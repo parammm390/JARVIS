@@ -2,6 +2,7 @@ import type { CompanyProfile, MentionState, ScrapeResult, VoiceDemoProfile } fro
 import type { DemoWorkflowType } from "@/lib/demo/workflows"
 import { getWorkflowDefinition } from "@/lib/demo/workflows"
 import { isDemoMockMode, serverEnv } from "@/lib/env"
+import { groqConfigured, groqGenerateJson } from "@/lib/llm/groq"
 import { readablePagesFrom } from "@/lib/scrape/scrape-site"
 
 const EQUIPMENT_TERMS = [
@@ -110,12 +111,26 @@ export async function buildGeminiCompanyProfile(
     }
   }
 
+  if (groqConfigured()) {
+    try {
+      const parsed = (await groqGenerateJson({
+        prompt: buildGeminiPrompt(companyName, scrape, workflowType),
+        maxTokens: 4096,
+        temperature: 0.05,
+        timeoutMs: GEMINI_TIMEOUT_MS,
+      })) as Partial<CompanyProfile & VoiceDemoProfile>
+      return normalizeGeminiProfile(parsed, fallback)
+    } catch {
+      // Fall through to Gemini, then the conservative fallback profile.
+    }
+  }
+
   if (!apiKey) {
     return {
       ...fallback,
       warnings: uniqueStrings([
         ...fallback.warnings,
-        "Gemini is not configured, so conservative fallback extraction was used.",
+        "No LLM provider is configured, so conservative fallback extraction was used.",
       ]),
       fallback_used: true,
     }

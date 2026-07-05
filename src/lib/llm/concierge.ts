@@ -1,5 +1,6 @@
 import { siteConfig } from "@/config/site"
 import { serverEnv } from "@/lib/env"
+import { groqConfigured, groqGenerateJson } from "@/lib/llm/groq"
 
 export type ConciergeRole = "user" | "assistant"
 
@@ -199,6 +200,22 @@ export async function buildFinnorConciergeReply(
 ): Promise<ConciergeReply> {
   const cleanedMessages = messages.slice(-12)
   const fallback = buildFallbackReply(cleanedMessages, collectedFields)
+
+  if (groqConfigured()) {
+    try {
+      const parsed = await groqGenerateJson({
+        system: SYSTEM_PROMPT,
+        prompt: buildConversationPrompt(cleanedMessages, collectedFields),
+        maxTokens: 900,
+        temperature: 0.22,
+        timeoutMs: CONCIERGE_TIMEOUT_MS,
+      })
+      return normalizeConciergeReply(parsed as GeminiConciergeJson, fallback)
+    } catch (error) {
+      console.info("FINNOR AI Concierge: Groq unavailable, trying Gemini.", error)
+    }
+  }
+
   const apiKey = serverEnv.geminiApiKey
 
   if (!apiKey) return fallback

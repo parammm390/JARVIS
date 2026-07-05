@@ -6,6 +6,7 @@
 // demo works identically without a GEMINI_API_KEY.
 
 import { serverEnv } from "@/lib/env"
+import { groqConfigured, groqGenerateJson } from "@/lib/llm/groq"
 import { money, type LtvLedger, type Quote } from "@/lib/lifecycle/pricing"
 import { formatCapacity, type SizingResult } from "@/lib/lifecycle/sizing"
 import type { WaterLookup } from "@/lib/lifecycle/water-data"
@@ -71,6 +72,20 @@ const NARRATIVE_SCHEMA = {
 
 export async function buildDiagnosisNarrative(input: DiagnosisInput): Promise<DiagnosisNarrative> {
   const fallback = buildFallbackNarrative(input)
+
+  if (groqConfigured()) {
+    try {
+      const parsed = await groqGenerateJson({
+        prompt: buildPrompt(input),
+        maxTokens: 4096,
+        temperature: 0.4,
+      })
+      return normalizeNarrative(parsed, fallback)
+    } catch {
+      // Fall through to Gemini, then the deterministic narrative.
+    }
+  }
+
   const apiKey = serverEnv.geminiApiKey
   if (!apiKey) return fallback
 

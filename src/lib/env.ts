@@ -9,6 +9,7 @@ function read(name: string) {
   if (
     lower === "your-anon-key" ||
     lower === "your-gemini-api-key" ||
+    lower === "your-groq-api-key" ||
     lower === "your-gmail-address" ||
     lower === "your-gmail-app-password" ||
     lower.includes("your-project.supabase.co") ||
@@ -26,6 +27,12 @@ export function isDemoMockMode() {
 }
 
 export const serverEnv = {
+  get groqApiKey() {
+    return read("GROQ_API_KEY")
+  },
+  get groqModel() {
+    return read("GROQ_MODEL") || "llama-3.3-70b-versatile"
+  },
   get geminiApiKey() {
     return read("GEMINI_API_KEY")
   },

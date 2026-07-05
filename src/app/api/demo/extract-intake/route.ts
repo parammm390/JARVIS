@@ -6,6 +6,7 @@ import {
   normalizeIntake,
 } from "@/lib/demo/intake-extraction"
 import { isDemoMockMode, serverEnv } from "@/lib/env"
+import { groqConfigured, groqGenerateJson } from "@/lib/llm/groq"
 import { ApiRequestError, readJsonBody } from "@/lib/api/request"
 import { rateLimit } from "@/lib/api/rate-limit"
 import {
@@ -84,7 +85,7 @@ export async function POST(request: Request) {
       workflowType,
     })
 
-    if (isDemoMockMode() || !serverEnv.geminiApiKey) {
+    if (isDemoMockMode() || (!serverEnv.geminiApiKey && !groqConfigured())) {
       return NextResponse.json(
         withHouseholdMemory(deterministic, body.household, body.householdId)
       )
@@ -149,6 +150,37 @@ async function extractWithGemini({
   deterministic: DemoIntakeHandoff
   workflowType: DemoWorkflowType
 }) {
+  const extractionPrompt = buildExtractionPrompt(
+    transcript,
+    companyProfile,
+    safeDemoScenario,
+    deterministic,
+    workflowType
+  )
+
+  if (groqConfigured()) {
+    try {
+      const parsed = (await groqGenerateJson({
+        prompt: extractionPrompt,
+        maxTokens: 1600,
+        temperature: 0,
+        timeoutMs: GEMINI_TIMEOUT_MS,
+      })) as Partial<DemoIntakeHandoff>
+      return normalizeIntake({
+        ...deterministic,
+        ...parsed,
+        workflowType,
+        companyName: parsed.companyName || deterministic.companyName,
+        isPreview: false,
+        previewReason: "",
+      })
+    } catch {
+      // Fall through to Gemini, then the deterministic extraction.
+    }
+  }
+
+  if (!serverEnv.geminiApiKey) return deterministic
+
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS)
 
@@ -165,17 +197,7 @@ async function extractWithGemini({
         contents: [
           {
             role: "user",
-            parts: [
-              {
-                text: buildExtractionPrompt(
-                  transcript,
-                  companyProfile,
-                  safeDemoScenario,
-                  deterministic,
-                  workflowType
-                ),
-              },
-            ],
+            parts: [{ text: extractionPrompt }],
           },
         ],
       },
