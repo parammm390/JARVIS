@@ -27,32 +27,32 @@ const navItems = [
   { href: "#faq", label: "FAQ" },
 ]
 
-const callStates = ["Ringing", "Answered", "Appointment path found", "Team routed"]
+const callStates = ["Ringing", "Answered", "Water data pulled", "Quoted + booked"]
 
 const intakeRows = [
   ["Caller", "Jennifer"],
   ["Location", "142 Millbrook Rd - Harrisonburg VA"],
   ["Concern", "Sulfur smell and hard water"],
-  ["Water source", "Well water"],
-  ["System interest", "Softener + whole-house filtration"],
-  ["Next step", "Water test booking"],
-  ["Status", "Ready for front-office follow-up"],
+  ["Area water", "14.3 gpg, 51 well samples (USGS)"],
+  ["Sized system", "40k softener + sulfur filter"],
+  ["Quote range", "$3,800-$4,250 installed"],
+  ["Status", "Booked Thu 10:00 AM, record open"],
 ]
 
 const workflowStateItems: Array<{ icon: LucideIcon; label: string }> = [
-  { icon: Waves, label: "Answered" },
-  { icon: CheckCircle2, label: "Booking intent confirmed" },
-  { icon: ShieldCheck, label: "Request qualified" },
-  { icon: BellRing, label: "Team route sent" },
+  { icon: Waves, label: "Answered ring two" },
+  { icon: CheckCircle2, label: "Water data pulled" },
+  { icon: ShieldCheck, label: "Quoted from your pricing" },
+  { icon: BellRing, label: "Booked by text" },
 ]
 
 const miniStatusItems: Array<{ icon: LucideIcon; label: string }> = [
   { icon: PhoneCall, label: "Call answered" },
-  { icon: CheckCircle2, label: "Job recovered" },
-  { icon: BellRing, label: "Team routed" },
+  { icon: CheckCircle2, label: "Quote delivered" },
+  { icon: BellRing, label: "Record opened" },
 ]
 
-const signalSteps = ["Incoming lead", "Fast answer", "Booking path", "Human route"]
+const signalSteps = ["Incoming call", "Live water data", "Sized quote", "Booked + remembered"]
 
 export function Hero() {
   const [scrolled, setScrolled] = useState(false)
@@ -136,7 +136,7 @@ export function Hero() {
               className="mb-6 inline-flex max-w-full items-center rounded-full border border-sky-900/10 bg-white px-4 py-2 text-sm font-bold leading-snug text-slate-700 shadow-sm"
             >
               <span className="mr-2 h-2 w-2 rounded-full bg-teal-500 shadow-[0_0_0_4px_rgba(20,184,166,0.12)]" />
-              AI booking and lead recovery for water companies
+              The AI quoting agent for water companies
             </motion.div>
 
             <motion.h1
@@ -145,7 +145,7 @@ export function Hero() {
               transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
               className="max-w-[22rem] break-words text-[2.18rem] font-black leading-[0.99] tracking-tight text-slate-950 sm:max-w-4xl sm:text-6xl md:text-7xl lg:text-[5.75rem]"
             >
-              Book more water jobs from the leads you already get.
+              The AI quoting agent that remembers every customer for years.
             </motion.h1>
 
             <motion.p
@@ -154,8 +154,10 @@ export function Hero() {
               transition={{ delay: 0.1, duration: 0.62 }}
               className="mt-7 max-w-[22rem] text-base font-semibold leading-relaxed text-slate-700 sm:max-w-2xl sm:text-lg md:text-xl"
             >
-              Finnor turns missed calls, after-hours inquiries, overflow calls, and slow web leads
-              into booked water tests, service appointments, or urgent owner/on-call routes.
+              FINNOR answers the calls you miss, pulls the real water data for the caller&apos;s
+              ZIP, sizes the system with math, quotes from your pricing, and books the visit by
+              text. Then it remembers the household for two years of reviews, check-ins,
+              referrals, and upsells.
             </motion.p>
 
             <motion.p
@@ -164,8 +166,9 @@ export function Hero() {
               transition={{ delay: 0.18, duration: 0.55 }}
               className="mt-5 flex w-full max-w-full rounded-2xl border border-teal-800/14 bg-white px-4 py-3 text-sm font-black leading-relaxed text-slate-700 shadow-sm"
             >
-              Built for water treatment quote requests, softener and filtration inquiries, RO and
-              whole-house system leads, no-water emergencies, and well pump service calls.
+              Every lead becomes a household memory record. Every record carries a next revenue
+              action. Every action is tracked to lifetime value. Water treatment and well pump
+              companies only.
             </motion.p>
 
             <motion.div
@@ -230,7 +233,7 @@ function DispatchCommandVisual({ activeState }: { activeState: number }) {
               <p className="text-xs font-black uppercase tracking-[0.22em] text-sky-100">
                 Finnor booking console
               </p>
-              <h2 className="mt-2 text-2xl font-black tracking-tight">Water job recovery</h2>
+              <h2 className="mt-2 text-2xl font-black tracking-tight">Quote, book, remember</h2>
             </div>
             <span className="inline-flex items-center rounded-full border border-teal-300/30 bg-teal-300/16 px-3 py-1.5 text-xs font-black text-teal-100">
               <span className="mr-2 h-2 w-2 animate-pulse rounded-full bg-teal-300" />

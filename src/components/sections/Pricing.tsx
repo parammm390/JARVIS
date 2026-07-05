@@ -13,16 +13,16 @@ import { siteConfig } from "@/config/site"
 import { Magnetic } from "@/components/ui/magnetic"
 
 const included = [
-  "Missed-call booking recovery",
-  "After-hours lead coverage",
-  "No-water urgent route",
-  "Water treatment quote/form follow-up",
-  "Speed-to-lead for inbound forms and paid leads",
-  "SMS/email alerts to owner, CSR, dispatcher, or on-call tech",
-  "Booked next-step context",
-  "Call recordings where configured",
-  "Simple recovered-job review",
-  "7-day scoped rollout",
+  "AI quoting agent on every missed, overflow, and after-hours call",
+  "Live water data by ZIP: USGS well samples + EPA system records",
+  "Sizing math and quote ranges from your pricing tiers",
+  "Tap-to-book SMS with the report and three slots",
+  "No-water urgent route with safety screen and on-call handoff",
+  "Household memory record for every lead, with next revenue action",
+  "Review asks, salt check-ins, re-test and rebed clocks on cadence",
+  "Referral attribution back to the review that produced it",
+  "Speed-to-lead callbacks on forms and paid leads",
+  "7-day scoped rollout with your team in the loop",
 ]
 
 const guarantees = [
@@ -66,11 +66,12 @@ export function Pricing() {
             viewport={{ once: true }}
             className="text-4xl font-black tracking-tight text-slate-950 md:text-6xl"
           >
-            One focused pilot. More booked jobs from the leads you already get.
+            One pilot. A quoting agent and a memory your competitors cannot copy.
           </motion.h2>
           <p className="mx-auto mt-5 max-w-2xl text-lg font-medium leading-relaxed text-slate-600">
-            A productized booking and lead recovery workflow for water companies that need more
-            front-office capacity without losing human control.
+            The full system: answered calls, live water data, quotes from your pricing, booked
+            visits, and a household record that keeps producing revenue for years. Humans keep
+            every final decision.
           </p>
         </div>
 
@@ -93,14 +94,14 @@ export function Pricing() {
                 </span>
               </div>
               <h3 className="mt-8 max-w-xl text-3xl font-black tracking-tight sm:text-4xl">
-                Founding Booking & Lead Recovery Pilot
+                Founding Quoting Agent Pilot
               </h3>
               <div className="mt-8 flex items-end gap-3">
                 <span className="text-5xl font-black tracking-[-0.05em] sm:text-7xl">Pilot</span>
-                <span className="pb-2 text-lg font-black text-slate-300">scoped around one recovery workflow</span>
+                <span className="pb-2 text-lg font-black text-slate-300">scoped around your calls, water, and pricing</span>
               </div>
               <div className="mt-5 max-w-lg space-y-1 text-base font-bold leading-relaxed text-slate-100">
-                <p>For missed calls, after-hours, overflow, web/form leads, or urgent well pump routes</p>
+                <p>Quoting calls, urgent well pump routes, tap-to-book texts, and the household memory behind all of it</p>
                 <p>Pricing reviewed after the workflow fit check</p>
               </div>
               <div className="mt-7 rounded-2xl border border-white/10 bg-white/[0.055] p-4">
@@ -137,7 +138,7 @@ export function Pricing() {
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-[0.22em] text-teal-200">Included in pilot</p>
-                  <h4 className="mt-2 text-2xl font-black tracking-tight">The booking recovery workflow</h4>
+                  <h4 className="mt-2 text-2xl font-black tracking-tight">The full lifecycle system</h4>
                 </div>
                 <Sparkles className="h-5 w-5 text-sky-200" />
               </div>
@@ -181,7 +182,7 @@ export function Pricing() {
                 <strong className="text-white">Eligible call:</strong> a call routed to Finnor through the agreed pilot setup, inside the approved workflow scope.
               </p>
               <p className="rounded-xl border border-white/10 bg-white/[0.035] px-4 py-3">
-                <strong className="text-white">Trust boundary:</strong> Finnor helps book or route the next step. Your team still owns quotes, ETAs, repair decisions, dispatch judgment, and customer promises.
+                <strong className="text-white">Trust boundary:</strong> the agent quotes ranges computed from your pricing and the real water, and never invents a number. Final figures, ETAs, repairs, and customer promises stay with your team.
               </p>
             </div>
             </div>

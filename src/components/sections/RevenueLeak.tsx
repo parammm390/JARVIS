@@ -6,23 +6,23 @@ import { ArrowRight, BellRing, PhoneOff, Search, TimerReset, UserRoundX } from "
 const problemCards = [
   {
     icon: PhoneOff,
-    title: "Homeowner reaches voicemail",
-    copy: "A water softener quote request, filtration inquiry, water quality concern, or urgent service call reaches voicemail with no response.",
+    title: "Voicemail eats the call",
+    copy: "6:47 PM, crew under a house. The quote request hits voicemail, the homeowner keeps dialing, and the first shop that answers wins the job.",
   },
   {
     icon: Search,
-    title: "The lead keeps looking",
-    copy: "The homeowner still needs answers about treatment options, an existing system issue, or a no-water emergency.",
+    title: "The quote is a guess",
+    copy: "A rep reads a rate sheet, not the water. Homeowners now bring independent water tests because dealer numbers stopped holding up. The guess costs trust and margin.",
   },
   {
     icon: UserRoundX,
-    title: "Competitor answers first",
-    copy: "The water company that responds first is more likely to win the quote request or urgent service call.",
+    title: "The job goes undocumented",
+    copy: "No serials, no before-and-after numbers, no itemized invoice. That is where surprise bills, disputes, and one-star reviews are born.",
   },
   {
     icon: TimerReset,
-    title: "Your team finds out too late",
-    copy: "By the time someone checks voicemail, the homeowner may have already booked a competitor who responded faster.",
+    title: "The customer is forgotten",
+    copy: "No review ask, no salt check-in, no re-test, no referral capture. They buy salt at the hardware store and their neighbor calls someone else.",
   },
 ]
 
@@ -39,7 +39,7 @@ export function RevenueLeak() {
               viewport={{ once: true }}
               className="mb-5 inline-flex rounded-full border border-orange-200 bg-orange-50 px-4 py-2 text-xs font-black uppercase tracking-[0.18em] text-orange-700"
             >
-              Lost booking risk
+              The leak is bigger than the missed call
             </motion.div>
             <motion.h2
               initial={{ opacity: 0, y: 18 }}
@@ -48,7 +48,7 @@ export function RevenueLeak() {
               transition={{ delay: 0.05 }}
               className="text-4xl font-black tracking-tight text-slate-950 md:text-6xl"
             >
-              Every unanswered water lead can become someone else&apos;s booked job.
+              The call you missed was worth two years of revenue, not one job.
             </motion.h2>
           </div>
           <motion.p
@@ -58,9 +58,10 @@ export function RevenueLeak() {
             transition={{ delay: 0.1 }}
             className="max-w-2xl text-lg font-medium leading-relaxed text-slate-600 md:text-xl"
           >
-            A homeowner may call about a softener quote, filtration quote, water quality concern,
-            existing system issue, or no-water emergency. If no one responds fast, they keep
-            looking until another water business books the appointment.
+            One missed softener call is an install, a service plan, seven salt deliveries, a
+            5-star review, a same-street referral, and the year-two upgrade. Lead tools see the
+            click, CRMs see the invoice, review apps see the star. Nobody remembers the
+            household, so the revenue after the invoice never happens.
           </motion.p>
         </div>
 
@@ -96,18 +97,18 @@ export function RevenueLeak() {
           <div className="grid gap-4 lg:grid-cols-[1fr_auto_1fr] lg:items-stretch">
             <BeforeAfterPanel
               tone="risk"
-              title="Voicemail gap"
-              label="Unanswered path"
-              items={["Job lost risk", "Caller waits", "Quote goes cold", "Follow-up starts late"]}
+              title="The memoryless path"
+              label="Same lead, no memory"
+              items={["Voicemail at 6:47 PM", "Rate-sheet guess", "One invoice, disputed", "Never contacted again"]}
             />
             <div className="hidden items-center justify-center px-2 lg:flex">
               <ArrowRight className="h-6 w-6 text-slate-500" />
             </div>
             <BeforeAfterPanel
               tone="safe"
-              title="Finnor recovery path"
-              label="Booking path"
-              items={["Call answered", "Booking intent found", "Team route sent", "Job recovered"]}
+              title="The FINNOR record"
+              label="One household memory"
+              items={["Answered on ring two", "Quoted from the water", "Booked and documented", "Remembered for years"]}
             />
           </div>
         </motion.div>

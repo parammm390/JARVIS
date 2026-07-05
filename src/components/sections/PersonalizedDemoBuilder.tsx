@@ -18,7 +18,7 @@ const builders = [
     eyebrow: "Demo builder 01",
     title: "Live Call & Booking Demo",
     description:
-      "Enter a company name and website. FINNOR answers as your front desk — captures the lead, confirms booking intent, checks urgency, and routes a structured handoff to your team.",
+      "Enter a company name and website. FINNOR answers as your front desk, captures the lead, confirms booking intent, checks urgency, and routes a structured handoff to your team.",
     href: siteConfig.demoLink,
     cta: "Build My Live Demo",
     icon: PhoneCall,

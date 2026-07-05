@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Privacy | Finnor AI",
     description:
-      "Privacy policy for Finnor AI — what information we collect, how it is used, and how to contact us.",
+      "Privacy policy for Finnor AI: what information we collect, how it is used, and how to contact us.",
     url: "https://finnorai.com/privacy",
     images: [
       {

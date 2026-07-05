@@ -15,37 +15,37 @@ import {
 const steps = [
   {
     day: "Day 1",
-    title: "Map missed, overflow, and after-hours call paths",
+    title: "Map call paths and pull your service area's live water data by ZIP",
     icon: PhoneForwarded,
   },
   {
     day: "Day 2",
-    title: "Define booking questions, issue types, urgency rules, and service-area logic",
+    title: "Load your pricing tiers, install mix, and sizing rules into the quoting agent",
     icon: ClipboardList,
   },
   {
     day: "Day 3",
-    title: "Configure AI voice and company knowledge boundaries",
+    title: "Set the rails: what the agent quotes, what it never says, and where humans take over",
     icon: GitBranch,
   },
   {
     day: "Day 4",
-    title: "Configure SMS/email routes to CSR, sales team, owner, dispatcher, or on-call tech",
+    title: "Wire the memory: booking slots, SMS routes, review asks, check-in cadence, referral logging",
     icon: BellRing,
   },
   {
     day: "Day 5",
-    title: "Test water treatment quote, existing system issue, callback confirmation, no-water emergency, and booking routing",
+    title: "Test live: quote calls, no-water emergencies, tap-to-book texts, and household record writes",
     icon: FlaskConical,
   },
   {
     day: "Day 6",
-    title: "Review booked next steps, urgent routes, and team ownership",
+    title: "Review every test record with your team: quotes, routes, next revenue actions, ownership",
     icon: FileCheck2,
   },
   {
     day: "Day 7",
-    title: "Launch scoped workflow",
+    title: "Go live. Every call from here opens a household memory record",
     icon: Route,
   },
 ]
@@ -78,7 +78,7 @@ export function FirstSevenDays() {
             transition={{ delay: 0.05, duration: 0.6 }}
             className="text-4xl font-black tracking-tight text-slate-950 md:text-5xl"
           >
-            A scoped launch can be prepared in about a week.
+            Quoting calls in seven days, or your money back.
           </motion.h2>
           <motion.p
             initial={{ opacity: 0, y: 16 }}
@@ -87,8 +87,9 @@ export function FirstSevenDays() {
             transition={{ delay: 0.1 }}
             className="mt-5 max-w-2xl text-lg font-medium leading-relaxed text-slate-600"
           >
-            The setup work focuses on routing, response boundaries, alerts, and practical lead and
-            service scenarios before any live caller touches the workflow.
+            One week from access to a live quoting agent with your water data, your pricing, and
+            your rails. Every scenario is tested with your team before a real caller ever touches
+            it. Miss the seven days and the initial payment comes back.
           </motion.p>
         </div>
 

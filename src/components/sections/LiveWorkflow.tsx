@@ -6,28 +6,28 @@ import { BellRing, ClipboardList, PhoneCall, ShieldAlert, UserRoundCheck } from 
 const workflow = [
   {
     icon: PhoneCall,
-    title: "Lead answered fast",
-    detail: "Finnor answers or follows up on missed, overflow, after-hours, and water lead moments through the account-specific booking workflow.",
+    title: "Answered on ring two",
+    detail: "Missed, overflow, after-hours, weekends. The call is taken, the concern is captured, and a household memory record opens before the caller hangs up.",
   },
   {
     icon: ClipboardList,
-    title: "Booking intent confirmed",
-    detail: "Caller, address, water concern, system interest, urgency, and best next step are clarified so your team can move quickly.",
+    title: "Water pulled, system sized",
+    detail: "Live public water data for the caller's ZIP, USGS well samples and EPA records, runs through the sizing math while the conversation is still going.",
   },
   {
     icon: ShieldAlert,
-    title: "Urgency checked",
-    detail: "No-water, pump failure, pressure loss, active leak, or safety language routes to the owner, dispatcher, or on-call path you approve.",
+    title: "Quoted from your pricing",
+    detail: "A real range from the tier you set, like $3,800 to $4,250 installed. Urgent no-water language skips the quote and routes straight to on-call.",
   },
   {
     icon: BellRing,
-    title: "Team routed",
-    detail: "The right CSR, sales, dispatch, owner, or on-call person gets the appointment or urgent route while the lead is still warm.",
+    title: "Booked by text",
+    detail: "The report and three tap-to-book slots land by SMS within 60 seconds of hang-up. The appointment writes itself onto the record.",
   },
   {
     icon: UserRoundCheck,
-    title: "Human owns the promise",
-    detail: "Your team owns quotes, dispatch, repair decisions, ETAs, and final customer promises.",
+    title: "The memory keeps working",
+    detail: "Review ask, salt cadence, re-test clocks, referral attribution, and the year-two offer, all fired from the same record. Your team owns every final call.",
   },
 ]
 
@@ -51,7 +51,7 @@ export function LiveWorkflow() {
             viewport={{ once: true }}
             className="text-4xl font-black tracking-tight text-slate-950 md:text-6xl"
           >
-            Fast answer. Appointment path. Human route.
+            Ring two to booked job in one continuous motion.
           </motion.h2>
           <motion.p
             initial={{ opacity: 0, y: 16 }}
@@ -60,8 +60,8 @@ export function LiveWorkflow() {
             transition={{ delay: 0.08 }}
             className="mx-auto mt-6 max-w-2xl text-lg font-medium leading-relaxed text-slate-600"
           >
-            The system is built for the response front door: recover the lead, book the next step
-            where appropriate, and keep human teams in control.
+            Answer, pull the water record, size it, quote it, book it. Five moves, under three
+            minutes, and the household memory holds all of it for the years after.
           </motion.p>
         </div>
 

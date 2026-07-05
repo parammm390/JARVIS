@@ -17,12 +17,12 @@ const trustSections = [
   {
     icon: UserRoundCheck,
     title: "Human teams stay in control",
-    copy: "Finnor helps book next steps and prepare job context for the human team. People remain responsible for repair decisions, quotes, ETAs, dispatch, and customer communication.",
+    copy: "FINNOR quotes ranges computed from your pricing tiers and real public water data, and books the visit. People remain responsible for final figures, repair decisions, ETAs, dispatch, and customer promises.",
   },
   {
     icon: ShieldCheck,
-    title: "Finnor does not diagnose repairs or make promises",
-    copy: "The workflow routes urgent service context to humans. It does not diagnose repairs, quote jobs, guarantee ETAs, or make service promises.",
+    title: "The agent never invents numbers or diagnoses",
+    copy: "Quote ranges come only from the pricing you configured and the measured water data on record. FINNOR does not diagnose repairs, invent prices, guarantee ETAs, or make health claims about water.",
   },
   {
     icon: AlertTriangle,
@@ -147,8 +147,9 @@ export function TrustSafetyPage() {
                   Conservative operating principle
                 </p>
                 <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-700">
-                  Book the next step when appropriate, route urgent language, and leave quotes,
-                  dispatch decisions, repair judgment, ETAs, and promises to the human team.
+                  Quote only from configured pricing and measured water data, book the next step,
+                  route urgent language, and leave final figures, dispatch decisions, repair
+                  judgment, ETAs, and promises to the human team.
                 </p>
               </div>
             </motion.div>

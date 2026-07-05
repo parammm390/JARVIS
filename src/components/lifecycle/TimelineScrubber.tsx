@@ -60,7 +60,7 @@ export function TimelineScrubber({
                 key={stage.id}
                 type="button"
                 onClick={() => onSelect(stageIndex)}
-                aria-label={`Stage ${stageIndex + 1}: ${stage.timeLabel} — ${stage.title}`}
+                aria-label={`Stage ${stageIndex + 1}: ${stage.timeLabel}, ${stage.title}`}
                 aria-current={isActive ? "step" : undefined}
                 data-cursor="hover"
                 className="group flex flex-col items-center gap-2.5 pb-1 pt-0"

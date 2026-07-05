@@ -6,18 +6,18 @@ import { AlertTriangle, CheckCircle2, FileLock2, ShieldCheck, UserRoundCheck } f
 const scopeItems = [
   {
     icon: CheckCircle2,
-    title: "Booking support",
-    copy: "Finnor helps move leads toward a water test, service appointment, or urgent human route, not diagnosis or recommendations.",
+    title: "Quotes from your numbers only",
+    copy: "Ranges come from real public water data, sizing math, and the pricing tier you set. FINNOR never invents a price, a contaminant, or a health claim.",
   },
   {
     icon: UserRoundCheck,
     title: "Human decision path",
-    copy: "Quotes, ETAs, repair decisions, and customer promises stay with your team.",
+    copy: "The final on-site figure, repair calls, diagnosis, ETAs, and customer promises stay with your team. The agent quotes the range; your people close.",
   },
   {
     icon: ShieldCheck,
     title: "Scoped launch terms",
-    copy: "Routing, alert paths, escalation rules, integrations, and data handling are defined before live deployment.",
+    copy: "Routing, alert paths, escalation rules, pricing tiers, integrations, and data handling are defined before live deployment.",
   },
 ]
 
@@ -42,7 +42,7 @@ export function Outcome() {
               viewport={{ once: true }}
               className="text-4xl font-black tracking-tight text-slate-950 md:text-6xl"
             >
-            Built to book next steps, not make service promises.
+            Quotes from your pricing. Decisions stay yours.
             </motion.h2>
             <motion.p
               initial={{ opacity: 0, y: 16 }}
@@ -51,9 +51,10 @@ export function Outcome() {
               transition={{ delay: 0.08 }}
               className="mt-6 max-w-2xl text-lg font-medium leading-relaxed text-slate-600"
             >
-              The goal is not to replace your team, quote jobs, diagnose repairs, or promise ETAs.
-              The goal is to recover the lead, move it toward the right booked next step, and route
-              urgent issues to the right human fast.
+              The quoting agent works inside hard rails. It quotes ranges computed from the water
+              and the tier you priced, books the visit, and keeps the record alive for years. It
+              does not diagnose repairs, promise ETAs, or freelance a discount. Your team owns
+              every final call.
             </motion.p>
           </div>
 
@@ -69,7 +70,7 @@ export function Outcome() {
                   Operating scope
                 </p>
                 <h3 className="mt-2 text-2xl font-black tracking-tight text-slate-950">
-                  Built to route, not decide.
+                  Rails the agent cannot cross.
                 </h3>
               </div>
               <FileLock2 className="h-6 w-6 text-slate-700" />

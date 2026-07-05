@@ -29,8 +29,8 @@ const CONCERN_OPTIONS = [
 const HOUSEHOLD_OPTIONS = [2, 4, 6]
 
 const GENERATION_STEPS = [
-  "Locating the water system — EPA SDWIS",
-  "Sampling county wells — USGS records",
+  "Locating the water system, EPA SDWIS",
+  "Sampling county wells, USGS records",
   "Running the sizing math",
   "Writing the diagnosis + quote",
 ]
@@ -357,7 +357,7 @@ export function LifecycleSetup({
                 className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-sm font-black text-slate-700 transition hover:border-sky-200 hover:text-slate-950"
               >
                 <Play className="h-4 w-4" />
-                Skip — watch the sample household
+                Skip, watch the sample household
               </button>
             </motion.form>
           ) : null}

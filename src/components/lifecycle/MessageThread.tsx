@@ -191,7 +191,7 @@ export function MessageThread({
                 transition={{ delay: 0.4 }}
                 className="mt-1.5 text-right text-[10px] font-black uppercase tracking-widest text-teal-700"
               >
-                Your call — tap a slot
+                Your call, tap a slot
               </motion.p>
             ) : null}
           </div>

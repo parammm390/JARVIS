@@ -196,7 +196,7 @@ export function PostCallHandoff({
                 </div>
                 <p className="mt-3 text-sm font-semibold leading-relaxed text-slate-700">
                   This call is now a household memory record. Every record carries its next
-                  revenue action — and the record never forgets.
+                  revenue action, and the record never forgets.
                 </p>
                 {intake.household ? (
                   <button

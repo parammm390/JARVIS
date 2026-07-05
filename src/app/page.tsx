@@ -13,17 +13,17 @@ import { Footer } from "@/components/sections/Footer"
 
 export const metadata: Metadata = {
   title: {
-    absolute: "Finnor AI | Book More Water Jobs From the Leads You Already Get",
+    absolute: "Finnor AI | The AI Quoting Agent That Remembers Every Customer",
   },
   description:
-    "Finnor turns missed calls, after-hours inquiries, overflow calls, and slow web leads into booked water tests, service appointments, or urgent owner/on-call routes.",
+    "FINNOR answers the call, pulls live water data, quotes from your pricing, books by text, and remembers every household for years of reviews, check-ins, referrals, and upsells.",
   alternates: {
     canonical: "https://finnorai.com/",
   },
   openGraph: {
-    title: "Finnor AI | Book More Water Jobs From the Leads You Already Get",
+    title: "Finnor AI | The AI Quoting Agent That Remembers Every Customer",
     description:
-      "Recover more water treatment and well pump jobs with faster response, booked appointments, and clear human-owned next steps.",
+      "Live water data, real sizing math, quotes from your pricing tier, and one household memory that compounds revenue for two years.",
     url: "https://finnorai.com/",
     images: [
       {
@@ -37,9 +37,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Finnor AI | Book More Water Jobs From the Leads You Already Get",
+    title: "Finnor AI | The AI Quoting Agent That Remembers Every Customer",
     description:
-      "Recover more water treatment and well pump jobs with faster response, booked appointments, and clear human-owned next steps.",
+      "Live water data, real sizing math, quotes from your pricing tier, and one household memory that compounds revenue for two years.",
     images: [
       {
         url: "https://finnorai.com/og-image.svg",

@@ -54,7 +54,7 @@ export function LifecycleExperience({ sample }: { sample: LifecycleScenario }) {
       services: handoff.services,
       onWell: handoff.onWell,
       banner: handoff.customerName
-        ? `Continuing the record from your live call — ${handoff.customerName}${
+        ? `Continuing the record from your live call. ${handoff.customerName}${
             handoff.concern ? `, ${handoff.concern.toLowerCase()}` : ""
           }. Same memory, next two years.`
         : "Continuing the record from your live call. Same memory, next two years.",
@@ -172,7 +172,7 @@ export function LifecycleExperience({ sample }: { sample: LifecycleScenario }) {
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-teal-500 opacity-35" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-teal-500" />
               </span>
-              Lifecycle demo — one continuous memory
+              Lifecycle demo, one continuous memory
             </motion.div>
 
             <motion.h1
@@ -192,7 +192,7 @@ export function LifecycleExperience({ sample }: { sample: LifecycleScenario }) {
               className="mt-6 max-w-3xl text-lg font-medium leading-relaxed text-slate-600 md:text-xl"
             >
               Lead tools see the click. CRMs see the invoice. Review apps see the star. FINNOR
-              carries one memory of the customer through all of it — here it is for one household,
+              carries one memory of the customer through all of it. Here it is for one household,
               compressed into two minutes.
             </motion.p>
 
@@ -203,8 +203,8 @@ export function LifecycleExperience({ sample }: { sample: LifecycleScenario }) {
               className="mt-4 text-xs font-semibold leading-relaxed text-slate-500"
             >
               {scenario.live && view === "playing"
-                ? `Computed for ${scenario.dealer.name} — ${scenario.dealer.location}, ${scenario.dealer.tierLabel} pricing. The water data, sizing, and quote are live from public records. The household is a composite; the timeline is simulated — the workflow is exactly what FINNOR runs.`
-                : "One composite household on real county water medians. The timeline is simulated — the workflow is exactly what FINNOR runs."}
+                ? `Computed for ${scenario.dealer.name}, ${scenario.dealer.location}, ${scenario.dealer.tierLabel} pricing. The water data, sizing, and quote are live from public records. The household is a composite; the timeline is simulated, and the workflow is exactly what FINNOR runs.`
+                : "One composite household on real county water medians. The timeline is simulated, and the workflow is exactly what FINNOR runs."}
             </motion.p>
 
             {view === "entry" ? (
@@ -402,7 +402,7 @@ export function LifecycleExperience({ sample }: { sample: LifecycleScenario }) {
               </h3>
               <p className="mt-5 text-base font-semibold leading-relaxed text-slate-700">
                 If you&apos;re a one-truck shop that answers every call yourself and nothing you
-                sell tops $1,500 — keep your $799 a month. You don&apos;t need this.
+                sell tops $1,500. Keep your $799 a month. You don&apos;t need this.
               </p>
               <p className="mt-4 text-base font-medium leading-relaxed text-slate-600">
                 It&apos;s built for dealers whose calls die in voicemail while the crew is under a
@@ -422,7 +422,7 @@ export function LifecycleExperience({ sample }: { sample: LifecycleScenario }) {
                   className="mt-2 inline-flex items-center gap-2 text-sm font-black text-slate-950 transition hover:text-sky-800"
                   data-cursor="hover"
                 >
-                  Start with the live call demo — your company, your calls
+                  Start with the live call demo. Your company, your calls
                   <ArrowRight className="h-4 w-4" />
                 </a>
               </div>
@@ -450,7 +450,7 @@ function EntryDoors({ onBuild, onSample }: { onBuild: () => void; onSample: () =
           <ArrowRight className="h-4 w-4 text-teal-200" />
         </span>
         <span className="mt-1.5 text-xs font-semibold leading-relaxed text-white/70">
-          Live water data for your ZIP, sizing math, and a quote at your pricing tier — 60 seconds
+          Live water data for your ZIP, sizing math, and a quote at your pricing tier in 60 seconds
           of setup.
         </span>
       </button>
@@ -466,14 +466,14 @@ function EntryDoors({ onBuild, onSample }: { onBuild: () => void; onSample: () =
           <Play className="h-4 w-4 text-teal-700" />
         </span>
         <span className="mt-1.5 text-xs font-semibold leading-relaxed text-slate-600">
-          Zero setup — it presses play on a Shenandoah Valley household and drives itself.
+          Zero setup. It presses play on a Shenandoah Valley household and drives itself.
         </span>
       </button>
 
       <div className="mt-5 space-y-2.5 border-t border-slate-200 pt-5">
         {[
           { icon: Waves, label: "Water data pulled live from EPA / USGS public records" },
-          { icon: Gauge, label: "Sizing math shown line by line — not implied" },
+          { icon: Gauge, label: "Sizing math shown line by line, not implied" },
           { icon: Wrench, label: "Simulated timeline, real workflow, your prices" },
         ].map(({ icon: Icon, label }) => (
           <div key={label} className="flex items-center gap-2.5">

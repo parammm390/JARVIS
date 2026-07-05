@@ -164,7 +164,7 @@ function WaterScene({ scene }: { scene: Extract<SceneData, { kind: "water" }> })
           </span>
           <div>
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-              Water profile — this address
+              Water profile, this address
             </p>
             <p className="mt-0.5 text-sm font-black text-slate-950">{scene.source}</p>
           </div>
@@ -423,7 +423,7 @@ function JobScene({ scene }: { scene: Extract<SceneData, { kind: "job" }> }) {
           <div className="flex items-center gap-2 border-b border-slate-200 bg-slate-50/80 px-4 py-3">
             <FileText className="h-4 w-4 text-sky-700" />
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-              Invoice — matches the quote
+              Invoice, matches the quote
             </p>
           </div>
           <div className="divide-y divide-slate-100">
@@ -437,7 +437,7 @@ function JobScene({ scene }: { scene: Extract<SceneData, { kind: "job" }> }) {
             ))}
           </div>
           <div className="mt-auto flex items-center justify-between border-t border-slate-200 bg-teal-50/70 px-4 py-3">
-            <p className="text-sm font-black text-slate-950">Total — as quoted</p>
+            <p className="text-sm font-black text-slate-950">Total, as quoted</p>
             <p className="text-base font-black text-teal-800" style={{ fontFamily: MONO }}>
               {scene.invoiceTotal}
             </p>
@@ -542,13 +542,13 @@ function ReferralScene({ scene }: { scene: Extract<SceneData, { kind: "referral"
           </span>
           <div>
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-              Inbound — after hours
+              Inbound, after hours
             </p>
             <p className="mt-0.5 text-sm font-black text-slate-950">{scene.callerName}</p>
           </div>
         </div>
         <span className="rounded-full border border-teal-200 bg-teal-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-teal-800">
-          New lead — attributed
+          New lead, attributed
         </span>
       </div>
 
@@ -612,7 +612,7 @@ function UpsellScene({
             <Sparkles className="h-5 w-5" />
           </span>
           <p className="text-[10px] font-black uppercase tracking-widest text-sky-800">
-            Why now — three signals from memory
+            Why now, three signals from memory
           </p>
         </div>
         <div className="mt-4 space-y-2.5">
@@ -659,7 +659,7 @@ function LedgerScene({ scene }: { scene: Extract<SceneData, { kind: "ledger" }> 
                 24-month ledger
               </p>
               <p className="mt-0.5 text-sm font-black text-slate-950">
-                Every line fired from memory — no one at the shop kept a list
+                Every line fired from memory. No one at the shop kept a list
               </p>
             </div>
           </div>
@@ -693,13 +693,13 @@ function LedgerScene({ scene }: { scene: Extract<SceneData, { kind: "ledger" }> 
           className="space-y-1.5 border-t border-slate-200 bg-slate-50/80 px-5 py-4 md:px-6"
         >
           <div className="flex items-center justify-between text-sm">
-            <p className="font-bold text-slate-600">Direct — one household</p>
+            <p className="font-bold text-slate-600">Direct, one household</p>
             <p className="font-black text-slate-900" style={{ fontFamily: MONO }}>
               {scene.directTotal}
             </p>
           </div>
           <div className="flex items-center justify-between text-sm">
-            <p className="font-bold text-slate-600">Referral — attributed to her review</p>
+            <p className="font-bold text-slate-600">Referral, attributed to her review</p>
             <p className="font-black text-slate-900" style={{ fontFamily: MONO }}>
               {scene.referralTotal}
             </p>
@@ -728,10 +728,10 @@ function LedgerScene({ scene }: { scene: Extract<SceneData, { kind: "ledger" }> 
         <p className="mt-2 text-sm font-bold text-slate-700">One transaction. Then silence.</p>
         <div className="mt-6 space-y-2.5">
           {[
-            "No water data — quote came off a rate sheet",
-            "No review ask — the moment passed",
-            "No check-ins — customer buys salt at the hardware store",
-            "No referral attribution — the neighbor called someone else",
+            "No water data, quote came off a rate sheet",
+            "No review ask, the moment passed",
+            "No check-ins, customer buys salt at the hardware store",
+            "No referral attribution, the neighbor called someone else",
           ].map((line) => (
             <div key={line} className="flex items-start gap-2.5">
               <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-orange-500" />

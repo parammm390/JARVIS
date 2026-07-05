@@ -30,11 +30,12 @@ export function Cta() {
                 Recover more jobs
               </div>
               <h2 className="max-w-3xl text-4xl font-black leading-[1.02] tracking-tight text-slate-950 md:text-6xl">
-                How many bookable water jobs went unanswered last week?
+                How many quotable jobs died in your voicemail last week?
               </h2>
               <p className="mt-6 max-w-2xl text-lg font-semibold leading-relaxed text-slate-700 md:text-xl">
-                FINNOR helps water businesses turn quote requests, web inquiries, missed calls,
-                and urgent service calls into booked next steps before the customer goes cold.
+                Every one of them was a household memory record you never got to open: the call,
+                the water data, the sized quote, the booked visit, and two years of revenue after
+                it. FINNOR opens the record on ring two.
               </p>
             </div>
 

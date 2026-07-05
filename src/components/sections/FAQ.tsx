@@ -11,36 +11,44 @@ import { HelpCircle } from "lucide-react"
 
 const faqs = [
   {
-    question: "Does Finnor replace my dispatcher?",
-    answer: "No. Finnor helps recover missed, overflow, after-hours, and slow web leads, then routes the booked next step or urgent issue to your human team.",
+    question: "It actually quotes? On the call?",
+    answer:
+      "Yes. FINNOR pulls the real public water record for the caller's area (USGS well samples, EPA system data), runs the sizing math against household size, and quotes a range from your pricing tier, like $3,800 to $4,250 installed. It never invents a number. The final on-site figure stays with your team, and the demo shows the whole calculation line by line.",
   },
   {
-    question: "Is this only for after-hours?",
-    answer: "No. Finnor can cover missed calls, overflow, after-hours calls, quote forms, inbound website requests, and paid lead follow-up during the windows you choose.",
+    question: "What is a household memory record?",
+    answer:
+      "Every lead becomes one: the call, the water profile, the sizing math, the quote, the booked visit, the documented job, the review, the salt cadence, the referral it produced, and the next offer that actually makes sense. Every record carries a computed next revenue action, and every action is tracked to lifetime value. Nothing else in this market carries one memory across all of it.",
   },
   {
-    question: "Does outbound mean cold calling?",
-    answer: "No. Outbound means speed-to-lead follow-up for inbound website forms, Google/Facebook leads, quote requests, paid leads, and old inquiries. It is not cold calling.",
+    question: "Where does the water data come from?",
+    answer:
+      "Public records, pulled live: measured well samples within 25 miles from USGS, plus your local system and its violation history from EPA SDWIS. Thin coverage falls back to state groundwater records and is labeled as an estimate. Unknowns stay marked, always.",
+  },
+  {
+    question: "Does FINNOR replace my dispatcher or my sales team?",
+    answer:
+      "No. FINNOR captures the lead, quotes the range, books the visit, and keeps the relationship warm for years. Repairs, diagnosis, ETAs, and the final handshake stay with your people. It does the remembering, so they can do the closing.",
   },
   {
     question: "Can it handle urgent well pump calls?",
-    answer: "Yes, within approved escalation paths. Finnor can identify no-water or urgent pump language and route it to your configured owner, dispatcher, or on-call contact.",
+    answer:
+      "Yes, within approved escalation paths. No-water and urgent pump language routes straight to your configured on-call contact with a structured handoff: scope, since when, people affected, safety screen, callback.",
   },
   {
-    question: "Does Finnor quote jobs or promise arrival times?",
-    answer: "No. Finnor does not quote jobs, guarantee ETAs, diagnose repairs, or make service promises. Your team controls those decisions.",
-  },
-  {
-    question: "What is the founding pilot?",
-    answer: "It is a scoped launch for one booking and lead recovery workflow: missed calls, after-hours, overflow, web/form leads, or urgent well pump routing. Pricing is reviewed on the pilot call.",
+    question: "Does outbound mean cold calling?",
+    answer:
+      "No. Outbound means speed-to-lead on inquiries you already earned: website forms, Google and Facebook leads, quote requests, plus the quarterly check-ins, review asks, and re-test reminders your household records fire on schedule.",
   },
   {
     question: "What are the guarantees?",
-    answer: "If an eligible call reaches Finnor and we miss it, your next month is free. If we do not launch your scoped workflow within 7 days after receiving required access, we refund your initial payment.",
+    answer:
+      "If an eligible call reaches FINNOR and we miss it, your next month is free. If we do not launch your scoped workflow within 7 days of receiving required access, we refund your initial payment.",
   },
   {
-    question: "What does Finnor avoid?",
-    answer: "Finnor does not diagnose repairs, quote jobs, guarantee ETAs, replace dispatch judgment, or make final customer promises. Humans stay in control.",
+    question: "Who is this NOT for?",
+    answer:
+      "If you are a one-truck shop that answers every call yourself and nothing you sell tops $1,500, keep your money. FINNOR earns it when calls die in voicemail while your crew is under a house, when quotes still come off a rate sheet instead of the water, and when customers vanish the day the invoice is paid.",
   },
 ]
 
@@ -66,7 +74,7 @@ export function FAQ() {
             transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
             className="text-4xl font-black tracking-tight text-slate-950 md:text-5xl"
           >
-            Direct answers for water businesses.
+            Direct answers. No hedging.
           </motion.h2>
           <motion.p
             initial={{ opacity: 0, y: 16 }}
@@ -75,8 +83,8 @@ export function FAQ() {
             transition={{ delay: 0.08 }}
             className="mx-auto mt-5 max-w-2xl text-lg font-medium leading-relaxed text-slate-600"
           >
-            Scope, booking boundaries, urgent routing, and usage limits are made explicit before
-            the system goes live.
+            What the quoting agent does, where the water data comes from, what stays human, and
+            exactly who should not buy this.
           </motion.p>
         </div>
 
