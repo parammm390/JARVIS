@@ -1,0 +1,14 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="630" fill="#000000"/>
+  <rect x="72" y="72" width="1056" height="486" rx="34" fill="#050707" stroke="rgba(103,232,249,0.28)"/>
+  <circle cx="930" cy="150" r="220" fill="rgba(103,232,249,0.12)"/>
+  <circle cx="280" cy="520" r="260" fill="rgba(255,255,255,0.06)"/>
+  <text x="116" y="154" fill="white" font-family="Inter, Arial, sans-serif" font-size="38" font-weight="900" letter-spacing="-1">FINNOR</text>
+  <text x="116" y="276" fill="white" font-family="Inter, Arial, sans-serif" font-size="72" font-weight="900" letter-spacing="-3">AI voice dispatch</text>
+  <text x="116" y="358" fill="white" fill-opacity="0.72" font-family="Inter, Arial, sans-serif" font-size="34" font-weight="600">After-hours no-water calls should not die in voicemail.</text>
+  <rect x="754" y="270" width="282" height="160" rx="26" fill="rgba(255,255,255,0.045)" stroke="rgba(255,255,255,0.12)"/>
+  <text x="784" y="318" fill="rgba(255,255,255,0.45)" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="900" letter-spacing="3">LIVE CALL</text>
+  <text x="784" y="362" fill="white" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="900">Sarah · 2:13 AM</text>
+  <text x="784" y="402" fill="rgba(255,255,255,0.7)" font-family="Inter, Arial, sans-serif" font-size="20" font-weight="700">No water - pump failure</text>
+  <circle cx="1000" cy="314" r="7" fill="#67E8F9"/>
+</svg>

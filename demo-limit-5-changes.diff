@@ -1,0 +1,49 @@
+diff --git a/src/lib/demo/limits.ts b/src/lib/demo/limits.ts
+new file mode 100644
+--- /dev/null
++++ b/src/lib/demo/limits.ts
+@@ -0,0 +1,6 @@
++export const DEMO_LIMIT_PER_DOMAIN = 5
++
++export const DEMO_LIMIT_REACHED_MESSAGE =
++  "You've reached the limit of five personalized demos for this company. We'd love to walk you through FINNOR live — book a quick call and we'll set up a tailored session for your team."
++
++export const DEMO_LIMIT_CALENDLY_URL = "https://calendly.com/pdave9807"
++
+diff --git a/supabase/migrations/20260702_raise_demo_limit_to_5.sql b/supabase/migrations/20260702_raise_demo_limit_to_5.sql
+new file mode 100644
+--- /dev/null
++++ b/supabase/migrations/20260702_raise_demo_limit_to_5.sql
+@@ -0,0 +1,7 @@
++-- Allow up to 5 demo generations per normalized website domain.
++-- Previously a unique index enforced a hard cap of 1 row per domain.
++
++DROP INDEX IF EXISTS public.demo_generation_locks_normalized_domain_key;
++
++CREATE INDEX IF NOT EXISTS demo_generation_locks_normalized_domain_idx
++  ON public.demo_generation_locks (normalized_domain);
++
+diff --git a/supabase/schema.sql b/supabase/schema.sql
+--- a/supabase/schema.sql
++++ b/supabase/schema.sql
+@@ -93,8 +93,8 @@
+ CREATE INDEX IF NOT EXISTS demo_leads_domain_company_idx
+   ON public.demo_leads (normalized_domain, normalized_company_name);
+ 
+-CREATE UNIQUE INDEX IF NOT EXISTS demo_generation_locks_normalized_domain_key
++CREATE INDEX IF NOT EXISTS demo_generation_locks_normalized_domain_idx
+   ON public.demo_generation_locks (normalized_domain);
+ 
+ CREATE INDEX IF NOT EXISTS demo_generation_locks_domain_company_idx
+diff --git a/supabase/finnor_demo_schema.sql b/supabase/finnor_demo_schema.sql
+--- a/supabase/finnor_demo_schema.sql
++++ b/supabase/finnor_demo_schema.sql
+@@ -47,8 +47,8 @@
+ CREATE INDEX IF NOT EXISTS demo_leads_domain_company_idx
+   ON public.demo_leads (normalized_domain, normalized_company_name);
+ 
+-CREATE UNIQUE INDEX IF NOT EXISTS demo_generation_locks_normalized_domain_key
++CREATE INDEX IF NOT EXISTS demo_generation_locks_normalized_domain_idx
+   ON public.demo_generation_locks (normalized_domain);
+ 
+ CREATE INDEX IF NOT EXISTS demo_generation_locks_domain_company_idx

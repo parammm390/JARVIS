@@ -1,0 +1,13 @@
+.vercel
+.env
+.env.local
+.env.*.local
+node_modules
+.next
+
+# local artifacts and secrets
+.env.vercel
+.DS_Store
+**/.DS_Store
+*.tsbuildinfo
+vercel_output.txt
