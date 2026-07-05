@@ -16,10 +16,12 @@ import {
   Wrench,
 } from "lucide-react"
 import { recordAtStage, type LifecycleScenario } from "@/lib/lifecycle/scenario"
+import { isPricingTier } from "@/lib/lifecycle/pricing"
+import { clearLifecycleHandoff, readLifecycleHandoff } from "@/lib/memory/handoff"
 import { RecordPanel } from "@/components/lifecycle/RecordPanel"
 import { TimelineScrubber } from "@/components/lifecycle/TimelineScrubber"
 import { StageScene } from "@/components/lifecycle/scenes"
-import { LifecycleSetup } from "@/components/lifecycle/LifecycleSetup"
+import { LifecycleSetup, type LifecyclePrefill } from "@/components/lifecycle/LifecycleSetup"
 import { CalendlyCta } from "@/components/demo/CalendlyCta"
 
 const EASE = [0.16, 1, 0.3, 1]
@@ -35,8 +37,30 @@ export function LifecycleExperience({ sample }: { sample: LifecycleScenario }) {
   const [index, setIndex] = useState(0)
   const [direction, setDirection] = useState(1)
   const [playing, setPlaying] = useState(false)
+  const [prefill, setPrefill] = useState<LifecyclePrefill | undefined>(undefined)
   const indexRef = useRef(index)
   indexRef.current = index
+
+  // Continuation from the live quoting call: the household record the visitor
+  // just created carries straight into the two-year view.
+  useEffect(() => {
+    const handoff = readLifecycleHandoff()
+    if (!handoff) return
+    clearLifecycleHandoff()
+    setPrefill({
+      zip: handoff.zip,
+      shopName: handoff.dealerName,
+      tier: isPricingTier(handoff.tier) ? handoff.tier : undefined,
+      services: handoff.services,
+      onWell: handoff.onWell,
+      banner: handoff.customerName
+        ? `Continuing the record from your live call — ${handoff.customerName}${
+            handoff.concern ? `, ${handoff.concern.toLowerCase()}` : ""
+          }. Same memory, next two years.`
+        : "Continuing the record from your live call. Same memory, next two years.",
+    })
+    setView("setup")
+  }, [])
 
   const stage = scenario.stages[index]
   const stageCount = scenario.stages.length
@@ -225,6 +249,7 @@ export function LifecycleExperience({ sample }: { sample: LifecycleScenario }) {
               transition={{ duration: 0.6, ease: EASE }}
             >
               <LifecycleSetup
+                prefill={prefill}
                 onReady={(generated) => startScenario(generated, false)}
                 onRunSample={() => startScenario(sample, true)}
               />

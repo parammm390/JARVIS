@@ -9,9 +9,9 @@ export const DEFAULT_WORKFLOW_TYPE: DemoWorkflowType = "water_treatment"
 
 export const workflowDefinitions = {
   water_treatment: {
-    label: "Water Treatment Lead Intake",
+    label: "Water Treatment Quoting & Booking",
     shortLabel: "Water treatment",
-    agentTitle: "Water Treatment Lead Intake AI",
+    agentTitle: "Water Treatment Quoting Agent",
     heroEyebrow: "Account-specific response workflow preview",
     heroDescription:
       "Choose the response workflow you want to test. FINNOR uses confirmed public information from your site to build a company-specific intake and handoff preview.",
@@ -31,13 +31,13 @@ export const workflowDefinitions = {
     suggestedCallerPrompt:
       "Hi, I am looking into a water softener and maybe a whole-house filter. We are on well water, there is a sulfur smell, and I would like to understand the options.",
     consoleDescription:
-      "The call captures the homeowner's contact details, water source, concern, system interest, timeline, and callback preference, then prepares a clean CSR or sales handoff without quoting prices or giving technical advice.",
+      "The call captures the homeowner's contact details, water source, and concern — then quotes a real range from the live area water data and your pricing tier, offers booking, and routes a structured handoff. No rate-sheet guessing.",
     chips: [
       "Quote request",
-      "Water test",
+      "Live area water data",
       "Softener / filtration / RO",
-      "Water source",
-      "Timeline",
+      "Quote range from your pricing",
+      "Booking",
       "CSR handoff",
     ],
     checklist: [

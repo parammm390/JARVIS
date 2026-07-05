@@ -24,6 +24,7 @@ import {
 } from "@/lib/demo/intake-extraction"
 import { CALENDLY_URL } from "@/components/demo/CalendlyCta"
 import { getWorkflowDefinition, type DemoWorkflowType } from "@/lib/demo/workflows"
+import { writeLifecycleHandoff } from "@/lib/memory/handoff"
 
 export type DemoTranscriptItem = NormalizedTranscriptItem
 export type IntakeSnapshot = DemoIntakeHandoff
@@ -177,6 +178,54 @@ export function PostCallHandoff({
         </div>
 
         <div className="space-y-5">
+          {intake.nextAction ? (
+            <HandoffCard icon={ClipboardCheck} label="Next Revenue Action">
+              <div className="rounded-3xl border border-teal-200 bg-teal-50 p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-base font-black text-slate-950">{intake.nextAction.label}</p>
+                    <p className="mt-1.5 text-xs font-bold uppercase tracking-widest text-teal-700">
+                      {intake.nextAction.due}
+                    </p>
+                  </div>
+                  {typeof intake.nextAction.revenue === "number" ? (
+                    <span className="shrink-0 rounded-full border border-teal-200 bg-white px-3 py-1.5 text-sm font-black text-teal-800">
+                      ${intake.nextAction.revenue.toLocaleString("en-US")}
+                    </span>
+                  ) : null}
+                </div>
+                <p className="mt-3 text-sm font-semibold leading-relaxed text-slate-700">
+                  This call is now a household memory record. Every record carries its next
+                  revenue action — and the record never forgets.
+                </p>
+                {intake.household ? (
+                  <button
+                    type="button"
+                    data-cursor="hover"
+                    onClick={() => {
+                      const record = intake.household
+                      if (!record) return
+                      writeLifecycleHandoff({
+                        householdId: record.id,
+                        dealerName: record.dealer.name,
+                        zip: record.dealer.zip,
+                        tier: record.dealer.tier,
+                        services: record.dealer.services,
+                        onWell: true,
+                        customerName: record.customer.name,
+                        concern: record.customer.concern,
+                      })
+                      window.location.href = "/demo/lifecycle"
+                    }}
+                    className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-slate-950 px-5 text-sm font-black text-white transition hover:bg-slate-800"
+                  >
+                    Watch this record&apos;s next two years
+                    <CalendarDays className="h-4 w-4" />
+                  </button>
+                ) : null}
+              </div>
+            </HandoffCard>
+          ) : null}
           <AnimatedHandoffSequence workflowType={intake.workflowType} />
 
           <HandoffCard icon={BellRing} label={workflow.alertLabel}>

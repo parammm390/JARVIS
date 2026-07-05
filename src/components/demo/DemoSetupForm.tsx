@@ -14,6 +14,16 @@ import {
 } from "lucide-react"
 import type { DemoGenerationStage, GenerateDemoResponse } from "@/lib/demo/types"
 import type { DemoWorkflowType } from "@/lib/demo/workflows"
+import { PRICING_TIERS, TIER_DEFINITIONS, type PricingTier } from "@/lib/lifecycle/pricing"
+
+const QUALIFY_SERVICES = [
+  "Water softeners",
+  "Whole-house filtration",
+  "RO drinking water",
+  "Iron & sulfur treatment",
+  "UV disinfection",
+  "Well pump service",
+]
 import { getWorkflowDefinition, workflowDefinitions } from "@/lib/demo/workflows"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -28,6 +38,13 @@ type DemoSetupFormProps = {
     companyName: string
     websiteUrl: string
     workflowType: DemoWorkflowType
+    qualification: {
+      serviceZip: string
+      pricingTier: string
+      services: string[]
+      householdSize: number
+      onWell: boolean
+    }
   }) => Promise<void>
   loadingSteps?: string[]
   loadingIndex?: number
@@ -52,6 +69,11 @@ export function DemoSetupForm({
   const [companyName, setCompanyName] = useState("")
   const [websiteUrl, setWebsiteUrl] = useState("")
   const [workflowType, setWorkflowType] = useState<DemoWorkflowType>("water_treatment")
+  const [serviceZip, setServiceZip] = useState("")
+  const [pricingTier, setPricingTier] = useState<PricingTier>("standard")
+  const [services, setServices] = useState<string[]>(QUALIFY_SERVICES.slice(0, 4))
+  const [householdSize, setHouseholdSize] = useState(4)
+  const [onWell, setOnWell] = useState(true)
   const workflow = getWorkflowDefinition(result?.profile.workflowType || workflowType)
 
   const isLoading = stage === "checking_duplicate" || stage === "generating_profile"
@@ -59,7 +81,12 @@ export function DemoSetupForm({
   const loadingProgress = isLoading
     ? Math.round(((loadingIndex + 1) / visibleLoadingSteps.length) * 100)
     : 0
-  const canSubmit = companyName.trim().length > 1 && websiteUrl.trim().length > 3 && !isLoading
+  const canSubmit =
+    companyName.trim().length > 1 &&
+    websiteUrl.trim().length > 3 &&
+    /^\d{5}$/.test(serviceZip) &&
+    services.length > 0 &&
+    !isLoading
 
   const qualityText = useMemo(() => {
     if (!result) return "Conservative extraction with fallback mode"
@@ -71,7 +98,20 @@ export function DemoSetupForm({
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!canSubmit) return
-    await onGenerate({ companyName, websiteUrl, workflowType })
+    await onGenerate({
+      companyName,
+      websiteUrl,
+      workflowType,
+      qualification: { serviceZip, pricingTier, services, householdSize, onWell },
+    })
+  }
+
+  function toggleService(service: string) {
+    setServices((current) =>
+      current.includes(service)
+        ? current.filter((item) => item !== service)
+        : [...current, service]
+    )
   }
 
   return (
@@ -180,6 +220,136 @@ export function DemoSetupForm({
                   </button>
                 )
               })}
+            </div>
+          </fieldset>
+
+          <fieldset className="space-y-4 rounded-2xl border border-teal-100 bg-teal-50/40 p-4">
+            <legend className="px-1 text-[10px] font-black uppercase tracking-[0.2em] text-teal-700">
+              Quoting setup — so the agent can quote real numbers
+            </legend>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label
+                  htmlFor="serviceZip"
+                  className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500"
+                >
+                  Service-area ZIP
+                </Label>
+                <Input
+                  id="serviceZip"
+                  value={serviceZip}
+                  onChange={(event) =>
+                    setServiceZip(event.target.value.replace(/[^\d]/g, "").slice(0, 5))
+                  }
+                  placeholder="22801"
+                  inputMode="numeric"
+                  className="h-12 rounded-xl border-slate-200 bg-white text-base font-semibold text-slate-900 placeholder:text-slate-400 focus-visible:border-sky-400 focus-visible:ring-2 focus-visible:ring-sky-100"
+                />
+              </div>
+              <div className="space-y-2">
+                <span className="block text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
+                  Typical household
+                </span>
+                <div className="flex gap-2">
+                  {[2, 4, 6].map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => setHouseholdSize(option)}
+                      className={`h-12 flex-1 rounded-xl border text-sm font-black transition ${
+                        householdSize === option
+                          ? "border-teal-200 bg-teal-50 text-teal-800"
+                          : "border-slate-200 bg-white text-slate-600 hover:border-sky-200"
+                      }`}
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <span className="block text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
+                Where you price
+              </span>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                {PRICING_TIERS.map((tierOption) => {
+                  const definition = TIER_DEFINITIONS[tierOption]
+                  const selected = pricingTier === tierOption
+                  return (
+                    <button
+                      key={tierOption}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => setPricingTier(tierOption)}
+                      className={`rounded-xl border p-3 text-left transition-all ${
+                        selected
+                          ? "border-sky-300 bg-white shadow-[0_12px_28px_rgba(14,165,233,0.1)]"
+                          : "border-slate-200 bg-white hover:border-sky-200"
+                      }`}
+                    >
+                      <span className="block text-xs font-black text-slate-950">
+                        {definition.label}
+                      </span>
+                      <span className="mt-0.5 block text-[10px] font-bold leading-snug text-slate-500">
+                        {definition.band}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <span className="block text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
+                Services you install
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {QUALIFY_SERVICES.map((service) => {
+                  const active = services.includes(service)
+                  return (
+                    <button
+                      key={service}
+                      type="button"
+                      onClick={() => toggleService(service)}
+                      className={`rounded-full border px-3 py-1.5 text-xs font-black transition ${
+                        active
+                          ? "border-teal-200 bg-teal-50 text-teal-800"
+                          : "border-slate-200 bg-white text-slate-600 hover:border-sky-200"
+                      }`}
+                    >
+                      {service}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <span className="block text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
+                Most customers are on
+              </span>
+              <div className="flex gap-2">
+                {[
+                  [true, "Private wells"],
+                  [false, "City water"],
+                ].map(([value, label]) => (
+                  <button
+                    key={String(label)}
+                    type="button"
+                    onClick={() => setOnWell(Boolean(value))}
+                    className={`h-11 flex-1 rounded-xl border text-xs font-black transition ${
+                      onWell === value
+                        ? "border-teal-200 bg-teal-50 text-teal-800"
+                        : "border-slate-200 bg-white text-slate-600 hover:border-sky-200"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
           </fieldset>
 

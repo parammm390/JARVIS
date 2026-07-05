@@ -1,5 +1,14 @@
 import { NextResponse } from "next/server"
-import type { GenerateDemoRequest, GenerateDemoResponse, ScrapeResult } from "@/lib/demo/types"
+import type {
+  DemoQualification,
+  GenerateDemoRequest,
+  GenerateDemoResponse,
+  ScrapeResult,
+} from "@/lib/demo/types"
+import { isPricingTier, type PricingTier } from "@/lib/lifecycle/pricing"
+import { buildCallDemoRecord, type QuoteSnapshot } from "@/lib/memory/household"
+import { buildAreaQuote } from "@/lib/memory/quoting"
+import { saveHouseholdRecord } from "@/lib/memory/store"
 import {
   DEMO_LIMIT_CALENDLY_URL,
   DEMO_LIMIT_PER_DOMAIN,
@@ -44,6 +53,7 @@ export async function POST(request: Request) {
       : ""
     const accountId = cleanString(body.accountId, 120)
     const ipHash = requestIpHash(request)
+    const qualification = normalizeQualification(body.qualification)
 
     if (!companyName || !websiteUrl || !workflowType) {
       return NextResponse.json(
@@ -77,6 +87,17 @@ export async function POST(request: Request) {
     if (lock.status === "created") {
       lockId = lock.lockId
     }
+
+    // The area quote runs against live public water data in parallel with the
+    // website scrape, so quoting costs no extra wall-clock time.
+    const quotingPromise: Promise<QuoteSnapshot | null> = qualification
+      ? buildAreaQuote({
+          zip: qualification.serviceZip,
+          tier: qualification.pricingTier as PricingTier,
+          householdSize: qualification.householdSize,
+          onWell: qualification.onWell,
+        })
+      : Promise.resolve(null)
 
     let scrape: ScrapeResult
     try {
@@ -140,6 +161,25 @@ export async function POST(request: Request) {
       )
       await finalizeGenerationLock({ lockId, leadId, profile })
 
+      // Every lead becomes a household memory record: dealer setup + area
+      // quote at month zero. The post-call intake merge advances it.
+      const quoting = await quotingPromise
+      let household = qualification
+        ? buildCallDemoRecord({
+            dealerName: profile.company_name,
+            zip: qualification.serviceZip,
+            tier: qualification.pricingTier,
+            tierLabel: quoting?.tierLabel || qualification.pricingTier,
+            services: qualification.services,
+            quote: quoting,
+          })
+        : null
+      let householdId: string | null = null
+      if (household) {
+        householdId = await saveHouseholdRecord(household)
+        household = { ...household, id: householdId }
+      }
+
       const response: GenerateDemoResponse = {
         profile,
         voiceProfile,
@@ -147,6 +187,9 @@ export async function POST(request: Request) {
         demoContext,
         artifacts,
         lead_id: leadId,
+        quoting,
+        household,
+        household_id: householdId,
         calendlyUrl: DEMO_LIMIT_CALENDLY_URL,
         scrape: {
           pagesRead: readablePagesFrom(scrape.pages).length,
@@ -173,6 +216,27 @@ export async function POST(request: Request) {
       { error: "An unexpected error occurred while preparing the demo." },
       { status: 500 }
     )
+  }
+}
+
+function normalizeQualification(
+  input: GenerateDemoRequest["qualification"]
+): DemoQualification | null {
+  if (!input || typeof input !== "object") return null
+  const serviceZip = cleanString(input.serviceZip, 10)
+  if (!/^\d{5}$/.test(serviceZip)) return null
+
+  return {
+    serviceZip,
+    pricingTier: isPricingTier(input.pricingTier) ? input.pricingTier : "standard",
+    services: (Array.isArray(input.services) ? input.services : [])
+      .map((service) => cleanString(service, 60))
+      .filter(Boolean)
+      .slice(0, 8),
+    householdSize: [2, 4, 6].includes(Number(input.householdSize))
+      ? Number(input.householdSize)
+      : 4,
+    onWell: input.onWell !== false,
   }
 }
 

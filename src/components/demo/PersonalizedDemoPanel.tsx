@@ -228,7 +228,15 @@ export function PersonalizedDemoPanel({
     callState === "responding"
   const callFinished = callState === "extracting_handoff" || callState === "ended"
 
-  const vapiVariables = useMemo(() => toVapiVariableValues(result.voiceProfile), [result.voiceProfile])
+  const vapiVariables = useMemo(
+    () => ({
+      ...toVapiVariableValues(result.voiceProfile),
+      // Quoting context from the live area water data + the dealer's pricing
+      // tier. New assistant prompts reference these; older prompts ignore them.
+      ...(result.quoting?.variables ?? {}),
+    }),
+    [result.voiceProfile, result.quoting]
+  )
   const missingContextKeys = useMemo(() => missingVapiVariableKeys(vapiVariables), [vapiVariables])
   const hasDemoContext = missingContextKeys.length === 0
   const intakeSnapshot = useMemo(
@@ -544,6 +552,8 @@ export function PersonalizedDemoPanel({
           companyProfile: result.profile,
           safeDemoScenario: result.voiceProfile.safeDemoScenario,
           workflowType: result.profile.workflowType,
+          householdId: result.household_id ?? null,
+          household: result.household ?? null,
         }),
       })
       const intake = (await response.json()) as DemoIntakeHandoff

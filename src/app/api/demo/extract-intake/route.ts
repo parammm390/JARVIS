@@ -9,6 +9,12 @@ import { isDemoMockMode, serverEnv } from "@/lib/env"
 import { ApiRequestError, readJsonBody } from "@/lib/api/request"
 import { rateLimit } from "@/lib/api/rate-limit"
 import {
+  finalizeRecord,
+  mergeIntakeIntoRecord,
+  type HouseholdRecord,
+} from "@/lib/memory/household"
+import { updateHouseholdRecord } from "@/lib/memory/store"
+import {
   DEFAULT_WORKFLOW_TYPE,
   getWorkflowDefinition,
   isDemoWorkflowType,
@@ -45,7 +51,9 @@ export async function POST(request: Request) {
       companyProfile?: Partial<CompanyProfile>
       safeDemoScenario?: string
       workflowType?: DemoWorkflowType
-    }>(request, 80_000)
+      householdId?: string | null
+      household?: HouseholdRecord | null
+    }>(request, 120_000)
     const transcript = normalizeTranscript(body.transcript)
     const companyProfile = body.companyProfile || {}
     const safeDemoScenario = typeof body.safeDemoScenario === "string" ? body.safeDemoScenario : ""
@@ -60,7 +68,13 @@ export async function POST(request: Request) {
       "Generated company"
 
     if (!transcript.length) {
-      return NextResponse.json(buildDemoPreviewHandoff(companyName, safeDemoScenario, workflowType))
+      return NextResponse.json(
+        withHouseholdMemory(
+          buildDemoPreviewHandoff(companyName, safeDemoScenario, workflowType),
+          body.household,
+          body.householdId
+        )
+      )
     }
 
     const deterministic = extractIntakeDeterministic({
@@ -71,7 +85,9 @@ export async function POST(request: Request) {
     })
 
     if (isDemoMockMode() || !serverEnv.geminiApiKey) {
-      return NextResponse.json(deterministic)
+      return NextResponse.json(
+        withHouseholdMemory(deterministic, body.household, body.householdId)
+      )
     }
 
     const geminiIntake = await extractWithGemini({
@@ -82,7 +98,9 @@ export async function POST(request: Request) {
       workflowType,
     })
 
-    return NextResponse.json(geminiIntake)
+    return NextResponse.json(
+      withHouseholdMemory(geminiIntake, body.household, body.householdId)
+    )
   } catch (error) {
     if (error instanceof ApiRequestError) {
       return NextResponse.json({ error: error.message }, { status: error.status })
@@ -91,6 +109,30 @@ export async function POST(request: Request) {
       buildDemoPreviewHandoff("Generated company"),
       { status: 200 }
     )
+  }
+}
+
+// The unifying step: the extracted intake merges into the household memory
+// record, the next revenue action recomputes, and the record persists. The
+// handoff UI renders both without a second round-trip.
+function withHouseholdMemory(
+  intake: DemoIntakeHandoff,
+  household: HouseholdRecord | null | undefined,
+  householdId: string | null | undefined
+): DemoIntakeHandoff {
+  if (!household || typeof household !== "object" || !household.dealer) {
+    return intake
+  }
+
+  try {
+    const merged = mergeIntakeIntoRecord(finalizeRecord({ ...household }), intake)
+    const withId = { ...merged, id: householdId ?? merged.id }
+    if (householdId) {
+      void updateHouseholdRecord(householdId, withId)
+    }
+    return { ...intake, nextAction: withId.nextAction, household: withId }
+  } catch {
+    return intake
   }
 }
 

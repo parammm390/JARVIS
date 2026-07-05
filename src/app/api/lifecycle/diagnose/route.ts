@@ -6,6 +6,9 @@ import { isPricingTier, type PricingTier } from "@/lib/lifecycle/pricing"
 import type { WaterLookup } from "@/lib/lifecycle/water-data"
 import { buildDiagnosisNarrative } from "@/lib/llm/lifecycle-diagnosis"
 import { getSupabaseServiceClient } from "@/lib/leads/supabase"
+import { finalizeRecord } from "@/lib/memory/household"
+import { saveHouseholdRecord } from "@/lib/memory/store"
+import { TIER_DEFINITIONS } from "@/lib/lifecycle/pricing"
 
 export const runtime = "nodejs"
 export const maxDuration = 60
@@ -55,11 +58,56 @@ export async function POST(request: Request) {
       live: true,
     }
 
-    const { diagnosisInput } = computeScenarioParts(buildInput)
+    const { sizing, quote, ledger, diagnosisInput } = computeScenarioParts(buildInput)
     const narrative = await buildDiagnosisNarrative(diagnosisInput)
     const scenario = buildScenario({ ...buildInput, narrative })
 
     void captureLifecycleLead(buildInput, narrative.fallbackUsed)
+
+    // The projected two-year relationship is itself a household memory record
+    // on the unified spine: full ledger, LTV, and the month-24 next action.
+    void saveHouseholdRecord(
+      finalizeRecord({
+        id: null,
+        source: "lifecycle_demo",
+        createdAt: new Date().toISOString(),
+        dealer: {
+          name: dealerName,
+          zip: buildInput.water.zip,
+          tier,
+          tierLabel: TIER_DEFINITIONS[tier].label,
+          services: buildInput.dealerServices,
+        },
+        customer: {
+          name: "Jennifer Alvarez (composite)",
+          phone: "",
+          address: `142 Millbrook Rd, ${buildInput.water.city}`,
+          concern: concernLabel,
+        },
+        water: {
+          city: buildInput.water.city,
+          stateCode: buildInput.water.stateCode,
+          hardnessGpg: sizing.hardnessGpg,
+          ironMgL: sizing.ironMgL,
+          source: buildInput.water.hardnessSource,
+        },
+        quote: {
+          packageName: quote.packageName,
+          low: quote.rangeLow,
+          high: quote.rangeHigh,
+          planMonthly: ledger.planMonthly,
+          saltDelivery: ledger.saltDelivery,
+        },
+        appointment: "Completed — installed day 8",
+        monthsElapsed: 24,
+        ledger: ledger.entries.map((entry) => ({
+          when: entry.when,
+          label: entry.label,
+          amount: entry.amount,
+          kind: entry.kind,
+        })),
+      })
+    )
 
     return NextResponse.json({ scenario, narrativeSource: narrative.fallbackUsed ? "computed" : "ai" })
   } catch (error) {

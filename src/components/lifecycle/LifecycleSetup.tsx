@@ -37,21 +37,34 @@ const GENERATION_STEPS = [
 
 type Phase = "form" | "generating" | "error"
 
+export type LifecyclePrefill = {
+  zip?: string
+  shopName?: string
+  tier?: PricingTier
+  services?: string[]
+  onWell?: boolean
+  banner?: string
+}
+
 export function LifecycleSetup({
   onReady,
   onRunSample,
+  prefill,
 }: {
   onReady: (scenario: LifecycleScenario) => void
   onRunSample: () => void
+  prefill?: LifecyclePrefill
 }) {
   const [phase, setPhase] = useState<Phase>("form")
-  const [zip, setZip] = useState("")
-  const [shopName, setShopName] = useState("")
-  const [services, setServices] = useState<string[]>(SERVICE_OPTIONS.slice(0, 4))
-  const [tier, setTier] = useState<PricingTier>("standard")
+  const [zip, setZip] = useState(prefill?.zip || "")
+  const [shopName, setShopName] = useState(prefill?.shopName || "")
+  const [services, setServices] = useState<string[]>(
+    prefill?.services?.length ? prefill.services : SERVICE_OPTIONS.slice(0, 4)
+  )
+  const [tier, setTier] = useState<PricingTier>(prefill?.tier || "standard")
   const [household, setHousehold] = useState(4)
   const [concern, setConcern] = useState(CONCERN_OPTIONS[0])
-  const [onWell, setOnWell] = useState(true)
+  const [onWell, setOnWell] = useState(prefill?.onWell ?? true)
   const [formError, setFormError] = useState("")
   const [stepIndex, setStepIndex] = useState(0)
   const [provenance, setProvenance] = useState<string[]>([])
@@ -169,6 +182,11 @@ export function LifecycleSetup({
                   <span className="mr-2 h-1.5 w-1.5 rounded-full bg-teal-500" />
                   Build it around your shop
                 </div>
+                {prefill?.banner ? (
+                  <div className="mb-4 rounded-2xl border border-teal-200 bg-teal-50 p-4 text-sm font-bold leading-relaxed text-teal-900">
+                    {prefill.banner}
+                  </div>
+                ) : null}
                 <h2 className="text-2xl font-black tracking-tight text-slate-950 md:text-3xl">
                   Real water. Real math. Your prices.
                 </h2>

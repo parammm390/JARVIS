@@ -61,10 +61,18 @@ export function DemoExperience() {
       companyName,
       websiteUrl,
       workflowType,
+      qualification,
     }: {
       companyName: string
       websiteUrl: string
       workflowType: DemoWorkflowType
+      qualification: {
+        serviceZip: string
+        pricingTier: string
+        services: string[]
+        householdSize: number
+        onWell: boolean
+      }
     }) => {
       setSelectedWorkflow(workflowType)
       setStage("checking_duplicate")
@@ -86,6 +94,7 @@ export function DemoExperience() {
             companyName,
             websiteUrl,
             workflowType,
+            qualification,
             browserFingerprint: getBrowserFingerprint(),
           }),
         })
@@ -225,6 +234,13 @@ function DemoHero({
     companyName: string
     websiteUrl: string
     workflowType: DemoWorkflowType
+    qualification: {
+      serviceZip: string
+      pricingTier: string
+      services: string[]
+      householdSize: number
+      onWell: boolean
+    }
   }) => Promise<void>
   loadingSteps: string[]
   loadingIndex: number

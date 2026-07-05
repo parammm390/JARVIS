@@ -1,4 +1,13 @@
 import type { DemoWorkflowType } from "@/lib/demo/workflows"
+import type { HouseholdRecord, NextRevenueAction, QuoteSnapshot } from "@/lib/memory/household"
+
+export type DemoQualification = {
+  serviceZip: string
+  pricingTier: string
+  services: string[]
+  householdSize: number
+  onWell: boolean
+}
 
 export type DemoGenerationStage =
   | "idle"
@@ -125,6 +134,7 @@ export type GenerateDemoRequest = {
   companyName: string
   websiteUrl: string
   workflowType: DemoWorkflowType
+  qualification?: Partial<DemoQualification>
   browserFingerprint?: string
   accountId?: string
 }
@@ -136,6 +146,9 @@ export type GenerateDemoResponse = {
   demoContext: string
   artifacts: DemoProofArtifacts
   lead_id?: string | null
+  quoting?: QuoteSnapshot | null
+  household?: HouseholdRecord | null
+  household_id?: string | null
   duplicate?: boolean
   duplicateMessage?: string
   calendlyUrl?: string
@@ -200,6 +213,8 @@ export type DemoIntakeHandoff = {
   peopleAffected: string
   isPreview?: boolean
   previewReason?: string
+  nextAction?: NextRevenueAction | null
+  household?: HouseholdRecord | null
   completedFields: Record<
     "callerName" | "facilityName" | "mainConcern" | "issueType" | "immediateDanger" | "callbackNumber",
     boolean
