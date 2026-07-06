@@ -15,7 +15,7 @@ export function CalendlyCta({ compact = false }: { compact?: boolean }) {
       <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
         <div>
           <h3 className="text-xl font-black tracking-tight text-slate-950">
-            Apply for the Booking & Lead Recovery Pilot
+            Apply for Founding Quoting Agent Pilot
           </h3>
           <p className="mt-2 max-w-2xl text-sm font-semibold leading-relaxed text-slate-600">
             Bring your company&apos;s demo. We will scope the lead sources, booking workflow,

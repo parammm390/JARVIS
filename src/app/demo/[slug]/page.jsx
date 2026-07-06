@@ -80,7 +80,7 @@ const PAIN_POINTS = [
 ]
 
 const TEAM_SIZES = ["Solo operator", "2–5 people", "5–15 people", "15+ people"]
-const JOB_VALUES = ["Under $500", "$500–$1,500", "$1,500–$3,500", "$3,500+"]
+const JOB_VALUES = ["$1,500–$2,800", "$2,800–$4,500", "$4,500–$7,000", "$7,000+"]
 const EASE = [0.16, 1, 0.3, 1]
 const MONO = "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
 const STATIC_WAVEFORM = [18, 34, 26, 48, 30, 54, 22, 42, 58, 28, 46, 36, 52, 24, 44, 32, 56, 38, 20, 50, 30, 42, 26, 36]

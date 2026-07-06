@@ -92,16 +92,16 @@ const comparisonRows = [
     points: [
       "Clarifies caller, address, pump type, pressure issue, no-water duration, contamination risk, urgency, and callback.",
       "Routes the urgent job to the owner, dispatcher, or on-call tech instead of leaving a loose message.",
-      "Keeps quotes, ETAs, troubleshooting, and customer promises with your human team.",
+      "Quotes ranges from your pricing and real water data automatically. Keeps ETAs, repairs, diagnosis, and final figures with your human team.",
     ],
   },
   {
     id: "generic-ai",
     label: "Finnor vs Generic AI",
     points: [
-      "Focused on well pump repair, pressure tank replacement, and water well service workflows.",
+      "Two equally-featured workflows: water treatment quoting (softeners, filtration, RO, iron/sulfur), and well pump / no-water emergency dispatch.",
       "Keeps unknown fields marked unknown instead of filling gaps confidently.",
-      "Recognizes well-service urgency such as no water, zero pressure, pump failure, contamination risk, or a household without water.",
+      "Recognizes urgency in both workflow types: treatment interest and timing from quotes, and emergency language like no water, zero pressure, pump failure, contamination risk.",
     ],
   },
 ]

@@ -75,7 +75,6 @@ export function Footer() {
         <div className="flex flex-col justify-between gap-5 border-t border-slate-200 pt-7 text-sm font-medium text-slate-500 md:flex-row md:items-center">
           <p>{new Date().getFullYear()} {siteConfig.name} Systems. All rights reserved.</p>
           <div className="flex flex-wrap gap-x-6 gap-y-3">
-            <span>Booked next steps, urgent routes, SMS/email alerts, and scoped CRM/webhook workflows.</span>
             <a href="/privacy" className="transition hover:text-slate-950">
               Privacy
             </a>

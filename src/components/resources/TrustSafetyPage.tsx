@@ -60,6 +60,7 @@ const boundaries = [
   "Your dispatcher or on-call technician",
   "Repair decisions and troubleshooting",
   "Repair diagnosis or equipment troubleshooting",
+  "The final on-site quote figure — FINNOR quotes ranges computed from your pricing and real water data, and never invents a number",
   "Emergency services",
   "A company's operating and safety policies",
   "Human follow-up with homeowners and property owners",
