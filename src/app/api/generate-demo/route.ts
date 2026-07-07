@@ -190,7 +190,7 @@ export async function POST(request: Request) {
         quoting,
         household,
         household_id: householdId,
-        qualification,
+        qualification: qualification ?? undefined,
         calendlyUrl: DEMO_LIMIT_CALENDLY_URL,
         scrape: {
           pagesRead: readablePagesFrom(scrape.pages).length,
