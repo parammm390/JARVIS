@@ -100,6 +100,7 @@ export function computeNextAction(
 ): NextRevenueAction {
   const plan = record.quote?.planMonthly ?? 24
   const salt = record.quote?.saltDelivery ?? 58
+  const hasConfirmedCustomer = record.customer.name || record.customer.address || record.customer.phone
 
   if (!record.water) {
     return {
@@ -122,7 +123,7 @@ export function computeNextAction(
       key: "book",
       label: "Text the report and booking options",
       due: "Within 60 seconds of hang-up",
-      revenue: Math.round((record.quote.low + record.quote.high) / 2),
+      revenue: hasConfirmedCustomer ? Math.round((record.quote.low + record.quote.high) / 2) : null,
     }
   }
   const installed = record.ledger.some((event) => event.kind === "install")

@@ -13,7 +13,7 @@ const faqs = [
   {
     question: "It actually quotes? On the call?",
     answer:
-      "Yes. FINNOR pulls the real public water record for the caller's area (USGS well samples, EPA system data), runs the sizing math against household size, and quotes a range from your pricing tier, like $3,800 to $4,250 installed. It never invents a number. The final on-site figure stays with your team, and the demo shows the whole calculation line by line.",
+      "Yes. FINNOR pulls the real public water record for the caller's area and confirms it with a free onsite test, runs the sizing math against household size, and quotes a range from your pricing tier, like $3,800 to $4,250 installed. It never invents a number. The final on-site figure stays with your team, and the demo shows the whole calculation line by line.",
   },
   {
     question: "What is a household memory record?",
@@ -23,7 +23,7 @@ const faqs = [
   {
     question: "Where does the water data come from?",
     answer:
-      "Public records, pulled live: measured well samples within 25 miles from USGS, plus your local system and its violation history from EPA SDWIS. Thin coverage falls back to state groundwater records and is labeled as an estimate. Unknowns stay marked, always.",
+      "Public records, plus a free onsite test to confirm the exact numbers for each customer's home. Thin coverage falls back to state groundwater records and is labeled as an estimate. Unknowns stay marked, always.",
   },
   {
     question: "Does FINNOR replace my dispatcher or my sales team?",

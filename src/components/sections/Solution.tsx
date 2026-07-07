@@ -30,7 +30,7 @@ const capabilities: Array<{ icon: LucideIcon; title: string; copy: string }> = [
   {
     icon: Radar,
     title: "Live Water Data Pull",
-    copy: "Measured well samples within 25 miles from USGS plus your local system's EPA record, pulled by ZIP while the caller is still on the line.",
+    copy: "Public water records for the caller's area, plus a free onsite test to confirm the exact numbers for their home.",
   },
   {
     icon: BarChart3,

@@ -145,7 +145,7 @@ export function Hero() {
               transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
               className="max-w-[22rem] break-words text-[2.18rem] font-black leading-[0.99] tracking-tight text-slate-950 sm:max-w-4xl sm:text-6xl md:text-7xl lg:text-[5.75rem]"
             >
-              The AI quoting agent that remembers every customer for years.
+              The quoting engine that knows your water before your team picks up.
             </motion.h1>
 
             <motion.p
@@ -156,8 +156,8 @@ export function Hero() {
             >
               FINNOR answers the calls you miss, pulls the real water data for the caller&apos;s
               ZIP, sizes the system with math, quotes from your pricing, and books the visit by
-              text. Then it remembers the household for two years of reviews, check-ins,
-              referrals, and upsells.
+              text. Every customer is remembered for years — reviews, check-ins, referrals, and
+              upsells.
             </motion.p>
 
             <motion.p

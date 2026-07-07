@@ -49,7 +49,7 @@ type PersonalizedDemoPanelProps = {
   onCallStatusChange: (stage: DemoGenerationStage) => void
 }
 
-const CALL_MAX_DURATION_SECONDS = 150
+const CALL_MAX_DURATION_SECONDS = 210
 const CALL_SAFETY_TIMEOUT_MS = CALL_MAX_DURATION_SECONDS * 1000
 
 function mockTranscriptFor(
@@ -190,6 +190,24 @@ function shouldAutoEndCall(transcript: TranscriptItem[]) {
   })
 }
 
+function buildSuggestedCallerPrompt(
+  workflowType: DemoWorkflowType,
+  onWell?: boolean
+): string {
+  if (workflowType === "well_pump_emergency") {
+    return "Hi, our whole house has had no water since 11 PM. The pressure tank reads zero, and I think the submersible well pump may have stopped working."
+  }
+
+  const waterSource = onWell ?? true
+  const waterConcern = waterSource
+    ? "sulfur smell and hard water"
+    : "chlorine taste and hard water"
+
+  return `Hi, I am looking into a water softener and maybe a whole-house filter. We are on ${
+    waterSource ? "well water" : "city water"
+  }, there is a ${waterConcern}, and I would like to understand the options.`
+}
+
 export function PersonalizedDemoPanel({
   result,
   onActiveStepChange,
@@ -197,6 +215,10 @@ export function PersonalizedDemoPanel({
   onCallStatusChange,
 }: PersonalizedDemoPanelProps) {
   const workflow = getWorkflowDefinition(result.profile.workflowType)
+  const suggestedPrompt = buildSuggestedCallerPrompt(
+    result.profile.workflowType,
+    result.qualification?.onWell
+  )
   const [callState, setCallState] = useState<CallState>("ready")
   const [micState, setMicState] = useState<MicState>("unknown")
   const [transcript, setTranscript] = useState<TranscriptItem[]>([])
@@ -730,7 +752,7 @@ export function PersonalizedDemoPanel({
                     Suggested caller prompt
                   </div>
                   <p className="text-base font-semibold leading-relaxed text-white/82">
-                    &quot;{workflow.suggestedCallerPrompt}&quot;
+                    &quot;{suggestedPrompt}&quot;
                   </p>
                   <p className="mt-3 text-sm font-semibold leading-relaxed text-slate-300">
                     {workflow.formDescription}

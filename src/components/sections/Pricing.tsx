@@ -20,7 +20,7 @@ const tiers = [
     features: [
       "Inbound quoting agent — missed, overflow, and after-hours calls",
       "Outbound speed-to-lead callbacks on forms and paid leads",
-      "Live water data by ZIP — USGS well samples + EPA public system records",
+      "Public water records plus a free onsite test to confirm the exact number",
       "Sizing and quote ranges computed from your own pricing tiers",
       "Tap-to-book SMS with the water report and open time slots, sent within seconds of the call ending",
       "No-water urgent route with safety screen and on-call handoff",

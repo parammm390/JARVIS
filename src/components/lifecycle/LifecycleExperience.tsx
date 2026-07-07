@@ -402,7 +402,7 @@ export function LifecycleExperience({ sample }: { sample: LifecycleScenario }) {
               </h3>
               <p className="mt-5 text-base font-semibold leading-relaxed text-slate-700">
                 If you&apos;re a one-truck shop that answers every call yourself and nothing you
-                sell tops $1,500, keep your $799 a month — you don&apos;t need this.
+                sell tops $1,500, keep your current workflow — you don&apos;t need this.
               </p>
               <p className="mt-4 text-base font-medium leading-relaxed text-slate-600">
                 It&apos;s built for dealers whose calls die in voicemail while the crew is under a

@@ -12,7 +12,7 @@ const workflow = [
   {
     icon: ClipboardList,
     title: "Water pulled, system sized",
-    detail: "Live public water data for the caller's ZIP, USGS well samples and EPA records, runs through the sizing math while the conversation is still going.",
+    detail: "Public water records for the caller's area, plus a free onsite test to confirm the exact numbers for their home.",
   },
   {
     icon: ShieldAlert,

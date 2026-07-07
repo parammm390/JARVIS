@@ -1,6 +1,6 @@
 "use client"
 
-import { FormEvent, useMemo, useState } from "react"
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react"
 import { motion } from "framer-motion"
 import {
   AlertTriangle,
@@ -28,6 +28,14 @@ import { getWorkflowDefinition, workflowDefinitions } from "@/lib/demo/workflows
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+
+function useHydrationAwareForms() {
+  const [isHydrated, setIsHydrated] = useState(false)
+  useEffect(() => {
+    setIsHydrated(true)
+  }, [])
+  return isHydrated
+}
 
 type DemoSetupFormProps = {
   stage: DemoGenerationStage
@@ -66,6 +74,7 @@ export function DemoSetupForm({
   loadingSteps = fallbackLoadingSteps,
   loadingIndex = 0,
 }: DemoSetupFormProps) {
+  const isHydrated = useHydrationAwareForms()
   const [companyName, setCompanyName] = useState("")
   const [websiteUrl, setWebsiteUrl] = useState("")
   const [workflowType, setWorkflowType] = useState<DemoWorkflowType>("water_treatment")
@@ -75,6 +84,20 @@ export function DemoSetupForm({
   const [householdSize, setHouseholdSize] = useState(4)
   const [onWell, setOnWell] = useState(true)
   const workflow = getWorkflowDefinition(result?.profile.workflowType || workflowType)
+
+  useEffect(() => {
+    if (!isHydrated) return
+    const form = document.querySelector('form[data-demo-setup]')
+    if (!form) return
+    const companyInput = form.querySelector<HTMLInputElement>('#companyName')
+    const urlInput = form.querySelector<HTMLInputElement>('#websiteUrl')
+    if (companyInput && companyInput.value !== companyName) {
+      companyInput.value = companyName
+    }
+    if (urlInput && urlInput.value !== websiteUrl) {
+      urlInput.value = websiteUrl
+    }
+  }, [isHydrated, companyName, websiteUrl])
 
   const isLoading = stage === "checking_duplicate" || stage === "generating_profile"
   const visibleLoadingSteps = loadingSteps.length ? loadingSteps : fallbackLoadingSteps
@@ -106,13 +129,14 @@ export function DemoSetupForm({
     })
   }
 
-  function toggleService(service: string) {
-    setServices((current) =>
-      current.includes(service)
+  const toggleService = useCallback((service: string) => {
+    setServices((current) => {
+      const updated = current.includes(service)
         ? current.filter((item) => item !== service)
         : [...current, service]
-    )
-  }
+      return updated
+    })
+  }, [])
 
   return (
     <div className="ops-card relative overflow-hidden rounded-[1.6rem] bg-white/88 p-5 shadow-[0_24px_70px_rgba(15,23,42,0.1)] md:p-7 lg:p-8">
@@ -123,7 +147,7 @@ export function DemoSetupForm({
           Live demo builder
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-6" data-demo-setup>
           <div className="space-y-3">
             <Label
               htmlFor="companyName"
@@ -138,6 +162,7 @@ export function DemoSetupForm({
               placeholder="Blue Ridge Water Treatment"
               className="h-14 rounded-xl border-slate-200 bg-white text-base font-semibold text-slate-900 placeholder:text-slate-400 focus-visible:border-sky-400 focus-visible:ring-2 focus-visible:ring-sky-100"
               autoComplete="organization"
+              suppressHydrationWarning
             />
           </div>
 
@@ -156,6 +181,7 @@ export function DemoSetupForm({
               className="h-14 rounded-xl border-slate-200 bg-white text-base font-semibold text-slate-900 placeholder:text-slate-400 focus-visible:border-sky-400 focus-visible:ring-2 focus-visible:ring-sky-100"
               inputMode="url"
               autoComplete="url"
+              suppressHydrationWarning
             />
           </div>
 

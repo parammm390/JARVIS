@@ -152,6 +152,7 @@ export type GenerateDemoResponse = {
   duplicate?: boolean
   duplicateMessage?: string
   calendlyUrl?: string
+  qualification?: Partial<DemoQualification>
   scrape: {
     pagesRead: number
     sourceUrls: string[]
