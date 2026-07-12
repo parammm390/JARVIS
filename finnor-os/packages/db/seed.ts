@@ -155,17 +155,218 @@ export async function seed(databaseUrl = process.env.DATABASE_URL): Promise<void
       [SEED_TENANT_ID],
     );
 
-    // Native inventory ledger starting stock (typical dealer consumables).
+    // Native inventory ledger starting stock (typical dealer consumables). One item
+    // (UV bulbs) is seeded BELOW its reorder threshold on purpose — a real dealer's
+    // inventory always has at least one thing running low, and the reorder-alert path
+    // (flag_reorder_needed, get_business_overview) needs a real case to demonstrate,
+    // not just "everything's fine" every time.
     await client.query(
       `INSERT INTO inventory_items (tenant_id, sku, name, quantity, reorder_threshold)
        VALUES
         ($1, 'SED-FILT-10', '10" Sediment Filter Cartridge', 24, 10),
         ($1, 'CARB-FILT-10', '10" Carbon Filter Cartridge', 18, 8),
         ($1, 'RO-MEM-75', 'RO Membrane 75 GPD', 6, 3),
-        ($1, 'RESIN-CUFT', 'Softener Resin (cu ft)', 12, 4)
+        ($1, 'RESIN-CUFT', 'Softener Resin (cu ft)', 12, 4),
+        ($1, 'UV-BULB-STD', 'UV Sterilizer Replacement Bulb', 2, 5),
+        ($1, 'PREFILT-HSG', 'Pre-Filter Housing Assembly', 9, 3)
        ON CONFLICT (tenant_id, sku) DO NOTHING`,
       [SEED_TENANT_ID],
     );
+
+    // ---- Additional technicians (varied specialties/coverage, not just one) ----
+    await client.query(
+      `INSERT INTO technicians (tenant_id, name, contact_info, availability)
+       SELECT $1, v.name, v.contact::jsonb, v.avail::jsonb FROM (VALUES
+         ('Priya Nair', '{"phone":"+13195550212","specialty":"RO/UV systems"}', '{"tue_sat":"07:30-16:00"}'),
+         ('Sam Okonkwo', '{"phone":"+13195550233","specialty":"softener install"}', '{"mon_fri":"09:00-18:00"}')
+       ) AS v(name, contact, avail)
+       WHERE NOT EXISTS (SELECT 1 FROM technicians t WHERE t.tenant_id = $1 AND t.name = v.name)`,
+      [SEED_TENANT_ID],
+    );
+
+    // ---- Full customer roster across every lifecycle stage — this is the point:
+    // a real dealer's book of business is never all in one state. Six new households,
+    // each seeded with the service history and workflow state that stage implies, so
+    // "customer lifecycles" and "win-back candidates" both have real, varied answers
+    // instead of two households stuck at the same stage forever. ----
+    const { rows: newHouseholds } = await client.query(
+      `INSERT INTO households (tenant_id, address, contact_info, water_profile, marketing_consent)
+       SELECT v.* FROM (VALUES
+        ($1::uuid, '215 Cypress Ct, Cedar Falls, IA', '{"name":"Marcus Webb","phone":"+13195550301"}'::jsonb, '{"hardness_gpg": 14, "iron_ppm": 0.6, "source": "well"}'::jsonb, true),
+        ($1::uuid, '77 Fieldstone Dr, Cedar Falls, IA', '{"name":"The Okafors","phone":"+13195550322"}'::jsonb, '{"hardness_gpg": 9, "iron_ppm": 0.2, "source": "municipal"}'::jsonb, true),
+        ($1::uuid, '340 Prairie View Ave, Cedar Falls, IA', '{"name":"Linda Chen","phone":"+13195550344"}'::jsonb, '{"hardness_gpg": 16, "iron_ppm": 0.3, "source": "well"}'::jsonb, true),
+        ($1::uuid, '19 Willow Bend Rd, Cedar Falls, IA', '{"name":"The Petersons","phone":"+13195550366"}'::jsonb, '{"hardness_gpg": 13, "iron_ppm": 0.5, "source": "well"}'::jsonb, true),
+        ($1::uuid, '502 Timber Ridge Rd, Waterloo, IA', '{"name":"Angela Ruiz","phone":"+13195550388"}'::jsonb, '{"hardness_gpg": 12, "iron_ppm": 0.4, "source": "municipal"}'::jsonb, true),
+        ($1::uuid, '88 Sable Creek Ln, Waterloo, IA', '{"name":"The Whitfields","phone":"+13195550399"}'::jsonb, '{"hardness_gpg": 15, "iron_ppm": 0.7, "source": "well"}'::jsonb, true)
+       ) AS v(tenant_id, address, contact_info, water_profile, marketing_consent)
+       WHERE NOT EXISTS (SELECT 1 FROM households h WHERE h.tenant_id = $1 AND h.address = v.address)
+       RETURNING id, address`,
+      [SEED_TENANT_ID],
+    );
+    const byAddr = (needle: string) => newHouseholds.find((r) => r.address.startsWith(needle))?.id as string | undefined;
+    const marcus = byAddr("215 Cypress");
+    const okafors = byAddr("77 Fieldstone");
+    const lindaChen = byAddr("340 Prairie");
+    const petersons = byAddr("19 Willow");
+    const angela = byAddr("502 Timber");
+    const whitfields = byAddr("88 Sable");
+
+    if (marcus) {
+      // Test completed, no quote yet — the exact case that lets a live call demo
+      // "generate a quote for Marcus" end to end.
+      await client.query(
+        `INSERT INTO service_visits (household_id, type, completed_at, notes)
+         VALUES ($1, 'water_test', now() - interval '4 days', 'Hardness 14 gpg, iron 0.6 ppm — softener + iron filter recommended')
+         ON CONFLICT DO NOTHING`,
+        [marcus],
+      );
+      await client.query(
+        `INSERT INTO workflow_states (tenant_id, workflow, subject_type, subject_id, state, history)
+         SELECT $1, 'lead_to_install', 'household', $2, 'test_completed',
+           jsonb_build_array(
+             jsonb_build_object('from','lead','to','water_test_scheduled','cause','schedule_water_test','at',(now() - interval '9 days')::text),
+             jsonb_build_object('from','water_test_scheduled','to','test_completed','cause','log_visit_report','at',(now() - interval '4 days')::text)
+           )
+         WHERE NOT EXISTS (SELECT 1 FROM workflow_states WHERE tenant_id = $1 AND subject_id = $2)`,
+        [SEED_TENANT_ID, marcus],
+      );
+    }
+    if (okafors) {
+      await client.query(
+        `INSERT INTO service_visits (household_id, type, completed_at, notes)
+         VALUES ($1, 'water_test', now() - interval '11 days', 'Municipal supply, moderate hardness — softener only')
+         ON CONFLICT DO NOTHING`,
+        [okafors],
+      );
+      await client.query(
+        `INSERT INTO proposals (household_id, content, status, sent_at)
+         SELECT $1, '{"summary":"HE Softener 32k package","price_note":"per current price sheet"}'::jsonb, 'sent', now() - interval '3 days'
+         WHERE NOT EXISTS (SELECT 1 FROM proposals WHERE household_id = $1)`,
+        [okafors],
+      );
+      await client.query(
+        `INSERT INTO workflow_states (tenant_id, workflow, subject_type, subject_id, state, history)
+         SELECT $1, 'lead_to_install', 'household', $2, 'quote_sent',
+           jsonb_build_array(
+             jsonb_build_object('from','lead','to','water_test_scheduled','cause','schedule_water_test'),
+             jsonb_build_object('from','water_test_scheduled','to','test_completed','cause','log_visit_report'),
+             jsonb_build_object('from','test_completed','to','quote_sent','cause','generate_quote','at',(now() - interval '3 days')::text)
+           )
+         WHERE NOT EXISTS (SELECT 1 FROM workflow_states WHERE tenant_id = $1 AND subject_id = $2)`,
+        [SEED_TENANT_ID, okafors],
+      );
+    }
+    if (lindaChen) {
+      await client.query(
+        `INSERT INTO equipment (household_id, type, model, source, install_date)
+         VALUES ($1, 'water_softener', 'HE Softener 45k', 'finnor', now() - interval '6 days') ON CONFLICT DO NOTHING`,
+        [lindaChen],
+      );
+      await client.query(
+        `INSERT INTO service_visits (household_id, type, completed_at, notes)
+         VALUES ($1, 'install', now() - interval '6 days', 'HE Softener 45k installed, system tested and running')
+         ON CONFLICT DO NOTHING`,
+        [lindaChen],
+      );
+      await client.query(
+        `INSERT INTO maintenance_agreements (household_id, cadence, terms, status, renewal_date)
+         VALUES ($1, 'annual', '{"plan":"standard","price_usd":"${PLACEHOLDER_NEEDS_REAL_VALUE}"}', 'active', now() + interval '359 days')
+         ON CONFLICT DO NOTHING`,
+        [lindaChen],
+      );
+      await client.query(
+        `INSERT INTO invoices (tenant_id, household_id, amount_usd, status, memo, due_date)
+         SELECT $1, $2, '2450.00', 'paid', 'HE Softener 45k — install', now() - interval '5 days'
+         WHERE NOT EXISTS (SELECT 1 FROM invoices WHERE household_id = $2)`,
+        [SEED_TENANT_ID, lindaChen],
+      );
+      await client.query(
+        `INSERT INTO workflow_states (tenant_id, workflow, subject_type, subject_id, state, history)
+         SELECT $1, 'lead_to_install', 'household', $2, 'installed',
+           jsonb_build_array(
+             jsonb_build_object('from','lead','to','water_test_scheduled','cause','schedule_water_test'),
+             jsonb_build_object('from','water_test_scheduled','to','test_completed','cause','log_visit_report'),
+             jsonb_build_object('from','test_completed','to','quote_sent','cause','generate_quote'),
+             jsonb_build_object('from','quote_sent','to','installed','cause','log_visit_report','at',(now() - interval '6 days')::text)
+           )
+         WHERE NOT EXISTS (SELECT 1 FROM workflow_states WHERE tenant_id = $1 AND subject_id = $2)`,
+        [SEED_TENANT_ID, lindaChen],
+      );
+    }
+    if (petersons) {
+      // Fully closed loop, AND the one overdue invoice — the exact case for
+      // "call the people who haven't paid" to have something real to find.
+      await client.query(
+        `INSERT INTO equipment (household_id, type, model, source, install_date)
+         VALUES ($1, 'water_softener', 'HE Softener 32k', 'finnor', now() - interval '35 days') ON CONFLICT DO NOTHING`,
+        [petersons],
+      );
+      await client.query(
+        `INSERT INTO service_visits (household_id, type, completed_at, notes)
+         VALUES ($1, 'install', now() - interval '35 days', 'HE Softener 32k installed')
+         ON CONFLICT DO NOTHING`,
+        [petersons],
+      );
+      await client.query(
+        `INSERT INTO invoices (tenant_id, household_id, amount_usd, status, memo, due_date)
+         SELECT $1, $2, '1890.00', 'overdue', 'HE Softener 32k — install', now() - interval '14 days'
+         WHERE NOT EXISTS (SELECT 1 FROM invoices WHERE household_id = $2)`,
+        [SEED_TENANT_ID, petersons],
+      );
+      await client.query(
+        `INSERT INTO communications_log (household_id, channel, direction, content, timestamp)
+         SELECT $1, 'call', 'outbound', 'Post-install follow-up — customer satisfied, mentioned invoice would be paid "this week"', now() - interval '20 days'
+         WHERE NOT EXISTS (SELECT 1 FROM communications_log WHERE household_id = $1)`,
+        [petersons],
+      );
+      await client.query(
+        `INSERT INTO workflow_states (tenant_id, workflow, subject_type, subject_id, state, history)
+         SELECT $1, 'lead_to_install', 'household', $2, 'follow_up_sent',
+           jsonb_build_array(
+             jsonb_build_object('from','lead','to','water_test_scheduled','cause','schedule_water_test'),
+             jsonb_build_object('from','water_test_scheduled','to','test_completed','cause','log_visit_report'),
+             jsonb_build_object('from','test_completed','to','quote_sent','cause','generate_quote'),
+             jsonb_build_object('from','quote_sent','to','installed','cause','log_visit_report'),
+             jsonb_build_object('from','installed','to','follow_up_sent','cause','send_proposal_to_recent_installs','at',(now() - interval '20 days')::text)
+           )
+         WHERE NOT EXISTS (SELECT 1 FROM workflow_states WHERE tenant_id = $1 AND subject_id = $2)`,
+        [SEED_TENANT_ID, petersons],
+      );
+    }
+    // Angela Ruiz + the Whitfields: real past customers with NO recent contact —
+    // genuine win-back candidates (3-6 months inactive), not fabricated on the fly.
+    if (angela) {
+      await client.query(
+        `INSERT INTO equipment (household_id, type, model, source, install_date)
+         VALUES ($1, 'water_softener', 'Standard Softener 32k', 'finnor', now() - interval '210 days') ON CONFLICT DO NOTHING`,
+        [angela],
+      );
+      await client.query(
+        `INSERT INTO communications_log (household_id, channel, direction, content, timestamp)
+         SELECT $1, 'call', 'outbound', 'Annual service reminder call — no answer, left voicemail', now() - interval '152 days'
+         WHERE NOT EXISTS (SELECT 1 FROM communications_log WHERE household_id = $1)`,
+        [angela],
+      );
+      await client.query(
+        `INSERT INTO maintenance_agreements (household_id, cadence, terms, status, renewal_date)
+         VALUES ($1, 'annual', '{"plan":"standard","price_usd":"${PLACEHOLDER_NEEDS_REAL_VALUE}"}', 'lapsed', now() - interval '60 days')
+         ON CONFLICT DO NOTHING`,
+        [angela],
+      );
+    }
+    if (whitfields) {
+      await client.query(
+        `INSERT INTO equipment (household_id, type, model, source, install_date)
+         VALUES ($1, 'water_softener', 'HE Softener 45k', 'finnor', now() - interval '180 days') ON CONFLICT DO NOTHING`,
+        [whitfields],
+      );
+      await client.query(
+        `INSERT INTO communications_log (household_id, channel, direction, content, timestamp)
+         SELECT $1, 'sms', 'outbound', 'Filter change reminder texted', now() - interval '128 days'
+         WHERE NOT EXISTS (SELECT 1 FROM communications_log WHERE household_id = $1)`,
+        [whitfields],
+      );
+    }
 
     // Read-only actions (web research, stock/availability checks, knowledge lookups)
     // answer instantly without a confirmation stop — they change nothing.

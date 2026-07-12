@@ -14,13 +14,18 @@ export class GroqProvider implements LLMProvider {
   private client: Groq;
   private models: string[];
 
-  constructor(apiKey = process.env.GROQ_API_KEY, model = process.env.GROQ_MODEL ?? "llama-3.1-8b-instant") {
+  constructor(apiKey = process.env.GROQ_API_KEY, model = process.env.GROQ_MODEL ?? "llama-3.3-70b-versatile") {
     if (!apiKey) throw new Error("GROQ_API_KEY is not set");
     // No SDK-level retries: a throttled call fails in milliseconds and we fail over
     // to the next model, whose rate-limit bucket is separate — instead of sitting
     // out a 20-40s retry-after on the free tier.
     this.client = new Groq({ apiKey, timeout: 8_000, maxRetries: 0 });
-    const fallbacks = ["llama-3.1-8b-instant", "llama-3.3-70b-versatile"];
+    // 70B first: this model's whole job is precise structured-field extraction (which
+    // action_type, which exact payload fields) — the 8B model is fast but was
+    // regularly stuffing entire sentences into single fields and misrouting between
+    // similarly-named actions. 8B stays as the fallback for when 70B is rate-limited,
+    // not the default.
+    const fallbacks = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
     this.models = [model, ...fallbacks.filter((m) => m !== model)];
   }
 

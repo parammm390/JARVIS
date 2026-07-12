@@ -2,7 +2,7 @@
 // transition history. Successful action executions advance the relevant machine —
 // state lives in the database, never implicitly in application logic.
 
-import { withTenant, workflowStates, households } from "@finnor/db";
+import { withTenant, workflowStates, households, serviceVisits } from "@finnor/db";
 import { and, eq, sql } from "drizzle-orm";
 
 export const WORKFLOWS = {
@@ -41,14 +41,20 @@ function transitionsFor(tenantId: string): Record<string, Transition> {
     log_visit_report: {
       workflow: "lead_to_install",
       subjectType: "household",
-      toState: "test_completed",
-      subject: (p) => (p.householdId ? String(p.householdId) : null),
+      toState: "test_completed", // overridden dynamically below by the visit's actual type
+      subject: () => null, // resolved from visitId below — most real calls only carry that
     },
     send_proposal_to_recent_installs: {
       workflow: "lead_to_install",
       subjectType: "household",
       toState: "follow_up_sent",
       subject: () => null, // per-target advancement handled below (batch)
+    },
+    generate_quote: {
+      workflow: "lead_to_install",
+      subjectType: "household",
+      toState: "quote_sent",
+      subject: (p) => (p.householdId ? String(p.householdId) : null),
     },
     renew_maintenance_agreement: {
       workflow: "amc_renewal",
@@ -107,6 +113,27 @@ export async function advanceWorkflowForAction(
   const advanced: Array<{ workflow: string; subjectId: string; toState: string }> = [];
   const t = transitionsFor(tenantId)[actionType];
   if (!t) return advanced;
+
+  // log_visit_report: the real signal for which stage a visit completion means is the
+  // visit's own type (a technician logging an install visit means "installed", a water
+  // test visit means "test_completed") — and most real calls only carry visitId, not
+  // householdId, so resolve both from the visit row instead of trusting the payload.
+  if (actionType === "log_visit_report") {
+    const visitId = payload.visitId ? String(payload.visitId) : null;
+    let householdId = payload.householdId ? String(payload.householdId) : null;
+    let toState = "test_completed";
+    if (visitId) {
+      const [visit] = await withTenant(tenantId, (db) => db.select().from(serviceVisits).where(eq(serviceVisits.id, visitId)));
+      if (visit) {
+        householdId = householdId ?? visit.householdId;
+        if (visit.type.toLowerCase().includes("install")) toState = "installed";
+      }
+    }
+    if (!householdId) return advanced;
+    await advanceWorkflowState(tenantId, t.workflow, t.subjectType, householdId, toState, actionType);
+    advanced.push({ workflow: t.workflow, subjectId: householdId, toState });
+    return advanced;
+  }
 
   // Batch actions advance every target household.
   if (actionType === "send_proposal_to_recent_installs" && Array.isArray(payload.targets)) {
