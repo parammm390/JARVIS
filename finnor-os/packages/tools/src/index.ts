@@ -18,3 +18,4 @@ export * from "./email";
 export * from "./maps";
 export * from "./exa";
 export * from "./llm";
+export * from "./voice-personas";

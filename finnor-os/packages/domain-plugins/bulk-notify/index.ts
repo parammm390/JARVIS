@@ -6,6 +6,7 @@
 import type { DomainEnginePlugin } from "../shared/plugin-interface";
 import type { DraftAction, ExecutionResult, ValidationResult, DomainPolicy } from "@finnor/shared-types";
 import type { ToolRegistry } from "@finnor/tools";
+import { personaAssistantId } from "@finnor/tools";
 import { withTenant, households, communicationsLog, serviceVisits } from "@finnor/db";
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -13,13 +14,6 @@ import { z } from "zod";
 const ACTION = "bulk_notify_existing_customers";
 
 const opt = <T extends z.ZodTypeAny>(t: T) => t.nullish().transform((v: unknown) => v ?? undefined);
-
-/** Named voice personas — real Vapi assistant ids, created for specific call purposes. */
-export const VOICE_PERSONAS: Record<string, string> = {
-  winback: "787ec013-a44f-474d-a719-c5d37c0372ae",
-  service_reminder: "33dbdbfb-cf60-4bf8-8f58-2f9a1c37b0aa",
-  install_followup: "5c1a88a9-1a9b-4ed0-a2c0-6089422ca9c0",
-};
 
 export const BulkNotifyPayloadSchema = z.object({
   offerScript: z.string().min(10).max(1000),
@@ -138,7 +132,7 @@ export const bulkNotifyPlugin: DomainEnginePlugin = {
     const channel = String(draft.payload.channel ?? "sms");
     const tenantId = String(draft.payload.tenantId ?? "");
     const voicePersona = draft.payload.voicePersona ? String(draft.payload.voicePersona) : undefined;
-    const assistantId = voicePersona ? VOICE_PERSONAS[voicePersona] : undefined;
+    const assistantId = personaAssistantId(voicePersona);
     if (targets.length === 0) return { status: "success", output: { sent: 0 }, expected: { sent: 0 } };
 
     let sent = 0;

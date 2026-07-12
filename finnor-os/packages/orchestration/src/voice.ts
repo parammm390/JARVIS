@@ -31,6 +31,11 @@ const INTEGRATION_NAMES: Record<string, string> = {
   accounting: "your accounting system",
   exa: "the web search service",
   redis: "the session memory service",
+  meta_ads: "your Meta Ads account",
+  google_ads: "your Google Ads account",
+  quickbooks: "your QuickBooks account",
+  email: "your email account",
+  maps: "the address lookup service",
 };
 
 /**

@@ -5,15 +5,13 @@
 import type { DomainEnginePlugin } from "../shared/plugin-interface";
 import type { DraftAction, ExecutionResult, ValidationResult, DomainPolicy } from "@finnor/shared-types";
 import type { ToolRegistry } from "@finnor/tools";
+import { VOICE_PERSONAS } from "@finnor/tools";
 import { withTenant, invoices, communicationsLog } from "@finnor/db";
 import { findHousehold } from "../shared/db-helpers";
 import { eq, inArray, or } from "drizzle-orm";
 import { z } from "zod";
 
 const opt = <T extends z.ZodTypeAny>(t: T) => t.nullish().transform((v: unknown) => v ?? undefined);
-
-/** Vapi assistant id for the payment-collector persona (see bulk-notify's VOICE_PERSONAS). */
-const PAYMENT_COLLECTOR_ASSISTANT_ID = "359a7dfe-4cb3-4ccb-9055-5d0cbc5b2e2c";
 
 export const CreateInvoiceSchema = z.object({
   householdId: opt(z.string().uuid()),
@@ -136,7 +134,7 @@ export const accountingPlugin: DomainEnginePlugin = {
           phoneNumber: String(contact.phone),
           instructions: firstMessage,
           tenantId,
-          assistantId: PAYMENT_COLLECTOR_ASSISTANT_ID,
+          assistantId: VOICE_PERSONAS.payment_collector,
           purpose: "payment_reminder",
         });
         if (call.ok) {
@@ -178,7 +176,7 @@ export const accountingPlugin: DomainEnginePlugin = {
         phoneNumber: String(contact.phone),
         instructions: message,
         tenantId,
-        assistantId: PAYMENT_COLLECTOR_ASSISTANT_ID,
+        assistantId: VOICE_PERSONAS.payment_collector,
         purpose: "payment_reminder",
       });
       sent = r.ok;

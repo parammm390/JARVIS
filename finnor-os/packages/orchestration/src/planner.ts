@@ -114,7 +114,9 @@ export class LLMPlanner implements Planner {
           })),
         )
         .returning();
-      return rows.map((row) => ({
+      // Single multi-row INSERT ... RETURNING preserves the input order, so rows[i]
+      // corresponds to valid[i] — safe to zip the LLM's reasoning back in by index.
+      return rows.map((row, i) => ({
         id: row.id,
         tenantId: row.tenantId,
         actionType: row.actionType,
@@ -122,6 +124,7 @@ export class LLMPlanner implements Planner {
         policyId: row.policyId,
         status: row.status,
         createdAt: row.createdAt.toISOString(),
+        reasoning: valid[i]?.reasoning,
       }));
     });
   }

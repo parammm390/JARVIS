@@ -85,7 +85,7 @@ export class FinnorOrchestrator implements Orchestrator {
     }> = [];
     await Promise.all(
       actions.map(async (action) => {
-        await appendEpisode(ctx.tenantId, action.id, "planned", { instruction }, { actionType: action.actionType });
+        await appendEpisode(ctx.tenantId, action.id, "planned", { instruction }, { actionType: action.actionType, reasoning: action.reasoning ?? null });
         const policy = await this.loadPolicy(action);
         const result = await this.executor.execute(action, policy);
         await this.reflectWithRetry(action, policy, result);
@@ -117,6 +117,41 @@ export class FinnorOrchestrator implements Orchestrator {
       }).catch(() => undefined);
     }
     return actions;
+  }
+
+  /**
+   * Draft and gate a SINGLE action whose action_type/payload is already known —
+   * skips the LLM planner entirely. For system-originated work (scheduled scans,
+   * proactive jobs) where there's no free-text instruction to interpret, only a
+   * deterministic decision already made by the caller. This is the shared primitive
+   * every proactive scan handler uses so each one gets a real rendered summary and
+   * (if voice is configured) a real voice_confirm_request job — the same treatment
+   * a human-typed instruction gets, not a hand-inserted row that skips the pipeline.
+   */
+  async draftKnownAction(
+    actionType: string,
+    payload: Record<string, unknown>,
+    tenantId: string,
+    opts: { source?: string } = {},
+  ): Promise<{ action: DomainAction; result: ExecutionResult }> {
+    const [row] = await withTenant(tenantId, (db) =>
+      db.insert(domainActions).values({ tenantId, actionType, payload, status: "draft" }).returning(),
+    );
+    if (!row) throw new Error("draftKnownAction: insert returned no row");
+    const action: DomainAction = {
+      id: row.id,
+      tenantId: row.tenantId,
+      actionType: row.actionType,
+      payload: row.payload as Record<string, unknown>,
+      policyId: row.policyId,
+      status: row.status,
+      createdAt: row.createdAt.toISOString(),
+    };
+    await appendEpisode(tenantId, action.id, "planned", { source: opts.source ?? "system_scan" }, { actionType });
+    const policy = await this.loadPolicy(action);
+    const result = await this.executor.execute(action, policy);
+    await this.reflectWithRetry(action, policy, result);
+    return { action, result };
   }
 
   /** Resume an approved action (called after POST /confirm flips status to approved). */

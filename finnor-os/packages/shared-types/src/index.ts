@@ -28,6 +28,11 @@ export interface DomainAction {
   policyId: string | null;
   status: DomainActionStatus;
   createdAt: string;
+  /** Why the LLM planner chose this action_type/payload — optional (only the LLM
+   *  planner path sets it; draftKnownAction/system-originated actions have no LLM
+   *  reasoning to report). Not a DB column — carried through to the "planned"
+   *  action_log episode for the learning/feedback pillar, never queried directly. */
+  reasoning?: string;
 }
 
 export interface DomainPolicy {
