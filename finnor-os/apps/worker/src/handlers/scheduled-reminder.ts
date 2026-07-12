@@ -29,19 +29,20 @@ export const scheduledReminder: JobHandler = async (payload) => {
       })
       .from(maintenanceAgreements)
       .innerJoin(households, eq(maintenanceAgreements.householdId, households.id))
-      .where(and(eq(maintenanceAgreements.status, "active"), lte(maintenanceAgreements.renewalDate, cutoff))),
+      .where(and(eq(households.tenantId, tenantId), eq(maintenanceAgreements.status, "active"), lte(maintenanceAgreements.renewalDate, cutoff))),
   );
   if (due.length === 0) return;
 
   // Idempotency: one query for every pending renewal, scoped to THIS agreement id
   // via its payload — not "any pending renewal anywhere" (the previous version's
   // global check meant one pending renewal silently skipped every other agreement
-  // in the same run). Fetched once, not once per agreement.
+  // in the same run). Fetched once, not once per agreement. Explicit tenantId filter
+  // (not just RLS) — see scan-low-inventory's comment for why.
   const pendingRenewals = await withTenant(tenantId, (db) =>
     db
       .select({ payload: domainActions.payload })
       .from(domainActions)
-      .where(and(eq(domainActions.actionType, "renew_maintenance_agreement"), eq(domainActions.status, "pending"))),
+      .where(and(eq(domainActions.tenantId, tenantId), eq(domainActions.actionType, "renew_maintenance_agreement"), eq(domainActions.status, "pending"))),
   );
   const alreadyPendingAgreementIds = new Set(
     pendingRenewals.map((r) => (r.payload as Record<string, unknown>)?.agreementId).filter(Boolean),

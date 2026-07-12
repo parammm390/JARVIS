@@ -246,3 +246,16 @@ export const invoices = pgTable("invoices", {
   dueDate: timestamp("due_date", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// Proactive scan findings (§14 extension): a staging area for scans with no natural
+// mutating action to draft into (low inventory, service-due) — the owner digest job
+// reads undigested rows, speaks/logs them, marks them digested.
+export const scanFindings = pgTable("scan_findings", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+  scanType: text("scan_type").notNull(),
+  summary: text("summary").notNull(),
+  details: jsonb("details").notNull().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  digestedAt: timestamp("digested_at", { withTimezone: true }),
+});
