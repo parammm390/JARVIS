@@ -39,7 +39,11 @@ export function getPool(): pg.Pool {
       process.env.POSTGRES_URL;
     if (!url) throw new Error("DATABASE_URL is not set");
     const cfg = pgConnectionConfig(url);
-    pool = new pg.Pool({ ...cfg, max: cfg.ssl ? 5 : 10 });
+    // Session-mode poolers (Supabase Supavisor) cap total concurrent clients low
+    // (15 on the default tier). Every serverless invocation opens its own pg.Pool, so
+    // a small per-invocation max plus a short idle timeout is what keeps that shared
+    // budget from being exhausted under real concurrent traffic — 5 was too generous.
+    pool = new pg.Pool({ ...cfg, max: cfg.ssl ? 2 : 10, idleTimeoutMillis: cfg.ssl ? 8_000 : undefined });
     // All Finnor tables live in the finnor_os schema; raw SQL in the app is unqualified.
     // Setting the path per connection keeps the shared role's defaults untouched.
     pool.on("connect", (client) => {

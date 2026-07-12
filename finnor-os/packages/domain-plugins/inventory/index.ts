@@ -71,7 +71,20 @@ export const inventoryPlugin: DomainEnginePlugin = {
         };
       }
       const item = await findInventoryItem(tenantId, { sku: p.sku ? String(p.sku) : undefined, name: p.name ? String(p.name) : undefined });
-      if (!item) return { status: "failure", output: {}, error: `No inventory item matches "${p.sku ?? p.name}".` };
+      if (!item) {
+        // A voice/text instruction that didn't name a real SKU still deserves a real
+        // answer, not a hard failure — fall back to the full list rather than making
+        // the caller repeat themselves with more precise wording.
+        const all = await withTenant(tenantId, (db) => db.select().from(inventoryItems));
+        return {
+          status: "success",
+          output: {
+            note: `Didn't recognize "${p.sku ?? p.name}" as a specific item — here's everything in stock instead.`,
+            items: all.map((i) => ({ sku: i.sku, name: i.name, quantity: i.quantity, reorderThreshold: i.reorderThreshold })),
+          },
+          expected: { answered: true },
+        };
+      }
       return { status: "success", output: { ...item }, expected: { answered: true } };
     }
 

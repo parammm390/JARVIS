@@ -32,6 +32,47 @@ interface VapiToolCall {
   function?: { name?: string; arguments?: Record<string, unknown> | string };
 }
 
+/**
+ * Turns ANY plugin's execute() output into something speakable — not just the few
+ * plugins that happen to set spokenSummary/recommendation/answer. Most plugins return
+ * structured data (arrays of rows, a handful of scalar fields) with nothing shaped for
+ * voice; without this, those results were silently swallowed into a generic "done"
+ * message that implied success even when there was nothing real to report.
+ */
+function describeExecutionOutput(actionSummary: string | null, out: Record<string, unknown>): string {
+  const known =
+    (out.spokenSummary as string | undefined) ??
+    (out.recommendation as string | undefined) ??
+    (out.answer as string | undefined) ??
+    (out.quantity !== undefined ? `${out.name ?? "item"}: ${out.quantity} in stock.` : undefined);
+  if (known) return known;
+
+  const note = typeof out.note === "string" ? out.note + " " : "";
+
+  const arrayEntry = Object.entries(out).find(([, v]) => Array.isArray(v));
+  if (arrayEntry) {
+    const [, arr] = arrayEntry as [string, unknown[]];
+    if (arr.length === 0) return `${note}${actionSummary ?? "That"} — nothing found.`;
+    const sample = arr.slice(0, 5).map((item) => {
+      if (item && typeof item === "object") {
+        const rec = item as Record<string, unknown>;
+        const label = rec.name ?? rec.sku ?? rec.title ?? rec.label ?? rec.campaign;
+        const qty = rec.quantity ?? rec.threshold;
+        if (label) return qty !== undefined ? `${label} (${qty})` : String(label);
+        return JSON.stringify(item).slice(0, 60);
+      }
+      return String(item);
+    });
+    return `${note}${actionSummary ? actionSummary + " — " : ""}${arr.length} result${arr.length === 1 ? "" : "s"}: ${sample.join(", ")}${arr.length > 5 ? ", and more" : ""}.`;
+  }
+
+  const scalarEntries = Object.entries(out).filter(([, v]) => typeof v === "string" || typeof v === "number" || typeof v === "boolean");
+  if (scalarEntries.length > 0) {
+    return `${actionSummary ? actionSummary + " — " : ""}${scalarEntries.map(([k, v]) => `${k}: ${v}`).join(", ")}.`;
+  }
+  return actionSummary ? `${actionSummary} — done.` : "Done, but nothing specific to report.";
+}
+
 async function handleToolCalls(message: Record<string, unknown>): Promise<Response> {
   const tenantId = defaultTenant();
   const callId = (message.call as { id?: string } | undefined)?.id ?? "unknown";
@@ -66,14 +107,23 @@ async function handleToolCalls(message: Record<string, unknown>): Promise<Respon
         // Read the drafted, gated actions back for spoken approval in this same call.
         const summaries = await withTenant(tenantId, (db) =>
           db
-            .select({ id: domainActions.id, summary: domainActions.summary, status: domainActions.status })
+            .select({
+              id: domainActions.id,
+              summary: domainActions.summary,
+              status: domainActions.status,
+              actionType: domainActions.actionType,
+            })
             .from(domainActions)
             .where(inArray(domainActions.id, actions.map((a) => a.id))),
         );
         const gated = summaries.filter((s) => s.status === "pending");
-        // Ungated actions (read-only research, stock checks) already completed — speak
-        // their actual answers, not just an acknowledgement.
         const completed = summaries.filter((s) => s.status === "completed");
+        // Never silently drop a failure — a stuck/blocked/reviewed action must be
+        // reported honestly, never folded into a generic "done" that implies success.
+        const troubled = summaries.filter((s) =>
+          ["failed", "needs_human_review", "blocked_integration_unavailable"].includes(s.status),
+        );
+
         const answers: string[] = [];
         if (completed.length > 0) {
           const episodes = await withTenant(tenantId, (db) =>
@@ -87,21 +137,33 @@ async function handleToolCalls(message: Record<string, unknown>): Promise<Respon
           for (const e of episodes) {
             if (seen.has(e.actionId)) continue;
             seen.add(e.actionId);
+            const summaryRow = completed.find((c) => c.id === e.actionId);
             const out = ((e.output as Record<string, unknown>).output ?? {}) as Record<string, unknown>;
-            const spokenAnswer =
-              (out.spokenSummary as string | undefined) ??
-              (out.recommendation as string | undefined) ??
-              (out.answer as string | undefined) ??
-              (out.quantity !== undefined ? `${out.name ?? "item"}: ${out.quantity} in stock.` : undefined);
-            if (spokenAnswer) answers.push(spokenAnswer);
+            answers.push(describeExecutionOutput(summaryRow?.summary ?? null, out));
           }
         }
+
         const parts: string[] = [];
         if (answers.length > 0) parts.push(answers.join(" "));
         if (gated.length > 0) {
           parts.push(`${gated.map((s) => s.summary ?? "an action").join(" Also: ")} Say yes to approve, or no to reject.`);
         }
-        if (parts.length === 0) parts.push("Done — everything ran, nothing needed your approval.");
+        if (troubled.length > 0) {
+          parts.push(
+            troubled
+              .map((s) => `${s.actionType ? s.actionType.replaceAll("_", " ") : "one step"} hit an issue and needs your review in the queue.`)
+              .join(" "),
+          );
+        }
+        // A plugin returning literally nothing usable is a bug to surface, not a false
+        // "it worked" — say so honestly instead of implying success with no content.
+        if (parts.length === 0) {
+          parts.push(
+            summaries.length > 0
+              ? `I ran that, but got nothing specific back to tell you — worth checking the audit log for "${summaries[0]!.actionType?.replaceAll("_", " ") ?? "this"}."`
+              : "I ran that but have nothing specific to report.",
+          );
+        }
         results.push({ toolCallId: tc.id, result: parts.join(" ") });
       } else if (name === "finnor_confirm") {
         const decisionWord = String(args.decision ?? args.answer ?? "");
