@@ -172,7 +172,7 @@ export async function seed(databaseUrl = process.env.DATABASE_URL): Promise<void
     await client.query(
       `INSERT INTO domain_policies (tenant_id, action_type, policy, requires_confirmation, confirmation_template)
        SELECT $1, t.action_type, '{"provider":"exa"}', false, null
-       FROM (VALUES ('search_web'), ('scan_competitors'), ('check_business_reviews'), ('check_stock_level'), ('flag_reorder_needed'), ('check_technician_availability'), ('answer_water_question')) AS t(action_type)
+       FROM (VALUES ('search_web'), ('scan_competitors'), ('check_business_reviews'), ('check_stock_level'), ('flag_reorder_needed'), ('check_technician_availability'), ('answer_water_question'), ('get_business_overview')) AS t(action_type)
        WHERE NOT EXISTS (SELECT 1 FROM domain_policies WHERE tenant_id=$1 AND action_type=t.action_type)`,
       [SEED_TENANT_ID],
     );

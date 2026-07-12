@@ -19,6 +19,7 @@ import technicianReportsPlugin from "../../domain-plugins/technician-reports/ind
 import serviceRemindersPlugin from "../../domain-plugins/service-reminders/index";
 import complianceDocumentationPlugin from "../../domain-plugins/compliance-documentation/index";
 import webResearchPlugin from "../../domain-plugins/web-research/index";
+import opsOverviewPlugin from "../../domain-plugins/ops-overview/index";
 
 export class PluginRegistry {
   private byActionType = new Map<string, DomainEnginePlugin>();
@@ -93,6 +94,7 @@ export function createDefaultPluginRegistry(): PluginRegistry {
     serviceRemindersPlugin,
     complianceDocumentationPlugin,
     webResearchPlugin,
+    opsOverviewPlugin,
   ]) {
     registry.register(plugin);
   }
