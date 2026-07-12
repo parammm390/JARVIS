@@ -18,6 +18,7 @@ const PAYMENT_COLLECTOR_ASSISTANT_ID = "359a7dfe-4cb3-4ccb-9055-5d0cbc5b2e2c";
 export const CreateInvoiceSchema = z.object({
   householdId: opt(z.string().uuid()),
   phone: opt(z.string()),
+  customerName: opt(z.string()), // "the Petersons", "Marcus Webb" — no phone in hand is the common case
   amountUsd: z.number().positive().max(1_000_000),
   memo: opt(z.string().max(500)),
   dueDate: opt(z.string()),
@@ -72,7 +73,7 @@ export const accountingPlugin: DomainEnginePlugin = {
     }
 
     const summaries: Record<string, string> = {
-      create_invoice: `Create a $${p.amountUsd} invoice for ${p.phone ?? p.householdId}${p.memo ? ` — ${p.memo}` : ""}.`,
+      create_invoice: `Create a $${p.amountUsd} invoice for ${p.customerName ?? p.phone ?? p.householdId ?? "the customer named"}${p.memo ? ` — ${p.memo}` : ""}.`,
       send_payment_reminder: `Send a payment reminder for invoice ${String(p.invoiceId).slice(0, 8)}${p.channel === "call" ? " by real phone call" : ""}.`,
       record_payment: `Mark invoice ${String(p.invoiceId).slice(0, 8)} as paid.`,
     };
@@ -92,8 +93,9 @@ export const accountingPlugin: DomainEnginePlugin = {
       const hh = await findHousehold(tenantId, {
         householdId: p.householdId ? String(p.householdId) : undefined,
         phone: p.phone ? String(p.phone) : undefined,
+        name: p.customerName ? String(p.customerName) : undefined,
       });
-      if (!hh) return { status: "failure", output: {}, error: "No customer found for that invoice." };
+      if (!hh) return { status: "failure", output: {}, error: `No customer found matching "${p.customerName ?? p.phone ?? p.householdId}".` };
       const due = p.dueDate ? new Date(String(p.dueDate)) : new Date(Date.now() + 30 * 24 * 3600 * 1000);
       const inv = await withTenant(tenantId, async (db) => {
         const [row] = await db

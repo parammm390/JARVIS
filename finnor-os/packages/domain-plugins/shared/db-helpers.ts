@@ -6,17 +6,33 @@ import { eq, sql, or, ilike } from "drizzle-orm";
 
 export async function findHousehold(
   tenantId: string,
-  by: { householdId?: string; phone?: string },
+  by: { householdId?: string; phone?: string; name?: string; address?: string },
 ): Promise<{ id: string; address: string; contactInfo: Record<string, unknown> } | null> {
   return withTenant(tenantId, async (db) => {
-    const [row] = by.householdId
-      ? await db.select().from(households).where(eq(households.id, by.householdId))
-      : by.phone
-        ? await db.select().from(households).where(sql`${households.contactInfo} ->> 'phone' = ${by.phone}`)
-        : [];
-    return row
-      ? { id: row.id, address: row.address, contactInfo: row.contactInfo as Record<string, unknown> }
-      : null;
+    if (by.householdId) {
+      const [row] = await db.select().from(households).where(eq(households.id, by.householdId));
+      if (row) return { id: row.id, address: row.address, contactInfo: row.contactInfo as Record<string, unknown> };
+    }
+    if (by.phone) {
+      const [row] = await db.select().from(households).where(sql`${households.contactInfo} ->> 'phone' = ${by.phone}`);
+      if (row) return { id: row.id, address: row.address, contactInfo: row.contactInfo as Record<string, unknown> };
+    }
+    // Voice/text instructions frequently name a customer ("the Petersons", "Marcus
+    // Webb") with no phone number in hand — this is the common case, not an edge
+    // case, and previously had no lookup path at all (silent "undefined" downstream).
+    if (by.name) {
+      const [row] = await db
+        .select()
+        .from(households)
+        .where(sql`${households.contactInfo} ->> 'name' ILIKE ${"%" + by.name + "%"}`)
+        .limit(1);
+      if (row) return { id: row.id, address: row.address, contactInfo: row.contactInfo as Record<string, unknown> };
+    }
+    if (by.address) {
+      const [row] = await db.select().from(households).where(ilike(households.address, `%${by.address}%`)).limit(1);
+      if (row) return { id: row.id, address: row.address, contactInfo: row.contactInfo as Record<string, unknown> };
+    }
+    return null;
   });
 }
 

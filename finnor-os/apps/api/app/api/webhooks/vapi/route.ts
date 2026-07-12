@@ -13,7 +13,7 @@
 
 import { VapiWebhookSchema } from "@finnor/policy-schema";
 import { adminDb, jobs, withTenant, domainActions, actionLog } from "@finnor/db";
-import { parseSpokenDecision, diagnoseFailure } from "@finnor/orchestration";
+import { parseSpokenDecision, diagnoseFailure, resolveProvider } from "@finnor/orchestration";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { getOrchestrator } from "../../../../lib/orchestrator";
 
@@ -39,7 +39,30 @@ interface VapiToolCall {
  * voice; without this, those results were silently swallowed into a generic "done"
  * message that implied success even when there was nothing real to report.
  */
-function describeExecutionOutput(actionSummary: string | null, out: Record<string, unknown>): string {
+/** Cheap model, tight timeout, hard fallback to the raw heuristic string on any
+ *  failure — narration quality is worth improving, but never at the cost of the
+ *  voice channel hanging or going silent because a second model call misbehaved. */
+async function naturalizeScalars(actionSummary: string | null, scalarEntries: [string, unknown][]): Promise<string> {
+  const raw = `${actionSummary ? actionSummary + " — " : ""}${scalarEntries.map(([k, v]) => `${k}: ${v}`).join(", ")}.`;
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2_500);
+    const text = await Promise.race([
+      resolveProvider("bedrock-deepseek").complete({
+        system:
+          "Rewrite this raw key:value execution result as one short, natural spoken sentence a person would say out loud. State every fact given — never drop or invent a value. No preamble, just the sentence.",
+        user: raw,
+      }),
+      new Promise<string>((_, reject) => setTimeout(() => reject(new Error("narration timeout")), 2_500)),
+    ]);
+    clearTimeout(timeout);
+    return text.trim() || raw;
+  } catch {
+    return raw;
+  }
+}
+
+async function describeExecutionOutput(actionSummary: string | null, out: Record<string, unknown>): Promise<string> {
   const known =
     (out.spokenSummary as string | undefined) ??
     (out.recommendation as string | undefined) ??
@@ -68,7 +91,7 @@ function describeExecutionOutput(actionSummary: string | null, out: Record<strin
 
   const scalarEntries = Object.entries(out).filter(([, v]) => typeof v === "string" || typeof v === "number" || typeof v === "boolean");
   if (scalarEntries.length > 0) {
-    return `${actionSummary ? actionSummary + " — " : ""}${scalarEntries.map(([k, v]) => `${k}: ${v}`).join(", ")}.`;
+    return naturalizeScalars(actionSummary, scalarEntries);
   }
   return actionSummary ? `${actionSummary} — done.` : "Done, but nothing specific to report.";
 }
@@ -139,7 +162,7 @@ async function handleToolCalls(message: Record<string, unknown>): Promise<Respon
             seen.add(e.actionId);
             const summaryRow = completed.find((c) => c.id === e.actionId);
             const out = ((e.output as Record<string, unknown>).output ?? {}) as Record<string, unknown>;
-            answers.push(describeExecutionOutput(summaryRow?.summary ?? null, out));
+            answers.push(await describeExecutionOutput(summaryRow?.summary ?? null, out));
           }
         }
 
