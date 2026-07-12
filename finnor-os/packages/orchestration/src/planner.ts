@@ -1,0 +1,125 @@
+// Planner (§9): instruction + tenant policy context (RAG) + memory → DomainAction[].
+// Only registered action_types are ever planned; unknown intents surface as such.
+
+import type { TenantContext, MemorySnapshot, DomainAction } from "@finnor/shared-types";
+import { withTenant, domainActions, domainPolicies } from "@finnor/db";
+import { inArray } from "drizzle-orm";
+import type { LLMProvider } from "./llm";
+import { resolveProvider } from "./llm";
+import type { PluginRegistry } from "./plugin-registry";
+import { z } from "zod";
+
+const PlanSchema = z.object({
+  actions: z.array(
+    z.object({
+      action_type: z.string(),
+      payload: z.record(z.unknown()),
+      reasoning: z.string().optional(),
+    }),
+  ),
+});
+
+export interface Planner {
+  plan(instruction: string, tenantContext: TenantContext, memory: MemorySnapshot): Promise<DomainAction[]>;
+}
+
+export class LLMPlanner implements Planner {
+  // Provider resolves lazily on first plan() so constructing an orchestrator never
+  // requires LLM credentials (executor-only paths, tests, workers that never plan).
+  private provider: LLMProvider | undefined;
+
+  constructor(
+    private plugins: PluginRegistry,
+    provider?: LLMProvider,
+  ) {
+    this.provider = provider;
+  }
+
+  private systemPromptCache: { day: string; prompt: string } | null = null;
+
+  private systemPrompt(): string {
+    const day = new Date().toISOString().slice(0, 10);
+    if (this.systemPromptCache?.day === day) return this.systemPromptCache.prompt;
+    const actionTypes = this.plugins.actionTypes();
+    const prompt = [
+      "You are the planning core of Finnor, an AI operating system for water treatment dealers.",
+      "Translate the dealer instruction into zero or more domain actions.",
+      `The ONLY valid action_type values are: ${actionTypes.join(", ")}.`,
+      "Each action_type has a REQUIRED payload JSON schema. Follow it exactly — field names matter:",
+      this.plugins.payloadSpecJson(),
+      `Today is ${day}. Resolve relative dates to ISO 8601 datetimes.`,
+      "If the instruction does not map to any valid action_type, return an empty actions array.",
+      'Respond with JSON: {"actions":[{"action_type":"...","payload":{...},"reasoning":"..."}]}',
+      "Payloads must contain only facts from the instruction or the provided memory — never invent phone numbers, addresses, or prices.",
+    ].join("\n");
+    this.systemPromptCache = { day, prompt };
+    return prompt;
+  }
+
+  async plan(
+    instruction: string,
+    tenantContext: TenantContext,
+    memory: MemorySnapshot,
+  ): Promise<DomainAction[]> {
+    const actionTypes = this.plugins.actionTypes();
+    const system = this.systemPrompt();
+    const user = JSON.stringify({
+      instruction,
+      memory: {
+        shortTerm: memory.shortTerm,
+        semantic: memory.semantic.map((s) => s.chunk).slice(0, 5),
+        recentEpisodes: memory.episodic.slice(0, 5),
+      },
+    });
+
+    let raw: string;
+    try {
+      this.provider ??= resolveProvider();
+      raw = await this.provider.complete({ system, user, json: true });
+    } catch (err) {
+      throw new Error(`Planner LLM call failed: ${(err as Error).message}`);
+    }
+
+    let parsed: z.infer<typeof PlanSchema>;
+    try {
+      parsed = PlanSchema.parse(JSON.parse(raw));
+    } catch {
+      // Model returned malformed JSON — treat as "no plan", never guess.
+      parsed = { actions: [] };
+    }
+
+    const valid = parsed.actions.filter((a) => actionTypes.includes(a.action_type));
+
+    if (valid.length === 0) return [];
+
+    // One transaction, one policy lookup, one batch insert — not 2N round trips.
+    return withTenant(tenantContext.tenantId, async (db) => {
+      const policies = await db
+        .select({ id: domainPolicies.id, actionType: domainPolicies.actionType })
+        .from(domainPolicies)
+        .where(inArray(domainPolicies.actionType, [...new Set(valid.map((a) => a.action_type))]));
+      const policyByType = new Map(policies.map((p) => [p.actionType, p.id]));
+      const rows = await db
+        .insert(domainActions)
+        .values(
+          valid.map((a) => ({
+            tenantId: tenantContext.tenantId,
+            actionType: a.action_type,
+            payload: a.payload,
+            policyId: policyByType.get(a.action_type) ?? null,
+            status: "draft" as const,
+          })),
+        )
+        .returning();
+      return rows.map((row) => ({
+        id: row.id,
+        tenantId: row.tenantId,
+        actionType: row.actionType,
+        payload: row.payload as Record<string, unknown>,
+        policyId: row.policyId,
+        status: row.status,
+        createdAt: row.createdAt.toISOString(),
+      }));
+    });
+  }
+}

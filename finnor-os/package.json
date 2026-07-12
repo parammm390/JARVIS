@@ -1,0 +1,54 @@
+{
+  "name": "finnor-os",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Finnor AI Operating System — multi-tenant orchestration platform for water treatment dealers",
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "packages/domain-plugins/*"
+  ],
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "dev:api": "npm run dev --workspace @finnor/api",
+    "dev:console": "npm run dev --workspace @finnor/console",
+    "dev:worker": "npm run dev --workspace @finnor/worker",
+    "dev:orchestrator": "npm run dev --workspace @finnor/orchestrator",
+    "db:generate": "drizzle-kit generate --config packages/db/drizzle.config.ts",
+    "db:migrate": "tsx packages/db/migrate.ts",
+    "db:seed": "tsx packages/db/seed.ts",
+    "openapi": "tsx scripts/generate-openapi.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "@supabase/supabase-js": "^2.45.1",
+    "@vapi-ai/web": "^2.6.1",
+    "dotenv": "^17.4.2",
+    "drizzle-orm": "^0.36.4",
+    "groq-sdk": "^0.9.1",
+    "ioredis": "^5.4.1",
+    "next": "14.2.5",
+    "nodemailer": "^9.0.3",
+    "pg": "^8.13.1",
+    "react": "^18",
+    "react-dom": "^18",
+    "zod": "^3.23.8",
+    "zod-to-json-schema": "^3.23.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/nodemailer": "^8.0.1",
+    "@types/pg": "^8.11.10",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "@vitest/ui": "^2.1.8",
+    "drizzle-kit": "^0.28.1",
+    "embedded-postgres": "^18.4.0-beta.17",
+    "tsx": "^4.19.2",
+    "typescript": "^5",
+    "vitest": "^2.1.8"
+  }
+}

@@ -1,0 +1,46 @@
+# CI (§29): lint/typecheck + vitest on every PR. No deploy step yet — manual deploy
+# until there's a reason to automate it.
+# NOTE: this repo lives at finnor-os/ inside the FINNOR repository, so paths are scoped.
+name: finnor-os-ci
+on:
+  pull_request:
+    paths: ["finnor-os/**"]
+  push:
+    branches: [main]
+    paths: ["finnor-os/**"]
+defaults:
+  run:
+    working-directory: finnor-os
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: finnor
+          POSTGRES_PASSWORD: finnor
+          POSTGRES_DB: finnor
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U finnor" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+    env:
+      DATABASE_URL: postgres://finnor:finnor@localhost:5432/finnor
+      REDIS_URL: redis://localhost:6379
+      AUTH_DEV_BYPASS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: finnor-os/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run db:migrate
+      - run: npm run db:seed
+      - run: npm test

@@ -1,0 +1,5 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "comment": "Deploy apps/api and apps/console as two Vercel projects, each with Root Directory set to finnor-os/apps/api and finnor-os/apps/console respectively. Env vars per finnor-os/.env.example.",
+  "framework": "nextjs"
+}

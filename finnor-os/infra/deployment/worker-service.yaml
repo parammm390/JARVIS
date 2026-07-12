@@ -1,0 +1,34 @@
+# Railway/Render-class deployment for the long-running processes (§24) — a serverless
+# function cannot hold a persistent worker loop.
+# Render blueprint format (render.yaml-compatible); adapt names for Railway as needed.
+services:
+  - type: worker
+    name: finnor-worker
+    runtime: node
+    rootDir: finnor-os
+    buildCommand: npm ci
+    startCommand: npm run dev:worker -- --no-watch || npx tsx apps/worker/src/index.ts
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: GOHIGHLEVEL_API_KEY
+        sync: false
+      - key: VAPI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+  - type: web
+    name: finnor-orchestrator
+    runtime: node
+    rootDir: finnor-os
+    buildCommand: npm ci
+    startCommand: npx tsx apps/orchestrator/src/index.ts
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false

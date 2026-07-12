@@ -1,0 +1,77 @@
+// Auth + tenant resolution (§17): Supabase Auth verifies the JWT; the users table maps
+// identity → tenant_id + role. Every request context carries TenantContext from here on.
+// AUTH_DEV_BYPASS=1 allows header-based identity for local dev and integration tests only.
+
+import { createClient } from "@supabase/supabase-js";
+import { getPool } from "@finnor/db";
+import type { TenantContext, Role } from "@finnor/shared-types";
+
+export class AuthError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+  ) {
+    super(message);
+  }
+}
+
+/**
+ * Identity → tenant lookup. This single query runs outside withTenant() because tenant
+ * identity is not yet known — it is the bootstrap step, reads only the users table by
+ * unique email, and returns the tenant context everything else is scoped by.
+ */
+async function resolveUserByEmail(email: string): Promise<TenantContext | null> {
+  const { rows } = await getPool().query(
+    `SELECT id, tenant_id, role FROM users WHERE email = $1`,
+    [email],
+  );
+  const row = rows[0];
+  if (!row) return null;
+  return { userId: row.id, tenantId: row.tenant_id, role: row.role as Role };
+}
+
+export async function requireContext(req: Request): Promise<TenantContext> {
+  if (process.env.AUTH_DEV_BYPASS === "1") {
+    const tenantId = req.headers.get("x-tenant-id");
+    const userId = req.headers.get("x-user-id") ?? "00000000-0000-4000-8000-0000000000aa";
+    const role = (req.headers.get("x-user-role") ?? "owner") as Role;
+    if (tenantId) return { tenantId, userId, role };
+  }
+
+  const auth = req.headers.get("authorization");
+  if (!auth?.startsWith("Bearer ")) throw new AuthError("Missing bearer token", 401);
+  const token = auth.slice("Bearer ".length);
+
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new AuthError("Auth is not configured (SUPABASE_URL / key missing)", 500);
+
+  const supabase = createClient(url, key, { auth: { persistSession: false } });
+  const { data, error } = await supabase.auth.getUser(token);
+  if (error || !data.user?.email) throw new AuthError("Invalid or expired token", 401);
+
+  const ctx = await resolveUserByEmail(data.user.email);
+  if (!ctx) throw new AuthError("User has no tenant — contact your administrator", 403);
+  return ctx;
+}
+
+/** RBAC (§18): can this role approve this action_type for this tenant? Config, not code. */
+export async function canApprove(ctx: TenantContext, actionType: string): Promise<boolean> {
+  const { rows } = await getPool().query(
+    `SELECT can_approve FROM role_permissions
+     WHERE tenant_id = $1 AND role = $2 AND (action_type = $3 OR action_type = '*')
+     ORDER BY action_type = $3 DESC LIMIT 1`,
+    [ctx.tenantId, ctx.role, actionType],
+  );
+  if (rows.length === 0) return ctx.role === "owner"; // safe default: only owners
+  return Boolean(rows[0].can_approve);
+}
+
+export function errorResponse(err: unknown): Response {
+  if (err instanceof AuthError) {
+    return Response.json({ error: err.message }, { status: err.status });
+  }
+  console.error(err);
+  // Plain language outward, details stay in server logs (§22).
+  return Response.json({ error: "Something went wrong on our side. Try again shortly." }, { status: 500 });
+}
