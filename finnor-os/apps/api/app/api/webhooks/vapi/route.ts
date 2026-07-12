@@ -124,7 +124,11 @@ async function handleToolCalls(message: Record<string, unknown>): Promise<Respon
           { sessionId: `vapi:${callId}` },
         );
         if (actions.length === 0) {
-          results.push({ toolCallId: tc.id, result: "I couldn't map that to anything I can do yet. Try rephrasing." });
+          results.push({
+            toolCallId: tc.id,
+            result:
+              "I don't have that exact thing, but I can pull the full business overview — leads, pending items, inventory, invoices, upcoming visits — want that instead?",
+          });
           continue;
         }
         // Read the drafted, gated actions back for spoken approval in this same call.

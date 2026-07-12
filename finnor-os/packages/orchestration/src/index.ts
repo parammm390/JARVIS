@@ -3,7 +3,7 @@
 
 import type { DomainAction, DomainPolicy, TenantContext, ExecutionResult } from "@finnor/shared-types";
 import { withTenant, domainActions, domainPolicies } from "@finnor/db";
-import { buildMemorySnapshot, appendEpisode } from "@finnor/memory";
+import { buildMemorySnapshot, appendEpisode, appendShortTerm } from "@finnor/memory";
 import { createDefaultRegistry, type ToolRegistry } from "@finnor/tools";
 import { and, eq } from "drizzle-orm";
 import { LLMPlanner, type Planner } from "./planner";
@@ -76,14 +76,46 @@ export class FinnorOrchestrator implements Orchestrator {
     });
     const actions = await this.planner.plan(instruction, ctx, memory);
     // Independent actions run concurrently — each is its own gated pipeline.
+    const turnResults: Array<{
+      actionType: string;
+      payload: Record<string, unknown>;
+      status: string;
+      awaitingApproval: boolean;
+      resultOutput: Record<string, unknown>;
+    }> = [];
     await Promise.all(
       actions.map(async (action) => {
         await appendEpisode(ctx.tenantId, action.id, "planned", { instruction }, { actionType: action.actionType });
         const policy = await this.loadPolicy(action);
         const result = await this.executor.execute(action, policy);
         await this.reflectWithRetry(action, policy, result);
+        // result.status is "success" even for a merely-GATED action (it succeeded at
+        // drafting, not at doing) — awaitingApproval is what actually distinguishes
+        // "this really happened, the resulting row/id is real" from "this is still a
+        // pending draft with no real resource yet." Conflating the two previously let
+        // a follow-up turn treat a pending draft's own id as if it were the id of the
+        // thing it would eventually create.
+        const awaitingApproval = Boolean(result.output?.gated || result.output?.pendingConfirmation);
+        turnResults.push({
+          actionType: action.actionType,
+          payload: action.payload,
+          status: result.status,
+          awaitingApproval,
+          resultOutput: awaitingApproval ? {} : result.output,
+        });
       }),
     );
+    // Write this turn back to short-term memory (§10) — without this, every turn in
+    // the same call/session started completely blank, so "call them" or "do it for
+    // the second one" had nothing to resolve against. TTL'd (30 min), scoped to this
+    // session only, never cross-session or cross-tenant.
+    if (opts.sessionId) {
+      await appendShortTerm(ctx.tenantId, opts.sessionId, {
+        instruction,
+        actions: turnResults,
+        at: new Date().toISOString(),
+      }).catch(() => undefined);
+    }
     return actions;
   }
 
