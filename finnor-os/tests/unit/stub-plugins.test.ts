@@ -48,9 +48,10 @@ const ALL_EXPECTED_ACTION_TYPES = [
   "flag_visit_issue",
 ];
 
-// Only actions gated on external APIs we cannot access (Meta/Google Ads app review)
-// remain scaffolds — everything else is a real native implementation now.
-const SCAFFOLDED = ["summarize_ad_performance", "send_campaign", "create_review_request"];
+// Only actions gated on write-access app review (Meta/Google Ads) remain scaffolds.
+// summarize_ad_performance graduated to real: it reads real Meta/Google Ads data once
+// connected, and clearly-labeled demo data otherwise — see packages/tools/src/ads.ts.
+const SCAFFOLDED = ["launch_ad_campaign", "create_review_request"];
 
 describe("full action-type roster (§5)", () => {
   const registry = createDefaultPluginRegistry();
@@ -75,6 +76,18 @@ describe("full action-type roster (§5)", () => {
       expect(result.error).toBeTruthy(); // explains itself, never guesses
     });
   }
+
+  it("summarize_ad_performance answers for real — demo data when no ad account is connected, never blocked", async () => {
+    const { createDefaultRegistry } = await import("@finnor/tools");
+    const plugin = registry.resolve("summarize_ad_performance")!;
+    const policy = { ...placeholderPolicy("summarize_ad_performance"), requiresConfirmation: false };
+    const draft = await plugin.draft("summarize_ad_performance", {}, policy);
+    expect(draft.requiresConfirmation).toBe(false); // read-only, never gated
+    const result = await plugin.execute(draft, createDefaultRegistry());
+    expect(result.status).toBe("success"); // no real ad account configured in this test env -> demo data, not a block
+    expect((result.output as { provider?: string }).provider).toBe("demo");
+    expect(typeof (result.output as { spokenSummary?: string }).spokenSummary).toBe("string");
+  });
 
   it("water-domain-knowledge answers from shared public-domain content", async () => {
     const plugin = registry.resolve("answer_water_question")!;

@@ -12,6 +12,7 @@ import { sendEmail } from "./email";
 import { geocodeAddress, distanceMiles } from "./maps";
 import { placeVapiCall } from "./vapi-rest";
 import { exaSearch } from "./exa";
+import { getAdPerformance, adsProviderStatus } from "./ads";
 
 const ghlBacked = (name: string, description: string, mcpTool: string, inputSchema: z.ZodTypeAny): Tool => ({
   name,
@@ -114,20 +115,37 @@ function registerUniversalTools(registry: ToolRegistry): void {
     // REAL outbound phone calls — Vapi phone number is configured.
     registry.register({
       name: "vapi_place_call",
-      description: "Place a REAL outbound call via the dealer's Vapi phone number",
+      description: "Place a REAL outbound call via the dealer's Vapi phone number, optionally with a specialized assistant persona",
       integration: "vapi",
-      inputSchema: z.object({ phoneNumber: z.string().min(7), instructions: z.string().optional() }).passthrough(),
+      inputSchema: z
+        .object({ phoneNumber: z.string().min(7), instructions: z.string().optional(), assistantId: z.string().optional(), purpose: z.string().optional() })
+        .passthrough(),
       async run(input) {
         const r = await placeVapiCall({
           customerNumber: String(input.phoneNumber),
           firstMessage: String(input.instructions ?? "Hello! This is Finnor calling on behalf of your water treatment dealer."),
-          metadata: input.tenantId ? { tenantId: String(input.tenantId) } : {},
+          metadata: {
+            ...(input.tenantId ? { tenantId: String(input.tenantId) } : {}),
+            ...(input.purpose ? { purpose: String(input.purpose) } : {}),
+          },
+          assistantId: input.assistantId ? String(input.assistantId) : undefined,
         });
         if (!r.ok) throw new Error(r.error ?? "Vapi call failed");
         return { ...r.output, live: true };
       },
     });
   }
+  registry.register({
+    name: "get_ad_performance",
+    description:
+      "Real ad campaign performance (spend, clicks, CTR, conversions). Uses Meta or Google Ads if connected, otherwise clearly-labeled demo data.",
+    integration: "ads",
+    inputSchema: z.object({ windowDays: z.number().int().min(1).max(90).optional() }).passthrough(),
+    async run(input) {
+      const report = await getAdPerformance(input.windowDays ? Number(input.windowDays) : 7);
+      return { ...report, providerStatus: adsProviderStatus() } as unknown as Record<string, unknown>;
+    },
+  });
   registry.register({
     name: "web_search",
     description: "Real-time web search via Exa (competitors, reviews, news, anything)",
