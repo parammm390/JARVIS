@@ -26,27 +26,34 @@ export class JobQueue {
     const client = await getPool().connect();
     let job: Job | null = null;
     try {
-      await client.query("BEGIN");
-      const { rows } = await client.query(
-        `SELECT id, type, payload, attempts, max_attempts FROM jobs
-         WHERE status = 'queued' AND run_at <= now()
-         ORDER BY run_at
-         FOR UPDATE SKIP LOCKED
-         LIMIT 1`,
-      );
-      if (rows.length === 0) {
+      try {
+        await client.query("BEGIN");
+        const { rows } = await client.query(
+          `SELECT id, type, payload, attempts, max_attempts FROM jobs
+           WHERE status = 'queued' AND run_at <= now()
+           ORDER BY run_at
+           FOR UPDATE SKIP LOCKED
+           LIMIT 1`,
+        );
+        if (rows.length === 0) {
+          await client.query("COMMIT");
+          return false;
+        }
+        job = rows[0] as Job;
+        await client.query(`UPDATE jobs SET status = 'running', attempts = attempts + 1 WHERE id = $1`, [job.id]);
         await client.query("COMMIT");
-        return false;
+      } catch (err) {
+        await client.query("ROLLBACK").catch(() => undefined);
+        throw err;
       }
-      job = rows[0] as Job;
-      await client.query(`UPDATE jobs SET status = 'running', attempts = attempts + 1 WHERE id = $1`, [job.id]);
-      await client.query("COMMIT");
-    } catch (err) {
-      await client.query("ROLLBACK").catch(() => undefined);
+    } finally {
+      // The empty-queue path used to return before this ran, leaking one pooled
+      // connection per idle poll — with production's max:2 (ssl) pool, two
+      // consecutive empty ticks (~4s) permanently exhausted it and every later
+      // getPool().connect() call hung forever waiting for a connection that was
+      // never coming back, silently wedging the entire queue.
       client.release();
-      throw err;
     }
-    client.release();
 
     const handler = this.handlers.get(job.type);
     try {

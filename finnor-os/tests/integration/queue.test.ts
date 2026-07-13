@@ -77,4 +77,16 @@ describe.skipIf(!available)("postgres job queue (§32.7)", () => {
     expect(rows[0].last_error).toMatch(/simulated failure/);
     expect(attempts).toBe(2);
   });
+
+  it("does not leak a pooled connection on an empty queue (regression: tick() used to return before releasing its client on the empty-queue path — fine locally where the pool caps at 10, but in production's ssl pool, capped at 2, two consecutive empty ticks permanently exhausted it and every later tick hung forever)", async () => {
+    await getPool().query("DELETE FROM jobs");
+    const queue = new JobQueue();
+    // Local dev's pool caps at 10 connections (non-ssl, packages/db/index.ts). Call
+    // tick() on a genuinely empty queue more times than that — before the fix, each
+    // empty tick leaked one connection and the 11th call would hang forever waiting
+    // for a free one that was never coming back.
+    for (let i = 0; i < 15; i++) {
+      expect(await queue.tick()).toBe(false);
+    }
+  });
 });
