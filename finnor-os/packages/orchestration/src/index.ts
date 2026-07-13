@@ -19,6 +19,7 @@ export * from "./reflection";
 export * from "./plugin-registry";
 export * from "./voice";
 export * from "./critic";
+export * from "./learning";
 
 export interface Orchestrator {
   handleInstruction(
