@@ -24,3 +24,14 @@ export class NotImplementedError extends IntegrationError {
     this.name = "NotImplementedError";
   }
 }
+
+/** Shared shape for every provider self-test (ads.ts, quickbooks.ts, ...) — one
+ *  definition so the integrations status endpoint has a uniform result to aggregate,
+ *  and so re-exporting every adapter module from the package index doesn't collide
+ *  on duplicate identical interface names. */
+export interface ProviderHealth {
+  configured: boolean;
+  /** null = not configured, so never actually tested against the real API. */
+  healthy: boolean | null;
+  error?: string;
+}

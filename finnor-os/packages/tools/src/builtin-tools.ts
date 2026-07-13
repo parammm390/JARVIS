@@ -5,7 +5,6 @@
 import { z } from "zod";
 import type { ToolRegistry, Tool } from "./registry";
 import { connectGhl, connectVapi, callMcpTool } from "./mcp-client";
-import { NotImplementedError } from "./errors";
 import { PLACEHOLDER_NEEDS_REAL_VALUE } from "@finnor/shared-types";
 import { registerSandboxComms } from "./sandbox";
 import { sendEmail } from "./email";
@@ -13,6 +12,7 @@ import { geocodeAddress, distanceMiles } from "./maps";
 import { placeVapiCall } from "./vapi-rest";
 import { exaSearch } from "./exa";
 import { getAdPerformance, adsProviderStatus } from "./ads";
+import { syncInvoiceToQuickBooks } from "./quickbooks";
 
 const ghlBacked = (name: string, description: string, mcpTool: string, inputSchema: z.ZodTypeAny): Tool => ({
   name,
@@ -189,18 +189,27 @@ function registerUniversalTools(registry: ToolRegistry): void {
       return { miles: distanceMiles(i.a, i.b) };
     },
   });
-  registerAccountingStub(registry);
+  registerAccountingSync(registry);
 }
 
-function registerAccountingStub(registry: ToolRegistry): void {
-  // Accounting: interface defined, no implementation yet (§20). Explicit stub, never silent.
+function registerAccountingSync(registry: ToolRegistry): void {
+  // Finnor's own invoices table is always the system of record — this tool is a
+  // best-effort SYNC outward, called async/non-blocking after a native invoice write
+  // (apps/worker/src/handlers/quickbooks-sync.ts), never inline in the accounting
+  // plugin's execute(). Real when QuickBooks is connected, an explicit typed
+  // not_implemented result otherwise — never silent, never guessed.
   registry.register({
-    name: "accounting_create_invoice",
-    description: `Create an invoice in the accounting system (QuickBooks-class). NOT IMPLEMENTED — API credential is ${PLACEHOLDER_NEEDS_REAL_VALUE}; no dealer has requested this integration yet.`,
-    integration: "accounting",
-    inputSchema: z.object({ householdId: z.string(), amountUsd: z.number(), memo: z.string().optional() }),
-    async run() {
-      throw new NotImplementedError("accounting");
+    name: "quickbooks_sync_invoice",
+    description: "Sync a native Finnor invoice to QuickBooks Online, if connected.",
+    integration: "quickbooks",
+    inputSchema: z.object({ customerName: z.string(), customerPhone: z.string().optional(), amountUsd: z.number(), memo: z.string().optional() }),
+    async run(input) {
+      const i = input as { customerName: string; customerPhone?: string; amountUsd: number; memo?: string };
+      // Throws IntegrationError (not-connected, or a real API failure) — wrappedCall
+      // (registry.call()'s caller) already catches and types it uniformly; no
+      // per-tool try/catch needed here.
+      const result = await syncInvoiceToQuickBooks(i);
+      return { ...result, synced: true };
     },
   });
 }

@@ -14,7 +14,7 @@
 // is why five env vars are needed instead of one. That is Google's requirement, not an
 // extra hoop added here.
 
-import { IntegrationError } from "./errors";
+import { IntegrationError, type ProviderHealth } from "./errors";
 
 export interface AdCampaignSummary {
   campaign: string;
@@ -50,6 +50,47 @@ function googleAdsConfigured(): boolean {
 
 export function adsProviderStatus(): { meta: boolean; googleAds: boolean } {
   return { meta: metaConfigured(), googleAds: googleAdsConfigured() };
+}
+
+/** Real, cheap Meta call (account metadata, not insights) — proves the token is
+ *  actually valid and scoped to this account, not just present in the environment. */
+async function testMetaConnection(): Promise<ProviderHealth> {
+  if (!metaConfigured()) return { configured: false, healthy: null };
+  try {
+    const token = process.env.META_ADS_ACCESS_TOKEN!;
+    const accountId = process.env.META_ADS_ACCOUNT_ID!.replace(/^act_/, "");
+    const res = await fetch(
+      `https://graph.facebook.com/v21.0/act_${accountId}?fields=id,name&access_token=${encodeURIComponent(token)}`,
+    );
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      return { configured: true, healthy: false, error: `(${res.status}) ${body.slice(0, 200)}` };
+    }
+    return { configured: true, healthy: true };
+  } catch (err) {
+    return { configured: true, healthy: false, error: (err as Error).message };
+  }
+}
+
+/** Real Google OAuth2 refresh — if this succeeds, the client id/secret/refresh token
+ *  are all actually valid, not just present. Cheaper than a real campaign query. */
+async function testGoogleAdsConnection(): Promise<ProviderHealth> {
+  if (!googleAdsConfigured()) return { configured: false, healthy: null };
+  try {
+    await googleAccessToken();
+    return { configured: true, healthy: true };
+  } catch (err) {
+    return { configured: true, healthy: false, error: (err as Error).message };
+  }
+}
+
+/** Real self-tests for both providers, run in parallel — for the integrations status
+ *  endpoint and anything voice-queryable ("are my ad integrations healthy?"). Distinct
+ *  from adsProviderStatus() above (a cheap sync presence check other callers already
+ *  use) — this one costs a real network round trip per configured provider. */
+export async function testAdsConnections(): Promise<{ meta: ProviderHealth; googleAds: ProviderHealth }> {
+  const [meta, googleAds] = await Promise.all([testMetaConnection(), testGoogleAdsConnection()]);
+  return { meta, googleAds };
 }
 
 /** Real Meta Marketing API call — GET /act_{id}/insights, real fields, no fabrication. */

@@ -19,3 +19,5 @@ export * from "./maps";
 export * from "./exa";
 export * from "./llm";
 export * from "./voice-personas";
+export * from "./ads";
+export * from "./quickbooks";

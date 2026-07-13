@@ -13,6 +13,7 @@ import { scanColdLeads } from "./handlers/scan-cold-leads";
 import { scanLowInventory } from "./handlers/scan-low-inventory";
 import { scanServiceDue } from "./handlers/scan-service-due";
 import { ownerDigest } from "./handlers/owner-digest";
+import { quickbooksSync } from "./handlers/quickbooks-sync";
 import { startScheduler, type ScheduledScan } from "./scheduler";
 
 export function createWorker(): JobQueue {
@@ -27,6 +28,7 @@ export function createWorker(): JobQueue {
   queue.register("scan_low_inventory", scanLowInventory);
   queue.register("scan_service_due", scanServiceDue);
   queue.register("owner_digest", ownerDigest);
+  queue.register("quickbooks_sync", quickbooksSync);
   return queue;
 }
 

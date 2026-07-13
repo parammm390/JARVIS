@@ -1,12 +1,14 @@
-// Accounting domain plugin — REAL, native ledger: invoices live in Finnor's database.
-// No QuickBooks-class dependency; an external sync can be added later as an MCP tool
-// without touching this plugin. Amounts always come from the caller or policy — never guessed.
+// Accounting domain plugin — REAL, native ledger: invoices live in Finnor's database,
+// always the system of record. If QuickBooks is connected (packages/tools/src/quickbooks.ts),
+// a fire-and-forget async sync job is queued after every native write — never inline,
+// never a dependency this plugin's own success waits on. Amounts always come from the
+// caller or policy — never guessed.
 
 import type { DomainEnginePlugin } from "../shared/plugin-interface";
 import type { DraftAction, ExecutionResult, ValidationResult, DomainPolicy } from "@finnor/shared-types";
 import type { ToolRegistry } from "@finnor/tools";
 import { VOICE_PERSONAS } from "@finnor/tools";
-import { withTenant, invoices, communicationsLog } from "@finnor/db";
+import { withTenant, invoices, communicationsLog, enqueueJob } from "@finnor/db";
 import { findHousehold } from "../shared/db-helpers";
 import { eq, inArray, or } from "drizzle-orm";
 import { z } from "zod";
@@ -109,6 +111,9 @@ export const accountingPlugin: DomainEnginePlugin = {
           .returning();
         return row!;
       });
+      // Fire-and-forget — a QuickBooks outage or missing connection never affects the
+      // native invoice's own success; quickbooksSync itself no-ops if unconfigured.
+      await enqueueJob("quickbooks_sync", { tenantId, invoiceId: inv.id }, `qbo-sync:${inv.id}`).catch(() => undefined);
       return {
         status: "success",
         output: { invoiceId: inv.id, amountUsd: inv.amountUsd, dueDate: inv.dueDate?.toISOString() ?? null },
