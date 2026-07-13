@@ -6,7 +6,7 @@
 import type { DomainEnginePlugin } from "../shared/plugin-interface";
 import type { DraftAction, ExecutionResult, ValidationResult, DomainPolicy } from "@finnor/shared-types";
 import type { ToolRegistry } from "@finnor/tools";
-import { resolveProvider } from "@finnor/tools";
+import { resolveProvider, testAdsConnections, testQuickBooksConnection } from "@finnor/tools";
 import { withTenant, households, domainActions, inventoryItems, invoices, serviceVisits, communicationsLog, maintenanceAgreements } from "@finnor/db";
 import { and, desc, eq, gte, isNull, lt, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -219,8 +219,18 @@ export const opsOverviewPlugin: DomainEnginePlugin = {
     const tenantId = String(draft.payload.tenantId ?? "");
     if (draft.actionType === ASK_ACTION) {
       const question = String(draft.payload.question ?? "");
-      const [overview, finance] = await Promise.all([loadOverview(tenantId), loadFinanceAndHistorySnapshot(tenantId)]);
-      const data = { ...overview, ...finance };
+      // Integration health checks cost real OAuth round trips (Meta, Google, QBO) —
+      // only pay that latency when the question is actually about integrations, not
+      // on every grounded-QA call regardless of topic.
+      const asksAboutIntegrations = /\b(integration|connected|quickbooks|meta ads|google ads|ads account|vapi|ghl|gohighlevel)\b/i.test(question);
+      const [overview, finance, integrations] = await Promise.all([
+        loadOverview(tenantId),
+        loadFinanceAndHistorySnapshot(tenantId),
+        asksAboutIntegrations
+          ? Promise.all([testAdsConnections(), testQuickBooksConnection()]).then(([ads, qb]) => ({ meta_ads: ads.meta, google_ads: ads.googleAds, quickbooks: qb }))
+          : Promise.resolve(undefined),
+      ]);
+      const data = { ...overview, ...finance, ...(integrations ? { integrations } : {}) };
       try {
         const answer = await synthesizeAnswer(question, data);
         return { status: "success", output: { spokenSummary: answer, groundedOn: data }, expected: { answered: true } };
