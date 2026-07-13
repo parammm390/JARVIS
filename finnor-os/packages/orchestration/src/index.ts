@@ -2,7 +2,7 @@
 // This module is the single entry point the API, webhooks, and workers all use.
 
 import type { DomainAction, DomainPolicy, TenantContext, ExecutionResult } from "@finnor/shared-types";
-import { withTenant, domainActions, domainPolicies } from "@finnor/db";
+import { withTenant, domainActions, domainPolicies, enqueueJob } from "@finnor/db";
 import { buildMemorySnapshot, appendEpisode, appendShortTerm } from "@finnor/memory";
 import { createDefaultRegistry, type ToolRegistry } from "@finnor/tools";
 import { and, eq } from "drizzle-orm";
@@ -18,6 +18,7 @@ export * from "./executor";
 export * from "./reflection";
 export * from "./plugin-registry";
 export * from "./voice";
+export * from "./critic";
 
 export interface Orchestrator {
   handleInstruction(
@@ -96,6 +97,15 @@ export class FinnorOrchestrator implements Orchestrator {
         // a follow-up turn treat a pending draft's own id as if it were the id of the
         // thing it would eventually create.
         const awaitingApproval = Boolean(result.output?.gated || result.output?.pendingConfirmation);
+        if (awaitingApproval) {
+          // Fire-and-forget async second pass — reviews the action while it already
+          // sits in the confirmation gate awaiting a human, so this adds zero latency
+          // to the voice/instruction path itself. See critic.ts for why this fires
+          // here (LLM-planned, instruction-driven actions) and not from
+          // draftKnownAction (deterministic system scans have no instruction to
+          // misinterpret — nothing for a critic to check).
+          await enqueueJob("critic_review", { tenantId: ctx.tenantId, actionId: action.id }, `critic:${action.id}`).catch(() => undefined);
+        }
         turnResults.push({
           actionType: action.actionType,
           payload: action.payload,

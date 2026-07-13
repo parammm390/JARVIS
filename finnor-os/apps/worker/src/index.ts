@@ -14,6 +14,7 @@ import { scanLowInventory } from "./handlers/scan-low-inventory";
 import { scanServiceDue } from "./handlers/scan-service-due";
 import { ownerDigest } from "./handlers/owner-digest";
 import { quickbooksSync } from "./handlers/quickbooks-sync";
+import { criticReview } from "./handlers/critic-review";
 import { startScheduler, type ScheduledScan } from "./scheduler";
 
 export function createWorker(): JobQueue {
@@ -29,6 +30,7 @@ export function createWorker(): JobQueue {
   queue.register("scan_service_due", scanServiceDue);
   queue.register("owner_digest", ownerDigest);
   queue.register("quickbooks_sync", quickbooksSync);
+  queue.register("critic_review", criticReview);
   return queue;
 }
 
