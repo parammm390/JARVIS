@@ -6,6 +6,18 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "port": 3000
+    },
+    {
+      "name": "finnor-os-api",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev:api", "--prefix", "finnor-os"],
+      "port": 3100
+    },
+    {
+      "name": "finnor-os-console",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev:console", "--prefix", "finnor-os"],
+      "port": 3101
     }
   ]
 }

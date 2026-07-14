@@ -18,14 +18,14 @@ const builders = [
     eyebrow: "Demo builder 01",
     title: "Live Call & Booking Demo",
     description:
-      "Enter a company name and website. FINNOR pulls real water data, sizes and quotes the system from your pricing, books the visit on the call, and routes a structured handoff for urgent situations.",
+      "Never miss a lead. FINNOR's AI agent answers after-hours calls and recovers missed calls with instant qualification, visit booking, live water data, and system quotes. Enter a company name and website to see the full flow.",
     href: siteConfig.demoLink,
     cta: "Build My Live Demo",
     icon: PhoneCall,
     bullets: [
-      "Live water data pulls by ZIP code",
-      "Quote ranges computed from your pricing",
-      "Tap-to-book SMS with the quote and open slots",
+      "After-hours and missed-call capture",
+      "Instant lead qualification and booking",
+      "Live water data and real-time quotes",
     ],
     accent: "sky",
   },
