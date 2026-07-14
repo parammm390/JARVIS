@@ -13,12 +13,14 @@ import { placeVapiCall } from "./vapi-rest";
 import { exaSearch } from "./exa";
 import { getAdPerformance, adsProviderStatus } from "./ads";
 import { syncInvoiceToQuickBooks } from "./quickbooks";
+import { launchAdCampaign, type CampaignLaunchInput } from "./ads-write";
 
-const ghlBacked = (name: string, description: string, mcpTool: string, inputSchema: z.ZodTypeAny): Tool => ({
+const ghlBacked = (name: string, description: string, mcpTool: string, inputSchema: z.ZodTypeAny, piiAllowlist?: readonly string[]): Tool => ({
   name,
   description,
   integration: "ghl",
   inputSchema,
+  piiAllowlist,
   async run(input) {
     // tenantId is Finnor-internal routing context — never forwarded to GHL.
     const { tenantId: _tenantId, ...args } = input;
@@ -58,6 +60,7 @@ export function registerBuiltinTools(registry: ToolRegistry): void {
       "Create or update a contact in GoHighLevel",
       "contacts_upsert-contact",
       z.object({ firstName: z.string().optional(), lastName: z.string().optional(), phone: z.string().optional(), email: z.string().optional() }).passthrough(),
+      ["firstName", "lastName", "phone", "email"],
     ),
   );
   registry.register(
@@ -66,6 +69,7 @@ export function registerBuiltinTools(registry: ToolRegistry): void {
       "Book a calendar slot in GoHighLevel",
       "calendars_create-appointment",
       z.object({ calendarId: z.string(), contactId: z.string(), startTime: z.string(), endTime: z.string().optional() }).passthrough(),
+      ["calendarId", "contactId", "startTime", "endTime"],
     ),
   );
   registry.register(
@@ -74,6 +78,7 @@ export function registerBuiltinTools(registry: ToolRegistry): void {
       "Send an SMS via GoHighLevel conversations",
       "conversations_send-a-new-message",
       z.object({ contactId: z.string(), message: z.string() }).passthrough(),
+      ["contactId", "message"],
     ),
   );
   registry.register(
@@ -82,6 +87,7 @@ export function registerBuiltinTools(registry: ToolRegistry): void {
       "Read-only: list/search contacts in GoHighLevel (used by acceptance test §32.5)",
       "contacts_get-contacts",
       z.object({ query: z.string().optional(), limit: z.number().optional() }).passthrough(),
+      ["query", "limit"],
     ),
   );
 
@@ -90,6 +96,7 @@ export function registerBuiltinTools(registry: ToolRegistry): void {
     description: "Place an outbound call via Vapi",
     integration: "vapi",
     inputSchema: z.object({ phoneNumber: z.string(), assistantId: z.string().optional(), instructions: z.string().optional() }).passthrough(),
+    piiAllowlist: ["phoneNumber", "assistantId", "instructions", "tenantId"],
     async run(input) {
       const conn = await connectVapi();
       try {
@@ -120,6 +127,7 @@ function registerUniversalTools(registry: ToolRegistry): void {
       inputSchema: z
         .object({ phoneNumber: z.string().min(7), instructions: z.string().optional(), assistantId: z.string().optional(), purpose: z.string().optional() })
         .passthrough(),
+      piiAllowlist: ["phoneNumber", "instructions", "assistantId", "purpose", "tenantId"],
       async run(input) {
         const r = await placeVapiCall({
           customerNumber: String(input.phoneNumber),
@@ -141,6 +149,7 @@ function registerUniversalTools(registry: ToolRegistry): void {
       "Real ad campaign performance (spend, clicks, CTR, conversions). Uses Meta or Google Ads if connected, otherwise clearly-labeled demo data.",
     integration: "ads",
     inputSchema: z.object({ windowDays: z.number().int().min(1).max(90).optional() }).passthrough(),
+    piiAllowlist: ["windowDays"],
     async run(input) {
       const report = await getAdPerformance(input.windowDays ? Number(input.windowDays) : 7);
       return { ...report, providerStatus: adsProviderStatus() } as unknown as Record<string, unknown>;
@@ -151,6 +160,7 @@ function registerUniversalTools(registry: ToolRegistry): void {
     description: "Real-time web search via Exa (competitors, reviews, news, anything)",
     integration: "exa",
     inputSchema: z.object({ query: z.string().min(2), numResults: z.number().int().min(1).max(10).optional() }).passthrough(),
+    piiAllowlist: ["query", "numResults"],
     async run(input) {
       const results = await exaSearch({ query: String(input.query), numResults: input.numResults ? Number(input.numResults) : 5 });
       return { results };
@@ -161,6 +171,7 @@ function registerUniversalTools(registry: ToolRegistry): void {
     description: "Send a real email via the dealer's Gmail account",
     integration: "email",
     inputSchema: z.object({ to: z.string().email(), subject: z.string().min(1), body: z.string().min(1) }).passthrough(),
+    piiAllowlist: ["to", "subject", "body"],
     async run(input) {
       const r = await sendEmail({ to: String(input.to), subject: String(input.subject), body: String(input.body) });
       return { sent: true, messageId: r.messageId };
@@ -171,6 +182,7 @@ function registerUniversalTools(registry: ToolRegistry): void {
     description: "Geocode a street address (OpenStreetMap, no key needed)",
     integration: "maps",
     inputSchema: z.object({ address: z.string().min(3) }),
+    piiAllowlist: ["address"],
     async run(input) {
       const p = await geocodeAddress(String(input.address));
       return { ...p };
@@ -184,12 +196,26 @@ function registerUniversalTools(registry: ToolRegistry): void {
       a: z.object({ lat: z.number(), lon: z.number() }),
       b: z.object({ lat: z.number(), lon: z.number() }),
     }),
+    piiAllowlist: ["a", "b"],
     async run(input) {
       const i = input as { a: { lat: number; lon: number }; b: { lat: number; lon: number } };
       return { miles: distanceMiles(i.a, i.b) };
     },
   });
   registerAccountingSync(registry);
+  registry.register({
+    name: "launch_ad_campaign",
+    description: "Launch a paid ad campaign (dry-run, clearly labeled, until write-scope Ads credentials are connected)",
+    integration: "ads",
+    inputSchema: z
+      .object({ name: z.string().min(1), dailyBudgetUsd: z.number().positive(), objective: z.string().optional(), targetZip: z.string().optional() })
+      .passthrough(),
+    piiAllowlist: ["name", "dailyBudgetUsd", "objective", "targetZip"],
+    async run(input) {
+      const result = await launchAdCampaign(input as unknown as CampaignLaunchInput);
+      return { ...result };
+    },
+  });
 }
 
 function registerAccountingSync(registry: ToolRegistry): void {
@@ -203,6 +229,7 @@ function registerAccountingSync(registry: ToolRegistry): void {
     description: "Sync a native Finnor invoice to QuickBooks Online, if connected.",
     integration: "quickbooks",
     inputSchema: z.object({ customerName: z.string(), customerPhone: z.string().optional(), amountUsd: z.number(), memo: z.string().optional() }),
+    piiAllowlist: ["customerName", "customerPhone", "amountUsd", "memo"],
     async run(input) {
       const i = input as { customerName: string; customerPhone?: string; amountUsd: number; memo?: string };
       // Throws IntegrationError (not-connected, or a real API failure) — wrappedCall

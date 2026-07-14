@@ -34,6 +34,16 @@ export function containsPlaceholder(value: unknown): boolean {
   return false;
 }
 
+/** Every placeholder location as a dot-path, for surfacing "which field" in a readiness UI. */
+export function findPlaceholderPaths(value: unknown, path = ""): string[] {
+  if (value === "PLACEHOLDER_NEEDS_REAL_VALUE") return [path || "(root)"];
+  if (Array.isArray(value)) return value.flatMap((v, i) => findPlaceholderPaths(v, `${path}[${i}]`));
+  if (value !== null && typeof value === "object") {
+    return Object.entries(value as Record<string, unknown>).flatMap(([k, v]) => findPlaceholderPaths(v, path ? `${path}.${k}` : k));
+  }
+  return [];
+}
+
 /** Render a {{placeholder}} confirmation template against a payload — plain language for the queue. */
 export function renderTemplate(template: string, values: Record<string, unknown>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key: string) => {

@@ -1,10 +1,12 @@
-// POST /api/actions/:id/reject — halts the action, audit row written first (§19).
+// POST /api/actions/:id/reject — halts the action. Audit-first ordering (§19) and the
+// actual status flip live in FinnorOrchestrator.decide() — shared with confirm and the
+// Vapi webhook (see confirm/route.ts for why).
 
 import { withTenant, domainActions } from "@finnor/db";
-import { appendEpisode } from "@finnor/memory";
 import { RejectActionSchema } from "@finnor/policy-schema";
 import { and, eq } from "drizzle-orm";
 import { requireContext, canApprove, errorResponse } from "../../../../../lib/auth";
+import { getOrchestrator } from "../../../../../lib/orchestrator";
 
 export async function POST(req: Request, { params }: { params: { id: string } }): Promise<Response> {
   try {
@@ -25,12 +27,8 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     }
     if (row.status === "rejected") return Response.json({ status: "rejected", idempotent: true });
 
-    // Audit before state change (§19).
-    await appendEpisode(ctx.tenantId, params.id, "rejected", { by: ctx.userId, role: ctx.role }, { reason: body.data.reason ?? null });
-
-    await withTenant(ctx.tenantId, (db) =>
-      db.update(domainActions).set({ status: "rejected" }).where(eq(domainActions.id, params.id)),
-    );
+    const result = await getOrchestrator().decide(params.id, ctx.tenantId, "reject", ctx.userId, { role: ctx.role, reason: body.data.reason ?? null });
+    if (result.output.idempotent) return Response.json({ status: result.output.status, idempotent: true });
     return Response.json({ status: "rejected" });
   } catch (err) {
     return errorResponse(err);

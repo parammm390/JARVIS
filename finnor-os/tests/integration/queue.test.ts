@@ -78,6 +78,32 @@ describe.skipIf(!available)("postgres job queue (§32.7)", () => {
     expect(attempts).toBe(2);
   });
 
+  it("reclaims an expired worker lease instead of leaving a crashed job running forever", async () => {
+    await getPool().query("DELETE FROM jobs");
+    const queue = new JobQueue();
+    await getPool().query(
+      `INSERT INTO jobs (type, payload, status, attempts, max_attempts, started_at)
+       VALUES ('crashed_worker', '{}', 'running', 1, 3, now() - interval '10 minutes')`,
+    );
+    expect(await queue.recoverExpiredRunningJobs(60)).toBe(1);
+    const { rows } = await getPool().query("SELECT status, started_at, last_error FROM jobs WHERE type = 'crashed_worker'");
+    expect(rows[0].status).toBe("queued");
+    expect(rows[0].started_at).toBeNull();
+    expect(rows[0].last_error).toMatch(/lease expired/i);
+  });
+
+  it("dead-letters an expired lease that already exhausted its attempts", async () => {
+    await getPool().query("DELETE FROM jobs");
+    const queue = new JobQueue();
+    await getPool().query(
+      `INSERT INTO jobs (type, payload, status, attempts, max_attempts, started_at)
+       VALUES ('crashed_poison_job', '{}', 'running', 3, 3, now() - interval '10 minutes')`,
+    );
+    expect(await queue.recoverExpiredRunningJobs(60)).toBe(1);
+    const { rows } = await getPool().query("SELECT status FROM jobs WHERE type = 'crashed_poison_job'");
+    expect(rows[0].status).toBe("dead_letter");
+  });
+
   it("does not leak a pooled connection on an empty queue (regression: tick() used to return before releasing its client on the empty-queue path — fine locally where the pool caps at 10, but in production's ssl pool, capped at 2, two consecutive empty ticks permanently exhausted it and every later tick hung forever)", async () => {
     await getPool().query("DELETE FROM jobs");
     const queue = new JobQueue();

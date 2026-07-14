@@ -16,7 +16,7 @@ Nothing Finnor plans actually happens until a human clicks **Approve** in the Co
 | Console | `apps/console` | Confirmation Queue, Audit Log, Policy Editor |
 | Orchestrator | `packages/orchestration` (+ `apps/orchestrator` service host) | Planner → confirmation gate → Executor → Reflection |
 | Worker | `apps/worker` | Postgres-backed job queue: transcripts, reminders, reconciliation |
-| Domain plugins | `packages/domain-plugins/*` | 10 engines behind one interface; water-test + maintenance-agreement are real, the rest are typed stubs awaiting dealer rules |
+| Domain plugins | `packages/domain-plugins/*` | 17 engines behind one interface, 38 action types total — real business logic throughout; a handful of integration-bound actions (ads, QuickBooks, GHL) demo-fall-back until a dealer's real provider credentials land |
 | Memory | `packages/memory` | Short-term (Redis), long-term (households), semantic (pgvector), episodic (append-only audit) |
 | Database | `packages/db` | Schema, migrations with row-level security, seed data |
 

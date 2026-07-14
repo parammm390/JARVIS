@@ -11,16 +11,37 @@
 //  3. end-of-call-report for a normal customer call: transcript enqueued for the
 //     Planner, exactly as before.
 
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { VapiWebhookSchema } from "@finnor/policy-schema";
 import { adminDb, jobs, withTenant, domainActions, actionLog } from "@finnor/db";
+import { ensureSecretsLoaded } from "@finnor/security";
 import { parseSpokenDecision, diagnoseFailure, resolveProvider } from "@finnor/orchestration";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { getOrchestrator } from "../../../../lib/orchestrator";
+import { checkAndRecordReceipt } from "../../../../lib/webhook-replay";
 
-function verifySecret(req: Request): boolean {
-  const expected = process.env.VAPI_WEBHOOK_SECRET;
-  if (!expected) return true; // not configured yet — set VAPI_WEBHOOK_SECRET in production
-  return req.headers.get("x-vapi-secret") === expected;
+const REPLAY_WINDOW_SECONDS = 300;
+
+/**
+ * HMAC-with-timestamp: header `x-vapi-signature: t=<unix>,v1=<hex hmac>` computed over
+ * `${t}.${rawBody}`. Replaces the previous static-secret compare, which failed OPEN
+ * whenever VAPI_WEBHOOK_SECRET was unset — this fails open ONLY when the secret is
+ * unset AND NODE_ENV isn't production (dev convenience); it fails CLOSED otherwise,
+ * and always rejects a signature outside a 5-minute window even with a valid secret.
+ */
+function verifySignature(req: Request, rawBody: string): boolean {
+  const secret = process.env.VAPI_WEBHOOK_SECRET;
+  if (!secret) return process.env.NODE_ENV !== "production";
+  const header = req.headers.get("x-vapi-signature") ?? "";
+  const parts = Object.fromEntries(header.split(",").map((kv) => kv.split("=") as [string, string]));
+  const t = Number(parts.t);
+  const v1 = parts.v1;
+  if (!t || !v1) return false;
+  if (Math.abs(Date.now() / 1000 - t) > REPLAY_WINDOW_SECONDS) return false;
+  const expected = createHmac("sha256", secret).update(`${t}.${rawBody}`).digest("hex");
+  const expectedBuf = Buffer.from(expected, "hex");
+  const gotBuf = Buffer.from(v1, "hex");
+  return expectedBuf.length === gotBuf.length && timingSafeEqual(expectedBuf, gotBuf);
 }
 
 function defaultTenant(): string {
@@ -244,8 +265,16 @@ async function handleToolCalls(message: Record<string, unknown>): Promise<Respon
 }
 
 export async function POST(req: Request): Promise<Response> {
-  if (!verifySecret(req)) return Response.json({ error: "Bad signature" }, { status: 401 });
-  const parsed = VapiWebhookSchema.safeParse(await req.json().catch(() => null));
+  await ensureSecretsLoaded();
+  const rawBody = await req.text();
+  if (!verifySignature(req, rawBody)) return Response.json({ error: "Bad signature" }, { status: 401 });
+  let json: unknown = null;
+  try {
+    json = JSON.parse(rawBody);
+  } catch {
+    // parsed.success below handles it
+  }
+  const parsed = VapiWebhookSchema.safeParse(json);
   if (!parsed.success) return Response.json({ error: "Malformed webhook" }, { status: 400 });
 
   const msg = parsed.data.message as Record<string, unknown> & {
@@ -253,6 +282,23 @@ export async function POST(req: Request): Promise<Response> {
     transcript?: string;
     call?: { id?: string; metadata?: Record<string, unknown> };
   };
+
+  // Replay protection, keyed by message shape — NOT bare call id: a single call
+  // fires many "tool-calls" messages (one per utterance), all sharing the same
+  // call.id, so deduping on call.id alone would silently drop every tool-call after
+  // the first one in a live call. "end-of-call-report" genuinely fires once per call,
+  // so call id alone is the right key there.
+  const callId = msg.call?.id;
+  {
+    const toolCallIds = ((msg.toolCallList ?? msg.toolCalls ?? []) as VapiToolCall[]).map((tc) => tc.id).join(",");
+    const eventId = callId
+      ? msg.type === "tool-calls"
+        ? `${callId}:tool-calls:${toolCallIds}`
+        : `${callId}:${msg.type}`
+      : `body:${createHash("sha256").update(rawBody).digest("hex")}`;
+    const receipt = await checkAndRecordReceipt("vapi", eventId, rawBody);
+    if (receipt === "duplicate") return Response.json({ received: true, duplicate: true });
+  }
 
   // 1. Live-call tools: plan + spoken confirmation inside the same call.
   if (msg.type === "tool-calls") {

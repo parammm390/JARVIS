@@ -139,6 +139,7 @@ export const domainActions = pgTable(
       .default("draft"),
     summary: text("summary"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    executionStartedAt: timestamp("execution_started_at", { withTimezone: true }),
   },
   (t) => [index("domain_actions_tenant_status_idx").on(t.tenantId, t.status)],
 );
@@ -194,11 +195,36 @@ export const jobs = pgTable(
     maxAttempts: integer("max_attempts").notNull().default(3),
     runAt: timestamp("run_at", { withTimezone: true }).notNull().defaultNow(),
     lastError: text("last_error"),
+    startedAt: timestamp("started_at", { withTimezone: true }),
     // Idempotency: callers may supply a key; enqueue is a no-op if it already exists.
     idempotencyKey: text("idempotency_key").unique(),
   },
   (t) => [index("jobs_status_run_at_idx").on(t.status, t.runAt)],
 );
+
+export const apiRateLimits = pgTable("api_rate_limits", {
+  bucketKey: text("bucket_key").notNull(),
+  windowStartedAt: timestamp("window_started_at", { withTimezone: true }).notNull(),
+  count: integer("count").notNull().default(0),
+});
+
+export const webhookReceipts = pgTable("webhook_receipts", {
+  provider: text("provider").notNull(),
+  eventId: text("event_id").notNull(),
+  payloadHash: text("payload_hash").notNull(),
+  receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const externalOperations = pgTable("external_operations", {
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+  domainActionId: uuid("domain_action_id").notNull().references(() => domainActions.id),
+  operationKey: text("operation_key").notNull(),
+  requestHash: text("request_hash").notNull(),
+  status: text("status", { enum: ["running", "succeeded", "failed", "unknown"] }).notNull(),
+  response: jsonb("response"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 // Workflow engine state machines (§14): explicit state + transition history per subject.
 export const workflowStates = pgTable("workflow_states", {

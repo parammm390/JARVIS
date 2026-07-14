@@ -1,6 +1,7 @@
 export * from "./errors";
 export * from "./wrap";
 export * from "./registry";
+export * from "./idempotent-call";
 export * from "./mcp-client";
 export * from "./builtin-tools";
 
@@ -21,3 +22,7 @@ export * from "./llm";
 export * from "./voice-personas";
 export * from "./ads";
 export * from "./quickbooks";
+export * from "./health";
+export * from "./ads-write";
+export * from "./temporal-signals";
+export * from "./observability";

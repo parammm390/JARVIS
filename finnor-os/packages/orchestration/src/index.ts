@@ -2,15 +2,20 @@
 // This module is the single entry point the API, webhooks, and workers all use.
 
 import type { DomainAction, DomainPolicy, TenantContext, ExecutionResult } from "@finnor/shared-types";
-import { withTenant, domainActions, domainPolicies, enqueueJob } from "@finnor/db";
-import { buildMemorySnapshot, appendEpisode, appendShortTerm } from "@finnor/memory";
+import { withTenant, domainActions, domainPolicies, actionLog, enqueueJob } from "@finnor/db";
+import { buildMemorySnapshot, appendEpisode, appendShortTerm, mirrorTurnToZep } from "@finnor/memory";
 import { createDefaultRegistry, type ToolRegistry } from "@finnor/tools";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { LLMPlanner, type Planner } from "./planner";
 import { GatedExecutor, type Executor } from "./executor";
 import { OutcomeReflection, type Reflection } from "./reflection";
 import { createDefaultPluginRegistry, PluginRegistry } from "./plugin-registry";
 import { resolveProvider } from "./llm";
+import { AllowlistExecutor } from "./graph/allowlist-executor";
+import { LangGraphExecutor } from "./graph/executor";
+import { buildGateGraph } from "./graph/build-graph";
+import { getCheckpointer } from "./graph/checkpointer";
+import { ensureSecretsLoaded, redactStructured, redactText } from "@finnor/security";
 
 export * from "./llm";
 export * from "./planner";
@@ -20,6 +25,11 @@ export * from "./plugin-registry";
 export * from "./voice";
 export * from "./critic";
 export * from "./learning";
+export * from "./graph/allowlist-executor";
+export * from "./graph/executor";
+export * from "./graph/build-graph";
+export * from "./graph/checkpointer";
+export * from "./graph/state";
 
 export interface Orchestrator {
   handleInstruction(
@@ -60,8 +70,14 @@ export class FinnorOrchestrator implements Orchestrator {
     this.plugins = deps?.plugins ?? createDefaultPluginRegistry();
     this.tools = deps?.tools ?? createDefaultRegistry();
     this.planner = deps?.planner ?? new LLMPlanner(this.plugins);
-    this.executor = deps?.executor ?? new GatedExecutor(this.plugins, this.tools);
     this.reflection = deps?.reflection ?? new OutcomeReflection();
+    if (deps?.executor) {
+      this.executor = deps.executor;
+    } else {
+      const legacy = new GatedExecutor(this.plugins, this.tools);
+      const graph = new LangGraphExecutor(buildGateGraph(this.plugins, this.tools, getCheckpointer()));
+      this.executor = new AllowlistExecutor(legacy, graph);
+    }
   }
 
   /** Instruction (voice transcript or text) → plan → gate-or-execute each action. */
@@ -70,6 +86,7 @@ export class FinnorOrchestrator implements Orchestrator {
     ctx: TenantContext,
     opts: { sessionId?: string; householdId?: string } = {},
   ): Promise<DomainAction[]> {
+    await ensureSecretsLoaded();
     const memory = await buildMemorySnapshot({
       tenantId: ctx.tenantId,
       sessionId: opts.sessionId,
@@ -126,6 +143,15 @@ export class FinnorOrchestrator implements Orchestrator {
         actions: turnResults,
         at: new Date().toISOString(),
       }).catch(() => undefined);
+      // Consolidation layer (Zep, additive — see @finnor/memory/consolidated.ts):
+      // mirrors the same turn so its knowledge graph can extract durable facts across
+      // sessions, not just this 30-minute short-term window. No-ops instantly if
+      // ZEP_API_KEY isn't configured.
+      const zepInstruction = redactText(instruction).value;
+      const zepOutcome = JSON.stringify(redactStructured(turnResults));
+      await mirrorTurnToZep(ctx.tenantId, opts.sessionId, `Instruction: ${zepInstruction}\nOutcome: ${zepOutcome}`).catch(
+        () => undefined,
+      );
     }
     return actions;
   }
@@ -145,6 +171,7 @@ export class FinnorOrchestrator implements Orchestrator {
     tenantId: string,
     opts: { source?: string } = {},
   ): Promise<{ action: DomainAction; result: ExecutionResult }> {
+    await ensureSecretsLoaded();
     const [row] = await withTenant(tenantId, (db) =>
       db.insert(domainActions).values({ tenantId, actionType, payload, status: "draft" }).returning(),
     );
@@ -165,31 +192,46 @@ export class FinnorOrchestrator implements Orchestrator {
     return { action, result };
   }
 
-  /** Resume an approved action (called after POST /confirm flips status to approved). */
+  /**
+   * Claims an approved action before execution. The conditional status transition is
+   * the database concurrency boundary: exactly one caller can turn approved into
+   * executing, so duplicate HTTP/webhook deliveries never duplicate a side effect.
+   */
   async runAction(actionId: string, tenantId: string): Promise<ExecutionResult> {
+    await ensureSecretsLoaded();
     const row = await withTenant(tenantId, async (db) => {
-      const [r] = await db
-        .select()
-        .from(domainActions)
-        .where(and(eq(domainActions.id, actionId), eq(domainActions.tenantId, tenantId)));
-      return r;
+      const [claimed] = await db
+        .update(domainActions)
+        .set({ status: "executing", executionStartedAt: new Date() })
+        .where(and(eq(domainActions.id, actionId), eq(domainActions.tenantId, tenantId), eq(domainActions.status, "approved")))
+        .returning();
+      if (claimed) return { claimed, current: claimed };
+      const [current] = await db.select().from(domainActions).where(and(eq(domainActions.id, actionId), eq(domainActions.tenantId, tenantId)));
+      return { claimed: null, current };
     });
-    if (!row) return { status: "failure", output: {}, error: "Action not found" };
-    if (row.status !== "approved") {
+    if (!row.current) return { status: "failure", output: {}, error: "Action not found" };
+    if (!row.claimed) {
+      if (row.current.status !== "executing" && row.current.status !== "completed") {
+        return {
+          status: "failure",
+          output: {},
+          error: `Action is ${row.current.status}, not approved — the confirmation gate has not cleared.`,
+        };
+      }
       return {
-        status: "failure",
-        output: {},
-        error: `Action is ${row.status}, not approved — the confirmation gate has not cleared.`,
+        status: "success",
+        output: { idempotent: true, status: row.current.status },
       };
     }
+    const claimed = row.claimed;
     const action: DomainAction = {
-      id: row.id,
-      tenantId: row.tenantId,
-      actionType: row.actionType,
-      payload: row.payload as Record<string, unknown>,
-      policyId: row.policyId,
-      status: row.status,
-      createdAt: row.createdAt.toISOString(),
+      id: claimed.id,
+      tenantId: claimed.tenantId,
+      actionType: claimed.actionType,
+      payload: claimed.payload as Record<string, unknown>,
+      policyId: claimed.policyId,
+      status: claimed.status,
+      createdAt: claimed.createdAt.toISOString(),
     };
     const policy = await this.loadPolicy(action);
     const result = await this.executor.execute(action, policy);
@@ -231,35 +273,54 @@ export class FinnorOrchestrator implements Orchestrator {
   }
 
   /**
-   * Voice/console-shared decision path: audit row FIRST (§19), then status flip, then
-   * execution on approve. decidedBy records the channel ("voice:<callId>" or a user id).
-   * Idempotent: deciding an already-decided action is a no-op with a clear result.
+   * Voice/console-shared decision path. The state transition and its audit entry are
+   * one transaction; the conditional UPDATE is the single winner under concurrent
+   * approvals. decidedBy records the channel ("voice:<callId>" or a user id).
    */
   async decide(
     actionId: string,
     tenantId: string,
     decision: "approve" | "reject",
     decidedBy: string,
+    opts?: { role?: string; note?: string | null; reason?: string | null },
   ): Promise<ExecutionResult> {
-    const row = await withTenant(tenantId, async (db) => {
-      const [r] = await db
-        .select()
-        .from(domainActions)
-        .where(and(eq(domainActions.id, actionId), eq(domainActions.tenantId, tenantId)));
-      return r;
-    });
-    if (!row) return { status: "failure", output: {}, error: "Action not found" };
-    if (row.status !== "pending" && row.status !== "needs_human_review") {
-      return { status: "success", output: { idempotent: true, status: row.status } };
-    }
-    await appendEpisode(tenantId, actionId, decision === "approve" ? "confirmed" : "rejected", { by: decidedBy }, { channel: decidedBy.startsWith("voice:") ? "voice" : "console" });
-    await withTenant(tenantId, (db) =>
-      db
+    const transition = await withTenant(tenantId, async (db) => {
+      const [claimed] = await db
         .update(domainActions)
         .set({ status: decision === "approve" ? "approved" : "rejected" })
-        .where(eq(domainActions.id, actionId)),
-    );
-    if (decision === "reject") return { status: "success", output: { rejected: true } };
+        .where(
+          and(
+            eq(domainActions.id, actionId),
+            eq(domainActions.tenantId, tenantId),
+            inArray(domainActions.status, ["pending", "needs_human_review"]),
+          ),
+        )
+        .returning();
+      if (!claimed) {
+        const [current] = await db.select().from(domainActions).where(and(eq(domainActions.id, actionId), eq(domainActions.tenantId, tenantId)));
+        return { claimed: null, current };
+      }
+      await db.insert(actionLog).values({
+        tenantId,
+        domainActionId: actionId,
+        step: decision === "approve" ? "confirmed" : "rejected",
+        input: { by: decidedBy, ...(opts?.role ? { role: opts.role } : {}) },
+        output: {
+          channel: decidedBy.startsWith("voice:") ? "voice" : "console",
+          ...(decision === "approve" ? { note: opts?.note ?? null } : { reason: opts?.reason ?? null }),
+        },
+      });
+      return { claimed, current: claimed };
+    });
+    if (!transition.current) return { status: "failure", output: {}, error: "Action not found" };
+    if (!transition.claimed) return { status: "success", output: { idempotent: true, status: transition.current.status } };
+    const row = transition.claimed;
+    if (decision === "reject") {
+      // Best-effort: close a paused graph thread so it doesn't dangle waiting for a
+      // resume that will never come. Never blocks the reject itself.
+      await this.executor.close?.(actionId, tenantId, row.actionType).catch(() => undefined);
+      return { status: "success", output: { rejected: true } };
+    }
     return this.runAction(actionId, tenantId);
   }
 

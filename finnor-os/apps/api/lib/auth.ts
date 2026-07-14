@@ -5,6 +5,10 @@
 import { createClient } from "@supabase/supabase-js";
 import { getPool } from "@finnor/db";
 import type { TenantContext, Role } from "@finnor/shared-types";
+import { ensureSecretsLoaded } from "@finnor/security";
+import { initObservability, Sentry } from "@finnor/tools";
+import { checkRateLimit } from "./rate-limit";
+import { redactText } from "@finnor/security";
 
 export class AuthError extends Error {
   constructor(
@@ -31,11 +35,18 @@ async function resolveUserByEmail(email: string): Promise<TenantContext | null> 
 }
 
 export async function requireContext(req: Request): Promise<TenantContext> {
-  if (process.env.AUTH_DEV_BYPASS === "1") {
+  await ensureSecretsLoaded();
+  // Dev-bypass never applies in production, REGARDLESS of the env var's value — a
+  // misconfigured prod deploy that left AUTH_DEV_BYPASS=1 set must not accept forged
+  // x-tenant-id headers just because the flag was never flipped off.
+  if (process.env.AUTH_DEV_BYPASS === "1" && process.env.NODE_ENV !== "production") {
     const tenantId = req.headers.get("x-tenant-id");
     const userId = req.headers.get("x-user-id") ?? "00000000-0000-4000-8000-0000000000aa";
     const role = (req.headers.get("x-user-role") ?? "owner") as Role;
-    if (tenantId) return { tenantId, userId, role };
+    if (tenantId) {
+      await enforceRateLimit(`tenant:${tenantId}`);
+      return { tenantId, userId, role };
+    }
   }
 
   const auth = req.headers.get("authorization");
@@ -52,7 +63,13 @@ export async function requireContext(req: Request): Promise<TenantContext> {
 
   const ctx = await resolveUserByEmail(data.user.email);
   if (!ctx) throw new AuthError("User has no tenant — contact your administrator", 403);
+  await enforceRateLimit(`tenant:${ctx.tenantId}`);
   return ctx;
+}
+
+async function enforceRateLimit(bucketKey: string): Promise<void> {
+  const ok = await checkRateLimit(bucketKey);
+  if (!ok) throw new AuthError("Rate limit exceeded — slow down and try again shortly.", 429);
 }
 
 /** RBAC (§18): can this role approve this action_type for this tenant? Config, not code. */
@@ -71,6 +88,9 @@ export function errorResponse(err: unknown): Response {
   if (err instanceof AuthError) {
     return Response.json({ error: err.message }, { status: err.status });
   }
+  initObservability();
+  const message = err instanceof Error ? redactText(err.message).value : "Unexpected route failure";
+  Sentry.captureException(new Error(message));
   console.error(err);
   // Plain language outward, details stay in server logs (§22).
   return Response.json({ error: "Something went wrong on our side. Try again shortly." }, { status: 500 });

@@ -8,6 +8,7 @@ import type { LLMProvider } from "./llm";
 import { resolveProvider } from "./llm";
 import type { PluginRegistry } from "./plugin-registry";
 import { z } from "zod";
+import { redactStructured, redactText, restoreTokens } from "@finnor/security";
 
 const PlanSchema = z.object({
   actions: z.array(
@@ -54,6 +55,7 @@ export class LLMPlanner implements Planner {
       "Only return an empty actions array when the instruction is not a business question or action at all (chit-chat, out of scope, or something no plugin could ever plausibly do) — never because the exact phrasing didn't match a narrower action_type.",
       'Respond with JSON: {"actions":[{"action_type":"...","payload":{...},"reasoning":"..."}]}',
       "Payloads must contain only facts from the instruction or the provided memory — never invent phone numbers, addresses, or prices.",
+      "Direct identifiers are replaced with bracketed tokens such as [PHONE_1] before you see them. Preserve those tokens exactly in payload values whenever the underlying field is needed; never invent a different identifier.",
     ].join("\n");
     this.systemPromptCache = { day, prompt };
     return prompt;
@@ -66,12 +68,13 @@ export class LLMPlanner implements Planner {
   ): Promise<DomainAction[]> {
     const actionTypes = this.plugins.actionTypes();
     const system = this.systemPrompt();
+    const redactedInstruction = redactText(instruction);
     const user = JSON.stringify({
-      instruction,
+      instruction: redactedInstruction.value,
       memory: {
-        shortTerm: memory.shortTerm,
-        semantic: memory.semantic.map((s) => s.chunk).slice(0, 5),
-        recentEpisodes: memory.episodic.slice(0, 5),
+        shortTerm: redactStructured(memory.shortTerm),
+        semantic: memory.semantic.map((s) => redactText(s.chunk).value).slice(0, 5),
+        recentEpisodes: redactStructured(memory.episodic.slice(0, 5)),
       },
     });
 
@@ -108,7 +111,7 @@ export class LLMPlanner implements Planner {
           valid.map((a) => ({
             tenantId: tenantContext.tenantId,
             actionType: a.action_type,
-            payload: a.payload,
+            payload: restoreTokens(a.payload, redactedInstruction.tokens),
             policyId: policyByType.get(a.action_type) ?? null,
             status: "draft" as const,
           })),

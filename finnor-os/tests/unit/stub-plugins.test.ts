@@ -46,12 +46,17 @@ const ALL_EXPECTED_ACTION_TYPES = [
   "summarize_ad_performance",
   "send_customer_message",
   "flag_visit_issue",
+  "send_proposal",
+  "create_review_request",
+  "launch_ad_campaign",
 ];
 
-// Only actions gated on write-access app review (Meta/Google Ads) remain scaffolds.
-// summarize_ad_performance graduated to real: it reads real Meta/Google Ads data once
-// connected, and clearly-labeled demo data otherwise — see packages/tools/src/ads.ts.
-const SCAFFOLDED = ["launch_ad_campaign", "create_review_request"];
+// launch_ad_campaign is the one remaining action gated on write-access app review
+// (Meta/Google Ads) — it runs for real today, but in a clearly-labeled dry-run mode
+// (see packages/tools/src/ads-write.ts), tested separately below, not via this loop.
+// create_review_request graduated to real: it's a comms send (SMS/email), not an
+// ads-API write, so it doesn't need write-scope approval — see packages/domain-plugins/marketing/index.ts.
+const SCAFFOLDED: string[] = [];
 
 describe("full action-type roster (§5)", () => {
   const registry = createDefaultPluginRegistry();
@@ -87,6 +92,28 @@ describe("full action-type roster (§5)", () => {
     expect(result.status).toBe("success"); // no real ad account configured in this test env -> demo data, not a block
     expect((result.output as { provider?: string }).provider).toBe("demo");
     expect(typeof (result.output as { spokenSummary?: string }).spokenSummary).toBe("string");
+  });
+
+  it("launch_ad_campaign runs for real in a clearly-labeled dry-run mode until write-scope Ads credentials are connected", async () => {
+    const { createDefaultRegistry } = await import("@finnor/tools");
+    const plugin = registry.resolve("launch_ad_campaign")!;
+    const policy = { ...placeholderPolicy("launch_ad_campaign"), policy: {}, requiresConfirmation: false };
+    const draft = await plugin.draft("launch_ad_campaign", { name: "Spring Special", dailyBudgetUsd: 25 }, policy);
+    const result = await plugin.execute(draft, createDefaultRegistry());
+    expect(result.status).toBe("success"); // genuinely ran — in dry-run mode, never blocked
+    expect((result.output as { mode?: string }).mode).toBe("dry_run");
+    expect(String((result.output as { note?: string }).note)).toContain("[DRY RUN]");
+  });
+
+  it("create_review_request: placeholder policy → plain-language not-configured + forced confirmation, execute() fails safely", async () => {
+    const plugin = registry.resolve("create_review_request")!;
+    const policy = placeholderPolicy("create_review_request");
+    const draft = await plugin.draft("create_review_request", {}, policy);
+    expect(draft.summary.toLowerCase()).toContain("not yet configured");
+    expect(draft.requiresConfirmation).toBe(true); // forced, despite policy saying false
+    const result = await plugin.execute(draft, new ToolRegistry());
+    expect(result.status).toBe("failure"); // explicit, never a silent send with a fake link
+    expect(result.error).toBeTruthy();
   });
 
   it("water-domain-knowledge answers from shared public-domain content", async () => {

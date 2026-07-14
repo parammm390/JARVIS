@@ -18,6 +18,7 @@
       "@finnor/db": ["./packages/db/index.ts"],
       "@finnor/db/*": ["./packages/db/*"],
       "@finnor/memory": ["./packages/memory/src/index.ts"],
+      "@finnor/security": ["./packages/security/src/index.ts"],
       "@finnor/tools": ["./packages/tools/src/index.ts"],
       "@finnor/orchestration": ["./packages/orchestration/src/index.ts"],
       "@finnor/plugins-shared": ["./packages/domain-plugins/shared/plugin-interface.ts"],

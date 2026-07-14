@@ -20,8 +20,10 @@ import {
 } from "@finnor/db";
 import { FinnorOrchestrator } from "@finnor/orchestration";
 import { createDefaultRegistry } from "@finnor/tools";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, and } from "drizzle-orm";
 import type { DomainAction } from "@finnor/shared-types";
+import { domainPolicies } from "@finnor/db";
+import { PRICING_CATALOG_ACTION_TYPE } from "../../packages/domain-plugins/shared/pricing-catalog";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
 
@@ -163,6 +165,57 @@ describe.skipIf(!available)("native business layer — real, end to end, gated",
       db.select().from(proposals).orderBy(desc(proposals.id)).limit(1),
     );
     expect(prop).toBeTruthy();
+  });
+
+  it("send_proposal delivers the generated quote (sms via native channel) and marks it sent", async () => {
+    const generated = await runGated("generate_quote", {
+      phone: "+13195550142",
+      householdLabel: "The Hendersons",
+      items: ["HE Softener 45k"],
+    });
+    const proposalId = String(generated.output.proposalId);
+
+    const sent = await runGated("send_proposal", { proposalId, channel: "sms", phone: "+13195550142" });
+    expect(sent.status).toBe("success");
+
+    const [row] = await withTenant(SEED_TENANT_ID, (db) => db.select().from(proposals).where(eq(proposals.id, proposalId)));
+    expect(row!.status).toBe("sent");
+    expect(row!.sentAt).toBeTruthy();
+  });
+
+  it("generate_quote AND proposal-batch both price from the same shared pricing_catalog policy row", async () => {
+    await withTenant(SEED_TENANT_ID, (db) =>
+      db.insert(domainPolicies).values({
+        tenantId: SEED_TENANT_ID,
+        actionType: PRICING_CATALOG_ACTION_TYPE,
+        policy: {
+          items: [{ sku: "HE-SOFT-45K", label: "HE Softener 45k", priceUsd: 1799 }],
+          laborRatePerHourUsd: 95,
+        },
+        requiresConfirmation: false,
+      }),
+    );
+
+    const r = await runGated("generate_quote", {
+      phone: "+13195550142",
+      householdLabel: "The Hendersons",
+      items: ["HE-SOFT-45K"],
+    });
+    expect(r.status).toBe("success");
+    const quote = r.output.quote as { lines: Array<{ item: string; priceUsd: number | null }>; totalUsd: number | null };
+    expect(quote.lines[0]!.priceUsd).toBe(1799);
+    expect(quote.totalUsd).toBe(1799);
+
+    const { loadPricingCatalog, isPricingCatalogReady } = await import(
+      "../../packages/domain-plugins/shared/pricing-catalog"
+    );
+    const catalog = await loadPricingCatalog(SEED_TENANT_ID);
+    expect(isPricingCatalogReady(catalog)).toBe(true);
+
+    // Clean up so later tests (and re-runs) see the seed's default unconfigured state.
+    await withTenant(SEED_TENANT_ID, (db) =>
+      db.delete(domainPolicies).where(and(eq(domainPolicies.tenantId, SEED_TENANT_ID), eq(domainPolicies.actionType, PRICING_CATALOG_ACTION_TYPE))),
+    );
   });
 
   it("flag_visit_issue creates a real review card in the owner's queue", async () => {

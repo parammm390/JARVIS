@@ -7,13 +7,15 @@ import type { DomainAction, DomainPolicy, ExecutionResult } from "@finnor/shared
 import { withTenant, domainActions, enqueueJob } from "@finnor/db";
 import { appendEpisode } from "@finnor/memory";
 import { eq, and } from "drizzle-orm";
-import type { ToolRegistry } from "@finnor/tools";
+import { ScopedToolRegistry, type ToolRegistry } from "@finnor/tools";
 import type { PluginRegistry } from "./plugin-registry";
 import { diagnoseFailure, buildConfirmationScript } from "./voice";
 import { advanceWorkflowForAction } from "./workflow";
 
 export interface Executor {
   execute(action: DomainAction, policy: DomainPolicy): Promise<ExecutionResult>;
+  /** Optional: best-effort cleanup on reject (e.g. closing a paused graph thread). */
+  close?(actionId: string, tenantId: string, actionType: string): Promise<void>;
 }
 
 export class GatedExecutor implements Executor {
@@ -44,7 +46,7 @@ export class GatedExecutor implements Executor {
 
     // ---------------- THE CONFIRMATION GATE ----------------
     // draft.requiresConfirmation can only tighten the gate (placeholder policies force it).
-    if ((policy.requiresConfirmation || draft.requiresConfirmation) && action.status !== "approved") {
+    if ((policy.requiresConfirmation || draft.requiresConfirmation) && action.status !== "approved" && action.status !== "executing") {
       await withTenant(action.tenantId, async (db) => {
         await db
           .update(domainActions)
@@ -70,9 +72,13 @@ export class GatedExecutor implements Executor {
     // --------------------------------------------------------
 
     await this.setStatus(action, "executing");
+    // Scoped per action execution: claims each external tool call against the
+    // external_operations ledger so a reflection retry never re-fires an
+    // already-completed side effect (send an SMS twice, double-sync an invoice).
+    const scopedTools = new ScopedToolRegistry(this.tools, { tenantId: action.tenantId, domainActionId: action.id });
     let result: ExecutionResult;
     try {
-      result = await plugin.execute(draft, this.tools);
+      result = await plugin.execute(draft, scopedTools);
     } catch (err) {
       result = { status: "failure", output: {}, error: (err as Error).message };
     }
@@ -112,7 +118,11 @@ export class GatedExecutor implements Executor {
     await withTenant(action.tenantId, async (db) => {
       await db
         .update(domainActions)
-        .set({ status })
+        .set({
+          status,
+          ...(status === "executing" ? { executionStartedAt: new Date() } : {}),
+          ...(status === "completed" || status === "failed" || status === "blocked_integration_unavailable" ? { executionStartedAt: null } : {}),
+        })
         .where(and(eq(domainActions.id, action.id), eq(domainActions.tenantId, action.tenantId)));
     });
   }

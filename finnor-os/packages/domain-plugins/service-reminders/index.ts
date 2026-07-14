@@ -65,17 +65,21 @@ export const serviceRemindersPlugin: DomainEnginePlugin = {
 
   draft(actionType, payload, policy: DomainPolicy): DraftAction {
     const p = ReminderPayloadSchema.parse(payload);
+    // Merge dealer overrides (policy.policy) with published defaults here — this is
+    // the only place in the pipeline that sees `policy`, so it must be carried
+    // forward in the payload for execute() to actually use it.
+    const intervals = ReminderPolicySchema.parse(policy.policy);
     return {
       actionType,
       summary: `Check whether a ${p.equipmentType.replaceAll("_", " ")} last serviced ${p.lastServicedAt.slice(0, 10)} is due for service.`,
-      payload: { ...p },
+      payload: { ...p, intervals },
       // Read-only computation — safe to run ungated when the policy allows it.
       requiresConfirmation: policy.requiresConfirmation,
     };
   },
 
   async execute(draft: DraftAction, _tools, ): Promise<ExecutionResult> {
-    const policy = ReminderPolicySchema.parse({}); // defaults; per-dealer overrides come from the policy row via draft payload merge upstream
+    const policy = ReminderPolicySchema.parse(draft.payload.intervals ?? {});
     const result = isReminderDue(String(draft.payload.equipmentType), String(draft.payload.lastServicedAt), policy);
     return {
       status: "success",

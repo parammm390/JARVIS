@@ -10,6 +10,7 @@ export default defineConfig({
       "@finnor/policy-schema": r("./packages/policy-schema/src/index.ts"),
       "@finnor/db": r("./packages/db/index.ts"),
       "@finnor/memory": r("./packages/memory/src/index.ts"),
+      "@finnor/security": r("./packages/security/src/index.ts"),
       "@finnor/tools": r("./packages/tools/src/index.ts"),
       "@finnor/orchestration": r("./packages/orchestration/src/index.ts"),
       "@finnor/plugins-shared": r("./packages/domain-plugins/shared/plugin-interface.ts"),

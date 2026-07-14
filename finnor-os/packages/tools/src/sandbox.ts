@@ -64,6 +64,7 @@ export function registerSandboxComms(registry: ToolRegistry): void {
       inputSchema: z
         .object({ phone: z.string().min(7), firstName: z.string().optional(), tenantId: TenantIdSchema })
         .passthrough(),
+      piiAllowlist: ["phone", "firstName", "address", "tenantId"],
       async run(input) {
         const { householdId, created } = await upsertHouseholdByPhone(
           String(input.tenantId),
@@ -81,6 +82,7 @@ export function registerSandboxComms(registry: ToolRegistry): void {
       inputSchema: z
         .object({ contactId: z.string().uuid(), startTime: z.string().min(1), tenantId: TenantIdSchema })
         .passthrough(),
+      piiAllowlist: ["contactId", "startTime", "tenantId"],
       async run(input) {
         const tenantId = String(input.tenantId);
         const householdId = String(input.contactId);
@@ -103,6 +105,9 @@ export function registerSandboxComms(registry: ToolRegistry): void {
       inputSchema: z
         .object({ contactId: z.string(), message: z.string().min(1), tenantId: TenantIdSchema })
         .passthrough(),
+      // tenantId/contactId are structurally required here (route the DB write), not
+      // optional metadata — unlike the live GHL/Vapi adapters, never omit them.
+      piiAllowlist: ["contactId", "message", "tenantId"],
       async run(input) {
         const tenantId = String(input.tenantId);
         const householdId = /^[0-9a-f-]{36}$/i.test(String(input.contactId)) ? String(input.contactId) : null;
@@ -121,6 +126,7 @@ export function registerSandboxComms(registry: ToolRegistry): void {
       description: "SANDBOX: list households as contacts",
       integration: "sandbox",
       inputSchema: z.object({ tenantId: TenantIdSchema, limit: z.number().optional() }).passthrough(),
+      piiAllowlist: ["tenantId", "limit"],
       async run(input) {
         const rows = await withTenant(String(input.tenantId), (db) =>
           db.select({ id: households.id, contactInfo: households.contactInfo }).from(households).limit(Number(input.limit ?? 20)),
@@ -135,6 +141,7 @@ export function registerSandboxComms(registry: ToolRegistry): void {
       inputSchema: z
         .object({ phoneNumber: z.string().min(7), instructions: z.string().optional(), tenantId: TenantIdSchema })
         .passthrough(),
+      piiAllowlist: ["phoneNumber", "instructions", "tenantId"],
       async run(input) {
         const tenantId = String(input.tenantId);
         const [hh] = await withTenant(tenantId, (db) =>

@@ -8,6 +8,7 @@
 // moment a plugin needed an LLM call (the ops-overview grounded-QA action does).
 
 import Groq from "groq-sdk";
+import { initObservability, Sentry } from "./observability";
 
 export interface LLMProvider {
   name: string;
@@ -190,7 +191,31 @@ export function registerProvider(name: string, factory: () => LLMProvider): void
   providers.set(name, factory);
 }
 
+/** Wraps a provider with a Sentry breadcrumb per complete() call (provider name,
+ *  latency, ok/fail) — never the prompt/response text itself, which may carry
+ *  redacted-but-still-sensitive business content (respects the same discipline
+ *  ToolRegistry.call()'s tool breadcrumbs follow). No-ops harmlessly without
+ *  SENTRY_DSN. */
+function withObservability(provider: LLMProvider): LLMProvider {
+  return {
+    name: provider.name,
+    async complete(opts) {
+      initObservability();
+      const start = Date.now();
+      try {
+        const text = await provider.complete(opts);
+        Sentry.addBreadcrumb({ category: "llm", message: provider.name, data: { ok: true, ms: Date.now() - start } });
+        return text;
+      } catch (err) {
+        Sentry.addBreadcrumb({ category: "llm", message: provider.name, data: { ok: false, ms: Date.now() - start } });
+        Sentry.captureMessage(`llm_failed:${provider.name}`, { level: "warning" });
+        throw err;
+      }
+    },
+  };
+}
+
 export function resolveProvider(name?: string): LLMProvider {
   const factory = providers.get(name ?? "groq") ?? providers.get("groq")!;
-  return factory();
+  return withObservability(factory());
 }

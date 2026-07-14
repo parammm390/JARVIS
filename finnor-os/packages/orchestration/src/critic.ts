@@ -9,6 +9,7 @@
 
 import { z } from "zod";
 import { type LLMProvider, resolveProvider } from "./llm";
+import { redactStructured } from "@finnor/security";
 
 export interface CriticInput {
   instruction: string;
@@ -48,7 +49,7 @@ export async function reviewAction(
 ): Promise<CriticVerdict> {
   let raw: string;
   try {
-    raw = await provider.complete({ system: SYSTEM_PROMPT, user: JSON.stringify(input), json: true });
+    raw = await provider.complete({ system: SYSTEM_PROMPT, user: JSON.stringify(redactStructured(input)), json: true });
   } catch (err) {
     throw new Error(`Critic LLM call failed: ${(err as Error).message}`);
   }

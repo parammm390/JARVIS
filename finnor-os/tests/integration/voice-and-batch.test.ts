@@ -143,7 +143,7 @@ describe.skipIf(!available)("send_proposal_to_recent_installs — full gated bat
       db.select().from(domainActions).where(eq(domainActions.id, action.id)),
     );
     expect(pendingRow!.summary).toMatch(/Send a follow-up proposal to \d+ recent install/);
-    expect(pendingRow!.summary).toMatch(/pricing tier isn't configured/); // placeholder honesty
+    expect(pendingRow!.summary).toMatch(/pricing catalog isn't configured/); // placeholder honesty
 
     // Simulate the spoken approval exactly as the webhook does.
     expect(parseSpokenDecision("yes go ahead and send them")).toBe("approve");

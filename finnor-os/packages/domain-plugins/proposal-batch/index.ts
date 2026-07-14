@@ -3,17 +3,16 @@
 // draft() reads the DB (read-only); all sends happen in execute() after the gate.
 
 import type { DomainEnginePlugin } from "../shared/plugin-interface";
-import { containsPlaceholder } from "../shared/plugin-interface";
 import type { DraftAction, ExecutionResult, ValidationResult, DomainPolicy } from "@finnor/shared-types";
 import type { ToolRegistry } from "@finnor/tools";
 import { withTenant, serviceVisits, households, equipment, proposals } from "@finnor/db";
 import { and, desc, eq, gte } from "drizzle-orm";
 import { z } from "zod";
+import { loadPricingCatalog, isPricingCatalogReady } from "../shared/pricing-catalog";
 
 const ACTION = "send_proposal_to_recent_installs";
 
 export const ProposalBatchPolicySchema = z.object({
-  pricing_tier: z.unknown(), // dealer-specific — placeholder until real pricing exists
   window_days_default: z.number().int().positive().default(30),
   max_batch: z.number().int().positive().max(50).default(10),
 });
@@ -91,7 +90,8 @@ export const proposalBatchPlugin: DomainEnginePlugin = {
     const windowDays = p.windowDays ?? (pol.success ? pol.data.window_days_default : 30);
     const limit = p.limit ?? (pol.success ? pol.data.max_batch : 10);
     const targets = await findTargets(policy.tenantId, windowDays, limit);
-    const pricingReady = pol.success && !containsPlaceholder(pol.data.pricing_tier);
+    const catalog = await loadPricingCatalog(policy.tenantId);
+    const pricingReady = isPricingCatalogReady(catalog);
 
     const roster = targets
       .map((t) => `${t.label} (${t.equipmentType ?? "equipment"} installed ${t.visitDate})`)
@@ -100,7 +100,7 @@ export const proposalBatchPlugin: DomainEnginePlugin = {
       targets.length === 0
         ? `No installs found in the last ${windowDays} days — nothing to send.`
         : `Send a follow-up proposal to ${targets.length} recent install${targets.length === 1 ? "" : "s"}: ${roster}.` +
-          (pricingReady ? "" : " Note: your pricing tier isn't configured yet, so proposals will describe the offer without exact prices.") +
+          (pricingReady ? "" : " Note: your pricing catalog isn't configured yet, so proposals will describe the offer without exact prices.") +
           " Approve to send all of them?";
 
     return {
