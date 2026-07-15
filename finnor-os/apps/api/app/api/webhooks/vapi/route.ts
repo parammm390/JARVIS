@@ -14,8 +14,19 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { VapiWebhookSchema } from "@finnor/policy-schema";
 import { adminDb, jobs, withTenant, domainActions, actionLog } from "@finnor/db";
+import { persistCall } from "@finnor/data-platform";
 import { ensureSecretsLoaded } from "@finnor/security";
 import { parseSpokenDecision, diagnoseFailure, resolveProvider } from "@finnor/orchestration";
+import type { Role } from "@finnor/shared-types";
+import {
+  resolveVoiceIdentity,
+  openVoiceSession,
+  appendVoiceTurn,
+  createPendingConfirmation,
+  resolveOpenConfirmations,
+  markConfirmationsResolved,
+  createHandoff,
+} from "@finnor/voice-os";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { getOrchestrator } from "../../../../lib/orchestrator";
 import { checkAndRecordReceipt } from "../../../../lib/webhook-replay";
@@ -119,9 +130,20 @@ async function describeExecutionOutput(actionSummary: string | null, out: Record
 
 async function handleToolCalls(message: Record<string, unknown>): Promise<Response> {
   const tenantId = defaultTenant();
-  const callId = (message.call as { id?: string } | undefined)?.id ?? "unknown";
+  const callMeta = message.call as { id?: string; customer?: { number?: string } } | undefined;
+  const callId = callMeta?.id ?? "unknown";
   const list = (message.toolCallList ?? message.toolCalls ?? []) as VapiToolCall[];
   const results: Array<{ toolCallId: string; result: string }> = [];
+
+  // Real caller resolution (§5 voice OS) — replaces the previous hardcoded owner
+  // userId/role that every caller on this line got, regardless of who was actually
+  // calling. Only a phone number matching the tenant's registered owner line resolves
+  // to owner trust; anything else (a customer, an unrecognized number, no caller-id
+  // at all) never gets silently upgraded the way it used to.
+  const identity = callMeta?.customer?.number ? await resolveVoiceIdentity(tenantId, callMeta.customer.number) : null;
+  const session = await openVoiceSession(tenantId, callId, identity?.id);
+  const staffCtx: { userId: string; role: Role } | null =
+    identity?.role === "owner" ? { userId: identity.matchedUserId ?? identity.id, role: "owner" } : null;
 
   for (const tc of list) {
     const name = tc.function?.name ?? "";
@@ -135,15 +157,30 @@ async function handleToolCalls(message: Record<string, unknown>): Promise<Respon
           results.push({ toolCallId: tc.id, result: "I didn't catch an instruction — please repeat it." });
           continue;
         }
+        if (!staffCtx) {
+          await createHandoff({
+            tenantId,
+            voiceSessionId: session.id,
+            reason: "unresolved caller identity on the owner assistant line",
+          });
+          results.push({
+            toolCallId: tc.id,
+            result: "I can't verify this line yet, so I can't make any changes — I've flagged this call for a team member to follow up.",
+          });
+          continue;
+        }
         const actions = await getOrchestrator().handleInstruction(
           instruction,
-          {
-            tenantId,
-            userId: "00000000-0000-4000-8000-0000000000ee",
-            role: "owner", // voice channel authenticates as the owner's line for now
-          },
+          { tenantId, userId: staffCtx.userId, role: staffCtx.role },
           { sessionId: `vapi:${callId}` },
         );
+        await appendVoiceTurn({
+          tenantId,
+          voiceSessionId: session.id,
+          role: "caller",
+          transcriptText: instruction,
+          resolvedActionIds: actions.map((a) => a.id),
+        });
         if (actions.length === 0) {
           results.push({
             toolCallId: tc.id,
@@ -166,6 +203,18 @@ async function handleToolCalls(message: Record<string, unknown>): Promise<Respon
         );
         const gated = summaries.filter((s) => s.status === "pending");
         const completed = summaries.filter((s) => s.status === "completed");
+        // Bind each gated action to THIS session — finnor_confirm resolves against
+        // these specific rows, not "whatever's newest pending for the tenant."
+        await Promise.all(
+          gated.map((g) =>
+            createPendingConfirmation({
+              tenantId,
+              voiceSessionId: session.id,
+              domainActionId: g.id,
+              promptText: g.summary ?? "an action",
+            }),
+          ),
+        );
         // Never silently drop a failure — a stuck/blocked/reviewed action must be
         // reported honestly, never folded into a generic "done" that implies success.
         const troubled = summaries.filter((s) =>
@@ -220,19 +269,28 @@ async function handleToolCalls(message: Record<string, unknown>): Promise<Respon
           results.push({ toolCallId: tc.id, result: "I didn't catch a clear yes or no — nothing was executed. Say yes or no." });
           continue;
         }
-        // Apply to the caller's newest pending action(s) — same rows the queue UI shows.
-        const pending = await withTenant(tenantId, (db) =>
-          db
-            .select({ id: domainActions.id })
-            .from(domainActions)
-            .where(eq(domainActions.status, "pending"))
-            .orderBy(desc(domainActions.createdAt))
-            .limit(args.actionId ? 1 : 5),
-        );
-        const ids = args.actionId ? [String(args.actionId)] : pending.map((p) => p.id);
+        if (!staffCtx) {
+          results.push({ toolCallId: tc.id, result: "I can't verify this line, so there's nothing pending for me to confirm here." });
+          continue;
+        }
+        // Resolve against THIS session's own open pending_confirmations — never the
+        // tenant's newest-pending domain_actions. A bare "yes" now only ever applies
+        // to what this call's own finnor_instruct actually drafted, never an
+        // unrelated caller's or an earlier session's pending action.
+        const open = await resolveOpenConfirmations(tenantId, session.id);
+        const ids = args.actionId ? [String(args.actionId)] : open.map((o) => o.domainActionId);
+        if (ids.length === 0) {
+          results.push({ toolCallId: tc.id, result: "I don't have anything pending to confirm on this call." });
+          continue;
+        }
         // Independent decisions execute concurrently — the caller hears one answer.
         const outcomes = await Promise.all(
           ids.map((id) => getOrchestrator().decide(id, tenantId, decision, `voice:${callId}`)),
+        );
+        await markConfirmationsResolved(
+          tenantId,
+          open.filter((o) => ids.includes(o.domainActionId)).map((o) => o.id),
+          decision === "approve" ? "confirmed" : "rejected",
         );
         let executed = 0;
         const problems: string[] = [];
@@ -325,7 +383,30 @@ export async function POST(req: Request): Promise<Response> {
       return Response.json({ received: true, decision, result: result.status });
     }
 
-    // 3. Normal customer call — transcript becomes a Planner instruction (as before).
+    // 3. Normal customer call — persist a permanent, queryable call record (Phase 1
+    // canonical data platform; replaces the old "transcript used once, then discarded"
+    // pattern), then the transcript still becomes a Planner instruction as before.
+    if (msg.call?.id) {
+      const startedAt = typeof msg.startedAt === "string" ? new Date(msg.startedAt) : undefined;
+      const endedAt = typeof msg.endedAt === "string" ? new Date(msg.endedAt) : undefined;
+      await withTenant(tenantId, (db) =>
+        persistCall(db, {
+          tenantId,
+          provenance: { sourceSystem: "vapi", externalId: msg.call!.id! },
+          direction: "inbound",
+          transcript: msg.transcript,
+          startedAt,
+          endedAt,
+          endedReason: typeof msg.endedReason === "string" ? msg.endedReason : undefined,
+          raw: { type: msg.type },
+        }),
+      ).catch((err) => {
+        // Never let call-persistence failure block the instruction from still reaching
+        // the Planner — the jobs insert below is the load-bearing path.
+        console.error("[vapi] failed to persist call record", err);
+      });
+    }
+
     await adminDb()
       .insert(jobs)
       .values({
