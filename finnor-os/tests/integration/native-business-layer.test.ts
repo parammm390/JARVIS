@@ -17,6 +17,8 @@ import {
   workflowStates,
   communicationsLog,
   proposals,
+  priceBookItems,
+  payments,
 } from "@finnor/db";
 import { FinnorOrchestrator } from "@finnor/orchestration";
 import { createDefaultRegistry } from "@finnor/tools";
@@ -24,6 +26,7 @@ import { desc, eq, and } from "drizzle-orm";
 import type { DomainAction } from "@finnor/shared-types";
 import { domainPolicies } from "@finnor/db";
 import { PRICING_CATALOG_ACTION_TYPE } from "../../packages/domain-plugins/shared/pricing-catalog";
+import { upsertPriceBookItem } from "@finnor/data-platform";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
 
@@ -148,6 +151,9 @@ describe.skipIf(!available)("native business layer — real, end to end, gated",
     expect(pay.status).toBe("success");
     const [row] = await withTenant(SEED_TENANT_ID, (db) => db.select().from(invoices).where(eq(invoices.id, invoiceId)));
     expect(row!.status).toBe("paid");
+    const [paymentRow] = await withTenant(SEED_TENANT_ID, (db) => db.select().from(payments).where(eq(payments.invoiceId, invoiceId)));
+    expect(paymentRow).toBeTruthy();
+    expect(paymentRow!.amountUsd).toBe("249.00");
   });
 
   it("generate_quote stores a real proposal, prices only from policy — never guessed", async () => {
@@ -183,18 +189,18 @@ describe.skipIf(!available)("native business layer — real, end to end, gated",
     expect(row!.sentAt).toBeTruthy();
   });
 
-  it("generate_quote AND proposal-batch both price from the same shared pricing_catalog policy row", async () => {
-    await withTenant(SEED_TENANT_ID, (db) =>
-      db.insert(domainPolicies).values({
+  it("generate_quote AND proposal-batch both price from the same shared price book", async () => {
+    // Line-item pricing now lives in price_book_items (Phase 1 canonical data platform);
+    // laborRatePerHourUsd stays a domain_policies scalar setting — see pricing-catalog.ts.
+    await withTenant(SEED_TENANT_ID, async (db) => {
+      await upsertPriceBookItem(db, { tenantId: SEED_TENANT_ID, sku: "HE-SOFT-45K", label: "HE Softener 45k", priceUsd: 1799 });
+      await db.insert(domainPolicies).values({
         tenantId: SEED_TENANT_ID,
         actionType: PRICING_CATALOG_ACTION_TYPE,
-        policy: {
-          items: [{ sku: "HE-SOFT-45K", label: "HE Softener 45k", priceUsd: 1799 }],
-          laborRatePerHourUsd: 95,
-        },
+        policy: { laborRatePerHourUsd: 95 },
         requiresConfirmation: false,
-      }),
-    );
+      });
+    });
 
     const r = await runGated("generate_quote", {
       phone: "+13195550142",
@@ -205,6 +211,7 @@ describe.skipIf(!available)("native business layer — real, end to end, gated",
     const quote = r.output.quote as { lines: Array<{ item: string; priceUsd: number | null }>; totalUsd: number | null };
     expect(quote.lines[0]!.priceUsd).toBe(1799);
     expect(quote.totalUsd).toBe(1799);
+    expect(r.output.quoteId).toBeTruthy(); // real quotes/quote_line_items row, not just jsonb
 
     const { loadPricingCatalog, isPricingCatalogReady } = await import(
       "../../packages/domain-plugins/shared/pricing-catalog"
@@ -213,9 +220,10 @@ describe.skipIf(!available)("native business layer — real, end to end, gated",
     expect(isPricingCatalogReady(catalog)).toBe(true);
 
     // Clean up so later tests (and re-runs) see the seed's default unconfigured state.
-    await withTenant(SEED_TENANT_ID, (db) =>
-      db.delete(domainPolicies).where(and(eq(domainPolicies.tenantId, SEED_TENANT_ID), eq(domainPolicies.actionType, PRICING_CATALOG_ACTION_TYPE))),
-    );
+    await withTenant(SEED_TENANT_ID, async (db) => {
+      await db.delete(domainPolicies).where(and(eq(domainPolicies.tenantId, SEED_TENANT_ID), eq(domainPolicies.actionType, PRICING_CATALOG_ACTION_TYPE)));
+      await db.delete(priceBookItems).where(eq(priceBookItems.sku, "HE-SOFT-45K"));
+    });
   });
 
   it("flag_visit_issue creates a real review card in the owner's queue", async () => {

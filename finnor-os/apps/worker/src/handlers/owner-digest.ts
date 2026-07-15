@@ -10,6 +10,7 @@
 import { getPool, withTenant, scanFindings, domainActions } from "@finnor/db";
 import { and, eq, gte, isNull } from "drizzle-orm";
 import { placeVapiCall, VOICE_PERSONAS } from "@finnor/tools";
+import { followUpDebt, cashCollections, slaBreaches } from "@finnor/read-models";
 import type { JobHandler } from "../queue";
 
 export const ownerDigest: JobHandler = async (payload) => {
@@ -30,7 +31,18 @@ export const ownerDigest: JobHandler = async (payload) => {
   const scanDraftTypes = new Set(["renew_maintenance_agreement", "bulk_notify_existing_customers"]);
   const freshScanDrafts = freshDrafts.filter((d) => scanDraftTypes.has(d.actionType));
 
-  if (findings.length === 0 && freshScanDrafts.length === 0) return; // nothing to say, no call placed
+  // Vertical workflow 6 (recurring "daily owner operating loop", docs/jarvis-90-
+  // execution-blueprint.md §5): the same one-call-a-day digest now also carries the
+  // Phase 6 read-models' operational signals a dealer actually asks about — cash
+  // still owed, leads/quotes nobody's followed up on, and workflows stuck mid-flight.
+  // Additive only: if none of these have anything to say either, the no-op stays a
+  // true no-op — never a call placed just because these queries ran.
+  const [debt, cash, sla] = await Promise.all([followUpDebt(tenantId), cashCollections(tenantId), slaBreaches(tenantId)]);
+  const overdueUsd = cash.invoicesByStatus.find((s) => s.status === "overdue")?.totalUsd ?? 0;
+
+  if (findings.length === 0 && freshScanDrafts.length === 0 && debt.length === 0 && overdueUsd === 0 && sla.stuckWorkflowRuns === 0) {
+    return; // nothing to say, no call placed
+  }
 
   const parts: string[] = [];
   if (freshScanDrafts.length > 0) {
@@ -39,6 +51,9 @@ export const ownerDigest: JobHandler = async (payload) => {
     );
   }
   for (const f of findings) parts.push(f.summary);
+  if (overdueUsd > 0) parts.push(`$${overdueUsd.toFixed(2)} is overdue across unpaid invoices.`);
+  if (debt.length > 0) parts.push(`${debt.length} lead${debt.length === 1 ? "" : "s"} or quote${debt.length === 1 ? "" : "s"} haven't been followed up on in a while.`);
+  if (sla.stuckWorkflowRuns > 0) parts.push(`${sla.stuckWorkflowRuns} in-progress workflow${sla.stuckWorkflowRuns === 1 ? "" : "s"} appear stuck and may need a look.`);
   const message = `Hi, this is Finnor with your daily update. ${parts.join(" ")}`;
 
   const { rows } = await getPool().query(`SELECT owner_phone FROM tenants WHERE id = $1`, [tenantId]);

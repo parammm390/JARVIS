@@ -21,6 +21,7 @@
     "db:generate": "drizzle-kit generate --config packages/db/drizzle.config.ts",
     "db:migrate": "tsx packages/db/migrate.ts",
     "db:seed": "tsx packages/db/seed.ts",
+    "db:bundle": "tsx scripts/bundle-migrations.ts",
     "setup:langgraph": "tsx packages/orchestration/src/graph/setup.ts",
     "openapi": "tsx scripts/generate-openapi.ts"
   },

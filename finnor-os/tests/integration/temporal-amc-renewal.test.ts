@@ -13,7 +13,7 @@ import { Worker } from "@temporalio/worker";
 import { fileURLToPath } from "node:url";
 import { migrate } from "../../packages/db/migrate";
 import { seed, SEED_TENANT_ID } from "../../packages/db/seed";
-import { withTenant, closePool, households, maintenanceAgreements, domainActions, tenants } from "@finnor/db";
+import { withTenant, closePool, households, maintenanceAgreements, domainActions, domainPolicies, invoices, workflowRuns, tenants } from "@finnor/db";
 import { eq, and } from "drizzle-orm";
 import * as activities from "../../apps/temporal-worker/src/activities";
 import { amcRenewalSequence, type AmcRenewalInput } from "../../apps/temporal-worker/src/workflows/amc-renewal-sequence";
@@ -141,5 +141,65 @@ describe.skipIf(!available)("AMC renewal Temporal workflow — real ephemeral se
     );
     const mine = drafted.filter((d) => (d.payload as Record<string, unknown>).agreementId === agreementId);
     expect(mine.length).toBe(2); // day-0 reminder AND the day-3 firmer follow-up, both real gated actions
+  }, 30_000);
+
+  it("a renewal with a real configured price actually bills the customer — a fresh invoice, handed to the real invoice-to-cash workflow", async () => {
+    // Its own tenant, not SEED_TENANT_ID — the seed's domain_policies row for
+    // renew_maintenance_agreement deliberately carries the honest PLACEHOLDER_NEEDS_REAL_VALUE
+    // sentinel (never a fabricated price), so proving the real-price path needs a
+    // tenant configured with one.
+    const priceTenantId = "00000000-0000-4000-8000-0000000000f6";
+    await withTenant(priceTenantId, (db) =>
+      db.insert(tenants).values({ id: priceTenantId, name: "AMC Price Test Dealer" }).onConflictDoNothing(),
+    );
+    await withTenant(priceTenantId, (db) =>
+      db.insert(domainPolicies).values({
+        tenantId: priceTenantId,
+        actionType: "renew_maintenance_agreement",
+        policy: { renewal_window_days: 30, price_usd: 189, cadence_options: ["annual"] },
+        requiresConfirmation: true,
+      }),
+    );
+    const { householdId, agreementId } = await withTenant(priceTenantId, async (db) => {
+      const [hh] = await db
+        .insert(households)
+        .values({ tenantId: priceTenantId, address: "1 Real Price Ln", contactInfo: { name: "Real Price", phone: "+19995552003" } })
+        .returning();
+      const [agreement] = await db
+        .insert(maintenanceAgreements)
+        .values({ householdId: hh!.id, cadence: "annual", status: "renewal_window", renewalDate: new Date() })
+        .returning();
+      return { householdId: hh!.id, agreementId: agreement!.id };
+    });
+
+    const input: AmcRenewalInput = {
+      tenantId: priceTenantId,
+      agreementId,
+      householdId,
+      householdLabel: "Real Price",
+      contactPhone: "+19995552003",
+      cadence: "annual",
+      firstWaitMs: 5_000,
+      secondWaitMs: 5_000,
+    };
+    const handle = await testEnv.client.workflow.start(amcRenewalSequence, {
+      workflowId: `test-amc-renewal:${agreementId}`,
+      taskQueue: TASK_QUEUE,
+      args: [input],
+    });
+    await handle.signal("customerResponded");
+    const result = await handle.result();
+    expect(result.outcome).toBe("renewed");
+
+    const [agreementRow] = await withTenant(priceTenantId, (db) => db.select().from(maintenanceAgreements).where(eq(maintenanceAgreements.id, agreementId)));
+    expect(agreementRow!.status).toBe("renewed");
+    expect(agreementRow!.renewalDate!.getTime()).toBeGreaterThan(Date.now()); // advanced to the next cadence window
+
+    const [invoice] = await withTenant(priceTenantId, (db) => db.select().from(invoices).where(eq(invoices.householdId, householdId)));
+    expect(invoice, "a real invoice should have been created for the configured price").toBeTruthy();
+    expect(Number(invoice!.amountUsd)).toBe(189);
+
+    const runs = await withTenant(priceTenantId, (db) => db.select().from(workflowRuns).where(eq(workflowRuns.workflowType, "invoice_to_cash")));
+    expect(runs.length).toBeGreaterThan(0); // the same real invoice-to-cash command graph vertical workflow 4 built was actually submitted
   }, 30_000);
 });

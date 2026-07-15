@@ -13,7 +13,7 @@
 import { proxyActivities, defineSignal, setHandler, condition } from "@temporalio/workflow";
 import type * as activities from "../activities";
 
-const { draftRenewalAction, notifyOwnerLapsed } = proxyActivities<typeof activities>({
+const { draftRenewalAction, notifyOwnerLapsed, markAgreementRenewed } = proxyActivities<typeof activities>({
   startToCloseTimeout: "2 minutes",
   retry: { maximumAttempts: 5, initialInterval: "30 seconds", backoffCoefficient: 2 },
 });
@@ -44,11 +44,13 @@ export async function amcRenewalSequence(input: AmcRenewalInput): Promise<{ outc
 
   await draftRenewalAction(input, 1); // day 0: first reminder
   if (await condition(() => responded, input.firstWaitMs ?? THREE_DAYS_MS)) {
+    await markAgreementRenewed(input);
     return { outcome: "renewed" };
   }
 
   await draftRenewalAction(input, 2); // day 3: firmer follow-up
   if (await condition(() => responded, input.secondWaitMs ?? FOUR_DAYS_MS)) {
+    await markAgreementRenewed(input);
     return { outcome: "renewed" };
   }
 

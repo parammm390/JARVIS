@@ -5,11 +5,28 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import pg from "pg";
 import { migrate } from "../../packages/db/migrate";
-import { getPool, closePool, withTenant, households, equipment, serviceVisits, inventoryItems, maintenanceAgreements, communicationsLog, domainPolicies, scanFindings, domainActions } from "@finnor/db";
+import {
+  getPool,
+  closePool,
+  withTenant,
+  households,
+  equipment,
+  serviceVisits,
+  inventoryItems,
+  maintenanceAgreements,
+  communicationsLog,
+  domainPolicies,
+  scanFindings,
+  domainActions,
+  leads,
+  workOrders,
+  dataQualityFindings,
+} from "@finnor/db";
 import { eq, and } from "drizzle-orm";
 import { scanLowInventory } from "../../apps/worker/src/handlers/scan-low-inventory";
 import { scanServiceDue } from "../../apps/worker/src/handlers/scan-service-due";
 import { scanColdLeads } from "../../apps/worker/src/handlers/scan-cold-leads";
+import { scanDataQuality } from "../../apps/worker/src/handlers/scan-data-quality";
 import { scheduledReminder } from "../../apps/worker/src/handlers/scheduled-reminder";
 import { ownerDigest } from "../../apps/worker/src/handlers/owner-digest";
 
@@ -152,6 +169,40 @@ describe.skipIf(!available)("proactive scan handlers", () => {
     expect(last.status).toBe("pending");
     expect(last.summary).toBeTruthy(); // the actual bug being fixed: this used to be null
     expect(last.summary).not.toBe("No summary drafted.");
+  });
+
+  it("scan_data_quality flags a duplicate household pair sharing the same phone", async () => {
+    await withTenant(TENANT_ID, (db) => db.delete(dataQualityFindings).where(eq(dataQualityFindings.tenantId, TENANT_ID)));
+    await withTenant(TENANT_ID, (db) =>
+      db.insert(households).values([
+        { tenantId: TENANT_ID, address: "4 Test Dupe Ln", contactInfo: { name: "Dupe One", phone: "+13195559933" } },
+        { tenantId: TENANT_ID, address: "4 Test Dupe Ln", contactInfo: { name: "Dupe One Again", phone: "+13195559933" } },
+      ]),
+    );
+    await scanDataQuality({ tenantId: TENANT_ID });
+    const findings = await withTenant(TENANT_ID, (db) =>
+      db.select().from(dataQualityFindings).where(and(eq(dataQualityFindings.tenantId, TENANT_ID), eq(dataQualityFindings.findingType, "duplicate_candidate"))),
+    );
+    expect(findings.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("scan_data_quality flags a lead with no phone or email, and a scheduled work order with no technician", async () => {
+    await withTenant(TENANT_ID, (db) => db.delete(dataQualityFindings).where(eq(dataQualityFindings.tenantId, TENANT_ID)));
+    const [lead] = await withTenant(TENANT_ID, (db) =>
+      db.insert(leads).values({ tenantId: TENANT_ID, name: "No Contact Method Lead", status: "new" }).returning(),
+    );
+    const [hh] = await withTenant(TENANT_ID, (db) =>
+      db.insert(households).values({ tenantId: TENANT_ID, address: "5 Test Workorder Ln", contactInfo: { name: "Work Order Household" } }).returning(),
+    );
+    await withTenant(TENANT_ID, (db) =>
+      db.insert(workOrders).values({ tenantId: TENANT_ID, householdId: hh!.id, type: "install", status: "scheduled" }),
+    );
+    await scanDataQuality({ tenantId: TENANT_ID });
+    const findings = await withTenant(TENANT_ID, (db) =>
+      db.select().from(dataQualityFindings).where(and(eq(dataQualityFindings.tenantId, TENANT_ID), eq(dataQualityFindings.findingType, "missing_critical_field"))),
+    );
+    expect(findings.some((f) => f.entityType === "lead" && f.entityId === lead!.id)).toBe(true);
+    expect(findings.some((f) => f.entityType === "work_order")).toBe(true);
   });
 
   it("owner_digest is a no-op (no call attempted) when there's nothing to report", async () => {

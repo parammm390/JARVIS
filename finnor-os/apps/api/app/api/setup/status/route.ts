@@ -10,7 +10,11 @@ import { testAdsConnections, testQuickBooksConnection, testVapiConnection, ghlIn
 import { zepProviderStatus } from "@finnor/memory";
 import { requireContext, errorResponse } from "../../../../lib/auth";
 import { scanActionTypeReadiness, type ActionTypeDescriptor } from "../../../../../../packages/domain-plugins/shared/setup-readiness";
-import { PRICING_CATALOG_ACTION_TYPE } from "../../../../../../packages/domain-plugins/shared/pricing-catalog";
+import {
+  PRICING_CATALOG_ACTION_TYPE,
+  loadPricingCatalog,
+  isPricingCatalogReady,
+} from "../../../../../../packages/domain-plugins/shared/pricing-catalog";
 
 export async function GET(req: Request): Promise<Response> {
   try {
@@ -21,12 +25,26 @@ export async function GET(req: Request): Promise<Response> {
       .map((actionType) => ({ actionType, pluginName: registry.resolve(actionType)!.name }));
     descriptors.push({ actionType: PRICING_CATALOG_ACTION_TYPE, pluginName: "shared-pricing-catalog" });
 
-    const [actionTypes, ads, quickbooks, vapi] = await Promise.all([
+    const [actionTypes, ads, quickbooks, vapi, pricingCatalog] = await Promise.all([
       scanActionTypeReadiness(ctx.tenantId, descriptors),
       testAdsConnections(),
       testQuickBooksConnection(),
       testVapiConnection(),
+      loadPricingCatalog(ctx.tenantId),
     ]);
+    // Line-item pricing now lives in price_book_items, not the domain_policies JSONB
+    // blob scanActionTypeReadiness inspects — override the generic check for this one
+    // action type so it doesn't permanently report "unconfigured" once dealers stop
+    // writing prices to domain_policies.
+    const pricingIdx = actionTypes.findIndex((a) => a.actionType === PRICING_CATALOG_ACTION_TYPE);
+    if (pricingIdx !== -1) {
+      const ready = isPricingCatalogReady(pricingCatalog);
+      actionTypes[pricingIdx] = {
+        ...actionTypes[pricingIdx]!,
+        status: ready ? "configured" : "unconfigured",
+        placeholderFields: ready ? [] : ["items"],
+      };
+    }
     const ghl = ghlIntegrationStatus();
     // No active health-check for these two (same posture as ghl: configured-state only,
     // no extra network round trip inside this endpoint) — LangGraph has no external
