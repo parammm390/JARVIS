@@ -9,6 +9,7 @@ import type { DraftAction, ExecutionResult, ValidationResult, DomainPolicy } fro
 import type { ToolRegistry } from "@finnor/tools";
 import { VOICE_PERSONAS } from "@finnor/tools";
 import { withTenant, invoices, communicationsLog, enqueueJob } from "@finnor/db";
+import { recordPayment } from "@finnor/data-platform";
 import { findHousehold } from "../shared/db-helpers";
 import { eq, inArray, or } from "drizzle-orm";
 import { z } from "zod";
@@ -163,8 +164,10 @@ export const accountingPlugin: DomainEnginePlugin = {
     if (!inv) return { status: "failure", output: {}, error: "That invoice doesn't exist." };
 
     if (draft.actionType === "record_payment") {
-      await withTenant(tenantId, (db) => db.update(invoices).set({ status: "paid" }).where(eq(invoices.id, inv.id)));
-      return { status: "success", output: { invoiceId: inv.id, status: "paid" }, expected: { paid: true } };
+      const { paymentId } = await withTenant(tenantId, (db) =>
+        recordPayment(db, { tenantId, invoiceId: inv.id, amountUsd: Number(inv.amountUsd) }),
+      );
+      return { status: "success", output: { invoiceId: inv.id, status: "paid", paymentId }, expected: { paid: true } };
     }
 
     // send_payment_reminder: real voice call if requested, else email if the household

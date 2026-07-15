@@ -6,6 +6,7 @@ import type { DomainEnginePlugin } from "../shared/plugin-interface";
 import type { DraftAction, ExecutionResult, ValidationResult, DomainPolicy } from "@finnor/shared-types";
 import type { ToolRegistry } from "@finnor/tools";
 import { withTenant, serviceVisits, households, equipment, proposals } from "@finnor/db";
+import { recordBusinessEvent } from "@finnor/data-platform";
 import { and, desc, eq, gte } from "drizzle-orm";
 import { z } from "zod";
 import { loadPricingCatalog, isPricingCatalogReady } from "../shared/pricing-catalog";
@@ -137,14 +138,24 @@ export const proposalBatchPlugin: DomainEnginePlugin = {
       if (sms.ok) {
         sent.push(t.label);
         if (tenantId) {
-          await withTenant(tenantId, (db) =>
-            db.insert(proposals).values({
-              householdId: t.householdId,
-              content: { message, kind: "post_install_follow_up" },
-              status: "sent",
-              sentAt: new Date(),
-            }),
-          ).catch(() => undefined);
+          await withTenant(tenantId, async (db) => {
+            const [row] = await db
+              .insert(proposals)
+              .values({
+                householdId: t.householdId,
+                content: { message, kind: "post_install_follow_up" },
+                status: "sent",
+                sentAt: new Date(),
+              })
+              .returning();
+            await recordBusinessEvent(db, {
+              tenantId,
+              entityType: "proposal",
+              entityId: row!.id,
+              eventType: "post_install_followup_sent",
+              payload: { householdId: t.householdId },
+            });
+          }).catch(() => undefined);
         }
       } else {
         failed.push({ label: t.label, error: sms.error ?? "send failed" });

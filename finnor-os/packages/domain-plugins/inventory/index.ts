@@ -3,6 +3,7 @@
 import type { DomainEnginePlugin } from "../shared/plugin-interface";
 import type { DraftAction, ExecutionResult, ValidationResult, DomainPolicy } from "@finnor/shared-types";
 import { withTenant, inventoryItems } from "@finnor/db";
+import { recordBusinessEvent } from "@finnor/data-platform";
 import { findInventoryItem } from "../shared/db-helpers";
 import { eq, sql, lte } from "drizzle-orm";
 import { z } from "zod";
@@ -126,6 +127,13 @@ export const inventoryPlugin: DomainEnginePlugin = {
         .set({ quantity: sql`${inventoryItems.quantity} - ${qty}` })
         .where(eq(inventoryItems.id, item.id))
         .returning();
+      await recordBusinessEvent(db, {
+        tenantId,
+        entityType: "inventory_item",
+        entityId: row!.id,
+        eventType: "stock_used_on_visit",
+        payload: { quantity: qty, remaining: row!.quantity, visitId: p.visitId ?? null },
+      });
       return row!;
     });
     return {

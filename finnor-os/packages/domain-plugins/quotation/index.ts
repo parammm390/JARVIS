@@ -9,6 +9,7 @@ import type { DraftAction, ExecutionResult, ValidationResult, DomainPolicy } fro
 import type { ToolRegistry } from "@finnor/tools";
 import { z } from "zod";
 import { withTenant, proposals } from "@finnor/db";
+import { createQuote } from "@finnor/data-platform";
 import { eq } from "drizzle-orm";
 import { findHousehold } from "../shared/db-helpers";
 import { loadPricingCatalog, priceForItem } from "../shared/pricing-catalog";
@@ -166,22 +167,34 @@ export const quotationPlugin: DomainEnginePlugin = {
         householdId: draft.payload.householdId ? String(draft.payload.householdId) : undefined,
         phone: draft.payload.phone ? String(draft.payload.phone) : undefined,
       });
+      const allPriced = lines.length > 0 && lines.every((l) => l.priceUsd !== null);
       const content = {
         kind: "quote",
         for: draft.payload.householdLabel,
         lines,
         notes: draft.payload.notes ?? null,
-        totalUsd: lines.every((l) => l.priceUsd !== null) ? lines.reduce((s2, l) => s2 + (l.priceUsd ?? 0), 0) : null,
+        totalUsd: allPriced ? lines.reduce((s2, l) => s2 + (l.priceUsd ?? 0), 0) : null,
         pricingNote: lines.some((l) => l.priceUsd === null)
           ? "One or more prices are not configured — set them in the pricing catalog."
           : null,
       };
       if (hh) {
+        // A real relational quote only gets created once every line item has a real
+        // price — never a partial quote with guessed/missing amounts.
+        const quoteId = allPriced
+          ? await withTenant(tenantId, (db) =>
+              createQuote(db, {
+                tenantId,
+                householdId: hh.id,
+                lineItems: lines.map((l) => ({ label: l.item, unitPriceUsd: l.priceUsd! })),
+              }),
+            ).then((r) => r.quoteId)
+          : null;
         const row = await withTenant(tenantId, async (db) => {
-          const [r] = await db.insert(proposals).values({ householdId: hh.id, content, status: "draft" }).returning();
+          const [r] = await db.insert(proposals).values({ householdId: hh.id, content, status: "draft", quoteId }).returning();
           return r!;
         });
-        return { status: "success", output: { proposalId: row.id, quote: content }, expected: { generated: true } };
+        return { status: "success", output: { proposalId: row.id, quoteId, quote: content }, expected: { generated: true } };
       }
       return { status: "success", output: { quote: content, note: "No matching customer record — quote not attached to a household." }, expected: { generated: true } };
     }

@@ -3,7 +3,8 @@
 
 import type { DomainEnginePlugin } from "../shared/plugin-interface";
 import type { DraftAction, ExecutionResult, ValidationResult, DomainPolicy } from "@finnor/shared-types";
-import { withTenant, households, communicationsLog, serviceVisits } from "@finnor/db";
+import { withTenant, communicationsLog, serviceVisits } from "@finnor/db";
+import { createLead, convertLeadToOpportunity } from "@finnor/data-platform";
 import { advanceWorkflowState, WORKFLOWS } from "../shared/workflow";
 import { findHousehold, findTechnician } from "../shared/db-helpers";
 import { sql } from "drizzle-orm";
@@ -86,24 +87,24 @@ export const crmPlugin: DomainEnginePlugin = {
       if (existing) {
         return { status: "success", output: { householdId: existing.id, alreadyExisted: true }, expected: { created: true } };
       }
-      const hh = await withTenant(tenantId, async (db) => {
-        const [row] = await db
-          .insert(households)
-          .values({
-            tenantId,
-            address: String(p.address ?? "(address pending)"),
-            contactInfo: { name: p.name, phone: p.phone, ...(p.email ? { email: p.email } : {}) },
-          })
-          .returning();
-        return row!;
-      });
-      await advanceWorkflowState(tenantId, "lead_to_install", "household", hh.id, "lead", "create_lead");
+      // Dual-write compromise (packages/data-platform/src/leads.ts): createLead() adds a
+      // real `leads` row alongside the household this plugin has always created eagerly.
+      const { leadId, householdId } = await withTenant(tenantId, (db) =>
+        createLead(db, {
+          tenantId,
+          name: String(p.name),
+          phone: String(p.phone),
+          address: p.address ? String(p.address) : undefined,
+          email: p.email ? String(p.email) : undefined,
+        }),
+      );
+      await advanceWorkflowState(tenantId, "lead_to_install", "household", householdId, "lead", "create_lead");
       if (p.notes) {
         await withTenant(tenantId, (db) =>
-          db.insert(communicationsLog).values({ householdId: hh.id, channel: "call", direction: "inbound", content: String(p.notes) }),
+          db.insert(communicationsLog).values({ householdId, channel: "call", direction: "inbound", content: String(p.notes) }),
         );
       }
-      return { status: "success", output: { householdId: hh.id, workflowState: "lead" }, expected: { created: true } };
+      return { status: "success", output: { householdId, leadId, workflowState: "lead" }, expected: { created: true } };
     }
 
     const hh = await findHousehold(tenantId, {
@@ -114,7 +115,10 @@ export const crmPlugin: DomainEnginePlugin = {
 
     if (draft.actionType === "update_lead_status") {
       await advanceWorkflowState(tenantId, "lead_to_install", "household", hh.id, String(p.status), "update_lead_status");
-      return { status: "success", output: { householdId: hh.id, status: p.status }, expected: { updated: true } };
+      const { opportunityId } = await withTenant(tenantId, (db) =>
+        convertLeadToOpportunity(db, { tenantId, householdId: hh.id, status: String(p.status) }),
+      );
+      return { status: "success", output: { householdId: hh.id, status: p.status, opportunityId }, expected: { updated: true } };
     }
 
     if (draft.actionType === "log_interaction") {

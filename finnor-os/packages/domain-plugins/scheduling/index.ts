@@ -3,6 +3,7 @@
 import type { DomainEnginePlugin } from "../shared/plugin-interface";
 import type { DraftAction, ExecutionResult, ValidationResult, DomainPolicy } from "@finnor/shared-types";
 import { withTenant, serviceVisits, technicians, households } from "@finnor/db";
+import { recordBusinessEvent } from "@finnor/data-platform";
 import { findTechnician } from "../shared/db-helpers";
 import { and, eq, gte, lte } from "drizzle-orm";
 import { z } from "zod";
@@ -113,24 +114,38 @@ export const schedulingPlugin: DomainEnginePlugin = {
         name: p.technicianName ? String(p.technicianName) : undefined,
       });
       if (!tech) return { status: "failure", output: {}, error: "No technician found by that name or id." };
-      await withTenant(tenantId, (db) =>
-        db.update(serviceVisits).set({ technicianId: tech.id }).where(eq(serviceVisits.id, visit.id)),
-      );
+      await withTenant(tenantId, async (db) => {
+        await db.update(serviceVisits).set({ technicianId: tech.id }).where(eq(serviceVisits.id, visit.id));
+        await recordBusinessEvent(db, {
+          tenantId,
+          entityType: "service_visit",
+          entityId: visit.id,
+          eventType: "technician_assigned",
+          payload: { technicianId: tech.id },
+        });
+      });
       return { status: "success", output: { visitId: visit.id, technician: tech.name }, expected: { assigned: true } };
     }
 
     // reschedule_visit
     const when = new Date(String(p.newTime));
     if (Number.isNaN(when.getTime())) return { status: "failure", output: {}, error: "That new time isn't a valid date." };
-    await withTenant(tenantId, (db) =>
-      db
+    await withTenant(tenantId, async (db) => {
+      await db
         .update(serviceVisits)
         .set({
           scheduledAt: when,
           notes: [visit.notes, `Rescheduled${p.reason ? `: ${p.reason}` : ""}`].filter(Boolean).join(" | "),
         })
-        .where(eq(serviceVisits.id, visit.id)),
-    );
+        .where(eq(serviceVisits.id, visit.id));
+      await recordBusinessEvent(db, {
+        tenantId,
+        entityType: "service_visit",
+        entityId: visit.id,
+        eventType: "rescheduled",
+        payload: { scheduledAt: when.toISOString(), reason: p.reason ?? null },
+      });
+    });
     return { status: "success", output: { visitId: visit.id, scheduledAt: when.toISOString() }, expected: { rescheduled: true } };
   },
 };

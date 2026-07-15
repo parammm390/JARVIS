@@ -6,6 +6,7 @@ import type { DomainEnginePlugin } from "../shared/plugin-interface";
 import type { DraftAction, ExecutionResult, ValidationResult, DomainPolicy } from "@finnor/shared-types";
 import { querySemantic } from "@finnor/memory";
 import { withTenant, communicationsLog } from "@finnor/db";
+import { getOrCreateConversation, persistMessage } from "@finnor/data-platform";
 import type { ToolRegistry } from "@finnor/tools";
 import { findHousehold } from "../shared/db-helpers";
 import { z } from "zod";
@@ -110,9 +111,19 @@ export const customerCommPlugin: DomainEnginePlugin = {
         return { status: "failure", output: {}, error: "No customer found and no email given — nowhere to send this." };
       }
       if (hh) {
+        // Kept alongside the canonical write below — packages/memory/src/long-term.ts
+        // still reads communications_log for household history.
         await withTenant(tenantId, (db) =>
           db.insert(communicationsLog).values({ householdId: hh.id, channel, direction: "outbound", content: message }),
         ).catch(() => undefined);
+        await withTenant(tenantId, async (db) => {
+          const { conversationId } = await getOrCreateConversation(db, {
+            tenantId,
+            householdId: hh.id,
+            channel: channel === "email" ? "email" : "sms",
+          });
+          await persistMessage(db, { tenantId, conversationId, direction: "outbound", channel, content: message });
+        }).catch(() => undefined);
       }
       return { status: "success", output: { sent: true, channel }, expected: { sent: true } };
     }
