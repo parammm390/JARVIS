@@ -3,13 +3,25 @@
 // thing simulated is the final carrier hop (PSTN call / SMS delivery). When real keys
 // arrive, createDefaultRegistry() swaps these for the live GHL/Vapi drivers with zero
 // changes to any plugin or orchestrator code.
+//
+// Phase 3: also writes the canonical contacts/contact_methods/conversations/messages
+// rows (@finnor/data-platform) alongside the legacy households/communications_log/
+// sandbox_outbox writes — additive, not a replacement. apps/api/app/api/comms/route.ts
+// (the console's Communications view) still reads the legacy tables, so removing them
+// would regress a working UI; the canonical rows exist so 6+ plugins whose persisted
+// output flows through this one file (bulk-notify, customer-comm, marketing,
+// maintenance-agreement, proposal-batch, water-test) now also produce real canonical
+// data without any of them needing their own change.
 
 import { z } from "zod";
 import type { Tool, ToolRegistry } from "./registry";
 import { withTenant, households, serviceVisits, communicationsLog, sandboxOutbox } from "@finnor/db";
 import { eq, sql } from "drizzle-orm";
+import { createContact, addContactMethod, getOrCreateConversation, persistMessage } from "@finnor/data-platform";
 
-async function upsertHouseholdByPhone(
+// Exported for reuse by the CRM capability contract's "native" binding
+// (packages/tools/src/capabilities/crm.ts) — same logic, one definition.
+export async function upsertHouseholdByPhone(
   tenantId: string,
   phone: string,
   name?: string,
@@ -29,11 +41,32 @@ async function upsertHouseholdByPhone(
         contactInfo: { phone, ...(name ? { name } : {}) },
       })
       .returning();
+    // Dual-write, same pattern as Phase 1's crm plugin: household stays authoritative,
+    // the canonical contact/consent record is additive. Only on first creation — a
+    // repeat call for a phone we already know about must not mint a second contact.
+    const { contactId } = await createContact(db, { tenantId, householdId: created!.id, name: name ?? "Unknown caller" });
+    await addContactMethod(db, { tenantId, contactId, methodType: "phone", value: phone });
     return { householdId: created!.id, created: true };
   });
 }
 
-async function recordOutbound(
+// Exported for reuse by the CRM capability contract's "native" binding.
+export async function bookServiceVisit(
+  tenantId: string,
+  householdId: string,
+  startTime: string,
+): Promise<{ booked: boolean; visitId: string; scheduledAt: string; simulated: true }> {
+  const when = new Date(startTime);
+  const scheduledAt = Number.isNaN(when.getTime()) ? null : when;
+  const visit = await withTenant(tenantId, async (db) => {
+    const [row] = await db.insert(serviceVisits).values({ householdId, type: "water_test", scheduledAt }).returning();
+    return row!;
+  });
+  return { booked: true, visitId: visit.id, scheduledAt: visit.scheduledAt?.toISOString() ?? "unscheduled", simulated: true };
+}
+
+// Exported for reuse by capability contracts' "native" bindings (crm.ts, marketing.ts).
+export async function recordOutbound(
   tenantId: string,
   householdId: string | null,
   channel: "sms" | "call",
@@ -50,6 +83,12 @@ async function recordOutbound(
         content,
       });
     }
+    const { conversationId } = await getOrCreateConversation(db, {
+      tenantId,
+      householdId: householdId ?? undefined,
+      channel: channel === "call" ? "voice" : "sms",
+    });
+    await persistMessage(db, { tenantId, conversationId, direction: "outbound", channel, content });
   });
 }
 
@@ -84,18 +123,7 @@ export function registerSandboxComms(registry: ToolRegistry): void {
         .passthrough(),
       piiAllowlist: ["contactId", "startTime", "tenantId"],
       async run(input) {
-        const tenantId = String(input.tenantId);
-        const householdId = String(input.contactId);
-        const when = new Date(String(input.startTime));
-        const scheduledAt = Number.isNaN(when.getTime()) ? null : when;
-        const visit = await withTenant(tenantId, async (db) => {
-          const [row] = await db
-            .insert(serviceVisits)
-            .values({ householdId, type: "water_test", scheduledAt })
-            .returning();
-          return row!;
-        });
-        return { booked: true, visitId: visit.id, scheduledAt: visit.scheduledAt?.toISOString() ?? "unscheduled", simulated: true };
+        return bookServiceVisit(String(input.tenantId), String(input.contactId), String(input.startTime));
       },
     },
     {

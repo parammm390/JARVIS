@@ -12,6 +12,10 @@ import { voiceNotifyFailure } from "./handlers/voice-notify-failure";
 import { scanColdLeads } from "./handlers/scan-cold-leads";
 import { scanLowInventory } from "./handlers/scan-low-inventory";
 import { scanServiceDue } from "./handlers/scan-service-due";
+import { scanDataQuality } from "./handlers/scan-data-quality";
+import { runWorkflowStep } from "./handlers/run-workflow-step";
+import { relayOutboxEventsHandler } from "./handlers/relay-outbox-events";
+import { scanAppointmentNoShows } from "./handlers/scan-appointment-no-shows";
 import { ownerDigest } from "./handlers/owner-digest";
 import { quickbooksSync } from "./handlers/quickbooks-sync";
 import { criticReview } from "./handlers/critic-review";
@@ -29,6 +33,10 @@ export function createWorker(): JobQueue {
   queue.register("scan_cold_leads", scanColdLeads);
   queue.register("scan_low_inventory", scanLowInventory);
   queue.register("scan_service_due", scanServiceDue);
+  queue.register("scan_data_quality", scanDataQuality);
+  queue.register("run_workflow_step", runWorkflowStep);
+  queue.register("relay_outbox_events", relayOutboxEventsHandler);
+  queue.register("scan_appointment_no_shows", scanAppointmentNoShows);
   queue.register("owner_digest", ownerDigest);
   queue.register("quickbooks_sync", quickbooksSync);
   queue.register("critic_review", criticReview);
@@ -45,6 +53,9 @@ const PROACTIVE_SCANS: ScheduledScan[] = [
   { type: "scan_cold_leads", intervalHours: 24, payload: (tenantId) => ({ tenantId }) },
   { type: "scan_low_inventory", intervalHours: 24, payload: (tenantId) => ({ tenantId }) },
   { type: "scan_service_due", intervalHours: 24, payload: (tenantId) => ({ tenantId }) },
+  { type: "scan_data_quality", intervalHours: 24, payload: (tenantId) => ({ tenantId }) },
+  { type: "relay_outbox_events", intervalHours: 1, payload: (tenantId) => ({ tenantId }) },
+  { type: "scan_appointment_no_shows", intervalHours: 1, payload: (tenantId) => ({ tenantId }) },
   { type: "learning_digest", intervalHours: 24, payload: (tenantId) => ({ tenantId }) },
   // Digest runs last-of-day relative to the scans above only in spirit — ticks are
   // independent, so in practice it reads whatever's accumulated in scan_findings by
