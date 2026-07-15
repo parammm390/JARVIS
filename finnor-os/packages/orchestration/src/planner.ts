@@ -9,6 +9,7 @@ import { resolveProvider } from "./llm";
 import type { PluginRegistry } from "./plugin-registry";
 import { z } from "zod";
 import { redactStructured, redactText, restoreTokens } from "@finnor/security";
+import { groundEntitiesWithDb, buildCommandGraph } from "./compiler";
 
 const PlanSchema = z.object({
   actions: z.array(
@@ -101,19 +102,37 @@ export class LLMPlanner implements Planner {
     // One transaction, one policy lookup, one batch insert — not 2N round trips.
     return withTenant(tenantContext.tenantId, async (db) => {
       const policies = await db
-        .select({ id: domainPolicies.id, actionType: domainPolicies.actionType })
+        .select({ id: domainPolicies.id, actionType: domainPolicies.actionType, requiresConfirmation: domainPolicies.requiresConfirmation })
         .from(domainPolicies)
         .where(inArray(domainPolicies.actionType, [...new Set(valid.map((a) => a.action_type))]));
-      const policyByType = new Map(policies.map((p) => [p.actionType, p.id]));
+      const policyByType = new Map(policies.map((p) => [p.actionType, p]));
+      // Typed plan compiler (Phase 6, §6): grounds every id-shaped payload field
+      // against the real table for this tenant, and tags each action with whether it
+      // will execute as a single call or drive the durable multi-step runtime — using
+      // this same open transaction, not a second one (see compiler.ts's own note on
+      // groundEntitiesWithDb vs. compileAction).
+      const restoredPayloads = valid.map((a) => restoreTokens(a.payload, redactedInstruction.tokens));
+      const compiled = await Promise.all(
+        valid.map(async (a, i) => {
+          const policy = policyByType.get(a.action_type);
+          const requiresConfirmation = policy?.requiresConfirmation ?? true;
+          return {
+            groundedPayload: await groundEntitiesWithDb(db, restoredPayloads[i]!),
+            compiledGraph: buildCommandGraph(a.action_type, requiresConfirmation),
+          };
+        }),
+      );
       const rows = await db
         .insert(domainActions)
         .values(
-          valid.map((a) => ({
+          valid.map((a, i) => ({
             tenantId: tenantContext.tenantId,
             actionType: a.action_type,
-            payload: restoreTokens(a.payload, redactedInstruction.tokens),
-            policyId: policyByType.get(a.action_type) ?? null,
+            payload: restoredPayloads[i]!,
+            policyId: policyByType.get(a.action_type)?.id ?? null,
             status: "draft" as const,
+            groundedPayload: compiled[i]!.groundedPayload,
+            compiledGraph: compiled[i]!.compiledGraph,
           })),
         )
         .returning();
@@ -128,6 +147,8 @@ export class LLMPlanner implements Planner {
         status: row.status,
         createdAt: row.createdAt.toISOString(),
         reasoning: valid[i]?.reasoning,
+        groundedPayload: row.groundedPayload as DomainAction["groundedPayload"],
+        compiledGraph: row.compiledGraph as DomainAction["compiledGraph"],
       }));
     });
   }

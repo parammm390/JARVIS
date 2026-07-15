@@ -33,6 +33,10 @@ export interface DomainAction {
    *  reasoning to report). Not a DB column — carried through to the "planned"
    *  action_log episode for the learning/feedback pillar, never queried directly. */
   reasoning?: string;
+  /** Phase 6 typed plan compiler (§6) output — absent on rows created before this
+   *  phase or by a path that bypasses the compiler. See packages/orchestration/src/compiler.ts. */
+  groundedPayload?: Array<{ field: string; status: "verified" | "not_found" | "unverifiable" }> | null;
+  compiledGraph?: { kind: "workflow" | "single_action"; commandType: string; requiresConfirmation: boolean; autoApprove: boolean } | null;
 }
 
 export interface DomainPolicy {

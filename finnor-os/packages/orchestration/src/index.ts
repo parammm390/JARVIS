@@ -19,6 +19,7 @@ import { ensureSecretsLoaded, redactStructured, redactText } from "@finnor/secur
 
 export * from "./llm";
 export * from "./planner";
+export * from "./compiler";
 export * from "./executor";
 export * from "./reflection";
 export * from "./plugin-registry";

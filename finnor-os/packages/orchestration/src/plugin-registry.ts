@@ -20,6 +20,10 @@ import serviceRemindersPlugin from "../../domain-plugins/service-reminders/index
 import complianceDocumentationPlugin from "../../domain-plugins/compliance-documentation/index";
 import webResearchPlugin from "../../domain-plugins/web-research/index";
 import opsOverviewPlugin from "../../domain-plugins/ops-overview/index";
+import leadToWaterTestPlugin from "../../domain-plugins/lead-to-water-test/index";
+import proposalSignaturePlugin from "../../domain-plugins/proposal-signature/index";
+import proposalToInstallationPlugin from "../../domain-plugins/proposal-to-installation/index";
+import invoiceToCashPlugin from "../../domain-plugins/invoice-to-cash/index";
 
 export class PluginRegistry {
   private byActionType = new Map<string, DomainEnginePlugin>();
@@ -95,6 +99,10 @@ export function createDefaultPluginRegistry(): PluginRegistry {
     complianceDocumentationPlugin,
     webResearchPlugin,
     opsOverviewPlugin,
+    leadToWaterTestPlugin,
+    proposalSignaturePlugin,
+    proposalToInstallationPlugin,
+    invoiceToCashPlugin,
   ]) {
     registry.register(plugin);
   }
