@@ -4,5 +4,12 @@
   "private": true,
   "type": "module",
   "main": "src/index.ts",
-  "types": "src/index.ts"
+  "types": "src/index.ts",
+  "dependencies": {
+    "@finnor/db": "*",
+    "@finnor/shared-types": "*",
+    "@getzep/zep-cloud": "^3.24.0",
+    "drizzle-orm": "^0.36.4",
+    "ioredis": "^5.4.1"
+  }
 }

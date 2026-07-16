@@ -6,5 +6,19 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@finnor/data-platform": "*",
+    "@finnor/db": "*",
+    "@finnor/memory": "*",
+    "@finnor/orchestration": "*",
+    "@finnor/plugin-bulk-notify": "*",
+    "@finnor/plugin-service-reminders": "*",
+    "@finnor/read-models": "*",
+    "@finnor/shared-types": "*",
+    "@finnor/tools": "*",
+    "@finnor/workflow-runtime": "*",
+    "dotenv": "^17.4.2",
+    "drizzle-orm": "^0.36.4"
   }
 }

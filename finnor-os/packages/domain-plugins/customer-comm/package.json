@@ -4,5 +4,13 @@
   "private": true,
   "type": "module",
   "main": "index.ts",
-  "types": "index.ts"
+  "types": "index.ts",
+  "dependencies": {
+    "@finnor/data-platform": "*",
+    "@finnor/db": "*",
+    "@finnor/memory": "*",
+    "@finnor/shared-types": "*",
+    "@finnor/tools": "*",
+    "zod": "^3.23.8"
+  }
 }

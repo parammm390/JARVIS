@@ -4,5 +4,13 @@
   "private": true,
   "type": "module",
   "main": "plugin-interface.ts",
-  "types": "plugin-interface.ts"
+  "types": "plugin-interface.ts",
+  "dependencies": {
+    "@finnor/data-platform": "*",
+    "@finnor/db": "*",
+    "@finnor/shared-types": "*",
+    "@finnor/tools": "*",
+    "drizzle-orm": "^0.36.4",
+    "zod": "^3.23.8"
+  }
 }
