@@ -45,8 +45,8 @@ export default function CommsPage() {
       </p>
       {error && <p style={{ color: "var(--danger)" }}>{error}</p>}
       {outbox.length === 0 && <p>Nothing sent yet.</p>}
-      {outbox.map((o) => (
-        <div key={o.id} className="card">
+      {outbox.map((o, i) => (
+        <div key={o.id} className="card stagger-item" style={{ "--i": Math.min(i, 12) } as React.CSSProperties}>
           <div style={{ fontSize: 12, color: "var(--text-faint)", marginBottom: 6 }}>
             {o.channel.toUpperCase()} → {o.toNumber} · {new Date(o.createdAt).toLocaleString()}{" "}
             {o.simulated && <span className="badge badge-warn" style={{ marginLeft: 6 }}>simulated delivery</span>}

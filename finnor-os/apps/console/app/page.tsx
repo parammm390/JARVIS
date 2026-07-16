@@ -1,12 +1,16 @@
 "use client";
 
-// Mission Control (Phase 10): real panels over real data, 4s poll. Each panel fetches
-// independently and shows a quiet placeholder on its own failure — never blanks the
-// whole page (the resilience page.tsx already practiced for its three stat tiles).
+// Mission Control (Phase 10): real panels over real data, 4s poll, driven live —
+// in-flight workflow steps animate as they progress, fresh events sweep in, stat
+// tiles tween to their new values, and the two genuinely real-time panels (in-flight
+// workflows, event timeline) carry a live indicator so "this polls in real time" is
+// visible, not just true. Each panel fetches independently and shows a quiet
+// placeholder on its own failure — never blanks the whole page.
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { usePoll } from "../lib/use-poll";
+import { useCountUp } from "../lib/use-count-up";
 
 interface Stats {
   pending: number;
@@ -64,6 +68,58 @@ function eventIcon(eventType: string): string {
   return "•";
 }
 
+/** Live indicator for a genuinely polling panel: a radiating dot next to the
+ *  heading, plus a thin scan-line sweep beneath it. */
+function LiveHeading({ children }: { children: React.ReactNode }) {
+  return (
+    <div>
+      <h3 className="live-heading" style={{ color: "var(--text-muted)", marginBottom: 0 }}>
+        <span className="live-dot" />
+        {children}
+      </h3>
+      <div className="live-scanbar" />
+    </div>
+  );
+}
+
+/** A workflow's step tracker: dots connected by lines, where the connector leading
+ *  INTO a still-active ("leased") step animates a moving light — the pipeline
+ *  visibly has something flowing through it, not just colored dots. */
+function StepFlow({ steps }: { steps: WorkflowStep[] }) {
+  return (
+    <div className="step-tracker">
+      {steps.map((s, i) => (
+        <span key={s.id} className="step-node">
+          {i > 0 && (
+            <span
+              className={`step-connector${s.status === "leased" ? " flowing" : ""}${s.status === "completed" ? " done" : ""}`}
+            />
+          )}
+          <span className={`step-dot ${s.status}`} title={`${s.stepType}: ${s.status}`} />
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/** Animated stat tile: the displayed number tweens smoothly toward its new value on
+ *  every poll (useCountUp), and the tile itself briefly rings + its number pops once
+ *  when the underlying value actually changed — a single clean beat, not a re-trigger
+ *  on every intermediate tween frame. */
+function StatTile({ label, value, href, accent, flash }: { label: string; value: number | null; href: string; accent: string; flash: boolean }) {
+  const animated = useCountUp(value);
+  return (
+    <a href={href} style={{ textDecoration: "none", color: "inherit" }}>
+      <div className={`card tile${flash ? " item-fresh" : ""}`}>
+        <div className={`tile-value${flash ? " value-pop" : ""}`} style={{ color: accent }}>
+          {animated ?? "–"}
+        </div>
+        <div className="tile-label">{label}</div>
+      </div>
+    </a>
+  );
+}
+
 export default function Home() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [runs, setRuns] = useState<WorkflowRun[] | null>(null);
@@ -74,9 +130,19 @@ export default function Home() {
   const [followUp, setFollowUp] = useState<{ data: Array<unknown> } | null>(null);
   const [dq, setDq] = useState<{ data: { totalUnresolved: number } } | null>(null);
   const [panelErrors, setPanelErrors] = useState<Record<string, boolean>>({});
+  const [flashTiles, setFlashTiles] = useState<Set<string>>(new Set());
+  const [freshEventIds, setFreshEventIds] = useState<Set<string>>(new Set());
+
+  const prevStats = useRef<Stats | null>(null);
+  const seenEventIds = useRef<Set<string> | null>(null);
 
   const markError = (key: string, failed: boolean) =>
     setPanelErrors((prev) => (prev[key] === failed ? prev : { ...prev, [key]: failed }));
+
+  function flashTile(key: string) {
+    setFlashTiles((prev) => new Set(prev).add(key));
+    setTimeout(() => setFlashTiles((prev) => { const next = new Set(prev); next.delete(key); return next; }), 1400);
+  }
 
   const loadStats = useCallback(async () => {
     try {
@@ -87,14 +153,22 @@ export default function Home() {
         api<{ entries: Array<{ step: string; actionType: string; timestamp: string }> }>("/api/audit?limit=6"),
         api<{ view: string; data: { stuckWorkflowRuns: number; openReconciliationCases: number } }>("/api/read-models/sla-breaches").catch(() => null),
       ]);
-      setStats({
+      const next: Stats = {
         pending: pending.actions.length,
         blocked: blocked.actions.length,
         sentComms: comms.outbox.length,
         stuckWorkflowRuns: sla?.data.stuckWorkflowRuns ?? null,
         openReconciliationCases: sla?.data.openReconciliationCases ?? null,
         recentSteps: audit.entries,
-      });
+      };
+      const prev = prevStats.current;
+      if (prev) {
+        (["pending", "blocked", "sentComms", "stuckWorkflowRuns", "openReconciliationCases"] as const).forEach((k) => {
+          if (prev[k] !== next[k]) flashTile(k);
+        });
+      }
+      prevStats.current = next;
+      setStats(next);
       markError("stats", false);
     } catch {
       markError("stats", true);
@@ -114,7 +188,17 @@ export default function Home() {
   const loadEvents = useCallback(async () => {
     try {
       const res = await api<{ events: BusinessEvent[] }>("/api/events");
-      setEvents(res.events.slice(0, 20));
+      const latest = res.events.slice(0, 20);
+      const seen = seenEventIds.current;
+      if (seen) {
+        const fresh = new Set(latest.filter((e) => !seen.has(e.id)).map((e) => e.id));
+        if (fresh.size > 0) {
+          setFreshEventIds(fresh);
+          setTimeout(() => setFreshEventIds(new Set()), 1500);
+        }
+      }
+      seenEventIds.current = new Set(latest.map((e) => e.id));
+      setEvents(latest);
       markError("events", false);
     } catch {
       markError("events", true);
@@ -146,15 +230,6 @@ export default function Home() {
   usePoll(loadEvents, 4000, []);
   usePoll(loadStrip, 12000, []);
 
-  const tile = (label: string, value: number | string, href: string, accent: string) => (
-    <a href={href} style={{ textDecoration: "none", color: "inherit" }}>
-      <div className="card tile">
-        <div className="tile-value" style={{ color: accent }}>{value}</div>
-        <div className="tile-label">{label}</div>
-      </div>
-    </a>
-  );
-
   return (
     <div>
       <h1 style={{ marginBottom: 4 }}>Finnor is on duty.</h1>
@@ -163,44 +238,48 @@ export default function Home() {
       </p>
 
       <div className="grid" style={{ marginTop: 18 }}>
-        {tile("awaiting your approval", stats?.pending ?? "–", "/confirm", "var(--warn)")}
-        {tile("blocked / needs review", stats?.blocked ?? "–", "/confirm", "var(--danger)")}
-        {tile("messages produced", stats?.sentComms ?? "–", "/comms", "var(--success)")}
-        {tile("stuck workflow runs", stats?.stuckWorkflowRuns ?? "–", "/", "var(--danger)")}
-        {tile("open reconciliation cases", stats?.openReconciliationCases ?? "–", "/", "var(--warn)")}
+        <StatTile label="awaiting your approval" value={stats?.pending ?? null} href="/confirm" accent="var(--warn)" flash={flashTiles.has("pending")} />
+        <StatTile label="blocked / needs review" value={stats?.blocked ?? null} href="/confirm" accent="var(--danger)" flash={flashTiles.has("blocked")} />
+        <StatTile label="messages produced" value={stats?.sentComms ?? null} href="/comms" accent="var(--success)" flash={flashTiles.has("sentComms")} />
+        <StatTile label="stuck workflow runs" value={stats?.stuckWorkflowRuns ?? null} href="/" accent="var(--danger)" flash={flashTiles.has("stuckWorkflowRuns")} />
+        <StatTile label="open reconciliation cases" value={stats?.openReconciliationCases ?? null} href="/" accent="var(--warn)" flash={flashTiles.has("openReconciliationCases")} />
       </div>
 
       <div className="grid" style={{ marginTop: 28, gridTemplateColumns: "1.3fr 1fr" }}>
         <section>
-          <h3 style={{ color: "var(--text-muted)" }}>In-flight workflows</h3>
+          <LiveHeading>In-flight workflows</LiveHeading>
           {runs === null && panelErrors.runs && <p className="card" style={{ color: "var(--text-faint)" }}>Workflow runs are momentarily unavailable.</p>}
           {runs !== null && runs.length === 0 && (
             <div className="card" style={{ color: "var(--text-faint)", textAlign: "center" }}>No workflows running right now.</div>
           )}
           {runs === null && !panelErrors.runs && <p className="pulse" style={{ color: "var(--text-faint)" }}>Loading…</p>}
-          {runs?.map((r) => (
-            <div key={r.id} className="card">
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+          {runs?.map((r, i) => (
+            <div
+              key={r.id}
+              className={`card stagger-item${r.status === "running" ? " workflow-card running" : ""}`}
+              style={{ "--i": Math.min(i, 12) } as React.CSSProperties}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
                 <strong style={{ color: "var(--accent)" }}>{r.workflowType.replaceAll("_", " ")}</strong>
                 <span style={{ color: "var(--text-faint)", fontSize: 12 }}>{relativeTime(r.createdAt)}</span>
               </div>
-              <div className="step-tracker">
-                {r.steps.map((s) => (
-                  <span key={s.id} className={`step-dot ${s.status}`} title={`${s.stepType}: ${s.status}`} />
-                ))}
-              </div>
+              <StepFlow steps={r.steps} />
             </div>
           ))}
         </section>
 
         <section>
-          <h3 style={{ color: "var(--text-muted)" }}>Event timeline</h3>
+          <LiveHeading>Event timeline</LiveHeading>
           {events === null && panelErrors.events && <p className="card" style={{ color: "var(--text-faint)" }}>Timeline is momentarily unavailable.</p>}
           {events !== null && events.length === 0 && (
             <div className="card" style={{ color: "var(--text-faint)", textAlign: "center" }}>No events yet.</div>
           )}
-          {events?.map((e) => (
-            <div key={e.id} className="card" style={{ padding: "10px 16px", display: "flex", justifyContent: "space-between" }}>
+          {events?.map((e, i) => (
+            <div
+              key={e.id}
+              className={`card stagger-item${freshEventIds.has(e.id) ? " item-fresh" : ""}`}
+              style={{ "--i": Math.min(i, 12), padding: "10px 16px", display: "flex", justifyContent: "space-between" } as React.CSSProperties}
+            >
               <span>
                 {eventIcon(e.eventType)}{" "}
                 <strong style={{ color: "var(--accent)" }}>{e.eventType.replaceAll("_", " ")}</strong>
@@ -265,7 +344,7 @@ export default function Home() {
 
       <h3 style={{ marginTop: 28, color: "var(--text-muted)" }}>Latest activity</h3>
       {(stats?.recentSteps ?? []).map((e, i) => (
-        <div key={i} className="card" style={{ padding: "10px 16px", display: "flex", justifyContent: "space-between" }}>
+        <div key={i} className="card stagger-item" style={{ "--i": Math.min(i, 12), padding: "10px 16px", display: "flex", justifyContent: "space-between" } as React.CSSProperties}>
           <span>
             <strong style={{ color: "var(--accent)" }}>{e.actionType}</strong>{" "}
             <span style={{ color: "var(--text-muted)" }}>· {e.step}</span>

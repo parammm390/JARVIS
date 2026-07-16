@@ -102,8 +102,12 @@ export default function ConfirmPage() {
           Nothing waiting on you right now. 🎉
         </div>
       )}
-      {actions.map((a) => (
-        <div key={a.id} className={`card${leaving.has(a.id) ? " leaving" : ""}`}>
+      {actions.map((a, i) => (
+        <div
+          key={a.id}
+          className={`card stagger-item awaiting-glow${leaving.has(a.id) ? " leaving" : ""}`}
+          style={{ "--i": Math.min(i, 12) } as React.CSSProperties}
+        >
           <div style={{ fontSize: 12, color: "var(--text-faint)", marginBottom: 8 }}>
             {a.actionType} · {new Date(a.createdAt).toLocaleString()} · {a.status.replaceAll("_", " ")}
           </div>

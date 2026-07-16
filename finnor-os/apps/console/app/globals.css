@@ -192,6 +192,88 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--a
 }
 .step-flash { animation: stepFlash .6s ease-out; }
 
+/* Staggered list entrance — each item in a "stagger" list carries --i (its index) and
+   fades/slides up on a short per-item delay, so a freshly loaded panel reads as a
+   cascade rather than a single flat pop-in. */
+@keyframes staggerIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.stagger-item {
+  animation: staggerIn .45s cubic-bezier(.16, 1, .3, 1) both;
+  animation-delay: calc(var(--i, 0) * 55ms);
+}
+
+/* A newly-arrived item (poll brought something the client hadn't seen before) gets a
+   brighter one-shot highlight sweep so "live" actually reads as live, not just as a
+   list that occasionally re-renders. */
+@keyframes freshSweep {
+  0% { background-position: 200% 0; border-color: var(--accent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent), 0 0 20px -4px color-mix(in srgb, var(--accent) 55%, transparent); }
+  60% { border-color: var(--accent); }
+  100% { background-position: -200% 0; border-color: var(--border); box-shadow: none; }
+}
+.item-fresh {
+  background-image: linear-gradient(100deg, transparent 30%, color-mix(in srgb, var(--accent) 16%, transparent) 45%, transparent 60%);
+  background-size: 250% 100%;
+  animation: freshSweep 1.4s cubic-bezier(.16, 1, .3, 1) both;
+}
+
+/* Live-panel heading: a small radiating dot + a thin animated scan-line under the
+   heading, communicating "this panel polls in real time" independent of any single
+   data change. */
+.live-heading { display: flex; align-items: center; gap: 8px; }
+.live-dot { position: relative; width: 8px; height: 8px; border-radius: 50%; background: var(--success); flex: none; }
+.live-dot::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border-radius: 50%;
+  border: 1.5px solid var(--success);
+  animation: livePing 1.8s cubic-bezier(0, 0, .2, 1) infinite;
+}
+@keyframes livePing {
+  0% { transform: scale(.6); opacity: .9; }
+  75%, 100% { transform: scale(1.9); opacity: 0; }
+}
+.live-scanbar {
+  position: relative;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--border);
+  overflow: hidden;
+  margin: 6px 0 var(--space-3);
+}
+.live-scanbar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  animation: scanSweep 2.2s ease-in-out infinite;
+}
+@keyframes scanSweep {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(340%); }
+}
+
+/* Number count-up landing: value briefly overshoots/settles when it changes. */
+@keyframes valuePop {
+  0% { transform: scale(1); }
+  30% { transform: scale(1.14); }
+  100% { transform: scale(1); }
+}
+.value-pop { display: inline-block; animation: valuePop .4s cubic-bezier(.34, 1.56, .64, 1); }
+
+/* Confirmation Queue: a pending card is "live" too — it's sitting in the same
+   real-time queue a voice call could drain from underneath the dealer. A slow
+   breathing left-edge bar says "still here, still waiting on you" without shouting. */
+.awaiting-glow {
+  position: relative;
+  border-left: 3px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  animation: cardIn var(--dur-med) ease, awaitBreathe 2.6s ease-in-out infinite;
+}
+@keyframes awaitBreathe {
+  0%, 100% { border-left-color: color-mix(in srgb, var(--accent) 35%, transparent); }
+  50% { border-left-color: color-mix(in srgb, var(--accent) 85%, transparent); }
+}
+
 .toast {
   position: fixed;
   bottom: 24px;
@@ -230,22 +312,84 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--a
 .badge-danger { background: var(--danger-bg); color: var(--danger); }
 .badge-muted { background: var(--bg-overlay); color: var(--text-faint); }
 
-/* ---- step tracker dots ---- */
+/* ---- step tracker: an animated pipeline, not a static row of dots ---- */
 
-.step-tracker { display: flex; align-items: center; gap: 6px; }
+.step-tracker { display: flex; align-items: center; }
+.step-node { display: flex; align-items: center; }
 .step-dot {
-  width: 10px;
-  height: 10px;
+  position: relative;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
   background: var(--text-faint);
-  opacity: .4;
-  transition: background var(--dur-fast) ease, opacity var(--dur-fast) ease;
+  opacity: .35;
+  flex: none;
+  transition: background var(--dur-fast) ease, opacity var(--dur-fast) ease, transform var(--dur-fast) ease;
 }
 .step-dot.pending { opacity: .3; }
-.step-dot.leased { background: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
+.step-dot.leased {
+  background: var(--accent);
+  opacity: 1;
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 60%, transparent);
+  animation: leasedGlow 1.1s ease-in-out infinite;
+}
+@keyframes leasedGlow {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent); transform: scale(1); }
+  50% { box-shadow: 0 0 0 6px transparent; transform: scale(1.15); }
+  100% { box-shadow: 0 0 0 0 transparent; transform: scale(1); }
+}
 .step-dot.completed { background: var(--success); opacity: 1; }
 .step-dot.failed { background: var(--danger); opacity: 1; }
 .step-dot.compensating, .step-dot.compensated { background: var(--warn); opacity: 1; }
+
+/* Connector between two steps: a static base line, plus — only when the step it
+   leads INTO is still active (leased) — a moving gradient "packet" traveling along
+   it, so the whole tracker reads as a pipe with something flowing through it. */
+.step-connector {
+  position: relative;
+  width: 22px;
+  height: 2px;
+  background: var(--border);
+  overflow: hidden;
+  flex: none;
+}
+.step-connector.flowing {
+  background: color-mix(in srgb, var(--accent) 25%, var(--border));
+}
+.step-connector.flowing::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 60%;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  animation: connectorFlow 1s linear infinite;
+}
+@keyframes connectorFlow {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(220%); }
+}
+.step-connector.done { background: var(--success); }
+
+/* A running workflow's whole card gets a slow, subtle rotating conic-gradient ring
+   around its border — "this one is actively working" at a glance, not just its dots. */
+@property --wf-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+.workflow-card.running {
+  position: relative;
+  border-color: transparent;
+  background:
+    linear-gradient(var(--bg-raised), var(--bg-raised)) padding-box,
+    conic-gradient(from var(--wf-angle), color-mix(in srgb, var(--accent) 70%, transparent), transparent 30%, transparent 70%, color-mix(in srgb, var(--accent) 70%, transparent)) border-box;
+  border: 1px solid transparent;
+  animation: cardIn var(--dur-med) ease, wfSpin 3.5s linear infinite;
+}
+@keyframes wfSpin {
+  from { --wf-angle: 0deg; }
+  to { --wf-angle: 360deg; }
+}
 
 /* ---- buttons ---- */
 
