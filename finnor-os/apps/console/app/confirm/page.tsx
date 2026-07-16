@@ -13,6 +13,7 @@ interface PendingAction {
   payload: Record<string, unknown>;
   status: string;
   createdAt: string;
+  groundedPayload?: Array<{ field: string; status: "verified" | "not_found" | "unverifiable" }> | null;
 }
 
 export default function ConfirmPage() {
@@ -74,58 +75,59 @@ export default function ConfirmPage() {
   }
 
   const filterBtn = (key: "pending" | "blocked", label: string) => (
-    <button
-      onClick={() => setFilter(key)}
-      style={{
-        background: filter === key ? "#22345c" : "#141f38",
-        color: "#e7ecf5",
-        border: "1px solid #2b3d63",
-        borderRadius: 8,
-        padding: "8px 16px",
-        cursor: "pointer",
-        fontWeight: filter === key ? 700 : 400,
-      }}
-    >
+    <button onClick={() => setFilter(key)} className={`btn-toggle${filter === key ? " active" : ""}`}>
       {label}
     </button>
   );
 
+  const groundedBadgeClass: Record<"verified" | "not_found" | "unverifiable", string> = {
+    verified: "badge badge-success",
+    not_found: "badge badge-danger",
+    unverifiable: "badge badge-muted",
+  };
+
   return (
     <div>
       <h1 style={{ marginBottom: 4 }}>Confirmation Queue</h1>
-      <p style={{ color: "#9fb0cc", marginTop: 0 }}>
+      <p style={{ color: "var(--text-muted)", marginTop: 0 }}>
         Nothing here has happened yet. Finnor only acts after you approve — here or by voice.
       </p>
       <div style={{ display: "flex", gap: 10, marginBottom: 18 }}>
         {filterBtn("pending", "Awaiting approval")}
         {filterBtn("blocked", "Blocked / needs review")}
       </div>
-      {error && <p style={{ color: "#ff9d9d" }}>{error}</p>}
+      {error && <p style={{ color: "var(--danger)" }}>{error}</p>}
       {actions.length === 0 && !error && (
-        <div className="card" style={{ textAlign: "center", color: "#7f92b5" }}>
+        <div className="card" style={{ textAlign: "center", color: "var(--text-faint)" }}>
           Nothing waiting on you right now. 🎉
         </div>
       )}
       {actions.map((a) => (
         <div key={a.id} className={`card${leaving.has(a.id) ? " leaving" : ""}`}>
-          <div style={{ fontSize: 12, color: "#7f92b5", marginBottom: 8 }}>
+          <div style={{ fontSize: 12, color: "var(--text-faint)", marginBottom: 8 }}>
             {a.actionType} · {new Date(a.createdAt).toLocaleString()} · {a.status.replaceAll("_", " ")}
           </div>
+          {a.groundedPayload && a.groundedPayload.length > 0 && (
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+              {a.groundedPayload.map((g) => (
+                <span key={g.field} className={groundedBadgeClass[g.status]}>
+                  {g.field}: {g.status.replaceAll("_", " ")}
+                </span>
+              ))}
+            </div>
+          )}
           <div style={{ fontSize: 16, marginBottom: 14, lineHeight: 1.5 }}>{a.summary ?? "No summary drafted."}</div>
           <details style={{ marginBottom: 14 }}>
-            <summary style={{ cursor: "pointer", color: "#8fb4ff", fontSize: 13 }}>Details</summary>
-            <pre style={{ fontSize: 12, overflowX: "auto", background: "#0b1220", padding: 12, borderRadius: 8 }}>
+            <summary style={{ cursor: "pointer", color: "var(--accent)", fontSize: 13 }}>Details</summary>
+            <pre style={{ fontSize: 12, overflowX: "auto", background: "var(--bg-sunken)", padding: 12, borderRadius: 8 }}>
               {JSON.stringify(a.payload, null, 2)}
             </pre>
           </details>
-          <button onClick={() => decide(a.id, "confirm")} style={approveBtn}>Approve</button>{" "}
-          <button onClick={() => decide(a.id, "reject")} style={rejectBtn}>Reject</button>
+          <button onClick={() => decide(a.id, "confirm")} className="btn-approve">Approve</button>{" "}
+          <button onClick={() => decide(a.id, "reject")} className="btn-danger">Reject</button>
         </div>
       ))}
       {toast && <div className="toast">{toast}</div>}
     </div>
   );
 }
-
-const approveBtn: React.CSSProperties = { background: "#1d7a46", color: "white", border: "none", borderRadius: 8, padding: "10px 26px", cursor: "pointer", fontWeight: 700, fontSize: 14 };
-const rejectBtn: React.CSSProperties = { background: "#7a1d2b", color: "white", border: "none", borderRadius: 8, padding: "10px 26px", cursor: "pointer", fontWeight: 700, fontSize: 14 };

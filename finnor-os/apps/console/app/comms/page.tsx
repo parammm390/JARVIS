@@ -38,22 +38,18 @@ export default function CommsPage() {
   return (
     <div>
       <h1>Communications</h1>
-      <p style={{ color: "#9fb0cc" }}>
+      <p style={{ color: "var(--text-muted)" }}>
         Every message and call Finnor produced. <strong>Simulated</strong> means the whole
         workflow completed — booking, records, audit — and only the carrier delivery is
         waiting on real phone credentials.
       </p>
-      {error && <p style={{ color: "#ff9d9d" }}>{error}</p>}
+      {error && <p style={{ color: "var(--danger)" }}>{error}</p>}
       {outbox.length === 0 && <p>Nothing sent yet.</p>}
       {outbox.map((o) => (
         <div key={o.id} className="card">
-          <div style={{ fontSize: 12, color: "#7f92b5", marginBottom: 6 }}>
+          <div style={{ fontSize: 12, color: "var(--text-faint)", marginBottom: 6 }}>
             {o.channel.toUpperCase()} → {o.toNumber} · {new Date(o.createdAt).toLocaleString()}{" "}
-            {o.simulated && (
-              <span style={{ background: "#4a3b12", color: "#ffd479", borderRadius: 4, padding: "1px 8px", marginLeft: 6 }}>
-                simulated delivery
-              </span>
-            )}
+            {o.simulated && <span className="badge badge-warn" style={{ marginLeft: 6 }}>simulated delivery</span>}
           </div>
           <div style={{ fontSize: 14 }}>{o.content}</div>
         </div>

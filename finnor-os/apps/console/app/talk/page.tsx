@@ -44,12 +44,12 @@ export default function TalkPage() {
   return (
     <div>
       <h1>Talk to Finnor</h1>
-      <p style={{ color: "#9fb0cc" }}>
+      <p style={{ color: "var(--text-muted)" }}>
         Live voice through your microphone — no phone line involved. Ask for anything Finnor
         can do; it reads drafts back and takes your spoken yes/no.
       </p>
       {!configured && (
-        <p style={{ color: "#ffd479" }}>
+        <p style={{ color: "var(--warn)" }}>
           Set NEXT_PUBLIC_VAPI_PUBLIC_KEY and NEXT_PUBLIC_VAPI_ASSISTANT_ID in .env, and point the
           assistant&apos;s server URL at your deployed /api/webhooks/vapi.
         </p>
@@ -65,23 +65,15 @@ export default function TalkPage() {
             vapiRef.current?.start(ASSISTANT_ID);
           }
         }}
-        style={{
-          background: status === "live" ? "#7a1d2b" : "#1d7a46",
-          color: "white",
-          border: "none",
-          borderRadius: 8,
-          padding: "14px 34px",
-          fontSize: 16,
-          fontWeight: 700,
-          cursor: configured ? "pointer" : "not-allowed",
-        }}
+        className={status === "live" ? "btn-danger" : "btn-approve"}
+        style={{ padding: "14px 34px", fontSize: 16 }}
       >
         {status === "live" ? "■ End conversation" : status === "connecting" ? "Connecting…" : "🎙 Start talking"}
       </button>
-      {errorMsg && <p style={{ color: "#ff9d9d" }}>{errorMsg}</p>}
+      {errorMsg && <p style={{ color: "var(--danger)" }}>{errorMsg}</p>}
       <div style={{ marginTop: 20 }}>
         {lines.map((l, i) => (
-          <div key={i} style={{ padding: "4px 0", color: l.startsWith("FINNOR") ? "#8fb4ff" : "#e7ecf5" }}>
+          <div key={i} style={{ padding: "4px 0", color: l.startsWith("FINNOR") ? "var(--accent)" : "var(--text)" }}>
             {l}
           </div>
         ))}

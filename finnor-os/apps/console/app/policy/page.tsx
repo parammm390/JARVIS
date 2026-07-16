@@ -52,15 +52,15 @@ export default function PolicyPage() {
     }
   }
 
-  const input: React.CSSProperties = { width: "100%", padding: 8, background: "#101a30", color: "#e7ecf5", border: "1px solid #2b3d63", borderRadius: 6, marginBottom: 12, fontFamily: "inherit" };
+  const input: React.CSSProperties = { width: "100%", padding: 8, marginBottom: 12, fontFamily: "inherit" };
 
   return (
     <div>
       <h1>Policy Editor</h1>
-      <p style={{ color: "#9fb0cc" }}>Business rules live here as configuration — pricing, cadences, confirmation wording. Never in code.</p>
+      <p style={{ color: "var(--text-muted)" }}>Business rules live here as configuration — pricing, cadences, confirmation wording. Never in code.</p>
       <label>Action type</label>
       <input style={input} value={actionType} onChange={(e) => setActionType(e.target.value)} />
-      <button onClick={load} style={btn}>Load current</button>
+      <button onClick={load} className="btn">Load current</button>
       <div style={{ height: 16 }} />
       <label>Policy JSON</label>
       <textarea style={{ ...input, minHeight: 200, fontFamily: "ui-monospace, monospace" }} value={policyJson} onChange={(e) => setPolicyJson(e.target.value)} />
@@ -71,10 +71,8 @@ export default function PolicyPage() {
       <div style={{ height: 12 }} />
       <label>Confirmation template (uses {"{{placeholders}}"})</label>
       <input style={input} value={template} onChange={(e) => setTemplate(e.target.value)} />
-      <button onClick={save} style={{ ...btn, background: "#1d7a46" }}>Save policy</button>
-      {status && <p style={{ color: "#9fb0cc" }}>{status}</p>}
+      <button onClick={save} className="btn btn-primary">Save policy</button>
+      {status && <p style={{ color: "var(--text-muted)" }}>{status}</p>}
     </div>
   );
 }
-
-const btn: React.CSSProperties = { background: "#22345c", color: "#e7ecf5", border: "1px solid #2b3d63", borderRadius: 6, padding: "8px 18px", cursor: "pointer" };

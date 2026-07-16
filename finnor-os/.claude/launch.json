@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "api",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev:api"],
+      "port": 3100
+    },
+    {
+      "name": "console",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev:console"],
+      "port": 3101
+    }
+  ]
+}
