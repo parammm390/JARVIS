@@ -27,7 +27,7 @@ interface Scenario {
   priorTurn?: { instruction: string; actionType: string; payload: Record<string, unknown> };
 }
 
-const emptyMemory = (): MemorySnapshot => ({ shortTerm: null, longTerm: null, semantic: [], episodic: [] });
+const emptyMemory = (): MemorySnapshot => ({ shortTerm: null, longTerm: null, semantic: [], episodic: [], patterns: null });
 
 const SCENARIOS: Scenario[] = [
   // --- crm ---

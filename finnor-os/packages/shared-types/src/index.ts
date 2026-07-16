@@ -51,6 +51,12 @@ export interface DomainPolicy {
   modelProvider?: string;
 }
 
+/** Phase 8: how much extra reasoning depth a drafted action gets before it's
+ *  inserted — "low" skips repair entirely (nothing to re-check when no human gate
+ *  applies), "medium" gets Phase 7's single repair pass, "high" additionally
+ *  generates and scores a second candidate before repair. */
+export type ReasoningTier = "low" | "medium" | "high";
+
 export interface ValidationResult {
   valid: boolean;
   errors: string[];
@@ -87,11 +93,36 @@ export interface ReflectionOutcome {
   detail: string;
 }
 
+// Retrieval-based pattern context (Phase 9) — real, queryable historical signals fed
+// to the planner as soft context, never a source of new facts to invent into a
+// payload. Call this "pattern context" or "retrieval" everywhere, never "learning":
+// nothing here is fine-tuned or trained, it's a live aggregate query over existing
+// rows, same honesty standard as every other memory source in this file.
+export interface HouseholdProposalPattern {
+  totalSent: number;
+  accepted: number;
+  declined: number;
+  expired: number;
+  avgAcceptedTotalUsd: number | null;
+}
+export interface TechnicianReliabilityPattern {
+  technicianId: string;
+  name: string;
+  totalAppointments: number;
+  noShowCount: number;
+  noShowRate: number;
+}
+export interface PatternContext {
+  householdProposals: HouseholdProposalPattern | null; // null only when no householdId was supplied
+  technicianReliability: TechnicianReliabilityPattern[]; // tenant-wide, [] if no data yet
+}
+
 export interface MemorySnapshot {
   shortTerm: Record<string, unknown> | null;
   longTerm: Record<string, unknown> | null;
   semantic: Array<{ chunk: string; sourceDocId: string | null; similarity: number }>;
   episodic: Array<Record<string, unknown>>;
+  patterns: PatternContext | null;
 }
 
 export type JobStatus = "queued" | "running" | "completed" | "failed" | "dead_letter";
