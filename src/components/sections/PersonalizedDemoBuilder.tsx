@@ -18,14 +18,14 @@ const builders = [
     eyebrow: "Demo builder 01",
     title: "Live Call & Booking Demo",
     description:
-      "Never miss a lead. FINNOR's AI agent answers after-hours calls and recovers missed calls with instant qualification, visit booking, live water data, and system quotes. Enter a company name and website to see the full flow.",
+      "Never miss a lead. FINNOR answers after-hours calls and recovers missed calls with instant qualification, visit booking, live water data, and real pricing ranges. Enter a company name and website to see the full flow.",
     href: siteConfig.demoLink,
     cta: "Build My Live Demo",
     icon: PhoneCall,
     bullets: [
       "After-hours and missed-call capture",
       "Instant lead qualification and booking",
-      "Live water data and real-time quotes",
+      "Live water data and real-time ranges",
     ],
     accent: "sky",
   },
@@ -87,8 +87,8 @@ export function PersonalizedDemoBuilder() {
               transition={{ delay: 0.08 }}
               className="mt-6 max-w-2xl text-lg font-medium leading-relaxed text-slate-600"
             >
-              Choose the experience you want to test. Build a company-specific lead recovery agent
-              from public website context, run the new lifecycle demo on public water data and your
+              Choose the experience you want to test. Build a company-specific booking and lead
+              recovery demo from public website context, run the new lifecycle demo on public water data and your
               pricing tier, or configure a complete operations dashboard around your services,
               market, team, and lead flow. All three are live and available without an account.
             </motion.p>

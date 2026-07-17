@@ -6,7 +6,7 @@ import { Footer } from "@/components/sections/Footer"
 export const metadata: Metadata = {
   title: "Customer Lifecycle Demo: One Continuous Memory",
   description:
-    "Build a two-year customer lifecycle on live public water data: the after-hours call, the real water record, the sizing math, the quote at your prices, the booked visit, the documented job, the review, the check-ins, the referral, and the upsell, all as one continuous memory.",
+    "Build a two-year customer lifecycle on live public water data: the after-hours call, the real water record, the sizing math, the range at your prices, the booked visit, the documented job, the review, the check-ins, the referral, and the upsell, all as one continuous memory.",
   alternates: {
     canonical: "https://finnorai.com/demo/lifecycle",
   },

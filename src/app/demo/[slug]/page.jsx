@@ -657,7 +657,7 @@ function Dashboard({ profile }) {
       <div data-lenis-prevent className="min-w-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain scroll-smooth">
         <header className="sticky top-0 z-40 flex h-20 items-center justify-between border-b border-slate-200 bg-white/88 px-4 shadow-[0_12px_42px_rgba(15,38,62,0.06)] backdrop-blur-xl md:px-6">
           <div className="flex min-w-0 items-center gap-3"><span className="text-lg font-black tracking-tight">FINNOR</span><span className="text-slate-300">/</span><span className="truncate text-sm font-black text-slate-600">{profile.companyName}</span></div>
-          <div className="flex items-center gap-3"><span className="inline-flex items-center rounded-full border border-teal-200 bg-teal-50 px-3 py-1.5 text-xs font-black text-teal-800"><span className="mr-2 h-1.5 w-1.5 animate-pulse rounded-full bg-teal-500" />AI Agent Active</span><Bell className="h-5 w-5 text-slate-600" /></div>
+          <div className="flex items-center gap-3"><span className="inline-flex items-center rounded-full border border-teal-200 bg-teal-50 px-3 py-1.5 text-xs font-black text-teal-800"><span className="mr-2 h-1.5 w-1.5 animate-pulse rounded-full bg-teal-500" />FINNOR Active</span><Bell className="h-5 w-5 text-slate-600" /></div>
         </header>
 
         <main className="container mx-auto p-4 md:p-6 lg:p-8">
@@ -672,7 +672,7 @@ function Dashboard({ profile }) {
           </section>
 
           <section id="live-calls" className="scroll-mt-24 pt-12">
-            <SectionHeading eyebrow="Live call demo" title={`Sarah answers for ${profile.companyName}`} copy={`Call as a customer in ${profile.city}. The live agent uses only the services and handoff context supplied in your profile.`} />
+            <SectionHeading eyebrow="Live call demo" title={`Sarah answers for ${profile.companyName}`} copy={`Call as a customer in ${profile.city}. FINNOR uses only the services and handoff context supplied in your profile.`} />
             <div className="command-surface command-grid mt-7 overflow-hidden rounded-[2rem] p-4 text-white md:p-6">
               <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
                 <CallConsole profile={profile} phase={callPhase} duration={callDuration} start={startInbound} end={endInbound} handoffSent={handoffSent} />

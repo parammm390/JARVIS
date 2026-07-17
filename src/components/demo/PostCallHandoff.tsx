@@ -279,7 +279,7 @@ export function PostCallHandoff({
                 {workflow.handoffStatus}
               </p>
               <h4 className="mt-2 text-2xl font-black tracking-tight text-slate-950">
-                Apply for Founding Quoting Agent Pilot
+                Apply for Founding Pilot
               </h4>
               <p className="mt-2 max-w-2xl text-sm font-medium leading-relaxed text-slate-600">
                 Bring your company&apos;s demo. We will review the selected booking logic, routing

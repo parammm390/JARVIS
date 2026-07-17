@@ -20,7 +20,7 @@ const steps = [
   },
   {
     day: "Day 2",
-    title: "Load your pricing tiers, install mix, and sizing rules into the quoting agent",
+    title: "Load your pricing tiers, install mix, and sizing rules into FINNOR",
     icon: ClipboardList,
   },
   {
@@ -78,7 +78,7 @@ export function FirstSevenDays() {
             transition={{ delay: 0.05, duration: 0.6 }}
             className="text-4xl font-black tracking-tight text-slate-950 md:text-5xl"
           >
-            Quoting calls in seven days, or your money back.
+            Quoting real ranges in seven days, or your money back.
           </motion.h2>
           <motion.p
             initial={{ opacity: 0, y: 16 }}
@@ -87,7 +87,7 @@ export function FirstSevenDays() {
             transition={{ delay: 0.1 }}
             className="mt-5 max-w-2xl text-lg font-medium leading-relaxed text-slate-600"
           >
-            One week from access to a live quoting agent with your water data, your pricing, and
+            One week from access to a live booking and lead recovery system with your water data, your pricing, and
             your rails. Every scenario is tested with your team before a real caller ever touches
             it. Miss the seven days and the initial payment comes back.
           </motion.p>

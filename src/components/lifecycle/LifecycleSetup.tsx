@@ -32,7 +32,7 @@ const GENERATION_STEPS = [
   "Locating the water system, EPA SDWIS",
   "Sampling county wells, USGS records",
   "Running the sizing math",
-  "Writing the diagnosis + quote",
+  "Writing the diagnosis + range",
 ]
 
 type Phase = "form" | "generating" | "error"
@@ -191,7 +191,7 @@ export function LifecycleSetup({
                   Real water. Real math. Your prices.
                 </h2>
                 <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-600">
-                  The diagnosis, quote, and two-year ledger below get computed from live public
+                  The diagnosis, range, and two-year ledger below get computed from live public
                   water records for your area and the pricing tier you actually sell at.
                 </p>
               </div>

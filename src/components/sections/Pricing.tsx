@@ -13,12 +13,12 @@ const tiers = [
   {
     id: "quoting",
     kicker: "Tier 1",
-    title: "Quoting Agent",
+    title: "Booking & Lead Recovery",
     subtitle: "Answer, quote, and book — inbound and outbound.",
     description:
-      "The full quoting agent on every missed, overflow, and after-hours call, plus outbound speed-to-lead follow-up on your web and paid leads, with messaging automation that sends the quote and booking link within seconds of the call ending.",
+      "The full booking and lead recovery system on every missed, overflow, and after-hours call, plus outbound speed-to-lead follow-up on your web and paid leads, with messaging automation that sends the quote and booking link within seconds of the call ending.",
     features: [
-      "Inbound quoting agent — missed, overflow, and after-hours calls",
+      "Inbound booking and lead recovery — missed, overflow, and after-hours calls",
       "Outbound speed-to-lead callbacks on forms and paid leads",
       "Public water records plus a free onsite test to confirm the exact number",
       "Sizing and quote ranges computed from your own pricing tiers",
@@ -33,11 +33,11 @@ const tiers = [
     id: "growth",
     kicker: "Tier 2",
     title: "Growth & Memory",
-    subtitle: "The quoting agent, plus a two-year household memory.",
+    subtitle: "Booking and lead recovery, plus a two-year household memory.",
     description:
-      "Everything in Quoting Agent, and then the record keeps working after the invoice — every lead becomes a household memory that drives review requests, maintenance check-ins, referral tracking, and the right upsell moment, automatically, for two years.",
+      "Everything in Booking & Lead Recovery, and then the record keeps working after the invoice — every lead becomes a household memory that drives review requests, maintenance check-ins, referral tracking, and the right upsell moment, automatically, for two years.",
     features: [
-      "Everything in Quoting Agent, plus:",
+      "Everything in Booking & Lead Recovery, plus:",
       "Two-year household memory record on every lead",
       "A standing next revenue action on every record",
       "Review requests timed to the right moment after install",
@@ -109,12 +109,12 @@ export function Pricing() {
             viewport={{ once: true }}
             className="text-4xl font-black tracking-tight text-slate-950 md:text-6xl"
           >
-            One pilot. A quoting agent and a memory your competitors cannot copy.
+            One pilot. AI booking and lead recovery, and a memory your competitors cannot copy.
           </motion.h2>
           <p className="mx-auto mt-5 max-w-2xl text-lg font-medium leading-relaxed text-slate-600">
-            The full system: answered calls, live water data, quotes from your pricing, booked
-            visits, and a household record that keeps producing revenue for years. Humans keep
-            every final decision.
+            The full system: answered calls, live water data, a real range from your pricing,
+            booked visits, and a household record that keeps producing revenue for years. Humans
+            keep every final decision.
           </p>
         </div>
 

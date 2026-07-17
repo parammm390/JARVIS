@@ -1,8 +1,8 @@
 export const siteConfig = {
   name: "FINNOR",
-  tagline: "The AI quoting agent and household memory system for water treatment and well pump companies.",
+  tagline: "AI booking and lead recovery for water treatment and well pump companies.",
   description:
-    "FINNOR answers every call, pulls live public water data, quotes from your pricing tier, books the visit by text, and remembers every household for years of reviews, check-ins, referrals, and upsells.",
+    "FINNOR answers every call, pulls live public water data, gives a real range from your pricing tier, books the visit by text, and remembers every household for years of reviews, check-ins, referrals, and upsells.",
   contactEmail: "param@finnorai.com",
   ctaLink: "https://calendly.com/pdave9807",
   demoLink: "/demo",

@@ -82,7 +82,7 @@ export function WorkflowModule({ activeStep, workflowType }: WorkflowModuleProps
             className="mb-6 inline-flex items-center rounded-full border border-slate-200 bg-white/72 px-4 py-1.5 text-xs font-black uppercase tracking-widest text-slate-500"
           >
             <span className="mr-2 h-1.5 w-1.5 rounded-full bg-teal-500" />
-            Phone agent, alerts, tracking, and booking routes
+            Phone answering, alerts, tracking, and booking routes
           </motion.div>
           <motion.h2
             initial={{ opacity: 0, y: 22 }}

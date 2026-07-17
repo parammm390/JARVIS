@@ -251,7 +251,7 @@ export function DemoSetupForm({
 
           <fieldset className="space-y-4 rounded-2xl border border-teal-100 bg-teal-50/40 p-4">
             <legend className="px-1 text-[10px] font-black uppercase tracking-[0.2em] text-teal-700">
-              Quoting setup, so the agent can quote real numbers
+              Pricing setup, so FINNOR gives a real range
             </legend>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

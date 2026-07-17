@@ -52,7 +52,7 @@ const miniStatusItems: Array<{ icon: LucideIcon; label: string }> = [
   { icon: BellRing, label: "Record opened" },
 ]
 
-const signalSteps = ["Incoming call", "Live water data", "Sized quote", "Booked + remembered"]
+const signalSteps = ["Incoming call", "Live water data", "Pre-qualified range", "Booked + remembered"]
 
 export function Hero() {
   const [scrolled, setScrolled] = useState(false)
@@ -136,7 +136,7 @@ export function Hero() {
               className="mb-6 inline-flex max-w-full items-center rounded-full border border-sky-900/10 bg-white px-4 py-2 text-sm font-bold leading-snug text-slate-700 shadow-sm"
             >
               <span className="mr-2 h-2 w-2 rounded-full bg-teal-500 shadow-[0_0_0_4px_rgba(20,184,166,0.12)]" />
-              The AI quoting agent for water companies
+              After 5pm, the calls you miss book with someone else
             </motion.div>
 
             <motion.h1
@@ -145,7 +145,7 @@ export function Hero() {
               transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
               className="max-w-[22rem] break-words text-[2.18rem] font-black leading-[0.99] tracking-tight text-slate-950 sm:max-w-4xl sm:text-6xl md:text-7xl lg:text-[5.75rem]"
             >
-              The quoting engine that knows your water before your team picks up.
+              The job you lose tonight is booked with your competitor by morning.
             </motion.h1>
 
             <motion.p
@@ -154,9 +154,10 @@ export function Hero() {
               transition={{ delay: 0.1, duration: 0.62 }}
               className="mt-7 max-w-[22rem] text-base font-semibold leading-relaxed text-slate-700 sm:max-w-2xl sm:text-lg md:text-xl"
             >
-              FINNOR answers the calls you miss, pulls the real water data for the caller&apos;s
-              ZIP, sizes the system with math, quotes from your pricing, and books the visit by
-              text. Every customer is remembered for years — reviews, check-ins, referrals, and
+              FINNOR answers every call your team misses, pulls the real water data for the
+              caller&apos;s ZIP, and gives a pre-qualified range from your pricing before anyone
+              drives out. Then it books the free onsite water test, same as your team already
+              runs. Every customer stays in memory for years — reviews, check-ins, referrals, and
               upsells.
             </motion.p>
 

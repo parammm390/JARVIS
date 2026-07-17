@@ -15,11 +15,11 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://finnorai.com"),
   applicationName: "Finnor AI",
   title: {
-    default: "Finnor | AI Quoting Agent for Water Treatment & Well Pump Companies",
+    default: "Finnor | AI Booking and Lead Recovery for Water Treatment & Well Pump Companies",
     template: "%s | Finnor AI",
   },
   description:
-    "FINNOR answers every missed call, pulls live public water data by ZIP, sizes the system with real math, quotes from your pricing tier, books by text, and remembers every household for years: reviews, check-ins, referrals, upsells, LTV.",
+    "FINNOR answers every missed call, pulls live public water data by ZIP, sizes the system with real math, gives a real range from your pricing tier, books by text, and remembers every household for years: reviews, check-ins, referrals, upsells, LTV.",
   keywords: [
     "water lead recovery",
     "water appointment booking",

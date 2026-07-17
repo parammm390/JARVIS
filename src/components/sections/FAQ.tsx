@@ -11,9 +11,9 @@ import { HelpCircle } from "lucide-react"
 
 const faqs = [
   {
-    question: "It actually quotes? On the call?",
+    question: "Does it quote a final number on the call?",
     answer:
-      "Yes. FINNOR pulls the real public water record for the caller's area and confirms it with a free onsite test, runs the sizing math against household size, and quotes a range from your pricing tier, like $3,800 to $4,250 installed. It never invents a number. The final on-site figure stays with your team, and the demo shows the whole calculation line by line.",
+      "No, and it shouldn't. FINNOR pulls the real public water record for the caller's area, runs the sizing math against household size, and gives a preliminary range from your pricing tier on the call, like $3,800 to $4,250 installed, so the lead is pre-qualified before anyone drives out. It never invents a number. Then it books the free onsite water test, same as your team already runs, where your tech confirms the exact numbers in person and gives the real quote. The demo shows the whole calculation line by line.",
   },
   {
     question: "What is a household memory record?",
@@ -83,7 +83,7 @@ export function FAQ() {
             transition={{ delay: 0.08 }}
             className="mx-auto mt-5 max-w-2xl text-lg font-medium leading-relaxed text-slate-600"
           >
-            What the quoting agent does, where the water data comes from, what stays human, and
+            What FINNOR's booking and lead recovery system does, where the water data comes from, what stays human, and
             exactly who should not buy this.
           </motion.p>
         </div>

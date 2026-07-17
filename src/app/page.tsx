@@ -13,17 +13,17 @@ import { Footer } from "@/components/sections/Footer"
 
 export const metadata: Metadata = {
   title: {
-    absolute: "Finnor AI | The AI Quoting Agent That Remembers Every Customer",
+    absolute: "Finnor AI | Never Lose Another After-Hours Water Call",
   },
   description:
-    "FINNOR answers the call, pulls live water data, quotes from your pricing, books by text, and remembers every household for years of reviews, check-ins, referrals, and upsells.",
+    "The call you miss after 5pm books with your competitor tonight. FINNOR answers every one, pulls real water data, pre-qualifies the lead with a range from your pricing, books the free water test, and remembers every household for years of reviews, check-ins, referrals, and upsells.",
   alternates: {
     canonical: "https://finnorai.com/",
   },
   openGraph: {
-    title: "Finnor AI | The AI Quoting Agent That Remembers Every Customer",
+    title: "Finnor AI | Never Lose Another After-Hours Water Call",
     description:
-      "Live water data, real sizing math, quotes from your pricing tier, and one household memory that compounds revenue for two years.",
+      "The call you miss at 6pm is a job your competitor books tonight. FINNOR answers it, pulls real water data, and pre-qualifies the lead with a range from your pricing before your team ever drives out.",
     url: "https://finnorai.com/",
     images: [
       {
@@ -37,9 +37,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Finnor AI | The AI Quoting Agent That Remembers Every Customer",
+    title: "Finnor AI | Never Lose Another After-Hours Water Call",
     description:
-      "Live water data, real sizing math, quotes from your pricing tier, and one household memory that compounds revenue for two years.",
+      "The call you miss at 6pm is a job your competitor books tonight. FINNOR answers it, pulls real water data, and pre-qualifies the lead with a range from your pricing before your team ever drives out.",
     images: [
       {
         url: "https://finnorai.com/og-image.svg",

@@ -11,7 +11,7 @@ export const workflowDefinitions = {
   water_treatment: {
     label: "Water Treatment Quoting & Booking",
     shortLabel: "Water treatment",
-    agentTitle: "Water Treatment Quoting Agent",
+    agentTitle: "Water Treatment Booking & Lead Recovery",
     heroEyebrow: "Account-specific response workflow preview",
     heroDescription:
       "Choose the response workflow you want to test. FINNOR uses confirmed public information from your site to build a company-specific intake and handoff preview.",

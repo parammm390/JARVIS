@@ -51,7 +51,7 @@ export function Outcome() {
               transition={{ delay: 0.08 }}
               className="mt-6 max-w-2xl text-lg font-medium leading-relaxed text-slate-600"
             >
-              The quoting agent works inside hard rails. It quotes ranges computed from the water
+              The booking and lead recovery system works inside hard rails. It quotes ranges computed from the water
               and the tier you priced, books the visit, and keeps the record alive for years. It
               does not diagnose repairs, promise ETAs, or freelance a discount. Your team owns
               every final call.

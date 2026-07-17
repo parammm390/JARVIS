@@ -21,7 +21,7 @@ const trustSections = [
   },
   {
     icon: ShieldCheck,
-    title: "The agent never invents numbers or diagnoses",
+    title: "FINNOR never invents numbers or diagnoses",
     copy: "Quote ranges come only from the pricing you configured and the measured water data on record. FINNOR does not diagnose repairs, invent prices, guarantee ETAs, or make health claims about water.",
   },
   {

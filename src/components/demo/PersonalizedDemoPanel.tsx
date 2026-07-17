@@ -725,7 +725,7 @@ export function PersonalizedDemoPanel({
 
                 <div className="max-w-3xl">
                   <p className="mb-3 text-xs font-black uppercase tracking-[0.28em] text-slate-300">
-                    Personalized agent
+                    Personalized system
                   </p>
                   <h2 className="text-3xl font-black tracking-tighter text-white md:text-5xl">
                     {result.profile.company_name} • {workflow.agentTitle}
