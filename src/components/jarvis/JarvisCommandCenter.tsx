@@ -17,6 +17,7 @@ import { setMuted, sfx } from "./sound"
 import { LeadsView, WorkflowsView, InventoryView, InvoicesView, ComplianceView, ResearchView, VoiceConsoleView } from "./views"
 import { JarvisDataProvider, useJarvis } from "./lib/data-core"
 import { useVapiSession } from "./lib/useVapiSession"
+import { deriveMood } from "./lib/mood"
 import { useCommandPalette, CommandPalette } from "./lib/CommandPalette"
 import { BootSequence, shouldShowBoot } from "./lib/BootSequence"
 import { AreaSparkline } from "./lib/charts"
@@ -159,6 +160,7 @@ function Shell() {
   useEffect(() => setMuted(!soundOn), [soundOn])
 
   const live = !data.statsDegraded && data.stats !== null
+  const mood = deriveMood({ voiceLive: session.voiceState === "live" || session.voiceState === "speaking", degraded: data.statsDegraded })
 
   if (!mounted) {
     return (
@@ -172,9 +174,9 @@ function Shell() {
   }
 
   return (
-    <div className="jarvis-cursor-zone jarvis-root relative min-h-screen bg-[#04070f] text-[color:var(--j-text)]">
+    <div className="jarvis-cursor-zone jarvis-root relative min-h-screen bg-[#04070f] text-[color:var(--j-text)]" data-mood={mood}>
       {/* atmosphere pinned behind everything */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden">
+      <div className="pointer-events-none fixed inset-0 overflow-hidden" style={{ opacity: "var(--aurora-opacity)" }}>
         <ConsoleAtmosphere />
         <div className="jarvis-gridfloor jarvis-ambient" aria-hidden />
       </div>

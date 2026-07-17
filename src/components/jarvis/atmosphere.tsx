@@ -113,8 +113,8 @@ export function Glass({
 export function LiveDot({ className = "" }: { className?: string }) {
   return (
     <span className={`relative inline-flex h-1.5 w-1.5 ${className}`} aria-hidden>
-      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-teal-300 opacity-75" />
-      <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-teal-300" />
+      <span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75" style={{ background: "var(--live-dot-color)" }} />
+      <span className="relative inline-flex h-1.5 w-1.5 rounded-full" style={{ background: "var(--live-dot-color)" }} />
     </span>
   )
 }

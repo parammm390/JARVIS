@@ -10,10 +10,10 @@ import { motion, useReducedMotion } from "framer-motion"
 import { Mic, MicOff, PhoneOff } from "lucide-react"
 import { JarvisOrb } from "./JarvisOrb"
 import type { useVapiSession } from "../lib/useVapiSession"
+import { onFrame } from "../lib/raf-bus"
 
-function WaveformStrip({ volumeLevel, active }: { volumeLevel: number; active: boolean }) {
+function WaveformStrip({ volumeLevel, active, color = "rgba(56,189,248," }: { volumeLevel: number; active: boolean; color?: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const rafRef = useRef<number>()
   const volRef = useRef(volumeLevel)
   const historyRef = useRef<number[]>([])
   volRef.current = volumeLevel
@@ -31,16 +31,10 @@ function WaveformStrip({ volumeLevel, active }: { volumeLevel: number; active: b
     let last = 0
 
     function draw(t: number) {
-      if (t - last < 1000 / 30) {
-        rafRef.current = requestAnimationFrame(draw)
-        return
-      }
+      if (t - last < 1000 / 30) return
       last = t
       ctx!.clearRect(0, 0, W, H)
-      if (!active) {
-        rafRef.current = requestAnimationFrame(draw)
-        return
-      }
+      if (!active) return
       historyRef.current.push(volRef.current)
       if (historyRef.current.length > 85) historyRef.current.shift()
       const hist = historyRef.current
@@ -52,18 +46,14 @@ function WaveformStrip({ volumeLevel, active }: { volumeLevel: number; active: b
         const h = Math.max(2, v * (H - 8))
         const x = W - (hist.length - i) * (barW + gap)
         const alpha = 0.35 + (i / hist.length) * 0.65
-        ctx!.fillStyle = `rgba(56,189,248,${alpha})`
+        ctx!.fillStyle = `${color}${alpha})`
         ctx!.beginPath()
         ctx!.roundRect(x, mid - h / 2, barW, h, 1.2)
         ctx!.fill()
       }
-      rafRef.current = requestAnimationFrame(draw)
     }
-    rafRef.current = requestAnimationFrame(draw)
-    return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current)
-    }
-  }, [active])
+    return onFrame(draw)
+  }, [active, color])
 
   return <canvas ref={canvasRef} style={{ width: 340, height: 64, maxWidth: "100%" }} aria-hidden />
 }
