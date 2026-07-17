@@ -27,6 +27,7 @@ export function CommandBar({
   const [busy, setBusy] = useState(false)
   const [showKeyPrompt, setShowKeyPrompt] = useState(false)
   const [note, setNote] = useState<string | null>(null)
+  const live = session.voiceState === "live" || session.voiceState === "speaking"
   useEffect(() => {
     if (prefill) setCommand(prefill)
   }, [prefill])
@@ -64,7 +65,7 @@ export function CommandBar({
           boxShadow: "0 0 34px rgba(56,130,246,0.22), 0 0 80px rgba(34,211,238,0.1)",
         }}
         animate={reduced ? {} : { backgroundPosition: ["0% 50%", "300% 50%"] }}
-        transition={{ duration: busy ? 1.4 : 7, repeat: Infinity, ease: "linear" }}
+        transition={{ duration: busy ? 1.4 : live ? 3 : 7, repeat: Infinity, ease: "linear" }}
       >
         <div className="flex items-center gap-3 rounded-full bg-[#070d1a]/95 py-2 pl-2.5 pr-2.5 backdrop-blur-xl">
           <JarvisOrb size={40} voiceState={session.voiceState} volumeLevel={session.volumeLevel} />

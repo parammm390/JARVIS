@@ -184,6 +184,11 @@ function Shell() {
         <div className="jarvis-gridfloor jarvis-ambient" aria-hidden />
       </div>
       <EventFXLayer />
+      <div
+        className="pointer-events-none fixed inset-0 z-20 transition-opacity duration-700"
+        style={{ boxShadow: "inset 0 0 140px 30px rgba(2,6,16,0.85)", opacity: mood === "voice" ? 0.5 : 0 }}
+        aria-hidden
+      />
 
       <CustomCursor />
       {booting && <BootSequence onDone={() => setBooting(false)} />}

@@ -121,7 +121,7 @@ export function LiveCallPanel({ session }: { session: ReturnType<typeof useVapiS
               </div>
             </div>
             <div className="mt-3 w-full rounded-xl border border-white/6 bg-black/25 px-2 py-1">
-              <WaveformStrip volumeLevel={volumeLevel} active={live} />
+              <WaveformStrip volumeLevel={volumeLevel} active={live} color={voiceState === "speaking" ? "rgba(34,211,238," : "rgba(45,212,191,"} />
             </div>
           </>
         )}

@@ -47,6 +47,7 @@ export function HeaderBand({ session }: { session?: ReturnType<typeof useVapiSes
   const overdueCount = data.cashCollections?.invoicesByStatus.find((s) => s.status === "overdue")?.count ?? 0
   const eventsToday = data.events.filter((e) => new Date(e.occurredAt).toDateString() === new Date(data.now).toDateString()).length
   const voiceLive = session && (session.voiceState === "live" || session.voiceState === "speaking")
+  const volumeLevel = session?.volumeLevel ?? 0
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 px-1">
@@ -70,23 +71,40 @@ export function HeaderBand({ session }: { session?: ReturnType<typeof useVapiSes
       </div>
       <div className="flex items-center gap-2.5">
         <div
-          className={`flex items-center gap-2 rounded-full border px-3.5 py-1.5 ${
-            voiceLive ? "border-cyan-400/40 bg-cyan-400/8 text-cyan-200" : "border-white/10 bg-white/[0.03] text-[color:var(--j-text-dim)]"
+          className={`flex items-center gap-2 rounded-full border px-3.5 py-1.5 transition-[width] duration-300 ${
+            voiceLive ? "j-panel-hot border-cyan-400/40 bg-cyan-400/8 text-cyan-200" : "border-white/10 bg-white/[0.03] text-[color:var(--j-text-dim)]"
           }`}
         >
-          <span className="text-[10.5px] font-bold">{voiceLive ? "Listening…" : "Voice ready"}</span>
+          <span className="text-[10.5px] font-bold">
+            {session?.voiceState === "connecting" ? (
+              <span className="inline-flex items-center gap-1">
+                Connecting
+                {[0, 1, 2].map((i) => (
+                  <span key={i} className="h-1 w-1 rounded-full bg-cyan-300" style={{ animation: `jarvis-dot-blink 1.2s ${i * 0.2}s infinite` }} />
+                ))}
+              </span>
+            ) : voiceLive ? (
+              "Listening…"
+            ) : (
+              "Voice ready"
+            )}
+          </span>
           <span className="flex h-3.5 items-center gap-[2px]" aria-hidden>
-            {Array.from({ length: 9 }).map((_, i) => (
-              <span
-                key={i}
-                className={`w-[2px] rounded-full ${voiceLive ? "bg-cyan-300" : "bg-white/25"}`}
-                style={{
-                  height: `${5 + ((i * 43) % 8)}px`,
-                  transformOrigin: "center",
-                  animation: voiceLive ? `jarvis-listening-bar ${0.7 + (i % 4) * 0.13}s ease-in-out ${i * 0.06}s infinite` : undefined,
-                }}
-              />
-            ))}
+            {Array.from({ length: 9 }).map((_, i) =>
+              voiceLive ? (
+                <span
+                  key={i}
+                  className="w-[2px] rounded-full bg-cyan-300 transition-transform duration-100"
+                  style={{ height: "8px", transform: `scaleY(${0.3 + volumeLevel * 1.4})`, transformOrigin: "center" }}
+                />
+              ) : (
+                <span
+                  key={i}
+                  className="w-[2px] rounded-full bg-white/25"
+                  style={{ height: `${5 + ((i * 43) % 8)}px`, transformOrigin: "center" }}
+                />
+              ),
+            )}
           </span>
         </div>
         <div className="group relative">
