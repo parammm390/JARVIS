@@ -7,7 +7,7 @@
 // the actual step maps (including the installation workflow's genuine parallel branch)
 // as dim ambient circuitry — no ages, no counts, nothing data-shaped (§2).
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
 import { Check } from "lucide-react"
 import { LiveDot } from "../atmosphere"
@@ -108,6 +108,12 @@ function GraphEdges({ nodes, edges, edgeState }: { nodes: GraphNode[]; edges: Gr
   const maxRow = Math.max(...nodes.map((n) => n.row))
   const width = X(maxCol) + NODE_W
   const height = Y(maxRow) + NODE_H
+
+  // branch merges: any node fed by more than one edge gets a junction marker
+  const incomingCount = new Map<string, number>()
+  for (const e of edges) incomingCount.set(e.to, (incomingCount.get(e.to) ?? 0) + 1)
+  const junctionNodes = [...incomingCount.entries()].filter(([, n]) => n > 1).map(([id]) => byId.get(id)).filter(Boolean) as GraphNode[]
+
   return (
     <svg className="absolute left-0 top-0" width={width} height={height} style={{ overflow: "visible" }} aria-hidden>
       {edges.map((e, i) => {
@@ -133,14 +139,20 @@ function GraphEdges({ nodes, edges, edgeState }: { nodes: GraphNode[]; edges: Gr
               opacity={state === "future" ? 0.35 : state === "blueprint" ? 0.7 : 1}
             />
             {!reduced && state === "flowing" && (
-              <circle r={3} fill="var(--j-cyan)">
-                <animateMotion dur="1.4s" repeatCount="indefinite" path={d} />
-              </circle>
-            )}
-            {!reduced && state === "flowing" && (
-              <circle r={6} fill="var(--j-cyan)" opacity={0.25}>
-                <animateMotion dur="1.4s" repeatCount="indefinite" path={d} />
-              </circle>
+              <>
+                <circle r={3} fill="var(--j-cyan)">
+                  <animateMotion dur="1.4s" repeatCount="indefinite" path={d} />
+                </circle>
+                <circle r={2.2} fill="var(--j-cyan)" opacity={0.7}>
+                  <animateMotion dur="1.4s" repeatCount="indefinite" path={d} begin="0.15s" />
+                </circle>
+                <circle r={1.6} fill="var(--j-cyan)" opacity={0.45}>
+                  <animateMotion dur="1.4s" repeatCount="indefinite" path={d} begin="0.3s" />
+                </circle>
+                <circle r={6} fill="var(--j-cyan)" opacity={0.25}>
+                  <animateMotion dur="1.4s" repeatCount="indefinite" path={d} />
+                </circle>
+              </>
             )}
             {!reduced && state === "blueprint" && (
               <circle r={2} fill="rgba(94,197,255,0.8)">
@@ -150,6 +162,9 @@ function GraphEdges({ nodes, edges, edgeState }: { nodes: GraphNode[]; edges: Gr
           </g>
         )
       })}
+      {junctionNodes.map((n) => (
+        <circle key={n.id} cx={X(n.col)} cy={Y(n.row) + NODE_H / 2} r={3} fill="none" stroke="rgba(34,211,238,0.4)" strokeWidth={1.5} />
+      ))}
     </svg>
   )
 }
@@ -169,9 +184,20 @@ function GraphNodeCard({ node, now, blueprint }: { node: GraphNode; now: number;
   const tone = NODE_TONE[node.status] ?? NODE_TONE.pending!
   const isLeased = node.status === "leased"
   const isDone = node.status === "completed"
+  const prevStatusRef = useRef(node.status)
+  const [shockwaveKey, setShockwaveKey] = useState(0)
+
+  useEffect(() => {
+    if (prevStatusRef.current !== "completed" && node.status === "completed") {
+      setShockwaveKey((k) => k + 1)
+    }
+    prevStatusRef.current = node.status
+  }, [node.status])
+
   return (
     <div
-      className="jarvis-rise group absolute flex items-center gap-2.5 rounded-xl border bg-[rgba(10,19,36,0.92)] px-3 backdrop-blur-md transition-[opacity,border-color,box-shadow] duration-500"
+      data-node
+      className="j-node jarvis-rise group absolute flex items-center gap-2.5 rounded-xl border bg-[rgba(10,19,36,0.92)] px-3 backdrop-blur-md transition-[opacity,border-color,box-shadow] duration-500"
       style={{
         left: X(node.col),
         top: Y(node.row),
@@ -183,9 +209,17 @@ function GraphNodeCard({ node, now, blueprint }: { node: GraphNode; now: number;
         ["--rise-to" as string]: blueprint ? 0.75 : node.status === "pending" ? 0.55 : 1,
       }}
     >
+      <span aria-hidden className="absolute -left-[3px] top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full border" style={{ background: "#0a1324", borderColor: isLeased ? "var(--j-cyan)" : "var(--j-border)" }} />
+      <span aria-hidden className="absolute -right-[3px] top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full border" style={{ background: "#0a1324", borderColor: isLeased ? "var(--j-cyan)" : "var(--j-border)" }} />
+      {!reduced && shockwaveKey > 0 && <span key={shockwaveKey} className="jarvis-shockwave" />}
       <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border" style={{ background: tone.iconBg, borderColor: tone.border, color: tone.icon }}>
         <StepIcon stepType={node.stepType} className="h-4 w-4" />
         {isLeased && !reduced && <span className="jarvis-pulse-ring absolute inset-0 rounded-full border border-cyan-300/60" />}
+        {isLeased && (
+          <svg className={`absolute -inset-1.5 ${reduced ? "" : "jarvis-spin"}`} width={44} height={44} viewBox="0 0 44 44" aria-hidden>
+            <circle cx={22} cy={22} r={19} fill="none" stroke="var(--j-cyan)" strokeWidth={2} strokeDasharray="70 40" strokeLinecap="round" opacity={0.85} />
+          </svg>
+        )}
       </div>
       <div className="min-w-0">
         <div className="truncate text-[11.5px] font-bold capitalize leading-tight text-[color:var(--j-text)]">{humanizeStepType(node.stepType)}</div>
@@ -223,7 +257,7 @@ function Graph({ nodes, edges, edgeState, now, blueprint }: { nodes: GraphNode[]
   const maxRow = Math.max(...nodes.map((n) => n.row))
   return (
     <div className="j-scroll overflow-x-auto pb-1 pt-1">
-      <div className="relative" style={{ width: X(maxCol) + NODE_W, height: Y(maxRow) + NODE_H, minWidth: X(maxCol) + NODE_W }}>
+      <div data-graph className="relative" style={{ width: X(maxCol) + NODE_W, height: Y(maxRow) + NODE_H, minWidth: X(maxCol) + NODE_W }}>
         <GraphEdges nodes={nodes} edges={edges} edgeState={edgeState} />
         {nodes.map((n) => (
           <GraphNodeCard key={n.id} node={n} now={now} blueprint={blueprint} />
@@ -255,6 +289,15 @@ function LiveRunRow({ run, now, onOpen }: { run: WorkflowRun; now: number; onOpe
     return "future"
   }
 
+  const prevRunStatusRef = useRef(run.status)
+  const [sweepKey, setSweepKey] = useState(0)
+  useEffect(() => {
+    if (prevRunStatusRef.current !== "completed" && run.status === "completed") {
+      setSweepKey((k) => k + 1)
+    }
+    prevRunStatusRef.current = run.status
+  }, [run.status])
+
   return (
     <motion.div
       layout
@@ -262,7 +305,7 @@ function LiveRunRow({ run, now, onOpen }: { run: WorkflowRun; now: number; onOpe
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.98 }}
       transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-      className="rounded-2xl border border-[color:var(--j-border)] bg-white/[0.015] p-4"
+      className={`rounded-2xl border border-[color:var(--j-border)] bg-white/[0.015] p-4 ${sweepKey > 0 ? "jarvis-sweep" : ""}`}
     >
       <button onClick={onOpen} className="mb-3 flex w-full items-center justify-between gap-3 text-left">
         <div className="flex min-w-0 items-center gap-2.5">

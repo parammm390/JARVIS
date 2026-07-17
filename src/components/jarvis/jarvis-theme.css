@@ -240,6 +240,48 @@
   }
 }
 
+/* ---- Phase 3: Workflow Theater v4 ---- */
+@keyframes jarvis-spin {
+  to { transform: rotate(360deg); }
+}
+.jarvis-spin { animation: jarvis-spin 1.2s linear infinite; transform-origin: center; }
+
+@keyframes jarvis-shockwave {
+  from { transform: scale(0.4); opacity: 0.55; }
+  to { transform: scale(1.7); opacity: 0; }
+}
+.jarvis-shockwave {
+  position: absolute;
+  inset: -8px;
+  border: 1.5px solid var(--j-green);
+  border-radius: 14px;
+  animation: jarvis-shockwave 0.5s ease-out both;
+  pointer-events: none;
+}
+
+@keyframes jarvis-sweep {
+  from { background-position: -200% 0; }
+  to { background-position: 200% 0; }
+}
+.jarvis-sweep {
+  background-image: linear-gradient(100deg, transparent 30%, rgba(52, 211, 153, 0.18) 50%, transparent 70%);
+  background-size: 200% 100%;
+  animation: jarvis-sweep 0.9s ease-out both;
+}
+
+.j-node { transition: opacity 0.25s, transform 0.2s; }
+.j-node:hover { transform: scale(1.03); }
+[data-graph]:has(.j-node:hover) .j-node:not(:hover) { opacity: 0.35; }
+[data-graph]:has(.j-node:hover) svg { opacity: 0.45; }
+
+@media (prefers-reduced-motion: reduce) {
+  .jarvis-spin,
+  .jarvis-shockwave,
+  .jarvis-sweep {
+    animation-duration: 0.01s !important;
+  }
+}
+
 .jarvis-root [data-hidden="true"] .jarvis-ambient,
 .jarvis-root [data-hidden="true"] .jarvis-edge-flow,
 .jarvis-root [data-hidden="true"] .jarvis-edge-blueprint,
