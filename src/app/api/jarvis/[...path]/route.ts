@@ -19,6 +19,7 @@ const READ_MODEL_VIEWS = new Set([
   "sla-breaches",
   "follow-up-debt",
   "data-quality",
+  "household-360",
 ])
 const RESOURCE_KINDS = new Set(["households", "inventory", "invoices", "technicians", "visits", "compliance-policy", "workflows"])
 

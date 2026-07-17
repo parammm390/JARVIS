@@ -14,7 +14,7 @@ import "./jarvis-theme.css"
 import { ConsoleAtmosphere, LiveDot } from "./atmosphere"
 import { CustomCursor } from "./CustomCursor"
 import { setMuted, sfx } from "./sound"
-import { LeadsView, WorkflowsView, InventoryView, InvoicesView, ComplianceView, ResearchView, VoiceConsoleView } from "./views"
+import { LeadsView, WorkflowsView, InventoryView, InvoicesView, ComplianceView, ResearchView, VoiceConsoleView, CustomersView } from "./views"
 import { JarvisDataProvider, useJarvis } from "./lib/data-core"
 import { useVapiSession } from "./lib/useVapiSession"
 import { deriveMood } from "./lib/mood"
@@ -34,7 +34,7 @@ import { CommandBar } from "./panels/CommandBar"
 import { ChannelDonut, ActionMixBars, AiPerformance } from "./panels/AnalyticsRow"
 import { SystemConsole } from "./panels/SystemConsole"
 import { JarvisOrb } from "./panels/JarvisOrb"
-import { Activity, Boxes, CircleDollarSign, FlaskConical, Globe, LayoutGrid, PhoneCall, Users, Volume2, VolumeX, Workflow } from "lucide-react"
+import { Activity, BookUser, Boxes, CircleDollarSign, FlaskConical, Globe, LayoutGrid, PhoneCall, Users, Volume2, VolumeX, Workflow } from "lucide-react"
 
 const LiveCallPanel = dynamic(() => import("./panels/LiveCallPanel").then((m) => m.LiveCallPanel), { ssr: false })
 const ParticleField = dynamic(() => import("./panels/ParticleField").then((m) => m.ParticleField), { ssr: false })
@@ -43,6 +43,7 @@ const SIDEBAR = [
   { icon: LayoutGrid, label: "Command Center" },
   { icon: PhoneCall, label: "Voice Console" },
   { icon: Users, label: "Leads & CRM" },
+  { icon: BookUser, label: "Customers" },
   { icon: Workflow, label: "Workflows" },
   { icon: Boxes, label: "Inventory" },
   { icon: CircleDollarSign, label: "Invoices" },
@@ -271,6 +272,7 @@ function Shell() {
             {view === "Command Center" && <CommandCenterHome session={session} prefill={prefill} onNavigate={setView} igniteKey={igniteKey} />}
             {view === "Voice Console" && <VoiceConsoleView voiceState={session.voiceState === "speaking" ? "live" : session.voiceState} toggleVoice={session.toggleVoice} feed={session.transcript} />}
             {view === "Leads & CRM" && <LeadsView />}
+            {view === "Customers" && <CustomersView />}
             {view === "Workflows" && <WorkflowsView />}
             {view === "Inventory" && <InventoryView />}
             {view === "Invoices" && <InvoicesView />}

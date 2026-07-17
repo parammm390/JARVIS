@@ -156,6 +156,173 @@ export function LeadsView() {
   )
 }
 
+// ---------- Customers (household 360) ----------
+
+interface Household360 {
+  household: { id: string; address: string; contactInfo: Row; marketingConsent: boolean; createdAt: string }
+  contacts: Array<{ id: string; name: string; role: string | null; methods: Array<{ methodType: string; value: string; consent: boolean }> }>
+  leads: Array<{ id: string; name: string; status: string }>
+  quotes: Array<{ id: string; status: string; totalUsd: number | null }>
+  invoices: Array<{ id: string; status: string; amountUsd: number }>
+  workOrders: Array<{ id: string; status: string }>
+  timeline: Array<{ entityType: string; entityId: string; eventType: string; occurredAt: string }>
+  queryMs: number
+}
+
+function timelineIcon(eventType: string): string {
+  if (eventType.startsWith("quote_")) return "📄"
+  if (eventType.startsWith("appointment_")) return "📅"
+  if (eventType.startsWith("work_order_")) return "🔧"
+  if (eventType.startsWith("contact_")) return "👤"
+  if (eventType.startsWith("payment") || eventType.startsWith("invoice_")) return "💵"
+  return "•"
+}
+
+function relTime(iso: string): string {
+  const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000)
+  if (mins < 1) return "just now"
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.round(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  return `${Math.round(hrs / 24)}d ago`
+}
+
+export function CustomersView() {
+  const { rows, live } = useResource("households", SAMPLE_LEADS)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [detail, setDetail] = useState<Household360 | null>(null)
+  const [loadingDetail, setLoadingDetail] = useState(false)
+  const [detailError, setDetailError] = useState<string | null>(null)
+
+  async function select(id: string) {
+    setSelectedId(id)
+    setLoadingDetail(true)
+    setDetailError(null)
+    setDetail(null)
+    try {
+      const res = await jarvisGet<{ data: Household360 }>("read-models/household-360", { householdId: id })
+      setDetail(res.data)
+      sfx.tick()
+    } catch (e) {
+      setDetailError(e instanceof JarvisApiError ? e.message : "Couldn't load this household.")
+    } finally {
+      setLoadingDetail(false)
+    }
+  }
+
+  const openLeads = detail?.leads.filter((l) => l.status !== "converted" && l.status !== "disqualified").length ?? 0
+  const openQuotes = detail?.quotes.filter((q) => q.status === "sent").length ?? 0
+  const unpaidUsd = detail?.invoices.filter((i) => i.status === "sent" || i.status === "overdue").reduce((s, i) => s + i.amountUsd, 0) ?? 0
+  const openWorkOrders = detail?.workOrders.filter((w) => w.status !== "completed" && w.status !== "canceled").length ?? 0
+
+  return (
+    <Glass><div className="p-5">
+      <PanelHeader title="Customers" sub="Full household 360 — every canonical and legacy record, one traversal, real time." live={live} />
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]">
+        <div className="max-h-[560px] space-y-2 overflow-y-auto pr-1">
+          {rows.slice(0, 30).map((r, i) => {
+            const id = String(r.id ?? i)
+            const c = (r.contactInfo ?? {}) as Row
+            const active = selectedId === id
+            return (
+              <motion.button
+                key={id}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.03 }}
+                onClick={() => r.id && select(String(r.id))}
+                disabled={!r.id}
+                className={`block w-full rounded-xl border px-4 py-3 text-left transition ${
+                  active ? "border-teal-300/50 bg-teal-300/[0.06]" : "border-white/8 bg-slate-900/50 hover:border-white/20"
+                } disabled:cursor-not-allowed disabled:opacity-40`}
+              >
+                <div className="truncate text-[13px] font-black">{String(r.address ?? "(address pending)")}</div>
+                <div className="mt-1 flex items-center gap-2">
+                  {Boolean(c.name) && <span className="text-[11px] text-white/45">{String(c.name)}</span>}
+                  <span className={`rounded-full px-2 py-0.5 text-[9px] font-black ${r.marketingConsent ? "bg-teal-300/12 text-teal-200" : "bg-white/8 text-white/40"}`}>
+                    {r.marketingConsent ? "consent" : "no consent"}
+                  </span>
+                </div>
+              </motion.button>
+            )
+          })}
+          {rows.length === 0 && <div className="rounded-xl border border-white/8 px-4 py-6 text-center text-sm text-white/40">No households yet.</div>}
+        </div>
+
+        <div>
+          {!selectedId && (
+            <div className="flex h-full min-h-[240px] items-center justify-center rounded-xl border border-white/8 px-4 py-10 text-center text-sm text-white/40">
+              Select a household to see its full history.
+            </div>
+          )}
+          {selectedId && loadingDetail && (
+            <div className="flex min-h-[240px] items-center justify-center gap-2 text-sm text-white/50">
+              <Loader2 className="h-4 w-4 animate-spin" /> Loading household…
+            </div>
+          )}
+          {selectedId && detailError && !loadingDetail && (
+            <div className="rounded-xl border border-amber-300/20 bg-amber-300/5 px-4 py-3 text-[12px] text-amber-100">{detailError}</div>
+          )}
+          {detail && !loadingDetail && (
+            <div>
+              <div className="rounded-xl border border-white/8 bg-slate-900/50 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-[15px] font-black">{detail.household.address}</div>
+                    <span className={`mt-1.5 inline-block rounded-full px-2.5 py-1 text-[10px] font-black ${detail.household.marketingConsent ? "bg-teal-300/12 text-teal-200" : "bg-rose-300/12 text-rose-200"}`}>
+                      {detail.household.marketingConsent ? "marketing consent" : "no marketing consent"}
+                    </span>
+                  </div>
+                  <span className="shrink-0 text-[10px] text-white/30">{detail.queryMs.toFixed(1)}ms</span>
+                </div>
+                {detail.contacts.length > 0 && (
+                  <div className="mt-3 space-y-1.5 border-t border-white/8 pt-3">
+                    {detail.contacts.map((c) => (
+                      <div key={c.id} className="text-[12px] text-white/70">
+                        <span className="font-black text-white/90">{c.name}</span>
+                        {c.role && <span className="text-white/40"> · {c.role}</span>}
+                        {c.methods.map((m, j) => (
+                          <span key={j} className="ml-2 text-white/45">{m.value}</span>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
+                {[
+                  { label: "open leads", value: openLeads },
+                  { label: "open quotes", value: openQuotes },
+                  { label: "unpaid", value: `$${unpaidUsd.toLocaleString()}` },
+                  { label: "open work orders", value: openWorkOrders },
+                ].map((s) => (
+                  <div key={s.label} className="rounded-xl border border-white/8 bg-slate-900/50 px-3 py-3 text-center">
+                    <div className="text-xl font-black tabular-nums text-teal-200">{s.value}</div>
+                    <div className="mt-0.5 text-[9.5px] font-bold uppercase tracking-wide text-white/40">{s.label}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-4 max-h-64 space-y-1.5 overflow-y-auto">
+                {detail.timeline.length === 0 && <div className="rounded-xl border border-white/8 px-4 py-4 text-center text-[12px] text-white/40">No recorded activity yet.</div>}
+                {detail.timeline.map((e, i) => (
+                  <div key={i} className="flex items-center justify-between rounded-xl border border-white/8 bg-slate-900/40 px-3.5 py-2.5">
+                    <span className="text-[12.5px]">
+                      {timelineIcon(e.eventType)} <span className="font-black text-teal-200">{e.eventType.replaceAll("_", " ")}</span>
+                    </span>
+                    <span className="text-[10px] text-white/35">{relTime(e.occurredAt)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div></Glass>
+  )
+}
+
 // ---------- Workflows ----------
 
 const SAMPLE_WF: Row[] = [
