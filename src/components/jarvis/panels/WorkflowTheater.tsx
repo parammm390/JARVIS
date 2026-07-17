@@ -170,13 +170,18 @@ function GraphNodeCard({ node, now, blueprint }: { node: GraphNode; now: number;
   const isLeased = node.status === "leased"
   const isDone = node.status === "completed"
   return (
-    <motion.div
-      layout
-      initial={{ opacity: 0, scale: 0.92 }}
-      animate={{ opacity: blueprint ? 0.75 : node.status === "pending" ? 0.55 : 1, scale: 1 }}
-      transition={{ type: "spring", stiffness: 260, damping: 22 }}
-      className="group absolute flex items-center gap-2.5 rounded-xl border bg-[rgba(10,19,36,0.92)] px-3 backdrop-blur-md"
-      style={{ left: X(node.col), top: Y(node.row), width: NODE_W, height: NODE_H, borderColor: tone.border, boxShadow: tone.shadow }}
+    <div
+      className="jarvis-rise group absolute flex items-center gap-2.5 rounded-xl border bg-[rgba(10,19,36,0.92)] px-3 backdrop-blur-md transition-[opacity,border-color,box-shadow] duration-500"
+      style={{
+        left: X(node.col),
+        top: Y(node.row),
+        width: NODE_W,
+        height: NODE_H,
+        borderColor: tone.border,
+        boxShadow: tone.shadow,
+        opacity: blueprint ? 0.75 : node.status === "pending" ? 0.55 : 1,
+        ["--rise-to" as string]: blueprint ? 0.75 : node.status === "pending" ? 0.55 : 1,
+      }}
     >
       <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border" style={{ background: tone.iconBg, borderColor: tone.border, color: tone.icon }}>
         <StepIcon stepType={node.stepType} className="h-4 w-4" />
@@ -209,7 +214,7 @@ function GraphNodeCard({ node, now, blueprint }: { node: GraphNode; now: number;
           {node.terminalReason}
         </div>
       )}
-    </motion.div>
+    </div>
   )
 }
 
@@ -217,7 +222,7 @@ function Graph({ nodes, edges, edgeState, now, blueprint }: { nodes: GraphNode[]
   const maxCol = Math.max(...nodes.map((n) => n.col))
   const maxRow = Math.max(...nodes.map((n) => n.row))
   return (
-    <div className="overflow-x-auto pb-1 pt-1">
+    <div className="j-scroll overflow-x-auto pb-1 pt-1">
       <div className="relative" style={{ width: X(maxCol) + NODE_W, height: Y(maxRow) + NODE_H, minWidth: X(maxCol) + NODE_W }}>
         <GraphEdges nodes={nodes} edges={edges} edgeState={edgeState} />
         {nodes.map((n) => (
@@ -272,13 +277,89 @@ function LiveRunRow({ run, now, onOpen }: { run: WorkflowRun; now: number; onOpe
         <div className="flex shrink-0 items-center gap-2">
           <span className="font-mono text-[10px] tabular-nums text-[color:var(--j-text-dim)]">{pct}%</span>
           <div className="h-1.5 w-24 overflow-hidden rounded-full bg-white/8">
-            <motion.div className="h-full rounded-full bg-gradient-to-r from-teal-400 to-cyan-400" animate={{ width: `${pct}%` }} transition={{ duration: 0.6 }} />
+            <div className="h-full rounded-full bg-gradient-to-r from-teal-400 to-cyan-400 transition-[width] duration-500 ease-out" style={{ width: `${pct}%` }} />
           </div>
         </div>
       </button>
       <Graph nodes={nodes} edges={edges} edgeState={edgeState} now={now} />
     </motion.div>
   )
+}
+
+// Replay theater — re-enacts REAL terminal runs step-by-step so the circuit is always
+// alive. Labeled REPLAY with the run's real completion age; step timing is compressed
+// presentation, every node and outcome is the genuine record.
+function ReplayRow({ run, now }: { run: WorkflowRun; now: number }) {
+  const [cursor, setCursor] = useState(0)
+  const total = run.steps.length
+  const done = cursor >= total
+
+  useEffect(() => {
+    setCursor(0)
+    const t = setInterval(() => {
+      if (document.visibilityState === "hidden") return
+      setCursor((c) => Math.min(total, c + 1))
+    }, 2000)
+    return () => clearInterval(t)
+  }, [run.id, total])
+
+  const nodes: GraphNode[] = run.steps.map((s, i) => ({
+    id: s.id,
+    stepType: s.stepType,
+    col: i,
+    row: 0,
+    status: i < cursor ? (s.status === "failed" ? "failed" : "completed") : i === cursor && !done ? "leased" : "pending",
+    terminalReason: s.terminalReason,
+  }))
+  const edges: GraphEdge[] = run.steps.slice(1).map((s, i) => ({ from: run.steps[i]!.id, to: s.id }))
+  const edgeState = (e: GraphEdge): EdgeState => {
+    const toIdx = run.steps.findIndex((s) => s.id === e.to)
+    if (toIdx < cursor) return "done"
+    if (toIdx === cursor && !done) return "flowing"
+    return "future"
+  }
+  const pct = Math.round((Math.min(cursor, total) / total) * 100)
+
+  return (
+    <div
+      className={`jarvis-rise relative overflow-hidden rounded-2xl border p-4 transition-colors duration-700 ${
+        done ? "border-emerald-400/35 bg-emerald-400/[0.03]" : "border-[color:var(--j-border)] bg-white/[0.015]"
+      }`}
+    >
+      <div className="mb-3 flex w-full flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="truncate text-[13.5px] font-black text-[color:var(--j-text)]">{humanizeWorkflowType(run.workflowType)}</span>
+          <span className="j-chip bg-violet-400/12 text-violet-300">REPLAY</span>
+          <span className="j-chip bg-white/6 font-mono text-[color:var(--j-text-dim)]">
+            {run.status} {ageLabel(run.updatedAt, now)} ago
+          </span>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="font-mono text-[10px] tabular-nums text-[color:var(--j-text-dim)]">{pct}%</span>
+          <div className="h-1.5 w-24 overflow-hidden rounded-full bg-white/8">
+            <div className={`h-full rounded-full bg-gradient-to-r transition-[width] duration-500 ease-out ${done ? "from-emerald-400 to-teal-300" : "from-teal-400 to-cyan-400"}`} style={{ width: `${pct}%` }} />
+          </div>
+        </div>
+      </div>
+      <Graph nodes={nodes} edges={edges} edgeState={edgeState} now={now} />
+      <div className="mt-2 text-[9.5px] text-[color:var(--j-text-faint)]">Re-enactment of a real run from the ledger · step timing compressed for display.</div>
+    </div>
+  )
+}
+
+function ReplayTheater({ pool, now }: { pool: WorkflowRun[]; now: number }) {
+  const [idx, setIdx] = useState(0)
+  const run = pool[idx % pool.length]!
+  const total = run.steps.length
+
+  // advance to the next real run after the re-enactment finishes + a short hold
+  useEffect(() => {
+    const holdMs = (total + 1) * 2000 + 3000
+    const t = setTimeout(() => setIdx((i) => i + 1), holdMs)
+    return () => clearTimeout(t)
+  }, [run.id, total])
+
+  return <ReplayRow key={`${run.id}-${idx}`} run={run} now={now} />
 }
 
 function RunDrawer({ run, onClose }: { run: WorkflowRun; onClose: () => void }) {
@@ -332,32 +413,38 @@ export function WorkflowTheater() {
     return () => offs.forEach((off) => off())
   }, [])
 
+  const replayPool = data.terminalRuns
+    .filter((r) => r.steps.length >= 2)
+    .slice()
+    .sort((a, b) => (a.status === "completed" ? 0 : 1) - (b.status === "completed" ? 0 : 1))
+  const mode: "live" | "replay" | "blueprint" = runs.length > 0 ? "live" : replayPool.length > 0 ? "replay" : "blueprint"
+
   return (
-    <div className="j-panel relative overflow-hidden xl:col-span-2">
+    <div className="j-panel j-hud relative overflow-hidden xl:col-span-2">
       {/* ambient scan sweep */}
       <div className="jarvis-scan jarvis-ambient pointer-events-none absolute inset-y-0 w-1/3 bg-gradient-to-r from-transparent via-cyan-300/[0.03] to-transparent" aria-hidden />
       <div className="p-4 md:p-5">
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="j-label flex items-center gap-2">
-              {runs.length > 0 ? (
+              {mode === "live" ? (
                 <>
                   <LiveDot /> Live Workflow
                 </>
+              ) : mode === "replay" ? (
+                "Workflow Theater"
               ) : (
                 "Workflow Circuits"
               )}
             </span>
-            {runs.length > 0 ? (
-              <span className="j-chip bg-cyan-400/10 text-cyan-300">{runs.length} in flight</span>
-            ) : (
-              <span className="j-chip bg-blue-400/10 text-blue-300/80">BLUEPRINT</span>
-            )}
+            {mode === "live" && <span className="j-chip bg-cyan-400/10 text-cyan-300">{runs.length} in flight</span>}
+            {mode === "replay" && <span className="j-chip bg-violet-400/12 text-violet-300">replaying real runs</span>}
+            {mode === "blueprint" && <span className="j-chip bg-blue-400/10 text-blue-300/80">BLUEPRINT</span>}
           </div>
           <span className="j-chip bg-white/5 text-[color:var(--j-text-dim)]">every consequential step is gated</span>
         </div>
 
-        {runs.length > 0 ? (
+        {mode === "live" && (
           <div className="space-y-3">
             <AnimatePresence initial={false}>
               {visible.map((run) => (
@@ -366,7 +453,21 @@ export function WorkflowTheater() {
             </AnimatePresence>
             {extra > 0 && <div className="text-center text-[11px] text-[color:var(--j-text-dim)]">+{extra} more in flight</div>}
           </div>
-        ) : (
+        )}
+
+        {mode === "replay" && (
+          <div className="space-y-4">
+            <ReplayTheater pool={replayPool} now={data.now} />
+            <div className="rounded-2xl border border-white/5 bg-white/[0.008] p-4">
+              <div className="mb-2.5 text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--j-text-faint)]">
+                {BLUEPRINTS[2]!.title} · circuit map
+              </div>
+              <Graph nodes={BLUEPRINTS[2]!.nodes} edges={BLUEPRINTS[2]!.edges} edgeState={() => "blueprint"} now={data.now} blueprint />
+            </div>
+          </div>
+        )}
+
+        {mode === "blueprint" && (
           <div className="space-y-4">
             {BLUEPRINTS.map((bp) => (
               <div key={bp.title} className="rounded-2xl border border-white/5 bg-white/[0.008] p-4">

@@ -99,8 +99,15 @@ export function HeaderBand({ session }: { session?: ReturnType<typeof useVapiSes
           )}
         </div>
         <span className="hidden font-mono text-xs font-bold tabular-nums tracking-wider text-[color:var(--j-text-dim)] md:inline">{clock}</span>
-        {data.apiLatencyMs != null && (
-          <span className="hidden font-mono text-[10.5px] font-bold tabular-nums text-[color:var(--j-text-faint)] md:inline">▁ {data.apiLatencyMs}ms</span>
+        {data.lastPollAtMs != null && (
+          <span className="hidden items-center gap-1.5 font-mono text-[10.5px] font-bold tabular-nums text-[color:var(--j-text-faint)] md:flex">
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="absolute h-full w-full animate-ping rounded-full bg-cyan-300 opacity-60" />
+              <span className="relative h-1.5 w-1.5 rounded-full bg-cyan-300" />
+            </span>
+            synced {Math.max(0, Math.round((data.now - data.lastPollAtMs) / 1000))}s ago
+            {data.apiLatencyMs != null ? ` · ${data.apiLatencyMs}ms` : ""}
+          </span>
         )}
       </div>
     </div>

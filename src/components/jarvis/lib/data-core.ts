@@ -119,7 +119,7 @@ export interface SetupStatus {
 // Change events — the nervous system. Every panel pulse traces to a real diff.
 // ---------------------------------------------------------------------------
 
-export type JarvisEventType = "new-business-event" | "step-completed" | "run-completed" | "new-pending-action" | "action-decided"
+export type JarvisEventType = "new-business-event" | "step-completed" | "run-completed" | "new-pending-action" | "action-decided" | "poll-landed"
 type Listener = (detail: unknown) => void
 const listeners = new Map<JarvisEventType, Set<Listener>>()
 
@@ -154,6 +154,9 @@ interface JarvisDataState {
   pendingDegraded: boolean
   runs: WorkflowRun[]
   runsDegraded: boolean
+  /** Latest 20 REAL terminal runs (completed/failed) — fuel for the honest replay theater. */
+  terminalRuns: WorkflowRun[]
+  lastPollAtMs: number | null
   apiLatencyMs: number | null
   /** Last 30 REAL measured fast-lane latencies — the page's always-moving honest chart. */
   latencyHistory: number[]
@@ -195,6 +198,8 @@ const EMPTY_STATE: JarvisDataState = {
   pendingDegraded: false,
   runs: [],
   runsDegraded: false,
+  terminalRuns: [],
+  lastPollAtMs: null,
   apiLatencyMs: null,
   latencyHistory: [],
   metricHistory: {},
@@ -305,6 +310,7 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
       pendingDegraded: pendingRes.status === "rejected" || blockedRes.status === "rejected",
       runs: runs ?? prev.runs,
       runsDegraded: runsRes.status === "rejected",
+      lastPollAtMs: statsRes.status === "fulfilled" ? nowTs : prev.lastPollAtMs,
       apiLatencyMs: statsRes.status === "fulfilled" ? latency : prev.apiLatencyMs,
       latencyHistory: statsRes.status === "fulfilled" ? [...prev.latencyHistory, latency].slice(-30) : prev.latencyHistory,
       newPendingSinceOpen: pendingActions && firstPendingIdsRef.current ? Math.max(0, pendingActions.filter((a) => !firstPendingIdsRef.current!.has(a.id)).length) : prev.newPendingSinceOpen,
@@ -314,6 +320,7 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
         ...(runs ? { runs: [...(prev.metricHistory.runs ?? []), runs.length].slice(-40) } : {}),
       },
     }))
+    if (statsRes.status === "fulfilled") emit("poll-landed", { latency })
     // Poll failures surface as degraded/SIMULATION badges in the UI (§2, §9) — never
     // console.error here, so a kill-the-API pass stays console-clean by construction.
   }, [])
@@ -322,12 +329,13 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
   const prevEventIdsRef = useRef<Set<string>>(new Set())
   const pollMedium = useCallback(async () => {
     if (!visibleRef.current) return
-    const [eventsRes, commsRes] = await Promise.allSettled([
+    const [eventsRes, commsRes, allRunsRes] = await Promise.allSettled([
       jarvisGet<{ events: EventRow[] }>("events"),
       jarvisGet<{
         outbox: Array<{ id: string; channel: string; toNumber: string; content: string; simulated: boolean; createdAt: string }>
         communications: Array<{ id: string; channel: string; direction: string; content: string; timestamp: string; household: string }>
       }>("comms"),
+      jarvisGet<{ runs: WorkflowRun[] }>("workflows/runs"),
     ])
     if (eventsRes.status === "fulfilled") {
       const ids = new Set(eventsRes.value.events.map((e) => e.id))
@@ -349,6 +357,10 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
       eventsDegraded: eventsRes.status === "rejected",
       comms: merged ?? prev.comms,
       commsDegraded: commsRes.status === "rejected",
+      terminalRuns:
+        allRunsRes.status === "fulfilled"
+          ? allRunsRes.value.runs.filter((r) => r.status === "completed" || r.status === "failed" || r.status === "compensated")
+          : prev.terminalRuns,
     }))
   }, [])
 

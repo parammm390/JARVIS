@@ -30,6 +30,7 @@ import { ActivityRail } from "./panels/ActivityRail"
 import { PipelinePulse } from "./panels/PipelinePulse"
 import { CommandBar } from "./panels/CommandBar"
 import { ChannelDonut, ActionMixBars, AiPerformance } from "./panels/AnalyticsRow"
+import { SystemConsole } from "./panels/SystemConsole"
 import { JarvisOrb } from "./panels/JarvisOrb"
 import { Activity, Boxes, CircleDollarSign, FlaskConical, Globe, LayoutGrid, PhoneCall, Users, Volume2, VolumeX, Workflow } from "lucide-react"
 
@@ -56,7 +57,8 @@ function CommandCenterHome({ session, prefill, onNavigate }: { session: ReturnTy
         <WorkflowTheater />
         <LiveCallPanel session={session} />
       </div>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <SystemConsole />
         <ChannelDonut />
         <ActionMixBars />
         <AiPerformance />
@@ -174,6 +176,7 @@ function Shell() {
       {/* atmosphere pinned behind everything */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <ConsoleAtmosphere />
+        <div className="jarvis-gridfloor jarvis-ambient" aria-hidden />
       </div>
 
       <CustomCursor />

@@ -103,6 +103,88 @@
   40% { opacity: 1; }
 }
 
+/* ---- HUD corner brackets (WorkflowTheater, SystemConsole) ---- */
+.j-hud::before,
+.j-hud::after {
+  content: "";
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  pointer-events: none;
+  border-color: rgba(56, 189, 248, 0.5);
+  z-index: 1;
+}
+.j-hud::before {
+  top: 8px;
+  left: 8px;
+  border-top: 1.5px solid rgba(56, 189, 248, 0.5);
+  border-left: 1.5px solid rgba(56, 189, 248, 0.5);
+  border-top-left-radius: 6px;
+}
+.j-hud::after {
+  bottom: 8px;
+  right: 8px;
+  border-bottom: 1.5px solid rgba(56, 189, 248, 0.5);
+  border-right: 1.5px solid rgba(56, 189, 248, 0.5);
+  border-bottom-right-radius: 6px;
+}
+
+/* ---- perspective grid floor (pure ambient) ---- */
+@keyframes jarvis-gridscroll {
+  to { background-position-y: 46px; }
+}
+.jarvis-gridfloor {
+  position: fixed;
+  left: -10vw;
+  right: -10vw;
+  bottom: -4vh;
+  height: 42vh;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(34, 211, 238, 0.09) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(34, 211, 238, 0.09) 1px, transparent 1px);
+  background-size: 46px 46px;
+  transform: perspective(480px) rotateX(58deg);
+  transform-origin: top center;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 32%, rgba(0, 0, 0, 0.4) 78%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0%, black 32%, rgba(0, 0, 0, 0.4) 78%, transparent 100%);
+  animation: jarvis-gridscroll 9s linear infinite;
+}
+
+/* ---- terminal console ---- */
+.j-console-line {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+@keyframes jarvis-cursor {
+  0%, 45% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+.jarvis-cursor { animation: jarvis-cursor 1.1s step-end infinite; }
+
+/* ---- guaranteed entrance (CSS, immune to animation-lib edge cases) ---- */
+@keyframes jarvis-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: var(--rise-to, 1); transform: translateY(0); }
+}
+.jarvis-rise { animation: jarvis-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+@media (prefers-reduced-motion: reduce) {
+  .jarvis-rise { animation-duration: 0.01s; }
+}
+
+/* ---- chromeless horizontal scrollers (workflow graphs) ---- */
+.j-scroll {
+  scrollbar-width: none;
+}
+.j-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* ---- number glow for hero digits ---- */
+.j-num-glow {
+  text-shadow: 0 0 18px rgba(148, 210, 255, 0.35), 0 0 42px rgba(34, 211, 238, 0.14);
+}
+
 .jarvis-root [data-hidden="true"] .jarvis-ambient,
 .jarvis-root [data-hidden="true"] .jarvis-edge-flow,
 .jarvis-root [data-hidden="true"] .jarvis-edge-blueprint,
@@ -115,7 +197,9 @@
   .jarvis-edge-blueprint,
   .jarvis-scan,
   .jarvis-breathe,
-  .jarvis-pulse-ring {
+  .jarvis-pulse-ring,
+  .jarvis-gridfloor,
+  .jarvis-cursor {
     animation: none !important;
   }
 }
