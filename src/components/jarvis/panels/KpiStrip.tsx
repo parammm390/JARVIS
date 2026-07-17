@@ -4,11 +4,13 @@
 // sparkline, delta chip. Every number LIVE, every sparkline a real per-poll session
 // trend (metricHistory), every delta computed from real data or hidden.
 
+import { useEffect, useRef } from "react"
 import { motion } from "framer-motion"
 import { LiveDot } from "../atmosphere"
 import { CountUp } from "../lib/CountUp"
 import { AreaSparkline } from "../lib/charts"
 import { useJarvis } from "../lib/data-core"
+import { flash } from "../lib/EventFX"
 
 const usd = (n: number) => `$${Math.round(n).toLocaleString()}`
 
@@ -98,11 +100,28 @@ export function KpiStrip({ onNavigate }: { onNavigate?: (view: string) => void }
     },
   ]
 
+  const cardRefs = useRef<Map<string, HTMLElement>>(new Map())
+  const prevValues = useRef<Map<string, number>>(new Map())
+
+  useEffect(() => {
+    for (const c of cards) {
+      const prev = prevValues.current.get(c.key)
+      if (prev !== undefined && prev !== c.value) {
+        flash(cardRefs.current.get(c.key) ?? null)
+      }
+      prevValues.current.set(c.key, c.value)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cards.map((c) => c.value).join(",")])
+
   return (
     <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
       {cards.map((c, i) => (
         <motion.button
           key={c.key}
+          ref={(el) => {
+            if (el) cardRefs.current.set(c.key, el)
+          }}
           onClick={() => onNavigate?.(c.view)}
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}

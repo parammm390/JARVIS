@@ -1,10 +1,10 @@
 "use client"
 
 // §7.9 — newest business events, colored dot by family, humanized eventType.
-import { useEffect } from "react"
+import { useEffect, useRef, useState } from "react"
 import { motion } from "framer-motion"
 import { LiveDot } from "../atmosphere"
-import { useJarvis, onJarvisEvent, ageLabel } from "../lib/data-core"
+import { useJarvis, onJarvisEvent, ageLabel, type EventRow } from "../lib/data-core"
 import { eventPingThrottled } from "../sound"
 
 function familyColor(eventType: string): string {
@@ -18,12 +18,36 @@ function familyColor(eventType: string): string {
 
 export function ActivityRail() {
   const data = useJarvis()
-  const items = data.events.slice(0, 20)
+  const pausedRef = useRef(false)
+  const queueRef = useRef<EventRow[]>([])
+  const [displayEvents, setDisplayEvents] = useState<EventRow[]>(data.events)
 
   useEffect(() => onJarvisEvent("new-business-event", () => eventPingThrottled()), [])
 
+  useEffect(() => {
+    if (pausedRef.current) {
+      queueRef.current = data.events
+      return
+    }
+    setDisplayEvents(data.events)
+  }, [data.events])
+
+  const items = displayEvents.slice(0, 20)
+
   return (
-    <div className="j-panel">
+    <div
+      className="j-panel"
+      onMouseEnter={() => {
+        pausedRef.current = true
+      }}
+      onMouseLeave={() => {
+        pausedRef.current = false
+        if (queueRef.current.length > 0) {
+          setDisplayEvents(queueRef.current)
+          queueRef.current = []
+        }
+      }}
+    >
       <div className="p-4">
         <div className="mb-3 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-[color:var(--j-text-dim)]">
           <LiveDot /> System Activity

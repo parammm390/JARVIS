@@ -4,7 +4,7 @@
 // removal, inflight guard, rollback on error. Gated behind the owner admin key —
 // unauthenticated visitors see the queue but Approve/Reject prompts for the key.
 
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import { Check, X } from "lucide-react"
  
@@ -12,6 +12,16 @@ import { sfx } from "../sound"
 import { useJarvis, ageLabel, type PendingAction } from "../lib/data-core"
 import { jarvisPost, getJarvisKey, JarvisApiError } from "../lib/api"
 import { AdminKeyPrompt } from "../lib/AdminKeyPrompt"
+
+function NewCardScanline() {
+  const [show, setShow] = useState(true)
+  useEffect(() => {
+    const t = setTimeout(() => setShow(false), 800)
+    return () => clearTimeout(t)
+  }, [])
+  if (!show) return null
+  return <span aria-hidden className="jarvis-scanline pointer-events-none absolute inset-y-0 w-1/3 bg-gradient-to-r from-transparent via-cyan-300/20 to-transparent" />
+}
 
 function GroundedBadge({ field, status }: { field: string; status: string }) {
   const cls = status === "verified" ? "bg-teal-300/12 text-teal-200" : status === "not_found" ? "bg-red-400/12 text-red-300" : "bg-white/8 text-white/50"
@@ -84,8 +94,9 @@ export function ApprovalDock() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, x: -60 }}
                 transition={{ duration: 0.3 }}
-                className="rounded-xl border border-white/10 bg-white/[0.02] p-3"
+                className="relative overflow-hidden rounded-xl border border-white/10 bg-white/[0.02] p-3"
               >
+                <NewCardScanline />
                 <div className="mb-1 flex items-center justify-between text-[9px] font-black uppercase tracking-widest text-[color:var(--j-text-faint)]">
                   <span>{a.actionType.replaceAll("_", " ")}</span>
                   <span>{ageLabel(a.createdAt, data.now)}</span>

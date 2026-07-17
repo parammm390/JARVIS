@@ -197,6 +197,49 @@
   text-shadow: 0 0 18px rgba(148, 210, 255, 0.35), 0 0 42px rgba(34, 211, 238, 0.14);
 }
 
+/* ---- Phase 2: EventFX one-shot classes (end-state-neutral, 600ms max) ---- */
+@keyframes jarvis-flash {
+  0% { box-shadow: 0 0 0 1px var(--accent), 0 0 22px color-mix(in srgb, var(--accent) 45%, transparent); }
+  100% { box-shadow: none; }
+}
+.jarvis-flash { animation: jarvis-flash 0.6s ease-out; }
+
+@keyframes jarvis-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.25); }
+  100% { transform: scale(1); }
+}
+.jarvis-pop { animation: jarvis-pop 0.45s cubic-bezier(0.22, 1, 0.36, 1); }
+
+@keyframes jarvis-edgepulse {
+  0% { opacity: 0; }
+  25% { opacity: 1; }
+  100% { opacity: 0; }
+}
+.jarvis-edgepulse { animation: jarvis-edgepulse 0.3s ease-out; }
+
+@keyframes jarvis-datapulse {
+  from { transform: translateX(-4vw); }
+  to { transform: translateX(104vw); }
+}
+.jarvis-datapulse { animation: jarvis-datapulse 0.7s linear; }
+
+@keyframes jarvis-scanline {
+  from { transform: translateX(-110%); }
+  to { transform: translateX(110%); }
+}
+.jarvis-scanline { animation: jarvis-scanline 0.7s ease-out both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .jarvis-flash,
+  .jarvis-pop,
+  .jarvis-edgepulse,
+  .jarvis-datapulse,
+  .jarvis-scanline {
+    animation-duration: 0.01s !important;
+  }
+}
+
 .jarvis-root [data-hidden="true"] .jarvis-ambient,
 .jarvis-root [data-hidden="true"] .jarvis-edge-flow,
 .jarvis-root [data-hidden="true"] .jarvis-edge-blueprint,

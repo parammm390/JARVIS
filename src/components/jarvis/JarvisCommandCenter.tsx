@@ -18,6 +18,7 @@ import { LeadsView, WorkflowsView, InventoryView, InvoicesView, ComplianceView, 
 import { JarvisDataProvider, useJarvis } from "./lib/data-core"
 import { useVapiSession } from "./lib/useVapiSession"
 import { deriveMood } from "./lib/mood"
+import { EventFXLayer } from "./lib/EventFX"
 import { useCommandPalette, CommandPalette } from "./lib/CommandPalette"
 import { BootSequence, shouldShowBoot } from "./lib/BootSequence"
 import { AreaSparkline } from "./lib/charts"
@@ -105,7 +106,9 @@ function Sidebar({ view, setView }: { view: string; setView: (v: string) => void
               <Icon className={`h-4 w-4 ${active ? "text-cyan-300" : ""}`} />
               {label}
               {label === "Command Center" && (data.stats?.pending ?? 0) > 0 && (
-                <span className="ml-auto rounded-full bg-cyan-300 px-2 py-0.5 text-[10px] font-black text-slate-950">{data.stats?.pending}</span>
+                <span key={data.stats?.pending} className="jarvis-pop ml-auto rounded-full bg-cyan-300 px-2 py-0.5 text-[10px] font-black text-slate-950">
+                  {data.stats?.pending}
+                </span>
               )}
             </button>
           )
@@ -180,6 +183,7 @@ function Shell() {
         <ConsoleAtmosphere />
         <div className="jarvis-gridfloor jarvis-ambient" aria-hidden />
       </div>
+      <EventFXLayer />
 
       <CustomCursor />
       {booting && <BootSequence onDone={() => setBooting(false)} />}
