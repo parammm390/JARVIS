@@ -83,7 +83,7 @@ export function FAQ() {
             transition={{ delay: 0.08 }}
             className="mx-auto mt-5 max-w-2xl text-lg font-medium leading-relaxed text-slate-600"
           >
-            What FINNOR's booking and lead recovery system does, where the water data comes from, what stays human, and
+            What FINNOR&apos;s booking and lead recovery system does, where the water data comes from, what stays human, and
             exactly who should not buy this.
           </motion.p>
         </div>
