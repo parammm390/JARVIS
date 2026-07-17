@@ -10,10 +10,7 @@ import { motion } from "framer-motion"
 import { Check, Loader2, Play, Search, Send, ShieldCheck, X } from "lucide-react"
 import { Glass } from "./atmosphere"
 import { sfx } from "./sound"
-
-const API = process.env.NEXT_PUBLIC_OS_API_URL ?? "https://finnor-os-api.vercel.app"
-const TENANT = process.env.NEXT_PUBLIC_OS_TENANT_ID ?? "00000000-0000-4000-8000-000000000001"
-const HEADERS = { "content-type": "application/json", "x-tenant-id": TENANT, "x-user-role": "owner" }
+import { jarvisGet, jarvisPost, JarvisApiError } from "./lib/api"
 
 type Row = Record<string, unknown>
 
@@ -21,9 +18,8 @@ function useResource(kind: string, sample: Row[]): { rows: Row[]; live: boolean;
   const [rows, setRows] = useState<Row[]>(sample)
   const [live, setLive] = useState(false)
   const reload = useCallback(() => {
-    fetch(`${API}/api/resources/${kind}`, { headers: HEADERS, cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
-      .then((d: { rows: Row[] }) => {
+    jarvisGet<{ rows: Row[] }>(`resources/${kind}`)
+      .then((d) => {
         setRows(d.rows)
         setLive(true)
       })
@@ -39,11 +35,14 @@ function useResource(kind: string, sample: Row[]): { rows: Row[]; live: boolean;
 
 /** Run an instruction through the real planner pipeline; returns a speakable outcome. */
 async function instruct(instruction: string): Promise<string> {
-  const res = await fetch(`${API}/api/actions`, { method: "POST", headers: HEADERS, body: JSON.stringify({ instruction }) })
-  const body = (await res.json()) as { planned?: Array<{ id: string; actionType: string }>; error?: string }
-  if (!res.ok) throw new Error(body.error ?? "backend offline")
-  const n = body.planned?.length ?? 0
-  return n === 0 ? "Couldn't map that to an action — add more detail." : `Planned ${n} action${n === 1 ? "" : "s"} — consequential ones are waiting in the Command Center queue.`
+  try {
+    const body = await jarvisPost<{ planned?: Array<{ id: string; actionType: string }> }>("actions", { instruction })
+    const n = body.planned?.length ?? 0
+    return n === 0 ? "Couldn't map that to an action — add more detail." : `Planned ${n} action${n === 1 ? "" : "s"} — consequential ones are waiting in the Command Center queue.`
+  } catch (e) {
+    if (e instanceof JarvisApiError && e.status === 401) throw new Error("Enter the owner key in the Command Center to run write actions.")
+    throw e
+  }
 }
 
 // ---------- shared chrome ----------
@@ -400,13 +399,12 @@ export function ResearchView() {
           ? `Check recent reviews of ${query}`
           : `Search the web for: ${query}`
     try {
-      const res = await fetch(`${API}/api/actions`, { method: "POST", headers: HEADERS, body: JSON.stringify({ instruction }) })
-      if (!res.ok) throw new Error(((await res.json()) as { error?: string }).error ?? "backend offline")
+      await jarvisPost("actions", { instruction })
       // research actions are ungated — the result lands in the audit log; pull it
       await new Promise((r) => setTimeout(r, 1600))
-      const audit = await fetch(`${API}/api/audit?limit=10`, { headers: HEADERS, cache: "no-store" }).then((r) => r.json()) as {
+      const audit = await jarvisGet<{
         entries: Array<{ step: string; output: { output?: { results?: Array<{ title: string; url: string; snippet: string }>; spokenSummary?: string } } }>
-      }
+      }>("audit", { limit: "10" })
       const exec = audit.entries.find((e) => e.step === "execute" && e.output?.output?.results)
       if (exec?.output.output?.results) {
         setResults(exec.output.output.results.slice(0, 5))

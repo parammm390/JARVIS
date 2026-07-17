@@ -1,0 +1,121 @@
+.jarvis-root {
+  --j-bg: #04070f;
+  --j-bg-deep: #030509;
+  --j-panel: rgba(10, 18, 34, 0.82);
+  --j-panel-solid: #0a1222;
+  --j-border: rgba(59, 130, 246, 0.14);
+  --j-border-hot: rgba(34, 211, 238, 0.55);
+  --j-text: #e6f1ff;
+  --j-text-dim: #64809f;
+  --j-text-faint: #3d5573;
+  --j-cyan: #22d3ee;
+  --j-teal: #2dd4bf;
+  --j-blue: #3b82f6;
+  --j-violet: #8b5cf6;
+  --j-amber: #fbbf24;
+  --j-red: #f87171;
+  --j-green: #34d399;
+  --j-glow-cyan: 0 0 24px rgba(34, 211, 238, 0.35), 0 0 64px rgba(34, 211, 238, 0.12);
+  --j-glow-teal: 0 0 20px rgba(45, 212, 191, 0.3), 0 0 56px rgba(45, 212, 191, 0.1);
+  --j-glow-green: 0 0 20px rgba(52, 211, 153, 0.35);
+  --j-glow-red: 0 0 20px rgba(248, 113, 113, 0.3);
+  --j-glow-amber: 0 0 20px rgba(251, 191, 36, 0.3);
+}
+
+/* ---- panel recipe: every card on the page shares this skin ---- */
+.j-panel {
+  position: relative;
+  border-radius: 1.25rem;
+  border: 1px solid var(--j-border);
+  background:
+    linear-gradient(180deg, rgba(23, 42, 72, 0.55) 0%, rgba(9, 16, 30, 0.92) 22%, rgba(7, 13, 26, 0.94) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(148, 197, 255, 0.07),
+    0 18px 44px rgba(2, 6, 16, 0.55);
+  backdrop-filter: blur(18px);
+  transition: border-color 0.25s ease, box-shadow 0.3s ease, transform 0.2s ease;
+}
+.j-panel:hover {
+  border-color: rgba(56, 189, 248, 0.28);
+}
+.j-panel-hot {
+  border-color: var(--j-border-hot);
+  box-shadow:
+    inset 0 1px 0 rgba(148, 197, 255, 0.08),
+    0 0 26px rgba(34, 211, 238, 0.18),
+    0 18px 44px rgba(2, 6, 16, 0.55);
+}
+
+.j-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--j-text-dim);
+}
+
+.j-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border-radius: 9999px;
+  padding: 0.15rem 0.55rem;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+/* ---- motion primitives (transform/opacity/stroke-dashoffset only) ---- */
+@keyframes jarvis-dashflow {
+  to { stroke-dashoffset: -64; }
+}
+.jarvis-edge-flow { animation: jarvis-dashflow 1.2s linear infinite; }
+
+@keyframes jarvis-blueprint-shimmer {
+  to { stroke-dashoffset: -120; }
+}
+.jarvis-edge-blueprint { animation: jarvis-blueprint-shimmer 8s linear infinite; }
+
+@keyframes jarvis-pulse-ring {
+  0% { transform: scale(1); opacity: 0.7; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+.jarvis-pulse-ring { animation: jarvis-pulse-ring 1.6s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
+
+@keyframes jarvis-scan {
+  0% { transform: translateX(-110%); }
+  100% { transform: translateX(320%); }
+}
+.jarvis-scan { animation: jarvis-scan 5.5s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
+
+@keyframes jarvis-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.035); }
+}
+.jarvis-breathe { animation: jarvis-breathe 4s ease-in-out infinite; }
+
+@keyframes jarvis-listening-bar {
+  0%, 100% { transform: scaleY(0.3); }
+  50% { transform: scaleY(1); }
+}
+
+@keyframes jarvis-dot-blink {
+  0%, 80%, 100% { opacity: 0.2; }
+  40% { opacity: 1; }
+}
+
+.jarvis-root [data-hidden="true"] .jarvis-ambient,
+.jarvis-root [data-hidden="true"] .jarvis-edge-flow,
+.jarvis-root [data-hidden="true"] .jarvis-edge-blueprint,
+.jarvis-root [data-hidden="true"] .jarvis-scan {
+  animation-play-state: paused !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jarvis-edge-flow,
+  .jarvis-edge-blueprint,
+  .jarvis-scan,
+  .jarvis-breathe,
+  .jarvis-pulse-ring {
+    animation: none !important;
+  }
+}

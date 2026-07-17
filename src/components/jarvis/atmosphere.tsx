@@ -78,11 +78,43 @@ export function ConsoleAtmosphere() {
   )
 }
 
-/** Glass card with a gradient light-catching border. */
-export function Glass({ className = "", children }: { className?: string; children: React.ReactNode }) {
+const GLOW_SHADOW: Record<string, string> = {
+  cyan: "var(--j-glow-cyan)",
+  teal: "var(--j-glow-teal)",
+  green: "var(--j-glow-green)",
+  red: "var(--j-glow-red)",
+  amber: "var(--j-glow-amber)",
+  none: "none",
+}
+
+/** Glass card with a gradient light-catching border and an optional colored glow. */
+export function Glass({
+  className = "",
+  children,
+  glow = "none",
+}: {
+  className?: string
+  children: React.ReactNode
+  glow?: "cyan" | "teal" | "green" | "red" | "amber" | "none"
+}) {
   return (
     <div className={`rounded-2xl bg-gradient-to-br from-teal-200/25 via-white/[0.07] to-sky-400/20 p-[1px] ${className}`}>
-      <div className="h-full rounded-[calc(1rem-1px)] bg-[#071120]/85 backdrop-blur-xl">{children}</div>
+      <div
+        className="h-full rounded-[calc(1rem-1px)] bg-[#071120]/85 backdrop-blur-xl transition-shadow duration-300"
+        style={{ boxShadow: GLOW_SHADOW[glow] }}
+      >
+        {children}
+      </div>
     </div>
+  )
+}
+
+/** Small teal pulse marking a value as LIVE (read from a real endpoint this render). */
+export function LiveDot({ className = "" }: { className?: string }) {
+  return (
+    <span className={`relative inline-flex h-1.5 w-1.5 ${className}`} aria-hidden>
+      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-teal-300 opacity-75" />
+      <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-teal-300" />
+    </span>
   )
 }

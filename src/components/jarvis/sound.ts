@@ -68,4 +68,27 @@ export const sfx = {
   send: () => {
     tone(880, 0.07, 0, "sine", 0.5)
   },
+  stepTick: () => {
+    tone(1568, 0.06, 0, "sine", 0.3)
+  },
+  runDone: () => {
+    tone(659, 0.1)
+    tone(988, 0.16, 0.09)
+  },
+  eventPing: () => {
+    tone(2093, 0.04, 0, "sine", 0.15)
+  },
+  bootHum: () => {
+    tone(110, 1.2, 0, "sine", 0.08)
+    tone(165, 1.2, 0.1, "sine", 0.05)
+  },
+}
+
+let lastEventPing = 0
+/** Rate-limited to max 1 per 3s regardless of burst (§8). */
+export function eventPingThrottled(): void {
+  const now = Date.now()
+  if (now - lastEventPing < 3000) return
+  lastEventPing = now
+  sfx.eventPing()
 }
