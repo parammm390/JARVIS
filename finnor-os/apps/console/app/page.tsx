@@ -11,6 +11,7 @@ import { useCallback, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { usePoll } from "../lib/use-poll";
 import { useCountUp } from "../lib/use-count-up";
+import Timeline, { relativeTime, type BusinessEvent } from "../components/Timeline";
 
 interface Stats {
   pending: number;
@@ -38,34 +39,6 @@ interface WorkflowRun {
   createdAt: string;
   updatedAt: string;
   steps: WorkflowStep[];
-}
-
-interface BusinessEvent {
-  id: string;
-  entityType: string;
-  entityId: string;
-  eventType: string;
-  occurredAt: string;
-  source: string | null;
-}
-
-function relativeTime(iso: string): string {
-  const ms = Date.now() - new Date(iso).getTime();
-  const mins = Math.round(ms / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.round(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.round(hours / 24)}d ago`;
-}
-
-function eventIcon(eventType: string): string {
-  if (eventType.startsWith("quote_")) return "📄";
-  if (eventType.startsWith("appointment_")) return "📅";
-  if (eventType.startsWith("work_order_")) return "🔧";
-  if (eventType.startsWith("contact_")) return "👤";
-  if (eventType.startsWith("payment") || eventType.startsWith("invoice_")) return "💵";
-  return "•";
 }
 
 /** Live indicator for a genuinely polling panel: a radiating dot next to the
@@ -187,7 +160,7 @@ export default function Home() {
 
   const loadEvents = useCallback(async () => {
     try {
-      const res = await api<{ events: BusinessEvent[] }>("/api/events");
+      const res = await api<{ events: Array<BusinessEvent & { id: string }> }>("/api/events");
       const latest = res.events.slice(0, 20);
       const seen = seenEventIds.current;
       if (seen) {
@@ -270,23 +243,11 @@ export default function Home() {
 
         <section>
           <LiveHeading>Event timeline</LiveHeading>
-          {events === null && panelErrors.events && <p className="card" style={{ color: "var(--text-faint)" }}>Timeline is momentarily unavailable.</p>}
-          {events !== null && events.length === 0 && (
-            <div className="card" style={{ color: "var(--text-faint)", textAlign: "center" }}>No events yet.</div>
+          {panelErrors.events ? (
+            <p className="card" style={{ color: "var(--text-faint)" }}>Timeline is momentarily unavailable.</p>
+          ) : (
+            <Timeline events={events} freshEventIds={freshEventIds} />
           )}
-          {events?.map((e, i) => (
-            <div
-              key={e.id}
-              className={`card stagger-item${freshEventIds.has(e.id) ? " item-fresh" : ""}`}
-              style={{ "--i": Math.min(i, 12), padding: "10px 16px", display: "flex", justifyContent: "space-between" } as React.CSSProperties}
-            >
-              <span>
-                {eventIcon(e.eventType)}{" "}
-                <strong style={{ color: "var(--accent)" }}>{e.eventType.replaceAll("_", " ")}</strong>
-              </span>
-              <span style={{ color: "var(--text-faint)", fontSize: 12 }}>{relativeTime(e.occurredAt)}</span>
-            </div>
-          ))}
         </section>
       </div>
 

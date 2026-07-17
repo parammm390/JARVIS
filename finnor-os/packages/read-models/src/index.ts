@@ -24,8 +24,18 @@ import {
   workflowSteps,
   reconciliationCases,
   dataQualityFindings,
+  contacts,
+  contactMethods,
+  opportunities,
+  serviceVisits,
+  messages,
+  documents,
+  communicationsLog,
+  businessEvents,
+  equipment,
 } from "@finnor/db";
-import { and, eq, inArray, isNull, lt, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import { performance } from "node:perf_hooks";
 
 export interface PipelineHealth {
   leadsByStatus: Array<{ status: string; count: number }>;
@@ -266,4 +276,228 @@ export async function dataQuality(tenantId: string): Promise<DataQualitySummary>
       .groupBy(dataQualityFindings.findingType, dataQualityFindings.severity);
     return { byTypeAndSeverity: rows, totalUnresolved: rows.reduce((s, r) => s + r.count, 0) };
   });
+}
+
+// ---------------------------------------------------------------------------
+// Household 360 (Phase 11, docs/jarvis-99-phase-10-16-execution-plan.md §PHASE 11).
+// Traverses BOTH table generations linked to a household: pre-canonical (equipment,
+// service_visits, maintenance_agreements via serviceDue above, communications_log)
+// and canonical (contacts+contact_methods, leads, opportunities, quotes,
+// invoices+payments, work_orders, appointments, conversations+messages, documents),
+// plus the business_events timeline. This is a read-model + API + console surface —
+// deliberately NOT wired into the planner prompt (ground-truth §14: longTerm already
+// isn't serialized into the LLM prompt; extending that is a named non-goal here to
+// keep the token-budget blast radius at zero for this phase).
+// ---------------------------------------------------------------------------
+
+export interface Household360 {
+  household: { id: string; address: string; contactInfo: Record<string, unknown>; marketingConsent: boolean; createdAt: string };
+  contacts: Array<{ id: string; name: string; role: string | null; methods: Array<{ methodType: string; value: string; consent: boolean }> }>;
+  equipment: Array<{ id: string; type: string; model: string | null; installDate: string | null; source: string }>;
+  leads: Array<{ id: string; name: string; status: string; source: string | null; createdAt: string }>;
+  opportunities: Array<{ id: string; pipelineStage: string; expectedValueUsd: number | null; createdAt: string }>;
+  quotes: Array<{ id: string; status: string; totalUsd: number | null; createdAt: string }>;
+  invoices: Array<{ id: string; status: string; amountUsd: number; dueDate: string | null; payments: Array<{ amountUsd: number; method: string; status: string; receivedAt: string }> }>;
+  workOrders: Array<{ id: string; type: string; status: string; technicianId: string | null; scheduledAt: string | null; completedAt: string | null }>;
+  serviceVisits: Array<{ id: string; type: string; technicianId: string | null; scheduledAt: string | null; completedAt: string | null }>;
+  appointments: Array<{ id: string; subjectType: string; status: string; scheduledAt: string; technicianId: string | null }>;
+  conversations: Array<{ id: string; channel: string; status: string; lastActivityAt: string; messageCount: number }>;
+  documents: Array<{ id: string; kind: string; title: string; createdAt: string }>;
+  // communications_log (pre-canonical) is linked to a household by nothing but
+  // householdId — it is NOT unified with canonical `conversations` (no shared key,
+  // no migration path). Surfaced honestly as its own array rather than folded into
+  // `conversations`, which would misrepresent two unrelated systems as one.
+  legacyCommunications: Array<{ id: string; channel: string; direction: string; content: string; timestamp: string }>;
+  timeline: Array<{ entityType: string; entityId: string; eventType: string; occurredAt: string; payload: Record<string, unknown> }>;
+  queryMs: number;
+}
+
+const toNum = (v: string | null): number | null => (v === null ? null : Number(v));
+
+export async function household360(tenantId: string, householdId: string): Promise<Household360 | null> {
+  const start = performance.now();
+  const result = await withTenant(tenantId, async (db) => {
+    const [hh] = await db
+      .select()
+      .from(households)
+      .where(and(eq(households.id, householdId), eq(households.tenantId, tenantId)));
+    if (!hh) return null;
+
+    // Stage 1: direct children of the household — 11 parallel indexed selects.
+    const [contactRows, equipmentRows, leadRows, opportunityRows, quoteRows, invoiceRows, workOrderRows, serviceVisitRows, conversationRows, documentRows, legacyCommsRows] =
+      await Promise.all([
+        db.select().from(contacts).where(and(eq(contacts.tenantId, tenantId), eq(contacts.householdId, householdId))),
+        db.select().from(equipment).where(eq(equipment.householdId, householdId)),
+        db.select().from(leads).where(and(eq(leads.tenantId, tenantId), eq(leads.householdId, householdId))),
+        db.select().from(opportunities).where(and(eq(opportunities.tenantId, tenantId), eq(opportunities.householdId, householdId))),
+        db.select().from(quotes).where(and(eq(quotes.tenantId, tenantId), eq(quotes.householdId, householdId))),
+        db.select().from(invoices).where(and(eq(invoices.tenantId, tenantId), eq(invoices.householdId, householdId))),
+        db.select().from(workOrders).where(and(eq(workOrders.tenantId, tenantId), eq(workOrders.householdId, householdId))),
+        db.select().from(serviceVisits).where(eq(serviceVisits.householdId, householdId)),
+        db.select().from(conversations).where(and(eq(conversations.tenantId, tenantId), eq(conversations.householdId, householdId))),
+        db.select().from(documents).where(and(eq(documents.tenantId, tenantId), eq(documents.householdId, householdId))),
+        db.select().from(communicationsLog).where(eq(communicationsLog.householdId, householdId)),
+      ]);
+
+    const contactIds = contactRows.map((c) => c.id);
+    const invoiceIds = invoiceRows.map((i) => i.id);
+    const conversationIds = conversationRows.map((c) => c.id);
+    const leadIds = leadRows.map((l) => l.id);
+    const workOrderIds = workOrderRows.map((w) => w.id);
+
+    // Stage 2: children-of-children. Appointments are polymorphic (subjectType/
+    // subjectId, no householdId) — match direct household holds, plus holds whose
+    // subject is one of this household's leads or work orders (the two-stage hop).
+    const subjectConditions = [and(eq(appointments.subjectType, "household"), eq(appointments.subjectId, householdId))];
+    if (leadIds.length > 0) subjectConditions.push(and(eq(appointments.subjectType, "lead"), inArray(appointments.subjectId, leadIds)));
+    if (workOrderIds.length > 0) subjectConditions.push(and(eq(appointments.subjectType, "work_order"), inArray(appointments.subjectId, workOrderIds)));
+
+    const [methodRows, paymentRows, messageRows, appointmentRows] = await Promise.all([
+      contactIds.length > 0 ? db.select().from(contactMethods).where(inArray(contactMethods.contactId, contactIds)) : Promise.resolve([]),
+      invoiceIds.length > 0 ? db.select().from(payments).where(inArray(payments.invoiceId, invoiceIds)) : Promise.resolve([]),
+      conversationIds.length > 0 ? db.select().from(messages).where(inArray(messages.conversationId, conversationIds)) : Promise.resolve([]),
+      db.select().from(appointments).where(and(eq(appointments.tenantId, tenantId), or(...subjectConditions))),
+    ]);
+
+    // Timeline: business_events for the union of every entity collected above,
+    // batched per entityType so each batch hits business_events_entity_idx.
+    const entityBatches: Array<[string, string[]]> = [
+      ["household", [householdId]],
+      ["contact", contactIds],
+      ["lead", leadIds],
+      ["opportunity", opportunityRows.map((o) => o.id)],
+      ["quote", quoteRows.map((q) => q.id)],
+      ["invoice", invoiceIds],
+      ["work_order", workOrderIds],
+      ["appointment", appointmentRows.map((a) => a.id)],
+    ].filter(([, ids]) => (ids?.length ?? 0) > 0) as Array<[string, string[]]>;
+
+    const eventBatches = await Promise.all(
+      entityBatches.map(([entityType, ids]) =>
+        db
+          .select()
+          .from(businessEvents)
+          .where(and(eq(businessEvents.tenantId, tenantId), eq(businessEvents.entityType, entityType), inArray(businessEvents.entityId, ids))),
+      ),
+    );
+    const timeline = eventBatches
+      .flat()
+      .sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime())
+      .slice(0, 100)
+      .map((e) => ({
+        entityType: e.entityType,
+        entityId: e.entityId,
+        eventType: e.eventType,
+        occurredAt: e.occurredAt.toISOString(),
+        payload: e.payload as Record<string, unknown>,
+      }));
+
+    const methodsByContact = new Map<string, typeof methodRows>();
+    for (const m of methodRows) {
+      const list = methodsByContact.get(m.contactId) ?? [];
+      list.push(m);
+      methodsByContact.set(m.contactId, list);
+    }
+    const paymentsByInvoice = new Map<string, typeof paymentRows>();
+    for (const p of paymentRows) {
+      const list = paymentsByInvoice.get(p.invoiceId) ?? [];
+      list.push(p);
+      paymentsByInvoice.set(p.invoiceId, list);
+    }
+    const messageCountByConversation = new Map<string, number>();
+    for (const m of messageRows) {
+      messageCountByConversation.set(m.conversationId!, (messageCountByConversation.get(m.conversationId!) ?? 0) + 1);
+    }
+
+    const household360Result: Household360 = {
+      household: {
+        id: hh.id,
+        address: hh.address,
+        contactInfo: hh.contactInfo as Record<string, unknown>,
+        marketingConsent: hh.marketingConsent,
+        createdAt: hh.createdAt.toISOString(),
+      },
+      contacts: contactRows.map((c) => ({
+        id: c.id,
+        name: c.name,
+        role: c.role,
+        methods: (methodsByContact.get(c.id) ?? []).map((m) => ({ methodType: m.methodType, value: m.value, consent: m.consent })),
+      })),
+      equipment: equipmentRows.map((e) => ({
+        id: e.id,
+        type: e.type,
+        model: e.model,
+        installDate: e.installDate ? e.installDate.toISOString() : null,
+        source: e.source,
+      })),
+      leads: leadRows.map((l) => ({ id: l.id, name: l.name, status: l.status, source: l.source, createdAt: l.createdAt.toISOString() })),
+      opportunities: opportunityRows.map((o) => ({
+        id: o.id,
+        pipelineStage: o.pipelineStage,
+        expectedValueUsd: toNum(o.expectedValueUsd),
+        createdAt: o.createdAt.toISOString(),
+      })),
+      quotes: quoteRows.map((q) => ({ id: q.id, status: q.status, totalUsd: toNum(q.totalUsd), createdAt: q.createdAt.toISOString() })),
+      invoices: invoiceRows.map((i) => ({
+        id: i.id,
+        status: i.status,
+        amountUsd: Number(i.amountUsd),
+        dueDate: i.dueDate ? i.dueDate.toISOString() : null,
+        payments: (paymentsByInvoice.get(i.id) ?? []).map((p) => ({
+          amountUsd: Number(p.amountUsd),
+          method: p.method,
+          status: p.status,
+          receivedAt: p.receivedAt.toISOString(),
+        })),
+      })),
+      workOrders: workOrderRows.map((w) => ({
+        id: w.id,
+        type: w.type,
+        status: w.status,
+        technicianId: w.technicianId,
+        scheduledAt: w.scheduledAt ? w.scheduledAt.toISOString() : null,
+        completedAt: w.completedAt ? w.completedAt.toISOString() : null,
+      })),
+      serviceVisits: serviceVisitRows.map((v) => ({
+        id: v.id,
+        type: v.type,
+        technicianId: v.technicianId,
+        scheduledAt: v.scheduledAt ? v.scheduledAt.toISOString() : null,
+        completedAt: v.completedAt ? v.completedAt.toISOString() : null,
+      })),
+      appointments: appointmentRows.map((a) => ({
+        id: a.id,
+        subjectType: a.subjectType,
+        status: a.status,
+        scheduledAt: a.scheduledAt.toISOString(),
+        technicianId: a.technicianId,
+      })),
+      conversations: conversationRows.map((c) => ({
+        id: c.id,
+        channel: c.channel,
+        status: c.status,
+        lastActivityAt: c.lastActivityAt.toISOString(),
+        messageCount: messageCountByConversation.get(c.id) ?? 0,
+      })),
+      documents: documentRows.map((d) => ({ id: d.id, kind: d.kind, title: d.title, createdAt: d.createdAt.toISOString() })),
+      legacyCommunications: legacyCommsRows.map((c) => ({
+        id: c.id,
+        channel: c.channel,
+        direction: c.direction,
+        content: c.content,
+        timestamp: c.timestamp.toISOString(),
+      })),
+      timeline,
+      queryMs: 0, // set below, outside withTenant, so it reflects the whole call
+    };
+    return household360Result;
+  });
+
+  if (result === null) return null;
+  const queryMs = performance.now() - start;
+  if (queryMs > 500) {
+    // eslint-disable-next-line no-console
+    console.warn(`[household360] slow traversal for tenant ${tenantId}, household ${householdId}: ${queryMs.toFixed(1)}ms`);
+  }
+  return { ...result, queryMs };
 }

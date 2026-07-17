@@ -3,7 +3,7 @@
 // dashboard) can query the same real, typed views workflow 6's daily digest already
 // consumes — one query per named view, no LLM involved.
 
-import { requireContext, errorResponse } from "../../../../lib/auth";
+import { requireContext, errorResponse, AuthError } from "../../../../lib/auth";
 import {
   pipelineHealth,
   technicianLoad,
@@ -13,17 +13,23 @@ import {
   slaBreaches,
   followUpDebt,
   dataQuality,
+  household360,
 } from "@finnor/read-models";
 
-const VIEWS: Record<string, (tenantId: string) => Promise<unknown>> = {
-  "pipeline-health": pipelineHealth,
-  "technician-load": technicianLoad,
-  "stock-risk": stockRisk,
-  "cash-collections": cashCollections,
+const VIEWS: Record<string, (tenantId: string, searchParams: URLSearchParams) => Promise<unknown>> = {
+  "pipeline-health": (tenantId) => pipelineHealth(tenantId),
+  "technician-load": (tenantId) => technicianLoad(tenantId),
+  "stock-risk": (tenantId) => stockRisk(tenantId),
+  "cash-collections": (tenantId) => cashCollections(tenantId),
   "service-due": (tenantId) => serviceDue(tenantId),
   "sla-breaches": (tenantId) => slaBreaches(tenantId),
   "follow-up-debt": (tenantId) => followUpDebt(tenantId),
-  "data-quality": dataQuality,
+  "data-quality": (tenantId) => dataQuality(tenantId),
+  "household-360": (tenantId, searchParams) => {
+    const householdId = searchParams.get("householdId");
+    if (!householdId) throw new AuthError("householdId query param required", 400);
+    return household360(tenantId, householdId);
+  },
 };
 
 export async function GET(req: Request, { params }: { params: { view: string } }): Promise<Response> {
@@ -34,7 +40,10 @@ export async function GET(req: Request, { params }: { params: { view: string } }
     if (!fn) {
       return Response.json({ error: `Unknown read-model "${view}". Valid views: ${Object.keys(VIEWS).join(", ")}` }, { status: 404 });
     }
-    const data = await fn(ctx.tenantId);
+    const data = await fn(ctx.tenantId, new URL(req.url).searchParams);
+    if (data === null) {
+      return Response.json({ error: "No such household" }, { status: 404 });
+    }
     return Response.json({ view, data });
   } catch (err) {
     return errorResponse(err);

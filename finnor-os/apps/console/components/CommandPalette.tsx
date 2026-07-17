@@ -36,6 +36,7 @@ export default function CommandPalette() {
     () => [
       { id: "nav-home", label: "Go to Mission Control", hint: "home", run: () => router.push("/") },
       { id: "nav-confirm", label: "Go to Confirmation Queue", hint: "confirm", run: () => router.push("/confirm") },
+      { id: "nav-customers", label: "Go to Customers", hint: "customers", run: () => router.push("/customers") },
       { id: "nav-audit", label: "Go to Audit Log", hint: "audit", run: () => router.push("/audit") },
       { id: "nav-policy", label: "Go to Policies", hint: "policy", run: () => router.push("/policy") },
       { id: "nav-comms", label: "Go to Communications", hint: "comms", run: () => router.push("/comms") },

@@ -120,21 +120,23 @@ describe.skipIf(!available)("proactive scan handlers", () => {
         timestamp: new Date(Date.now() - 4 * 30 * 24 * 3600 * 1000), // 4 months ago — inside the 3-6 window
       }),
     );
-    // No unique constraint on (tenant_id, action_type) to target with onConflict —
-    // delete-then-insert is the safe idempotent pattern used elsewhere in this repo.
-    await withTenant(TENANT_ID, (db) =>
+    // No unique constraint on (tenant_id, action_type) to target with onConflict, and
+    // delete-then-insert is unsafe here: action_log is append-only (§19 — UPDATE/DELETE
+    // rejected by trigger), so once a drafted action against this policy has been
+    // logged, deleting the policy row permanently violates domain_actions_policy_id_fkey
+    // on every subsequent run. Update-in-place if the row exists, insert otherwise.
+    const [existingPolicy] = await withTenant(TENANT_ID, (db) =>
       db
-        .delete(domainPolicies)
+        .select()
+        .from(domainPolicies)
         .where(and(eq(domainPolicies.tenantId, TENANT_ID), eq(domainPolicies.actionType, "bulk_notify_existing_customers"))),
     );
-    await withTenant(TENANT_ID, (db) =>
-      db.insert(domainPolicies).values({
-        tenantId: TENANT_ID,
-        actionType: "bulk_notify_existing_customers",
-        policy: { winback_offer_script: "Test win-back: 15% off, book a free water test." },
-        requiresConfirmation: true,
-      }),
-    );
+    const policyValues = { policy: { winback_offer_script: "Test win-back: 15% off, book a free water test." }, requiresConfirmation: true };
+    if (existingPolicy) {
+      await withTenant(TENANT_ID, (db) => db.update(domainPolicies).set(policyValues).where(eq(domainPolicies.id, existingPolicy.id)));
+    } else {
+      await withTenant(TENANT_ID, (db) => db.insert(domainPolicies).values({ tenantId: TENANT_ID, actionType: "bulk_notify_existing_customers", ...policyValues }));
+    }
     await scanColdLeads({ tenantId: TENANT_ID });
     const drafted = await withTenant(TENANT_ID, (db) =>
       db.select().from(domainActions).where(and(eq(domainActions.tenantId, TENANT_ID), eq(domainActions.actionType, "bulk_notify_existing_customers"))),
