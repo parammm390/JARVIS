@@ -299,6 +299,26 @@
   }
 }
 
+/* ---- Phase 7: Boot choreography v2 ---- */
+@keyframes jarvis-boot-converge {
+  from { transform: rotate(var(--frag-rotate)) translateY(-14px); opacity: 0.9; }
+  to { transform: rotate(var(--frag-rotate)) translateY(0); opacity: 0; }
+}
+.jarvis-boot-fragment { animation: jarvis-boot-converge 0.9s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+@keyframes jarvis-boot-line {
+  from { clip-path: inset(0 100% 0 0); opacity: 0.4; }
+  to { clip-path: inset(0 0 0 0); opacity: 1; }
+}
+.jarvis-boot-line { animation: jarvis-boot-line 0.35s steps(18) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .jarvis-boot-fragment,
+  .jarvis-boot-line {
+    animation-duration: 0.01s !important;
+  }
+}
+
 .jarvis-root [data-hidden="true"] .jarvis-ambient,
 .jarvis-root [data-hidden="true"] .jarvis-edge-flow,
 .jarvis-root [data-hidden="true"] .jarvis-edge-blueprint,

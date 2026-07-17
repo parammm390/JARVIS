@@ -100,10 +100,43 @@ export function BootSequence({ onDone }: { onDone: () => void }) {
         onClick={skip}
         style={{ pointerEvents: released ? "none" : "auto" }}
       >
-        <JarvisOrb size={96} voiceState="connecting" />
+        <div
+          aria-hidden
+          className="jarvis-rise pointer-events-none absolute inset-0 opacity-0"
+          style={{
+            ["--rise-to" as string]: 1,
+            animationDuration: "1s",
+            animationDelay: "0.6s",
+            backgroundImage: "linear-gradient(rgba(34,211,238,0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(34,211,238,0.07) 1px, transparent 1px)",
+            backgroundSize: "46px 46px",
+            maskImage: "radial-gradient(60% 50% at 50% 60%, black, transparent)",
+            WebkitMaskImage: "radial-gradient(60% 50% at 50% 60%, black, transparent)",
+          }}
+        />
+        <div className="relative flex h-24 w-24 items-center justify-center">
+          {[0, 120, 240].map((deg) => (
+            <span
+              key={deg}
+              aria-hidden
+              className="jarvis-boot-fragment absolute h-16 w-16 rounded-full border-2 border-cyan-300/70"
+              style={{
+                clipPath: "inset(0 0 60% 0)",
+                transform: `rotate(${deg}deg) translateY(-14px)`,
+                ["--frag-rotate" as string]: `${deg}deg`,
+              }}
+            />
+          ))}
+          <div className="jarvis-rise" style={{ ["--rise-to" as string]: 1, animationDelay: "0.7s", animationDuration: "0.4s" }}>
+            <JarvisOrb size={96} voiceState="connecting" />
+          </div>
+        </div>
         <div className="mt-8 space-y-2 text-center">
-          {lines.map((l) => (
-            <div key={l.id} className="flex items-center gap-2 text-[12px]">
+          {lines.map((l, i) => (
+            <div
+              key={l.id}
+              className="jarvis-boot-line flex items-center gap-2 overflow-hidden text-[12px]"
+              style={{ animationDelay: `${i * 0.12}s` }}
+            >
               <span className={l.state === "online" ? "text-teal-300" : l.state === "standalone" ? "text-amber-300" : "text-white/30"}>
                 {l.state === "online" ? "✓ ONLINE" : l.state === "standalone" ? "— STANDALONE" : "…"}
               </span>

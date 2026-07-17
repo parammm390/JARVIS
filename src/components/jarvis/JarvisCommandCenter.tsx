@@ -61,36 +61,32 @@ function CommandCenterHome({
   onNavigate: (v: string) => void
   igniteKey: number
 }) {
-  const sectionProps = (idx: number) => ({
-    key: `${igniteKey}-${idx}`,
-    className: "jarvis-rise",
-    style: { animationDelay: `${idx * 60}ms` } as React.CSSProperties,
-  })
+  const delay = (idx: number) => ({ animationDelay: `${idx * 60}ms` }) as React.CSSProperties
   return (
     <div className="space-y-4">
-      <div {...sectionProps(0)}>
+      <div key={`${igniteKey}-0`} className="jarvis-rise" style={delay(0)}>
         <HeaderBand session={session} />
       </div>
-      <div {...sectionProps(1)}>
+      <div key={`${igniteKey}-1`} className="jarvis-rise" style={delay(1)}>
         <KpiStrip onNavigate={onNavigate} />
       </div>
-      <div {...sectionProps(2)} className={`${sectionProps(2).className} grid grid-cols-1 gap-4 xl:grid-cols-3`}>
+      <div key={`${igniteKey}-2`} className="jarvis-rise grid grid-cols-1 gap-4 xl:grid-cols-3" style={delay(2)}>
         <WorkflowTheater />
         <LiveCallPanel session={session} />
       </div>
-      <div {...sectionProps(3)} className={`${sectionProps(3).className} grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4`}>
+      <div key={`${igniteKey}-3`} className="jarvis-rise grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4" style={delay(3)}>
         <SystemConsole />
         <ChannelDonut />
         <ActionMixBars />
         <AiPerformance />
       </div>
-      <div {...sectionProps(4)} className={`${sectionProps(4).className} grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4`}>
+      <div key={`${igniteKey}-4`} className="jarvis-rise grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4" style={delay(4)}>
         <PipelinePulse />
         <ApprovalDock />
         <CommsFeed />
         <ActivityRail />
       </div>
-      <div {...sectionProps(5)}>
+      <div key={`${igniteKey}-5`} className="jarvis-rise" style={delay(5)}>
         <CommandBar session={session} prefill={prefill} />
       </div>
     </div>
@@ -219,7 +215,14 @@ function Shell() {
       />
 
       <CustomCursor />
-      {booting && <BootSequence onDone={() => setBooting(false)} />}
+      {booting && (
+        <BootSequence
+          onDone={() => {
+            setBooting(false)
+            setIgniteKey((k) => k + 1)
+          }}
+        />
+      )}
       {palette.open && (
         <CommandPalette
           onClose={() => palette.setOpen(false)}
