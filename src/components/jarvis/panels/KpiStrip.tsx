@@ -5,7 +5,6 @@
 // trend (metricHistory), every delta computed from real data or hidden.
 
 import { useEffect, useRef } from "react"
-import { motion } from "framer-motion"
 import { LiveDot } from "../atmosphere"
 import { CountUp } from "../lib/CountUp"
 import { AreaSparkline } from "../lib/charts"
@@ -117,38 +116,35 @@ export function KpiStrip({ onNavigate }: { onNavigate?: (view: string) => void }
   return (
     <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
       {cards.map((c, i) => (
-        <motion.button
+        <button
           key={c.key}
           ref={(el) => {
             if (el) cardRefs.current.set(c.key, el)
           }}
           onClick={() => onNavigate?.(c.view)}
-          initial={{ opacity: 0, y: 14 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: i * 0.06, ease: [0.22, 1, 0.36, 1] }}
-          whileHover={{ y: -3 }}
-          className="j-panel group relative overflow-hidden p-4 text-left"
+          style={{ animationDelay: `${i * 60}ms`, ["--rise-to" as string]: 1 }}
+          className="jarvis-rise j-panel group relative min-h-[118px] overflow-hidden p-3.5 text-left transition-transform duration-150 hover:-translate-y-0.5"
         >
           {/* accent glow seep, per-card color */}
           <div
             className="pointer-events-none absolute -right-8 -top-10 h-28 w-28 rounded-full opacity-[0.12] blur-2xl transition-opacity group-hover:opacity-25"
             style={{ background: c.color }}
           />
-          <div className="flex items-center gap-1.5">
-            <LiveDot />
-            <span className="j-label">{c.label}</span>
-          </div>
-          <div className="mt-2 flex items-end justify-between gap-2">
-            <CountUp value={c.value} format={c.format} className="text-3xl font-black tabular-nums leading-none text-[color:var(--j-text)]" />
-            {c.spark.length > 1 && <AreaSparkline values={c.spark} width={92} height={36} color={c.color} className="shrink-0" />}
-          </div>
-          <div className="mt-2 flex items-center gap-2">
-            <span className="truncate text-[11px] text-[color:var(--j-text-dim)]">{c.sub}</span>
+          <div className="flex items-center justify-between gap-2">
+            <span className="flex items-center gap-1.5">
+              <LiveDot />
+              <span className="j-label">{c.label}</span>
+            </span>
             {c.delta && (
               <span className={`j-chip shrink-0 ${c.deltaTone === "warn" ? "bg-amber-400/12 text-amber-300" : "bg-teal-400/12 text-teal-300"}`}>{c.delta}</span>
             )}
           </div>
-        </motion.button>
+          <div className="mt-2 flex items-end justify-between gap-2">
+            <CountUp value={c.value} format={c.format} className="j-num-glow text-[30px] font-black tabular-nums leading-none text-[color:var(--j-text)]" />
+            {c.spark.length > 1 && <AreaSparkline values={c.spark} width={96} height={40} color={c.color} className="w-24 shrink-0" />}
+          </div>
+          <div className="mt-1.5 truncate text-[11px] text-[color:var(--j-text-dim)]">{c.sub}</div>
+        </button>
       ))}
     </div>
   )
