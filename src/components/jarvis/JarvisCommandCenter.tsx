@@ -121,7 +121,7 @@ function Sidebar({ view, setView }: { view: string; setView: (v: string) => void
               }`}
             >
               {active && <motion.span layoutId="jarvis-nav-glow" className="absolute inset-y-1.5 left-0 w-[3px] rounded-full bg-cyan-300 shadow-[0_0_10px_rgba(34,211,238,0.8)]" />}
-              <Icon className={`h-4 w-4 ${active ? "text-cyan-300" : ""}`} />
+              <Icon className={`h-4 w-4 transition-colors duration-200 ${active ? "text-cyan-300" : ""}`} />
               {label}
               {label === "Command Center" && (data.stats?.pending ?? 0) > 0 && (
                 <span key={data.stats?.pending} className="jarvis-pop ml-auto rounded-full bg-cyan-300 px-2 py-0.5 text-[10px] font-black text-slate-950">

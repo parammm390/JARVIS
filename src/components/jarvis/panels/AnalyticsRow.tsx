@@ -36,11 +36,13 @@ export function ChannelDonut() {
   const total = segments.reduce((s, x) => s + x.value, 0)
 
   return (
-    <div className="j-panel p-4 md:p-5">
-      <div className="mb-3 flex items-center gap-2">
-        <LiveDot />
-        <span className="j-label">Comms by Channel</span>
+    <div className="j-panel">
+      <div className="flex items-center justify-between border-b border-white/6 px-4 py-2.5">
+        <span className="j-label flex items-center gap-2">
+          <LiveDot /> Comms by Channel
+        </span>
       </div>
+      <div className="px-4 py-3">
       {total === 0 ? (
         <div className="py-8 text-center text-[12px] text-[color:var(--j-text-faint)]">No communications yet.</div>
       ) : (
@@ -58,6 +60,7 @@ export function ChannelDonut() {
         </div>
       )}
       <p className="mt-3 text-[9.5px] text-[color:var(--j-text-faint)]">From the real communications log, newest 100.</p>
+      </div>
     </div>
   )
 }
@@ -74,11 +77,13 @@ export function ActionMixBars() {
   const max = Math.max(1, ...rows.map((r) => r.total))
 
   return (
-    <div className="j-panel p-4 md:p-5">
-      <div className="mb-3 flex items-center gap-2">
-        <LiveDot />
-        <span className="j-label">What Finnor Works On</span>
+    <div className="j-panel">
+      <div className="flex items-center justify-between border-b border-white/6 px-4 py-2.5">
+        <span className="j-label flex items-center gap-2">
+          <LiveDot /> What Finnor Works On
+        </span>
       </div>
+      <div className="px-4 py-3">
       {rows.length === 0 ? (
         <div className="py-8 text-center text-[12px] text-[color:var(--j-text-faint)]">No planned actions yet.</div>
       ) : (
@@ -95,6 +100,7 @@ export function ActionMixBars() {
         </div>
       )}
       <p className="mt-3 text-[9.5px] text-[color:var(--j-text-faint)]">Planner action counts, last 90 days.</p>
+      </div>
     </div>
   )
 }
@@ -113,11 +119,13 @@ export function AiPerformance() {
   }, [data.insights])
 
   return (
-    <div className="j-panel p-4 md:p-5">
-      <div className="mb-3 flex items-center gap-2">
-        <LiveDot />
-        <span className="j-label">System Performance</span>
+    <div className="j-panel">
+      <div className="flex items-center justify-between border-b border-white/6 px-4 py-2.5">
+        <span className="j-label flex items-center gap-2">
+          <LiveDot /> System Performance
+        </span>
       </div>
+      <div className="px-4 py-3">
       <div className="space-y-2.5">
         <div className="flex items-baseline justify-between">
           <span className="text-[11.5px] text-[color:var(--j-text-dim)]">API round-trip</span>
@@ -150,6 +158,7 @@ export function AiPerformance() {
             </span>
           </div>
         )}
+      </div>
       </div>
     </div>
   )

@@ -48,10 +48,12 @@ export function PipelinePulse() {
 
   return (
     <div className="j-panel">
-      <div className="p-4">
-        <div className="mb-3 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-[color:var(--j-text-dim)]">
+      <div className="flex items-center justify-between border-b border-white/6 px-4 py-2.5">
+        <span className="j-label flex items-center gap-2">
           <LiveDot /> Pipeline Pulse
-        </div>
+        </span>
+      </div>
+      <div className="px-4 py-3">
         {ph ? (
           <div className="space-y-3">
             <SegmentBar label="Leads" segments={ph.leadsByStatus} />

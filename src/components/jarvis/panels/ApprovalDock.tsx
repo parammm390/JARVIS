@@ -71,11 +71,11 @@ export function ApprovalDock() {
 
   return (
     <div className="j-panel">
-      <div className="p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-[color:var(--j-text-dim)]">Awaiting Your Approval</div>
-          {visible.length > 0 && <span className="rounded-full bg-cyan-300/15 px-2 py-0.5 text-[10px] font-black text-cyan-200">{visible.length}</span>}
-        </div>
+      <div className="flex items-center justify-between border-b border-white/6 px-4 py-2.5">
+        <span className="j-label">Awaiting Your Approval</span>
+        {visible.length > 0 && <span className="rounded-full bg-cyan-300/15 px-2 py-0.5 text-[10px] font-black text-cyan-200">{visible.length}</span>}
+      </div>
+      <div className="px-4 py-3">
         {error && (
           <div className="mb-2 rounded-lg border border-red-400/30 bg-red-400/5 px-3 py-2 text-[11px] text-red-300">{error}</div>
         )}
@@ -110,18 +110,20 @@ export function ApprovalDock() {
                   </div>
                 )}
                 <div className="mt-2 flex gap-2">
-                  <button
+                  <motion.button
                     onClick={() => decide(a.id, "confirm")}
-                    className="inline-flex items-center gap-1 rounded-full bg-teal-300 px-3 py-1 text-[10px] font-black text-slate-950 shadow-[var(--j-glow-teal)] transition hover:-translate-y-0.5"
+                    whileTap={{ scale: 0.96 }}
+                    className="inline-flex items-center gap-1 rounded-full bg-teal-300 px-3 py-1 text-[10px] font-black text-slate-950 shadow-[var(--j-glow-teal)] transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60"
                   >
                     <Check className="h-3 w-3" /> Approve
-                  </button>
-                  <button
+                  </motion.button>
+                  <motion.button
                     onClick={() => decide(a.id, "reject")}
-                    className="inline-flex items-center gap-1 rounded-full border border-white/15 px-3 py-1 text-[10px] font-black text-white/70 transition hover:-translate-y-0.5 hover:text-red-300"
+                    whileTap={{ scale: 0.96 }}
+                    className="inline-flex items-center gap-1 rounded-full border border-white/15 px-3 py-1 text-[10px] font-black text-white/70 transition hover:-translate-y-0.5 hover:text-red-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60"
                   >
                     <X className="h-3 w-3" /> Reject
-                  </button>
+                  </motion.button>
                 </div>
               </motion.div>
             ))}

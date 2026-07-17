@@ -419,7 +419,7 @@ function RunDrawer({ run, onClose }: { run: WorkflowRun; onClose: () => void }) 
         initial={{ x: "100%" }}
         animate={{ x: 0 }}
         exit={{ x: "100%" }}
-        transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+        transition={{ type: "spring", stiffness: 300, damping: 30 }}
       >
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-lg font-black text-[color:var(--j-text)]">{humanizeWorkflowType(run.workflowType)}</h3>
