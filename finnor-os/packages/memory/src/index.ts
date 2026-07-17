@@ -35,7 +35,7 @@ export async function buildMemorySnapshot(opts: {
     // Phase 9 — same graceful-degradation convention every other memory source here
     // already follows: a pattern-query failure must never break planning.
     buildPatternContext(tenantId, householdId).catch(
-      (): PatternContext => ({ householdProposals: null, technicianReliability: [] }),
+      (): PatternContext => ({ householdProposals: null, technicianReliability: [], scanSignals: [] }),
     ),
   ]);
   return {

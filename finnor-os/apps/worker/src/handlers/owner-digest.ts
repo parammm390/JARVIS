@@ -50,7 +50,13 @@ export const ownerDigest: JobHandler = async (payload) => {
       `${freshScanDrafts.length} new item${freshScanDrafts.length === 1 ? "" : "s"} waiting in your approval queue from today's automatic scans.`,
     );
   }
-  for (const f of findings) parts.push(f.summary);
+  // Phase 12: a finding with draftedActionId already has its action counted in the
+  // "waiting in your approval queue" line above (freshScanDrafts) — say so as a short
+  // pointer instead of just reading the finding out cold, so it's clear the two are
+  // the same item, not two separate things.
+  for (const f of findings) {
+    parts.push(f.draftedActionId ? `${f.summary} Already drafted for your approval.` : f.summary);
+  }
   if (overdueUsd > 0) parts.push(`$${overdueUsd.toFixed(2)} is overdue across unpaid invoices.`);
   if (debt.length > 0) parts.push(`${debt.length} lead${debt.length === 1 ? "" : "s"} or quote${debt.length === 1 ? "" : "s"} haven't been followed up on in a while.`);
   if (sla.stuckWorkflowRuns > 0) parts.push(`${sla.stuckWorkflowRuns} in-progress workflow${sla.stuckWorkflowRuns === 1 ? "" : "s"} appear stuck and may need a look.`);

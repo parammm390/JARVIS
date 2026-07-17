@@ -5,9 +5,9 @@
 // every call. No fine-tuning, no "learning," no similarity search: call this
 // "pattern context" or "retrieval" everywhere, per the roadmap's own honesty standard.
 
-import { withTenant, proposals, quotes, households, businessEvents, technicians, appointments, type Db } from "@finnor/db";
-import { and, eq, inArray, isNotNull } from "drizzle-orm";
-import type { PatternContext, HouseholdProposalPattern, TechnicianReliabilityPattern } from "@finnor/shared-types";
+import { withTenant, proposals, quotes, households, businessEvents, technicians, appointments, scanFindings, type Db } from "@finnor/db";
+import { and, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
+import type { PatternContext, HouseholdProposalPattern, TechnicianReliabilityPattern, ScanSignal } from "@finnor/shared-types";
 
 // proposals has no tenant_id column (confirmed: packages/db/schema.ts's proposals
 // table only carries householdId) — must join through households to scope by tenant,
@@ -108,9 +108,30 @@ async function technicianReliabilityPattern(db: Db, tenantId: string): Promise<T
   }));
 }
 
+// Phase 12 (loop closure) — undigested scan_findings as soft context. Newest 10 only
+// (a planner prompt is not a findings inbox); details jsonb deliberately NOT
+// forwarded — summary is already dealer-readable, raw details would bloat the prompt
+// for no benefit the LLM can act on.
+async function scanSignalsPattern(db: Db, tenantId: string): Promise<ScanSignal[]> {
+  const rows = await db
+    .select({ scanType: scanFindings.scanType, severity: scanFindings.severity, summary: scanFindings.summary, createdAt: scanFindings.createdAt })
+    .from(scanFindings)
+    .where(and(eq(scanFindings.tenantId, tenantId), isNull(scanFindings.digestedAt)))
+    .orderBy(desc(scanFindings.createdAt))
+    .limit(10);
+  const now = Date.now();
+  return rows.map((r) => ({
+    scanType: r.scanType,
+    severity: r.severity as ScanSignal["severity"],
+    summary: r.summary,
+    ageHours: (now - r.createdAt.getTime()) / 3_600_000,
+  }));
+}
+
 export async function buildPatternContext(tenantId: string, householdId?: string): Promise<PatternContext> {
   return withTenant(tenantId, async (db) => ({
     householdProposals: householdId ? await householdProposalPattern(db, tenantId, householdId) : null,
     technicianReliability: await technicianReliabilityPattern(db, tenantId),
+    scanSignals: await scanSignalsPattern(db, tenantId),
   }));
 }

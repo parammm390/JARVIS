@@ -16,16 +16,36 @@ import type { ReasoningTier } from "@finnor/shared-types";
 // that today only fires for invoice creation.
 export const DEFAULT_AMOUNT_USD_THRESHOLD = 500;
 
+// Phase 12 (loop closure): action types where drafting against stock a scan already
+// flagged as low is itself a stakes signal, independent of dollar amount — named and
+// exported so scan-low-inventory.ts and this module agree on the same set without
+// duplicating it.
+export const STOCK_CONSUMING_ACTION_TYPES = new Set(["log_stock_used_on_visit", "start_installation_workflow"]);
+
 export function classifyReasoningTier(input: {
   requiresConfirmation: boolean;
   compiledGraph: CommandGraph;
   payload: Record<string, unknown>;
   amountThresholdUsd?: number;
+  actionType?: string;
+  openScanSignals?: Array<{ scanType: string; severity: string }>;
 }): ReasoningTier {
+  // Tier only ever spends more reasoning on gated stakes — an action that doesn't
+  // require confirmation was never going to get extra scrutiny, and scan signals
+  // don't change that by design.
   if (!input.requiresConfirmation) return "low";
   const threshold = input.amountThresholdUsd ?? DEFAULT_AMOUNT_USD_THRESHOLD;
   const amount = typeof input.payload.amountUsd === "number" ? input.payload.amountUsd : null;
   if (input.compiledGraph.kind === "workflow" || (amount !== null && amount > threshold)) return "high";
+
+  const signals = input.openScanSignals ?? [];
+  const hasCritical = signals.some((s) => s.severity === "critical");
+  const hasLowInventoryStockConsumption =
+    input.actionType !== undefined &&
+    STOCK_CONSUMING_ACTION_TYPES.has(input.actionType) &&
+    signals.some((s) => s.scanType === "low_inventory");
+  if (hasCritical || hasLowInventoryStockConsumption) return "high";
+
   return "medium";
 }
 

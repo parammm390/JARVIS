@@ -112,9 +112,19 @@ export interface TechnicianReliabilityPattern {
   noShowCount: number;
   noShowRate: number;
 }
+// Phase 12 (loop closure) — undigested scan_findings surfaced as soft context, same
+// honesty rule as the rest of this interface: informs the planner, never instructs it.
+export interface ScanSignal {
+  scanType: string;
+  severity: "info" | "warning" | "critical";
+  summary: string;
+  ageHours: number;
+}
+
 export interface PatternContext {
   householdProposals: HouseholdProposalPattern | null; // null only when no householdId was supplied
   technicianReliability: TechnicianReliabilityPattern[]; // tenant-wide, [] if no data yet
+  scanSignals: ScanSignal[]; // tenant-wide, newest 10, [] if none open
 }
 
 export interface MemorySnapshot {

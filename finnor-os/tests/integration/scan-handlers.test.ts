@@ -162,6 +162,20 @@ describe.skipIf(!available)("proactive scan handlers", () => {
         renewalDate: new Date(Date.now() + 5 * 24 * 3600 * 1000), // due in 5 days — inside the 30-day scan window
       }),
     );
+    // The maintenance-agreement plugin's validate() requires policy.policy.price_usd
+    // (MaintenanceAgreementPolicySchema has no default for it) — without a real policy
+    // row this tenant would fall back to defaultPolicy()'s empty {} and validate()
+    // would fail every time, same update-or-insert idempotency pattern as the
+    // win-back policy seeded above.
+    const [existingRenewalPolicy] = await withTenant(TENANT_ID, (db) =>
+      db.select().from(domainPolicies).where(and(eq(domainPolicies.tenantId, TENANT_ID), eq(domainPolicies.actionType, "renew_maintenance_agreement"))),
+    );
+    const renewalPolicyValues = { policy: { price_usd: 199 }, requiresConfirmation: true };
+    if (existingRenewalPolicy) {
+      await withTenant(TENANT_ID, (db) => db.update(domainPolicies).set(renewalPolicyValues).where(eq(domainPolicies.id, existingRenewalPolicy.id)));
+    } else {
+      await withTenant(TENANT_ID, (db) => db.insert(domainPolicies).values({ tenantId: TENANT_ID, actionType: "renew_maintenance_agreement", ...renewalPolicyValues }));
+    }
     await scheduledReminder({ tenantId: TENANT_ID, windowDays: 30 });
     const drafted = await withTenant(TENANT_ID, (db) =>
       db.select().from(domainActions).where(and(eq(domainActions.tenantId, TENANT_ID), eq(domainActions.actionType, "renew_maintenance_agreement"))),

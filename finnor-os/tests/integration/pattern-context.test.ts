@@ -118,6 +118,9 @@ describe.skipIf(!available)("Pattern context (Phase 9)", () => {
     expect(snapshot.patterns!.householdProposals).toBeNull();
     expect(snapshot.patterns!.technicianReliability).toHaveLength(1);
     expect(snapshot.patterns!.technicianReliability[0]!.noShowRate).toBe(0.2);
+    // Phase 12: scanSignals is additive — no findings seeded for this tenant, so it
+    // defaults to [] rather than being absent from the shape.
+    expect(snapshot.patterns!.scanSignals).toEqual([]);
   });
 
   it("4. the pattern genuinely reaches the planner's outgoing prompt — not just the type", async () => {

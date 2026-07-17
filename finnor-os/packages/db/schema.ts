@@ -300,6 +300,11 @@ export const scanFindings = pgTable("scan_findings", {
   details: jsonb("details").notNull().default({}),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   digestedAt: timestamp("digested_at", { withTimezone: true }),
+  // Phase 12 (loop closure): severity feeds risk tiering, draftedActionId links a
+  // finding to the gated action it caused a config-gated scan to draft (null when the
+  // scan only recorded a finding — no config, or the scan has no drafting path at all).
+  severity: text("severity", { enum: ["info", "warning", "critical"] }).notNull().default("info"),
+  draftedActionId: uuid("drafted_action_id").references(() => domainActions.id),
 });
 
 // ---------------------------------------------------------------------------

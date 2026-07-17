@@ -4,7 +4,7 @@
 // confirmation_template summary and, previously, produced blank "No summary drafted."
 // cards with no voice confirmation, unlike every other gated action).
 
-import { withTenant, maintenanceAgreements, households, domainActions } from "@finnor/db";
+import { withTenant, maintenanceAgreements, households, domainActions, scanFindings } from "@finnor/db";
 import { FinnorOrchestrator } from "@finnor/orchestration";
 import { and, eq, lte } from "drizzle-orm";
 import type { JobHandler } from "../queue";
@@ -52,7 +52,7 @@ export const scheduledReminder: JobHandler = async (payload) => {
     if (alreadyPendingAgreementIds.has(row.agreementId)) continue;
     const contact = (row.contactInfo ?? {}) as Record<string, unknown>;
 
-    await orchestrator.draftKnownAction(
+    const { action } = await orchestrator.draftKnownAction(
       "renew_maintenance_agreement",
       {
         agreementId: row.agreementId,
@@ -63,6 +63,18 @@ export const scheduledReminder: JobHandler = async (payload) => {
       },
       tenantId,
       { source: "scan_maintenance_renewal" },
+    );
+    // Phase 12: every drafting scan also records a finding pointing at what it
+    // drafted, so the digest can say "already queued" instead of double-reporting.
+    await withTenant(tenantId, (db) =>
+      db.insert(scanFindings).values({
+        tenantId,
+        scanType: "maintenance_renewal",
+        severity: "info",
+        summary: `${String(contact.name ?? row.address)}'s maintenance agreement is entering its renewal window.`,
+        details: { agreementId: row.agreementId, householdId: row.householdId, cadence: row.cadence },
+        draftedActionId: action.id,
+      }),
     );
   }
 };

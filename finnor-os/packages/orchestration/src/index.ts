@@ -26,6 +26,7 @@ export * from "./plugin-registry";
 export * from "./voice";
 export * from "./critic";
 export * from "./learning";
+export * from "./tiering";
 export * from "./graph/allowlist-executor";
 export * from "./graph/executor";
 export * from "./graph/build-graph";
@@ -249,12 +250,18 @@ export class FinnorOrchestrator implements Orchestrator {
     const cached = this.policyCache.get(cacheKey);
     if (cached && Date.now() - cached.at < 30_000) return cached.policy;
     const row = await withTenant(action.tenantId, async (db) => {
+      // Explicit tenantId filter, not just RLS scoping — defense in depth (a role
+      // that owns these tables, as local dev connections typically do, bypasses RLS
+      // entirely regardless of FORCE ROW LEVEL SECURITY; without this, an
+      // unqualified `.limit(1)` by actionType alone can non-deterministically pick
+      // up another tenant's policy row for the same action_type). Same convention
+      // scan-low-inventory.ts and friends already follow.
       const [r] = action.policyId
-        ? await db.select().from(domainPolicies).where(eq(domainPolicies.id, action.policyId))
+        ? await db.select().from(domainPolicies).where(and(eq(domainPolicies.id, action.policyId), eq(domainPolicies.tenantId, action.tenantId)))
         : await db
             .select()
             .from(domainPolicies)
-            .where(eq(domainPolicies.actionType, action.actionType))
+            .where(and(eq(domainPolicies.actionType, action.actionType), eq(domainPolicies.tenantId, action.tenantId)))
             .limit(1);
       return r;
     });

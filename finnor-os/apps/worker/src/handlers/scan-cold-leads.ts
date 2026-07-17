@@ -39,7 +39,7 @@ export const scanColdLeads: JobHandler = async (payload) => {
     | undefined;
 
   if (offerScript) {
-    await orchestrator.draftKnownAction(
+    const { action } = await orchestrator.draftKnownAction(
       "bulk_notify_existing_customers",
       {
         offerScript,
@@ -51,6 +51,19 @@ export const scanColdLeads: JobHandler = async (payload) => {
       tenantId,
       { source: "scan_cold_leads" },
     );
+    // Phase 12: every drafting scan also records a finding pointing at what it
+    // drafted, so the digest can say "already queued" instead of double-reporting
+    // and the loop from finding to action is auditable end-to-end.
+    await withTenant(tenantId, (db) =>
+      db.insert(scanFindings).values({
+        tenantId,
+        scanType: "cold_leads",
+        severity: "info",
+        summary: `${targets.length} customer${targets.length === 1 ? "" : "s"} inactive ${MIN_MONTHS_INACTIVE}-${MAX_MONTHS_INACTIVE} months.`,
+        details: { count: targets.length, sample: targets.slice(0, 3).map((t) => t.label) },
+        draftedActionId: action.id,
+      }),
+    );
     return;
   }
 
@@ -60,6 +73,7 @@ export const scanColdLeads: JobHandler = async (payload) => {
     db.insert(scanFindings).values({
       tenantId,
       scanType: "cold_leads",
+      severity: "info",
       summary: `${targets.length} customer${targets.length === 1 ? "" : "s"} inactive ${MIN_MONTHS_INACTIVE}-${MAX_MONTHS_INACTIVE} months, but no win-back offer script is configured yet — set domain_policies.bulk_notify_existing_customers.policy.winback_offer_script to auto-draft outreach.`,
       details: { count: targets.length, sample: targets.slice(0, 3).map((t) => t.label) },
     }),

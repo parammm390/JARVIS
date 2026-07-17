@@ -4,8 +4,8 @@
 // own future behavior. Deterministic aggregation only, no LLM call — this is a report,
 // not a judgment.
 
-import { withTenant, domainActions, actionLog } from "@finnor/db";
-import { and, eq, gte, desc } from "drizzle-orm";
+import { withTenant, domainActions, actionLog, scanFindings } from "@finnor/db";
+import { and, eq, gte, desc, isNotNull } from "drizzle-orm";
 
 export interface ActionTypeStats {
   actionType: string;
@@ -123,19 +123,42 @@ export function buildTopConcerns(stats: ActionTypeStats[], criticFindings: Criti
   return concerns;
 }
 
+export interface ScanFindingLag {
+  avg: number | null;
+  max: number | null;
+  sampleSize: number;
+}
+
+// Pure, deterministic — no DB access, unit-testable with fabricated timestamps.
+// This is real, honestly-sourced data on how long findings sit before the daily
+// digest reads them, ahead of any decision to change scheduler intervals (Phase 12 —
+// the roadmap requires measuring first, this IS that measurement).
+export function computeScanFindingLag(rows: Array<{ createdAt: Date; digestedAt: Date | null }>): ScanFindingLag {
+  const lagHours = rows
+    .filter((r): r is { createdAt: Date; digestedAt: Date } => r.digestedAt !== null)
+    .map((r) => (r.digestedAt.getTime() - r.createdAt.getTime()) / 3_600_000);
+  if (lagHours.length === 0) return { avg: null, max: null, sampleSize: 0 };
+  return {
+    avg: lagHours.reduce((s, n) => s + n, 0) / lagHours.length,
+    max: Math.max(...lagHours),
+    sampleSize: lagHours.length,
+  };
+}
+
 export interface LearningDigest {
   generatedAt: string;
   windowDays: number;
   actionTypeStats: ActionTypeStats[];
   criticFindings: CriticFinding[];
   topConcerns: string[];
+  scanFindingLagHours: ScanFindingLag;
 }
 
 /** DB-touching entry point — the shared computation both the worker's learning_digest
  *  job and GET /api/insights call, so there's exactly one place this logic lives. */
 export async function computeLearningDigest(tenantId: string, windowDays = 90): Promise<LearningDigest> {
   const since = new Date(Date.now() - windowDays * 24 * 3600 * 1000);
-  const [actionRows, criticRows] = await withTenant(tenantId, (db) =>
+  const [actionRows, criticRows, scanFindingRows] = await withTenant(tenantId, (db) =>
     Promise.all([
       db
         .select({ actionType: domainActions.actionType, status: domainActions.status })
@@ -148,6 +171,10 @@ export async function computeLearningDigest(tenantId: string, windowDays = 90): 
         .where(and(eq(actionLog.tenantId, tenantId), eq(actionLog.step, "critic_review"), gte(actionLog.timestamp, since)))
         .orderBy(desc(actionLog.timestamp))
         .limit(100),
+      db
+        .select({ createdAt: scanFindings.createdAt, digestedAt: scanFindings.digestedAt })
+        .from(scanFindings)
+        .where(and(eq(scanFindings.tenantId, tenantId), gte(scanFindings.createdAt, since), isNotNull(scanFindings.digestedAt))),
     ]),
   );
 
@@ -167,5 +194,6 @@ export async function computeLearningDigest(tenantId: string, windowDays = 90): 
     actionTypeStats,
     criticFindings,
     topConcerns: buildTopConcerns(actionTypeStats, criticFindings, windowDays),
+    scanFindingLagHours: computeScanFindingLag(scanFindingRows),
   };
 }
