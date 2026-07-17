@@ -282,6 +282,23 @@
   }
 }
 
+/* ---- Phase 6: Degraded/relight wave (mood STANDALONE) ---- */
+@keyframes jarvis-flip-in {
+  from { transform: rotateX(90deg); opacity: 0; }
+  to { transform: rotateX(0); opacity: 1; }
+}
+.jarvis-flip-in { animation: jarvis-flip-in 0.4s ease-out both; transform-origin: bottom; display: inline-flex; }
+
+.jarvis-root[data-mood="standalone"] .j-panel {
+  border-color: rgba(251, 191, 36, 0.12);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jarvis-flip-in {
+    animation-duration: 0.01s !important;
+  }
+}
+
 .jarvis-root [data-hidden="true"] .jarvis-ambient,
 .jarvis-root [data-hidden="true"] .jarvis-edge-flow,
 .jarvis-root [data-hidden="true"] .jarvis-edge-blueprint,

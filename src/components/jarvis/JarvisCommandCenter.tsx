@@ -6,7 +6,7 @@
 // dock panels, glowing command pill. Every number LIVE or DERIVED; SSR-shell +
 // mounted-flag hydration pattern preserved; the 7 original feature views intact.
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import dynamic from "next/dynamic"
 import Link from "next/link"
 import { MotionConfig, motion } from "framer-motion"
@@ -50,28 +50,49 @@ const SIDEBAR = [
   { icon: Activity, label: "Activity" },
 ]
 
-function CommandCenterHome({ session, prefill, onNavigate }: { session: ReturnType<typeof useVapiSession>; prefill?: string; onNavigate: (v: string) => void }) {
+function CommandCenterHome({
+  session,
+  prefill,
+  onNavigate,
+  igniteKey,
+}: {
+  session: ReturnType<typeof useVapiSession>
+  prefill?: string
+  onNavigate: (v: string) => void
+  igniteKey: number
+}) {
+  const sectionProps = (idx: number) => ({
+    key: `${igniteKey}-${idx}`,
+    className: "jarvis-rise",
+    style: { animationDelay: `${idx * 60}ms` } as React.CSSProperties,
+  })
   return (
     <div className="space-y-4">
-      <HeaderBand session={session} />
-      <KpiStrip onNavigate={onNavigate} />
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+      <div {...sectionProps(0)}>
+        <HeaderBand session={session} />
+      </div>
+      <div {...sectionProps(1)}>
+        <KpiStrip onNavigate={onNavigate} />
+      </div>
+      <div {...sectionProps(2)} className={`${sectionProps(2).className} grid grid-cols-1 gap-4 xl:grid-cols-3`}>
         <WorkflowTheater />
         <LiveCallPanel session={session} />
       </div>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div {...sectionProps(3)} className={`${sectionProps(3).className} grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4`}>
         <SystemConsole />
         <ChannelDonut />
         <ActionMixBars />
         <AiPerformance />
       </div>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div {...sectionProps(4)} className={`${sectionProps(4).className} grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4`}>
         <PipelinePulse />
         <ApprovalDock />
         <CommsFeed />
         <ActivityRail />
       </div>
-      <CommandBar session={session} prefill={prefill} />
+      <div {...sectionProps(5)}>
+        <CommandBar session={session} prefill={prefill} />
+      </div>
     </div>
   )
 }
@@ -153,6 +174,8 @@ function Shell() {
   const [soundOn, setSoundOn] = useState(true)
   const [booting, setBooting] = useState(false)
   const [prefill, setPrefill] = useState<string | undefined>(undefined)
+  const [igniteKey, setIgniteKey] = useState(0)
+  const wasDegradedRef = useRef(false)
   const session = useVapiSession()
   const palette = useCommandPalette()
 
@@ -161,6 +184,11 @@ function Shell() {
     setBooting(shouldShowBoot())
   }, [])
   useEffect(() => setMuted(!soundOn), [soundOn])
+
+  useEffect(() => {
+    if (wasDegradedRef.current && !data.statsDegraded) setIgniteKey((k) => k + 1)
+    wasDegradedRef.current = data.statsDegraded
+  }, [data.statsDegraded])
 
   const live = !data.statsDegraded && data.stats !== null
   const mood = deriveMood({ voiceLive: session.voiceState === "live" || session.voiceState === "speaking", degraded: data.statsDegraded })
@@ -212,8 +240,10 @@ function Shell() {
               <OpsTicker soundOn={soundOn} onToggleSound={() => setSoundOn((v) => !v)} />
             </div>
             <span className={`j-chip shrink-0 uppercase tracking-widest ${live ? "bg-teal-300/12 text-teal-200" : "bg-amber-300/12 text-amber-200"}`}>
-              {live && <LiveDot />}
-              {live ? "Live" : "Simulation"}
+              <span key={live ? "live" : "sim"} className="jarvis-flip-in inline-flex items-center gap-[0.3rem]">
+                {live && <LiveDot />}
+                {live ? "Live" : "Simulation"}
+              </span>
             </span>
           </div>
 
@@ -233,7 +263,7 @@ function Shell() {
           </div>
 
           <div className="p-4 md:p-6">
-            {view === "Command Center" && <CommandCenterHome session={session} prefill={prefill} onNavigate={setView} />}
+            {view === "Command Center" && <CommandCenterHome session={session} prefill={prefill} onNavigate={setView} igniteKey={igniteKey} />}
             {view === "Voice Console" && <VoiceConsoleView voiceState={session.voiceState === "speaking" ? "live" : session.voiceState} toggleVoice={session.toggleVoice} feed={session.transcript} />}
             {view === "Leads & CRM" && <LeadsView />}
             {view === "Workflows" && <WorkflowsView />}
