@@ -26,6 +26,18 @@ export function useFlashRef<T extends HTMLElement>(event: JarvisEventType, cls =
   return ref
 }
 
+// Module-level burst queue: WorkflowTheater pushes {x,y} on real step completion;
+// ParticleField drains it once per animation frame. Sparks carry no numerals.
+let burstQueue: Array<{ x: number; y: number }> = []
+export function burstAt(x: number, y: number): void {
+  burstQueue.push({ x, y })
+}
+export function consumeBursts(): Array<{ x: number; y: number }> {
+  const q = burstQueue
+  burstQueue = []
+  return q
+}
+
 let pulseCounter = 0
 
 export function EventFXLayer() {

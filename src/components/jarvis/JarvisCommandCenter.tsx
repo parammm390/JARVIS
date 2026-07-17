@@ -37,6 +37,7 @@ import { JarvisOrb } from "./panels/JarvisOrb"
 import { Activity, Boxes, CircleDollarSign, FlaskConical, Globe, LayoutGrid, PhoneCall, Users, Volume2, VolumeX, Workflow } from "lucide-react"
 
 const LiveCallPanel = dynamic(() => import("./panels/LiveCallPanel").then((m) => m.LiveCallPanel), { ssr: false })
+const ParticleField = dynamic(() => import("./panels/ParticleField").then((m) => m.ParticleField), { ssr: false })
 
 const SIDEBAR = [
   { icon: LayoutGrid, label: "Command Center" },
@@ -207,6 +208,7 @@ function Shell() {
         <ConsoleAtmosphere />
         <div className="jarvis-gridfloor jarvis-ambient" aria-hidden />
       </div>
+      <ParticleField />
       <EventFXLayer />
       <div
         className="pointer-events-none fixed inset-0 z-20 transition-opacity duration-700"

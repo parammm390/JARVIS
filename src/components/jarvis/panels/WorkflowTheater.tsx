@@ -14,6 +14,7 @@ import { LiveDot } from "../atmosphere"
 import { StepIcon, humanizeStepType, humanizeWorkflowType } from "./StepIcon"
 import { useJarvis, onJarvisEvent, runProgressPct, ageLabel, ageSeconds, type WorkflowRun } from "../lib/data-core"
 import { sfx } from "../sound"
+import { burstAt } from "../lib/EventFX"
 
 const NODE_W = 172
 const NODE_H = 72
@@ -186,16 +187,20 @@ function GraphNodeCard({ node, now, blueprint }: { node: GraphNode; now: number;
   const isDone = node.status === "completed"
   const prevStatusRef = useRef(node.status)
   const [shockwaveKey, setShockwaveKey] = useState(0)
+  const nodeElRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (prevStatusRef.current !== "completed" && node.status === "completed") {
       setShockwaveKey((k) => k + 1)
+      const rect = nodeElRef.current?.getBoundingClientRect()
+      if (rect) burstAt(rect.left + rect.width / 2, rect.top + rect.height / 2)
     }
     prevStatusRef.current = node.status
   }, [node.status])
 
   return (
     <div
+      ref={nodeElRef}
       data-node
       className="j-node jarvis-rise group absolute flex items-center gap-2.5 rounded-xl border bg-[rgba(10,19,36,0.92)] px-3 backdrop-blur-md transition-[opacity,border-color,box-shadow] duration-500"
       style={{
