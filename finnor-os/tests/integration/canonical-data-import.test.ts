@@ -6,7 +6,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import pg from "pg";
 import { migrate } from "../../packages/db/migrate";
 import { withTenant, closePool, tenants, leads, households, businessEvents, dataQualityFindings } from "@finnor/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { importSyntheticDealerData, SYNTHETIC_DEALER_LEADS } from "../../scripts/import-synthetic-dealer";
 import { scanDataQuality } from "../../apps/worker/src/handlers/scan-data-quality";
 
@@ -71,12 +71,15 @@ describe.skipIf(!available)("canonical data import — blueprint Phase 1 proof",
     // Backdate synth-005's activity so it reads as stale under the default 14-day window
     // (the scan can't fabricate real time passing, so the test simulates it directly).
     const staleLeadId = leadIdsByExternalId["synth-005"]!;
-    await withTenant(TENANT_ID, (db) =>
-      db
+    await withTenant(TENANT_ID, async (db) => {
+      // business_events is append-only in real use (migration 0015) — this test-only
+      // time-simulation opts in via a transaction-local GUC no application code ever sets.
+      await db.execute(sql`SELECT set_config('app.allow_audit_mutation', 'true', true)`);
+      await db
         .update(businessEvents)
         .set({ occurredAt: new Date(Date.now() - 30 * 24 * 3600 * 1000) })
-        .where(and(eq(businessEvents.tenantId, TENANT_ID), eq(businessEvents.entityType, "lead"), eq(businessEvents.entityId, staleLeadId))),
-    );
+        .where(and(eq(businessEvents.tenantId, TENANT_ID), eq(businessEvents.entityType, "lead"), eq(businessEvents.entityId, staleLeadId)));
+    });
 
     await scanDataQuality({ tenantId: TENANT_ID });
 

@@ -28,7 +28,7 @@ import {
   contacts,
   documents,
 } from "@finnor/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import {
   createLead,
   convertLeadToOpportunity,
@@ -81,6 +81,9 @@ describe.skipIf(!available)("@finnor/data-platform repository layer", () => {
     // make the idempotency assertions below see stale rows and report false negatives —
     // children before parents to respect FKs.
     await withTenant(TENANT_ID, async (db) => {
+      // business_events is append-only in real use (migration 0015) — this test-only
+      // fixture reset opts in via a transaction-local GUC no application code ever sets.
+      await db.execute(sql`SELECT set_config('app.allow_audit_mutation', 'true', true)`);
       await db.delete(businessEvents).where(eq(businessEvents.tenantId, TENANT_ID));
       await db.delete(messages).where(eq(messages.tenantId, TENANT_ID));
       await db.delete(calls).where(eq(calls.tenantId, TENANT_ID));

@@ -16,7 +16,7 @@ import {
   inventoryItems,
   businessEvents,
 } from "@finnor/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { inventoryPlugin } from "../../packages/domain-plugins/inventory";
 import { schedulingPlugin } from "../../packages/domain-plugins/scheduling";
 import { technicianReportsPlugin } from "../../packages/domain-plugins/technician-reports";
@@ -62,6 +62,9 @@ describe.skipIf(!available)("business_events emitted by Phase 3B plugin touches"
     // Clean slate: a prior run of this file must not collide on inventory_items' own
     // UNIQUE(tenant_id, sku) constraint.
     await withTenant(TENANT_ID, async (db) => {
+      // business_events is append-only in real use (migration 0015) — this test-only
+      // fixture reset opts in via a transaction-local GUC no application code ever sets.
+      await db.execute(sql`SELECT set_config('app.allow_audit_mutation', 'true', true)`);
       await db.delete(businessEvents).where(eq(businessEvents.tenantId, TENANT_ID));
       await db.delete(inventoryItems).where(and(eq(inventoryItems.tenantId, TENANT_ID), eq(inventoryItems.sku, "BE-TEST-SKU")));
     });

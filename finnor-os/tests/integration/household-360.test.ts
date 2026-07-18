@@ -5,7 +5,7 @@
 // query-param contract. Dedicated tenant ...fc, FK-ordered cleanup in afterAll.
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import pg from "pg";
 import { migrate } from "../../packages/db/migrate";
 import {
@@ -155,6 +155,9 @@ describe.skipIf(!available)("household360 (Phase 11)", () => {
       await db.delete(documents).where(eq(documents.id, documentId));
       await db.delete(contactMethods).where(inArray(contactMethods.contactId, contactIds));
       await db.delete(contacts).where(inArray(contacts.id, contactIds));
+      // business_events is append-only in real use (migration 0015) — this test-only
+      // fixture reset opts in via a transaction-local GUC no application code ever sets.
+      await db.execute(sql`SELECT set_config('app.allow_audit_mutation', 'true', true)`);
       await db.delete(businessEvents).where(eq(businessEvents.tenantId, TENANT_ID));
       await db.delete(households).where(inArray(households.id, [householdId, decoyHouseholdId]));
     });
