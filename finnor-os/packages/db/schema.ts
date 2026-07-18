@@ -713,9 +713,16 @@ export const workflowRuns = pgTable("workflow_runs", {
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
   commandId: uuid("command_id").notNull().references(() => commands.id),
   workflowType: text("workflow_type").notNull(),
-  status: text("status", { enum: ["running", "completed", "failed", "compensating", "compensated"] })
+  status: text("status", {
+    enum: ["running", "completed", "failed", "compensating", "compensated", "paused", "cancelled", "escalated"],
+  })
     .notNull()
     .default("running"),
+  // §2.7: optimistic concurrency for run controls (pause/resume/cancel/retry/escalate)
+  // — every status-changing UPDATE (here and in advanceWorkflow) increments this, and
+  // callers condition their UPDATE on the version they last read so two concurrent
+  // control calls can't both believe they made the transition.
+  version: integer("version").notNull().default(1),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

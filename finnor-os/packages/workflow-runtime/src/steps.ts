@@ -68,7 +68,17 @@ export async function claimStep(tenantId: string, stepId: string): Promise<Workf
         attempts: sql`${workflowSteps.attempts} + 1`,
         updatedAt: new Date(),
       })
-      .where(and(eq(workflowSteps.id, stepId), eq(workflowSteps.tenantId, tenantId), eq(workflowSteps.status, "pending")))
+      .where(
+        and(
+          eq(workflowSteps.id, stepId),
+          eq(workflowSteps.tenantId, tenantId),
+          eq(workflowSteps.status, "pending"),
+          // §2.7: a paused/cancelled/escalated run must genuinely stop making progress,
+          // not just display a different status label — this is the actual enforcement
+          // point, checked atomically in the same UPDATE as the claim itself.
+          sql`${workflowSteps.workflowRunId} NOT IN (SELECT id FROM ${workflowRuns} WHERE status IN ('paused', 'cancelled', 'escalated'))`,
+        ),
+      )
       .returning();
     return claimed ?? null;
   });
@@ -161,8 +171,15 @@ export async function advanceWorkflow(tenantId: string, workflowRunId: string): 
   const finalStatus = allCompleted ? "completed" : anyFailed ? "failed" : "running";
   if (finalStatus === "running") return; // still has leased/compensating steps in flight
 
+  // §2.7: only transition a run that's actually still 'running' — a paused/cancelled/
+  // escalated run must never be silently flipped to completed/failed by a step that
+  // was already in flight when the control action landed.
   const [run] = await withTenant(tenantId, (db) =>
-    db.update(workflowRuns).set({ status: finalStatus, updatedAt: new Date() }).where(eq(workflowRuns.id, workflowRunId)).returning(),
+    db
+      .update(workflowRuns)
+      .set({ status: finalStatus, version: sql`${workflowRuns.version} + 1`, updatedAt: new Date() })
+      .where(and(eq(workflowRuns.id, workflowRunId), eq(workflowRuns.status, "running")))
+      .returning(),
   );
   if (run) {
     await withTenant(tenantId, (db) =>
