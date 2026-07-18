@@ -22,7 +22,15 @@ Status: GATE-GREEN (one non-blocking owner follow-up outstanding — see Task 1.
 **Not required by the exit gate, tracked anyway:** the Supabase service-role key rotation (see Task 1.7) remains pending on the owner. The pack's own EXIT GATE text for Phase 1 does not list this as a required condition — only the incident doc, which is committed.
 
 ## Phase 2 — One runtime, receipts for everything
-Status: not-started
+Status: in-progress
+- [x] Task 2.1 — Effect census (evidence: `finnor-os/docs/effect-census.md`). Key finding: only 4/42 action types (`start_water_test_workflow`, `request_proposal_signature`, `start_installation_workflow`, `start_invoice_to_cash_workflow`) run on `@finnor/workflow-runtime` today; the other ~38 execute via two bare-call paths (`GatedExecutor.execute` and its LangGraph mirror `graph/nodes.ts`) that call `plugin.execute()` directly with only a per-tool-call idempotency ledger — no workflow_run, no receipt, no DLQ, no chaos coverage. AMC renewal (Temporal, Task 2.6) only owns wait/timer/escalation logic and drafts through the same `domain_actions` pipeline, not a separate effect surface. This reframes 2.5 as generalizing path 3 (one adapter so every single-step action submits a 1-step `workflow_run`) rather than migrating 21 plugins' internals individually.
+- [ ] Task 2.2 — Contracts (DecisionReceipt, event envelope, migrations)
+- [ ] Task 2.3 — Exactly-once outbox + DLQ
+- [ ] Task 2.4 — Receipts in the engine
+- [ ] Task 2.5 — The great rewiring
+- [ ] Task 2.6 — Temporal exit
+- [ ] Task 2.7 — Run controls
+- [ ] Task 2.8 — Chaos matrix
 
 ## Phase 3 — All 42 actions configured + Dealer Zero
 Status: not-started
