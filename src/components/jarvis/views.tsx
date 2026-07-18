@@ -881,7 +881,7 @@ function SystemHealthPanel() {
         )}
       </div>
       <p className="mt-3 text-[10.5px] text-white/35">
-        Every binding defaults to <code className="text-teal-200/80">emulator</code> — fully functional, zero real credentials required — until a dealer's
+        Every binding defaults to <code className="text-teal-200/80">emulator</code> — fully functional, zero real credentials required — until a dealer&rsquo;s
         real provider keys are set and its <code className="text-teal-200/80">*_BINDING</code> env var is flipped. Same opt-in-only posture as{" "}
         {integrationsStatus ? "the Payments & E-Sign providers above" : "every capability on this page"}.
       </p>
