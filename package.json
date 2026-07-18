@@ -27,7 +27,8 @@
     "split-type": "^0.3.4",
     "tailwind-merge": "^2.4.0",
     "tailwindcss-animate": "^1.0.7",
-    "three": "^0.184.0"
+    "three": "^0.184.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/node": "^20",

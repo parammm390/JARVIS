@@ -16,6 +16,7 @@ import { CustomCursor } from "./CustomCursor"
 import { setMuted, sfx } from "./sound"
 import { LeadsView, WorkflowsView, InventoryView, InvoicesView, ComplianceView, ResearchView, VoiceConsoleView, CustomersView, SystemHealthView } from "./views"
 import { JarvisDataProvider, useJarvis } from "./lib/data-core"
+import { JarvisAuthProvider, useJarvisAuth } from "./lib/jarvis-auth"
 import { useVapiSession } from "./lib/useVapiSession"
 import { deriveMood } from "./lib/mood"
 import { EventFXLayer } from "./lib/EventFX"
@@ -96,6 +97,33 @@ function CommandCenterHome({
   )
 }
 
+function SidebarProfile() {
+  const { session, loading, signOut } = useJarvisAuth()
+  if (loading) return null
+  if (!session) {
+    return (
+      <Link href="/jarvis/login" className="flex items-center gap-2.5 rounded-xl px-1 py-1.5 text-[12px] font-bold text-[color:var(--j-text-dim)] hover:text-white">
+        <div className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 text-[11px] font-black">?</div>
+        Sign in
+      </Link>
+    )
+  }
+  const email = session.user.email ?? "Signed in"
+  const initials = email.slice(0, 2).toUpperCase()
+  return (
+    <div className="flex items-center gap-2.5 px-1">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-cyan-400 to-blue-500 text-[11px] font-black text-slate-950">{initials}</div>
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-[12px] font-bold text-[color:var(--j-text)]">{email}</div>
+        <button onClick={() => void signOut()} className="text-[9.5px] text-[color:var(--j-text-faint)] hover:text-white">
+          Sign out
+        </button>
+      </div>
+      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-300" />
+    </div>
+  )
+}
+
 function Sidebar({ view, setView }: { view: string; setView: (v: string) => void }) {
   const data = useJarvis()
   const live = !data.statsDegraded && data.stats !== null
@@ -153,14 +181,7 @@ function Sidebar({ view, setView }: { view: string; setView: (v: string) => void
             </div>
           )}
         </div>
-        <div className="flex items-center gap-2.5 px-1">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-cyan-400 to-blue-500 text-[11px] font-black text-slate-950">PD</div>
-          <div className="min-w-0">
-            <div className="truncate text-[12px] font-bold text-[color:var(--j-text)]">Param Dave</div>
-            <div className="text-[9.5px] text-[color:var(--j-text-faint)]">Owner</div>
-          </div>
-          <span className="ml-auto h-1.5 w-1.5 rounded-full bg-emerald-300" />
-        </div>
+        <SidebarProfile />
       </div>
     </aside>
   )
@@ -296,9 +317,11 @@ function Shell() {
 export default function JarvisCommandCenter() {
   return (
     <MotionConfig reducedMotion="user">
-      <JarvisDataProvider>
-        <Shell />
-      </JarvisDataProvider>
+      <JarvisAuthProvider>
+        <JarvisDataProvider>
+          <Shell />
+        </JarvisDataProvider>
+      </JarvisAuthProvider>
     </MotionConfig>
   )
 }

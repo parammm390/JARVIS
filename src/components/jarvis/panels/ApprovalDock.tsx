@@ -1,17 +1,18 @@
 "use client"
 
 // §7.7 — decide() moved from JarvisCommandCenter verbatim in behavior: optimistic
-// removal, inflight guard, rollback on error. Gated behind the owner admin key —
-// unauthenticated visitors see the queue but Approve/Reject prompts for the key.
+// removal, inflight guard, rollback on error. Gated behind a real sign-in —
+// unauthenticated visitors see the queue but Approve/Reject prompts to sign in.
 
 import { useEffect, useRef, useState } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import { Check, X } from "lucide-react"
- 
+
 import { sfx } from "../sound"
 import { useJarvis, ageLabel, type PendingAction } from "../lib/data-core"
-import { jarvisPost, getJarvisKey, JarvisApiError } from "../lib/api"
-import { AdminKeyPrompt } from "../lib/AdminKeyPrompt"
+import { jarvisPost, JarvisApiError } from "../lib/api"
+import { hasActiveSession } from "../lib/jarvis-auth"
+import { SignInPrompt } from "../lib/SignInPrompt"
 
 function NewCardScanline() {
   const [show, setShow] = useState(true)
@@ -41,7 +42,7 @@ export function ApprovalDock() {
 
   async function decide(id: string, verb: "confirm" | "reject") {
     if (inflight.current.has(id)) return
-    if (!getJarvisKey()) {
+    if (!hasActiveSession()) {
       pendingVerb.current = { id, verb }
       setShowKeyPrompt(true)
       return
@@ -131,16 +132,10 @@ export function ApprovalDock() {
         </div>
       </div>
       {showKeyPrompt && (
-        <AdminKeyPrompt
+        <SignInPrompt
           onClose={() => {
             setShowKeyPrompt(false)
             pendingVerb.current = null
-          }}
-          onSaved={() => {
-            setShowKeyPrompt(false)
-            const p = pendingVerb.current
-            pendingVerb.current = null
-            if (p) void decide(p.id, p.verb)
           }}
         />
       )}

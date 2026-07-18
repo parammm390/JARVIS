@@ -1,28 +1,13 @@
 "use client"
 
 // Single fetch surface for every JARVIS panel. Both reads and writes go through the
-// same-origin /api/jarvis/* proxy and require the owner's admin key (entered once,
-// kept in localStorage, never sent anywhere except this proxy) — see
-// CommandPalette/ApprovalDock for the prompt. A small public-aggregate slice (stats,
-// setup/status, integrations/status) stays keyless on the backend regardless of
-// whether this client attaches the header.
+// same-origin /api/jarvis/* proxy and forward the caller's real Supabase session
+// token — the finnor-os backend's own requireContext/RBAC decides what a signed-in
+// user can see and do. Logged-out visitors still get the 3 public-aggregate paths
+// (stats, setup/status, integrations/status); everything else 401s and the panels
+// already degrade gracefully to their sample-data view.
 
-const KEY_STORAGE = "jarvis_admin_key"
-
-export function getJarvisKey(): string | null {
-  if (typeof window === "undefined") return null
-  return window.localStorage.getItem(KEY_STORAGE)
-}
-
-export function setJarvisKey(key: string): void {
-  if (typeof window === "undefined") return
-  window.localStorage.setItem(KEY_STORAGE, key)
-}
-
-export function clearJarvisKey(): void {
-  if (typeof window === "undefined") return
-  window.localStorage.removeItem(KEY_STORAGE)
-}
+import { getCurrentAccessToken } from "./jarvis-auth"
 
 export class JarvisApiError extends Error {
   constructor(
@@ -53,15 +38,19 @@ function publish(r: JarvisRequestLog): void {
   requestListeners.forEach((cb) => cb(r))
 }
 
+function authHeaders(): Record<string, string> | undefined {
+  const token = getCurrentAccessToken()
+  return token ? { authorization: `Bearer ${token}` } : undefined
+}
+
 export async function jarvisGet<T>(path: string, params?: Record<string, string>): Promise<T> {
   const qs = params ? `?${new URLSearchParams(params).toString()}` : ""
   const started = performance.now()
   let status = 0
   try {
-    const key = getJarvisKey()
     const res = await fetch(`/api/jarvis/${path}${qs}`, {
       cache: "no-store",
-      headers: key ? { "x-jarvis-key": key } : undefined,
+      headers: authHeaders(),
     })
     status = res.status
     if (!res.ok) throw new JarvisApiError(`GET ${path} failed (${res.status})`, res.status)
@@ -72,14 +61,14 @@ export async function jarvisGet<T>(path: string, params?: Record<string, string>
 }
 
 export async function jarvisPost<T>(path: string, body: unknown): Promise<T> {
-  const key = getJarvisKey()
-  if (!key) throw new JarvisApiError("Admin key required", 401)
+  const auth = authHeaders()
+  if (!auth) throw new JarvisApiError("Sign in required", 401)
   const started = performance.now()
   let status = 0
   try {
     const res = await fetch(`/api/jarvis/${path}`, {
       method: "POST",
-      headers: { "content-type": "application/json", "x-jarvis-key": key },
+      headers: { "content-type": "application/json", ...auth },
       body: JSON.stringify(body ?? {}),
     })
     status = res.status

@@ -10,7 +10,7 @@ import { Send } from "lucide-react"
 import { JarvisOrb } from "./JarvisOrb"
 import { sfx } from "../sound"
 import { jarvisPost, JarvisApiError } from "../lib/api"
-import { AdminKeyPrompt } from "../lib/AdminKeyPrompt"
+import { SignInPrompt } from "../lib/SignInPrompt"
 import type { useVapiSession } from "../lib/useVapiSession"
 
 export function CommandBar({
@@ -95,15 +95,7 @@ export function CommandBar({
       <div className="mt-1.5 flex items-center justify-center gap-3 text-[10px] text-[color:var(--j-text-faint)]">
         {note ? <span className="text-[color:var(--j-text-dim)]">{note}</span> : <span>Enter to run · ⌘K for the palette · consequential actions wait for your approval</span>}
       </div>
-      {showKeyPrompt && (
-        <AdminKeyPrompt
-          onClose={() => setShowKeyPrompt(false)}
-          onSaved={() => {
-            setShowKeyPrompt(false)
-            void run()
-          }}
-        />
-      )}
+      {showKeyPrompt && <SignInPrompt onClose={() => setShowKeyPrompt(false)} />}
     </div>
   )
 }
