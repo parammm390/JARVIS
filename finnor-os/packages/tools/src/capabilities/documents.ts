@@ -9,6 +9,7 @@ import { z } from "zod";
 import { withTenant } from "@finnor/db";
 import { createDocument } from "@finnor/data-platform";
 import type { CapabilityContract, CapabilityBinding, RetryPolicy } from "@finnor/workflow-runtime";
+import { requestDocusignSignature, docusignProviderStatus } from "../docusign";
 import {
   emulatorGenerateDocument,
   emulatorRequestSignature,
@@ -34,6 +35,7 @@ export const RequestSignatureInputSchema = z.object({
   signerName: z.string().min(1),
   signerEmail: z.string().email(),
   idempotencyKey: z.string().min(1),
+  proposalId: z.string().uuid().optional(),
 });
 export const RequestSignatureOutputSchema = z.object({ signatureRequestId: z.string(), status: z.literal("sent") });
 
@@ -88,4 +90,13 @@ export const requestSignatureContract: CapabilityContract<RequestSignatureInput,
 export const requestSignatureEmulatorBinding: CapabilityBinding<RequestSignatureInput, RequestSignatureOutput> = {
   name: "emulator",
   call: emulatorRequestSignature,
+};
+
+export function isDocusignConfigured(): boolean {
+  return docusignProviderStatus().configured;
+}
+
+export const requestSignatureDocusignBinding: CapabilityBinding<RequestSignatureInput, RequestSignatureOutput> = {
+  name: "docusign",
+  call: requestDocusignSignature,
 };

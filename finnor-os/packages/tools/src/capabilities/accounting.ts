@@ -8,6 +8,7 @@
 import { z } from "zod";
 import type { CapabilityContract, CapabilityBinding, RetryPolicy } from "@finnor/workflow-runtime";
 import { syncInvoiceToQuickBooks, quickbooksProviderStatus } from "../quickbooks";
+import { createStripePaymentLink, stripeProviderStatus } from "../stripe";
 import {
   emulatorSyncInvoice,
   emulatorCreatePaymentLink,
@@ -41,6 +42,10 @@ const RETRY_POLICY: RetryPolicy = { attempts: 3, baseDelayMs: 250, timeoutMs: 10
 
 export function isQuickBooksConfigured(): boolean {
   return quickbooksProviderStatus().configured;
+}
+
+export function isStripeConfigured(): boolean {
+  return stripeProviderStatus().configured;
 }
 
 // --- sync_invoice --------------------------------------------------------------
@@ -93,4 +98,9 @@ export const createPaymentLinkContract: CapabilityContract<CreatePaymentLinkInpu
 export const createPaymentLinkEmulatorBinding: CapabilityBinding<CreatePaymentLinkInput, CreatePaymentLinkOutput> = {
   name: "emulator",
   call: emulatorCreatePaymentLink,
+};
+
+export const stripeCreatePaymentLinkBinding: CapabilityBinding<CreatePaymentLinkInput, CreatePaymentLinkOutput> = {
+  name: "stripe",
+  call: createStripePaymentLink,
 };

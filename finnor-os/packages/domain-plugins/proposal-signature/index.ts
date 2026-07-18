@@ -86,6 +86,7 @@ export const proposalSignaturePlugin: DomainEnginePlugin = {
             stepType: "request_signature",
             payload: {
               tenantId,
+              proposalId,
               // documentId is filled in from step 1's carried-forward context by
               // run-workflow-step.ts's mapPayload, same mechanism as vertical workflow 1.
               signerName: String(draft.payload.signerName),

@@ -22,6 +22,8 @@ export * from "./llm";
 export * from "./voice-personas";
 export * from "./ads";
 export * from "./quickbooks";
+export * from "./stripe";
+export * from "./docusign";
 export * from "./health";
 export * from "./ads-write";
 export * from "./temporal-signals";

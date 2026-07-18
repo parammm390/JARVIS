@@ -25,6 +25,7 @@ import {
   generateDocumentNativeBinding,
   requestSignatureContract,
   requestSignatureEmulatorBinding,
+  requestSignatureDocusignBinding,
   reserveStockContract,
   reserveStockEmulatorBinding,
   reserveStockNativeBinding,
@@ -36,6 +37,7 @@ import {
   syncInvoiceQuickbooksBinding,
   createPaymentLinkContract,
   createPaymentLinkEmulatorBinding,
+  stripeCreatePaymentLinkBinding,
   upsertContactContract,
   upsertContactEmulatorBinding,
   upsertContactNativeBinding,
@@ -74,6 +76,12 @@ function documentsBinding(): CapabilityBinding<unknown, unknown> {
     unknown
   >;
 }
+function esignBinding(): CapabilityBinding<unknown, unknown> {
+  return (process.env.ESIGN_BINDING === "docusign" ? requestSignatureDocusignBinding : requestSignatureEmulatorBinding) as CapabilityBinding<
+    unknown,
+    unknown
+  >;
+}
 function inventoryReserveBinding(): CapabilityBinding<unknown, unknown> {
   return (process.env.INVENTORY_BINDING === "native" ? reserveStockNativeBinding : reserveStockEmulatorBinding) as CapabilityBinding<
     unknown,
@@ -88,6 +96,12 @@ function inventoryReceiveBinding(): CapabilityBinding<unknown, unknown> {
 }
 function accountingSyncBinding(): CapabilityBinding<unknown, unknown> {
   return (process.env.ACCOUNTING_BINDING === "quickbooks" ? syncInvoiceQuickbooksBinding : syncInvoiceEmulatorBinding) as CapabilityBinding<
+    unknown,
+    unknown
+  >;
+}
+function paymentLinkBinding(): CapabilityBinding<unknown, unknown> {
+  return (process.env.PAYMENTS_BINDING === "stripe" ? stripeCreatePaymentLinkBinding : createPaymentLinkEmulatorBinding) as CapabilityBinding<
     unknown,
     unknown
   >;
@@ -141,7 +155,7 @@ const STEP_HANDLERS: Record<string, StepHandlerEntry> = {
   generate_document: { contract: generateDocumentContract as CapabilityContract<unknown, unknown>, resolveBinding: documentsBinding },
   request_signature: {
     contract: requestSignatureContract as CapabilityContract<unknown, unknown>,
-    resolveBinding: () => requestSignatureEmulatorBinding as CapabilityBinding<unknown, unknown>,
+    resolveBinding: esignBinding,
     mapPayload: (payload) => {
       const context = (payload.context as Record<string, { documentId?: string }> | undefined) ?? {};
       return {
@@ -150,6 +164,7 @@ const STEP_HANDLERS: Record<string, StepHandlerEntry> = {
         signerName: payload.signerName,
         signerEmail: payload.signerEmail,
         documentId: context.generate_document?.documentId,
+        proposalId: payload.proposalId,
       };
     },
   },
@@ -158,7 +173,7 @@ const STEP_HANDLERS: Record<string, StepHandlerEntry> = {
   sync_invoice: { contract: syncInvoiceContract as CapabilityContract<unknown, unknown>, resolveBinding: accountingSyncBinding },
   create_payment_link: {
     contract: createPaymentLinkContract as CapabilityContract<unknown, unknown>,
-    resolveBinding: () => createPaymentLinkEmulatorBinding as CapabilityBinding<unknown, unknown>,
+    resolveBinding: paymentLinkBinding,
   },
   upsert_contact: { contract: upsertContactContract as CapabilityContract<unknown, unknown>, resolveBinding: crmUpsertContactBinding },
   send_message: {

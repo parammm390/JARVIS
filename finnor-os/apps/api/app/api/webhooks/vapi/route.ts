@@ -11,7 +11,7 @@
 //  3. end-of-call-report for a normal customer call: transcript enqueued for the
 //     Planner, exactly as before.
 
-import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { createHash } from "node:crypto";
 import { VapiWebhookSchema } from "@finnor/policy-schema";
 import { adminDb, jobs, withTenant, domainActions, domainPolicies, actionLog, tenantPhoneNumbers } from "@finnor/db";
 import { persistCall } from "@finnor/data-platform";
@@ -30,29 +30,21 @@ import {
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { getOrchestrator } from "../../../../lib/orchestrator";
 import { checkAndRecordReceipt } from "../../../../lib/webhook-replay";
-
-const REPLAY_WINDOW_SECONDS = 300;
+import { verifyTimestampedHmacSignature } from "../../../../lib/verify-hmac-signature";
 
 /**
  * HMAC-with-timestamp: header `x-vapi-signature: t=<unix>,v1=<hex hmac>` computed over
- * `${t}.${rawBody}`. Replaces the previous static-secret compare, which failed OPEN
- * whenever VAPI_WEBHOOK_SECRET was unset — this fails open ONLY when the secret is
- * unset AND NODE_ENV isn't production (dev convenience); it fails CLOSED otherwise,
- * and always rejects a signature outside a 5-minute window even with a valid secret.
+ * `${t}.${rawBody}`. Fails open ONLY when the secret is unset AND NODE_ENV isn't
+ * production (dev convenience); fails CLOSED otherwise, and always rejects a
+ * signature outside a 5-minute window even with a valid secret.
  */
 function verifySignature(req: Request, rawBody: string): boolean {
-  const secret = process.env.VAPI_WEBHOOK_SECRET;
-  if (!secret) return process.env.NODE_ENV !== "production";
-  const header = req.headers.get("x-vapi-signature") ?? "";
-  const parts = Object.fromEntries(header.split(",").map((kv) => kv.split("=") as [string, string]));
-  const t = Number(parts.t);
-  const v1 = parts.v1;
-  if (!t || !v1) return false;
-  if (Math.abs(Date.now() / 1000 - t) > REPLAY_WINDOW_SECONDS) return false;
-  const expected = createHmac("sha256", secret).update(`${t}.${rawBody}`).digest("hex");
-  const expectedBuf = Buffer.from(expected, "hex");
-  const gotBuf = Buffer.from(v1, "hex");
-  return expectedBuf.length === gotBuf.length && timingSafeEqual(expectedBuf, gotBuf);
+  return verifyTimestampedHmacSignature(req, {
+    header: "x-vapi-signature",
+    secret: process.env.VAPI_WEBHOOK_SECRET,
+    rawBody,
+    allowUnsetSecret: process.env.NODE_ENV !== "production",
+  });
 }
 
 function defaultTenant(): string {

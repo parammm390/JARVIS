@@ -22,6 +22,10 @@ export interface RequestSignatureInput {
   signerName: string;
   signerEmail: string;
   idempotencyKey: string;
+  /** Threaded through when the calling step has it (proposal-signature plugin's
+   *  request_signature step) so a real e-signature webhook can round-trip back to the
+   *  right proposal without a separate lookup table. Ignored by the emulator. */
+  proposalId?: string;
 }
 export interface RequestSignatureOutput {
   signatureRequestId: string;

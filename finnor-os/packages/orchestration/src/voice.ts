@@ -67,6 +67,8 @@ const INTEGRATION_NAMES: Record<string, string> = {
   quickbooks: "your QuickBooks account",
   email: "your email account",
   maps: "the address lookup service",
+  stripe: "Stripe (your payment system)",
+  docusign: "DocuSign (your e-signature service)",
 };
 
 /**
