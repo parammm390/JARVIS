@@ -7,10 +7,11 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { motion } from "framer-motion"
-import { Check, Loader2, Play, Search, Send, ShieldCheck, X } from "lucide-react"
+import { Check, Loader2, Phone, PhoneOff, Play, Search, Send, ShieldCheck, X } from "lucide-react"
 import { Glass } from "./atmosphere"
 import { sfx } from "./sound"
 import { jarvisGet, jarvisPost, JarvisApiError } from "./lib/api"
+import { useJarvis, ageLabel } from "./lib/data-core"
 
 type Row = Record<string, unknown>
 
@@ -622,6 +623,65 @@ export function ResearchView() {
 
 // ---------- Voice Console ----------
 
+/** Phase 14: real phone-line routing status + real unclear-phrasing digest, both
+ *  already polled by JarvisDataProvider (sanity + slow lanes) — no extra fetch here. */
+function VoiceOpsPanel() {
+  const { setupStatus, insights, now } = useJarvis()
+  const phoneRouting = setupStatus?.phoneRouting
+  const unclear = insights?.unclearConfirmations ?? []
+  const live = setupStatus !== null && insights !== null
+
+  return (
+    <Glass><div className="p-5">
+      <PanelHeader title="Voice Ops" sub="Phone-line routing and real caller phrasings the yes/no parser didn't catch." live={live} />
+
+      <div className="mb-4 flex items-center gap-3 rounded-xl border border-white/8 bg-slate-950/50 px-4 py-3">
+        {phoneRouting?.configured ? (
+          <>
+            <Phone className="h-4 w-4 shrink-0 text-teal-300" />
+            <div className="min-w-0">
+              <div className="text-[12.5px] font-black text-white/85">
+                {phoneRouting.numbers.length} line{phoneRouting.numbers.length === 1 ? "" : "s"} registered for tenant routing
+              </div>
+              <div className="truncate text-[11px] text-white/45">{phoneRouting.numbers.map((n) => n.label || n.phoneNumber).join(", ")}</div>
+            </div>
+          </>
+        ) : (
+          <>
+            <PhoneOff className="h-4 w-4 shrink-0 text-amber-300" />
+            <div className="min-w-0">
+              <div className="text-[12.5px] font-black text-amber-200">No phone line registered yet</div>
+              <div className="text-[11px] text-white/45">Calls fall back to the single default tenant — fine for one dealer, not for multi-line.</div>
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className="mb-2 text-[10px] font-black uppercase tracking-[0.16em] text-white/40">Unclear confirmation phrasings</div>
+      <div className="max-h-56 space-y-2 overflow-y-auto rounded-xl border border-white/8 bg-slate-950/50 p-4">
+        {unclear.length === 0 ? (
+          <div className="py-3 text-center text-[11.5px] text-white/35">
+            {live ? "No unclear phrasings recorded yet — every yes/no has parsed cleanly." : "Awaiting connection to the live API."}
+          </div>
+        ) : (
+          unclear.map((u, i) => (
+            <div key={i} className="flex items-baseline justify-between gap-3 text-[12px] leading-relaxed">
+              <span className="text-white/75">&ldquo;{u.transcript}&rdquo;</span>
+              <span className="shrink-0 font-mono text-[10px] text-white/35">{ageLabel(u.at, now || Date.now())} ago</span>
+            </div>
+          ))
+        )}
+      </div>
+      {unclear.length > 0 && (
+        <p className="mt-2 text-[10.5px] text-white/35">
+          Add a phrasing above to <code className="text-teal-200/80">policy.approvePhrases</code>/<code className="text-teal-200/80">rejectPhrases</code> for
+          &ldquo;voice_confirmation&rdquo; and it stops showing up here once it starts matching.
+        </p>
+      )}
+    </div></Glass>
+  )
+}
+
 export function VoiceConsoleView({
   voiceState,
   toggleVoice,
@@ -632,6 +692,7 @@ export function VoiceConsoleView({
   feed: Array<{ role: "you" | "jarvis"; text: string }>
 }) {
   return (
+    <div className="space-y-4">
     <Glass><div className="p-5">
       <PanelHeader title="Voice Console" sub="Talk to JARVIS through your microphone — no phone line, no carrier, full pipeline." live={voiceState === "live"} />
       <div className="flex flex-col items-center py-6">
@@ -661,5 +722,7 @@ export function VoiceConsoleView({
         ))}
       </div>
     </div></Glass>
+    <VoiceOpsPanel />
+    </div>
   )
 }

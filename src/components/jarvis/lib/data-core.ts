@@ -99,10 +99,18 @@ export interface DataQuality {
   byTypeAndSeverity: Array<{ entityType: string; severity: string; count: number }>
   totalUnresolved: number
 }
+export interface UnclearConfirmation {
+  transcript: string
+  at: string
+}
 export interface Insights {
   actionTypeStats: Array<{ actionType: string; total: number; decided: number; rejected: number; completed: number; failureRate: number; rejectionRate: number }>
   criticFindings: unknown[]
   topConcerns: string[]
+  /** Phase 14: real caller phrasings that failed to parse as yes/no, redacted, from
+   *  sessions whose confirmation eventually resolved — self-cleans once a phrase is
+   *  added to policy. Optional: older API deploys won't carry this field yet. */
+  unclearConfirmations?: UnclearConfirmation[]
 }
 export interface SetupStatusEntry {
   actionType: string
@@ -111,8 +119,16 @@ export interface SetupStatusEntry {
   hasPolicyRow: boolean
   requiresConfirmation: boolean
 }
+export interface PhoneRoutingNumber {
+  phoneNumber: string
+  vapiPhoneNumberId: string | null
+  label: string | null
+}
 export interface SetupStatus {
   actionTypes: SetupStatusEntry[]
+  /** Phase 14: whether this tenant has a registered Vapi line for tenant-by-phone
+   *  routing. Optional: older API deploys won't carry this field yet. */
+  phoneRouting?: { configured: boolean; numbers: PhoneRoutingNumber[] }
 }
 
 // ---------------------------------------------------------------------------
