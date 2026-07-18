@@ -895,3 +895,16 @@ export const handoffs = pgTable("handoffs", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   resolvedAt: timestamp("resolved_at", { withTimezone: true }),
 });
+
+// Resolves which tenant a Vapi call belongs to from the DIALED number. Not
+// tenant-scoped, no RLS (same convention as `jobs`) — looked up during tenant
+// *resolution*, before tenant_id is known. Uniques are GLOBAL: one dialed number
+// resolves to exactly one tenant.
+export const tenantPhoneNumbers = pgTable("tenant_phone_numbers", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+  phoneNumber: text("phone_number").notNull().unique(),
+  vapiPhoneNumberId: text("vapi_phone_number_id").unique(),
+  label: text("label"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});

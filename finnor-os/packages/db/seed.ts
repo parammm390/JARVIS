@@ -139,6 +139,20 @@ export async function seed(databaseUrl = process.env.DATABASE_URL): Promise<void
       `UPDATE tenants SET owner_phone = COALESCE(owner_phone, '${PLACEHOLDER_NEEDS_REAL_VALUE}') WHERE id = $1`,
       [SEED_TENANT_ID],
     );
+    // Maps the seed tenant's registered Vapi line to VAPI_PHONE_NUMBER_ID (the real
+    // Vapi assistant's dialed-number id) when the env var is present, so the tenant
+    // resolver's preferred match key (vapi_phone_number_id) works out of the box in
+    // any environment carrying that env var — single-tenant deploys don't need this
+    // row (resolveTenantFromCall falls back to VAPI_DEFAULT_TENANT_ID).
+    if (process.env.VAPI_PHONE_NUMBER_ID) {
+      await client.query(
+        `INSERT INTO tenant_phone_numbers (tenant_id, phone_number, vapi_phone_number_id, label)
+         SELECT $1, '${PLACEHOLDER_NEEDS_REAL_VALUE}', $2, 'seed default line'
+         WHERE NOT EXISTS (SELECT 1 FROM tenant_phone_numbers WHERE vapi_phone_number_id = $2)
+         ON CONFLICT DO NOTHING`,
+        [SEED_TENANT_ID, process.env.VAPI_PHONE_NUMBER_ID],
+      );
+    }
     await client.query(
       `UPDATE households SET marketing_consent = true
        WHERE tenant_id = $1 AND address LIKE '412 Maple Ridge%'`,

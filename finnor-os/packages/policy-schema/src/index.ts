@@ -71,11 +71,26 @@ export const AuditQuerySchema = z.object({
 });
 
 // Vapi webhook: transcript events feed the Planner as instructions.
+// `call` uses .passthrough() at every level — Vapi's payload carries fields (customer.number,
+// phoneNumberId, metadata, ...) this schema doesn't enumerate, and zod's default object behavior
+// STRIPS unknown keys on parse. Previously call was `z.object({ id }).partial()` with no
+// passthrough, which silently deleted call.customer.number and call.phoneNumberId on every
+// webhook — caller-identity resolution and tenant-by-phone-number routing both depend on fields
+// that never survived parsing.
 export const VapiWebhookSchema = z.object({
   message: z
     .object({
       type: z.string(),
-      call: z.object({ id: z.string() }).partial().optional(),
+      call: z
+        .object({
+          id: z.string().optional(),
+          phoneNumberId: z.string().optional(),
+          customer: z.object({ number: z.string().optional() }).passthrough().optional(),
+          phoneNumber: z.object({ number: z.string().optional() }).passthrough().optional(),
+          metadata: z.record(z.unknown()).optional(),
+        })
+        .passthrough()
+        .optional(),
       transcript: z.string().optional(),
       artifact: z.record(z.unknown()).optional(),
     })

@@ -13,7 +13,7 @@
 
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { VapiWebhookSchema } from "@finnor/policy-schema";
-import { adminDb, jobs, withTenant, domainActions, actionLog } from "@finnor/db";
+import { adminDb, jobs, withTenant, domainActions, domainPolicies, actionLog, tenantPhoneNumbers } from "@finnor/db";
 import { persistCall } from "@finnor/data-platform";
 import { ensureSecretsLoaded } from "@finnor/security";
 import { parseSpokenDecision, diagnoseFailure, resolveProvider } from "@finnor/orchestration";
@@ -57,6 +57,56 @@ function verifySignature(req: Request, rawBody: string): boolean {
 
 function defaultTenant(): string {
   return process.env.VAPI_DEFAULT_TENANT_ID ?? "PLACEHOLDER_NEEDS_REAL_VALUE";
+}
+
+/**
+ * Resolves which tenant a call belongs to from the DIALED number — replaces the
+ * previous hardcoded defaultTenant() everywhere, which routed every call on every
+ * deployed line to the same single tenant regardless of who was actually dialed.
+ * Match order: (1) Vapi's own phoneNumberId (preferred — stable across number
+ * changes), (2) the dialed number in E.164, (3) env default with a loud warning so
+ * misrouting is visible instead of silent. `tenant_phone_numbers` has no RLS (like
+ * `jobs`) because tenant_id is exactly what's unknown at this point.
+ */
+async function resolveTenantFromCall(call: { phoneNumberId?: string; phoneNumber?: { number?: string } } | undefined): Promise<string> {
+  if (call?.phoneNumberId) {
+    const [byVapiId] = await adminDb()
+      .select({ tenantId: tenantPhoneNumbers.tenantId })
+      .from(tenantPhoneNumbers)
+      .where(eq(tenantPhoneNumbers.vapiPhoneNumberId, call.phoneNumberId));
+    if (byVapiId) return byVapiId.tenantId;
+  }
+  const dialedNumber = call?.phoneNumber?.number;
+  if (dialedNumber) {
+    const [byNumber] = await adminDb()
+      .select({ tenantId: tenantPhoneNumbers.tenantId })
+      .from(tenantPhoneNumbers)
+      .where(eq(tenantPhoneNumbers.phoneNumber, dialedNumber));
+    if (byNumber) return byNumber.tenantId;
+  }
+  console.warn("[vapi] no tenant_phone_numbers match — falling back to VAPI_DEFAULT_TENANT_ID", {
+    phoneNumberId: call?.phoneNumberId,
+    dialedNumber,
+  });
+  return defaultTenant();
+}
+
+/**
+ * Per-tenant extra approve/reject phrases for parseSpokenDecision, sourced from
+ * `domain_policies` under the conventional action type `voice_confirmation`
+ * (`policy.approvePhrases` / `policy.rejectPhrases`, arrays of strings). No
+ * domain_policies row → today's built-in-patterns-only behavior, unchanged. This is
+ * retrieval feeding a config the dealer edits by hand — nothing here ever writes a
+ * phrase automatically (see computeLearningDigest's unclearConfirmations for the
+ * read-only signal that informs what to add).
+ */
+async function loadVoiceConfirmationPhrases(tenantId: string): Promise<{ approve?: string[]; reject?: string[] }> {
+  const [row] = await withTenant(tenantId, (db) =>
+    db.select({ policy: domainPolicies.policy }).from(domainPolicies).where(eq(domainPolicies.actionType, "voice_confirmation")),
+  );
+  const policy = (row?.policy ?? {}) as { approvePhrases?: unknown; rejectPhrases?: unknown };
+  const asStrings = (v: unknown): string[] | undefined => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : undefined);
+  return { approve: asStrings(policy.approvePhrases), reject: asStrings(policy.rejectPhrases) };
 }
 
 interface VapiToolCall {
@@ -129,8 +179,10 @@ async function describeExecutionOutput(actionSummary: string | null, out: Record
 }
 
 async function handleToolCalls(message: Record<string, unknown>): Promise<Response> {
-  const tenantId = defaultTenant();
-  const callMeta = message.call as { id?: string; customer?: { number?: string } } | undefined;
+  const callMeta = message.call as
+    | { id?: string; phoneNumberId?: string; customer?: { number?: string }; phoneNumber?: { number?: string } }
+    | undefined;
+  const tenantId = await resolveTenantFromCall(callMeta);
   const callId = callMeta?.id ?? "unknown";
   const list = (message.toolCallList ?? message.toolCalls ?? []) as VapiToolCall[];
   const results: Array<{ toolCallId: string; result: string }> = [];
@@ -264,7 +316,11 @@ async function handleToolCalls(message: Record<string, unknown>): Promise<Respon
         results.push({ toolCallId: tc.id, result: parts.join(" ") });
       } else if (name === "finnor_confirm") {
         const decisionWord = String(args.decision ?? args.answer ?? "");
-        const decision = parseSpokenDecision(decisionWord);
+        const decision = parseSpokenDecision(decisionWord, await loadVoiceConfirmationPhrases(tenantId));
+        // Recorded regardless of outcome (including "unclear") — this is the caller
+        // turn computeLearningDigest's unclearConfirmations later re-parses to surface
+        // real phrasings that failed to match, so the dealer can add them as config.
+        await appendVoiceTurn({ tenantId, voiceSessionId: session.id, role: "caller", transcriptText: decisionWord });
         if (decision === "unclear") {
           results.push({ toolCallId: tc.id, result: "I didn't catch a clear yes or no — nothing was executed. Say yes or no." });
           continue;
@@ -338,7 +394,7 @@ export async function POST(req: Request): Promise<Response> {
   const msg = parsed.data.message as Record<string, unknown> & {
     type: string;
     transcript?: string;
-    call?: { id?: string; metadata?: Record<string, unknown> };
+    call?: { id?: string; phoneNumberId?: string; phoneNumber?: { number?: string }; metadata?: Record<string, unknown> };
   };
 
   // Replay protection, keyed by message shape — NOT bare call id: a single call
@@ -364,12 +420,12 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   if (msg.type === "end-of-call-report" && msg.transcript) {
-    const tenantId = defaultTenant();
+    const tenantId = await resolveTenantFromCall(msg.call);
     const metadata = (msg.call?.metadata ?? {}) as Record<string, unknown>;
 
     // 2. Outbound confirmation call ended — parse the spoken decision from the transcript.
     if (metadata.pendingActionId) {
-      const decision = parseSpokenDecision(msg.transcript);
+      const decision = parseSpokenDecision(msg.transcript, await loadVoiceConfirmationPhrases(String(metadata.tenantId ?? tenantId)));
       if (decision === "unclear") {
         // Fail closed: unclear speech never approves. The action stays pending in the queue.
         return Response.json({ received: true, decision: "unclear", note: "action left pending" });

@@ -4,8 +4,10 @@
 // own future behavior. Deterministic aggregation only, no LLM call — this is a report,
 // not a judgment.
 
-import { withTenant, domainActions, actionLog, scanFindings } from "@finnor/db";
-import { and, eq, gte, desc, isNotNull } from "drizzle-orm";
+import { withTenant, domainActions, actionLog, scanFindings, pendingConfirmations, voiceTurns, domainPolicies } from "@finnor/db";
+import { and, eq, gte, desc, isNotNull, inArray } from "drizzle-orm";
+import { parseSpokenDecision } from "./voice";
+import { redactText } from "@finnor/security";
 
 export interface ActionTypeStats {
   actionType: string;
@@ -145,6 +147,32 @@ export function computeScanFindingLag(rows: Array<{ createdAt: Date; digestedAt:
   };
 }
 
+export interface UnclearConfirmation {
+  transcript: string;
+  at: string;
+}
+
+/**
+ * Pure aggregation — retrieval feeding a config loop the dealer edits by hand, NOT
+ * auto-learning: nothing here writes a phrase anywhere. It re-parses each caller turn
+ * from a SESSION WHOSE CONFIRMATION DID EVENTUALLY RESOLVE (so this only surfaces
+ * "the caller had to repeat themselves" moments, not abandoned/expired calls) with the
+ * tenant's OWN CURRENT extra phrases applied — a phrase already added to policy stops
+ * showing up here on its own once it starts matching, so the digest never re-suggests
+ * a fix that's already live. Newest first, capped 20.
+ */
+export function computeUnclearConfirmations(
+  callerTurns: Array<{ transcriptText: string; createdAt: Date }>,
+  extra: { approve?: string[]; reject?: string[] },
+  limit = 20,
+): UnclearConfirmation[] {
+  return callerTurns
+    .filter((t) => parseSpokenDecision(t.transcriptText, extra) === "unclear")
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    .slice(0, limit)
+    .map((t) => ({ transcript: redactText(t.transcriptText).value, at: t.createdAt.toISOString() }));
+}
+
 export interface LearningDigest {
   generatedAt: string;
   windowDays: number;
@@ -152,13 +180,14 @@ export interface LearningDigest {
   criticFindings: CriticFinding[];
   topConcerns: string[];
   scanFindingLagHours: ScanFindingLag;
+  unclearConfirmations: UnclearConfirmation[];
 }
 
 /** DB-touching entry point — the shared computation both the worker's learning_digest
  *  job and GET /api/insights call, so there's exactly one place this logic lives. */
 export async function computeLearningDigest(tenantId: string, windowDays = 90): Promise<LearningDigest> {
   const since = new Date(Date.now() - windowDays * 24 * 3600 * 1000);
-  const [actionRows, criticRows, scanFindingRows] = await withTenant(tenantId, (db) =>
+  const [actionRows, criticRows, scanFindingRows, resolvedConfirmations, policyRow] = await withTenant(tenantId, (db) =>
     Promise.all([
       db
         .select({ actionType: domainActions.actionType, status: domainActions.status })
@@ -175,8 +204,40 @@ export async function computeLearningDigest(tenantId: string, windowDays = 90): 
         .select({ createdAt: scanFindings.createdAt, digestedAt: scanFindings.digestedAt })
         .from(scanFindings)
         .where(and(eq(scanFindings.tenantId, tenantId), gte(scanFindings.createdAt, since), isNotNull(scanFindings.digestedAt))),
+      // Two-stage traversal (same pattern as household360): direct rows first, then
+      // the caller turns that hang off their session ids — a JOIN would work too, but
+      // this mirrors the established convention for this kind of "children of a set
+      // of parent ids" query in this codebase.
+      db
+        .select({ voiceSessionId: pendingConfirmations.voiceSessionId })
+        .from(pendingConfirmations)
+        .where(
+          and(
+            eq(pendingConfirmations.tenantId, tenantId),
+            inArray(pendingConfirmations.status, ["confirmed", "rejected"]),
+            gte(pendingConfirmations.resolvedAt, since),
+          ),
+        ),
+      db.select({ policy: domainPolicies.policy }).from(domainPolicies).where(eq(domainPolicies.actionType, "voice_confirmation")),
     ]),
   );
+
+  const resolvedSessionIds = [...new Set(resolvedConfirmations.map((r) => r.voiceSessionId))];
+  const callerTurns =
+    resolvedSessionIds.length === 0
+      ? []
+      : await withTenant(tenantId, (db) =>
+          db
+            .select({ transcriptText: voiceTurns.transcriptText, createdAt: voiceTurns.createdAt })
+            .from(voiceTurns)
+            .where(and(eq(voiceTurns.tenantId, tenantId), eq(voiceTurns.role, "caller"), inArray(voiceTurns.voiceSessionId, resolvedSessionIds))),
+        );
+  const confirmationPolicy = (policyRow[0]?.policy ?? {}) as { approvePhrases?: unknown; rejectPhrases?: unknown };
+  const asStrings = (v: unknown): string[] | undefined => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : undefined);
+  const unclearConfirmations = computeUnclearConfirmations(callerTurns, {
+    approve: asStrings(confirmationPolicy.approvePhrases),
+    reject: asStrings(confirmationPolicy.rejectPhrases),
+  });
 
   const actionTypeStats = summarizeActionOutcomes(actionRows);
   const criticFindings: CriticFinding[] = criticRows
@@ -195,5 +256,6 @@ export async function computeLearningDigest(tenantId: string, windowDays = 90): 
     criticFindings,
     topConcerns: buildTopConcerns(actionTypeStats, criticFindings, windowDays),
     scanFindingLagHours: computeScanFindingLag(scanFindingRows),
+    unclearConfirmations,
   };
 }

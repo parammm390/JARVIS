@@ -3,7 +3,7 @@
 // and the scanFindings-writing job are covered by tests/integration/learning-digest.test.ts.
 
 import { describe, it, expect } from "vitest";
-import { summarizeActionOutcomes, buildTopConcerns, type ActionTypeStats, type CriticFinding } from "@finnor/orchestration";
+import { summarizeActionOutcomes, buildTopConcerns, computeUnclearConfirmations, type ActionTypeStats, type CriticFinding } from "@finnor/orchestration";
 
 describe("summarizeActionOutcomes", () => {
   it("buckets rows by actionType and status", () => {
@@ -106,5 +106,43 @@ describe("buildTopConcerns", () => {
       { actionType: "create_invoice", total: 20, draft: 0, pending: 0, completed: 19, failed: 1, rejected: 0, needsHumanReview: 0, blockedIntegration: 0, decided: 20, failureRate: 0.05, rejectionRate: 0 },
     ];
     expect(buildTopConcerns(stats, noCriticFindings, 90)).toEqual([]);
+  });
+});
+
+describe("computeUnclearConfirmations (Phase 14 retrieval, pure)", () => {
+  const turn = (transcriptText: string, minutesAgo: number) => ({ transcriptText, createdAt: new Date(Date.now() - minutesAgo * 60_000) });
+
+  it("surfaces only turns parseSpokenDecision itself calls unclear", () => {
+    const turns = [turn("yes go ahead", 10), turn("hmm let me think", 5), turn("no cancel it", 2)];
+    const result = computeUnclearConfirmations(turns, {});
+    expect(result).toHaveLength(1);
+    expect(result[0]!.transcript).toContain("let me think");
+  });
+
+  it("newest first", () => {
+    const turns = [turn("hmm what", 30), turn("uh, maybe?", 5), turn("beats me", 15)];
+    const result = computeUnclearConfirmations(turns, {});
+    expect(result.map((r) => r.transcript)).toEqual(["uh, maybe?", "beats me", "hmm what"]);
+  });
+
+  it("caps at the given limit", () => {
+    const turns = Array.from({ length: 30 }, (_, i) => turn(`unclear mumble number ${i}`, i));
+    expect(computeUnclearConfirmations(turns, {}, 20)).toHaveLength(20);
+  });
+
+  it("a phrase already added to the tenant's own policy stops showing up — self-cleaning", () => {
+    const turns = [turn("totally go for it", 5)];
+    expect(computeUnclearConfirmations(turns, {})).toHaveLength(1);
+    expect(computeUnclearConfirmations(turns, { approve: ["go for it"] })).toHaveLength(0);
+  });
+
+  it("redacts PII in the surfaced transcript", () => {
+    const turns = [turn("uh, call me back at 555-123-4567 maybe", 1)];
+    const result = computeUnclearConfirmations(turns, {});
+    expect(result[0]!.transcript).not.toContain("555-123-4567");
+  });
+
+  it("empty input yields an empty list", () => {
+    expect(computeUnclearConfirmations([], {})).toEqual([]);
   });
 });
