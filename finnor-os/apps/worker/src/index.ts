@@ -21,6 +21,7 @@ import { ownerDigest } from "./handlers/owner-digest";
 import { quickbooksSync } from "./handlers/quickbooks-sync";
 import { criticReview } from "./handlers/critic-review";
 import { learningDigest } from "./handlers/learning-digest";
+import { scanApprovalExpiry } from "./handlers/scan-approval-expiry";
 import { startScheduler, type ScheduledScan } from "./scheduler";
 
 export function createWorker(): JobQueue {
@@ -42,6 +43,7 @@ export function createWorker(): JobQueue {
   queue.register("quickbooks_sync", quickbooksSync);
   queue.register("critic_review", criticReview);
   queue.register("learning_digest", learningDigest);
+  queue.register("scan_approval_expiry", scanApprovalExpiry);
   return queue;
 }
 
@@ -57,6 +59,9 @@ const PROACTIVE_SCANS: ScheduledScan[] = [
   { type: "scan_data_quality", intervalHours: 24, payload: (tenantId) => ({ tenantId }) },
   { type: "relay_outbox_events", intervalHours: 1, payload: (tenantId) => ({ tenantId }) },
   { type: "scan_appointment_no_shows", intervalHours: 1, payload: (tenantId) => ({ tenantId }) },
+  // Hourly, not daily like most scans above — a confirmation_timeout_hours default of
+  // 24h loses most of its meaning if the check that enforces it only runs once a day.
+  { type: "scan_approval_expiry", intervalHours: 1, payload: (tenantId) => ({ tenantId }) },
   { type: "learning_digest", intervalHours: 24, payload: (tenantId) => ({ tenantId }) },
   // Digest runs last-of-day relative to the scans above only in spirit — ticks are
   // independent, so in practice it reads whatever's accumulated in scan_findings by

@@ -35,6 +35,8 @@ import {
   households,
   maintenanceAgreements,
   domainActions,
+  domainPolicies,
+  jobs,
 } from "@finnor/db";
 import { eq, and } from "drizzle-orm";
 import {
@@ -62,6 +64,7 @@ import {
 import { FinnorOrchestrator } from "@finnor/orchestration";
 import { ToolRegistry } from "@finnor/tools";
 import { scheduledReminder } from "../../apps/worker/src/handlers/scheduled-reminder";
+import { scanApprovalExpiry, DEFAULT_CONFIRMATION_TIMEOUT_HOURS } from "../../apps/worker/src/handlers/scan-approval-expiry";
 import type { DomainAction } from "@finnor/shared-types";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
@@ -666,6 +669,105 @@ describe.skipIf(!available)("chaos matrix (§2.8)", () => {
       expect((receipt!.failure as Record<string, unknown>).errorKind).toBe("provider_down");
       expect(receipt!.failure).not.toBeNull();
       expect(stableReceiptFields(receipt!)).toMatchSnapshot();
+    });
+  });
+
+  // =========================================================================
+  // Approval expiry — the pack's 6th failure mode, built for real after confirming
+  // (by exhaustive grep, not assumption) that no expiry mechanism existed anywhere in
+  // this codebase. Domain-level, not per-flow: a pending gated action is one concept
+  // regardless of which flow it eventually belongs to, so this is one focused set of
+  // real cells rather than 3 artificially duplicated flow variants.
+  // =========================================================================
+  describe("approval expiry (closes the chaos matrix's 6th failure mode)", () => {
+    async function makePendingAction(actionType: string, timeoutHours: number | null, ageHours: number): Promise<{ actionId: string; policyId: string }> {
+      const [policy] = await withTenant(SEED_TENANT_ID, (db) =>
+        db
+          .insert(domainPolicies)
+          .values({ tenantId: SEED_TENANT_ID, actionType, policy: {}, requiresConfirmation: true, confirmationTimeoutHours: timeoutHours })
+          .returning(),
+      );
+      const createdAt = new Date(Date.now() - ageHours * 3600 * 1000);
+      const [action] = await withTenant(SEED_TENANT_ID, (db) =>
+        db
+          .insert(domainActions)
+          .values({ tenantId: SEED_TENANT_ID, actionType, payload: {}, policyId: policy!.id, status: "pending", summary: "chaos test pending action", createdAt })
+          .returning(),
+      );
+      return { actionId: action!.id, policyId: policy!.id };
+    }
+
+    async function cleanup(actionId: string, policyId: string): Promise<void> {
+      await withTenant(SEED_TENANT_ID, async (db) => {
+        await db.delete(jobs).where(eq(jobs.idempotencyKey, `approval-expiry:${actionId}`));
+        await db.delete(domainActions).where(eq(domainActions.id, actionId));
+        await db.delete(domainPolicies).where(eq(domainPolicies.id, policyId));
+      });
+    }
+
+    it("a pending action past its configured timeout is escalated to needs_human_review and re-notified — never auto-approved, never auto-rejected, never executed", async () => {
+      const { actionId, policyId } = await makePendingAction(`chaos_expiry_probe_${Date.now()}_1`, 1, 2); // 1h timeout, 2h old — expired
+      try {
+        await scanApprovalExpiry({ tenantId: SEED_TENANT_ID });
+        const [action] = await withTenant(SEED_TENANT_ID, (db) => db.select().from(domainActions).where(eq(domainActions.id, actionId)));
+        // The whole safety property: expiry escalates urgency, it never itself acts.
+        expect(action!.status).toBe("needs_human_review");
+        const [job] = await withTenant(SEED_TENANT_ID, (db) => db.select().from(jobs).where(eq(jobs.idempotencyKey, `approval-expiry:${actionId}`)));
+        expect(job).toBeTruthy();
+        expect(job!.type).toBe("voice_notify_failure");
+      } finally {
+        await cleanup(actionId, policyId);
+      }
+    });
+
+    it("a pending action still within its timeout window is left untouched", async () => {
+      const { actionId, policyId } = await makePendingAction(`chaos_expiry_probe_${Date.now()}_2`, 24, 1); // 24h timeout, only 1h old
+      try {
+        await scanApprovalExpiry({ tenantId: SEED_TENANT_ID });
+        const [action] = await withTenant(SEED_TENANT_ID, (db) => db.select().from(domainActions).where(eq(domainActions.id, actionId)));
+        expect(action!.status).toBe("pending"); // not due yet — untouched
+        const [job] = await withTenant(SEED_TENANT_ID, (db) => db.select().from(jobs).where(eq(jobs.idempotencyKey, `approval-expiry:${actionId}`)));
+        expect(job).toBeUndefined();
+      } finally {
+        await cleanup(actionId, policyId);
+      }
+    });
+
+    it("no confirmationTimeoutHours configured falls back to the 24h application default", async () => {
+      const { actionId, policyId } = await makePendingAction(`chaos_expiry_probe_${Date.now()}_3`, null, DEFAULT_CONFIRMATION_TIMEOUT_HOURS + 1);
+      try {
+        await scanApprovalExpiry({ tenantId: SEED_TENANT_ID });
+        const [action] = await withTenant(SEED_TENANT_ID, (db) => db.select().from(domainActions).where(eq(domainActions.id, actionId)));
+        expect(action!.status).toBe("needs_human_review");
+      } finally {
+        await cleanup(actionId, policyId);
+      }
+    });
+
+    it("the approval option stays open after expiry — needs_human_review is exactly the status the confirm route already accepts", async () => {
+      const { actionId, policyId } = await makePendingAction(`chaos_expiry_probe_${Date.now()}_4`, 1, 2);
+      try {
+        await scanApprovalExpiry({ tenantId: SEED_TENANT_ID });
+        const [action] = await withTenant(SEED_TENANT_ID, (db) => db.select().from(domainActions).where(eq(domainActions.id, actionId)));
+        // The exact guard apps/api/app/api/actions/[id]/confirm/route.ts uses — this
+        // proves expiry never closes off the approval an owner might still make.
+        const approvable = action!.status === "pending" || action!.status === "needs_human_review";
+        expect(approvable).toBe(true);
+      } finally {
+        await cleanup(actionId, policyId);
+      }
+    });
+
+    it("running the scan again on an already-escalated action is a no-op — no duplicate transition, no duplicate notification", async () => {
+      const { actionId, policyId } = await makePendingAction(`chaos_expiry_probe_${Date.now()}_5`, 1, 2);
+      try {
+        await scanApprovalExpiry({ tenantId: SEED_TENANT_ID });
+        await scanApprovalExpiry({ tenantId: SEED_TENANT_ID }); // a second, redundant tick
+        const jobRows = await withTenant(SEED_TENANT_ID, (db) => db.select().from(jobs).where(eq(jobs.idempotencyKey, `approval-expiry:${actionId}`)));
+        expect(jobRows).toHaveLength(1); // the status guard skips an already-escalated row entirely on the second tick
+      } finally {
+        await cleanup(actionId, policyId);
+      }
     });
   });
 });

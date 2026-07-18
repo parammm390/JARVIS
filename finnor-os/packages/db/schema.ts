@@ -122,6 +122,10 @@ export const domainPolicies = pgTable(
     requiresConfirmation: boolean("requires_confirmation").notNull().default(true),
     confirmationTemplate: text("confirmation_template"),
     modelProvider: text("model_provider"),
+    // §2.8: how long a gated action may sit "pending" before scan_approval_expiry
+    // escalates it to needs_human_review. Null = the application-level default (24h)
+    // applies — never a fabricated per-row guess.
+    confirmationTimeoutHours: integer("confirmation_timeout_hours"),
   },
   (t) => [index("domain_policies_tenant_action_idx").on(t.tenantId, t.actionType)],
 );

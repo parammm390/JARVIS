@@ -279,6 +279,7 @@ export class FinnorOrchestrator implements Orchestrator {
           requiresConfirmation: row.requiresConfirmation,
           confirmationTemplate: row.confirmationTemplate,
           modelProvider: row.modelProvider ?? undefined,
+          confirmationTimeoutHours: row.confirmationTimeoutHours ?? undefined,
         };
     this.policyCache.set(cacheKey, { at: Date.now(), policy });
     return policy;

@@ -25,6 +25,10 @@ export const DomainPolicySchema = z.object({
   requiresConfirmation: z.boolean(),
   confirmationTemplate: z.string().nullable(),
   modelProvider: z.string().optional(),
+  // §2.8: hours a gated action may sit "pending" before scan_approval_expiry
+  // escalates it to needs_human_review — never auto-approved, never auto-rejected.
+  // Unset means the application default (24h) applies.
+  confirmationTimeoutHours: z.number().int().positive().nullable().optional(),
 });
 export type DomainPolicyInput = z.infer<typeof DomainPolicySchema>;
 
@@ -61,6 +65,7 @@ export const UpsertPolicySchema = z.object({
   requiresConfirmation: z.boolean(),
   confirmationTemplate: z.string().nullable().optional(),
   modelProvider: z.string().optional(),
+  confirmationTimeoutHours: z.number().int().positive().nullable().optional(),
 });
 
 export const AuditQuerySchema = z.object({

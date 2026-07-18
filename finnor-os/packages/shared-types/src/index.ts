@@ -59,6 +59,10 @@ export interface DomainPolicy {
   confirmationTemplate: string | null;
   /** Optional per-action-type model provider override (config, not code). */
   modelProvider?: string;
+  /** §2.8: hours a gated action may sit "pending" before scan_approval_expiry
+   *  escalates it to needs_human_review. Unset/null means the application default
+   *  (24h) applies. */
+  confirmationTimeoutHours?: number | null;
 }
 
 /** Phase 8: how much extra reasoning depth a drafted action gets before it's
