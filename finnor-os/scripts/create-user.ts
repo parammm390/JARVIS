@@ -98,7 +98,10 @@ async function main(): Promise<void> {
     if (resetPassword) {
       const existing = await findAuthUserByEmail(supabase, email);
       if (!existing) throw new Error(`createUser said "${email}" already exists, but listUsers can't find it — investigate before retrying.`);
-      const { error: updateErr } = await supabase.auth.admin.updateUserById(existing.id, { password });
+      // email_confirm here too: a pre-existing account created outside this script
+      // (e.g. an old self-signup) may have never completed email confirmation, which
+      // silently blocks password-grant login with no earlier error to catch it.
+      const { error: updateErr } = await supabase.auth.admin.updateUserById(existing.id, { password, email_confirm: true });
       if (updateErr) throw new Error(`updateUserById failed: ${updateErr.message}`);
       passwordToReport = password;
       console.log(`Supabase auth user for ${email} already existed — password reset as requested.`);
