@@ -11,7 +11,7 @@
 // gap, tracked separately — this comment is that tracking.
 
 import { createSign } from "node:crypto";
-import { IntegrationError } from "./errors";
+import { IntegrationError, type ProviderHealth } from "./errors";
 import type { RequestSignatureInput, RequestSignatureOutput } from "./emulators/documents-emulator";
 
 export type { RequestSignatureInput, RequestSignatureOutput };
@@ -27,6 +27,20 @@ function docusignConfigured(): boolean {
 
 export function docusignProviderStatus(): { configured: boolean } {
   return { configured: docusignConfigured() };
+}
+
+/** Real self-test: the JWT-grant token exchange itself (docusignAccessToken, defined
+ *  below) — proves the integration key/user id/private key actually mint a working
+ *  access token, not just that all four env vars are present. Mirrors
+ *  quickbooks.ts's testQuickBooksConnection. */
+export async function testDocusignConnection(): Promise<ProviderHealth> {
+  if (!docusignConfigured()) return { configured: false, healthy: null };
+  try {
+    await docusignAccessToken();
+    return { configured: true, healthy: true };
+  } catch (err) {
+    return { configured: true, healthy: false, error: (err as Error).message };
+  }
 }
 
 function baseUrl(): string {

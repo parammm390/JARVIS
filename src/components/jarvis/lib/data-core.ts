@@ -130,6 +130,26 @@ export interface SetupStatus {
    *  routing. Optional: older API deploys won't carry this field yet. */
   phoneRouting?: { configured: boolean; numbers: PhoneRoutingNumber[] }
 }
+export interface ProviderHealth {
+  configured: boolean
+  /** null = not configured, so never actually tested against the real API. */
+  healthy: boolean | null
+  error?: string
+}
+/** Phase 15: real self-tests for every external integration (not just presence),
+ *  from GET /api/integrations/status — includes the two new Phase 15 providers
+ *  (Stripe, DocuSign) plus which binding is actually wired to serve each capability. */
+export interface IntegrationsStatus {
+  meta_ads: ProviderHealth
+  google_ads: ProviderHealth
+  quickbooks: ProviderHealth
+  vapi: ProviderHealth
+  ghl: ProviderHealth
+  stripe: ProviderHealth
+  docusign: ProviderHealth
+  bindings: { payments: "stripe" | "emulator"; esign: "docusign" | "emulator" }
+  summary: { configuredCount: number; healthyCount: number; unhealthyCount: number }
+}
 
 // ---------------------------------------------------------------------------
 // Change events — the nervous system. Every panel pulse traces to a real diff.
@@ -197,6 +217,8 @@ interface JarvisDataState {
 
   setupStatus: SetupStatus | null
   setupDegraded: boolean
+  integrationsStatus: IntegrationsStatus | null
+  integrationsDegraded: boolean
 
   newPendingSinceOpen: number
   approvalsThisSession: number
@@ -235,6 +257,8 @@ const EMPTY_STATE: JarvisDataState = {
   readModelsDegraded: false,
   setupStatus: null,
   setupDegraded: false,
+  integrationsStatus: null,
+  integrationsDegraded: false,
   newPendingSinceOpen: 0,
   approvalsThisSession: 0,
   rejectionsThisSession: 0,
@@ -425,8 +449,17 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
   // ---- sanity lane ----
   const pollSanity = useCallback(async () => {
     if (!visibleRef.current) return
-    const res = await jarvisGet<SetupStatus>("setup/status").catch(() => null)
-    setState((prev) => ({ ...prev, setupStatus: res ?? prev.setupStatus, setupDegraded: res === null }))
+    const [res, integrations] = await Promise.all([
+      jarvisGet<SetupStatus>("setup/status").catch(() => null),
+      jarvisGet<IntegrationsStatus>("integrations/status").catch(() => null),
+    ])
+    setState((prev) => ({
+      ...prev,
+      setupStatus: res ?? prev.setupStatus,
+      setupDegraded: res === null,
+      integrationsStatus: integrations ?? prev.integrationsStatus,
+      integrationsDegraded: integrations === null,
+    }))
   }, [])
 
   useEffect(() => {

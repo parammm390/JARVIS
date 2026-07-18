@@ -5,7 +5,7 @@
 // pre-creating catalog Price objects first — exactly the invoice-amount use case,
 // where the amount is only known at draft time.
 
-import { IntegrationError } from "./errors";
+import { IntegrationError, type ProviderHealth } from "./errors";
 import type { CreatePaymentLinkInput, CreatePaymentLinkOutput } from "./emulators/accounting-emulator";
 
 export type { CreatePaymentLinkInput, CreatePaymentLinkOutput };
@@ -16,6 +16,25 @@ function stripeConfigured(): boolean {
 
 export function stripeProviderStatus(): { configured: boolean } {
   return { configured: stripeConfigured() };
+}
+
+/** Real, cheap Stripe call (GET /v1/balance, the standard health-check endpoint) —
+ *  proves the secret key actually works, not just that it's present. Mirrors
+ *  quickbooks.ts's testQuickBooksConnection exactly. */
+export async function testStripeConnection(): Promise<ProviderHealth> {
+  if (!stripeConfigured()) return { configured: false, healthy: null };
+  try {
+    const res = await fetch("https://api.stripe.com/v1/balance", {
+      headers: { Authorization: `Bearer ${process.env.STRIPE_SECRET_KEY}` },
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      return { configured: true, healthy: false, error: `(${res.status}) ${body.slice(0, 200)}` };
+    }
+    return { configured: true, healthy: true };
+  } catch (err) {
+    return { configured: true, healthy: false, error: (err as Error).message };
+  }
 }
 
 /** Real Stripe Checkout Session creation. Idempotency-Key is Stripe-native (the

@@ -7,7 +7,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { motion } from "framer-motion"
-import { Check, Loader2, Phone, PhoneOff, Play, Search, Send, ShieldCheck, X } from "lucide-react"
+import { Check, CreditCard, FileSignature, Loader2, Phone, PhoneOff, Play, Search, Send, ShieldCheck, X } from "lucide-react"
 import { Glass } from "./atmosphere"
 import { sfx } from "./sound"
 import { jarvisGet, jarvisPost, JarvisApiError } from "./lib/api"
@@ -435,6 +435,90 @@ const SAMPLE_INVOICES: Row[] = [
   { amountUsd: "249", status: "paid", memo: "Annual maintenance visit", createdAt: new Date().toISOString() },
 ]
 
+/** Phase 15: real Stripe/DocuSign provider health + which binding is actually wired
+ *  to serve each capability, from GET /api/integrations/status (sanity lane, already
+ *  polled by JarvisDataProvider — no extra fetch here, same pattern as VoiceOpsPanel). */
+function ProviderChip({
+  label,
+  health,
+  binding,
+  activeBindingName,
+  icon: Icon,
+}: {
+  label: string
+  health: { configured: boolean; healthy: boolean | null; error?: string } | undefined
+  binding: string | undefined
+  activeBindingName: string
+  icon: React.ComponentType<{ className?: string }>
+}) {
+  const live = binding === activeBindingName
+  const tone = !health?.configured ? "amber" : health.healthy === false ? "rose" : live ? "teal" : "white"
+  const toneClasses =
+    tone === "teal"
+      ? "border-teal-300/25 bg-teal-300/5"
+      : tone === "amber"
+        ? "border-amber-300/20 bg-amber-300/5"
+        : tone === "rose"
+          ? "border-rose-300/25 bg-rose-300/5"
+          : "border-white/8 bg-slate-900/50"
+  const iconTone = tone === "teal" ? "text-teal-300" : tone === "amber" ? "text-amber-300" : tone === "rose" ? "text-rose-300" : "text-white/40"
+  return (
+    <div className={`flex items-center gap-3 rounded-xl border px-4 py-3 ${toneClasses}`}>
+      <Icon className={`h-4 w-4 shrink-0 ${iconTone}`} />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2 text-[12.5px] font-black text-white/85">
+          {label}
+          {live && <span className="rounded-full bg-teal-300/15 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-teal-200">active binding</span>}
+        </div>
+        <div className="truncate text-[11px] text-white/45">
+          {!health?.configured
+            ? "Not connected — add credentials to activate"
+            : health.healthy === false
+              ? `Configured but unhealthy — ${health.error ?? "self-test failed"}`
+              : health.healthy
+                ? live
+                  ? "Connected and serving this capability"
+                  : `Connected, but ${activeBindingName === "emulator" ? "the emulator" : "another binding"} is still active — flip the *_BINDING env var to switch over`
+                : "Configured"}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function PaymentsEsignOpsPanel() {
+  const { integrationsStatus, integrationsDegraded } = useJarvis()
+  const live = integrationsStatus !== null && !integrationsDegraded
+
+  return (
+    <Glass><div className="p-5">
+      <PanelHeader title="Payments & E-Sign Ops" sub="Stripe payment links and DocuSign signature requests — real adapters, opt-in bindings." live={live} />
+      <div className="grid gap-3 md:grid-cols-2">
+        <ProviderChip
+          label="Stripe"
+          health={integrationsStatus?.stripe}
+          binding={integrationsStatus?.bindings.payments}
+          activeBindingName="stripe"
+          icon={CreditCard}
+        />
+        <ProviderChip
+          label="DocuSign"
+          health={integrationsStatus?.docusign}
+          binding={integrationsStatus?.bindings.esign}
+          activeBindingName="docusign"
+          icon={FileSignature}
+        />
+      </div>
+      <p className="mt-3 text-[10.5px] text-white/35">
+        Both capabilities run on a safe, fully-functional emulator until real credentials are set — <code className="text-teal-200/80">STRIPE_SECRET_KEY</code> +{" "}
+        <code className="text-teal-200/80">PAYMENTS_BINDING=stripe</code>, or <code className="text-teal-200/80">DOCUSIGN_INTEGRATION_KEY</code>/
+        <code className="text-teal-200/80">USER_ID</code>/<code className="text-teal-200/80">ACCOUNT_ID</code>/<code className="text-teal-200/80">PRIVATE_KEY</code> +{" "}
+        <code className="text-teal-200/80">ESIGN_BINDING=docusign</code> — no code change either way.
+      </p>
+    </div></Glass>
+  )
+}
+
 export function InvoicesView() {
   const { rows, live, reload } = useResource("invoices", SAMPLE_INVOICES)
   const [phone, setPhone] = useState("")
@@ -460,6 +544,7 @@ export function InvoicesView() {
 
   const total = rows.filter((r) => r.status !== "void").reduce((s, r) => s + Number(r.amountUsd ?? 0), 0)
   return (
+    <div className="space-y-4">
     <Glass><div className="p-5">
       <PanelHeader title="Invoices" sub="Native ledger — create, remind, record payment. No accounting SaaS required." live={live} />
       <div className="mb-4 flex items-center gap-3">
@@ -485,6 +570,8 @@ export function InvoicesView() {
         ))}
       </div>
     </div></Glass>
+    <PaymentsEsignOpsPanel />
+    </div>
   )
 }
 

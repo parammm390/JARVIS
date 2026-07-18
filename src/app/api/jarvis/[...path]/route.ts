@@ -33,6 +33,7 @@ function isAllowedGet(segments: string[]): boolean {
   if (segments.length === 1 && a === "comms") return true
   if (segments.length === 1 && a === "insights") return true
   if (segments.length === 2 && a === "setup" && b === "status") return true
+  if (segments.length === 2 && a === "integrations" && b === "status") return true
   if (segments.length === 2 && a === "resources" && RESOURCE_KINDS.has(b!)) return true
   if (segments.length === 1 && a === "audit") return true
   void c
