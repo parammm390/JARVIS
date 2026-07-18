@@ -108,6 +108,7 @@ export const proposalToInstallationPlugin: DomainEnginePlugin = {
         payload: { quoteId, householdId, invoiceId: invoice.id },
         workflowType: "signed_proposal_to_installation",
         idempotencyKey,
+        correlationId: draft.correlationId,
         steps,
       }),
     );

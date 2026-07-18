@@ -693,6 +693,10 @@ export const commands = pgTable(
     status: text("status", { enum: ["approved", "running", "completed", "failed"] })
       .notNull()
       .default("approved"),
+    // §2.4: finishes the Phase-16(e) correlationId thread into the durable runtime —
+    // forwarded from the originating DomainAction/TenantContext, so every receipt this
+    // command's steps produce is greppable back to the request that caused it.
+    correlationId: text("correlation_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -730,6 +734,9 @@ export const workflowSteps = pgTable(
     evidence: jsonb("evidence").notNull().default({}),
     terminalReason: text("terminal_reason"),
     payload: jsonb("payload").notNull().default({}),
+    // §2.4: denormalized copy of the parent command's correlationId — lets receipts.ts
+    // read it straight off the step row with no join, same convention as tenantId.
+    correlationId: text("correlation_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

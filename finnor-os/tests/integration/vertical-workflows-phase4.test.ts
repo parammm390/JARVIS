@@ -22,6 +22,7 @@ import {
   integrationOperations,
   reconciliationCases,
   inboxEvents,
+  decisionReceipts,
 } from "@finnor/db";
 import { eq, and } from "drizzle-orm";
 import leadToWaterTestPlugin from "../../packages/domain-plugins/lead-to-water-test/index";
@@ -68,9 +69,12 @@ async function cleanWorkflowRun(workflowRunId: string, commandId: string) {
     const steps = await db.select().from(workflowSteps).where(eq(workflowSteps.workflowRunId, workflowRunId));
     for (const s of steps) {
       await db.delete(integrationOperations).where(eq(integrationOperations.workflowStepId, s.id));
-      // inbox_events.matched_step_id FKs into workflow_steps — must clear before the
-      // steps themselves are deleted, or the delete below violates that FK.
+      // inbox_events.matched_step_id and decision_receipts.workflow_step_id both FK
+      // into workflow_steps — must clear before the steps themselves are deleted, or
+      // the delete below violates those FKs. decision_receipts is new (§2.4 — every
+      // claimed step now opens one).
       await db.delete(inboxEvents).where(eq(inboxEvents.matchedStepId, s.id));
+      await db.delete(decisionReceipts).where(eq(decisionReceipts.workflowStepId, s.id));
     }
     await db.delete(workflowSteps).where(eq(workflowSteps.workflowRunId, workflowRunId));
     await db.delete(workflowRuns).where(eq(workflowRuns.id, workflowRunId));

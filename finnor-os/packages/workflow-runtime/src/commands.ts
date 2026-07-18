@@ -18,6 +18,10 @@ export interface SubmitCommandParams {
   steps: StepDefinition[];
   idempotencyKey?: string;
   requestedBy?: string;
+  /** §2.4: forwarded from the originating DomainAction/TenantContext (Phase 16(e)) —
+   *  carried onto both the command and every one of its steps so a receipt can read it
+   *  with no join. */
+  correlationId?: string;
 }
 
 export interface SubmitCommandResult {
@@ -53,6 +57,7 @@ export async function submitCommand(db: Db, params: SubmitCommandParams): Promis
       payload: params.payload,
       idempotencyKey: params.idempotencyKey ?? null,
       requestedBy: params.requestedBy ?? null,
+      correlationId: params.correlationId ?? null,
       status: "approved",
     })
     .returning();
@@ -72,6 +77,7 @@ export async function submitCommand(db: Db, params: SubmitCommandParams): Promis
         sequence: i,
         payload: s.payload,
         idempotencyKey: `${run!.id}:${i}`,
+        correlationId: params.correlationId ?? null,
       })),
     )
     .returning();

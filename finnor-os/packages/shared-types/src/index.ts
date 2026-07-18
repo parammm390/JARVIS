@@ -78,6 +78,11 @@ export interface DraftAction {
   summary: string;
   payload: Record<string, unknown>;
   requiresConfirmation: boolean;
+  /** §2.4: stamped onto the draft by the executor (GatedExecutor/graph nodes) right
+   *  after plugin.draft() returns, from the originating DomainAction/TenantContext —
+   *  finishes the Phase-16(e) correlationId thread into any submitCommand() call a
+   *  plugin's execute() makes. Plugins never set this themselves. */
+  correlationId?: string;
 }
 
 export type ExecutionStatus =

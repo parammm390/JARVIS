@@ -14,6 +14,7 @@ import {
   commands,
   integrationOperations,
   reconciliationCases,
+  decisionReceipts,
 } from "@finnor/db";
 import { and, eq } from "drizzle-orm";
 import { submitCommand, claimStep, completeStep, failStep, advanceWorkflow, recoverStaleSteps } from "@finnor/workflow-runtime";
@@ -37,6 +38,9 @@ async function cleanSlate() {
   await withTenant(TENANT_ID, async (db) => {
     await db.delete(reconciliationCases).where(eq(reconciliationCases.tenantId, TENANT_ID));
     await db.delete(integrationOperations).where(eq(integrationOperations.tenantId, TENANT_ID));
+    // decision_receipts.workflow_step_id FKs into workflow_steps (§2.4 — claimStep opens
+    // one per step) — must clear before the steps themselves are deleted.
+    await db.delete(decisionReceipts).where(eq(decisionReceipts.tenantId, TENANT_ID));
     await db.delete(workflowSteps).where(eq(workflowSteps.tenantId, TENANT_ID));
     await db.delete(workflowRuns).where(eq(workflowRuns.tenantId, TENANT_ID));
     await db.delete(commands).where(eq(commands.tenantId, TENANT_ID));

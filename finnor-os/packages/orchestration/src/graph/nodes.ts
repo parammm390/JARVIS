@@ -46,6 +46,7 @@ export function makeDraftNode(plugins: PluginRegistry) {
   return async (state: GateState): Promise<Partial<GateState>> => {
     const plugin = plugins.resolve(state.actionType)!;
     const draft = await plugin.draft(state.actionType, state.payload, state.policy);
+    draft.correlationId = state.correlationId;
     await appendEpisode(state.tenantId, state.actionId, "draft", {}, { summary: draft.summary });
     return { draft };
   };
