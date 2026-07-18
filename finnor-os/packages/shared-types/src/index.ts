@@ -159,3 +159,73 @@ export interface Job {
 
 /** Literal marker for values that require real-world input. Never a guess. */
 export const PLACEHOLDER_NEEDS_REAL_VALUE = "PLACEHOLDER_NEEDS_REAL_VALUE";
+
+// ---------------------------------------------------------------------------
+// Phase 2 (JARVIS 95% MAESTRO PACK §0.3.2, §2.2): the one error taxonomy every retry
+// path keys off. Existing call sites (e.g. packages/tools/src/errors.ts's
+// IntegrationError) extend this rather than re-declaring their own — a string-matched
+// error kind is exactly the failure mode this type exists to rule out.
+// ---------------------------------------------------------------------------
+export type ErrorKind = "retryable" | "terminal" | "conflict" | "auth" | "validation" | "provider_down";
+
+export interface TypedError {
+  kind: ErrorKind;
+  cause: string;
+  context?: Record<string, unknown>;
+}
+
+// Versioned event envelope (§2.2): every inbox/outbox message is one of these. A
+// consumer that doesn't recognize `version`'s major rejects the envelope into
+// dead_letters instead of guessing at an unknown payload shape (see
+// packages/workflow-runtime/src/envelope.ts for the runtime check).
+export interface EventEnvelope<TPayload = Record<string, unknown>> {
+  type: string;
+  version: number;
+  tenantId: string;
+  occurredAt: string;
+  payload: TPayload;
+}
+
+/** One piece of evidence a DecisionReceipt cites — a real row/call this decision relied
+ *  on, never an invented justification. */
+export interface ReceiptEvidence {
+  source: string;
+  ref: string;
+  timestamp: string;
+}
+
+export interface ReceiptApproval {
+  required: boolean;
+  approvedBy?: string;
+  at?: string;
+}
+
+export interface ReceiptFailure {
+  errorKind: ErrorKind;
+  message: string;
+  recoveryPath: string;
+}
+
+/** Phase 2 (§2.2): the record every executed action must be queryable as — "what did I
+ *  intend, what evidence did I use, what policy allowed it, who approved it, what
+ *  actually happened, how do we recover" in one row. Created at proposal time
+ *  (expectedResult/actualResult null, finalizedAt null), finalized in place at
+ *  completion — never a second row per retry. */
+export interface DecisionReceipt {
+  id: string;
+  tenantId: string;
+  objective: string;
+  evidence: ReceiptEvidence[];
+  policyApplied: { id: string; version: number } | null;
+  riskTier: "low" | "medium" | "high";
+  proposedAction: Record<string, unknown>;
+  approval: ReceiptApproval;
+  expectedResult: Record<string, unknown> | null;
+  actualResult: Record<string, unknown> | null;
+  failure: ReceiptFailure | null;
+  correlationId: string | null;
+  workflowRunId: string | null;
+  stepId: string | null;
+  createdAt: string;
+  finalizedAt: string | null;
+}

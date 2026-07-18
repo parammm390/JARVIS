@@ -11,3 +11,5 @@ export * from "./outbox";
 export * from "./inbox";
 export * from "./reconciliation";
 export * from "./compensation";
+export * from "./envelope";
+export * from "./receipts";

@@ -767,6 +767,9 @@ export const outboxEvents = pgTable("outbox_events", {
     .notNull()
     .default("pending"),
   attempts: integer("attempts").notNull().default(0),
+  // Envelope major version (§2.2b) — a relayer that doesn't recognize the version
+  // rejects the event into dead_letters rather than guessing at an unknown payload shape.
+  envelopeVersion: integer("envelope_version").notNull().default(1),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   deliveredAt: timestamp("delivered_at", { withTimezone: true }),
 });
@@ -787,6 +790,7 @@ export const inboxEvents = pgTable(
     status: text("status", { enum: ["received", "matched", "unmatched", "duplicate"] })
       .notNull()
       .default("received"),
+    envelopeVersion: integer("envelope_version").notNull().default(1),
     receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [unique("inbox_events_provider_event_idx").on(t.provider, t.eventId)],
@@ -818,6 +822,67 @@ export const compensationCases = pgTable("compensation_cases", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   resolvedAt: timestamp("resolved_at", { withTimezone: true }),
 });
+
+// Phase 2 (JARVIS 95% MAESTRO PACK §2.2): one receipt per executed action — created at
+// proposal time (before the step's external effect runs), finalized with
+// actualResult/failure at completion. Answers "what did I intend, what evidence did I
+// use, what policy allowed it, who approved it, what actually happened, how do we
+// recover" in one row. `workflowStepId` is unique — a step has exactly one receipt,
+// finalized in place, never a second row per retry (attempts already live on the step).
+export const decisionReceipts = pgTable(
+  "decision_receipts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    workflowRunId: uuid("workflow_run_id").references(() => workflowRuns.id),
+    workflowStepId: uuid("workflow_step_id").references(() => workflowSteps.id),
+    domainActionId: uuid("domain_action_id").references(() => domainActions.id),
+    objective: text("objective").notNull(),
+    evidence: jsonb("evidence").notNull().default([]),
+    policyApplied: jsonb("policy_applied"),
+    riskTier: text("risk_tier", { enum: ["low", "medium", "high"] }).notNull().default("medium"),
+    proposedAction: jsonb("proposed_action").notNull().default({}),
+    approval: jsonb("approval").notNull().default({ required: false }),
+    expectedResult: jsonb("expected_result"),
+    actualResult: jsonb("actual_result"),
+    failure: jsonb("failure"),
+    correlationId: text("correlation_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    finalizedAt: timestamp("finalized_at", { withTimezone: true }),
+  },
+  (t) => [
+    unique("decision_receipts_step_idx").on(t.workflowStepId),
+    index("decision_receipts_tenant_created_idx").on(t.tenantId, t.createdAt),
+  ],
+);
+
+// Phase 2 (§2.3): terminal outbox/step failures land here instead of silently vanishing
+// into a generic reconciliation_case — a queryable, replayable row an owner can act on.
+// Distinct from jobs.status='dead_letter' (apps/worker/src/queue.ts), which is the
+// generic job-queue's own retry-exhaustion marker for ANY job type; this table is
+// specifically the durable-runtime's external-effect DLQ (outbox dispatch + workflow
+// steps), matching the pack's §2.3 shape exactly so replay can reuse the idempotency key.
+export const deadLetters = pgTable(
+  "dead_letters",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    relatedOutboxEventId: uuid("related_outbox_event_id").references(() => outboxEvents.id),
+    relatedWorkflowStepId: uuid("related_workflow_step_id").references(() => workflowSteps.id),
+    envelope: jsonb("envelope").notNull(),
+    errorKind: text("error_kind", {
+      enum: ["retryable", "terminal", "conflict", "auth", "validation", "provider_down"],
+    }).notNull(),
+    attempts: integer("attempts").notNull().default(0),
+    firstSeenAt: timestamp("first_seen_at", { withTimezone: true }).notNull().defaultNow(),
+    lastError: text("last_error").notNull(),
+    replayable: boolean("replayable").notNull().default(true),
+    status: text("status", { enum: ["open", "replayed", "discarded"] }).notNull().default("open"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  },
+  (t) => [index("dead_letters_tenant_status_idx").on(t.tenantId, t.status)],
+);
 
 // ---------------------------------------------------------------------------
 // Voice OS (Phase 5, docs/jarvis-90-execution-blueprint.md §5). Replaces
