@@ -8,6 +8,8 @@
 import { createDefaultPluginRegistry } from "@finnor/orchestration";
 import { testAdsConnections, testQuickBooksConnection, testVapiConnection, ghlIntegrationStatus, temporalProviderStatus } from "@finnor/tools";
 import { zepProviderStatus } from "@finnor/memory";
+import { adminDb, tenantPhoneNumbers } from "@finnor/db";
+import { eq } from "drizzle-orm";
 import { requireContext, errorResponse } from "../../../../lib/auth";
 import { scanActionTypeReadiness, type ActionTypeDescriptor } from "../../../../../../packages/domain-plugins/shared/setup-readiness";
 import {
@@ -25,12 +27,19 @@ export async function GET(req: Request): Promise<Response> {
       .map((actionType) => ({ actionType, pluginName: registry.resolve(actionType)!.name }));
     descriptors.push({ actionType: PRICING_CATALOG_ACTION_TYPE, pluginName: "shared-pricing-catalog" });
 
-    const [actionTypes, ads, quickbooks, vapi, pricingCatalog] = await Promise.all([
+    const [actionTypes, ads, quickbooks, vapi, pricingCatalog, phoneNumberRows] = await Promise.all([
       scanActionTypeReadiness(ctx.tenantId, descriptors),
       testAdsConnections(),
       testQuickBooksConnection(),
       testVapiConnection(),
       loadPricingCatalog(ctx.tenantId),
+      // tenant_phone_numbers has no RLS (looked up during tenant *resolution*, before
+      // tenant_id is known — see migration 0013) — an explicit filter is required and
+      // sufficient here since ctx.tenantId is already authenticated at this point.
+      adminDb()
+        .select({ phoneNumber: tenantPhoneNumbers.phoneNumber, vapiPhoneNumberId: tenantPhoneNumbers.vapiPhoneNumberId, label: tenantPhoneNumbers.label })
+        .from(tenantPhoneNumbers)
+        .where(eq(tenantPhoneNumbers.tenantId, ctx.tenantId)),
     ]);
     // Line-item pricing now lives in price_book_items, not the domain_policies JSONB
     // blob scanActionTypeReadiness inspects — override the generic check for this one
@@ -64,7 +73,9 @@ export async function GET(req: Request): Promise<Response> {
         actionTypes.every((a) => a.status !== "unconfigured") && Object.values(integrations).every((h) => h.healthy !== false),
     };
 
-    return Response.json({ actionTypes, integrations, summary }, { headers: { "cache-control": "no-store" } });
+    const phoneRouting = { configured: phoneNumberRows.length > 0, numbers: phoneNumberRows };
+
+    return Response.json({ actionTypes, integrations, summary, phoneRouting }, { headers: { "cache-control": "no-store" } });
   } catch (err) {
     return errorResponse(err);
   }
