@@ -7,11 +7,12 @@ import { interrupt } from "@langchain/langgraph";
 import { withTenant, domainActions, enqueueJob } from "@finnor/db";
 import { appendEpisode } from "@finnor/memory";
 import { eq, and } from "drizzle-orm";
-import type { DomainAction, ExecutionResult } from "@finnor/shared-types";
+import type { DomainAction } from "@finnor/shared-types";
 import { ScopedToolRegistry, type ToolRegistry } from "@finnor/tools";
 import type { PluginRegistry } from "../plugin-registry";
 import { diagnoseFailure, buildConfirmationScript } from "../voice";
 import { advanceWorkflowForAction } from "../workflow";
+import { executePluginViaRuntime } from "../runtime-bridge";
 import type { GateState } from "./state";
 
 async function setStatus(tenantId: string, actionId: string, status: DomainAction["status"]): Promise<void> {
@@ -100,12 +101,16 @@ export function makeExecuteNode(plugins: PluginRegistry, tools: ToolRegistry) {
     await setStatus(state.tenantId, state.actionId, "executing");
     // Same idempotency scoping as the legacy GatedExecutor — see its comment.
     const scopedTools = new ScopedToolRegistry(tools, { tenantId: state.tenantId, domainActionId: state.actionId });
-    let result: ExecutionResult;
-    try {
-      result = await plugin.execute(state.draft!, scopedTools);
-    } catch (err) {
-      result = { status: "failure", output: {}, error: (err as Error).message };
-    }
+    // §2.5: same runtime bridge as the legacy GatedExecutor — see its comment.
+    const result = await executePluginViaRuntime({
+      tenantId: state.tenantId,
+      actionId: state.actionId,
+      actionType: state.actionType,
+      correlationId: state.correlationId,
+      draft: state.draft!,
+      plugin,
+      tools: scopedTools,
+    });
     await appendEpisode(state.tenantId, state.actionId, "execute", { draft: state.draft!.payload }, { ...result });
 
     const finalStatus =

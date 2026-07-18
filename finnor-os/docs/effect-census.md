@@ -7,6 +7,17 @@ the exit gate. "External side effect" = anything with a real-world consequence o
 this database (SMS/email/call, CRM/calendar write, invoice/payment, e-sign, ad spend,
 document generation) OR any write with cross-tenant/financial blast radius.
 
+**Update (Task 2.5, this session): paths 1 and 2 below are RESOLVED.** Both
+`GatedExecutor.execute()` and the LangGraph mirror now call
+`packages/orchestration/src/runtime-bridge.ts`'s `executePluginViaRuntime()` instead of
+`plugin.execute()` directly — every domain-action execution (all 42 action types, not
+just the 4 workflow-kind ones) now creates a real `commands`/`workflow_runs`/
+`workflow_steps` row and a finalized `DecisionReceipt`, verified by grep (the only
+`plugin.execute()` call site left in non-test code is inside that one bridge function)
+and by the full existing test suite passing unchanged (402/405, behavior-identical) plus
+a new dedicated test (`tests/integration/single-action-runtime-bridge.test.ts`). See the
+"Definition of done" section below for what this does and does NOT change.
+
 ## Dispatch paths today
 
 | # | Path | File | How it executes plugins | Runtime coverage |
@@ -20,21 +31,21 @@ document generation) OR any write with cross-tenant/financial blast radius.
 
 ## Action-type inventory (`compiler.ts` `WORKFLOW_ACTION_TYPES`)
 
-Only **4 of 42** action types are tagged `kind: "workflow"` and go through path 3 today:
-`start_water_test_workflow`, `request_proposal_signature`, `start_installation_workflow`,
-`start_invoice_to_cash_workflow`.
+Only **4 of 42** action types are tagged `kind: "workflow"` (async, multi-step, via
+`enqueueStep` + the worker): `start_water_test_workflow`, `request_proposal_signature`,
+`start_installation_workflow`, `start_invoice_to_cash_workflow`.
 
-The remaining **~38 action types**, across all 21 domain plugins (crm, scheduling,
-inventory, accounting, customer-comm, quotation, marketing, bulk-notify,
+**As of Task 2.5, the remaining ~38 action types** — across all 21 domain plugins (crm,
+scheduling, inventory, accounting, customer-comm, quotation, marketing, bulk-notify,
 service-reminders, technician-reports, compliance-documentation, maintenance-agreement,
-ops-overview, water-domain-knowledge, web-research, proposal-batch,
-proposal-to-installation*, invoice-to-cash*, proposal-signature*), execute via path 1 or
-2 — bare `plugin.execute()`, no receipt, no DLQ, no chaos coverage.
-
-(*proposal-to-installation, invoice-to-cash, proposal-signature plugins export several
-action types each — some of their own action types are single-step reads/mutations
-still on path 1/2 even though the plugin's *workflow-starting* action type is on path 3.
-Verify per-action-type, not per-plugin, during 2.5.)
+ops-overview, water-domain-knowledge, web-research, proposal-batch, and the
+non-workflow-starting action types in proposal-to-installation/invoice-to-cash/
+proposal-signature) — execute via `executePluginViaRuntime()` (synchronous, one
+command/step per real attempt, real receipt), not bare `plugin.execute()`. Verified: the
+`compiler.ts` `kind` tag itself is untouched by 2.5 (still only 4 `"workflow"` entries) —
+it only ever decided which *dispatch shape* an action type gets (async multi-step vs.
+sync single-step), and both shapes are now runtime-backed, so the tag's meaning changed
+without its values needing to.
 
 ## Definition of done (Phase 2 exit gate, this doc's job)
 
@@ -44,6 +55,27 @@ dedicated code path — no `plugin.execute()` call survives outside a workflow-r
 step handler. Paths 1 and 2 are deleted, not "kept for compatibility." Path 4 gets
 `FOR UPDATE SKIP LOCKED` + a real `dead_letters` table + replay API (Task 2.3). Every
 step handler creates/finalizes a `DecisionReceipt` (Task 2.2/2.4).
+
+**Done (2.5), with one honest caveat.** The bare `plugin.execute()` call itself is gone
+from both engines — replaced by `executePluginViaRuntime()`, which still creates the
+command/run/step rows and still gets a receipt. What it deliberately does NOT do is
+reuse the async job-queue dispatch (`enqueueStep` + the worker) that the 4 original
+workflow-kind action types use — it calls `claimStep` → `plugin.execute()` →
+`completeStep`/`failStep` synchronously, in the SAME request, because every other action
+type's caller (POST /actions/:id/confirm, the Vapi voice-confirmation flow) needs the
+real result immediately, not later. So the codebase now has two RUNTIME-BACKED dispatch
+shapes (synchronous single-step vs. asynchronous multi-step), not the one uniform
+mechanism the mission statement describes literally — but both create real
+commands/workflow_runs/workflow_steps/decision_receipts rows, and no plugin executes
+outside either of them. Also discovered and fixed while building this: a first version
+that gave each domain_action's execution a stable idempotency key broke the reflection
+retry mechanism (`packages/orchestration/src/index.ts`'s `reflectWithRetry`, which
+deliberately calls `executor.execute()` twice on the same action) — fixed by NOT
+deduping at the command level here, since the real exactly-once protection against a
+duplicated external side effect already lives one level deeper, in
+`ScopedToolRegistry`/`external_operations`, keyed by each tool call's own business
+identifiers. Proven with a dedicated test asserting two `executor.execute()` calls on
+the same action produce two independent steps and two independent receipts.
 
 ## Non-goals for this census
 

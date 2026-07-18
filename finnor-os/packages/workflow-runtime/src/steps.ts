@@ -107,18 +107,25 @@ export async function completeStep(tenantId: string, stepId: string, evidence: R
   await finalizeReceiptForStep(tenantId, stepId, { actualResult: evidence });
 }
 
-export async function failStep(tenantId: string, stepId: string, terminalReason: string): Promise<void> {
+export async function failStep(
+  tenantId: string,
+  stepId: string,
+  terminalReason: string,
+  // failStep is this step's terminal outcome for the current attempt — nothing resets
+  // a 'failed' step back to pending except recoverStaleSteps' own stale-lease branch,
+  // so "terminal" (not "retryable") is the right default: it accurately reflects THIS
+  // attempt's finality, not whether the workflow as a whole might still recover. Callers
+  // with a more specific classification (e.g. the §2.5 runtime bridge distinguishing a
+  // plugin's "integration_unavailable" from a plain failure) may pass it explicitly.
+  errorKind: import("@finnor/shared-types").ErrorKind = "terminal",
+): Promise<void> {
   await withTenant(tenantId, (db) =>
     db
       .update(workflowSteps)
       .set({ status: "failed", terminalReason, leaseExpiresAt: null, updatedAt: new Date() })
       .where(eq(workflowSteps.id, stepId)),
   );
-  // failStep is this step's terminal outcome for the current attempt — nothing resets a
-  // 'failed' step back to pending except recoverStaleSteps' own stale-lease branch, so
-  // "terminal" (not "retryable") accurately reflects THIS attempt's finality, not
-  // whether the workflow as a whole might still recover.
-  await finalizeReceiptForStep(tenantId, stepId, { errorKind: "terminal", message: terminalReason, recoveryPath: "review via GET /api/workflows/runs and retry or escalate the run" });
+  await finalizeReceiptForStep(tenantId, stepId, { errorKind, message: terminalReason, recoveryPath: "review via GET /api/workflows/runs and retry or escalate the run" });
 }
 
 /** Enqueues the next pending step in sequence, or marks the workflow_run (and its

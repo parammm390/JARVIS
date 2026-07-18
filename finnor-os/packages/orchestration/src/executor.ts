@@ -11,6 +11,7 @@ import { ScopedToolRegistry, type ToolRegistry } from "@finnor/tools";
 import type { PluginRegistry } from "./plugin-registry";
 import { diagnoseFailure, buildConfirmationScript } from "./voice";
 import { advanceWorkflowForAction } from "./workflow";
+import { executePluginViaRuntime } from "./runtime-bridge";
 
 export interface Executor {
   execute(action: DomainAction, policy: DomainPolicy): Promise<ExecutionResult>;
@@ -78,12 +79,18 @@ export class GatedExecutor implements Executor {
     // external_operations ledger so a reflection retry never re-fires an
     // already-completed side effect (send an SMS twice, double-sync an invoice).
     const scopedTools = new ScopedToolRegistry(this.tools, { tenantId: action.tenantId, domainActionId: action.id });
-    let result: ExecutionResult;
-    try {
-      result = await plugin.execute(draft, scopedTools);
-    } catch (err) {
-      result = { status: "failure", output: {}, error: (err as Error).message };
-    }
+    // §2.5: routes through @finnor/workflow-runtime (command/step + DecisionReceipt)
+    // instead of calling plugin.execute() bare — same real result, now with a durable
+    // record. See runtime-bridge.ts's header comment for why this is synchronous.
+    const result = await executePluginViaRuntime({
+      tenantId: action.tenantId,
+      actionId: action.id,
+      actionType: action.actionType,
+      correlationId: action.correlationId,
+      draft,
+      plugin,
+      tools: scopedTools,
+    });
     await appendEpisode(action.tenantId, action.id, "execute", { draft: draft.payload }, { ...result });
 
     const finalStatus =
