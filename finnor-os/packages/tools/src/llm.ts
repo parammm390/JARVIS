@@ -9,6 +9,7 @@
 
 import Groq from "groq-sdk";
 import { initObservability, Sentry } from "./observability";
+import { recordOutcome, isDegraded } from "./provider-health";
 
 export interface LLMProvider {
   name: string;
@@ -102,17 +103,39 @@ export class BedrockOpenAICompatProvider implements LLMProvider {
 
 /** Tries each provider in order — different vendor, different failure modes (rate
  *  limit, outage, auth) don't correlate, so a chain is strictly more available than
- *  any single provider. */
+ *  any single provider.
+ *
+ *  Health-aware ordering (Phase 13 Part B): before iterating, stable-partition the
+ *  chain so non-degraded providers come first — never DROPS a provider, a degraded
+ *  one is still tried as the last resort. If every provider in the chain is degraded,
+ *  the "non-degraded" bucket is empty and this reduces to the original order (no
+ *  special-casing needed for that — it falls out of the partition itself). This is a
+ *  transport concern, not a business decision, so no action_log entry — just a Sentry
+ *  breadcrumb when the order actually changes. */
 export class CompositeProvider implements LLMProvider {
   name = "composite";
   constructor(private providers: LLMProvider[]) {}
 
   async complete(opts: { system: string; user: string; json?: boolean }): Promise<string> {
+    const ordered = [...this.providers.filter((p) => !isDegraded(p.name)), ...this.providers.filter((p) => isDegraded(p.name))];
+    if (ordered.some((p, i) => p !== this.providers[i])) {
+      initObservability();
+      Sentry.addBreadcrumb({ category: "llm", message: "provider-reorder", data: { order: ordered.map((p) => p.name) } });
+    }
     let lastError: Error | null = null;
-    for (const p of this.providers) {
+    for (const p of ordered) {
+      const start = Date.now();
       try {
-        return await p.complete(opts);
+        const text = await p.complete(opts);
+        // Recorded here, per sub-provider — the outer withObservability() wrap (see
+        // resolveProvider) only ever sees this composite as a single unit named
+        // "composite", so it can't supply the per-provider data isDegraded() above
+        // needs. This is the one place that actually knows which sub-provider just
+        // succeeded or failed.
+        recordOutcome(p.name, true, Date.now() - start);
+        return text;
       } catch (err) {
+        recordOutcome(p.name, false, Date.now() - start);
         lastError = err as Error;
       }
     }
@@ -204,11 +227,15 @@ function withObservability(provider: LLMProvider): LLMProvider {
       const start = Date.now();
       try {
         const text = await provider.complete(opts);
-        Sentry.addBreadcrumb({ category: "llm", message: provider.name, data: { ok: true, ms: Date.now() - start } });
+        const ms = Date.now() - start;
+        Sentry.addBreadcrumb({ category: "llm", message: provider.name, data: { ok: true, ms } });
+        recordOutcome(provider.name, true, ms);
         return text;
       } catch (err) {
-        Sentry.addBreadcrumb({ category: "llm", message: provider.name, data: { ok: false, ms: Date.now() - start } });
+        const ms = Date.now() - start;
+        Sentry.addBreadcrumb({ category: "llm", message: provider.name, data: { ok: false, ms } });
         Sentry.captureMessage(`llm_failed:${provider.name}`, { level: "warning" });
+        recordOutcome(provider.name, false, ms);
         throw err;
       }
     },

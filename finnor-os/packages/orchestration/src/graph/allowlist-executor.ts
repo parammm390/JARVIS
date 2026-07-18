@@ -8,14 +8,31 @@
 import type { DomainAction, DomainPolicy, ExecutionResult } from "@finnor/shared-types";
 import type { Executor } from "../executor";
 
-export function graphActionTypeAllowlist(): Set<string> {
-  const raw = process.env.ORCHESTRATION_ENGINE_GRAPH_ACTION_TYPES ?? "";
+// Phase 13 Part A: the vertical-workflow action types move onto the LangGraph engine
+// by default now that the restart-proof (langgraph-workflow-actions.test.ts) has run
+// against them. The env var remains the kill switch — `undefined` (unset) means "use
+// this default", an explicit empty string means "explicitly route nothing to the
+// graph engine" — those are different states and must stay distinguishable.
+export const DEFAULT_GRAPH_ACTION_TYPES = [
+  "schedule_water_test",
+  "start_water_test_workflow",
+  "request_proposal_signature",
+  "start_installation_workflow",
+  "start_invoice_to_cash_workflow",
+];
+
+function parseAllowlist(raw: string): Set<string> {
   return new Set(
     raw
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean),
   );
+}
+
+export function graphActionTypeAllowlist(): Set<string> {
+  const raw = process.env.ORCHESTRATION_ENGINE_GRAPH_ACTION_TYPES;
+  return raw === undefined ? new Set(DEFAULT_GRAPH_ACTION_TYPES) : parseAllowlist(raw);
 }
 
 export class AllowlistExecutor implements Executor {

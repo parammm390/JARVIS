@@ -26,6 +26,7 @@ export * from "./health";
 export * from "./ads-write";
 export * from "./temporal-signals";
 export * from "./observability";
+export * from "./provider-health";
 export * from "./emulators/fault-injection";
 export * from "./emulators/scheduling-emulator";
 export * from "./emulators/communications-emulator";
