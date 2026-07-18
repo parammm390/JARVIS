@@ -1,9 +1,11 @@
 "use client"
 
-// Single fetch surface for every JARVIS panel. Reads go through the same-origin
-// /api/jarvis/* proxy (public, read-only). Writes go through the same proxy but
-// require the owner's admin key (entered once, kept in localStorage, never sent
-// anywhere except this proxy) — see CommandPalette/ApprovalDock for the prompt.
+// Single fetch surface for every JARVIS panel. Both reads and writes go through the
+// same-origin /api/jarvis/* proxy and require the owner's admin key (entered once,
+// kept in localStorage, never sent anywhere except this proxy) — see
+// CommandPalette/ApprovalDock for the prompt. A small public-aggregate slice (stats,
+// setup/status, integrations/status) stays keyless on the backend regardless of
+// whether this client attaches the header.
 
 const KEY_STORAGE = "jarvis_admin_key"
 
@@ -56,7 +58,11 @@ export async function jarvisGet<T>(path: string, params?: Record<string, string>
   const started = performance.now()
   let status = 0
   try {
-    const res = await fetch(`/api/jarvis/${path}${qs}`, { cache: "no-store" })
+    const key = getJarvisKey()
+    const res = await fetch(`/api/jarvis/${path}${qs}`, {
+      cache: "no-store",
+      headers: key ? { "x-jarvis-key": key } : undefined,
+    })
     status = res.status
     if (!res.ok) throw new JarvisApiError(`GET ${path} failed (${res.status})`, res.status)
     return (await res.json()) as T
