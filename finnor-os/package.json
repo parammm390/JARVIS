@@ -23,6 +23,7 @@
     "db:migrate": "tsx packages/db/migrate.ts",
     "db:seed": "tsx packages/db/seed.ts",
     "db:bundle": "tsx scripts/bundle-migrations.ts",
+    "db:create-user": "tsx scripts/create-user.ts",
     "setup:langgraph": "tsx packages/orchestration/src/graph/setup.ts",
     "openapi": "tsx scripts/generate-openapi.ts"
   },
