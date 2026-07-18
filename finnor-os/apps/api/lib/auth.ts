@@ -37,8 +37,8 @@ async function resolveUserByEmail(email: string): Promise<TenantContext | null> 
 
 /** Phase 16(e): forward an inbound trace id (a caller's own retry/proxy hop) or mint a
  *  fresh one. Tagged onto the current Sentry scope so every breadcrumb/error this
- *  request produces — here and later in the worker/Temporal, once threaded through
- *  enqueueJob — carries the same id, without adding any new tracing vendor. */
+ *  request produces — here and later in the worker, once threaded through enqueueJob —
+ *  carries the same id, without adding any new tracing vendor. */
 function resolveCorrelationId(req: Request): string {
   const correlationId = req.headers.get("x-correlation-id") ?? randomUUID();
   Sentry.getCurrentScope().setTag("correlation_id", correlationId);

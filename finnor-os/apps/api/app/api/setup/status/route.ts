@@ -6,7 +6,7 @@
 // real credentials and a fully-populated policy set gets readyForProduction: true.
 
 import { createDefaultPluginRegistry } from "@finnor/orchestration";
-import { testAdsConnections, testQuickBooksConnection, testVapiConnection, ghlIntegrationStatus, temporalProviderStatus } from "@finnor/tools";
+import { testAdsConnections, testQuickBooksConnection, testVapiConnection, ghlIntegrationStatus } from "@finnor/tools";
 import { zepProviderStatus } from "@finnor/memory";
 import { secretProviderStatus } from "@finnor/security";
 import { adminDb, tenantPhoneNumbers } from "@finnor/db";
@@ -60,8 +60,7 @@ export async function GET(req: Request): Promise<Response> {
     // no extra network round trip inside this endpoint) — LangGraph has no external
     // service to check (it's in-process, using the same Postgres pool as everything else).
     const zep = { ...zepProviderStatus(), healthy: null as boolean | null };
-    const temporal = { ...temporalProviderStatus(), healthy: null as boolean | null };
-    const integrations = { meta_ads: ads.meta, google_ads: ads.googleAds, quickbooks, vapi, ghl, zep, temporal };
+    const integrations = { meta_ads: ads.meta, google_ads: ads.googleAds, quickbooks, vapi, ghl, zep };
 
     const summary = {
       actionTypesTotal: actionTypes.length,

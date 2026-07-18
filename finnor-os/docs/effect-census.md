@@ -79,11 +79,30 @@ the same action produce two independent steps and two independent receipts.
 
 ## Non-goals for this census
 
-- `apps/temporal-worker` (AMC renewal, `workflows/amc-renewal-sequence.ts`) is a
-  separate, already-known migration target (Task 2.6). Verified: Temporal here owns
-  ONLY the durable wait/signal-race/escalation timing between renewal attempts — each
-  actual reminder still drafts through the unchanged `FinnorOrchestrator.draftKnownAction()`
-  pipeline (path 1/2 above), the same primitive `scheduled_reminder` already uses. So
-  2.6 is a timer-mechanism port (Temporal's `condition()`/signals → a workflow-runtime
-  equivalent, likely reusing the date-bucketed re-enqueue pattern already in
-  `apps/worker/src/scheduler.ts`), not a second effect-execution surface to migrate.
+- **`apps/temporal-worker` — DELETED (Task 2.6).** Verified before deleting: Temporal
+  owned ONLY the durable wait/signal-race/escalation timing between renewal attempts —
+  each actual reminder always drafted through the unchanged
+  `FinnorOrchestrator.draftKnownAction()` pipeline, the same primitive `scheduled_reminder`
+  already used. Also verified: NOTHING in production ever called
+  `workflow.start(amcRenewalSequence, ...)` — grep found zero call sites outside the
+  deleted test file and the worker/client scaffolding itself, so the whole Temporal
+  proof-slice had never actually run for a real agreement. Ported to
+  `apps/worker/src/handlers/scheduled-reminder.ts`: the SAME daily-ticked scan now runs
+  the full sequence (first reminder → wait → firmer follow-up → wait → escalate to
+  lapsed) by checking two new `maintenance_agreements` columns
+  (`first_reminder_sent_at`/`second_reminder_sent_at`, migration `0019`) against
+  configurable wait durations, instead of a Temporal workflow's durable timer — coarser
+  granularity (checked once per tick, not reacted to instantly), an accepted tradeoff for
+  a Postgres-native mechanism. `markAgreementRenewed`/escalation logic ported unchanged
+  (including the placeholder-honesty behavior: no invoice is ever fabricated when a
+  dealer has no real price configured). The Temporal "customer responded" signal had no
+  caller anywhere in production either (`signalAmcRenewalResponded` in
+  `packages/tools/src/temporal-signals.ts`, deleted, was never invoked by anything) — its
+  replacement, `markAmcRenewalResponded()`, preserves that same honest parity: it exists
+  as a seam for a future SMS-reply webhook, but nothing calls it yet, matching the exact
+  pre-existing status quo rather than inventing new scope. `@temporalio/*` removed from
+  every package.json (128 packages dropped from node_modules). Test ported:
+  `tests/integration/amc-renewal-sequence.test.ts` (3 tests, all passing) replaces the
+  deleted `temporal-amc-renewal.test.ts`, driving the wait via short configured
+  durations + a real short sleep between ticks instead of a Temporal
+  `TestWorkflowEnvironment`.

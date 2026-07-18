@@ -88,8 +88,8 @@ app only ever reads.
 
 ## 3. Platform env-var flips (Vercel / Railway)
 
-Both `apps/api`+`apps/console` (Vercel) and `apps/worker`+`apps/temporal-worker`
-(Railway) need the same three vars set for the cutover:
+Both `apps/api`+`apps/console` (Vercel) and `apps/worker` (Railway) need the same
+three vars set for the cutover:
 
 - `SECRETS_PROVIDER=aws-secrets-manager`
 - `FINNOR_SECRET_IDS` = the JSON blob from §1, as a single-line env var value

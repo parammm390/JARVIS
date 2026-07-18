@@ -17,7 +17,6 @@
     "dev:api": "npm run dev --workspace @finnor/api",
     "dev:console": "npm run dev --workspace @finnor/console",
     "dev:worker": "npm run dev --workspace @finnor/worker",
-    "dev:temporal-worker": "npm run dev --workspace @finnor/temporal-worker",
     "dev:orchestrator": "npm run dev --workspace @finnor/orchestrator",
     "db:generate": "drizzle-kit generate --config packages/db/drizzle.config.ts",
     "db:migrate": "tsx packages/db/migrate.ts",
@@ -36,10 +35,6 @@
     "@modelcontextprotocol/sdk": "^1.12.0",
     "@sentry/node": "^10.65.0",
     "@supabase/supabase-js": "^2.45.1",
-    "@temporalio/activity": "^1.20.2",
-    "@temporalio/client": "^1.20.2",
-    "@temporalio/worker": "^1.20.2",
-    "@temporalio/workflow": "^1.20.2",
     "@vapi-ai/web": "^2.6.1",
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.36.4",
@@ -57,7 +52,6 @@
     "@swc/core": "1.10.18"
   },
   "devDependencies": {
-    "@temporalio/testing": "^1.20.2",
     "@types/node": "^20",
     "@types/nodemailer": "^8.0.1",
     "@types/pg": "^8.11.10",

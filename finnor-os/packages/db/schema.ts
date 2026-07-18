@@ -86,6 +86,11 @@ export const maintenanceAgreements = pgTable("maintenance_agreements", {
     .notNull()
     .default("active"),
   renewalDate: timestamp("renewal_date", { withTimezone: true }),
+  // §2.6: the AMC renewal sequence's "wait" state, ported from Temporal's durable
+  // timer to a periodically-ticked scan (scheduled-reminder.ts) — null until that
+  // reminder has actually been sent.
+  firstReminderSentAt: timestamp("first_reminder_sent_at", { withTimezone: true }),
+  secondReminderSentAt: timestamp("second_reminder_sent_at", { withTimezone: true }),
 });
 
 export const proposals = pgTable("proposals", {

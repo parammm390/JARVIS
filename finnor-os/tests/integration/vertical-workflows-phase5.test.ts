@@ -1,8 +1,8 @@
 // Vertical workflows 5-7 (Phase 5, docs/jarvis-90-execution-blueprint.md §5) plus the
 // Phase 6 read-models workflow 6's daily digest depends on. Workflow 5 (recurring
 // revenue)'s actual completion — a renewed maintenance agreement really billing the
-// customer — is proven in tests/integration/temporal-amc-renewal.test.ts alongside the
-// rest of that Temporal sequence, not duplicated here.
+// customer — is proven in tests/integration/amc-renewal-sequence.test.ts (§2.6, ported
+// off Temporal) alongside the rest of that renewal sequence, not duplicated here.
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import pg from "pg";
