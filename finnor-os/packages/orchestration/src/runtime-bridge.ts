@@ -71,6 +71,7 @@ export async function executePluginViaRuntime(params: ExecutePluginViaRuntimePar
       payload: params.draft.payload,
       workflowType: "single_action",
       correlationId: params.correlationId,
+      domainActionId: params.actionId,
       steps: [{ stepType: params.actionType, payload: params.draft.payload }],
     }),
   );

@@ -1,0 +1,23 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`chaos matrix (§2.8) > flow 1 — simple (single step) > provider hard-fail (single step, no compensation target): failStep records a terminal, typed failure — zero successful calls 1`] = `
+{
+  "approvalRequired": true,
+  "failureErrorKind": "provider_down",
+  "finalized": true,
+  "hasActualResult": false,
+  "hasFailure": true,
+  "riskTier": "medium",
+}
+`;
+
+exports[`chaos matrix (§2.8) > flow 3 — AMC renewal > provider hard-fail: a permanently failing send is recorded as a real failure, never silently swallowed 1`] = `
+{
+  "approvalRequired": true,
+  "failureErrorKind": "provider_down",
+  "finalized": true,
+  "hasActualResult": false,
+  "hasFailure": true,
+  "riskTier": "medium",
+}
+`;

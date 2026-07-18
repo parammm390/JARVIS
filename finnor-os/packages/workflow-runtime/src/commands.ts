@@ -22,6 +22,11 @@ export interface SubmitCommandParams {
    *  carried onto both the command and every one of its steps so a receipt can read it
    *  with no join. */
   correlationId?: string;
+  /** §2.8: the originating domain_action id, for single-action commands the §2.5
+   *  runtime bridge submits — carried onto every step so its receipt can be looked up
+   *  by domain_action_id, not just workflow_step_id. Left undefined for genuine
+   *  multi-step workflow-kind commands, which have no single originating action. */
+  domainActionId?: string;
 }
 
 export interface SubmitCommandResult {
@@ -78,6 +83,7 @@ export async function submitCommand(db: Db, params: SubmitCommandParams): Promis
         payload: s.payload,
         idempotencyKey: `${run!.id}:${i}`,
         correlationId: params.correlationId ?? null,
+        domainActionId: params.domainActionId ?? null,
       })),
     )
     .returning();

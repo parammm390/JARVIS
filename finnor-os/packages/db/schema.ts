@@ -749,6 +749,11 @@ export const workflowSteps = pgTable(
     // §2.4: denormalized copy of the parent command's correlationId — lets receipts.ts
     // read it straight off the step row with no join, same convention as tenantId.
     correlationId: text("correlation_id"),
+    // §2.8 finding: the §2.5 runtime bridge's single-action steps originate from a
+    // gated domain_action but had no way to link a receipt back to it — this is that
+    // link, set only for steps the runtime bridge creates (workflow-kind commands
+    // have no single originating domain_action, so it stays null for those).
+    domainActionId: uuid("domain_action_id").references(() => domainActions.id),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

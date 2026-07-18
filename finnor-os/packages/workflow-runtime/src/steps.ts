@@ -49,6 +49,7 @@ async function openReceiptForFirstClaim(tenantId: string, step: WorkflowStepRow)
       proposedAction: { stepType: step.stepType, payload: step.payload },
       approval: { required: true, approvedBy: command?.requestedBy ?? undefined, at: command?.createdAt.toISOString() },
       correlationId: step.correlationId ?? undefined,
+      domainActionId: step.domainActionId ?? undefined,
     });
   } catch (err) {
     console.error(`[decision_receipts] failed to open receipt for step ${step.id}`, err);
