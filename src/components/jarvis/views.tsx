@@ -7,7 +7,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { motion } from "framer-motion"
-import { Check, CreditCard, FileSignature, Loader2, Phone, PhoneOff, Play, Search, Send, ShieldCheck, X } from "lucide-react"
+import { Check, CreditCard, FileSignature, KeyRound, Loader2, Phone, PhoneOff, Play, Search, Send, Server, ShieldCheck, X } from "lucide-react"
 import { Glass } from "./atmosphere"
 import { sfx } from "./sound"
 import { jarvisGet, jarvisPost, JarvisApiError } from "./lib/api"
@@ -810,6 +810,95 @@ export function VoiceConsoleView({
       </div>
     </div></Glass>
     <VoiceOpsPanel />
+    </div>
+  )
+}
+
+// ---------- System Health (Phase 16 — production hardening) ----------
+
+const BINDING_LABELS: Record<string, string> = {
+  scheduling: "Scheduling",
+  communications: "Communications",
+  documents: "Documents",
+  esign: "E-Sign",
+  inventory: "Inventory",
+  accounting: "Accounting",
+  payments: "Payments",
+  crm: "CRM",
+  marketing: "Marketing",
+}
+
+function BindingChip({ capability, value }: { capability: string; value: string }) {
+  const real = value !== "emulator"
+  return (
+    <div className={`rounded-xl border px-3 py-2.5 ${real ? "border-teal-300/25 bg-teal-300/8" : "border-white/8 bg-slate-950/50"}`}>
+      <div className="text-[9.5px] font-black uppercase tracking-[0.14em] text-white/40">{BINDING_LABELS[capability] ?? capability}</div>
+      <div className={`text-[12.5px] font-black ${real ? "text-teal-200" : "text-white/55"}`}>{real ? value : "emulator"}</div>
+    </div>
+  )
+}
+
+/** Phase 16: secrets provider, node environment, and every *_BINDING switch in
+ *  effect — all from GET /api/setup/status's `environment` block (sanity lane,
+ *  already polled by JarvisDataProvider — zero new fetches). This is the same
+ *  "what's actually configured" honesty the rest of the page practices, applied to
+ *  the production-hardening workstream instead of a customer-facing capability. */
+function SystemHealthPanel() {
+  const { setupStatus, integrationsStatus } = useJarvis()
+  const env = setupStatus?.environment
+  const live = env !== undefined
+
+  return (
+    <Glass><div className="p-5">
+      <PanelHeader title="Production Readiness" sub="Secrets provider, environment, and every capability binding — real switches, real state." live={live} />
+
+      <div className="mb-4 grid gap-3 sm:grid-cols-2">
+        <div className="flex items-center gap-3 rounded-xl border border-white/8 bg-slate-950/50 px-4 py-3">
+          <Server className="h-4 w-4 shrink-0 text-teal-300" />
+          <div>
+            <div className="text-[9.5px] font-black uppercase tracking-[0.14em] text-white/40">Environment</div>
+            <div className="text-[13px] font-black text-white/85">{env?.nodeEnv ?? "—"}</div>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 rounded-xl border border-white/8 bg-slate-950/50 px-4 py-3">
+          <KeyRound className="h-4 w-4 shrink-0 text-teal-300" />
+          <div>
+            <div className="text-[9.5px] font-black uppercase tracking-[0.14em] text-white/40">Secrets provider</div>
+            <div className="text-[13px] font-black text-white/85">
+              {!env ? "—" : env.secretProvider.provider === "aws-secrets-manager" ? "AWS Secrets Manager" : "Plain env vars"}
+              {env?.secretProvider.loaded && <span className="ml-2 text-[10px] font-bold text-teal-300">loaded</span>}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="mb-2 text-[10px] font-black uppercase tracking-[0.16em] text-white/40">Capability bindings</div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {env ? (
+          Object.entries(env.bindings).map(([capability, value]) => <BindingChip key={capability} capability={capability} value={value} />)
+        ) : (
+          <div className="col-span-3 py-3 text-center text-[11.5px] text-white/35">Awaiting connection to the live API.</div>
+        )}
+      </div>
+      <p className="mt-3 text-[10.5px] text-white/35">
+        Every binding defaults to <code className="text-teal-200/80">emulator</code> — fully functional, zero real credentials required — until a dealer's
+        real provider keys are set and its <code className="text-teal-200/80">*_BINDING</code> env var is flipped. Same opt-in-only posture as{" "}
+        {integrationsStatus ? "the Payments & E-Sign providers above" : "every capability on this page"}.
+      </p>
+      <p className="mt-2 text-[10.5px] text-white/30">
+        RBAC (dispatcher/technician approval scopes) and per-request correlation-id tracing are enforced and logged server-side — verified by
+        <code className="ml-1 text-teal-200/80">tests/integration/rbac-approval.test.ts</code> and{" "}
+        <code className="text-teal-200/80">correlation-id.test.ts</code> in finnor-os, not surfaced here as a live feed to avoid faking data this page can&rsquo;t
+        actually observe.
+      </p>
+    </div></Glass>
+  )
+}
+
+export function SystemHealthView() {
+  return (
+    <div className="space-y-4">
+      <SystemHealthPanel />
     </div>
   )
 }

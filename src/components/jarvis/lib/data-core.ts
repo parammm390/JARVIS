@@ -124,11 +124,29 @@ export interface PhoneRoutingNumber {
   vapiPhoneNumberId: string | null
   label: string | null
 }
+/** Phase 16(c): a deploy's config posture, verifiable from this one endpoint instead
+ *  of grepping platform env-var UIs. Optional: older API deploys won't carry it yet. */
+export interface EnvironmentStatus {
+  nodeEnv: string
+  secretProvider: { provider: "env" | "aws-secrets-manager"; loaded: boolean; loadedAt: string | null }
+  bindings: {
+    scheduling: string
+    communications: string
+    documents: string
+    esign: string
+    inventory: string
+    accounting: string
+    payments: string
+    crm: string
+    marketing: string
+  }
+}
 export interface SetupStatus {
   actionTypes: SetupStatusEntry[]
   /** Phase 14: whether this tenant has a registered Vapi line for tenant-by-phone
    *  routing. Optional: older API deploys won't carry this field yet. */
   phoneRouting?: { configured: boolean; numbers: PhoneRoutingNumber[] }
+  environment?: EnvironmentStatus
 }
 export interface ProviderHealth {
   configured: boolean

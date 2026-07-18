@@ -14,7 +14,7 @@ import "./jarvis-theme.css"
 import { ConsoleAtmosphere, LiveDot } from "./atmosphere"
 import { CustomCursor } from "./CustomCursor"
 import { setMuted, sfx } from "./sound"
-import { LeadsView, WorkflowsView, InventoryView, InvoicesView, ComplianceView, ResearchView, VoiceConsoleView, CustomersView } from "./views"
+import { LeadsView, WorkflowsView, InventoryView, InvoicesView, ComplianceView, ResearchView, VoiceConsoleView, CustomersView, SystemHealthView } from "./views"
 import { JarvisDataProvider, useJarvis } from "./lib/data-core"
 import { useVapiSession } from "./lib/useVapiSession"
 import { deriveMood } from "./lib/mood"
@@ -34,7 +34,7 @@ import { CommandBar } from "./panels/CommandBar"
 import { ChannelDonut, ActionMixBars, AiPerformance } from "./panels/AnalyticsRow"
 import { SystemConsole } from "./panels/SystemConsole"
 import { JarvisOrb } from "./panels/JarvisOrb"
-import { Activity, BookUser, Boxes, CircleDollarSign, FlaskConical, Globe, LayoutGrid, PhoneCall, Users, Volume2, VolumeX, Workflow } from "lucide-react"
+import { Activity, BookUser, Boxes, CircleDollarSign, FlaskConical, Globe, LayoutGrid, PhoneCall, ShieldCheck, Users, Volume2, VolumeX, Workflow } from "lucide-react"
 
 const LiveCallPanel = dynamic(() => import("./panels/LiveCallPanel").then((m) => m.LiveCallPanel), { ssr: false })
 const ParticleField = dynamic(() => import("./panels/ParticleField").then((m) => m.ParticleField), { ssr: false })
@@ -50,6 +50,7 @@ const SIDEBAR = [
   { icon: FlaskConical, label: "Water Compliance" },
   { icon: Globe, label: "Web Research" },
   { icon: Activity, label: "Activity" },
+  { icon: ShieldCheck, label: "Production Readiness" },
 ]
 
 function CommandCenterHome({
@@ -279,6 +280,7 @@ function Shell() {
             {view === "Water Compliance" && <ComplianceView />}
             {view === "Web Research" && <ResearchView />}
             {view === "Activity" && <ActivityRail />}
+            {view === "Production Readiness" && <SystemHealthView />}
           </div>
 
           <p className="px-4 pb-6 text-center text-[10.5px] text-[color:var(--j-text-faint)]">
