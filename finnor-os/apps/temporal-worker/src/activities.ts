@@ -5,11 +5,26 @@
 
 import { FinnorOrchestrator, advanceWorkflowState } from "@finnor/orchestration";
 import { withTenant, maintenanceAgreements, invoices, domainPolicies, enqueueJob } from "@finnor/db";
+import { Context } from "@temporalio/activity";
 import { and, eq } from "drizzle-orm";
 import { startInvoiceToCash } from "../../../packages/domain-plugins/invoice-to-cash/index";
 import type { AmcRenewalInput } from "./workflows/amc-renewal-sequence";
 
 const CADENCE_MONTHS: Record<string, number> = { annual: 12, semi_annual: 6, quarterly: 3 };
+
+/** Phase 16(e): activities have no ctx/TenantContext.correlationId to thread — the
+ *  AMC renewal sequence's workflow args were never plumbed with one, and adding that
+ *  is a workflow-signature change, not "cheaply plumbable" per the doc's own scoping.
+ *  Temporal's own workflowId is a real, honest substitute (still greppable across the
+ *  worker's Sentry breadcrumbs and this activity's enqueueJob payload) — falls back to
+ *  undefined outside an activity context (e.g. a unit test calling this directly). */
+function activityCorrelationId(): string | undefined {
+  try {
+    return Context.current().info.workflowExecution?.workflowId;
+  } catch {
+    return undefined;
+  }
+}
 
 let orchestrator: FinnorOrchestrator | null = null;
 function getOrchestrator(): FinnorOrchestrator {
@@ -102,5 +117,6 @@ export async function notifyOwnerLapsed(input: AmcRenewalInput): Promise<void> {
       script: `Heads up — ${input.householdLabel}'s ${input.cadence} maintenance renewal went unanswered after two reminders and has lapsed. Want me to try a phone call instead?`,
     },
     `amc-lapsed:${input.agreementId}`,
+    activityCorrelationId(),
   );
 }

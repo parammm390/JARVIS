@@ -16,6 +16,11 @@ export const GateStateAnnotation = Annotation.Root({
   draft: Annotation<DraftAction | undefined>,
   decision: Annotation<"approve" | "reject" | undefined>,
   result: Annotation<ExecutionResult | undefined>,
+  // Phase 16(e): threaded from DomainAction.correlationId at invoke time (see
+  // graph/executor.ts) so the gate node's voice_confirm_request/voice_notify_failure
+  // enqueues can tag it too — optional, so existing checkpointed runs without it
+  // (started before this field existed) simply resume with it undefined.
+  correlationId: Annotation<string | undefined>,
 });
 
 export type GateState = typeof GateStateAnnotation.State;

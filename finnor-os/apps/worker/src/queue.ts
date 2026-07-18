@@ -3,6 +3,7 @@
 
 import { getPool } from "@finnor/db";
 import type { Job } from "@finnor/shared-types";
+import { Sentry } from "@finnor/tools";
 
 export type JobHandler = (payload: Record<string, unknown>) => Promise<void>;
 
@@ -81,11 +82,24 @@ export class JobQueue {
     }
 
     const handler = this.handlers.get(job.type);
+    // Phase 16(e): correlation id rides inside payload as _correlationId (enqueueJob's
+    // doing) — fall back to the job's own id so every dispatch is greppable even when
+    // no caller had a ctx to thread one through (draftKnownAction/system scans).
+    const payload = job.payload as Record<string, unknown>;
+    const correlationId = (payload._correlationId as string | undefined) ?? job.id;
+    const start = Date.now();
     try {
-      if (!handler) throw new Error(`No handler registered for job type ${job.type}`);
-      await handler(job.payload as Record<string, unknown>);
+      await Sentry.withScope(async (scope) => {
+        scope.setTag("correlation_id", correlationId);
+        scope.setTag("job_type", job.type);
+        if (!handler) throw new Error(`No handler registered for job type ${job.type}`);
+        await handler(payload);
+      });
+      Sentry.addBreadcrumb({ category: "job", message: job.type, data: { ok: true, ms: Date.now() - start, correlationId } });
       await getPool().query(`UPDATE jobs SET status = 'completed', started_at = NULL WHERE id = $1`, [job.id]);
     } catch (err) {
+      Sentry.addBreadcrumb({ category: "job", message: job.type, data: { ok: false, ms: Date.now() - start, correlationId } });
+      Sentry.captureException(err);
       const attempts = Number(job.attempts) + 1;
       const max = Number((job as unknown as { max_attempts: number }).max_attempts ?? 3);
       const dead = attempts >= max;

@@ -7,6 +7,11 @@ export interface TenantContext {
   tenantId: string;
   userId: string;
   role: Role;
+  /** Phase 16(e): per-request trace id, generated (or forwarded from an inbound
+   *  `x-correlation-id` header) in requireContext. Threaded through enqueueJob's
+   *  payload and worker breadcrumbs so one instruction's effects are greppable across
+   *  process boundaries — not a DB column, never persisted on its own. */
+  correlationId?: string;
 }
 
 export type DomainActionStatus =
@@ -37,6 +42,11 @@ export interface DomainAction {
    *  phase or by a path that bypasses the compiler. See packages/orchestration/src/compiler.ts. */
   groundedPayload?: Array<{ field: string; status: "verified" | "not_found" | "unverifiable" }> | null;
   compiledGraph?: { kind: "workflow" | "single_action"; commandType: string; requiresConfirmation: boolean; autoApprove: boolean } | null;
+  /** Phase 16(e): carried from TenantContext.correlationId when a ctx is available
+   *  (handleInstruction). Not a DB column — in-memory only, so draftKnownAction/
+   *  runAction paths (no ctx) simply leave it undefined; enqueueJob falls back to the
+   *  job's own id in that case (see queue.ts). */
+  correlationId?: string;
 }
 
 export interface DomainPolicy {

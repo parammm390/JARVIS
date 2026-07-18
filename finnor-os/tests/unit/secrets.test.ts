@@ -77,6 +77,20 @@ describe("secrets manager", () => {
     delete process.env.MY_TEST_KEY;
   });
 
+  it("malformed FINNOR_SECRET_IDS JSON throws a clear error, not a cryptic parse failure", async () => {
+    process.env.SECRETS_PROVIDER = "aws-secrets-manager";
+    process.env.FINNOR_SECRET_IDS = "{not valid json";
+    const { ensureSecretsLoaded } = await import("@finnor/security");
+    await expect(ensureSecretsLoaded()).rejects.toThrow(/FINNOR_SECRET_IDS is invalid JSON/);
+  });
+
+  it("FINNOR_SECRET_IDS as a JSON array (not an object) is rejected the same way", async () => {
+    process.env.SECRETS_PROVIDER = "aws-secrets-manager";
+    process.env.FINNOR_SECRET_IDS = '["not", "an", "object"]';
+    const { ensureSecretsLoaded } = await import("@finnor/security");
+    await expect(ensureSecretsLoaded()).rejects.toThrow(/FINNOR_SECRET_IDS is invalid JSON/);
+  });
+
   it("does not retry a non-retryable AWS error (AccessDenied) — fails fast", async () => {
     process.env.SECRETS_PROVIDER = "aws-secrets-manager";
     process.env.FINNOR_SECRET_IDS = JSON.stringify({ MY_TEST_KEY: "arn:aws:secretsmanager:us-east-1:123:secret:test" });

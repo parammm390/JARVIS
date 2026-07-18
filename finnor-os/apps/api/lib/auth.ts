@@ -3,6 +3,7 @@
 // AUTH_DEV_BYPASS=1 allows header-based identity for local dev and integration tests only.
 
 import { createClient } from "@supabase/supabase-js";
+import { randomUUID } from "node:crypto";
 import { getPool } from "@finnor/db";
 import type { TenantContext, Role } from "@finnor/shared-types";
 import { ensureSecretsLoaded } from "@finnor/security";
@@ -34,8 +35,19 @@ async function resolveUserByEmail(email: string): Promise<TenantContext | null> 
   return { userId: row.id, tenantId: row.tenant_id, role: row.role as Role };
 }
 
+/** Phase 16(e): forward an inbound trace id (a caller's own retry/proxy hop) or mint a
+ *  fresh one. Tagged onto the current Sentry scope so every breadcrumb/error this
+ *  request produces — here and later in the worker/Temporal, once threaded through
+ *  enqueueJob — carries the same id, without adding any new tracing vendor. */
+function resolveCorrelationId(req: Request): string {
+  const correlationId = req.headers.get("x-correlation-id") ?? randomUUID();
+  Sentry.getCurrentScope().setTag("correlation_id", correlationId);
+  return correlationId;
+}
+
 export async function requireContext(req: Request): Promise<TenantContext> {
   await ensureSecretsLoaded();
+  const correlationId = resolveCorrelationId(req);
   // Dev-bypass never applies in production, REGARDLESS of the env var's value — a
   // misconfigured prod deploy that left AUTH_DEV_BYPASS=1 set must not accept forged
   // x-tenant-id headers just because the flag was never flipped off.
@@ -45,7 +57,7 @@ export async function requireContext(req: Request): Promise<TenantContext> {
     const role = (req.headers.get("x-user-role") ?? "owner") as Role;
     if (tenantId) {
       await enforceRateLimit(`tenant:${tenantId}`);
-      return { tenantId, userId, role };
+      return { tenantId, userId, role, correlationId };
     }
   }
 
@@ -64,7 +76,7 @@ export async function requireContext(req: Request): Promise<TenantContext> {
   const ctx = await resolveUserByEmail(data.user.email);
   if (!ctx) throw new AuthError("User has no tenant — contact your administrator", 403);
   await enforceRateLimit(`tenant:${ctx.tenantId}`);
-  return ctx;
+  return { ...ctx, correlationId };
 }
 
 async function enforceRateLimit(bucketKey: string): Promise<void> {

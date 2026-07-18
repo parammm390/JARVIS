@@ -8,6 +8,7 @@
 import { createDefaultPluginRegistry } from "@finnor/orchestration";
 import { testAdsConnections, testQuickBooksConnection, testVapiConnection, ghlIntegrationStatus, temporalProviderStatus } from "@finnor/tools";
 import { zepProviderStatus } from "@finnor/memory";
+import { secretProviderStatus } from "@finnor/security";
 import { adminDb, tenantPhoneNumbers } from "@finnor/db";
 import { eq } from "drizzle-orm";
 import { requireContext, errorResponse } from "../../../../lib/auth";
@@ -75,7 +76,26 @@ export async function GET(req: Request): Promise<Response> {
 
     const phoneRouting = { configured: phoneNumberRows.length > 0, numbers: phoneNumberRows };
 
-    return Response.json({ actionTypes, integrations, summary, phoneRouting }, { headers: { "cache-control": "no-store" } });
+    // Phase 16(c): a staging (or prod) deploy's config posture, verifiable from this one
+    // endpoint instead of grepping platform env-var UIs. Bindings default to "emulator" —
+    // the same safe-until-opted-in posture every *_BINDING switch already has.
+    const environment = {
+      nodeEnv: process.env.NODE_ENV ?? "development",
+      secretProvider: secretProviderStatus(),
+      bindings: {
+        scheduling: process.env.SCHEDULING_BINDING ?? "emulator",
+        communications: process.env.COMMUNICATIONS_BINDING ?? "emulator",
+        documents: process.env.DOCUMENTS_BINDING ?? "emulator",
+        esign: process.env.ESIGN_BINDING ?? "emulator",
+        inventory: process.env.INVENTORY_BINDING ?? "emulator",
+        accounting: process.env.ACCOUNTING_BINDING ?? "emulator",
+        payments: process.env.PAYMENTS_BINDING ?? "emulator",
+        crm: process.env.CRM_BINDING ?? "emulator",
+        marketing: process.env.MARKETING_BINDING ?? "emulator",
+      },
+    };
+
+    return Response.json({ actionTypes, integrations, summary, phoneRouting, environment }, { headers: { "cache-control": "no-store" } });
   } catch (err) {
     return errorResponse(err);
   }

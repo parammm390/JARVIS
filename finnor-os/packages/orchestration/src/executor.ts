@@ -61,6 +61,7 @@ export class GatedExecutor implements Executor {
           "voice_confirm_request",
           { tenantId: action.tenantId, actionId: action.id, script: buildConfirmationScript(draft.summary) },
           `voice-confirm:${action.id}`,
+          action.correlationId,
         ).catch(() => undefined); // queue trouble must never break the gate itself
       }
       // Stop here. Execution resumes only via POST /actions/:id/confirm or a spoken yes.
@@ -109,6 +110,7 @@ export class GatedExecutor implements Executor {
         "voice_notify_failure",
         { tenantId: action.tenantId, actionId: action.id, script: diagnoseFailure(result.error, action.actionType) },
         `voice-fail:${action.id}`,
+        action.correlationId,
       ).catch(() => undefined);
     }
     return result;

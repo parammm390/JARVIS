@@ -76,4 +76,18 @@ describe.skipIf(!available)("GET /api/setup/status — phoneRouting (Phase 14)",
     expect(body.phoneRouting.numbers).toHaveLength(1);
     expect(body.phoneRouting.numbers[0]!.phoneNumber).toBe(myNumber);
   });
+
+  it("reports the environment block (Phase 16c): nodeEnv, secret provider, and every binding switch", async () => {
+    const res = await GET(req());
+    const body = (await res.json()) as {
+      environment: { nodeEnv: string; secretProvider: { provider: string; loaded: boolean }; bindings: Record<string, string> };
+    };
+    expect(body.environment.nodeEnv).toBeTruthy();
+    expect(body.environment.secretProvider.provider).toBe("env"); // no SECRETS_PROVIDER set in this test run
+    // Every binding defaults to "emulator" until a dealer opts a real provider in —
+    // same safe-until-configured posture as the *_BINDING switches themselves.
+    for (const key of ["scheduling", "communications", "documents", "esign", "inventory", "accounting", "payments", "crm", "marketing"]) {
+      expect(body.environment.bindings[key]).toBe("emulator");
+    }
+  });
 });

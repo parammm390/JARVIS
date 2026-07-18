@@ -67,6 +67,7 @@ export function makeGateNode() {
         "voice_confirm_request",
         { tenantId: state.tenantId, actionId: state.actionId, script: buildConfirmationScript(state.draft!.summary) },
         `voice-confirm:${state.actionId}`,
+        state.correlationId,
       ).catch(() => undefined);
     }
     return {};
@@ -121,6 +122,7 @@ export function makeExecuteNode(plugins: PluginRegistry, tools: ToolRegistry) {
         "voice_notify_failure",
         { tenantId: state.tenantId, actionId: state.actionId, script: diagnoseFailure(result.error, state.actionType) },
         `voice-fail:${state.actionId}`,
+        state.correlationId,
       ).catch(() => undefined);
     }
     return { result };

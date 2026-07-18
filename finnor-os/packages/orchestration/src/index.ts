@@ -105,7 +105,11 @@ export class FinnorOrchestrator implements Orchestrator {
       resultOutput: Record<string, unknown>;
     }> = [];
     await Promise.all(
-      actions.map(async (action) => {
+      actions.map(async (rawAction) => {
+        // Phase 16(e): tag this instruction's correlation id onto the action so the
+        // executor's own enqueueJob calls (voice_confirm_request/voice_notify_failure)
+        // can thread it through — in-memory only, never a DB column (see DomainAction.correlationId).
+        const action: DomainAction = ctx.correlationId ? { ...rawAction, correlationId: ctx.correlationId } : rawAction;
         await appendEpisode(ctx.tenantId, action.id, "planned", { instruction }, { actionType: action.actionType, reasoning: action.reasoning ?? null });
         const policy = await this.loadPolicy(action);
         const result = await this.executor.execute(action, policy);
@@ -124,7 +128,7 @@ export class FinnorOrchestrator implements Orchestrator {
           // here (LLM-planned, instruction-driven actions) and not from
           // draftKnownAction (deterministic system scans have no instruction to
           // misinterpret — nothing for a critic to check).
-          await enqueueJob("critic_review", { tenantId: ctx.tenantId, actionId: action.id }, `critic:${action.id}`).catch(() => undefined);
+          await enqueueJob("critic_review", { tenantId: ctx.tenantId, actionId: action.id }, `critic:${action.id}`, ctx.correlationId).catch(() => undefined);
         }
         turnResults.push({
           actionType: action.actionType,

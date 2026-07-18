@@ -21,6 +21,32 @@ Production backups are **not** this script — Supabase manages backups differen
 - **Restore drills in production**: **never restore into the live project.** Create a **separate** Supabase project (or a local instance) and restore there — the same pattern the local drill script follows (throwaway database, never the source). Verify row counts / spot-check a few tables, then tear the restore target down.
 - **PITR restore**: handled entirely through the Supabase dashboard (Database → Backups → Point in Time Recovery) — this creates a new project from a timestamp, it does not modify the live project in place.
 
+## Last drill attempt (Phase 16b, 2026-07-18)
+
+Attempted to run `scripts/backup-restore-drill.ts` for real against the dev database
+from this session's sandboxed environment. Result: **still blocked on client tools —
+honestly, not run.** What was checked before concluding that:
+
+- `which pg_dump pg_restore createdb dropdb` — none present on `PATH`.
+- No `brew`, no `docker`, no `conda` available in this environment (all three absent).
+- The project's own `@embedded-postgres/darwin-arm64` package (already a devDependency)
+  was inspected directly — `node_modules/@embedded-postgres/darwin-arm64/native/bin/`
+  contains exactly `initdb`, `pg_ctl`, `postgres`. No client tools, confirming this
+  doc's existing claim rather than just repeating it.
+- Searched the npm registry and PyPI for a portable, prebuilt `pg_dump`/`pg_restore`
+  binary distribution installable without a package manager or container — found
+  nothing that ships the actual CLI tools (only libpq bindings, ORMs, or unrelated
+  packages).
+- A filesystem-wide search for a pre-existing `pg_dump` binary (Postgres.app,
+  `/usr/local`, `/opt/homebrew`) also came up empty.
+
+**Conclusion: the drill remains human-blocked on Postgres client tools**, exactly the
+condition this doc already described. Nothing beyond that condition has changed. The
+correct next step is still: run `npx tsx scripts/backup-restore-drill.ts` from a real
+development machine or CI image with `postgresql-client` installed (`brew install
+postgresql`, `apt install postgresql-client`, or a CI image that already has it) — the
+script itself is unchanged and ready to execute the moment client tools are present.
+
 ## What to verify after any real restore
 
 1. Row counts on `tenants`, `domain_actions`, `action_log`, `domain_policies` roughly match expectations for the restore point.

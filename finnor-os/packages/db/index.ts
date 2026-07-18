@@ -90,15 +90,20 @@ export async function closePool(): Promise<void> {
   }
 }
 
-/** Idempotent job enqueue — safe to call twice with the same key (§16). */
+/** Idempotent job enqueue — safe to call twice with the same key (§16). `correlationId`
+ *  (Phase 16e) rides inside payload as `_correlationId` rather than a new column — the
+ *  worker reads it back off `job.payload` at dispatch time (see apps/worker/src/queue.ts),
+ *  so no migration is needed and every existing caller that omits it is unaffected. */
 export async function enqueueJob(
   type: string,
   payload: Record<string, unknown>,
   idempotencyKey?: string,
+  correlationId?: string,
 ): Promise<void> {
+  const fullPayload = correlationId ? { ...payload, _correlationId: correlationId } : payload;
   await getPool().query(
     `INSERT INTO jobs (type, payload, idempotency_key) VALUES ($1, $2, $3)
      ON CONFLICT (idempotency_key) DO NOTHING`,
-    [type, JSON.stringify(payload), idempotencyKey ?? null],
+    [type, JSON.stringify(fullPayload), idempotencyKey ?? null],
   );
 }

@@ -392,12 +392,22 @@ export async function seed(databaseUrl = process.env.DATABASE_URL): Promise<void
       [SEED_TENANT_ID],
     );
 
-    // RBAC matrix: owners approve everything; dispatchers approve scheduling only.
+    // RBAC matrix (Phase 16d): owners approve everything; dispatchers approve
+    // scheduling/communication action types only (the ones a dispatcher's job
+    // actually touches — never invoicing, never anything with money); technicians
+    // approve nothing. No-rows-for-a-tenant falls back to owner-only (canApprove's
+    // safe default) — this baseline exists so a real tenant isn't relying on that
+    // fallback alone.
     await client.query(
       `INSERT INTO role_permissions (tenant_id, role, action_type, can_approve)
        SELECT $1, r.role, r.action_type, r.can_approve FROM (VALUES
          ('owner','*', true),
          ('dispatcher','schedule_water_test', true),
+         ('dispatcher','reschedule_visit', true),
+         ('dispatcher','assign_technician_to_visit', true),
+         ('dispatcher','send_customer_message', true),
+         ('dispatcher','send_follow_up', true),
+         ('dispatcher','start_water_test_workflow', true),
          ('technician','*', false)
        ) AS r(role, action_type, can_approve)
        WHERE NOT EXISTS (SELECT 1 FROM role_permissions WHERE tenant_id=$1)`,

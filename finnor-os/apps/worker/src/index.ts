@@ -2,6 +2,7 @@
 
 import "dotenv/config";
 
+import { initObservability } from "@finnor/tools";
 import { JobQueue } from "./queue";
 import { sendMessage } from "./handlers/send-message";
 import { scheduledReminder } from "./handlers/scheduled-reminder";
@@ -65,6 +66,10 @@ const PROACTIVE_SCANS: ScheduledScan[] = [
 
 const isMain = process.argv[1]?.endsWith("index.ts") || process.argv[1]?.endsWith("index.js");
 if (isMain) {
+  // Phase 16(e): the worker never initialized Sentry before this — a crash here was
+  // console.error or nothing (ground-truth §5). initObservability() no-ops harmlessly
+  // without SENTRY_DSN, so this is safe to call unconditionally at boot.
+  initObservability();
   const controller = new AbortController();
   process.on("SIGTERM", () => controller.abort());
   process.on("SIGINT", () => controller.abort());
