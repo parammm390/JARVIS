@@ -770,6 +770,10 @@ export const outboxEvents = pgTable("outbox_events", {
   // Envelope major version (§2.2b) — a relayer that doesn't recognize the version
   // rejects the event into dead_letters rather than guessing at an unknown payload shape.
   envelopeVersion: integer("envelope_version").notNull().default(1),
+  // §2.3: jittered backoff delay + last classified failure kind. next_attempt_at is
+  // NULL for a never-yet-attempted row (immediately claimable).
+  nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }),
+  lastErrorKind: text("last_error_kind"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   deliveredAt: timestamp("delivered_at", { withTimezone: true }),
 });
