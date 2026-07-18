@@ -5,7 +5,7 @@
 // file's lease_expires_at is an additional, finer-grained atomic claim on top of the
 // job-level lease, not a second queue system.
 
-import { withTenant, enqueueJob, workflowSteps, workflowRuns, commands, integrationOperations, reconciliationCases } from "@finnor/db";
+import { withTenant, enqueueJob, workflowSteps, workflowRuns, commands, integrationOperations, reconciliationCases, domainActions, domainPolicies } from "@finnor/db";
 import { and, eq, lt, sql, desc } from "drizzle-orm";
 import { maybeChaosKill } from "./chaos";
 import { openReconciliationCase } from "./reconciliation";
@@ -38,13 +38,24 @@ async function openReceiptForFirstClaim(tenantId: string, step: WorkflowStepRow)
   try {
     const [run] = await withTenant(tenantId, (db) => db.select().from(workflowRuns).where(eq(workflowRuns.id, step.workflowRunId)));
     const [command] = run ? await withTenant(tenantId, (db) => db.select().from(commands).where(eq(commands.id, run.commandId))) : [undefined];
+    // §3.1: policyApplied cites the REAL policy row that gated this step's parent
+    // domain_action, when one exists — a system-drafted scan step or a chaos-test
+    // step with no domain_action_id honestly gets null, not a fabricated reference.
+    let policyApplied: { id: string; version: number } | null = null;
+    if (step.domainActionId) {
+      const [action] = await withTenant(tenantId, (db) => db.select().from(domainActions).where(eq(domainActions.id, step.domainActionId!)));
+      if (action?.policyId) {
+        const [policy] = await withTenant(tenantId, (db) => db.select().from(domainPolicies).where(eq(domainPolicies.id, action.policyId!)));
+        if (policy) policyApplied = { id: policy.id, version: policy.version };
+      }
+    }
     await openReceipt({
       tenantId,
       workflowRunId: step.workflowRunId,
       workflowStepId: step.id,
       objective: `${run?.workflowType ?? "workflow"}: ${step.stepType}`,
       evidence: [{ source: "workflow_step", ref: step.id, timestamp: new Date().toISOString() }],
-      policyApplied: null,
+      policyApplied,
       riskTier: "medium",
       proposedAction: { stepType: step.stepType, payload: step.payload },
       approval: { required: true, approvedBy: command?.requestedBy ?? undefined, at: command?.createdAt.toISOString() },

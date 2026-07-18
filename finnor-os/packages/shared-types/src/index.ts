@@ -63,6 +63,9 @@ export interface DomainPolicy {
    *  escalates it to needs_human_review. Unset/null means the application default
    *  (24h) applies. */
   confirmationTimeoutHours?: number | null;
+  /** §3.1: what decision_receipts.policy_applied.version cites — bumped whenever this
+   *  row's config changes. Defaults to 1 on every new row (migration 0023). */
+  version: number;
 }
 
 /** Phase 8: how much extra reasoning depth a drafted action gets before it's

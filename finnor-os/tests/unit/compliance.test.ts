@@ -18,6 +18,7 @@ const EPA_POLICY: DomainPolicy = {
   },
   requiresConfirmation: false,
   confirmationTemplate: null,
+  version: 1,
 };
 
 describe("generate_compliance_summary — real EPA reference data", () => {

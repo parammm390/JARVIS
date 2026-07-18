@@ -57,6 +57,11 @@ export async function PUT(req: Request, { params }: Params): Promise<Response> {
             requiresConfirmation: body.data.requiresConfirmation,
             confirmationTemplate: body.data.confirmationTemplate ?? null,
             modelProvider: body.data.modelProvider ?? null,
+            confirmationTimeoutHours: body.data.confirmationTimeoutHours ?? null,
+            // §3.1: a real edit is a real new version — never caller-supplied (a
+            // client can't be trusted to increment its own audit trail), always +1
+            // from whatever's actually stored, regardless of what body.data.version says.
+            version: existing.version + 1,
           })
           .where(eq(domainPolicies.id, existing.id))
           .returning();
@@ -71,6 +76,8 @@ export async function PUT(req: Request, { params }: Params): Promise<Response> {
           requiresConfirmation: body.data.requiresConfirmation,
           confirmationTemplate: body.data.confirmationTemplate ?? null,
           modelProvider: body.data.modelProvider ?? null,
+          confirmationTimeoutHours: body.data.confirmationTimeoutHours ?? null,
+          // version omitted — column default (1) applies to a genuinely first-ever row.
         })
         .returning();
       return created!;

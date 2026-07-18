@@ -9,6 +9,7 @@ const policy: DomainPolicy = {
   policy: { renewal_window_days: 30, price_usd: 199, cadence_options: ["annual"] },
   requiresConfirmation: true,
   confirmationTemplate: "Send a renewal offer to {{household}} for their {{cadence}} maintenance agreement. Approve?",
+  version: 1,
 };
 
 describe("maintenance-agreement plugin", () => {

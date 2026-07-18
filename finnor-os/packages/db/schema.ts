@@ -126,6 +126,10 @@ export const domainPolicies = pgTable(
     // escalates it to needs_human_review. Null = the application-level default (24h)
     // applies — never a fabricated per-row guess.
     confirmationTimeoutHours: integer("confirmation_timeout_hours"),
+    // §3.1: bumped whenever this row's policy/requiresConfirmation config changes —
+    // what decision_receipts.policy_applied.version actually cites (previously always
+    // null, migration 0023).
+    version: integer("version").notNull().default(1),
   },
   (t) => [index("domain_policies_tenant_action_idx").on(t.tenantId, t.actionType)],
 );

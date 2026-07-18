@@ -14,6 +14,7 @@ const placeholderPolicy = (actionType: string): DomainPolicy => ({
   policy: { some_rule: "PLACEHOLDER_NEEDS_REAL_VALUE" },
   requiresConfirmation: false, // the scaffold must OVERRIDE this to true
   confirmationTemplate: null,
+  version: 1,
 });
 
 const ALL_EXPECTED_ACTION_TYPES = [

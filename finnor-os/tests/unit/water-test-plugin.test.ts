@@ -9,6 +9,7 @@ const policy: DomainPolicy = {
   policy: { service_radius_miles: 25, default_duration_minutes: 45, allowed_windows: ["09:00-12:00"] },
   requiresConfirmation: true,
   confirmationTemplate: "Schedule a water test at {{address}} on {{scheduled_at}} with {{technician}}. Approve?",
+  version: 1,
 };
 
 describe("water-test plugin", () => {

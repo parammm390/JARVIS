@@ -280,6 +280,7 @@ export class LLMPlanner implements Planner {
         policy: {},
         requiresConfirmation: true,
         confirmationTemplate: null,
+        version: 0,
       };
       const policy = policyByType.get(verdict.actionType) ?? fallbackPolicy;
       const validation = targetPlugin?.validate(verdict.actionType, verdict.payload, policy);

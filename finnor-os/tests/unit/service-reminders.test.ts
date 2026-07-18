@@ -17,6 +17,7 @@ function fakePolicy(overrides: Record<string, unknown>): DomainPolicy {
     policy: overrides,
     requiresConfirmation: false,
     confirmationTemplate: null,
+    version: 1,
   };
 }
 

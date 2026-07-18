@@ -52,6 +52,10 @@ export function defaultPolicy(tenantId: string, actionType: string): DomainPolic
     // Default-deny posture: no configured policy → always require a human.
     requiresConfirmation: true,
     confirmationTemplate: null,
+    // No real row exists — version 0 marks this as never having been a stored policy
+    // (real rows start at 1, migration 0023's default), so a receipt citing version 0
+    // is honestly distinguishable from one that cites an actual configured policy.
+    version: 0,
   };
 }
 
@@ -280,6 +284,7 @@ export class FinnorOrchestrator implements Orchestrator {
           confirmationTemplate: row.confirmationTemplate,
           modelProvider: row.modelProvider ?? undefined,
           confirmationTimeoutHours: row.confirmationTimeoutHours ?? undefined,
+          version: row.version,
         };
     this.policyCache.set(cacheKey, { at: Date.now(), policy });
     return policy;

@@ -29,6 +29,9 @@ export const DomainPolicySchema = z.object({
   // escalates it to needs_human_review — never auto-approved, never auto-rejected.
   // Unset means the application default (24h) applies.
   confirmationTimeoutHours: z.number().int().positive().nullable().optional(),
+  // §3.1: what decision_receipts.policy_applied.version cites. Real rows start at 1
+  // (migration 0023's column default) — never a fabricated per-row guess.
+  version: z.number().int().nonnegative(),
 });
 export type DomainPolicyInput = z.infer<typeof DomainPolicySchema>;
 
@@ -66,6 +69,9 @@ export const UpsertPolicySchema = z.object({
   confirmationTemplate: z.string().nullable().optional(),
   modelProvider: z.string().optional(),
   confirmationTimeoutHours: z.number().int().positive().nullable().optional(),
+  // Server-side upsert logic bumps this on a real config change (see
+  // scripts/seed-tenant-policies.ts) — a caller may omit it and let the server decide.
+  version: z.number().int().positive().optional(),
 });
 
 export const AuditQuerySchema = z.object({
