@@ -34,6 +34,7 @@ import {
   serviceVisits,
   communicationsLog,
   leads,
+  inventoryItems,
 } from "@finnor/db";
 import { createLead } from "@finnor/data-platform";
 import { and, eq, sql } from "drizzle-orm";
@@ -229,11 +230,48 @@ async function ensureOpenLeads(): Promise<void> {
   });
 }
 
+// §3.4: real stockroom inventory — a mix of healthy and below-threshold items so
+// scan_low_inventory has something real to find (flag_reorder_needed). Cost is a real
+// plausible wholesale figure (~55-60% of the retail price-book price for the same SKU,
+// docs/policy-matrix.md §Pricing), not a guess disconnected from the rest of the seed.
+const DEALER_ZERO_INVENTORY: Array<{ sku: string; name: string; quantity: number; reorderThreshold: number; unitCostUsd: number }> = [
+  { sku: "FILT-SED", name: "Sediment Pre-Filter Cartridge", quantity: 8, reorderThreshold: 15, unitCostUsd: 10 }, // below threshold
+  { sku: "FILT-CARB", name: "Carbon Block Filter Cartridge", quantity: 6, reorderThreshold: 15, unitCostUsd: 14 }, // below threshold
+  { sku: "MEMB-RO", name: "RO Membrane Replacement (50 GPD)", quantity: 3, reorderThreshold: 5, unitCostUsd: 36 }, // below threshold
+  { sku: "SALT-BAG", name: "Water Softener Salt (40lb bag)", quantity: 40, reorderThreshold: 20, unitCostUsd: 5 },
+  { sku: "FILT-WH-SED", name: "Whole-House Sediment Filter Housing", quantity: 10, reorderThreshold: 8, unitCostUsd: 82 },
+  { sku: "FILT-WH-CARB", name: "Whole-House Carbon Filtration System", quantity: 4, reorderThreshold: 3, unitCostUsd: 360 },
+];
+
+async function ensureInventory(): Promise<void> {
+  await withTenant(DEALER_ZERO_TENANT_ID, async (db) => {
+    for (const item of DEALER_ZERO_INVENTORY) {
+      const [existing] = await db.select().from(inventoryItems).where(and(eq(inventoryItems.tenantId, DEALER_ZERO_TENANT_ID), eq(inventoryItems.sku, item.sku)));
+      if (existing) {
+        await db
+          .update(inventoryItems)
+          .set({ quantity: item.quantity, reorderThreshold: item.reorderThreshold, unitCostUsd: String(item.unitCostUsd) })
+          .where(eq(inventoryItems.id, existing.id));
+      } else {
+        await db.insert(inventoryItems).values({
+          tenantId: DEALER_ZERO_TENANT_ID,
+          sku: item.sku,
+          name: item.name,
+          quantity: item.quantity,
+          reorderThreshold: item.reorderThreshold,
+          unitCostUsd: String(item.unitCostUsd),
+        });
+      }
+    }
+  });
+}
+
 export interface SeedDealerZeroResult {
   tenantId: string;
   technicianCount: number;
   establishedHouseholdCount: number;
   openLeadCount: number;
+  inventoryItemCount: number;
 }
 
 export async function seedDealerZero(): Promise<SeedDealerZeroResult> {
@@ -241,11 +279,13 @@ export async function seedDealerZero(): Promise<SeedDealerZeroResult> {
   const technicianIds = await ensureTechnicians();
   const householdIds = await ensureEstablishedHouseholds(technicianIds);
   await ensureOpenLeads();
+  await ensureInventory();
   return {
     tenantId: DEALER_ZERO_TENANT_ID,
     technicianCount: technicianIds.length,
     establishedHouseholdCount: householdIds.length,
     openLeadCount: OPEN_LEAD_COUNT,
+    inventoryItemCount: DEALER_ZERO_INVENTORY.length,
   };
 }
 
@@ -255,7 +295,7 @@ if (isMain) {
     .then(async (result) => {
       console.log(`Dealer Zero tenant: ${result.tenantId}`);
       console.log(`Technicians: ${result.technicianCount}, established households: ${result.establishedHouseholdCount}, open leads: ${result.openLeadCount}`);
-      console.log(`Total households: ${result.establishedHouseholdCount + result.openLeadCount}`);
+      console.log(`Total households: ${result.establishedHouseholdCount + result.openLeadCount}, inventory items: ${result.inventoryItemCount}`);
       await closePool();
     })
     .catch(async (err) => {

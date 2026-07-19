@@ -55,12 +55,12 @@ forward into the real matrix below to avoid documenting fictional configuration)
 | `log_interaction` | true | low |
 | `assign_lead_to_technician` | true | medium |
 
-## 4. inventory (no policy fields read)
-| Action | Confirmation | Risk |
-|---|---|---|
-| `check_stock_level` | false (read-only) | low |
-| `flag_reorder_needed` | false (a flag, not a reorder — no inventory movement) | low |
-| `log_stock_used_on_visit` | true (moves inventory) | medium |
+## 4. inventory
+| Action | PF | Chosen value | Confirmation | Risk |
+|---|---|---|---|---|
+| `check_stock_level` | — | — | false (read-only) | low |
+| `flag_reorder_needed` | `autoDraftReorderFlags` (read by `scan_low_inventory`, not the plugin itself) | **true** — §3.4 detection loop: below-threshold stock drafts a real flag_reorder_needed action instead of only a scan_findings row | false (a flag, not a reorder — no inventory movement) | low |
+| `log_stock_used_on_visit` | — | — | true (moves inventory) | medium |
 
 ## 5. scheduling (no policy fields read)
 | Action | Confirmation | Risk |
@@ -94,12 +94,12 @@ forward into the real matrix below to avoid documenting fictional configuration)
 | | `channel` | `sms` | | |
 | | `message_template` | *(plugin default)* | | |
 
-## 9. customer-comm (no policy fields read)
-| Action | Confirmation | Risk |
-|---|---|---|
-| `answer_customer_question` | true (answer reaches a customer) | medium |
-| `send_customer_message` | true (hardcoded in code) | medium |
-| `send_follow_up` | true (hardcoded in code) | medium |
+## 9. customer-comm
+| Action | PF | Chosen value | Confirmation | Risk |
+|---|---|---|---|---|
+| `answer_customer_question` | — | — | true (answer reaches a customer) | medium |
+| `send_customer_message` | — | — | true (hardcoded in code) | medium |
+| `send_follow_up` | `serviceDueScript` (read by `scan_service_due`, not the plugin itself) | **"Hi! Our records show your {{equipmentType}} may be due for service. Reply or call to book a visit — happy to answer any questions in the meantime."** — §3.4 detection loop: a due reminder drafts a real, gated send_follow_up instead of only a scan_findings row | true (hardcoded in code) | medium |
 
 ## 10. water-domain-knowledge (no policy fields read)
 | Action | Confirmation | Risk |

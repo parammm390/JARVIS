@@ -44,7 +44,9 @@ function policyRows(reviewLinkUrl: string | null): PolicyRow[] {
     { actionType: "assign_lead_to_technician", policy: {}, requiresConfirmation: true },
 
     { actionType: "check_stock_level", policy: {}, requiresConfirmation: false },
-    { actionType: "flag_reorder_needed", policy: {}, requiresConfirmation: false },
+    // autoDraftReorderFlags is read by scan_low_inventory, not the plugin itself — §3.4
+    // detection loop: below-threshold stock drafts a real flag_reorder_needed action.
+    { actionType: "flag_reorder_needed", policy: { autoDraftReorderFlags: true }, requiresConfirmation: false },
     { actionType: "log_stock_used_on_visit", policy: {}, requiresConfirmation: true },
 
     { actionType: "assign_technician_to_visit", policy: {}, requiresConfirmation: true },
@@ -70,7 +72,13 @@ function policyRows(reviewLinkUrl: string | null): PolicyRow[] {
 
     { actionType: "answer_customer_question", policy: {}, requiresConfirmation: true },
     { actionType: "send_customer_message", policy: {}, requiresConfirmation: true },
-    { actionType: "send_follow_up", policy: {}, requiresConfirmation: true },
+    // serviceDueScript is read by scan_service_due, not the plugin itself — §3.4
+    // detection loop: a due reminder drafts a real, gated send_follow_up.
+    {
+      actionType: "send_follow_up",
+      policy: { serviceDueScript: "Hi! Our records show your {{equipmentType}} may be due for service. Reply or call to book a visit — happy to answer any questions in the meantime." },
+      requiresConfirmation: true,
+    },
 
     { actionType: "answer_water_question", policy: {}, requiresConfirmation: false },
 
