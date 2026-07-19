@@ -7,7 +7,7 @@
 
 import { createDefaultPluginRegistry } from "@finnor/orchestration";
 import { testAdsConnections, testQuickBooksConnection, testVapiConnection, ghlIntegrationStatus, circuitSnapshot } from "@finnor/tools";
-import { zepProviderStatus } from "@finnor/memory";
+import { zepProviderStatus, embeddingsProviderStatus } from "@finnor/memory";
 import { secretProviderStatus } from "@finnor/security";
 import { adminDb, tenantPhoneNumbers } from "@finnor/db";
 import { eq } from "drizzle-orm";
@@ -60,7 +60,11 @@ export async function GET(req: Request): Promise<Response> {
     // no extra network round trip inside this endpoint) — LangGraph has no external
     // service to check (it's in-process, using the same Postgres pool as everything else).
     const zep = { ...zepProviderStatus(), healthy: null as boolean | null };
-    const integrations = { meta_ads: ads.meta, google_ads: ads.googleAds, quickbooks, vapi, ghl, zep };
+    // §5.1: embeddingsProviderStatus() itself already reports healthy:false when
+    // unconfigured (a real, not-guessed signal — see semantic.ts) rather than the
+    // null-means-"not checked" convention zep/ghl use above.
+    const embeddingsStatus = embeddingsProviderStatus();
+    const integrations = { meta_ads: ads.meta, google_ads: ads.googleAds, quickbooks, vapi, ghl, zep, embeddings: embeddingsStatus };
 
     const summary = {
       actionTypesTotal: actionTypes.length,

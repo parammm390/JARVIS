@@ -90,4 +90,22 @@ describe.skipIf(!available)("GET /api/setup/status — phoneRouting (Phase 14)",
       expect(body.environment.bindings[key]).toBe("emulator");
     }
   });
+
+  it("§5.1: reports embeddings as unconfigured (honest, not a guessed 'healthy') when EMBEDDINGS_API_KEY is unset", async () => {
+    delete process.env.EMBEDDINGS_API_KEY;
+    const res = await GET(req());
+    const body = (await res.json()) as { integrations: { embeddings: { configured: boolean; healthy: boolean | null; provider: string } } };
+    expect(body.integrations.embeddings).toEqual({ configured: false, healthy: false, provider: "voyage-3.5" });
+  });
+
+  it("§5.1: reports embeddings as configured once a real key is present", async () => {
+    process.env.EMBEDDINGS_API_KEY = "voyage-test-key";
+    try {
+      const res = await GET(req());
+      const body = (await res.json()) as { integrations: { embeddings: { configured: boolean } } };
+      expect(body.integrations.embeddings.configured).toBe(true);
+    } finally {
+      delete process.env.EMBEDDINGS_API_KEY;
+    }
+  });
 });
