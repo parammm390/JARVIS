@@ -223,21 +223,42 @@ the CI retrieval-eval gate, and a documented manual promotion flow — see
 `phase-status.md`'s Phase 6 section for the full breakdown). What's left is entirely
 provisioning real infrastructure only Param can create:
 
-**Staging environment (Task 6.1)** — three separate accounts/projects, all with a free
-tier, none needing a registered business:
-1. **A second Supabase project** (separate from the production one, `kpxrnonhnhexutvdywbh`)
-   — supabase.com → New Project, free tier is enough for staging traffic. Paste the new
-   project's URL + service-role key + Postgres connection string in chat and I'll set
-   them as the staging deploy's env vars and run `npm run db:migrate` against it.
-2. **A second Railway environment** for `apps/worker` — Railway supports adding a
-   `staging` environment to the existing `innovative-prosperity` project (Railway
-   dashboard → environments → New Environment), or a second project entirely; either
-   works. `railway.staging.json` (already in the repo) is the build/deploy config to
-   point it at.
-3. **A second Vercel deployment** for `apps/api` + `apps/console` — either a dedicated
-   Vercel project (same flow as the existing ones) or Vercel's own preview-deployment
-   feature pointed at a `staging` branch. Tell me which you'd rather do and I'll wire it
-   up once the Supabase project from step 1 exists.
+**Staging environment (Task 6.1) — RESOLVED 2026-07-19/20, real infrastructure live.**
+You authorized ~$5 of Railway credit and pointed me at your existing, previously-empty
+Railway project `imaginative-enchantment` instead of a new Supabase project — cheaper
+and faster than the original 3-account plan below, and it worked. Done, verified, not
+just assumed:
+- A real Postgres 18 database (service `Postgres`, project `imaginative-enchantment`,
+  pgvector confirmed available) — fully isolated from production's Supabase, all 31
+  migrations + the LangGraph checkpointer schema applied.
+- Worker deployed as service `finnor-worker-staging`, confirmed online, real GROQ/AWS
+  Bedrock keys mirrored over from production (LLM-planner credentials, not customer-
+  facing, safe to share between environments) so the planner actually works on staging.
+- Dealer Zero seeded for real: 120 households, 42/42 policies, simulator enabled.
+- `apps/api` deployed as a Vercel Preview build on the existing `api` project (Preview-
+  scoped env vars point at the staging DB, so it never touches production data).
+- **Real, unresolved bug found while verifying this:** 5 of 11 scheduled job types
+  (everything that constructs a `FinnorOrchestrator` — includes `simulator_tick`) fail
+  on the deployed staging worker with `plugin.actionTypes is not iterable`, while 6
+  others succeed. Not reproducible locally against the same database with the same
+  code; not fixed by a clean redeploy. Likely the same root cause as the older "Railway
+  zombie deployment" finding (§5 below) — same error string, similar handler pattern —
+  but this time on a single non-duplicated deployment, which points at something more
+  fundamental in how this monorepo builds under Railway/Nixpacks rather than a
+  duplicate-instance race. Needs real container access to root-cause properly (Railway's
+  CLI has no shell-into-container command); flagging here since it may be worth Railway
+  support if it recurs. Full detail in `phase-status.md`'s Task 6.1 entry and Blockers.
+- Cleaned up: an earlier, redundant empty "staging" *environment* I'd created inside the
+  wrong (production) Railway project before you gave me the real project id — deleted
+  once the actual target was confirmed, so there's only one staging concept now, not two.
+
+**Not yet done, if you ever want the fully-isolated-per-the-original-plan version**
+instead of the Railway-hosted Postgres above: a genuinely separate Supabase project (a
+different provider, matches the pack's own original wording more literally) and a
+dedicated `apps/console`/`apps/api` staging Vercel project rather than a Preview
+deployment on the existing one. Not necessary — what's live now satisfies the real
+isolation goal — but the option's still open if you'd rather standardize on Supabase
+everywhere.
 
 **AWS account for Secrets Manager (Task 6.2)** — the code side is already fully built
 (`packages/security/src/secrets.ts`, see `docs/secrets-runbook.md`). Needs: an AWS

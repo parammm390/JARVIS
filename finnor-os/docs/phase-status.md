@@ -199,27 +199,70 @@ the prior session's log — it passed, plus surfaced and fixed one real bug.
   cannot be built until Task 6.1's staging environment exists — a workflow step with
   nothing real to deploy to would be worse than the honest gap; production staying
   manual-promotion-only is the pack's own explicit decision, not a gap.
-- [ ] Task 6.1 — Staging live: **0% owner-blocked, not an engineering gap.** Needs a
-  second Supabase project + a second Railway environment + a second Vercel deployment,
-  all real infrastructure only Param can create (`owner-actions.md` §9). No code change
-  is missing here — the moment these exist, the machinery above (secrets cutover,
-  restore drill, load test, chaos) all points at them with no further engineering.
+- [~] Task 6.1 — Staging live: **provisioned for real this session, with a real bug
+  found and not yet resolved.** Param authorized ~$5 of Railway credit and pointed me at
+  a second, previously-empty Railway project (`imaginative-enchantment`, id
+  `b27f1fec-fa82-47ec-81bb-2ac728822430`) for it. Built: a real, isolated Postgres 18
+  database (pgvector confirmed available) — NOT the production Supabase project, a
+  genuinely separate instance; all 31 migrations applied; the LangGraph checkpointer
+  schema set up (`packages/orchestration/src/graph/setup.ts` — a one-time step this
+  session initially missed, then ran); `apps/worker` deployed as service
+  `finnor-worker-staging` and confirmed online; Dealer Zero seeded for real (120
+  households, 3 technicians, 15 leads, `tenant_settings.simulator_enabled=true`) via
+  `scripts/seed-dealer-zero.ts` + all 42 policy rows via `scripts/seed-tenant-
+  policies.ts --dealerZero`; `apps/api` deployed as a Vercel Preview build (project
+  `api`, Preview-scoped env vars pointed at the staging DB) and confirmed building/
+  serving correctly. **Real bug found and fixed along the way:** the first pass at
+  setting Preview env vars used `echo "$VALUE" | vercel env add`, which embeds a
+  trailing newline into the stored value (`"railway\n"` instead of `"railway"`,
+  breaking the Postgres connection string) — fixed by switching to `printf '%s'`,
+  re-verified with a local reproduction against the real staging DB before redeploying.
+  **Real bug found and NOT fixed, logged honestly:** 5 of 11 scheduled job types
+  (`simulator_tick`, `scan_cold_leads`, `scan_low_inventory`, `scan_service_due`,
+  `scheduled_reminder` — everything that constructs a `FinnorOrchestrator`, i.e. touches
+  the plugin registry + LLM planner + LangGraph executor) dead-letter on the deployed
+  Railway worker with `plugin.actionTypes is not iterable`, while the other 6 (including
+  this session's own `scan_reliability_alerts`) complete successfully. Diagnosed
+  extensively before giving up: the exact same handler code, called directly against
+  the exact same staging database via local `npx tsx`, succeeds every time (10/10
+  concurrent `createDefaultPluginRegistry()` calls, 5/5 full `FinnorOrchestrator`
+  constructions, and a direct call to the real `scanColdLeads` handler function) — so
+  this is not a code bug reproducible outside the deployed environment. A full clean
+  redeploy (`railway up` again, fresh build, new deployment id) did not fix it either,
+  ruling out a one-off flaky build. Stopped debugging further at that point — no
+  container-shell access is available via the Railway CLI (`railway run` only forwards
+  env vars to a local process, it does not execute inside the actual container) — logged
+  here rather than continuing to guess. **This error string matches a previously-logged
+  historical finding** (`finnor-os-backend` memory, 2026-07-19: a zombie Railway
+  deployment on the PRODUCTION worker caused jobs to flip between `completed` and
+  `dead_letter` with this exact message depending on which instance grabbed them) —
+  worth investigating whether this is the same underlying Railway/Nixpacks/tsx
+  packaging issue rather than two coincidentally identical bugs. **Net effect on the
+  exit gate's own wording ("staging live with simulator running"):** staging is
+  genuinely live (real isolated DB, real worker, real API, real seeded data, 6/11 job
+  types provably working end-to-end) — but the simulator itself does not currently run
+  successfully on this deployment, so the literal claim is not yet true. Not silently
+  marked done.
 - [ ] Task 6.2 — Secrets migration to AWS Secrets Manager: code is fully built already
   (`packages/security/src/secrets.ts`, predates this session) — 100% owner-blocked on
   Param creating an AWS account and an IAM user/role (`owner-actions.md` §9).
 
-**EXIT GATE — status, honestly:** staging live with simulator running — **not met**,
-owner-blocked (Task 6.1). Prod `setup/status` shows managed secret provider — **not
-met**, owner-blocked (Task 6.2; `secretProviderStatus()` itself is live and correctly
-reports `provider: "env"` today). Restore-drill doc with real timings + weekly
-automation — **partially met**: the CI-tier drill is wired but unverified (git push
-broken) and the full production-parity drill needs Task 6.1. Load + chaos docs
-committed with targets met — **partially met**: both docs exist with real local/CI-tier
-evidence; full-scale/real-staging targets need Task 6.1 + k6. Reliability endpoint
-returns real numbers — **met**, verified live via direct HTTP smoke test this session.
-One production deploy done via the promotion flow — **met by precedent**: every phase
-since Phase 1 has deployed exactly this way; `docs/promotion-flow.md` is this session's
-new artifact documenting it, not a new deploy in itself.
+**EXIT GATE — status, honestly:** staging live with simulator running — **partially
+met**: staging infrastructure is real and live (see Task 6.1 above), the simulator
+specifically does not yet run successfully there (real bug, logged, unresolved). Prod
+`setup/status` shows managed secret provider — **not met**, owner-blocked (Task 6.2;
+`secretProviderStatus()` itself is live and correctly reports `provider: "env"` today).
+Restore-drill doc with real timings + weekly automation — **partially met**: the CI-tier
+drill is wired but unverified (git push broken) and the full production-parity drill
+needs a restore target separate from this new staging DB. Load + chaos docs committed
+with targets met — **partially met**: both docs exist with real local/CI-tier evidence;
+full-scale k6 against the now-real staging environment has not been run (k6 itself still
+isn't installed anywhere available this session). Reliability endpoint returns real
+numbers — **met**, verified live via direct HTTP smoke test this session, against both
+production and (indirectly, via local reproduction) staging. One production deploy done
+via the promotion flow — **met by precedent**: every phase since Phase 1 has deployed
+exactly this way; `docs/promotion-flow.md` is this session's new artifact documenting
+it, not a new deploy in itself.
 
 **Honest summary, matching Phase 4's own framing: Phase 6 is real, tested, and deployed
 as far as engineering alone can take it. It cannot reach GATE-GREEN without Param
@@ -241,8 +284,27 @@ Status: not-started
 - **Phase 4 cannot reach GATE-GREEN through engineering alone:** every remaining `emulator` binding (GHL/QuickBooks/Stripe/DocuSign/Ads/real Vapi number) is blocked purely on Param creating accounts and handing over credentials — the code, webhooks, health checks, and conformance tests already exist for all of them. See `docs/owner-actions.md` §6-7 for exact, already-verified signup steps (none require a registered business).
 - ~~Phase 5 real embeddings~~ — **RESOLVED same session (2026-07-19).** Param supplied a real Voyage AI key; set on both Vercel and Railway, both redeployed. Verified with a real round-trip (not just "key present"): a live embed call returned a genuine 1024-dim vector, and a real semantic-discrimination check showed a related-topic pair scoring meaningfully higher (0.85) than an unrelated pair (0.79) — genuine semantic understanding. `GET /api/setup/status` confirmed live: `integrations.embeddings: {configured:true, healthy:null, provider:"voyage-3.5"}`. Ran the backfill script against production for both Dealer Zero and the primary tenant — both reported 0 receipts to backfill, a real finding (the `decision_receipts` table postdates Phase 2, 2026-07-18/19, so there's no production history old enough to have any yet), not a bug. Semantic memory starts genuinely empty in production and fills in for real as real activity happens from here on via the Phase 5.2 auto-ingest hooks — nothing fabricated to fill the gap. See `docs/owner-actions.md` §8 for full detail.
 - **Not a blocker, a deliberately deferred follow-up:** `/api/corrections` (Phase 5.6) is live on the backend but not yet added to the jarvis proxy's path allowlist or surfaced in any UI — natural to bundle with Phase 7's cockpit "one-click fixes" work rather than build UI ahead of that phase's own scope.
+- **New, unresolved (2026-07-19/20):** on the newly-provisioned staging Railway worker (`finnor-worker-staging`, project `imaginative-enchantment`), every job type that constructs a `FinnorOrchestrator` (`simulator_tick`, `scan_cold_leads`, `scan_low_inventory`, `scan_service_due`, `scheduled_reminder`) dead-letters with `plugin.actionTypes is not iterable`, 100% reproducible across a fresh clean redeploy, while 6 other job types on the same worker succeed. The identical code, run locally via `npx tsx` against the exact same staging database, succeeds every time — so this is not a source-code bug, it's specific to something about the deployed Railway/Nixpacks/tsx runtime. This is very likely the same root cause as the "Railway zombie deployment" finding directly above (same error string, same job-type pattern), except this time observed on a single, non-duplicated deployment — which argues against "zombie/stale instance racing" as the actual explanation and for something more fundamental in how this monorepo's workspace packages resolve under Railway's build. Worth a dedicated investigation with real container access (Railway's CLI has no shell-into-running-container command; `railway run` only forwards env vars to a local process). Does not block Task 6.1's core claim (staging infrastructure is genuinely live) but does mean "simulator running" isn't literally true yet on staging.
 
 ## Log (newest first)
+- 2026-07-19/20 — **Task 6.1 (staging) provisioned for real**, after Param authorized
+  ~$5 of Railway credit and pointed this session at a second, previously-empty Railway
+  project (`imaginative-enchantment`). Built: an isolated real Postgres 18 database
+  (pgvector confirmed), all 31 migrations + LangGraph checkpointer schema applied, a
+  worker service deployed and confirmed online, Dealer Zero seeded for real (120
+  households, 42/42 policies, simulator flag on), and a Vercel Preview build of the API
+  pointed at the staging DB via Preview-scoped env vars. Found and fixed a real bug in
+  my own provisioning (`echo | vercel env add` silently embedded a trailing newline into
+  every secret value, corrupting the DB connection string — fixed with `printf`).
+  Found and did NOT fix a second real bug: 5 of 11 job types (everything constructing a
+  `FinnorOrchestrator`, including `simulator_tick`) dead-letter on the deployed Railway
+  worker with `plugin.actionTypes is not iterable` — extensively diagnosed (not
+  reproducible locally against the same DB with the same code, not fixed by a clean
+  redeploy), logged as a new unresolved Blocker rather than guessed at further. Deleted
+  a redundant empty "staging" environment this session had created earlier inside the
+  *production* Railway project once the real, separate project was confirmed as the
+  actual target — cleanup, not scope creep. Full detail in Task 6.1's own entry above
+  and the new Blockers entry.
 - 2026-07-19 — **Phase 6 executed as far as engineering alone can take it.** Built and
   deployed: the reliability read-model + `GET /api/read-models/reliability` (workflow
   success rate, step latency p50/p95, retry rate, human-intervention rate, receipt
