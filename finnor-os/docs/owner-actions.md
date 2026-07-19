@@ -213,3 +213,70 @@ You supplied a real Voyage AI key this session. Done, verified, not just assumed
 
 Nothing left to do here — real memory is fully live end to end. As real customers call
 in and real jobs complete, semantic memory fills in for real automatically.
+
+## 9. Phase 6 (ops-grade platform) — everything here is real infrastructure/accounts, none require a registered business
+
+Phase 6 is engineering-complete everywhere it can be without new accounts (reliability
+read-model + API route, Sentry correlationId tracing, threshold-based alert detection,
+a real CI restore-drill step, a real k6 load-test script, real local chaos evidence,
+the CI retrieval-eval gate, and a documented manual promotion flow — see
+`phase-status.md`'s Phase 6 section for the full breakdown). What's left is entirely
+provisioning real infrastructure only Param can create:
+
+**Staging environment (Task 6.1)** — three separate accounts/projects, all with a free
+tier, none needing a registered business:
+1. **A second Supabase project** (separate from the production one, `kpxrnonhnhexutvdywbh`)
+   — supabase.com → New Project, free tier is enough for staging traffic. Paste the new
+   project's URL + service-role key + Postgres connection string in chat and I'll set
+   them as the staging deploy's env vars and run `npm run db:migrate` against it.
+2. **A second Railway environment** for `apps/worker` — Railway supports adding a
+   `staging` environment to the existing `innovative-prosperity` project (Railway
+   dashboard → environments → New Environment), or a second project entirely; either
+   works. `railway.staging.json` (already in the repo) is the build/deploy config to
+   point it at.
+3. **A second Vercel deployment** for `apps/api` + `apps/console` — either a dedicated
+   Vercel project (same flow as the existing ones) or Vercel's own preview-deployment
+   feature pointed at a `staging` branch. Tell me which you'd rather do and I'll wire it
+   up once the Supabase project from step 1 exists.
+
+**AWS account for Secrets Manager (Task 6.2)** — the code side is already fully built
+(`packages/security/src/secrets.ts`, see `docs/secrets-runbook.md`). Needs: an AWS
+account (aws.amazon.com, free tier covers Secrets Manager's first 30 days per secret,
+then ~$0.40/secret/month — real but small recurring cost, I will not create this account
+or accept the cost without you confirming first), then an IAM user or role scoped to
+`secretsmanager:GetSecretValue` on a `finnor/prod/*` naming prefix (exact policy JSON
+already in the runbook). Once you have an AWS access key pair (or if you'd rather I use
+IAM roles instead of static keys, tell me and I'll ask for the role ARN), paste it in
+chat and I'll create the actual secrets, set the three cutover env vars, and redeploy.
+
+**Sentry account + DSN (Task 6.6)** — `SENTRY_DSN` is currently unset in production
+(confirmed this session via `vercel env ls` — no Sentry variable exists on the `api`
+project), so `Sentry.init()` is a harmless no-op right now: the correlationId
+tracing and the new threshold-based alert detection (`scan_reliability_alerts` —
+reconciliation backlog>20, DLQ>10, a circuit breaker stuck open, a failure-rate spike,
+a secret-store read failure) are real, wired, and running on an hourly schedule, but
+have nowhere to report to yet. sentry.io → sign up free (developer tier is free
+forever for one project, no business needed) → create a project (platform: Node.js) →
+copy the DSN. Paste it in chat and I'll set `SENTRY_DSN` on both the API (Vercel) and
+worker (Railway) and redeploy — the moment that's done, every alert this session built
+starts actually reaching Sentry's dashboard. **Separately, dashboard alert *rules*
+(routing a Sentry event to email/Slack/etc.) are a Sentry dashboard configuration step
+only you can do** — Sentry Alerts → Create Alert Rule, condition "an event's message
+contains `reliability_alert:`", action of your choice. I'll write the exact rule
+conditions once the DSN exists and you tell me where you want notifications routed.
+
+**k6 CLI (Task 6.4)** — `k6 run scripts/k6-load-test.js` needs k6 installed wherever it
+runs (`brew install k6` locally, or a CI runner image that ships it). Free, open-source,
+no account needed at all — purely a "run this install command" step, not blocked on
+anything but hasn't been done since there's no staging environment yet to point it at.
+
+**Postgres client tools for the FULL production restore drill** — the CI-tier drill
+(dump/restore against CI's own ephemeral Postgres) is wired and described in
+`docs/restore-drill-2026-07-19.md`; the full "restore latest prod backup into an
+isolated env" tier the pack's Task 6.3 asks for needs the second Supabase project from
+Task 6.1 above, since a restore target has to be a separate project, never the live one.
+
+None of the five items above need Param to have a registered business, an existing
+company, or anything beyond an email address and (for AWS/Railway/Vercel scale-ups
+only) a payment method for genuinely small recurring costs — same framing as Phase 4's
+own owner-actions section.

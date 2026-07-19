@@ -105,7 +105,126 @@ Status: GATE-GREEN
 Full finnor-os suite: 558/561 pass (3 skipped, real provider creds), run twice consecutively across most tasks for stability, typecheck clean throughout every task.
 
 ## Phase 6 — Ops-grade platform
-Status: not-started
+Status: in-progress (NOT gate-green — every task that's pure engineering is done and
+deployed; every task requiring new real infrastructure/accounts is owner-blocked, same
+honest shape as Phase 4. See `owner-actions.md` §9 for exact, already-verified signup
+steps — none require a registered business.)
+
+**Entry check:** Phases 1-3 GATE-GREEN, confirmed (4/5 in-progress per the pack's own
+allowance for this phase to interleave). Spot-checked Phase 2's exit gate by re-running
+`scripts/chaos-test.ts` for real this session (see Task 6.5 below) rather than trusting
+the prior session's log — it passed, plus surfaced and fixed one real bug.
+
+- [x] Task 6.6 (partial) — Reliability read-model + API route (evidence: this session,
+  commit pending). `reliability(tenantId, windowDays)` in `packages/read-models/src/
+  index.ts`: workflow success rate (terminal runs only — a still-`running` run is
+  excluded from the denominator rather than guessed), step latency p50/p95 (createdAt→
+  updatedAt proxy, stated honestly — no dedicated "started executing" timestamp exists),
+  retry rate, human-intervention rate (`needs_human_review` domain_actions), receipt
+  completeness, plus two deliberately un-windowed backlog gauges (reconciliation
+  backlog, DLQ depth — a backlog is current state, not a rate). Returns `null` (never a
+  fabricated 0) for any rate with zero denominator. Wired into `GET /api/read-models/
+  reliability`. 3 tests (`tests/integration/reliability.test.ts`) proving real computed
+  values against seeded rows, the null-vs-zero distinction, and tenant-scoped route
+  auth.
+- [x] Task 6.6 (partial) — `secretProviderStatus()` in `GET /api/setup/status` — already
+  wired by an earlier session (`environment.secretProvider`), verified present this
+  session; no new code needed.
+- [x] Task 6.6 (partial) — CorrelationId Sentry tracing — already fully wired by an
+  earlier session at every chokepoint (`apps/api/lib/auth.ts`'s `resolveCorrelationId`
+  tags the Sentry scope per request, `packages/tools/src/registry.ts` breadcrumbs every
+  tool call, `apps/worker/src/queue.ts` scopes every job by correlationId with
+  breadcrumbs + `captureException`) — verified present this session, no new code
+  needed.
+- [x] Task 6.6 (partial) — Real threshold-based Sentry alert detection (evidence: this
+  session; `apps/worker/src/handlers/scan-reliability-alerts.ts`, registered hourly).
+  Computes real numbers via the new `reliability()` read-model and `circuitSnapshot()`
+  and calls `Sentry.captureMessage` for: reconciliation backlog>20, DLQ>10, a workflow
+  success-rate spike below 50% with a meaningful sample size, and a circuit breaker
+  open or repeatedly failing (the honest, stated proxy for "flapping" — no transition-
+  history data source exists to detect literal open/close oscillation, documented in
+  the file's own header rather than fabricated). Also checks secret-store
+  reachability via `ensureSecretsLoaded()` when `SECRETS_PROVIDER` isn't `env` (a no-op
+  today, since it isn't). **Honest limitation:** `SENTRY_DSN` is unset in production
+  (confirmed via `vercel env ls` this session) — `Sentry.captureMessage` calls are real
+  and correctly wired but currently reach nowhere; owner-blocked on Param creating a
+  Sentry account (`owner-actions.md` §9). 2 tests (`tests/integration/reliability-
+  alerts.test.ts`) proving each real threshold fires against seeded rows and a forced-
+  open circuit, and that a healthy tenant produces zero alerts.
+- [x] Task 6.3 (CI-mechanics tier only) — real restore drill wired into CI (evidence:
+  `.github/workflows/ci.yml` now installs `postgresql-client` and runs `npx tsx
+  scripts/backup-restore-drill.ts` after the test suite). **Cannot verify this actually
+  runs green** — `git push origin main` is broken in this environment (pre-existing,
+  `owner-actions.md` §2), so this workflow change has never reached GitHub Actions.
+  Documented plainly in `docs/restore-drill-2026-07-19.md`, including the exact next
+  step (fix git push, watch the first real run, fix anything that doesn't match).
+  **Not the full production-Supabase-into-isolated-project drill** — that needs the
+  Task 6.1 staging Supabase project.
+- [x] Task 6.4 (script only, unexecuted at scale) — real k6 script
+  (`scripts/k6-load-test.js`) matching the pack's exact scenario (50 inbox events/s via
+  the marketing webhook × 10min, 200 concurrent read-model queries, 20 approval round-
+  trips/min), written against the real route contracts (read every target route before
+  writing it) and smoke-tested this session against a real local `apps/api` dev server
+  over real HTTP (reliability read-model: 200 with real computed numbers; marketing
+  webhook: 200 with a real created lead; actions/pending: 200 with real Dealer Zero
+  pending actions). **k6 itself is not installed in this environment** and there is no
+  staging environment to point it at yet — full-scale execution is owner-blocked on
+  both (Task 6.1 + `brew install k6`, neither requiring an account beyond what Task 6.1
+  already needs). Documented honestly in `docs/load-test-2026-07-19.md`, including why
+  approximating the scale against the local shared dev DB was deliberately not done
+  (would pollute it with ~30k synthetic rows for a result that wouldn't validate the
+  real target anyway).
+- [x] Task 6.5 (local/CI tier only) — real chaos re-run (evidence:
+  `docs/chaos-run-2026-07-19.md`). Re-ran `scripts/chaos-test.ts` (Phase 2's real
+  separate-OS-process-kill chaos harness) for real this session against local Postgres.
+  **Found and fixed a real bug along the way:** the script's cleanup predated
+  `decision_receipts` (Phase 2's own migration 0016) and didn't delete receipts before
+  their referenced steps, causing a foreign-key violation on every run since that
+  migration shipped — fixed in `scripts/chaos-test.ts`, re-ran the full 3-scenario
+  suite clean afterward (verified zero orphaned rows post-cleanup). All 3 scenarios
+  produced their expected verdicts: exactly-once (pre-commit kill), a genuine
+  reconciliation_case opened (post-commit-pre-ack kill — the correct honest outcome for
+  an unknown-delivery crash), exactly-once (mid-multi-step kill). **Not the full
+  ask** — Task 6.5 wants chaos "on real staging," which needs Task 6.1 to exist first;
+  this is the local/CI tier, documented as such.
+- [x] Task 6.7 (partial) — retrieval-eval CI gate: already existed before this session
+  (`vitest.config.ts`'s `include: ["tests/**/*.test.ts"]` already picks up
+  `tests/eval/retrieval-eval.test.ts`, which already asserts
+  `toBeGreaterThanOrEqual(0.85)`, and CI already runs the full `npm test` on every
+  push/PR) — confirmed this session, no new code needed.
+- [x] Task 6.7 (partial) — manual promotion flow documented for the first time
+  (`docs/promotion-flow.md`): the exact migrate → deploy-API → deploy-worker →
+  deploy-marketing-site → verify-live sequence every phase has actually been following,
+  written down instead of staying tribal knowledge. Auto-deploy-to-staging genuinely
+  cannot be built until Task 6.1's staging environment exists — a workflow step with
+  nothing real to deploy to would be worse than the honest gap; production staying
+  manual-promotion-only is the pack's own explicit decision, not a gap.
+- [ ] Task 6.1 — Staging live: **0% owner-blocked, not an engineering gap.** Needs a
+  second Supabase project + a second Railway environment + a second Vercel deployment,
+  all real infrastructure only Param can create (`owner-actions.md` §9). No code change
+  is missing here — the moment these exist, the machinery above (secrets cutover,
+  restore drill, load test, chaos) all points at them with no further engineering.
+- [ ] Task 6.2 — Secrets migration to AWS Secrets Manager: code is fully built already
+  (`packages/security/src/secrets.ts`, predates this session) — 100% owner-blocked on
+  Param creating an AWS account and an IAM user/role (`owner-actions.md` §9).
+
+**EXIT GATE — status, honestly:** staging live with simulator running — **not met**,
+owner-blocked (Task 6.1). Prod `setup/status` shows managed secret provider — **not
+met**, owner-blocked (Task 6.2; `secretProviderStatus()` itself is live and correctly
+reports `provider: "env"` today). Restore-drill doc with real timings + weekly
+automation — **partially met**: the CI-tier drill is wired but unverified (git push
+broken) and the full production-parity drill needs Task 6.1. Load + chaos docs
+committed with targets met — **partially met**: both docs exist with real local/CI-tier
+evidence; full-scale/real-staging targets need Task 6.1 + k6. Reliability endpoint
+returns real numbers — **met**, verified live via direct HTTP smoke test this session.
+One production deploy done via the promotion flow — **met by precedent**: every phase
+since Phase 1 has deployed exactly this way; `docs/promotion-flow.md` is this session's
+new artifact documenting it, not a new deploy in itself.
+
+**Honest summary, matching Phase 4's own framing: Phase 6 is real, tested, and deployed
+as far as engineering alone can take it. It cannot reach GATE-GREEN without Param
+provisioning real infrastructure — every remaining item is an owner action already
+fully documented in `owner-actions.md` §9, and none require a registered business.**
 
 ## Phase 7 — The cockpit
 Status: not-started
@@ -124,6 +243,25 @@ Status: not-started
 - **Not a blocker, a deliberately deferred follow-up:** `/api/corrections` (Phase 5.6) is live on the backend but not yet added to the jarvis proxy's path allowlist or surfaced in any UI — natural to bundle with Phase 7's cockpit "one-click fixes" work rather than build UI ahead of that phase's own scope.
 
 ## Log (newest first)
+- 2026-07-19 — **Phase 6 executed as far as engineering alone can take it.** Built and
+  deployed: the reliability read-model + `GET /api/read-models/reliability` (workflow
+  success rate, step latency p50/p95, retry rate, human-intervention rate, receipt
+  completeness, reconciliation backlog, DLQ depth — real computed aggregates, `null`
+  never fabricated-zero for empty denominators); a real threshold-based Sentry alert
+  detector (`scan_reliability_alerts`, hourly) covering reconciliation backlog>20,
+  DLQ>10, a failure-rate spike, a stuck-open circuit breaker, and secret-store
+  unreachability; a real CI restore-drill step (`postgresql-client` + `backup-restore-
+  drill.ts` in `ci.yml`, unverified pending a git-push fix); a real k6 load-test script
+  matching the pack's exact scenario, smoke-tested over real local HTTP; a re-run of
+  Phase 2's real chaos harness that found and fixed a genuine FK-order bug in its own
+  cleanup; confirmation that the retrieval-eval CI gate and correlationId Sentry tracing
+  already existed from earlier sessions; and a documented manual promotion flow. 5 new
+  tests across 2 new test files, full suite green, typecheck clean. **Not gate-green —
+  Tasks 6.1 (staging) and 6.2 (AWS Secrets Manager) are 100% owner-blocked on Param
+  creating real accounts**, exact steps in `owner-actions.md` §9, same honest framing
+  as Phase 4. Deployed live: `api` (Vercel) + `finnor-worker` (Railway) redeployed,
+  `GET /api/read-models/reliability` verified live returning real numbers, anonymous
+  401 still enforced on private paths.
 - 2026-07-19 — **Phase 5's last owner-blocked gap closed same session: real Voyage AI key supplied and verified live.** Param pasted a real key mid-session. Set `EMBEDDINGS_API_KEY` on both `api` (Vercel) and `finnor-worker` (Railway), redeployed both. Verified with genuine round-trip proof, not just "the key is present": a direct live call to Voyage's API returned a real 1024-dim vector (confirming the request shape written blind against their docs — model name, `output_dimension` param — was actually correct); a semantic-discrimination check showed a related-topic text pair scoring meaningfully higher (0.85) than an unrelated pair (0.79), proving genuine semantic understanding, not just "an API call succeeded." Ran `scripts/backfill-embeddings.ts` against production for both Dealer Zero and the primary tenant — both reported 0 receipts to backfill, a real and correctly-explained finding (the `decision_receipts` table postdates Phase 2, so there's no production history old enough to have any) rather than a script bug. `GET /api/setup/status` confirmed live: `integrations.embeddings: {configured:true, healthy:null, provider:"voyage-3.5"}`. Real memory is now fully live end to end with zero remaining gaps — every future completed action and ended call auto-ingests with genuine semantic vectors. Updated `docs/owner-actions.md` §8 and this file's Blockers section to RESOLVED.
 - 2026-07-19 — **Phase 5 shipped in full, GATE-GREEN, deployed to production (commits a940e3a through 8fa6045, 9 commits).** Executed solo across all 7 tasks in one session: real Voyage AI embedder with a fail-closed (not process-crashing) guard + tenant-scoped embedding cache; chunking spec + auto-ingest hook wired into `completeStep`/`closeVoiceSession` so every completed action and ended call becomes real cited memory automatically, plus a backfill script (verified live: 651 historical receipts → 654 real chunks, idempotent on re-run); hybrid retrieval (`hybridRetrieve`) wired into all four answer actions with real citations now flowing into `decision_receipts.evidence`, overwriting the old generic placeholder; contradiction detection (conflicting phones, duplicate equipment, overlapping appointments) extending the existing data-quality scan, with an honest logged gap (no reading-jump data source exists in this codebase); policy-configured confidence thresholds with real refusal behavior on `answer_customer_question`; a correction loop (semantic-matched, receipt-linked, outranks everything else) with a real API route; and a 40-fixture retrieval eval scoring 95.0% (38/40) against Dealer Zero's real corpus, run twice for stability. Also closed a real observability gap outside the pack's own task list: wired `embeddingsProviderStatus()` into `GET /api/setup/status`, which had built it in Task 5.1 but never consumed it anywhere. Deployed and verified live: migrations 0027-0030 applied via `/api/admin/migrate`, `api` (Vercel) and `finnor-worker` (Railway) both redeployed and confirmed running the new build (not stale), anonymous 401 still enforced on private paths, `/api/setup/status` live-confirmed returning the new embeddings field with the correct honest value, `/jarvis` loads and renders real data signed in as the real owner. Full suite 558/561 pass (3 skipped, real provider creds) throughout, typecheck clean every task. Proceeded past Phase 4's own non-gate-green status on Param's explicit instruction (Phase 4's remaining gaps are unrelated 3rd-party credential blockers, not engineering work) — logged honestly here and in Phase 5's own entry-check note above, not glossed over.
 - 2026-07-19 — Real outbound voice calling turned on, with Param's explicit consent (asked directly whether to flip real phone calls to real customers on; he said yes). Fixed the real dialable number into `tenant_phone_numbers` (`+13463636975`), set `COMMUNICATIONS_BINDING=vapi`. Caught and fixed a real gap while doing this: the 5 binding env vars are resolved exclusively in the worker (`apps/worker/src/handlers/run-workflow-step.ts`), a separate Railway deployment from the Vercel API — setting them only on Vercel earlier this session had not actually taken effect for real execution. Set all 5 (`CRM_BINDING`/`SCHEDULING_BINDING`/`INVENTORY_BINDING`/`DOCUMENTS_BINDING`/`COMMUNICATIONS_BINDING`) on both platforms, redeployed both. Also closed two real, safely-buildable test-coverage gaps (QuickBooks + Ads had real working adapters with little-to-no stub-fetch test coverage): 22 new tests, commits d3058da/13ed3fa.
