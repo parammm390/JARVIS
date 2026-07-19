@@ -33,8 +33,11 @@ import {
   communicationsLog,
   businessEvents,
   equipment,
+  domainActions,
+  decisionReceipts,
+  deadLetters,
 } from "@finnor/db";
-import { and, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { performance } from "node:perf_hooks";
 
 export interface PipelineHealth {
@@ -500,4 +503,109 @@ export async function household360(tenantId: string, householdId: string): Promi
     console.warn(`[household360] slow traversal for tenant ${tenantId}, household ${householdId}: ${queryMs.toFixed(1)}ms`);
   }
   return { ...result, queryMs };
+}
+
+// ---------------------------------------------------------------------------
+// Reliability (Phase 6, JARVIS 95% MAESTRO PACK §6.6): per-tenant operational
+// health, grounded entirely in tables the durable runtime (Phase 2) and receipt
+// pipeline already write for real — no metric here is invented or sampled.
+// windowDays scopes the THROUGHPUT metrics (success rate, latency, retry rate,
+// human-intervention rate, receipt completeness) to recent activity; the two
+// backlog gauges (reconciliationBacklog, dlqDepth) are deliberately NOT windowed
+// — a backlog is a current-state count, not a rate, and windowing it would hide
+// an old unresolved case sitting past the window boundary.
+// ---------------------------------------------------------------------------
+
+export interface ReliabilityMetrics {
+  tenantId: string;
+  windowDays: number;
+  workflowSuccessRate: number | null;
+  stepLatencyMs: { p50: number | null; p95: number | null; sampleSize: number };
+  retryRate: number | null;
+  humanInterventionRate: number | null;
+  reconciliationBacklog: number;
+  dlqDepth: number;
+  receiptCompleteness: number | null;
+  asOf: string;
+}
+
+function percentile(sorted: number[], p: number): number | null {
+  if (sorted.length === 0) return null;
+  const idx = Math.min(sorted.length - 1, Math.floor(p * sorted.length));
+  return sorted[idx]!;
+}
+
+export async function reliability(tenantId: string, windowDays = 1): Promise<ReliabilityMetrics> {
+  const cutoff = new Date(Date.now() - windowDays * 86_400_000);
+  return withTenant(tenantId, async (db) => {
+    const runRows = await db
+      .select({ status: workflowRuns.status, count: sql<number>`count(*)::int` })
+      .from(workflowRuns)
+      .where(and(eq(workflowRuns.tenantId, tenantId), gte(workflowRuns.createdAt, cutoff)))
+      .groupBy(workflowRuns.status);
+    const byStatus = Object.fromEntries(runRows.map((r) => [r.status, r.count]));
+    // "Terminal" excludes still-running/paused/escalated runs — those haven't
+    // resolved yet, so counting them as failures (or successes) would be a guess.
+    const terminal = (byStatus.completed ?? 0) + (byStatus.failed ?? 0) + (byStatus.compensated ?? 0) + (byStatus.cancelled ?? 0);
+    const workflowSuccessRate = terminal > 0 ? (byStatus.completed ?? 0) / terminal : null;
+
+    const completedSteps = await db
+      .select({ createdAt: workflowSteps.createdAt, updatedAt: workflowSteps.updatedAt })
+      .from(workflowSteps)
+      .where(and(eq(workflowSteps.tenantId, tenantId), eq(workflowSteps.status, "completed"), gte(workflowSteps.createdAt, cutoff)));
+    // Proxy for step latency: createdAt (queued) -> updatedAt (last write, which for a
+    // completed step is its completion). Not a dedicated "started executing" timestamp
+    // (none exists on this table) — stated honestly rather than fabricating one.
+    const latencies = completedSteps.map((s) => s.updatedAt.getTime() - s.createdAt.getTime()).sort((a, b) => a - b);
+
+    const [retryRow] = await db
+      .select({
+        total: sql<number>`count(*)::int`,
+        retried: sql<number>`count(*) filter (where ${workflowSteps.attempts} > 1)::int`,
+      })
+      .from(workflowSteps)
+      .where(and(eq(workflowSteps.tenantId, tenantId), inArray(workflowSteps.status, ["completed", "failed"]), gte(workflowSteps.createdAt, cutoff)));
+    const retryRate = retryRow!.total > 0 ? retryRow!.retried / retryRow!.total : null;
+
+    const [humanRow] = await db
+      .select({
+        total: sql<number>`count(*)::int`,
+        needsHuman: sql<number>`count(*) filter (where ${domainActions.status} = 'needs_human_review')::int`,
+      })
+      .from(domainActions)
+      .where(and(eq(domainActions.tenantId, tenantId), gte(domainActions.createdAt, cutoff)));
+    const humanInterventionRate = humanRow!.total > 0 ? humanRow!.needsHuman / humanRow!.total : null;
+
+    const [reconRow] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(reconciliationCases)
+      .where(and(eq(reconciliationCases.tenantId, tenantId), eq(reconciliationCases.status, "open")));
+
+    const [dlqRow] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(deadLetters)
+      .where(and(eq(deadLetters.tenantId, tenantId), eq(deadLetters.status, "open")));
+
+    const [receiptRow] = await db
+      .select({
+        total: sql<number>`count(*)::int`,
+        finalized: sql<number>`count(*) filter (where ${decisionReceipts.finalizedAt} is not null)::int`,
+      })
+      .from(decisionReceipts)
+      .where(and(eq(decisionReceipts.tenantId, tenantId), gte(decisionReceipts.createdAt, cutoff)));
+    const receiptCompleteness = receiptRow!.total > 0 ? receiptRow!.finalized / receiptRow!.total : null;
+
+    return {
+      tenantId,
+      windowDays,
+      workflowSuccessRate,
+      stepLatencyMs: { p50: percentile(latencies, 0.5), p95: percentile(latencies, 0.95), sampleSize: latencies.length },
+      retryRate,
+      humanInterventionRate,
+      reconciliationBacklog: reconRow!.count,
+      dlqDepth: dlqRow!.count,
+      receiptCompleteness,
+      asOf: new Date().toISOString(),
+    };
+  });
 }

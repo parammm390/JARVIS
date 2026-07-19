@@ -14,6 +14,7 @@ import {
   followUpDebt,
   dataQuality,
   household360,
+  reliability,
 } from "@finnor/read-models";
 
 const VIEWS: Record<string, (tenantId: string, searchParams: URLSearchParams) => Promise<unknown>> = {
@@ -25,6 +26,10 @@ const VIEWS: Record<string, (tenantId: string, searchParams: URLSearchParams) =>
   "sla-breaches": (tenantId) => slaBreaches(tenantId),
   "follow-up-debt": (tenantId) => followUpDebt(tenantId),
   "data-quality": (tenantId) => dataQuality(tenantId),
+  "reliability": (tenantId, searchParams) => {
+    const windowDays = Number(searchParams.get("windowDays") ?? 1);
+    return reliability(tenantId, Number.isFinite(windowDays) && windowDays > 0 ? windowDays : 1);
+  },
   "household-360": (tenantId, searchParams) => {
     const householdId = searchParams.get("householdId");
     if (!householdId) throw new AuthError("householdId query param required", 400);
