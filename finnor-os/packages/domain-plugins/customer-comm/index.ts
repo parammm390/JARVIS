@@ -164,23 +164,29 @@ export const customerCommPlugin: DomainEnginePlugin = {
       };
     }
 
+    const correction = retrieval.facts.correction as { correctedFact: string } | undefined;
+
     let answer: string;
     try {
       const provider = resolveProvider();
       answer = (
         await provider.complete({
           system:
-            "You answer a customer's question for a water treatment dealer. Use the structured facts (their own " +
-            "service history, if given) as ground truth; semantic document snippets are supporting context, never " +
-            "a substitute for a structured fact when both exist. Never invent a number, date, or promise not " +
-            "present in the given data. One or two short, warm sentences, no preamble.",
+            "You answer a customer's question for a water treatment dealer. If a `correction` fact is present, " +
+            "it OUTRANKS every other fact and every semantic snippet — a human operator corrected a past wrong " +
+            "answer on this exact topic, so build your answer from correction.correctedFact, not from anything " +
+            "else that disagrees with it. Otherwise use the structured facts (their own service history, if " +
+            "given) as ground truth; semantic document snippets are supporting context, never a substitute for a " +
+            "structured fact when both exist. Never invent a number, date, or promise not present in the given " +
+            "data. One or two short, warm sentences, no preamble.",
           user: JSON.stringify({ question, facts: retrieval.facts, semanticSnippets: retrieval.semanticHits.map((h) => h.chunk) }),
         })
       ).trim();
     } catch {
-      // LLM synthesis failed — degrade to the old behavior (top raw chunk) rather than
-      // returning nothing; still real, still cited, just not natural-language-composed.
-      answer = retrieval.semanticHits[0]?.chunk ?? "I found related information but could not summarize it right now.";
+      // LLM synthesis failed — degrade rather than returning nothing, but a correction
+      // still wins even in degraded mode: never silently fall back to a stale semantic
+      // chunk when a human already corrected exactly this question.
+      answer = correction?.correctedFact ?? retrieval.semanticHits[0]?.chunk ?? "I found related information but could not summarize it right now.";
     }
 
     return {

@@ -7,6 +7,7 @@
 // table, a household lookup) rather than this module guessing what's relevant.
 
 import { querySemantic, type SemanticHit } from "./semantic";
+import { findMatchingCorrection } from "./corrections";
 
 export interface StructuredFact {
   /** Which real source this came from — becomes a citation's `source`. */
@@ -61,13 +62,24 @@ export interface HybridRetrieveParams {
 
 export async function hybridRetrieve(params: HybridRetrieveParams): Promise<HybridRetrievalResult> {
   const asOf = new Date().toISOString();
-  const structured = params.structured ?? [];
+  const structured = [...(params.structured ?? [])];
   // Semantic memory failing (unconfigured embeddings, a transient DB blip) must never
   // break an answer that structured facts alone can already ground — same
   // graceful-degradation convention buildMemorySnapshot already applies.
-  const semanticHits = await querySemantic(params.tenantId, params.query, params.semanticLimit ?? DEFAULT_SEMANTIC_LIMIT).catch(
-    () => [] as SemanticHit[],
-  );
+  const [semanticHits, correction] = await Promise.all([
+    querySemantic(params.tenantId, params.query, params.semanticLimit ?? DEFAULT_SEMANTIC_LIMIT).catch(() => [] as SemanticHit[]),
+    // §5.6: a human correction always wins — checked BEFORE anything else so it lands
+    // first in `structured` (and therefore first in `citations`), ahead of every other
+    // structured fact a caller supplied, not just ahead of semantic hits.
+    findMatchingCorrection(params.tenantId, params.query).catch(() => null),
+  ]);
+  if (correction) {
+    structured.unshift({
+      source: "correction",
+      ref: correction.id,
+      data: { correctedFact: correction.correctedFact, originalQuestion: correction.question, correctedBy: correction.correctedBy },
+    });
+  }
 
   const facts: Record<string, unknown> = {};
   const citations: Citation[] = [];

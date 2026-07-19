@@ -17,6 +17,7 @@ export * from "./consolidated";
 export * from "./patterns";
 export * from "./chunking";
 export * from "./ingest";
+export * from "./corrections";
 export * from "./retrieval";
 
 export async function buildMemorySnapshot(opts: {
