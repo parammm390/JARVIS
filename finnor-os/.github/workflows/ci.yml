@@ -54,3 +54,27 @@ jobs:
       - name: Install Postgres client tools
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
       - run: npx tsx scripts/backup-restore-drill.ts
+
+  deploy-staging:
+    # Phase 6 (§6.7): auto-deploy to staging on every merge to main, now that a real
+    # staging environment exists (finnor-worker-staging, project imaginative-
+    # enchantment — see docs/phase-status.md's Task 6.1 entry). Production stays
+    # manual-promotion-only per the pack's own explicit decision (docs/promotion-
+    # flow.md) — this job never touches production.
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: finnor-os
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+      - name: Deploy worker to staging
+        # RAILWAY_TOKEN is a project-scoped token from the Railway dashboard
+        # (imaginative-enchantment project → Settings → Tokens) — an owner action,
+        # not yet added as a GitHub Actions secret. This job cannot run until it is.
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_STAGING_TOKEN }}
+        run: railway up --service finnor-worker-staging --environment production --ci --yes

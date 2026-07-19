@@ -301,3 +301,19 @@ None of the five items above need Param to have a registered business, an existi
 company, or anything beyond an email address and (for AWS/Railway/Vercel scale-ups
 only) a payment method for genuinely small recurring costs — same framing as Phase 4's
 own owner-actions section.
+
+## 10. Railway CI deploy token, for Task 6.7's auto-deploy-to-staging job
+
+`.github/workflows/ci.yml` now has a `deploy-staging` job (runs after tests pass, only
+on pushes to `main`) that deploys `apps/worker` to the real staging worker
+(`finnor-worker-staging`, project `imaginative-enchantment`) automatically. It needs a
+GitHub Actions secret it doesn't have yet:
+
+1. Railway dashboard → project `imaginative-enchantment` → Settings → Tokens → create a
+   new **project token** (not an account token — scope it to this one project).
+2. GitHub → this repo's Settings → Secrets and variables → Actions → New repository
+   secret → name it `RAILWAY_STAGING_TOKEN`, paste the token value.
+
+Also blocked, separately, on the same `git push` fix as everything else CI-related
+(`owner-actions.md` §2) — this job can't run at all until GitHub Actions can see this
+repo's latest commits.
