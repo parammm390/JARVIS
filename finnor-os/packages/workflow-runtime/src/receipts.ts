@@ -49,11 +49,17 @@ export async function openReceipt(params: OpenReceiptParams): Promise<{ receiptI
 
 /** Finalizes a receipt with what actually happened. Idempotent to call twice with the
  *  same result (a recovered/resumed step re-finalizing) — it's a plain UPDATE, not an
- *  append, so the second call just overwrites with the same values. */
+ *  append, so the second call just overwrites with the same values.
+ *
+ *  §5.3: optional `evidence` overwrites the receipt's generic open-time placeholder
+ *  (`[{source:"workflow_step",...}]`, set by openReceiptForFirstClaim before the real
+ *  work has happened) with the REAL citations the execution actually relied on — e.g.
+ *  hybridRetrieve's structured-fact + semantic-hit sources for an answer action. Every
+ *  AI answer's receipt carries real citations this way, not a placeholder pointer. */
 export async function finalizeReceipt(
   tenantId: string,
   receiptId: string,
-  result: { actualResult: Record<string, unknown> } | { failure: ReceiptFailure },
+  result: { actualResult: Record<string, unknown>; evidence?: ReceiptEvidence[] } | { failure: ReceiptFailure },
 ): Promise<void> {
   await withTenant(tenantId, (db) =>
     db
@@ -61,6 +67,7 @@ export async function finalizeReceipt(
       .set({
         actualResult: "actualResult" in result ? result.actualResult : null,
         failure: "failure" in result ? result.failure : null,
+        ...("evidence" in result && result.evidence ? { evidence: result.evidence } : {}),
         finalizedAt: new Date(),
       })
       .where(eq(decisionReceipts.id, receiptId)),

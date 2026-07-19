@@ -4,6 +4,7 @@
 
 import type { DomainEnginePlugin } from "../shared/plugin-interface";
 import type { DraftAction, ExecutionResult, ValidationResult } from "@finnor/shared-types";
+import { hybridRetrieve, type SemanticHit } from "@finnor/memory";
 import { z } from "zod";
 
 export const WaterQuestionPayloadSchema = z.object({
@@ -65,27 +66,36 @@ export const waterDomainKnowledgePlugin: DomainEnginePlugin = {
     return {
       actionType,
       summary: `Answer a water treatment question about: ${p.topic}`,
-      payload: p,
+      payload: { ...p, tenantId: policy.tenantId },
       // Read-only knowledge lookup — policies may still gate it, default is not to.
       requiresConfirmation: policy.requiresConfirmation,
     };
   },
 
   async execute(draft): Promise<ExecutionResult> {
+    const tenantId = String(draft.payload.tenantId ?? "");
     const topic = String(draft.payload.topic ?? "").toLowerCase();
     const match = Object.entries(WATER_KNOWLEDGE).find(([k]) => topic.includes(k));
+    // §5.3: the canned table below IS this action's structured source — a real,
+    // versioned, public-domain reference, not a guess. Semantic memory supplements
+    // with anything dealer-specific (their own SOP for a topic) but never overrides a
+    // canned entry when one exists — retrieval order is law even for a static lookup.
+    const structured = match ? [{ source: "water_knowledge_reference", ref: match[0], data: match[1] }] : [];
+    const retrieval = tenantId ? await hybridRetrieve({ tenantId, query: topic, structured }) : { citations: [], semanticHits: [] as SemanticHit[] };
+
     if (!match) {
       return {
         status: "success",
         output: {
           answer: `No canned knowledge entry for "${topic}". Known topics: ${Object.keys(WATER_KNOWLEDGE).join(", ")}.`,
+          citations: retrieval.citations,
         },
       };
     }
     const [key, entry] = match;
     return {
       status: "success",
-      output: { topic: key, summary: entry.summary, treatment: entry.treatment },
+      output: { topic: key, summary: entry.summary, treatment: entry.treatment, citations: retrieval.citations },
       expected: { answered: true },
     };
   },

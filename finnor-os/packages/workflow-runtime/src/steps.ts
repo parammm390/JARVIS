@@ -11,6 +11,7 @@ import { maybeChaosKill } from "./chaos";
 import { openReconciliationCase } from "./reconciliation";
 import { openReceipt, finalizeReceipt, findReceiptByStep } from "./receipts";
 import { ingestReceipt } from "./memory-ingest";
+import type { ReceiptEvidence } from "@finnor/shared-types";
 
 // Overridable (FINNOR_STEP_LEASE_SECONDS) so the chaos-test script can prove real
 // lease-expiry recovery in seconds rather than waiting out the production default.
@@ -103,6 +104,16 @@ export async function claimStep(tenantId: string, stepId: string): Promise<Workf
  *  (recoverStaleSteps re-finalizing after a crash), since it's a plain UPDATE, not an
  *  append. No receipt existing (e.g. the open above failed) is a logged gap, never a
  *  thrown error — the step's own completion must never depend on the receipt succeeding. */
+/** §5.3: a plugin execution may report the real sources it relied on — hybridRetrieve's
+ *  structured facts + semantic hits, for an answer action — under `output.citations`.
+ *  Pulled out here so any completed step's real evidence (not just answer actions)
+ *  overwrites the open-time placeholder when present. */
+function extractCitations(actualResult: Record<string, unknown>): ReceiptEvidence[] | undefined {
+  const output = (actualResult.output ?? actualResult) as Record<string, unknown> | undefined;
+  const citations = output?.citations;
+  return Array.isArray(citations) && citations.length > 0 ? (citations as ReceiptEvidence[]) : undefined;
+}
+
 async function finalizeReceiptForStep(tenantId: string, stepId: string, result: { actualResult: Record<string, unknown> } | { errorKind: import("@finnor/shared-types").ErrorKind; message: string; recoveryPath: string }): Promise<void> {
   try {
     const receipt = await findReceiptByStep(tenantId, stepId);
@@ -113,7 +124,9 @@ async function finalizeReceiptForStep(tenantId: string, stepId: string, result: 
     await finalizeReceipt(
       tenantId,
       receipt.id,
-      "actualResult" in result ? { actualResult: result.actualResult } : { failure: { errorKind: result.errorKind, message: result.message, recoveryPath: result.recoveryPath } },
+      "actualResult" in result
+        ? { actualResult: result.actualResult, evidence: extractCitations(result.actualResult) }
+        : { failure: { errorKind: result.errorKind, message: result.message, recoveryPath: result.recoveryPath } },
     );
   } catch (err) {
     console.error(`[decision_receipts] failed to finalize receipt for step ${stepId}`, err);

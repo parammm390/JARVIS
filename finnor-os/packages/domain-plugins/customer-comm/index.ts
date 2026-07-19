@@ -4,18 +4,25 @@
 
 import type { DomainEnginePlugin } from "../shared/plugin-interface";
 import type { DraftAction, ExecutionResult, ValidationResult, DomainPolicy } from "@finnor/shared-types";
-import { querySemantic } from "@finnor/memory";
+import { hybridRetrieve, type StructuredFact } from "@finnor/memory";
 import { withTenant, communicationsLog } from "@finnor/db";
 import { getOrCreateConversation, persistMessage } from "@finnor/data-platform";
+import { household360 } from "@finnor/read-models";
+import { resolveProvider } from "@finnor/tools";
 import type { ToolRegistry } from "@finnor/tools";
 import { findHousehold } from "../shared/db-helpers";
 import { z } from "zod";
 
+const opt = <T extends z.ZodTypeAny>(t: T) => t.nullish().transform((v: unknown) => v ?? undefined);
+
 export const CustomerQuestionPayloadSchema = z.object({
   question: z.string().min(3).max(2000),
+  // §5.3: optional — when the caller already knows which household is asking (a
+  // returning customer's call/text), the household's own real history grounds the
+  // answer as a structured fact ahead of semantic memory. Absent for an unidentified
+  // asker (e.g. a first-time web form question) — semantic memory alone still applies.
+  householdId: opt(z.string().uuid()),
 });
-
-const opt = <T extends z.ZodTypeAny>(t: T) => t.nullish().transform((v: unknown) => v ?? undefined);
 
 export const SendMessageSchema = z.object({
   householdId: opt(z.string().uuid()),
@@ -129,23 +136,48 @@ export const customerCommPlugin: DomainEnginePlugin = {
     }
     const tenantId = String(draft.payload.tenantId ?? "");
     const question = String(draft.payload.question ?? "");
-    const hits = await querySemantic(tenantId, question, 3);
-    if (hits.length === 0) {
+    const householdId = draft.payload.householdId ? String(draft.payload.householdId) : undefined;
+
+    const structured: StructuredFact[] = [];
+    if (householdId) {
+      const profile = await household360(tenantId, householdId).catch(() => null);
+      if (profile) structured.push({ source: "household360", ref: householdId, data: profile });
+    }
+    const retrieval = await hybridRetrieve({ tenantId, query: question, structured });
+
+    if (retrieval.semanticHits.length === 0 && structured.length === 0) {
       return {
         status: "success",
         output: {
           answer: "I don't have anything in your documents that answers this yet. Upload the relevant SOP or price sheet and I'll use it next time.",
-          sources: [],
+          citations: [],
         },
         expected: { answered: true },
       };
     }
+
+    let answer: string;
+    try {
+      const provider = resolveProvider();
+      answer = (
+        await provider.complete({
+          system:
+            "You answer a customer's question for a water treatment dealer. Use the structured facts (their own " +
+            "service history, if given) as ground truth; semantic document snippets are supporting context, never " +
+            "a substitute for a structured fact when both exist. Never invent a number, date, or promise not " +
+            "present in the given data. One or two short, warm sentences, no preamble.",
+          user: JSON.stringify({ question, facts: retrieval.facts, semanticSnippets: retrieval.semanticHits.map((h) => h.chunk) }),
+        })
+      ).trim();
+    } catch {
+      // LLM synthesis failed — degrade to the old behavior (top raw chunk) rather than
+      // returning nothing; still real, still cited, just not natural-language-composed.
+      answer = retrieval.semanticHits[0]?.chunk ?? "I found related information but could not summarize it right now.";
+    }
+
     return {
       status: "success",
-      output: {
-        answer: hits[0]!.chunk,
-        sources: hits.map((h) => ({ doc: h.sourceDocId, similarity: h.similarity })),
-      },
+      output: { answer, citations: retrieval.citations },
       expected: { answered: true },
     };
   },

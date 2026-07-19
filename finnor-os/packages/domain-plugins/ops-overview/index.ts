@@ -8,6 +8,7 @@ import type { DraftAction, ExecutionResult, ValidationResult, DomainPolicy } fro
 import type { ToolRegistry } from "@finnor/tools";
 import { resolveProvider, testAdsConnections, testQuickBooksConnection } from "@finnor/tools";
 import { withTenant, households, domainActions, inventoryItems, invoices, serviceVisits, communicationsLog, maintenanceAgreements } from "@finnor/db";
+import { hybridRetrieve } from "@finnor/memory";
 import { and, desc, eq, gte, isNull, lt, sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -170,8 +171,11 @@ async function synthesizeAnswer(question: string, data: unknown): Promise<string
   const text = await provider.complete({
     system:
       "You answer a water treatment dealer owner's business question using ONLY the JSON data given. " +
-      "Never state a number or fact not present in the data. If the specific thing asked isn't in the data, " +
-      "say so plainly and offer the closest real figure that IS available. One or two short spoken sentences, no preamble.",
+      "Treat every field except semanticSnippets as ground truth (real query results); semanticSnippets are " +
+      "supporting context from past records, never a substitute for a ground-truth field when both cover the " +
+      "same fact. Never state a number or fact not present in the data. If the specific thing asked isn't in " +
+      "the data, say so plainly and offer the closest real figure that IS available. One or two short spoken " +
+      "sentences, no preamble.",
     user: JSON.stringify({ question, data }),
   });
   return text.trim();
@@ -230,24 +234,48 @@ export const opsOverviewPlugin: DomainEnginePlugin = {
           ? Promise.all([testAdsConnections(), testQuickBooksConnection()]).then(([ads, qb]) => ({ meta_ads: ads.meta, google_ads: ads.googleAds, quickbooks: qb }))
           : Promise.resolve(undefined),
       ]);
-      const data = { ...overview, ...finance, ...(integrations ? { integrations } : {}) };
+      // §5.3: structured facts (the real overview/finance query results above) come
+      // first — retrieval order is law. Semantic memory (past receipts, transcripts,
+      // reports) supplements, never substitutes, and every source cited flows straight
+      // into this action's DecisionReceipt via output.citations (extracted in
+      // packages/workflow-runtime/src/steps.ts).
+      const structured = [
+        { source: "business_overview", ref: "current", data: overview },
+        { source: "finance_history_snapshot", ref: "current", data: finance },
+        ...(integrations ? [{ source: "integrations_status", ref: "current", data: integrations }] : []),
+      ];
+      const retrieval = await hybridRetrieve({ tenantId, query: question, structured });
+      const data = { ...retrieval.facts, semanticSnippets: retrieval.semanticHits.map((h) => h.chunk) };
       try {
         const answer = await synthesizeAnswer(question, data);
-        return { status: "success", output: { spokenSummary: answer, groundedOn: data }, expected: { answered: true } };
+        return { status: "success", output: { spokenSummary: answer, groundedOn: data, citations: retrieval.citations }, expected: { answered: true } };
       } catch (err) {
         // LLM synthesis failed — never silently drop the question. Fall back to the
         // deterministic overview narration so the caller still gets something real.
         return {
           status: "success",
-          output: { spokenSummary: `I couldn't fully process that question, but here's the current picture: ${speak(overview)}`, error: (err as Error).message },
+          output: {
+            spokenSummary: `I couldn't fully process that question, but here's the current picture: ${speak(overview)}`,
+            error: (err as Error).message,
+            citations: retrieval.citations,
+          },
           expected: { answered: true },
         };
       }
     }
     const overview = await loadOverview(tenantId);
+    // §5.3: this branch has no free-text question to retrieve against, but it's still
+    // one of the four "answer actions" the receipt-citation contract covers — the live
+    // overview itself is the structured fact; a generic query surfaces any relevant
+    // recent memory (e.g. a noted recurring issue) as supporting citations too.
+    const retrieval = await hybridRetrieve({
+      tenantId,
+      query: "business overview leads pending inventory invoices visits",
+      structured: [{ source: "business_overview", ref: "current", data: overview }],
+    });
     return {
       status: "success",
-      output: { ...overview, spokenSummary: speak(overview) },
+      output: { ...overview, spokenSummary: speak(overview), citations: retrieval.citations },
       expected: { answered: true },
     };
   },
