@@ -50,3 +50,121 @@ service → Deployments tab → find the 2026-07-13 deployment
 per-deployment control the CLI doesn't expose). After that, `railway status` should show
 exactly one active deployment. Worth checking whether this pattern recurs after future
 deploys — if so, it may be a Railway account/project-level issue worth their support.
+
+## 6. Phase 4 decision, confirmed with Param (2026-07-19): skip GoHighLevel, skip real SMS for now
+
+The pack's original DECISIONS section said CRM + scheduling + SMS/email = GoHighLevel
+($97–297/month, 14-day free trial only, no free tier). Checked live at gohighlevel.com/
+pricing before recommending this. A prior session had already replaced GHL's CRM/
+scheduling role with a real native implementation (Finnor's own database — see
+`finnor-os-backend` history, the 2026-07-12 "native pass"), so the ONLY thing GHL would
+still add is real outbound SMS delivery (email already works for real via Gmail SMTP,
+free). Param chose **"skip real SMS for now"** rather than pay for GHL or set up a
+cheaper alternative (Twilio was offered as a no-business-needed, pay-as-you-go option and
+declined for now). Net effect: `CRM_BINDING`/`SCHEDULING_BINDING` should be set to
+`native` (real, free, already built and conformance-tested — see
+`tests/integration/capability-contract-conformance.test.ts`, 35/35 passing), and outbound
+SMS stays on the honestly-labeled emulator until Param revisits this. No owner action
+needed here unless you change your mind — if you ever do want real SMS, tell me and I'll
+either wire up GHL's trial or Twilio, whichever you'd rather pay for.
+
+## 7. Phase 4 providers — none of these require a registered business
+
+You said "I don't have a business" as a reason you couldn't do Phase 4's signups. That's
+not actually a blocker for any of the providers below — every one of them has a free
+individual/developer/sandbox tier that needs nothing but an email address (Stripe and
+DocuSign's real account creation flows don't ask for business registration at all; a
+"business name" field, where one exists, accepts any text and isn't verified at this
+tier). I have not personally walked through each provider's live signup flow inside this
+session (only GoHighLevel's pricing page, above) — the steps below are accurate based on
+how each provider's standard developer/sandbox signup has worked; if any click-path has
+moved, the destination account type (sandbox/test/demo) is still correct. Do these in any
+order; each is fully independent.
+
+**Stripe (payments, test mode)**
+1. Go to stripe.com → Start now / Sign up. Email + password, no business info required
+   to create the account or to use test mode.
+2. Dashboard → make sure "Test mode" is on (toggle, usually top-right).
+3. Developers → API keys → copy the **Secret key** (starts `sk_test_`).
+4. Paste that value in chat and I'll set `STRIPE_SECRET_KEY` + `PAYMENTS_BINDING=stripe`
+   on the `api` Vercel project and redeploy. Webhook signing secret comes later, once the
+   webhook endpoint is live — I'll ask for that separately when it's time.
+5. No card needed, no charge — test mode never touches real money, by design, forever
+   until you deliberately flip to live keys (a separate future step, one env var).
+
+**QuickBooks Online (accounting, sandbox)**
+1. Go to developer.intuit.com → Sign in / Create account (a normal Intuit account, no
+   business needed).
+2. Dashboard → create an app (any name, e.g. "Finnor JARVIS"). Intuit auto-generates a
+   **fake sandbox company** for you — this IS the intended target, not a limitation.
+3. App → Keys & OAuth → copy **Client ID** and **Client Secret**.
+4. The OAuth flow needs one authorization click I can't do for you (it opens Intuit's
+   consent screen) — once you have Client ID/Secret in hand, tell me and I'll walk you
+   through the one-click authorize step to get the refresh token + realm (sandbox company)
+   id.
+5. Paste all four (Client ID, Client Secret, refresh token, realm id) in chat and I'll set
+   `QUICKBOOKS_CLIENT_ID`/`QUICKBOOKS_CLIENT_SECRET`/`QUICKBOOKS_REFRESH_TOKEN`/
+   `QUICKBOOKS_REALM_ID` (environment stays `sandbox`) and redeploy.
+
+**DocuSign (e-signature, demo/developer account)**
+1. Go to developers.docusign.com → Get a free account / Sign up. Email + password, no
+   business needed — this is explicitly a developer sandbox account.
+2. Once in, go to your Apps and Keys page (My Account or Admin, depending on the current
+   DocuSign UI) → Add App / Integration Key → copy the **Integration Key**.
+3. Generate an **RSA keypair** on that same page (DocuSign will show you a "Generate RSA"
+   button) — copy the private key it gives you (starts `-----BEGIN RSA PRIVATE KEY-----`).
+4. Copy your **User ID** and **Account ID** (both shown on your DocuSign account/profile
+   page — API Username / Account ID, both GUIDs).
+5. Paste all four (Integration Key, User ID, Account ID, private key) in chat — the
+   private key is a genuine secret but is meant to go straight into env vars, same as the
+   Supabase key above. I'll set `DOCUSIGN_INTEGRATION_KEY`/`DOCUSIGN_USER_ID`/
+   `DOCUSIGN_ACCOUNT_ID`/`DOCUSIGN_PRIVATE_KEY` (base URL stays the demo environment,
+   `https://demo.docusign.net`) and redeploy.
+
+**Meta Ads (marketing, read-only + paused-campaign creation only — JARVIS never spends
+real money without you separately approving a launch)**
+1. You need a personal Facebook account (if you don't have one, that's the only real
+   prerequisite — no business registration).
+2. Go to business.facebook.com → create a Business Manager (any name — this can be
+   literally "Finnor Water Co. Test", it's not verified at this tier) → add an ad account
+   under it (no payment method required just to create it and use read APIs).
+3. developers.facebook.com → create an app → add the Marketing API product → generate a
+   long-lived **access token** for your ad account.
+4. Note your **ad account id** (numeric, shown as `act_123456789` — we only need the
+   number, not the `act_` prefix).
+5. Paste both in chat and I'll set `META_ADS_ACCESS_TOKEN` / `META_ADS_ACCOUNT_ID` and
+   redeploy.
+
+**Google Ads (marketing, read-only + paused-campaign creation only, same no-real-spend
+posture as Meta above)**
+1. You need a Google account (personal Gmail is fine).
+2. ads.google.com → create an account (again, no business registration required at
+   signup — "Expert Mode" skips the guided campaign setup entirely, you can create the
+   account with zero campaigns running).
+3. This one has the most moving parts: a **developer token** from
+   ads.google.com/aw/apicenter (test-account-level access is granted instantly with no
+   review; a token with basic/production access requires a short Google review — test
+   access is enough for what Phase 4 needs, which is read APIs and paused campaigns
+   only), plus OAuth **client ID/secret** from console.cloud.google.com (a free Google
+   Cloud project, no billing needed for this) and a **refresh token** (I can walk you
+   through the one-click OAuth consent once the app exists), plus your **customer id**
+   (shown in the Ads UI, format `123-456-7890`, digits only for env).
+4. Paste developer token, client ID, client secret, refresh token, and customer id in
+   chat and I'll set the five `GOOGLE_ADS_*` env vars and redeploy.
+
+**Vapi real phone number (voice — this is the one item on this list with a real,
+recurring cost, roughly a few dollars a month; I will not purchase this without you
+telling me to)**
+1. Your Vapi account already exists and is funded (VAPI_API_KEY etc. are already set in
+   production) — this is just missing a real number.
+2. dashboard.vapi.ai → Phone Numbers → Buy a number (or "Get free number" if Vapi is
+   currently offering one via its own Twilio-backed pool — pricing shown before you
+   confirm).
+3. Tell me the number (and its Vapi phone-number-id, shown right after purchase) and I'll
+   replace the `PLACEHOLDER_NEEDS_REAL_VALUE` row in `tenant_phone_numbers` and set
+   `VAPI_PHONE_NUMBER_ID`, then redeploy. Until then, outbound confirmation calls stay on
+   the emulator (honestly labeled), which is the correct, safe default — no real call
+   should go out from a placeholder number.
+4. **I need your explicit go-ahead before you spend anything here** — reply whenever
+   you're ready and I'll walk you through the exact purchase screen so you know the cost
+   before you click confirm.
