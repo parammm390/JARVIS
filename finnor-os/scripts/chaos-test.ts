@@ -14,7 +14,7 @@ import "dotenv/config";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { withTenant, closePool, tenants, workflowRuns, workflowSteps, commands, integrationOperations, reconciliationCases } from "@finnor/db";
+import { withTenant, closePool, tenants, workflowRuns, workflowSteps, commands, integrationOperations, reconciliationCases, decisionReceipts } from "@finnor/db";
 import { eq } from "drizzle-orm";
 import { submitCommand } from "@finnor/workflow-runtime";
 
@@ -66,6 +66,11 @@ async function cleanup(stepIds: string[], workflowRunId: string, commandId: stri
   await withTenant(TENANT_ID, async (db) => {
     await db.delete(reconciliationCases).where(eq(reconciliationCases.tenantId, TENANT_ID));
     for (const id of stepIds) await db.delete(integrationOperations).where(eq(integrationOperations.workflowStepId, id));
+    // decision_receipts (Phase 2, migration 0016) references workflow_steps and
+    // postdates this script — must be cleared first or workflow_steps' delete below
+    // fails on the FK. Real bug found running this for real this session, fixed here,
+    // not worked around.
+    for (const id of stepIds) await db.delete(decisionReceipts).where(eq(decisionReceipts.workflowStepId, id));
     await db.delete(workflowSteps).where(eq(workflowSteps.workflowRunId, workflowRunId));
     await db.delete(workflowRuns).where(eq(workflowRuns.id, workflowRunId));
     await db.delete(commands).where(eq(commands.id, commandId));
