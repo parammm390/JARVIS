@@ -181,3 +181,41 @@ If you'd rather use a *different* number than the one Vapi already had on file:
    this without you telling me to.**
 2. Tell me the number (and its Vapi phone-number-id, shown right after purchase) and I'll
    update `tenant_phone_numbers`/`VAPI_PHONE_NUMBER_ID` and redeploy.
+
+## 8. Voyage AI embeddings (Phase 5, real memory) — no business required
+
+JARVIS's real memory system (§5 of the JARVIS 95 pack) is fully built and deployed —
+real chunking, hybrid retrieval, citations on every AI answer, contradiction detection,
+a correction loop, and a 40-fixture retrieval eval that's currently scoring 95% against
+the built-in deterministic test embedder. The one missing piece is a real embeddings
+provider: right now `EMBEDDINGS_API_KEY` is still the placeholder, so
+`GET /api/setup/status` honestly reports `integrations.embeddings: {configured: false,
+healthy: false}` and every semantic-memory read/write in production loudly refuses
+(`FailClosedEmbedder`) instead of silently using a fake vector — nothing pretends to be
+real. Fixing this is one env var.
+
+**Steps (personal account, no business registration needed):**
+1. Go to **voyageai.com** → Sign up (email + password; a personal account is fine, no
+   business info required).
+2. Once in, go to the dashboard's API Keys page → create a new key. Copy it (starts with
+   something like `pa-...`).
+3. Voyage's free tier is generous for this scale (Dealer Zero's real corpus today is a
+   few hundred short text chunks) — check the current pricing page before assuming, but
+   you're very unlikely to hit a paid tier just from this system's own usage.
+4. Paste the key in chat and I'll set `EMBEDDINGS_API_KEY` on both the `api` Vercel
+   project and the `finnor-worker` Railway service (both make real embedding calls —
+   same two-deployment gotcha as the Vapi binding above), redeploy both, then run
+   `scripts/backfill-embeddings.ts` against Dealer Zero so its ~1,100 existing receipts
+   get real semantic vectors instead of the mechanical test-only stand-in.
+5. Nothing else changes automatically — this is a pure env-var flip. `setup/status`
+   flips `integrations.embeddings.configured` to `true` on the next request; a real
+   health check (an actual round-trip, not just "configured") isn't wired in yet
+   deliberately, since Voyage doesn't have a cheap dedicated health endpoint the way
+   Stripe's `/v1/balance` does — the honest signal today is "configured or not," same
+   posture Zep already has on this same endpoint.
+
+One thing worth deciding whenever this happens: Voyage's exact current model
+name/dimension options for `voyage-3.5` should be reconfirmed against their live docs
+at signup time — the code (`packages/memory/src/semantic.ts`) was written against
+Voyage's documented API shape as of this session but has never been exercised against a
+real account (no key exists in this environment to test with).
