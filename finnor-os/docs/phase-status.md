@@ -144,13 +144,23 @@ the prior session's log — it passed, plus surfaced and fixed one real bug.
   open or repeatedly failing (the honest, stated proxy for "flapping" — no transition-
   history data source exists to detect literal open/close oscillation, documented in
   the file's own header rather than fabricated). Also checks secret-store
-  reachability via `ensureSecretsLoaded()` when `SECRETS_PROVIDER` isn't `env` (a no-op
-  today, since it isn't). **Honest limitation:** `SENTRY_DSN` is unset in production
-  (confirmed via `vercel env ls` this session) — `Sentry.captureMessage` calls are real
-  and correctly wired but currently reach nowhere; owner-blocked on Param creating a
-  Sentry account (`owner-actions.md` §9). 2 tests (`tests/integration/reliability-
+  reachability via `ensureSecretsLoaded()` when `SECRETS_PROVIDER` isn't `env` (now
+  live and meaningful — see Task 6.2 below). 2 tests (`tests/integration/reliability-
   alerts.test.ts`) proving each real threshold fires against seeded rows and a forced-
   open circuit, and that a healthy tenant produces zero alerts.
+- [x] Task 6.6 (partial) — **`SENTRY_DSN` RESOLVED, real alerts now reach a real
+  Sentry project (2026-07-19/20).** Param created a Sentry project and supplied the
+  real DSN in chat. Set as `finnor/prod/sentry-dsn` in AWS Secrets Manager (see Task
+  6.2) and added to `FINNOR_SECRET_IDS` on both `api` (Vercel) and `finnor-worker`
+  (Railway); both redeployed. **Verified with a real event, not just "the DSN is
+  set":** sent a live `Sentry.captureMessage` call from this session using the exact
+  same `initObservability()`/`Sentry` singleton the app uses, confirmed
+  `Sentry.flush()` returned `true` (the SDK's own delivery-confirmed signal, not a
+  fire-and-forget assumption). Every alert `scan_reliability_alerts` (built earlier
+  this session) and every correlationId-tagged breadcrumb/exception now genuinely
+  reaches Sentry's dashboard. Alert *routing* (Sentry → email/Slack/etc.) is still a
+  dashboard configuration step for Param whenever he wants notifications somewhere
+  specific — the events themselves are landing regardless.
 - [x] Task 6.3 (CI-mechanics tier only) — real restore drill wired into CI (evidence:
   `.github/workflows/ci.yml` now installs `postgresql-client` and runs `npx tsx
   scripts/backup-restore-drill.ts` after the test suite). **Cannot verify this actually
@@ -249,26 +259,47 @@ the prior session's log — it passed, plus surfaced and fixed one real bug.
   types provably working end-to-end) — but the simulator itself does not currently run
   successfully on this deployment, so the literal claim is not yet true. Not silently
   marked done.
-- [ ] Task 6.2 — Secrets migration to AWS Secrets Manager: code is fully built already
-  (`packages/security/src/secrets.ts`, predates this session) — 100% owner-blocked on
-  Param creating an AWS account and an IAM user/role (`owner-actions.md` §9).
+- [x] Task 6.2 — **RESOLVED for real, 2026-07-19/20.** Param created an AWS account and
+  a dedicated IAM user (`JARVIS-claude`, admin-scoped for setup only — never used as
+  the app's runtime credential) and supplied its access key in chat. Code was already
+  fully built (`packages/security/src/secrets.ts`, predates this session). Did the
+  actual migration, carefully: created 7 real secrets in AWS Secrets Manager
+  (`finnor/prod/{database-url,supabase-service-role-key,vapi-api-key,vapi-webhook-
+  secret,groq-api-key,redis-url,sentry-dsn}` — only the ones with real current
+  production values; Stripe/QuickBooks/DocuSign/Ads secrets deliberately left out
+  since those integrations have no real values yet, per Phase 4's own status);
+  created a genuinely least-privilege IAM policy (`FinnorReadOwnSecretsOnly`, scoped
+  to `secretsmanager:GetSecretValue` on `finnor/prod/*` only, exactly matching
+  `docs/secrets-runbook.md`'s own spec) and a separate IAM user (`finnor-app-prod`)
+  for the app to actually run as — **not** the admin key Param supplied, which was
+  used only for setup and never touches a live deployment. Verified the scoped
+  credential works (`GetSecretValue` on its own secret: yes) and is genuinely
+  restricted (`iam:ListUsers`: denied) before using it anywhere. Verified the real
+  application code path locally (`ensureSecretsLoaded()` against the real AWS setup,
+  all 6 original values loaded correctly into `process.env`) before touching any live
+  deployment — only then set `SECRETS_PROVIDER`/`FINNOR_SECRET_IDS`/AWS credentials on
+  both `api` (Vercel) and `finnor-worker` (Railway) production, redeployed both,
+  verified live via `GET /api/setup/status` through the real proxy:
+  `{"provider":"aws-secrets-manager","loaded":true}`. Deliberately left the old
+  plaintext env vars in place as a rollback safety net rather than removing them in
+  the same pass — `ensureSecretsLoaded()`'s AWS-sourced values take precedence at
+  runtime regardless, so this is safe, not a half-finished cutover.
 
 **EXIT GATE — status, honestly:** staging live with simulator running — **partially
 met**: staging infrastructure is real and live (see Task 6.1 above), the simulator
 specifically does not yet run successfully there (real bug, logged, unresolved). Prod
-`setup/status` shows managed secret provider — **not met**, owner-blocked (Task 6.2;
-`secretProviderStatus()` itself is live and correctly reports `provider: "env"` today).
-Restore-drill doc with real timings + weekly automation — **partially met**: the CI-tier
-drill is wired but unverified (git push broken) and the full production-parity drill
-needs a restore target separate from this new staging DB. Load + chaos docs committed
-with targets met — **partially met**: both docs exist with real local/CI-tier evidence;
-full-scale k6 against the now-real staging environment has not been run (k6 itself still
-isn't installed anywhere available this session). Reliability endpoint returns real
-numbers — **met**, verified live via direct HTTP smoke test this session, against both
-production and (indirectly, via local reproduction) staging. One production deploy done
-via the promotion flow — **met by precedent**: every phase since Phase 1 has deployed
-exactly this way; `docs/promotion-flow.md` is this session's new artifact documenting
-it, not a new deploy in itself.
+`setup/status` shows managed secret provider — **MET, 2026-07-19/20** — verified live:
+`{"provider":"aws-secrets-manager","loaded":true}`. Restore-drill doc with real timings
++ weekly automation — **partially met**: the CI-tier drill is wired but unverified (git
+push still broken as of this update) and the full production-parity drill needs a
+restore target separate from this new staging DB. Load + chaos docs committed with
+targets met — **partially met**: k6 was obtained and run for real against the staging
+DB (see Task 6.4's own updated entry) — 100% success rate but latency targets missed,
+root-caused to the local test harness's connection pool, not necessarily the real
+infra. Reliability endpoint returns real numbers — **met**, verified live via direct
+HTTP smoke test this session, against both production and staging. One production
+deploy done via the promotion flow — **met**, multiple times this session in fact (API
++ worker redeployed twice each for the AWS/Sentry cutover alone).
 
 **Honest summary, matching Phase 4's own framing: Phase 6 is real, tested, and deployed
 as far as engineering alone can take it. It cannot reach GATE-GREEN without Param
@@ -353,6 +384,24 @@ Status: not-started
   </details>
 
 ## Log (newest first)
+- 2026-07-19/20 — **Tasks 6.2 and part of 6.6 genuinely resolved: real AWS Secrets
+  Manager cutover + real Sentry alerting, both live in production.** Param supplied a
+  real AWS admin key and a real Sentry DSN in chat. Did the AWS migration carefully:
+  created 7 real secrets (only for values that actually exist today — Stripe/
+  QuickBooks/DocuSign/Ads left out since those integrations aren't live yet), created a
+  genuinely least-privilege IAM policy + a separate non-admin IAM user for the app to
+  actually run as, verified that scoped user was both functional and properly
+  restricted before using it anywhere, tested the real secret-loading code path
+  locally before touching any live deployment, then cut over `api` (Vercel) and
+  `finnor-worker` (Railway) production and verified live via `setup/status`. Same
+  session, added the Sentry DSN as an 8th secret and verified with a real
+  `Sentry.captureMessage` + `Sentry.flush()` call (not just "the DSN is set") — every
+  alert this session's `scan_reliability_alerts` handler raises now reaches a real
+  dashboard. Also attempted, separately, to fix `git push` with a token Param
+  provided — found the deeper issue was that `paramdave/finnor` doesn't exist on
+  GitHub at all (not a credential problem), and the token belonged to a different
+  GitHub account entirely; flagged back to Param rather than guessing further. Full
+  detail in Task 6.2's and 6.6's own entries above and `owner-actions.md`.
 - 2026-07-19/20 — **Second diagnostic pass on the `plugin.actionTypes is not iterable`
   staging bug: corrected an earlier wrong conclusion, root-caused precisely, did not
   ship a fix.** The prior pass (same day, below) had concluded "not reproducible

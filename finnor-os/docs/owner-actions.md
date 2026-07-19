@@ -260,36 +260,54 @@ deployment on the existing one. Not necessary — what's live now satisfies the 
 isolation goal — but the option's still open if you'd rather standardize on Supabase
 everywhere.
 
-**AWS account for Secrets Manager (Task 6.2)** — the code side is already fully built
-(`packages/security/src/secrets.ts`, see `docs/secrets-runbook.md`). Needs: an AWS
-account (aws.amazon.com, free tier covers Secrets Manager's first 30 days per secret,
-then ~$0.40/secret/month — real but small recurring cost, I will not create this account
-or accept the cost without you confirming first), then an IAM user or role scoped to
-`secretsmanager:GetSecretValue` on a `finnor/prod/*` naming prefix (exact policy JSON
-already in the runbook). Once you have an AWS access key pair (or if you'd rather I use
-IAM roles instead of static keys, tell me and I'll ask for the role ARN), paste it in
-chat and I'll create the actual secrets, set the three cutover env vars, and redeploy.
+**AWS account for Secrets Manager (Task 6.2) — RESOLVED 2026-07-19/20, real cutover
+live in production.** You created an AWS account + the `JARVIS-claude` admin IAM user
+and gave me its key. Done, verified, not just assumed: created 7 real secrets in
+Secrets Manager for everything with a real current production value (database, Supabase
+service role, Vapi API + webhook secret, Groq, Redis, Sentry DSN); created a genuinely
+least-privilege IAM policy + a separate `finnor-app-prod` user scoped to
+`secretsmanager:GetSecretValue` on `finnor/prod/*` only — **your admin key was used
+only to set this up and is not the credential the app runs with**; verified the scoped
+credential is actually restricted (denied `iam:ListUsers`) before using it; tested the
+real `ensureSecretsLoaded()` code path locally against the real AWS setup before ever
+touching a live deployment; then set the cutover on both `api` (Vercel) and
+`finnor-worker` (Railway) production, redeployed both, and confirmed live via
+`GET /api/setup/status`: `{"provider":"aws-secrets-manager","loaded":true}`. Old
+plaintext env vars deliberately left in place as a rollback safety net.
 
-**Sentry account + DSN (Task 6.6)** — `SENTRY_DSN` is currently unset in production
-(confirmed this session via `vercel env ls` — no Sentry variable exists on the `api`
-project), so `Sentry.init()` is a harmless no-op right now: the correlationId
-tracing and the new threshold-based alert detection (`scan_reliability_alerts` —
-reconciliation backlog>20, DLQ>10, a circuit breaker stuck open, a failure-rate spike,
-a secret-store read failure) are real, wired, and running on an hourly schedule, but
-have nowhere to report to yet. sentry.io → sign up free (developer tier is free
-forever for one project, no business needed) → create a project (platform: Node.js) →
-copy the DSN. Paste it in chat and I'll set `SENTRY_DSN` on both the API (Vercel) and
-worker (Railway) and redeploy — the moment that's done, every alert this session built
-starts actually reaching Sentry's dashboard. **Separately, dashboard alert *rules*
-(routing a Sentry event to email/Slack/etc.) are a Sentry dashboard configuration step
-only you can do** — Sentry Alerts → Create Alert Rule, condition "an event's message
-contains `reliability_alert:`", action of your choice. I'll write the exact rule
-conditions once the DSN exists and you tell me where you want notifications routed.
+Remaining, if you ever want it: `SECRETS_PROVIDER=aws-secrets-manager` isn't set on the
+new staging worker (`finnor-worker-staging`) — deliberately, since staging's secrets
+would need their own separate `finnor/staging/*` AWS entries pointing at staging's own
+database, not production's; not done this session since staging works fine on plain env
+vars today and mixing this up would risk staging pointing at production data.
 
-**k6 CLI (Task 6.4)** — `k6 run scripts/k6-load-test.js` needs k6 installed wherever it
-runs (`brew install k6` locally, or a CI runner image that ships it). Free, open-source,
-no account needed at all — purely a "run this install command" step, not blocked on
-anything but hasn't been done since there's no staging environment yet to point it at.
+**Sentry account + DSN (Task 6.6) — RESOLVED 2026-07-19/20, real events landing.** You
+created a Sentry project and pasted the DSN. Set as `finnor/prod/sentry-dsn` in AWS
+Secrets Manager (same cutover as above) and added to both platforms' secret mappings;
+redeployed both. **Verified with a real test event, not just "the DSN is set":** sent a
+live `Sentry.captureMessage` using the app's own `initObservability()`/`Sentry`
+singleton and confirmed `Sentry.flush()` returned `true` — Sentry's own delivery-
+confirmed signal. Every correlationId-tagged breadcrumb/exception and every
+`scan_reliability_alerts` threshold alert (reconciliation backlog>20, DLQ>10, a circuit
+breaker stuck open, a failure-rate spike, a secret-store read failure) now genuinely
+reaches your Sentry dashboard. **Still yours to do, whenever you want actual
+notifications (not just events sitting in the dashboard):** Sentry → Alerts → Create
+Alert Rule, condition "an event's message contains `reliability_alert:`", action of
+your choice (email/Slack/etc.) — a dashboard config step only you can do; tell me if you
+want the exact rule conditions written out.
+
+**k6 CLI (Task 6.4) — RESOLVED 2026-07-19/20, obtained and run for real.** Downloaded as
+a standalone binary (github.com/grafana/k6 releases, no `brew`/sudo/account needed) and
+run against the real staging database — see `docs/load-test-2026-07-19.md` for the real
+results (100% success rate, latency far outside target, root-caused to the local test
+harness's small connection pool). Still not done: the full 50rps/10-minute scenario, and
+getting past Vercel's team SSO wall to test the actual deployed staging URL directly
+instead of a local proxy for its database — that one's a real gap, not owner-blocked in
+the account-creation sense, just not solved (Vercel's Protection Bypass for Automation
+is dashboard-only, no API path exists — confirmed against their own docs this session).
+If you want that path unblocked: Vercel dashboard → `api` project → Settings →
+Deployment Protection → enable "Protection Bypass for Automation" → it generates a
+secret automatically → paste it in chat and I'll use it.
 
 **Postgres client tools for the FULL production restore drill** — the CI-tier drill
 (dump/restore against CI's own ephemeral Postgres) is wired and described in
