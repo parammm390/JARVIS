@@ -284,9 +284,88 @@ Status: not-started
 - **Phase 4 cannot reach GATE-GREEN through engineering alone:** every remaining `emulator` binding (GHL/QuickBooks/Stripe/DocuSign/Ads/real Vapi number) is blocked purely on Param creating accounts and handing over credentials — the code, webhooks, health checks, and conformance tests already exist for all of them. See `docs/owner-actions.md` §6-7 for exact, already-verified signup steps (none require a registered business).
 - ~~Phase 5 real embeddings~~ — **RESOLVED same session (2026-07-19).** Param supplied a real Voyage AI key; set on both Vercel and Railway, both redeployed. Verified with a real round-trip (not just "key present"): a live embed call returned a genuine 1024-dim vector, and a real semantic-discrimination check showed a related-topic pair scoring meaningfully higher (0.85) than an unrelated pair (0.79) — genuine semantic understanding. `GET /api/setup/status` confirmed live: `integrations.embeddings: {configured:true, healthy:null, provider:"voyage-3.5"}`. Ran the backfill script against production for both Dealer Zero and the primary tenant — both reported 0 receipts to backfill, a real finding (the `decision_receipts` table postdates Phase 2, 2026-07-18/19, so there's no production history old enough to have any yet), not a bug. Semantic memory starts genuinely empty in production and fills in for real as real activity happens from here on via the Phase 5.2 auto-ingest hooks — nothing fabricated to fill the gap. See `docs/owner-actions.md` §8 for full detail.
 - **Not a blocker, a deliberately deferred follow-up:** `/api/corrections` (Phase 5.6) is live on the backend but not yet added to the jarvis proxy's path allowlist or surfaced in any UI — natural to bundle with Phase 7's cockpit "one-click fixes" work rather than build UI ahead of that phase's own scope.
-- **New, unresolved (2026-07-19/20):** on the newly-provisioned staging Railway worker (`finnor-worker-staging`, project `imaginative-enchantment`), every job type that constructs a `FinnorOrchestrator` (`simulator_tick`, `scan_cold_leads`, `scan_low_inventory`, `scan_service_due`, `scheduled_reminder`) dead-letters with `plugin.actionTypes is not iterable`, 100% reproducible across a fresh clean redeploy, while 6 other job types on the same worker succeed. The identical code, run locally via `npx tsx` against the exact same staging database, succeeds every time — so this is not a source-code bug, it's specific to something about the deployed Railway/Nixpacks/tsx runtime. This is very likely the same root cause as the "Railway zombie deployment" finding directly above (same error string, same job-type pattern), except this time observed on a single, non-duplicated deployment — which argues against "zombie/stale instance racing" as the actual explanation and for something more fundamental in how this monorepo's workspace packages resolve under Railway's build. Worth a dedicated investigation with real container access (Railway's CLI has no shell-into-running-container command; `railway run` only forwards env vars to a local process). Does not block Task 6.1's core claim (staging infrastructure is genuinely live) but does mean "simulator running" isn't literally true yet on staging.
+- **New, unresolved, root-caused precisely (2026-07-19/20, second diagnostic pass):** on
+  the staging Railway worker (`finnor-worker-staging`, project `imaginative-enchantment`),
+  every job type that constructs a `FinnorOrchestrator` (`simulator_tick`,
+  `scan_cold_leads`, `scan_low_inventory`, `scan_service_due`, `scheduled_reminder`)
+  dead-letters with `plugin.actionTypes is not iterable`; 6 other job types on the same
+  worker succeed. Initial pass (documented below this entry, superseded) concluded "not
+  reproducible locally" and guessed at a Railway-specific runtime cause. **That
+  conclusion was wrong — found the real reproduction and the exact plugin.** The
+  earlier local tests used a simplified, non-faithful reproduction (a standalone script
+  importing `@finnor/orchestration` directly, or `createWorker()` called without
+  actually running through `runLoop`'s real dispatch path) — running the ACTUAL
+  `apps/worker/src/index.ts` entry point exactly as `railway.json`'s startCommand does
+  (`sh -c 'npx tsx apps/$SERVICE_APP/src/index.ts'`), against the exact staging
+  database, reproduces the crash locally 100% of the time, with an uncaught exception at
+  `packages/orchestration/src/plugin-registry.ts:32`. Added temporary diagnostic logging
+  to `register()` (in a throwaway `/tmp` copy, never touched the real repo) and found the
+  exact plugin: `leadToWaterTestPlugin` (18th in the 21-plugin static list) resolves to
+  `undefined` — not just its `actionTypes`, the entire imported module — while plugins
+  1-17 load correctly with real `actionTypes` arrays. This is the classic symptom of a
+  CommonJS circular-require returning an incomplete `module.exports` (tsx transpiles
+  this codebase's ESM-authored TypeScript through a CJS-compat `require()` shim, not
+  native ESM — confirmed via the `require stack` frames in an unrelated error this same
+  session). Ruled out, each with a real test, not a guess: a fresh `npm install` (exact
+  Nixpacks build step) in a clean checkout — still succeeds standalone, still fails
+  through the real entrypoint; Node 20 vs Node 22 — both behave identically; `NODE_ENV=
+  production` — no difference; reordering the 21 plugin imports within `plugin-
+  registry.ts` — no difference (confirms the cycle isn't about that file's own import
+  order); reordering the `@finnor/workflow-runtime` import to the top of `lead-to-water-
+  test/index.ts` itself — no difference either. Grepped every file in `@finnor/workflow-
+  runtime` for a static import back toward orchestration/domain-plugins/apps-worker —
+  none found, so the actual cycle's second hop is still unidentified (could be a dynamic
+  `import()` my grep wouldn't catch, or a longer chain through `@finnor/db`/`@finnor/
+  tools`/`@finnor/shared-types` that's shared but only breaks for this one plugin's
+  specific position in the graph). **Deliberately did not attempt the one fix that would
+  likely work structurally** — converting `createDefaultPluginRegistry()` to lazily
+  `import()` each plugin instead of statically importing them — because that requires
+  making it `async`, which `FinnorOrchestrator`'s constructor (a real JS constructor,
+  can't be async) can't accommodate without a broader refactor touching all 17 call
+  sites across the codebase including a live production API route
+  (`setup/status/route.ts`) — too large and risky to ship unverified under time pressure,
+  and this codebase's own engineering law is explicit: "Bug found ⇒ regression test
+  first, fix second." No regression test exists yet because the failure mode needs the
+  real entry point + a live DB to reproduce, not a simple unit test. **Confirmed
+  production is not known to be affected** — deliberately did not query production's DB
+  to check (direct production Supabase access needs explicit sign-off per this
+  project's own established rule, not sought this session) — this finding is scoped to
+  the new staging deployment only. Next real step for whoever picks this up: write a
+  regression test that imports `apps/worker/src/index.ts` as the entry module (not just
+  `@finnor/orchestration`) to reliably reproduce this in CI, then trace the actual second
+  hop of the cycle with that test as a tight feedback loop, then fix and verify via the
+  regression test before ever touching the async-conversion idea.
+
+  <details><summary>Superseded first-pass note (kept for the record, conclusion was wrong)</summary>
+
+  100% reproducible across a fresh clean redeploy, while 6 other job types on the same
+  worker succeed. The identical code, run locally via `npx tsx` against the exact same
+  staging database, succeeds every time — so this is not a source-code bug, it's
+  specific to something about the deployed Railway/Nixpacks/tsx runtime. [Superseded —
+  see the entry above: it IS a source-code bug, reproducible locally with a faithful
+  entry-point reproduction; the earlier local tests just weren't faithful enough.]
+  </details>
 
 ## Log (newest first)
+- 2026-07-19/20 — **Second diagnostic pass on the `plugin.actionTypes is not iterable`
+  staging bug: corrected an earlier wrong conclusion, root-caused precisely, did not
+  ship a fix.** The prior pass (same day, below) had concluded "not reproducible
+  locally, must be Railway-environment-specific" — that was wrong, based on
+  non-faithful local reproductions. Found the real reproduction (running the actual
+  `apps/worker/src/index.ts` entry point, not a simplified script), which fails
+  100% of the time locally too. Added temporary diagnostic logging (throwaway `/tmp`
+  copy only, never touched the real repo) and identified the exact plugin
+  (`leadToWaterTestPlugin`, 18th of 21) whose entire module resolves to `undefined` —
+  a classic CJS circular-require symptom under tsx's compat shim. Tested and ruled out
+  4 candidate causes with real evidence each (fresh install, Node 20 vs 22, `NODE_ENV`,
+  two different import-reordering attempts) rather than guessing. Deliberately did not
+  attempt the structural fix (converting plugin loading to lazy/async imports) because
+  it would require an async `FinnorOrchestrator` constructor, touching 17 call sites
+  including a live production API route — too large to ship unverified under time
+  pressure, and this repo's own rule is regression-test-first. Full trail in the
+  Blockers entry above (superseded first-pass note kept alongside it for the record,
+  not deleted). No source code changed in the real repo this pass — all testing
+  happened in a throwaway `/tmp` checkout, confirmed clean via `git status` afterward.
 - 2026-07-19/20 — **Task 6.1 (staging) provisioned for real**, after Param authorized
   ~$5 of Railway credit and pointed this session at a second, previously-empty Railway
   project (`imaginative-enchantment`). Built: an isolated real Postgres 18 database
