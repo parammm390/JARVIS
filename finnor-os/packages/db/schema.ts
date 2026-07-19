@@ -201,14 +201,64 @@ export const embeddings = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
-    sourceDocId: text("source_doc_id"),
+    // Phase 5 (§5.2 chunking spec): "no orphan chunks" — every chunk traces to the
+    // real record it came from. NOT NULL enforced at the DB layer by migration 0027.
+    sourceDocId: text("source_doc_id").notNull(),
     // Additive alongside the loose sourceDocId text field above — new ingestion can
     // point here once a real documents row exists; sourceDocId stays for back-compat.
     documentId: uuid("document_id"),
     chunk: text("chunk").notNull(),
-    embedding: vector("embedding", { dimensions: 1536 }),
+    // Phase 5 (§5.1): Voyage AI voyage-3.5, 1024-dim (migration 0027 retypes the
+    // column — this table had zero real writers before this phase, see that migration).
+    embedding: vector("embedding", { dimensions: 1024 }),
+    // Phase 5 (§5.2): chunk metadata the chunking spec requires — which real entities
+    // this chunk mentions, and when the underlying event/fact occurred (not when it was
+    // embedded) so hybrid retrieval can reason about recency and supersession.
+    entityRefs: jsonb("entity_refs").notNull().default([]),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("embeddings_tenant_idx").on(t.tenantId)],
+  (t) => [
+    index("embeddings_tenant_idx").on(t.tenantId),
+    index("embeddings_tenant_occurred_idx").on(t.tenantId, t.occurredAt),
+  ],
+);
+
+// Phase 5 (§5.1): content-hash cache so re-ingesting an unchanged chunk never pays for
+// a second embedding call. Tenant-scoped (not global) — see migration 0028 for why a
+// shared global cache would be a cross-tenant information leak.
+export const embeddingCache = pgTable(
+  "embedding_cache",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    contentHash: text("content_hash").notNull(),
+    model: text("model").notNull(),
+    embedding: vector("embedding", { dimensions: 1024 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("embedding_cache_tenant_idx").on(t.tenantId),
+    unique("embedding_cache_tenant_hash_model_idx").on(t.tenantId, t.contentHash, t.model),
+  ],
+);
+
+// Phase 5 (§5.6 correction loop): an operator-supplied correction to a wrong AI answer,
+// stored as a first-class fact that outranks semantic hits on the same topic thereafter.
+// receiptId links back to the DecisionReceipt for the answer being corrected — real
+// provenance, not a free-floating claim.
+export const memoryCorrections = pgTable(
+  "memory_corrections",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    receiptId: uuid("receipt_id").references(() => decisionReceipts.id),
+    question: text("question").notNull(),
+    wrongAnswer: text("wrong_answer").notNull(),
+    correctedFact: text("corrected_fact").notNull(),
+    correctedBy: text("corrected_by").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("memory_corrections_tenant_idx").on(t.tenantId)],
 );
 
 // RBAC permission matrix — which roles can approve which action_types, per tenant (§18).
