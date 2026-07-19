@@ -11,6 +11,7 @@ import { household360 } from "@finnor/read-models";
 import { resolveProvider } from "@finnor/tools";
 import type { ToolRegistry } from "@finnor/tools";
 import { findHousehold } from "../shared/db-helpers";
+import { readConfidenceThreshold } from "../shared/plugin-interface";
 import { z } from "zod";
 
 const opt = <T extends z.ZodTypeAny>(t: T) => t.nullish().transform((v: unknown) => v ?? undefined);
@@ -68,7 +69,7 @@ export const customerCommPlugin: DomainEnginePlugin = {
       return {
         actionType,
         summary: `Answer a customer question from your own documents: "${p.question.slice(0, 160)}"`,
-        payload: { ...p, tenantId: policy.tenantId },
+        payload: { ...p, tenantId: policy.tenantId, retrievalConfidenceThreshold: readConfidenceThreshold(policy) },
         requiresConfirmation: policy.requiresConfirmation,
       };
     }
@@ -143,14 +144,21 @@ export const customerCommPlugin: DomainEnginePlugin = {
       const profile = await household360(tenantId, householdId).catch(() => null);
       if (profile) structured.push({ source: "household360", ref: householdId, data: profile });
     }
-    const retrieval = await hybridRetrieve({ tenantId, query: question, structured });
+    const confidenceThreshold = typeof draft.payload.retrievalConfidenceThreshold === "number" ? draft.payload.retrievalConfidenceThreshold : undefined;
+    const retrieval = await hybridRetrieve({ tenantId, query: question, structured, confidenceThreshold });
 
-    if (retrieval.semanticHits.length === 0 && structured.length === 0) {
+    // §5.5: below-threshold retrieval states what's missing instead of guessing off a
+    // thin semantic hit. This subsumes the old "zero hits" case (confidence is always
+    // "low" when there are zero hits and no structured fact) with one honest path.
+    if (retrieval.confidence === "low") {
       return {
         status: "success",
         output: {
-          answer: "I don't have anything in your documents that answers this yet. Upload the relevant SOP or price sheet and I'll use it next time.",
-          citations: [],
+          answer:
+            retrieval.semanticHits.length === 0
+              ? "I don't have anything in your documents that answers this yet. Upload the relevant SOP or price sheet and I'll use it next time."
+              : "I found something related but I'm not confident enough in it to answer that precisely — you may want to check with the dealer directly, or upload a document that covers this topic.",
+          citations: retrieval.citations,
         },
         expected: { answered: true },
       };

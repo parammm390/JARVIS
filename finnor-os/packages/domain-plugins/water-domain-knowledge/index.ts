@@ -5,6 +5,7 @@
 import type { DomainEnginePlugin } from "../shared/plugin-interface";
 import type { DraftAction, ExecutionResult, ValidationResult } from "@finnor/shared-types";
 import { hybridRetrieve, type SemanticHit } from "@finnor/memory";
+import { readConfidenceThreshold } from "../shared/plugin-interface";
 import { z } from "zod";
 
 export const WaterQuestionPayloadSchema = z.object({
@@ -66,7 +67,7 @@ export const waterDomainKnowledgePlugin: DomainEnginePlugin = {
     return {
       actionType,
       summary: `Answer a water treatment question about: ${p.topic}`,
-      payload: { ...p, tenantId: policy.tenantId },
+      payload: { ...p, tenantId: policy.tenantId, retrievalConfidenceThreshold: readConfidenceThreshold(policy) },
       // Read-only knowledge lookup — policies may still gate it, default is not to.
       requiresConfirmation: policy.requiresConfirmation,
     };
@@ -75,13 +76,16 @@ export const waterDomainKnowledgePlugin: DomainEnginePlugin = {
   async execute(draft): Promise<ExecutionResult> {
     const tenantId = String(draft.payload.tenantId ?? "");
     const topic = String(draft.payload.topic ?? "").toLowerCase();
+    const confidenceThreshold = typeof draft.payload.retrievalConfidenceThreshold === "number" ? draft.payload.retrievalConfidenceThreshold : undefined;
     const match = Object.entries(WATER_KNOWLEDGE).find(([k]) => topic.includes(k));
     // §5.3: the canned table below IS this action's structured source — a real,
     // versioned, public-domain reference, not a guess. Semantic memory supplements
     // with anything dealer-specific (their own SOP for a topic) but never overrides a
     // canned entry when one exists — retrieval order is law even for a static lookup.
     const structured = match ? [{ source: "water_knowledge_reference", ref: match[0], data: match[1] }] : [];
-    const retrieval = tenantId ? await hybridRetrieve({ tenantId, query: topic, structured }) : { citations: [], semanticHits: [] as SemanticHit[] };
+    const retrieval = tenantId
+      ? await hybridRetrieve({ tenantId, query: topic, structured, confidenceThreshold })
+      : { citations: [], semanticHits: [] as SemanticHit[] };
 
     if (!match) {
       return {

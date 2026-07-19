@@ -9,6 +9,7 @@ import type { ToolRegistry } from "@finnor/tools";
 import { resolveProvider, testAdsConnections, testQuickBooksConnection } from "@finnor/tools";
 import { withTenant, households, domainActions, inventoryItems, invoices, serviceVisits, communicationsLog, maintenanceAgreements } from "@finnor/db";
 import { hybridRetrieve } from "@finnor/memory";
+import { readConfidenceThreshold } from "../shared/plugin-interface";
 import { and, desc, eq, gte, isNull, lt, sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -205,7 +206,7 @@ export const opsOverviewPlugin: DomainEnginePlugin = {
       return {
         actionType,
         summary: `Look up an answer to: "${p.question}"`,
-        payload: { ...p, tenantId: policy.tenantId },
+        payload: { ...p, tenantId: policy.tenantId, retrievalConfidenceThreshold: readConfidenceThreshold(policy) },
         requiresConfirmation: false, // read-only
       };
     }
@@ -244,7 +245,8 @@ export const opsOverviewPlugin: DomainEnginePlugin = {
         { source: "finance_history_snapshot", ref: "current", data: finance },
         ...(integrations ? [{ source: "integrations_status", ref: "current", data: integrations }] : []),
       ];
-      const retrieval = await hybridRetrieve({ tenantId, query: question, structured });
+      const confidenceThreshold = typeof draft.payload.retrievalConfidenceThreshold === "number" ? draft.payload.retrievalConfidenceThreshold : undefined;
+      const retrieval = await hybridRetrieve({ tenantId, query: question, structured, confidenceThreshold });
       const data = { ...retrieval.facts, semanticSnippets: retrieval.semanticHits.map((h) => h.chunk) };
       try {
         const answer = await synthesizeAnswer(question, data);
