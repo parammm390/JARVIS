@@ -23,6 +23,7 @@ import { criticReview } from "./handlers/critic-review";
 import { learningDigest } from "./handlers/learning-digest";
 import { scanApprovalExpiry } from "./handlers/scan-approval-expiry";
 import { simulatorTick } from "./handlers/simulator-tick";
+import { scanReliabilityAlerts } from "./handlers/scan-reliability-alerts";
 import { startScheduler, type ScheduledScan } from "./scheduler";
 
 export function createWorker(): JobQueue {
@@ -46,6 +47,7 @@ export function createWorker(): JobQueue {
   queue.register("learning_digest", learningDigest);
   queue.register("scan_approval_expiry", scanApprovalExpiry);
   queue.register("simulator_tick", simulatorTick);
+  queue.register("scan_reliability_alerts", scanReliabilityAlerts);
   return queue;
 }
 
@@ -64,6 +66,9 @@ const PROACTIVE_SCANS: ScheduledScan[] = [
   // Hourly, not daily like most scans above — a confirmation_timeout_hours default of
   // 24h loses most of its meaning if the check that enforces it only runs once a day.
   { type: "scan_approval_expiry", intervalHours: 1, payload: (tenantId) => ({ tenantId }) },
+  // Phase 6 (§6.6): reliability thresholds are operational-health signals, not
+  // business-day cadence — hourly, same reasoning as scan_approval_expiry above.
+  { type: "scan_reliability_alerts", intervalHours: 1, payload: (tenantId) => ({ tenantId }) },
   { type: "learning_digest", intervalHours: 24, payload: (tenantId) => ({ tenantId }) },
   // §3.3: no-ops for any tenant whose tenant_settings.simulator_enabled isn't true —
   // enqueued for every tenant like every other scan, gated by real DB state, not a
