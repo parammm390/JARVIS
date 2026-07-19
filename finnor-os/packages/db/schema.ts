@@ -774,7 +774,11 @@ export const dataQualityFindings = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
     findingType: text("finding_type", {
-      enum: ["duplicate_candidate", "missing_critical_field", "stale_data", "ambiguous_match"],
+      // Phase 5 (§5.4): "contradiction" added — one entity's own data disagreeing
+      // with itself (conflicting phones, duplicate equipment, overlapping
+      // appointments), distinct from duplicate_candidate (two different entities
+      // that might be the same record). Migration 0029.
+      enum: ["duplicate_candidate", "missing_critical_field", "stale_data", "ambiguous_match", "contradiction"],
     }).notNull(),
     entityType: text("entity_type").notNull(),
     entityId: uuid("entity_id").notNull(),

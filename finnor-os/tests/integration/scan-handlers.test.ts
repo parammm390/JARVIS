@@ -21,6 +21,10 @@ import {
   leads,
   workOrders,
   dataQualityFindings,
+  contacts,
+  contactMethods,
+  technicians,
+  appointments,
 } from "@finnor/db";
 import { eq, and } from "drizzle-orm";
 import { scanLowInventory } from "../../apps/worker/src/handlers/scan-low-inventory";
@@ -219,6 +223,102 @@ describe.skipIf(!available)("proactive scan handlers", () => {
     );
     expect(findings.some((f) => f.entityType === "lead" && f.entityId === lead!.id)).toBe(true);
     expect(findings.some((f) => f.entityType === "work_order")).toBe(true);
+  });
+
+  it("scan_data_quality flags a household whose legacy phone disagrees with its canonical contact's phone (§5.4 contradiction)", async () => {
+    await withTenant(TENANT_ID, (db) => db.delete(dataQualityFindings).where(and(eq(dataQualityFindings.tenantId, TENANT_ID), eq(dataQualityFindings.findingType, "contradiction"))));
+    const [hh] = await withTenant(TENANT_ID, (db) =>
+      db.insert(households).values({ tenantId: TENANT_ID, address: "6 Test Contradiction Ln", contactInfo: { name: "Phone Mismatch", phone: "+13195551111" } }).returning(),
+    );
+    const [contact] = await withTenant(TENANT_ID, (db) =>
+      db.insert(contacts).values({ tenantId: TENANT_ID, householdId: hh!.id, name: "Phone Mismatch" }).returning(),
+    );
+    await withTenant(TENANT_ID, (db) =>
+      db.insert(contactMethods).values({ tenantId: TENANT_ID, contactId: contact!.id, methodType: "phone", value: "+13195552222" }),
+    );
+    await scanDataQuality({ tenantId: TENANT_ID });
+    const findings = await withTenant(TENANT_ID, (db) =>
+      db.select().from(dataQualityFindings).where(and(eq(dataQualityFindings.tenantId, TENANT_ID), eq(dataQualityFindings.findingType, "contradiction"), eq(dataQualityFindings.entityType, "household"))),
+    );
+    expect(findings.some((f) => f.entityId === hh!.id && f.relatedEntityId === contact!.id)).toBe(true);
+    const match = findings.find((f) => f.entityId === hh!.id)!;
+    expect(match.details).toMatchObject({ legacyPhone: "13195551111", canonicalPhone: "13195552222" });
+  });
+
+  it("scan_data_quality never flags a household whose legacy and canonical phones genuinely agree", async () => {
+    await withTenant(TENANT_ID, (db) => db.delete(dataQualityFindings).where(and(eq(dataQualityFindings.tenantId, TENANT_ID), eq(dataQualityFindings.findingType, "contradiction"))));
+    const [hh] = await withTenant(TENANT_ID, (db) =>
+      db.insert(households).values({ tenantId: TENANT_ID, address: "7 Test Agreement Ln", contactInfo: { name: "Phone Match", phone: "+13195553333" } }).returning(),
+    );
+    const [contact] = await withTenant(TENANT_ID, (db) =>
+      db.insert(contacts).values({ tenantId: TENANT_ID, householdId: hh!.id, name: "Phone Match" }).returning(),
+    );
+    await withTenant(TENANT_ID, (db) =>
+      db.insert(contactMethods).values({ tenantId: TENANT_ID, contactId: contact!.id, methodType: "phone", value: "+13195553333" }),
+    );
+    await scanDataQuality({ tenantId: TENANT_ID });
+    const findings = await withTenant(TENANT_ID, (db) =>
+      db.select().from(dataQualityFindings).where(and(eq(dataQualityFindings.tenantId, TENANT_ID), eq(dataQualityFindings.findingType, "contradiction"), eq(dataQualityFindings.entityType, "household"))),
+    );
+    expect(findings.some((f) => f.entityId === hh!.id)).toBe(false);
+  });
+
+  it("scan_data_quality flags duplicate equipment of the same type for the same household", async () => {
+    await withTenant(TENANT_ID, (db) => db.delete(dataQualityFindings).where(and(eq(dataQualityFindings.tenantId, TENANT_ID), eq(dataQualityFindings.findingType, "contradiction"))));
+    const [hh] = await withTenant(TENANT_ID, (db) =>
+      db.insert(households).values({ tenantId: TENANT_ID, address: "8 Test Dupe Equip Ln", contactInfo: {} }).returning(),
+    );
+    await withTenant(TENANT_ID, (db) =>
+      db.insert(equipment).values([
+        { householdId: hh!.id, type: "softener", model: "Model A" },
+        { householdId: hh!.id, type: "softener", model: "Model B" },
+      ]),
+    );
+    await scanDataQuality({ tenantId: TENANT_ID });
+    const findings = await withTenant(TENANT_ID, (db) =>
+      db.select().from(dataQualityFindings).where(and(eq(dataQualityFindings.tenantId, TENANT_ID), eq(dataQualityFindings.findingType, "contradiction"), eq(dataQualityFindings.entityType, "equipment"))),
+    );
+    expect(findings.some((f) => (f.details as { householdId?: string }).householdId === hh!.id)).toBe(true);
+  });
+
+  it("scan_data_quality flags overlapping appointments for the same technician", async () => {
+    await withTenant(TENANT_ID, (db) => db.delete(dataQualityFindings).where(and(eq(dataQualityFindings.tenantId, TENANT_ID), eq(dataQualityFindings.findingType, "contradiction"))));
+    const [tech] = await withTenant(TENANT_ID, (db) => db.insert(technicians).values({ tenantId: TENANT_ID, name: "Overlap Tech" }).returning());
+    const start1 = new Date("2026-08-01T09:00:00Z");
+    const start2 = new Date("2026-08-01T09:30:00Z"); // starts 30 min into a 60-min-default first appointment
+    await withTenant(TENANT_ID, (db) =>
+      db.insert(appointments).values([
+        { tenantId: TENANT_ID, subjectType: "household", subjectId: TENANT_ID, technicianId: tech!.id, status: "confirmed", scheduledAt: start1 },
+        { tenantId: TENANT_ID, subjectType: "household", subjectId: TENANT_ID, technicianId: tech!.id, status: "confirmed", scheduledAt: start2 },
+      ]),
+    );
+    await scanDataQuality({ tenantId: TENANT_ID });
+    const findings = await withTenant(TENANT_ID, (db) =>
+      db.select().from(dataQualityFindings).where(and(eq(dataQualityFindings.tenantId, TENANT_ID), eq(dataQualityFindings.findingType, "contradiction"), eq(dataQualityFindings.entityType, "appointment"))),
+    );
+    // Positional (findings[0]) would flake against the local dev DB's cross-run
+    // persistence — other technicians' overlap findings from earlier runs may already
+    // be in the table (same tolerant-of-accumulation convention the tests above use).
+    expect(findings.some((f) => (f.details as { technicianId?: string }).technicianId === tech!.id)).toBe(true);
+  });
+
+  it("scan_data_quality never flags non-overlapping appointments for the same technician", async () => {
+    await withTenant(TENANT_ID, (db) => db.delete(dataQualityFindings).where(and(eq(dataQualityFindings.tenantId, TENANT_ID), eq(dataQualityFindings.findingType, "contradiction"))));
+    const [tech] = await withTenant(TENANT_ID, (db) => db.insert(technicians).values({ tenantId: TENANT_ID, name: "No Overlap Tech" }).returning());
+    await withTenant(TENANT_ID, (db) =>
+      db.insert(appointments).values([
+        { tenantId: TENANT_ID, subjectType: "household", subjectId: TENANT_ID, technicianId: tech!.id, status: "confirmed", scheduledAt: new Date("2026-08-02T09:00:00Z"), durationMinutes: 30 },
+        { tenantId: TENANT_ID, subjectType: "household", subjectId: TENANT_ID, technicianId: tech!.id, status: "confirmed", scheduledAt: new Date("2026-08-02T10:00:00Z"), durationMinutes: 30 },
+      ]),
+    );
+    await scanDataQuality({ tenantId: TENANT_ID });
+    const findings = await withTenant(TENANT_ID, (db) =>
+      db
+        .select()
+        .from(dataQualityFindings)
+        .where(and(eq(dataQualityFindings.tenantId, TENANT_ID), eq(dataQualityFindings.findingType, "contradiction"), eq(dataQualityFindings.entityType, "appointment"))),
+    );
+    expect(findings.filter((f) => (f.details as { technicianId?: string }).technicianId === tech!.id)).toHaveLength(0);
   });
 
   it("owner_digest is a no-op (no call attempted) when there's nothing to report", async () => {

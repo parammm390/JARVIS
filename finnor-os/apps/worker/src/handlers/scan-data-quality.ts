@@ -14,15 +14,24 @@ import {
   businessEvents,
   dataQualityFindings,
   domainPolicies,
+  contacts,
+  contactMethods,
+  equipment,
+  appointments,
   type Db,
 } from "@finnor/db";
-import { and, eq, isNull, or, desc } from "drizzle-orm";
+import { and, eq, isNull, or, desc, inArray } from "drizzle-orm";
 import type { JobHandler } from "../queue";
 
 const DEFAULT_STALE_DAYS = 14;
 const DATA_QUALITY_ACTION_TYPE = "data_quality_scan";
+// §5.4: no appointments row records a real duration in this codebase yet (nothing
+// writes appointments.duration_minutes) — a conservative default keeps the overlap
+// check honest (a real gap, not a fabricated precision) rather than treating a null
+// duration as zero (which would never detect a genuine double-booking).
+const DEFAULT_APPOINTMENT_DURATION_MINUTES = 60;
 
-type FindingType = "duplicate_candidate" | "missing_critical_field" | "stale_data" | "ambiguous_match";
+type FindingType = "duplicate_candidate" | "missing_critical_field" | "stale_data" | "ambiguous_match" | "contradiction";
 
 /** Idempotent per (tenant, findingType, entity, relatedEntity): re-running the scan
  *  never piles up duplicate findings for the same underlying issue. */
@@ -181,6 +190,123 @@ export const scanDataQuality: JobHandler = async (payload) => {
           details: { lastActivityAt: lastActivity.toISOString(), staleDays },
           severity: "low",
         });
+      }
+    }
+
+    // --- Contradictions (§5.4): one entity's own data disagreeing with itself —
+    // distinct in shape from duplicate_candidate above (two DIFFERENT entities that
+    // might be the same record). "Implausible reading jumps" (the pack's fourth
+    // example) has no data source in this codebase — no table stores a water-reading
+    // time series (schedule_water_test only books a visit; nothing records the
+    // resulting hardness/iron readings anywhere) — a real, honest gap, not fabricated.
+
+    // 1. Conflicting phone numbers: a household's legacy contact_info.phone disagrees
+    // with its own canonical contact's phone contact_method — the exact
+    // dual-table-generation seam household360's own comments call out.
+    const householdsWithLegacyPhone = hhRows.filter((h) => normalizedPhone(h.contactInfo));
+    if (householdsWithLegacyPhone.length > 0) {
+      const hhIds = householdsWithLegacyPhone.map((h) => h.id);
+      const contactRows = await db.select().from(contacts).where(and(eq(contacts.tenantId, tenantId), inArray(contacts.householdId, hhIds)));
+      const contactIds = contactRows.map((c) => c.id);
+      const methodRows =
+        contactIds.length > 0
+          ? await db.select().from(contactMethods).where(and(eq(contactMethods.methodType, "phone"), inArray(contactMethods.contactId, contactIds)))
+          : [];
+      const phonesByContactId = new Map<string, string[]>();
+      for (const m of methodRows) {
+        const norm = m.value.replace(/\D/g, "");
+        if (norm) phonesByContactId.set(m.contactId, [...(phonesByContactId.get(m.contactId) ?? []), norm]);
+      }
+      const contactsByHousehold = new Map<string, typeof contactRows>();
+      for (const c of contactRows) {
+        if (c.householdId) contactsByHousehold.set(c.householdId, [...(contactsByHousehold.get(c.householdId) ?? []), c]);
+      }
+      for (const h of householdsWithLegacyPhone) {
+        const legacyPhone = normalizedPhone(h.contactInfo)!;
+        for (const c of contactsByHousehold.get(h.id) ?? []) {
+          for (const canonicalPhone of phonesByContactId.get(c.id) ?? []) {
+            if (canonicalPhone !== legacyPhone) {
+              await upsertFinding(db, {
+                tenantId,
+                findingType: "contradiction",
+                entityType: "household",
+                entityId: h.id,
+                relatedEntityId: c.id,
+                details: { reason: "legacy contact_info phone disagrees with canonical contact's phone", legacyPhone, canonicalPhone, contactName: c.name },
+                severity: "high",
+              });
+            }
+          }
+        }
+      }
+    }
+
+    // 2. Duplicate equipment: two-plus rows of the SAME type for the SAME household —
+    // very likely a double-entry, flagged for human review rather than auto-merged
+    // (a household legitimately owning two softeners is possible, just uncommon).
+    const householdIdSet = new Set(hhRows.map((h) => h.id));
+    const equipmentRows = await db.select({ id: equipment.id, householdId: equipment.householdId, type: equipment.type }).from(equipment);
+    const equipByHouseholdType = new Map<string, string[]>();
+    for (const e of equipmentRows) {
+      if (!householdIdSet.has(e.householdId)) continue; // equipment has no tenant_id column — filter via this tenant's households
+      const key = `${e.householdId}:${e.type}`;
+      equipByHouseholdType.set(key, [...(equipByHouseholdType.get(key) ?? []), e.id]);
+    }
+    for (const [key, ids] of equipByHouseholdType) {
+      if (ids.length < 2) continue;
+      const [householdId, type] = key.split(":");
+      const [first, ...rest] = ids;
+      for (const dupeId of rest) {
+        await upsertFinding(db, {
+          tenantId,
+          findingType: "contradiction",
+          entityType: "equipment",
+          entityId: first!,
+          relatedEntityId: dupeId,
+          details: { reason: "duplicate equipment type for the same household", householdId, type },
+          severity: "medium",
+        });
+      }
+    }
+
+    // 3. Overlapping appointments: the same technician double-booked. A running-max-end
+    // sweep over each technician's appointments sorted by start time — catches every
+    // overlapping pair, not just chronologically-adjacent ones.
+    const activeAppointments = await db
+      .select({ id: appointments.id, technicianId: appointments.technicianId, scheduledAt: appointments.scheduledAt, durationMinutes: appointments.durationMinutes })
+      .from(appointments)
+      .where(and(eq(appointments.tenantId, tenantId), or(eq(appointments.status, "hold"), eq(appointments.status, "confirmed"))));
+    const byTechnician = new Map<string, typeof activeAppointments>();
+    for (const a of activeAppointments) {
+      if (a.technicianId) byTechnician.set(a.technicianId, [...(byTechnician.get(a.technicianId) ?? []), a]);
+    }
+    for (const [technicianId, appts] of byTechnician) {
+      const sorted = [...appts].sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime());
+      let runningEnd = -Infinity;
+      let runningEndOwner: (typeof sorted)[number] | null = null;
+      for (const a of sorted) {
+        const start = a.scheduledAt.getTime();
+        if (runningEndOwner && start < runningEnd) {
+          await upsertFinding(db, {
+            tenantId,
+            findingType: "contradiction",
+            entityType: "appointment",
+            entityId: runningEndOwner.id,
+            relatedEntityId: a.id,
+            details: {
+              reason: "overlapping appointments for the same technician",
+              technicianId,
+              firstStart: runningEndOwner.scheduledAt.toISOString(),
+              secondStart: a.scheduledAt.toISOString(),
+            },
+            severity: "high",
+          });
+        }
+        const end = start + (a.durationMinutes ?? DEFAULT_APPOINTMENT_DURATION_MINUTES) * 60_000;
+        if (end > runningEnd) {
+          runningEnd = end;
+          runningEndOwner = a;
+        }
       }
     }
   });
