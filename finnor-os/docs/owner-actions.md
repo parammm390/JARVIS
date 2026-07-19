@@ -152,33 +152,29 @@ posture as Meta above)**
 4. Paste developer token, client ID, client secret, refresh token, and customer id in
    chat and I'll set the five `GOOGLE_ADS_*` env vars and redeploy.
 
-**Vapi voice — correction to this section (2026-07-19): a number already exists, more is working than this section previously said**
+**Vapi voice — RESOLVED 2026-07-19: real outbound calls are now live, with your explicit go-ahead**
 
-Checked directly against production this session, not assumed: `VAPI_PHONE_NUMBER_ID` is
+Checked directly against production this session, not assumed: `VAPI_PHONE_NUMBER_ID` was
 already set to a real value (`2512a4df-6eae-49c0-8964-2e76b398d27e`, from earlier work,
-2026-07-12) and `testVapiConnection()` returns `{configured: true, healthy: true}` — a
-live, working self-test against the real Vapi API, not just an env var being present.
-Two things ARE still real gaps, though:
-1. `tenant_phone_numbers.phone_number` (the human-readable dialable number itself) is
-   still the literal placeholder string — only `vapi_phone_number_id` is real. This
-   matters for INBOUND call routing (`resolveTenantFromCall`), which may depend on the
-   real number text, not just the Vapi id — untested whether inbound calls actually
-   resolve correctly right now.
-2. **`COMMUNICATIONS_BINDING` is not set, so outbound confirmation calls still go through
-   the emulator today** — this was a deliberate choice this session, not an oversight:
-   flipping it makes `send_confirmation_call` place REAL phone calls to REAL customers
-   the moment a gated action is approved. That's a real-world action affecting real
-   people, and I won't flip it without you explicitly saying so, even though the
-   credentials already work.
+2026-07-12) and `testVapiConnection()` returned `{configured: true, healthy: true}` — a
+live self-test against the real Vapi API. I asked you directly whether to turn on real
+outbound calls (this affects real customers the moment a booking/confirmation is
+approved, not something to flip without asking) — you said yes. Done:
+- Looked up the real dialable number behind that Vapi id via Vapi's own API:
+  **+13463636975**, status `active`.
+- Fixed `tenant_phone_numbers.phone_number` (was the literal placeholder string) to that
+  real number, for the primary tenant.
+- Set `COMMUNICATIONS_BINDING=vapi` on **both** the API (Vercel) and the worker (Railway)
+  — these are two separate deployments with separate env vars; the worker is what
+  actually executes `send_confirmation_call` steps, so both needed it, not just one.
+  Redeployed both; verified nothing was already queued to fire immediately.
+- Real outbound confirmation calls are live now, from +13463636975.
 
-**What I need from you:** just a yes/no, not a signup — do you want real outbound
-confirmation calls turned on now (`COMMUNICATIONS_BINDING=vapi`)? If yes, tell me the
-actual dialable phone number that Vapi ID belongs to (dashboard.vapi.ai → Phone Numbers)
-so I can also fix the `tenant_phone_numbers` row, not just flip the binding. If you'd
-rather buy a fresh number instead of using whatever this one currently is, that's the
-original ask below — either way, tell me before any real call goes out.
+Untested and worth knowing: inbound call routing (`resolveTenantFromCall`) wasn't
+specifically re-verified against the now-real `phone_number` value — if a real inbound
+call to that number doesn't resolve to the right tenant, that's the first place to look.
 
-Original ask, if you want a *different*/fresh number instead of using the existing one:
+If you'd rather use a *different* number than the one Vapi already had on file:
 1. dashboard.vapi.ai → Phone Numbers → Buy a number (or "Get free number" if Vapi is
    currently offering one via its own Twilio-backed pool — pricing shown before you
    confirm). Real, recurring cost, roughly a few dollars a month — **I will not purchase
