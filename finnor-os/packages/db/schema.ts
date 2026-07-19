@@ -31,6 +31,17 @@ export const tenants = pgTable("tenants", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+// §3.2/§3.3: one row per tenant of real, DB-backed flags. is_dealer_zero is what
+// other code checks for the "labeled dealer-zero everywhere" rule instead of matching
+// on tenant name; simulator_enabled is §3.3's gate (ON only for Dealer Zero).
+export const tenantSettings = pgTable("tenant_settings", {
+  tenantId: uuid("tenant_id").primaryKey().references(() => tenants.id),
+  isDealerZero: boolean("is_dealer_zero").notNull().default(false),
+  simulatorEnabled: boolean("simulator_enabled").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
