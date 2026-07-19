@@ -24,3 +24,29 @@ Precautionary rotation after the read-exposure incident (see `incident-2026-07-p
 3. Paste the new value in chat (this one is a genuine secret — fine to paste here since it goes straight into env vars, but never post it anywhere public), and I'll update it on the `api` Vercel project and redeploy.
 
 Not urgent in the sense of an active exploit confirmed, but the incident doc recommends doing it regardless as standard practice after any exposure window, however brief.
+
+## 5. Remove a stuck zombie Railway deployment (found during Phase 3, 2026-07-19)
+
+`finnor-worker` on Railway (project `innovative-prosperity`) has **two simultaneously
+running deployments**, confirmed via `railway status --json`: one from **2026-07-13**
+(`bbb87a57-d958-4bde-8a31-724d5b802563`) and the current correct one from today
+(`98bed049-...`). Both show `deploymentStopped: false` with a `RUNNING` instance. Since
+`apps/worker/src/queue.ts`'s `tick()` claims jobs via `FOR UPDATE SKIP LOCKED`, **both
+processes poll and race for the same jobs** — whichever one wins a given job determines
+whether it succeeds (new code) or fails (July 13's stale code, which predates
+`scan_approval_expiry`/`simulator_tick`/several handlers entirely). This is a real,
+observed production bug, not a hypothesis: jobs of the same type flip between
+`completed` and `dead_letter` (`No handler registered for job type ...`, `plugin.
+actionTypes is not iterable`) depending purely on which instance grabbed them.
+
+**Tried and confirmed NOT sufficient:** `railway service restart --service finnor-worker
+--environment production` (restarts the latest deployment in place; does not touch the
+stray old one). `railway down` only removes the *most recent* deployment — the opposite
+of what's needed here. The CLI has no `railway deployment remove <id>` equivalent.
+
+**Fix:** open the Railway dashboard → project `innovative-prosperity` → `finnor-worker`
+service → Deployments tab → find the 2026-07-13 deployment
+(`bbb87a57-d958-4bde-8a31-724d5b802563`) → Remove/Stop it directly (the dashboard has a
+per-deployment control the CLI doesn't expose). After that, `railway status` should show
+exactly one active deployment. Worth checking whether this pattern recurs after future
+deploys — if so, it may be a Railway account/project-level issue worth their support.
