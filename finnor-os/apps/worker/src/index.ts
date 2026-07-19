@@ -22,6 +22,7 @@ import { quickbooksSync } from "./handlers/quickbooks-sync";
 import { criticReview } from "./handlers/critic-review";
 import { learningDigest } from "./handlers/learning-digest";
 import { scanApprovalExpiry } from "./handlers/scan-approval-expiry";
+import { simulatorTick } from "./handlers/simulator-tick";
 import { startScheduler, type ScheduledScan } from "./scheduler";
 
 export function createWorker(): JobQueue {
@@ -44,6 +45,7 @@ export function createWorker(): JobQueue {
   queue.register("critic_review", criticReview);
   queue.register("learning_digest", learningDigest);
   queue.register("scan_approval_expiry", scanApprovalExpiry);
+  queue.register("simulator_tick", simulatorTick);
   return queue;
 }
 
@@ -63,6 +65,11 @@ const PROACTIVE_SCANS: ScheduledScan[] = [
   // 24h loses most of its meaning if the check that enforces it only runs once a day.
   { type: "scan_approval_expiry", intervalHours: 1, payload: (tenantId) => ({ tenantId }) },
   { type: "learning_digest", intervalHours: 24, payload: (tenantId) => ({ tenantId }) },
+  // §3.3: no-ops for any tenant whose tenant_settings.simulator_enabled isn't true —
+  // enqueued for every tenant like every other scan, gated by real DB state, not a
+  // hardcoded Dealer Zero check. dateSeed is the actual calendar day, computed here
+  // (not inside the handler) so the same real day always buckets to the same job.
+  { type: "simulator_tick", intervalHours: 24, payload: (tenantId) => ({ tenantId, dateSeed: new Date().toISOString().slice(0, 10) }) },
   // Digest runs last-of-day relative to the scans above only in spirit — ticks are
   // independent, so in practice it reads whatever's accumulated in scan_findings by
   // the time its own daily window rolls over, which is close enough for a v1 digest.

@@ -1,6 +1,8 @@
 // Shared type contracts for the Finnor AI Operating System.
 // Every subsystem (orchestration, plugins, memory, tools, workers) compiles against these.
 
+export * from "./dealer-zero-fixtures";
+
 export type Role = "owner" | "dispatcher" | "technician";
 
 export interface TenantContext {
