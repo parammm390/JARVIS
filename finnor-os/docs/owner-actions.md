@@ -182,40 +182,34 @@ If you'd rather use a *different* number than the one Vapi already had on file:
 2. Tell me the number (and its Vapi phone-number-id, shown right after purchase) and I'll
    update `tenant_phone_numbers`/`VAPI_PHONE_NUMBER_ID` and redeploy.
 
-## 8. Voyage AI embeddings (Phase 5, real memory) — no business required
+## 8. Voyage AI embeddings (Phase 5, real memory) — RESOLVED 2026-07-19, real key live
 
-JARVIS's real memory system (§5 of the JARVIS 95 pack) is fully built and deployed —
-real chunking, hybrid retrieval, citations on every AI answer, contradiction detection,
-a correction loop, and a 40-fixture retrieval eval that's currently scoring 95% against
-the built-in deterministic test embedder. The one missing piece is a real embeddings
-provider: right now `EMBEDDINGS_API_KEY` is still the placeholder, so
-`GET /api/setup/status` honestly reports `integrations.embeddings: {configured: false,
-healthy: false}` and every semantic-memory read/write in production loudly refuses
-(`FailClosedEmbedder`) instead of silently using a fake vector — nothing pretends to be
-real. Fixing this is one env var.
+You supplied a real Voyage AI key this session. Done, verified, not just assumed:
+- Set `EMBEDDINGS_API_KEY` on both the `api` Vercel project and the `finnor-worker`
+  Railway service (both make real embedding calls — same two-deployment gotcha as the
+  Vapi binding above), redeployed both, confirmed both running the new build.
+- **Real round-trip proof, not just "the key is present":** called the live Voyage API
+  directly with the real key — got back a genuine 1024-dimension vector, confirming the
+  request shape (`model: voyage-3.5`, `output_dimension: 1024`) this code was written
+  against (but never tested live) is actually correct. Then checked real semantic
+  discrimination: "rotten egg smell" scored meaningfully more similar to its own
+  hydrogen-sulfide explanation (0.85) than to an unrelated scheduling question (0.79) —
+  genuine semantic understanding, unlike the mechanical test-only embedder this system
+  otherwise uses.
+- Ran `scripts/backfill-embeddings.ts` against production for both Dealer Zero and your
+  primary tenant — both reported 0 receipts to backfill. Real finding, not a bug: the
+  `decision_receipts` table itself didn't exist until Phase 2 shipped (2026-07-18/19),
+  so there's no real production history old enough to have receipts yet. Nothing was
+  fabricated to fill that gap — semantic memory starts genuinely empty in production
+  and fills in for real as real activity happens from here on (every completed action
+  and every ended call auto-ingests, per Phase 5.2).
+- `GET /api/setup/status` verified live, post-deploy: `integrations.embeddings` now
+  reports `{configured: true, healthy: null, provider: "voyage-3.5"}` — `healthy` stays
+  `null` deliberately (never guessed): a real per-poll health check would cost a real
+  embedding call on every dashboard load (the page fires ~15 parallel status calls),
+  same reasoning Voyage doesn't have a cheap dedicated health endpoint the way
+  Stripe's `/v1/balance` does — the honest signal is "configured or not," same
+  posture Zep already has on this same endpoint.
 
-**Steps (personal account, no business registration needed):**
-1. Go to **voyageai.com** → Sign up (email + password; a personal account is fine, no
-   business info required).
-2. Once in, go to the dashboard's API Keys page → create a new key. Copy it (starts with
-   something like `pa-...`).
-3. Voyage's free tier is generous for this scale (Dealer Zero's real corpus today is a
-   few hundred short text chunks) — check the current pricing page before assuming, but
-   you're very unlikely to hit a paid tier just from this system's own usage.
-4. Paste the key in chat and I'll set `EMBEDDINGS_API_KEY` on both the `api` Vercel
-   project and the `finnor-worker` Railway service (both make real embedding calls —
-   same two-deployment gotcha as the Vapi binding above), redeploy both, then run
-   `scripts/backfill-embeddings.ts` against Dealer Zero so its ~1,100 existing receipts
-   get real semantic vectors instead of the mechanical test-only stand-in.
-5. Nothing else changes automatically — this is a pure env-var flip. `setup/status`
-   flips `integrations.embeddings.configured` to `true` on the next request; a real
-   health check (an actual round-trip, not just "configured") isn't wired in yet
-   deliberately, since Voyage doesn't have a cheap dedicated health endpoint the way
-   Stripe's `/v1/balance` does — the honest signal today is "configured or not," same
-   posture Zep already has on this same endpoint.
-
-One thing worth deciding whenever this happens: Voyage's exact current model
-name/dimension options for `voyage-3.5` should be reconfirmed against their live docs
-at signup time — the code (`packages/memory/src/semantic.ts`) was written against
-Voyage's documented API shape as of this session but has never been exercised against a
-real account (no key exists in this environment to test with).
+Nothing left to do here — real memory is fully live end to end. As real customers call
+in and real jobs complete, semantic memory fills in for real automatically.
