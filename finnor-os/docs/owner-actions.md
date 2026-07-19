@@ -152,19 +152,36 @@ posture as Meta above)**
 4. Paste developer token, client ID, client secret, refresh token, and customer id in
    chat and I'll set the five `GOOGLE_ADS_*` env vars and redeploy.
 
-**Vapi real phone number (voice — this is the one item on this list with a real,
-recurring cost, roughly a few dollars a month; I will not purchase this without you
-telling me to)**
-1. Your Vapi account already exists and is funded (VAPI_API_KEY etc. are already set in
-   production) — this is just missing a real number.
-2. dashboard.vapi.ai → Phone Numbers → Buy a number (or "Get free number" if Vapi is
+**Vapi voice — correction to this section (2026-07-19): a number already exists, more is working than this section previously said**
+
+Checked directly against production this session, not assumed: `VAPI_PHONE_NUMBER_ID` is
+already set to a real value (`2512a4df-6eae-49c0-8964-2e76b398d27e`, from earlier work,
+2026-07-12) and `testVapiConnection()` returns `{configured: true, healthy: true}` — a
+live, working self-test against the real Vapi API, not just an env var being present.
+Two things ARE still real gaps, though:
+1. `tenant_phone_numbers.phone_number` (the human-readable dialable number itself) is
+   still the literal placeholder string — only `vapi_phone_number_id` is real. This
+   matters for INBOUND call routing (`resolveTenantFromCall`), which may depend on the
+   real number text, not just the Vapi id — untested whether inbound calls actually
+   resolve correctly right now.
+2. **`COMMUNICATIONS_BINDING` is not set, so outbound confirmation calls still go through
+   the emulator today** — this was a deliberate choice this session, not an oversight:
+   flipping it makes `send_confirmation_call` place REAL phone calls to REAL customers
+   the moment a gated action is approved. That's a real-world action affecting real
+   people, and I won't flip it without you explicitly saying so, even though the
+   credentials already work.
+
+**What I need from you:** just a yes/no, not a signup — do you want real outbound
+confirmation calls turned on now (`COMMUNICATIONS_BINDING=vapi`)? If yes, tell me the
+actual dialable phone number that Vapi ID belongs to (dashboard.vapi.ai → Phone Numbers)
+so I can also fix the `tenant_phone_numbers` row, not just flip the binding. If you'd
+rather buy a fresh number instead of using whatever this one currently is, that's the
+original ask below — either way, tell me before any real call goes out.
+
+Original ask, if you want a *different*/fresh number instead of using the existing one:
+1. dashboard.vapi.ai → Phone Numbers → Buy a number (or "Get free number" if Vapi is
    currently offering one via its own Twilio-backed pool — pricing shown before you
-   confirm).
-3. Tell me the number (and its Vapi phone-number-id, shown right after purchase) and I'll
-   replace the `PLACEHOLDER_NEEDS_REAL_VALUE` row in `tenant_phone_numbers` and set
-   `VAPI_PHONE_NUMBER_ID`, then redeploy. Until then, outbound confirmation calls stay on
-   the emulator (honestly labeled), which is the correct, safe default — no real call
-   should go out from a placeholder number.
-4. **I need your explicit go-ahead before you spend anything here** — reply whenever
-   you're ready and I'll walk you through the exact purchase screen so you know the cost
-   before you click confirm.
+   confirm). Real, recurring cost, roughly a few dollars a month — **I will not purchase
+   this without you telling me to.**
+2. Tell me the number (and its Vapi phone-number-id, shown right after purchase) and I'll
+   update `tenant_phone_numbers`/`VAPI_PHONE_NUMBER_ID` and redeploy.
