@@ -160,20 +160,26 @@ the prior session's log — it passed, plus surfaced and fixed one real bug.
   step (fix git push, watch the first real run, fix anything that doesn't match).
   **Not the full production-Supabase-into-isolated-project drill** — that needs the
   Task 6.1 staging Supabase project.
-- [x] Task 6.4 (script only, unexecuted at scale) — real k6 script
-  (`scripts/k6-load-test.js`) matching the pack's exact scenario (50 inbox events/s via
-  the marketing webhook × 10min, 200 concurrent read-model queries, 20 approval round-
-  trips/min), written against the real route contracts (read every target route before
-  writing it) and smoke-tested this session against a real local `apps/api` dev server
-  over real HTTP (reliability read-model: 200 with real computed numbers; marketing
-  webhook: 200 with a real created lead; actions/pending: 200 with real Dealer Zero
-  pending actions). **k6 itself is not installed in this environment** and there is no
-  staging environment to point it at yet — full-scale execution is owner-blocked on
-  both (Task 6.1 + `brew install k6`, neither requiring an account beyond what Task 6.1
-  already needs). Documented honestly in `docs/load-test-2026-07-19.md`, including why
-  approximating the scale against the local shared dev DB was deliberately not done
-  (would pollute it with ~30k synthetic rows for a result that wouldn't validate the
-  real target anyway).
+- [x] Task 6.4 (real run, scaled; full-scale still pending) — real k6 script
+  (`scripts/k6-load-test.js`) matching the pack's exact scenario, written against the
+  real route contracts. **Update: k6 itself was obtained this session** as a standalone
+  binary (github.com releases zip, no `brew`/sudo needed — same technique used for
+  Postgres client tools earlier) and **actually run against the real staging database**
+  provisioned in Task 6.1. Vercel's team SSO wall blocks anonymous HTTP to the deployed
+  staging Preview URL, so the target was `apps/api` run locally with the real staging
+  `DATABASE_URL` (dev-bypass auth for this verification run only — the real deployed
+  Preview is untouched, still `AUTH_DEV_BYPASS=0`). Ran a scaled pass (5 events/s, 20
+  read VUs, 30s) rather than the full 50/s-for-10-minutes scenario on a first attempt.
+  **Real result: 100% success rate, zero request failures, but p95 latency ~45-53s
+  against a <500ms/<800ms target** — root-caused to the real, verified cause
+  (`packages/db/index.ts`'s `max: 2` SSL connection pool, shared by 20+ concurrent VUs
+  through one local Node process) and explicitly flagged as a property of this local
+  single-process test harness, not a proven finding about Vercel's actual serverless
+  deployment (which spreads load across many processes, each with its own small pool).
+  29 real synthetic leads confirmed created via direct DB query — the write path works
+  end-to-end for real. Full detail, including what's still not done (the full-scale
+  scenario, zero-event-loss verification, and getting past the Vercel SSO wall to test
+  the real deployed URL), in `docs/load-test-2026-07-19.md`.
 - [x] Task 6.5 (local/CI tier only) — real chaos re-run (evidence:
   `docs/chaos-run-2026-07-19.md`). Re-ran `scripts/chaos-test.ts` (Phase 2's real
   separate-OS-process-kill chaos harness) for real this session against local Postgres.

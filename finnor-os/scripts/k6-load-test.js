@@ -55,28 +55,36 @@ const READ_MODEL_VIEWS = [
   "reliability",
 ];
 
+// Env-overridable so a real, smaller validation run can prove the mechanics work
+// without committing to the full 10-minute/50rps pack scenario (and the ~30k synthetic
+// rows it would create) on a first attempt. Defaults are the pack's exact numbers.
+const INBOX_RATE = Number(__ENV.INBOX_RATE ?? 50);
+const READ_VUS = Number(__ENV.READ_VUS ?? 200);
+const APPROVAL_RATE = Number(__ENV.APPROVAL_RATE ?? 20);
+const DURATION = __ENV.LOAD_DURATION ?? "10m";
+
 export const options = {
   scenarios: {
     inbox_events: {
       executor: "constant-arrival-rate",
-      rate: 50,
+      rate: INBOX_RATE,
       timeUnit: "1s",
-      duration: "10m",
-      preAllocatedVUs: 60,
-      maxVUs: 150,
+      duration: DURATION,
+      preAllocatedVUs: Math.max(10, Math.ceil(INBOX_RATE * 1.2)),
+      maxVUs: Math.max(20, INBOX_RATE * 3),
       exec: "inboxEvent",
     },
     read_model_queries: {
       executor: "constant-vus",
-      vus: 200,
-      duration: "10m",
+      vus: READ_VUS,
+      duration: DURATION,
       exec: "readModelQuery",
     },
     approval_round_trips: {
       executor: "constant-arrival-rate",
-      rate: 20,
+      rate: APPROVAL_RATE,
       timeUnit: "1m",
-      duration: "10m",
+      duration: DURATION,
       preAllocatedVUs: 5,
       maxVUs: 20,
       exec: "approvalRoundTrip",
@@ -89,6 +97,12 @@ export const options = {
 };
 
 function authHeaders() {
+  // AUTH_MODE=devbypass is for local/dev-bypass verification runs only (matches this
+  // repo's own AUTH_DEV_BYPASS convention) — real staging/production runs always use a
+  // real bearer token, never this branch.
+  if (__ENV.AUTH_MODE === "devbypass") {
+    return { "x-tenant-id": TENANT_ID, "x-user-role": "owner", "Content-Type": "application/json" };
+  }
   return { Authorization: `Bearer ${AUTH_BEARER_TOKEN}`, "Content-Type": "application/json" };
 }
 
