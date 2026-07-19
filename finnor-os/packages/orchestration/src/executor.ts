@@ -44,6 +44,7 @@ export class GatedExecutor implements Executor {
 
     const draft = await plugin.draft(action.actionType, action.payload, policy);
     draft.correlationId = action.correlationId;
+    draft.approvedBy = action.approvedBy;
     await appendEpisode(action.tenantId, action.id, "draft", {}, { summary: draft.summary });
 
     // ---------------- THE CONFIRMATION GATE ----------------

@@ -71,6 +71,17 @@ export async function executePluginViaRuntime(params: ExecutePluginViaRuntimePar
       payload: params.draft.payload,
       workflowType: "single_action",
       correlationId: params.correlationId,
+      // §3.6: real bug found while building Phase 3's e2e proof test — requestedBy was
+      // never threaded from the confirm route through to here, so DecisionReceipt.
+      // approval.approvedBy (openReceiptForFirstClaim, workflow-runtime/src/steps.ts)
+      // silently came back undefined for every single-action execution, including the
+      // majority of the 42 action types (everything not on the LangGraph allowlist —
+      // see graph/allowlist-executor.ts). Known remaining gap, not fixed here: the 4
+      // graph-routed workflow-kind action types resume from a LangGraph checkpoint
+      // (graph/executor.ts's `isPausedHere` branch) rather than a fresh invoke, so
+      // injecting approvedBy there needs a `this.graph.updateState(...)` call before
+      // resume — a separate, larger change, tracked in docs/phase-status.md.
+      requestedBy: params.draft.approvedBy,
       domainActionId: params.actionId,
       steps: [{ stepType: params.actionType, payload: params.draft.payload }],
     }),

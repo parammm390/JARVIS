@@ -49,6 +49,14 @@ export interface DomainAction {
    *  runAction paths (no ctx) simply leave it undefined; enqueueJob falls back to the
    *  job's own id in that case (see queue.ts). */
   correlationId?: string;
+  /** §3.6: who approved this action (ctx.userId from the confirm route, or a voice
+   *  session id) — stamped by runAction() right after decide()'s conditional status
+   *  transition wins. Not a DB column, mirrors correlationId's convention — threads
+   *  through to DecisionReceipt.approval.approvedBy via DraftAction.approvedBy below.
+   *  A system-drafted action that auto-runs with no human gate (requiresConfirmation:
+   *  false) simply leaves this undefined, which is honest — nobody approved it, it
+   *  was allowed to run unattended by policy. */
+  approvedBy?: string;
 }
 
 export interface DomainPolicy {
@@ -92,6 +100,10 @@ export interface DraftAction {
    *  finishes the Phase-16(e) correlationId thread into any submitCommand() call a
    *  plugin's execute() makes. Plugins never set this themselves. */
   correlationId?: string;
+  /** §3.6: mirrors DomainAction.approvedBy — stamped by GatedExecutor/graph nodes
+   *  alongside correlationId, right after plugin.draft() returns, so any
+   *  submitCommand() a plugin's own execute() calls can cite requestedBy. */
+  approvedBy?: string;
 }
 
 export type ExecutionStatus =

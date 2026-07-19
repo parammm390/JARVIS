@@ -197,6 +197,19 @@ export class FinnorOrchestrator implements Orchestrator {
     };
     await appendEpisode(tenantId, action.id, "planned", { source: opts.source ?? "system_scan" }, { actionType });
     const policy = await this.loadPolicy(action);
+    // Real bug found while building Phase 3's e2e proof test: unlike the LLM-planner
+    // path (planner.ts:327, sets policyId at insert time), draftKnownAction — the
+    // shared primitive EVERY proactive scan and the Dealer Zero simulator uses — never
+    // persisted policyId onto the domain_actions row, even when loadPolicy() resolved a
+    // real, versioned policy. openReceiptForFirstClaim (workflow-runtime/src/steps.ts)
+    // reads policyId straight off that row, so every system-originated receipt's
+    // policyApplied silently came back null — the majority of Dealer Zero's real
+    // traffic, not an edge case. version 0 is defaultPolicy()'s sentinel for "no real
+    // row exists" (index.ts:58) — only persist a real, stored policy's id, never that.
+    if (policy.version && policy.version > 0 && policy.id !== action.policyId) {
+      await withTenant(tenantId, (db) => db.update(domainActions).set({ policyId: policy.id }).where(eq(domainActions.id, action.id)));
+      action.policyId = policy.id;
+    }
     const result = await this.executor.execute(action, policy);
     await this.reflectWithRetry(action, policy, result);
     return { action, result };
@@ -207,7 +220,7 @@ export class FinnorOrchestrator implements Orchestrator {
    * the database concurrency boundary: exactly one caller can turn approved into
    * executing, so duplicate HTTP/webhook deliveries never duplicate a side effect.
    */
-  async runAction(actionId: string, tenantId: string): Promise<ExecutionResult> {
+  async runAction(actionId: string, tenantId: string, approvedBy?: string): Promise<ExecutionResult> {
     await ensureSecretsLoaded();
     const row = await withTenant(tenantId, async (db) => {
       const [claimed] = await db
@@ -242,6 +255,7 @@ export class FinnorOrchestrator implements Orchestrator {
       policyId: claimed.policyId,
       status: claimed.status,
       createdAt: claimed.createdAt.toISOString(),
+      approvedBy,
     };
     const policy = await this.loadPolicy(action);
     const result = await this.executor.execute(action, policy);
@@ -339,7 +353,7 @@ export class FinnorOrchestrator implements Orchestrator {
       await this.executor.close?.(actionId, tenantId, row.actionType).catch(() => undefined);
       return { status: "success", output: { rejected: true } };
     }
-    return this.runAction(actionId, tenantId);
+    return this.runAction(actionId, tenantId, decidedBy);
   }
 
   /** Reflection loop: retry once on mismatch, escalate after that (§9). */
