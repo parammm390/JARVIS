@@ -81,7 +81,14 @@ export const proposalSignaturePlugin: DomainEnginePlugin = {
         steps: [
           {
             stepType: "generate_document",
-            payload: { tenantId, kind: "proposal_pdf", title: `Proposal ${proposalId.slice(0, 8)}`, idempotencyKey: `${idempotencyKey}:doc` },
+            payload: {
+              tenantId,
+              kind: "proposal_pdf",
+              title: `Proposal ${proposalId.slice(0, 8)}`,
+              idempotencyKey: `${idempotencyKey}:doc`,
+              sourceEntityType: "proposal",
+              sourceEntityId: proposalId,
+            },
           },
           {
             stepType: "request_signature",

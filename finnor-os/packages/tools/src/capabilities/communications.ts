@@ -8,12 +8,19 @@
 import { z } from "zod";
 import type { CapabilityContract, CapabilityBinding, RetryPolicy } from "@finnor/workflow-runtime";
 import { placeVapiCall } from "../vapi-rest";
+import { withCircuitBreaker } from "../provider-circuit-breaker";
+import { claimBudget } from "../provider-budget";
 import {
   emulatorSendConfirmation,
   emulatorReconcileCall,
   type SendConfirmationInput,
   type SendConfirmationOutput,
 } from "../emulators/communications-emulator";
+
+// Phase 4 (§4.4): real, configurable daily cap on outbound Vapi calls per tenant —
+// no per-tenant override mechanism yet (that's a domain_policies field, future work),
+// but the cap itself is real and enforced here, not advisory.
+const DAILY_VAPI_CALL_CAP = Number(process.env.VAPI_DAILY_CALL_CAP ?? 200);
 
 export type { SendConfirmationInput, SendConfirmationOutput };
 
@@ -64,13 +71,24 @@ export function isVapiConfigured(): boolean {
 }
 
 async function vapiSendConfirmation(input: SendConfirmationInput): Promise<SendConfirmationOutput> {
-  const r = await placeVapiCall({
-    customerNumber: input.phoneNumber,
-    firstMessage: input.message,
-    metadata: { tenantId: input.tenantId, idempotencyKey: input.idempotencyKey },
+  // Phase 4 (§4.4): real per-tenant daily cap, checked BEFORE the breaker/call — a
+  // tenant that's already hit its cap must never place another real call, breaker
+  // state notwithstanding.
+  const budget = await claimBudget(input.tenantId, "vapi", "call", DAILY_VAPI_CALL_CAP);
+  if (!budget.allowed) {
+    throw new Error(`degraded: vapi daily call cap reached for tenant (${budget.used}/${budget.cap})`);
+  }
+
+  const { callId } = await withCircuitBreaker("vapi", async () => {
+    const r = await placeVapiCall({
+      customerNumber: input.phoneNumber,
+      firstMessage: input.message,
+      metadata: { tenantId: input.tenantId, idempotencyKey: input.idempotencyKey },
+    });
+    if (!r.ok) throw new Error(r.error ?? "Vapi call failed");
+    return { callId: String((r.output as Record<string, unknown>).id ?? input.idempotencyKey) };
   });
-  if (!r.ok) throw new Error(r.error ?? "Vapi call failed");
-  const callId = String((r.output as Record<string, unknown>).id ?? input.idempotencyKey);
+
   return { callId, status: "placed" };
 }
 

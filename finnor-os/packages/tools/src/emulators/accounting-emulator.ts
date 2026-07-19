@@ -6,6 +6,7 @@ import { makeFaultInjector, type FaultInjectionConfig } from "./fault-injection"
 
 export interface SyncInvoiceInput {
   tenantId: string;
+  invoiceId?: string;
   customerName: string;
   customerPhone?: string;
   amountUsd: number;

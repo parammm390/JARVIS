@@ -125,6 +125,7 @@ export async function startInvoiceToCash(
           stepType: "sync_invoice",
           payload: {
             tenantId,
+            invoiceId,
             customerName: String(contact.name ?? household?.address ?? "Customer"),
             customerPhone: contact.phone ? String(contact.phone) : undefined,
             amountUsd: Number(invoice.amountUsd),

@@ -13,7 +13,7 @@ import {
   index,
   unique,
 } from "drizzle-orm/pg-core";
-import { money, provenanceColumns, archivable } from "./columns";
+import { money, provenanceColumns, archivable, bytea } from "./columns";
 
 // Everything Finnor owns lives in its own Postgres schema — this is what lets it
 // share a database (e.g. an existing Supabase project's `public` schema already
@@ -241,6 +241,20 @@ export const jobs = pgTable(
   },
   (t) => [index("jobs_status_run_at_idx").on(t.status, t.runAt)],
 );
+
+// Phase 4 (§4.4): durable per-provider circuit-breaker state — global per provider,
+// not tenant-scoped, since a provider's own uptime doesn't vary by tenant. See
+// migration 0026 for why this can't be in-memory (serverless invocations don't share
+// process state).
+export const providerCircuitState = pgTable("provider_circuit_state", {
+  provider: text("provider").primaryKey(),
+  consecutiveFailures: integer("consecutive_failures").notNull().default(0),
+  state: text("state", { enum: ["closed", "open"] }).notNull().default("closed"),
+  openedAt: timestamp("opened_at", { withTimezone: true }),
+  lastFailureAt: timestamp("last_failure_at", { withTimezone: true }),
+  lastSuccessAt: timestamp("last_success_at", { withTimezone: true }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 export const apiRateLimits = pgTable("api_rate_limits", {
   bucketKey: text("bucket_key").notNull(),
@@ -649,6 +663,37 @@ export const documents = pgTable("documents", {
   ...provenanceColumns(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// Phase 4 (§4.2): real PDF bytes, Postgres-backed — separate from documents' metadata
+// row, same convention as decision_receipts living apart from workflow_steps.
+export const documentContents = pgTable("document_contents", {
+  documentId: uuid("document_id").primaryKey().references(() => documents.id),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+  contentType: text("content_type").notNull().default("application/pdf"),
+  bytes: bytea("bytes").notNull(),
+  sizeBytes: integer("size_bytes").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Phase 4 (§4.5): the single join between a Finnor-internal entity and a real
+// provider's object, once bindings flip from emulator to real. No provider ids
+// scattered across domain tables.
+export const externalRefs = pgTable(
+  "external_refs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    entity: text("entity").notNull(),
+    internalId: uuid("internal_id").notNull(),
+    provider: text("provider").notNull(),
+    externalId: text("external_id").notNull(),
+    syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("external_refs_internal_provider_idx").on(t.tenantId, t.entity, t.internalId, t.provider),
+    index("external_refs_external_id_idx").on(t.tenantId, t.provider, t.externalId),
+  ],
+);
 
 // Real queryable cross-entity timeline — distinct from action_log (requires a non-null
 // domain_action_id, so it structurally can't represent an imported row or a data-quality

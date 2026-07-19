@@ -28,6 +28,8 @@ export * from "./health";
 export * from "./ads-write";
 export * from "./observability";
 export * from "./provider-health";
+export * from "./provider-circuit-breaker";
+export * from "./provider-budget";
 export * from "./emulators/fault-injection";
 export * from "./emulators/scheduling-emulator";
 export * from "./emulators/communications-emulator";

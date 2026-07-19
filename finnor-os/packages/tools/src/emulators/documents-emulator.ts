@@ -10,6 +10,8 @@ export interface GenerateDocumentInput {
   kind: string;
   title: string;
   idempotencyKey: string;
+  sourceEntityType?: "proposal";
+  sourceEntityId?: string;
 }
 export interface GenerateDocumentOutput {
   documentId: string;
@@ -26,6 +28,10 @@ export interface RequestSignatureInput {
    *  request_signature step) so a real e-signature webhook can round-trip back to the
    *  right proposal without a separate lookup table. Ignored by the emulator. */
   proposalId?: string;
+  /** Phase 4 (§4.2): the document's real bytes, fetched by the binding layer (which
+   *  has DB access) before calling a real provider adapter (which deliberately
+   *  doesn't). Ignored by the emulator. */
+  documentBytes?: Buffer;
 }
 export interface RequestSignatureOutput {
   signatureRequestId: string;

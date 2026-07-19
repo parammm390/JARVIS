@@ -6,7 +6,7 @@
 // real credentials and a fully-populated policy set gets readyForProduction: true.
 
 import { createDefaultPluginRegistry } from "@finnor/orchestration";
-import { testAdsConnections, testQuickBooksConnection, testVapiConnection, ghlIntegrationStatus } from "@finnor/tools";
+import { testAdsConnections, testQuickBooksConnection, testVapiConnection, ghlIntegrationStatus, circuitSnapshot } from "@finnor/tools";
 import { zepProviderStatus } from "@finnor/memory";
 import { secretProviderStatus } from "@finnor/security";
 import { adminDb, tenantPhoneNumbers } from "@finnor/db";
@@ -75,6 +75,14 @@ export async function GET(req: Request): Promise<Response> {
 
     const phoneRouting = { configured: phoneNumberRows.length > 0, numbers: phoneNumberRows };
 
+    // Phase 4 (§4.4): real, durable circuit-breaker state per provider that has one
+    // wired (packages/tools/src/provider-circuit-breaker.ts) — an "open" entry here
+    // means real calls to that provider are currently refused and affected actions are
+    // failing closed (degraded), not silently falling back to the emulator.
+    const circuitBreakers = Object.fromEntries(
+      await Promise.all(["vapi", "stripe", "quickbooks"].map(async (p) => [p, await circuitSnapshot(p)] as const)),
+    );
+
     // Phase 16(c): a staging (or prod) deploy's config posture, verifiable from this one
     // endpoint instead of grepping platform env-var UIs. Bindings default to "emulator" —
     // the same safe-until-opted-in posture every *_BINDING switch already has.
@@ -94,7 +102,7 @@ export async function GET(req: Request): Promise<Response> {
       },
     };
 
-    return Response.json({ actionTypes, integrations, summary, phoneRouting, environment }, { headers: { "cache-control": "no-store" } });
+    return Response.json({ actionTypes, integrations, summary, phoneRouting, environment, circuitBreakers }, { headers: { "cache-control": "no-store" } });
   } catch (err) {
     return errorResponse(err);
   }

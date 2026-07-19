@@ -6,9 +6,11 @@
 // gated phase per the blueprint's own rule).
 
 import { z } from "zod";
+import { withTenant, externalRefs } from "@finnor/db";
 import type { CapabilityContract, CapabilityBinding, RetryPolicy } from "@finnor/workflow-runtime";
 import { syncInvoiceToQuickBooks, quickbooksProviderStatus } from "../quickbooks";
 import { createStripePaymentLink, stripeProviderStatus } from "../stripe";
+import { withCircuitBreaker } from "../provider-circuit-breaker";
 import {
   emulatorSyncInvoice,
   emulatorCreatePaymentLink,
@@ -22,6 +24,7 @@ export type { SyncInvoiceInput, SyncInvoiceOutput, CreatePaymentLinkInput, Creat
 
 export const SyncInvoiceInputSchema = z.object({
   tenantId: z.string().uuid(),
+  invoiceId: z.string().uuid().optional(),
   customerName: z.string().min(1),
   customerPhone: z.string().optional(),
   amountUsd: z.number().positive(),
@@ -72,12 +75,28 @@ export const syncInvoiceEmulatorBinding: CapabilityBinding<SyncInvoiceInput, Syn
 export const syncInvoiceQuickbooksBinding: CapabilityBinding<SyncInvoiceInput, SyncInvoiceOutput> = {
   name: "quickbooks",
   async call(input) {
-    const result = await syncInvoiceToQuickBooks({
-      customerName: input.customerName,
-      customerPhone: input.customerPhone,
-      amountUsd: input.amountUsd,
-      memo: input.memo,
-    });
+    const result = await withCircuitBreaker("quickbooks", () =>
+      syncInvoiceToQuickBooks({
+        customerName: input.customerName,
+        customerPhone: input.customerPhone,
+        amountUsd: input.amountUsd,
+        memo: input.memo,
+      }),
+    );
+    // Phase 4 (§4.5): the single join between Finnor's invoice and QuickBooks' real
+    // objects. invoiceId is optional upstream (older callers may not pass it) — only
+    // write a real ref when there's a real internal id to join against.
+    if (input.invoiceId) {
+      await withTenant(input.tenantId, (db) =>
+        db
+          .insert(externalRefs)
+          .values({ tenantId: input.tenantId, entity: "invoice", internalId: input.invoiceId!, provider: "quickbooks", externalId: result.quickbooksInvoiceId })
+          .onConflictDoUpdate({
+            target: [externalRefs.tenantId, externalRefs.entity, externalRefs.internalId, externalRefs.provider],
+            set: { externalId: result.quickbooksInvoiceId, syncedAt: new Date() },
+          }),
+      );
+    }
     return { externalInvoiceId: result.quickbooksInvoiceId, externalCustomerId: result.quickbooksCustomerId };
   },
 };
@@ -102,5 +121,17 @@ export const createPaymentLinkEmulatorBinding: CapabilityBinding<CreatePaymentLi
 
 export const stripeCreatePaymentLinkBinding: CapabilityBinding<CreatePaymentLinkInput, CreatePaymentLinkOutput> = {
   name: "stripe",
-  call: createStripePaymentLink,
+  async call(input) {
+    const result = await withCircuitBreaker("stripe", () => createStripePaymentLink(input));
+    await withTenant(input.tenantId, (db) =>
+      db
+        .insert(externalRefs)
+        .values({ tenantId: input.tenantId, entity: "invoice", internalId: input.invoiceId, provider: "stripe", externalId: result.linkId })
+        .onConflictDoUpdate({
+          target: [externalRefs.tenantId, externalRefs.entity, externalRefs.internalId, externalRefs.provider],
+          set: { externalId: result.linkId, syncedAt: new Date() },
+        }),
+    );
+    return result;
+  },
 };

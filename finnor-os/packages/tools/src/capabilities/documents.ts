@@ -1,15 +1,18 @@
-// Documents/e-signature capability contract (Phase 3 domain 5 of 5). Nothing exists
-// anywhere in the repo for this domain today (confirmed by grep: zero PDF/DocuSign/
-// e-sign hits that aren't false positives on the word "signature" meaning function
-// signatures). `generate_document`'s native binding wraps the already-built-but-
-// unused `createDocument()` (@finnor/data-platform, Phase 1); `request_signature` is
-// emulator-only — no real e-signature provider is in scope this phase.
+// Documents/e-signature capability contract (Phase 3 domain 5 of 5; Phase 4 §4.2
+// closed the "no real PDF bytes anywhere" gap). `generate_document`'s native binding
+// wraps `createDocument()` (@finnor/data-platform) for the metadata row AND now
+// renders real PDF bytes via pdf-lib (../pdf/render-pdf), persisted in
+// document_contents (migration 0025) -- a proposal's line items/pricing come from
+// the real quotes/quote_line_items rows, not a placeholder title. `request_signature`
+// is emulator-only unless ESIGN_BINDING=docusign (real account required, Phase 4).
 
 import { z } from "zod";
-import { withTenant } from "@finnor/db";
-import { createDocument } from "@finnor/data-platform";
+import { withTenant, quotes, quoteLineItems, proposals, households } from "@finnor/db";
+import { eq } from "drizzle-orm";
+import { createDocument, recordDocumentContent, getDocumentContent } from "@finnor/data-platform";
 import type { CapabilityContract, CapabilityBinding, RetryPolicy } from "@finnor/workflow-runtime";
 import { requestDocusignSignature, docusignProviderStatus } from "../docusign";
+import { renderDocumentPdf } from "../pdf/render-pdf";
 import {
   emulatorGenerateDocument,
   emulatorRequestSignature,
@@ -26,6 +29,11 @@ export const GenerateDocumentInputSchema = z.object({
   kind: z.string().min(1),
   title: z.string().min(1),
   idempotencyKey: z.string().min(1),
+  // Optional: which real domain entity this document renders from. Only "proposal"
+  // (keyed by proposals.id) is wired to real content today -- anything else still
+  // gets a real, honestly-generic PDF rather than a fabricated line-item render.
+  sourceEntityType: z.enum(["proposal"]).optional(),
+  sourceEntityId: z.string().uuid().optional(),
 });
 export const GenerateDocumentOutputSchema = z.object({ documentId: z.string(), storageRef: z.string() });
 
@@ -69,7 +77,27 @@ export const generateDocumentNativeBinding: CapabilityBinding<GenerateDocumentIn
         title: input.title,
         provenance: { sourceSystem: "capability:generate_document", externalId: input.idempotencyKey },
       });
-      return { documentId, storageRef: `native://documents/${documentId}` };
+
+      let pdfBytes: Buffer;
+      if (input.sourceEntityType === "proposal" && input.sourceEntityId) {
+        const [proposal] = await db.select().from(proposals).where(eq(proposals.id, input.sourceEntityId));
+        const [household] = proposal ? await db.select().from(households).where(eq(households.id, proposal.householdId)) : [];
+        const [quote] = proposal?.quoteId ? await db.select().from(quotes).where(eq(quotes.id, proposal.quoteId)) : [];
+        const lineItemRows = quote ? await db.select().from(quoteLineItems).where(eq(quoteLineItems.quoteId, quote.id)) : [];
+        pdfBytes = await renderDocumentPdf({
+          kind: "proposal",
+          title: input.title,
+          householdAddress: household?.address ?? "On file",
+          lineItems: lineItemRows.map((li) => ({ label: li.label, quantity: li.quantity, unitPriceUsd: Number(li.unitPriceUsd) })),
+          totalUsd: quote?.totalUsd ? Number(quote.totalUsd) : lineItemRows.reduce((sum, li) => sum + li.quantity * Number(li.unitPriceUsd), 0),
+          validUntil: quote?.validUntil ? quote.validUntil.toISOString() : null,
+        });
+      } else {
+        pdfBytes = await renderDocumentPdf({ kind: "generic", title: input.title });
+      }
+      await recordDocumentContent(db, { tenantId: input.tenantId, documentId, bytes: pdfBytes });
+
+      return { documentId, storageRef: `internal://documents/${documentId}` };
     });
   },
 };
@@ -98,5 +126,8 @@ export function isDocusignConfigured(): boolean {
 
 export const requestSignatureDocusignBinding: CapabilityBinding<RequestSignatureInput, RequestSignatureOutput> = {
   name: "docusign",
-  call: requestDocusignSignature,
+  async call(input) {
+    const content = await withTenant(input.tenantId, (db) => getDocumentContent(db, input.documentId));
+    return requestDocusignSignature({ ...input, documentBytes: content?.bytes });
+  },
 };

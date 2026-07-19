@@ -2,13 +2,14 @@
 // dependency, JWT grant auth (RS256 assertion), same no-new-npm-deps discipline as
 // stripe.ts and quickbooks.ts.
 //
-// This repo's documents are `storageRef: native://…` with NO real PDF bytes
-// (documents-emulator/createDocument never generate one — a pre-existing gap in the
-// documents domain, not something e-signature work should silently paper over). The
-// adapter below generates a minimal, honestly-labeled placeholder PDF from the
-// document id so DocuSign has real bytes to attach a signature to. Real PDF rendering
-// (populating it with the actual proposal/quote content) is a documents-capability
-// gap, tracked separately — this comment is that tracking.
+// Phase 4 (§4.2): documents now have real PDF bytes (packages/db schema's
+// document_contents, migration 0025, rendered via ../pdf/render-pdf). This module
+// stays deliberately DB-free (matches stripe.ts/quickbooks.ts's "plain fetch, no DB"
+// shape and its own unit tests' stub-fetch isolation) — the caller (documents.ts's
+// requestSignatureDocusignBinding, which already has real DB access) fetches the
+// real bytes and passes them in via input.documentBytes. buildPlaceholderPdf below
+// survives only as the fallback for when no content row exists yet — honest degraded
+// behavior, not silently pretending it has real content.
 
 import { createSign } from "node:crypto";
 import { IntegrationError, type ProviderHealth } from "./errors";
@@ -156,7 +157,7 @@ export async function requestDocusignSignature(input: RequestSignatureInput): Pr
   }
   const accessToken = await docusignAccessToken();
   const accountId = process.env.DOCUSIGN_ACCOUNT_ID!;
-  const documentBytes = buildPlaceholderPdf(`Document ${input.documentId}`);
+  const documentBytes = input.documentBytes ?? buildPlaceholderPdf(`Document ${input.documentId}`);
 
   const customFields = [
     { name: "tenantId", value: input.tenantId },

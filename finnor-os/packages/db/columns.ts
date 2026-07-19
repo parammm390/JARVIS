@@ -2,7 +2,16 @@
 // docs/jarvis-90-execution-blueprint.md). Money/provenance/archive conventions live
 // here once so every new table follows the same rules instead of re-deriving them.
 
-import { numeric, text, timestamp } from "drizzle-orm/pg-core";
+import { customType, numeric, text, timestamp } from "drizzle-orm/pg-core";
+
+/** Raw binary storage (real PDF bytes, etc.) — Postgres `bytea`, in/out as Buffer.
+ *  No blob-storage provider exists or is in scope; Postgres is the real store here,
+ *  not a placeholder for one. */
+export const bytea = customType<{ data: Buffer }>({
+  dataType() {
+    return "bytea";
+  },
+});
 
 /**
  * Money columns are Postgres `numeric`. This Drizzle version's `numeric()` builder is
