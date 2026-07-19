@@ -4,8 +4,9 @@
 // owner userId/role and its "confirm the newest pending domain_actions" heuristic.
 
 import { withTenant, voiceIdentities, voiceSessions, voiceTurns, pendingConfirmations, handoffs, tenants, users } from "@finnor/db";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, asc } from "drizzle-orm";
 import { findHousehold } from "../../domain-plugins/shared/db-helpers";
+import { ingestMemory } from "@finnor/memory";
 
 export type VoiceRole = "owner" | "dispatcher" | "technician" | "customer" | "unknown";
 
@@ -123,6 +124,28 @@ export async function closeVoiceSession(tenantId: string, sessionId: string): Pr
   await withTenant(tenantId, (db) =>
     db.update(voiceSessions).set({ status: "ended", endedAt: new Date() }).where(eq(voiceSessions.id, sessionId)),
   );
+  await ingestCallTranscript(tenantId, sessionId).catch((err) =>
+    console.error(`[memory] transcript auto-ingest failed for voice session ${sessionId}`, err),
+  );
+}
+
+/** §5.2: auto-ingests the whole call as one semantic-memory document at close — a
+ *  transcript is naturally a per-call unit, not per-turn (chunkText still splits it
+ *  further if it runs long). Best-effort: a memory-layer failure must never affect the
+ *  call itself, which has already ended by the time this runs. Exported (not just
+ *  called from closeVoiceSession) so scripts/backfill-embeddings.ts can re-ingest
+ *  historical, already-ended sessions without duplicating this logic. */
+export async function ingestCallTranscript(tenantId: string, sessionId: string): Promise<number> {
+  const turns = await withTenant(tenantId, (db) =>
+    db
+      .select({ role: voiceTurns.role, transcriptText: voiceTurns.transcriptText })
+      .from(voiceTurns)
+      .where(eq(voiceTurns.voiceSessionId, sessionId))
+      .orderBy(asc(voiceTurns.sequence)),
+  );
+  if (turns.length === 0) return 0;
+  const text = turns.map((t) => `${t.role}: ${t.transcriptText}`).join("\n");
+  return ingestMemory({ tenantId, sourceDocId: `voice_session:${sessionId}`, text, entityRefs: [{ type: "voice_session", id: sessionId }] });
 }
 
 export async function appendVoiceTurn(params: {

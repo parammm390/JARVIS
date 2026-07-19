@@ -15,6 +15,8 @@ export * from "./semantic";
 export * from "./episodic";
 export * from "./consolidated";
 export * from "./patterns";
+export * from "./chunking";
+export * from "./ingest";
 
 export async function buildMemorySnapshot(opts: {
   tenantId: string;

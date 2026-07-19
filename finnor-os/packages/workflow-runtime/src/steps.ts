@@ -10,6 +10,7 @@ import { and, eq, lt, sql, desc } from "drizzle-orm";
 import { maybeChaosKill } from "./chaos";
 import { openReconciliationCase } from "./reconciliation";
 import { openReceipt, finalizeReceipt, findReceiptByStep } from "./receipts";
+import { ingestReceipt } from "./memory-ingest";
 
 // Overridable (FINNOR_STEP_LEASE_SECONDS) so the chaos-test script can prove real
 // lease-expiry recovery in seconds rather than waiting out the production default.
@@ -119,6 +120,17 @@ async function finalizeReceiptForStep(tenantId: string, stepId: string, result: 
   }
 }
 
+/** §5.2: auto-ingest into semantic memory — every completed step becomes real, cited
+ *  memory the moment its receipt is finalized. Uses the already-fetched receipt fields
+ *  rather than re-querying (findReceiptByStep just ran inside finalizeReceiptForStep's
+ *  caller) — see memory-ingest.ts, shared with scripts/backfill-embeddings.ts so the
+ *  live path and the historical backfill can never render a chunk differently. */
+async function ingestStepReceipt(tenantId: string, stepId: string, evidence: Record<string, unknown>): Promise<void> {
+  const receipt = await findReceiptByStep(tenantId, stepId);
+  if (!receipt) return; // no receipt to cite — nothing honest to ingest
+  await ingestReceipt(tenantId, { ...receipt, actualResult: evidence, finalizedAt: new Date() });
+}
+
 export async function completeStep(tenantId: string, stepId: string, evidence: Record<string, unknown>): Promise<void> {
   await withTenant(tenantId, (db) =>
     db
@@ -127,6 +139,9 @@ export async function completeStep(tenantId: string, stepId: string, evidence: R
       .where(eq(workflowSteps.id, stepId)),
   );
   await finalizeReceiptForStep(tenantId, stepId, { actualResult: evidence });
+  await ingestStepReceipt(tenantId, stepId, evidence).catch((err) =>
+    console.error(`[memory] auto-ingest failed for step ${stepId}`, err),
+  );
 }
 
 export async function failStep(

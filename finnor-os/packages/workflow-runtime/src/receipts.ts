@@ -69,10 +69,23 @@ export async function finalizeReceipt(
 
 /** Looks up the receipt already opened for a step (finalizeReceipt needs the id;
  *  recovery paths that resume a step need to find its existing receipt rather than
- *  opening a second one — workflowStepId is unique in the table). */
-export async function findReceiptByStep(tenantId: string, workflowStepId: string): Promise<{ id: string } | null> {
+ *  opening a second one — workflowStepId is unique in the table). Carries objective/
+ *  domainActionId/workflowRunId too (§5.2: completeStep's auto-ingest hook needs real
+ *  provenance for the chunk it writes, not just the id). */
+export async function findReceiptByStep(
+  tenantId: string,
+  workflowStepId: string,
+): Promise<{ id: string; objective: string; domainActionId: string | null; workflowRunId: string | null } | null> {
   const [row] = await withTenant(tenantId, (db) =>
-    db.select({ id: decisionReceipts.id }).from(decisionReceipts).where(eq(decisionReceipts.workflowStepId, workflowStepId)),
+    db
+      .select({
+        id: decisionReceipts.id,
+        objective: decisionReceipts.objective,
+        domainActionId: decisionReceipts.domainActionId,
+        workflowRunId: decisionReceipts.workflowRunId,
+      })
+      .from(decisionReceipts)
+      .where(eq(decisionReceipts.workflowStepId, workflowStepId)),
   );
   return row ?? null;
 }
