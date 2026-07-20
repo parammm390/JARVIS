@@ -960,6 +960,44 @@ the newly-deployed bundle.
   </details>
 
 ## Log (newest first)
+- 2026-07-21 — **Outside the pack's own 8-phase numbering, requested directly by
+  Param: real per-customer personalization for `bulk_notify_existing_customers`
+  (the win-back campaign action — "call everyone inactive 3-6 months, mention what
+  they actually bought, offer 15% off").** Previously this action broadcast one
+  identical script to every target; now each target's own most recent equipment
+  (real `equipment` table data) is woven into THEIR call/text only, never another
+  household's, and a `discountPercent` field carries the one real number the
+  campaign is allowed to state — the assistant's own system prompt already refused
+  to invent one, this is what gives it something real to say. Auto-selects the
+  already-live "winback" Vapi persona (`gpt-realtime-mini`, verified live via
+  Vapi's own API this session) when a discount is set. **Real, more serious bug
+  found and fixed along the way, not a feature request:** `findConsentedTargets`
+  had no explicit tenant filter on its households query — it relied on RLS alone,
+  which (per this same session's Task 8.1 finding) isn't independently enforced in
+  production yet, meaning a bulk marketing campaign could have leaked another
+  tenant's entire consented-customer list into its target batch. Fixed with an
+  explicit `tenantId` predicate (§0.3.5: RLS + explicit predicate, both, always) —
+  caught by this session's own new integration test failing before the fix was
+  even attempted, not shipped and found later. Also wired the same real per-tenant
+  daily Vapi call cap every other dial-out path already enforces
+  (`packages/tools/src/capabilities/communications.ts`'s `DAILY_VAPI_CALL_CAP`,
+  now exported and reused) into this path for the first time — a bulk campaign
+  previously had zero volume safety rail. 5 new tests
+  (`tests/integration/bulk-notify-personalization.test.ts`), full suite 598/598
+  (up from 593), typecheck clean. **Real proof against production Dealer Zero,
+  this session:** a live "3-6 months inactive, 15% off" campaign drafted for real
+  found 16 real matching households, each with correctly-isolated equipment
+  (Dorothy White → whole_house_filter, Kevin Johnson → water_softener, etc.),
+  confirmation-gated, never auto-sent. Deployed live: `api` (Vercel) and
+  `finnor-worker` (Railway) both redeployed and verified (401/200 unchanged,
+  clean worker boot log). **Honest scope limit:** proof stopped at the
+  confirmation-gate step, deliberately — Dealer Zero's phone numbers are
+  synthetic/non-dialable by design (so an accidental real call is never possible),
+  which also means the actual "phone rings and a human hears personalized speech"
+  step was not exercised live this session; Param chose Dealer-Zero-only testing
+  specifically to avoid any real-number risk. Standing offer, not yet taken up: a
+  single real test call to Param's own number, so he can personally hear a live
+  personalized win-back call before this goes anywhere near real customers.
 - 2026-07-21 — **Phase 8 executed for the first time: security re-verification, the
   failure-injection calendar, the daily scorecard, and the certification document
   itself — all real, all deployed live, all honestly scored.** Spot-checked Phases

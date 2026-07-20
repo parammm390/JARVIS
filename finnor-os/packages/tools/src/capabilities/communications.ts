@@ -19,8 +19,10 @@ import {
 
 // Phase 4 (§4.4): real, configurable daily cap on outbound Vapi calls per tenant —
 // no per-tenant override mechanism yet (that's a domain_policies field, future work),
-// but the cap itself is real and enforced here, not advisory.
-const DAILY_VAPI_CALL_CAP = Number(process.env.VAPI_DAILY_CALL_CAP ?? 200);
+// but the cap itself is real and enforced here, not advisory. Exported so every other
+// real dial-out path (e.g. bulk-notify's win-back campaigns) enforces the SAME cap
+// rather than each call site inventing its own number.
+export const DAILY_VAPI_CALL_CAP = Number(process.env.VAPI_DAILY_CALL_CAP ?? 200);
 
 export type { SendConfirmationInput, SendConfirmationOutput };
 
