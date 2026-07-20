@@ -13,6 +13,16 @@ on:
 jobs:
   lint-typecheck-e2e:
     runs-on: ubuntu-latest
+    env:
+      # The Supabase ANON/publishable key, not the service-role secret — Next.js
+      # bakes every NEXT_PUBLIC_* var into the client JS bundle at build time, so
+      # this is already visible to anyone opening devtools on the live site; it is
+      # not confidential, and prerendering /jarvis and /jarvis/login genuinely
+      # requires it to be set (real first CI run of this workflow failed on `npm
+      # run build` with "supabaseUrl is required" without it — reproduced locally
+      # by unsetting it, root-caused, not guessed).
+      NEXT_PUBLIC_SUPABASE_URL: https://kpxrnonhnhexutvdywbh.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: sb_publishable_pL3At585tx6uLFymhYtjbA_HJvVTeWB
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
