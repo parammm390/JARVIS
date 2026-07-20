@@ -101,13 +101,16 @@ describe.skipIf(!available)("GET /api/workflows/runs (Phase 10)", () => {
   it("returns running runs first plus recent terminal runs, each with ordered steps", async () => {
     const res = await GET(req());
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { runs: Array<{ id: string; status: string; steps: Array<{ sequence: number; status: string }> }> };
+    const body = (await res.json()) as { runs: Array<{ id: string; status: string; version: number; steps: Array<{ sequence: number; status: string }> }> };
     const running = body.runs.find((r) => r.id === runningRunId);
     const completed = body.runs.find((r) => r.id === completedRunId);
     expect(running).toBeDefined();
     expect(completed).toBeDefined();
     expect(running!.steps.map((s) => s.sequence)).toEqual([1, 2]);
     expect(running!.steps[1]!.status).toBe("leased");
+    // Phase 7 (§7.2): the cockpit's run controls need this to condition their
+    // optimistic-concurrency UPDATE — a fresh run defaults to version 1.
+    expect(running!.version).toBe(1);
   });
 
   it("?status=running filters to only running runs", async () => {

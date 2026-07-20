@@ -35,6 +35,8 @@ import { GET as receiptsListGET } from "../../apps/api/app/api/receipts/route";
 import { GET as receiptByIdGET } from "../../apps/api/app/api/receipts/[id]/route";
 import { POST as escalatePOST } from "../../apps/api/app/api/actions/[id]/escalate/route";
 import { GET as overviewGET } from "../../apps/api/app/api/overview/route";
+import { GET as dataQualityFindingsGET } from "../../apps/api/app/api/data-quality/findings/route";
+import { POST as resolveFindingPOST } from "../../apps/api/app/api/data-quality/findings/[id]/resolve/route";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
 const TENANT_B = "00000000-0000-4000-8000-0000000000f1";
@@ -137,6 +139,15 @@ describe.skipIf(!available)("authz test wall (Phase 1.8)", () => {
     });
     it("overview (Phase 7.6 daily briefing)", async () => {
       expect((await overviewGET(anonReq())).status).toBe(401);
+    });
+    it("data-quality/findings (Phase 7.7)", async () => {
+      expect((await dataQualityFindingsGET(anonReq())).status).toBe(401);
+    });
+    it("data-quality/findings/:id/resolve (Phase 7.7)", async () => {
+      const res = await resolveFindingPOST(new Request("http://localhost/api/test", { method: "POST" }), {
+        params: { id: "00000000-0000-4000-8000-000000000000" },
+      });
+      expect(res.status).toBe(401);
     });
   });
 

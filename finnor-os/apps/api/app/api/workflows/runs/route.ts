@@ -57,6 +57,7 @@ export async function GET(req: Request): Promise<Response> {
         id: r.id,
         workflowType: r.workflowType,
         status: r.status,
+        version: r.version,
         createdAt: r.createdAt,
         updatedAt: r.updatedAt,
         steps: (stepsByRun.get(r.id) ?? []).map((s) => ({
