@@ -24,7 +24,10 @@ test.describe("public /jarvis page", () => {
 
     await page.goto("/jarvis")
     await expect(page.getByText("Good evening").or(page.getByText("Good morning")).or(page.getByText("Good afternoon"))).toBeVisible()
-    await expect(page.getByText(/live|simulation/i).first()).toBeVisible({ timeout: 15_000 })
+    // The header's Live/Simulation badge specifically — a looser text match also
+    // catches the desktop sidebar's "Connected · Live" status card, which exists in
+    // the DOM but is CSS-hidden below the lg breakpoint (mobile-375 project).
+    await expect(page.locator("main").getByText(/^(Live|Simulation)$/).first()).toBeVisible({ timeout: 15_000 })
 
     expect(unexpected, `unexpected console errors on /jarvis: ${unexpected.join("\n")}`).toEqual([])
   })
@@ -37,7 +40,10 @@ test.describe("public /jarvis page", () => {
 
   test("logged out visitors see a sign-in affordance, not live private data", async ({ page }) => {
     await page.goto("/jarvis")
-    await expect(page.getByText(/sign in/i)).toBeVisible()
+    // Two "Sign in" links legitimately exist in the DOM at once (desktop sidebar +
+    // mobile header chip, each CSS-hidden at the other's breakpoint) — the
+    // `:visible` pseudo-class filters to whichever one actually renders here.
+    await expect(page.locator("a:visible", { hasText: /sign in/i })).toBeVisible()
   })
 })
 
