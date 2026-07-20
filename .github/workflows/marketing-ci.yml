@@ -1,0 +1,51 @@
+# CI for the marketing site (repo root) — Phase 7 §7.9/§7.10 (JARVIS 95% MAESTRO
+# PACK): "truthfulness enforcement in CI" and "Playwright suite green in CI" both
+# need an actual CI job, not just a clean local run. Scoped to paths OUTSIDE
+# finnor-os/ (that repo has its own workflow, ci.yml) so the two don't trigger on
+# each other's changes.
+name: marketing-ci
+on:
+  pull_request:
+    paths-ignore: ["finnor-os/**"]
+  push:
+    branches: [main]
+    paths-ignore: ["finnor-os/**"]
+jobs:
+  lint-typecheck-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      # Phase 7 §7.8: no-restricted-properties(Math.random) under src/components/
+      # jarvis and src/app/jarvis, defined in .eslintrc.cjs — this is what actually
+      # enforces it; running lint in CI is what makes that enforcement real instead
+      # of just a local convention.
+      - run: npm run lint
+      - run: npx tsc --noEmit -p tsconfig.json
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      # Runs against the production build via `next start` (playwright.config.ts's
+      # webServer), not `next dev` — closer to what's actually deployed.
+      # jarvis-authenticated.spec.ts's real-login flows skip cleanly here (no
+      # TEST_OWNER_EMAIL/TEST_OWNER_PASSWORD secret configured yet — see
+      # finnor-os/docs/owner-actions.md for why a real credential isn't faked);
+      # jarvis-public.spec.ts's 10 tests run for real.
+      - run: npm run start &
+        env:
+          PORT: 3000
+      - run: npx wait-on http://localhost:3000 --timeout 60000
+      - run: npm run test:e2e
+        env:
+          PLAYWRIGHT_BASE_URL: http://localhost:3000
+          TEST_OWNER_EMAIL: ${{ secrets.TEST_OWNER_EMAIL }}
+          TEST_OWNER_PASSWORD: ${{ secrets.TEST_OWNER_PASSWORD }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 14
