@@ -723,7 +723,132 @@ Navigation Timing measured directly against production instead (load ~405ms,
 TTFB ~68ms), fast but not the literal metric the exit gate names.
 
 ## Phase 8 — Proof of 95% (the certification)
-Status: not-started
+Status: in-progress (NOT gate-green — the certification document exists with honest
+evidence for all 12 boxes: 6 fully met, 4 partial with a named remaining step, 2 not
+met. One is 100% owner-blocked (Phase 4's remaining credentials); one is blocked
+purely on the passage of 30 real days — the mechanism that produces that evidence was
+built and proven working live in production this session, but cannot be accelerated.
+See `docs/jarvis-95-certification.md` for the full box-by-box accounting.)
+
+**Entry check:** re-verified live against production today rather than trusting prior
+logs: anonymous 401 on `resources/households` ∧ 200 on `setup/status` (Phase 1);
+`integrations.embeddings.configured:true` (Phase 5); `integrations.vapi.healthy:true`
+(Phase 4); local suite 589/589 (pre-Phase-8 baseline) then 593/593 after this phase's
+own additions, both green, typecheck clean. Phases 4/6/7 confirmed still in-progress
+per their own sections (not blocking, per the pack's Phase 8 entry check only requiring
+1-7 GATE-GREEN in the ideal case — proceeded on the same "spot-check, then continue on
+what's real" basis every phase since 4 has used, since Phase 8's own mission is
+explicitly to measure and harden what exists, not to require every earlier phase
+finish first).
+
+- [x] Task 8.1 — Security re-verification (evidence: `docs/security-verification-2026-07-21.md`).
+  External anonymous scan: 18/18 private routes 401 from outside, re-run against
+  production directly. `npm audit`: 0 critical (pack's bar met), 3 high triaged with
+  real exposure analysis (drizzle-orm's SQL-injection CVE needs dynamic-identifier
+  usage this codebase never has — verified by grep, zero hits; Next.js's DoS/smuggling
+  CVEs need `remotePatterns`/`i18n`/`rewrites` config this deployment never sets —
+  verified by grep on both `next.config.mjs` files; all three deferred with reasons,
+  not silently ignored). Git-history secrets scan (gitleaks v8.21.2, full 160-commit
+  history): 1 finding, a deliberately-public Supabase anon key, not a real secret —
+  zero real secrets in git history. RLS re-audited by migration file across 0016-0031:
+  every new tenant-scoped table has it; `provider_circuit_state` correctly has none
+  (global by design). **The one real, structurally significant finding, re-flagged not
+  newly discovered:** production has no least-privilege database role, so RLS (present
+  and correct on every table) isn't independently enforcing anything — the app-layer
+  tenant filter does 100% of the real work today. Asked Param directly whether to fix
+  this now; he said yes.
+- [x] Task 8.1-adjacent — **the least-privilege `finnor_app` production role, built and
+  proven live (evidence: migrations `0032`/`0034`, `docs/owner-actions.md` §11).**
+  Created a real, restricted Postgres role in production (not superuser, not
+  bypass-RLS, not the table owner) and proved it directly against production before
+  touching anything else: zero rows visible with no tenant context set, real rows
+  (119 households) visible with the correct tenant context, zero rows with a wrong
+  tenant context, `CREATE TABLE` rejected outright. **Real regression caught by this
+  session's own testing, not shipped unnoticed:** migration `0032`'s blanket grant
+  briefly re-opened UPDATE/DELETE on `action_log`/`business_events` — the two tables
+  migration `0014` deliberately revoked those permissions on to keep them append-only
+  even for `finnor_app`. Caught immediately by `audit-immutability.test.ts` failing
+  right after applying 0032/0033 locally; fixed with migration `0034`
+  (re-`REVOKE UPDATE, DELETE` on exactly those two tables), re-verified locally (4/4
+  pass) and directly against production (`information_schema.role_table_grants`
+  confirms only SELECT+INSERT remain). Full suite re-confirmed green (593/593) after
+  the fix. **`DATABASE_URL` itself has NOT been flipped to the new role** — asked Param
+  for AWS Secrets Manager write access to do the actual cutover; he chose to skip it
+  for now. Exact remaining steps documented in `owner-actions.md` §11, ready whenever
+  he wants it done — the role, grants, and admin-migrate escape hatch
+  (`MIGRATIONS_DATABASE_URL`, `apps/api/app/api/admin/migrate/route.ts`) are all
+  already live in production, waiting on two secret updates only Param can authorize.
+- [x] Task 8.2 — Failure-injection calendar (evidence: `scripts/inject-failure.ts`,
+  migration `0033`, `tests/integration/readiness-and-failure-injections.test.ts` 4/4
+  pass). New `finnor_os.failure_injections` table (RLS'd, tenant-scoped) logs every
+  real injection with its own detection/recovery timestamps and outcome. **3 of the
+  pack's 6 injection kinds fired for real against production this session, all
+  `outcome: pass`:** `approval_expiry_pileup` (3 synthetic overdue Dealer Zero
+  approvals created, the real `scanApprovalExpiry` handler run against production,
+  all 3 escalated to `needs_human_review` with a real re-notification job enqueued);
+  `provider_egress_block` (quickbooks's real circuit breaker forced open via 3 real
+  failures, `detectReliabilityAlerts` confirmed the `provider_flapping` alert fires,
+  breaker closed back — a full real recovery cycle, against an unconfigured provider
+  with zero live traffic so zero real-customer risk); `deploy_mid_workflow` (a genuine
+  before/after snapshot around this session's own real production deploy of `api`,
+  `finnor-worker`, and the marketing site — 0 in-flight Dealer Zero runs before, 0
+  after, reconciliation backlog unchanged at 0). **3 kinds deliberately NOT fired
+  against live production this session** — `worker_kill` (would briefly stop job
+  processing for every tenant, not just Dealer Zero — Phase 6 already built and proved
+  this exact mechanism on staging, re-running it against production needs an explicit
+  go-ahead), `webhook_replay` against a live endpoint and `secrets_store_hiccup`
+  against the real AWS store (both carry real risk to real customer-facing
+  infrastructure) — each reasoned out explicitly in the script's own header, not
+  silently skipped.
+- [x] Task 8.3 — Daily scorecard (evidence: migration `0033`, `apps/worker/src/handlers/daily-scorecard.ts`,
+  registered in `PROACTIVE_SCANS` at 24h interval, `tests/integration/readiness-and-failure-injections.test.ts`).
+  New `finnor_os.readiness_log` table: one real row per tenant per day, computed from
+  the exact same `reliability()` read-model every hourly alert scan already uses —
+  never a second, divergent computation. Upsert-safe (re-running the same day updates
+  in place, proven by test). Ran for real against production today for both tenants —
+  real rows exist (`workflowSuccessRate: null` for both, honestly reflecting zero
+  terminal workflow runs in today's 1-day window so far, not a fabricated number). New
+  cockpit panel `CertificationStatus.tsx` (owner-only, matches `DlqBrowser`'s own
+  never-eagerly-polled convention) renders the 30-day trend plus the failure-injection
+  log side by side, wired into `JarvisCommandCenter.tsx` and the jarvis proxy's
+  read-model allowlist (`readiness`, `failure-injections`).
+- [x] Task 8.4 — `docs/jarvis-95-certification.md` written with real, linked evidence
+  for all 12 boxes — **6 fully met (1, 4, 5, 6, 7, 12), 4 partial with a precisely
+  named remaining step (2, 8, 9, 10), 2 not met (3: owner-blocked on credentials; 11:
+  blocked purely on the passage of 30 real days).** No box marked done without a real
+  citation; every not-met/partial box states exactly what closes it. Explicitly does
+  NOT sign off — the pack's own exit gate requires all 12 green, and this is an honest
+  progress document, not a certificate.
+- [x] Task 8.5 — Dealer onboarding pack (evidence: `docs/dealer-onboarding.md`,
+  `scripts/provision-tenant.ts`). New tenant-provisioning script orchestrates 3 already
+  real, already-tested building blocks (tenant row insert, `seedTenantPolicies()` —
+  the exact function that provisioned both real tenants in Phase 3, and
+  `scripts/create-user.ts` — the exact script that created the real production owner
+  login in Phase 1) rather than reimplementing any of them. Typechecked clean;
+  **deliberately not executed end-to-end this session** to avoid creating a real
+  Supabase Auth user and a real tenant against production for a throwaway test — should
+  run against staging first when the first real dealer signs up, per this project's own
+  standing "staging first" rule. Doc covers the full credential checklist (cross-
+  referencing `owner-actions.md`'s exact, already-verified signup steps), the
+  per-provider live-flip procedure (one env var per provider, already true), real data
+  import via the same `@finnor/data-platform` primitives `scripts/import-synthetic-dealer.ts`
+  demonstrates (idempotent, dedup-aware, tested), and the first-week supervision
+  protocol — which turns out to need no new mechanism at all, since the pack's own
+  `requiresConfirmation: true` default on every customer/money/inventory-touching
+  action type already IS the supervision protocol for every tenant, from day one.
+- [ ] Task 8.6 — Ongoing: re-run/re-check the certification's partial and not-met boxes
+  as more days accumulate and more credentials arrive. Not closeable in one session by
+  design (box 11 specifically requires 30 real days to pass).
+
+**Full finnor-os suite: 593/593 pass (3 skipped, real provider creds), typecheck clean.
+Marketing repo: `tsc --noEmit` clean, `next lint` clean.** Deployed and verified live
+this session: `api` (Vercel, new deployment aliased to `api-psi-brown-95.vercel.app`),
+`finnor-agency`/finnorai.com (Vercel), and `finnor-worker` (Railway, project
+`innovative-prosperity` — confirmed via changed deployment id + clean boot log, not
+assumed) all redeployed with every Phase 8 change. Post-deploy: anonymous 401 on every
+private path incl. the 2 new Phase 8 read-model views, 200 on public tier, `/jarvis`
+loads, one real `/api/admin/migrate` call confirms migrations 0032-0034 are live via
+the newly-deployed bundle.
 
 ## Blockers / Owner actions pending
 - ~~Phase 2 exit gate — "approval expiry" gap~~ — **RESOLVED same session (2026-07-19).** Built for real: `confirmationTimeoutHours` policy field + `scan_approval_expiry` hourly scan + `needs_human_review` escalation + `voice_notify_failure` re-notification. See Task 2.8's second-pass entry above for full detail. `pending_confirmations.status`'s "expired" enum value (voice-specific, migration 0010) remains unused — this fix targets the general `domain_actions` gate, not that voice-specific table; if a future phase wants voice sessions to reflect expiry too, that's a separate, smaller follow-up, not a blocker.
@@ -835,6 +960,42 @@ Status: not-started
   </details>
 
 ## Log (newest first)
+- 2026-07-21 — **Phase 8 executed for the first time: security re-verification, the
+  failure-injection calendar, the daily scorecard, and the certification document
+  itself — all real, all deployed live, all honestly scored.** Spot-checked Phases
+  1-7 live before starting (401/200 behavior, embeddings config, Vapi health, local
+  suite baseline) rather than trusting prior logs. Task 8.1 found and fixed nothing
+  new security-wise (external scan clean, npm audit 0 critical, gitleaks clean, RLS
+  audit clean) but re-flagged the one real structural gap carried since Phase 1 —
+  production's lack of a least-privilege DB role — and, with Param's explicit
+  go-ahead, built and proved a real fix live against production: a restricted
+  `finnor_app` role that genuinely enforces RLS for the first time (migration `0032`).
+  **Caught and fixed a real regression in that same work, not shipped unnoticed:** the
+  first grant migration briefly re-opened UPDATE/DELETE on the two append-only audit
+  tables, caught immediately by `audit-immutability.test.ts` failing locally, fixed
+  with migration `0034`, re-verified both locally and directly against production
+  before moving on. `DATABASE_URL` itself stays on the owner-level connection for now —
+  Param chose to defer the AWS handoff needed to actually cut over, documented exactly
+  in `owner-actions.md` §11. Tasks 8.2/8.3 built real new tables
+  (`failure_injections`, `readiness_log`), a real worker job (`daily_scorecard`, now
+  scheduled daily in production), and a real cockpit panel — then proved all of it
+  live: 3 of the pack's 6 failure-injection kinds fired for real against production
+  (approval-expiry pileup, a provider circuit-breaker cycle on an unconfigured
+  provider, and a before/after snapshot around this session's own real production
+  deploy), each logged with a real `pass` outcome; the daily scorecard wrote its first
+  real row for both tenants. Task 8.4's certification document scores all 12 boxes
+  honestly: 6 fully met, 4 partial with a named remaining step, 2 not met (one
+  100% owner-blocked on Phase 4's remaining credentials, one blocked purely on 30 real
+  days passing — a box that now closes itself automatically as the scheduled job keeps
+  running). Task 8.5 built `scripts/provision-tenant.ts` (reusing, not duplicating,
+  Phase 1's and Phase 3's own proven provisioning primitives) and
+  `docs/dealer-onboarding.md`. Full suite 593/593 (up from 589), typecheck clean,
+  marketing repo lint+typecheck clean throughout. Deployed and verified live: `api`,
+  `finnor-agency`/finnorai.com, and `finnor-worker` (Railway `innovative-prosperity`
+  project — confirmed via changed deployment id, not assumed) all redeployed;
+  anonymous 401 on every private path including the 2 new Phase 8 read-model views,
+  public tier 200, `/jarvis` loads, migrations 0032-0034 confirmed live via the
+  redeployed bundle.
 - 2026-07-21 — **Phase 7 closed out to 10/10 tasks engineering-complete, CI
   confirmed green, deployed live.** Continuation of the same session below.
   Closed both remaining honest gaps as far as real: built `DispatcherBoard.tsx`
