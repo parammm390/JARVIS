@@ -157,6 +157,23 @@ export interface ProviderHealth {
 /** Phase 15: real self-tests for every external integration (not just presence),
  *  from GET /api/integrations/status — includes the two new Phase 15 providers
  *  (Stripe, DocuSign) plus which binding is actually wired to serve each capability. */
+/** Phase 6: ops-grade reliability numbers from GET /api/read-models/reliability —
+ *  real success rate / latency / retry / DLQ backlog, never a fabricated 0 for an
+ *  empty denominator (null instead). Polled on the slow lane alongside the other
+ *  read-models, same pattern as PipelineHealth etc. */
+export interface ReliabilityMetrics {
+  tenantId: string
+  windowDays: number
+  workflowSuccessRate: number | null
+  stepLatencyMs: { p50: number | null; p95: number | null; sampleSize: number }
+  retryRate: number | null
+  humanInterventionRate: number | null
+  reconciliationBacklog: number
+  dlqDepth: number
+  receiptCompleteness: number | null
+  asOf: string
+}
+
 export interface IntegrationsStatus {
   meta_ads: ProviderHealth
   google_ads: ProviderHealth
@@ -232,6 +249,7 @@ interface JarvisDataState {
   dataQuality: DataQuality | null
   insights: Insights | null
   readModelsDegraded: boolean
+  reliability: ReliabilityMetrics | null
 
   setupStatus: SetupStatus | null
   setupDegraded: boolean
@@ -273,6 +291,7 @@ const EMPTY_STATE: JarvisDataState = {
   dataQuality: null,
   insights: null,
   readModelsDegraded: false,
+  reliability: null,
   setupStatus: null,
   setupDegraded: false,
   integrationsStatus: null,
@@ -425,7 +444,7 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
   // ---- slow lane ----
   const pollSlow = useCallback(async () => {
     if (!visibleRef.current) return
-    const [pipeline, cash, sla, stock, followUp, techLoad, serviceDue, dataQuality, insights] = await Promise.allSettled([
+    const [pipeline, cash, sla, stock, followUp, techLoad, serviceDue, dataQuality, insights, reliability] = await Promise.allSettled([
       jarvisGet<{ data: PipelineHealth }>("read-models/pipeline-health"),
       jarvisGet<{ data: CashCollections }>("read-models/cash-collections"),
       jarvisGet<{ data: SlaBreaches }>("read-models/sla-breaches"),
@@ -435,6 +454,7 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
       jarvisGet<{ data: ServiceDue }>("read-models/service-due"),
       jarvisGet<{ data: DataQuality }>("read-models/data-quality"),
       jarvisGet<Insights>("insights"),
+      jarvisGet<{ data: ReliabilityMetrics }>("read-models/reliability"),
     ])
     const anyDegraded = [pipeline, cash, sla, stock, followUp, techLoad, serviceDue, dataQuality].some((r) => r.status === "rejected")
     setState((prev) => ({
@@ -448,6 +468,7 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
       serviceDue: serviceDue.status === "fulfilled" ? serviceDue.value.data : prev.serviceDue,
       dataQuality: dataQuality.status === "fulfilled" ? dataQuality.value.data : prev.dataQuality,
       insights: insights.status === "fulfilled" ? insights.value : prev.insights,
+      reliability: reliability.status === "fulfilled" ? reliability.value.data : prev.reliability,
       readModelsDegraded: anyDegraded,
       metricHistory: {
         ...prev.metricHistory,

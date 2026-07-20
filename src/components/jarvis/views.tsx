@@ -335,9 +335,63 @@ const WF_STAGES: Record<string, string[]> = {
   amc_renewal: ["agreement_active", "renewal_window", "renewal_sent", "renewed", "lapsed"],
 }
 
+/** Phase 6: real ops-grade reliability numbers — success rate, step latency, retry/
+ *  human-intervention rates, DLQ + reconciliation backlogs. Mirrors the read-model's
+ *  own honesty: a null denominator renders as "—", never a fabricated 0%. */
+function StatTile({
+  label,
+  value,
+  tone = "white",
+}: {
+  label: string
+  value: string
+  tone?: "white" | "amber" | "rose" | "teal"
+}) {
+  const valueTone = tone === "amber" ? "text-amber-300" : tone === "rose" ? "text-rose-300" : tone === "teal" ? "text-teal-200" : "text-white/85"
+  return (
+    <div className="rounded-xl border border-white/8 bg-slate-900/50 px-4 py-3">
+      <div className="text-[10px] font-black uppercase tracking-[0.16em] text-white/40">{label}</div>
+      <div className={`mt-1 text-xl font-black tabular-nums ${valueTone}`}>{value}</div>
+    </div>
+  )
+}
+
+function pct(n: number | null): string {
+  return n === null ? "—" : `${Math.round(n * 100)}%`
+}
+function ms(n: number | null): string {
+  return n === null ? "—" : `${Math.round(n)}ms`
+}
+
+function ReliabilityOpsPanel() {
+  const { reliability, readModelsDegraded } = useJarvis()
+  const live = reliability !== null && !readModelsDegraded
+  const dlq = reliability?.dlqDepth ?? 0
+  const backlog = reliability?.reconciliationBacklog ?? 0
+  return (
+    <Glass><div className="p-5">
+      <PanelHeader title="Reliability & Ops" sub="Real success rate, latency, and backlog numbers from the workflow engine — never a fabricated 0 when there's no data yet." live={live} />
+      <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
+        <StatTile label="Workflow success" value={pct(reliability?.workflowSuccessRate ?? null)} tone="teal" />
+        <StatTile label="Step latency p50" value={ms(reliability?.stepLatencyMs.p50 ?? null)} />
+        <StatTile label="Step latency p95" value={ms(reliability?.stepLatencyMs.p95 ?? null)} />
+        <StatTile label="Retry rate" value={pct(reliability?.retryRate ?? null)} />
+        <StatTile label="Human intervention" value={pct(reliability?.humanInterventionRate ?? null)} />
+        <StatTile label="Receipt completeness" value={pct(reliability?.receiptCompleteness ?? null)} tone="teal" />
+        <StatTile label="Reconciliation backlog" value={String(backlog)} tone={backlog > 20 ? "amber" : "white"} />
+        <StatTile label="DLQ depth" value={String(dlq)} tone={dlq > 10 ? "rose" : "white"} />
+      </div>
+      <p className="mt-3 text-[10.5px] text-white/35">
+        {reliability ? `${reliability.stepLatencyMs.sampleSize} steps sampled over the last ${reliability.windowDays}-day window · as of ${new Date(reliability.asOf).toLocaleTimeString()}.` : "Waiting for live data."}
+      </p>
+    </div></Glass>
+  )
+}
+
 export function WorkflowsView() {
   const { rows, live } = useResource("workflows", SAMPLE_WF)
   return (
+    <div className="space-y-4">
     <Glass><div className="p-5">
       <PanelHeader title="Workflows" sub="Every customer's lifecycle as an explicit state machine — advanced automatically by executed actions." live={live} />
       <div className="space-y-4">
@@ -364,6 +418,8 @@ export function WorkflowsView() {
         {rows.length === 0 && <div className="rounded-xl border border-white/8 px-4 py-6 text-center text-sm text-white/40">No lifecycles yet — create a lead or book a water test.</div>}
       </div>
     </div></Glass>
+    <ReliabilityOpsPanel />
+    </div>
   )
 }
 
