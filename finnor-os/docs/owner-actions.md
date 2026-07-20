@@ -389,3 +389,14 @@ Tell me when you're ready to hand over AWS access (paste the admin key again, or
 two secret edits yourself in the AWS Console using the exact values above) and I'll
 finish the cutover and re-verify live, same as every other provider flip in this
 project.
+
+## 12. Phase 6 load-capacity gap — Param's decision, 2026-07-21: skip for now
+
+Asked directly which way to close the remaining Task 6.4 gap (under ~200 concurrent
+requests, database connection pooling slows down more than the pack's own target
+allows — a real architecture choice, not a config tweak): (a) a free engineering
+rework of the pooling mode, (b) pay for a bigger database tier, or (c) skip it. Param
+chose **skip for now**. Doesn't block Phase 4 credentials, dealer onboarding, or
+day-to-day use — it only matters under sustained heavy simultaneous traffic, which a
+new real dealer won't hit early on. Revisit if/when real usage approaches that scale;
+options (a) and (b) are still fully documented in `docs/load-test-2026-07-19.md`.
