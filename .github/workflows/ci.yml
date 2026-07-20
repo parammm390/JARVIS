@@ -43,6 +43,14 @@ jobs:
       - run: npm run typecheck
       - run: npm run db:migrate
       - run: npm run db:seed
+      # setup.ts's own header comment already documented this as "run once in CI right
+      # after db:migrate" -- it just never actually got added here. Local dev never hit
+      # this gap because the embedded dev Postgres data directory persists across runs,
+      # so the schema was already there from some earlier session; a truly fresh
+      # database (this runner's ephemeral container) never got it, and
+      # dealer-zero-e2e.test.ts failed on this repo's first-ever real CI run with
+      # `relation "finnor_langgraph.checkpoints" does not exist`.
+      - run: npm run setup:langgraph
       - run: npm test
       # Phase 6 (§6.3): the real dump/restore round-trip this repo's backup-restore
       # runbook documents as blocked on Postgres client tools — this runner has them

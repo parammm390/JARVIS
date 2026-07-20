@@ -6,7 +6,7 @@ import { describe, it, expect, beforeAll } from "vitest";
 import pg from "pg";
 import { migrate } from "../../packages/db/migrate";
 import { seed, SEED_TENANT_ID } from "../../packages/db/seed";
-import { embedManyCached, type EmbeddingProvider } from "@finnor/memory";
+import { embedManyCached, EMBEDDING_DIMENSIONS, type EmbeddingProvider } from "@finnor/memory";
 
 const SUPER_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
 const TENANT_B = "00000000-0000-4000-8000-000000000002";
@@ -32,7 +32,14 @@ class CountingEmbedder implements EmbeddingProvider {
   }
   async embed(text: string): Promise<number[]> {
     this.calls++;
-    return [text.length, this.calls];
+    // Real pgvector (CI, staging, prod) enforces the embedding_cache column's declared
+    // vector(1024) dimension -- a short stub vector only "worked" against local dev's
+    // jsonb fallback (no pgvector, no dimension check). Distinguish calls/texts via the
+    // first two real dimensions, zero-fill the rest to the real width.
+    const v = new Array(EMBEDDING_DIMENSIONS).fill(0);
+    v[0] = text.length;
+    v[1] = this.calls;
+    return v;
   }
 }
 
