@@ -312,19 +312,25 @@ export class FinnorOrchestrator implements Orchestrator {
   async decide(
     actionId: string,
     tenantId: string,
-    decision: "approve" | "reject",
+    decision: "approve" | "reject" | "escalate",
     decidedBy: string,
     opts?: { role?: string; note?: string | null; reason?: string | null },
   ): Promise<ExecutionResult> {
+    // Escalate is non-terminal (pending -> needs_human_review, still awaiting a
+    // human): it only ever moves a genuinely still-pending action, never one already
+    // under review (that transition is a no-op, handled by the idempotent branch
+    // below via the source-status check).
+    const fromStatuses = decision === "escalate" ? (["pending"] as const) : (["pending", "needs_human_review"] as const);
+    const toStatus = decision === "approve" ? "approved" : decision === "reject" ? "rejected" : "needs_human_review";
     const transition = await withTenant(tenantId, async (db) => {
       const [claimed] = await db
         .update(domainActions)
-        .set({ status: decision === "approve" ? "approved" : "rejected" })
+        .set({ status: toStatus })
         .where(
           and(
             eq(domainActions.id, actionId),
             eq(domainActions.tenantId, tenantId),
-            inArray(domainActions.status, ["pending", "needs_human_review"]),
+            inArray(domainActions.status, [...fromStatuses]),
           ),
         )
         .returning();
@@ -335,23 +341,34 @@ export class FinnorOrchestrator implements Orchestrator {
       await db.insert(actionLog).values({
         tenantId,
         domainActionId: actionId,
-        step: decision === "approve" ? "confirmed" : "rejected",
+        step: decision === "approve" ? "confirmed" : decision === "reject" ? "rejected" : "escalated",
         input: { by: decidedBy, ...(opts?.role ? { role: opts.role } : {}) },
         output: {
           channel: decidedBy.startsWith("voice:") ? "voice" : "console",
-          ...(decision === "approve" ? { note: opts?.note ?? null } : { reason: opts?.reason ?? null }),
+          ...(decision === "approve" ? { note: opts?.note ?? null } : decision === "reject" ? { reason: opts?.reason ?? null } : { note: opts?.note ?? null }),
         },
       });
       return { claimed, current: claimed };
     });
     if (!transition.current) return { status: "failure", output: {}, error: "Action not found" };
-    if (!transition.claimed) return { status: "success", output: { idempotent: true, status: transition.current.status } };
+    if (!transition.claimed) {
+      // For escalate specifically, an action already in needs_human_review is the
+      // correct idempotent target state, not an error.
+      if (decision === "escalate" && transition.current.status === "needs_human_review") {
+        return { status: "success", output: { idempotent: true, status: transition.current.status } };
+      }
+      return { status: "success", output: { idempotent: true, status: transition.current.status } };
+    }
     const row = transition.claimed;
     if (decision === "reject") {
       // Best-effort: close a paused graph thread so it doesn't dangle waiting for a
       // resume that will never come. Never blocks the reject itself.
       await this.executor.close?.(actionId, tenantId, row.actionType).catch(() => undefined);
       return { status: "success", output: { rejected: true } };
+    }
+    if (decision === "escalate") {
+      // Stays open for a human, no executor thread to close, nothing to run yet.
+      return { status: "success", output: { escalated: true } };
     }
     return this.runAction(actionId, tenantId, decidedBy);
   }

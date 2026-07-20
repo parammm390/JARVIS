@@ -999,6 +999,7 @@ export const decisionReceipts = pgTable(
   (t) => [
     unique("decision_receipts_step_idx").on(t.workflowStepId),
     index("decision_receipts_tenant_created_idx").on(t.tenantId, t.createdAt),
+    index("decision_receipts_domain_action_idx").on(t.domainActionId),
   ],
 );
 

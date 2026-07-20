@@ -30,6 +30,11 @@ import { GET as integrationsStatusGET } from "../../apps/api/app/api/integration
 import { GET as auditGET } from "../../apps/api/app/api/audit/route";
 import { GET as eventsGET } from "../../apps/api/app/api/events/route";
 import { POST as actionsPOST } from "../../apps/api/app/api/actions/route";
+import { GET as meGET } from "../../apps/api/app/api/me/route";
+import { GET as receiptsListGET } from "../../apps/api/app/api/receipts/route";
+import { GET as receiptByIdGET } from "../../apps/api/app/api/receipts/[id]/route";
+import { POST as escalatePOST } from "../../apps/api/app/api/actions/[id]/escalate/route";
+import { GET as overviewGET } from "../../apps/api/app/api/overview/route";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
 const TENANT_B = "00000000-0000-4000-8000-0000000000f1";
@@ -113,6 +118,25 @@ describe.skipIf(!available)("authz test wall (Phase 1.8)", () => {
     it("actions (POST)", async () => {
       const res = await actionsPOST(new Request("http://localhost/api/actions", { method: "POST", body: "{}" }));
       expect(res.status).toBe(401);
+    });
+    it("me (Phase 7.4 role lookup)", async () => {
+      expect((await meGET(anonReq())).status).toBe(401);
+    });
+    it("receipts (list, Phase 7.1/7.3)", async () => {
+      expect((await receiptsListGET(anonReq("http://localhost/api/receipts?domainActionId=00000000-0000-4000-8000-000000000000"))).status).toBe(401);
+    });
+    it("receipts/:id (Phase 7.3)", async () => {
+      const res = await receiptByIdGET(anonReq(), { params: { id: "00000000-0000-4000-8000-000000000000" } });
+      expect(res.status).toBe(401);
+    });
+    it("actions/:id/escalate (Phase 7.1)", async () => {
+      const res = await escalatePOST(new Request("http://localhost/api/test", { method: "POST", body: "{}" }), {
+        params: { id: "00000000-0000-4000-8000-000000000000" },
+      });
+      expect(res.status).toBe(401);
+    });
+    it("overview (Phase 7.6 daily briefing)", async () => {
+      expect((await overviewGET(anonReq())).status).toBe(401);
     });
   });
 

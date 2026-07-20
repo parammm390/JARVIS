@@ -63,6 +63,10 @@ export const RejectActionSchema = z.object({
   reason: z.string().max(2000).optional(),
 });
 
+export const EscalateActionSchema = z.object({
+  note: z.string().max(2000).optional(),
+});
+
 export const UpsertPolicySchema = z.object({
   policy: z.record(z.unknown()),
   requiresConfirmation: z.boolean(),
