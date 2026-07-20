@@ -24,6 +24,7 @@ import { learningDigest } from "./handlers/learning-digest";
 import { scanApprovalExpiry } from "./handlers/scan-approval-expiry";
 import { simulatorTick } from "./handlers/simulator-tick";
 import { scanReliabilityAlerts } from "./handlers/scan-reliability-alerts";
+import { dailyScorecard } from "./handlers/daily-scorecard";
 import { startScheduler, type ScheduledScan } from "./scheduler";
 
 export function createWorker(): JobQueue {
@@ -48,6 +49,7 @@ export function createWorker(): JobQueue {
   queue.register("scan_approval_expiry", scanApprovalExpiry);
   queue.register("simulator_tick", simulatorTick);
   queue.register("scan_reliability_alerts", scanReliabilityAlerts);
+  queue.register("daily_scorecard", dailyScorecard);
   return queue;
 }
 
@@ -79,6 +81,10 @@ const PROACTIVE_SCANS: ScheduledScan[] = [
   // independent, so in practice it reads whatever's accumulated in scan_findings by
   // the time its own daily window rolls over, which is close enough for a v1 digest.
   { type: "owner_digest", intervalHours: 24, payload: (tenantId) => ({ tenantId }) },
+  // Phase 8 (§8.3): the 30-day certification's daily readiness row. Runs after the
+  // scans above have had their own daily window to complete for the day, same
+  // "close enough for a v1" reasoning as owner_digest.
+  { type: "daily_scorecard", intervalHours: 24, payload: (tenantId) => ({ tenantId }) },
 ];
 
 const isMain = process.argv[1]?.endsWith("index.ts") || process.argv[1]?.endsWith("index.js");

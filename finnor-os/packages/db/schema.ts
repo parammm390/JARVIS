@@ -12,6 +12,8 @@ import {
   vector,
   index,
   unique,
+  real,
+  date,
 } from "drizzle-orm/pg-core";
 import { money, provenanceColumns, archivable, bytea } from "./columns";
 
@@ -1120,3 +1122,49 @@ export const tenantPhoneNumbers = pgTable("tenant_phone_numbers", {
   label: text("label"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// Phase 8 (§8.3): the daily scorecard. One row per tenant per calendar day, computed
+// from the same reliability() read-model every hourly alert scan already uses — never
+// a second, divergent computation. Rates are nullable (never a fabricated 0 for an
+// empty denominator, matching reliability()'s own convention); the two backlog gauges
+// are NOT nullable since they're always a real count, even when 0.
+export const readinessLog = pgTable(
+  "readiness_log",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    logDate: date("log_date").notNull(),
+    workflowSuccessRate: real("workflow_success_rate"),
+    stepLatencyP95Ms: integer("step_latency_p95_ms"),
+    retryRate: real("retry_rate"),
+    humanInterventionRate: real("human_intervention_rate"),
+    reconciliationBacklog: integer("reconciliation_backlog").notNull(),
+    dlqDepth: integer("dlq_depth").notNull(),
+    receiptCompleteness: real("receipt_completeness"),
+    incidentNotes: text("incident_notes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique("readiness_log_tenant_date_idx").on(t.tenantId, t.logDate)],
+);
+
+// Phase 8 (§8.2): the failure-injection calendar's real log — every deliberate chaos
+// injection run against production/Dealer Zero, with its own detection/recovery
+// timestamps and receipt trail, not just a line in a doc.
+export const failureInjections = pgTable(
+  "failure_injections",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    kind: text("kind", {
+      enum: ["worker_kill", "webhook_replay", "provider_egress_block", "approval_expiry_pileup", "secrets_store_hiccup", "deploy_mid_workflow"],
+    }).notNull(),
+    injectedAt: timestamp("injected_at", { withTimezone: true }).notNull().defaultNow(),
+    detectedAt: timestamp("detected_at", { withTimezone: true }),
+    recoveredAt: timestamp("recovered_at", { withTimezone: true }),
+    outcome: text("outcome", { enum: ["pass", "fail", "inconclusive"] }),
+    detail: jsonb("detail").notNull().default({}),
+    receiptIds: jsonb("receipt_ids").notNull().default([]),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("failure_injections_tenant_injected_idx").on(t.tenantId, t.injectedAt)],
+);

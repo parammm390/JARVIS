@@ -15,6 +15,8 @@ import {
   dataQuality,
   household360,
   reliability,
+  readinessTrend,
+  failureInjectionLog,
 } from "@finnor/read-models";
 
 const VIEWS: Record<string, (tenantId: string, searchParams: URLSearchParams) => Promise<unknown>> = {
@@ -35,6 +37,13 @@ const VIEWS: Record<string, (tenantId: string, searchParams: URLSearchParams) =>
     if (!householdId) throw new AuthError("householdId query param required", 400);
     return household360(tenantId, householdId);
   },
+  // Phase 8 (§8.3): the 30-day certification trend the cockpit's scorecard panel reads.
+  "readiness": (tenantId, searchParams) => {
+    const days = Number(searchParams.get("days") ?? 30);
+    return readinessTrend(tenantId, Number.isFinite(days) && days > 0 ? days : 30);
+  },
+  // Phase 8 (§8.2): the failure-injection calendar's real log.
+  "failure-injections": (tenantId) => failureInjectionLog(tenantId),
 };
 
 export async function GET(req: Request, { params }: { params: { view: string } }): Promise<Response> {

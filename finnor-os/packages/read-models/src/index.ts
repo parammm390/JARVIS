@@ -36,8 +36,10 @@ import {
   domainActions,
   decisionReceipts,
   deadLetters,
+  readinessLog,
+  failureInjections,
 } from "@finnor/db";
-import { and, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { performance } from "node:perf_hooks";
 
 export interface PipelineHealth {
@@ -608,4 +610,74 @@ export async function reliability(tenantId: string, windowDays = 1): Promise<Rel
       asOf: new Date().toISOString(),
     };
   });
+}
+
+// Phase 8 (§8.3): the daily scorecard trend the cockpit renders. Reads back exactly
+// what apps/worker/src/handlers/daily-scorecard.ts wrote — this function never
+// recomputes anything itself, it's a plain read of the historical log.
+export interface ReadinessDay {
+  logDate: string;
+  workflowSuccessRate: number | null;
+  stepLatencyP95Ms: number | null;
+  retryRate: number | null;
+  humanInterventionRate: number | null;
+  reconciliationBacklog: number;
+  dlqDepth: number;
+  receiptCompleteness: number | null;
+  incidentNotes: string | null;
+}
+
+export async function readinessTrend(tenantId: string, days = 30): Promise<ReadinessDay[]> {
+  const rows = await withTenant(tenantId, (db) =>
+    db
+      .select({
+        logDate: readinessLog.logDate,
+        workflowSuccessRate: readinessLog.workflowSuccessRate,
+        stepLatencyP95Ms: readinessLog.stepLatencyP95Ms,
+        retryRate: readinessLog.retryRate,
+        humanInterventionRate: readinessLog.humanInterventionRate,
+        reconciliationBacklog: readinessLog.reconciliationBacklog,
+        dlqDepth: readinessLog.dlqDepth,
+        receiptCompleteness: readinessLog.receiptCompleteness,
+        incidentNotes: readinessLog.incidentNotes,
+      })
+      .from(readinessLog)
+      .where(eq(readinessLog.tenantId, tenantId))
+      .orderBy(desc(readinessLog.logDate))
+      .limit(days),
+  );
+  return rows;
+}
+
+// Phase 8 (§8.2): the failure-injection calendar's real log, newest first.
+export interface FailureInjectionRow {
+  id: string;
+  kind: string;
+  injectedAt: string;
+  detectedAt: string | null;
+  recoveredAt: string | null;
+  outcome: string | null;
+  detail: unknown;
+  receiptIds: unknown;
+}
+
+export async function failureInjectionLog(tenantId: string, limit = 50): Promise<FailureInjectionRow[]> {
+  const rows = await withTenant(tenantId, (db) =>
+    db
+      .select({
+        id: failureInjections.id,
+        kind: failureInjections.kind,
+        injectedAt: failureInjections.injectedAt,
+        detectedAt: failureInjections.detectedAt,
+        recoveredAt: failureInjections.recoveredAt,
+        outcome: failureInjections.outcome,
+        detail: failureInjections.detail,
+        receiptIds: failureInjections.receiptIds,
+      })
+      .from(failureInjections)
+      .where(eq(failureInjections.tenantId, tenantId))
+      .orderBy(desc(failureInjections.injectedAt))
+      .limit(limit),
+  );
+  return rows.map((r) => ({ ...r, injectedAt: r.injectedAt.toISOString(), detectedAt: r.detectedAt?.toISOString() ?? null, recoveredAt: r.recoveredAt?.toISOString() ?? null }));
 }

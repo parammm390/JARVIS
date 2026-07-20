@@ -32,6 +32,7 @@ import { DailyBriefing } from "./panels/DailyBriefing"
 import { DegradedBanner } from "./panels/DegradedBanner"
 import { DataQualityQueue } from "./panels/DataQualityQueue"
 import { DlqBrowser } from "./panels/DlqBrowser"
+import { CertificationStatus } from "./panels/CertificationStatus"
 import { DispatcherBoard } from "./panels/DispatcherBoard"
 import { TechnicianBoard } from "./panels/TechnicianBoard"
 import { CommsFeed } from "./panels/CommsFeed"
@@ -111,6 +112,9 @@ function CommandCenterHome({
       <div key={`${igniteKey}-4b`} className="jarvis-rise grid grid-cols-1 gap-4 xl:grid-cols-2" style={delay(4)}>
         <DataQualityQueue />
         <DlqBrowser />
+      </div>
+      <div key={`${igniteKey}-4c`} className="jarvis-rise" style={delay(4)}>
+        <CertificationStatus />
       </div>
       <div key={`${igniteKey}-5`} className="jarvis-rise" style={delay(5)}>
         <CommandBar session={session} prefill={prefill} />

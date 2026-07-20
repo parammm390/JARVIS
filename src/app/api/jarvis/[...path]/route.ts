@@ -23,6 +23,8 @@ const READ_MODEL_VIEWS = new Set([
   "data-quality",
   "household-360",
   "reliability",
+  "readiness",
+  "failure-injections",
 ])
 const RESOURCE_KINDS = new Set(["households", "inventory", "invoices", "technicians", "visits", "compliance-policy", "workflows"])
 
