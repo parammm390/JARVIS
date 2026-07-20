@@ -310,11 +310,16 @@ API, which is outside Railway's private network and can only reach Postgres via 
 *public* TCP proxy — and creating one is dashboard-only; confirmed by introspecting
 Railway's own GraphQL API schema (only a `tcpProxyDelete` mutation exists, no create).
 
-**To finish this (one click, your existing Railway account, ~30 seconds):**
-1. railway.app dashboard → project `imaginative-enchantment` → the `pgbouncer` service
-   → Settings → Networking → "Generate Domain" / enable a public TCP proxy.
-2. Tell me the resulting public host:port and I'll point the Vercel staging API at it
-   and re-run the load test to confirm it actually fixes the failure rate.
+**DONE, 2026-07-20 — you enabled the public TCP proxy, I wired it in and re-tested.**
+Fixed a real code bug it exposed (the app's SSL heuristic didn't know this new public
+domain was safe to skip SSL for — extended via an explicit `sslmode=disable` override,
+not a hardcoded hostname), pointed staging's API at it, and found a *second* real
+bottleneck: PgBouncer's pool size (20) was far below the load test's concurrency.
+Raised it to 60 (real Postgres headroom checked first — `max_connections=100`, ~29
+already in use). A reduced-scale re-run went from 40% to 76% success after the pool
+bump — real, measured, verified improvement, not a full fix yet (the full 200-VU pack
+scenario wasn't re-run at full scale this session — see `docs/load-test-2026-07-19.md`
+for the exact numbers and honest scoping). Nothing further needed from you here.
 
 **Postgres client tools for the FULL production restore drill** — the CI-tier drill
 (dump/restore against CI's own ephemeral Postgres) is wired and described in
@@ -327,19 +332,10 @@ company, or anything beyond an email address and (for AWS/Railway/Vercel scale-u
 only) a payment method for genuinely small recurring costs — same framing as Phase 4's
 own owner-actions section.
 
-## 10. Railway CI deploy token, for Task 6.7's auto-deploy-to-staging job
+## 10. ~~Railway CI deploy token~~ — DONE, 2026-07-20
 
-`.github/workflows/ci.yml` now has a `deploy-staging` job (runs after tests pass, only
-on pushes to `main`) that deploys `apps/worker` to the real staging worker
-(`finnor-worker-staging`, project `imaginative-enchantment`) automatically. It needs a
-GitHub Actions secret it doesn't have yet:
-
-1. Railway dashboard → project `imaginative-enchantment` → Settings → Tokens → create a
-   new **project token** (not an account token — scope it to this one project).
-2. GitHub → this repo's Settings → Secrets and variables → Actions → New repository
-   secret → name it `RAILWAY_STAGING_TOKEN`, paste the token value.
-
-GitHub Actions' own outage (§2) has cleared and CI is running for real now — confirmed
-by watching this exact job run and fail with `Not signed in. → Run railway login to
-authenticate` because `RAILWAY_TOKEN` was empty. That's the one and only thing left:
-add the secret above and the next push to `main` will deploy for real.
+You provided the project token; set as the GitHub Actions secret `RAILWAY_STAGING_TOKEN`
+(via the GitHub API, encrypted with the repo's public key the same way `gh`/the web UI
+would). `.github/workflows/ci.yml`'s `deploy-staging` job now has everything it needs —
+the next push to `main` will deploy `apps/worker` to `finnor-worker-staging` for real.
+Nothing further needed from you here.

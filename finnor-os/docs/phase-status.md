@@ -105,10 +105,13 @@ Status: GATE-GREEN
 Full finnor-os suite: 558/561 pass (3 skipped, real provider creds), run twice consecutively across most tasks for stability, typecheck clean throughout every task.
 
 ## Phase 6 — Ops-grade platform
-Status: in-progress (NOT gate-green — every task that's pure engineering is done and
-deployed; every task requiring new real infrastructure/accounts is owner-blocked, same
-honest shape as Phase 4. See `owner-actions.md` §9 for exact, already-verified signup
-steps — none require a registered business.)
+Status: in-progress (NOT gate-green, but every owner-blocked item is now resolved as of
+2026-07-20 — the public TCP proxy and the Railway CI token were the last two, both
+done. What remains is pure engineering: the load test measurably improved [40%→76%
+success at reduced scale] after the proxy+pool-size fix but hasn't been re-run at the
+pack's full 200-VU scale, and Task 6.5's chaos-on-real-staging tier is still local/CI
+only. See `docs/load-test-2026-07-19.md`'s 2026-07-20 update and `owner-actions.md` §9
+for the full detail.)
 
 **Entry check:** Phases 1-3 GATE-GREEN, confirmed (4/5 in-progress per the pack's own
 allowance for this phase to interleave). Spot-checked Phase 2's exit gate by re-running
