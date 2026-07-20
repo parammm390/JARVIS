@@ -44,21 +44,32 @@ jobs:
       # TEST_OWNER_EMAIL/TEST_OWNER_PASSWORD secret configured yet — see
       # finnor-os/docs/owner-actions.md for why a real credential isn't faked);
       # jarvis-public.spec.ts's 10 tests run for real.
-      - run: npm run start &
-        env:
-          PORT: 3000
-      - run: npx wait-on http://localhost:3000 --timeout 60000
-      - name: Run Playwright e2e (list reporter also written to the job summary for public visibility)
+      #
+      # Start+wait+test all in ONE step, deliberately: `npm run start &` in its own
+      # separate `run:` step looked right (that step even reported success, and a
+      # follow-on `wait-on` step confirmed the server up) but a background process's
+      # parent shell exits when its OWN step finishes — GitHub Actions can reap
+      # backgrounded children at that point, so by the time a later step's new shell
+      # actually ran the tests, the server was gone. Real, previously-unverified
+      # gotcha, not a guess: every prior CI failure here showed page content simply
+      # never appearing (timeouts on real assertions), consistent with every test
+      # hitting a dead server, not a rendering/timing problem. One step keeps the
+      # server's parent process alive for the server's entire real lifetime.
+      - name: Start server, wait for it, run Playwright e2e (list reporter also written to the job summary)
         env:
           PLAYWRIGHT_BASE_URL: http://localhost:3000
           TEST_OWNER_EMAIL: ${{ secrets.TEST_OWNER_EMAIL }}
           TEST_OWNER_PASSWORD: ${{ secrets.TEST_OWNER_PASSWORD }}
         run: |
           set -o pipefail
+          npm run start &
+          server_pid=$!
+          npx wait-on http://localhost:3000 --timeout 60000
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           npx playwright test --reporter=list 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
           status=$?
           echo '```' >> "$GITHUB_STEP_SUMMARY"
+          kill "$server_pid" 2>/dev/null || true
           exit $status
       - uses: actions/upload-artifact@v4
         if: always()
