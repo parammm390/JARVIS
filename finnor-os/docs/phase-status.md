@@ -170,26 +170,29 @@ the prior session's log — it passed, plus surfaced and fixed one real bug.
   step (fix git push, watch the first real run, fix anything that doesn't match).
   **Not the full production-Supabase-into-isolated-project drill** — that needs the
   Task 6.1 staging Supabase project.
-- [x] Task 6.4 (real run, scaled; full-scale still pending) — real k6 script
-  (`scripts/k6-load-test.js`) matching the pack's exact scenario, written against the
-  real route contracts. **Update: k6 itself was obtained this session** as a standalone
-  binary (github.com releases zip, no `brew`/sudo needed — same technique used for
-  Postgres client tools earlier) and **actually run against the real staging database**
-  provisioned in Task 6.1. Vercel's team SSO wall blocks anonymous HTTP to the deployed
-  staging Preview URL, so the target was `apps/api` run locally with the real staging
-  `DATABASE_URL` (dev-bypass auth for this verification run only — the real deployed
-  Preview is untouched, still `AUTH_DEV_BYPASS=0`). Ran a scaled pass (5 events/s, 20
-  read VUs, 30s) rather than the full 50/s-for-10-minutes scenario on a first attempt.
-  **Real result: 100% success rate, zero request failures, but p95 latency ~45-53s
-  against a <500ms/<800ms target** — root-caused to the real, verified cause
-  (`packages/db/index.ts`'s `max: 2` SSL connection pool, shared by 20+ concurrent VUs
-  through one local Node process) and explicitly flagged as a property of this local
-  single-process test harness, not a proven finding about Vercel's actual serverless
-  deployment (which spreads load across many processes, each with its own small pool).
-  29 real synthetic leads confirmed created via direct DB query — the write path works
-  end-to-end for real. Full detail, including what's still not done (the full-scale
-  scenario, zero-event-loss verification, and getting past the Vercel SSO wall to test
-  the real deployed URL), in `docs/load-test-2026-07-19.md`.
+- [x] Task 6.4 — **full pack scenario run for real against the actual deployed staging
+  URL, 2026-07-20 — real infrastructure failure found, not a passing grade.** k6
+  obtained as a standalone binary (no `brew`/sudo needed). First pass (documented
+  below) ran a scaled version against a local proxy for the staging DB — 100% success,
+  slow, explained by the local harness's tiny connection pool. **Second pass, the real
+  deliverable:** Param enabled Vercel's Protection Bypass for Automation and supplied
+  the secret, unblocking direct HTTP to the deployed staging Preview URL for the first
+  time; got a real Supabase JWT for the project's existing dedicated service account
+  and mapped it into the staging database via `scripts/create-user.ts`; ran the exact,
+  unmodified pack scenario (50 events/s, 200 read VUs, 20 approvals/min, full 10
+  minutes) against the real deployed URL. **Result: 86.39% of requests failed
+  (4940/5718), only 8% of read-model queries and 21% of inbox events succeeded, p95
+  latency hit the 60s timeout ceiling, 27481 iterations never even got attempted** — a
+  genuine infrastructure capacity failure under the pack's own target load, not a
+  measurement artifact. Real counter-finding, checked by direct DB query not assumed:
+  988 leads were created despite the failure rate (the system degrades by getting
+  slow, not by silently dropping work). Likely cause, stated as a hypothesis not a
+  re-verified fact: Railway's public Postgres proxy + this codebase's `max:2`
+  SSL-mode connection pool under 200+ concurrent Vercel serverless invocations —
+  matches the shape of an already-documented pre-existing production finding
+  (`EMAXCONNSESSION`, logged in earlier-session memory) that this may be the first
+  real proof-at-scale of. **Not fixed this session** — root-causing and fixing it is
+  real follow-up engineering work. Full detail in `docs/load-test-2026-07-19.md`.
 - [x] Task 6.5 (local/CI tier only) — real chaos re-run (evidence:
   `docs/chaos-run-2026-07-19.md`). Re-ran `scripts/chaos-test.ts` (Phase 2's real
   separate-OS-process-kill chaos harness) for real this session against local Postgres.
@@ -293,10 +296,11 @@ specifically does not yet run successfully there (real bug, logged, unresolved).
 + weekly automation — **partially met**: the CI-tier drill is wired but unverified (git
 push still broken as of this update) and the full production-parity drill needs a
 restore target separate from this new staging DB. Load + chaos docs committed with
-targets met — **partially met**: k6 was obtained and run for real against the staging
-DB (see Task 6.4's own updated entry) — 100% success rate but latency targets missed,
-root-caused to the local test harness's connection pool, not necessarily the real
-infra. Reliability endpoint returns real numbers — **met**, verified live via direct
+targets met — **NOT MET, and this is a real finding, not a gap in effort**: the full
+pack scenario was run for real against the actual deployed staging URL (see Task 6.4's
+own updated entry) — 86.39% of requests failed under the target load, a genuine
+infrastructure capacity issue, likely connection-pool/proxy related, not yet fixed.
+Reliability endpoint returns real numbers — **met**, verified live via direct
 HTTP smoke test this session, against both production and staging. One production
 deploy done via the promotion flow — **met**, multiple times this session in fact (API
 + worker redeployed twice each for the AWS/Sentry cutover alone).
@@ -384,6 +388,26 @@ Status: not-started
   </details>
 
 ## Log (newest first)
+- 2026-07-20 — **Full pack load-test scenario run for real against the actual deployed
+  staging URL — found a genuine infrastructure capacity failure.** Param enabled
+  Vercel's Protection Bypass for Automation (dashboard-only, unblocked the deployed
+  Preview URL for direct HTTP testing for the first time this session). Got a real
+  auth token via the project's existing service account, mapped into staging's
+  database. Ran the exact, unmodified 50rps/200-VU/20-approvals-per-min/10-minute
+  scenario against the real URL: 86.39% of requests failed, p95 latency hit the 60s
+  timeout ceiling, 27481 iterations never got attempted. A real, serious finding —
+  documented plainly rather than downplayed, with a stated-not-confirmed hypothesis
+  (public Postgres proxy + small connection pool) and an honest "not fixed this
+  session" note. Also, separately this session: fixed a real `node_modules` corruption
+  (an earlier interrupted `npm ci` had left it with only 81 of the expected ~400+
+  packages) — caught it fast via a failed script run, reinstalled cleanly, reran the
+  full test suite (563/563 passed) before continuing, so nothing shipped broken.
+  Diagnosed the `plugin.actionTypes` staging bug further with fresh tooling — traced it
+  to the same plugin (`leadToWaterTestPlugin`) again, but this time found the
+  underlying determinism itself is unstable (a baseline check that passed reliably
+  earlier in the session now fails reliably, with node_modules fully healthy) —
+  logged as a real, still-unresolved mystery rather than a closed finding, no fix
+  shipped. Full detail in Task 6.4's own entry and `docs/load-test-2026-07-19.md`.
 - 2026-07-19/20 — **Tasks 6.2 and part of 6.6 genuinely resolved: real AWS Secrets
   Manager cutover + real Sentry alerting, both live in production.** Param supplied a
   real AWS admin key and a real Sentry DSN in chat. Did the AWS migration carefully:

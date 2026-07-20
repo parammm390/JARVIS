@@ -96,14 +96,23 @@ export const options = {
   },
 };
 
+// Vercel's team-level deployment protection (SSO wall) sits in front of every
+// non-custom-domain deployment, including Preview URLs — separate from the app's own
+// auth. VERCEL_BYPASS_SECRET is the "Protection Bypass for Automation" secret from the
+// project's dashboard settings; sent on every request when set, no-op otherwise (e.g.
+// against production's custom domain, which isn't behind this wall).
+function vercelBypassHeaders() {
+  return __ENV.VERCEL_BYPASS_SECRET ? { "x-vercel-protection-bypass": __ENV.VERCEL_BYPASS_SECRET } : {};
+}
+
 function authHeaders() {
   // AUTH_MODE=devbypass is for local/dev-bypass verification runs only (matches this
   // repo's own AUTH_DEV_BYPASS convention) — real staging/production runs always use a
   // real bearer token, never this branch.
   if (__ENV.AUTH_MODE === "devbypass") {
-    return { "x-tenant-id": TENANT_ID, "x-user-role": "owner", "Content-Type": "application/json" };
+    return { "x-tenant-id": TENANT_ID, "x-user-role": "owner", "Content-Type": "application/json", ...vercelBypassHeaders() };
   }
-  return { Authorization: `Bearer ${AUTH_BEARER_TOKEN}`, "Content-Type": "application/json" };
+  return { Authorization: `Bearer ${AUTH_BEARER_TOKEN}`, "Content-Type": "application/json", ...vercelBypassHeaders() };
 }
 
 export function inboxEvent() {
@@ -116,7 +125,7 @@ export function inboxEvent() {
     phone: `+1999${String(Math.floor(Math.random() * 9_000_000) + 1_000_000)}`,
   });
   const res = http.post(`${BASE_URL}/api/webhooks/marketing`, payload, {
-    headers: { "Content-Type": "application/json", "x-webhook-secret": MARKETING_WEBHOOK_SECRET },
+    headers: { "Content-Type": "application/json", "x-webhook-secret": MARKETING_WEBHOOK_SECRET, ...vercelBypassHeaders() },
   });
   inboxAckDuration.add(res.timings.duration);
   check(res, { "inbox event accepted (200/201)": (r) => r.status === 200 || r.status === 201 });

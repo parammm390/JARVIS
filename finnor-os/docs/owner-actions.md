@@ -296,18 +296,20 @@ Alert Rule, condition "an event's message contains `reliability_alert:`", action
 your choice (email/Slack/etc.) — a dashboard config step only you can do; tell me if you
 want the exact rule conditions written out.
 
-**k6 CLI (Task 6.4) — RESOLVED 2026-07-19/20, obtained and run for real.** Downloaded as
-a standalone binary (github.com/grafana/k6 releases, no `brew`/sudo/account needed) and
-run against the real staging database — see `docs/load-test-2026-07-19.md` for the real
-results (100% success rate, latency far outside target, root-caused to the local test
-harness's small connection pool). Still not done: the full 50rps/10-minute scenario, and
-getting past Vercel's team SSO wall to test the actual deployed staging URL directly
-instead of a local proxy for its database — that one's a real gap, not owner-blocked in
-the account-creation sense, just not solved (Vercel's Protection Bypass for Automation
-is dashboard-only, no API path exists — confirmed against their own docs this session).
-If you want that path unblocked: Vercel dashboard → `api` project → Settings →
-Deployment Protection → enable "Protection Bypass for Automation" → it generates a
-secret automatically → paste it in chat and I'll use it.
+**k6 CLI + full-scale load test — RESOLVED 2026-07-20, obtained, run for real, and
+found a real problem.** Downloaded as a standalone binary (no `brew`/sudo/account
+needed). You enabled Vercel's "Protection Bypass for Automation" and gave me the
+secret, which unblocked the actual deployed staging URL for the first time. Ran the
+exact full pack scenario (50 events/s, 200 read VUs, 20 approvals/min, 10 minutes)
+against it for real. **Result: 86.39% of requests failed under that load** — a real
+infrastructure capacity problem, not a test artifact (likely Railway's public Postgres
+proxy + this codebase's small SSL connection pool under 200+ concurrent Vercel
+invocations, though not re-confirmed with a dedicated diagnostic pass). See
+`docs/load-test-2026-07-19.md` for full detail. **This needs real follow-up
+engineering** (most likely: a connection pooler between the app and Postgres, or a
+private network path instead of the public proxy) — not something resolved by an
+owner action, flagging it here mainly so it's visible next to everything else that
+got closed out this session.
 
 **Postgres client tools for the FULL production restore drill** — the CI-tier drill
 (dump/restore against CI's own ephemeral Postgres) is wired and described in
