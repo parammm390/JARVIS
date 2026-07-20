@@ -339,3 +339,53 @@ You provided the project token; set as the GitHub Actions secret `RAILWAY_STAGIN
 would). `.github/workflows/ci.yml`'s `deploy-staging` job now has everything it needs —
 the next push to `main` will deploy `apps/worker` to `finnor-worker-staging` for real.
 Nothing further needed from you here.
+
+## 11. Flip production DATABASE_URL to the new least-privilege role (Phase 8, §8.1)
+
+**One remaining step, entirely mine to do once you hand over AWS write access — you
+chose to skip it for 2026-07-21, this is ready whenever you are.**
+
+Real background: production's database connection has always used a full-access
+("owner") account. Every table already has row-level security turned on — but Postgres
+only actually enforces that against a *restricted* account, not the owner account
+itself. So today, the app's own code is the only thing stopping one customer's data
+from being visible to another (verified this is done correctly everywhere), but the
+database's second layer of protection isn't independently backing that up.
+
+**Already done, verified against production directly, nothing more needed here:**
+- Created a new, restricted database login (`finnor_app`) with real Postgres grants —
+  it can read/write the app's own data, but cannot create or alter tables, and cannot
+  see any tenant's data unless the request explicitly says which tenant it's for.
+- Proved it live: connected as this new login and confirmed (a) with no tenant
+  specified, it sees zero rows; (b) with the real tenant specified, it sees that
+  tenant's real data (119 households); (c) with a different tenant specified, still
+  zero rows — genuine cross-tenant isolation, not assumed; (d) attempting to create a
+  table as this login is rejected outright.
+- Committed migration `0032_least_privilege_app_role.sql` so this is reproducible in
+  any future environment (staging, a second dealer's database, etc.), not a one-off.
+
+**What's left, needs AWS Secrets Manager write access (the `JARVIS-claude` admin login
+from Task 9's original setup, or the AWS Console directly):**
+1. Add a new secret `finnor/prod/migrations-database-url` = the CURRENT (owner-level)
+   `DATABASE_URL` value — this becomes the connection used only by the one-off
+   `/api/admin/migrate` endpoint going forward, since that endpoint needs real
+   table-creation rights and the new restricted login deliberately doesn't have them.
+   (Code already updated to prefer this variable when present — see
+   `apps/api/app/api/admin/migrate/route.ts`.)
+2. Update the existing secret `finnor/prod/database-url` to the NEW restricted
+   connection string (the `finnor_app` login created above) — this is what the app
+   uses for every normal request from that point on.
+3. Add `MIGRATIONS_DATABASE_URL` to the `FINNOR_SECRET_IDS` mapping (plain Vercel env
+   var, not itself a secret — just tells the app which AWS secret name maps to which
+   env var, same pattern the existing 7 entries already use).
+4. Redeploy `api` (Vercel) and `finnor-worker` (Railway) — both read secrets from the
+   same AWS store.
+5. Verify live: `setup/status` still 200, a real signed-in request to
+   `resources/households` still returns real data, anonymous still 401, and one
+   `/api/admin/migrate` call still succeeds (proving the new `MIGRATIONS_DATABASE_URL`
+   path works).
+
+Tell me when you're ready to hand over AWS access (paste the admin key again, or do the
+two secret edits yourself in the AWS Console using the exact values above) and I'll
+finish the cutover and re-verify live, same as every other provider flip in this
+project.
