@@ -388,6 +388,23 @@ Status: not-started
   </details>
 
 ## Log (newest first)
+- 2026-07-20 — **GitHub push fixed for real (repo now `parammm390/JARVIS`, real token
+  with `repo` scope); found and fixed the actual reason CI never ran (`.github/
+  workflows/ci.yml` was nested at `finnor-os/.github/workflows/`, but GitHub Actions
+  only discovers workflows at the true repo root — moved it, a structural bug
+  predating this session, not just a credential issue); GitHub itself hit a live
+  "Minor Service Outage" (confirmed via githubstatus.com) blocking verification of the
+  first real CI run — external, not fixable by either of us. Also: deployed a real
+  PgBouncer connection pooler into staging, found and fixed two real bugs (IPv6 bind,
+  SSL mismatch — the second required a real code change in `packages/db/index.ts`,
+  tested against the full suite before use), verified 3 real jobs complete
+  successfully through it — but honestly scoped: this fixes the worker's connection
+  reliability, not the actual 86%-failure load-test finding, which needs a public TCP
+  proxy Railway's API doesn't expose (confirmed via GraphQL schema introspection —
+  only `tcpProxyDelete` exists, no create mutation). Two live staging-worker outages
+  during this work, both self-caught within seconds via log monitoring and rolled back
+  immediately — never left broken, never touched production. Full detail in Task 6.3/
+  6.7's entries, `docs/load-test-2026-07-19.md`, and `owner-actions.md`.
 - 2026-07-20 — **Full pack load-test scenario run for real against the actual deployed
   staging URL — found a genuine infrastructure capacity failure.** Param enabled
   Vercel's Protection Bypass for Automation (dashboard-only, unblocked the deployed
