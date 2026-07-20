@@ -1,0 +1,22 @@
+
+Running 16 tests using 2 workers
+
+  -   1 [desktop-chromium] › e2e/jarvis-authenticated.spec.ts:27:7 › authenticated cockpit flow › daily briefing renders real numbers and a Why? link works
+  -   2 [desktop-chromium] › e2e/jarvis-authenticated.spec.ts:34:7 › authenticated cockpit flow › approving a pending action removes it from the inbox
+  -   3 [desktop-chromium] › e2e/jarvis-authenticated.spec.ts:45:7 › authenticated cockpit flow › a live workflow run's drawer opens and shows its steps
+  ✓   5 [desktop-chromium] › e2e/jarvis-public.spec.ts:78:7 › public /jarvis page › sidebar nav and command bar are present (1.6s)
+  ✓   4 [desktop-chromium] › e2e/jarvis-public.spec.ts:60:7 › public /jarvis page › loads, shows a live-ops status, and throws no unexpected console errors (1.8s)
+  ✓   6 [desktop-chromium] › e2e/jarvis-public.spec.ts:84:7 › public /jarvis page › logged out visitors see a sign-in affordance, not live private data (1.1s)
+  ✓   7 [desktop-chromium] › e2e/jarvis-public.spec.ts:96:7 › technician mobile viewport (375px) › public page renders (mobile nav layout) with no horizontal overflow (999ms)
+  -   9 [mobile-375] › e2e/jarvis-authenticated.spec.ts:27:7 › authenticated cockpit flow › daily briefing renders real numbers and a Why? link works
+  -  10 [mobile-375] › e2e/jarvis-authenticated.spec.ts:34:7 › authenticated cockpit flow › approving a pending action removes it from the inbox
+  -  11 [mobile-375] › e2e/jarvis-authenticated.spec.ts:45:7 › authenticated cockpit flow › a live workflow run's drawer opens and shows its steps
+  ✓   8 [desktop-chromium] › e2e/jarvis-public.spec.ts:109:7 › login page › renders email + password fields and a submit control (330ms)
+  ✓  12 [mobile-375] › e2e/jarvis-public.spec.ts:60:7 › public /jarvis page › loads, shows a live-ops status, and throws no unexpected console errors (1.1s)
+  ✓  13 [mobile-375] › e2e/jarvis-public.spec.ts:78:7 › public /jarvis page › sidebar nav and command bar are present (1.1s)
+  ✓  14 [mobile-375] › e2e/jarvis-public.spec.ts:84:7 › public /jarvis page › logged out visitors see a sign-in affordance, not live private data (944ms)
+  ✓  15 [mobile-375] › e2e/jarvis-public.spec.ts:96:7 › technician mobile viewport (375px) › public page renders (mobile nav layout) with no horizontal overflow (875ms)
+  ✓  16 [mobile-375] › e2e/jarvis-public.spec.ts:109:7 › login page › renders email + password fields and a submit control (340ms)
+
+  6 skipped
+  10 passed (7.0s)
