@@ -29,6 +29,11 @@ export class PluginRegistry {
   private byActionType = new Map<string, DomainEnginePlugin>();
 
   register(plugin: DomainEnginePlugin): void {
+    if (!Array.isArray(plugin.actionTypes)) {
+      throw new Error(
+        `plugin ${plugin?.name ?? "<unnamed>"}.actionTypes is not an array: ${JSON.stringify(plugin.actionTypes)} (plugin keys: ${plugin ? Object.keys(plugin).join(",") : "<no plugin>"})`,
+      );
+    }
     for (const t of plugin.actionTypes) {
       if (this.byActionType.has(t)) {
         throw new Error(`action_type ${t} already registered by ${this.byActionType.get(t)!.name}`);

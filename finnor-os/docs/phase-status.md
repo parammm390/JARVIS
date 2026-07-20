@@ -218,8 +218,9 @@ the prior session's log — it passed, plus surfaced and fixed one real bug.
   cannot be built until Task 6.1's staging environment exists — a workflow step with
   nothing real to deploy to would be worse than the honest gap; production staying
   manual-promotion-only is the pack's own explicit decision, not a gap.
-- [~] Task 6.1 — Staging live: **provisioned for real this session, with a real bug
-  found and not yet resolved.** Param authorized ~$5 of Railway credit and pointed me at
+- [x] Task 6.1 — Staging live: **provisioned for real, and the outstanding bug is now
+  fixed and verified (see the RESOLVED entry below) — no longer partial.** Param
+  authorized ~$5 of Railway credit and pointed me at
   a second, previously-empty Railway project (`imaginative-enchantment`, id
   `b27f1fec-fa82-47ec-81bb-2ac728822430`) for it. Built: a real, isolated Postgres 18
   database (pgvector confirmed available) — NOT the production Supabase project, a
@@ -236,32 +237,63 @@ the prior session's log — it passed, plus surfaced and fixed one real bug.
   trailing newline into the stored value (`"railway\n"` instead of `"railway"`,
   breaking the Postgres connection string) — fixed by switching to `printf '%s'`,
   re-verified with a local reproduction against the real staging DB before redeploying.
-  **Real bug found and NOT fixed, logged honestly:** 5 of 11 scheduled job types
-  (`simulator_tick`, `scan_cold_leads`, `scan_low_inventory`, `scan_service_due`,
-  `scheduled_reminder` — everything that constructs a `FinnorOrchestrator`, i.e. touches
-  the plugin registry + LLM planner + LangGraph executor) dead-letter on the deployed
-  Railway worker with `plugin.actionTypes is not iterable`, while the other 6 (including
-  this session's own `scan_reliability_alerts`) complete successfully. Diagnosed
-  extensively before giving up: the exact same handler code, called directly against
-  the exact same staging database via local `npx tsx`, succeeds every time (10/10
-  concurrent `createDefaultPluginRegistry()` calls, 5/5 full `FinnorOrchestrator`
-  constructions, and a direct call to the real `scanColdLeads` handler function) — so
-  this is not a code bug reproducible outside the deployed environment. A full clean
-  redeploy (`railway up` again, fresh build, new deployment id) did not fix it either,
-  ruling out a one-off flaky build. Stopped debugging further at that point — no
-  container-shell access is available via the Railway CLI (`railway run` only forwards
-  env vars to a local process, it does not execute inside the actual container) — logged
-  here rather than continuing to guess. **This error string matches a previously-logged
-  historical finding** (`finnor-os-backend` memory, 2026-07-19: a zombie Railway
-  deployment on the PRODUCTION worker caused jobs to flip between `completed` and
-  `dead_letter` with this exact message depending on which instance grabbed them) —
-  worth investigating whether this is the same underlying Railway/Nixpacks/tsx
-  packaging issue rather than two coincidentally identical bugs. **Net effect on the
-  exit gate's own wording ("staging live with simulator running"):** staging is
-  genuinely live (real isolated DB, real worker, real API, real seeded data, 6/11 job
-  types provably working end-to-end) — but the simulator itself does not currently run
-  successfully on this deployment, so the literal claim is not yet true. Not silently
-  marked done.
+  **RESOLVED for real, 2026-07-20 — root cause found and fixed, verified against the
+  live deployed target, not worked around.** This bug has a longer history than this
+  entry alone shows — see the Blockers section's two prior diagnostic passes (first
+  pass wrongly concluded "Railway-only, not reproducible locally"; second pass
+  corrected that, found a faithful local repro, traced it to `leadToWaterTestPlugin`
+  resolving wrong, suspected a CJS circular-require under tsx's compat shim, but
+  couldn't find the cycle's actual second hop and stopped short of a fix pending a
+  regression test). This pass took a different angle — instrument the real deployed
+  worker directly and read back what it actually did, rather than trying to reproduce
+  locally again. Patched `apps/worker/src/queue.ts` to store `err.stack` (not just
+  `err.message`) in
+  `jobs.last_error`, and `packages/orchestration/src/plugin-registry.ts`'s `register()`
+  to report the actual non-array value and the plugin object's own keys on failure —
+  both real, permanent diagnostic improvements, not throwaway instrumentation — then
+  redeployed to staging and forced a fresh attempt by resetting one dead-lettered row
+  per failing type straight in the staging DB (`UPDATE jobs SET status='queued',
+  attempts=0, run_at=now()`). The real error: `plugin <unnamed>.actionTypes is not an
+  array: undefined (plugin keys: StartWaterTestWorkflowSchema,default,
+  findAppointmentForSubject,leadToWaterTestPlugin)` — the "plugin" `register()` received
+  was the entire module namespace object of `lead-to-water-test/index.ts`, not its
+  default export. Real cause: `packages/domain-plugins/lead-to-water-test/`,
+  `proposal-signature/`, `proposal-to-installation/`, and `invoice-to-cash/` — the 4
+  "workflow-kind" plugins added later than their 16 siblings — were the only plugin
+  directories with no `package.json` of their own, so unlike every sibling (each of
+  which declares `"type": "module"` explicitly) they inherited module-type resolution
+  from the workspace root, which has no `"type"` field at all → CommonJS by default.
+  Node's real, documented behavior for `import x from` on a CJS module from an ESM
+  importer is to bind `x` to the whole `module.exports`, not auto-unwrap `.default` —
+  exactly the observed shape, and consistent with (a more precise version of) the prior
+  pass's CJS-interop suspicion — there was no second hop of a circular require to find;
+  the actual mismatch was simpler, a module-type difference between these 4 plugins and
+  their 16 siblings. **Honestly scoped:** the prior pass specifically tested Node 20 vs
+  22 locally and saw no difference; this pass did not independently re-test why the
+  symptom is Railway/staging-specific rather than reproducing on every local run too
+  (Railway's build stage logs Node 18.20.5 vs local Node 22.22.3, a plausible but not
+  re-verified contributor via Node's own cjs-module-lexer changes across versions) — the
+  fix itself does not depend on that explanation being exactly right, since it removes
+  the module-type ambiguity structurally rather than targeting a specific Node version.
+  **Fix:** gave all 4 orphan
+  directories their own `package.json`, identical in shape to their 16 working siblings
+  (`"type": "module"`, matching `dependencies` derived from each file's actual imports)
+  — removes the interop ambiguity structurally rather than special-casing Node versions
+  or import syntax. `npm install` picked up 4 new workspaces cleanly. Full suite
+  re-verified green (563/563) before touching staging again. **Verified live, not
+  assumed:** redeployed `finnor-worker-staging`, reset all 5 previously-dead-lettered
+  job types to `queued` again, all 5 completed with zero error
+  (`simulator_tick`/`scan_cold_leads`/`scan_low_inventory`/`scan_service_due`/
+  `scheduled_reminder`, each `status: completed, attempts: 1`). Combined with the 6
+  already-working types, **all 11/11 scheduled job types now complete successfully on
+  the deployed staging worker.** The historical production-zombie-deployment finding
+  this was compared against in the prior write-up is now understood to be a coincidence
+  of error message, not the same root cause — that one was a stale/duplicate deployment
+  racing for jobs; this one was a real, deterministic module-resolution bug, unrelated
+  to deployment duplication. **Net effect on the exit gate's own wording ("staging live
+  with simulator running"): now literally true**, not partial — staging is live (real
+  isolated DB, real worker, real API, real seeded data) and all 11 job types, including
+  the simulator, run successfully end-to-end on the deployed environment.
 - [x] Task 6.2 — **RESOLVED for real, 2026-07-19/20.** Param created an AWS account and
   a dedicated IAM user (`JARVIS-claude`, admin-scoped for setup only — never used as
   the app's runtime credential) and supplied its access key in chat. Code was already
@@ -288,27 +320,37 @@ the prior session's log — it passed, plus surfaced and fixed one real bug.
   the same pass — `ensureSecretsLoaded()`'s AWS-sourced values take precedence at
   runtime regardless, so this is safe, not a half-finished cutover.
 
-**EXIT GATE — status, honestly:** staging live with simulator running — **partially
-met**: staging infrastructure is real and live (see Task 6.1 above), the simulator
-specifically does not yet run successfully there (real bug, logged, unresolved). Prod
-`setup/status` shows managed secret provider — **MET, 2026-07-19/20** — verified live:
+**EXIT GATE — status, updated 2026-07-20:** staging live with simulator running —
+**MET.** Task 6.1's remaining bug (5/11 job types dead-lettering with
+`plugin.actionTypes is not iterable`) is root-caused and fixed (see Task 6.1's entry
+above) — all 11/11 job types, including the simulator, verified completing
+successfully on the deployed staging worker. Prod `setup/status` shows managed secret
+provider — **MET, 2026-07-19/20** — verified live:
 `{"provider":"aws-secrets-manager","loaded":true}`. Restore-drill doc with real timings
-+ weekly automation — **partially met**: the CI-tier drill is wired but unverified (git
-push still broken as of this update) and the full production-parity drill needs a
-restore target separate from this new staging DB. Load + chaos docs committed with
-targets met — **NOT MET, and this is a real finding, not a gap in effort**: the full
-pack scenario was run for real against the actual deployed staging URL (see Task 6.4's
-own updated entry) — 86.39% of requests failed under the target load, a genuine
-infrastructure capacity issue, likely connection-pool/proxy related, not yet fixed.
-Reliability endpoint returns real numbers — **met**, verified live via direct
-HTTP smoke test this session, against both production and staging. One production
-deploy done via the promotion flow — **met**, multiple times this session in fact (API
-+ worker redeployed twice each for the AWS/Sentry cutover alone).
++ weekly automation — **CI wiring MET, verification still blocked**: `git push` is now
+genuinely fixed (real GitHub token, `parammm390/JARVIS`, confirmed working — `git
+fetch`/`git log origin/main` both reach GitHub fine and match local `main` exactly) and
+the real root cause of "CI never ran" (workflow file nested under `finnor-os/`,
+invisible to GitHub Actions regardless of credentials) is fixed too — but the first
+real CI run is stuck `queued` because GitHub Actions itself is having a live Critical-
+impact partial outage (confirmed directly against status.github.com, incident open
+since 2026-07-19 23:34 UTC) — external, not fixable by either of us, should self-
+resolve. The full production-parity drill still needs a restore target separate from
+this staging DB. Load + chaos docs committed with targets met — **NOT MET, real
+finding, not a gap in effort**: the 86.39%-failure load test result from Task 6.4
+stands; worker-side connection pooling is now fixed for real (PgBouncer + code fix,
+see Task 6.3/6.4 entries) but the Vercel-side path that the load test actually hit
+still needs a public TCP proxy in front of PgBouncer, which Railway's API can't create
+(only delete) — a one-click Railway dashboard action, documented in `owner-actions.md`
+§9, not yet done. Reliability endpoint returns real numbers — **met**, verified live
+via direct HTTP smoke test, against both production and staging. One production deploy
+done via the promotion flow — **met**, multiple times (API + worker redeployed twice
+each for the AWS/Sentry cutover alone).
 
-**Honest summary, matching Phase 4's own framing: Phase 6 is real, tested, and deployed
-as far as engineering alone can take it. It cannot reach GATE-GREEN without Param
-provisioning real infrastructure — every remaining item is an owner action already
-fully documented in `owner-actions.md` §9, and none require a registered business.**
+**Honest summary, updated 2026-07-20: Phase 6 is now blocked on exactly two owner
+actions, both single clicks in the existing Railway dashboard (no new account) — see
+`owner-actions.md` §9's updated entries. Everything reachable by engineering alone,
+including today's real staging-worker bug fix, is done.**
 
 ## Phase 7 — The cockpit
 Status: not-started
@@ -377,6 +419,15 @@ Status: not-started
   hop of the cycle with that test as a tight feedback loop, then fix and verify via the
   regression test before ever touching the async-conversion idea.
 
+  **RESOLVED 2026-07-20, see Task 6.1's own entry above:** there was no second hop of a
+  circular require to find. Instrumenting the actual deployed worker (not another local
+  repro attempt) showed `leadToWaterTestPlugin` resolving to the whole CJS module
+  namespace instead of its default export — caused by this plugin (and 3 siblings)
+  lacking their own `package.json`, so they fell back to CommonJS while every other
+  plugin explicitly declares `"type": "module"`. Fixed by giving all 4 their own
+  `package.json` matching their siblings; verified live on staging, all 11/11 job types
+  now complete.
+
   <details><summary>Superseded first-pass note (kept for the record, conclusion was wrong)</summary>
 
   100% reproducible across a fresh clean redeploy, while 6 other job types on the same
@@ -388,6 +439,24 @@ Status: not-started
   </details>
 
 ## Log (newest first)
+- 2026-07-20 — **Task 6.1's staging-worker bug (`plugin.actionTypes is not iterable`)
+  RESOLVED for real, root-caused and fixed, verified live.** Instrumented the actual
+  deployed staging worker (stack traces into `jobs.last_error`, a descriptive guard in
+  `plugin-registry.ts`'s `register()`) instead of attempting another local
+  reproduction, redeployed, and forced fresh attempts by resetting dead-lettered rows
+  directly in the staging DB. Real error: `leadToWaterTestPlugin` resolved to the
+  entire CJS module namespace object instead of its default export. Real cause: this
+  plugin and 3 siblings (`proposal-signature`, `proposal-to-installation`,
+  `invoice-to-cash`) were the only domain-plugin directories with no `package.json` of
+  their own, so they fell back to CommonJS module resolution while all 16 siblings
+  explicitly declare `"type": "module"`. Fixed by giving all 4 their own `package.json`,
+  matching their siblings exactly — a structural fix, not a workaround. Full suite
+  reverified green (563/563) before redeploying. **Verified against the live target,
+  not assumed:** reset all 5 previously-dead-lettered job types on staging, all 5
+  completed with zero error this time. All 11/11 scheduled job types, including the
+  simulator, now run successfully on the deployed staging worker — Task 6.1's exit-gate
+  wording ("staging live with simulator running") is now literally true. Full detail in
+  Task 6.1's own entry and the Blockers section.
 - 2026-07-20 — **GitHub push fixed for real (repo now `parammm390/JARVIS`, real token
   with `repo` scope); found and fixed the actual reason CI never ran (`.github/
   workflows/ci.yml` was nested at `finnor-os/.github/workflows/`, but GitHub Actions

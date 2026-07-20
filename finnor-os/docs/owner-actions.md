@@ -4,11 +4,9 @@
 
 Turned out `NEXT_PUBLIC_SUPABASE_ANON_KEY` (already set on `finnor-agency`, from an earlier setup pass) is the correct publishable key for project `kpxrnonhnhexutvdywbh` — same project `FINNOR_OS_SUPABASE_URL` points at. Missed the cross-reference initially because it's named generically rather than `FINNOR_OS_*`; no action needed, login was built using it directly.
 
-## 2. GitHub push credentials (optional — doesn't block deploys)
+## 2. ~~GitHub push credentials~~ — RESOLVED, real token works now
 
-`git push origin main` fails from this environment: no git credential helper is configured for `https://github.com`. This does **not** block anything live — production deploys go straight from the local build via `vercel deploy --prod`, which is working and verified. It only means GitHub's copy of the repo is behind what's actually running on finnorai.com.
-
-**To fix (optional, whenever convenient):** install the GitHub CLI (`brew install gh`) and run `gh auth login`, which configures git's credential helper automatically. Not urgent — flagging so commits don't silently pile up unpushed.
+`git push`/`git fetch` against `https://github.com/parammm390/JARVIS` both confirmed working directly (`git fetch origin` succeeds, `origin/main` matches local `main` exactly). No action needed here anymore. What's currently blocking a *verified green CI run* is unrelated to credentials: GitHub Actions itself is having a live Critical-impact partial outage (confirmed directly against status.githubstatus.com, incident open since 2026-07-19 23:34 UTC) — external, should clear on its own, nothing to do but wait and re-check.
 
 ## 3. MFA on the owner Supabase account (Task 1.5 — account now exists)
 
@@ -237,17 +235,17 @@ just assumed:
 - Dealer Zero seeded for real: 120 households, 42/42 policies, simulator enabled.
 - `apps/api` deployed as a Vercel Preview build on the existing `api` project (Preview-
   scoped env vars point at the staging DB, so it never touches production data).
-- **Real, unresolved bug found while verifying this:** 5 of 11 scheduled job types
-  (everything that constructs a `FinnorOrchestrator` — includes `simulator_tick`) fail
-  on the deployed staging worker with `plugin.actionTypes is not iterable`, while 6
-  others succeed. Not reproducible locally against the same database with the same
-  code; not fixed by a clean redeploy. Likely the same root cause as the older "Railway
-  zombie deployment" finding (§5 below) — same error string, similar handler pattern —
-  but this time on a single non-duplicated deployment, which points at something more
-  fundamental in how this monorepo builds under Railway/Nixpacks rather than a
-  duplicate-instance race. Needs real container access to root-cause properly (Railway's
-  CLI has no shell-into-container command); flagging here since it may be worth Railway
-  support if it recurs. Full detail in `phase-status.md`'s Task 6.1 entry and Blockers.
+- **RESOLVED 2026-07-20 — no owner action needed, was a real code bug, now fixed.** The
+  5-of-11-job-types failure turned out to be unrelated to the "Railway zombie
+  deployment" finding (§5 below) despite the matching error string — a coincidence, not
+  the same cause. Real cause: 4 of the 20 domain-plugin directories
+  (`lead-to-water-test`, `proposal-signature`, `proposal-to-installation`,
+  `invoice-to-cash`) had no `package.json` of their own, unlike their 16 siblings, so
+  they resolved as CommonJS instead of ESM and a default import returned the whole
+  module namespace instead of the plugin object. Fixed by giving all 4 a `package.json`
+  matching their siblings. Verified live: all 11/11 job types, including
+  `simulator_tick`, now complete successfully on the deployed staging worker. Full
+  detail in `phase-status.md`'s Task 6.1 entry and Blockers.
 - Cleaned up: an earlier, redundant empty "staging" *environment* I'd created inside the
   wrong (production) Railway project before you gave me the real project id — deleted
   once the actual target was confirmed, so there's only one staging concept now, not two.
@@ -302,14 +300,21 @@ needed). You enabled Vercel's "Protection Bypass for Automation" and gave me the
 secret, which unblocked the actual deployed staging URL for the first time. Ran the
 exact full pack scenario (50 events/s, 200 read VUs, 20 approvals/min, 10 minutes)
 against it for real. **Result: 86.39% of requests failed under that load** — a real
-infrastructure capacity problem, not a test artifact (likely Railway's public Postgres
-proxy + this codebase's small SSL connection pool under 200+ concurrent Vercel
-invocations, though not re-confirmed with a dedicated diagnostic pass). See
-`docs/load-test-2026-07-19.md` for full detail. **This needs real follow-up
-engineering** (most likely: a connection pooler between the app and Postgres, or a
-private network path instead of the public proxy) — not something resolved by an
-owner action, flagging it here mainly so it's visible next to everything else that
-got closed out this session.
+infrastructure capacity problem, not a test artifact. See `docs/load-test-2026-07-19.md`
+for full detail.
+
+**Follow-up engineering done, one dashboard click away from actually fixing this:** a
+real PgBouncer instance is now deployed and working on staging's private network — the
+worker's connection reliability is fixed. But the load test hit the deployed *Vercel*
+API, which is outside Railway's private network and can only reach Postgres via a
+*public* TCP proxy — and creating one is dashboard-only; confirmed by introspecting
+Railway's own GraphQL API schema (only a `tcpProxyDelete` mutation exists, no create).
+
+**To finish this (one click, your existing Railway account, ~30 seconds):**
+1. railway.app dashboard → project `imaginative-enchantment` → the `pgbouncer` service
+   → Settings → Networking → "Generate Domain" / enable a public TCP proxy.
+2. Tell me the resulting public host:port and I'll point the Vercel staging API at it
+   and re-run the load test to confirm it actually fixes the failure rate.
 
 **Postgres client tools for the FULL production restore drill** — the CI-tier drill
 (dump/restore against CI's own ephemeral Postgres) is wired and described in
@@ -334,6 +339,6 @@ GitHub Actions secret it doesn't have yet:
 2. GitHub → this repo's Settings → Secrets and variables → Actions → New repository
    secret → name it `RAILWAY_STAGING_TOKEN`, paste the token value.
 
-Also blocked, separately, on the same `git push` fix as everything else CI-related
-(`owner-actions.md` §2) — this job can't run at all until GitHub Actions can see this
-repo's latest commits.
+`git push` itself is fixed now (§2) and GitHub can see this repo's latest commits — the
+only thing this job is still blocked on, besides the token above, is GitHub Actions'
+own live outage (§2) clearing so any workflow can run at all.

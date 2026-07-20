@@ -103,9 +103,10 @@ export class JobQueue {
       const attempts = Number(job.attempts) + 1;
       const max = Number((job as unknown as { max_attempts: number }).max_attempts ?? 3);
       const dead = attempts >= max;
+      const errDetail = err instanceof Error ? (err.stack ?? err.message) : String(err);
       await getPool().query(
         `UPDATE jobs SET status = $2, last_error = $3, run_at = now() + ($4 || ' seconds')::interval, started_at = NULL WHERE id = $1`,
-        [job.id, dead ? "dead_letter" : "queued", (err as Error).message, String(30 * 2 ** attempts)],
+        [job.id, dead ? "dead_letter" : "queued", errDetail, String(30 * 2 ** attempts)],
       );
     }
     return true;
