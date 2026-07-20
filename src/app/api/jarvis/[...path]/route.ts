@@ -34,6 +34,8 @@ function isPublicGet(segments: string[]): boolean {
   return false
 }
 
+const RUN_CONTROL_VERBS = new Set(["pause", "resume", "cancel", "retry", "escalate"])
+
 function isAllowedGet(segments: string[]): boolean {
   const [a, b, c] = segments
   if (segments.length === 1 && a === "stats") return true
@@ -47,15 +49,28 @@ function isAllowedGet(segments: string[]): boolean {
   if (segments.length === 2 && a === "integrations" && b === "status") return true
   if (segments.length === 2 && a === "resources" && RESOURCE_KINDS.has(b!)) return true
   if (segments.length === 1 && a === "audit") return true
+  // Phase 7 (the cockpit): "Why?" receipt lookups, the caller's own role, the daily
+  // briefing, the data-quality/contradiction queue, the DLQ browser, and corrections.
+  if (segments.length === 1 && a === "receipts") return true
+  if (segments.length === 2 && a === "receipts") return true
+  if (segments.length === 1 && a === "me") return true
+  if (segments.length === 1 && a === "overview") return true
+  if (segments.length === 1 && a === "dlq") return true
+  if (segments.length === 2 && a === "dlq") return true
+  if (segments.length === 1 && a === "corrections") return true
   void c
   return false
 }
 
 function isAllowedPost(segments: string[]): boolean {
-  const [a, b, c] = segments
+  const [a, b, c, d] = segments
   if (segments.length === 1 && a === "actions") return true
-  if (segments.length === 3 && a === "actions" && (c === "confirm" || c === "reject")) return true
-  void b
+  if (segments.length === 3 && a === "actions" && (c === "confirm" || c === "reject" || c === "escalate")) return true
+  // Phase 7: run controls (owner-only server-side via canApprove) and DLQ replay/
+  // discard (owner-only) both need the frontend to reach them at all first.
+  if (segments.length === 4 && a === "workflows" && b === "runs" && RUN_CONTROL_VERBS.has(d!)) return true
+  if (segments.length === 3 && a === "dlq" && (c === "replay" || c === "discard")) return true
+  if (segments.length === 1 && a === "corrections") return true
   return false
 }
 
@@ -68,7 +83,8 @@ const QueryValueSchema = z.string().max(200).regex(/^[^\r\n]*$/);
 const QueryKeySchema = z.string().min(1).max(40).regex(/^[a-zA-Z0-9_]+$/);
 
 function validSegments(segments: string[]): boolean {
-  return segments.length > 0 && segments.length <= 3 && segments.every((s) => SegmentSchema.safeParse(s).success);
+  // 4, not 3: Phase 7's run-control paths are workflows/runs/:id/{pause,resume,...}.
+  return segments.length > 0 && segments.length <= 4 && segments.every((s) => SegmentSchema.safeParse(s).success);
 }
 
 function validQuery(url: URL): boolean {

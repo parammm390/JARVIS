@@ -28,6 +28,10 @@ import { KpiStrip } from "./panels/KpiStrip"
 import { OpsTicker } from "./panels/OpsTicker"
 import { WorkflowTheater } from "./panels/WorkflowTheater"
 import { ApprovalDock } from "./panels/ApprovalDock"
+import { DailyBriefing } from "./panels/DailyBriefing"
+import { DegradedBanner } from "./panels/DegradedBanner"
+import { DataQualityQueue } from "./panels/DataQualityQueue"
+import { DlqBrowser } from "./panels/DlqBrowser"
 import { CommsFeed } from "./panels/CommsFeed"
 import { ActivityRail } from "./panels/ActivityRail"
 import { PipelinePulse } from "./panels/PipelinePulse"
@@ -71,6 +75,12 @@ function CommandCenterHome({
       <div key={`${igniteKey}-0`} className="jarvis-rise" style={delay(0)}>
         <HeaderBand session={session} />
       </div>
+      <div key={`${igniteKey}-0a`} className="jarvis-rise" style={delay(0)}>
+        <DegradedBanner />
+      </div>
+      <div key={`${igniteKey}-0b`} className="jarvis-rise" style={delay(0)}>
+        <DailyBriefing />
+      </div>
       <div key={`${igniteKey}-1`} className="jarvis-rise" style={delay(1)}>
         <KpiStrip onNavigate={onNavigate} />
       </div>
@@ -89,6 +99,10 @@ function CommandCenterHome({
         <ApprovalDock />
         <CommsFeed />
         <ActivityRail />
+      </div>
+      <div key={`${igniteKey}-4b`} className="jarvis-rise grid grid-cols-1 gap-4 xl:grid-cols-2" style={delay(4)}>
+        <DataQualityQueue />
+        <DlqBrowser />
       </div>
       <div key={`${igniteKey}-5`} className="jarvis-rise" style={delay(5)}>
         <CommandBar session={session} prefill={prefill} />

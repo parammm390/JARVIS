@@ -12,6 +12,14 @@ import { sfx } from "../sound"
 import { jarvisPost, JarvisApiError } from "../lib/api"
 import { SignInPrompt } from "../lib/SignInPrompt"
 import type { useVapiSession } from "../lib/useVapiSession"
+import { useJarvis, type PendingAction } from "../lib/data-core"
+
+// Shape of POST /api/actions's "planned" array — real DomainAction rows
+// (finnor-os apps/api/app/api/actions/route.ts), not yet narrowed to only the ones
+// that actually landed as a gated pending row (that split only exists internally,
+// see orchestration/src/index.ts's turnResults) — see the optimistic-injection note
+// in run() below for how that's handled honestly without a backend change.
+type PlannedAction = { id: string; actionType: string; payload: unknown; status: string; createdAt: string; groundedPayload?: PendingAction["groundedPayload"] }
 
 export function CommandBar({
   session,
@@ -23,6 +31,7 @@ export function CommandBar({
   onPlanned?: (n: number, summaries: string[]) => void
 }) {
   const reduced = useReducedMotion()
+  const data = useJarvis()
   const [command, setCommand] = useState(prefill ?? "")
   const [busy, setBusy] = useState(false)
   const [showKeyPrompt, setShowKeyPrompt] = useState(false)
@@ -39,9 +48,21 @@ export function CommandBar({
     setBusy(true)
     setNote(null)
     try {
-      const body = await jarvisPost<{ planned?: Array<{ actionType: string }> }>("actions", { instruction })
-      const n = body.planned?.length ?? 0
-      onPlanned?.(n, body.planned?.map((p) => p.actionType) ?? [])
+      const body = await jarvisPost<{ planned?: PlannedAction[] }>("actions", { instruction })
+      const planned = body.planned ?? []
+      const n = planned.length
+      onPlanned?.(n, planned.map((p) => p.actionType))
+      // Phase 7 (§7.5): show the proposed action(s) in the Approval Inbox right now,
+      // not after the next poll — this is the "talk to JARVIS" moment, it should
+      // feel instant. Some of these may turn out to be ungated (already executed by
+      // the time this response even returns) rather than a real pending row; the
+      // provider's next fast-lane poll (≤4s) always wins with the server's actual
+      // truth either way, so a wrong guess here is a brief flash, never a lasting one.
+      if (n > 0) {
+        data.injectOptimisticPending(
+          planned.map((p) => ({ id: p.id, actionType: p.actionType, summary: null, payload: p.payload, status: p.status, createdAt: p.createdAt, groundedPayload: p.groundedPayload })),
+        )
+      }
       setNote(n === 0 ? "Couldn't map that to an action — try naming the customer, task, or item." : `Planned ${n} action${n === 1 ? "" : "s"} — check the approval dock.`)
       setCommand("")
     } catch (e) {

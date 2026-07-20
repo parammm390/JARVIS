@@ -9,12 +9,15 @@
 
 import { useEffect, useRef, useState } from "react"
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
-import { Check } from "lucide-react"
+import { Check, Pause, Play, XCircle, RotateCcw, ArrowUpCircle } from "lucide-react"
 import { LiveDot } from "../atmosphere"
 import { StepIcon, humanizeStepType, humanizeWorkflowType } from "./StepIcon"
 import { useJarvis, onJarvisEvent, runProgressPct, ageLabel, ageSeconds, type WorkflowRun } from "../lib/data-core"
+import { jarvisPost, jarvisGet, JarvisApiError } from "../lib/api"
 import { sfx } from "../sound"
 import { burstAt } from "../lib/EventFX"
+import { ReceiptDrawer } from "../lib/ReceiptDrawer"
+import { useJarvisAuth } from "../lib/jarvis-auth"
 
 const NODE_W = 172
 const NODE_H = 72
@@ -410,6 +413,116 @@ function ReplayTheater({ pool, now }: { pool: WorkflowRun[]; now: number }) {
   return <ReplayRow key={`${run.id}-${idx}`} run={run} now={now} />
 }
 
+// Phase 7 (§7.2): which run-control verbs are even legal from the run's CURRENT
+// status — matches packages/workflow-runtime/src/run-controls.ts's own TRANSITIONS
+// table exactly, so this never offers a button the server would just 409 on.
+const RUN_CONTROL_VERBS = [
+  { verb: "pause", label: "Pause", icon: Pause, from: ["running"] },
+  { verb: "resume", label: "Resume", icon: Play, from: ["paused"] },
+  { verb: "cancel", label: "Cancel", icon: XCircle, from: ["running", "paused"] },
+  { verb: "retry", label: "Retry", icon: RotateCcw, from: ["failed"] },
+  { verb: "escalate", label: "Escalate", icon: ArrowUpCircle, from: ["running", "failed"] },
+] as const
+
+function RunControls({ run }: { run: WorkflowRun }) {
+  const { role } = useJarvisAuth()
+  const [inflight, setInflight] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [appliedVerb, setAppliedVerb] = useState<string | null>(null)
+  const available = RUN_CONTROL_VERBS.filter((v) => (v.from as readonly string[]).includes(run.status))
+
+  // Phase 7 (§7.4): client-side courtesy only — the backend's own canApprove(ctx,"*")
+  // gate (apps/api/lib/run-control-route.ts) is the real authorizer regardless of
+  // what this hides. Default seeded role_permissions grant "*" to owner alone, so
+  // that's the simplification this client makes; a tenant with a custom grant for
+  // another role would still be correctly authorized server-side, just wouldn't see
+  // this button — a real, honestly-scoped gap, not a security hole.
+  if (role !== "owner") return null
+  if (available.length === 0 && !appliedVerb) return null
+
+  async function act(verb: (typeof RUN_CONTROL_VERBS)[number]["verb"]) {
+    if (inflight) return
+    setInflight(verb)
+    setError(null)
+    try {
+      await jarvisPost(`workflows/runs/${run.id}/${verb}`, { expectedVersion: run.version })
+      // Explicitly-pending, not full optimistic patching (§0.3.11): this run's real
+      // state lives in the shared poller, not local state here — the next fast-lane
+      // poll (≤4s) reflects the real transition. This just confirms the call landed.
+      setAppliedVerb(verb)
+    } catch (e) {
+      if (e instanceof JarvisApiError && e.status === 403) setError("Your role can't control workflow runs.")
+      else if (e instanceof JarvisApiError && e.status === 409) setError("That run already moved on — refreshing.")
+      else setError(e instanceof Error ? e.message : "That didn't go through — try again.")
+    } finally {
+      setInflight(null)
+    }
+  }
+
+  return (
+    <div className="mb-4 rounded-xl border border-white/8 bg-white/[0.015] p-3">
+      <div className="mb-2 text-[9px] font-black uppercase tracking-widest text-[color:var(--j-text-faint)]">Run controls</div>
+      {error && <div className="mb-2 rounded-lg border border-red-400/30 bg-red-400/5 px-2 py-1.5 text-[10px] text-red-300">{error}</div>}
+      {appliedVerb && !error && (
+        <div className="mb-2 rounded-lg border border-cyan-300/20 bg-cyan-300/5 px-2 py-1.5 text-[10px] text-cyan-200">
+          {appliedVerb} sent — updating…
+        </div>
+      )}
+      <div className="flex flex-wrap gap-2">
+        {available.map(({ verb, label, icon: Icon }) => (
+          <button
+            key={verb}
+            type="button"
+            disabled={inflight !== null}
+            onClick={() => act(verb)}
+            className="inline-flex items-center gap-1.5 rounded-full border border-white/15 px-3 py-1 text-[10px] font-black text-white/70 transition hover:-translate-y-0.5 hover:text-cyan-200 disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60"
+          >
+            <Icon className="h-3 w-3" /> {inflight === verb ? "Sending…" : label}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// Phase 7 (§7.3): a step doesn't carry its own receipt id from GET workflows/runs, so
+// this looks it up on demand (GET receipts?workflowStepId=X) the moment someone
+// actually wants to see it, rather than eagerly fetching one per step per run.
+function WhyStepButton({ stepId }: { stepId: string }) {
+  const [state, setState] = useState<"idle" | "loading" | "none">("idle")
+  const [openReceiptId, setOpenReceiptId] = useState<string | null>(null)
+
+  async function open() {
+    if (state === "loading") return
+    setState("loading")
+    try {
+      const res = await jarvisGet<{ receipts: Array<{ id: string }> }>("receipts", { workflowStepId: stepId })
+      if (res.receipts.length > 0) {
+        setOpenReceiptId(res.receipts[0]!.id)
+        setState("idle")
+      } else {
+        setState("none")
+      }
+    } catch {
+      setState("none")
+    }
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={open}
+        disabled={state === "loading"}
+        className="text-[9px] font-black uppercase tracking-wide text-cyan-300/70 hover:text-cyan-200 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60"
+      >
+        {state === "loading" ? "Loading…" : state === "none" ? "No receipt yet" : "Why?"}
+      </button>
+      {openReceiptId && <ReceiptDrawer receiptId={openReceiptId} onClose={() => setOpenReceiptId(null)} />}
+    </>
+  )
+}
+
 function RunDrawer({ run, onClose }: { run: WorkflowRun; onClose: () => void }) {
   return (
     <AnimatePresence>
@@ -427,6 +540,7 @@ function RunDrawer({ run, onClose }: { run: WorkflowRun; onClose: () => void }) 
             Close
           </button>
         </div>
+        <RunControls run={run} />
         <div className="space-y-3">
           {run.steps.map((s) => (
             <div key={s.id} className="j-panel !rounded-xl p-3">
@@ -436,9 +550,12 @@ function RunDrawer({ run, onClose }: { run: WorkflowRun; onClose: () => void }) 
                 </span>
                 <span className="text-[color:var(--j-text-dim)]">{s.status}</span>
               </div>
-              <div className="mt-1 font-mono text-[10px] text-[color:var(--j-text-faint)]">
-                updated {new Date(s.updatedAt).toLocaleString()} · attempts {s.attempts}
-                {s.terminalReason ? ` · ${s.terminalReason}` : ""}
+              <div className="mt-1 flex items-center justify-between font-mono text-[10px] text-[color:var(--j-text-faint)]">
+                <span>
+                  updated {new Date(s.updatedAt).toLocaleString()} · attempts {s.attempts}
+                  {s.terminalReason ? ` · ${s.terminalReason}` : ""}
+                </span>
+                <WhyStepButton stepId={s.id} />
               </div>
             </div>
           ))}

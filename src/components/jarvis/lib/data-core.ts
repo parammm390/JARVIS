@@ -28,6 +28,19 @@ export interface StatsResponse {
   blocked: number
   recentActions: ActionRow[]
 }
+/** Phase 7 (§7.1): the most recent DecisionReceipt for a pending action, embedded by
+ *  GET actions/pending so the Approval Inbox card can render objective/evidence/
+ *  policy/risk-tier without a second round trip. Full detail (expected vs actual,
+ *  failure, approval) lives behind the "Why?" drawer's own GET receipts/:id call. */
+export interface ReceiptSummary {
+  id: string
+  domainActionId: string | null
+  objective: string
+  evidence: Array<{ source: string; ref: string; timestamp: string }>
+  policyApplied: { id: string; version: number } | null
+  riskTier: "low" | "medium" | "high"
+  createdAt: string
+}
 export interface PendingAction {
   id: string
   actionType: string
@@ -36,6 +49,7 @@ export interface PendingAction {
   status: string
   createdAt: string
   groundedPayload?: Array<{ field: string; status: "verified" | "not_found" | "unverifiable" }>
+  receipt?: ReceiptSummary | null
 }
 export interface WorkflowStep {
   id: string
@@ -50,6 +64,9 @@ export interface WorkflowRun {
   id: string
   workflowType: string
   status: string
+  /** Optimistic-concurrency counter (Phase 7 §7.2 run controls key their UPDATE on
+   *  the version they last read here). */
+  version: number
   createdAt: string
   updatedAt: string
   steps: WorkflowStep[]
@@ -259,7 +276,14 @@ interface JarvisDataState {
   newPendingSinceOpen: number
   approvalsThisSession: number
   rejectionsThisSession: number
-  recordDecision: (verb: "confirm" | "reject") => void
+  recordDecision: (verb: "confirm" | "reject" | "escalate") => void
+  /** Phase 7 (§7.5, command bar): prepend freshly-planned actions into the
+   *  Approval Inbox immediately, before the next poll confirms them. Best-effort —
+   *  an action that turns out to have auto-run (ungated) rather than land as a
+   *  real pending row simply drops out on the next fast-lane poll (≤4s later),
+   *  which always replaces this list with the server's actual truth. Never a
+   *  lasting inconsistency, just a brief optimistic guess. */
+  injectOptimisticPending: (actions: PendingAction[]) => void
 }
 
 const EMPTY_STATE: JarvisDataState = {
@@ -300,6 +324,7 @@ const EMPTY_STATE: JarvisDataState = {
   approvalsThisSession: 0,
   rejectionsThisSession: 0,
   recordDecision: () => {},
+  injectOptimisticPending: () => {},
 }
 
 const JarvisDataContext = createContext<JarvisDataState>(EMPTY_STATE)
@@ -321,11 +346,25 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
   const firstPendingIdsRef = useRef<Set<string> | null>(null)
   const sessionRef = useRef({ approvals: 0, rejections: 0 })
 
-  const recordDecision = useCallback((verb: "confirm" | "reject") => {
+  const recordDecision = useCallback((verb: "confirm" | "reject" | "escalate") => {
+    // Escalate leaves the action open for a human (needs_human_review, not
+    // terminal) — it doesn't count toward the approve/reject session tally, but
+    // still emits the event so other panels can react to it honestly.
     if (verb === "confirm") sessionRef.current.approvals += 1
-    else sessionRef.current.rejections += 1
+    else if (verb === "reject") sessionRef.current.rejections += 1
     setState((prev) => ({ ...prev, approvalsThisSession: sessionRef.current.approvals, rejectionsThisSession: sessionRef.current.rejections }))
     emit("action-decided", { verb })
+  }, [])
+
+  const injectOptimisticPending = useCallback((actions: PendingAction[]) => {
+    if (actions.length === 0) return
+    setState((prev) => {
+      const existingIds = new Set(prev.pendingActions.map((a) => a.id))
+      const fresh = actions.filter((a) => !existingIds.has(a.id))
+      if (fresh.length === 0) return prev
+      return { ...prev, pendingActions: [...fresh, ...prev.pendingActions] }
+    })
+    emit("new-pending-action", { count: actions.length, source: "command-bar" })
   }, [])
 
   // ---- fast lane ----
@@ -502,7 +541,7 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
   }, [])
 
   useEffect(() => {
-    setState((prev) => ({ ...prev, mountedAt: Date.now(), now: Date.now(), recordDecision }))
+    setState((prev) => ({ ...prev, mountedAt: Date.now(), now: Date.now(), recordDecision, injectOptimisticPending }))
     const onVisibility = () => {
       const wasHidden = !visibleRef.current
       visibleRef.current = document.visibilityState !== "hidden"
@@ -535,7 +574,7 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
       clearInterval(tSanity)
       clearInterval(tTick)
     }
-  }, [pollFast, pollMedium, pollSlow, pollSanity, recordDecision])
+  }, [pollFast, pollMedium, pollSlow, pollSanity, recordDecision, injectOptimisticPending])
 
   return React.createElement(JarvisDataContext.Provider, { value: state }, children)
 }
