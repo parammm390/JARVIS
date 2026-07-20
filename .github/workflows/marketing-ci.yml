@@ -48,11 +48,18 @@ jobs:
         env:
           PORT: 3000
       - run: npx wait-on http://localhost:3000 --timeout 60000
-      - run: npm run test:e2e
+      - name: Run Playwright e2e (list reporter also written to the job summary for public visibility)
         env:
           PLAYWRIGHT_BASE_URL: http://localhost:3000
           TEST_OWNER_EMAIL: ${{ secrets.TEST_OWNER_EMAIL }}
           TEST_OWNER_PASSWORD: ${{ secrets.TEST_OWNER_PASSWORD }}
+        run: |
+          set -o pipefail
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          npx playwright test --reporter=list 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+          status=$?
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          exit $status
       - uses: actions/upload-artifact@v4
         if: always()
         with:
