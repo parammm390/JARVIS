@@ -16,13 +16,19 @@ export type Db = NodePgDatabase<typeof schema>;
  * node-postgres quirk: an `sslmode=` query param in the connection string overrides
  * an explicit `ssl` config object, and Supabase's chain is self-signed from Node's
  * point of view. Strip the param and configure ssl explicitly instead.
+ *
+ * `.railway.internal` hosts (Phase 6 staging: a session-mode PgBouncer sitting between
+ * the app and Postgres) are Railway's own private network — already an isolated,
+ * non-public transport, same trust level as localhost — and the plain Postgres image
+ * behind it doesn't terminate TLS, so requesting SSL there fails outright ("the server
+ * does not support SSL connections") rather than just being redundant.
  */
 export function pgConnectionConfig(url: string): pg.ClientConfig {
   const cleaned = url.replace(/([?&])sslmode=[^&]*&?/, "$1").replace(/[?&]$/, "");
-  const isLocal = cleaned.includes("localhost") || cleaned.includes("127.0.0.1");
+  const skipSsl = cleaned.includes("localhost") || cleaned.includes("127.0.0.1") || cleaned.includes(".railway.internal");
   return {
     connectionString: cleaned,
-    ...(isLocal ? {} : { ssl: { rejectUnauthorized: false } }),
+    ...(skipSsl ? {} : { ssl: { rejectUnauthorized: false } }),
   };
 }
 
