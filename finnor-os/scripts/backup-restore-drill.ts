@@ -60,10 +60,20 @@ async function main(): Promise<void> {
     console.log(`[backup-drill] creating throwaway database ${RESTORE_DB}`);
     run("createdb", ["-h", conn.host, "-p", conn.port, "-U", conn.user, RESTORE_DB], env);
 
+    // Extensions are per-database, not per-cluster -- a fresh createdb has none, but
+    // the dump contains objects (embeddings/embedding_cache columns) of type `vector`.
+    // Without this, every such object fails to restore with `type "public.vector" does
+    // not exist` -- a real, previously-unexercised gap: this drill had never actually
+    // run against a pgvector-enabled source before (this repo's first-ever green CI run).
+    const restoreUrl = `postgres://${conn.user}:${conn.password}@${conn.host}:${conn.port}/${RESTORE_DB}`;
+    const extClient = new pg.Client({ connectionString: restoreUrl });
+    await extClient.connect();
+    await extClient.query("CREATE EXTENSION IF NOT EXISTS vector");
+    await extClient.end();
+
     console.log(`[backup-drill] restoring into ${RESTORE_DB}`);
     run("pg_restore", ["-h", conn.host, "-p", conn.port, "-U", conn.user, "-d", RESTORE_DB, dumpFile], env);
 
-    const restoreUrl = `postgres://${conn.user}:${conn.password}@${conn.host}:${conn.port}/${RESTORE_DB}`;
     const [sourceCounts, restoredCounts] = await Promise.all([rowCounts(SOURCE_URL, tablesToCheck), rowCounts(restoreUrl, tablesToCheck)]);
 
     console.log("[backup-drill] row-count comparison:");
