@@ -339,6 +339,7 @@ GitHub Actions secret it doesn't have yet:
 2. GitHub → this repo's Settings → Secrets and variables → Actions → New repository
    secret → name it `RAILWAY_STAGING_TOKEN`, paste the token value.
 
-`git push` itself is fixed now (§2) and GitHub can see this repo's latest commits — the
-only thing this job is still blocked on, besides the token above, is GitHub Actions'
-own live outage (§2) clearing so any workflow can run at all.
+GitHub Actions' own outage (§2) has cleared and CI is running for real now — confirmed
+by watching this exact job run and fail with `Not signed in. → Run railway login to
+authenticate` because `RAILWAY_TOKEN` was empty. That's the one and only thing left:
+add the secret above and the next push to `main` will deploy for real.

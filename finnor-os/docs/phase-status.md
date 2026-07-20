@@ -161,15 +161,42 @@ the prior session's log — it passed, plus surfaced and fixed one real bug.
   reaches Sentry's dashboard. Alert *routing* (Sentry → email/Slack/etc.) is still a
   dashboard configuration step for Param whenever he wants notifications somewhere
   specific — the events themselves are landing regardless.
-- [x] Task 6.3 (CI-mechanics tier only) — real restore drill wired into CI (evidence:
-  `.github/workflows/ci.yml` now installs `postgresql-client` and runs `npx tsx
-  scripts/backup-restore-drill.ts` after the test suite). **Cannot verify this actually
-  runs green** — `git push origin main` is broken in this environment (pre-existing,
-  `owner-actions.md` §2), so this workflow change has never reached GitHub Actions.
-  Documented plainly in `docs/restore-drill-2026-07-19.md`, including the exact next
-  step (fix git push, watch the first real run, fix anything that doesn't match).
-  **Not the full production-Supabase-into-isolated-project drill** — that needs the
-  Task 6.1 staging Supabase project.
+- [x] Task 6.3 (CI-mechanics tier only) — real restore drill wired into CI, **and now
+  actually VERIFIED GREEN for real, 2026-07-20** (`.github/workflows/ci.yml` installs
+  `postgresql-client` and runs `npx tsx scripts/backup-restore-drill.ts` after the test
+  suite). This repo's CI had literally never completed a run before today — `git push`
+  is now fixed (confirmed working), the workflow-location bug is fixed (Task 6.7's own
+  entry), and GitHub Actions itself was mid-outage most of the day (external, confirmed
+  via status.githubstatus.com, cleared on its own). Once it could finally run for real,
+  it found and this session fixed 4 real, previously-unexercised bugs in sequence, each
+  root-caused from the actual job log (pulled via the GitHub API) rather than guessed
+  at, each verified by watching the NEXT real run go one step further:
+  1. Vite's CSS plugin eagerly resolved a postcss config and, finding none in
+     `finnor-os/`, walked up into the marketing site's `postcss.config.js` at the true
+     repo root — needing `tailwindcss`, a dependency `finnor-os`'s own `npm ci` never
+     installs. Worked locally only by the accident of the repo root's own node_modules
+     (installed separately for marketing-site work) already having it. Fixed with a
+     literal empty postcss config in `vitest.config.ts` — verified by reproducing the
+     exact crash locally first (temporarily hiding `node_modules/tailwindcss`).
+  2. `dealer-zero-e2e.test.ts` failed with `relation "finnor_langgraph.checkpoints" does
+     not exist` — the LangGraph checkpointer schema setup (`npm run setup:langgraph`,
+     an existing script whose own header comment already said "run once in CI right
+     after db:migrate") had never actually been added to `ci.yml`. Local dev never hit
+     this because the embedded dev Postgres data directory persists across sessions.
+     Fixed by adding the step.
+  3. `embedding-cache.test.ts` failed 5x with `expected 1024 dimensions, not 2` — its
+     stub embedder returned a fake 2-element vector, harmless against local dev's jsonb
+     fallback (no pgvector there) but rejected by CI's real `vector(1024)` column. Fixed
+     by zero-filling to the real `EMBEDDING_DIMENSIONS` constant.
+  4. The restore drill itself then ran for the first time ever and failed with `type
+     "public.vector" does not exist` — `createdb` makes a bare database with no
+     extensions (per-database, not per-cluster), but the dump contains `vector`-typed
+     columns. Fixed by running `CREATE EXTENSION IF NOT EXISTS vector` against the
+     fresh restore-target database before `pg_restore`.
+  **Full CI `test` job is now green end-to-end, every step, confirmed by fetching the
+  actual run's job list post-completion** (`npm test`, `npx tsx scripts/backup-restore-
+  drill.ts`, everything — all `completed success`). **Not the full production-Supabase-
+  into-isolated-project drill** — that needs the Task 6.1 staging Supabase project.
 - [x] Task 6.4 — **full pack scenario run for real against the actual deployed staging
   URL, 2026-07-20 — real infrastructure failure found, not a passing grade.** k6
   obtained as a standalone binary (no `brew`/sudo needed). First pass (documented
@@ -210,7 +237,15 @@ the prior session's log — it passed, plus surfaced and fixed one real bug.
   (`vitest.config.ts`'s `include: ["tests/**/*.test.ts"]` already picks up
   `tests/eval/retrieval-eval.test.ts`, which already asserts
   `toBeGreaterThanOrEqual(0.85)`, and CI already runs the full `npm test` on every
-  push/PR) — confirmed this session, no new code needed.
+  push/PR) — **confirmed for real, 2026-07-20: this gate has now actually run green in
+  CI** (see Task 6.3's own entry — the eval test is part of the same `npm test` step
+  that's now verified passing end-to-end).
+- [x] Task 6.7 — `deploy-staging` job in `ci.yml` **runs now** (previously blocked on
+  the workflow being invisible to GitHub Actions at all, now fixed) and fails at exactly
+  the one place `owner-actions.md` §10 already documented: `RAILWAY_TOKEN:` empty,
+  `railway up` reports "Not signed in." Confirmed by pulling the actual job log — not a
+  new gap, the exact one already flagged, now reachable and verified pointing at the
+  right single remaining cause (a Railway project token GitHub doesn't have yet).
 - [x] Task 6.7 (partial) — manual promotion flow documented for the first time
   (`docs/promotion-flow.md`): the exact migrate → deploy-API → deploy-worker →
   deploy-marketing-site → verify-live sequence every phase has actually been following,
@@ -327,16 +362,16 @@ above) — all 11/11 job types, including the simulator, verified completing
 successfully on the deployed staging worker. Prod `setup/status` shows managed secret
 provider — **MET, 2026-07-19/20** — verified live:
 `{"provider":"aws-secrets-manager","loaded":true}`. Restore-drill doc with real timings
-+ weekly automation — **CI wiring MET, verification still blocked**: `git push` is now
-genuinely fixed (real GitHub token, `parammm390/JARVIS`, confirmed working — `git
-fetch`/`git log origin/main` both reach GitHub fine and match local `main` exactly) and
-the real root cause of "CI never ran" (workflow file nested under `finnor-os/`,
-invisible to GitHub Actions regardless of credentials) is fixed too — but the first
-real CI run is stuck `queued` because GitHub Actions itself is having a live Critical-
-impact partial outage (confirmed directly against status.github.com, incident open
-since 2026-07-19 23:34 UTC) — external, not fixable by either of us, should self-
-resolve. The full production-parity drill still needs a restore target separate from
-this staging DB. Load + chaos docs committed with targets met — **NOT MET, real
+— **MET FOR REAL, 2026-07-20**: once the GitHub Actions outage cleared, CI ran for the
+first time ever and this session fixed 4 real bugs it found in sequence (see Task 6.3's
+own entry for the full list — postcss/tailwindcss, LangGraph checkpointer setup,
+embedding vector dimensions, restore-target extension) until the `test` job, restore
+drill included, ran fully green end-to-end, confirmed by reading the completed run's
+own job list. **Weekly automation is the one piece still not met**: `deploy-staging`
+now runs (previously invisible to GitHub Actions entirely) but fails at exactly the one
+place already documented — no `RAILWAY_TOKEN` secret yet (`owner-actions.md` §10). The
+full production-parity drill still needs a restore target separate from this staging
+DB. Load + chaos docs committed with targets met — **NOT MET, real
 finding, not a gap in effort**: the 86.39%-failure load test result from Task 6.4
 stands; worker-side connection pooling is now fixed for real (PgBouncer + code fix,
 see Task 6.3/6.4 entries) but the Vercel-side path that the load test actually hit
@@ -349,8 +384,11 @@ each for the AWS/Sentry cutover alone).
 
 **Honest summary, updated 2026-07-20: Phase 6 is now blocked on exactly two owner
 actions, both single clicks in the existing Railway dashboard (no new account) — see
-`owner-actions.md` §9's updated entries. Everything reachable by engineering alone,
-including today's real staging-worker bug fix, is done.**
+`owner-actions.md` §9/§10's updated entries. Everything reachable by engineering alone
+is done: the staging-worker bug, and — once GitHub's own outage cleared — this repo's
+CI ran for real for the first time ever and every bug it found (4 of them, all real,
+all previously invisible because CI had never successfully run before today) is fixed
+and verified green.**
 
 ## Phase 7 — The cockpit
 Status: not-started
