@@ -11,3 +11,7 @@ node_modules
 **/.DS_Store
 *.tsbuildinfo
 vercel_output.txt
+
+# Playwright (Phase 7 §7.10) run artifacts — never source
+/playwright-report/
+/test-results/

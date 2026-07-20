@@ -41,8 +41,11 @@ export function LoginForm() {
         <p className="mb-5 text-[12px] text-[color:var(--j-text-dim)]">Real account, real data. The public page stays readable without signing in.</p>
         <form onSubmit={submit} className="space-y-3">
           <div>
-            <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-[color:var(--j-text-faint)]">Email</label>
+            <label htmlFor="jarvis-login-email" className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-[color:var(--j-text-faint)]">
+              Email
+            </label>
             <input
+              id="jarvis-login-email"
               type="email"
               required
               autoFocus
@@ -53,8 +56,11 @@ export function LoginForm() {
             />
           </div>
           <div>
-            <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-[color:var(--j-text-faint)]">Password</label>
+            <label htmlFor="jarvis-login-password" className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-[color:var(--j-text-faint)]">
+              Password
+            </label>
             <input
+              id="jarvis-login-password"
               type="password"
               required
               value={password}

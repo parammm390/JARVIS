@@ -138,6 +138,34 @@ function SidebarProfile() {
   )
 }
 
+// Phase 7 (§7.9, mobile-capable cockpit): the desktop sidebar (and its sign-in link)
+// is `hidden lg:flex` — below that breakpoint there was previously NO way to reach
+// /jarvis/login at all, which would make "mobile approval in two taps" (the pack's
+// own exit-gate wording) impossible. This is the same sign-in affordance, compact,
+// for the `lg:hidden` mobile header.
+function MobileProfileChip() {
+  const { session, loading, signOut } = useJarvisAuth()
+  if (loading) return null
+  if (!session) {
+    return (
+      <Link
+        href="/jarvis/login"
+        className="j-chip shrink-0 border border-white/12 text-white/70 hover:text-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60"
+      >
+        Sign in
+      </Link>
+    )
+  }
+  return (
+    <button
+      onClick={() => void signOut()}
+      className="j-chip shrink-0 border border-white/12 text-white/70 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60"
+    >
+      Sign out
+    </button>
+  )
+}
+
 function Sidebar({ view, setView }: { view: string; setView: (v: string) => void }) {
   const data = useJarvis()
   const live = !data.statsDegraded && data.stats !== null
@@ -287,6 +315,9 @@ function Shell() {
                 {live ? "Live" : "Simulation"}
               </span>
             </span>
+            <div className="lg:hidden">
+              <MobileProfileChip />
+            </div>
           </div>
 
           {/* mobile view switcher */}
