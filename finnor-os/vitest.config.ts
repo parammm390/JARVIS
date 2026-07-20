@@ -4,6 +4,19 @@ import { fileURLToPath } from "node:url";
 const r = (p: string) => fileURLToPath(new URL(p, import.meta.url));
 
 export default defineConfig({
+  // finnor-os is a backend monorepo with zero CSS of its own, but Vite's CSS plugin
+  // eagerly resolves a postcss config at server-init time regardless of `test.css` --
+  // `postcss-load-config`'s searchPath starts at finnor-os and, finding no config here,
+  // walks UP into the marketing site's postcss.config.js at the true repo root
+  // (finnor-os/ lives nested inside it), which needs `tailwindcss` -- a dependency this
+  // workspace's own `npm ci` never installs. Worked locally by accident only because the
+  // repo root's own node_modules (installed separately for marketing-site work) happened
+  // to already have it; crashed for real on a clean CI checkout with `Cannot find module
+  // 'tailwindcss'`, the first real signal from this repo's first-ever green CI run.
+  // Passing a literal (empty) postcss config here bypasses the filesystem search
+  // entirely -- verified by reproducing the exact CI crash locally (temporarily hiding
+  // node_modules/tailwindcss) before and after this fix.
+  css: { postcss: { plugins: [] } },
   resolve: {
     alias: {
       "@finnor/shared-types": r("./packages/shared-types/src/index.ts"),
