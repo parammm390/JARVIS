@@ -15,17 +15,25 @@ export type Db = NodePgDatabase<typeof schema>;
 /**
  * node-postgres quirk: an `sslmode=` query param in the connection string overrides
  * an explicit `ssl` config object, and Supabase's chain is self-signed from Node's
- * point of view. Strip the param and configure ssl explicitly instead.
+ * point of view. Strip the param and configure ssl explicitly instead — except
+ * `sslmode=disable` is read as an explicit override before stripping (the standard
+ * Postgres convention for "this endpoint genuinely doesn't speak TLS, don't ask it to").
  *
  * `.railway.internal` hosts (Phase 6 staging: a session-mode PgBouncer sitting between
  * the app and Postgres) are Railway's own private network — already an isolated,
  * non-public transport, same trust level as localhost — and the plain Postgres image
  * behind it doesn't terminate TLS, so requesting SSL there fails outright ("the server
- * does not support SSL connections") rather than just being redundant.
+ * does not support SSL connections") rather than just being redundant. The same
+ * PgBouncer, reached via Railway's *public* TCP proxy for Task 6.4's Vercel-side load
+ * test, has the identical no-TLS limitation but crosses the public internet — the
+ * hostname heuristic alone can't tell that case apart safely (a real public Postgres
+ * host should still get SSL), so that caller passes `sslmode=disable` explicitly rather
+ * than this function guessing from the domain.
  */
 export function pgConnectionConfig(url: string): pg.ClientConfig {
+  const sslDisabled = /[?&]sslmode=disable\b/.test(url);
   const cleaned = url.replace(/([?&])sslmode=[^&]*&?/, "$1").replace(/[?&]$/, "");
-  const skipSsl = cleaned.includes("localhost") || cleaned.includes("127.0.0.1") || cleaned.includes(".railway.internal");
+  const skipSsl = sslDisabled || cleaned.includes("localhost") || cleaned.includes("127.0.0.1") || cleaned.includes(".railway.internal");
   return {
     connectionString: cleaned,
     ...(skipSsl ? {} : { ssl: { rejectUnauthorized: false } }),
