@@ -9,9 +9,17 @@ const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000"
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: true,
+  // A single `next start` process serving many concurrent Playwright workers at
+  // once (this repo's default local run: 2 projects x full parallelism) measurably
+  // slows first render under that combined load — real finding, not a test bug:
+  // running just one project passed reliably, running the whole suite together
+  // started missing the default 5s expect timeout. Fewer workers keeps the server
+  // from being the bottleneck; a slightly longer expect timeout absorbs the rest.
+  workers: process.env.CI ? 2 : undefined,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: [["html", { open: "never" }]],
+  expect: { timeout: 10_000 },
   use: {
     baseURL,
     trace: "on-first-retry",

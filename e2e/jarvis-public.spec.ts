@@ -4,21 +4,49 @@ import { test, expect } from "@playwright/test"
 // can exercise without a real Supabase credential (see jarvis-authenticated.spec.ts
 // for the flows that need one, and why they're gated rather than faked).
 
-// Real, expected noise on this specific architecture: every panel polls its own
-// private endpoint even while logged out (so it can degrade gracefully to sample
-// data the instant a session exists) — the browser logs a "Failed to load
-// resource" console-level line for every one of those 401s, regardless of the app
-// handling the rejection cleanly. That's not a bug; only a genuine uncaught
-// exception (pageerror) or a non-401 console error is.
-function isExpectedLoggedOutNoise(text: string): boolean {
-  return /Failed to load resource.*401/.test(text)
+// Real, expected noise on this specific architecture — neither is a product bug:
+// (1) every panel polls its own private endpoint even while logged out (so it can
+//     degrade gracefully to sample data the instant a session exists), and the
+//     browser logs a "Failed to load resource" console-level line for every one
+//     of those 401s regardless of the app handling the rejection cleanly.
+// (2) BootSequence.tsx's boot-check fetches the real finnor-os API's /api/health
+//     DIRECTLY (not through the same-origin /api/jarvis proxy) to test raw
+//     reachability. Production's CORS allowlist (finnor-os apps/api/middleware.ts,
+//     CONSOLE_ORIGIN) only permits finnorai.com's own origin — correct there, but
+//     it means this ONE check always CORS-fails when testing against the real
+//     remote API from localhost (dev/CI), never in production where the origin
+//     actually matches. Widening the production API's CORS allowlist to permit
+//     arbitrary localhost origins is a real security-relevant backend change, not
+//     something to make casually just to quiet a local test — this is the test
+//     environment's own artifact, not a product defect, so it's excluded here
+//     instead, same as the 401 noise.
+// A genuine uncaught exception (pageerror) or any OTHER console error still fails
+// the test. The bare generic "net::ERR_FAILED" line only gets excluded when it's
+// the direct follow-on to the health-check CORS error above (a browser logs both
+// for the one failed cross-origin fetch) — never as a blanket allowance, so an
+// unrelated real network failure with that same generic message still fails loudly.
+function makeNoiseFilter() {
+  let sawHealthCheckCorsError = false
+  return (text: string): boolean => {
+    if (/Failed to load resource.*401/.test(text)) return true
+    if (/api\/health.*CORS policy|blocked by CORS policy.*api\/health/i.test(text)) {
+      sawHealthCheckCorsError = true
+      return true
+    }
+    if (sawHealthCheckCorsError && text === "Failed to load resource: net::ERR_FAILED") {
+      sawHealthCheckCorsError = false
+      return true
+    }
+    return false
+  }
 }
 
 test.describe("public /jarvis page", () => {
   test("loads, shows a live-ops status, and throws no unexpected console errors", async ({ page }) => {
     const unexpected: string[] = []
+    const isNoise = makeNoiseFilter()
     page.on("console", (msg) => {
-      if (msg.type() === "error" && !isExpectedLoggedOutNoise(msg.text())) unexpected.push(msg.text())
+      if (msg.type() === "error" && !isNoise(msg.text())) unexpected.push(msg.text())
     })
     page.on("pageerror", (err) => unexpected.push(err.message))
 
