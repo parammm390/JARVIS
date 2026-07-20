@@ -70,7 +70,11 @@ export function DlqBrowser() {
         <span className="j-label">Dead-Letter Queue</span>
         <div className="flex items-center gap-2">
           {rows && rows.length > 0 && <span className="rounded-full bg-red-400/12 px-2 py-0.5 text-[10px] font-black text-red-300">{rows.length}</span>}
-          <button type="button" onClick={() => void load()} className="rounded-full border border-white/12 p-1 text-white/50 hover:text-cyan-200">
+          <button
+            type="button"
+            onClick={() => void load()}
+            className="rounded-full border border-white/12 p-1 text-white/50 hover:text-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60"
+          >
             <RefreshCw className="h-3 w-3" />
           </button>
         </div>
@@ -97,7 +101,7 @@ export function DlqBrowser() {
                     type="button"
                     disabled={inflight === r.id}
                     onClick={() => act(r.id, "replay")}
-                    className="inline-flex items-center gap-1 rounded-full border border-white/15 px-3 py-1 text-[10px] font-black text-white/70 hover:text-cyan-200 disabled:opacity-40"
+                    className="inline-flex items-center gap-1 rounded-full border border-white/15 px-3 py-1 text-[10px] font-black text-white/70 hover:text-cyan-200 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60"
                   >
                     <RotateCcw className="h-3 w-3" /> Replay
                   </button>
@@ -106,7 +110,7 @@ export function DlqBrowser() {
                   type="button"
                   disabled={inflight === r.id}
                   onClick={() => act(r.id, "discard")}
-                  className="inline-flex items-center gap-1 rounded-full border border-white/15 px-3 py-1 text-[10px] font-black text-white/50 hover:text-red-300 disabled:opacity-40"
+                  className="inline-flex items-center gap-1 rounded-full border border-white/15 px-3 py-1 text-[10px] font-black text-white/50 hover:text-red-300 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60"
                 >
                   <Trash2 className="h-3 w-3" /> Discard
                 </button>
