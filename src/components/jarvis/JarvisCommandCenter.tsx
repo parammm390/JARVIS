@@ -32,6 +32,8 @@ import { DailyBriefing } from "./panels/DailyBriefing"
 import { DegradedBanner } from "./panels/DegradedBanner"
 import { DataQualityQueue } from "./panels/DataQualityQueue"
 import { DlqBrowser } from "./panels/DlqBrowser"
+import { DispatcherBoard } from "./panels/DispatcherBoard"
+import { TechnicianBoard } from "./panels/TechnicianBoard"
 import { CommsFeed } from "./panels/CommsFeed"
 import { ActivityRail } from "./panels/ActivityRail"
 import { PipelinePulse } from "./panels/PipelinePulse"
@@ -83,6 +85,12 @@ function CommandCenterHome({
       </div>
       <div key={`${igniteKey}-1`} className="jarvis-rise" style={delay(1)}>
         <KpiStrip onNavigate={onNavigate} />
+      </div>
+      <div key={`${igniteKey}-1b`} className="jarvis-rise" style={delay(1)}>
+        <DispatcherBoard />
+      </div>
+      <div key={`${igniteKey}-1c`} className="jarvis-rise" style={delay(1)}>
+        <TechnicianBoard />
       </div>
       <div key={`${igniteKey}-2`} className="jarvis-rise grid grid-cols-1 gap-4 xl:grid-cols-3" style={delay(2)}>
         <WorkflowTheater />
