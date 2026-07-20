@@ -13,8 +13,6 @@ on:
 jobs:
   lint-typecheck-e2e:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     env:
       # The Supabase ANON/publishable key, not the service-role secret — Next.js
       # bakes every NEXT_PUBLIC_* var into the client JS bundle at build time, so
@@ -66,30 +64,8 @@ jobs:
           set -e
           npm run start & server_pid=$!
           npx wait-on http://localhost:3000 --timeout 60000
-          echo "server reachable" > /tmp/ci-debug.txt
           set +e
-          npx playwright test --reporter=list > /tmp/ci-test-output.txt 2>&1
+          npx playwright test --reporter=list
           test_status=$?
-          echo "$test_status" > /tmp/ci-test-exit.txt
           kill "$server_pid" 2>/dev/null || true
-          cat /tmp/ci-test-output.txt
           exit "$test_status"
-      # Temporary diagnostic (Phase 7 §7.10): GitHub now requires sign-in to view
-      # Actions logs even on this public repo, and the unauthenticated REST API's
-      # 60/hr limit was hit mid-diagnosis of this exact failure. Committing the raw
-      # output to a dedicated branch makes it readable via a plain
-      # raw.githubusercontent.com fetch — no auth wall, no API rate limit. Remove
-      # once this workflow is confirmed green.
-      - name: Publish raw test output for unauthenticated reading
-        if: always()
-        run: |
-          git config user.name "marketing-ci-debug"
-          git config user.email "actions@github.com"
-          git checkout --orphan ci-debug-output
-          git rm -rf . > /dev/null 2>&1 || true
-          cp /tmp/ci-debug.txt debug.txt 2>/dev/null || echo "server never became reachable" > debug.txt
-          cp /tmp/ci-test-output.txt test-output.txt 2>/dev/null || echo "no test output captured" > test-output.txt
-          cp /tmp/ci-test-exit.txt test-exit.txt 2>/dev/null || echo "unknown" > test-exit.txt
-          git add debug.txt test-output.txt test-exit.txt
-          git commit -m "ci debug output for ${{ github.sha }}"
-          git push --force origin ci-debug-output
