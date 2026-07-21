@@ -25,6 +25,8 @@ const SECURITY_HEADERS = [
   { key: "Permissions-Policy", value: "camera=(), microphone=(self), geolocation=()" },
 ]
 
+import { withSentryConfig } from "@sentry/nextjs"
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   async redirects() {
@@ -50,4 +52,15 @@ const nextConfig = {
   },
 }
 
-export default nextConfig
+// A2.T3: release-tagged Sentry (see sentry.{client,server,edge}.config.ts). Source-map
+// upload only activates once SENTRY_AUTH_TOKEN/org/project are set — silent:true means
+// it degrades to a no-op instead of failing the build in every env that doesn't have
+// those yet (none currently do; Sentry error reporting itself doesn't need them).
+export default withSentryConfig(nextConfig, {
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  silent: true,
+  widenClientFileUpload: false,
+  telemetry: false,
+})
