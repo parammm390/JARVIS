@@ -26,6 +26,7 @@ import { simulatorTick } from "./handlers/simulator-tick";
 import { scanReliabilityAlerts } from "./handlers/scan-reliability-alerts";
 import { dailyScorecard } from "./handlers/daily-scorecard";
 import { startScheduler, type ScheduledScan } from "./scheduler";
+import { startHeartbeat } from "./heartbeat";
 
 export function createWorker(): JobQueue {
   const queue = new JobQueue();
@@ -98,6 +99,7 @@ if (isMain) {
   process.on("SIGTERM", () => controller.abort());
   process.on("SIGINT", () => controller.abort());
   log.info({ event: "worker_started" }, "[worker] started, polling jobs table");
+  startHeartbeat(30_000, controller.signal);
   startScheduler(PROACTIVE_SCANS, 15 * 60_000, controller.signal);
   createWorker()
     .runLoop(2000, controller.signal)

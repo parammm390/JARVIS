@@ -308,6 +308,13 @@ export const providerCircuitState = pgTable("provider_circuit_state", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+// A2.T4: dead-man-switch state — see migration 0035.
+export const workerHeartbeat = pgTable("worker_heartbeat", {
+  id: text("id").primaryKey(),
+  lastBeatAt: timestamp("last_beat_at", { withTimezone: true }).notNull().defaultNow(),
+  meta: jsonb("meta").notNull().default({}),
+});
+
 export const apiRateLimits = pgTable("api_rate_limits", {
   bucketKey: text("bucket_key").notNull(),
   windowStartedAt: timestamp("window_started_at", { withTimezone: true }).notNull(),
