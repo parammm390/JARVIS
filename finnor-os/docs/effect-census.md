@@ -10,8 +10,10 @@ document generation) OR any write with cross-tenant/financial blast radius.
 **Update (Task 2.5, this session): paths 1 and 2 below are RESOLVED.** Both
 `GatedExecutor.execute()` and the LangGraph mirror now call
 `packages/orchestration/src/runtime-bridge.ts`'s `executePluginViaRuntime()` instead of
-`plugin.execute()` directly — every domain-action execution (all 42 action types, not
-just the 4 workflow-kind ones) now creates a real `commands`/`workflow_runs`/
+`plugin.execute()` directly — every domain-action execution (all 41 action types, not
+just the 4 workflow-kind ones — the pricing-catalog pseudo-row `setup/status` also
+tracks is a policy-only concept, never an executed action type, see
+`docs/policy-matrix.md`'s "§Pricing" note) now creates a real `commands`/`workflow_runs`/
 `workflow_steps` row and a finalized `DecisionReceipt`, verified by grep (the only
 `plugin.execute()` call site left in non-test code is inside that one bridge function)
 and by the full existing test suite passing unchanged (402/405, behavior-identical) plus
@@ -31,11 +33,11 @@ a new dedicated test (`tests/integration/single-action-runtime-bridge.test.ts`).
 
 ## Action-type inventory (`compiler.ts` `WORKFLOW_ACTION_TYPES`)
 
-Only **4 of 42** action types are tagged `kind: "workflow"` (async, multi-step, via
+Only **4 of 41** action types are tagged `kind: "workflow"` (async, multi-step, via
 `enqueueStep` + the worker): `start_water_test_workflow`, `request_proposal_signature`,
 `start_installation_workflow`, `start_invoice_to_cash_workflow`.
 
-**As of Task 2.5, the remaining ~38 action types** — across all 21 domain plugins (crm,
+**As of Task 2.5, the remaining ~37 action types** — across all 21 domain plugins (crm,
 scheduling, inventory, accounting, customer-comm, quotation, marketing, bulk-notify,
 service-reminders, technician-reports, compliance-documentation, maintenance-agreement,
 ops-overview, water-domain-knowledge, web-research, proposal-batch, and the
