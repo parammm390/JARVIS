@@ -1,0 +1,107 @@
+// A2.T5 acceptance: GET /api/vitals — auth required, and each section reflects real
+// DB state (queue depth/oldest-pending age from a real queued job, DLQ count scoped to
+// THIS tenant only, heartbeat age from a real worker_heartbeat row).
+
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import pg from "pg";
+import { migrate } from "../../packages/db/migrate";
+import { getPool, withTenant, closePool, tenants, deadLetters, workerHeartbeat } from "@finnor/db";
+import { GET as vitalsRoute } from "../../apps/api/app/api/vitals/route";
+
+const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
+const TENANT_A = "00000000-0000-4000-8000-0000000000fa";
+const TENANT_B = "00000000-0000-4000-8000-0000000000fb";
+
+async function dbUp(): Promise<boolean> {
+  const c = new pg.Client({ connectionString: DB_URL, connectionTimeoutMillis: 2000 });
+  try {
+    await c.connect();
+    await c.end();
+    return true;
+  } catch {
+    return false;
+  }
+}
+const available = await dbUp();
+
+function req(tenantId?: string): Request {
+  const headers: Record<string, string> = { "x-user-role": "owner" };
+  if (tenantId) headers["x-tenant-id"] = tenantId;
+  return new Request("http://localhost/api/vitals", { headers });
+}
+
+describe.skipIf(!available)("GET /api/vitals", () => {
+  beforeAll(async () => {
+    process.env.DATABASE_URL = DB_URL;
+    process.env.AUTH_DEV_BYPASS = "1";
+    await migrate(DB_URL);
+    await withTenant(TENANT_A, (db) => db.insert(tenants).values({ id: TENANT_A, name: "Vitals Test Dealer A" }).onConflictDoNothing());
+    await withTenant(TENANT_B, (db) => db.insert(tenants).values({ id: TENANT_B, name: "Vitals Test Dealer B" }).onConflictDoNothing());
+  });
+  afterAll(async () => {
+    await closePool();
+  });
+
+  it("401s without a bearer token / dev-bypass headers", async () => {
+    const original = process.env.AUTH_DEV_BYPASS;
+    delete process.env.AUTH_DEV_BYPASS;
+    const res = await vitalsRoute(new Request("http://localhost/api/vitals"));
+    expect(res.status).toBe(401);
+    process.env.AUTH_DEV_BYPASS = original;
+  });
+
+  it("reports real queue depth and oldest-pending age off an actually-queued job", async () => {
+    await getPool().query(`DELETE FROM jobs WHERE type = 'vitals_test_job'`);
+    await getPool().query(
+      `INSERT INTO jobs (type, payload, run_at) VALUES ('vitals_test_job', '{}', now() - interval '5 seconds')`,
+    );
+    const res = await vitalsRoute(req(TENANT_A));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.queue.depth).toBeGreaterThanOrEqual(1);
+    expect(body.queue.oldestPendingAgeSeconds).toBeGreaterThanOrEqual(4);
+  });
+
+  it("scopes DLQ count to the requesting tenant only — tenant B's entries never leak into A's count", async () => {
+    await getPool().query(`DELETE FROM dead_letters WHERE tenant_id IN ($1, $2)`, [TENANT_A, TENANT_B]);
+    await withTenant(TENANT_A, (db) =>
+      db.insert(deadLetters).values({ tenantId: TENANT_A, envelope: {}, errorKind: "terminal", lastError: "vitals test A" }),
+    );
+    await withTenant(TENANT_B, (db) =>
+      db.insert(deadLetters).values([
+        { tenantId: TENANT_B, envelope: {}, errorKind: "terminal", lastError: "vitals test B 1" },
+        { tenantId: TENANT_B, envelope: {}, errorKind: "terminal", lastError: "vitals test B 2" },
+      ]),
+    );
+    const [resA, resB] = await Promise.all([vitalsRoute(req(TENANT_A)), vitalsRoute(req(TENANT_B))]);
+    const [bodyA, bodyB] = await Promise.all([resA.json(), resB.json()]);
+    expect(bodyA.dlq.openCount).toBe(1);
+    expect(bodyB.dlq.openCount).toBe(2);
+  });
+
+  it("reports heartbeat age from a real worker_heartbeat row, and unhealthy when stale", async () => {
+    await getPool().query(`DELETE FROM worker_heartbeat WHERE id = 'worker'`);
+    const res1 = await vitalsRoute(req(TENANT_A));
+    const body1 = await res1.json();
+    expect(body1.heartbeat.ageSeconds).toBeNull();
+    expect(body1.heartbeat.healthy).toBe(false);
+
+    await getPool().query(`INSERT INTO worker_heartbeat (id, last_beat_at) VALUES ('worker', now())`);
+    const res2 = await vitalsRoute(req(TENANT_A));
+    const body2 = await res2.json();
+    expect(body2.heartbeat.ageSeconds).toBeLessThan(5);
+    expect(body2.heartbeat.healthy).toBe(true);
+
+    await getPool().query(`UPDATE worker_heartbeat SET last_beat_at = now() - interval '10 minutes' WHERE id = 'worker'`);
+    const res3 = await vitalsRoute(req(TENANT_A));
+    const body3 = await res3.json();
+    expect(body3.heartbeat.healthy).toBe(false);
+  });
+
+  it("includes resolved capability bindings", async () => {
+    const res = await vitalsRoute(req(TENANT_A));
+    const body = await res.json();
+    expect(body.bindings).toBeDefined();
+    expect(typeof body.bindings).toBe("object");
+  });
+});
