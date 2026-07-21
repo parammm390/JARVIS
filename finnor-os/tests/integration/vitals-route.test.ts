@@ -39,6 +39,10 @@ describe.skipIf(!available)("GET /api/vitals", () => {
     await withTenant(TENANT_B, (db) => db.insert(tenants).values({ id: TENANT_B, name: "Vitals Test Dealer B" }).onConflictDoNothing());
   });
   afterAll(async () => {
+    // Never leave a queued job sitting in the shared jobs table — a stray row here
+    // gets claimed by the NEXT thing to call JobQueue.tick() against this same local
+    // DB (another test file, a dev script), not just this suite.
+    await getPool().query(`DELETE FROM jobs WHERE type = 'vitals_test_job'`);
     await closePool();
   });
 
