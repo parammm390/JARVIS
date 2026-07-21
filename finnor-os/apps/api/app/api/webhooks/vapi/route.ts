@@ -11,7 +11,7 @@
 //  3. end-of-call-report for a normal customer call: transcript enqueued for the
 //     Planner, exactly as before.
 
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { VapiWebhookSchema } from "@finnor/policy-schema";
 import { adminDb, jobs, withTenant, domainActions, domainPolicies, actionLog, tenantPhoneNumbers } from "@finnor/db";
 import { persistCall } from "@finnor/data-platform";
@@ -188,6 +188,11 @@ async function handleToolCalls(message: Record<string, unknown>): Promise<Respon
   const session = await openVoiceSession(tenantId, callId, identity?.id);
   const staffCtx: { userId: string; role: Role } | null =
     identity?.role === "owner" ? { userId: identity.matchedUserId ?? identity.id, role: "owner" } : null;
+  // A2.T1: mint the trace id at the live-call intake, keyed by callId so every action
+  // this call produces (one finnor_instruct tool-call per utterance) correlates under
+  // the same id — same "vapi:<callId>" namespace the outbound-confirmation path below
+  // already uses for its own correlation-free purposes (session/idempotency keys).
+  const correlationId = `vapi:${callId}`;
 
   for (const tc of list) {
     const name = tc.function?.name ?? "";
@@ -215,7 +220,7 @@ async function handleToolCalls(message: Record<string, unknown>): Promise<Respon
         }
         const actions = await getOrchestrator().handleInstruction(
           instruction,
-          { tenantId, userId: staffCtx.userId, role: staffCtx.role },
+          { tenantId, userId: staffCtx.userId, role: staffCtx.role, correlationId },
           { sessionId: `vapi:${callId}` },
         );
         await appendVoiceTurn({
@@ -455,11 +460,21 @@ export async function POST(req: Request): Promise<Response> {
       });
     }
 
+    // A2.T1: same trace-id namespace as the live-call path above — _correlationId is
+    // the convention queue.ts's tick() and enqueueJob() already read/write; a bare
+    // `.insert(jobs)` (this call bypasses the enqueueJob() helper for its custom
+    // idempotencyKey shape) has to set it by hand.
     await adminDb()
       .insert(jobs)
       .values({
         type: "process_instruction",
-        payload: { tenantId, instruction: msg.transcript, source: "vapi", callId: msg.call?.id ?? null },
+        payload: {
+          tenantId,
+          instruction: msg.transcript,
+          source: "vapi",
+          callId: msg.call?.id ?? null,
+          _correlationId: msg.call?.id ? `vapi:${msg.call.id}` : randomUUID(),
+        },
         idempotencyKey: msg.call?.id ? `vapi:${msg.call.id}` : null,
       })
       .onConflictDoNothing({ target: jobs.idempotencyKey });
