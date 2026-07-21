@@ -45,3 +45,4 @@ export * from "./emulators/inventory-emulator";
 export * from "./capabilities/inventory";
 export * from "./emulators/documents-emulator";
 export * from "./capabilities/documents";
+export * from "./binding-resolution";

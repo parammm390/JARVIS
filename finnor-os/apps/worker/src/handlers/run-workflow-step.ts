@@ -49,79 +49,85 @@ import {
   launchAdCampaignContract,
   launchAdCampaignEmulatorBinding,
   launchAdCampaignDryRunBinding,
+  resolveCapabilityBindings,
 } from "@finnor/tools";
 import type { JobHandler } from "../queue";
 
+// Binding *selection logic* (mode + source — native-by-default for Finnor-owned caps
+// since A1.T2, emulator-by-default for external caps) lives in one place —
+// @finnor/tools' resolveCapabilityBindings() — shared with apps/api's /api/setup/status
+// report so the two can never drift apart. This file only maps a resolved mode string
+// to the actual CapabilityBinding object to call.
 function schedulingBinding(): CapabilityBinding<unknown, unknown> {
-  return (process.env.SCHEDULING_BINDING === "native" ? nativeSchedulingBinding : emulatorSchedulingBinding) as CapabilityBinding<
+  return (resolveCapabilityBindings().scheduling.mode === "emulator" ? emulatorSchedulingBinding : nativeSchedulingBinding) as CapabilityBinding<
     unknown,
     unknown
   >;
 }
 function confirmBinding(): CapabilityBinding<unknown, unknown> {
-  return (process.env.SCHEDULING_BINDING === "native" ? confirmAppointmentNativeBinding : confirmAppointmentEmulatorBinding) as CapabilityBinding<
+  return (resolveCapabilityBindings().scheduling.mode === "emulator" ? confirmAppointmentEmulatorBinding : confirmAppointmentNativeBinding) as CapabilityBinding<
     unknown,
     unknown
   >;
 }
 function communicationsBinding(): CapabilityBinding<unknown, unknown> {
-  return (process.env.COMMUNICATIONS_BINDING === "vapi" ? vapiCommunicationsBinding : emulatorCommunicationsBinding) as CapabilityBinding<
+  return (resolveCapabilityBindings().communications.mode === "vapi" ? vapiCommunicationsBinding : emulatorCommunicationsBinding) as CapabilityBinding<
     unknown,
     unknown
   >;
 }
 function documentsBinding(): CapabilityBinding<unknown, unknown> {
-  return (process.env.DOCUMENTS_BINDING === "native" ? generateDocumentNativeBinding : generateDocumentEmulatorBinding) as CapabilityBinding<
+  return (resolveCapabilityBindings().documents.mode === "emulator" ? generateDocumentEmulatorBinding : generateDocumentNativeBinding) as CapabilityBinding<
     unknown,
     unknown
   >;
 }
 function esignBinding(): CapabilityBinding<unknown, unknown> {
-  return (process.env.ESIGN_BINDING === "docusign" ? requestSignatureDocusignBinding : requestSignatureEmulatorBinding) as CapabilityBinding<
+  return (resolveCapabilityBindings().esign.mode === "docusign" ? requestSignatureDocusignBinding : requestSignatureEmulatorBinding) as CapabilityBinding<
     unknown,
     unknown
   >;
 }
 function inventoryReserveBinding(): CapabilityBinding<unknown, unknown> {
-  return (process.env.INVENTORY_BINDING === "native" ? reserveStockNativeBinding : reserveStockEmulatorBinding) as CapabilityBinding<
+  return (resolveCapabilityBindings().inventory.mode === "emulator" ? reserveStockEmulatorBinding : reserveStockNativeBinding) as CapabilityBinding<
     unknown,
     unknown
   >;
 }
 function inventoryReceiveBinding(): CapabilityBinding<unknown, unknown> {
-  return (process.env.INVENTORY_BINDING === "native" ? receiveProcurementNativeBinding : receiveProcurementEmulatorBinding) as CapabilityBinding<
+  return (resolveCapabilityBindings().inventory.mode === "emulator" ? receiveProcurementEmulatorBinding : receiveProcurementNativeBinding) as CapabilityBinding<
     unknown,
     unknown
   >;
 }
 function accountingSyncBinding(): CapabilityBinding<unknown, unknown> {
-  return (process.env.ACCOUNTING_BINDING === "quickbooks" ? syncInvoiceQuickbooksBinding : syncInvoiceEmulatorBinding) as CapabilityBinding<
+  return (resolveCapabilityBindings().accounting.mode === "quickbooks" ? syncInvoiceQuickbooksBinding : syncInvoiceEmulatorBinding) as CapabilityBinding<
     unknown,
     unknown
   >;
 }
 function paymentLinkBinding(): CapabilityBinding<unknown, unknown> {
-  return (process.env.PAYMENTS_BINDING === "stripe" ? stripeCreatePaymentLinkBinding : createPaymentLinkEmulatorBinding) as CapabilityBinding<
+  return (resolveCapabilityBindings().payments.mode === "stripe" ? stripeCreatePaymentLinkBinding : createPaymentLinkEmulatorBinding) as CapabilityBinding<
     unknown,
     unknown
   >;
 }
 function crmUpsertContactBinding(): CapabilityBinding<unknown, unknown> {
-  const mode = process.env.CRM_BINDING;
-  return (mode === "ghl" ? upsertContactGhlBinding : mode === "native" ? upsertContactNativeBinding : upsertContactEmulatorBinding) as CapabilityBinding<
+  const mode = resolveCapabilityBindings().crm.mode;
+  return (mode === "ghl" ? upsertContactGhlBinding : mode === "emulator" ? upsertContactEmulatorBinding : upsertContactNativeBinding) as CapabilityBinding<
     unknown,
     unknown
   >;
 }
 function crmSendMessageBinding(): CapabilityBinding<unknown, unknown> {
-  const mode = process.env.CRM_BINDING;
-  return (mode === "ghl" ? sendMessageGhlBinding : mode === "native" ? sendMessageNativeBinding : sendMessageEmulatorBinding) as CapabilityBinding<
+  const mode = resolveCapabilityBindings().crm.mode;
+  return (mode === "ghl" ? sendMessageGhlBinding : mode === "emulator" ? sendMessageEmulatorBinding : sendMessageNativeBinding) as CapabilityBinding<
     unknown,
     unknown
   >;
 }
 function marketingLaunchBinding(): CapabilityBinding<unknown, unknown> {
-  return (process.env.MARKETING_BINDING === "dry_run" ? launchAdCampaignDryRunBinding : launchAdCampaignEmulatorBinding) as CapabilityBinding<
+  return (resolveCapabilityBindings().marketing.mode === "dry_run" ? launchAdCampaignDryRunBinding : launchAdCampaignEmulatorBinding) as CapabilityBinding<
     unknown,
     unknown
   >;

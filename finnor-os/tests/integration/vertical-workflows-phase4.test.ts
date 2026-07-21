@@ -1,7 +1,11 @@
 // Phase 4 vertical workflows 1-4 acceptance (docs/jarvis-90-execution-blueprint.md
 // §4.1-4.4) — each proven end-to-end against real Postgres, driving the durable
 // execution runtime's job-queue-backed steps directly (same mechanism a real worker
-// process uses), with the default (emulator) capability bindings.
+// process uses). Scheduling/documents/inventory/crm bindings are pinned to "emulator"
+// explicitly (A1.T2 flipped their default to native) so this suite keeps exercising
+// the emulator paths its resetXEmulator()/getEmulatorXStatus() assertions depend on,
+// and so workflow 4's send_message step doesn't leave a real communications_log row
+// behind that its cleanup block (never written to expect one) doesn't delete.
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import pg from "pg";
@@ -85,6 +89,10 @@ async function cleanWorkflowRun(workflowRunId: string, commandId: string) {
 describe.skipIf(!available)("Phase 4 vertical workflows", () => {
   beforeAll(async () => {
     process.env.DATABASE_URL = DB_URL;
+    process.env.SCHEDULING_BINDING = "emulator";
+    process.env.DOCUMENTS_BINDING = "emulator";
+    process.env.INVENTORY_BINDING = "emulator";
+    process.env.CRM_BINDING = "emulator";
     await migrate(DB_URL);
     await withTenant(TENANT_ID, (db) => db.insert(tenants).values({ id: TENANT_ID, name: "Phase 4 Workflow Test Dealer" }).onConflictDoNothing());
     // Clean slate: reconciliation_cases/inbox_events opened by a prior run must not

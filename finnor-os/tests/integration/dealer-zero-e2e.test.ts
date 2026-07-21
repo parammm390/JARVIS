@@ -78,6 +78,9 @@ describe.skipIf(!available)("Phase 3.6 proof tests — policy conformance + Deal
   beforeAll(async () => {
     process.env.DATABASE_URL = DB_URL;
     process.env.AUTH_DEV_BYPASS = "1";
+    // A1.T2 flipped scheduling's default to native — pin emulator explicitly so this
+    // test's getEmulatorHoldStatus()/wasEmulatorCallSent() assertions still hold.
+    process.env.SCHEDULING_BINDING = "emulator";
     await migrate(DB_URL);
     await seed(DB_URL);
     await seedDealerZero();

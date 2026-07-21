@@ -6,7 +6,7 @@
 // real credentials and a fully-populated policy set gets readyForProduction: true.
 
 import { createDefaultPluginRegistry } from "@finnor/orchestration";
-import { testAdsConnections, testQuickBooksConnection, testVapiConnection, ghlIntegrationStatus, circuitSnapshot } from "@finnor/tools";
+import { testAdsConnections, testQuickBooksConnection, testVapiConnection, ghlIntegrationStatus, circuitSnapshot, resolveCapabilityBindings } from "@finnor/tools";
 import { zepProviderStatus, embeddingsProviderStatus } from "@finnor/memory";
 import { secretProviderStatus } from "@finnor/security";
 import { adminDb, tenantPhoneNumbers } from "@finnor/db";
@@ -87,23 +87,18 @@ export async function GET(req: Request): Promise<Response> {
       await Promise.all(["vapi", "stripe", "quickbooks"].map(async (p) => [p, await circuitSnapshot(p)] as const)),
     );
 
-    // Phase 16(c): a staging (or prod) deploy's config posture, verifiable from this one
-    // endpoint instead of grepping platform env-var UIs. Bindings default to "emulator" —
-    // the same safe-until-opted-in posture every *_BINDING switch already has.
+    // Phase 16(c) / A1.T3: a staging (or prod) deploy's config posture, verifiable from
+    // this one endpoint instead of grepping platform env-var UIs. bindings comes from
+    // @finnor/tools' resolveCapabilityBindings() — the exact same function
+    // apps/worker/src/handlers/run-workflow-step.ts uses to pick the real binding — so
+    // this report can never silently drift from what actually executes. Each entry is
+    // {mode, source}: source is "env" (an operator set the var) or "default" (Finnor-
+    // owned capabilities default to "native" as of A1.T2; external capabilities still
+    // default to "emulator"). Tenant-row source arrives with A3's tenant_integrations.
     const environment = {
       nodeEnv: process.env.NODE_ENV ?? "development",
       secretProvider: secretProviderStatus(),
-      bindings: {
-        scheduling: process.env.SCHEDULING_BINDING ?? "emulator",
-        communications: process.env.COMMUNICATIONS_BINDING ?? "emulator",
-        documents: process.env.DOCUMENTS_BINDING ?? "emulator",
-        esign: process.env.ESIGN_BINDING ?? "emulator",
-        inventory: process.env.INVENTORY_BINDING ?? "emulator",
-        accounting: process.env.ACCOUNTING_BINDING ?? "emulator",
-        payments: process.env.PAYMENTS_BINDING ?? "emulator",
-        crm: process.env.CRM_BINDING ?? "emulator",
-        marketing: process.env.MARKETING_BINDING ?? "emulator",
-      },
+      bindings: resolveCapabilityBindings(),
     };
 
     return Response.json({ actionTypes, integrations, summary, phoneRouting, environment, circuitBreakers }, { headers: { "cache-control": "no-store" } });

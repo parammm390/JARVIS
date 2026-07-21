@@ -77,17 +77,22 @@ describe.skipIf(!available)("GET /api/setup/status — phoneRouting (Phase 14)",
     expect(body.phoneRouting.numbers[0]!.phoneNumber).toBe(myNumber);
   });
 
-  it("reports the environment block (Phase 16c): nodeEnv, secret provider, and every binding switch", async () => {
+  it("reports the environment block (Phase 16c / A1.T3): nodeEnv, secret provider, and every binding's resolved mode + source", async () => {
     const res = await GET(req());
     const body = (await res.json()) as {
-      environment: { nodeEnv: string; secretProvider: { provider: string; loaded: boolean }; bindings: Record<string, string> };
+      environment: { nodeEnv: string; secretProvider: { provider: string; loaded: boolean }; bindings: Record<string, { mode: string; source: string }> };
     };
     expect(body.environment.nodeEnv).toBeTruthy();
     expect(body.environment.secretProvider.provider).toBe("env"); // no SECRETS_PROVIDER set in this test run
-    // Every binding defaults to "emulator" until a dealer opts a real provider in —
-    // same safe-until-configured posture as the *_BINDING switches themselves.
-    for (const key of ["scheduling", "communications", "documents", "esign", "inventory", "accounting", "payments", "crm", "marketing"]) {
-      expect(body.environment.bindings[key]).toBe("emulator");
+    // Finnor-owned capabilities (A1.T2) default to "native" — there's no external SaaS
+    // behind them. External capabilities still default to "emulator" until a dealer
+    // opts a real provider in. Neither test-run env sets any *_BINDING var, so every
+    // entry here reports source: "default".
+    for (const key of ["scheduling", "documents", "inventory", "crm"]) {
+      expect(body.environment.bindings[key]).toEqual({ mode: "native", source: "default" });
+    }
+    for (const key of ["communications", "esign", "accounting", "payments", "marketing"]) {
+      expect(body.environment.bindings[key]).toEqual({ mode: "emulator", source: "default" });
     }
   });
 
