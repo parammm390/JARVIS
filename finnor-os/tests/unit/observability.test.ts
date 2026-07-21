@@ -11,8 +11,14 @@ function mockSentry() {
   const addBreadcrumb = vi.fn();
   const captureException = vi.fn();
   const captureMessage = vi.fn();
-  vi.doMock("@sentry/node", () => ({ init, addBreadcrumb, captureException, captureMessage }));
-  return { init, addBreadcrumb, captureException, captureMessage };
+  // A2.T2: errorResponse() now reads the correlation_id tag back off the current
+  // scope (to attach it to the structured log line) — getScopeData().tags must
+  // exist on the mock the same way it does on the real Scope.
+  const setTag = vi.fn();
+  const getScopeData = vi.fn(() => ({ tags: {} }));
+  const getCurrentScope = vi.fn(() => ({ setTag, getScopeData }));
+  vi.doMock("@sentry/node", () => ({ init, addBreadcrumb, captureException, captureMessage, getCurrentScope }));
+  return { init, addBreadcrumb, captureException, captureMessage, getCurrentScope };
 }
 
 describe("observability — Sentry wiring", () => {

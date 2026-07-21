@@ -2,7 +2,7 @@
 
 import "dotenv/config";
 
-import { initObservability } from "@finnor/tools";
+import { initObservability, getLogger } from "@finnor/tools";
 import { JobQueue } from "./queue";
 import { sendMessage } from "./handlers/send-message";
 import { scheduledReminder } from "./handlers/scheduled-reminder";
@@ -93,16 +93,17 @@ if (isMain) {
   // console.error or nothing (ground-truth §5). initObservability() no-ops harmlessly
   // without SENTRY_DSN, so this is safe to call unconditionally at boot.
   initObservability();
+  const log = getLogger();
   const controller = new AbortController();
   process.on("SIGTERM", () => controller.abort());
   process.on("SIGINT", () => controller.abort());
-  console.log("[worker] started, polling jobs table");
+  log.info({ event: "worker_started" }, "[worker] started, polling jobs table");
   startScheduler(PROACTIVE_SCANS, 15 * 60_000, controller.signal);
   createWorker()
     .runLoop(2000, controller.signal)
     .then(() => process.exit(0))
     .catch((err) => {
-      console.error(err);
+      log.fatal({ err: err instanceof Error ? err.message : String(err) }, "[worker] run loop crashed");
       process.exit(1);
     });
 }

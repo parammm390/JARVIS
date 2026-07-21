@@ -8,6 +8,7 @@ import { withTenant, domainActions } from "@finnor/db";
 import { and, eq } from "drizzle-orm";
 import { appendEpisode, readEpisodes } from "@finnor/memory";
 import { criticConfigured, reviewAction } from "@finnor/orchestration";
+import { logWithTrace } from "@finnor/tools";
 import type { JobHandler } from "../queue";
 
 export const criticReview: JobHandler = async (payload) => {
@@ -15,8 +16,9 @@ export const criticReview: JobHandler = async (payload) => {
   const actionId = String(payload.actionId ?? "");
   if (!tenantId || !actionId) throw new Error("critic_review requires tenantId, actionId");
 
+  const log = logWithTrace({ traceId: payload._correlationId as string | undefined, tenantId, actionId });
   if (!criticConfigured()) {
-    console.log(`[critic_review] Bedrock not configured — skipping for action ${actionId}`);
+    log.info("[critic_review] Bedrock not configured — skipping");
     return;
   }
 

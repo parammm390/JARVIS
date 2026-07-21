@@ -17,6 +17,7 @@ import { adminDb, jobs, withTenant, domainActions, domainPolicies, actionLog, te
 import { persistCall } from "@finnor/data-platform";
 import { ensureSecretsLoaded } from "@finnor/security";
 import { parseSpokenDecision, diagnoseFailure, resolveProvider } from "@finnor/orchestration";
+import { logWithTrace } from "@finnor/tools";
 import type { Role } from "@finnor/shared-types";
 import {
   resolveVoiceIdentity,
@@ -76,10 +77,10 @@ async function resolveTenantFromCall(call: { phoneNumberId?: string; phoneNumber
       .where(eq(tenantPhoneNumbers.phoneNumber, dialedNumber));
     if (byNumber) return byNumber.tenantId;
   }
-  console.warn("[vapi] no tenant_phone_numbers match — falling back to VAPI_DEFAULT_TENANT_ID", {
-    phoneNumberId: call?.phoneNumberId,
-    dialedNumber,
-  });
+  logWithTrace({}).warn(
+    { phoneNumberId: call?.phoneNumberId, dialedNumber },
+    "[vapi] no tenant_phone_numbers match — falling back to VAPI_DEFAULT_TENANT_ID",
+  );
   return defaultTenant();
 }
 
@@ -365,7 +366,10 @@ async function handleToolCalls(message: Record<string, unknown>): Promise<Respon
         results.push({ toolCallId: tc.id, result: `Unknown tool ${name}.` });
       }
     } catch (err) {
-      console.error("[vapi tool-call]", err);
+      logWithTrace({ traceId: correlationId, tenantId }).error(
+        { err: err instanceof Error ? err.message : String(err) },
+        "[vapi tool-call] failed",
+      );
       results.push({
         toolCallId: tc.id,
         result: "Something went wrong on my side — that action is parked in your review queue, nothing was sent.",
@@ -436,6 +440,9 @@ export async function POST(req: Request): Promise<Response> {
       return Response.json({ received: true, decision, result: result.status });
     }
 
+    // A2.T1: same trace-id namespace as the live-call path above.
+    const correlationId = msg.call?.id ? `vapi:${msg.call.id}` : randomUUID();
+
     // 3. Normal customer call — persist a permanent, queryable call record (Phase 1
     // canonical data platform; replaces the old "transcript used once, then discarded"
     // pattern), then the transcript still becomes a Planner instruction as before.
@@ -456,14 +463,16 @@ export async function POST(req: Request): Promise<Response> {
       ).catch((err) => {
         // Never let call-persistence failure block the instruction from still reaching
         // the Planner — the jobs insert below is the load-bearing path.
-        console.error("[vapi] failed to persist call record", err);
+        logWithTrace({ traceId: correlationId, tenantId }).error(
+          { err: err instanceof Error ? err.message : String(err) },
+          "[vapi] failed to persist call record",
+        );
       });
     }
 
-    // A2.T1: same trace-id namespace as the live-call path above — _correlationId is
-    // the convention queue.ts's tick() and enqueueJob() already read/write; a bare
-    // `.insert(jobs)` (this call bypasses the enqueueJob() helper for its custom
-    // idempotencyKey shape) has to set it by hand.
+    // _correlationId is the convention queue.ts's tick() and enqueueJob() already
+    // read/write; a bare `.insert(jobs)` (this call bypasses the enqueueJob() helper
+    // for its custom idempotencyKey shape) has to set it by hand.
     await adminDb()
       .insert(jobs)
       .values({
@@ -473,7 +482,7 @@ export async function POST(req: Request): Promise<Response> {
           instruction: msg.transcript,
           source: "vapi",
           callId: msg.call?.id ?? null,
-          _correlationId: msg.call?.id ? `vapi:${msg.call.id}` : randomUUID(),
+          _correlationId: correlationId,
         },
         idempotencyKey: msg.call?.id ? `vapi:${msg.call.id}` : null,
       })

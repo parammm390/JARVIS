@@ -13,6 +13,7 @@
 // read-last-run-then-write-last-run pair, which would race.
 
 import { enqueueJob, getPool } from "@finnor/db";
+import { getLogger } from "@finnor/tools";
 
 export interface ScheduledScan {
   /** Job type — must be registered as a handler in apps/worker/src/index.ts. */
@@ -60,7 +61,7 @@ export function startScheduler(scans: ScheduledScan[], tickMs = 15 * 60_000, sig
     try {
       await scheduleTick(scans);
     } catch (err) {
-      console.error("[scheduler] tick failed:", err);
+      getLogger().error({ err: err instanceof Error ? err.message : String(err) }, "[scheduler] tick failed");
     }
   };
   void tick(); // run once immediately on boot, don't wait a full interval for the first pass

@@ -3,7 +3,7 @@
 
 import { getPool } from "@finnor/db";
 import type { Job } from "@finnor/shared-types";
-import { Sentry } from "@finnor/tools";
+import { Sentry, logWithTrace } from "@finnor/tools";
 
 export type JobHandler = (payload: Record<string, unknown>) => Promise<void>;
 
@@ -87,6 +87,16 @@ export class JobQueue {
     // no caller had a ctx to thread one through (draftKnownAction/system scans).
     const payload = job.payload as Record<string, unknown>;
     const correlationId = (payload._correlationId as string | undefined) ?? job.id;
+    // A2.T2: every job's log line carries the same trace/tenant/action fields its
+    // Sentry breadcrumb and the eventual DecisionReceipt do — the id printed here is
+    // the one to grep for in Axiom/Sentry/the receipt for this exact execution.
+    const log = logWithTrace({
+      traceId: correlationId,
+      tenantId: (payload.tenantId as string | undefined) ?? undefined,
+      actionId: (payload.actionId as string | undefined) ?? undefined,
+      jobType: job.type,
+      jobId: job.id,
+    });
     const start = Date.now();
     try {
       await Sentry.withScope(async (scope) => {
@@ -95,11 +105,15 @@ export class JobQueue {
         if (!handler) throw new Error(`No handler registered for job type ${job.type}`);
         await handler(payload);
       });
-      Sentry.addBreadcrumb({ category: "job", message: job.type, data: { ok: true, ms: Date.now() - start, correlationId } });
+      const ms = Date.now() - start;
+      Sentry.addBreadcrumb({ category: "job", message: job.type, data: { ok: true, ms, correlationId } });
+      log.info({ ok: true, ms }, `job ${job.type} completed`);
       await getPool().query(`UPDATE jobs SET status = 'completed', started_at = NULL WHERE id = $1`, [job.id]);
     } catch (err) {
-      Sentry.addBreadcrumb({ category: "job", message: job.type, data: { ok: false, ms: Date.now() - start, correlationId } });
+      const ms = Date.now() - start;
+      Sentry.addBreadcrumb({ category: "job", message: job.type, data: { ok: false, ms, correlationId } });
       Sentry.captureException(err);
+      log.error({ ok: false, ms, err: err instanceof Error ? err.message : String(err) }, `job ${job.type} failed`);
       const attempts = Number(job.attempts) + 1;
       const max = Number((job as unknown as { max_attempts: number }).max_attempts ?? 3);
       const dead = attempts >= max;

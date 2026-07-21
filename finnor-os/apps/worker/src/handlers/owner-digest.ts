@@ -9,7 +9,7 @@
 
 import { getPool, withTenant, scanFindings, domainActions } from "@finnor/db";
 import { and, eq, gte, isNull } from "drizzle-orm";
-import { placeVapiCall, VOICE_PERSONAS } from "@finnor/tools";
+import { placeVapiCall, VOICE_PERSONAS, logWithTrace } from "@finnor/tools";
 import { followUpDebt, cashCollections, slaBreaches } from "@finnor/read-models";
 import type { JobHandler } from "../queue";
 
@@ -75,13 +75,15 @@ export const ownerDigest: JobHandler = async (payload) => {
     if (!result.ok) {
       // Don't dead-letter a daily digest over a transient call failure — the findings
       // stay undigested and roll into tomorrow's call instead of being lost.
-      console.error(`[owner_digest] call failed for tenant ${tenantId}: ${result.error}`);
+      logWithTrace({ traceId: payload._correlationId as string | undefined, tenantId }).error({ err: result.error }, "[owner_digest] call failed");
       return;
     }
   } else {
     // No phone configured — the findings are still real and still queryable (via
     // get_business_overview / a future insights view), just not spoken proactively.
-    console.log(`[owner_digest] tenant ${tenantId} has no owner_phone set — findings recorded, not called out.`);
+    logWithTrace({ traceId: payload._correlationId as string | undefined, tenantId }).info(
+      "[owner_digest] no owner_phone set — findings recorded, not called out",
+    );
   }
 
   if (findings.length > 0) {

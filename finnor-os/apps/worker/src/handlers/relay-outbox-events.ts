@@ -5,11 +5,12 @@
 // apps/worker/src/handlers/reconciliation.ts stub's own convention.
 
 import { relayOutboxEvents, type OutboxDeliverer } from "@finnor/workflow-runtime";
+import { logWithTrace } from "@finnor/tools";
 import type { JobHandler } from "../queue";
 
 const deliverer: OutboxDeliverer = {
   async deliver(eventType, payload, opts) {
-    console.log(`[relay_outbox_events] would deliver "${eventType}" (idempotencyKey=${opts.idempotencyKey})`, payload);
+    logWithTrace({}).info({ eventType, idempotencyKey: opts.idempotencyKey, payload }, "[relay_outbox_events] would deliver");
   },
 };
 

@@ -7,7 +7,7 @@ import { randomUUID } from "node:crypto";
 import { getPool } from "@finnor/db";
 import type { TenantContext, Role } from "@finnor/shared-types";
 import { ensureSecretsLoaded } from "@finnor/security";
-import { initObservability, Sentry } from "@finnor/tools";
+import { initObservability, Sentry, logWithTrace } from "@finnor/tools";
 import { checkRateLimit } from "./rate-limit";
 import { redactText } from "@finnor/security";
 
@@ -103,7 +103,11 @@ export function errorResponse(err: unknown): Response {
   initObservability();
   const message = err instanceof Error ? redactText(err.message).value : "Unexpected route failure";
   Sentry.captureException(new Error(message));
-  console.error(err);
+  // A2.T2: same correlation_id resolveCorrelationId() already tagged onto this
+  // request's Sentry scope — reading it back here means this chokepoint (the one
+  // every route's catch already flows through) needs no signature change anywhere.
+  const traceId = Sentry.getCurrentScope().getScopeData().tags.correlation_id as string | undefined;
+  logWithTrace({ traceId }).error({ err: message }, "unhandled route failure");
   // Plain language outward, details stay in server logs (§22).
   return Response.json({ error: "Something went wrong on our side. Try again shortly." }, { status: 500 });
 }
