@@ -81,6 +81,8 @@ const API_PATHS = {
   dlqDiscard: "/api/dlq/{id}/discard",
   corrections: "/api/corrections",
   policy: "/api/policies/{tenantId}/{actionType}",
+  vitals: "/api/vitals",
+  activity: "/api/activity",
 } as const satisfies Record<string, keyof paths>
 
 // ---------------------------------------------------------------------------
@@ -149,6 +151,29 @@ export interface AuditEntry {
 
 export interface RunControlResult {
   run: WorkflowRun
+}
+
+// Verified against finnor-os/apps/api/app/api/vitals/route.ts (A2.T5) — every field
+// mirrors that route's actual Response.json shape, not guessed.
+export interface Vitals {
+  queue: { depth: number; oldestPendingAgeSeconds: number | null }
+  heartbeat: { ageSeconds: number | null; healthy: boolean }
+  dlq: { openCount: number }
+  bindings: Record<string, string>
+  scans: Record<string, string | null>
+}
+
+// Verified against finnor-os/apps/api/app/api/activity/route.ts (A2.T6).
+export interface ActivityItem {
+  source: "action_log" | "workflow_step" | "call"
+  id: string
+  occurredAt: string
+  detail: Record<string, unknown>
+}
+export interface ActivityPage {
+  items: ActivityItem[]
+  nextCursor: string | null
+  hasMore: boolean
 }
 
 const READ_MODEL_VIEWS = {
@@ -246,6 +271,12 @@ export const jarvisClient = {
   // Honestly loose response — the domain_policies row shape wasn't read/verified this session.
   upsertPolicy: (tenantId: string, actionType: string, body: { policy: Record<string, unknown>; requiresConfirmation: boolean }): Promise<unknown> =>
     jarvisPost(`policies/${tenantId}/${actionType}`, body),
+
+  // D1.T2 pulse bar / D1.T3 activity theater.
+  vitals: (): Promise<Vitals> => jarvisGet<Vitals>("vitals"),
+
+  activity: (params?: { since?: string; limit?: number }): Promise<ActivityPage> =>
+    jarvisGet<ActivityPage>("activity", toStringParams(params)),
 }
 
 // Referenced only for its compile-time `satisfies` check above (API_PATHS) and to

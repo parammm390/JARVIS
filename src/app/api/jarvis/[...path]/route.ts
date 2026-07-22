@@ -60,6 +60,12 @@ function isAllowedGet(segments: string[]): boolean {
   if (segments.length === 1 && a === "dlq") return true
   if (segments.length === 2 && a === "dlq") return true
   if (segments.length === 1 && a === "corrections") return true
+  // D1.T2/T3: pulse bar (/api/vitals) and activity theater (/api/activity) both need
+  // to reach through here — flagged as a real gap by C1's own session (this proxy's
+  // allowlist never grew to cover A2.T5/T6's routes when they shipped) and closed now
+  // that D1 actually consumes them.
+  if (segments.length === 1 && a === "vitals") return true
+  if (segments.length === 1 && a === "activity") return true
   void c
   return false
 }

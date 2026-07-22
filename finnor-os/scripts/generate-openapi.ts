@@ -234,6 +234,22 @@ const doc = {
         responses: { "201": { description: "{id}" }, "403": { description: "Role cannot submit" }, "404": { description: "Receipt not found" } },
       },
     },
+    "/api/vitals": {
+      get: {
+        summary: "D1.T2 pulse bar — queue depth/oldest-pending age, worker heartbeat age, this tenant's open DLQ count, resolved capability bindings, per-scan-type last-run clocks",
+        responses: { "200": { description: "{queue, heartbeat, dlq, bindings, scans}" }, "401": { description: "Bad auth" } },
+      },
+    },
+    "/api/activity": {
+      get: {
+        summary: "D1.T3 activity theater — merged action_log + workflow_step + call feed, forward-only (occurredAt,id) keyset cursor",
+        parameters: [
+          { name: "since", in: "query", schema: { type: "string" } },
+          { name: "limit", in: "query", schema: { type: "integer" } },
+        ],
+        responses: { "200": { description: "{items, nextCursor, hasMore}" }, "400": { description: "Invalid query" }, "401": { description: "Bad auth" } },
+      },
+    },
     "/api/policies/{tenantId}/{actionType}": {
       get: { summary: "Read a domain policy", responses: { "200": { description: "Policy" }, "404": { description: "Not configured" } } },
       put: {
