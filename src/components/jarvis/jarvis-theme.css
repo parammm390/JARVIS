@@ -34,6 +34,17 @@
   --accent: var(--j-amber);
 }
 
+/* D1.T5 — FLOW-24 ThemeTide: a subtle day-part tint layered on top of the mood
+   system above, keyed off the REAL device clock (Bridge.tsx's getDaypart(), never a
+   fabricated cycle). This app has no light/dark theme (grepped, confirmed C3) — these
+   four values stay within the same dark aesthetic, only nudging the aurora hue, never
+   swapping to a light background. --day-tint composites additively with whatever
+   --accent the mood block above already set, via ThemeTide's 2s crossfade transition. */
+.jarvis-root[data-daypart="dawn"] { --day-tint: rgba(251, 191, 36, 0.05); }
+.jarvis-root[data-daypart="day"] { --day-tint: rgba(34, 211, 238, 0.04); }
+.jarvis-root[data-daypart="dusk"] { --day-tint: rgba(139, 92, 246, 0.05); }
+.jarvis-root[data-daypart="night"] { --day-tint: rgba(29, 78, 216, 0.05); }
+
 /* ---- panel recipe: every card on the page shares this skin ---- */
 .j-panel {
   position: relative;
