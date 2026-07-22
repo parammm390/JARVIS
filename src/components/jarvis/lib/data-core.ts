@@ -41,6 +41,24 @@ export interface ReceiptSummary {
   riskTier: "low" | "medium" | "high"
   createdAt: string
 }
+/** D2.T1 — async second-pass verdict from the critic (packages/orchestration/src/
+ *  critic.ts). Genuinely null whenever no critic_review has run yet (no AWS Bedrock
+ *  key configured today per the credentials ledger) — never a fabricated "pending"
+ *  state; the cockpit renders nothing when this is null. */
+export interface CriticVerdict {
+  flagged: boolean
+  reason: string
+}
+/** D2.T1 — price-book provenance: any {sku, price} pair found in the payload,
+ *  compared against this tenant's real price_book_items row for that sku.
+ *  `matches` is null when the payload carried a sku but no price to compare. */
+export interface PriceBookProvenanceEntry {
+  sku: string
+  label: string
+  priceBookPriceUsd: number
+  payloadPriceUsd: number | null
+  matches: boolean | null
+}
 export interface PendingAction {
   id: string
   actionType: string
@@ -50,6 +68,8 @@ export interface PendingAction {
   createdAt: string
   groundedPayload?: Array<{ field: string; status: "verified" | "not_found" | "unverifiable" }>
   receipt?: ReceiptSummary | null
+  critic?: CriticVerdict | null
+  priceBookProvenance?: PriceBookProvenanceEntry[]
 }
 export interface WorkflowStep {
   id: string

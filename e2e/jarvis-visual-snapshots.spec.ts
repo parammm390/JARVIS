@@ -88,3 +88,31 @@ test.describe("visual snapshots — /jarvis/stage", () => {
     await expect(page).toHaveScreenshot("stage-owner-content.png", SCREENSHOT_OPTS)
   })
 })
+
+test.describe("visual snapshots — /jarvis/bridge (D1 Command Bridge + D2 Approval Cockpit)", () => {
+  // Bridge gates its whole route behind a real session (BridgeShell in Bridge.tsx) —
+  // same honest limitation as Stage's owner-content case below: a signed-in mouse-
+  // free approve/reject/undo cycle needs a real Supabase account, which this repo's
+  // standing rule says never to mint. The signed-out gate is what's real and
+  // reachable without one.
+  test("logged-out gate screen", async ({ page }) => {
+    await page.goto("/jarvis/bridge")
+    await expect(page.getByText("Sign in required")).toBeVisible()
+    await expect(page).toHaveScreenshot("bridge-signed-out-gate.png", SCREENSHOT_OPTS)
+  })
+
+  const email = process.env.TEST_OWNER_EMAIL
+  const password = process.env.TEST_OWNER_PASSWORD
+  test("owner content — Bridge with live Orb/PulseBar/ApprovalCockpit", async ({ page }) => {
+    test.skip(!email || !password, "TEST_OWNER_EMAIL/TEST_OWNER_PASSWORD not set — see e2e/jarvis-authenticated.spec.ts's header for why this isn't faked")
+    await page.goto("/jarvis/login")
+    await page.getByPlaceholder(/you@example.com/i).fill(email!)
+    await page.getByPlaceholder(/•+/i).fill(password!)
+    await page.getByRole("button", { name: /sign in/i }).click()
+    await page.waitForURL("**/jarvis")
+    await page.goto("/jarvis/bridge")
+    await expect(page.getByText("Awaiting Your Approval")).toBeVisible()
+    await page.waitForTimeout(3_000) // let at least one fast-lane poll land
+    await expect(page).toHaveScreenshot("bridge-owner-content.png", SCREENSHOT_OPTS)
+  })
+})

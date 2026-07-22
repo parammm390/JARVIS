@@ -25,7 +25,7 @@ import { useVapiSession } from "../lib/useVapiSession"
 import { KpiStrip } from "../panels/KpiStrip"
 import { DailyBriefing } from "../panels/DailyBriefing"
 import { WorkflowTheater } from "../panels/WorkflowTheater"
-import { ApprovalDock } from "../panels/ApprovalDock"
+import { ApprovalCockpit } from "./ApprovalCockpit"
 import { GridBackdrop } from "../ui/fx/GridBackdrop"
 import { choreo } from "../ui/motion/choreo"
 import { PulseBar } from "./PulseBar"
@@ -168,7 +168,7 @@ function RightRail() {
         <ActivityTheater />
       </div>
       <div className="max-h-[45vh] overflow-y-auto">
-        <ApprovalDock />
+        <ApprovalCockpit />
       </div>
     </aside>
   )
