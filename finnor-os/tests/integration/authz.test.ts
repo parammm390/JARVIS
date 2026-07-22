@@ -3,13 +3,15 @@
 // this is genuinely new coverage, not a duplicate.
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from "vitest";
+import { randomUUID } from "node:crypto";
 import pg from "pg";
 import { migrate } from "../../packages/db/migrate";
 import { seed, SEED_TENANT_ID } from "../../packages/db/seed";
 import { closePool, withTenant, rolePermissions } from "@finnor/db";
 import { requireContext, canApprove, AuthError } from "../../apps/api/lib/auth";
-import { checkRateLimit } from "../../apps/api/lib/rate-limit";
+import { checkRateLimit, secondsUntilWindowReset } from "../../apps/api/lib/rate-limit";
 import { checkAndRecordReceipt } from "../../apps/api/lib/webhook-replay";
+import { POST as submitAction } from "../../apps/api/app/api/actions/route";
 import { eq, and } from "drizzle-orm";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
@@ -62,6 +64,71 @@ describe.skipIf(!available)("authz — dev-bypass hardening, rate limiting, webh
     const results: boolean[] = [];
     for (let i = 0; i < 5; i++) results.push(await checkRateLimit(bucket, 3));
     expect(results).toEqual([true, true, true, false, false]);
+  });
+
+  it("secondsUntilWindowReset returns a sane value within the 60s fixed window", () => {
+    const s = secondsUntilWindowReset();
+    expect(s).toBeGreaterThan(0);
+    expect(s).toBeLessThanOrEqual(60);
+  });
+
+  it("A4.T5: an invalid bearer token is IP-throttled BEFORE auth verification even runs, with 429 + Retry-After", async () => {
+    vi.stubEnv("NODE_ENV", "test");
+    vi.stubEnv("AUTH_DEV_BYPASS", "0");
+    vi.stubEnv("RATE_LIMIT_IP_PER_MINUTE", "2");
+    const ip = `203.0.113.${Math.floor(Math.random() * 255)}`; // unique per run, avoids bucket collision
+    const garbageReq = () =>
+      new Request("http://localhost/api/test", {
+        headers: { authorization: "Bearer garbage-token-not-real", "x-forwarded-for": ip },
+      });
+
+    // First 2 (the configured limit) fail on auth verification itself (Supabase isn't
+    // configured in this test env) — 500, NOT 429, proving the IP throttle didn't fire
+    // yet.
+    await expect(requireContext(garbageReq())).rejects.toMatchObject({ status: 500 });
+    await expect(requireContext(garbageReq())).rejects.toMatchObject({ status: 500 });
+    // The 3rd attempt within the same window trips the IP bucket BEFORE even reaching
+    // auth verification — 429, with a real Retry-After header, not a generic error.
+    try {
+      await requireContext(garbageReq());
+      expect.unreachable("expected the 3rd attempt to be rate-limited");
+    } catch (err) {
+      expect(err).toBeInstanceOf(AuthError);
+      const authErr = err as AuthError;
+      expect(authErr.status).toBe(429);
+      expect(authErr.headers?.["Retry-After"]).toBeDefined();
+      expect(Number(authErr.headers?.["Retry-After"])).toBeGreaterThan(0);
+    }
+  });
+
+  it("A4.T5: POST /api/actions enforces its own tighter intake bucket, independent of the generic tenant bucket", async () => {
+    vi.stubEnv("NODE_ENV", "test");
+    vi.stubEnv("AUTH_DEV_BYPASS", "1");
+    vi.stubEnv("RATE_LIMIT_INTAKE_PER_MINUTE", "2");
+    vi.stubEnv("RATE_LIMIT_PER_MINUTE", "1000"); // generic tenant bucket stays wide open
+    // A unique tenant id per run so this test's intake bucket never collides with the
+    // rest of the suite's use of SEED_TENANT_ID.
+    const tenantId = randomUUID();
+    const makeReq = () =>
+      new Request("http://localhost/api/actions", {
+        method: "POST",
+        headers: { "x-tenant-id": tenantId, "x-user-role": "owner", "content-type": "application/json" },
+        // Deliberately invalid body — fails SubmitInstructionSchema and 400s WITHOUT
+        // ever reaching the orchestrator/LLM planner. The rate-limit check runs before
+        // that parse, so this still proves the intake bucket independent of body
+        // content or actual planning cost.
+        body: JSON.stringify({}),
+      });
+
+    const first = await submitAction(makeReq());
+    const second = await submitAction(makeReq());
+    expect(first.status).toBe(400); // failed schema validation, but got PAST the rate limiter
+    expect(second.status).toBe(400);
+    const third = await submitAction(makeReq());
+    expect(third.status).toBe(429);
+    const body = await third.json();
+    expect(body.error).toMatch(/rate limit/i);
+    expect(third.headers.get("Retry-After")).toBeDefined();
   });
 
   it("a replayed webhook payload is rejected the second time it's posted", async () => {

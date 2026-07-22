@@ -17,3 +17,11 @@ export async function checkRateLimit(bucketKey: string, limit = Number(process.e
   );
   return (rows[0]?.count ?? 0) <= limit;
 }
+
+/** A4.T5: how long until the CURRENT fixed window rolls over — the honest Retry-After
+ *  value for a 429 (this window is fixed-size, not sliding, so "wait until it resets"
+ *  is exactly this many seconds, never an estimate). Pure arithmetic, no DB round trip. */
+export function secondsUntilWindowReset(): number {
+  const elapsedInWindow = Date.now() % WINDOW_MS;
+  return Math.ceil((WINDOW_MS - elapsedInWindow) / 1000);
+}
