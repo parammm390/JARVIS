@@ -25,6 +25,7 @@ import { scanApprovalExpiry } from "./handlers/scan-approval-expiry";
 import { simulatorTick } from "./handlers/simulator-tick";
 import { scanReliabilityAlerts } from "./handlers/scan-reliability-alerts";
 import { scanIntegrationHealth } from "./handlers/scan-integration-health";
+import { scanWatchdog } from "./handlers/scan-watchdog";
 import { dailyScorecard } from "./handlers/daily-scorecard";
 import { projectReadModels } from "./handlers/project-read-models";
 import { startScheduler, type ScheduledScan } from "./scheduler";
@@ -54,6 +55,7 @@ export function createWorker(): JobQueue {
   queue.register("simulator_tick", simulatorTick);
   queue.register("scan_reliability_alerts", scanReliabilityAlerts);
   queue.register("scan_integration_health", scanIntegrationHealth);
+  queue.register("scan_watchdog", scanWatchdog);
   queue.register("daily_scorecard", dailyScorecard);
   queue.register("project_read_models", projectReadModels);
   return queue;
@@ -82,6 +84,11 @@ const PROACTIVE_SCANS: ScheduledScan[] = [
   // scheduler's own 15-min tick (see scheduler.ts's own "not a promise of exact
   // timing" header), same honest "close enough" posture as every other sub-daily scan.
   { type: "scan_integration_health", intervalHours: 1 / 6, payload: (tenantId) => ({ tenantId }) },
+  // A4.T2: same honest sub-hourly posture as scan_integration_health just above — real
+  // cadence is this scheduler's own 15-min tick, not this number. The exit gate's "<5min"
+  // claim is about direct-invocation detection latency (see the integration test), not
+  // this production scheduler's real-world firing frequency.
+  { type: "scan_watchdog", intervalHours: 1 / 6, payload: (tenantId) => ({ tenantId }) },
   { type: "learning_digest", intervalHours: 24, payload: (tenantId) => ({ tenantId }) },
   // §3.3: no-ops for any tenant whose tenant_settings.simulator_enabled isn't true —
   // enqueued for every tenant like every other scan, gated by real DB state, not a
