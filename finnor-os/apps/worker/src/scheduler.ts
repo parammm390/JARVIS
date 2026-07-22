@@ -68,3 +68,24 @@ export function startScheduler(scans: ScheduledScan[], tickMs = 15 * 60_000, sig
   const handle = setInterval(tick, tickMs);
   signal?.addEventListener("abort", () => clearInterval(handle));
 }
+
+/** A4.T4: same idempotent-bucket mechanism as scheduleTick, but for a GLOBAL job type
+ *  (no tenant loop) — worker_heartbeat.ts writes its own row directly instead of going
+ *  through the job queue at all; backup_db is different: it's genuinely long-running
+ *  and failure-prone (a real network call to GitHub), so it deliberately goes through
+ *  the job queue's own attempt/backoff/dead-letter machinery rather than a bare
+ *  setInterval callback that would just swallow a failure. */
+export function startGlobalScheduler(type: string, intervalHours: number, tickMs = 15 * 60_000, signal?: AbortSignal): void {
+  const tick = async () => {
+    if (signal?.aborted) return;
+    try {
+      const bucket = dateBucket(intervalHours);
+      await enqueueJob(type, {}, `scan:${type}:global:${bucket}`);
+    } catch (err) {
+      getLogger().error({ err: err instanceof Error ? err.message : String(err), type }, "[scheduler] global tick failed");
+    }
+  };
+  void tick();
+  const handle = setInterval(tick, tickMs);
+  signal?.addEventListener("abort", () => clearInterval(handle));
+}

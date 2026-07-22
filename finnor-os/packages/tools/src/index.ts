@@ -17,6 +17,7 @@ export function createDefaultRegistry(): ToolRegistry {
 export * from "./vapi-rest";
 export * from "./email";
 export * from "./resend";
+export * from "./backup-storage-github";
 export * from "./maps";
 export * from "./exa";
 export * from "./llm";

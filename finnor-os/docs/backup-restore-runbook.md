@@ -1,6 +1,63 @@
 # Backup & Restore Runbook
 
-## Local / CI mechanics
+## A4.T4 (2026-07-23): automated backup_db job — the primary mechanism now
+
+The client-tools blocker documented below (no `pg_dump`/`pg_restore`/`createdb`/`dropdb`
+anywhere in this dev sandbox, confirmed exhaustively on 2026-07-18) is exactly why the
+real `backup_db` job does **not** shell out to `pg_dump` at all:
+
+- **Dump/restore**: `packages/db/backup.ts`'s `dumpAllTables()`/`restoreAllTables()` — pure
+  `pg` client (`SELECT * FROM finnor_os.<table>` per table; restore does
+  `SET session_replication_role = replica` to sidestep FK ordering, since every table's PK
+  is `uuid().defaultRandom()` — zero serial/identity columns anywhere, so no sequence
+  resets needed either). Zero external binary dependency — runs anywhere Node + `pg` can
+  connect, including the Railway worker's own container.
+- **Storage target**: a dedicated private GitHub repo's Releases (Cloudflare R2 is
+  **blocked** — Param has no card on file, and Cloudflare requires one even for R2's free
+  tier; see `JARVIS-CREDENTIALS-LEDGER.md`). `packages/tools/src/backup-storage-github.ts`
+  — plain `fetch` against the GitHub REST API, no octokit dependency. Requires
+  `BACKUP_GITHUB_TOKEN` (fine-grained PAT, scoped to ONLY the backups repo, Contents:
+  Read+write) and `BACKUP_GITHUB_REPO` (`owner/repo`) — ⏸ **PARAM**: create the repo and
+  generate the token; the job no-ops loudly (logged, never silent) until both are set.
+- **Job**: `backup_db` (`apps/worker/src/handlers/backup-db.ts`), global (not per-tenant,
+  same posture as `worker_heartbeat`), scheduled every 6 hours
+  (`startGlobalScheduler` in `apps/worker/src/index.ts`) — dump → gzip → upload → prune to
+  **14 daily + 8 weekly** retention (`applyRetention()`, pure, unit-tested against
+  synthetic release timelines spanning many simulated days).
+- **Restore drill**: `scripts/restore-drill-from-backup.ts` — downloads the LATEST real
+  backup from the GitHub repo, restores into a throwaway `finnor_restore_drill_<ts>`
+  database (created via plain SQL `CREATE DATABASE`, no `createdb` binary needed),
+  migrates it, runs a smoke check (real tenant count + a real cross-table join query),
+  prints PASS/FAIL, drops the throwaway database. This is the drill that actually proves
+  the GitHub artifact itself is restorable — the pg_dump-based drill below dumps live
+  from source, so it can't prove that.
+
+**RPO ≤ 6h**: the job runs every 6 hours; worst case data loss on a full DB loss is
+whatever changed since the last successful run (the 6-hour window itself, plus however
+stale the scheduler's own tick was — bounded by the same 15-min ticker every other scan
+here documents honestly as "minimum gap, not exact timing").
+
+**RTO ≤ 30min**: the create-db + migrate + restore + verify portion (everything
+`restore-drill-from-backup.ts` does except the initial GitHub download, which this dev
+sandbox couldn't exercise without the token) measured **17.3s real** in
+`tests/integration/backup-restore.test.ts`'s own run against this dealer-zero-scale
+dataset (real Postgres, real throwaway database, real full restore + row-count + content
+verification) — comfortably inside the 30-minute budget even accounting for a real
+GitHub download and a production-scale dataset being meaningfully larger. The actual
+end-to-end script (including the download step) is untested until Param supplies
+`BACKUP_GITHUB_TOKEN`/`BACKUP_GITHUB_REPO` — flagged honestly, not assumed. A real
+production incident additionally needs pointing traffic at the restored database
+(DNS/connection string swap), not modeled by the drill itself.
+
+**Open, unverified**: whether Supabase's own plan tier for the production project
+includes automated backups/PITR (their dashboard: Project Settings → Database →
+Backups) — if so, `backup_db` is a supplementary, Finnor-owned safety net independent of
+Supabase's own mechanism (useful since it's actually drillable end-to-end by us, whereas
+Supabase's own PITR isn't something this project has independently tested), not
+necessarily the ONLY line of defense. Worth Param checking the actual tier rather than
+this doc assuming either way.
+
+## Local / CI mechanics (pg_dump-based, secondary — needs Postgres client tools)
 
 `scripts/backup-restore-drill.ts` proves the actual dump/restore round-trip works:
 

@@ -27,9 +27,10 @@ import { scanReliabilityAlerts } from "./handlers/scan-reliability-alerts";
 import { scanIntegrationHealth } from "./handlers/scan-integration-health";
 import { scanWatchdog } from "./handlers/scan-watchdog";
 import { scanDlqTriage } from "./handlers/scan-dlq-triage";
+import { backupDb } from "./handlers/backup-db";
 import { dailyScorecard } from "./handlers/daily-scorecard";
 import { projectReadModels } from "./handlers/project-read-models";
-import { startScheduler, type ScheduledScan } from "./scheduler";
+import { startScheduler, startGlobalScheduler, type ScheduledScan } from "./scheduler";
 import { startHeartbeat } from "./heartbeat";
 import { startSseServer } from "./sse-server";
 
@@ -58,6 +59,7 @@ export function createWorker(): JobQueue {
   queue.register("scan_integration_health", scanIntegrationHealth);
   queue.register("scan_watchdog", scanWatchdog);
   queue.register("scan_dlq_triage", scanDlqTriage);
+  queue.register("backup_db", backupDb);
   queue.register("daily_scorecard", dailyScorecard);
   queue.register("project_read_models", projectReadModels);
   return queue;
@@ -135,6 +137,10 @@ if (isMain) {
   }
   startHeartbeat(30_000, controller.signal);
   startScheduler(PROACTIVE_SCANS, 15 * 60_000, controller.signal);
+  // A4.T4: global (no tenant loop) — a DB backup isn't per-tenant data, same posture as
+  // worker_heartbeat. No-ops loudly inside the handler itself until Param supplies
+  // BACKUP_GITHUB_TOKEN/BACKUP_GITHUB_REPO.
+  startGlobalScheduler("backup_db", 6, 15 * 60_000, controller.signal);
   // B1.T2, deployed same process as the job loop: this repo's single railway.json
   // start command (`npx tsx apps/$SERVICE_APP/src/index.ts`) means finnor-worker has
   // exactly one entrypoint — a second Railway service isn't needed (and isn't
