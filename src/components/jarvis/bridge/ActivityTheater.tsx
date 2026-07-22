@@ -15,6 +15,7 @@ import { useLiveQuery } from "@/lib/jarvis/useLiveQuery"
 import { getCurrentAccessToken, useJarvisAuth } from "../lib/jarvis-auth"
 import { ReceiptDrawer } from "../lib/ReceiptDrawer"
 import { Enter } from "../ui/motion/primitives"
+import { ActionRenderer } from "../ui/renderers/ActionRenderer"
 
 const SOURCE_ICON: Record<ActivityItem["source"], string> = {
   action_log: "bg-cyan-400",
@@ -106,20 +107,30 @@ export function ActivityTheater() {
       <div className="flex-1 space-y-1.5 overflow-y-auto px-3 py-3">
         {items.length === 0 && <div className="text-[11px] text-[color:var(--j-text-faint)]">No activity yet — the feed fills as Finnor works.</div>}
         <AnimatePresence initial={false}>
-          {items.map((item) => (
-            <Enter key={item.id} y={-6}>
-              <button
-                type="button"
-                onClick={() => void openReceiptFor(item)}
-                disabled={item.source === "call"}
-                className="flex w-full items-center gap-2 rounded-lg border border-white/6 bg-white/[0.015] px-2.5 py-1.5 text-left text-[11px] hover:bg-white/[0.04] disabled:cursor-default disabled:hover:bg-white/[0.015]"
-              >
-                <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${SOURCE_ICON[item.source]}`} />
-                <span className="min-w-0 flex-1 truncate text-[color:var(--j-text)]">{summarize(item)}</span>
-                <span className="shrink-0 text-[9px] text-[color:var(--j-text-faint)]">{ageLabel(item.occurredAt)}</span>
-              </button>
-            </Enter>
-          ))}
+          {items.map((item) => {
+            // D3.T1: action_log rows now carry actionType+payload (GET /api/activity's
+            // join into domain_actions) — the SAME ActionRenderer approvals/receipts
+            // use, in compact mode. workflow_step/call rows don't have a registered
+            // action type (their own taxonomy — StepIcon.tsx/VoiceCallScene cover
+            // those elsewhere), so they keep the existing summarize() text.
+            const actionType = item.source === "action_log" && typeof item.detail.actionType === "string" ? item.detail.actionType : null
+            return (
+              <Enter key={item.id} y={-6}>
+                <button
+                  type="button"
+                  onClick={() => void openReceiptFor(item)}
+                  disabled={item.source === "call"}
+                  className="flex w-full items-center gap-2 rounded-lg border border-white/6 bg-white/[0.015] px-2.5 py-1.5 text-left text-[11px] hover:bg-white/[0.04] disabled:cursor-default disabled:hover:bg-white/[0.015]"
+                >
+                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${SOURCE_ICON[item.source]}`} />
+                  <span className="min-w-0 flex-1 truncate text-[color:var(--j-text)]">
+                    {actionType ? <ActionRenderer actionType={actionType} payload={item.detail.payload} compact /> : summarize(item)}
+                  </span>
+                  <span className="shrink-0 text-[9px] text-[color:var(--j-text-faint)]">{ageLabel(item.occurredAt)}</span>
+                </button>
+              </Enter>
+            )
+          })}
         </AnimatePresence>
       </div>
       {openReceiptId && <ReceiptDrawer receiptId={openReceiptId} onClose={() => setOpenReceiptId(null)} />}

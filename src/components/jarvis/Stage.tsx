@@ -25,6 +25,7 @@ import { FlowCatalogAmbientSection } from "./ui/motion/FlowCatalogAmbient"
 import { FpsMeterHud } from "./ui/motion/FpsMeter"
 import { EffectsCatalogSection } from "./ui/fx/EffectsCatalog"
 import { PrimitivesCatalogSection } from "./ui/primitives/PrimitivesCatalog"
+import { RendererCatalogSection } from "./ui/renderers/RendererCatalog"
 
 // Same ssr:false convention JarvisCommandCenter already uses for this exact
 // component — canvas + matchMedia only run client-side anyway, and it lets the
@@ -152,6 +153,7 @@ function StageContent() {
       <FlowCatalogAmbientSection />
       <EffectsCatalogSection />
       <PrimitivesCatalogSection />
+      <RendererCatalogSection />
       <FpsMeterHud />
       <ParticleField />
     </div>

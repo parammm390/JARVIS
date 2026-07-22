@@ -8,6 +8,8 @@
 import { useEffect, useState } from "react"
 import { jarvisGet } from "./api"
 import { Drawer } from "../ui/primitives/Drawer"
+import { ActionRenderer } from "../ui/renderers/ActionRenderer"
+import { getRendererEntry } from "../ui/renderers/registry"
 
 export interface FullReceipt {
   id: string
@@ -32,6 +34,29 @@ function JsonBlock({ value }: { value: unknown }) {
       {JSON.stringify(value, null, 2)}
     </pre>
   )
+}
+
+// D3.T1 — `proposedAction` (declared on FullReceipt but never rendered before this
+// session, grepped/confirmed) is always shaped `{stepType, payload}` — every receipt,
+// sync or async, is opened by openReceiptForFirstClaim (workflow-runtime/src/
+// steps.ts) which sets stepType to the domain action's actual actionType for
+// single-step commands (runtime-bridge.ts:92: `stepType: params.actionType`), or to
+// a named sub-step for the 4 async workflow-kind types (e.g. hold_appointment —
+// StepIcon.tsx's own taxonomy, not one of the 41 registered types). Registered
+// stepTypes get the SAME ActionRenderer approvals/feed use; an unregistered one
+// (a real sub-step, not a bug) gets a designed one-liner, never raw JSON.
+function ProposedActionSection({ proposedAction }: { proposedAction: unknown }) {
+  const obj = proposedAction && typeof proposedAction === "object" ? (proposedAction as Record<string, unknown>) : null
+  const stepType = obj && typeof obj.stepType === "string" ? obj.stepType : null
+  if (!stepType) return <span className="text-[color:var(--j-text-faint)]">none yet</span>
+  if (!getRendererEntry(stepType)) {
+    return (
+      <div className="rounded-lg border border-white/8 bg-white/[0.02] p-2 text-[11px] text-[color:var(--j-text-dim)]">
+        {stepType.replaceAll("_", " ")} — workflow sub-step, not a top-level action type
+      </div>
+    )
+  }
+  return <ActionRenderer actionType={stepType} payload={obj!.payload} />
 }
 
 function Section({ label, children }: { label: string; children: React.ReactNode }) {
@@ -110,6 +135,10 @@ export function ReceiptDrawer({ receiptId, onClose }: { receiptId: string; onClo
                 {receipt.approval.required ? (receipt.approval.approvedBy ? `approved by ${receipt.approval.approvedBy}` : "awaiting approval") : "no approval required (ungated read)"}
                 {receipt.approval.at ? ` · ${new Date(receipt.approval.at).toLocaleString()}` : ""}
               </div>
+            </Section>
+
+            <Section label="Proposed action">
+              <ProposedActionSection proposedAction={receipt.proposedAction} />
             </Section>
 
             <Section label="Expected result">

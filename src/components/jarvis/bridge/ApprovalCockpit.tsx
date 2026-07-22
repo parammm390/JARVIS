@@ -51,6 +51,7 @@ import { ReceiptDrawer } from "../lib/ReceiptDrawer"
 import { RiskBadge, type RiskTier } from "../ui/primitives/RiskBadge"
 import { Flight } from "../ui/motion/primitives"
 import { choreo } from "../ui/motion/choreo"
+import { ActionRenderer } from "../ui/renderers/ActionRenderer"
 
 // ---------------------------------------------------------------------------
 // Small local helpers (deliberately not imported from ApprovalDock.tsx — that file is
@@ -185,6 +186,14 @@ function ApprovalCard({
         </div>
 
         <div className="text-[12px] leading-relaxed text-[color:var(--j-text)]">{action.summary ?? "Drafted action awaiting approval."}</div>
+
+        {/* D3.T1 — the renderer registry's real scene for this action's payload,
+            same ActionRenderer component the Activity Theater (feed) and
+            ReceiptDrawer (receipt) contexts use — the plan's own "same renderer
+            proven in feed + approval + receipt" wording, not three lookalikes. */}
+        <div className="mt-2">
+          <ActionRenderer actionType={action.actionType} payload={action.payload} />
+        </div>
 
         <div className="mt-2 flex flex-wrap items-center gap-1">
           <RiskBadge tier={tier} />

@@ -11,8 +11,8 @@
 // history". Each source is one indexed, tenant-scoped query; merged and re-limited in
 // app code, never a cross-table SQL UNION (three very different row shapes).
 
-import { withTenant, actionLog, workflowSteps, calls } from "@finnor/db";
-import { and, asc, eq, gt, or, sql, type SQL } from "drizzle-orm";
+import { withTenant, actionLog, workflowSteps, calls, domainActions } from "@finnor/db";
+import { and, asc, eq, gt, inArray, or, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { requireContext, errorResponse, AuthError } from "../../../lib/auth";
 
@@ -97,12 +97,34 @@ export async function GET(req: Request): Promise<Response> {
       ]);
     });
 
+    // D3.T1: the renderer registry (root src/) dispatches on actionType + payload —
+    // action_log rows only carry domainActionId, so a second, cheap tenant-scoped
+    // lookup joins in the 2 fields the Activity Theater's feed context actually
+    // needs to reuse the SAME renderer approvals/receipts already use, instead of
+    // the feed being permanently stuck on a generic "step" label.
+    const domainActionIds = [...new Set(actionLogRows.map((r) => r.domainActionId).filter((id): id is string => !!id))];
+    const actionById = new Map<string, { actionType: string; payload: unknown }>();
+    if (domainActionIds.length > 0) {
+      const actionRows = await withTenant(ctx.tenantId, (db) =>
+        db
+          .select({ id: domainActions.id, actionType: domainActions.actionType, payload: domainActions.payload })
+          .from(domainActions)
+          .where(and(eq(domainActions.tenantId, ctx.tenantId), inArray(domainActions.id, domainActionIds))),
+      );
+      for (const a of actionRows) actionById.set(a.id, { actionType: a.actionType, payload: a.payload });
+    }
+
     const items: ActivityItem[] = [
       ...actionLogRows.map((r) => ({
         source: "action_log" as const,
         id: r.id,
         occurredAt: r.timestamp,
-        detail: { domainActionId: r.domainActionId, step: r.step, output: r.output },
+        detail: {
+          domainActionId: r.domainActionId,
+          step: r.step,
+          output: r.output,
+          ...(r.domainActionId && actionById.has(r.domainActionId) ? actionById.get(r.domainActionId) : {}),
+        },
       })),
       ...stepRows.map((r) => ({
         source: "workflow_step" as const,
