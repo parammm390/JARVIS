@@ -49,93 +49,80 @@ import {
   launchAdCampaignContract,
   launchAdCampaignEmulatorBinding,
   launchAdCampaignDryRunBinding,
-  resolveCapabilityBindings,
+  resolveCapabilityBindingsForTenant,
 } from "@finnor/tools";
 import type { JobHandler } from "../queue";
 
-// Binding *selection logic* (mode + source — native-by-default for Finnor-owned caps
-// since A1.T2, emulator-by-default for external caps) lives in one place —
-// @finnor/tools' resolveCapabilityBindings() — shared with apps/api's /api/setup/status
-// report so the two can never drift apart. This file only maps a resolved mode string
-// to the actual CapabilityBinding object to call.
-function schedulingBinding(): CapabilityBinding<unknown, unknown> {
-  return (resolveCapabilityBindings().scheduling.mode === "emulator" ? emulatorSchedulingBinding : nativeSchedulingBinding) as CapabilityBinding<
+// Binding *selection logic* (mode + source — tenant-row override first (A3.T1), then
+// native-by-default for Finnor-owned caps since A1.T2, emulator-by-default for external
+// caps) lives in one place — @finnor/tools' resolveCapabilityBindingsForTenant() —
+// shared with apps/api's /api/setup/status report so the two can never drift apart.
+// This file only maps a resolved mode string to the actual CapabilityBinding object to
+// call, per-tenant since a tenant_integrations row is scoped to one tenant.
+async function schedulingBinding(tenantId: string): Promise<CapabilityBinding<unknown, unknown>> {
+  const bindings = await resolveCapabilityBindingsForTenant(tenantId);
+  return (bindings.scheduling.mode === "emulator" ? emulatorSchedulingBinding : nativeSchedulingBinding) as CapabilityBinding<unknown, unknown>;
+}
+async function confirmBinding(tenantId: string): Promise<CapabilityBinding<unknown, unknown>> {
+  const bindings = await resolveCapabilityBindingsForTenant(tenantId);
+  return (bindings.scheduling.mode === "emulator" ? confirmAppointmentEmulatorBinding : confirmAppointmentNativeBinding) as CapabilityBinding<
     unknown,
     unknown
   >;
 }
-function confirmBinding(): CapabilityBinding<unknown, unknown> {
-  return (resolveCapabilityBindings().scheduling.mode === "emulator" ? confirmAppointmentEmulatorBinding : confirmAppointmentNativeBinding) as CapabilityBinding<
+async function communicationsBinding(tenantId: string): Promise<CapabilityBinding<unknown, unknown>> {
+  const bindings = await resolveCapabilityBindingsForTenant(tenantId);
+  return (bindings.communications.mode === "vapi" ? vapiCommunicationsBinding : emulatorCommunicationsBinding) as CapabilityBinding<unknown, unknown>;
+}
+async function documentsBinding(tenantId: string): Promise<CapabilityBinding<unknown, unknown>> {
+  const bindings = await resolveCapabilityBindingsForTenant(tenantId);
+  return (bindings.documents.mode === "emulator" ? generateDocumentEmulatorBinding : generateDocumentNativeBinding) as CapabilityBinding<unknown, unknown>;
+}
+async function esignBinding(tenantId: string): Promise<CapabilityBinding<unknown, unknown>> {
+  const bindings = await resolveCapabilityBindingsForTenant(tenantId);
+  return (bindings.esign.mode === "docusign" ? requestSignatureDocusignBinding : requestSignatureEmulatorBinding) as CapabilityBinding<unknown, unknown>;
+}
+async function inventoryReserveBinding(tenantId: string): Promise<CapabilityBinding<unknown, unknown>> {
+  const bindings = await resolveCapabilityBindingsForTenant(tenantId);
+  return (bindings.inventory.mode === "emulator" ? reserveStockEmulatorBinding : reserveStockNativeBinding) as CapabilityBinding<unknown, unknown>;
+}
+async function inventoryReceiveBinding(tenantId: string): Promise<CapabilityBinding<unknown, unknown>> {
+  const bindings = await resolveCapabilityBindingsForTenant(tenantId);
+  return (bindings.inventory.mode === "emulator" ? receiveProcurementEmulatorBinding : receiveProcurementNativeBinding) as CapabilityBinding<
     unknown,
     unknown
   >;
 }
-function communicationsBinding(): CapabilityBinding<unknown, unknown> {
-  return (resolveCapabilityBindings().communications.mode === "vapi" ? vapiCommunicationsBinding : emulatorCommunicationsBinding) as CapabilityBinding<
-    unknown,
-    unknown
-  >;
+async function accountingSyncBinding(tenantId: string): Promise<CapabilityBinding<unknown, unknown>> {
+  const bindings = await resolveCapabilityBindingsForTenant(tenantId);
+  return (bindings.accounting.mode === "quickbooks" ? syncInvoiceQuickbooksBinding : syncInvoiceEmulatorBinding) as CapabilityBinding<unknown, unknown>;
 }
-function documentsBinding(): CapabilityBinding<unknown, unknown> {
-  return (resolveCapabilityBindings().documents.mode === "emulator" ? generateDocumentEmulatorBinding : generateDocumentNativeBinding) as CapabilityBinding<
-    unknown,
-    unknown
-  >;
+async function paymentLinkBinding(tenantId: string): Promise<CapabilityBinding<unknown, unknown>> {
+  const bindings = await resolveCapabilityBindingsForTenant(tenantId);
+  return (bindings.payments.mode === "stripe" ? stripeCreatePaymentLinkBinding : createPaymentLinkEmulatorBinding) as CapabilityBinding<unknown, unknown>;
 }
-function esignBinding(): CapabilityBinding<unknown, unknown> {
-  return (resolveCapabilityBindings().esign.mode === "docusign" ? requestSignatureDocusignBinding : requestSignatureEmulatorBinding) as CapabilityBinding<
-    unknown,
-    unknown
-  >;
-}
-function inventoryReserveBinding(): CapabilityBinding<unknown, unknown> {
-  return (resolveCapabilityBindings().inventory.mode === "emulator" ? reserveStockEmulatorBinding : reserveStockNativeBinding) as CapabilityBinding<
-    unknown,
-    unknown
-  >;
-}
-function inventoryReceiveBinding(): CapabilityBinding<unknown, unknown> {
-  return (resolveCapabilityBindings().inventory.mode === "emulator" ? receiveProcurementEmulatorBinding : receiveProcurementNativeBinding) as CapabilityBinding<
-    unknown,
-    unknown
-  >;
-}
-function accountingSyncBinding(): CapabilityBinding<unknown, unknown> {
-  return (resolveCapabilityBindings().accounting.mode === "quickbooks" ? syncInvoiceQuickbooksBinding : syncInvoiceEmulatorBinding) as CapabilityBinding<
-    unknown,
-    unknown
-  >;
-}
-function paymentLinkBinding(): CapabilityBinding<unknown, unknown> {
-  return (resolveCapabilityBindings().payments.mode === "stripe" ? stripeCreatePaymentLinkBinding : createPaymentLinkEmulatorBinding) as CapabilityBinding<
-    unknown,
-    unknown
-  >;
-}
-function crmUpsertContactBinding(): CapabilityBinding<unknown, unknown> {
-  const mode = resolveCapabilityBindings().crm.mode;
+async function crmUpsertContactBinding(tenantId: string): Promise<CapabilityBinding<unknown, unknown>> {
+  const mode = (await resolveCapabilityBindingsForTenant(tenantId)).crm.mode;
   return (mode === "ghl" ? upsertContactGhlBinding : mode === "emulator" ? upsertContactEmulatorBinding : upsertContactNativeBinding) as CapabilityBinding<
     unknown,
     unknown
   >;
 }
-function crmSendMessageBinding(): CapabilityBinding<unknown, unknown> {
-  const mode = resolveCapabilityBindings().crm.mode;
+async function crmSendMessageBinding(tenantId: string): Promise<CapabilityBinding<unknown, unknown>> {
+  const mode = (await resolveCapabilityBindingsForTenant(tenantId)).crm.mode;
   return (mode === "ghl" ? sendMessageGhlBinding : mode === "emulator" ? sendMessageEmulatorBinding : sendMessageNativeBinding) as CapabilityBinding<
     unknown,
     unknown
   >;
 }
-function marketingLaunchBinding(): CapabilityBinding<unknown, unknown> {
-  return (resolveCapabilityBindings().marketing.mode === "dry_run" ? launchAdCampaignDryRunBinding : launchAdCampaignEmulatorBinding) as CapabilityBinding<
-    unknown,
-    unknown
-  >;
+async function marketingLaunchBinding(tenantId: string): Promise<CapabilityBinding<unknown, unknown>> {
+  const bindings = await resolveCapabilityBindingsForTenant(tenantId);
+  return (bindings.marketing.mode === "dry_run" ? launchAdCampaignDryRunBinding : launchAdCampaignEmulatorBinding) as CapabilityBinding<unknown, unknown>;
 }
 
 interface StepHandlerEntry {
   contract: CapabilityContract<unknown, unknown>;
-  resolveBinding: () => CapabilityBinding<unknown, unknown>;
+  resolveBinding: (tenantId: string) => Promise<CapabilityBinding<unknown, unknown>>;
   /** Transforms the step's stored payload (which carries forward prior completed
    *  steps' output under `payload.context.<stepType>` — see advanceWorkflow()) into
    *  the exact shape this capability's input schema expects. Omit when the step's own
@@ -258,7 +245,7 @@ export const runWorkflowStep: JobHandler = async (payload) => {
     if (!entry) throw new Error(`No handler for workflow step type "${claimed.stepType}"`);
 
     const input = entry.mapPayload ? entry.mapPayload(claimed.payload as Record<string, unknown>) : claimed.payload;
-    const result = await executeCapability(tenantId, stepId, entry.contract, entry.resolveBinding(), input);
+    const result = await executeCapability(tenantId, stepId, entry.contract, await entry.resolveBinding(tenantId), input);
     if (!result.ok) {
       await failStep(tenantId, stepId, result.error);
       return;

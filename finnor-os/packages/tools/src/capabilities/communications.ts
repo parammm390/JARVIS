@@ -81,15 +81,19 @@ async function vapiSendConfirmation(input: SendConfirmationInput): Promise<SendC
     throw new Error(`degraded: vapi daily call cap reached for tenant (${budget.used}/${budget.cap})`);
   }
 
-  const { callId } = await withCircuitBreaker("vapi", async () => {
-    const r = await placeVapiCall({
-      customerNumber: input.phoneNumber,
-      firstMessage: input.message,
-      metadata: { tenantId: input.tenantId, idempotencyKey: input.idempotencyKey },
-    });
-    if (!r.ok) throw new Error(r.error ?? "Vapi call failed");
-    return { callId: String((r.output as Record<string, unknown>).id ?? input.idempotencyKey) };
-  });
+  const { callId } = await withCircuitBreaker(
+    "vapi",
+    async () => {
+      const r = await placeVapiCall({
+        customerNumber: input.phoneNumber,
+        firstMessage: input.message,
+        metadata: { tenantId: input.tenantId, idempotencyKey: input.idempotencyKey },
+      });
+      if (!r.ok) throw new Error(r.error ?? "Vapi call failed");
+      return { callId: String((r.output as Record<string, unknown>).id ?? input.idempotencyKey) };
+    },
+    { tenantId: input.tenantId },
+  );
 
   return { callId, status: "placed" };
 }

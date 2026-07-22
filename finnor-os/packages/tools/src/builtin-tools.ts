@@ -8,6 +8,7 @@ import { connectGhl, connectVapi, callMcpTool } from "./mcp-client";
 import { PLACEHOLDER_NEEDS_REAL_VALUE } from "@finnor/shared-types";
 import { registerSandboxComms } from "./sandbox";
 import { sendEmail } from "./email";
+import { sendResendEmail } from "./resend";
 import { geocodeAddress, distanceMiles } from "./maps";
 import { placeVapiCall } from "./vapi-rest";
 import { exaSearch } from "./exa";
@@ -175,6 +176,27 @@ function registerUniversalTools(registry: ToolRegistry): void {
     async run(input) {
       const r = await sendEmail({ to: String(input.to), subject: String(input.subject), body: String(input.body) });
       return { sent: true, messageId: r.messageId };
+    },
+  });
+  registry.register({
+    name: "send_finnor_notification",
+    // A3.T5: Finnor's OWN outbound channel (win-back nudges, digests, alerts) via
+    // Resend — never the dealer's Gmail (that's send_email above). Pre-launch: the
+    // recipient allowlist lives INSIDE sendResendEmail(), enforced regardless of what
+    // called this tool — a blocked recipient returns an honest {sent:false,blocked:true}
+    // result, never a thrown error masquerading as a system failure.
+    description: "Send a real email from Finnor itself (win-back/digest/alert), allowlisted to finnorai.com + the configured owner address only",
+    integration: "resend",
+    inputSchema: z.object({ tenantId: z.string().uuid(), to: z.string().email(), subject: z.string().min(1), html: z.string().min(1) }).passthrough(),
+    piiAllowlist: ["to", "subject", "html"],
+    async run(input) {
+      const result = await sendResendEmail({
+        tenantId: String(input.tenantId),
+        to: String(input.to),
+        subject: String(input.subject),
+        html: String(input.html),
+      });
+      return { ...result };
     },
   });
   registry.register({

@@ -44,3 +44,58 @@ export function makeFaultInjector(config: FaultInjectionConfig = {}): () => Prom
     }
   };
 }
+
+// A3.T4: named fault presets an operator (or test) can select by a short mode string,
+// rather than hand-assembling a FaultInjectionConfig — matches the plan's own
+// `EMULATOR_FAULTS=cap:mode,...` shape. "malformed-webhook" is deliberately not a
+// preset here: it describes a payload SHAPE (an inbound webhook body), not a call
+// fault this per-call injector models — that belongs with B7.T4's webhook fuzzing,
+// not this per-call latency/failure/timeout primitive.
+export const FAULT_MODE_PRESETS: Record<string, FaultInjectionConfig> = {
+  latency: { latencyMsRange: [800, 2500] },
+  fail: { failEveryNth: 2 }, // "5xx" per the plan's own wording
+  ratelimit: { rateLimitEveryNth: 2 }, // "429"
+  auth: { authFailure: true },
+  timeout: { timeoutOnNth: 1 },
+};
+
+/** Parses `EMULATOR_FAULTS=crm:fail,communications:ratelimit` into a per-capability
+ *  preset map. Unknown capability or mode names are silently ignored (never crash
+ *  boot over a typo in an ops env var) — callers can log what they end up applying. */
+export function parseEmulatorFaultsEnv(value: string | undefined): Map<string, FaultInjectionConfig> {
+  const result = new Map<string, FaultInjectionConfig>();
+  if (!value) return result;
+  for (const pair of value.split(",")) {
+    const [capability, mode] = pair.split(":").map((s) => s.trim());
+    if (!capability || !mode) continue;
+    const preset = FAULT_MODE_PRESETS[mode];
+    if (preset) result.set(capability, preset);
+  }
+  return result;
+}
+
+// A3.T4 per-tenant config: a persistent (not one-shot) injector per (capability,
+// tenantId) so counter-based faults (failEveryNth, rateLimitEveryNth) keep a real,
+// stable count across calls for that one tenant — a fresh makeFaultInjector() per
+// call would never reach "every Nth call" since every call would look like the 1st.
+// Falls back to the process-wide/env-configured injector when no tenant override is
+// set — set via tenant_integrations.config.faults (apps/api's tenant-integrations
+// admin surface, or directly in tests).
+const tenantInjectors = new Map<string, () => Promise<void>>();
+
+export function setTenantFaultConfig(capability: string, tenantId: string, config: FaultInjectionConfig | null): void {
+  const key = `${capability}:${tenantId}`;
+  if (config === null) {
+    tenantInjectors.delete(key);
+    return;
+  }
+  tenantInjectors.set(key, makeFaultInjector(config));
+}
+
+export function tenantFaultInjector(capability: string, tenantId: string): (() => Promise<void>) | undefined {
+  return tenantInjectors.get(`${capability}:${tenantId}`);
+}
+
+export function resetTenantFaultConfigs(): void {
+  tenantInjectors.clear();
+}

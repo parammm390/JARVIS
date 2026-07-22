@@ -414,6 +414,31 @@ export async function seed(databaseUrl = process.env.DATABASE_URL): Promise<void
       [SEED_TENANT_ID],
     );
 
+    // A3.T1: tenant_integrations rows for the seed/Dealer Zero tenant, matching A1's
+    // audited reality (not aspirational) — crm/scheduling/inventory/documents run
+    // native (Finnor's own tables, no external SaaS behind them), communications runs
+    // real Vapi, and esign/accounting/payments/marketing stay emulator until a real
+    // vendor account is wired (A3.T5 does email; DocuSign/QuickBooks/Stripe/ad-platform
+    // write-scope remain future work per §3/§8). A tenant with no row here still
+    // resolves correctly via env/default (binding-resolution.ts) — this just lets
+    // setup/status show a "tenant" source for the one tenant that actually exists today.
+    await client.query(
+      `INSERT INTO tenant_integrations (tenant_id, capability, binding, mode)
+       SELECT $1, t.capability, t.binding, t.mode FROM (VALUES
+         ('crm', 'native', 'real'),
+         ('scheduling', 'native', 'real'),
+         ('inventory', 'native', 'real'),
+         ('documents', 'native', 'real'),
+         ('communications', 'vapi', 'real'),
+         ('esign', 'emulator', 'emulator'),
+         ('accounting', 'emulator', 'emulator'),
+         ('payments', 'emulator', 'emulator'),
+         ('marketing', 'emulator', 'emulator')
+       ) AS t(capability, binding, mode)
+       ON CONFLICT (tenant_id, capability) DO NOTHING`,
+      [SEED_TENANT_ID],
+    );
+
     await client.query("COMMIT");
   } catch (err) {
     await client.query("ROLLBACK").catch(() => undefined);

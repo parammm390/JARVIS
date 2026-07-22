@@ -6,7 +6,7 @@
 // real credentials and a fully-populated policy set gets readyForProduction: true.
 
 import { createDefaultPluginRegistry } from "@finnor/orchestration";
-import { testAdsConnections, testQuickBooksConnection, testVapiConnection, ghlIntegrationStatus, circuitSnapshot, resolveCapabilityBindings } from "@finnor/tools";
+import { testAdsConnections, testQuickBooksConnection, testVapiConnection, ghlIntegrationStatus, circuitSnapshot, resolveCapabilityBindingsForTenant } from "@finnor/tools";
 import { zepProviderStatus, embeddingsProviderStatus } from "@finnor/memory";
 import { secretProviderStatus } from "@finnor/security";
 import { adminDb, tenantPhoneNumbers } from "@finnor/db";
@@ -28,7 +28,7 @@ export async function GET(req: Request): Promise<Response> {
       .map((actionType) => ({ actionType, pluginName: registry.resolve(actionType)!.name }));
     descriptors.push({ actionType: PRICING_CATALOG_ACTION_TYPE, pluginName: "shared-pricing-catalog" });
 
-    const [actionTypes, ads, quickbooks, vapi, pricingCatalog, phoneNumberRows] = await Promise.all([
+    const [actionTypes, ads, quickbooks, vapi, pricingCatalog, phoneNumberRows, bindings] = await Promise.all([
       scanActionTypeReadiness(ctx.tenantId, descriptors),
       testAdsConnections(),
       testQuickBooksConnection(),
@@ -41,6 +41,7 @@ export async function GET(req: Request): Promise<Response> {
         .select({ phoneNumber: tenantPhoneNumbers.phoneNumber, vapiPhoneNumberId: tenantPhoneNumbers.vapiPhoneNumberId, label: tenantPhoneNumbers.label })
         .from(tenantPhoneNumbers)
         .where(eq(tenantPhoneNumbers.tenantId, ctx.tenantId)),
+      resolveCapabilityBindingsForTenant(ctx.tenantId),
     ]);
     // Line-item pricing now lives in price_book_items, not the domain_policies JSONB
     // blob scanActionTypeReadiness inspects — override the generic check for this one
@@ -79,26 +80,28 @@ export async function GET(req: Request): Promise<Response> {
 
     const phoneRouting = { configured: phoneNumberRows.length > 0, numbers: phoneNumberRows };
 
-    // Phase 4 (§4.4): real, durable circuit-breaker state per provider that has one
-    // wired (packages/tools/src/provider-circuit-breaker.ts) — an "open" entry here
-    // means real calls to that provider are currently refused and affected actions are
-    // failing closed (degraded), not silently falling back to the emulator.
+    // Phase 4 (§4.4), extended A3.T3 (ghl/docusign): real, durable circuit-breaker
+    // state per provider that has one wired (packages/tools/src/provider-circuit-breaker.ts)
+    // — an "open" entry here means real calls to that provider are currently refused
+    // and affected actions are failing closed (degraded), not silently falling back to
+    // the emulator.
     const circuitBreakers = Object.fromEntries(
-      await Promise.all(["vapi", "stripe", "quickbooks"].map(async (p) => [p, await circuitSnapshot(p)] as const)),
+      await Promise.all(["vapi", "stripe", "quickbooks", "ghl", "docusign", "resend"].map(async (p) => [p, await circuitSnapshot(p)] as const)),
     );
 
-    // Phase 16(c) / A1.T3: a staging (or prod) deploy's config posture, verifiable from
-    // this one endpoint instead of grepping platform env-var UIs. bindings comes from
-    // @finnor/tools' resolveCapabilityBindings() — the exact same function
-    // apps/worker/src/handlers/run-workflow-step.ts uses to pick the real binding — so
-    // this report can never silently drift from what actually executes. Each entry is
-    // {mode, source}: source is "env" (an operator set the var) or "default" (Finnor-
-    // owned capabilities default to "native" as of A1.T2; external capabilities still
-    // default to "emulator"). Tenant-row source arrives with A3's tenant_integrations.
+    // Phase 16(c) / A1.T3, tenant-row added A3.T1: a staging (or prod) deploy's config
+    // posture, verifiable from this one endpoint instead of grepping platform env-var
+    // UIs. bindings comes from @finnor/tools' resolveCapabilityBindingsForTenant() — the
+    // exact same function apps/worker/src/handlers/run-workflow-step.ts uses to pick the
+    // real binding — so this report can never silently drift from what actually
+    // executes. Each entry is {mode, source}: source is "tenant" (a tenant_integrations
+    // row overrides it), "env" (an operator set the var), or "default" (Finnor-owned
+    // capabilities default to "native" as of A1.T2; external capabilities still default
+    // to "emulator").
     const environment = {
       nodeEnv: process.env.NODE_ENV ?? "development",
       secretProvider: secretProviderStatus(),
-      bindings: resolveCapabilityBindings(),
+      bindings,
     };
 
     return Response.json({ actionTypes, integrations, summary, phoneRouting, environment, circuitBreakers }, { headers: { "cache-control": "no-store" } });

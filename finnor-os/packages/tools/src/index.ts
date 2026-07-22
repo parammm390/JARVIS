@@ -16,6 +16,7 @@ export function createDefaultRegistry(): ToolRegistry {
 }
 export * from "./vapi-rest";
 export * from "./email";
+export * from "./resend";
 export * from "./maps";
 export * from "./exa";
 export * from "./llm";
@@ -32,6 +33,7 @@ export * from "./provider-health";
 export * from "./provider-circuit-breaker";
 export * from "./provider-budget";
 export * from "./emulators/fault-injection";
+export * from "./emulators/apply-env-faults";
 export * from "./emulators/scheduling-emulator";
 export * from "./emulators/communications-emulator";
 export * from "./capabilities/scheduling";

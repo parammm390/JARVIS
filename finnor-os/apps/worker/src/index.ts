@@ -2,7 +2,7 @@
 
 import "dotenv/config";
 
-import { initObservability, getLogger } from "@finnor/tools";
+import { initObservability, getLogger, applyEmulatorFaultsFromEnv } from "@finnor/tools";
 import { JobQueue } from "./queue";
 import { sendMessage } from "./handlers/send-message";
 import { scheduledReminder } from "./handlers/scheduled-reminder";
@@ -24,6 +24,7 @@ import { learningDigest } from "./handlers/learning-digest";
 import { scanApprovalExpiry } from "./handlers/scan-approval-expiry";
 import { simulatorTick } from "./handlers/simulator-tick";
 import { scanReliabilityAlerts } from "./handlers/scan-reliability-alerts";
+import { scanIntegrationHealth } from "./handlers/scan-integration-health";
 import { dailyScorecard } from "./handlers/daily-scorecard";
 import { projectReadModels } from "./handlers/project-read-models";
 import { startScheduler, type ScheduledScan } from "./scheduler";
@@ -52,6 +53,7 @@ export function createWorker(): JobQueue {
   queue.register("scan_approval_expiry", scanApprovalExpiry);
   queue.register("simulator_tick", simulatorTick);
   queue.register("scan_reliability_alerts", scanReliabilityAlerts);
+  queue.register("scan_integration_health", scanIntegrationHealth);
   queue.register("daily_scorecard", dailyScorecard);
   queue.register("project_read_models", projectReadModels);
   return queue;
@@ -75,6 +77,11 @@ const PROACTIVE_SCANS: ScheduledScan[] = [
   // Phase 6 (§6.6): reliability thresholds are operational-health signals, not
   // business-day cadence — hourly, same reasoning as scan_approval_expiry above.
   { type: "scan_reliability_alerts", intervalHours: 1, payload: (tenantId) => ({ tenantId }) },
+  // A3.T2: sub-hourly per the plan's "10 min" — dateBucket()'s minute-granularity path
+  // for intervalHours<1 means the real-world cadence is actually governed by this
+  // scheduler's own 15-min tick (see scheduler.ts's own "not a promise of exact
+  // timing" header), same honest "close enough" posture as every other sub-daily scan.
+  { type: "scan_integration_health", intervalHours: 1 / 6, payload: (tenantId) => ({ tenantId }) },
   { type: "learning_digest", intervalHours: 24, payload: (tenantId) => ({ tenantId }) },
   // §3.3: no-ops for any tenant whose tenant_settings.simulator_enabled isn't true —
   // enqueued for every tenant like every other scan, gated by real DB state, not a
@@ -107,6 +114,12 @@ if (isMain) {
   process.on("SIGTERM", () => controller.abort());
   process.on("SIGINT", () => controller.abort());
   log.info({ event: "worker_started" }, "[worker] started, polling jobs table");
+  // A3.T4: EMULATOR_FAULTS=<capability>:<mode>,... — never set in Railway prod/staging
+  // per the ledger, so this is a no-op there; local/CI chaos runs opt in explicitly.
+  const faultedCapabilities = applyEmulatorFaultsFromEnv();
+  if (faultedCapabilities.length > 0) {
+    log.warn({ event: "emulator_faults_applied", capabilities: faultedCapabilities }, "[worker] EMULATOR_FAULTS applied — emulators are adversarial");
+  }
   startHeartbeat(30_000, controller.signal);
   startScheduler(PROACTIVE_SCANS, 15 * 60_000, controller.signal);
   // B1.T2, deployed same process as the job loop: this repo's single railway.json

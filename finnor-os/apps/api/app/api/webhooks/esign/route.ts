@@ -22,6 +22,7 @@ import { eq } from "drizzle-orm";
 import { applySignatureOutcome } from "../../../../../../packages/domain-plugins/proposal-signature/index";
 import { checkAndRecordReceipt } from "../../../../lib/webhook-replay";
 import { errorResponse } from "../../../../lib/auth";
+import { logWithTrace } from "@finnor/tools";
 
 function verifyDocusignSignature(req: Request, rawBody: string): boolean {
   const secret = process.env.DOCUSIGN_CONNECT_SECRET;
@@ -62,7 +63,10 @@ const STATUS_TO_OUTCOME: Record<string, "signed" | "declined" | "expired"> = {
 export async function POST(req: Request): Promise<Response> {
   try {
     const rawBody = await req.text();
-    if (!verifyDocusignSignature(req, rawBody)) return Response.json({ error: "Bad signature" }, { status: 401 });
+    if (!verifyDocusignSignature(req, rawBody)) {
+      logWithTrace({ route: "webhooks/esign" }).warn({ event: "webhook_signature_rejected", provider: "docusign" }, "rejected webhook: bad x-docusign-signature-1");
+      return Response.json({ error: "Bad signature" }, { status: 401 });
+    }
 
     let json: unknown = null;
     try {

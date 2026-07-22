@@ -382,7 +382,10 @@ async function handleToolCalls(message: Record<string, unknown>): Promise<Respon
 export async function POST(req: Request): Promise<Response> {
   await ensureSecretsLoaded();
   const rawBody = await req.text();
-  if (!verifySignature(req, rawBody)) return Response.json({ error: "Bad signature" }, { status: 401 });
+  if (!verifySignature(req, rawBody)) {
+    logWithTrace({ route: "webhooks/vapi" }).warn({ event: "webhook_signature_rejected", provider: "vapi" }, "rejected webhook: bad x-vapi-signature");
+    return Response.json({ error: "Bad signature" }, { status: 401 });
+  }
   let json: unknown = null;
   try {
     json = JSON.parse(rawBody);

@@ -3,8 +3,11 @@
 // signature verification once STRIPE_WEBHOOK_SECRET exists, matching the existing
 // webhooks/ghl and webhooks/vapi routes' own pattern of failing closed once a real
 // secret exists. Absent that secret, the original generic emulator/dev shape stays
-// accepted unchanged — a deploy with PAYMENTS_BINDING=stripe but no webhook secret
-// yet configured doesn't silently stop working, it just isn't verified yet. Dedup is
+// accepted OUTSIDE production only (A3.T6: this route used to accept it unconditionally
+// in every env, the one webhook route that didn't match every other route's own
+// "unset secret = accept-all only outside production, never in it" posture — a deploy
+// with PAYMENTS_BINDING=stripe but no webhook secret yet configured doesn't silently
+// stop working in dev, but production now fails closed like everywhere else). Dedup is
 // real regardless: transport-level via checkAndRecordReceipt (webhook_receipts),
 // business-level via applyPaymentWebhookEvent's receiveInboxEvent (inbox_events) —
 // the same two-layer dedup the ghl/vapi routes already use.
@@ -14,6 +17,7 @@ import { applyPaymentWebhookEvent } from "../../../../../../packages/domain-plug
 import { checkAndRecordReceipt } from "../../../../lib/webhook-replay";
 import { errorResponse } from "../../../../lib/auth";
 import { verifyTimestampedHmacSignature } from "../../../../lib/verify-hmac-signature";
+import { logWithTrace } from "@finnor/tools";
 
 const PaymentWebhookSchema = z.object({
   tenantId: z.string().uuid(),
@@ -51,7 +55,10 @@ export async function POST(req: Request): Promise<Response> {
         rawBody,
         allowUnsetSecret: false,
       });
-      if (!verified) return Response.json({ error: "Bad signature" }, { status: 401 });
+      if (!verified) {
+        logWithTrace({ route: "webhooks/payment" }).warn({ event: "webhook_signature_rejected", provider: "stripe" }, "rejected webhook: bad stripe-signature");
+        return Response.json({ error: "Bad signature" }, { status: 401 });
+      }
 
       let json: unknown = null;
       try {
@@ -84,7 +91,22 @@ export async function POST(req: Request): Promise<Response> {
       return Response.json({ received: true, applied: result.applied });
     }
 
-    // No real provider configured — original generic emulator/dev shape, unchanged.
+    // A3.T6: no STRIPE_WEBHOOK_SECRET configured — same fail posture as every other
+    // webhook route in this repo (ghl/vapi/esign): accept-all is a dev convenience
+    // ONLY, never in production. Before this gate existed, this route was the one
+    // exception that accepted an unsigned, caller-supplied-tenantId payload in
+    // production too — a real, live gap (anyone who knew a tenantId could POST a fake
+    // "payment succeeded" event and have it applied) whenever PAYMENTS_BINDING wasn't
+    // yet stripe with its secret configured.
+    if (process.env.NODE_ENV === "production") {
+      logWithTrace({ route: "webhooks/payment" }).warn(
+        { event: "webhook_signature_rejected", provider: "payment_provider", reason: "no STRIPE_WEBHOOK_SECRET configured in production" },
+        "rejected webhook: no verification secret configured in production",
+      );
+      return Response.json({ error: "Bad signature" }, { status: 401 });
+    }
+
+    // No real provider configured, non-production — original generic emulator/dev shape, unchanged.
     let json: unknown = null;
     try {
       json = JSON.parse(rawBody);

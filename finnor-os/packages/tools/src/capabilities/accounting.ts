@@ -75,13 +75,16 @@ export const syncInvoiceEmulatorBinding: CapabilityBinding<SyncInvoiceInput, Syn
 export const syncInvoiceQuickbooksBinding: CapabilityBinding<SyncInvoiceInput, SyncInvoiceOutput> = {
   name: "quickbooks",
   async call(input) {
-    const result = await withCircuitBreaker("quickbooks", () =>
-      syncInvoiceToQuickBooks({
-        customerName: input.customerName,
-        customerPhone: input.customerPhone,
-        amountUsd: input.amountUsd,
-        memo: input.memo,
-      }),
+    const result = await withCircuitBreaker(
+      "quickbooks",
+      () =>
+        syncInvoiceToQuickBooks({
+          customerName: input.customerName,
+          customerPhone: input.customerPhone,
+          amountUsd: input.amountUsd,
+          memo: input.memo,
+        }),
+      { tenantId: input.tenantId },
     );
     // Phase 4 (§4.5): the single join between Finnor's invoice and QuickBooks' real
     // objects. invoiceId is optional upstream (older callers may not pass it) — only
@@ -122,7 +125,7 @@ export const createPaymentLinkEmulatorBinding: CapabilityBinding<CreatePaymentLi
 export const stripeCreatePaymentLinkBinding: CapabilityBinding<CreatePaymentLinkInput, CreatePaymentLinkOutput> = {
   name: "stripe",
   async call(input) {
-    const result = await withCircuitBreaker("stripe", () => createStripePaymentLink(input));
+    const result = await withCircuitBreaker("stripe", () => createStripePaymentLink(input), { tenantId: input.tenantId });
     await withTenant(input.tenantId, (db) =>
       db
         .insert(externalRefs)

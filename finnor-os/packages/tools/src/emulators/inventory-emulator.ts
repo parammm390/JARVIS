@@ -4,7 +4,7 @@
 // shape on either — this models the warehouse_stock/procurement_orders semantics from
 // scratch: reserve-then-commit, receive increments stock.
 
-import { makeFaultInjector, type FaultInjectionConfig } from "./fault-injection";
+import { makeFaultInjector, tenantFaultInjector, type FaultInjectionConfig } from "./fault-injection";
 
 export interface ReserveStockInput {
   tenantId: string;
@@ -56,7 +56,7 @@ export function getEmulatorStock(sku: string): number {
 }
 
 export async function emulatorReserveStock(input: ReserveStockInput): Promise<ReserveStockOutput> {
-  await injectFaults();
+  await (tenantFaultInjector("inventory", input.tenantId) ?? injectFaults)();
   const existing = reservations.get(input.idempotencyKey);
   if (existing) return existing;
   const current = stockBySku.get(input.sku) ?? 0;
@@ -75,7 +75,7 @@ export async function emulatorReleaseReservation(input: ReserveStockInput, outpu
 }
 
 export async function emulatorReceiveProcurement(input: ReceiveProcurementInput): Promise<ReceiveProcurementOutput> {
-  await injectFaults();
+  await (tenantFaultInjector("inventory", input.tenantId) ?? injectFaults)();
   const existing = receipts.get(input.idempotencyKey);
   if (existing) return existing;
   const newQuantity = (stockBySku.get(input.sku) ?? 0) + input.quantityOrdered;

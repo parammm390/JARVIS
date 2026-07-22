@@ -7,12 +7,20 @@
 //    emulator is the explicit opt-out (A1.T2 inverted this from the old emulator-default).
 //  - External capabilities (communications/esign/accounting/payments/marketing) call a
 //    real third-party vendor when opted in, so emulator stays the safe default.
+//
+// A3.T1 adds the tenant-row link ahead of both: resolveCapabilityBindingsForTenant()
+// checks tenant_integrations first, and only falls through to the env/default logic
+// below (resolveCapabilityBindings(), unchanged, still used directly wherever no
+// tenantId is available yet) when that tenant has no override row for a capability.
+
+import { withTenant, tenantIntegrations } from "@finnor/db";
+import { eq } from "drizzle-orm";
 
 export type BindingMode = "native" | "emulator" | "ghl" | "vapi" | "docusign" | "quickbooks" | "stripe" | "dry_run";
 
 export interface BindingResolution {
   mode: BindingMode;
-  source: "env" | "default";
+  source: "tenant" | "env" | "default";
 }
 
 function resolveOwned(envValue: string | undefined): BindingResolution {
@@ -49,4 +57,41 @@ export function resolveCapabilityBindings(env: NodeJS.ProcessEnv = process.env):
     payments: resolveExternal(env.PAYMENTS_BINDING, "stripe"),
     marketing: resolveExternal(env.MARKETING_BINDING, "dry_run"),
   };
+}
+
+const CAPABILITY_KEYS = [
+  "scheduling",
+  "documents",
+  "inventory",
+  "crm",
+  "communications",
+  "esign",
+  "accounting",
+  "payments",
+  "marketing",
+] as const;
+
+/**
+ * tenant-row -> env -> A1 defaults. A tenant_integrations row overrides its capability's
+ * env/default resolution outright (source: "tenant"); a capability with no row for this
+ * tenant falls through to resolveCapabilityBindings() unchanged. Read via withTenant (not
+ * adminDb) even though the row is also filtered by tenantId explicitly below — RLS stays
+ * the enforced boundary, this is defense in depth, matching every other tenant-scoped
+ * read in this package (see idempotent-call.ts).
+ */
+export async function resolveCapabilityBindingsForTenant(
+  tenantId: string,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<CapabilityBindingsReport> {
+  const envReport = resolveCapabilityBindings(env);
+  const rows = await withTenant(tenantId, (db) =>
+    db.select().from(tenantIntegrations).where(eq(tenantIntegrations.tenantId, tenantId)),
+  );
+  const overrides = new Map(rows.map((r) => [r.capability, r.binding as BindingMode]));
+  const report = { ...envReport };
+  for (const key of CAPABILITY_KEYS) {
+    const override = overrides.get(key);
+    if (override) report[key] = { mode: override, source: "tenant" };
+  }
+  return report;
 }

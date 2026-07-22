@@ -12,6 +12,7 @@ import { eq } from "drizzle-orm";
 import { createDocument, recordDocumentContent, getDocumentContent } from "@finnor/data-platform";
 import type { CapabilityContract, CapabilityBinding, RetryPolicy } from "@finnor/workflow-runtime";
 import { requestDocusignSignature, docusignProviderStatus } from "../docusign";
+import { withCircuitBreaker } from "../provider-circuit-breaker";
 import { renderDocumentPdf } from "../pdf/render-pdf";
 import {
   emulatorGenerateDocument,
@@ -128,6 +129,6 @@ export const requestSignatureDocusignBinding: CapabilityBinding<RequestSignature
   name: "docusign",
   async call(input) {
     const content = await withTenant(input.tenantId, (db) => getDocumentContent(db, input.documentId));
-    return requestDocusignSignature({ ...input, documentBytes: content?.bytes });
+    return withCircuitBreaker("docusign", () => requestDocusignSignature({ ...input, documentBytes: content?.bytes }), { tenantId: input.tenantId });
   },
 };

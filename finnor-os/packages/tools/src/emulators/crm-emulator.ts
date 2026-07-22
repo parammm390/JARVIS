@@ -1,7 +1,7 @@
 // Stateful local CRM emulator — an in-memory double for GoHighLevel (or any external
 // CRM), fault-injecting like the scheduling/communications emulators (Phase 2).
 
-import { makeFaultInjector, type FaultInjectionConfig } from "./fault-injection";
+import { makeFaultInjector, tenantFaultInjector, type FaultInjectionConfig } from "./fault-injection";
 
 export interface UpsertContactInput {
   tenantId: string;
@@ -61,7 +61,7 @@ export function wasEmulatorMessageSent(idempotencyKey: string): boolean {
 }
 
 export async function emulatorUpsertContact(input: UpsertContactInput): Promise<UpsertContactOutput> {
-  await injectFaults();
+  await (tenantFaultInjector("crm", input.tenantId) ?? injectFaults)();
   const existing = contactsByPhone.get(input.phone);
   if (existing) return { contactId: existing, createdNew: false };
   const contactId = input.idempotencyKey;
@@ -70,13 +70,13 @@ export async function emulatorUpsertContact(input: UpsertContactInput): Promise<
 }
 
 export async function emulatorSendMessage(input: SendMessageInput): Promise<SendMessageOutput> {
-  await injectFaults();
+  await (tenantFaultInjector("crm", input.tenantId) ?? injectFaults)();
   sentMessages.add(input.idempotencyKey);
   return { sent: true, channel: input.channel ?? "sms" };
 }
 
 export async function emulatorBookProviderAppointment(input: BookProviderAppointmentInput): Promise<BookProviderAppointmentOutput> {
-  await injectFaults();
+  await (tenantFaultInjector("crm", input.tenantId) ?? injectFaults)();
   const existing = bookedVisits.get(input.idempotencyKey);
   if (existing) return { booked: true, ...existing };
   const visit = { visitId: input.idempotencyKey, scheduledAt: input.startTime };

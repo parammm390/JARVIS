@@ -7,6 +7,7 @@
 import { z } from "zod";
 import type { CapabilityContract, CapabilityBinding, RetryPolicy } from "@finnor/workflow-runtime";
 import { connectGhl, callMcpTool } from "../mcp-client";
+import { withCircuitBreaker } from "../provider-circuit-breaker";
 import { upsertHouseholdByPhone, recordOutbound, bookServiceVisit } from "../sandbox";
 import {
   emulatorUpsertContact,
@@ -96,16 +97,22 @@ export const upsertContactNativeBinding: CapabilityBinding<UpsertContactInput, U
 export const upsertContactGhlBinding: CapabilityBinding<UpsertContactInput, UpsertContactOutput> = {
   name: "ghl",
   async call(input) {
-    const conn = await connectGhl();
-    try {
-      const result = await callMcpTool(conn, "ghl", "contacts_upsert-contact", {
-        firstName: input.firstName,
-        phone: input.phone,
-      });
-      return { contactId: String(result.contactId ?? input.idempotencyKey), createdNew: true };
-    } finally {
-      await conn.close().catch(() => undefined);
-    }
+    return withCircuitBreaker(
+      "ghl",
+      async () => {
+        const conn = await connectGhl();
+        try {
+          const result = await callMcpTool(conn, "ghl", "contacts_upsert-contact", {
+            firstName: input.firstName,
+            phone: input.phone,
+          });
+          return { contactId: String(result.contactId ?? input.idempotencyKey), createdNew: true };
+        } finally {
+          await conn.close().catch(() => undefined);
+        }
+      },
+      { tenantId: input.tenantId },
+    );
   },
 };
 
@@ -140,13 +147,19 @@ export const sendMessageNativeBinding: CapabilityBinding<SendMessageInput, SendM
 export const sendMessageGhlBinding: CapabilityBinding<SendMessageInput, SendMessageOutput> = {
   name: "ghl",
   async call(input) {
-    const conn = await connectGhl();
-    try {
-      await callMcpTool(conn, "ghl", "conversations_send-a-new-message", { contactId: input.contactId, message: input.message });
-      return { sent: true, channel: input.channel ?? "sms" };
-    } finally {
-      await conn.close().catch(() => undefined);
-    }
+    return withCircuitBreaker(
+      "ghl",
+      async () => {
+        const conn = await connectGhl();
+        try {
+          await callMcpTool(conn, "ghl", "conversations_send-a-new-message", { contactId: input.contactId, message: input.message });
+          return { sent: true, channel: input.channel ?? "sms" };
+        } finally {
+          await conn.close().catch(() => undefined);
+        }
+      },
+      { tenantId: input.tenantId },
+    );
   },
 };
 
@@ -179,19 +192,25 @@ export const bookProviderAppointmentNativeBinding: CapabilityBinding<BookProvide
 export const bookProviderAppointmentGhlBinding: CapabilityBinding<BookProviderAppointmentInput, BookProviderAppointmentOutput> = {
   name: "ghl",
   async call(input) {
-    const conn = await connectGhl();
-    try {
-      const result = await callMcpTool(conn, "ghl", "calendars_create-appointment", {
-        contactId: input.contactId,
-        startTime: input.startTime,
-      });
-      return {
-        booked: true,
-        visitId: String(result.id ?? input.idempotencyKey),
-        scheduledAt: input.startTime,
-      };
-    } finally {
-      await conn.close().catch(() => undefined);
-    }
+    return withCircuitBreaker(
+      "ghl",
+      async () => {
+        const conn = await connectGhl();
+        try {
+          const result = await callMcpTool(conn, "ghl", "calendars_create-appointment", {
+            contactId: input.contactId,
+            startTime: input.startTime,
+          });
+          return {
+            booked: true,
+            visitId: String(result.id ?? input.idempotencyKey),
+            scheduledAt: input.startTime,
+          };
+        } finally {
+          await conn.close().catch(() => undefined);
+        }
+      },
+      { tenantId: input.tenantId },
+    );
   },
 };

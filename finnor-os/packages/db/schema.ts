@@ -1189,3 +1189,26 @@ export const readModelProjections = pgTable(
   },
   (t) => [primaryKey({ columns: [t.tenantId, t.view] })],
 );
+
+// A3.T1: per-tenant override for which binding/mode serves each capability, on top of
+// A1.T3's env-only resolveCapabilityBindings(). See migration 0039's own header for the
+// binding-vs-mode distinction and the tenant-row -> env -> default resolution order.
+export const tenantIntegrations = pgTable(
+  "tenant_integrations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    capability: text("capability", {
+      enum: ["scheduling", "documents", "inventory", "crm", "communications", "esign", "accounting", "payments", "marketing"],
+    }).notNull(),
+    binding: text("binding").notNull(),
+    mode: text("mode", { enum: ["real", "sandbox", "emulator"] }).notNull().default("emulator"),
+    config: jsonb("config").notNull().default({}),
+    health: text("health", { enum: ["ok", "degraded", "down", "unknown"] }).notNull().default("unknown"),
+    lastCheckAt: timestamp("last_check_at", { withTimezone: true }),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique("tenant_integrations_tenant_capability_idx").on(t.tenantId, t.capability)],
+);

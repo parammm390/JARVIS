@@ -82,6 +82,47 @@ describe.skipIf(!available)("Phase 4 §4.4: durable circuit breaker + per-tenant
     expect(realCalls).toBe(3); // the 4th call never touched the real provider at all
   });
 
+  it("half-open recovery (A3.T3): once the cooldown has elapsed, the next call is let through as a probe — success closes it, failure re-opens and restarts the cooldown", async () => {
+    await recordProviderFailure(TEST_PROVIDER);
+    await recordProviderFailure(TEST_PROVIDER);
+    await recordProviderFailure(TEST_PROVIDER);
+    expect(await isCircuitOpen(TEST_PROVIDER)).toBe(true);
+
+    // Still well within the 60s cooldown — must keep refusing, zero real calls.
+    let realCalls = 0;
+    await expect(withCircuitBreaker(TEST_PROVIDER, async () => { realCalls++; return "ok"; })).rejects.toThrow(/degraded/);
+    expect(realCalls).toBe(0);
+
+    // Simulate the cooldown having elapsed — same technique as heartbeat.test.ts's
+    // direct last_beat_at manipulation, not a fake timer: real DB state, real clock.
+    await adminDb()
+      .update(providerCircuitState)
+      .set({ openedAt: new Date(Date.now() - 61_000) })
+      .where(eq(providerCircuitState.provider, TEST_PROVIDER));
+
+    // A failing probe: real call attempted (breaker let it through), then re-opens
+    // and re-stamps openedAt so the cooldown genuinely restarts rather than admitting
+    // another probe on the very next call.
+    await expect(withCircuitBreaker(TEST_PROVIDER, async () => { realCalls++; throw new Error("still down"); })).rejects.toThrow("still down");
+    expect(realCalls).toBe(1);
+    const afterFailedProbe = await circuitSnapshot(TEST_PROVIDER);
+    expect(afterFailedProbe.state).toBe("open");
+    expect(Date.now() - afterFailedProbe.openedAt!.getTime()).toBeLessThan(5_000); // freshly re-stamped, not the old 61s-ago value
+
+    await expect(withCircuitBreaker(TEST_PROVIDER, async () => { realCalls++; return "ok"; })).rejects.toThrow(/degraded/);
+    expect(realCalls).toBe(1); // cooldown restarted — immediately refused again, no second probe yet
+
+    // Elapse the (restarted) cooldown again and let a probe succeed this time.
+    await adminDb()
+      .update(providerCircuitState)
+      .set({ openedAt: new Date(Date.now() - 61_000) })
+      .where(eq(providerCircuitState.provider, TEST_PROVIDER));
+    const result = await withCircuitBreaker(TEST_PROVIDER, async () => { realCalls++; return "recovered"; });
+    expect(result).toBe("recovered");
+    expect(realCalls).toBe(2);
+    expect(await isCircuitOpen(TEST_PROVIDER)).toBe(false);
+  });
+
   it("claimBudget enforces a real daily cap per tenant+provider+metric, independent metrics don't interfere", async () => {
     const first = await claimBudget(TEST_TENANT, TEST_PROVIDER, "call", 2);
     expect(first).toEqual({ allowed: true, used: 1, cap: 2 });

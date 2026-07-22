@@ -7,13 +7,22 @@
 
 import { adminDb, providerCircuitState } from "@finnor/db";
 import { eq, sql } from "drizzle-orm";
+import { logWithTrace } from "./logger";
 
 const OPEN_AFTER_CONSECUTIVE_FAILURES = 3;
+// A3.T3: real half-open recovery — before this, an opened breaker refused every
+// attempt forever, since nothing that could ever call recordProviderSuccess() again
+// (withCircuitBreaker itself refused the call) was left running. 60s matches the
+// plan's own "5 fails -> open, 60s half-open" (this repo opens at 3, not 5 — see the
+// existing OPEN_AFTER_CONSECUTIVE_FAILURES comment history; kept as-is, not part of
+// this task's scope to change the threshold).
+const OPEN_COOLDOWN_MS = 60_000;
 
 export interface CircuitState {
   provider: string;
   state: "closed" | "open";
   consecutiveFailures: number;
+  openedAt?: Date | null;
 }
 
 async function getOrInit(provider: string): Promise<typeof providerCircuitState.$inferSelect> {
@@ -49,7 +58,12 @@ export async function recordProviderSuccess(provider: string): Promise<void> {
 
 /** Records a real failure and opens the breaker once the threshold is hit. Uses an
  *  atomic UPDATE ... RETURNING off the DB's own current count (not a read-then-write
- *  from the caller's stale snapshot) so concurrent failing calls can't undercount. */
+ *  from the caller's stale snapshot) so concurrent failing calls can't undercount.
+ *  A failure recorded while ALREADY open (a failed half-open probe, see
+ *  withCircuitBreaker) re-stamps openedAt so the cooldown restarts from now — without
+ *  this, a probe that fails would leave the old openedAt in place and the very next
+ *  check would immediately think the cooldown had elapsed again, busy-looping probes
+ *  instead of actually waiting out OPEN_COOLDOWN_MS. */
 export async function recordProviderFailure(provider: string): Promise<CircuitState> {
   await getOrInit(provider); // ensure the row exists before the atomic increment below
   const [row] = await adminDb()
@@ -61,36 +75,71 @@ export async function recordProviderFailure(provider: string): Promise<CircuitSt
     })
     .where(eq(providerCircuitState.provider, provider))
     .returning();
-  if (row!.consecutiveFailures >= OPEN_AFTER_CONSECUTIVE_FAILURES && row!.state === "closed") {
+  if (row!.state === "open") {
+    const [restamped] = await adminDb()
+      .update(providerCircuitState)
+      .set({ openedAt: new Date() })
+      .where(eq(providerCircuitState.provider, provider))
+      .returning();
+    return { provider, state: "open", consecutiveFailures: restamped!.consecutiveFailures, openedAt: restamped!.openedAt };
+  }
+  if (row!.consecutiveFailures >= OPEN_AFTER_CONSECUTIVE_FAILURES) {
     const [opened] = await adminDb()
       .update(providerCircuitState)
       .set({ state: "open", openedAt: new Date() })
       .where(eq(providerCircuitState.provider, provider))
       .returning();
-    return { provider, state: opened!.state as "open", consecutiveFailures: opened!.consecutiveFailures };
+    return { provider, state: opened!.state as "open", consecutiveFailures: opened!.consecutiveFailures, openedAt: opened!.openedAt };
   }
-  return { provider, state: row!.state as "closed" | "open", consecutiveFailures: row!.consecutiveFailures };
+  return { provider, state: row!.state as "closed" | "open", consecutiveFailures: row!.consecutiveFailures, openedAt: row!.openedAt };
 }
 
 export async function circuitSnapshot(provider: string): Promise<CircuitState> {
   const row = await getOrInit(provider);
-  return { provider, state: row.state as "closed" | "open", consecutiveFailures: row.consecutiveFailures };
+  return { provider, state: row.state as "closed" | "open", consecutiveFailures: row.consecutiveFailures, openedAt: row.openedAt };
+}
+
+export interface CircuitBreakerMeta {
+  tenantId?: string;
+  traceId?: string;
 }
 
 /** Wraps a real provider call with breaker enforcement: refuses to even attempt the
- *  call while open, records the real outcome either way. Never used to decide
- *  emulator-vs-real — only to decide "attempt vs degrade" once a binding is already
- *  real. */
-export async function withCircuitBreaker<T>(provider: string, fn: () => Promise<T>): Promise<T> {
-  if (await isCircuitOpen(provider)) {
-    throw new Error(`degraded: awaiting ${provider} (circuit breaker open after repeated failures)`);
+ *  call while open AND still within the cooldown, records the real outcome either
+ *  way. Never used to decide emulator-vs-real — only to decide "attempt vs degrade"
+ *  once a binding is already real.
+ *
+ *  Half-open recovery (A3.T3): once OPEN_COOLDOWN_MS has passed since openedAt, the
+ *  NEXT call is let through as a single probe rather than refused forever — success
+ *  closes the breaker (recordProviderSuccess), failure re-opens it and restarts the
+ *  cooldown (recordProviderFailure's own re-stamping above). Before this, an opened
+ *  breaker had no path back to closed short of someone manually calling
+ *  recordProviderSuccess — which nothing did, since this function itself refused
+ *  every subsequent attempt. */
+export async function withCircuitBreaker<T>(provider: string, fn: () => Promise<T>, meta: CircuitBreakerMeta = {}): Promise<T> {
+  const snap = await circuitSnapshot(provider);
+  const log = logWithTrace({ provider, ...meta });
+  if (snap.state === "open") {
+    const cooldownElapsed = Date.now() - (snap.openedAt?.getTime() ?? 0) >= OPEN_COOLDOWN_MS;
+    if (!cooldownElapsed) {
+      log.warn({ event: "circuit_breaker_refused", consecutiveFailures: snap.consecutiveFailures }, `circuit breaker open for ${provider} — call refused`);
+      throw new Error(`degraded: awaiting ${provider} (circuit breaker open after repeated failures)`);
+    }
+    log.info({ event: "circuit_breaker_half_open_probe" }, `circuit breaker cooldown elapsed for ${provider} — attempting one probe call`);
   }
   try {
     const result = await fn();
     await recordProviderSuccess(provider);
+    if (snap.state === "open") log.info({ event: "circuit_breaker_closed" }, `circuit breaker for ${provider} closed — probe succeeded`);
     return result;
   } catch (err) {
-    await recordProviderFailure(provider);
+    const after = await recordProviderFailure(provider);
+    if (after.state === "open") {
+      log.error(
+        { event: "circuit_breaker_open", consecutiveFailures: after.consecutiveFailures, err: (err as Error).message },
+        `circuit breaker for ${provider} is open`,
+      );
+    }
     throw err;
   }
 }

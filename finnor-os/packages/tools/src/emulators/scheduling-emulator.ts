@@ -3,7 +3,7 @@
 // idempotent-dedup behavior (duplicate delivery of the same hold request is absorbed,
 // not double-booked), configurable latency/failure/rate-limit/auth/timeout profile.
 
-import { makeFaultInjector, type FaultInjectionConfig } from "./fault-injection";
+import { makeFaultInjector, tenantFaultInjector, type FaultInjectionConfig } from "./fault-injection";
 
 export interface HoldAppointmentInput {
   tenantId: string;
@@ -46,7 +46,7 @@ export function resetSchedulingEmulator(): void {
 }
 
 export async function emulatorHoldAppointment(input: HoldAppointmentInput): Promise<HoldAppointmentOutput> {
-  await injectFaults();
+  await (tenantFaultInjector("scheduling", input.tenantId) ?? injectFaults)();
   // Idempotent by the caller's idempotency key — a duplicate delivery of the same hold
   // request (retry, at-least-once redelivery) returns the SAME hold, never a second one.
   const existing = holds.get(input.idempotencyKey);
@@ -56,8 +56,8 @@ export async function emulatorHoldAppointment(input: HoldAppointmentInput): Prom
   return { holdId: hold.holdId, status: "held", scheduledAt: hold.scheduledAt };
 }
 
-export async function emulatorReleaseHold(_input: HoldAppointmentInput, output: HoldAppointmentOutput): Promise<void> {
-  await injectFaults();
+export async function emulatorReleaseHold(input: HoldAppointmentInput, output: HoldAppointmentOutput): Promise<void> {
+  await (tenantFaultInjector("scheduling", input.tenantId) ?? injectFaults)();
   const hold = holds.get(output.holdId);
   if (hold) hold.status = "released";
 }
@@ -80,7 +80,7 @@ export interface ConfirmAppointmentOutput {
 }
 
 export async function emulatorConfirmAppointment(input: ConfirmAppointmentInput): Promise<ConfirmAppointmentOutput> {
-  await injectFaults();
+  await (tenantFaultInjector("scheduling", input.tenantId) ?? injectFaults)();
   const hold = holds.get(input.holdId);
   if (hold) hold.status = "confirmed";
   return { holdId: input.holdId, status: "confirmed" };

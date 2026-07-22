@@ -1,12 +1,12 @@
 // GET /api/vitals (A2.T5) — the operational-health answer: queue depth, oldest-pending
 // age, worker heartbeat age, this tenant's open DLQ count, resolved capability bindings
-// (a placeholder — A3's tenant_integrations gives these real per-binding health), and
-// per-scan-type "last run" clocks. Each section is one cheap, already-indexed query;
-// nothing here is a fan-out over the same tables /api/setup/status already reads.
+// (tenant-row -> env -> default, A3.T1), and per-scan-type "last run" clocks. Each
+// section is one cheap, already-indexed query; nothing here is a fan-out over the same
+// tables /api/setup/status already reads.
 
-import { getPool, withTenant, deadLetters } from "@finnor/db";
+import { getPool, withTenant, deadLetters, tenantIntegrations } from "@finnor/db";
 import { and, eq, sql } from "drizzle-orm";
-import { resolveCapabilityBindings } from "@finnor/tools";
+import { resolveCapabilityBindingsForTenant } from "@finnor/tools";
 import { requireContext, errorResponse } from "../../../lib/auth";
 
 // A worker beats every 30s (apps/worker/src/heartbeat.ts) — 3x that cadence is enough
@@ -26,6 +26,7 @@ const SCAN_JOB_TYPES = [
   "scan_appointment_no_shows",
   "scan_approval_expiry",
   "scan_reliability_alerts",
+  "scan_integration_health",
   "learning_digest",
   "simulator_tick",
   "owner_digest",
@@ -36,7 +37,7 @@ export async function GET(req: Request): Promise<Response> {
   try {
     const ctx = await requireContext(req);
 
-    const [queueRow, heartbeatRow, dlqRows, scanRows] = await Promise.all([
+    const [queueRow, heartbeatRow, dlqRows, scanRows, bindings, integrationHealthRows] = await Promise.all([
       getPool().query<{ depth: string; oldest_pending_age_seconds: number | null }>(
         `SELECT count(*)::int AS depth, extract(epoch FROM (now() - min(run_at)))::int AS oldest_pending_age_seconds
          FROM jobs WHERE status = 'queued' AND run_at <= now()`,
@@ -54,6 +55,19 @@ export async function GET(req: Request): Promise<Response> {
         `SELECT type, max(run_at) AS last_run_at FROM jobs WHERE type = ANY($1::text[]) GROUP BY type`,
         [SCAN_JOB_TYPES],
       ),
+      resolveCapabilityBindingsForTenant(ctx.tenantId),
+      withTenant(ctx.tenantId, (db) =>
+        db
+          .select({
+            capability: tenantIntegrations.capability,
+            binding: tenantIntegrations.binding,
+            health: tenantIntegrations.health,
+            lastCheckAt: tenantIntegrations.lastCheckAt,
+            lastError: tenantIntegrations.lastError,
+          })
+          .from(tenantIntegrations)
+          .where(eq(tenantIntegrations.tenantId, ctx.tenantId)),
+      ),
     ]);
 
     const heartbeatAgeSeconds = heartbeatRow.rows[0]?.age_seconds ?? null;
@@ -70,9 +84,11 @@ export async function GET(req: Request): Promise<Response> {
           healthy: heartbeatAgeSeconds !== null && heartbeatAgeSeconds < HEARTBEAT_STALE_AFTER_SECONDS,
         },
         dlq: { openCount: dlqRows[0]?.count ?? 0 },
-        // Placeholder per A2.T5's own scope note — real per-binding health (breaker
-        // state, last_check_at) arrives with A3's tenant_integrations table.
-        bindings: resolveCapabilityBindings(),
+        bindings,
+        // A3.T2: real per-binding health (breaker-aware) for whichever capabilities
+        // this tenant has an explicit tenant_integrations row for — EMU-tagged
+        // implicitly via `binding` (D1.T2's pulse bar reads this field for that label).
+        integrationHealth: integrationHealthRows,
         scans: SCAN_JOB_TYPES.reduce<Record<string, string | null>>((acc, type) => {
           acc[type] = lastRunByType[type] ?? null;
           return acc;

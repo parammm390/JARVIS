@@ -3,7 +3,7 @@
 // request_signature is emulator-only this phase; real-provider activation is later,
 // gated work.
 
-import { makeFaultInjector, type FaultInjectionConfig } from "./fault-injection";
+import { makeFaultInjector, tenantFaultInjector, type FaultInjectionConfig } from "./fault-injection";
 
 export interface GenerateDocumentInput {
   tenantId: string;
@@ -56,7 +56,7 @@ export function resetDocumentsEmulator(): void {
 }
 
 export async function emulatorGenerateDocument(input: GenerateDocumentInput): Promise<GenerateDocumentOutput> {
-  await injectFaults();
+  await (tenantFaultInjector("documents", input.tenantId) ?? injectFaults)();
   const existing = generatedDocuments.get(input.idempotencyKey);
   if (existing) return existing;
   const result: GenerateDocumentOutput = { documentId: input.idempotencyKey, storageRef: `sandbox://documents/${input.idempotencyKey}` };
@@ -65,7 +65,7 @@ export async function emulatorGenerateDocument(input: GenerateDocumentInput): Pr
 }
 
 export async function emulatorRequestSignature(input: RequestSignatureInput): Promise<RequestSignatureOutput> {
-  await injectFaults();
+  await (tenantFaultInjector("documents", input.tenantId) ?? injectFaults)();
   const existing = signatureRequests.get(input.idempotencyKey);
   if (existing) return existing.output;
   const output: RequestSignatureOutput = { signatureRequestId: input.idempotencyKey, status: "sent" };

@@ -12,34 +12,36 @@ import {
   ghlIntegrationStatus,
   testStripeConnection,
   testDocusignConnection,
+  resolveCapabilityBindingsForTenant,
+  resendProviderStatus,
 } from "@finnor/tools";
 import { requireContext, errorResponse } from "../../../../lib/auth";
 
 export async function GET(req: Request): Promise<Response> {
   try {
-    await requireContext(req); // authenticated, but this data isn't tenant-scoped (process-level env vars)
-    const [ads, quickbooks, vapi, stripe, docusign] = await Promise.all([
+    const ctx = await requireContext(req);
+    const [ads, quickbooks, vapi, stripe, docusign, bindingsReport] = await Promise.all([
       testAdsConnections(),
       testQuickBooksConnection(),
       testVapiConnection(),
       testStripeConnection(),
       testDocusignConnection(),
+      resolveCapabilityBindingsForTenant(ctx.tenantId),
     ]);
     const ghl = ghlIntegrationStatus();
-    const all = { meta_ads: ads.meta, google_ads: ads.googleAds, quickbooks, vapi, ghl, stripe, docusign };
+    // Same "configured-state only" posture as ghl above — no cheap authenticated no-op
+    // exists on Resend's API to probe healthy/unhealthy for real.
+    const resend = { ...resendProviderStatus(), healthy: null as boolean | null };
+    const all = { meta_ads: ads.meta, google_ads: ads.googleAds, quickbooks, vapi, ghl, stripe, docusign, resend };
     const summary = {
       configuredCount: Object.values(all).filter((h) => h.configured).length,
       healthyCount: Object.values(all).filter((h) => h.healthy === true).length,
       unhealthyCount: Object.values(all).filter((h) => h.healthy === false).length,
     };
-    // Which binding actually serves each capability right now — configured creds
-    // alone don't mean the workflow runtime is using them yet (PAYMENTS_BINDING/
-    // ESIGN_BINDING are the separate opt-in switches, packages/tools' env-var
-    // pattern every other domain already follows).
-    const bindings = {
-      payments: process.env.PAYMENTS_BINDING === "stripe" ? "stripe" : "emulator",
-      esign: process.env.ESIGN_BINDING === "docusign" ? "docusign" : "emulator",
-    };
+    // Which binding actually serves each capability right now (A3.T1: tenant-row ->
+    // env -> default, the same resolveCapabilityBindingsForTenant() the worker uses to
+    // pick the real binding — this report can't drift from what actually executes).
+    const bindings = { payments: bindingsReport.payments.mode, esign: bindingsReport.esign.mode };
     return Response.json({ ...all, bindings, summary }, { headers: { "cache-control": "no-store" } });
   } catch (err) {
     return errorResponse(err);

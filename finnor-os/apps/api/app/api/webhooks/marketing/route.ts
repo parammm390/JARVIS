@@ -15,6 +15,7 @@ import { withTenant } from "@finnor/db";
 import { createLead } from "@finnor/data-platform";
 import { checkAndRecordReceipt } from "../../../../lib/webhook-replay";
 import { errorResponse } from "../../../../lib/auth";
+import { logWithTrace } from "@finnor/tools";
 
 const MarketingConversionSchema = z.object({
   tenantId: z.string().uuid(),
@@ -47,7 +48,10 @@ function verifyMarketingWebhookSecret(req: Request): boolean {
 
 export async function POST(req: Request): Promise<Response> {
   try {
-    if (!verifyMarketingWebhookSecret(req)) return Response.json({ error: "Bad or missing webhook secret" }, { status: 401 });
+    if (!verifyMarketingWebhookSecret(req)) {
+      logWithTrace({ route: "webhooks/marketing" }).warn({ event: "webhook_signature_rejected", provider: "marketing_conversion" }, "rejected webhook: bad or missing x-webhook-secret");
+      return Response.json({ error: "Bad or missing webhook secret" }, { status: 401 });
+    }
     const rawBody = await req.text();
     let json: unknown = null;
     try {

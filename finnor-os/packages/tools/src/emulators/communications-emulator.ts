@@ -3,7 +3,7 @@
 // dedup (so a retried "send" after an unknown-delivery crash is provably safe rather
 // than risking a double-send).
 
-import { makeFaultInjector, type FaultInjectionConfig } from "./fault-injection";
+import { makeFaultInjector, tenantFaultInjector, type FaultInjectionConfig } from "./fault-injection";
 
 export interface SendConfirmationInput {
   tenantId: string;
@@ -44,7 +44,7 @@ export function resetCommunicationsEmulator(): void {
 }
 
 export async function emulatorSendConfirmation(input: SendConfirmationInput): Promise<SendConfirmationOutput> {
-  await injectFaults();
+  await (tenantFaultInjector("communications", input.tenantId) ?? injectFaults)();
   // Provider-side idempotency: the same idempotency key never results in a second call.
   const existing = sentCalls.get(input.idempotencyKey);
   if (existing) return { callId: existing.callId, status: "placed" };

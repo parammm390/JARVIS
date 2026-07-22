@@ -6,6 +6,7 @@ import { GhlWebhookSchema } from "@finnor/policy-schema";
 import { adminDb, jobs } from "@finnor/db";
 import { ensureSecretsLoaded } from "@finnor/security";
 import { checkAndRecordReceipt } from "../../../../lib/webhook-replay";
+import { logWithTrace } from "@finnor/tools";
 
 /**
  * GHL (HighLevel) marketplace webhooks are signed RSA-SHA256 against GHL's own
@@ -30,7 +31,10 @@ function verifySignature(req: Request, rawBody: string): boolean {
 export async function POST(req: Request): Promise<Response> {
   await ensureSecretsLoaded();
   const rawBody = await req.text();
-  if (!verifySignature(req, rawBody)) return Response.json({ error: "Bad signature" }, { status: 401 });
+  if (!verifySignature(req, rawBody)) {
+    logWithTrace({ route: "webhooks/ghl" }).warn({ event: "webhook_signature_rejected", provider: "ghl" }, "rejected webhook: bad x-wh-signature");
+    return Response.json({ error: "Bad signature" }, { status: 401 });
+  }
   let json: unknown = null;
   try {
     json = JSON.parse(rawBody);

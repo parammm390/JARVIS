@@ -2,7 +2,7 @@
 // payment-link provider (create_payment_link, no real binding exists yet — Stripe
 // integration is real-provider-activation, a later gated phase).
 
-import { makeFaultInjector, type FaultInjectionConfig } from "./fault-injection";
+import { makeFaultInjector, tenantFaultInjector, type FaultInjectionConfig } from "./fault-injection";
 
 export interface SyncInvoiceInput {
   tenantId: string;
@@ -47,7 +47,7 @@ export function resetAccountingEmulator(): void {
 }
 
 export async function emulatorSyncInvoice(input: SyncInvoiceInput): Promise<SyncInvoiceOutput> {
-  await injectFaults();
+  await (tenantFaultInjector("accounting", input.tenantId) ?? injectFaults)();
   const existing = syncedInvoices.get(input.idempotencyKey);
   if (existing) return existing;
   const customerId = customersByName.get(input.customerName) ?? `cust_${customersByName.size + 1}`;
@@ -58,7 +58,7 @@ export async function emulatorSyncInvoice(input: SyncInvoiceInput): Promise<Sync
 }
 
 export async function emulatorCreatePaymentLink(input: CreatePaymentLinkInput): Promise<CreatePaymentLinkOutput> {
-  await injectFaults();
+  await (tenantFaultInjector("accounting", input.tenantId) ?? injectFaults)();
   const existing = paymentLinks.get(input.idempotencyKey);
   if (existing) return existing;
   const result: CreatePaymentLinkOutput = {

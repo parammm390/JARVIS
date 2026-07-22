@@ -3,7 +3,7 @@
 // domain's send-message emulator directly (packages/tools/src/emulators/crm-emulator.ts)
 // since it's the identical shape (send a message to a contact) — not reinvented here.
 
-import { makeFaultInjector, type FaultInjectionConfig } from "./fault-injection";
+import { makeFaultInjector, tenantFaultInjector, type FaultInjectionConfig } from "./fault-injection";
 
 export interface LaunchAdCampaignInput {
   tenantId: string;
@@ -31,7 +31,7 @@ export function resetMarketingEmulator(): void {
 }
 
 export async function emulatorLaunchAdCampaign(input: LaunchAdCampaignInput): Promise<LaunchAdCampaignOutput> {
-  await injectFaults();
+  await (tenantFaultInjector("marketing", input.tenantId) ?? injectFaults)();
   const existing = launchedCampaigns.get(input.idempotencyKey);
   if (existing) return existing;
   const result: LaunchAdCampaignOutput = { campaignId: input.idempotencyKey, mode: "dry_run" };
