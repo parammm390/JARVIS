@@ -19,6 +19,7 @@ import Link from "next/link"
 import "./jarvis-theme.css"
 import { JarvisAuthProvider, useJarvisAuth } from "./lib/jarvis-auth"
 import { useLiveQuery, type LiveQueryConnection } from "@/lib/jarvis/useLiveQuery"
+import { FlowCatalogSection } from "./ui/motion/FlowCatalog"
 
 interface FixtureActivityItem {
   source: "action_log" | "workflow_step" | "call"
@@ -127,7 +128,7 @@ function StageContent() {
         <div>
           <h1 className="text-lg font-black text-[color:var(--j-text)]">JARVIS Stage</h1>
           <p className="text-[11px] text-[color:var(--j-text-dim)]">
-            Dev harness — every primitive/choreography/renderer mounts here from fixtures (C1.T3). C2&apos;s FLOW motion catalog and
+            Dev harness — every primitive/choreography/renderer mounts here from fixtures (C1.T3). C2&apos;s FLOW motion catalog (below) and
             C3&apos;s effects/primitive kit add their own sections next.
           </p>
         </div>
@@ -136,6 +137,7 @@ function StageContent() {
         </button>
       </div>
       <LiveQueryFixtureSection />
+      <FlowCatalogSection />
     </div>
   )
 }
