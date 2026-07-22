@@ -20,6 +20,8 @@ import "./jarvis-theme.css"
 import { JarvisAuthProvider, useJarvisAuth } from "./lib/jarvis-auth"
 import { useLiveQuery, type LiveQueryConnection } from "@/lib/jarvis/useLiveQuery"
 import { FlowCatalogSection } from "./ui/motion/FlowCatalog"
+import { FlowCatalogAmbientSection } from "./ui/motion/FlowCatalogAmbient"
+import { FpsMeterHud } from "./ui/motion/FpsMeter"
 
 interface FixtureActivityItem {
   source: "action_log" | "workflow_step" | "call"
@@ -138,6 +140,8 @@ function StageContent() {
       </div>
       <LiveQueryFixtureSection />
       <FlowCatalogSection />
+      <FlowCatalogAmbientSection />
+      <FpsMeterHud />
     </div>
   )
 }

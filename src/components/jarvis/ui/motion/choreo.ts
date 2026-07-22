@@ -106,4 +106,109 @@ export const deckFan: FlowChoreo = {
   },
 }
 
-export const choreo = { liquidFill, valvePulse, bypassUnfurl, stampApprove, shatterReject, deckFan }
+// FLOW-15 CameraPan: scale .98 + slide + fade 400ms → crossfade (reduced)
+export const cameraPan: FlowChoreo = {
+  variants: {
+    initial: { opacity: 0, scale: 0.98, x: 16 },
+    animate: { opacity: 1, scale: 1, x: 0, transition: { duration: DURATION.slow, ease: EASE.standard } },
+  },
+  reducedVariants: {
+    initial: { opacity: 0 },
+    animate: { opacity: 1, transition: { duration: DURATION.base } },
+  },
+}
+
+// FLOW-19 RadarSweep: waves under cap → count (reduced: static count, no waves).
+// Consumed by rendering N staggered copies of this variant as expanding rings.
+export const radarSweep: FlowChoreo = {
+  variants: {
+    initial: { scale: 0.3, opacity: 0.6 },
+    animate: {
+      scale: 1.8,
+      opacity: 0,
+      transition: { duration: 1.8, repeat: Infinity, ease: EASE.decelerate },
+    },
+  },
+  reducedVariants: {
+    initial: { scale: 1, opacity: 0 },
+    animate: { scale: 1, opacity: 0 },
+  },
+}
+
+// FLOW-20 DrawSpark: 500ms self-draw → drawn (reduced: shown fully drawn)
+export const drawSpark: FlowChoreo = {
+  variants: {
+    initial: { pathLength: 0, opacity: 0.4 },
+    animate: { pathLength: 1, opacity: 1, transition: { duration: 0.5, ease: EASE.standard } },
+  },
+  reducedVariants: {
+    initial: { pathLength: 1, opacity: 1 },
+    animate: { pathLength: 1, opacity: 1, transition: { duration: 0 } },
+  },
+}
+
+// FLOW-21 RouteDraw: polyline + marker glide → shown (reduced: shown static, no glide)
+export const routeDraw: FlowChoreo = {
+  variants: {
+    initial: { pathLength: 0 },
+    animate: { pathLength: 1, transition: { duration: 1.1, ease: EASE.standard } },
+  },
+  reducedVariants: {
+    initial: { pathLength: 1 },
+    animate: { pathLength: 1, transition: { duration: 0 } },
+  },
+}
+
+// FLOW-22 PinAura: pulse → colored pin (reduced: static colored pin, no pulse).
+// Distinct name from valvePulse even though the shape rhymes — separate FLOW ids
+// with separate honesty labels/consumers (map pins vs. workflow valves).
+export const pinAura: FlowChoreo = {
+  variants: {
+    initial: { scale: 1, opacity: 0.5 },
+    animate: { scale: [1, 1.6, 1], opacity: [0.5, 0, 0.5], transition: { duration: 1.6, repeat: Infinity, ease: EASE.decelerate } },
+  },
+  reducedVariants: {
+    initial: { scale: 1, opacity: 0 },
+    animate: { scale: 1, opacity: 0 },
+  },
+}
+
+// FLOW-24 ThemeTide: 2s crossfade → step (reduced: instant step, no crossfade)
+export const themeTide: FlowChoreo = {
+  variants: {
+    initial: { opacity: 0 },
+    animate: { opacity: 1, transition: { duration: 2, ease: "linear" } },
+  },
+  reducedVariants: {
+    initial: { opacity: 0 },
+    animate: { opacity: 1, transition: { duration: 0 } },
+  },
+}
+
+// FLOW-25 ShakeDeny: 4px/200ms → outline flash (reduced: outline flash only, no shake)
+export const shakeDeny: FlowChoreo = {
+  variants: {
+    initial: { x: 0 },
+    animate: { x: [0, -4, 4, -4, 4, 0], transition: { duration: 0.2 } },
+  },
+  reducedVariants: {
+    initial: { x: 0 },
+    animate: { x: 0, transition: { duration: 0 } },
+  },
+}
+
+export const choreo = {
+  liquidFill,
+  valvePulse,
+  bypassUnfurl,
+  stampApprove,
+  shatterReject,
+  deckFan,
+  cameraPan,
+  radarSweep,
+  drawSpark,
+  routeDraw,
+  pinAura,
+  themeTide,
+  shakeDeny,
+}
