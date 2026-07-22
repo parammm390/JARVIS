@@ -8,6 +8,7 @@
     "start": "next start -p 3100"
   },
   "dependencies": {
+    "@langchain/langgraph-checkpoint-postgres": "^0.0.4",
     "@finnor/data-platform": "*",
     "@finnor/db": "*",
     "@finnor/memory": "*",

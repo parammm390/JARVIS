@@ -21,6 +21,13 @@ export default defineConfig({
     alias: {
       "@finnor/shared-types": r("./packages/shared-types/src/index.ts"),
       "@finnor/policy-schema": r("./packages/policy-schema/src/index.ts"),
+      // Deep subpath imports (apps/api's admin/migrate route uses these two) — must
+      // come before the bare "@finnor/db" entry below since Vite's object-form alias
+      // resolves in listed order and a bare key would otherwise never get reached for
+      // these more specific ones if it matched first.
+      "@finnor/db/migrate": r("./packages/db/migrate.ts"),
+      "@finnor/db/seed": r("./packages/db/seed.ts"),
+      "@finnor/db/migrations-bundle": r("./packages/db/migrations-bundle.ts"),
       "@finnor/db": r("./packages/db/index.ts"),
       "@finnor/data-platform": r("./packages/data-platform/src/index.ts"),
       "@finnor/workflow-runtime": r("./packages/workflow-runtime/src/index.ts"),
