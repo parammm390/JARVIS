@@ -28,6 +28,7 @@ import { dailyScorecard } from "./handlers/daily-scorecard";
 import { projectReadModels } from "./handlers/project-read-models";
 import { startScheduler, type ScheduledScan } from "./scheduler";
 import { startHeartbeat } from "./heartbeat";
+import { startSseServer } from "./sse-server";
 
 export function createWorker(): JobQueue {
   const queue = new JobQueue();
@@ -108,6 +109,21 @@ if (isMain) {
   log.info({ event: "worker_started" }, "[worker] started, polling jobs table");
   startHeartbeat(30_000, controller.signal);
   startScheduler(PROACTIVE_SCANS, 15 * 60_000, controller.signal);
+  // B1.T2, deployed same process as the job loop: this repo's single railway.json
+  // start command (`npx tsx apps/$SERVICE_APP/src/index.ts`) means finnor-worker has
+  // exactly one entrypoint — a second Railway service isn't needed (and isn't
+  // "free tier only" per hard rule #5) when the SSE gateway can just bind its own
+  // port inside the same already-running process. Only starts if Railway (or any
+  // host) actually provides a PORT — local `npm run dev`/`start` for the job loop
+  // alone stays exactly as before, no port required.
+  if (process.env.PORT) {
+    const ssePort = Number(process.env.PORT);
+    startSseServer(ssePort, controller.signal)
+      .then(() => log.info({ port: ssePort }, "[sse] gateway listening (same process as job loop)"))
+      .catch((err) => {
+        log.error({ err: err instanceof Error ? err.message : String(err) }, "[sse] gateway failed to start — job loop continues regardless");
+      });
+  }
   createWorker()
     .runLoop(2000, controller.signal)
     .then(() => process.exit(0))
