@@ -1027,8 +1027,9 @@ export const deadLetters = pgTable(
     relatedOutboxEventId: uuid("related_outbox_event_id").references(() => outboxEvents.id),
     relatedWorkflowStepId: uuid("related_workflow_step_id").references(() => workflowSteps.id),
     envelope: jsonb("envelope").notNull(),
+    // A4.T1 (migration 0040): added needs_human/config to match shared-types' ErrorKind.
     errorKind: text("error_kind", {
-      enum: ["retryable", "terminal", "conflict", "auth", "validation", "provider_down"],
+      enum: ["retryable", "terminal", "conflict", "auth", "validation", "provider_down", "needs_human", "config"],
     }).notNull(),
     attempts: integer("attempts").notNull().default(0),
     firstSeenAt: timestamp("first_seen_at", { withTimezone: true }).notNull().defaultNow(),

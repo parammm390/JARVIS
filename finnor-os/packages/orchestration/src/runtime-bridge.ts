@@ -18,7 +18,7 @@
 
 import { withTenant } from "@finnor/db";
 import { submitCommand, claimStep, completeStep, failStep } from "@finnor/workflow-runtime";
-import type { DraftAction, ExecutionResult } from "@finnor/shared-types";
+import type { DraftAction, ExecutionResult, ErrorKind } from "@finnor/shared-types";
 import type { ToolRegistry } from "@finnor/tools";
 import type { DomainEnginePlugin } from "@finnor/plugins-shared";
 
@@ -33,11 +33,17 @@ export interface ExecutePluginViaRuntimeParams {
 }
 
 /** Maps a plugin's ExecutionResult onto the workflow_step's terminal outcome + the
- *  errorKind its DecisionReceipt failure carries. Only "success" is a real completion —
- *  "not_implemented" and "integration_unavailable" are still real failures from the
- *  runtime's point of view (the effect did not happen), just with a more specific,
- *  honest reason than a plain unclassified error. */
-function classifyFailure(result: ExecutionResult): { reason: string; errorKind: "provider_down" | "terminal" } {
+ *  errorKind its DecisionReceipt failure carries. A4.T1: a plugin (or the thrown-error
+ *  branch below) that already set `result.errorKind` wins — e.g. a thrown
+ *  IntegrationError's real `kind` — since it's strictly more specific than anything
+ *  derivable from `status` alone. Only "success" is a real completion — "not_implemented"
+ *  and "integration_unavailable" are still real failures from the runtime's point of
+ *  view (the effect did not happen), just with a more specific, honest reason than a
+ *  plain unclassified error. */
+function classifyFailure(result: ExecutionResult): { reason: string; errorKind: ErrorKind } {
+  if (result.errorKind) {
+    return { reason: result.error ?? "execution failed", errorKind: result.errorKind };
+  }
   if (result.status === "integration_unavailable") {
     return { reason: result.error ?? "integration unavailable", errorKind: "provider_down" };
   }
@@ -101,13 +107,26 @@ export async function executePluginViaRuntime(params: ExecutePluginViaRuntimePar
   try {
     result = await params.plugin.execute(params.draft, params.tools);
   } catch (err) {
-    result = { status: "failure", output: {}, error: (err as Error).message };
+    // A4.T1: previously discarded a thrown IntegrationError's own `.kind` (e.g.
+    // "retryable" for a transient network blip) — every thrown error silently became an
+    // unclassified failure that classifyFailure() would then default to "terminal",
+    // corrupting the receipt AND starving Reflection of the one signal it needs to
+    // avoid retrying something that can never succeed (or, as here, to actually retry
+    // something that can).
+    const kind = (err as { kind?: ErrorKind })?.kind;
+    result = { status: "failure", output: {}, error: (err as Error).message, errorKind: kind };
   }
 
   if (result.status === "success") {
     await completeStep(params.tenantId, stepId, { status: result.status, output: result.output, expected: result.expected ?? null });
   } else {
     const { reason, errorKind } = classifyFailure(result);
+    // A4.T1: write the classified kind back onto the result Reflection receives — before
+    // this fix, classifyFailure()'s output only ever reached the receipt/step row;
+    // reflection.evaluate() (called by the caller with this exact same `result` object)
+    // never saw a kind at all, so it always retried once, even a guaranteed-terminal
+    // validation failure.
+    result = { ...result, errorKind };
     await failStep(params.tenantId, stepId, reason, errorKind);
   }
 

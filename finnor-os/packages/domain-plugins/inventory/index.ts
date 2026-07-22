@@ -102,7 +102,7 @@ export const inventoryPlugin: DomainEnginePlugin = {
         };
       }
       const item = await findInventoryItem(tenantId, { sku: p.sku ? String(p.sku) : undefined, name: p.name ? String(p.name) : undefined });
-      if (!item) return { status: "failure", output: {}, error: `No inventory item matches "${p.sku ?? p.name}".` };
+      if (!item) return { status: "failure", output: {}, error: `No inventory item matches "${p.sku ?? p.name}".`, errorKind: "validation" };
       return {
         status: "success",
         output: { ...item, reorderNeeded: item.quantity <= item.reorderThreshold },
@@ -112,13 +112,14 @@ export const inventoryPlugin: DomainEnginePlugin = {
 
     // log_stock_used_on_visit — atomic decrement, never below zero.
     const item = await findInventoryItem(tenantId, { sku: p.sku ? String(p.sku) : undefined, name: p.name ? String(p.name) : undefined });
-    if (!item) return { status: "failure", output: {}, error: `No inventory item matches "${p.sku ?? p.name}".` };
+    if (!item) return { status: "failure", output: {}, error: `No inventory item matches "${p.sku ?? p.name}".`, errorKind: "validation" };
     const qty = Number(p.quantity);
     if (item.quantity < qty) {
       return {
         status: "failure",
         output: { available: item.quantity },
         error: `Only ${item.quantity} × ${item.name} in stock — can't deduct ${qty}. Update the count or reorder first.`,
+        errorKind: "validation",
       };
     }
     const updated = await withTenant(tenantId, async (db) => {

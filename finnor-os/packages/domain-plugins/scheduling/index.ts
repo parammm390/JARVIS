@@ -73,7 +73,7 @@ export const schedulingPlugin: DomainEnginePlugin = {
         technicianId: p.technicianId ? String(p.technicianId) : undefined,
         name: p.technicianName ? String(p.technicianName) : undefined,
       });
-      if (!tech) return { status: "failure", output: {}, error: "No technician found by that name or id." };
+      if (!tech) return { status: "failure", output: {}, error: "No technician found by that name or id.", errorKind: "validation" };
       const dayStart = new Date(`${String(p.date).slice(0, 10)}T00:00:00`);
       const dayEnd = new Date(dayStart.getTime() + 24 * 3600 * 1000);
       const booked = await withTenant(tenantId, (db) =>
@@ -106,14 +106,14 @@ export const schedulingPlugin: DomainEnginePlugin = {
       const [row] = await db.select().from(serviceVisits).where(eq(serviceVisits.id, String(p.visitId)));
       return row ?? null;
     });
-    if (!visit) return { status: "failure", output: {}, error: "That visit doesn't exist." };
+    if (!visit) return { status: "failure", output: {}, error: "That visit doesn't exist.", errorKind: "validation" };
 
     if (draft.actionType === "assign_technician_to_visit") {
       const tech = await findTechnician(tenantId, {
         technicianId: p.technicianId ? String(p.technicianId) : undefined,
         name: p.technicianName ? String(p.technicianName) : undefined,
       });
-      if (!tech) return { status: "failure", output: {}, error: "No technician found by that name or id." };
+      if (!tech) return { status: "failure", output: {}, error: "No technician found by that name or id.", errorKind: "validation" };
       await withTenant(tenantId, async (db) => {
         await db.update(serviceVisits).set({ technicianId: tech.id }).where(eq(serviceVisits.id, visit.id));
         await recordBusinessEvent(db, {
@@ -129,7 +129,7 @@ export const schedulingPlugin: DomainEnginePlugin = {
 
     // reschedule_visit
     const when = new Date(String(p.newTime));
-    if (Number.isNaN(when.getTime())) return { status: "failure", output: {}, error: "That new time isn't a valid date." };
+    if (Number.isNaN(when.getTime())) return { status: "failure", output: {}, error: "That new time isn't a valid date.", errorKind: "validation" };
     await withTenant(tenantId, async (db) => {
       await db
         .update(serviceVisits)

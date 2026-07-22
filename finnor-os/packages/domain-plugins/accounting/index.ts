@@ -96,7 +96,7 @@ export const accountingPlugin: DomainEnginePlugin = {
         phone: p.phone ? String(p.phone) : undefined,
         name: p.customerName ? String(p.customerName) : undefined,
       });
-      if (!hh) return { status: "failure", output: {}, error: `No customer found matching "${p.customerName ?? p.phone ?? p.householdId}".` };
+      if (!hh) return { status: "failure", output: {}, error: `No customer found matching "${p.customerName ?? p.phone ?? p.householdId}".`, errorKind: "validation" };
       const due = p.dueDate ? new Date(String(p.dueDate)) : new Date(Date.now() + 30 * 24 * 3600 * 1000);
       const inv = await withTenant(tenantId, async (db) => {
         const [row] = await db
@@ -161,7 +161,7 @@ export const accountingPlugin: DomainEnginePlugin = {
       const [row] = await db.select().from(invoices).where(eq(invoices.id, String(p.invoiceId)));
       return row ?? null;
     });
-    if (!inv) return { status: "failure", output: {}, error: "That invoice doesn't exist." };
+    if (!inv) return { status: "failure", output: {}, error: "That invoice doesn't exist.", errorKind: "validation" };
 
     if (draft.actionType === "record_payment") {
       const { paymentId } = await withTenant(tenantId, (db) =>
@@ -179,7 +179,7 @@ export const accountingPlugin: DomainEnginePlugin = {
     let sent = false;
     let channel = "sms";
     if (p.channel === "call") {
-      if (!contact.phone) return { status: "failure", output: {}, error: "This customer has no phone on file to call." };
+      if (!contact.phone) return { status: "failure", output: {}, error: "This customer has no phone on file to call.", errorKind: "validation" };
       const r = await tools.call("vapi_place_call", {
         phoneNumber: String(contact.phone),
         instructions: message,
@@ -200,7 +200,7 @@ export const accountingPlugin: DomainEnginePlugin = {
       sent = r.ok;
       if (!r.ok) return { status: "integration_unavailable", output: {}, error: r.error };
     } else {
-      return { status: "failure", output: {}, error: "This customer has no email or phone on file for a reminder." };
+      return { status: "failure", output: {}, error: "This customer has no email or phone on file for a reminder.", errorKind: "validation" };
     }
     await withTenant(tenantId, (db) =>
       db.insert(communicationsLog).values({ householdId: inv.householdId, channel, direction: "outbound", content: message }),

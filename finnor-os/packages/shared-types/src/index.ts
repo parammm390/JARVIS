@@ -130,6 +130,13 @@ export interface ExecutionResult {
   error?: string;
   /** What the executor expected to happen — Reflection compares this to observed outcome. */
   expected?: Record<string, unknown>;
+  /** A4.T1: classifies a non-success outcome so Reflection can decide retry-vs-escalate
+   *  by KIND, not by blindly retrying every failure once. A plugin (or a thrown
+   *  IntegrationError caught in runtime-bridge.ts) may set this directly; otherwise
+   *  runtime-bridge's classifyFailure() derives one from `status` before this result is
+   *  returned. Undefined only for a `status: "success"` result, which Reflection never
+   *  inspects this field for. */
+  errorKind?: ErrorKind;
 }
 
 export type ReflectionDecision = "accept" | "retry" | "escalate";
@@ -203,7 +210,15 @@ export const PLACEHOLDER_NEEDS_REAL_VALUE = "PLACEHOLDER_NEEDS_REAL_VALUE";
 // IntegrationError) extend this rather than re-declaring their own — a string-matched
 // error kind is exactly the failure mode this type exists to rule out.
 // ---------------------------------------------------------------------------
-export type ErrorKind = "retryable" | "terminal" | "conflict" | "auth" | "validation" | "provider_down";
+// A4.T1: added `needs_human` (the system worked correctly but hit a business
+// decision only a person can make — distinct from `auth`/`validation`, which are
+// system-detected defects) and `config` (the system correctly refused to proceed
+// because of its OWN configuration/policy state — e.g. a budget cap or a missing
+// setting — never a provider or a data problem; see B5's "honest CONFIG receipt"
+// precedent in the plan). The original 6 kinds are unchanged — this only fills the
+// two gaps the plan's RETRYABLE|TERMINAL|NEEDS_HUMAN|CONFIG list named that this
+// finer-grained taxonomy didn't already cover.
+export type ErrorKind = "retryable" | "terminal" | "conflict" | "auth" | "validation" | "provider_down" | "needs_human" | "config";
 
 export interface TypedError {
   kind: ErrorKind;

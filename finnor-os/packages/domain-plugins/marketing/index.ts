@@ -157,7 +157,7 @@ export const marketingPlugin: DomainEnginePlugin = {
     // REVIEW_REQUEST
     const linkUrl = draft.payload.reviewLinkUrl ? String(draft.payload.reviewLinkUrl) : undefined;
     if (!linkUrl || containsPlaceholder(linkUrl)) {
-      return { status: "failure", output: {}, error: "No review link configured yet — set review_link_url in the marketing policy first." };
+      return { status: "failure", output: {}, error: "No review link configured yet — set review_link_url in the marketing policy first.", errorKind: "config" };
     }
     const template = draft.payload.messageTemplate
       ? String(draft.payload.messageTemplate)
@@ -166,13 +166,13 @@ export const marketingPlugin: DomainEnginePlugin = {
 
     if (draft.payload.channel === "email") {
       const to = draft.payload.email ? String(draft.payload.email) : undefined;
-      if (!to) return { status: "failure", output: {}, error: "No email address on file to send the review request to." };
+      if (!to) return { status: "failure", output: {}, error: "No email address on file to send the review request to.", errorKind: "validation" };
       const r = await tools.call("send_email", { to, subject: "Would you leave us a review?", body: message });
       if (!r.ok) return { status: r.integrationUnavailable ? "integration_unavailable" : "failure", output: {}, error: r.error };
       return { status: "success", output: { sent: true, channel: "email" }, expected: { sent: true } };
     }
     const phone = draft.payload.phone ? String(draft.payload.phone) : undefined;
-    if (!phone) return { status: "failure", output: {}, error: "No phone number on file to text the review request to." };
+    if (!phone) return { status: "failure", output: {}, error: "No phone number on file to text the review request to.", errorKind: "validation" };
     const contact = await tools.call("ghl_create_contact", { phone, tenantId: draft.payload.tenantId });
     if (!contact.ok) return { status: contact.integrationUnavailable ? "integration_unavailable" : "failure", output: {}, error: contact.error };
     const sms = await tools.call("ghl_send_sms", {

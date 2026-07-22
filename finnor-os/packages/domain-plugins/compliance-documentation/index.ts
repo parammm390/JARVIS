@@ -103,6 +103,7 @@ export const complianceDocumentationPlugin: DomainEnginePlugin = {
         status: "failure",
         output: {},
         error: "The household's water profile has no measurable values to check. Add test results first.",
+        errorKind: "validation",
       };
     }
     const paperworkNote =

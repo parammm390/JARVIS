@@ -116,7 +116,7 @@ export const customerCommPlugin: DomainEnginePlugin = {
         if (!r.ok) return { status: "integration_unavailable", output: {}, error: r.error };
         channel = "sms";
       } else {
-        return { status: "failure", output: {}, error: "No customer found and no email given — nowhere to send this." };
+        return { status: "failure", output: {}, error: "No customer found and no email given — nowhere to send this.", errorKind: "validation" };
       }
       if (hh) {
         // Kept alongside the canonical write below — packages/memory/src/long-term.ts

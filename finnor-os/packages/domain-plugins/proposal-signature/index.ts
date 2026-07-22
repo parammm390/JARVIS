@@ -67,7 +67,7 @@ export const proposalSignaturePlugin: DomainEnginePlugin = {
       const [row] = await db.select().from(proposals).where(eq(proposals.id, proposalId));
       return row ?? null;
     });
-    if (!proposal) return { status: "failure", output: {}, error: "That proposal doesn't exist." };
+    if (!proposal) return { status: "failure", output: {}, error: "That proposal doesn't exist.", errorKind: "validation" };
 
     const idempotencyKey = `proposal-signature:${proposalId}`;
     const submitted = await withTenant(tenantId, (db) =>

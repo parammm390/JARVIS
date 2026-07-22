@@ -63,7 +63,7 @@ export const invoiceToCashPlugin: DomainEnginePlugin = {
       channel: (p.channel as "sms" | "email" | undefined) ?? "sms",
       correlationId: draft.correlationId,
     });
-    if (!result.ok) return { status: "failure", output: {}, error: result.error };
+    if (!result.ok) return { status: "failure", output: {}, error: result.error, errorKind: "validation" };
     return {
       status: "success",
       output: { commandId: result.commandId, workflowRunId: result.workflowRunId, invoiceId },

@@ -96,7 +96,7 @@ export const technicianReportsPlugin: DomainEnginePlugin = {
     const visitId = draft.payload.visitId ? String(draft.payload.visitId) : null;
     const report = String(draft.payload.report ?? "");
     const markCompleted = Boolean(draft.payload.markCompleted);
-    if (!tenantId) return { status: "failure", output: {}, error: "Missing tenant context" };
+    if (!tenantId) return { status: "failure", output: {}, error: "Missing tenant context", errorKind: "validation" };
 
     const updated = await withTenant(tenantId, async (db) => {
       if (visitId) {
@@ -135,7 +135,7 @@ export const technicianReportsPlugin: DomainEnginePlugin = {
       return row;
     });
     if (!updated) {
-      return { status: "failure", output: {}, error: "Could not find the visit or household to attach this report to." };
+      return { status: "failure", output: {}, error: "Could not find the visit or household to attach this report to.", errorKind: "validation" };
     }
     return { status: "success", output: { visitId: updated.id }, expected: { logged: true } };
   },

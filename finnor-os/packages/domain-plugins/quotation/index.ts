@@ -201,16 +201,16 @@ export const quotationPlugin: DomainEnginePlugin = {
     if (draft.actionType === "send_proposal") {
       const tenantId = String(draft.payload.tenantId ?? "");
       const quote = draft.payload.quote as Record<string, unknown> | null;
-      if (!quote) return { status: "failure", output: {}, error: "No matching proposal record to send." };
+      if (!quote) return { status: "failure", output: {}, error: "No matching proposal record to send.", errorKind: "validation" };
       const body = renderQuoteBody(quote);
       if (draft.payload.channel === "email") {
         const to = draft.payload.email ? String(draft.payload.email) : undefined;
-        if (!to) return { status: "failure", output: {}, error: "No email address on file to send the proposal to." };
+        if (!to) return { status: "failure", output: {}, error: "No email address on file to send the proposal to.", errorKind: "validation" };
         const r = await tools.call("send_email", { to, subject: "Your quote", body });
         if (!r.ok) return { status: r.integrationUnavailable ? "integration_unavailable" : "failure", output: {}, error: `Could not send the proposal email: ${r.error}` };
       } else {
         const phone = draft.payload.phone ? String(draft.payload.phone) : undefined;
-        if (!phone) return { status: "failure", output: {}, error: "No phone number on file to text the proposal to." };
+        if (!phone) return { status: "failure", output: {}, error: "No phone number on file to text the proposal to.", errorKind: "validation" };
         const contact = await tools.call("ghl_create_contact", { phone, tenantId });
         if (!contact.ok) return { status: contact.integrationUnavailable ? "integration_unavailable" : "failure", output: {}, error: `Could not reach the CRM to create the contact: ${contact.error}` };
         const sms = await tools.call("ghl_send_sms", {

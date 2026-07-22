@@ -111,7 +111,7 @@ export const crmPlugin: DomainEnginePlugin = {
       householdId: p.householdId ? String(p.householdId) : undefined,
       phone: p.phone ? String(p.phone) : undefined,
     });
-    if (!hh) return { status: "failure", output: {}, error: "No customer found with that phone or id. Create the lead first." };
+    if (!hh) return { status: "failure", output: {}, error: "No customer found with that phone or id. Create the lead first.", errorKind: "validation" };
 
     if (draft.actionType === "update_lead_status") {
       await advanceWorkflowState(tenantId, "lead_to_install", "household", hh.id, String(p.status), "update_lead_status");
@@ -138,7 +138,7 @@ export const crmPlugin: DomainEnginePlugin = {
       technicianId: p.technicianId ? String(p.technicianId) : undefined,
       name: p.technicianName ? String(p.technicianName) : undefined,
     });
-    if (!tech) return { status: "failure", output: {}, error: "No technician found by that name or id." };
+    if (!tech) return { status: "failure", output: {}, error: "No technician found by that name or id.", errorKind: "validation" };
     const visit = await withTenant(tenantId, async (db) => {
       const [row] = await db
         .insert(serviceVisits)
