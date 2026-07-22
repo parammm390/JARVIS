@@ -2,11 +2,10 @@
 // identity → tenant_id + role. Every request context carries TenantContext from here on.
 // AUTH_DEV_BYPASS=1 allows header-based identity for local dev and integration tests only.
 
-import { createClient } from "@supabase/supabase-js";
 import { randomUUID } from "node:crypto";
 import { getPool } from "@finnor/db";
 import type { TenantContext, Role } from "@finnor/shared-types";
-import { ensureSecretsLoaded } from "@finnor/security";
+import { ensureSecretsLoaded, resolveTenantFromBearerToken, AuthVerificationError } from "@finnor/security";
 import { initObservability, Sentry, logWithTrace } from "@finnor/tools";
 import { checkRateLimit } from "./rate-limit";
 import { redactText } from "@finnor/security";
@@ -18,21 +17,6 @@ export class AuthError extends Error {
   ) {
     super(message);
   }
-}
-
-/**
- * Identity → tenant lookup. This single query runs outside withTenant() because tenant
- * identity is not yet known — it is the bootstrap step, reads only the users table by
- * unique email, and returns the tenant context everything else is scoped by.
- */
-async function resolveUserByEmail(email: string): Promise<TenantContext | null> {
-  const { rows } = await getPool().query(
-    `SELECT id, tenant_id, role FROM users WHERE email = $1`,
-    [email],
-  );
-  const row = rows[0];
-  if (!row) return null;
-  return { userId: row.id, tenantId: row.tenant_id, role: row.role as Role };
 }
 
 /** Phase 16(e): forward an inbound trace id (a caller's own retry/proxy hop) or mint a
@@ -65,16 +49,13 @@ export async function requireContext(req: Request): Promise<TenantContext> {
   if (!auth?.startsWith("Bearer ")) throw new AuthError("Missing bearer token", 401);
   const token = auth.slice("Bearer ".length);
 
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new AuthError("Auth is not configured (SUPABASE_URL / key missing)", 500);
-
-  const supabase = createClient(url, key, { auth: { persistSession: false } });
-  const { data, error } = await supabase.auth.getUser(token);
-  if (error || !data.user?.email) throw new AuthError("Invalid or expired token", 401);
-
-  const ctx = await resolveUserByEmail(data.user.email);
-  if (!ctx) throw new AuthError("User has no tenant — contact your administrator", 403);
+  let ctx: Awaited<ReturnType<typeof resolveTenantFromBearerToken>>;
+  try {
+    ctx = await resolveTenantFromBearerToken(token);
+  } catch (err) {
+    if (err instanceof AuthVerificationError) throw new AuthError(err.message, err.status);
+    throw err;
+  }
   await enforceRateLimit(`tenant:${ctx.tenantId}`);
   return { ...ctx, correlationId };
 }

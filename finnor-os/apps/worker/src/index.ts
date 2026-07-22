@@ -25,6 +25,7 @@ import { scanApprovalExpiry } from "./handlers/scan-approval-expiry";
 import { simulatorTick } from "./handlers/simulator-tick";
 import { scanReliabilityAlerts } from "./handlers/scan-reliability-alerts";
 import { dailyScorecard } from "./handlers/daily-scorecard";
+import { projectReadModels } from "./handlers/project-read-models";
 import { startScheduler, type ScheduledScan } from "./scheduler";
 import { startHeartbeat } from "./heartbeat";
 
@@ -51,6 +52,7 @@ export function createWorker(): JobQueue {
   queue.register("simulator_tick", simulatorTick);
   queue.register("scan_reliability_alerts", scanReliabilityAlerts);
   queue.register("daily_scorecard", dailyScorecard);
+  queue.register("project_read_models", projectReadModels);
   return queue;
 }
 
@@ -86,6 +88,11 @@ const PROACTIVE_SCANS: ScheduledScan[] = [
   // scans above have had their own daily window to complete for the day, same
   // "close enough for a v1" reasoning as owner_digest.
   { type: "daily_scorecard", intervalHours: 24, payload: (tenantId) => ({ tenantId }) },
+  // B1.T3: the debounced NOTIFY-driven refresh (sse-server.ts) is the fast path for
+  // most of pipeline-health/reliability/activity-snapshot; this hourly tick is the
+  // backstop for the one coverage gap (proposals has no NOTIFY trigger — migration
+  // 0037's own comment) and anything missed during a LISTEN reconnect.
+  { type: "project_read_models", intervalHours: 1, payload: (tenantId) => ({ tenantId }) },
 ];
 
 const isMain = process.argv[1]?.endsWith("index.ts") || process.argv[1]?.endsWith("index.js");

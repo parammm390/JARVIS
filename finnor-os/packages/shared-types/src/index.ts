@@ -16,6 +16,17 @@ export interface TenantContext {
   correlationId?: string;
 }
 
+/** B1.T1: the shape of every 'jarvis_events' Postgres NOTIFY payload — IDs only, never
+ *  the row's own data (see packages/db/migrations/0037's own comment on why). Shared
+ *  by apps/worker/src/sse/listener.ts (the LISTEN side) and packages/projections (the
+ *  CQRS projector), so both sides of that channel agree on one type. */
+export interface JarvisEvent {
+  tenantId: string;
+  kind: string;
+  id: string;
+  ts: string;
+}
+
 export type DomainActionStatus =
   | "draft"
   | "pending" // awaiting human confirmation — the gate

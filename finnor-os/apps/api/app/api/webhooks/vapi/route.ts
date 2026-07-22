@@ -13,7 +13,7 @@
 
 import { createHash, randomUUID } from "node:crypto";
 import { VapiWebhookSchema } from "@finnor/policy-schema";
-import { adminDb, jobs, withTenant, domainActions, domainPolicies, actionLog, tenantPhoneNumbers } from "@finnor/db";
+import { adminDb, jobs, withTenant, domainActions, domainPolicies, actionLog, tenantPhoneNumbers, getPool } from "@finnor/db";
 import { persistCall } from "@finnor/data-platform";
 import { ensureSecretsLoaded } from "@finnor/security";
 import { parseSpokenDecision, diagnoseFailure, resolveProvider } from "@finnor/orchestration";
@@ -395,21 +395,26 @@ export async function POST(req: Request): Promise<Response> {
   const msg = parsed.data.message as Record<string, unknown> & {
     type: string;
     transcript?: string;
+    status?: string;
     call?: { id?: string; phoneNumberId?: string; phoneNumber?: { number?: string }; metadata?: Record<string, unknown> };
   };
 
   // Replay protection, keyed by message shape — NOT bare call id: a single call
-  // fires many "tool-calls" messages (one per utterance), all sharing the same
-  // call.id, so deduping on call.id alone would silently drop every tool-call after
-  // the first one in a live call. "end-of-call-report" genuinely fires once per call,
-  // so call id alone is the right key there.
+  // fires many "tool-calls" messages (one per utterance) AND many "status-update"
+  // messages (queued/ringing/in-progress/forwarding/ended), all sharing the same
+  // call.id and, for status-update, the same msg.type too — deduping on call id (or
+  // call id + type) alone would silently drop every status transition after the
+  // first. "end-of-call-report" genuinely fires once per call, so call id alone is
+  // the right key there.
   const callId = msg.call?.id;
   {
     const toolCallIds = ((msg.toolCallList ?? msg.toolCalls ?? []) as VapiToolCall[]).map((tc) => tc.id).join(",");
     const eventId = callId
       ? msg.type === "tool-calls"
         ? `${callId}:tool-calls:${toolCallIds}`
-        : `${callId}:${msg.type}`
+        : msg.type === "status-update"
+          ? `${callId}:status-update:${msg.status ?? "unknown"}`
+          : `${callId}:${msg.type}`
       : `body:${createHash("sha256").update(rawBody).digest("hex")}`;
     const receipt = await checkAndRecordReceipt("vapi", eventId, rawBody);
     if (receipt === "duplicate") return Response.json({ received: true, duplicate: true });
@@ -418,6 +423,20 @@ export async function POST(req: Request): Promise<Response> {
   // 1. Live-call tools: plan + spoken confirmation inside the same call.
   if (msg.type === "tool-calls") {
     return handleToolCalls(msg);
+  }
+
+  // B1.T4: in-progress call status → NOTIFY → SSE, so the cockpit sees a call
+  // ringing/connecting/ending live, not only once persistCall runs at the very end.
+  // Deliberately ephemeral — no durable row (calls has no in-progress state of its
+  // own; persistCall's insert at end-of-call-report remains the durable record, and
+  // migration 0037's calls_notify trigger covers that half already). A direct
+  // pg_notify from here, not a trigger, since there is no table write to hang one off.
+  if (msg.type === "status-update" && callId) {
+    const tenantId = await resolveTenantFromCall(msg.call);
+    await getPool().query("SELECT pg_notify('jarvis_events', $1)", [
+      JSON.stringify({ tenantId, kind: "call_status", id: callId, ts: new Date().toISOString(), status: msg.status ?? "unknown" }),
+    ]);
+    return Response.json({ received: true });
   }
 
   if (msg.type === "end-of-call-report" && msg.transcript) {

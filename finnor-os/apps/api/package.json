@@ -14,6 +14,7 @@
     "@finnor/memory": "*",
     "@finnor/orchestration": "*",
     "@finnor/policy-schema": "*",
+    "@finnor/projections": "*",
     "@finnor/read-models": "*",
     "@finnor/security": "*",
     "@finnor/shared-types": "*",

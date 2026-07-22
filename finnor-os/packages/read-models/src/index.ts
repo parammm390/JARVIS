@@ -38,6 +38,8 @@ import {
   deadLetters,
   readinessLog,
   failureInjections,
+  actionLog,
+  calls,
 } from "@finnor/db";
 import { and, desc, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { performance } from "node:perf_hooks";
@@ -609,6 +611,56 @@ export async function reliability(tenantId: string, windowDays = 1): Promise<Rel
       receiptCompleteness,
       asOf: new Date().toISOString(),
     };
+  });
+}
+
+export interface ActivitySnapshotItem {
+  source: "action_log" | "workflow_step" | "call";
+  id: string;
+  occurredAt: string;
+  detail: Record<string, unknown>;
+}
+
+export interface ActivitySnapshot {
+  items: ActivitySnapshotItem[];
+  asOf: string;
+}
+
+// B1.T3: a fast "what just happened" snapshot — the most recent `limit` items across
+// the same 3 sources GET /api/activity (A2.T6) merges, but a plain snapshot (no cursor
+// paging). Does NOT replace /api/activity — that route's forward-cursor semantics are
+// what D1.T3's live Activity Theater actually polls for new items; this is what a CQRS
+// projection wants to cache for a fast first paint (packages/projections).
+export async function activitySnapshot(tenantId: string, limit = 50): Promise<ActivitySnapshot> {
+  return withTenant(tenantId, async (db) => {
+    const [actionLogRows, stepRows, callRows] = await Promise.all([
+      db.select().from(actionLog).where(eq(actionLog.tenantId, tenantId)).orderBy(desc(actionLog.timestamp)).limit(limit),
+      db.select().from(workflowSteps).where(eq(workflowSteps.tenantId, tenantId)).orderBy(desc(workflowSteps.updatedAt)).limit(limit),
+      db.select().from(calls).where(eq(calls.tenantId, tenantId)).orderBy(desc(calls.createdAt)).limit(limit),
+    ]);
+    const items: ActivitySnapshotItem[] = [
+      ...actionLogRows.map((r) => ({
+        source: "action_log" as const,
+        id: r.id,
+        occurredAt: r.timestamp.toISOString(),
+        detail: { domainActionId: r.domainActionId, step: r.step, output: r.output },
+      })),
+      ...stepRows.map((r) => ({
+        source: "workflow_step" as const,
+        id: r.id,
+        occurredAt: r.updatedAt.toISOString(),
+        detail: { workflowRunId: r.workflowRunId, stepType: r.stepType, status: r.status, terminalReason: r.terminalReason },
+      })),
+      ...callRows.map((r) => ({
+        source: "call" as const,
+        id: r.id,
+        occurredAt: r.createdAt.toISOString(),
+        detail: { direction: r.direction, endedReason: r.endedReason, fromNumber: r.fromNumber, toNumber: r.toNumber },
+      })),
+    ]
+      .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt))
+      .slice(0, limit);
+    return { items, asOf: new Date().toISOString() };
   });
 }
 

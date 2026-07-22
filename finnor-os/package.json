@@ -17,6 +17,7 @@
     "dev:api": "npm run dev --workspace @finnor/api",
     "dev:console": "npm run dev --workspace @finnor/console",
     "dev:worker": "npm run dev --workspace @finnor/worker",
+    "dev:worker-sse": "npm run dev:sse --workspace @finnor/worker",
     "dev:orchestrator": "npm run dev --workspace @finnor/orchestrator",
     "db:generate": "drizzle-kit generate --config packages/db/drizzle.config.ts",
     "db:migrate": "tsx packages/db/migrate.ts",

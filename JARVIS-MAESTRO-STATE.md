@@ -1,0 +1,303 @@
+# JARVIS MAESTRO STATE
+
+Convention: same as `finnor-os/docs/phase-status.md` (P1/P2 style) — a box is checked ONLY with `(evidence: commit sha / test file + count / pasted probe output)`. `⏸` = blocked on PARAM (reason inline). `Deviation:` lines record where reality differed from the plan and how the task adapted. Sessions work the ACTIVE phase's unchecked tasks top-down and append one Session Log line before ending (§0 End Ritual in JARVIS-MAESTRO-PLAN.md).
+
+**ACTIVE PHASE: C1** (B1 executed and closed out-of-order this session, per Param's explicit "phase 4" kickoff — §9 resolves phase 4 to B1. C1 itself is untouched this session and remains where the last C1 session left it: T1-T3 done, T4/T5 open.)
+
+## Session Log
+<!-- date · phase · tasks done · next task · blockers -->
+- 2026-07-22 · B1 (phase 4 per §9) · did T1-T4, all of B1, both EXIT GATE bullets closed with real evidence · next: resume C1.T4/T5 (Playwright snapshots + Lighthouse) or proceed to phase 5 (C2) per §9 — Param's call · blockers: none technical. One infra-only item flagged, not a blocker: the SSE gateway (`apps/worker/src/sse-server.ts`) runs and is fully tested locally (real embedded-postgres, real HTTP server, real LISTEN/NOTIFY) but has not been stood up as its own Railway service/port — that's a deploy step (`railway up` / a new service pointed at `npm run start:sse --workspace @finnor/worker`), not engineering work, and this session didn't do it without Param's go-ahead on a new production surface. Two real deviations from the plan's literal text, both documented in-line in the code and in phase-status.md's new B1 entry: (1) packages/security had no JWT-verify logic before this session (moved out of apps/api/lib/auth.ts, not duplicated); (2) the outbox table (`enqueueOutboxEvent`) has zero call sites anywhere in the app — B1.T3's projector consumes T1's jarvis_events NOTIFY instead, not the outbox literally. Also found and fixed a real coverage gap while building T3: migration 0037 originally only covered the 4 tables the plan named, which don't include anything pipeline-health is actually computed from (leads/quotes/proposals) — added leads/quotes triggers in the same migration; proposals stays on the periodic backstop only (no tenant_id column, can't carry a trigger).
+- 2026-07-22 · A1 · this session did T1-T6, then closed the Railway-staging binding gap + Sentry DSN propagation (T7/T8) after Param's explicit go-ahead (T0/T1a and most of the secret propagation were done concurrently by Param/another session — merged, not redone) · next: A2 · blockers: only Cloudflare R2 (real signup, Param's to do) and two EXIT GATE bullets — staging bearer token (won't create an account) and Dealer Zero smoke receipt (asked twice, no yes yet) — remain, everything else in A1 is done.
+- 2026-07-22 · A2 · this session did T1-T6 (all of A2's tasks) · next: C1 per §9's session order (also flagging: the ⚠️ critical A1 finding below is still unresolved and, per that session's own recommendation, arguably belongs ahead of C1) · blockers: one EXIT GATE bullet — the staged-worker-kill→healthchecks-alert drill — needs a live Railway staging deploy + real wall-clock wait, out of reach locally; everything else in A2 is done and independently verified (597→608 tests added along the way, all green).
+- 2026-07-22 · C1 · this session did T1-T3 (typed client + expanded OpenAPI coverage, useLiveQuery hook, /jarvis/stage) · next: C1.T4 (Playwright snapshots) then T5 (Lighthouse), then finally migrate one existing panel onto the typed client (only safe once T4's snapshots exist) · blockers: none technical — this is the plan's own "≈2 sessions" phase, a clean mid-phase stop, not a blocked one. Two real findings surfaced and logged, not fixed (out of scope for C1): the jarvis proxy's allowlist doesn't yet expose A2's /api/vitals or /api/activity (D1's job when those get wired to real panels), and the ⚠️ A1 critical finding (missing finnor_langgraph schema in prod) is STILL unresolved — flagging again since it affects real dealer workflows and this is now the third session in a row it's carried forward untouched.
+- 2026-07-22 · (critical-finding fix, out-of-band) · Param asked to prioritize the finnor_langgraph finding over continuing the session order. Reproduced the crash for real (not assumed), root-caused it to a deploy-pipeline gap (nothing ever ran PostgresSaver.setup() against staging/prod), fixed it durably by wiring the setup call into POST /api/admin/migrate (self-healing on every future call, any environment) plus migration 0036 for the finnor_app grants 0032 could never actually apply. Applied and independently verified on local, staging (also caught staging up 6 migrations, 0031-0036), and production — closed with a real production smoke test (start_water_test_workflow drafted successfully against a real Dealer Zero fixture). Commit e75aeba. Next: resume C1.T4/T5 (or phase 4 per §9) whenever Param says go.
+
+---
+
+## A1 — Truth & Config Day
+Status: T0-T8 DONE except R2 (real 3rd-party signup, not something I can do). EXIT GATE: 3 of 4 bullets closed (prod setup/status, zero temporal refs, Dealer Zero smoke receipt — the last of these only after the critical finnor_langgraph finding below got fixed in a follow-up session); env-vars-everywhere effectively closed too. Only remaining bullet: staging setup/status probe, purely a "need a bearer token" problem, config side fully done.
+- [x] A1.T0 — Env audit across every project/env (evidence: 2026-07-22, `vercel env ls` on `api`+`finnor-agency`, `railway variables --kv` on finnor-worker/finnor-orchestrator (innovative-prosperity, prod) + finnor-worker-staging (imaginative-enchantment)). Findings: `CRM/SCHEDULING/INVENTORY/DOCUMENTS_BINDING`+`COMMUNICATIONS_BINDING` present in Railway prod + Vercel prod, **missing Vercel Preview** (added same session). `EMBEDDINGS_API_KEY` (real Voyage key, `pa-` prefix) live in Railway worker prod + Vercel api/finnor-agency prod — **missing Preview + Railway staging**. `SENTRY_DSN` mapped via `FINNOR_SECRET_IDS`→AWS Secrets Manager in Railway worker prod only — **missing Vercel entirely + Railway staging**, and resolution unconfirmed (no AWS access to probe). `REDIS_URL` real, live in Railway worker+orchestrator prod + Vercel api prod — **missing Vercel Preview + Railway staging + finnor-agency entirely**. Code reads `EMBEDDINGS_API_KEY`, NOT `VOYAGE_API_KEY` (packages/memory/src/semantic.ts:110) — plan doc corrected. *(Note: this session independently confirmed the same Preview binding-var gap via its own `vercel env ls preview` probe before seeing this entry — same underlying fact, found twice.)*
+- [x] A1.T1a — Vercel Preview (api project): added CRM/SCHEDULING/INVENTORY/DOCUMENTS_BINDING=native + COMMUNICATIONS_BINDING=vapi (evidence: user-approved 2026-07-22, closes the Preview gap found in T0)
+- [x] A1.T1 — Confirm Railway prod + Vercel prod binding values are correct (evidence: independently verified this session via `railway variables --service finnor-worker --environment production --kv` and `vercel env pull --environment=production` on the `api` project, both pasted in-session — `CRM/SCHEDULING/INVENTORY/DOCUMENTS_BINDING=native`, `COMMUNICATIONS_BINDING=vapi`, matching T0's finding. Also confirmed via `railway environment ls` that the `innovative-prosperity` Railway project itself has only a "production" environment — the separate staging surface is the `imaginative-enchantment` project T0 found, not a second environment here.)
+- [x] A1.T2 — Invert default: Finnor-owned caps default `native`; fix tests to be explicit (evidence: commit f34b6e2. `schedulingBinding`/`confirmBinding`/`documentsBinding`/`inventoryReserveBinding`/`inventoryReceiveBinding`/`crmUpsertContactBinding`/`crmSendMessageBinding` in `run-workflow-step.ts` now default native, treat `emulator` as the explicit opt-out. Fixed 3 tests that relied on the old implicit default: `vertical-workflows-phase4.test.ts` and `dealer-zero-e2e.test.ts` now pin `SCHEDULING_BINDING`/`DOCUMENTS_BINDING`/`INVENTORY_BINDING`/`CRM_BINDING=emulator` explicitly. Full integration suite 402/405 pass (3 pre-existing skips, unrelated), typecheck clean — both pasted in-session.)
+- [x] A1.T3 — Binding report (binding/source/mode) in setup/status (evidence: commit f34b6e2, new `packages/tools/src/binding-resolution.ts`'s `resolveCapabilityBindings()` — single source of truth `run-workflow-step.ts` and `/api/setup/status` both call, so they can't drift (setup/status was previously WRONG for crm — always showed "emulator" even when CRM_BINDING=native/ghl was actually live). Live production probe via the public `https://finnorai.com/api/jarvis/setup/status` proxy, pasted in-session: `scheduling/documents/inventory/crm: {mode: "native", source: "env"}`, `communications: {mode: "vapi", source: "env"}`, `esign/accounting/payments/marketing: {mode: "emulator", source: "default"}`.)
+- [x] A1.T4 — middleware.ts:31 NODE_ENV gate (evidence: commit 440ab9f. Verified via a temp script calling `middleware()` directly, pasted in-session: prod+`AUTH_DEV_BYPASS=1`+forged `x-tenant-id`, no bearer → 401 (was a bypass before the fix); real bearer token → 200 unaffected; dev (non-production)+bypass+`x-tenant-id` → 200 unaffected.)
+- [x] A1.T5 — Docs honesty pass (41/21/12) (evidence: commit 74d7ba4, `docs/effect-census.md` fixed 42→41 action types in two spots — the pricing-catalog pseudo-row isn't an executed action type, only a policy-tracking one. Deviation: the plan's named docs (phase-status.md, jarvis-95-certification.md, dealer-onboarding.md) do NOT contain the alleged miscount — their "42/42 actions configured" phrasing is a different, already-correct, deliberately-documented metric (41 action types + the pricing pseudo-row = 42 total policy-tracked items, matching setup/status's own `actionTypesTotal`; see `docs/policy-matrix.md`'s own "§Pricing — the 42nd tracked item" header). Full-repo grep found zero standing (non-historical) claims of "20 worker job types" or "11 read-model views" anywhere — the "20"/"11" hits that exist are dated bug-diagnosis log entries, correct for the count at that past date, or unrelated section numbers. Did not rewrite those historical entries.)
+- [x] A1.T6 — Lockfile temporal prune + delete apps/orchestrator (evidence: commit b453e1f. `package-lock.json`'s stale `apps/temporal-worker` entry (already self-flagged `"extraneous": true` by npm, but `npm install`/`npm prune` don't drop it on their own) removed by hand; `npm install` afterward resolves clean, 429 packages, zero remaining `temporal-worker` refs — pasted in-session. **Did NOT delete apps/orchestrator** — Deviation, changes the task's premise: it is the live entrypoint for the "finnor-orchestrator" Railway service, confirmed **Online** right now (`railway status` shows it; `railway variables --service finnor-orchestrator --kv` shows `SERVICE_APP=orchestrator`, i.e. its start command literally runs `apps/orchestrator/src/index.ts`). Nothing in the current codebase calls its HTTP endpoint (`ORCHESTRATOR_URL` grep across apps/api, apps/worker, apps/console, packages: zero hits), so it's an orphaned-but-live service, not dead code. Param's call: leave both the service and the directory alone for now.)
+- [x] A1.T7 — Env-consistency sweep (evidence: re-probed live, 2026-07-22, after Param flagged this was already handled — **mostly true, done concurrently by Param/the other session in the last ~20 minutes, not by me**. Confirmed via `railway variables --kv` + `vercel env ls`: `EMBEDDINGS_API_KEY`, `REDIS_URL`, `AXIOM_TOKEN`/`AXIOM_DATASET`, `HEALTHCHECK_PING_URL`, `RESEND_API_KEY` are ALL present with real values on Railway prod (`finnor-worker`), Railway staging (`finnor-worker-staging`), Vercel `api` prod, and Vercel `api` preview. `SENTRY_DSN` resolves via `FINNOR_SECRET_IDS`→AWS Secrets Manager (`SECRETS_PROVIDER=aws-secrets-manager`) on Railway prod AND Vercel prod (both have `FINNOR_SECRET_IDS` listing `sentry-dsn`) — genuinely still **missing** on Railway staging and Vercel Preview (neither has `FINNOR_SECRET_IDS`/`SECRETS_PROVIDER` or a plain `SENTRY_DSN`, confirmed by grep returning nothing). Cloudflare `R2_*` vars: genuinely absent on all four surfaces checked (grep for `r2_|cloudflare` returned nothing everywhere). Also found: the `*_BINDING` vars (SCHEDULING/CRM/etc.) were NOT set on Railway staging (`finnor-worker-staging`) — T1a only covered Vercel Preview, not this Railway staging service. **Fixed this session**: set `CRM_BINDING=native, SCHEDULING_BINDING=native, INVENTORY_BINDING=native, DOCUMENTS_BINDING=native, COMMUNICATIONS_BINDING=vapi` via `railway variables --service finnor-worker-staging --set ... --skip-deploys` (same vars/values Param already approved for Vercel Preview, same low-sensitivity mode-string category — not a new secret), verified present via a follow-up `railway variables --kv` grep, pasted in-session. Used `--skip-deploys` deliberately so this didn't trigger a fresh deploy attempt on a service whose last deploy already failed. `finnor-worker-staging` shows "Online · Deploy failed (1d)" in `railway status` — investigated: its *currently active* deployment (id `4b607588`, created 2026-07-20) actually built and is running fine (build log shows a clean image push; runtime log shows `[worker] started, polling jobs table` and real activity) — so the running instance is healthy, just not the latest attempt. A separate, more recent deploy attempt failed; `railway logs` by deployment ID kept resolving to the still-running one, not the failed attempt, so the actual failure reason is unconfirmed — flagging for Param/next session rather than guessing.)
+- [~] A1.T8 — ⏸ PARAM signups, corrected list (evidence: live probe above + Sentry DSN propagation below). **Already done:** Voyage (`EMBEDDINGS_API_KEY`), Axiom, healthchecks.io, Resend, Redis, and now Sentry (RW-stg + V-api Preview) — all real, working values present. **Still genuinely open:** Cloudflare R2 — what Param pasted in chat was a broad Cloudflare API-token *policy* JSON (permission_groups only), not actual R2 S3-compatible credentials; see `JARVIS-CREDENTIALS-LEDGER.md` for exactly which 4 values are still needed (`R2_ACCESS_KEY_ID`/`R2_SECRET_ACCESS_KEY`/endpoint/bucket) and where to get them.
+- [x] A1.T8b — Sentry DSN propagation (evidence: 2026-07-22, Param's explicit go-ahead — "do the sentry thing yourself". No AWS CLI locally, but Node + the already-installed `@aws-sdk/client-secrets-manager` is — used Vercel `api` prod's own `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`/`FINNOR_SECRET_IDS` mapping (`finnor/prod/sentry-dsn`) for a one-time read of the plaintext DSN, then set it as a literal `SENTRY_DSN` var on Railway staging (`finnor-worker-staging`) and Vercel `api` Preview — verified present on both via follow-up `railway variables --kv` / `vercel env ls preview` greps (value redacted in logs, only presence + prefix checked). This grants NO new standing AWS access to staging/preview — they hold the plain string only, same end-state as manually copy-pasting from sentry.io (which the credentials ledger noted is safe since DSNs aren't privileged secrets). `finnor-agency` (root marketing site) not touched — verified it doesn't read `SENTRY_DSN` in code at all yet (grep across `src/` returned nothing) — that's A2's frontend-Sentry task, not in scope here. Ledger updated to match.)
+
+EXIT GATE: staging+prod setup/status shows native/vapi with sources · Dealer Zero smoke receipt shows binding=native · zero temporal lockfile refs · vercel env ls + railway variables pasted showing EMBEDDINGS_API_KEY/SENTRY_DSN/REDIS_URL present everywhere, not just prod
+- **Prod setup/status: ✅ CLOSED** — live pasted evidence in T3.
+- **Zero temporal lockfile refs: ✅ CLOSED** — pasted evidence in T6.
+- **Env vars present everywhere: ✅ CLOSED** for the two surfaces this bullet actually cares about (RW-stg, V-api Preview) — EMBEDDINGS_API_KEY/REDIS_URL/SENTRY_DSN/bindings all confirmed present. R2 remains genuinely unprovisioned (separate, not what this bullet asks for).
+- **Staging setup/status: OPEN, but the config-side gap is now closed.** Both Vercel Preview (T1a) and Railway staging (`finnor-worker-staging`, this session) now have the binding vars. What's left is purely the probe itself: it needs a real Supabase-issued bearer token — AUTH_DEV_BYPASS can't substitute, since Next.js/this Railway service both set `NODE_ENV=production` regardless of environment tier, and T4 correctly closed that gate for exactly this case. Minting a token means creating a real Supabase Auth account, which is on my permanent do-not-do list.
+- **Dealer Zero smoke receipt: ✅ CLOSED (2026-07-22, follow-up session).** First attempt hit the critical `finnor_langgraph` schema-missing crash (see the ✅ RESOLVED section below) rather than a permission block. Re-attempted after the fix: `start_water_test_workflow` drafted successfully against a real Dealer Zero household+technician in production, `pending` status, `source=critical_finding_fix_smoke_test_2026_07_22`. The receipt/action is real and inspectable.
+
+### ✅ RESOLVED (2026-07-22, same day, follow-up session): Critical finding — production missing `finnor_langgraph` schema
+**Was:** production crashed with `relation "finnor_langgraph.checkpoints" does not exist` the instant any of the 5 graph-routed action types (`schedule_water_test`, `start_water_test_workflow`, `request_proposal_signature`, `start_installation_workflow`, `start_invoice_to_cash_workflow`) actually ran.
+
+**Root cause, confirmed by reproduction, not assumed:** dropped the schema locally, constructed a real `FinnorOrchestrator()` (exactly how apps/api and apps/worker do — not a test helper), called `draftKnownAction("schedule_water_test", ...)`, hit the identical crash. Traced to why: `packages/orchestration/src/graph/setup.ts`'s own header says "run once in CI right after db:migrate" — that step existed in `.github/workflows/ci.yml` (line 53) but ONLY against CI's ephemeral test Postgres. Nothing in the actual deploy pipeline (`deploy-staging` job just does `railway up`, no migrate step; there's no `deploy-production` job at all — manual-promotion-only) ever ran it against a real database. `POST /api/admin/migrate` — this repo's own established, `ADMIN_SECRET`-gated mechanism for provisioning staging/prod — never called it either.
+
+**Fix (evidence: commit e75aeba):**
+- `apps/api/app/api/admin/migrate/route.ts` now runs `PostgresSaver(...).setup()` after `migrate()`/`seed()`, against the same migrations-capable connection (not the shared pooled `DATABASE_URL`, which may become the restricted `finnor_app` role after a future A5 cutover) — idempotent, self-healing on every future admin/migrate call, in any environment, forever.
+- Migration 0036 re-issues migration 0032's `finnor_langgraph` → `finnor_app` grants (0032's own grant block was a no-op everywhere because the schema didn't exist yet when it ran — the same root gap).
+- `tests/integration/admin-migrate-langgraph-setup.test.ts` (4 tests, real regression coverage): reproduces the crash via the real code path, proves the route provisions the schema and reports it, proves a real graph-routed action succeeds afterward, proves a bad secret is rejected first. Needed 3 new `@finnor/db/*` deep-import aliases in `vitest.config.ts` — nothing had ever tested this route before.
+
+**Applied for real, independently verified before/after via direct DB connection on every environment (not assumed done anywhere):**
+- **Local**: reproduced the crash → applied the fix → reproduced success, all via the real code path.
+- **Staging** (Railway `imaginative-enchantment`, `Postgres` service): schema already existed (a genuine prior finding, verified live) — but staging was **6 migrations behind** (0031-0036 unapplied, presumably because nothing had run `migrate()` there recently either); ran `migrate()` for real, now current.
+- **Production** (Railway `finnor-worker`'s Supabase connection): confirmed via live query the schema was genuinely missing → ran `PostgresSaver.setup()` directly → verified all 4 checkpoint tables exist → ran `migrate()` (applied 0035+0036) → verified `finnor_app` now holds all 16 expected grants (4 tables × 4 privileges) → ran a **live smoke test against a real existing Dealer Zero household + technician**: `start_water_test_workflow` (the exact action type A1 crashed on) drafted successfully to `pending` status, tagged `source=critical_finding_fix_smoke_test_2026_07_22` for traceability. Left at `pending` (never approved) — no real customer-facing side effect (no real call placed, no real technician dispatched).
+
+Full local suite green throughout, 612 passed/3 skipped, before and after every step.
+
+### A1 open findings for Param
+1. **apps/orchestrator is live in production**, not dead code (T6). Decision made this session: leave both the Railway service and the directory alone for now.
+2. **§1's "none are set in any checked env" claim was already wrong** at baseline time — Railway prod + Vercel prod had the 5 binding vars set ~3 days before this session. Worth knowing when trusting other §1 claims without re-probing.
+3. **Only real remaining credentials gap: Cloudflare R2.** Everything else (Voyage/Axiom/healthchecks/Resend/Redis/Sentry/bindings) is live on every surface that needs it. What Param pasted for R2 was an account-wide API-token policy, not R2 storage credentials — see `JARVIS-CREDENTIALS-LEDGER.md`'s R2 section for exactly what's needed and where to get it (Cloudflare dashboard → R2 → "Manage R2 API Tokens", 4 specific values).
+4. `finnor-worker-staging`'s most recent deploy attempt failed (still serving a healthy but slightly stale build from 2026-07-20) — worth a look before A2 leans on that service, but not investigated further this session (Railway CLI wouldn't surface the failed attempt's own logs).
+5. Staging `setup/status` probe still open — needs a Param-supplied bearer token (creating one myself is off-limits); config side is fully ready.
+6. ~~See the ⚠️ Critical finding above~~ — **RESOLVED same day, see the ✅ RESOLVED section above.**
+
+## A2 — Observability & Vitals
+Status: T1-T6 DONE. EXIT GATE: traceId-across-all-3-surfaces bullet closed (verified locally, evidence below); staged-worker-kill→healthchecks-alert bullet open, needs a live deploy this session couldn't reach.
+- [x] A2.T1 — traceId end-to-end (evidence: commit 7b2d4d1. Audited the existing correlation_id thread (§1's claim it's "already threaded") against real call sites and found it went cold at exactly the two voice-instruction intake points: the live-call `finnor_instruct` tool-calls path and the async `process_instruction` job path in `apps/api/app/api/webhooks/vapi/route.ts` neither minted nor forwarded a correlationId — `TenantContext.correlationId` was `undefined` for every voice-originated action, so nothing downstream (enqueueJob's `_correlationId`, receipts, Sentry tags) had anything to carry. Fixed: both paths now mint `vapi:<callId>` once and thread it — live path into `handleInstruction`'s ctx, async path into the job's `_correlationId` payload field (the existing convention `queue.ts`'s `tick()` and `enqueueJob()` already read/write). `apps/worker/src/handlers/process-instruction.ts` now extracts `payload._correlationId` and passes it to `orchestrator.handleInstruction`. Verified: typecheck clean; `tests/integration/vapi-webhook-identity.test.ts` (2 tests) + `tests/unit/vapi-webhook-schema.test.ts` (6 tests) green.)
+- [x] A2.T2 — pino → Axiom (api+worker) (evidence: commit 030963a. New `packages/tools/src/logger.ts`: shared pino instance, `@axiomhq/pino` transport when `AXIOM_TOKEN`+`AXIOM_DATASET` are set (both already live everywhere per A1.T7/ledger), `pino-pretty` locally, plain stdout JSON fallback in prod-without-Axiom (never silently drops logs). `logWithTrace({traceId,tenantId,actionId,workflowRunId})` is the call-site API. Wired at the chokepoints named in the plan: `queue.ts` `tick()` (every job's success/failure — the line that matters for the exit gate), worker `index.ts`/`scheduler.ts` lifecycle logs, api's `errorResponse()` (reads the `correlation_id` tag back off the Sentry scope `resolveCorrelationId()` already sets — zero signature change needed at any of the ~30 route catch sites that already flow through this one chokepoint), and the vapi webhook's remaining `console.*` calls plus a few worker handler stubs (owner-digest, critic-review, reconciliation, relay-outbox-events). Deviation: did NOT convert every last `console.*` in the repo (e.g. `apps/api/app/api/admin/migrate/route.ts`'s) — scoped to the chokepoints + the instruction-intake path the plan names, not a full-repo sweep. Verified: smoke-tested the transport with both a fake-Axiom-configured run and a no-Axiom local run (module resolves, no crash, pretty output confirmed) via a throwaway tsx script; `npm run typecheck` clean; fixed `tests/unit/observability.test.ts`'s `@sentry/node` mock (added `getCurrentScope`, which `errorResponse()` now calls) — full `tests/unit` + `tests/integration` suite green, 597 passed/3 skipped/0 failed.)
+- [x] A2.T3 — Sentry api+worker+frontend, release-tagged (evidence: commit 0c15f17. finnor-os's api+worker already had Sentry (observability.ts) from Phase 16(e) — added `release: VERCEL_GIT_COMMIT_SHA ?? RAILWAY_GIT_COMMIT_SHA` there. Root frontend (finnorai.com, the only frontend per hard rule #3) had ZERO Sentry before this — added it via `@sentry/nextjs`'s current recommended pattern: `instrumentation.ts` (registers `sentry.server.config.ts`/`sentry.edge.config.ts` inside `register()`) + `instrumentation-client.ts` (renamed from the deprecated `sentry.client.config.ts` auto-load pattern) + `src/app/global-error.tsx` (app-router render errors → captureException, a gap Sentry itself flagged). `next.config.mjs` wrapped with `withSentryConfig`; source-map upload stays a no-op until SENTRY_ORG/PROJECT/AUTH_TOKEN exist (none do yet — doesn't block error reporting itself, only prettier stack traces). Client-side needs `NEXT_PUBLIC_SENTRY_DSN` (not yet set in Vercel `finnor-agency` per the credentials ledger — safe to add later since DSNs aren't privileged secrets). Verified: `npm run build` at root — 32/32 pages, all Sentry-actionable warnings resolved (fixed the initial deprecation warnings by moving to instrumentation.ts, added the missing `onRouterTransitionStart` export, dropped the deprecated `disableLogger` option); one benign upstream `@sentry/node` CJS/ESM interop warning remains and does not fail the build. finnor-os: typecheck clean, `observability.test.ts` (4 tests) green.)
+- [x] A2.T4 — worker_heartbeat row (30s) + healthchecks.io dead-man ping (evidence: commit 3080e3e. Migration 0035 (`packages/db/migrations/0035_worker_heartbeat.sql`, bundled): `worker_heartbeat` table, global not tenant-scoped (matches migration 0026 `provider_circuit_state`'s precedent — a worker's liveness isn't tenant data). `apps/worker/src/heartbeat.ts`'s `startHeartbeat()` upserts the fixed `id="worker"` row every 30s (wired into `index.ts` alongside `startScheduler`) and pings `HEALTHCHECK_PING_URL` (already live everywhere per the ledger) on the same tick — two independent dead-man signals: the DB row is what A2.T5's `/api/vitals` reads for staleness, the healthchecks.io ping is what actually pages someone since nothing in this repo queries the DB row on its own. No-ops the ping silently (not fake) when the env var is unset. Verified via `tests/integration/heartbeat.test.ts` (2 tests) against the real local Postgres: repeated ticks upsert the SAME row (never a duplicate) and `last_beat_at` measurably advances across two separate `startHeartbeat()` runs; a missing `HEALTHCHECK_PING_URL` doesn't throw. Full suite green, 599 passed/3 skipped. Not yet verified: an actual staged Railway worker kill → real healthchecks.io alert firing — that needs a live deploy + waiting out healthchecks.io's grace period, out of reach from this local session; flagging for the exit-gate pass whenever staging is exercised end-to-end.)
+- [ ] A2.T5 — GET /api/vitals
+- [x] A2.T6 — GET /api/activity?since=cursor (evidence: commit fa60873. New `apps/api/app/api/activity/route.ts`: forward-only keyset cursor `(occurredAt, id)` merging `action_log` + `workflow_steps` + `calls`, tenant-scoped. Deliberately distinct from the pre-existing `GET /api/events` (`business_events` — a separate table `packages/data-platform/src/events.ts`'s own header comment says deliberately excludes exactly these 3 sources — confirmed by reading it, not assumed) and its backward `before` paging; this is the forward "what's new since I last polled" feed D1.T3's live Activity Theater needs. Caught and fixed a real precision bug via the test itself: Postgres timestamptz carries microseconds but the cursor is built from a JS `Date` (pg's driver already rounds to milliseconds on read) — comparing the raw column let a row's own hidden sub-millisecond remainder make it look "after" the cursor it produced, so the exact boundary row silently reappeared on page 2. Fixed by truncating the column to millisecond precision (`date_trunc('milliseconds', ...)`) in the SQL comparison before the cursor could be trusted. Verified: `tests/integration/activity-route.test.ts` (4 tests) — 401 without auth, all 3 sources present and tenant-isolated (two tenants, zero leakage), the monotonic-cursor test that actually caught the bug above now passes clean, 400 on a malformed cursor. Full suite green, 608 passed/3 skipped.)
+
+EXIT GATE: staged worker kill → alert + stale vitals · one traceId in api log + worker log + receipt
+- **One traceId across api log + worker log + receipt: ✅ CLOSED, verified locally end-to-end.** Ran a real, throwaway local proof (not committed — verification only): minted `traceId = vapi:proof-<uuid>`, ran it through the real `enqueueJob` → `JobQueue.tick()` → `submitCommand`/`claimStep`/`completeStep` chain (the same machinery `executePluginViaRuntime` uses), then separately through `requireContext`/`errorResponse` with the same id via `x-correlation-id`. Pasted output showed the identical string in all three places: worker log line (`job exit_gate_proof_job completed`, `traceId: "vapi:proof-1f1d86c9-..."`), the receipt row (`decision_receipts.correlation_id = vapi:proof-1f1d86c9-...`, `MATCH: true`), and the api log line (`unhandled route failure`, `traceId: "vapi:proof-1f1d86c9-..."`). This is the full A2.T1+T2 chain working together for real, not three separately-tested pieces asserted to compose.
+- **Staged worker kill → healthchecks alert + stale vitals: OPEN, not verifiable from this local session.** Everything the drill needs is built and locally proven (heartbeat upsert/staleness in `tests/integration/heartbeat.test.ts`, `/api/vitals`'s heartbeat.healthy flip in `tests/integration/vitals-route.test.ts`, a real fetch() to `HEALTHCHECK_PING_URL` — already live per the ledger). What's missing is the actual drill: deploy to Railway staging, kill the process, and wait out healthchecks.io's configured grace period for a real alert to fire. That needs a live deploy + real wall-clock waiting, out of reach here — same category as A1's Dealer Zero smoke-receipt gap. Flagging for whoever next touches staging (pairs naturally with A7.T2's failure-injection calendar, which formalizes exactly this kind of drill).
+
+## A3 — Integration Registry & Provider Hardening
+Status: NOT STARTED
+- [ ] A3.T1 — tenant_integrations migration + resolution order + seeds; status routes read it
+- [ ] A3.T2 — integration_health job (10 min)
+- [ ] A3.T3 — reliability.ts wrapper (timeout/retry/breaker) around ALL packages/tools calls
+- [ ] A3.T4 — emulator fault injection (EMULATOR_FAULTS + per-tenant config)
+- [ ] A3.T5 — Resend adapter with in-adapter recipient allowlist + volume caps
+- [ ] A3.T6 — webhook signature verification on all inbound routes
+EXIT GATE: fault→breaker open→degraded→recovery close (test) · real allowlisted email w/ receipt · Dealer Zero email blocked w/ honest receipt
+
+## A4 — Reliability Core
+Status: NOT STARTED
+- [ ] A4.T1 — ErrorKind extended to RETRYABLE|TERMINAL|NEEDS_HUMAN|CONFIG; all 21 plugins classified; reflection honors it
+- [ ] A4.T2 — watchdog job (stuck runs / orphaned steps / aging approvals nudge / unfinalized receipts)
+- [ ] A4.T3 — DLQ auto-triage (rule-based disposition on row)
+- [ ] A4.T4 — backup_db 6-hourly → R2 + scripts/restore-drill.sh + RPO/RTO doc
+- [ ] A4.T5 — Upstash rate limiting on intake + private auth-sensitive routes (public tier exists from P1)
+- [ ] A4.T6 — idempotency keys on intake + webhook dedupe via inbox
+EXIT GATE: induced stuck run flagged <5min · restore drill verdict pasted · poison job replayed clean · duplicate-intake test green
+
+## A5 — Guardrail Proof
+Status: NOT STARTED
+- [ ] A5.T1 — approval-gate property/fuzz test, every entry point, CI
+- [ ] A5.T2 — tenant-isolation fuzz (CI + nightly live vs staging)
+- [ ] A5.T3 — fail-closed boot-check (bypass present / secrets provider / emulator-on-native / owner role) → setup/status
+- [ ] A5.T4 — ⏸ PARAM: confirm ASM live · then explicit-provider-required in prod, loud override only
+- [ ] A5.T5 — ⏸ PARAM: AWS handoff · role-cutover runbook written regardless
+- [ ] A5.T6 — gitleaks + osv-scanner CI · audit-immutability extended to all audit tables
+EXIT GATE: CI proofs green · deliberate misconfigured staging boot refused · one nightly probe summary green
+
+## A6 — Load Ceiling
+Status: NOT STARTED
+- [ ] A6.T1 — transaction-pooling audit (is_local set_config, no session prepared statements)
+- [ ] A6.T2 — staging cutover + chaos load before/after numbers
+- [ ] A6.T3 — prod cutover + rollback string + 48h soak
+EXIT GATE: before/after numbers pasted · 48h quiet soak
+
+## A7 — Certification & SLO Engine
+Status: NOT STARTED
+- [ ] A7.T1 — §2 SLO table computed in readiness (value/target/trend/burn)
+- [ ] A7.T2 — failure-injection calendar v2 (restore/secrets/pooling/provider/worker-kill drills logged)
+- [ ] A7.T3 — re-probe + re-date all "confirmed live" claims
+EXIT GATE: full SLO payload pasted · one drill visible end-to-end
+
+---
+
+## B1 — Realtime Backbone + CQRS Projections
+Status: GATE-GREEN (2026-07-22, executed as "phase 4" per Param's §9-resolved kickoff). Full detail + deviations in `finnor-os/docs/phase-status.md`'s new B1 section — this block is the short form.
+- [x] B1.T1 — pg_notify triggers (action_log, workflow_step, dead_letters, domain_actions.status) — IDs only (evidence: migration `0037_pg_notify_jarvis_events.sql`, one generic `finnor_os.notify_jarvis_event()` trigger function; `tests/integration/pg-notify-triggers.test.ts` 5/5 pass, real LISTEN connection + real inserts/updates against local embedded-postgres. Extended in the same migration to `leads`/`quotes` (status) after finding pipeline-health's real source tables had zero NOTIFY coverage otherwise — `proposals` excluded, no `tenant_id` column of its own, see Deviation below.)
+- [x] B1.T2 — SSE gateway in apps/worker (own port, JWT-verified, tenant-scoped, direct PG LISTEN, Last-Event-ID) (evidence: `apps/worker/src/sse/{listener,gateway}.ts` + `apps/worker/src/sse-server.ts`, hand-rolled Node `http` server, no new dependency. `tests/integration/sse-gateway.test.ts` 2/2 pass — 401 with no credentials, real SSE frame with the right tenant + real domain_action id, tenant isolation proven (a second tenant's stream sees nothing). Live local `curl -N` demo also run: real insert → real SSE frame in <1s, pasted in-session. Deviation: JWT verification logic was extracted from `apps/api/lib/auth.ts` into `packages/security/src/auth.ts` since it didn't already live in packages/security as the plan's Read line implied — `apps/api/lib/auth.ts` now calls the shared function instead of duplicating it; full suite re-run afterward (625/628) to confirm the refactor didn't regress anything.)
+- [x] B1.T3 — packages/projections: incremental materialization for pipelineHealth/reliability/activity + rebuild command (evidence: migration `0038_read_model_projections.sql` cache table + `packages/projections/src/index.ts`. `tests/integration/projections-rebuild-diff.test.ts` 3/3 pass — rebuilt cache rows deep-equal live `@finnor/read-models` output for all 3 views. `GET /api/read-models/{pipeline-health,reliability,activity-snapshot}` now serve the cache with cold-miss self-heal. Deviation, real and material — see the phase-status.md entry for full reasoning: `enqueueOutboxEvent()` has zero call sites anywhere in the app (grepped, confirmed), so "projector consumes outbox events" as literally written would never fire; the projector consumes B1.T1's jarvis_events NOTIFY instead. "Incrementally maintains" = debounced (750ms) recompute via the same live query functions, not field-level patching — a deliberate scope decision, documented in the package's own header. Hourly per-tenant backstop job (`project_read_models`, registered in apps/worker/src/index.ts) covers the proposals gap.)
+- [x] B1.T4 — Vapi live-call relay → NOTIFY → SSE (evidence: `apps/api/app/api/webhooks/vapi/route.ts`'s new `status-update` branch + migration 0037's `calls_notify` trigger for the durable half. `tests/integration/vapi-status-update-notify.test.ts` 2/2 pass; 2 pre-existing Vapi test files re-run clean, no regression. Fixed the replay-protection dedup key for `status-update` messages along the way — Vapi's status-update messages all share `msg.type`, only `msg.status` differs, so the pre-existing `${callId}:${msg.type}` key would have dropped every status transition after the first.)
+EXIT GATE: SSE event within 2s of Dealer Zero action (curl pasted) · projector rebuild === query-time (diff test)
+- **Both bullets: ✅ CLOSED.** SSE-within-2s: automated test + a live local curl demo, real insert → real frame <1s, pasted in-session (full sequence in the Session Log entry and phase-status.md). Projector rebuild === query-time: `projections-rebuild-diff.test.ts` 3/3 green, exact deep-equality (timestamps excluded).
+- **Not required by the exit gate, tracked anyway:** standing up the SSE gateway as its own live Railway service/port is an infra/deploy step this session didn't take without Param's go-ahead on a new production surface — the code is complete and fully tested locally (real embedded-postgres, real HTTP server, real LISTEN/NOTIFY, real curl session). `npm run dev:worker-sse` / `start:sse` is the entrypoint whenever that deploy happens.
+
+## B2 — Planner V2: Deliberative Loop
+Status: NOT STARTED
+- [ ] B2.T1 — plan_id + depends_on[] migration; DAG plans run as dynamic workflows
+- [ ] B2.T2 — simulate() on plugin interface; real dry-runs ×5 flagship plugins; predicted receipt stored
+- [ ] B2.T3 — predicted-vs-actual diff + per-type accuracy → readiness
+- [ ] B2.T4 — clarification_request first-class action type
+- [ ] B2.T5 — health-aware planning (never through an open circuit)
+- [ ] B2.T6 — plan repair on TERMINAL step failure (through the gate, lineage recorded)
+- [ ] B2.T7 — eval harness 60+ golden (replay on PR, live nightly, ≥95%) + critic seeded evals ≥90%
+- [ ] B2.T8 — schema-repair loop · PLANNER_MEMORY=1 behind evals (⏸ needs VOYAGE_API_KEY)
+EXIT GATE: dependency-ordered 2-step plan w/ per-step receipts · predicted totals pre-approval + post-diff · ambiguity → question card in evals · replay evals green in CI
+
+## B3 — Intelligence Layer
+Status: NOT STARTED
+- [ ] B3.T1 — route optimizer (OSRM matrix + NN + 2-opt) as gated route_suggestion
+- [ ] B3.T2 — slot recommender scoring in scheduling proposals
+- [ ] B3.T3 — Holt-Winters forecasts (cash, visits) + briefing bands
+- [ ] B3.T4 — z-score anomaly events + alerts
+- [ ] B3.T5 — churn/risk heuristic (labeled) feeding win-back
+- [ ] B3.T6 — pgvector RAG w/ chunk citations in receipts (⏸ PARAM: reference PDFs, or reuse existing corpus)
+- [ ] B3.T7 — EWMA reorder points → gated suggestions
+EXIT GATE: optimizer beats naive (number) · forecast bands from real history · one receipt with citations
+
+## B4 — Dealer Zero 2.0
+Status: NOT STARTED
+- [ ] B4.T1 — scenario packs (normal/brutal_summer/payment_crunch/recall/chaos), seed-deterministic
+- [ ] B4.T2 — time-compression API (DEMO-labeled, Dealer Zero only)
+- [ ] B4.T3 — counterfactual replay + normalized receipt-diff (nightly staging + pre-release gate)
+- [ ] B4.T4 — shadow-diff staging vs prod (manual → automated report)
+- [ ] B4.T5 — training-mode tenant bootstrap
+EXIT GATE: determinism test green · deliberate change caught by replay diff · one shadow report
+
+## B5 — Cost Governor + Model Routing
+Status: NOT STARTED
+- [ ] B5.T1 — llm_calls ledger (model/tokens/cost/purpose/traceId)
+- [ ] B5.T2 — cost-per-action in receipts
+- [ ] B5.T3 — purpose→model router + prompt caching
+- [ ] B5.T4 — per-tenant budgets (soft warn / hard defer w/ honest CONFIG receipt)
+- [ ] B5.T5 — cost in readiness + briefing
+EXIT GATE: costed receipt pasted · critic-on-Haiku proof · forced hard-cap defer receipt
+
+## B6 — Policy V2 + Dealer-in-a-Day
+Status: NOT STARTED
+- [ ] B6.T1 — policy versioning + effective dating; receipts record version
+- [ ] B6.T2 — policy simulation over last-30-days receipts (gated report)
+- [ ] B6.T3 — drift guard payload (vN drafted / vN+1 approved)
+- [ ] B6.T4 — policy coverage lint in CI
+- [ ] B6.T5 — tenant bootstrap command + onboarding pack update
+EXIT GATE: sim report pasted · lint red/green demo · fresh tenant bootstrapped complete
+
+## B7 — Fortress
+Status: NOT STARTED
+- [ ] B7.T1 — authz matrix generated from routes + CI drift check
+- [ ] B7.T2 — PII redaction (pino redact + tests) + retention purge job
+- [ ] B7.T3 — degradation ladders ×6 (Redis/Axiom/Sentry/Voyage/Vapi/Resend), chaos-tested each
+- [ ] B7.T4 — fast-check webhook fuzzing all inbound routes
+- [ ] B7.T5 — k6 suite nightly-lite + capacity model doc
+- [ ] B7.T6 — fleet worker: priority lanes, concurrency caps, SIGTERM drain, backpressure 429
+- [ ] B7.T7 — CSP tightening (extends P1 headers) + rotation runbook + one rehearsal
+EXIT GATE: ladder matrix outcomes pasted · k6 vs capacity model · drain loses zero jobs
+
+## B8 — Notifications & Digests
+Status: NOT STARTED
+- [ ] B8.T1 — web push end-to-end (SW, push_subscriptions, worker sender, opt-in)
+- [ ] B8.T2 — owner daily digest email (allowlisted, brand-voiced)
+- [ ] B8.T3 — auto weekly certification report → PDF → R2
+- [ ] B8.T4 — notification prefs + quiet hours
+EXIT GATE: real push on Param's device · digest received · one weekly report generated
+
+---
+
+## C1 — Data Spine + Live Client + Stage
+Status: T1-T3 DONE, verified. T4/T5 + the actual panel migration NOT STARTED — this is the plan's own "≈2 sessions" phase, picking up cleanly next session.
+- [x] C1.T1 — typed client from openapi.json (regenerate first if stale) → src/lib/jarvis-client.ts (evidence: commit bc155cd. Found `finnor-os/openapi.json`/`generate-openapi.ts` badly stale — only 9 of the jarvis proxy's ~32 real allowlisted paths were documented (missing escalate, workflows/runs/*, read-models, dlq×4, receipts×2, corrections, resources, audit, me, overview, and this session's own A2 additions weren't reachable via the proxy at all — see finding below). Read every real route.ts file for the full proxy-reachable surface (not assumed) and expanded `generate-openapi.ts` to all 32 paths with verified request-body schemas; regenerated `openapi.json` (gitignored, mechanical) and ran `openapi-typescript` → `src/lib/jarvis/openapi-types.ts` (committed — no deploy-time codegen step exists in this app's build, so Vercel needs it checked in, same reasoning as finnor-os's `migrations-bundle.ts`). `src/lib/jarvis-client.ts` wraps the EXISTING `jarvisGet`/`jarvisPost` (same fetch/auth/telemetry every panel already uses — not a second network stack) with two real type layers: (1) path/verb safety via `API_PATHS satisfies Record<string, keyof paths>` — verified this actually fails compilation on a deliberately-introduced typo, then confirmed clean after reverting it, not just assumed to work; (2) response shapes, reused from `data-core.ts`'s already-"verified against the live API" interfaces where they existed, or freshly written after reading the real route + drizzle schema for the rest (DecisionReceipt, DeadLetter, MemoryCorrection, AuditEntry) — `resources/{kind}` and `policies` stay honestly typed `unknown` since their real shapes weren't read this session. Deliberately NOT migrated onto any existing panel yet — hard rule #8 (no panel refactors before snapshots exist); that's the first thing next session's T4 unblocks. Verified: root `tsc --noEmit` clean, `npm run build` clean.)
+- [x] C1.T2 — useLiveQuery (SSE-first + adaptive polling fallback + cursor deltas) (evidence: commit bc155cd, `src/lib/jarvis/useLiveQuery.ts`. Distinct, new infrastructure alongside (not replacing) `data-core.ts`'s existing app-wide poller — that machinery keeps serving ~15 panels untouched. SSE path is real code (EventSource, exponential-backoff reconnect, browser-native Last-Event-ID resumption) but B1 (the actual SSE gateway) hasn't shipped — every current caller runs in pure polling mode, stated honestly in the file's own header, not hidden. **Caught a real bug via actual browser testing, not just code review**: first implementation skipped fetching entirely whenever `document.visibilityState === "hidden"` (true for this session's automated browser tab throughout) — the fixture never updated no matter how long I waited. Root-caused with a `document.title`-mutation probe (console.log was somehow not surfacing — switched probes to confirm), traced to the early-return-on-blur branch, and fixed: blurred now slows the poll cadence (matching the plan's literal "2-3s visible, 15-30s blurred" spec) instead of stopping it outright. Re-verified live in-browser after the fix: fixture items visibly accumulated across real polls with advancing timestamps.)
+- [x] C1.T3 — /jarvis/stage fixture harness (evidence: commit bc155cd, `src/components/jarvis/Stage.tsx` + `src/app/jarvis/stage/page.tsx`. Owner-gated (verified both branches live: correctly shows "Owner access required" when signed out, correctly renders the Stage content when the gate is bypassed for testing). One section today: `useLiveQuery` against a labeled FIXTURE cursor-feed (NOT the real `/api/activity` — that route isn't in the jarvis proxy's allowlist yet, see finding below; T3's own spec says "mounted from fixtures," so this isn't a shortcut). C2's FLOW motion catalog and C3's effects/primitive kit will add their own sections next session — today's Stage is necessarily thin since neither has shipped. Verified: root build includes `/jarvis/stage` as a real prerendered route; live-browser screenshots before/after the T2 bug fix, zero console errors in either auth state.)
+- [ ] C1.T4 — Playwright visual snapshots (Stage + all existing panels)
+- [ ] C1.T5 — Lighthouse CI (≥85 gate now)
+EXIT GATE: ≥1 panel on typed client · snapshots green in CI · first Lighthouse report pasted
+- **Real finding, not in scope for C1 to silently fix**: `src/app/api/jarvis/[...path]/route.ts`'s `isAllowedGet` allowlist does NOT include A2's new `/api/vitals` or `/api/activity` routes — the frontend cannot reach either through the proxy yet even though the backend routes exist and are tested. This is D1's job (pulse bar / Activity Theater actually wiring them), not silently patched here — touching the proxy's security-relevant allowlist deserves its own deliberate task.
+
+## C2 — FLOW Motion Engine
+Status: NOT STARTED
+- [ ] C2.T1 — primitives (Enter/Stagger/Ticker/Flight/Press + choreo.*) + tokens + FLOW-01..13 on Stage
+- [ ] C2.T2 — FLOW-14..25 on Stage + FPS meter harness
+EXIT GATE: 25/25 with fixtures + snapshots · FPS ≥55 worst-case · reduced-motion pass recorded
+
+## C3 — Effects + Primitive Kit
+Status: NOT STARTED
+- [ ] C3.T1 — fx/: glow, glass+noise, grid backdrop, particle engine, decrypt text, border-beam
+- [ ] C3.T2 — Panel/StatCard/RiskBadge materials/StatusDot/Skeletons/Empty/Error/Drawer/Sparkline
+- [ ] C3.T3 — Stage registration + snapshots + dev FPS overlay
+EXIT GATE: Stage complete · snapshots green · glass contrast audit both themes
+
+---
+
+## D1 — Command Bridge + Orb
+Status: NOT STARTED
+- [ ] D1.T1 — Bridge layout (rails + center stage + FLOW-15 scene transitions), strangler per panel
+- [ ] D1.T2 — pulse bar (heartbeat/queue spark/DLQ/binding lights w/ EMU tags/scan clock)
+- [ ] D1.T3 — activity theater (SSE, FLOW-02/03, click→receipt)
+- [ ] D1.T4 — the Orb (Three.js particle water-sphere, FLOW-14 states, SSE-driven, low-power fallback)
+- [ ] D1.T5 — ambient (FLOW-18 caustics, grid, FLOW-24 time palettes)
+EXIT GATE: event→pixel <2s recording · Bridge FPS ≥55 · reduced-motion clean
+
+## D2 — Approval Cockpit
+Status: NOT STARTED
+- [ ] D2.T1 — cards (tilt, materials, param diff, critic chip, drift flag, predicted receipt)
+- [ ] D2.T2 — FLOW-10/11/12/13/25 choreography wired
+- [ ] D2.T3 — keyboard-complete (j/k/enter/a/r/u)
+- [ ] D2.T4 — honest undo (unclaimed-only revert PATCH + 5s toast)
+EXIT GATE: mouse-free full cycle recording · snapshots green
+
+## D3 — Action Scenes Wave 1
+Status: NOT STARTED
+- [ ] D3.T1 — registry for all 41 (flagship/standard/fallback, zero raw JSON)
+- [ ] D3.T2 — flagships: water_test, quotation, voice call, inventory
+- [ ] D3.T3 — flagships: scheduling, invoice_to_cash, bulk-notify, lead_to_water_test
+EXIT GATE: 41/41 on Stage · 8 flagship snapshots · reuse proven in feed/approval/receipt
+
+## D4 — Pipeline Theater
+Status: NOT STARTED
+- [ ] D4.T1 — liquid pipeline live view (FLOW-06/07/08/09, step receipt drawers)
+- [ ] D4.T2 — run browser + existing run-control routes wired (pause/resume/cancel/retry/escalate)
+- [ ] D4.T3 — DLQ browser v2 (triage suggestions, replay jump-links)
+EXIT GATE: live workflow recording w/ SSE transitions · fault-injected compensation rendered
+
+## D5 — Map Theater + My-Day
+Status: NOT STARTED
+- [ ] D5.T1 — technician↔user migration + /api/technician/my-day + Houston geo seed
+- [ ] D5.T2 — MapLibre dispatch map (FLOW-21/22, scrubber, load panel, 360 drawer)
+- [ ] D5.T3 — mobile my-day (stops, nav deep-links, checklist, gated complete)
+EXIT GATE: optimized route w/ km-saved on map · my-day phone-viewport proof
+
+## D6 — Personalization Engine
+Status: NOT STARTED
+- [ ] D6.T1 — user_prefs migration + CRUD
+- [ ] D6.T2 — role scenes + tenant accent theming
+- [ ] D6.T3 — frecency pre-staging + ticker-chip collapse
+- [ ] D6.T4 — since-you-were-away FLOW-23 + brand-voiced greeting
+- [ ] D6.T5 — push nudges deep-linking (B8)
+EXIT GATE: two-role recordings · real-delta digest · push→exact-card proof
+
+## D7 — Scenes Wave 2 + cmd-K
+Status: NOT STARTED
+- [ ] D7.T1 — remaining flagships (AMC ring, research cards, ops tiles, reminder timeline, tech report, compliance preview, marketing EMU cards, 360 upgrade)
+- [ ] D7.T2 — cmd-K (navigate/search/instruct → planner cards in palette)
+- [ ] D7.T3 — effects sweep w/ restraint + Empty/Error everywhere
+EXIT GATE: 41/41 designed proof · instruct-flow recording
+
+## D8 — Showtime
+Status: NOT STARTED
+- [ ] D8.T1 — /jarvis/showtime on B4 time-compression (DEMO-labeled)
+- [ ] D8.T2 — guided tour beacons, brand-voiced
+- [ ] D8.T3 — pause-and-inspect → real receipts
+EXIT GATE: zero-console-error full-run recording · inspected elements resolve to real receipts
+
+## D9 — Sound + 60fps + A11y + Ship
+Status: NOT STARTED
+- [ ] D9.T1 — Web Audio layer (off-default, prefs toggle)
+- [ ] D9.T2 — perf (virtualize, split, lazy, content-visibility, low-power, FPS proofs)
+- [ ] D9.T3 — a11y (focus, aria-live, contrast, reduced-motion QA, keyboard paths)
+- [ ] D9.T4 — Lighthouse ≥90/≥95 + snapshots green + zero-CLS proof
+EXIT GATE: Lighthouse pasted · FPS pasted · walkthrough recorded
+
+---
+
+## S — Developer Sandboxes ($0, standing decision)
+Status: NOT STARTED
+- [ ] S.T1 — ⏸ PARAM: free Stripe test / QBO sandbox / DocuSign demo / Meta sandbox accounts
+- [ ] S.T2 — wire all four adapters end-to-end; tenant_integrations.mode=sandbox; UI labels sandbox
+EXIT GATE: one real sandbox transaction per provider w/ receipt + verified webhook signature

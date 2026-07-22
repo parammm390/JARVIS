@@ -5,7 +5,6 @@
 
 import { requireContext, errorResponse, AuthError } from "../../../../lib/auth";
 import {
-  pipelineHealth,
   technicianLoad,
   stockRisk,
   cashCollections,
@@ -18,9 +17,15 @@ import {
   readinessTrend,
   failureInjectionLog,
 } from "@finnor/read-models";
+import { getProjection } from "@finnor/projections";
 
 const VIEWS: Record<string, (tenantId: string, searchParams: URLSearchParams) => Promise<unknown>> = {
-  "pipeline-health": (tenantId) => pipelineHealth(tenantId),
+  // B1.T3: these 3 are served from the CQRS cache (self-healing on a cold miss), not
+  // recomputed on every request — see packages/projections. windowDays on reliability
+  // is ignored by the cached path (the cache is always the default 1-day window);
+  // pass windowDays to opt into a live, uncached computation instead.
+  "pipeline-health": (tenantId) => getProjection(tenantId, "pipeline-health"),
+  "activity-snapshot": (tenantId) => getProjection(tenantId, "activity-snapshot"),
   "technician-load": (tenantId) => technicianLoad(tenantId),
   "stock-risk": (tenantId) => stockRisk(tenantId),
   "cash-collections": (tenantId) => cashCollections(tenantId),
@@ -30,7 +35,10 @@ const VIEWS: Record<string, (tenantId: string, searchParams: URLSearchParams) =>
   "data-quality": (tenantId) => dataQuality(tenantId),
   "reliability": (tenantId, searchParams) => {
     const windowDays = Number(searchParams.get("windowDays") ?? 1);
-    return reliability(tenantId, Number.isFinite(windowDays) && windowDays > 0 ? windowDays : 1);
+    if (searchParams.has("windowDays") && Number.isFinite(windowDays) && windowDays > 0 && windowDays !== 1) {
+      return reliability(tenantId, windowDays);
+    }
+    return getProjection(tenantId, "reliability");
   },
   "household-360": (tenantId, searchParams) => {
     const householdId = searchParams.get("householdId");

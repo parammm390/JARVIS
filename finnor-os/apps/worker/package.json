@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "start": "tsx src/index.ts"
+    "start": "tsx src/index.ts",
+    "dev:sse": "tsx watch src/sse-server.ts",
+    "start:sse": "tsx src/sse-server.ts"
   },
   "dependencies": {
     "@finnor/data-platform": "*",
@@ -14,11 +16,14 @@
     "@finnor/orchestration": "*",
     "@finnor/plugin-bulk-notify": "*",
     "@finnor/plugin-service-reminders": "*",
+    "@finnor/projections": "*",
     "@finnor/read-models": "*",
+    "@finnor/security": "*",
     "@finnor/shared-types": "*",
     "@finnor/tools": "*",
     "@finnor/workflow-runtime": "*",
     "dotenv": "^17.4.2",
-    "drizzle-orm": "^0.36.4"
+    "drizzle-orm": "^0.36.4",
+    "pg": "^8.13.1"
   }
 }

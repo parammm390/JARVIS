@@ -14,6 +14,7 @@ import {
   unique,
   real,
   date,
+  primaryKey,
 } from "drizzle-orm/pg-core";
 import { money, provenanceColumns, archivable, bytea } from "./columns";
 
@@ -1174,4 +1175,17 @@ export const failureInjections = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("failure_injections_tenant_injected_idx").on(t.tenantId, t.injectedAt)],
+);
+
+// B1.T3: CQRS materialized cache for the 3 hottest read-models. See migration 0038's
+// own comment for why only these 3 (of 12 total) get a cache row.
+export const readModelProjections = pgTable(
+  "read_model_projections",
+  {
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    view: text("view", { enum: ["pipeline-health", "reliability", "activity-snapshot"] }).notNull(),
+    data: jsonb("data").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.tenantId, t.view] })],
 );
