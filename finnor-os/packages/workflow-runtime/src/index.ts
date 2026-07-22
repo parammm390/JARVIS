@@ -14,5 +14,6 @@ export * from "./compensation";
 export * from "./envelope";
 export * from "./receipts";
 export * from "./dlq";
+export * from "./dlq-triage";
 export * from "./run-controls";
 export * from "./memory-ingest";

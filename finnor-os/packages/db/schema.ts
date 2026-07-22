@@ -1038,6 +1038,11 @@ export const deadLetters = pgTable(
     status: text("status", { enum: ["open", "replayed", "discarded"] }).notNull().default("open"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    // A4.T3 (migration 0041): advisory only — never gates the owner-only replay/discard
+    // routes in dlq.ts, just pre-computes a recommendation so an owner isn't reviewing a
+    // DLQ row cold. Recomputed on every triage tick, so no history is lost by overwriting.
+    suggestedDisposition: text("suggested_disposition", { enum: ["replay", "discard", "escalate"] }),
+    suggestionReason: text("suggestion_reason"),
   },
   (t) => [index("dead_letters_tenant_status_idx").on(t.tenantId, t.status)],
 );
