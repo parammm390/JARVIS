@@ -19,7 +19,13 @@ export async function startSseServer(port: number, signal?: AbortSignal): Promis
   await startJarvisEventListener();
   onJarvisEvent(onJarvisEventMarkProjectionsDirty);
   const server = createSseGateway();
-  await new Promise<void>((resolve) => server.listen(port, resolve));
+  // Railway (and most container platforms) route to a container's assigned port over
+  // its private network interface, not just loopback — binding with no explicit host
+  // can resolve to IPv6 `::`/loopback-only in some container network namespaces,
+  // which the edge proxy can't reach (observed as a real 502 "Application failed to
+  // respond" in staging even though the process itself was confirmed alive via a real
+  // job completing). Binding "0.0.0.0" explicitly is the documented fix.
+  await new Promise<void>((resolve) => server.listen(port, "0.0.0.0", resolve));
   signal?.addEventListener("abort", () => {
     server.close();
     void stopJarvisEventListener();
