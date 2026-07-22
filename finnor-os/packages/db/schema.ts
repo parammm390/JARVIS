@@ -1218,3 +1218,20 @@ export const tenantIntegrations = pgTable(
   },
   (t) => [unique("tenant_integrations_tenant_capability_idx").on(t.tenantId, t.capability)],
 );
+
+// A4.T6 (migration 0042): opt-in idempotency for POST /api/actions. `response` starts
+// null at claim time — the row itself is the claim, so a second INSERT for the same
+// (tenantId, idempotencyKey) conflicts and is rejected before the orchestrator runs
+// twice — then gets filled in once the real planner run completes.
+export const intakeIdempotency = pgTable(
+  "intake_idempotency",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    idempotencyKey: text("idempotency_key").notNull(),
+    response: jsonb("response"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (t) => [unique("intake_idempotency_tenant_key_idx").on(t.tenantId, t.idempotencyKey), index("intake_idempotency_tenant_idx").on(t.tenantId)],
+);

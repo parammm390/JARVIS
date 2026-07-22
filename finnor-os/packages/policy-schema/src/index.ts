@@ -52,6 +52,12 @@ export const SubmitInstructionSchema = z.object({
   instruction: z.string().min(1).max(10_000),
   channel: z.enum(["voice", "text", "console"]).default("console"),
   sessionId: z.string().optional(),
+  // A4.T6: opt-in only — deriving a key from instruction text by default would risk
+  // silently collapsing two genuinely different instructions that happen to share the
+  // same wording in a short window. A client that knows it might retry (network
+  // timeout, etc.) supplies its own key; one that doesn't gets today's unchanged
+  // behavior (every submission plans for real).
+  idempotencyKey: z.string().min(1).max(200).optional(),
 });
 export type SubmitInstruction = z.infer<typeof SubmitInstructionSchema>;
 

@@ -3,6 +3,7 @@
 import { SubmitInstructionSchema } from "@finnor/policy-schema";
 import { requireContext, errorResponse, enforceRouteRateLimit } from "../../../lib/auth";
 import { getOrchestrator } from "../../../lib/orchestrator";
+import { claimOrGetCachedIntake, completeIntakeClaim } from "../../../lib/intake-idempotency";
 
 export async function POST(req: Request): Promise<Response> {
   try {
@@ -21,10 +22,28 @@ export async function POST(req: Request): Promise<Response> {
         { status: 400 },
       );
     }
-    const actions = await getOrchestrator().handleInstruction(body.data.instruction, ctx, {
-      sessionId: body.data.sessionId,
-    });
-    return Response.json({ planned: actions }, { status: 201 });
+    // A4.T6: opt-in only (see SubmitInstructionSchema's own comment on why not derived
+    // from instruction text by default) — a client that didn't supply a key gets
+    // today's unchanged behavior, every submission plans for real.
+    if (!body.data.idempotencyKey) {
+      const actions = await getOrchestrator().handleInstruction(body.data.instruction, ctx, { sessionId: body.data.sessionId });
+      return Response.json({ planned: actions }, { status: 201 });
+    }
+
+    const claim = await claimOrGetCachedIntake(ctx.tenantId, body.data.idempotencyKey);
+    if (claim.status === "cached") {
+      return Response.json({ ...(claim.response as Record<string, unknown>), duplicate: true }, { status: 201 });
+    }
+    if (claim.status === "in_progress") {
+      return Response.json(
+        { error: "A submission with this idempotency key is already in progress (or a prior attempt never completed) — don't retry the same key indefinitely." },
+        { status: 409 },
+      );
+    }
+    const actions = await getOrchestrator().handleInstruction(body.data.instruction, ctx, { sessionId: body.data.sessionId });
+    const response = { planned: actions };
+    await completeIntakeClaim(ctx.tenantId, claim.id, response);
+    return Response.json(response, { status: 201 });
   } catch (err) {
     return errorResponse(err);
   }
