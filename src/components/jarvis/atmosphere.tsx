@@ -8,7 +8,9 @@ import { motion } from "framer-motion"
 import { useMemo } from "react"
 
 // Film grain as an inline SVG turbulence texture — no asset request, ~300 bytes.
-const GRAIN =
+// Exported so ui/fx/Glass.tsx (C3.T1) can reuse the identical texture for the
+// glass material's noise variant instead of shipping a second data URI.
+export const GRAIN =
   "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E\")"
 
 export function ConsoleAtmosphere() {
@@ -78,7 +80,9 @@ export function ConsoleAtmosphere() {
   )
 }
 
-const GLOW_SHADOW: Record<string, string> = {
+// Exported so ui/fx/Glow.tsx (C3.T1) drives the same tier→shadow mapping on
+// non-glass surfaces (badges, buttons) — one glow vocabulary, not two.
+export const GLOW_SHADOW: Record<string, string> = {
   cyan: "var(--j-glow-cyan)",
   teal: "var(--j-glow-teal)",
   green: "var(--j-glow-green)",
@@ -87,23 +91,34 @@ const GLOW_SHADOW: Record<string, string> = {
   none: "none",
 }
 
-/** Glass card with a gradient light-catching border and an optional colored glow. */
+/**
+ * Glass card with a gradient light-catching border and an optional colored glow.
+ * `noise` (C3.T1) layers the same film-grain SVG turbulence ConsoleAtmosphere uses,
+ * mixed with `overlay` at low opacity so it reads as material texture rather than
+ * visible static — contrast-audited against jarvis-root's two real mood variants
+ * (default cyan / standalone amber, see JARVIS-MAESTRO-STATE.md C3 notes).
+ */
 export function Glass({
   className = "",
   children,
   glow = "none",
+  noise = false,
 }: {
   className?: string
   children: React.ReactNode
   glow?: "cyan" | "teal" | "green" | "red" | "amber" | "none"
+  noise?: boolean
 }) {
   return (
     <div className={`rounded-2xl bg-gradient-to-br from-teal-200/25 via-white/[0.07] to-sky-400/20 p-[1px] ${className}`}>
       <div
-        className="h-full rounded-[calc(1rem-1px)] bg-[#071120]/85 backdrop-blur-xl transition-shadow duration-300"
+        className="relative h-full overflow-hidden rounded-[calc(1rem-1px)] bg-[#071120]/85 backdrop-blur-xl transition-shadow duration-300"
         style={{ boxShadow: GLOW_SHADOW[glow] }}
       >
-        {children}
+        {noise && (
+          <div aria-hidden className="pointer-events-none absolute inset-0 opacity-[0.05] mix-blend-overlay" style={{ backgroundImage: GRAIN }} />
+        )}
+        <div className="relative">{children}</div>
       </div>
     </div>
   )

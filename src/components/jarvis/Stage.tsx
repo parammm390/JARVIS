@@ -15,6 +15,7 @@
 // as live data it isn't.
 
 import { useState } from "react"
+import dynamic from "next/dynamic"
 import Link from "next/link"
 import "./jarvis-theme.css"
 import { JarvisAuthProvider, useJarvisAuth } from "./lib/jarvis-auth"
@@ -22,6 +23,14 @@ import { useLiveQuery, type LiveQueryConnection } from "@/lib/jarvis/useLiveQuer
 import { FlowCatalogSection } from "./ui/motion/FlowCatalog"
 import { FlowCatalogAmbientSection } from "./ui/motion/FlowCatalogAmbient"
 import { FpsMeterHud } from "./ui/motion/FpsMeter"
+import { EffectsCatalogSection } from "./ui/fx/EffectsCatalog"
+import { PrimitivesCatalogSection } from "./ui/primitives/PrimitivesCatalog"
+
+// Same ssr:false convention JarvisCommandCenter already uses for this exact
+// component — canvas + matchMedia only run client-side anyway, and it lets the
+// FLOW-08 BurstFail demo below trigger the real production particle engine
+// (ui/fx/ParticleBurst.tsx's `burstAt`) instead of the C2-era motion-div stand-in.
+const ParticleField = dynamic(() => import("./panels/ParticleField").then((m) => m.ParticleField), { ssr: false })
 
 interface FixtureActivityItem {
   source: "action_log" | "workflow_step" | "call"
@@ -130,8 +139,8 @@ function StageContent() {
         <div>
           <h1 className="text-lg font-black text-[color:var(--j-text)]">JARVIS Stage</h1>
           <p className="text-[11px] text-[color:var(--j-text-dim)]">
-            Dev harness — every primitive/choreography/renderer mounts here from fixtures (C1.T3). C2&apos;s FLOW motion catalog (below) and
-            C3&apos;s effects/primitive kit add their own sections next.
+            Dev harness — every primitive/choreography/renderer mounts here from fixtures (C1.T3). C2&apos;s FLOW motion catalog and C3&apos;s
+            effects/primitive kit are both below. D-track renderers add their own sections next.
           </p>
         </div>
         <button onClick={() => void signOut()} className="rounded-full border border-white/12 px-3 py-1 text-[10px] font-bold text-white/60 hover:text-white">
@@ -141,7 +150,10 @@ function StageContent() {
       <LiveQueryFixtureSection />
       <FlowCatalogSection />
       <FlowCatalogAmbientSection />
+      <EffectsCatalogSection />
+      <PrimitivesCatalogSection />
       <FpsMeterHud />
+      <ParticleField />
     </div>
   )
 }

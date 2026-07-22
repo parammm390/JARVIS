@@ -10,16 +10,21 @@
 // FLOW-06 PipeFlow and FLOW-07 ValvePulse reuse `jarvis-theme.css`'s pre-existing
 // `.jarvis-edge-flow`/keyframes rather than re-implementing dash-offset animation a
 // second time — that CSS already IS this FLOW entry, just not previously cataloged
-// as one. FLOW-08 BurstFail here is a small motion-div stand-in (12 dots), not the
-// full canvas particle engine — that's C3.T1's "~100-line canvas" particle engine;
-// this demonstrates the choreography (spray + red flash), not the final renderer.
+// as one. FLOW-08 BurstFail's own choreography (spray + red flash) stays a small
+// motion-div stand-in — that's the FLOW spec's specific 30-particle/500ms shape, not
+// the general-purpose engine. C3.T1 additionally wires its Replay button to
+// `burstAt()`, the SAME production canvas particle engine WorkflowTheater already
+// fires on every real step completion (found via grep, not rebuilt — see
+// ui/fx/ParticleBurst.tsx) — Stage.tsx mounts `<ParticleField/>` so that burst is
+// actually visible here, not just simulated by the motion-div spray.
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { motion, useReducedMotion, AnimatePresence } from "framer-motion"
 import { Enter, Stagger, Ticker, Flight, Press } from "./primitives"
 import { choreo } from "./choreo"
 import { EASE } from "./tokens"
 import { FlowCard, ReplayButton } from "./FlowCard"
+import { burstAt } from "../fx/ParticleBurst"
 
 function PanelSurfaceDemo() {
   const [key, setKey] = useState(0)
@@ -125,11 +130,19 @@ function ValvePulseDemo() {
 function BurstFailDemo() {
   const reduced = useReducedMotion()
   const [key, setKey] = useState(0)
+  const anchorRef = useRef<HTMLDivElement>(null)
   const particles = Array.from({ length: 12 }, (_, i) => i)
+
+  function replay() {
+    setKey((k) => k + 1)
+    const rect = anchorRef.current?.getBoundingClientRect()
+    if (rect) burstAt(rect.left + rect.width / 2, rect.top + rect.height / 2)
+  }
+
   return (
-    <FlowCard id="FLOW-08" title="BurstFail" reducedFallback="red flash only, no particle spray (full canvas engine is C3.T1)">
+    <FlowCard id="FLOW-08" title="BurstFail" reducedFallback="red flash only, no particle spray">
       <div className="relative flex w-full items-center justify-center">
-        <div className="relative h-8 w-8">
+        <div ref={anchorRef} className="relative h-8 w-8">
           <motion.div
             key={`flash-${key}`}
             initial={{ opacity: 0.9 }}
@@ -154,7 +167,7 @@ function BurstFailDemo() {
             )
           })}
         </div>
-        <div className="absolute -bottom-1 right-0"><ReplayButton onClick={() => setKey((k) => k + 1)} /></div>
+        <div className="absolute -bottom-1 right-0"><ReplayButton onClick={replay} /></div>
       </div>
     </FlowCard>
   )

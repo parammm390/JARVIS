@@ -1,0 +1,10 @@
+// C3.T2 — ui/primitives/ barrel.
+export { Panel } from "./Panel"
+export { StatCard } from "./StatCard"
+export { RiskBadge, type RiskTier } from "./RiskBadge"
+export { StatusDot, type Status } from "./StatusDot"
+export { SkeletonText, SkeletonRow, SkeletonStat, SkeletonCard } from "./Skeletons"
+export { EmptyState } from "./EmptyState"
+export { ErrorState } from "./ErrorState"
+export { Drawer } from "./Drawer"
+export { Sparkline } from "./Sparkline"

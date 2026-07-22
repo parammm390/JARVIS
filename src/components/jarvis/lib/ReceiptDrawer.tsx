@@ -6,8 +6,8 @@
 // same honest, complete view backs both entry points.
 
 import { useEffect, useState } from "react"
-import { AnimatePresence, motion } from "framer-motion"
 import { jarvisGet } from "./api"
+import { Drawer } from "../ui/primitives/Drawer"
 
 export interface FullReceipt {
   id: string
@@ -64,22 +64,7 @@ export function ReceiptDrawer({ receiptId, onClose }: { receiptId: string; onClo
   }, [receiptId])
 
   return (
-    <AnimatePresence>
-      <motion.div className="fixed inset-0 z-[60] bg-black/55 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
-      <motion.div
-        className="fixed right-0 top-0 z-[61] h-full w-full max-w-md overflow-y-auto border-l border-[color:var(--j-border)] bg-[#070d1a] p-5"
-        initial={{ x: "100%" }}
-        animate={{ x: 0 }}
-        exit={{ x: "100%" }}
-        transition={{ type: "spring", stiffness: 300, damping: 30 }}
-      >
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-black text-[color:var(--j-text)]">Why?</h3>
-          <button onClick={onClose} className="rounded-full border border-white/12 px-3 py-1 text-xs text-white/60 hover:text-white">
-            Close
-          </button>
-        </div>
-
+    <Drawer title="Why?" onClose={onClose}>
         {error && <div className="rounded-lg border border-red-400/30 bg-red-400/5 px-3 py-2 text-[11px] text-red-300">{error}</div>}
 
         {!receipt && !error && (
@@ -151,7 +136,6 @@ export function ReceiptDrawer({ receiptId, onClose }: { receiptId: string; onClo
             </div>
           </>
         )}
-      </motion.div>
-    </AnimatePresence>
+    </Drawer>
   )
 }
