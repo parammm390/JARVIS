@@ -137,19 +137,22 @@ function BurstFailDemo() {
             transition={{ duration: 0.5 }}
             className="absolute inset-0 rounded-full bg-red-400"
           />
-          {!reduced &&
-            particles.map((i) => {
-              const angle = (i / particles.length) * Math.PI * 2
-              return (
-                <motion.span
-                  key={`${key}-${i}`}
-                  className="absolute left-1/2 top-1/2 h-1 w-1 rounded-full bg-red-300"
-                  initial={{ x: 0, y: 0, opacity: 1 }}
-                  animate={{ x: Math.cos(angle) * 40, y: Math.sin(angle) * 40, opacity: 0 }}
-                  transition={{ duration: 0.5, ease: EASE.accelerate }}
-                />
-              )
-            })}
+          {particles.map((i) => {
+            const angle = (i / particles.length) * Math.PI * 2
+            // Always mounted (never `{!reduced && ...}`) — omitting elements based on
+            // `reduced` diverges element COUNT between SSR (always non-reduced) and a
+            // real reduced-motion client's first render, a hydration mismatch same
+            // class as the initial-style one documented in choreo.ts. Reduced mode
+            // instead keeps `animate` equal to `initial` (zero-duration, no spray).
+            return (
+              <motion.span
+                key={`${key}-${i}`}
+                className="absolute left-1/2 top-1/2 h-1 w-1 rounded-full bg-red-300"
+                initial={{ x: 0, y: 0, opacity: 1 }}
+                animate={reduced ? { x: 0, y: 0, opacity: 0, transition: { duration: 0 } } : { x: Math.cos(angle) * 40, y: Math.sin(angle) * 40, opacity: 0, transition: { duration: 0.5, ease: EASE.accelerate } }}
+              />
+            )
+          })}
         </div>
         <div className="absolute -bottom-1 right-0"><ReplayButton onClick={() => setKey((k) => k + 1)} /></div>
       </div>

@@ -26,10 +26,18 @@ export function Enter({
   className?: string
 }) {
   const reduced = useReducedMotion()
+  // `initial` must NEVER branch on `reduced`: framer-motion's useReducedMotion reads
+  // matchMedia synchronously on first client render, so for a real user with OS-level
+  // reduced-motion on, the very first client render already differs from what SSR
+  // produced (SSR has no window, always resolves non-reduced) — a real hydration
+  // mismatch, reproduced and confirmed via Playwright's emulateMedia during C2.T2's
+  // verification pass. SSR only ever serializes `initial` as inline style, never
+  // `animate`, so keeping `initial` constant and only branching `animate`/`transition`
+  // eliminates the mismatch while still landing on the correct reduced-motion result.
   return (
     <motion.div
       className={className}
-      initial={{ opacity: 0, y: reduced ? 0 : y }}
+      initial={{ opacity: 0, y }}
       animate={{ opacity: 1, y: 0 }}
       transition={reduced ? { duration: DURATION.fast, delay } : { ...SPRING.soft, delay }}
     >
@@ -113,13 +121,17 @@ export function Flight({
   className?: string
 }) {
   const reduced = useReducedMotion()
+  // Same SSR-safety rule as <Enter>: `initial` never branches on `reduced` (was
+  // `reduced ? {opacity:0} : false` — a real hydration mismatch for reduced-motion
+  // users, since `initial={false}` renders NO inline style at all while `{opacity:0}`
+  // does). Always {opacity:0}; only `layout`/`transition` differ.
   return (
     <motion.div
       layoutId={layoutId}
       layout={!reduced}
       className={className}
       transition={reduced ? { duration: DURATION.fast } : SPRING.stiff}
-      initial={reduced ? { opacity: 0 } : false}
+      initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
     >
       {children}

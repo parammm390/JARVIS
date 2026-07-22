@@ -1,10 +1,22 @@
-// C2.T1 — choreo.* variant/transition presets for the FLOW-05..12 catalog entries
-// that aren't a direct instance of one of the five named primitives (Enter/Stagger/
-// Ticker/Flight/Press). Each export is a framer-motion `variants` object consumed as
+// C2.T1/T2 — choreo.* variant/transition presets for FLOW entries that aren't a
+// direct instance of one of the five named primitives (Enter/Stagger/Ticker/Flight/
+// Press). Each export is a framer-motion `variants` object consumed as
 // `<motion.div variants={choreo.xxx} initial="initial" animate="animate">` — plain
 // data, no components, so the Stage can list/label them without extra wrapper JSX
 // per entry. Reduced-motion variants are the honest fallback named in the plan's own
 // catalog line for each FLOW entry.
+//
+// SSR-safety rule (found + fixed during C2.T2's reduced-motion verification pass,
+// reproduced via Playwright's emulateMedia): `variants.initial` and
+// `reducedVariants.initial` must always be IDENTICAL. framer-motion's
+// useReducedMotion() resolves to `null` during SSR (no window) and synchronously to
+// the real boolean on the client's first render — so a real user with OS-level
+// reduced-motion on gets a client `initial` that differs from what SSR produced,
+// which is a genuine React hydration-mismatch error, not a cosmetic one. SSR only
+// ever serializes `initial` as inline style; `animate`/`transition` are applied
+// post-mount and are safe to branch on `reduced`. Every preset below intentionally
+// keeps `initial` constant and reaches its reduced end-state via a `duration: 0`
+// (or same-tick) `animate` snap instead.
 
 import type { Variants } from "framer-motion"
 import { DURATION, EASE } from "./tokens"
@@ -18,13 +30,10 @@ interface FlowChoreo {
 export const liquidFill: FlowChoreo = {
   variants: {
     initial: { scaleY: 0, originY: 1 },
-    animate: {
-      scaleY: 1,
-      transition: { duration: 0.9, ease: EASE.decelerate },
-    },
+    animate: { scaleY: 1, transition: { duration: 0.9, ease: EASE.decelerate } },
   },
   reducedVariants: {
-    initial: { scaleY: 1 },
+    initial: { scaleY: 0, originY: 1 },
     animate: { scaleY: 1, transition: { duration: 0 } },
   },
 }
@@ -33,14 +42,11 @@ export const liquidFill: FlowChoreo = {
 export const valvePulse: FlowChoreo = {
   variants: {
     initial: { opacity: 0.55 },
-    animate: {
-      opacity: [0.55, 1, 0.55],
-      transition: { duration: 1.2, repeat: Infinity, ease: "easeInOut" },
-    },
+    animate: { opacity: [0.55, 1, 0.55], transition: { duration: 1.2, repeat: Infinity, ease: "easeInOut" } },
   },
   reducedVariants: {
-    initial: { opacity: 0.85 },
-    animate: { opacity: 0.85 },
+    initial: { opacity: 0.55 },
+    animate: { opacity: 0.85, transition: { duration: 0 } },
   },
 }
 
@@ -54,7 +60,7 @@ export const bypassUnfurl: FlowChoreo = {
     animate: { pathLength: 1, opacity: 1, transition: { duration: DURATION.slow, ease: EASE.standard } },
   },
   reducedVariants: {
-    initial: { pathLength: 1, opacity: 1 },
+    initial: { pathLength: 0, opacity: 0 },
     animate: { pathLength: 1, opacity: 1, transition: { duration: 0 } },
   },
 }
@@ -71,24 +77,19 @@ export const stampApprove: FlowChoreo = {
     },
   },
   reducedVariants: {
-    initial: { opacity: 0 },
-    animate: { opacity: 1, transition: { duration: DURATION.fast } },
+    initial: { scale: 1.4, opacity: 0 },
+    animate: { scale: 1, opacity: 1, transition: { duration: 0 } },
   },
 }
 
 // FLOW-11 ShatterReject: clip-path fragments → slide-away (reduced)
 export const shatterReject: FlowChoreo = {
   variants: {
-    initial: { opacity: 1, scale: 1, rotate: 0 },
-    animate: {
-      opacity: 0,
-      scale: 0.85,
-      rotate: -4,
-      transition: { duration: DURATION.slow, ease: EASE.accelerate },
-    },
+    initial: { opacity: 1, scale: 1, rotate: 0, x: 0 },
+    animate: { opacity: 0, scale: 0.85, rotate: -4, transition: { duration: DURATION.slow, ease: EASE.accelerate } },
   },
   reducedVariants: {
-    initial: { opacity: 1, x: 0 },
+    initial: { opacity: 1, scale: 1, rotate: 0, x: 0 },
     animate: { opacity: 0, x: -24, transition: { duration: DURATION.fast } },
   },
 }
@@ -101,8 +102,8 @@ export const deckFan: FlowChoreo = {
     animate: { scale: 1, opacity: 1, transition: { duration: DURATION.base, ease: EASE.decelerate } },
   },
   reducedVariants: {
-    initial: { opacity: 0 },
-    animate: { opacity: 1, transition: { duration: DURATION.fast } },
+    initial: { scale: 0.94, opacity: 0 },
+    animate: { scale: 1, opacity: 1, transition: { duration: DURATION.fast } },
   },
 }
 
@@ -113,8 +114,8 @@ export const cameraPan: FlowChoreo = {
     animate: { opacity: 1, scale: 1, x: 0, transition: { duration: DURATION.slow, ease: EASE.standard } },
   },
   reducedVariants: {
-    initial: { opacity: 0 },
-    animate: { opacity: 1, transition: { duration: DURATION.base } },
+    initial: { opacity: 0, scale: 0.98, x: 16 },
+    animate: { opacity: 1, scale: 1, x: 0, transition: { duration: DURATION.base } },
   },
 }
 
@@ -123,15 +124,11 @@ export const cameraPan: FlowChoreo = {
 export const radarSweep: FlowChoreo = {
   variants: {
     initial: { scale: 0.3, opacity: 0.6 },
-    animate: {
-      scale: 1.8,
-      opacity: 0,
-      transition: { duration: 1.8, repeat: Infinity, ease: EASE.decelerate },
-    },
+    animate: { scale: 1.8, opacity: 0, transition: { duration: 1.8, repeat: Infinity, ease: EASE.decelerate } },
   },
   reducedVariants: {
-    initial: { scale: 1, opacity: 0 },
-    animate: { scale: 1, opacity: 0 },
+    initial: { scale: 0.3, opacity: 0.6 },
+    animate: { scale: 0.3, opacity: 0, transition: { duration: 0 } },
   },
 }
 
@@ -142,7 +139,7 @@ export const drawSpark: FlowChoreo = {
     animate: { pathLength: 1, opacity: 1, transition: { duration: 0.5, ease: EASE.standard } },
   },
   reducedVariants: {
-    initial: { pathLength: 1, opacity: 1 },
+    initial: { pathLength: 0, opacity: 0.4 },
     animate: { pathLength: 1, opacity: 1, transition: { duration: 0 } },
   },
 }
@@ -154,7 +151,7 @@ export const routeDraw: FlowChoreo = {
     animate: { pathLength: 1, transition: { duration: 1.1, ease: EASE.standard } },
   },
   reducedVariants: {
-    initial: { pathLength: 1 },
+    initial: { pathLength: 0 },
     animate: { pathLength: 1, transition: { duration: 0 } },
   },
 }
@@ -168,8 +165,8 @@ export const pinAura: FlowChoreo = {
     animate: { scale: [1, 1.6, 1], opacity: [0.5, 0, 0.5], transition: { duration: 1.6, repeat: Infinity, ease: EASE.decelerate } },
   },
   reducedVariants: {
-    initial: { scale: 1, opacity: 0 },
-    animate: { scale: 1, opacity: 0 },
+    initial: { scale: 1, opacity: 0.5 },
+    animate: { scale: 1, opacity: 0, transition: { duration: 0 } },
   },
 }
 

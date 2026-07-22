@@ -37,6 +37,7 @@ function OrbStatesDemo() {
       <div className="flex w-full items-center justify-between">
         <div className="flex items-center gap-3">
           <motion.div
+            initial={{ scale: 1, rotate: 0 }}
             animate={reduced ? { scale: 1 } : state === "idle" ? { scale: [1, 1.05, 1] } : state === "planning" ? { rotate: 360 } : state === "executing" ? { scale: [1, 1.15, 1] } : state === "blocked" ? { scale: 0.9 } : { scale: [1, 0.7, 1.1, 1], rotate: [0, 8, -8, 0] }}
             transition={reduced ? { duration: 0 } : state === "planning" ? { duration: 1.4, repeat: Infinity, ease: "linear" } : { duration: state === "executing" ? 0.9 : 1.6, repeat: Infinity, ease: "easeInOut" }}
             className="h-9 w-9 rounded-full"
@@ -69,7 +70,11 @@ function CameraPanDemo() {
 const TYPE_SPEECH_TEXT = "Draft ready for approval."
 function TypeSpeechDemo() {
   const reduced = useReducedMotion()
-  const [chars, setChars] = useState(reduced ? TYPE_SPEECH_TEXT.length : 0)
+  // Always starts at 0 regardless of `reduced` — matches what SSR renders (server
+  // has no window, `reduced` is null there). The effect below jumps straight to full
+  // text post-mount when the real client is reduced-motion, instead of branching the
+  // initial state itself, which would be a hydration-mismatch same as choreo.ts's.
+  const [chars, setChars] = useState(0)
   const [key, setKey] = useState(0)
   const intervalRef = useRef<number | null>(null)
 
@@ -142,17 +147,20 @@ function RadarSweepDemo() {
   return (
     <FlowCard id="FLOW-19" title="RadarSweep" reducedFallback="static count, no expanding waves">
       <div className="relative flex h-14 w-14 items-center justify-center">
-        {!reduced &&
-          [0, 0.6, 1.2].map((delay) => (
-            <motion.span
-              key={delay}
-              variants={v}
-              initial="initial"
-              animate="animate"
-              transition={{ delay, duration: 1.8, repeat: Infinity, ease: [0, 0, 0.2, 1] }}
-              className="absolute h-10 w-10 rounded-full border border-cyan-400/50"
-            />
-          ))}
+        {/* Always mounted (never `{!reduced && ...}` — see choreo.ts's SSR-safety
+            note); the per-span `transition` override only applies when NOT reduced,
+            so reduced mode falls through to the variant's own duration:0 transition
+            instead of this 1.8s-repeat override defeating it. */}
+        {[0, 0.6, 1.2].map((delay) => (
+          <motion.span
+            key={delay}
+            variants={v}
+            initial="initial"
+            animate="animate"
+            transition={reduced ? undefined : { delay, duration: 1.8, repeat: Infinity, ease: [0, 0, 0.2, 1] }}
+            className="absolute h-10 w-10 rounded-full border border-cyan-400/50"
+          />
+        ))}
         <span className="z-10 font-mono text-[13px] font-black text-[color:var(--j-text)]">7</span>
       </div>
     </FlowCard>
@@ -197,7 +205,9 @@ function PinAuraDemo() {
   return (
     <FlowCard id="FLOW-22" title="PinAura" reducedFallback="static colored pin, no pulse ring">
       <div className="relative flex h-10 w-10 items-center justify-center">
-        {!reduced && <motion.span variants={v} initial="initial" animate="animate" className="absolute h-8 w-8 rounded-full bg-teal-400/40" />}
+        {/* Always mounted — `{!reduced && ...}` would diverge element COUNT between
+            SSR (always non-reduced) and a real reduced-motion client's first render. */}
+        <motion.span variants={v} initial="initial" animate="animate" className="absolute h-8 w-8 rounded-full bg-teal-400/40" />
         <span className="z-10 h-3 w-3 rounded-full bg-teal-300" style={{ boxShadow: "var(--j-glow-teal)" }} />
       </div>
     </FlowCard>
@@ -207,7 +217,13 @@ function PinAuraDemo() {
 const DIGEST_TEXT = "3 approvals cleared while you were away."
 function DigestCinematicDemo() {
   const reduced = useReducedMotion()
-  const [playing, setPlaying] = useState(!reduced)
+  // Always starts `true` (matches what SSR renders — `reduced` is null/falsy there,
+  // so `!reduced` is true) — the effect below flips it off post-mount for a real
+  // reduced-motion client instead of branching the initial state.
+  const [playing, setPlaying] = useState(true)
+  useEffect(() => {
+    if (reduced) setPlaying(false)
+  }, [reduced])
   return (
     <FlowCard id="FLOW-23" title="DigestCinematic" reducedFallback="text shown immediately, no 3–5s cinematic reveal">
       <div className="flex w-full items-center justify-between">
