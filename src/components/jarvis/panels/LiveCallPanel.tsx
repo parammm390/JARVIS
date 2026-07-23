@@ -7,7 +7,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { motion, useReducedMotion } from "framer-motion"
-import { Mic, MicOff, PhoneOff } from "lucide-react"
+import { AlertTriangle, Mic, MicOff, PhoneOff } from "lucide-react"
 import { JarvisOrb } from "./JarvisOrb"
 import type { useVapiSession } from "../lib/useVapiSession"
 import { onFrame } from "../lib/raf-bus"
@@ -60,7 +60,7 @@ function WaveformStrip({ volumeLevel, active, color = "rgba(56,189,248," }: { vo
 
 export function LiveCallPanel({ session }: { session: ReturnType<typeof useVapiSession> }) {
   const reduced = useReducedMotion()
-  const { voiceState, volumeLevel, transcript, callDurationSec, muted, toggleVoice, toggleMute, configured } = session
+  const { voiceState, volumeLevel, transcript, callDurationSec, muted, toggleVoice, toggleMute, configured, lastError, micSilenceWarning } = session
   const [tab, setTab] = useState<"transcript" | "details">("transcript")
   const live = voiceState === "live" || voiceState === "speaking"
   const mm = String(Math.floor(callDurationSec / 60)).padStart(2, "0")
@@ -105,6 +105,12 @@ export function LiveCallPanel({ session }: { session: ReturnType<typeof useVapiS
                 Voice keys not configured on this deployment.
               </div>
             )}
+            {lastError && (
+              <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-400/25 bg-amber-400/5 px-3 py-2 text-left text-[11px] text-amber-200">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>{lastError}</span>
+              </div>
+            )}
           </>
         )}
 
@@ -123,6 +129,12 @@ export function LiveCallPanel({ session }: { session: ReturnType<typeof useVapiS
             <div className="mt-3 w-full rounded-xl border border-white/6 bg-black/25 px-2 py-1">
               <WaveformStrip volumeLevel={volumeLevel} active={live} color={voiceState === "speaking" ? "rgba(34,211,238," : "rgba(45,212,191,"} />
             </div>
+            {micSilenceWarning && (
+              <div className="mt-2 flex w-full items-start gap-2 rounded-lg border border-amber-400/25 bg-amber-400/5 px-3 py-2 text-left text-[11px] text-amber-200">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>Not picking up your mic — check it isn&apos;t muted or blocked, then try speaking again.</span>
+              </div>
+            )}
           </>
         )}
 

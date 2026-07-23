@@ -349,7 +349,19 @@ function Shell() {
 
           <div className="p-4 md:p-6">
             {view === "Command Center" && <CommandCenterHome session={session} prefill={prefill} onNavigate={setView} igniteKey={igniteKey} />}
-            {view === "Voice Console" && <VoiceConsoleView voiceState={session.voiceState === "speaking" ? "live" : session.voiceState} toggleVoice={session.toggleVoice} feed={session.transcript} />}
+            {view === "Voice Console" && (
+              <VoiceConsoleView
+                voiceState={
+                  session.voiceState === "speaking"
+                    ? "live"
+                    : session.voiceState === "error"
+                      ? "idle"
+                      : session.voiceState
+                }
+                toggleVoice={session.toggleVoice}
+                feed={session.transcript}
+              />
+            )}
             {view === "Leads & CRM" && <LeadsView />}
             {view === "Customers" && <CustomersView />}
             {view === "Workflows" && <WorkflowsView />}

@@ -8,7 +8,7 @@
 import { motion, useReducedMotion } from "framer-motion"
 import { useId } from "react"
 
-export type VoiceState = "idle" | "connecting" | "live" | "speaking"
+export type VoiceState = "idle" | "connecting" | "live" | "speaking" | "error"
 
 export function JarvisOrb({
   size = 64,

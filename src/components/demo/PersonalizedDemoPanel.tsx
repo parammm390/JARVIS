@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { motion } from "framer-motion"
 import Vapi from "@vapi-ai/web"
 import {
+  AlertTriangle,
   Bot,
   CheckCircle2,
   Clock3,
@@ -226,6 +227,7 @@ export function PersonalizedDemoPanel({
   const [isMockCall, setIsMockCall] = useState(false)
   const [callError, setCallError] = useState("")
   const [handoffIntake, setHandoffIntake] = useState<DemoIntakeHandoff | null>(null)
+  const [micSilenceWarning, setMicSilenceWarning] = useState(false)
 
   const vapiRef = useRef<Vapi | null>(null)
   const postCallRef = useRef<HTMLDivElement | null>(null)
@@ -239,6 +241,18 @@ export function PersonalizedDemoPanel({
   const extractionStartedRef = useRef(false)
   const autoEndQueuedRef = useRef(false)
   const seenTranscriptRef = useRef<Set<string>>(new Set())
+  const callStateRef = useRef<CallState>("ready")
+  // Real bug found live (product owner: "it shows running but never captures my
+  // voice"): Vapi's `call-start`/"listening" signal only means the assistant's
+  // server-side session joined — it is NOT a confirmation that the browser's
+  // microphone was actually captured (Daily/Chrome can join a call with a muted or
+  // absent local audio track without ever throwing an error event, e.g. after a
+  // previously-denied mic permission). This audio-level watchdog independently
+  // verifies real mic input is arriving, decoupled from anything Vapi reports.
+  const audioContextRef = useRef<AudioContext | null>(null)
+  const analyserRef = useRef<AnalyserNode | null>(null)
+  const micWatchdogRef = useRef<number | null>(null)
+  const lastAudioAtRef = useRef<number>(0)
 
   const hasVapiConfig = Boolean(
     voiceConfig.vapiPublicKey && voiceConfig.vapiAssistantId && !voiceConfig.mockMode
@@ -285,6 +299,20 @@ export function PersonalizedDemoPanel({
   }, [hasVapiConfig])
 
   useEffect(() => {
+    callStateRef.current = callState
+    // Only the caller's own speaking turn ("listening") should ever trigger a
+    // silence warning — reset the clock on every transition into it so a long
+    // preceding assistant response never counts as "already gone quiet."
+    if (callState === "listening") {
+      lastAudioAtRef.current = performance.now()
+      setMicSilenceWarning(false)
+    }
+    if (callState === "ended" || callState === "error") {
+      stopMicLevelWatch()
+    }
+  }, [callState])
+
+  useEffect(() => {
     if (!isCallActive || callState === "preparing") return
     const timer = setInterval(() => setElapsedSeconds((current) => current + 1), 1000)
     return () => clearInterval(timer)
@@ -316,6 +344,7 @@ export function PersonalizedDemoPanel({
       if (mediaStreamRef.current) {
         mediaStreamRef.current.getTracks().forEach((track) => track.stop())
       }
+      stopMicLevelWatch()
       if (vapiRef.current) {
         vapiRef.current.removeAllListeners()
         void vapiRef.current.stop()
@@ -356,18 +385,19 @@ export function PersonalizedDemoPanel({
     }
 
     if (hasVapiConfig) {
-      const preflightError = browserPreflightError()
-      if (preflightError) {
-        console.info("[FINNOR demo mic preflight]", {
-          mediaDevicesPresent: Boolean(navigator.mediaDevices),
-          getUserMediaPresent: Boolean(navigator.mediaDevices?.getUserMedia),
-          secureContext: window.isSecureContext,
-        })
+      setMicState("requesting")
+      const micResult = await requestMicrophoneAccess()
+      if ("error" in micResult) {
+        console.info("[FINNOR demo mic preflight failed]", { error: micResult.error })
+        setMicState("denied")
         setCallState("error")
         onCallStatusChange("error")
-        setCallError(preflightError)
+        setCallError(micResult.error)
         return
       }
+      setMicState("granted")
+      mediaStreamRef.current = micResult.stream
+      startMicLevelWatch(micResult.stream)
 
       await startVapiCall()
       return
@@ -594,14 +624,91 @@ export function PersonalizedDemoPanel({
     }
   }
 
-  function browserPreflightError() {
+  // Real bug fix: the old `browserPreflightError()` only checked that
+  // `getUserMedia` exists and the page is HTTPS — it never actually requested the
+  // microphone, so a previously-denied browser permission passed silently and the
+  // call proceeded straight into Vapi, which can report "listening" even with no
+  // real audio track. This actually requests the mic and distinguishes WHY it
+  // failed, so a real denial surfaces as a real, actionable error instead of the
+  // call silently "running" with nothing captured.
+  async function requestMicrophoneAccess(): Promise<{ stream: MediaStream } | { error: string }> {
     if (!navigator.mediaDevices?.getUserMedia) {
-      return "Microphone permission blocked. Please allow mic access and try again."
+      return { error: "This browser doesn't support microphone access. Please use a recent version of Chrome, Edge, or Safari." }
     }
     if (!window.isSecureContext) {
-      return "Microphone permission blocked. Please allow mic access and try again."
+      return { error: "Microphone access requires a secure (https) connection." }
     }
-    return ""
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      return { stream }
+    } catch (err) {
+      const name = err instanceof DOMException ? err.name : ""
+      if (name === "NotAllowedError" || name === "PermissionDeniedError") {
+        return { error: "Microphone access was denied. Please allow microphone access for this site in your browser's address-bar permissions, then try again." }
+      }
+      if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+        return { error: "No microphone was found. Please connect a microphone and try again." }
+      }
+      if (name === "NotReadableError" || name === "TrackStartError") {
+        return { error: "Your microphone is being used by another application. Please close other apps using it and try again." }
+      }
+      return { error: "Microphone permission blocked. Please allow mic access and try again." }
+    }
+  }
+
+  // Independently confirms real audio is arriving from the mic, decoupled from
+  // whatever Vapi's own event stream reports — this is what actually catches the
+  // "shows listening, never captures anything" case, not just a permission denial.
+  function startMicLevelWatch(stream: MediaStream) {
+    try {
+      const AudioCtxCtor = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+      if (!AudioCtxCtor) return
+      const ctx = new AudioCtxCtor()
+      const source = ctx.createMediaStreamSource(stream)
+      const analyser = ctx.createAnalyser()
+      analyser.fftSize = 512
+      source.connect(analyser)
+      audioContextRef.current = ctx
+      analyserRef.current = analyser
+      lastAudioAtRef.current = performance.now()
+
+      const data = new Uint8Array(analyser.frequencyBinCount)
+      const SILENCE_THRESHOLD = 8 // byte-domain deviation from the 128 midline
+      const SILENCE_WARNING_MS = 8000
+
+      micWatchdogRef.current = window.setInterval(() => {
+        if (!analyserRef.current) return
+        analyserRef.current.getByteTimeDomainData(data)
+        let maxDeviation = 0
+        for (let i = 0; i < data.length; i++) {
+          const deviation = Math.abs(data[i] - 128)
+          if (deviation > maxDeviation) maxDeviation = deviation
+        }
+        if (maxDeviation > SILENCE_THRESHOLD) {
+          lastAudioAtRef.current = performance.now()
+          setMicSilenceWarning(false)
+          return
+        }
+        if (callStateRef.current === "listening" && performance.now() - lastAudioAtRef.current > SILENCE_WARNING_MS) {
+          setMicSilenceWarning(true)
+        }
+      }, 500)
+    } catch (err) {
+      console.error("[FINNOR mic level watch] failed to start", err)
+    }
+  }
+
+  function stopMicLevelWatch() {
+    if (micWatchdogRef.current) {
+      window.clearInterval(micWatchdogRef.current)
+      micWatchdogRef.current = null
+    }
+    if (audioContextRef.current) {
+      void audioContextRef.current.close()
+      audioContextRef.current = null
+    }
+    analyserRef.current = null
+    setMicSilenceWarning(false)
   }
 
   function clearMockTimer() {
@@ -621,6 +728,7 @@ export function PersonalizedDemoPanel({
 
   function cleanupLocalMedia() {
     clearMockTimer()
+    stopMicLevelWatch()
     if (mediaStreamRef.current) {
       mediaStreamRef.current.getTracks().forEach((track) => track.stop())
       mediaStreamRef.current = null
@@ -804,6 +912,15 @@ export function PersonalizedDemoPanel({
                 {callError ? (
                   <div className="mt-5 rounded-2xl border border-white/15 bg-white/[0.06] p-4 text-sm font-semibold leading-relaxed text-white">
                     {callError}
+                  </div>
+                ) : null}
+                {micSilenceWarning ? (
+                  <div className="mt-5 flex items-start gap-3 rounded-2xl border border-amber-300/25 bg-amber-300/[0.08] p-4 text-sm font-semibold leading-relaxed text-amber-100">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span>
+                      We&apos;re not picking up your microphone. Check that it isn&apos;t muted and that this site has
+                      mic permission in your browser, then try speaking again.
+                    </span>
                   </div>
                 ) : null}
                 {callFinished ? (
