@@ -6,6 +6,7 @@
 // real credentials and a fully-populated policy set gets readyForProduction: true.
 
 import { createDefaultPluginRegistry } from "@finnor/orchestration";
+import { createHash } from "node:crypto";
 import {
   testAdsConnections,
   testQuickBooksConnection,
@@ -125,6 +126,10 @@ export async function GET(req: Request): Promise<Response> {
         authDevBypassConfigured,
         ownedCapabilityEmulators,
         databaseRole: { currentUser: databaseRole?.current_user ?? "unknown", bypassRls: Boolean(databaseRole?.rolbypassrls) },
+        // A non-reversible fingerprint lets an authenticated operator prove this
+        // serverless invocation is using the same managed connection as a separate
+        // restricted-role probe, without exposing a host, user, or credential.
+        databaseConnectionFingerprint: createHash("sha256").update(process.env.DATABASE_URL ?? "").digest("hex").slice(0, 16),
       },
     };
 
