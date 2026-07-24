@@ -11,5 +11,5 @@ const url = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").trim()
 const anonKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "").trim()
 
 export const supabaseBrowser = createClient(url, anonKey, {
-  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false },
+  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
 })

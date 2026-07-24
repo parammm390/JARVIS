@@ -78,6 +78,9 @@ export function LoginForm() {
             {busy ? "Signing in…" : "Sign in"}
           </button>
         </form>
+        <Link href="/jarvis/reset-password" className="mt-3 block text-center text-[11px] text-[color:var(--j-text-faint)] hover:text-white">
+          Forgot your password?
+        </Link>
         <Link href="/jarvis" className="mt-4 block text-center text-[11px] text-[color:var(--j-text-faint)] hover:text-white">
           Back to JARVIS
         </Link>
