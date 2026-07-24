@@ -42,7 +42,15 @@ export async function verifyBearerToken(token: string): Promise<{ email: string 
 /** Identity → tenant lookup. Outside any withTenant() scope deliberately — tenant
  *  identity is not yet known at this point, it's the bootstrap step. */
 export async function resolveTenantContextByEmail(email: string): Promise<IdentityContext | null> {
-  const { rows } = await getPool().query(`SELECT id, tenant_id, role FROM users WHERE email = $1`, [email]);
+  // The lookup happens before we know which tenant GUC to set. Under the restricted
+  // production finnor_app role, direct users-table reads are therefore correctly
+  // RLS-empty. The migration's narrowly granted SECURITY DEFINER function returns
+  // only this already Supabase-verified email's mapping.
+  const { rows } = await getPool().query(
+    `SELECT user_id AS id, tenant_id, user_role AS role
+     FROM resolve_authenticated_identity($1)`,
+    [email],
+  );
   const row = rows[0];
   if (!row) return null;
   return { userId: row.id, tenantId: row.tenant_id, role: row.role as Role };

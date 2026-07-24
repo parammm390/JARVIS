@@ -84,34 +84,32 @@ async function authRequest(auth: AuthAdmin, path: string, init: RequestInit = {}
     ...init,
     headers: {
       apikey: auth.serviceKey,
-      authorization: `Bearer ${auth.serviceKey}`,
-      "content-type": "application/json",
       ...init.headers,
     },
   });
 }
 
-async function findAuthUserByEmail(auth: AuthAdmin, email: string): Promise<{ id: string } | null> {
+async function listAuthUsers(auth: AuthAdmin): Promise<Map<string, { id: string }>> {
+  const found = new Map<string, { id: string }>();
   for (let page = 1; page <= 10; page += 1) {
     const response = await authRequest(auth, `/auth/v1/admin/users?page=${page}&per_page=200`);
     if (!response.ok) throw new Error(`Supabase listUsers failed: HTTP ${response.status}`);
     const body = (await response.json()) as { users?: Array<{ id: string; email?: string }> };
     const users = body.users ?? [];
-    const match = users.find((user) => user.email?.toLowerCase() === email.toLowerCase());
-    if (match) return { id: match.id };
+    for (const user of users) if (user.email) found.set(user.email.toLowerCase(), { id: user.id });
     if (users.length < 200) break;
   }
-  return null;
+  return found;
 }
 
-async function ensureAuthPrincipal(auth: AuthAdmin, email: string): Promise<{ jwt: string; wasReset: boolean }> {
+async function ensureAuthPrincipal(auth: AuthAdmin, email: string, existing: { id: string } | undefined): Promise<{ jwt: string; wasReset: boolean }> {
   const password = randomPassword();
-  const existing = await findAuthUserByEmail(auth, email);
   let wasReset = false;
 
   if (existing) {
     const response = await authRequest(auth, `/auth/v1/admin/users/${existing.id}`, {
       method: "PUT",
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({ password, email_confirm: true }),
     });
     if (!response.ok) throw new Error(`Supabase password reset failed for ${email}: HTTP ${response.status}`);
@@ -119,6 +117,7 @@ async function ensureAuthPrincipal(auth: AuthAdmin, email: string): Promise<{ jw
   } else {
     const response = await authRequest(auth, "/auth/v1/admin/users", {
       method: "POST",
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({
         email,
         password,
@@ -131,6 +130,7 @@ async function ensureAuthPrincipal(auth: AuthAdmin, email: string): Promise<{ jw
 
   const response = await authRequest(auth, "/auth/v1/token?grant_type=password", {
     method: "POST",
+    headers: { "content-type": "application/json" },
     body: JSON.stringify({ email, password }),
   });
   const body = (await response.json()) as { access_token?: string; msg?: string; message?: string };
@@ -244,12 +244,13 @@ async function main(): Promise<void> {
   // but an incorrectly mapped Auth key must not block or silently change principal
   // provisioning.
   const auth: AuthAdmin = { baseUrl: productionFileEnv.SUPABASE_URL!, serviceKey: productionFileEnv.SUPABASE_SERVICE_ROLE_KEY! };
-  const tenantAId = randomUUID();
-  const tenantBId = randomUUID();
-  const [principalA, principalB] = await Promise.all([
-    ensureAuthPrincipal(auth, emailA),
-    ensureAuthPrincipal(auth, emailB),
-  ]);
+  const tenantAId = args["tenant-a-id"] ?? randomUUID();
+  const tenantBId = args["tenant-b-id"] ?? randomUUID();
+  // Read once before changes; this avoids repeated Admin directory scans during a
+  // credential refresh while preserving explicit, per-account mutations below.
+  const authUsers = await listAuthUsers(auth);
+  const principalA = await ensureAuthPrincipal(auth, emailA, authUsers.get(emailA.toLowerCase()));
+  const principalB = await ensureAuthPrincipal(auth, emailB, authUsers.get(emailB.toLowerCase()));
   const [production, staging] = await Promise.all([
     provisionDatabase(productionEnv.DATABASE_URL!, tenantAId, tenantBId, emailA, emailB),
     // Preview currently exposes only its migration credential. This path seeds the
