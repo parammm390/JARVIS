@@ -1,5 +1,9 @@
 # JARVIS 95% — Phase Status
 
+## Phase 13 — D4 Pipeline Theater exit gate
+
+- [x] **Live Dealer Zero recording gate (2026-07-24):** authenticated the local SSE gateway as the dedicated Dealer Zero owner and observed a real two-step `lead_to_water_test` workflow (`c8df5bb8-0112-4168-aefc-edba5031eaf4`) emitting sequential `workflow_step` notifications, then `reliability` and `activity-snapshot` projection refreshes. A second Dealer Zero run (`01cd8ed9-947b-4abb-b805-0fa1cccca59a`) used a communications auth-fault injection after a real scheduling hold; the downstream call returned `false` and the existing compensation runtime released the hold successfully (`compensation_case` `2812e193-f2a1-4a7e-a2f3-dbe678b3af73`). The tenant is permanently labelled synthetic; no external customer/provider call was sent.
+
 ## Maestro B3 — Intelligence Layer
 Status: GATE-GREEN (2026-07-25)
 
