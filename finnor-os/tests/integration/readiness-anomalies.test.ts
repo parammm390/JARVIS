@@ -19,7 +19,8 @@ describe.skipIf(!available)("B3 readiness anomalies", () => {
     await withTenant(TENANT_ID, async (db) => {
       for (let day = 0; day < 15; day += 1) {
         const date = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() - 14 + day));
-        await db.insert(readinessLog).values({ tenantId: TENANT_ID, logDate: date.toISOString().slice(0, 10), workflowSuccessRate: day === 14 ? 0.1 : 0.95 + (day % 2) * 0.01, reconciliationBacklog: 0, dlqDepth: 0 }).onConflictDoUpdate({ target: [readinessLog.tenantId, readinessLog.logDate], set: { workflowSuccessRate: day === 14 ? 0.1 : 0.95 } });
+        const workflowSuccessRate = day === 14 ? 0.1 : 0.95 + (day % 2) * 0.01;
+        await db.insert(readinessLog).values({ tenantId: TENANT_ID, logDate: date.toISOString().slice(0, 10), workflowSuccessRate, reconciliationBacklog: 0, dlqDepth: 0 }).onConflictDoUpdate({ target: [readinessLog.tenantId, readinessLog.logDate], set: { workflowSuccessRate } });
       }
     });
     const anomalies = await readinessAnomalies(TENANT_ID);
