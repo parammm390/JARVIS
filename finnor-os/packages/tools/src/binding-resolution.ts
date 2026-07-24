@@ -45,6 +45,17 @@ export interface CapabilityBindingsReport {
   marketing: BindingResolution;
 }
 
+const FINNOR_OWNED_CAPABILITIES = ["scheduling", "documents", "inventory", "crm"] as const;
+
+/** A5.T3: expose exactly the owned capabilities which an operator explicitly routed
+ * to an emulator. This is intentionally a report rather than an exception: A1.T2
+ * permits that explicit opt-out for a sandbox/Dealer Zero tenant, and setup/status
+ * must remain available to say so honestly rather than hiding the configuration.
+ */
+export function ownedCapabilitiesResolvingToEmulator(bindings: CapabilityBindingsReport): string[] {
+  return FINNOR_OWNED_CAPABILITIES.filter((capability) => bindings[capability].mode === "emulator");
+}
+
 export function resolveCapabilityBindings(env: NodeJS.ProcessEnv = process.env): CapabilityBindingsReport {
   return {
     scheduling: resolveOwned(env.SCHEDULING_BINDING),

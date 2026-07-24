@@ -4,7 +4,7 @@
 
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 
-const ENV_KEYS = ["SECRETS_PROVIDER", "FINNOR_SECRET_IDS", "SECRET_REFRESH_MS", "ALLOW_PLAINTEXT_ENV_SECRETS", "NODE_ENV"] as const;
+const ENV_KEYS = ["SECRETS_PROVIDER", "FINNOR_SECRET_IDS", "SECRET_REFRESH_MS", "ALLOW_PLAINTEXT_ENV_SECRETS", "AUTH_DEV_BYPASS", "NODE_ENV"] as const;
 let savedEnv: Record<string, string | undefined> = {};
 
 describe("secrets manager", () => {
@@ -32,6 +32,15 @@ describe("secrets manager", () => {
     const { ensureSecretsLoaded, secretProviderStatus } = await import("@finnor/security");
     await ensureSecretsLoaded();
     expect(secretProviderStatus().loaded).toBe(true);
+  });
+
+  it("refuses a production boot when AUTH_DEV_BYPASS is configured, even as 0", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("AUTH_DEV_BYPASS", "0");
+    vi.stubEnv("ALLOW_PLAINTEXT_ENV_SECRETS", "1");
+    const { ensureSecretsLoaded } = await import("@finnor/security");
+    await expect(ensureSecretsLoaded()).rejects.toThrow(/AUTH_DEV_BYPASS/);
+    vi.unstubAllEnvs();
   });
 
   it("refuses the env provider in production unless the loud emergency override is set", async () => {

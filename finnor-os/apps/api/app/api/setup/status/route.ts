@@ -6,10 +6,18 @@
 // real credentials and a fully-populated policy set gets readyForProduction: true.
 
 import { createDefaultPluginRegistry } from "@finnor/orchestration";
-import { testAdsConnections, testQuickBooksConnection, testVapiConnection, ghlIntegrationStatus, circuitSnapshot, resolveCapabilityBindingsForTenant } from "@finnor/tools";
+import {
+  testAdsConnections,
+  testQuickBooksConnection,
+  testVapiConnection,
+  ghlIntegrationStatus,
+  circuitSnapshot,
+  resolveCapabilityBindingsForTenant,
+  ownedCapabilitiesResolvingToEmulator,
+} from "@finnor/tools";
 import { zepProviderStatus, embeddingsProviderStatus } from "@finnor/memory";
 import { secretProviderStatus } from "@finnor/security";
-import { adminDb, tenantPhoneNumbers } from "@finnor/db";
+import { adminDb, getPool, tenantPhoneNumbers } from "@finnor/db";
 import { eq } from "drizzle-orm";
 import { requireContext, errorResponse } from "../../../../lib/auth";
 import { scanActionTypeReadiness, type ActionTypeDescriptor } from "../../../../../../packages/domain-plugins/shared/setup-readiness";
@@ -98,10 +106,26 @@ export async function GET(req: Request): Promise<Response> {
     // row overrides it), "env" (an operator set the var), or "default" (Finnor-owned
     // capabilities default to "native" as of A1.T2; external capabilities still default
     // to "emulator").
+    const databaseRole = (
+      await getPool().query<{ current_user: string; rolbypassrls: boolean }>(
+        "SELECT current_user, rolbypassrls FROM pg_roles WHERE rolname = current_user",
+      )
+    ).rows[0];
+    const ownedCapabilityEmulators = ownedCapabilitiesResolvingToEmulator(bindings);
+    const authDevBypassConfigured = Object.hasOwn(process.env, "AUTH_DEV_BYPASS");
     const environment = {
       nodeEnv: process.env.NODE_ENV ?? "development",
       secretProvider: secretProviderStatus(),
       bindings,
+      // A5.T3: this status is deliberately configuration-only — it never returns a
+      // secret. An explicit emulator is not itself a crash condition (A1 permits it
+      // for sandbox/Dealer Zero tenants), but is surfaced as a production warning so
+      // it can never be mistaken for a native path.
+      bootSafety: {
+        authDevBypassConfigured,
+        ownedCapabilityEmulators,
+        databaseRole: { currentUser: databaseRole?.current_user ?? "unknown", bypassRls: Boolean(databaseRole?.rolbypassrls) },
+      },
     };
 
     return Response.json({ actionTypes, integrations, summary, phoneRouting, environment, circuitBreakers }, { headers: { "cache-control": "no-store" } });

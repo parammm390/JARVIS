@@ -80,7 +80,16 @@ describe.skipIf(!available)("GET /api/setup/status — phoneRouting (Phase 14)",
   it("reports the environment block (Phase 16c / A1.T3): nodeEnv, secret provider, and every binding's resolved mode + source", async () => {
     const res = await GET(req());
     const body = (await res.json()) as {
-      environment: { nodeEnv: string; secretProvider: { provider: string; loaded: boolean }; bindings: Record<string, { mode: string; source: string }> };
+      environment: {
+        nodeEnv: string;
+        secretProvider: { provider: string; loaded: boolean };
+        bindings: Record<string, { mode: string; source: string }>;
+        bootSafety: {
+          authDevBypassConfigured: boolean;
+          ownedCapabilityEmulators: string[];
+          databaseRole: { currentUser: string; bypassRls: boolean };
+        };
+      };
     };
     expect(body.environment.nodeEnv).toBeTruthy();
     expect(body.environment.secretProvider.provider).toBe("env"); // no SECRETS_PROVIDER set in this test run
@@ -94,6 +103,10 @@ describe.skipIf(!available)("GET /api/setup/status — phoneRouting (Phase 14)",
     for (const key of ["communications", "esign", "accounting", "payments", "marketing"]) {
       expect(body.environment.bindings[key]).toEqual({ mode: "emulator", source: "default" });
     }
+    expect(body.environment.bootSafety.authDevBypassConfigured).toBe(true);
+    expect(body.environment.bootSafety.ownedCapabilityEmulators).toEqual([]);
+    expect(body.environment.bootSafety.databaseRole.currentUser).toBeTruthy();
+    expect(body.environment.bootSafety.databaseRole.bypassRls).toBeTypeOf("boolean");
   });
 
   it("§5.1: reports embeddings as unconfigured (honest, not a guessed 'healthy') when EMBEDDINGS_API_KEY is unset", async () => {

@@ -70,6 +70,14 @@ export async function ensureSecretsLoaded(): Promise<void> {
   // loadedAt from a prior attempt and kicking off a second, redundant fetch.
   loadedAt = Date.now();
   initialization = (async () => {
+    // A5.T3: dev-header auth is test/local-only. Treat *any* configured value as a
+    // production configuration error rather than relying on a future parser to
+    // interpret "0" or another non-empty value safely. API routes and the worker both
+    // call this at their entry boundary, so neither can start under this posture.
+    if (process.env.NODE_ENV === "production" && Object.hasOwn(process.env, "AUTH_DEV_BYPASS")) {
+      console.error("[security] production refused: AUTH_DEV_BYPASS must be unset");
+      throw new Error("Production refuses to boot while AUTH_DEV_BYPASS is configured");
+    }
     if (provider() === "env") {
       if (process.env.NODE_ENV === "production" && process.env.ALLOW_PLAINTEXT_ENV_SECRETS !== "1") {
         // The only env-provider production path is a deliberate, noisy emergency
