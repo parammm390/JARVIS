@@ -45,6 +45,7 @@ import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, or, sql } from "dri
 import { performance } from "node:perf_hooks";
 
 export * from "./route-optimizer";
+export * from "./slot-recommender";
 
 export interface PipelineHealth {
   leadsByStatus: Array<{ status: string; count: number }>;

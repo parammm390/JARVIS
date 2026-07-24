@@ -565,6 +565,19 @@ export const technicianCapacity = pgTable("technician_capacity", {
   ...archivable(),
 });
 
+// B3.T2: these are configured operating inputs, never inferred from free-form
+// technician contact/availability JSON. Null means slot recommendations must surface
+// an honest "profile incomplete" state instead of a made-up travel/SLA score.
+export const technicianDispatchProfiles = pgTable("technician_dispatch_profiles", {
+  technicianId: uuid("technician_id").primaryKey().references(() => technicians.id),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+  baseAddress: text("base_address"),
+  workdayStart: text("workday_start"),
+  workdayEnd: text("workday_end"),
+  defaultSlaMinutes: integer("default_sla_minutes"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const priceBookItems = pgTable(
   "price_book_items",
   {
