@@ -1,5 +1,14 @@
 # JARVIS 95% — Phase Status
 
+## Maestro B2 — Planner V2: Deliberative Loop
+Status: GATE-GREEN (2026-07-24)
+
+- [x] B2.T1–T8 — DAG plans, persisted simulations and prediction diffs, durable clarification cards, health-aware manual fallback, terminal failure repair lineage, 68-case replay/critic harness, and one-attempt schema repair with `PLANNER_MEMORY=1` gating (evidence: commits `516b7f7`, `cd38a84`, `16d6e10`, `f8a73ac`, `5a8a4b5`, `2870674`, `8101ed3`, `3f87e35`, `2e578e8`, `01037d0`; detailed task evidence in `JARVIS-MAESTRO-STATE.md`.)
+- [x] EXIT GATE — two-step dependency receipts (`07a4e81`, 4/4); quotation’s persisted $125 pre-approval prediction and post-execution accuracy 1.0 (`18a30e6`, 1/1); durable ambiguity question card and replay contract (`clarification-request.test.ts` 1/1, replay 3/3); GitHub Actions replay CI green on [run 30117543133](https://github.com/parammm390/JARVIS/actions/runs/30117543133), test job 89561812041.
+- [x] CI readiness repairs discovered during closure: policy seeding for planner advisory actions (`d891eb0`), Voice OS fixture isolation (`e12f09b`), native Postgres-array restore handling (`6bddf11`), and readiness fixture reset (`ee09282`). All 138 Vitest files passed locally in bounded batches; the CI test job’s typecheck, replay eval, full suite, and backup drill all passed.
+
+Note: the workflow’s separate staging deployment job failed after its test job passed; its configured `RAILWAY_STAGING_TOKEN` is a deployment concern outside this phase’s replay-eval gate and no B2 staging deployment is claimed.
+
 ## Phase 1 — Security lockdown & real identity
 Status: GATE-GREEN (one non-blocking owner follow-up outstanding — see Task 1.7)
 - [x] Task 1.1 — Hotfix: require x-jarvis-key on all private GET routes (evidence: commit 0f6c957, deployed https://finnorai.com, verified `curl https://finnorai.com/api/jarvis/resources/households` → 401, `stats`/`setup/status` still 200)
