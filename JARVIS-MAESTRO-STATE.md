@@ -10,6 +10,7 @@ Convention: same as `finnor-os/docs/phase-status.md` (P1/P2 style) — a box is 
 
 ## Session Log
 <!-- date · phase · tasks done · next task · blockers -->
+- 2026-07-25 · phase 16 (B3) · re-verified T6 corpus availability before completion audit: local workspace contains no reference PDFs and the local database's only PDF rows are generated test/compliance reports, not authorized water-treatment sources · next: B3.T6 needs Param to supply/publicly authorize a reference corpus; then ingest and prove a cited receipt · blockers: treating test PDFs or repository docs as domain references would fabricate citations, so T6 and its exit-gate citation proof remain open.
 - 2026-07-25 · phase 16 (B3) · completed T7: a daily EWMA scan derives advisory reorder points from only recorded `stock_used_on_visit` events and drafts the existing confirmation-gated reorder-review action when the policy enables it · next: B3.T6 remains explicitly ⏸ PARAM; End Ritual complete except citation-dependent exit proof · blockers: no reference-PDF corpus or authorized existing corpus was supplied, so no citations were invented.
 - 2026-07-25 · phase 16 (B3) · completed T4: real readiness z-score anomalies → deduped activity event + existing Sentry alert · next: B3.T5 churn/risk heuristic · blockers: B3.T6 remains corpus-dependent; none for T5.
 - 2026-07-25 · phase 16 (B3) · completed T3: real cash/visit 14-day forecast bands + owner-digest wording · next: B3.T4 anomaly detection + alerts · blockers: B3.T6 remains corpus-dependent; none for T4.
