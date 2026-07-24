@@ -73,6 +73,7 @@ export const leadToWaterTestPlugin: DomainEnginePlugin = {
         workflowType: "lead_to_water_test",
         idempotencyKey,
         correlationId: draft.correlationId,
+        domainActionId: draft.domainActionId,
         steps: [
           {
             stepType: "hold_appointment",

@@ -48,6 +48,7 @@ export function makeDraftNode(plugins: PluginRegistry) {
     const plugin = plugins.resolve(state.actionType)!;
     const draft = await plugin.draft(state.actionType, state.payload, state.policy);
     draft.correlationId = state.correlationId;
+    draft.domainActionId = state.actionId;
     await appendEpisode(state.tenantId, state.actionId, "draft", {}, { summary: draft.summary });
     return { draft };
   };

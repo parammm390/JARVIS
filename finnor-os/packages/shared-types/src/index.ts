@@ -123,6 +123,8 @@ export interface DraftAction {
    *  alongside correlationId, right after plugin.draft() returns, so any
    *  submitCommand() a plugin's own execute() calls can cite requestedBy. */
   approvedBy?: string;
+  /** B2.T6: executor-stamped provenance for an async workflow command. */
+  domainActionId?: string;
 }
 
 export type ExecutionStatus =

@@ -109,6 +109,7 @@ export const proposalToInstallationPlugin: DomainEnginePlugin = {
         workflowType: "signed_proposal_to_installation",
         idempotencyKey,
         correlationId: draft.correlationId,
+        domainActionId: draft.domainActionId,
         steps,
       }),
     );

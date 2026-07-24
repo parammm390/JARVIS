@@ -78,6 +78,7 @@ export const proposalSignaturePlugin: DomainEnginePlugin = {
         workflowType: "water_test_to_signed_proposal",
         idempotencyKey,
         correlationId: draft.correlationId,
+        domainActionId: draft.domainActionId,
         steps: [
           {
             stepType: "generate_document",

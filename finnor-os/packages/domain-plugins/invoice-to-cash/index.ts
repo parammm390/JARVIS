@@ -81,6 +81,7 @@ export const invoiceToCashPlugin: DomainEnginePlugin = {
       contactId: p.contactId ? String(p.contactId) : undefined,
       channel: (p.channel as "sms" | "email" | undefined) ?? "sms",
       correlationId: draft.correlationId,
+      domainActionId: draft.domainActionId,
     });
     if (!result.ok) return { status: "failure", output: {}, error: result.error, errorKind: "validation" };
     return {
@@ -99,7 +100,7 @@ export const invoiceToCashPlugin: DomainEnginePlugin = {
  */
 export async function startInvoiceToCash(
   tenantId: string,
-  params: { invoiceId: string; contactId?: string; channel?: "sms" | "email"; correlationId?: string },
+  params: { invoiceId: string; contactId?: string; channel?: "sms" | "email"; correlationId?: string; domainActionId?: string },
 ): Promise<{ ok: true; commandId: string; workflowRunId: string } | { ok: false; error: string }> {
   const invoiceId = params.invoiceId;
   const invoice = await withTenant(tenantId, async (db) => {
@@ -125,6 +126,7 @@ export async function startInvoiceToCash(
       workflowType: "invoice_to_cash",
       idempotencyKey,
       correlationId: params.correlationId,
+      domainActionId: params.domainActionId,
       steps: [
         {
           stepType: "create_payment_link",
