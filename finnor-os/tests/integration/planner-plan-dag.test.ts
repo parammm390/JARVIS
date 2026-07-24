@@ -7,9 +7,10 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import pg from "pg";
 import { randomUUID } from "node:crypto";
 import { migrate } from "../../packages/db/migrate";
-import { closePool, domainActions, tenants, withTenant } from "@finnor/db";
+import { closePool, decisionReceipts, domainActions, tenants, withTenant } from "@finnor/db";
 import { and, eq, inArray } from "drizzle-orm";
-import { LLMPlanner, createDefaultPluginRegistry, readyPlanActions, validateDependencyIndexes } from "@finnor/orchestration";
+import { GatedExecutor, LLMPlanner, createDefaultPluginRegistry, readyPlanActions, validateDependencyIndexes } from "@finnor/orchestration";
+import { createDefaultRegistry } from "@finnor/tools";
 import type { LLMProvider } from "@finnor/orchestration";
 import type { MemorySnapshot, TenantContext } from "@finnor/shared-types";
 
@@ -94,5 +95,23 @@ describe.skipIf(!available)("planner plan DAG", () => {
       db.insert(domainActions).values({ id: ownDependent, tenantId: TENANT_ID, actionType: "create_invoice", payload: {}, planId, dependsOn: [foreignPrerequisite] }),
     );
     expect(await readyPlanActions(TENANT_ID, planId)).toEqual([]);
+  });
+
+  it("executes a two-step DAG in dependency order with one runtime receipt per step", async () => {
+    const planId = randomUUID();
+    const [first] = await withTenant(TENANT_ID, (db) =>
+      db.insert(domainActions).values({ tenantId: TENANT_ID, actionType: "manual_step_suggestion", payload: { originalActionType: "first", originalPayload: {}, unavailableCapabilities: ["test"], reason: "first receipt fixture" }, planId }).returning(),
+    );
+    const [second] = await withTenant(TENANT_ID, (db) =>
+      db.insert(domainActions).values({ tenantId: TENANT_ID, actionType: "manual_step_suggestion", payload: { originalActionType: "second", originalPayload: {}, unavailableCapabilities: ["test"], reason: "second receipt fixture" }, planId, dependsOn: [first!.id] }).returning(),
+    );
+    const executor = new GatedExecutor(createDefaultPluginRegistry(), createDefaultRegistry());
+    const policy = { id: "", tenantId: TENANT_ID, actionType: "manual_step_suggestion", policy: {}, requiresConfirmation: false, confirmationTemplate: null, version: 0 };
+    expect((await readyPlanActions(TENANT_ID, planId)).map((action) => action.id)).toEqual([first!.id]);
+    await executor.execute({ id: first!.id, tenantId: TENANT_ID, actionType: first!.actionType, payload: first!.payload as Record<string, unknown>, policyId: null, status: "draft", createdAt: first!.createdAt.toISOString() }, policy);
+    expect((await readyPlanActions(TENANT_ID, planId)).map((action) => action.id)).toEqual([second!.id]);
+    await executor.execute({ id: second!.id, tenantId: TENANT_ID, actionType: second!.actionType, payload: second!.payload as Record<string, unknown>, policyId: null, status: "draft", createdAt: second!.createdAt.toISOString() }, policy);
+    const receipts = await withTenant(TENANT_ID, (db) => db.select().from(decisionReceipts).where(eq(decisionReceipts.tenantId, TENANT_ID)));
+    expect(receipts.filter((receipt) => receipt.domainActionId === first!.id || receipt.domainActionId === second!.id)).toHaveLength(2);
   });
 });
