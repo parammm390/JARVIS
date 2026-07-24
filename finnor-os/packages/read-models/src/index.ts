@@ -46,6 +46,7 @@ import { performance } from "node:perf_hooks";
 
 export * from "./route-optimizer";
 export * from "./slot-recommender";
+export * from "./holt-winters";
 
 export interface PipelineHealth {
   leadsByStatus: Array<{ status: string; count: number }>;
