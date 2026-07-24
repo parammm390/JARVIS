@@ -2,10 +2,12 @@
 
 import type { DomainEnginePlugin } from "../shared/plugin-interface";
 import type { DraftAction, ExecutionResult, ValidationResult, DomainPolicy } from "@finnor/shared-types";
-import { withTenant, serviceVisits, technicians, households } from "@finnor/db";
+import { withTenant, serviceVisits, technicians, households, technicianCapacity, technicianDispatchProfiles } from "@finnor/db";
+import { geocodeAddress } from "@finnor/tools";
+import { osrmDurationMatrix, recommendSlots, type RoutePoint } from "@finnor/read-models";
 import { recordBusinessEvent } from "@finnor/data-platform";
 import { findTechnician } from "../shared/db-helpers";
-import { and, eq, gte, lte } from "drizzle-orm";
+import { and, eq, gte, isNull, lte, or } from "drizzle-orm";
 import { z } from "zod";
 
 const opt = <T extends z.ZodTypeAny>(t: T) => t.nullish().transform((v: unknown) => v ?? undefined);
@@ -19,6 +21,8 @@ export const AvailabilitySchema = z.object({
   technicianId: opt(z.string().uuid()),
   technicianName: opt(z.string()),
   date: z.string(), // ISO date
+  address: opt(z.string().min(1)),
+  slaDueAt: opt(z.string().datetime()),
 });
 export const RescheduleSchema = z.object({
   visitId: z.string().uuid(),
@@ -95,6 +99,49 @@ export const schedulingPlugin: DomainEnginePlugin = {
     const p = draft.payload;
 
     if (draft.actionType === "check_technician_availability") {
+      // B3.T2: an address + actual SLA deadline asks for a ranked proposal. Without
+      // either, retain the existing single-technician availability answer rather than
+      // invent a travel or urgency input.
+      if (p.address && p.slaDueAt) {
+        const dueAt = new Date(String(p.slaDueAt));
+        const dayStart = new Date(`${String(p.date).slice(0, 10)}T00:00:00`);
+        const dayEnd = new Date(dayStart.getTime() + 24 * 3600 * 1000);
+        const weekday = dayStart.getDay();
+        const [profiles, capacityRows, bookedRows] = await withTenant(tenantId, async (db) =>
+          Promise.all([
+            db.select({ technicianId: technicianDispatchProfiles.technicianId, name: technicians.name, baseAddress: technicianDispatchProfiles.baseAddress, slaMinutes: technicianDispatchProfiles.defaultSlaMinutes })
+              .from(technicianDispatchProfiles).innerJoin(technicians, eq(technicians.id, technicianDispatchProfiles.technicianId))
+              .where(eq(technicianDispatchProfiles.tenantId, tenantId)),
+            db.select({ technicianId: technicianCapacity.technicianId, max: technicianCapacity.maxConcurrentJobs }).from(technicianCapacity)
+              .where(and(eq(technicianCapacity.tenantId, tenantId), or(eq(technicianCapacity.dayOfWeek, weekday), isNull(technicianCapacity.dayOfWeek)))),
+            db.select({ technicianId: serviceVisits.technicianId }).from(serviceVisits)
+              .where(and(gte(serviceVisits.scheduledAt, dayStart), lte(serviceVisits.scheduledAt, dayEnd), isNull(serviceVisits.completedAt))),
+          ]),
+        );
+        const configured = profiles.filter((profile) => profile.baseAddress && profile.slaMinutes);
+        const geocoded: RoutePoint[] = [{ id: "request", label: String(p.address), ...(await geocodeAddress(String(p.address))) }];
+        for (const profile of configured) {
+          const point = await geocodeAddress(profile.baseAddress!);
+          geocoded.push({ id: profile.technicianId, label: profile.baseAddress!, ...point });
+        }
+        const durations = geocoded.length > 1 ? await osrmDurationMatrix(geocoded) : [];
+        const capacityByTech = new Map(capacityRows.map((row) => [row.technicianId, row.max]));
+        const bookedByTech = new Map<string, number>();
+        for (const row of bookedRows) if (row.technicianId) bookedByTech.set(row.technicianId, (bookedByTech.get(row.technicianId) ?? 0) + 1);
+        const minutesUntilSla = Math.round((dueAt.getTime() - Date.now()) / 60_000);
+        const recommendations = recommendSlots(profiles.map((profile) => {
+          const index = geocoded.findIndex((point) => point.id === profile.technicianId);
+          return {
+            technicianId: profile.technicianId,
+            technicianName: profile.name,
+            driveMinutes: index > 0 ? Math.round(durations[0]![index]! / 60) : null,
+            bookedJobs: bookedByTech.get(profile.technicianId) ?? 0,
+            maxConcurrentJobs: capacityByTech.get(profile.technicianId) ?? null,
+            minutesUntilSla: profile.slaMinutes ? Math.min(minutesUntilSla, profile.slaMinutes) : null,
+          };
+        }));
+        return { status: "success", output: { requestedAddress: p.address, slaDueAt: p.slaDueAt, recommendations, heuristic: "Scores are a transparent drive-time + load + SLA-risk heuristic, not a promise of availability." }, expected: { answered: true } };
+      }
       const tech = await findTechnician(tenantId, {
         technicianId: p.technicianId ? String(p.technicianId) : undefined,
         name: p.technicianName ? String(p.technicianName) : undefined,

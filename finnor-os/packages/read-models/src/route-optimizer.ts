@@ -81,3 +81,15 @@ export async function osrmMatrix(points: RoutePoint[], request: typeof fetch = f
   }
   return body.distances as DistanceMatrix;
 }
+
+export async function osrmDurationMatrix(points: RoutePoint[], request: typeof fetch = fetch): Promise<DistanceMatrix> {
+  if (points.length === 0) return [];
+  const coordinates = points.map((point) => `${point.lon},${point.lat}`).join(";");
+  const response = await request(`https://router.project-osrm.org/table/v1/driving/${coordinates}?annotations=duration`);
+  if (!response.ok) throw new Error(`OSRM duration matrix failed (${response.status})`);
+  const body = (await response.json()) as { code?: string; durations?: Array<Array<number | null>> };
+  if (body.code !== "Ok" || !body.durations || body.durations.length !== points.length || body.durations.some((row) => row.length !== points.length || row.some((value) => typeof value !== "number"))) {
+    throw new Error("OSRM duration matrix response was incomplete");
+  }
+  return body.durations as DistanceMatrix;
+}
