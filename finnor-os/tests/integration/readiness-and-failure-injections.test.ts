@@ -36,6 +36,15 @@ function req(tenantId: string, view: string, qs = ""): Request {
   });
 }
 
+async function clearFixtureRows(): Promise<void> {
+  for (const tenantId of [TENANT_ID, OTHER_TENANT_ID]) {
+    await withTenant(tenantId, async (db) => {
+      await db.delete(readinessLog).where(eq(readinessLog.tenantId, tenantId));
+      await db.delete(failureInjections).where(eq(failureInjections.tenantId, tenantId));
+    });
+  }
+}
+
 describe.skipIf(!available)("readiness_log + failure_injections (Phase 8)", () => {
   beforeAll(async () => {
     process.env.DATABASE_URL = DB_URL;
@@ -43,11 +52,11 @@ describe.skipIf(!available)("readiness_log + failure_injections (Phase 8)", () =
     await migrate(DB_URL);
     await getPool().query(`INSERT INTO tenants (id, name) VALUES ($1, 'Readiness Test Tenant') ON CONFLICT (id) DO NOTHING`, [TENANT_ID]);
     await getPool().query(`INSERT INTO tenants (id, name) VALUES ($1, 'Readiness Decoy Tenant') ON CONFLICT (id) DO NOTHING`, [OTHER_TENANT_ID]);
+    await clearFixtureRows();
   });
 
   afterAll(async () => {
-    await withTenant(TENANT_ID, (db) => db.delete(readinessLog).where(eq(readinessLog.tenantId, TENANT_ID)));
-    await withTenant(TENANT_ID, (db) => db.delete(failureInjections).where(eq(failureInjections.tenantId, TENANT_ID)));
+    await clearFixtureRows();
     await closePool();
   });
 
