@@ -5,6 +5,9 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { domainActions, withTenant } from "@finnor/db";
 import type { DomainAction } from "@finnor/shared-types";
+import type { ExecutionResult } from "@finnor/shared-types";
+import { diffPrediction } from "./prediction-diff";
+import { appendEpisode } from "@finnor/memory";
 
 export interface PlannerActionDependency {
   /** Indexes into the returned plan, not model-invented database ids. */
@@ -68,4 +71,17 @@ export async function planIdForAction(tenantId: string, actionId: string): Promi
     db.select({ planId: domainActions.planId }).from(domainActions).where(and(eq(domainActions.tenantId, tenantId), eq(domainActions.id, actionId))),
   );
   return row?.planId ?? null;
+}
+
+/** Persist a one-time, field-level prediction comparison once execution actually ran. */
+export async function recordPredictionDiff(action: DomainAction, result: ExecutionResult): Promise<void> {
+  if (result.output.gated || result.output.pendingConfirmation) return;
+  const [row] = await withTenant(action.tenantId, (db) =>
+    db.select({ predictedReceipt: domainActions.predictedReceipt, predictionDiff: domainActions.predictionDiff }).from(domainActions).where(and(eq(domainActions.tenantId, action.tenantId), eq(domainActions.id, action.id))),
+  );
+  if (!row?.predictedReceipt || row.predictionDiff) return;
+  const receipt = row.predictedReceipt as { simulation?: { predicted?: { expectedResult?: Record<string, unknown> } } };
+  const diff = diffPrediction(receipt.simulation?.predicted?.expectedResult, result.output);
+  await withTenant(action.tenantId, (db) => db.update(domainActions).set({ predictionDiff: diff }).where(and(eq(domainActions.tenantId, action.tenantId), eq(domainActions.id, action.id))));
+  await appendEpisode(action.tenantId, action.id, "prediction_diff", { predicted: receipt.simulation?.predicted?.expectedResult ?? null, actual: result.output }, { ...diff });
 }

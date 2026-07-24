@@ -69,7 +69,7 @@ export const inventoryPlugin: DomainEnginePlugin = {
     return {
       mode: "dry_run" as const,
       summary: item && after !== null && after >= 0 ? `Dry run: ${quantity} × ${item.name} would reduce stock from ${item.quantity} to ${after}; inventory was not changed.` : "Dry run: no stock deduction is predicted because the item is missing or quantity is unavailable.",
-      predicted: { sku: item?.sku ?? p.sku ?? null, itemFound: Boolean(item), quantity, fieldChanges: item && after !== null && after >= 0 ? [{ field: "quantity", from: item.quantity, to: after }] : [] },
+      predicted: { sku: item?.sku ?? p.sku ?? null, itemFound: Boolean(item), quantity, fieldChanges: item && after !== null && after >= 0 ? [{ field: "quantity", from: item.quantity, to: after }] : [], expectedResult: item && after !== null && after >= 0 ? { sku: item.sku, remaining: after, reorderNeeded: after <= item.reorderThreshold } : undefined },
     };
   },
 

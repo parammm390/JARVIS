@@ -67,6 +67,7 @@ export const invoiceToCashPlugin: DomainEnginePlugin = {
         amountUsd: invoice ? Number(invoice.amountUsd) : null,
         fieldChanges: invoice ? [{ field: "workflow", from: null, to: "invoice_to_cash" }] : [],
         steps: invoice ? ["create_payment_link", "send_message", "sync_invoice"] : [],
+        expectedResult: invoice ? { invoiceId: p.invoiceId } : undefined,
       },
     };
   },

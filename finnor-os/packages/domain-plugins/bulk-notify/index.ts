@@ -211,6 +211,7 @@ export const bulkNotifyPlugin: DomainEnginePlugin = {
         wouldAttempt: callable,
         capped: targets.length - callable,
         fieldChanges: [],
+        expectedResult: { sent: callable, capped: targets.length - callable },
       },
     };
   },

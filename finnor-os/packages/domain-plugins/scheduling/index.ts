@@ -75,7 +75,7 @@ export const schedulingPlugin: DomainEnginePlugin = {
       return {
         mode: "dry_run" as const,
         summary: visit && technician ? `Dry run: ${technician.name} would be assigned; the visit was not changed.` : "Dry run: assignment cannot be predicted because the visit or technician was not found.",
-        predicted: { visitId: p.visitId, visitFound: Boolean(visit), technician: technician?.name ?? null, fieldChanges: technician ? [{ field: "technicianId", from: visit?.technicianId ?? null, to: technician.id }] : [] },
+        predicted: { visitId: p.visitId, visitFound: Boolean(visit), technician: technician?.name ?? null, fieldChanges: technician ? [{ field: "technicianId", from: visit?.technicianId ?? null, to: technician.id }] : [], expectedResult: visit && technician ? { visitId: visit.id, technician: technician.name } : undefined },
       };
     }
     if (actionType === "reschedule_visit") {
@@ -84,7 +84,7 @@ export const schedulingPlugin: DomainEnginePlugin = {
       return {
         mode: "dry_run" as const,
         summary: visit && !Number.isNaN(when.getTime()) ? `Dry run: the visit would move to ${when.toISOString()}; no calendar row was changed.` : "Dry run: reschedule cannot be predicted because the visit or requested time is invalid.",
-        predicted: { visitId: p.visitId, visitFound: Boolean(visit), fieldChanges: visit && !Number.isNaN(when.getTime()) ? [{ field: "scheduledAt", from: visit.scheduledAt?.toISOString() ?? null, to: when.toISOString() }] : [] },
+        predicted: { visitId: p.visitId, visitFound: Boolean(visit), fieldChanges: visit && !Number.isNaN(when.getTime()) ? [{ field: "scheduledAt", from: visit.scheduledAt?.toISOString() ?? null, to: when.toISOString() }] : [], expectedResult: visit && !Number.isNaN(when.getTime()) ? { visitId: visit.id, scheduledAt: when.toISOString() } : undefined },
       };
     }
     return { mode: "dry_run" as const, summary: `Dry run: availability will be read for ${String(p.date)}; no calendar row will change.`, predicted: { date: p.date, fieldChanges: [] } };

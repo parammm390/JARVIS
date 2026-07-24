@@ -16,7 +16,7 @@ import { LangGraphExecutor } from "./graph/executor";
 import { buildGateGraph } from "./graph/build-graph";
 import { getCheckpointer } from "./graph/checkpointer";
 import { ensureSecretsLoaded, redactStructured, redactText } from "@finnor/security";
-import { isPlanActionReady, planIdForAction, readyPlanActions } from "./plan-dag";
+import { isPlanActionReady, planIdForAction, readyPlanActions, recordPredictionDiff } from "./plan-dag";
 
 export * from "./llm";
 export * from "./planner";
@@ -388,6 +388,7 @@ export class FinnorOrchestrator implements Orchestrator {
     policy: DomainPolicy,
     result: ExecutionResult,
   ): Promise<void> {
+    await recordPredictionDiff(action, result);
     const outcome = await this.reflection.evaluate(action, result);
     if (outcome.decision === "retry") {
       const retryResult = await this.executor.execute(action, policy);

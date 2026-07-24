@@ -41,7 +41,7 @@ import {
   actionLog,
   calls,
 } from "@finnor/db";
-import { and, desc, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { performance } from "node:perf_hooks";
 
 export interface PipelineHealth {
@@ -530,6 +530,7 @@ export interface ReliabilityMetrics {
   reconciliationBacklog: number;
   dlqDepth: number;
   receiptCompleteness: number | null;
+  predictionAccuracy: Array<{ actionType: string; comparedFields: number; matchedFields: number; accuracy: number | null }>;
   asOf: string;
 }
 
@@ -599,6 +600,28 @@ export async function reliability(tenantId: string, windowDays = 1): Promise<Rel
       .where(and(eq(decisionReceipts.tenantId, tenantId), gte(decisionReceipts.createdAt, cutoff)));
     const receiptCompleteness = receiptRow!.total > 0 ? receiptRow!.finalized / receiptRow!.total : null;
 
+    // B2.T3: only explicitly comparable simulation fields contribute. Schema-only
+    // predictions and actions that have not executed yet are excluded, rather than
+    // being silently counted as correct or incorrect.
+    const predictionRows = await db
+      .select({ actionType: domainActions.actionType, diff: domainActions.predictionDiff })
+      .from(domainActions)
+      .where(and(eq(domainActions.tenantId, tenantId), isNotNull(domainActions.predictionDiff), gte(domainActions.createdAt, cutoff)));
+    const byActionType = new Map<string, { comparedFields: number; matchedFields: number }>();
+    for (const row of predictionRows) {
+      const diff = row.diff as { compared?: number; matched?: number };
+      if (!diff.compared) continue;
+      const current = byActionType.get(row.actionType) ?? { comparedFields: 0, matchedFields: 0 };
+      current.comparedFields += diff.compared;
+      current.matchedFields += diff.matched ?? 0;
+      byActionType.set(row.actionType, current);
+    }
+    const predictionAccuracy = [...byActionType.entries()].map(([actionType, metrics]) => ({
+      actionType,
+      ...metrics,
+      accuracy: metrics.matchedFields / metrics.comparedFields,
+    }));
+
     return {
       tenantId,
       windowDays,
@@ -609,6 +632,7 @@ export async function reliability(tenantId: string, windowDays = 1): Promise<Rel
       reconciliationBacklog: reconRow!.count,
       dlqDepth: dlqRow!.count,
       receiptCompleteness,
+      predictionAccuracy,
       asOf: new Date().toISOString(),
     };
   });

@@ -155,7 +155,7 @@ export const quotationPlugin: DomainEnginePlugin = {
       summary: allPriced
         ? `Dry run: a quote for ${p.householdLabel} totals $${totalUsd}. No proposal or quote row was created.`
         : `Dry run: ${p.householdLabel}'s quote has unpriced items. No proposal or quote row was created.`,
-      predicted: { proposal: "would_create", householdLabel: p.householdLabel, lines, totalUsd, allPriced },
+      predicted: { proposal: "would_create", householdLabel: p.householdLabel, lines, totalUsd, allPriced, expectedResult: { quote: { lines, totalUsd } } },
     };
   },
 

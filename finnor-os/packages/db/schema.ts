@@ -186,6 +186,7 @@ export const domainActions = pgTable(
     dependsOn: uuid("depends_on").array().notNull().default([]),
     // B2.T2: an explicitly labeled no-write prediction while the action is pending.
     predictedReceipt: jsonb("predicted_receipt"),
+    predictionDiff: jsonb("prediction_diff"),
   },
   (t) => [
     index("domain_actions_tenant_status_idx").on(t.tenantId, t.status),
