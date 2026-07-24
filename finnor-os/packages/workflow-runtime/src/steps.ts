@@ -176,6 +176,20 @@ export async function failStep(
       .where(eq(workflowSteps.id, stepId)),
   );
   await finalizeReceiptForStep(tenantId, stepId, { errorKind, message: terminalReason, recoveryPath: "review via GET /api/workflows/runs and retry or escalate the run" });
+  // B2.T6: semantic terminal failures can propose a revised plan. Provider outages
+  // remain on the established recovery/retry path and do not consume a repair.
+  if (errorKind === "terminal") {
+    const [step] = await withTenant(tenantId, (db) =>
+      db.select({ domainActionId: workflowSteps.domainActionId }).from(workflowSteps).where(eq(workflowSteps.id, stepId)),
+    );
+    if (step?.domainActionId) {
+      await enqueueJob(
+        "repair_plan_after_terminal_failure",
+        { tenantId, domainActionId: step.domainActionId, workflowStepId: stepId },
+        `plan-repair:${step.domainActionId}`,
+      ).catch(() => undefined);
+    }
+  }
 }
 
 /** Enqueues the next pending step in sequence, or marks the workflow_run (and its

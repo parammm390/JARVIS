@@ -187,11 +187,28 @@ export const domainActions = pgTable(
     // B2.T2: an explicitly labeled no-write prediction while the action is pending.
     predictedReceipt: jsonb("predicted_receipt"),
     predictionDiff: jsonb("prediction_diff"),
+    repairedFromPlanId: uuid("repaired_from_plan_id"),
   },
   (t) => [
     index("domain_actions_tenant_status_idx").on(t.tenantId, t.status),
     index("domain_actions_tenant_plan_idx").on(t.tenantId, t.planId),
   ],
+);
+
+export const planRepairs = pgTable(
+  "plan_repairs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    failedDomainActionId: uuid("failed_domain_action_id").notNull().references(() => domainActions.id),
+    sourcePlanId: uuid("source_plan_id").notNull(),
+    repairPlanId: uuid("repair_plan_id"),
+    terminalReceipt: jsonb("terminal_receipt").notNull(),
+    status: text("status", { enum: ["planning", "proposed", "no_remainder", "failed"] }).notNull().default("planning"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    proposedAt: timestamp("proposed_at", { withTimezone: true }),
+  },
+  (t) => [unique("plan_repairs_failed_action_idx").on(t.failedDomainActionId), index("plan_repairs_tenant_source_plan_idx").on(t.tenantId, t.sourcePlanId)],
 );
 
 // Episodic memory: append-only, never updated or deleted (§10, §19).

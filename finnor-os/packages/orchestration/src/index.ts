@@ -2,10 +2,10 @@
 // This module is the single entry point the API, webhooks, and workers all use.
 
 import type { DomainAction, DomainPolicy, TenantContext, ExecutionResult } from "@finnor/shared-types";
-import { withTenant, domainActions, domainPolicies, actionLog, enqueueJob } from "@finnor/db";
+import { withTenant, domainActions, domainPolicies, actionLog, decisionReceipts, planRepairs, enqueueJob } from "@finnor/db";
 import { buildMemorySnapshot, appendEpisode, appendShortTerm, mirrorTurnToZep } from "@finnor/memory";
 import { createDefaultRegistry, type ToolRegistry } from "@finnor/tools";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { LLMPlanner, type Planner } from "./planner";
 import { GatedExecutor, type Executor } from "./executor";
 import { OutcomeReflection, type Reflection } from "./reflection";
@@ -43,6 +43,7 @@ export interface Orchestrator {
     opts?: { sessionId?: string; householdId?: string },
   ): Promise<DomainAction[]>;
   runAction(actionId: string, tenantId: string): Promise<ExecutionResult>;
+  repairPlanAfterTerminalFailure(tenantId: string, domainActionId: string, workflowStepId: string): Promise<void>;
 }
 
 /** A policy row is required for execution; absent one, a safe default gates everything. */
@@ -271,6 +272,91 @@ export class FinnorOrchestrator implements Orchestrator {
     await this.reflectWithRetry(action, policy, result);
     await this.dispatchReadyPlanActions(tenantId, row.claimed.planId);
     return result;
+  }
+
+  /**
+   * B2.T6: a terminal runtime receipt is a new planning input, never an excuse to
+   * mutate the old DAG. We claim one repair lineage row atomically, ask the ordinary
+   * planner for a revised remainder, then put the resulting roots through the same
+   * validation/confirmation executor every other plan uses.
+   */
+  async repairPlanAfterTerminalFailure(tenantId: string, domainActionId: string, workflowStepId: string): Promise<void> {
+    const [sourceAction, receipt] = await withTenant(tenantId, async (db) => {
+      const [action] = await db
+        .select()
+        .from(domainActions)
+        .where(and(eq(domainActions.tenantId, tenantId), eq(domainActions.id, domainActionId)));
+      const [latestReceipt] = await db
+        .select()
+        .from(decisionReceipts)
+        .where(and(eq(decisionReceipts.tenantId, tenantId), eq(decisionReceipts.workflowStepId, workflowStepId), eq(decisionReceipts.domainActionId, domainActionId)))
+        .orderBy(desc(decisionReceipts.createdAt))
+        .limit(1);
+      return [action, latestReceipt] as const;
+    });
+    if (!sourceAction?.planId || !receipt) return;
+    // Failed step receipts store their terminal classification in `failure`, while
+    // successful ones store data in `actualResult`; keep that receipt shape intact
+    // when handing it back to the planner.
+    const failure = (receipt.failure ?? null) as Record<string, unknown> | null;
+    if (failure?.errorKind !== "terminal") return;
+    const terminalReceipt = { failure, actualResult: receipt.actualResult ?? null };
+
+    // Unique failed_domain_action_id is the concurrency boundary: duplicate jobs or
+    // repeated worker delivery cannot create two competing repair plans.
+    const [claim] = await withTenant(tenantId, (db) =>
+      db
+        .insert(planRepairs)
+        .values({
+          tenantId,
+          failedDomainActionId: domainActionId,
+          sourcePlanId: sourceAction.planId!,
+          terminalReceipt,
+          status: "planning",
+        })
+        .onConflictDoNothing()
+        .returning(),
+    );
+    if (!claim) return;
+
+    try {
+      const remainder = await withTenant(tenantId, (db) =>
+        db
+          .select({ actionType: domainActions.actionType, payload: domainActions.payload, status: domainActions.status, dependsOn: domainActions.dependsOn })
+          .from(domainActions)
+          .where(and(eq(domainActions.tenantId, tenantId), eq(domainActions.planId, sourceAction.planId!), inArray(domainActions.status, ["draft", "pending"]))),
+      );
+      if (remainder.length === 0) {
+        await withTenant(tenantId, (db) => db.update(planRepairs).set({ status: "no_remainder", proposedAt: new Date() }).where(eq(planRepairs.id, claim.id)));
+        await appendEpisode(tenantId, domainActionId, "plan_repair", { receipt: terminalReceipt }, { status: "no_remainder", sourcePlanId: sourceAction.planId });
+        return;
+      }
+      const repairInput = {
+        kind: "terminal_plan_repair",
+        sourcePlanId: sourceAction.planId,
+        failedAction: { actionType: sourceAction.actionType, payload: sourceAction.payload },
+        terminalReceipt,
+        unfinishedRemainder: remainder,
+        instruction: "Return only the revised remaining business actions needed after this terminal failure. Do not repeat completed work; preserve dependencies where still required.",
+      };
+      const instruction = JSON.stringify(repairInput);
+      const memory = await buildMemorySnapshot({ tenantId, semanticQuery: instruction });
+      const repaired = await this.planner.plan(instruction, { tenantId, userId: "system:plan-repair", role: "owner" }, memory);
+      const repairPlanId = repaired.length > 0 ? await planIdForAction(tenantId, repaired[0]!.id) : null;
+      if (repairPlanId) {
+        await withTenant(tenantId, (db) =>
+          db.update(domainActions).set({ repairedFromPlanId: sourceAction.planId }).where(and(eq(domainActions.tenantId, tenantId), eq(domainActions.planId, repairPlanId))),
+        );
+      }
+      await withTenant(tenantId, (db) =>
+        db.update(planRepairs).set({ repairPlanId, status: repaired.length > 0 ? "proposed" : "no_remainder", proposedAt: new Date() }).where(eq(planRepairs.id, claim.id)),
+      );
+      await appendEpisode(tenantId, domainActionId, "plan_repair", { receipt: terminalReceipt, unfinishedRemainder: remainder }, { sourcePlanId: sourceAction.planId, repairPlanId, actionIds: repaired.map((action) => action.id) });
+      if (repairPlanId) await this.dispatchReadyPlanActions(tenantId, repairPlanId);
+    } catch (err) {
+      await withTenant(tenantId, (db) => db.update(planRepairs).set({ status: "failed" }).where(eq(planRepairs.id, claim.id))).catch(() => undefined);
+      throw err;
+    }
   }
 
   // Policies change rarely; a short TTL cache removes a DB round trip from every

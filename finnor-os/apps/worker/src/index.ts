@@ -30,6 +30,7 @@ import { scanDlqTriage } from "./handlers/scan-dlq-triage";
 import { backupDb } from "./handlers/backup-db";
 import { dailyScorecard } from "./handlers/daily-scorecard";
 import { projectReadModels } from "./handlers/project-read-models";
+import { repairPlanAfterTerminalFailure } from "./handlers/repair-plan-after-terminal-failure";
 import { startScheduler, startGlobalScheduler, type ScheduledScan } from "./scheduler";
 import { startHeartbeat } from "./heartbeat";
 import { startSseServer } from "./sse-server";
@@ -62,6 +63,7 @@ export function createWorker(): JobQueue {
   queue.register("backup_db", backupDb);
   queue.register("daily_scorecard", dailyScorecard);
   queue.register("project_read_models", projectReadModels);
+  queue.register("repair_plan_after_terminal_failure", repairPlanAfterTerminalFailure);
   return queue;
 }
 
