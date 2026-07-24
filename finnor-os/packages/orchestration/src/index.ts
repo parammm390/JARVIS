@@ -17,6 +17,7 @@ import { buildGateGraph } from "./graph/build-graph";
 import { getCheckpointer } from "./graph/checkpointer";
 import { ensureSecretsLoaded, redactStructured, redactText } from "@finnor/security";
 import { isPlanActionReady, planIdForAction, readyPlanActions, recordPredictionDiff } from "./plan-dag";
+import { plannerMemoryEnabled } from "./planner-memory";
 
 export * from "./llm";
 export * from "./planner";
@@ -35,6 +36,7 @@ export * from "./graph/checkpointer";
 export * from "./graph/state";
 export * from "./plan-dag";
 export * from "./planning-health";
+export * from "./planner-memory";
 
 export interface Orchestrator {
   handleInstruction(
@@ -101,7 +103,7 @@ export class FinnorOrchestrator implements Orchestrator {
       tenantId: ctx.tenantId,
       sessionId: opts.sessionId,
       householdId: opts.householdId,
-      semanticQuery: instruction,
+      semanticQuery: plannerMemoryEnabled() ? instruction : undefined,
     });
     const actions = await this.planner.plan(instruction, ctx, memory);
     // Record every planned node before dispatching anything. Dependent nodes stay as
@@ -340,7 +342,7 @@ export class FinnorOrchestrator implements Orchestrator {
         instruction: "Return only the revised remaining business actions needed after this terminal failure. Do not repeat completed work; preserve dependencies where still required.",
       };
       const instruction = JSON.stringify(repairInput);
-      const memory = await buildMemorySnapshot({ tenantId, semanticQuery: instruction });
+      const memory = await buildMemorySnapshot({ tenantId, semanticQuery: plannerMemoryEnabled() ? instruction : undefined });
       const repaired = await this.planner.plan(instruction, { tenantId, userId: "system:plan-repair", role: "owner" }, memory);
       const repairPlanId = repaired.length > 0 ? await planIdForAction(tenantId, repaired[0]!.id) : null;
       if (repairPlanId) {
