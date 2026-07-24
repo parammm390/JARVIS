@@ -18,7 +18,11 @@ import {
 } from "@finnor/voice-os";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
-const TENANT_ID = "00000000-0000-4000-8000-0000000000f5";
+// This suite used to share ...0f5 with bulk-notify and document tests. Vitest runs
+// files concurrently, so either sibling could create the tenant without ownerPhone
+// before this suite's `onConflictDoNothing()` insert; the owner-line assertion then
+// depended on test scheduling. Keep the fixture tenant exclusive to Voice OS.
+const TENANT_ID = "b8c6a2df-1f23-4e45-8a67-2ce8e46089b1";
 
 async function dbUp(): Promise<boolean> {
   const c = new pg.Client({ connectionString: DB_URL, connectionTimeoutMillis: 2000 });
@@ -44,7 +48,10 @@ describe.skipIf(!available)("voice OS", () => {
     process.env.DATABASE_URL = DB_URL;
     await migrate(DB_URL);
     await withTenant(TENANT_ID, (db) =>
-      db.insert(tenants).values({ id: TENANT_ID, name: "Voice OS Test Dealer", ownerPhone: "+15555550200" }).onConflictDoNothing(),
+      db
+        .insert(tenants)
+        .values({ id: TENANT_ID, name: "Voice OS Test Dealer", ownerPhone: "+15555550200" })
+        .onConflictDoUpdate({ target: tenants.id, set: { ownerPhone: "+15555550200" } }),
     );
   });
   afterAll(async () => {
