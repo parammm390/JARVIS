@@ -11,7 +11,13 @@ import { z } from "zod";
 const opt = <T extends z.ZodTypeAny>(t: T) => t.nullish().transform((v: unknown) => v ?? undefined);
 
 export const StockLevelSchema = z.object({ sku: opt(z.string()), name: opt(z.string()) });
-export const ReorderCheckSchema = z.object({ sku: opt(z.string()), name: opt(z.string()) });
+export const ReorderCheckSchema = z.object({
+  sku: opt(z.string()),
+  name: opt(z.string()),
+  // Advisory context from the B3 EWMA scan. It neither orders nor changes stock.
+  reasoning: opt(z.string().max(500)),
+  suggestedQuantity: opt(z.number().int().nonnegative().max(1_000_000)),
+});
 export const LogUsageSchema = z.object({
   sku: opt(z.string()),
   name: opt(z.string()),
@@ -47,7 +53,9 @@ export const inventoryPlugin: DomainEnginePlugin = {
     const what = String(p.sku ?? p.name ?? "all items");
     const summaries: Record<string, string> = {
       check_stock_level: `Check stock level for ${what}.`,
-      flag_reorder_needed: `Check whether ${what} is at or below its reorder threshold.`,
+      flag_reorder_needed: p.reasoning
+        ? `Review reorder suggestion for ${what}: ${p.reasoning}`
+        : `Check whether ${what} is at or below its reorder threshold.`,
       log_stock_used_on_visit: `Deduct ${p.quantity} × ${what} from stock${p.visitId ? ` (visit ${String(p.visitId).slice(0, 8)})` : ""}.`,
     };
     return {

@@ -51,6 +51,7 @@ export * from "./slot-recommender";
 export * from "./holt-winters";
 export * from "./anomaly-detector";
 export * from "./churn-risk";
+export * from "./reorder-points";
 
 export interface IntelligenceForecasts {
   cashCollections: ForecastPoint[] | null;
