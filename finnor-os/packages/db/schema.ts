@@ -180,8 +180,15 @@ export const domainActions = pgTable(
     // compiler, simply have neither.
     groundedPayload: jsonb("grounded_payload"),
     compiledGraph: jsonb("compiled_graph"),
+    // B2.T1: rows from a single planner turn share a plan id. Dependencies are
+    // materialized from same-transaction sibling ids, never accepted from a client.
+    planId: uuid("plan_id"),
+    dependsOn: uuid("depends_on").array().notNull().default([]),
   },
-  (t) => [index("domain_actions_tenant_status_idx").on(t.tenantId, t.status)],
+  (t) => [
+    index("domain_actions_tenant_status_idx").on(t.tenantId, t.status),
+    index("domain_actions_tenant_plan_idx").on(t.tenantId, t.planId),
+  ],
 );
 
 // Episodic memory: append-only, never updated or deleted (§10, §19).

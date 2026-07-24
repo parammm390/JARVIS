@@ -16,6 +16,7 @@ import { LangGraphExecutor } from "./graph/executor";
 import { buildGateGraph } from "./graph/build-graph";
 import { getCheckpointer } from "./graph/checkpointer";
 import { ensureSecretsLoaded, redactStructured, redactText } from "@finnor/security";
+import { isPlanActionReady, planIdForAction, readyPlanActions } from "./plan-dag";
 
 export * from "./llm";
 export * from "./planner";
@@ -32,6 +33,7 @@ export * from "./graph/executor";
 export * from "./graph/build-graph";
 export * from "./graph/checkpointer";
 export * from "./graph/state";
+export * from "./plan-dag";
 
 export interface Orchestrator {
   handleInstruction(
@@ -100,7 +102,8 @@ export class FinnorOrchestrator implements Orchestrator {
       semanticQuery: instruction,
     });
     const actions = await this.planner.plan(instruction, ctx, memory);
-    // Independent actions run concurrently — each is its own gated pipeline.
+    // Record every planned node before dispatching anything. Dependent nodes stay as
+    // durable drafts until their prerequisite actions genuinely complete.
     const turnResults: Array<{
       actionType: string;
       payload: Record<string, unknown>;
@@ -109,12 +112,15 @@ export class FinnorOrchestrator implements Orchestrator {
       resultOutput: Record<string, unknown>;
     }> = [];
     await Promise.all(
-      actions.map(async (rawAction) => {
+      actions.map((action) => appendEpisode(ctx.tenantId, action.id, "planned", { instruction }, { actionType: action.actionType, reasoning: action.reasoning ?? null })),
+    );
+    const readiness = await Promise.all(actions.map(async (action) => ({ action, ready: await isPlanActionReady(ctx.tenantId, action.id) })));
+    await Promise.all(
+      readiness.filter(({ ready }) => ready).map(async ({ action: rawAction }) => {
         // Phase 16(e): tag this instruction's correlation id onto the action so the
         // executor's own enqueueJob calls (voice_confirm_request/voice_notify_failure)
         // can thread it through — in-memory only, never a DB column (see DomainAction.correlationId).
         const action: DomainAction = ctx.correlationId ? { ...rawAction, correlationId: ctx.correlationId } : rawAction;
-        await appendEpisode(ctx.tenantId, action.id, "planned", { instruction }, { actionType: action.actionType, reasoning: action.reasoning ?? null });
         const policy = await this.loadPolicy(action);
         const result = await this.executor.execute(action, policy);
         await this.reflectWithRetry(action, policy, result);
@@ -143,6 +149,8 @@ export class FinnorOrchestrator implements Orchestrator {
         });
       }),
     );
+    const planIds = new Set(await Promise.all(actions.map((action) => planIdForAction(ctx.tenantId, action.id))));
+    await Promise.all([...planIds].filter((planId): planId is string => Boolean(planId)).map((planId) => this.dispatchReadyPlanActions(ctx.tenantId, planId)));
     // Write this turn back to short-term memory (§10) — without this, every turn in
     // the same call/session started completely blank, so "call them" or "do it for
     // the second one" had nothing to resolve against. TTL'd (30 min), scoped to this
@@ -260,6 +268,7 @@ export class FinnorOrchestrator implements Orchestrator {
     const policy = await this.loadPolicy(action);
     const result = await this.executor.execute(action, policy);
     await this.reflectWithRetry(action, policy, result);
+    await this.dispatchReadyPlanActions(tenantId, row.claimed.planId);
     return result;
   }
 
@@ -383,6 +392,24 @@ export class FinnorOrchestrator implements Orchestrator {
     if (outcome.decision === "retry") {
       const retryResult = await this.executor.execute(action, policy);
       await this.reflection.evaluate(action, retryResult);
+    }
+  }
+
+  /** Sends newly-unblocked DAG nodes through the ordinary validation/gate path. */
+  private async dispatchReadyPlanActions(tenantId: string, planId: string | null): Promise<void> {
+    if (!planId) return;
+    // Each pass consumes one topological layer. Pending approvals leave no ready
+    // drafts, while auto-approved completions can make the following layer ready.
+    for (;;) {
+      const ready = await readyPlanActions(tenantId, planId);
+      if (ready.length === 0) return;
+      await Promise.all(
+        ready.map(async (action) => {
+          const policy = await this.loadPolicy(action);
+          const result = await this.executor.execute(action, policy);
+          await this.reflectWithRetry(action, policy, result);
+        }),
+      );
     }
   }
 }

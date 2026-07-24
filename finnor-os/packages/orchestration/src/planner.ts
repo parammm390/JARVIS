@@ -15,6 +15,8 @@ import { repairAction } from "./repair";
 import type { RepairVerdict } from "./repair";
 import { classifyReasoningTier, scoreCandidate } from "./tiering";
 import type { ReasoningTier } from "@finnor/shared-types";
+import { randomUUID } from "node:crypto";
+import { validateDependencyIndexes } from "./plan-dag";
 
 const PlanSchema = z.object({
   actions: z.array(
@@ -22,6 +24,8 @@ const PlanSchema = z.object({
       action_type: z.string(),
       payload: z.record(z.unknown()),
       reasoning: z.string().optional(),
+      // Dependencies are indexes into earlier entries in this response, not DB ids.
+      depends_on: z.array(z.number().int().nonnegative()).optional(),
     }),
   ),
 });
@@ -71,7 +75,7 @@ export class LLMPlanner implements Planner {
       "CRITICAL: a prior turn with awaitingApproval:true has NOT actually happened yet — it is a draft sitting in the confirmation queue, nothing was created, and it has no real id of its own kind (e.g. a pending create_invoice has no real invoice id — only a domain_action id, which is a different thing and must never be used as an invoiceId/visitId/etc.). If the current instruction depends on something from a turn that was awaitingApproval:true (e.g. \"remind him about that invoice\" when the invoice draft is still pending), do NOT invent or reuse an id — instead route to answer_business_question explaining that the prior action needs approval first, or ask for the missing identifier some other real way (phone/name lookup).",
       "If the instruction is a QUESTION about the business (revenue, financial totals, a specific customer's history, trends, anything informational) and no narrower action_type fits exactly, route it to answer_business_question with the verbatim question as payload — that action queries real data across every domain (invoices, leads, inventory, visits, communications history) and answers honestly from whatever is actually there, including saying so when a specific figure isn't tracked. Prefer it over returning empty for any business QUESTION.",
       "Only return an empty actions array when the instruction is not a business question or action at all (chit-chat, out of scope, or something no plugin could ever plausibly do) — never because the exact phrasing didn't match a narrower action_type.",
-      'Respond with JSON: {"actions":[{"action_type":"...","payload":{...},"reasoning":"..."}]}',
+      'Respond with JSON: {"actions":[{"action_type":"...","payload":{...},"reasoning":"...","depends_on":[0]}]}. depends_on is optional; when present it contains zero-based indexes of EARLIER actions that must finish before this action can be dispatched. Never use a database id, forward index, or duplicate index.',
       "Payloads must contain only facts from the instruction or the provided memory — never invent phone numbers, addresses, or prices.",
       "Direct identifiers are replaced with bracketed tokens such as [PHONE_1] before you see them. Preserve those tokens exactly in payload values whenever the underlying field is needed; never invent a different identifier.",
       "memory.patterns.householdProposals (if present) summarizes this household's own past proposal/quote outcomes — use it only as soft context, never as a source of new facts to invent into a payload.",
@@ -120,6 +124,10 @@ export class LLMPlanner implements Planner {
     const valid = parsed.actions.filter((a) => actionTypes.includes(a.action_type));
 
     if (valid.length === 0) return [];
+    // Invalid edges fail closed rather than silently becoming independent work.
+    const dependencyIndexes = validateDependencyIndexes(valid.map((action) => ({ dependsOn: action.depends_on })));
+    const planId = randomUUID();
+    const planActionIds = valid.map(() => randomUUID());
 
     // Hoisted out of the transaction — restoreTokens has no DB dependency, this is a
     // trivial hoist, not a logic change (Phase 7).
@@ -321,6 +329,7 @@ export class LLMPlanner implements Planner {
         .insert(domainActions)
         .values(
           finalCandidates.map((c, i) => ({
+            id: planActionIds[i]!,
             tenantId: tenantContext.tenantId,
             actionType: c.actionType,
             payload: c.payload,
@@ -328,6 +337,8 @@ export class LLMPlanner implements Planner {
             status: "draft" as const,
             groundedPayload: compiled[i]!.groundedPayload,
             compiledGraph: compiled[i]!.compiledGraph,
+            planId,
+            dependsOn: dependencyIndexes[i]!.map((dependency) => planActionIds[dependency]!),
           })),
         )
         .returning();
