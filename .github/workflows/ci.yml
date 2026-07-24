@@ -41,6 +41,7 @@ jobs:
           cache-dependency-path: finnor-os/package-lock.json
       - run: npm ci
       - run: npm run typecheck
+      - run: npm run test:planner-evals
       - run: npm run db:migrate
       - run: npm run db:seed
       # setup.ts's own header comment already documented this as "run once in CI right
