@@ -6,7 +6,10 @@ import "dotenv/config";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { closePool } from "@finnor/db";
-import { ingestPublicReferencePdf, type PublicReferenceSource } from "@finnor/memory";
+// Deliberately bypass the @finnor/memory runtime barrel: corpus ingestion is an
+// operator-only script and its PDF parser must never be loaded by an unrelated API
+// route during static generation.
+import { ingestPublicReferencePdf, type PublicReferenceSource } from "../packages/memory/src/reference-corpus";
 
 interface ManifestEntry extends PublicReferenceSource { file: string }
 interface Manifest { sources: ManifestEntry[] }
