@@ -17,8 +17,10 @@
 // null-vs-zero contradiction detector docs for the same posture).
 
 import { Sentry, circuitSnapshot } from "@finnor/tools";
+import { recordBusinessEvent } from "@finnor/data-platform";
+import { withTenant } from "@finnor/db";
 import { secretProviderStatus, ensureSecretsLoaded } from "@finnor/security";
-import { reliability } from "@finnor/read-models";
+import { readinessAnomalies, reliability } from "@finnor/read-models";
 
 const RECONCILIATION_BACKLOG_THRESHOLD = 20;
 const DLQ_DEPTH_THRESHOLD = 10;
@@ -97,5 +99,10 @@ export const scanReliabilityAlerts = async (payload: Record<string, unknown>): P
       extra: alert.detail,
       tags: { alert_kind: alert.kind, tenant_id: tenantId },
     });
+  }
+  const anomalies = await readinessAnomalies(tenantId);
+  for (const anomaly of anomalies) {
+    await withTenant(tenantId, (db) => recordBusinessEvent(db, { tenantId, entityType: "tenant", entityId: tenantId, eventType: "anomaly_detected", payload: anomaly, source: "rolling_z_score" }));
+    Sentry.captureMessage(`anomaly:${anomaly.metric}:tenant:${tenantId}`, { level: "warning", extra: anomaly, tags: { alert_kind: "anomaly", tenant_id: tenantId } });
   }
 };

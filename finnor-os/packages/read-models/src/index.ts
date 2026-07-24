@@ -44,6 +44,7 @@ import {
 import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { performance } from "node:perf_hooks";
 import { holtWinters, type ForecastPoint } from "./holt-winters";
+import { rollingZScores } from "./anomaly-detector";
 
 export * from "./route-optimizer";
 export * from "./slot-recommender";
@@ -78,6 +79,12 @@ export async function intelligenceForecasts(tenantId: string, historyDays = 56):
     return { cash: cashByDay.get(key(day)) ?? 0, visits: visitsByDay.get(key(day)) ?? 0 };
   });
   return { cashCollections: holtWinters(days.map((day) => day.cash)), visitVolume: holtWinters(days.map((day) => day.visits)), historyDays };
+}
+
+export async function readinessAnomalies(tenantId: string): Promise<Array<{ metric: "failure_rate"; value: number; zScore: number }>> {
+  const rows = await withTenant(tenantId, (db) => db.select({ success: readinessLog.workflowSuccessRate }).from(readinessLog).where(and(eq(readinessLog.tenantId, tenantId), isNotNull(readinessLog.workflowSuccessRate))).orderBy(desc(readinessLog.logDate)).limit(60));
+  const values = rows.reverse().map((row) => 1 - row.success!);
+  return rollingZScores(values).filter((point) => point.index === values.length - 1).map((point) => ({ metric: "failure_rate" as const, value: point.value, zScore: point.zScore }));
 }
 
 export interface PipelineHealth {
