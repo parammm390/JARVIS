@@ -1,5 +1,12 @@
 # JARVIS 95% — Phase Status
 
+## Maestro B3 — Intelligence Layer
+Status: GATE-GREEN (2026-07-25)
+
+- [x] B3.T1–T7 — gated OSRM/NN/2-opt route suggestions, configurable drive/load/SLA slot scoring, tenant-history Holt-Winters bands, z-score reliability anomaly events, labeled churn ranking, public-document RAG, and EWMA gated reorder reviews (detailed per-task evidence in `JARVIS-MAESTRO-STATE.md`).
+- [x] Public RAG evidence — commit `dbf28ec`; the tracked manifest pins official EPA and Pentair PDFs by URL and SHA-256. Real Voyage ingestion wrote 7 EPA and 15 Pentair chunks into a dedicated non-private reference tenant. The ordinary confirmation-gated `answer_water_question` execution persisted receipt `5ac88267-6779-4f3c-8f4a-e4ecfe894f2f`, citing exact Pentair PDF chunks including `#chunk=1`, `#chunk=15`, `#chunk=11`, and `#chunk=9`.
+- [x] EXIT GATE — seeded route proof: 32 km naive → 9 km optimized (23 km saved, `route-optimizer.test.ts` 3/3); real history forecast proof: both 14-day bands (`intelligence-forecasts.test.ts` 1/1); cited receipt as above. Final focused verification: 21/21 across route optimizer, forecasts, answer-citation runtime flow, reference guard, and Voyage client tests.
+
 ## Maestro B2 — Planner V2: Deliberative Loop
 Status: GATE-GREEN (2026-07-24)
 
