@@ -18,7 +18,8 @@
 
 import { Sentry, circuitSnapshot } from "@finnor/tools";
 import { recordBusinessEvent } from "@finnor/data-platform";
-import { withTenant } from "@finnor/db";
+import { businessEvents, withTenant } from "@finnor/db";
+import { and, eq, gte } from "drizzle-orm";
 import { secretProviderStatus, ensureSecretsLoaded } from "@finnor/security";
 import { readinessAnomalies, reliability } from "@finnor/read-models";
 
@@ -102,7 +103,13 @@ export const scanReliabilityAlerts = async (payload: Record<string, unknown>): P
   }
   const anomalies = await readinessAnomalies(tenantId);
   for (const anomaly of anomalies) {
-    await withTenant(tenantId, (db) => recordBusinessEvent(db, { tenantId, entityType: "tenant", entityId: tenantId, eventType: "anomaly_detected", payload: anomaly, source: "rolling_z_score" }));
+    const today = new Date(); today.setUTCHours(0, 0, 0, 0);
+    const alreadyRecorded = await withTenant(tenantId, async (db) => {
+      const [existing] = await db.select({ id: businessEvents.id }).from(businessEvents).where(and(eq(businessEvents.tenantId, tenantId), eq(businessEvents.eventType, "anomaly_detected"), gte(businessEvents.occurredAt, today))).limit(1);
+      if (!existing) await recordBusinessEvent(db, { tenantId, entityType: "tenant", entityId: tenantId, eventType: "anomaly_detected", payload: anomaly, source: "rolling_z_score" });
+      return Boolean(existing);
+    });
+    if (alreadyRecorded) continue;
     Sentry.captureMessage(`anomaly:${anomaly.metric}:tenant:${tenantId}`, { level: "warning", extra: anomaly, tags: { alert_kind: "anomaly", tenant_id: tenantId } });
   }
 };
