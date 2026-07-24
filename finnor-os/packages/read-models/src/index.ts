@@ -48,6 +48,7 @@ import { holtWinters, type ForecastPoint } from "./holt-winters";
 export * from "./route-optimizer";
 export * from "./slot-recommender";
 export * from "./holt-winters";
+export * from "./anomaly-detector";
 
 export interface IntelligenceForecasts {
   cashCollections: ForecastPoint[] | null;
