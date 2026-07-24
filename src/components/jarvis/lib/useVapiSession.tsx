@@ -18,12 +18,13 @@ export interface TranscriptLine {
 }
 
 interface DailyCallLike {
-  participants: () => { local?: { tracks?: { audio?: { persistentTrack?: MediaStreamTrack } } } }
+  participants: () => { local?: { tracks?: { audio?: { persistentTrack?: MediaStreamTrack; track?: MediaStreamTrack } } } }
 }
 
 interface VapiInstance {
-  start: (id: string) => void
-  stop: () => void
+  start: (id: string) => Promise<unknown>
+  stop: () => Promise<void>
+  end: () => void
   setMuted: (m: boolean) => void
   on: (e: string, cb: (m?: unknown) => void) => void
   getDailyCallObject: () => DailyCallLike | null
@@ -40,20 +41,26 @@ interface VapiInstance {
 function forceReleaseMic(vapi: VapiInstance | null): void {
   try {
     const call = vapi?.getDailyCallObject?.()
-    const track = call?.participants?.().local?.tracks?.audio?.persistentTrack
-    if (track && track.readyState !== "ended") {
-      track.stop()
-      console.info("[JARVIS] force-stopped local mic track on end")
+    const audio = call?.participants?.().local?.tracks?.audio
+    // Daily exposes `persistentTrack` on current builds, while older builds can
+    // retain the same hardware stream under `track`. Stop every distinct local
+    // audio track so Chrome relinquishes the microphone in either shape.
+    const tracks = new Set([audio?.persistentTrack, audio?.track].filter((track): track is MediaStreamTrack => Boolean(track)))
+    for (const track of tracks) {
+      if (track.readyState !== "ended") track.stop()
     }
+    if (tracks.size) console.info("[JARVIS] force-stopped local mic track(s) on end")
   } catch (err) {
     console.error("[JARVIS] forceReleaseMic failed", err)
   }
 }
 
 const MIC_SILENCE_WARNING_MS = 8000
-// Vapi's own `volume-level` events report near-zero when nothing audible is
-// arriving — reusing that instead of building a separate audio analyser, since the
-// SDK already samples the real mic input for us.
+// Vapi's `local-volume-level` event (packages/@vapi-ai/web's own
+// handleLocalAudioLevel) reports the REAL local microphone level — confirmed by
+// reading the SDK source. `volume-level` (handleRemoteParticipantsAudioLevel) is
+// the assistant's own output level and says nothing about whether the user's mic
+// is working; an earlier pass here mistakenly watched that one instead.
 const MIC_ACTIVITY_THRESHOLD = 0.02
 
 // Real structural bug, found on top of the mic-release fix above: this hook used
@@ -96,9 +103,9 @@ function useVapiSessionInternal() {
   // never captures my voice"): `call-start`/"live" only means Vapi's server-side
   // session joined — it's not proof the browser mic was actually captured (Daily/
   // Chrome can join with a muted or absent local audio track and never fire an
-  // error). Vapi's own `volume-level` event already samples real mic input, so this
-  // watches for it going quiet during OUR speaking turn ("live", not "speaking" —
-  // that's Finnor's turn) instead of trusting the connection state alone.
+  // error). Vapi's own `local-volume-level` event samples the real local mic
+  // input, so this watches for it going quiet during OUR speaking turn ("live",
+  // not "speaking" — that's Finnor's turn) instead of trusting connection state.
   const startMicWatchdog = useCallback(() => {
     stopMicWatchdog()
     lastAudioAtRef.current = Date.now()
@@ -114,7 +121,14 @@ function useVapiSessionInternal() {
     import("@vapi-ai/web")
       .then(({ default: Vapi }) => {
         if (!mounted) return
-        const vapi = new Vapi(VAPI_PUBLIC_KEY) as unknown as VapiInstance
+        // Daily's Chrome 140+ microphone path requires this flag. Without it,
+        // Chrome can keep the hardware track open while Daily joins without a
+        // usable upstream audio track: TTS still works, but Vapi receives no
+        // user audio or transcript. This is deliberately the *only* mic request;
+        // do not add a separate getUserMedia preflight here.
+        const vapi = new Vapi(VAPI_PUBLIC_KEY, undefined, {
+          alwaysIncludeMicInPermissionPrompt: true,
+        }) as unknown as VapiInstance
         vapi.on("call-start", () => {
           setLastError(null)
           setVoiceState("live")
@@ -143,8 +157,13 @@ function useVapiSessionInternal() {
           forceReleaseMic(vapiRef.current)
         })
         vapi.on("volume-level", (m?: unknown) => {
+          // `volume-level` is the remote Vapi speaker. It drives the assistant
+          // waveform only; it cannot establish whether the user's mic works.
           const level = typeof m === "number" ? m : 0
           setVolumeLevel(level)
+        })
+        vapi.on("local-volume-level", (m?: unknown) => {
+          const level = typeof m === "number" ? m : 0
           if (level > MIC_ACTIVITY_THRESHOLD) {
             lastAudioAtRef.current = Date.now()
             setMicSilenceWarning(false)
@@ -165,7 +184,7 @@ function useVapiSessionInternal() {
       mounted = false
       stopMicWatchdog()
       forceReleaseMic(vapiRef.current)
-      vapiRef.current?.stop()
+      void vapiRef.current?.stop()
     }
   }, [startMicWatchdog, stopMicWatchdog])
 
@@ -192,7 +211,7 @@ function useVapiSessionInternal() {
   // `getUserMedia` — restoring that single-request path. Vapi's own `error`/
   // `call-start-failed` events (already wired below) still surface a real denial;
   // we just no longer duplicate the request ourselves first.
-  const toggleVoice = useCallback(() => {
+  const toggleVoice = useCallback(async () => {
     if (voiceState === "live" || voiceState === "speaking") {
       // Don't wait solely on Vapi's own async `call-end` event to update state or
       // release the mic — if that event is ever slow/unreliable, the UI would be
@@ -204,13 +223,23 @@ function useVapiSessionInternal() {
       setVoiceState("idle")
       callStartRef.current = null
       sfx.voiceOff()
-      void vapiRef.current?.stop()
+      // `end()` sends Vapi's explicit live-call end control before destroying
+      // Daily. That closes the room as well as releasing the local track, unlike
+      // relying on a later left-meeting callback alone.
+      vapiRef.current?.end()
       return
     }
     setLastError(null)
     setVoiceState("connecting")
     setCallDurationSec(0)
-    vapiRef.current?.start(VAPI_ASSISTANT_ID)
+    try {
+      await vapiRef.current?.start(VAPI_ASSISTANT_ID)
+    } catch (error) {
+      console.error("[JARVIS] unable to start voice session", error)
+      setLastError("The microphone session could not start. Please try again.")
+      setVoiceState("error")
+      forceReleaseMic(vapiRef.current)
+    }
   }, [voiceState, stopMicWatchdog])
 
   const toggleMute = useCallback(() => {
