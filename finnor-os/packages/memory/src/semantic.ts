@@ -249,6 +249,10 @@ export async function embedManyCached(
 
 export interface WriteSemanticChunk {
   chunk: string;
+  /** Optional per-chunk source identity, e.g. a public PDF URL with #chunk=N. */
+  sourceDocId?: string;
+  /** Optional canonical document row for source-backed chunks. */
+  documentId?: string;
   entityRefs?: unknown[];
   occurredAt?: Date;
 }
@@ -269,7 +273,8 @@ export async function writeSemantic(
     await db.insert(embeddings).values(
       chunks.map((c, i) => ({
         tenantId,
-        sourceDocId,
+        sourceDocId: c.sourceDocId ?? sourceDocId,
+        documentId: c.documentId ?? null,
         chunk: c.chunk,
         embedding: vectors[i]!,
         entityRefs: c.entityRefs ?? [],

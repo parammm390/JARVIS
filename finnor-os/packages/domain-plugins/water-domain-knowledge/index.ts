@@ -88,6 +88,16 @@ export const waterDomainKnowledgePlugin: DomainEnginePlugin = {
       : { citations: [], semanticHits: [] as SemanticHit[] };
 
     if (!match) {
+      if ("confidence" in retrieval && retrieval.confidence === "high" && retrieval.semanticHits[0]) {
+        // No model-generated paraphrase here: when the only source is a retrieved
+        // public document, return its cited excerpt verbatim rather than inventing a
+        // synthesis or attributing a claim to the canned table.
+        return {
+          status: "success",
+          output: { answer: retrieval.semanticHits[0].chunk, citations: retrieval.citations },
+          expected: { answered: true, source: "retrieved_reference" },
+        };
+      }
       return {
         status: "success",
         output: {

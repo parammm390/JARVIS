@@ -19,6 +19,7 @@ export * from "./chunking";
 export * from "./ingest";
 export * from "./corrections";
 export * from "./retrieval";
+export * from "./reference-corpus";
 
 export async function buildMemorySnapshot(opts: {
   tenantId: string;
