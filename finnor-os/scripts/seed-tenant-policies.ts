@@ -117,6 +117,14 @@ function policyRows(reviewLinkUrl: string | null): PolicyRow[] {
     { actionType: "start_installation_workflow", policy: {}, requiresConfirmation: true },
     { actionType: "start_invoice_to_cash_workflow", policy: {}, requiresConfirmation: true },
 
+    // Planner safety/advisory actions are registered plugins too, so every tenant
+    // receives a real policy row rather than relying on an implicit fallback.
+    // clarification_request deliberately remains in the normal pending queue; it
+    // records a human question and never authorizes the missing business action.
+    { actionType: "clarification_request", policy: {}, requiresConfirmation: true },
+    { actionType: "manual_step_suggestion", policy: {}, requiresConfirmation: false },
+    { actionType: "route_suggestion", policy: {}, requiresConfirmation: true },
+
     // The pricing_catalog pseudo-row: scalars only (DECISIONS: labor $95/h). Real US
     // sales-tax rates vary by state/locality — 7% is a real, usable generic default the
     // dealer localizes later, not the placeholder sentinel.
