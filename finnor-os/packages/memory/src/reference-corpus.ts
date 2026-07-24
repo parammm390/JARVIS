@@ -3,7 +3,7 @@
 // independently inspectable source rather than an opaque embedding-row identifier.
 
 import { createHash } from "node:crypto";
-import { PDFParse } from "pdf-parse";
+import type { PDFParse } from "pdf-parse";
 import { and, eq, like } from "drizzle-orm";
 import { createDocument, recordDocumentContent } from "@finnor/data-platform";
 import { documents, embeddings, withTenant } from "@finnor/db";
@@ -43,6 +43,13 @@ export async function ingestPublicReferencePdf(params: {
   let parser: PDFParse | undefined;
   let text: string;
   try {
+    // pdf-parse creates worker threads. Loading it through the @finnor/memory barrel
+    // during Next's static generation made unrelated API routes start that machinery
+    // and terminated the build worker. Corpus ingestion is an explicit operator job,
+    // so defer the runtime import until this function actually receives verified PDF
+    // bytes; the type-only import above preserves the public contract without loading
+    // any parser code at module evaluation time.
+    const { PDFParse } = await import("pdf-parse");
     parser = new PDFParse({ data: params.bytes });
     text = (await parser.getText()).text.trim();
   } finally {
