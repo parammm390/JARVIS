@@ -43,10 +43,41 @@ import {
 } from "@finnor/db";
 import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { performance } from "node:perf_hooks";
+import { holtWinters, type ForecastPoint } from "./holt-winters";
 
 export * from "./route-optimizer";
 export * from "./slot-recommender";
 export * from "./holt-winters";
+
+export interface IntelligenceForecasts {
+  cashCollections: ForecastPoint[] | null;
+  visitVolume: ForecastPoint[] | null;
+  historyDays: number;
+}
+
+/** B3.T3: cash is actual succeeded payment receipt time; visit volume is actual
+ * scheduled service-visit time. We deliberately do not substitute invoice issue dates
+ * or created-at timestamps for either series. */
+export async function intelligenceForecasts(tenantId: string, historyDays = 56): Promise<IntelligenceForecasts> {
+  const today = new Date();
+  const start = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() - historyDays + 1));
+  const [paymentRows, visitRows] = await withTenant(tenantId, (db) =>
+    Promise.all([
+      db.select({ receivedAt: payments.receivedAt, amountUsd: payments.amountUsd }).from(payments).where(and(eq(payments.tenantId, tenantId), eq(payments.status, "succeeded"), gte(payments.receivedAt, start))),
+      db.select({ scheduledAt: serviceVisits.scheduledAt }).from(serviceVisits).innerJoin(households, eq(households.id, serviceVisits.householdId)).where(and(eq(households.tenantId, tenantId), gte(serviceVisits.scheduledAt, start))),
+    ]),
+  );
+  const key = (date: Date) => date.toISOString().slice(0, 10);
+  const cashByDay = new Map<string, number>();
+  const visitsByDay = new Map<string, number>();
+  for (const row of paymentRows) cashByDay.set(key(row.receivedAt), (cashByDay.get(key(row.receivedAt)) ?? 0) + Number(row.amountUsd));
+  for (const row of visitRows) if (row.scheduledAt) visitsByDay.set(key(row.scheduledAt), (visitsByDay.get(key(row.scheduledAt)) ?? 0) + 1);
+  const days = Array.from({ length: historyDays }, (_, index) => {
+    const day = new Date(start.getTime() + index * 86_400_000);
+    return { cash: cashByDay.get(key(day)) ?? 0, visits: visitsByDay.get(key(day)) ?? 0 };
+  });
+  return { cashCollections: holtWinters(days.map((day) => day.cash)), visitVolume: holtWinters(days.map((day) => day.visits)), historyDays };
+}
 
 export interface PipelineHealth {
   leadsByStatus: Array<{ status: string; count: number }>;

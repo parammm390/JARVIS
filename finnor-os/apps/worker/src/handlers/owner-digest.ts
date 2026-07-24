@@ -10,7 +10,7 @@
 import { getPool, withTenant, scanFindings, domainActions } from "@finnor/db";
 import { and, eq, gte, isNull } from "drizzle-orm";
 import { placeVapiCall, VOICE_PERSONAS, logWithTrace } from "@finnor/tools";
-import { followUpDebt, cashCollections, routeSavingsBriefing, slaBreaches } from "@finnor/read-models";
+import { followUpDebt, cashCollections, intelligenceForecasts, routeSavingsBriefing, slaBreaches } from "@finnor/read-models";
 import type { JobHandler } from "../queue";
 
 export const ownerDigest: JobHandler = async (payload) => {
@@ -37,7 +37,7 @@ export const ownerDigest: JobHandler = async (payload) => {
   // still owed, leads/quotes nobody's followed up on, and workflows stuck mid-flight.
   // Additive only: if none of these have anything to say either, the no-op stays a
   // true no-op — never a call placed just because these queries ran.
-  const [debt, cash, routes, sla] = await Promise.all([followUpDebt(tenantId), cashCollections(tenantId), routeSavingsBriefing(tenantId), slaBreaches(tenantId)]);
+  const [debt, cash, forecasts, routes, sla] = await Promise.all([followUpDebt(tenantId), cashCollections(tenantId), intelligenceForecasts(tenantId), routeSavingsBriefing(tenantId), slaBreaches(tenantId)]);
   const overdueUsd = cash.invoicesByStatus.find((s) => s.status === "overdue")?.totalUsd ?? 0;
 
   if (findings.length === 0 && freshScanDrafts.length === 0 && debt.length === 0 && overdueUsd === 0 && routes.proposals === 0 && sla.stuckWorkflowRuns === 0) {
@@ -60,6 +60,9 @@ export const ownerDigest: JobHandler = async (payload) => {
   if (overdueUsd > 0) parts.push(`$${overdueUsd.toFixed(2)} is overdue across unpaid invoices.`);
   if (debt.length > 0) parts.push(`${debt.length} lead${debt.length === 1 ? "" : "s"} or quote${debt.length === 1 ? "" : "s"} haven't been followed up on in a while.`);
   if (routes.proposals > 0) parts.push(`${routes.proposals} route suggestion${routes.proposals === 1 ? "" : "s"} compared ${routes.naiveKm.toFixed(1)} km of existing ordering with ${routes.optimizedKm.toFixed(1)} km optimized, saving ${routes.kmSaved.toFixed(1)} km.`);
+  const cashDay14 = forecasts.cashCollections?.[13];
+  const visitDay14 = forecasts.visitVolume?.[13];
+  if (cashDay14 && visitDay14) parts.push(`The 14-day model estimates $${cashDay14.estimate.toFixed(2)} in collections and ${visitDay14.estimate.toFixed(1)} scheduled visits on day 14; its uncertainty bands are available in the intelligence forecast read model.`);
   if (sla.stuckWorkflowRuns > 0) parts.push(`${sla.stuckWorkflowRuns} in-progress workflow${sla.stuckWorkflowRuns === 1 ? "" : "s"} appear stuck and may need a look.`);
   const message = `Hi, this is Finnor with your daily update. ${parts.join(" ")}`;
 
