@@ -19,6 +19,8 @@ import type { DraftAction, ExecutionResult, ValidationResult, DomainPolicy } fro
 import type { ToolRegistry } from "@finnor/tools";
 import { personaAssistantId, claimBudget, withCircuitBreaker, DAILY_VAPI_CALL_CAP } from "@finnor/tools";
 import { withTenant, households, communicationsLog, serviceVisits, equipment } from "@finnor/db";
+import { invoices, maintenanceAgreements } from "@finnor/db";
+import { churnRisk } from "@finnor/read-models";
 import { eq, sql, desc, and, inArray } from "drizzle-orm";
 import { z } from "zod";
 
@@ -57,6 +59,8 @@ interface ConsentedTarget {
   /** Their own most recent equipment type only — e.g. "water softener". Undefined
    *  when the household has no equipment on file (never another household's). */
   equipmentSummary?: string;
+  riskScore?: number;
+  riskFactors?: string[];
 }
 
 /** Per-target message, never a shared broadcast string. If the owner supplied
@@ -125,6 +129,12 @@ export async function findConsentedTargets(tenantId: string, window?: Inactivity
     for (const e of equipmentRows) {
       if (!equipmentByHousehold.has(e.householdId)) equipmentByHousehold.set(e.householdId, e.type);
     }
+    const householdIds = rows.map((row) => row.id);
+    const [visits, agreements, invoiceRows] = await Promise.all([
+      db.select({ householdId: serviceVisits.householdId, completedAt: serviceVisits.completedAt }).from(serviceVisits).where(inArray(serviceVisits.householdId, householdIds)),
+      db.select({ householdId: maintenanceAgreements.householdId, status: maintenanceAgreements.status }).from(maintenanceAgreements).where(inArray(maintenanceAgreements.householdId, householdIds)),
+      db.select({ householdId: invoices.householdId, status: invoices.status, amountUsd: invoices.amountUsd }).from(invoices).where(and(eq(invoices.tenantId, tenantId), inArray(invoices.householdId, householdIds))),
+    ]);
 
     const now = Date.now();
     const monthsAgo = (iso: string | null) =>
@@ -140,14 +150,20 @@ export async function findConsentedTargets(tenantId: string, window?: Inactivity
       })
       .map((r) => {
         const contact = (r.contactInfo ?? {}) as Record<string, unknown>;
+        const completed = visits.filter((visit) => visit.householdId === r.id && visit.completedAt);
+        const lastCompleted = completed.reduce<Date | null>((latest, visit) => !latest || visit.completedAt! > latest ? visit.completedAt! : latest, null);
+        const risk = churnRisk({ daysSinceVisit: lastCompleted ? (Date.now() - lastCompleted.getTime()) / 86_400_000 : Infinity, visitsLastYear: completed.filter((visit) => visit.completedAt!.getTime() >= Date.now() - 365 * 86_400_000).length, hasActiveAmc: agreements.some((agreement) => agreement.householdId === r.id && agreement.status === "active"), overdueBalanceUsd: invoiceRows.filter((invoice) => invoice.householdId === r.id && invoice.status === "overdue").reduce((sum, invoice) => sum + Number(invoice.amountUsd), 0) });
         return {
           householdId: r.id,
           label: String(contact.name ?? r.address),
           phone: String(contact.phone ?? ""),
           equipmentSummary: equipmentByHousehold.get(r.id),
+          riskScore: risk.score,
+          riskFactors: risk.factors,
         };
       })
-      .filter((t) => t.phone.length > 0);
+      .filter((t) => t.phone.length > 0)
+      .sort((a, b) => (b.riskScore ?? 0) - (a.riskScore ?? 0) || a.label.localeCompare(b.label));
   });
 }
 
