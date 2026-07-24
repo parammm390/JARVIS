@@ -139,11 +139,18 @@ export function useVapiSession() {
     return () => clearInterval(t)
   }, [voiceState])
 
-  // Real preflight, replacing the previous zero-verification path (`toggleVoice`
-  // used to call `vapi.start()` directly with no mic check at all): actually
-  // requests the mic so a prior browser denial surfaces as a real, visible error
-  // instead of silently starting a "live" session with nothing captured.
-  const toggleVoice = useCallback(async () => {
+  // Real regression, found and reverted: an earlier pass here added a SEPARATE
+  // `getUserMedia()` preflight call, immediately stopped, before handing off to
+  // `vapi.start()` — which triggers Daily/Vapi's OWN internal getUserMedia request
+  // a moment later. Two back-to-back requests for the same physical mic device is
+  // a real, known class of bug (device-release race on some browsers/OS audio
+  // stacks) and matches exactly what the product owner reported live: mic still
+  // shows as captured/active even after ending the session. Before this file had
+  // any preflight at all, `vapi.start()` was the ONLY thing that ever touched
+  // `getUserMedia` — restoring that single-request path. Vapi's own `error`/
+  // `call-start-failed` events (already wired below) still surface a real denial;
+  // we just no longer duplicate the request ourselves first.
+  const toggleVoice = useCallback(() => {
     if (voiceState === "live" || voiceState === "speaking") {
       vapiRef.current?.stop()
       return
@@ -151,21 +158,6 @@ export function useVapiSession() {
     setLastError(null)
     setVoiceState("connecting")
     setCallDurationSec(0)
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      stream.getTracks().forEach((track) => track.stop()) // just verifying — Vapi/Daily opens its own track
-    } catch (err) {
-      const name = err instanceof DOMException ? err.name : ""
-      const message =
-        name === "NotAllowedError" || name === "PermissionDeniedError"
-          ? "Microphone access was denied. Please allow microphone access for this site in your browser settings, then try again."
-          : name === "NotFoundError" || name === "DevicesNotFoundError"
-            ? "No microphone was found. Please connect a microphone and try again."
-            : "Microphone access is blocked. Please allow mic access and try again."
-      setLastError(message)
-      setVoiceState("error")
-      return
-    }
     vapiRef.current?.start(VAPI_ASSISTANT_ID)
   }, [voiceState])
 
