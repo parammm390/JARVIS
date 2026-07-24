@@ -10,6 +10,7 @@ Convention: same as `finnor-os/docs/phase-status.md` (P1/P2 style) — a box is 
 
 ## Session Log
 <!-- date · phase · tasks done · next task · blockers -->
+- 2026-07-24 · phase 16 (B3) · T1 discovery completed; no task checkbox closed because the required geo/action design is absent from the source baseline · next: Param must choose the canonical source and persistence model for household/visit coordinates and authorize the `route_suggestion` action contract; then resume B3.T1 · blockers: a real design mismatch, documented in the B3 block per §0; no coordinates, action type, or architecture were invented.
 - 2026-07-24 · phase 12 (B2.T6 in progress) · added action→async-workflow-step provenance in commit `2870674`, so terminal workflow-step receipts can identify their originating gated plan action; next: implement the receipt-driven revised-remainder proposal, durable plan lineage, and normal-gate dispatch · blockers: none.
 - 2026-07-24 · phase 12 (B2) · completed T5 in commit `5a8a4b5`: planner now receives tenant integration-health plus durable circuit state, and a deterministic post-plan guard replaces a provider-backed action with a durable `manual_step_suggestion` carrying the exact unavailable-capability reason; next: B2.T6 terminal-plan repair through the normal gate with lineage · blockers: none.
 - 2026-07-24 · phase 13 (D4 exit-gate re-probe) · checked both available browser profiles against local `/jarvis`; each visibly rendered signed-out Standalone/Simulation mode with zero real runs, and the local proxy logged `401` for every private workflows/actions/events/read-model endpoint · next: record a real Dealer Zero workflow’s SSE transitions and fault-injected compensation after an owner signs in · blockers: an authenticated owner session is still absent; no account/session was created or fabricated.
@@ -178,8 +179,9 @@ Status: T1-T5 DONE, T6-T8 NOT STARTED
 EXIT GATE: dependency-ordered 2-step plan w/ per-step receipts · predicted totals pre-approval + post-diff · ambiguity → question card in evals · replay evals green in CI
 
 ## B3 — Intelligence Layer
-Status: NOT STARTED
+Status: PAUSED AT T1 — design finding recorded 2026-07-24; do not proceed to later tasks out of order.
 - [ ] B3.T1 — route optimizer (OSRM matrix + NN + 2-opt) as gated route_suggestion
+  - Finding (2026-07-24): the source-backed discovery required by T1 found no latitude/longitude columns or route-stop model in `packages/db/schema.ts` (the `households` table stores only `address`), and `route_suggestion` is absent from the single-source plugin registry (`packages/orchestration/src/plugin-registry.ts`, which currently registers the 41 baseline action types). OSRM's matrix API requires coordinate pairs; deriving or geocoding them, adding geo persistence, and introducing a 42nd gated action each require an architecture decision. Per §0 Work Loop, implementation stops here rather than inventing coordinates, a storage model, or a new action contract. Evidence: `rg -n -i 'route_suggestion|route optimizer|osrm|two.opt|nearest.neighbor' finnor-os --glob '!node_modules/**'` returned no implementation; schema/registry source read in full for the relevant definitions.
 - [ ] B3.T2 — slot recommender scoring in scheduling proposals
 - [ ] B3.T3 — Holt-Winters forecasts (cash, visits) + briefing bands
 - [ ] B3.T4 — z-score anomaly events + alerts
