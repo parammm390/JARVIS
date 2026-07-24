@@ -169,6 +169,34 @@ describe.skipIf(!available)("LangGraph gate flow — schedule_water_test on the 
     expect(again.output.idempotent).toBe(true);
   });
 
+  it("property sweep: every unapproved persisted status is re-gated with zero tool calls", async () => {
+    // This is deliberately a status-domain sweep, not a hand-picked happy-path test:
+    // any new persisted status added to DomainAction must make an explicit decision
+    // here before it can become an execution bypass.
+    const statuses = ["draft", "pending", "rejected", "failed", "needs_human_review", "blocked_integration_unavailable"] as const;
+    for (const status of statuses) {
+      const { reg, calls } = mockTools();
+      const orchestrator = freshGraphOrchestrator(reg);
+      const action = await createDraftAction("schedule_water_test", {
+        address: `Status ${status} Way, Cedar Falls, IA`,
+        contactPhone: "+13195550177",
+        contactName: `Gate status ${status}`,
+      });
+      await withTenant(SEED_TENANT_ID, (db) =>
+        db.update(domainActions).set({ status }).where(eq(domainActions.id, action.id)),
+      );
+      const persisted = await getAction(action.id);
+      const result = await orchestrator.executor.execute(
+        { ...action, status: persisted.status },
+        await orchestrator.loadPolicy({ ...action, status: persisted.status }),
+      );
+
+      expect(result.output.gated, status).toBe(true);
+      expect(calls, status).toHaveLength(0);
+      expect((await getAction(action.id)).status, status).toBe("pending");
+    }
+  });
+
   it("THE ACTUAL POINT: a gate survives a full instance restart — a completely fresh executor/checkpointer/graph, sharing no in-memory state with the one that gated the action, resumes it correctly purely from Postgres", async () => {
     const { reg: gatingTools } = mockTools();
     const gatingOrchestrator = freshGraphOrchestrator(gatingTools);
