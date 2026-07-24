@@ -25,6 +25,8 @@ Convention: same as `finnor-os/docs/phase-status.md` (P1/P2 style) — a box is 
 
 ---
 
+- 2026-07-24 · phase 12 (B2 per §9) · completed B2.T1 only: persisted backward-only planner DAGs (`plan_id`, `depends_on[]`) and routed dispatch through readiness checks so roots use the existing gate and later nodes unlock only after every prerequisite reaches `completed`; next: B2.T2 · blockers: none for T2; stopped cleanly under §0 Context Budget before starting another task. Evidence: commit `516b7f7`; `npm run typecheck` clean; `tests/integration/planner-plan-dag.test.ts`, `plan-compiler.test.ts`, and `planner-repair.test.ts` 12/12 passed against real local Postgres. A real test-fixture cleanup error was caught during the first run (`action_log` is correctly append-only); fixed by preserving the audit rows, then re-ran green.
+
 ## A1 — Truth & Config Day
 Status: T0-T8 DONE except R2 (real 3rd-party signup, not something I can do). EXIT GATE: 3 of 4 bullets closed (prod setup/status, zero temporal refs, Dealer Zero smoke receipt — the last of these only after the critical finnor_langgraph finding below got fixed in a follow-up session); env-vars-everywhere effectively closed too. Only remaining bullet: staging setup/status probe, purely a "need a bearer token" problem, config side fully done.
 - [x] A1.T0 — Env audit across every project/env (evidence: 2026-07-22, `vercel env ls` on `api`+`finnor-agency`, `railway variables --kv` on finnor-worker/finnor-orchestrator (innovative-prosperity, prod) + finnor-worker-staging (imaginative-enchantment)). Findings: `CRM/SCHEDULING/INVENTORY/DOCUMENTS_BINDING`+`COMMUNICATIONS_BINDING` present in Railway prod + Vercel prod, **missing Vercel Preview** (added same session). `EMBEDDINGS_API_KEY` (real Voyage key, `pa-` prefix) live in Railway worker prod + Vercel api/finnor-agency prod — **missing Preview + Railway staging**. `SENTRY_DSN` mapped via `FINNOR_SECRET_IDS`→AWS Secrets Manager in Railway worker prod only — **missing Vercel entirely + Railway staging**, and resolution unconfirmed (no AWS access to probe). `REDIS_URL` real, live in Railway worker+orchestrator prod + Vercel api prod — **missing Vercel Preview + Railway staging + finnor-agency entirely**. Code reads `EMBEDDINGS_API_KEY`, NOT `VOYAGE_API_KEY` (packages/memory/src/semantic.ts:110) — plan doc corrected. *(Note: this session independently confirmed the same Preview binding-var gap via its own `vercel env ls preview` probe before seeing this entry — same underlying fact, found twice.)*
@@ -157,8 +159,8 @@ EXIT GATE: SSE event within 2s of Dealer Zero action (curl pasted) · projector 
   - `npm run dev:worker-sse` / `start:sse` remains available for standalone local dev; the deployed path is the merged `index.ts` entrypoint, `PORT` env-gated.
 
 ## B2 — Planner V2: Deliberative Loop
-Status: NOT STARTED
-- [ ] B2.T1 — plan_id + depends_on[] migration; DAG plans run as dynamic workflows
+Status: T1 DONE, T2-T8 NOT STARTED
+- [x] B2.T1 — plan_id + depends_on[] migration; DAG plans run as dynamic workflows (evidence: commit `516b7f7`; migration `0043_planner_plan_dags.sql`; `tests/integration/planner-plan-dag.test.ts` 3/3 against real Postgres proves planner materialization, backward-only dependency validation, root-only readiness, completion-gated unlock, and tenant isolation; `tests/integration/plan-compiler.test.ts` + `planner-repair.test.ts` 9/9 re-run clean; `npm run typecheck` clean.)
 - [ ] B2.T2 — simulate() on plugin interface; real dry-runs ×5 flagship plugins; predicted receipt stored
 - [ ] B2.T3 — predicted-vs-actual diff + per-type accuracy → readiness
 - [ ] B2.T4 — clarification_request first-class action type
