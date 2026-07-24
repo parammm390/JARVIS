@@ -16,8 +16,9 @@
 // and returns its real ExecutionResult unchanged. Existing callers see identical
 // behavior; the runtime just gains a durable record of what ran.
 
-import { withTenant } from "@finnor/db";
+import { withTenant, domainActions, actionLog } from "@finnor/db";
 import { submitCommand, claimStep, completeStep, failStep } from "@finnor/workflow-runtime";
+import { and, eq } from "drizzle-orm";
 import type { DraftAction, ExecutionResult, ErrorKind } from "@finnor/shared-types";
 import type { ToolRegistry } from "@finnor/tools";
 import type { DomainEnginePlugin } from "@finnor/plugins-shared";
@@ -54,6 +55,26 @@ function classifyFailure(result: ExecutionResult): { reason: string; errorKind: 
 }
 
 export async function executePluginViaRuntime(params: ExecutePluginViaRuntimeParams): Promise<ExecutionResult> {
+  // The exported bridge is shared by the two executors, never an approval entry point.
+  // Refuse a direct caller unless the action was claimed for execution and carries the
+  // immutable `confirmed` episode written by FinnorOrchestrator.decide(). This stops
+  // accidental bridge calls before they create a command, receipt, or provider call.
+  const authorized = await withTenant(params.tenantId, async (db) => {
+    const [action] = await db
+      .select({ status: domainActions.status })
+      .from(domainActions)
+      .where(and(eq(domainActions.id, params.actionId), eq(domainActions.tenantId, params.tenantId)))
+      .limit(1);
+    if (action?.status !== "executing") return false;
+    const [approval] = await db
+      .select({ id: actionLog.id })
+      .from(actionLog)
+      .where(and(eq(actionLog.domainActionId, params.actionId), eq(actionLog.tenantId, params.tenantId), eq(actionLog.step, "confirmed")))
+      .limit(1);
+    return Boolean(approval);
+  });
+  if (!authorized) return { status: "failure", output: {}, error: "Execution refused: action was not claimed from an audited approval." };
+
   // Deliberately NO command-level idempotencyKey here (unlike lead-to-water-test's
   // `lead-to-water-test:${householdId}:${scheduledAt}` and the other 3 workflow-kind
   // plugins). Those dedupe because their caller might legitimately be invoked twice for

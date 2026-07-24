@@ -17,9 +17,10 @@ import { z } from "zod";
 import pg from "pg";
 import { migrate } from "../../packages/db/migrate";
 import { seed, SEED_TENANT_ID } from "../../packages/db/seed";
-import { withTenant, closePool, domainActions, domainPolicies, commands, workflowRuns, workflowSteps, decisionReceipts } from "@finnor/db";
+import { withTenant, closePool, domainActions, domainPolicies, actionLog, commands, workflowRuns, workflowSteps, decisionReceipts } from "@finnor/db";
 import { eq } from "drizzle-orm";
-import { FinnorOrchestrator } from "@finnor/orchestration";
+import { FinnorOrchestrator, createDefaultPluginRegistry } from "@finnor/orchestration";
+import { executePluginViaRuntime } from "../../packages/orchestration/src/runtime-bridge";
 import { ToolRegistry } from "@finnor/tools";
 import type { DomainAction } from "@finnor/shared-types";
 
@@ -61,6 +62,13 @@ async function createDraftAction(payload: Record<string, unknown>): Promise<Doma
       .insert(domainActions)
       .values({ tenantId: SEED_TENANT_ID, actionType: ACTION_TYPE, payload, policyId: policy?.id ?? null, status: "approved" })
       .returning();
+    await db.insert(actionLog).values({
+      tenantId: SEED_TENANT_ID,
+      domainActionId: row!.id,
+      step: "confirmed",
+      input: { by: "test:owner" },
+      output: { channel: "test" },
+    });
     return {
       id: row!.id,
       tenantId: row!.tenantId,
@@ -152,6 +160,55 @@ describe.skipIf(!available)("single-action execution via the runtime bridge (§2
     } finally {
       await cleanupSteps(newIds);
     }
+  });
+
+  it("direct runtime-bridge misuse refuses a pending action before creating a workflow step", async () => {
+    const orchestrator = new FinnorOrchestrator({ tools: mockTools() });
+    const action = await createDraftAction({
+      address: "2 Guardrail Way",
+      contactPhone: "+15555550101",
+      contactName: "Bridge Guardrail",
+    });
+    await withTenant(SEED_TENANT_ID, (db) => db.update(domainActions).set({ status: "pending" }).where(eq(domainActions.id, action.id)));
+    const persisted = { ...action, status: "pending" as const };
+    const policy = await orchestrator.loadPolicy(persisted);
+    const plugin = createDefaultPluginRegistry().resolve(ACTION_TYPE)!;
+    const draft = await plugin.draft(ACTION_TYPE, persisted.payload, policy);
+    const before = await currentStepIds();
+
+    const result = await executePluginViaRuntime({
+      tenantId: SEED_TENANT_ID,
+      actionId: action.id,
+      actionType: ACTION_TYPE,
+      draft,
+      plugin,
+      tools: mockTools(),
+    });
+
+    expect(result.status).toBe("failure");
+    expect(result.error).toMatch(/audited approval/);
+    expect(await currentStepIds()).toEqual(before);
+  });
+
+  it("a forged approved SQL status cannot claim execution without the audited confirmation", async () => {
+    const orchestrator = new FinnorOrchestrator({ tools: mockTools() });
+    const [policy] = await withTenant(SEED_TENANT_ID, (db) => db.select().from(domainPolicies).where(eq(domainPolicies.actionType, ACTION_TYPE)).limit(1));
+    const [forged] = await withTenant(SEED_TENANT_ID, (db) =>
+      db.insert(domainActions).values({
+        tenantId: SEED_TENANT_ID,
+        actionType: ACTION_TYPE,
+        payload: { address: "3 Forged Status Way", contactPhone: "+15555550102", contactName: "Forged" },
+        policyId: policy?.id ?? null,
+        status: "approved",
+      }).returning(),
+    );
+    const before = await currentStepIds();
+    const result = await orchestrator.runAction(forged!.id, SEED_TENANT_ID, "test:attacker");
+
+    expect(result.status).toBe("failure");
+    expect(result.error).toMatch(/confirmation gate/);
+    expect((await withTenant(SEED_TENANT_ID, (db) => db.select().from(domainActions).where(eq(domainActions.id, forged!.id)).limit(1)))[0]!.status).toBe("approved");
+    expect(await currentStepIds()).toEqual(before);
   });
 
   it("reflection's retry-once mechanism creates a SECOND independent step + receipt, not a swallowed no-op", async () => {

@@ -191,6 +191,31 @@ describe.skipIf(!available)("full gated flow (§32.6, §32.11)", () => {
     expect(calls).toHaveLength(0);
   });
 
+  it("property sweep: every unapproved persisted status stays gated on the legacy executor", async () => {
+    // schedule_water_test is graph-routed by default; renew_maintenance_agreement is
+    // deliberately legacy-routed, so this mirrors the LangGraph status-domain sweep.
+    const statuses = ["draft", "pending", "rejected", "failed", "needs_human_review", "blocked_integration_unavailable"] as const;
+    for (const status of statuses) {
+      const { reg, calls } = mockTools();
+      const orchestrator = new FinnorOrchestrator({ tools: reg });
+      const action = await createDraftAction("renew_maintenance_agreement", {
+        householdLabel: `Legacy ${status}`,
+        contactPhone: "+13195550177",
+        cadence: "annual",
+      });
+      await withTenant(SEED_TENANT_ID, (db) => db.update(domainActions).set({ status }).where(eq(domainActions.id, action.id)));
+      const persisted = await getAction(action.id);
+      const result = await orchestrator.executor.execute(
+        { ...action, status: persisted.status },
+        await orchestrator.loadPolicy({ ...action, status: persisted.status }),
+      );
+
+      expect(result.output.gated, status).toBe(true);
+      expect(calls, status).toHaveLength(0);
+      expect((await getAction(action.id)).status, status).toBe("pending");
+    }
+  });
+
   it("failing integration → retry once → escalate to needs_human_review, never silent (§9, §30)", async () => {
     const reg = new ToolRegistry();
     let attempts = 0;

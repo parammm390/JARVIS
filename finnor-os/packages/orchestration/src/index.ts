@@ -235,11 +235,21 @@ export class FinnorOrchestrator implements Orchestrator {
   async runAction(actionId: string, tenantId: string, approvedBy?: string): Promise<ExecutionResult> {
     await ensureSecretsLoaded();
     const row = await withTenant(tenantId, async (db) => {
-      const [claimed] = await db
-        .update(domainActions)
-        .set({ status: "executing", executionStartedAt: new Date() })
-        .where(and(eq(domainActions.id, actionId), eq(domainActions.tenantId, tenantId), eq(domainActions.status, "approved")))
-        .returning();
+      // Status alone is never approval evidence. decide() writes this immutable
+      // episode in the same transaction as its pending→approved transition; requiring
+      // it prevents a bare forged SQL status mutation from claiming execution.
+      const [approval] = await db
+        .select({ id: actionLog.id })
+        .from(actionLog)
+        .where(and(eq(actionLog.domainActionId, actionId), eq(actionLog.tenantId, tenantId), eq(actionLog.step, "confirmed")))
+        .limit(1);
+      const [claimed] = approval
+        ? await db
+            .update(domainActions)
+            .set({ status: "executing", executionStartedAt: new Date() })
+            .where(and(eq(domainActions.id, actionId), eq(domainActions.tenantId, tenantId), eq(domainActions.status, "approved")))
+            .returning()
+        : [];
       if (claimed) return { claimed, current: claimed };
       const [current] = await db.select().from(domainActions).where(and(eq(domainActions.id, actionId), eq(domainActions.tenantId, tenantId)));
       return { claimed: null, current };
