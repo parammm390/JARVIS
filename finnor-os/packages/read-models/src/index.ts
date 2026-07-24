@@ -50,6 +50,7 @@ export * from "./route-optimizer";
 export * from "./slot-recommender";
 export * from "./holt-winters";
 export * from "./anomaly-detector";
+export * from "./churn-risk";
 
 export interface IntelligenceForecasts {
   cashCollections: ForecastPoint[] | null;
