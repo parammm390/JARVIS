@@ -31,6 +31,7 @@ import { backupDb } from "./handlers/backup-db";
 import { dailyScorecard } from "./handlers/daily-scorecard";
 import { projectReadModels } from "./handlers/project-read-models";
 import { repairPlanAfterTerminalFailure } from "./handlers/repair-plan-after-terminal-failure";
+import { suggestDailyRoutes } from "./handlers/suggest-daily-routes";
 import { startScheduler, startGlobalScheduler, type ScheduledScan } from "./scheduler";
 import { startHeartbeat } from "./heartbeat";
 import { startSseServer } from "./sse-server";
@@ -64,6 +65,7 @@ export function createWorker(): JobQueue {
   queue.register("daily_scorecard", dailyScorecard);
   queue.register("project_read_models", projectReadModels);
   queue.register("repair_plan_after_terminal_failure", repairPlanAfterTerminalFailure);
+  queue.register("suggest_daily_routes", suggestDailyRoutes);
   return queue;
 }
 
@@ -109,6 +111,7 @@ const PROACTIVE_SCANS: ScheduledScan[] = [
   // independent, so in practice it reads whatever's accumulated in scan_findings by
   // the time its own daily window rolls over, which is close enough for a v1 digest.
   { type: "owner_digest", intervalHours: 24, payload: (tenantId) => ({ tenantId }) },
+  { type: "suggest_daily_routes", intervalHours: 24, payload: (tenantId) => ({ tenantId }) },
   // Phase 8 (§8.3): the 30-day certification's daily readiness row. Runs after the
   // scans above have had their own daily window to complete for the day, same
   // "close enough for a v1" reasoning as owner_digest.

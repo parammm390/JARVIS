@@ -44,6 +44,8 @@ import {
 import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { performance } from "node:perf_hooks";
 
+export * from "./route-optimizer";
+
 export interface PipelineHealth {
   leadsByStatus: Array<{ status: string; count: number }>;
   quotesByStatus: Array<{ status: string; count: number }>;
@@ -159,6 +161,39 @@ export async function cashCollections(tenantId: string): Promise<CashCollections
       .where(and(eq(workflowSteps.tenantId, tenantId), eq(workflowSteps.stepType, "create_payment_link"), inArray(workflowSteps.status, ["pending", "leased", "completed"])));
     return { invoicesByStatus, totalCollected: collectedRow!.totalCollected, paymentLinksAwaitingPayment: linksRow!.count };
   });
+}
+
+export interface RouteSavingsBriefing {
+  proposals: number;
+  naiveKm: number;
+  optimizedKm: number;
+  kmSaved: number;
+}
+
+/** Completed B3 route suggestions are receipted runtime results.  The owner briefing
+ * reads them back; it never recomputes a route or claims a saving that was not
+ * actually returned by OSRM. */
+export async function routeSavingsBriefing(tenantId: string, date = new Date()): Promise<RouteSavingsBriefing> {
+  const start = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const end = new Date(start.getTime() + 86_400_000);
+  const rows = await withTenant(tenantId, (db) =>
+    db
+      .select({ actualResult: decisionReceipts.actualResult })
+      .from(decisionReceipts)
+      .innerJoin(domainActions, eq(domainActions.id, decisionReceipts.domainActionId))
+      .where(and(eq(domainActions.tenantId, tenantId), eq(domainActions.actionType, "route_suggestion"), gte(decisionReceipts.createdAt, start), lt(decisionReceipts.createdAt, end))),
+  );
+  return rows.reduce<RouteSavingsBriefing>(
+    (total, row) => {
+      const output = ((row.actualResult as { output?: unknown } | null)?.output ?? {}) as Record<string, unknown>;
+      const naiveKm = typeof output.naiveKm === "number" ? output.naiveKm : null;
+      const optimizedKm = typeof output.optimizedKm === "number" ? output.optimizedKm : null;
+      const kmSaved = typeof output.kmSaved === "number" ? output.kmSaved : null;
+      if (naiveKm === null || optimizedKm === null || kmSaved === null) return total;
+      return { proposals: total.proposals + 1, naiveKm: total.naiveKm + naiveKm, optimizedKm: total.optimizedKm + optimizedKm, kmSaved: total.kmSaved + kmSaved };
+    },
+    { proposals: 0, naiveKm: 0, optimizedKm: 0, kmSaved: 0 },
+  );
 }
 
 export interface ServiceDueAgreement {

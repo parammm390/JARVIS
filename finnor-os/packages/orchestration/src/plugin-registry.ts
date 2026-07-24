@@ -27,6 +27,7 @@ import proposalToInstallationPlugin from "../../domain-plugins/proposal-to-insta
 import invoiceToCashPlugin from "../../domain-plugins/invoice-to-cash/index";
 import clarificationPlugin from "../../domain-plugins/clarification/index";
 import manualStepPlugin from "../../domain-plugins/manual-step/index";
+import routeOptimizationPlugin from "../../domain-plugins/route-optimization/index";
 
 export class PluginRegistry {
   private byActionType = new Map<string, DomainEnginePlugin>();
@@ -140,6 +141,7 @@ export function createDefaultPluginRegistry(): PluginRegistry {
     invoiceToCashPlugin,
     clarificationPlugin,
     manualStepPlugin,
+    routeOptimizationPlugin,
   ]) {
     registry.register(plugin);
   }
