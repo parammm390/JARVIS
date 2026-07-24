@@ -1,7 +1,7 @@
 // Native business layer acceptance: CRM, scheduling, inventory, accounting, quotes,
 // and issue flagging are REAL against Finnor's own tables — no external SaaS required.
 
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import pg from "pg";
 import { migrate } from "../../packages/db/migrate";
 import { seed, SEED_TENANT_ID } from "../../packages/db/seed";
@@ -19,6 +19,8 @@ import {
   proposals,
   priceBookItems,
   payments,
+  technicianCapacity,
+  technicianDispatchProfiles,
 } from "@finnor/db";
 import { FinnorOrchestrator } from "@finnor/orchestration";
 import { createDefaultRegistry } from "@finnor/tools";
@@ -118,6 +120,30 @@ describe.skipIf(!available)("native business layer — real, end to end, gated",
     const [v] = await withTenant(SEED_TENANT_ID, (db) => db.select().from(serviceVisits).where(eq(serviceVisits.id, visitId)));
     expect(v!.scheduledAt?.toISOString()).toBe("2026-07-20T15:00:00.000Z");
     expect(v!.notes).toMatch(/Rescheduled/);
+  });
+
+  it("B3 slot recommender ranks configured dispatch profiles through the scheduling proposal", async () => {
+    const candidates = await withTenant(SEED_TENANT_ID, (db) => db.select().from(technicians).where(eq(technicians.tenantId, SEED_TENANT_ID)).limit(2));
+    expect(candidates).toHaveLength(2);
+    await withTenant(SEED_TENANT_ID, async (db) => {
+      for (const [index, tech] of candidates.entries()) {
+        await db.insert(technicianDispatchProfiles).values({ technicianId: tech.id, tenantId: SEED_TENANT_ID, baseAddress: `Base ${index + 1}`, workdayStart: "08:00", workdayEnd: "17:00", defaultSlaMinutes: 240 }).onConflictDoUpdate({ target: technicianDispatchProfiles.technicianId, set: { baseAddress: `Base ${index + 1}`, defaultSlaMinutes: 240 } });
+        await db.insert(technicianCapacity).values({ tenantId: SEED_TENANT_ID, technicianId: tech.id, dayOfWeek: 1, maxConcurrentJobs: 4 });
+      }
+    });
+    const originalFetch = globalThis.fetch;
+    vi.stubGlobal("fetch", async (url: string) => {
+      if (url.includes("nominatim")) return new Response(JSON.stringify([{ lat: "29.7", lon: url.includes("Base%202") ? "-95.2" : "-95.3", display_name: "test" }]));
+      return new Response(JSON.stringify({ code: "Ok", durations: [[0, 600, 1200], [600, 0, 600], [1200, 600, 0]] }));
+    });
+    try {
+      const result = await runGated("check_technician_availability", { date: "2026-07-20", address: "Customer", slaDueAt: new Date(Date.now() + 60 * 60_000).toISOString() });
+      expect(result.status).toBe("success");
+      expect((result.output.recommendations as unknown[])).toHaveLength(2);
+      expect(result.output.heuristic).toMatch(/heuristic/);
+    } finally {
+      vi.stubGlobal("fetch", originalFetch);
+    }
   });
 
   it("inventory: stock check, usage deduction, refuses to go negative, reorder flag", async () => {
