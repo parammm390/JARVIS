@@ -109,12 +109,10 @@ export function getPool(): pg.Pool {
       idleTimeoutMillis: unpooledLocal ? undefined : 8_000,
       connectionTimeoutMillis: unpooledLocal ? undefined : 5_000,
     });
-    // All Finnor tables live in the finnor_os schema; raw SQL in the app is unqualified.
-    // Setting the path per connection keeps the shared role's defaults untouched.
-    pool.on("connect", (client) => {
-      client.query("SET search_path = finnor_os, public").catch(() => undefined);
-      if (!unpooledLocal) client.query("SET statement_timeout = 10000").catch(() => undefined);
-    });
+    // Do not issue client.query() from the pool's connect event. It races the first
+    // caller's BEGIN/set_config sequence in serverless runtimes (and Node now warns
+    // about concurrent client queries). Tenant paths set these values synchronously
+    // inside their transaction below; the role default covers unscoped admin reads.
     // node-postgres's own docs: an idle client's background 'error' event (e.g. the
     // pooler or network dropping a connection that's just sitting in the pool, not
     // mid-query) has no other listener and crashes the ENTIRE process if unhandled --
@@ -150,6 +148,8 @@ export async function withTenant<T>(
   const client = await getPool().connect();
   try {
     await client.query("BEGIN");
+    await client.query("SET LOCAL search_path = finnor_os, public");
+    await client.query("SET LOCAL statement_timeout = 10000");
     await client.query("SELECT set_config('app.tenant_id', $1, true)", [tenantId]);
     const db = drizzle(client, { schema });
     const result = await fn(db);
