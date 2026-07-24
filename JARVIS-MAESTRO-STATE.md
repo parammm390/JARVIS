@@ -26,6 +26,7 @@ Convention: same as `finnor-os/docs/phase-status.md` (P1/P2 style) — a box is 
 ---
 
 - 2026-07-24 · phase 12 (B2 per §9) · completed B2.T1 only: persisted backward-only planner DAGs (`plan_id`, `depends_on[]`) and routed dispatch through readiness checks so roots use the existing gate and later nodes unlock only after every prerequisite reaches `completed`; next: B2.T2 · blockers: none for T2; stopped cleanly under §0 Context Budget before starting another task. Evidence: commit `516b7f7`; `npm run typecheck` clean; `tests/integration/planner-plan-dag.test.ts`, `plan-compiler.test.ts`, and `planner-repair.test.ts` 12/12 passed against real local Postgres. A real test-fixture cleanup error was caught during the first run (`action_log` is correctly append-only); fixed by preserving the audit rows, then re-ran green.
+- 2026-07-24 · phase 12 (B2) · completed B2.T2: added the plugin-interface/registry simulation seam, five data-backed no-write flagship dry-runs (quotation, scheduling, inventory, invoice-to-cash, bulk-notify), and `predicted_receipt` persistence on newly drafted actions; next: B2.T3 · blockers: none; stopped cleanly under §0 Context Budget before starting another task. Evidence: commit `cd38a84`; `npm run typecheck` clean; planner simulation/DAG/compiler/repair integration suites 14/14 green against real local Postgres. A first broad re-run found a test repeatability bug (fixed SKU conflicted with the audit-preserved fixture from the prior pass); changed it to a per-run UUID SKU and re-ran green.
 
 ## A1 — Truth & Config Day
 Status: T0-T8 DONE except R2 (real 3rd-party signup, not something I can do). EXIT GATE: 3 of 4 bullets closed (prod setup/status, zero temporal refs, Dealer Zero smoke receipt — the last of these only after the critical finnor_langgraph finding below got fixed in a follow-up session); env-vars-everywhere effectively closed too. Only remaining bullet: staging setup/status probe, purely a "need a bearer token" problem, config side fully done.
@@ -159,9 +160,9 @@ EXIT GATE: SSE event within 2s of Dealer Zero action (curl pasted) · projector 
   - `npm run dev:worker-sse` / `start:sse` remains available for standalone local dev; the deployed path is the merged `index.ts` entrypoint, `PORT` env-gated.
 
 ## B2 — Planner V2: Deliberative Loop
-Status: T1 DONE, T2-T8 NOT STARTED
+Status: T1-T2 DONE, T3-T8 NOT STARTED
 - [x] B2.T1 — plan_id + depends_on[] migration; DAG plans run as dynamic workflows (evidence: commit `516b7f7`; migration `0043_planner_plan_dags.sql`; `tests/integration/planner-plan-dag.test.ts` 3/3 against real Postgres proves planner materialization, backward-only dependency validation, root-only readiness, completion-gated unlock, and tenant isolation; `tests/integration/plan-compiler.test.ts` + `planner-repair.test.ts` 9/9 re-run clean; `npm run typecheck` clean.)
-- [ ] B2.T2 — simulate() on plugin interface; real dry-runs ×5 flagship plugins; predicted receipt stored
+- [x] B2.T2 — simulate() on plugin interface; real dry-runs ×5 flagship plugins; predicted receipt stored (evidence: commit `cd38a84`; migration `0044_predicted_receipt.sql`; `tests/integration/planner-simulation.test.ts` 2/2 against real Postgres proves quotation/scheduling/inventory/invoice-to-cash/bulk-notify simulations read actual tenant data while leaving proposal, calendar, stock, workflow-command, and communication rows unchanged, and proves `LLMPlanner` persists `{version:1, actionType, simulation}` on the still-`draft` action; planner DAG/compiler/repair regression suites 12/12 plus `npm run typecheck` clean.)
 - [ ] B2.T3 — predicted-vs-actual diff + per-type accuracy → readiness
 - [ ] B2.T4 — clarification_request first-class action type
 - [ ] B2.T5 — health-aware planning (never through an open circuit)
