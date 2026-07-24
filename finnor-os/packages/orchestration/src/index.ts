@@ -34,6 +34,7 @@ export * from "./graph/build-graph";
 export * from "./graph/checkpointer";
 export * from "./graph/state";
 export * from "./plan-dag";
+export * from "./planning-health";
 
 export interface Orchestrator {
   handleInstruction(

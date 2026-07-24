@@ -17,6 +17,7 @@ import { classifyReasoningTier, scoreCandidate } from "./tiering";
 import type { ReasoningTier } from "@finnor/shared-types";
 import { randomUUID } from "node:crypto";
 import { validateDependencyIndexes } from "./plan-dag";
+import { buildPlanningHealthContext, manualStepForUnavailableIntegration } from "./planning-health";
 
 const PlanSchema = z.object({
   actions: z.array(
@@ -76,6 +77,7 @@ export class LLMPlanner implements Planner {
       "If the instruction is a QUESTION about the business (revenue, financial totals, a specific customer's history, trends, anything informational) and no narrower action_type fits exactly, route it to answer_business_question with the verbatim question as payload — that action queries real data across every domain (invoices, leads, inventory, visits, communications history) and answers honestly from whatever is actually there, including saying so when a specific figure isn't tracked. Prefer it over returning empty for any business QUESTION.",
       "Only return an empty actions array when the instruction is not a business question or action at all (chit-chat, out of scope, or something no plugin could ever plausibly do) — never because the exact phrasing didn't match a narrower action_type.",
       "When an instruction could lead to a business action but lacks a required fact or has multiple equally plausible real targets, return exactly one clarification_request instead of guessing. Its payload must contain a plain-language question, the missingFields list, and optional context. Do not emit a guessed business action alongside it.",
+      "The user context includes integrationHealth. Do not propose an action that needs a capability whose unavailable field is true; propose manual_step_suggestion with the supplied reason instead. The server enforces this again after planning.",
       'Respond with JSON: {"actions":[{"action_type":"...","payload":{...},"reasoning":"...","depends_on":[0]}]}. depends_on is optional; when present it contains zero-based indexes of EARLIER actions that must finish before this action can be dispatched. Never use a database id, forward index, or duplicate index.',
       "Payloads must contain only facts from the instruction or the provided memory — never invent phone numbers, addresses, or prices.",
       "Direct identifiers are replaced with bracketed tokens such as [PHONE_1] before you see them. Preserve those tokens exactly in payload values whenever the underlying field is needed; never invent a different identifier.",
@@ -95,8 +97,13 @@ export class LLMPlanner implements Planner {
     const actionTypes = this.plugins.actionTypes();
     const system = this.systemPrompt();
     const redactedInstruction = redactText(instruction);
+    // Health failures are not silently ignored: if the planner cannot inspect the
+    // guard that prevents a known-open circuit from being planned through, it fails
+    // before creating any action rather than guessing that the provider is healthy.
+    const integrationHealth = await buildPlanningHealthContext(tenantContext.tenantId);
     const user = JSON.stringify({
       instruction: redactedInstruction.value,
+      integrationHealth,
       memory: {
         shortTerm: redactStructured(memory.shortTerm),
         semantic: memory.semantic.map((s) => redactText(s.chunk).value).slice(0, 5),
@@ -272,7 +279,7 @@ export class LLMPlanner implements Planner {
     // A repaired candidate must still pass the TARGET plugin's own validate() before
     // it's accepted — repair.ts deliberately doesn't import PluginRegistry (avoid a
     // new coupling), so that check belongs here, one layer up.
-    const finalCandidates = valid.map((a, i) => {
+    const repairedCandidates = valid.map((a, i) => {
       const verdict = repairVerdicts[i]!;
       if (!verdict) {
         // low tier — repair never ran, base candidate is the original draft as-is.
@@ -306,6 +313,16 @@ export class LLMPlanner implements Planner {
         payload: baseCandidates[i]!.payload,
         verdict: { ...verdict, repaired: false, actionType: baseCandidates[i]!.actionType, payload: baseCandidates[i]!.payload, reason },
       };
+    });
+
+    // The prompt receives health context, but this is the real safety boundary:
+    // no candidate that would call a down/open integration reaches persistence as
+    // that action. The durable replacement is an advisory manual-step receipt.
+    const finalCandidates = repairedCandidates.map((candidate) => {
+      const manual = manualStepForUnavailableIntegration(candidate.actionType, candidate.payload, integrationHealth);
+      return manual
+        ? { ...candidate, actionType: manual.actionType, payload: manual.payload, healthAdjustment: manual }
+        : { ...candidate, healthAdjustment: null };
     });
 
     // B2.T2: forecast before persisting or gating. `PluginRegistry.simulate()` is
@@ -392,6 +409,18 @@ export class LLMPlanner implements Planner {
                 reason: verdict.reason,
                 deterministicFlags: verdict.deterministicFlags,
               },
+            ),
+          );
+        }
+        const healthAdjustment = finalCandidates[i]!.healthAdjustment;
+        if (healthAdjustment) {
+          episodes.push(
+            appendEpisode(
+              tenantContext.tenantId,
+              row.id,
+              "planning_health",
+              { originalActionType: healthAdjustment.payload.originalActionType, originalPayload: healthAdjustment.payload.originalPayload },
+              { unavailableCapabilities: healthAdjustment.payload.unavailableCapabilities, reason: healthAdjustment.payload.reason },
             ),
           );
         }
