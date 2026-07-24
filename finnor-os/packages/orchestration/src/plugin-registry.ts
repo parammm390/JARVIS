@@ -2,6 +2,7 @@
 // action_types here; the orchestrator routes by action_type, nothing else.
 
 import type { DomainEnginePlugin } from "@finnor/plugins-shared";
+import type { DomainPolicy, SimulationResult } from "@finnor/shared-types";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import waterTestPlugin from "../../domain-plugins/water-test/index";
 import maintenanceAgreementPlugin from "../../domain-plugins/maintenance-agreement/index";
@@ -44,6 +45,33 @@ export class PluginRegistry {
 
   resolve(actionType: string): DomainEnginePlugin | undefined {
     return this.byActionType.get(actionType);
+  }
+
+  /** Every plugin is simulatable. Plugins with a domain-specific implementation may
+   * read real tenant data, but the fallback deliberately reports only schema/input
+   * facts and never pretends it knows a side effect's eventual result. */
+  async simulate(actionType: string, payload: Record<string, unknown>, policy: DomainPolicy): Promise<SimulationResult> {
+    const plugin = this.resolve(actionType);
+    if (!plugin) {
+      return { mode: "schema", summary: `No plugin is registered for ${actionType}; no execution is predicted.`, predicted: { actionType, fieldChanges: [] } };
+    }
+    if (plugin.simulate) return plugin.simulate(actionType, payload, policy);
+    const validation = plugin.validate(actionType, payload, policy);
+    return {
+      mode: "schema",
+      summary: validation.valid
+        ? `${actionType.replaceAll("_", " ")} is schema-valid; this default prediction makes no claim about external effects.`
+        : `${actionType.replaceAll("_", " ")} is not schema-valid and will not execute until corrected.`,
+      predicted: {
+        actionType,
+        valid: validation.valid,
+        validationErrors: validation.errors,
+        // Inputs are named rather than presented as changed persisted fields: the
+        // default knows the schema, not a domain's mutation semantics.
+        inputFields: Object.keys(payload).sort(),
+        fieldChanges: [],
+      },
+    };
   }
 
   actionTypes(): string[] {

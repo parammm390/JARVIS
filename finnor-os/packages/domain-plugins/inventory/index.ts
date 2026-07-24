@@ -58,6 +58,21 @@ export const inventoryPlugin: DomainEnginePlugin = {
     };
   },
 
+  async simulate(actionType, payload, policy) {
+    const p = SCHEMAS[actionType]!.parse(payload) as Record<string, unknown>;
+    if (actionType !== "log_stock_used_on_visit") {
+      return { mode: "schema" as const, summary: `${actionType.replaceAll("_", " ")} is read-only; no stock mutation is predicted.`, predicted: { actionType, fieldChanges: [] } };
+    }
+    const item = await findInventoryItem(policy.tenantId, { sku: p.sku ? String(p.sku) : undefined, name: p.name ? String(p.name) : undefined });
+    const quantity = Number(p.quantity);
+    const after = item ? item.quantity - quantity : null;
+    return {
+      mode: "dry_run" as const,
+      summary: item && after !== null && after >= 0 ? `Dry run: ${quantity} × ${item.name} would reduce stock from ${item.quantity} to ${after}; inventory was not changed.` : "Dry run: no stock deduction is predicted because the item is missing or quantity is unavailable.",
+      predicted: { sku: item?.sku ?? p.sku ?? null, itemFound: Boolean(item), quantity, fieldChanges: item && after !== null && after >= 0 ? [{ field: "quantity", from: item.quantity, to: after }] : [] },
+    };
+  },
+
   async execute(draft: DraftAction): Promise<ExecutionResult> {
     const tenantId = String(draft.payload.tenantId ?? "");
     const p = draft.payload;

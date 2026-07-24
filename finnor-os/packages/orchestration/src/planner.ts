@@ -307,6 +307,27 @@ export class LLMPlanner implements Planner {
       };
     });
 
+    // B2.T2: forecast before persisting or gating. `PluginRegistry.simulate()` is
+    // guaranteed no-write: five flagship plugins provide data-backed dry-runs and
+    // every other plugin falls back to an explicitly limited schema prediction.
+    const predictedReceipts = await Promise.all(
+      finalCandidates.map(async (candidate) => {
+        const policy =
+          policyByType.get(candidate.actionType) ??
+          ({
+            id: "",
+            tenantId: tenantContext.tenantId,
+            actionType: candidate.actionType,
+            policy: {},
+            requiresConfirmation: true,
+            confirmationTemplate: null,
+            version: 0,
+          } satisfies DomainPolicy);
+        const simulation = await this.plugins.simulate(candidate.actionType, candidate.payload, policy);
+        return { version: 1, actionType: candidate.actionType, simulation };
+      }),
+    );
+
     // One transaction, one batch insert — not 2N round trips. The policy lookup
     // itself already happened above (LLM-free, pre-repair); this reuses that map.
     const rows = await withTenant(tenantContext.tenantId, async (db) => {
@@ -339,6 +360,7 @@ export class LLMPlanner implements Planner {
             compiledGraph: compiled[i]!.compiledGraph,
             planId,
             dependsOn: dependencyIndexes[i]!.map((dependency) => planActionIds[dependency]!),
+            predictedReceipt: predictedReceipts[i]!,
           })),
         )
         .returning();

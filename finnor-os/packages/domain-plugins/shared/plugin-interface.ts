@@ -21,6 +21,9 @@ export interface DomainEnginePlugin {
   // Async allowed: batch plugins read tenant data (read-only!) to build the spoken
   // summary. Side effects still belong exclusively in execute().
   draft(actionType: string, payload: unknown, policy: DomainPolicy): DraftAction | Promise<DraftAction>;
+  /** Optional domain-specific no-write forecast. Registry fallback is a labeled
+   * schema-level prediction, so every plugin remains simulatable. */
+  simulate?(actionType: string, payload: unknown, policy: DomainPolicy): import("@finnor/shared-types").SimulationResult | Promise<import("@finnor/shared-types").SimulationResult>;
   execute(draft: DraftAction, tools: ToolRegistry): Promise<ExecutionResult>;
 }
 

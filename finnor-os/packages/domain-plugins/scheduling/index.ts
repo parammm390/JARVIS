@@ -64,6 +64,32 @@ export const schedulingPlugin: DomainEnginePlugin = {
     };
   },
 
+  async simulate(actionType, payload, policy) {
+    const p = SCHEMAS[actionType]!.parse(payload) as Record<string, unknown>;
+    const tenantId = policy.tenantId;
+    if (actionType === "assign_technician_to_visit") {
+      const [visit, technician] = await Promise.all([
+        withTenant(tenantId, async (db) => (await db.select().from(serviceVisits).where(eq(serviceVisits.id, String(p.visitId))))[0] ?? null),
+        findTechnician(tenantId, { technicianId: p.technicianId ? String(p.technicianId) : undefined, name: p.technicianName ? String(p.technicianName) : undefined }),
+      ]);
+      return {
+        mode: "dry_run" as const,
+        summary: visit && technician ? `Dry run: ${technician.name} would be assigned; the visit was not changed.` : "Dry run: assignment cannot be predicted because the visit or technician was not found.",
+        predicted: { visitId: p.visitId, visitFound: Boolean(visit), technician: technician?.name ?? null, fieldChanges: technician ? [{ field: "technicianId", from: visit?.technicianId ?? null, to: technician.id }] : [] },
+      };
+    }
+    if (actionType === "reschedule_visit") {
+      const [visit] = await withTenant(tenantId, (db) => db.select().from(serviceVisits).where(eq(serviceVisits.id, String(p.visitId))));
+      const when = new Date(String(p.newTime));
+      return {
+        mode: "dry_run" as const,
+        summary: visit && !Number.isNaN(when.getTime()) ? `Dry run: the visit would move to ${when.toISOString()}; no calendar row was changed.` : "Dry run: reschedule cannot be predicted because the visit or requested time is invalid.",
+        predicted: { visitId: p.visitId, visitFound: Boolean(visit), fieldChanges: visit && !Number.isNaN(when.getTime()) ? [{ field: "scheduledAt", from: visit.scheduledAt?.toISOString() ?? null, to: when.toISOString() }] : [] },
+      };
+    }
+    return { mode: "dry_run" as const, summary: `Dry run: availability will be read for ${String(p.date)}; no calendar row will change.`, predicted: { date: p.date, fieldChanges: [] } };
+  },
+
   async execute(draft: DraftAction): Promise<ExecutionResult> {
     const tenantId = String(draft.payload.tenantId ?? "");
     const p = draft.payload;

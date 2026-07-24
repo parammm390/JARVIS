@@ -141,6 +141,24 @@ export const quotationPlugin: DomainEnginePlugin = {
     };
   },
 
+  async simulate(actionType, payload, policy) {
+    if (actionType !== "generate_quote") {
+      return { mode: "schema" as const, summary: `${actionType.replaceAll("_", " ")} has no quotation price calculation to dry-run.`, predicted: { actionType, fieldChanges: [] } };
+    }
+    const p = QuotePayloadSchema.parse(payload);
+    const catalog = await loadPricingCatalog(policy.tenantId);
+    const lines = p.items.map((item) => ({ item, priceUsd: priceForItem(catalog, item) }));
+    const allPriced = lines.length > 0 && lines.every((line) => line.priceUsd !== null);
+    const totalUsd = allPriced ? lines.reduce((sum, line) => sum + (line.priceUsd ?? 0), 0) : null;
+    return {
+      mode: "dry_run" as const,
+      summary: allPriced
+        ? `Dry run: a quote for ${p.householdLabel} totals $${totalUsd}. No proposal or quote row was created.`
+        : `Dry run: ${p.householdLabel}'s quote has unpriced items. No proposal or quote row was created.`,
+      predicted: { proposal: "would_create", householdLabel: p.householdLabel, lines, totalUsd, allPriced },
+    };
+  },
+
   async execute(draft: DraftAction, tools: ToolRegistry): Promise<ExecutionResult> {
     if (draft.actionType === "size_equipment_for_household") {
       const p = SizingPayloadSchema.parse(draft.payload);

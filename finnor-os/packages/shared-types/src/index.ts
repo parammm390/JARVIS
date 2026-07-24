@@ -100,6 +100,14 @@ export interface ValidationResult {
   errors: string[];
 }
 
+/** B2.T2: an explicitly non-mutating forecast produced before an action reaches the
+ * confirmation gate. It is a prediction, never evidence that an effect happened. */
+export interface SimulationResult {
+  mode: "schema" | "dry_run";
+  summary: string;
+  predicted: Record<string, unknown>;
+}
+
 export interface DraftAction {
   actionType: string;
   /** Plain-language summary shown in the Confirmation Queue. Never a stack trace. */

@@ -184,6 +184,8 @@ export const domainActions = pgTable(
     // materialized from same-transaction sibling ids, never accepted from a client.
     planId: uuid("plan_id"),
     dependsOn: uuid("depends_on").array().notNull().default([]),
+    // B2.T2: an explicitly labeled no-write prediction while the action is pending.
+    predictedReceipt: jsonb("predicted_receipt"),
   },
   (t) => [
     index("domain_actions_tenant_status_idx").on(t.tenantId, t.status),

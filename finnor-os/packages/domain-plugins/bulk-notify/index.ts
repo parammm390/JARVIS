@@ -195,6 +195,26 @@ export const bulkNotifyPlugin: DomainEnginePlugin = {
     };
   },
 
+  async simulate(actionType, payload, policy) {
+    const p = BulkNotifyPayloadSchema.parse(payload);
+    const targets = await findConsentedTargets(policy.tenantId, {
+      minMonthsInactive: p.minMonthsInactive as number | undefined,
+      maxMonthsInactive: p.maxMonthsInactive as number | undefined,
+    });
+    const callable = p.channel === "call" ? Math.min(targets.length, DAILY_VAPI_CALL_CAP) : targets.length;
+    return {
+      mode: "dry_run" as const,
+      summary: `Dry run: ${targets.length} consented customer${targets.length === 1 ? "" : "s"} match; ${callable} ${p.channel} delivery${callable === 1 ? "" : "ies"} would be attempted. No message or call was sent.`,
+      predicted: {
+        channel: p.channel,
+        matchingConsentedTargets: targets.length,
+        wouldAttempt: callable,
+        capped: targets.length - callable,
+        fieldChanges: [],
+      },
+    };
+  },
+
   async execute(draft: DraftAction, tools: ToolRegistry): Promise<ExecutionResult> {
     const targets = (draft.payload.targets ?? []) as unknown as ConsentedTarget[];
     const offerScript = draft.payload.offerScript ? String(draft.payload.offerScript) : undefined;

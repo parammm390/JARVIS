@@ -53,6 +53,24 @@ export const invoiceToCashPlugin: DomainEnginePlugin = {
     };
   },
 
+  async simulate(actionType, payload, policy) {
+    const p = StartInvoiceToCashSchema.parse(payload);
+    const [invoice] = await withTenant(policy.tenantId, (db) => db.select().from(invoices).where(eq(invoices.id, p.invoiceId)));
+    return {
+      mode: "dry_run" as const,
+      summary: invoice
+        ? `Dry run: payment-link, delivery, and accounting-sync steps would be queued for $${invoice.amountUsd}; no command or payment link was created.`
+        : "Dry run: the invoice was not found, so no payment-collection workflow is predicted.",
+      predicted: {
+        invoiceId: p.invoiceId,
+        invoiceFound: Boolean(invoice),
+        amountUsd: invoice ? Number(invoice.amountUsd) : null,
+        fieldChanges: invoice ? [{ field: "workflow", from: null, to: "invoice_to_cash" }] : [],
+        steps: invoice ? ["create_payment_link", "send_message", "sync_invoice"] : [],
+      },
+    };
+  },
+
   async execute(draft: DraftAction, _tools: ToolRegistry): Promise<ExecutionResult> {
     const tenantId = String(draft.payload.tenantId ?? "");
     const p = draft.payload;
