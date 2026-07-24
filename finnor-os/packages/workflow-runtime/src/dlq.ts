@@ -2,11 +2,15 @@
 // so the route stays a thin auth+params wrapper, matching this repo's convention
 // (packages/orchestration's decide() playing the same role for actions/:id/confirm).
 
-import { withTenant, deadLetters, outboxEvents } from "@finnor/db";
+import { withTenant, deadLetters, outboxEvents, workflowSteps } from "@finnor/db";
 import { and, eq } from "drizzle-orm";
 
 export type ReplayResult =
-  | { replayed: true }
+  // Replaying an outbox event does not create a second workflow run: it reuses the
+  // original idempotency key. Return that original run when there is one so the UI
+  // can take an owner straight back to the affected theater without implying a new
+  // run was created.
+  | { replayed: true; workflowRunId: string | null }
   | { replayed: false; reason: "not_found" | "not_open" | "not_replayable" | "no_linked_outbox_event" };
 
 /** Re-enqueues the dead letter's linked outbox event by resetting it to `pending` —
@@ -22,12 +26,21 @@ export async function replayDeadLetter(tenantId: string, deadLetterId: string): 
     if (!row.replayable) return { replayed: false, reason: "not_replayable" };
     if (!row.relatedOutboxEventId) return { replayed: false, reason: "no_linked_outbox_event" };
 
+    const [outbox] = await db
+      .select({ workflowStepId: outboxEvents.workflowStepId })
+      .from(outboxEvents)
+      .where(eq(outboxEvents.id, row.relatedOutboxEventId));
+    const stepId = row.relatedWorkflowStepId ?? outbox?.workflowStepId;
+    const [step] = stepId
+      ? await db.select({ workflowRunId: workflowSteps.workflowRunId }).from(workflowSteps).where(eq(workflowSteps.id, stepId))
+      : [];
+
     await db
       .update(outboxEvents)
       .set({ status: "pending", nextAttemptAt: null, lastErrorKind: null })
       .where(eq(outboxEvents.id, row.relatedOutboxEventId));
     await db.update(deadLetters).set({ status: "replayed", resolvedAt: new Date() }).where(eq(deadLetters.id, deadLetterId));
-    return { replayed: true };
+    return { replayed: true, workflowRunId: step?.workflowRunId ?? null };
   });
 }
 

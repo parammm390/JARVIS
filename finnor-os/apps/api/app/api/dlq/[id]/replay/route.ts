@@ -20,7 +20,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     if (!result.replayed) {
       return Response.json({ error: result.reason }, { status: STATUS_BY_REASON[result.reason] ?? 409 });
     }
-    return Response.json({ replayed: true });
+    return Response.json({ replayed: true, workflowRunId: result.workflowRunId });
   } catch (err) {
     return errorResponse(err);
   }

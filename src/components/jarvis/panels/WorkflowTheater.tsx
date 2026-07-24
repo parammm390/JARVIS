@@ -183,7 +183,7 @@ const NODE_TONE: Record<string, { border: string; iconBg: string; icon: string; 
   blueprint: { border: "rgba(59,130,246,0.16)", iconBg: "rgba(59,130,246,0.08)", icon: "rgba(94,148,213,0.75)" },
 }
 
-function GraphNodeCard({ node, now, blueprint }: { node: GraphNode; now: number; blueprint?: boolean }) {
+function GraphNodeCard({ node, now, blueprint, onSelect }: { node: GraphNode; now: number; blueprint?: boolean; onSelect?: (node: GraphNode) => void }) {
   const reduced = useReducedMotion()
   const tone = NODE_TONE[node.status] ?? NODE_TONE.pending!
   const isLeased = node.status === "leased"
@@ -201,11 +201,23 @@ function GraphNodeCard({ node, now, blueprint }: { node: GraphNode; now: number;
     prevStatusRef.current = node.status
   }, [node.status])
 
+  const interactive = Boolean(onSelect && !blueprint)
+
   return (
     <div
       ref={nodeElRef}
       data-node
-      className="j-node jarvis-rise group absolute flex items-center gap-2.5 rounded-xl border bg-[rgba(10,19,36,0.92)] px-3 backdrop-blur-md transition-[opacity,border-color,box-shadow] duration-500"
+      role={interactive ? "button" : undefined}
+      tabIndex={interactive ? 0 : undefined}
+      aria-label={interactive ? `Open receipt for ${humanizeStepType(node.stepType)}` : undefined}
+      onClick={interactive ? () => onSelect?.(node) : undefined}
+      onKeyDown={interactive ? (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault()
+          onSelect?.(node)
+        }
+      } : undefined}
+      className={`j-node jarvis-rise group absolute flex items-center gap-2.5 rounded-xl border bg-[rgba(10,19,36,0.92)] px-3 backdrop-blur-md transition-[opacity,border-color,box-shadow] duration-500 ${interactive ? "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70" : ""}`}
       style={{
         left: X(node.col),
         top: Y(node.row),
@@ -260,7 +272,7 @@ function GraphNodeCard({ node, now, blueprint }: { node: GraphNode; now: number;
   )
 }
 
-function Graph({ nodes, edges, edgeState, now, blueprint }: { nodes: GraphNode[]; edges: GraphEdge[]; edgeState: (e: GraphEdge) => EdgeState; now: number; blueprint?: boolean }) {
+function Graph({ nodes, edges, edgeState, now, blueprint, onSelectNode }: { nodes: GraphNode[]; edges: GraphEdge[]; edgeState: (e: GraphEdge) => EdgeState; now: number; blueprint?: boolean; onSelectNode?: (node: GraphNode) => void }) {
   const maxCol = Math.max(...nodes.map((n) => n.col))
   const maxRow = Math.max(...nodes.map((n) => n.row))
   return (
@@ -268,14 +280,14 @@ function Graph({ nodes, edges, edgeState, now, blueprint }: { nodes: GraphNode[]
       <div data-graph className="relative" style={{ width: X(maxCol) + NODE_W, height: Y(maxRow) + NODE_H, minWidth: X(maxCol) + NODE_W }}>
         <GraphEdges nodes={nodes} edges={edges} edgeState={edgeState} />
         {nodes.map((n) => (
-          <GraphNodeCard key={n.id} node={n} now={now} blueprint={blueprint} />
+          <GraphNodeCard key={n.id} node={n} now={now} blueprint={blueprint} onSelect={onSelectNode} />
         ))}
       </div>
     </div>
   )
 }
 
-function LiveRunRow({ run, now, onOpen }: { run: WorkflowRun; now: number; onOpen: () => void }) {
+function LiveRunRow({ run, now, onOpen, onSelectStep }: { run: WorkflowRun; now: number; onOpen: () => void; onSelectStep?: (stepId: string) => void }) {
   const nodes: GraphNode[] = run.steps.map((s, i) => ({
     id: s.id,
     stepType: s.stepType,
@@ -332,7 +344,7 @@ function LiveRunRow({ run, now, onOpen }: { run: WorkflowRun; now: number; onOpe
           </div>
         </div>
       </button>
-      <Graph nodes={nodes} edges={edges} edgeState={edgeState} now={now} />
+      <Graph nodes={nodes} edges={edges} edgeState={edgeState} now={now} onSelectNode={(node) => onSelectStep?.(node.id)} />
     </motion.div>
   )
 }
@@ -523,6 +535,29 @@ function WhyStepButton({ stepId }: { stepId: string }) {
   )
 }
 
+// A node click has the same receipt lookup contract as the explicit "Why?" action.
+// Workflow-run payloads intentionally do not embed receipt ids, so this stays an
+// on-demand tenant-scoped lookup rather than inventing a second source of truth.
+function StepReceiptLookup({ stepId, onClose }: { stepId: string; onClose: () => void }) {
+  const [receiptId, setReceiptId] = useState<string | null>(null)
+
+  useEffect(() => {
+    let current = true
+    void jarvisGet<{ receipts: Array<{ id: string }> }>("receipts", { workflowStepId: stepId })
+      .then((res) => {
+        if (current) setReceiptId(res.receipts[0]?.id ?? null)
+      })
+      .catch(() => {
+        if (current) setReceiptId(null)
+      })
+    return () => {
+      current = false
+    }
+  }, [stepId])
+
+  return receiptId ? <ReceiptDrawer receiptId={receiptId} onClose={onClose} /> : null
+}
+
 function RunDrawer({ run, onClose }: { run: WorkflowRun; onClose: () => void }) {
   return (
     <AnimatePresence>
@@ -565,13 +600,80 @@ function RunDrawer({ run, onClose }: { run: WorkflowRun; onClose: () => void }) 
   )
 }
 
+function RunBrowser({ runs, now, onOpen, onSelectStep }: { runs: WorkflowRun[]; now: number; onOpen: (runId: string) => void; onSelectStep: (stepId: string) => void }) {
+  const [kind, setKind] = useState("all")
+  const [status, setStatus] = useState("all")
+  const [age, setAge] = useState("all")
+  const [expandedRunId, setExpandedRunId] = useState<string | null>(null)
+  const kinds = [...new Set(runs.map((run) => run.workflowType))].sort()
+  const statuses = [...new Set(runs.map((run) => run.status))].sort()
+  const maxAgeMs = age === "1h" ? 3_600_000 : age === "24h" ? 86_400_000 : age === "7d" ? 604_800_000 : Infinity
+  const filtered = runs.filter((run) =>
+    (kind === "all" || run.workflowType === kind) &&
+    (status === "all" || run.status === status) &&
+    now - new Date(run.updatedAt).getTime() <= maxAgeMs,
+  )
+
+  return (
+    <div className="mt-4 rounded-2xl border border-white/8 bg-white/[0.012] p-3">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <div className="text-[10px] font-black uppercase tracking-[0.16em] text-[color:var(--j-text-faint)]">Run browser</div>
+          <p className="text-[10px] text-[color:var(--j-text-dim)]">{filtered.length} of {runs.length} real runs</p>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          <select value={kind} onChange={(event) => setKind(event.target.value)} aria-label="Filter workflow kind" className="rounded-lg border border-white/10 bg-[#0a1324] px-2 py-1 text-[10px] text-white/70">
+            <option value="all">all kinds</option>
+            {kinds.map((value) => <option key={value} value={value}>{humanizeWorkflowType(value)}</option>)}
+          </select>
+          <select value={status} onChange={(event) => setStatus(event.target.value)} aria-label="Filter workflow status" className="rounded-lg border border-white/10 bg-[#0a1324] px-2 py-1 text-[10px] text-white/70">
+            <option value="all">all status</option>
+            {statuses.map((value) => <option key={value} value={value}>{value}</option>)}
+          </select>
+          <select value={age} onChange={(event) => setAge(event.target.value)} aria-label="Filter workflow age" className="rounded-lg border border-white/10 bg-[#0a1324] px-2 py-1 text-[10px] text-white/70">
+            <option value="all">any age</option>
+            <option value="1h">last hour</option>
+            <option value="24h">last day</option>
+            <option value="7d">last 7 days</option>
+          </select>
+        </div>
+      </div>
+      <div className="space-y-2">
+        {filtered.map((run) => (
+          <div key={run.id} className="rounded-xl border border-white/8 bg-black/10 p-2.5">
+            <button type="button" onClick={() => setExpandedRunId((current) => current === run.id ? null : run.id)} className="flex w-full items-center justify-between gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60">
+              <span className="min-w-0 truncate text-[11px] font-bold text-[color:var(--j-text)]">{humanizeWorkflowType(run.workflowType)}</span>
+              <span className="flex shrink-0 items-center gap-1.5 text-[9px] text-[color:var(--j-text-dim)]">
+                {run.watchdogFlagged && <span className="rounded-full bg-red-400/10 px-1.5 py-0.5 font-black text-red-300">watchdog stuck</span>}
+                <span>{run.status}</span><span>·</span><span>{ageLabel(run.updatedAt, now)}</span>
+              </span>
+            </button>
+            {expandedRunId === run.id && <div className="mt-3"><LiveRunRow run={run} now={now} onOpen={() => onOpen(run.id)} onSelectStep={onSelectStep} /></div>}
+          </div>
+        ))}
+        {filtered.length === 0 && <p className="rounded-lg border border-dashed border-white/10 p-3 text-center text-[10px] text-[color:var(--j-text-dim)]">No real runs match these filters.</p>}
+      </div>
+    </div>
+  )
+}
+
 export function WorkflowTheater() {
   const data = useJarvis()
   const [openRunId, setOpenRunId] = useState<string | null>(null)
+  const [openReceiptStepId, setOpenReceiptStepId] = useState<string | null>(null)
+  const handledRunLinkRef = useRef<string | null>(null)
   const runs = data.runs
   const visible = runs.slice(0, 3)
   const extra = runs.length - visible.length
   const openRun = runs.find((r) => r.id === openRunId) ?? null
+
+  useEffect(() => {
+    const requestedRunId = new URLSearchParams(window.location.search).get("workflowRunId")
+    if (requestedRunId && requestedRunId !== handledRunLinkRef.current && runs.some((run) => run.id === requestedRunId)) {
+      handledRunLinkRef.current = requestedRunId
+      setOpenRunId(requestedRunId)
+    }
+  }, [runs])
 
   useEffect(() => {
     const offs = [onJarvisEvent("step-completed", () => sfx.stepTick()), onJarvisEvent("run-completed", () => sfx.runDone())]
@@ -585,7 +687,7 @@ export function WorkflowTheater() {
   const mode: "live" | "replay" | "blueprint" = runs.length > 0 ? "live" : replayPool.length > 0 ? "replay" : "blueprint"
 
   return (
-    <div className="j-panel j-hud relative overflow-hidden xl:col-span-2">
+    <div id="workflow-theater" className="j-panel j-hud relative overflow-hidden xl:col-span-2">
       {/* ambient scan sweep */}
       <div className="jarvis-scan jarvis-ambient pointer-events-none absolute inset-y-0 w-1/3 bg-gradient-to-r from-transparent via-cyan-300/[0.03] to-transparent" aria-hidden />
       <div className="p-4 md:p-5">
@@ -613,7 +715,7 @@ export function WorkflowTheater() {
           <div className="space-y-3">
             <AnimatePresence initial={false}>
               {visible.map((run) => (
-                <LiveRunRow key={run.id} run={run} now={data.now} onOpen={() => setOpenRunId(run.id)} />
+                <LiveRunRow key={run.id} run={run} now={data.now} onOpen={() => setOpenRunId(run.id)} onSelectStep={setOpenReceiptStepId} />
               ))}
             </AnimatePresence>
             {extra > 0 && <div className="text-center text-[11px] text-[color:var(--j-text-dim)]">+{extra} more in flight</div>}
@@ -645,8 +747,10 @@ export function WorkflowTheater() {
             </p>
           </div>
         )}
+        <RunBrowser runs={[...runs, ...data.terminalRuns.filter((terminal) => !runs.some((run) => run.id === terminal.id))]} now={data.now} onOpen={setOpenRunId} onSelectStep={setOpenReceiptStepId} />
       </div>
       {openRun && <RunDrawer run={openRun} onClose={() => setOpenRunId(null)} />}
+      {openReceiptStepId && <StepReceiptLookup stepId={openReceiptStepId} onClose={() => setOpenReceiptStepId(null)} />}
     </div>
   )
 }

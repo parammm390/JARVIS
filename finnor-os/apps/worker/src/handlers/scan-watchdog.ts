@@ -17,7 +17,7 @@
 
 import { withTenant, workflowRuns, workflowSteps, decisionReceipts, domainActions, domainPolicies, enqueueJob, getPool } from "@finnor/db";
 import { and, eq, lt, isNull, sql } from "drizzle-orm";
-import { enqueueStep } from "@finnor/workflow-runtime";
+import { enqueueStep, isRunPastWatchdogDeadline, stuckRunDeadlineHours } from "@finnor/workflow-runtime";
 import { appendEpisode, readEpisodes } from "@finnor/memory";
 import { Sentry } from "@finnor/tools";
 import type { JobHandler } from "../queue";
@@ -29,15 +29,6 @@ import type { JobHandler } from "../queue";
 // workflow-kind types (§1) get their own row; anything else (single-action commands,
 // which normally finish in one runtime-bridge call) falls back to a much shorter default,
 // since a single_action run sitting "running" past a few minutes is far more suspicious.
-const STUCK_RUN_DEADLINE_HOURS: Record<string, number> = {
-  lead_to_water_test: 48, // spans scheduling a real future visit — genuinely slow by design
-  proposal_signature: 72, // waiting on a customer's real signature
-  proposal_to_installation: 72,
-  invoice_to_cash: 72,
-  single_action: 0.25, // 15 minutes — should complete in one runtime-bridge call
-};
-const DEFAULT_STUCK_RUN_DEADLINE_HOURS = 24;
-
 const ORPHANED_STEP_MINUTES = 10;
 const UNFINALIZED_RECEIPT_MINUTES = 60;
 // Half of scan-approval-expiry's own default — a nudge should land well before the
@@ -62,9 +53,9 @@ async function detectStuckRuns(tenantId: string): Promise<WatchdogFinding[]> {
   );
   const findings: WatchdogFinding[] = [];
   for (const run of running) {
-    const deadline = STUCK_RUN_DEADLINE_HOURS[run.workflowType] ?? DEFAULT_STUCK_RUN_DEADLINE_HOURS;
+    const deadline = stuckRunDeadlineHours(run.workflowType);
     const elapsed = hoursSince(run.updatedAt);
-    if (elapsed >= deadline) {
+    if (isRunPastWatchdogDeadline(run)) {
       findings.push({
         kind: "stuck_run",
         tenantId,

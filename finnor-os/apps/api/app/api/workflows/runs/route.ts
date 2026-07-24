@@ -7,6 +7,7 @@
 import { withTenant, workflowRuns, workflowSteps } from "@finnor/db";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { requireContext, errorResponse } from "../../../../lib/auth";
+import { isRunPastWatchdogDeadline } from "@finnor/workflow-runtime";
 
 export async function GET(req: Request): Promise<Response> {
   try {
@@ -31,7 +32,7 @@ export async function GET(req: Request): Promise<Response> {
             const terminal = await db
               .select()
               .from(workflowRuns)
-              .where(and(eq(workflowRuns.tenantId, ctx.tenantId), inArray(workflowRuns.status, ["completed", "failed", "compensating", "compensated"])))
+              .where(and(eq(workflowRuns.tenantId, ctx.tenantId), inArray(workflowRuns.status, ["completed", "failed", "compensating", "compensated", "paused", "cancelled", "escalated"])))
               .orderBy(desc(workflowRuns.updatedAt))
               .limit(20);
             return [...running, ...terminal];
@@ -57,6 +58,11 @@ export async function GET(req: Request): Promise<Response> {
         id: r.id,
         workflowType: r.workflowType,
         status: r.status,
+        // This is the same pure threshold the watchdog scan uses. Findings are sent
+        // to Sentry rather than persisted, so re-evaluating it here is the only
+        // truthful way to badge a currently stuck run without inventing a database
+        // flag that does not exist.
+        watchdogFlagged: r.status === "running" && isRunPastWatchdogDeadline(r),
         version: r.version,
         createdAt: r.createdAt,
         updatedAt: r.updatedAt,

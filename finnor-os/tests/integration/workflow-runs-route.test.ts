@@ -33,6 +33,7 @@ function req(qs = ""): Request {
 describe.skipIf(!available)("GET /api/workflows/runs (Phase 10)", () => {
   let runningRunId: string;
   let completedRunId: string;
+  let stuckRunId: string;
 
   beforeAll(async () => {
     process.env.DATABASE_URL = DB_URL;
@@ -47,7 +48,7 @@ describe.skipIf(!available)("GET /api/workflows/runs (Phase 10)", () => {
       const stale = await db
         .select({ id: commands.id })
         .from(commands)
-        .where(inArray(commands.idempotencyKey, ["wf-runs-test-1", "wf-runs-test-2"]));
+        .where(inArray(commands.idempotencyKey, ["wf-runs-test-1", "wf-runs-test-2", "wf-runs-test-stuck"]));
       const staleCmdIds = stale.map((c) => c.id);
       if (staleCmdIds.length > 0) {
         const staleRuns = await db.select({ id: workflowRuns.id }).from(workflowRuns).where(inArray(workflowRuns.commandId, staleCmdIds));
@@ -91,6 +92,16 @@ describe.skipIf(!available)("GET /api/workflows/runs (Phase 10)", () => {
       await db.insert(workflowSteps).values([
         { tenantId: SEED_TENANT_ID, workflowRunId: completedRunId, stepType: "schedule_visit", sequence: 1, status: "completed", idempotencyKey: "step-3" },
       ]);
+
+      const [cmd3] = await db
+        .insert(commands)
+        .values({ tenantId: SEED_TENANT_ID, commandType: "start_water_test_workflow", payload: {}, idempotencyKey: "wf-runs-test-stuck" })
+        .returning();
+      const [stuckRun] = await db
+        .insert(workflowRuns)
+        .values({ tenantId: SEED_TENANT_ID, commandId: cmd3!.id, workflowType: "single_action", status: "running", updatedAt: new Date(Date.now() - 16 * 60_000) })
+        .returning();
+      stuckRunId = stuckRun!.id;
     });
   });
 
@@ -101,7 +112,7 @@ describe.skipIf(!available)("GET /api/workflows/runs (Phase 10)", () => {
   it("returns running runs first plus recent terminal runs, each with ordered steps", async () => {
     const res = await GET(req());
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { runs: Array<{ id: string; status: string; version: number; steps: Array<{ sequence: number; status: string }> }> };
+    const body = (await res.json()) as { runs: Array<{ id: string; status: string; version: number; watchdogFlagged: boolean; steps: Array<{ sequence: number; status: string }> }> };
     const running = body.runs.find((r) => r.id === runningRunId);
     const completed = body.runs.find((r) => r.id === completedRunId);
     expect(running).toBeDefined();
@@ -111,6 +122,8 @@ describe.skipIf(!available)("GET /api/workflows/runs (Phase 10)", () => {
     // Phase 7 (§7.2): the cockpit's run controls need this to condition their
     // optimistic-concurrency UPDATE — a fresh run defaults to version 1.
     expect(running!.version).toBe(1);
+    expect(running!.watchdogFlagged).toBe(false);
+    expect(body.runs.find((r) => r.id === stuckRunId)!.watchdogFlagged).toBe(true);
   });
 
   it("?status=running filters to only running runs", async () => {

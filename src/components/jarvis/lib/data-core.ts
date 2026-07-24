@@ -89,6 +89,8 @@ export interface WorkflowRun {
   version: number
   createdAt: string
   updatedAt: string
+  /** Same threshold as the A4 watchdog scan; computed by GET workflows/runs. */
+  watchdogFlagged?: boolean
   steps: WorkflowStep[]
 }
 export interface EventRow {

@@ -6,7 +6,7 @@
 // provider (data-core.ts) — an owner opens this occasionally, not every 4 seconds.
 
 import { useCallback, useEffect, useState } from "react"
-import { RefreshCw, RotateCcw, Trash2 } from "lucide-react"
+import { ArrowUpRight, RefreshCw, RotateCcw, Trash2 } from "lucide-react"
 import { jarvisGet, jarvisPost, JarvisApiError } from "../lib/api"
 import { useJarvisAuth } from "../lib/jarvis-auth"
 import { ageLabel } from "../lib/data-core"
@@ -20,6 +20,9 @@ interface DeadLetter {
   lastError: string
   replayable: boolean
   status: "open" | "replayed" | "discarded"
+  suggestedDisposition?: "replay" | "discard" | "escalate" | null
+  suggestionReason?: string | null
+  relatedWorkflowRunId?: string | null
 }
 
 export function DlqBrowser() {
@@ -27,6 +30,7 @@ export function DlqBrowser() {
   const [rows, setRows] = useState<DeadLetter[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [inflight, setInflight] = useState<string | null>(null)
+  const [replayedRunId, setReplayedRunId] = useState<string | null>(null)
   const [now, setNow] = useState(Date.now())
 
   const load = useCallback(async () => {
@@ -55,7 +59,8 @@ export function DlqBrowser() {
     if (inflight) return
     setInflight(id)
     try {
-      await jarvisPost(`dlq/${id}/${verb}`, {})
+      const result = await jarvisPost<{ workflowRunId?: string | null }>(`dlq/${id}/${verb}`, {})
+      if (verb === "replay") setReplayedRunId(result.workflowRunId ?? null)
       setRows((prev) => prev?.filter((r) => r.id !== id) ?? prev)
     } catch (e) {
       setError(e instanceof JarvisApiError ? e.message : e instanceof Error ? e.message : "That didn't go through.")
@@ -94,7 +99,13 @@ export function DlqBrowser() {
               <div className="mt-1 flex flex-wrap gap-1">
                 <span className="rounded-full bg-white/8 px-2 py-0.5 text-[9px] text-white/50">{r.errorKind}</span>
                 <span className="rounded-full bg-white/8 px-2 py-0.5 text-[9px] text-white/50">{r.attempts} attempt{r.attempts === 1 ? "" : "s"}</span>
+                {r.suggestedDisposition && (
+                  <span className={`rounded-full px-2 py-0.5 text-[9px] font-black ${r.suggestedDisposition === "replay" ? "bg-cyan-400/10 text-cyan-200" : r.suggestedDisposition === "discard" ? "bg-slate-400/10 text-slate-300" : "bg-amber-400/10 text-amber-200"}`}>
+                    suggest {r.suggestedDisposition}
+                  </span>
+                )}
               </div>
+              {r.suggestionReason && <p className="mt-2 text-[10px] leading-relaxed text-[color:var(--j-text-dim)]">{r.suggestionReason}</p>}
               <div className="mt-2 flex gap-2">
                 {r.replayable && (
                   <button
@@ -115,8 +126,24 @@ export function DlqBrowser() {
                   <Trash2 className="h-3 w-3" /> Discard
                 </button>
               </div>
+              {r.relatedWorkflowRunId && (
+                <a
+                  href={`/jarvis?workflowRunId=${encodeURIComponent(r.relatedWorkflowRunId)}#workflow-theater`}
+                  className="mt-2 inline-flex items-center gap-1 text-[10px] font-black text-cyan-300/80 hover:text-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60"
+                >
+                  View linked workflow <ArrowUpRight className="h-3 w-3" />
+                </a>
+              )}
             </div>
           ))}
+          {replayedRunId && (
+            <a
+              href={`/jarvis?workflowRunId=${encodeURIComponent(replayedRunId)}#workflow-theater`}
+              className="inline-flex items-center gap-1 rounded-lg border border-cyan-300/20 bg-cyan-300/5 px-3 py-2 text-[10px] font-black text-cyan-100 hover:text-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60"
+            >
+              Replay queued. View the linked workflow <ArrowUpRight className="h-3 w-3" />
+            </a>
+          )}
         </div>
       </div>
     </div>
