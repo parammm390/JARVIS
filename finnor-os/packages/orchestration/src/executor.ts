@@ -76,6 +76,17 @@ export class GatedExecutor implements Executor {
     }
     // --------------------------------------------------------
 
+    // A policy may deliberately permit a read-only action without a human
+    // confirmation. Record that authorization immutably before claiming it so the
+    // runtime bridge can distinguish this legitimate path from a forged SQL status.
+    // Confirmation-required actions instead carry the `confirmed` episode written
+    // by decide(), which the bridge validates independently.
+    if (!policy.requiresConfirmation && !draft.requiresConfirmation) {
+      await appendEpisode(action.tenantId, action.id, "policy_ungated_authorized", { policyId: policy.id ?? null }, {
+        actionType: action.actionType,
+        reason: "policy does not require confirmation",
+      });
+    }
     await this.setStatus(action, "executing");
     // Scoped per action execution: claims each external tool call against the
     // external_operations ledger so a reflection retry never re-fires an

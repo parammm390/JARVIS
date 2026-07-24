@@ -18,7 +18,7 @@
 
 import { withTenant, domainActions, actionLog } from "@finnor/db";
 import { submitCommand, claimStep, completeStep, failStep } from "@finnor/workflow-runtime";
-import { and, eq } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
 import type { DraftAction, ExecutionResult, ErrorKind } from "@finnor/shared-types";
 import type { ToolRegistry } from "@finnor/tools";
 import type { DomainEnginePlugin } from "@finnor/plugins-shared";
@@ -56,9 +56,12 @@ function classifyFailure(result: ExecutionResult): { reason: string; errorKind: 
 
 export async function executePluginViaRuntime(params: ExecutePluginViaRuntimeParams): Promise<ExecutionResult> {
   // The exported bridge is shared by the two executors, never an approval entry point.
-  // Refuse a direct caller unless the action was claimed for execution and carries the
-  // immutable `confirmed` episode written by FinnorOrchestrator.decide(). This stops
-  // accidental bridge calls before they create a command, receipt, or provider call.
+  // Refuse a direct caller unless the action was claimed for execution and carries an
+  // immutable authorization episode. Confirmation-gated actions carry `confirmed`,
+  // written by FinnorOrchestrator.decide(); deliberately ungated read-only actions
+  // carry `policy_ungated_authorized`, written by GatedExecutor after policy
+  // validation. This stops a forged SQL status from creating a command, receipt, or
+  // provider call while preserving the explicit read-only policy path.
   const authorized = await withTenant(params.tenantId, async (db) => {
     const [action] = await db
       .select({ status: domainActions.status })
@@ -66,14 +69,18 @@ export async function executePluginViaRuntime(params: ExecutePluginViaRuntimePar
       .where(and(eq(domainActions.id, params.actionId), eq(domainActions.tenantId, params.tenantId)))
       .limit(1);
     if (action?.status !== "executing") return false;
-    const [approval] = await db
+    const [authorization] = await db
       .select({ id: actionLog.id })
       .from(actionLog)
-      .where(and(eq(actionLog.domainActionId, params.actionId), eq(actionLog.tenantId, params.tenantId), eq(actionLog.step, "confirmed")))
+      .where(and(
+        eq(actionLog.domainActionId, params.actionId),
+        eq(actionLog.tenantId, params.tenantId),
+        or(eq(actionLog.step, "confirmed"), eq(actionLog.step, "policy_ungated_authorized")),
+      ))
       .limit(1);
-    return Boolean(approval);
+    return Boolean(authorization);
   });
-  if (!authorized) return { status: "failure", output: {}, error: "Execution refused: action was not claimed from an audited approval." };
+  if (!authorized) return { status: "failure", output: {}, error: "Execution refused: action was not claimed from an audited approval or policy authorization." };
 
   // Deliberately NO command-level idempotencyKey here (unlike lead-to-water-test's
   // `lead-to-water-test:${householdId}:${scheduledAt}` and the other 3 workflow-kind
