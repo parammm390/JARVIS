@@ -8,9 +8,11 @@ const environments = [
 ] as const;
 const tenantAToken = process.env.TENANT_A_PROBE_JWT;
 const tenantBToken = process.env.TENANT_B_PROBE_JWT;
+const productionMarkerHouseholdId = process.env.PRODUCTION_TENANT_A_MARKER_HOUSEHOLD_ID;
+const stagingMarkerHouseholdId = process.env.STAGING_TENANT_A_MARKER_HOUSEHOLD_ID;
 
-if (!tenantAToken || !tenantBToken || environments.some((environment) => !environment.url)) {
-  throw new Error("A5 tenant-isolation probe requires STAGING_API_URL, PRODUCTION_API_URL, TENANT_A_PROBE_JWT, and TENANT_B_PROBE_JWT");
+if (!tenantAToken || !tenantBToken || !productionMarkerHouseholdId || !stagingMarkerHouseholdId || environments.some((environment) => !environment.url)) {
+  throw new Error("A5 tenant-isolation probe requires URLs, both JWTs, and one tenant-A marker household ID per environment");
 }
 
 async function householdIds(baseUrl: string, token: string): Promise<string[]> {
@@ -28,7 +30,10 @@ async function main(): Promise<void> {
     const [aIds, bIds] = await Promise.all([householdIds(environment.url!, tenantAToken!), householdIds(environment.url!, tenantBToken!)]);
     const overlap = aIds.filter((id) => bIds.includes(id));
     if (overlap.length > 0) throw new Error(`${environment.name}: tenant data leak (${overlap.length} overlapping household IDs)`);
-    console.log(`${environment.name}: PASS — tenant A rows=${aIds.length}, tenant B rows=${bIds.length}, overlap=0`);
+    const markerId = environment.name === "production" ? productionMarkerHouseholdId : stagingMarkerHouseholdId;
+    if (!aIds.includes(markerId!)) throw new Error(`${environment.name}: tenant A marker household is not visible to tenant A`);
+    if (bIds.includes(markerId!)) throw new Error(`${environment.name}: tenant A marker household leaked to tenant B`);
+    console.log(`${environment.name}: PASS — tenant A rows=${aIds.length}, tenant B rows=${bIds.length}, overlap=0, marker visible only to tenant A`);
   }
 }
 
