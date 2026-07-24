@@ -57,17 +57,29 @@ function isUnpooledLocal(url: string): boolean {
 }
 
 let pool: pg.Pool | null = null;
+let poolConnectionString: string | null = null;
 
 export function getPool(): pg.Pool {
+  const url =
+    process.env.DATABASE_URL ??
+    process.env.POSTGRES_URL_NON_POOLING ??
+    process.env.POSTGRES_URL;
+  if (!url) throw new Error("DATABASE_URL is not set");
+
+  // Managed-secret boot can replace DATABASE_URL after an import-time helper has
+  // already touched the pool. Never keep the pre-secret connection alive: it may be
+  // a migration/owner URL rather than the restricted application role. New callers
+  // get a pool for the current environment while the old pool drains safely.
+  if (pool && poolConnectionString !== url) {
+    const stalePool = pool;
+    pool = null;
+    poolConnectionString = null;
+    void stalePool.end().catch(() => undefined);
+  }
   if (!pool) {
     // Cloud (Vercel + Supabase store): POSTGRES_URL_NON_POOLING is a direct session-mode
     // connection — required because we set search_path per session, which a transaction-
     // mode pooler would reset between clients. We run our own small pg.Pool regardless.
-    const url =
-      process.env.DATABASE_URL ??
-      process.env.POSTGRES_URL_NON_POOLING ??
-      process.env.POSTGRES_URL;
-    if (!url) throw new Error("DATABASE_URL is not set");
     const cfg = pgConnectionConfig(url);
     // Every session-mode pooler this app talks to (Supabase Supavisor, and now
     // PgBouncer whether private or public) caps total concurrent backend connections
@@ -116,6 +128,7 @@ export function getPool(): pg.Pool {
     pool.on("error", (err) => {
       console.error("[db] idle pooled connection error (non-fatal, connection recycled):", err.message);
     });
+    poolConnectionString = url;
   }
   return pool;
 }
@@ -154,6 +167,7 @@ export async function closePool(): Promise<void> {
   if (pool) {
     await pool.end();
     pool = null;
+    poolConnectionString = null;
   }
 }
 
