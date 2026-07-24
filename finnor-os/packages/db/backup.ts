@@ -27,6 +27,21 @@ async function listFinnorTables(client: pg.Client): Promise<string[]> {
   return rows.map((r) => r.table_name);
 }
 
+async function listFinnorArrayColumns(client: pg.Client): Promise<Map<string, Set<string>>> {
+  const { rows } = await client.query<{ table_name: string; column_name: string }>(
+    `SELECT table_name, column_name
+       FROM information_schema.columns
+      WHERE table_schema = 'finnor_os' AND data_type = 'ARRAY'`,
+  );
+  const result = new Map<string, Set<string>>();
+  for (const row of rows) {
+    const columns = result.get(row.table_name) ?? new Set<string>();
+    columns.add(row.column_name);
+    result.set(row.table_name, columns);
+  }
+  return result;
+}
+
 /** Dumps every real table in the finnor_os schema. Dev/demo-scale only (Dealer Zero,
  *  not a real multi-tenant production body of data) — a straight `SELECT *` per table
  *  is the honest scope here; a real production-scale dump would need streaming/paging,
@@ -60,6 +75,11 @@ export async function restoreAllTables(databaseUrl: string, dump: DatabaseDump):
     await client.query("BEGIN");
     await client.query("SET session_replication_role = replica");
     const tableNames = Object.keys(dump.tables);
+    // pg returns Postgres arrays as JavaScript arrays, just as it returns JSON arrays
+    // as JavaScript arrays. The restore path must distinguish them: JSON needs an
+    // explicit JSON string (see below), while a real `uuid[]`/`text[]` must remain a
+    // native array for pg to encode as a Postgres array literal.
+    const arrayColumns = await listFinnorArrayColumns(client);
     // Reverse order for TRUNCATE doesn't matter with FK checks disabled, but keep it
     // deterministic (declaration order) for readable logs/failures.
     for (const name of tableNames) {
@@ -80,6 +100,7 @@ export async function restoreAllTables(databaseUrl: string, dump: DatabaseDump):
         // (pg already binds those correctly for timestamp/text/numeric/uuid columns).
         const values = columns.map((c) => {
           const v = row[c];
+          if (Array.isArray(v) && arrayColumns.get(name)?.has(c)) return v;
           if (v !== null && typeof v === "object" && !(v instanceof Date) && !Buffer.isBuffer(v)) {
             return JSON.stringify(v);
           }
