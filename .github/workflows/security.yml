@@ -18,10 +18,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   osv:
     name: osv-scanner
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: google/osv-scanner-action@v2.3.8
-        with:
-          scan-args: |-
-            --lockfile=finnor-os/package-lock.json
+    # v2 ships reusable workflows, not a root action.yml. Calling the root as an
+    # action makes GitHub reject it before the dependency scan begins.
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2.3.8
+    with:
+      scan-args: |-
+        --lockfile=finnor-os/package-lock.json
