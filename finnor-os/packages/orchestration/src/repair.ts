@@ -21,6 +21,9 @@ export interface RepairInput {
   reasoning?: string;
   allowedActionTypes: string[];
   payloadSpec: string; // plugins.payloadSpecJson() — same string planner.ts's system prompt uses
+  /** B2.T8: the plugin's concrete schema error, supplied for the one permitted
+   * repair attempt before the planner fails loudly. */
+  validationError?: string;
 }
 
 export interface RepairVerdict {
@@ -179,6 +182,7 @@ export async function repairAction(
     flags.length > 0
       ? `A pattern check flagged this draft for possible confusion: ${flags.join(", ")}. Weigh this, but use your own judgment.`
       : "",
+    input.validationError ? `The candidate failed plugin schema validation: ${input.validationError}. Repair that exact error; do not invent missing facts.` : "",
     'Respond with ONLY this JSON: {"repaired": boolean, "actionType": "...", "payload": {...}, "reason": "one short sentence"}. If repaired is false, actionType/payload must equal the original draft exactly.',
   ]
     .filter(Boolean)

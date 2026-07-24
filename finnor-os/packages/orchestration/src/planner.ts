@@ -163,6 +163,42 @@ export class LLMPlanner implements Planner {
       return new Map(rows.map((p) => [p.actionType, p as DomainPolicy]));
     });
 
+    // B2.T8: schema-invalid model output gets exactly one explicit repair attempt.
+    // It is deliberately before tiering/second-candidate work, so an invalid draft
+    // never receives a second, unrelated chance to slip through that would conceal
+    // the original validation problem. If the repair cannot make it valid, abort the
+    // plan loudly instead of persisting a row the executor is guaranteed to reject.
+    const schemaRepair = await Promise.all(
+      valid.map(async (action, index) => {
+        const candidate = { actionType: action.action_type, payload: restoredPayloads[index]! };
+        const plugin = this.plugins.resolve(candidate.actionType);
+        const policy =
+          policyByType.get(candidate.actionType) ??
+          ({ id: "", tenantId: tenantContext.tenantId, actionType: candidate.actionType, policy: {}, requiresConfirmation: true, confirmationTemplate: null, version: 0 } satisfies DomainPolicy);
+        const validation = plugin?.validate(candidate.actionType, candidate.payload, policy);
+        if (plugin && validation?.valid) return { candidate, repaired: null as RepairVerdict | null, validationError: null as string | null };
+        const validationError = !plugin ? `no plugin resolves ${candidate.actionType}` : validation?.errors.join("; ") || "payload failed validation";
+        const verdict = await repairAction({
+          instruction: redactedInstruction.value,
+          candidate,
+          reasoning: action.reasoning,
+          allowedActionTypes: actionTypes,
+          payloadSpec: this.plugins.payloadSpecJson(),
+          validationError,
+        });
+        const repairedPlugin = verdict.repaired ? this.plugins.resolve(verdict.actionType) : undefined;
+        const repairedPolicy =
+          policyByType.get(verdict.actionType) ??
+          ({ id: "", tenantId: tenantContext.tenantId, actionType: verdict.actionType, policy: {}, requiresConfirmation: true, confirmationTemplate: null, version: 0 } satisfies DomainPolicy);
+        const repairedValidation = repairedPlugin?.validate(verdict.actionType, verdict.payload, repairedPolicy);
+        if (!verdict.repaired || !repairedPlugin || !repairedValidation?.valid) {
+          const finalError = !verdict.repaired ? verdict.reason : !repairedPlugin ? `no plugin resolves ${verdict.actionType}` : repairedValidation?.errors.join("; ") || "payload failed validation";
+          throw new Error(`Schema repair failed for ${candidate.actionType} after one attempt: ${finalError}`);
+        }
+        return { candidate: { actionType: verdict.actionType, payload: verdict.payload }, repaired: verdict, validationError };
+      }),
+    );
+
     // Reasoning tier (Phase 8): pure classification, no DB/LLM — decides how much
     // extra reasoning depth each action gets below. requiresConfirmation and
     // compiledGraph are computed once here against the ORIGINAL action_type; the
@@ -177,7 +213,7 @@ export class LLMPlanner implements Planner {
       const tier: ReasoningTier = classifyReasoningTier({
         requiresConfirmation,
         compiledGraph,
-        payload: restoredPayloads[i]!,
+        payload: schemaRepair[i]!.candidate.payload,
         amountThresholdUsd,
         actionType: a.action_type,
         openScanSignals: memory.patterns?.scanSignals ?? [],
@@ -228,7 +264,7 @@ export class LLMPlanner implements Planner {
     if (highIndices.length > 0) {
       await withTenant(tenantContext.tenantId, async (db) => {
         for (const i of highIndices) {
-          const candidateA = { actionType: valid[i]!.action_type, payload: restoredPayloads[i]! };
+      const candidateA = schemaRepair[i]!.candidate;
           const candidateB = secondCandidates.get(i) ?? null;
           const groundedA = await groundEntitiesWithDb(db, candidateA.payload);
           const scoreA = scoreCandidate({
@@ -262,12 +298,12 @@ export class LLMPlanner implements Planner {
     const baseCandidates = valid.map((a, i) => {
       const tier = tierInfo[i]!.tier;
       if (tier === "high") return winnerByIndex.get(i)!;
-      return { actionType: a.action_type, payload: restoredPayloads[i]! };
+      return schemaRepair[i]!.candidate;
     });
 
     const repairVerdicts: Array<RepairVerdict | null> = await Promise.all(
       valid.map((a, i) => {
-        if (tierInfo[i]!.tier === "low") return Promise.resolve(null);
+        if (tierInfo[i]!.tier === "low" || schemaRepair[i]!.repaired) return Promise.resolve(null);
         return repairAction({
           instruction: redactedInstruction.value,
           candidate: baseCandidates[i]!,
@@ -397,6 +433,18 @@ export class LLMPlanner implements Planner {
       rows.flatMap((row, i) => {
         const episodes: Array<Promise<void>> = [];
         const verdict = finalCandidates[i]!.verdict;
+        const schemaVerdict = schemaRepair[i]!.repaired;
+        if (schemaVerdict) {
+          episodes.push(
+            appendEpisode(
+              tenantContext.tenantId,
+              row.id,
+              "schema_repair",
+              { originalActionType: valid[i]!.action_type, originalPayload: restoredPayloads[i], validationError: schemaRepair[i]!.validationError },
+              { repaired: true, actionType: schemaVerdict.actionType, payload: schemaVerdict.payload, reason: schemaVerdict.reason },
+            ),
+          );
+        }
         if (verdict) {
           episodes.push(
             appendEpisode(

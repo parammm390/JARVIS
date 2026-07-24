@@ -173,4 +173,21 @@ describe.skipIf(!available)("LLMPlanner repair pass", () => {
     expect(result).toBeTruthy();
     expect(result!.actionType).not.toBe("send_proposal_to_recent_installs");
   });
+
+  it("7. repairs one schema-invalid payload using the concrete validation error", async () => {
+    process.env.AWS_BEDROCK_API_KEY = "test-key";
+    mockFetchOnce('{"repaired": true, "actionType": "create_invoice", "payload": {"amountUsd": 450}, "reason": "Added the required amount from the instruction."}');
+    const planner = new LLMPlanner(createDefaultPluginRegistry(), stubPlannerProvider("create_invoice", {}));
+    const [result] = await planner.plan("Create a $450 invoice for the Hendersons.", tenantContext(), emptyMemory());
+    expect(result).toMatchObject({ actionType: "create_invoice", payload: { amountUsd: 450 } });
+    const episodes = await readEpisodes(TENANT_ID, { domainActionId: result!.id });
+    expect(episodes.find((episode) => episode.step === "schema_repair")?.output).toMatchObject({ repaired: true });
+  });
+
+  it("8. fails loudly after its one invalid-payload repair attempt", async () => {
+    process.env.AWS_BEDROCK_API_KEY = "test-key";
+    mockFetchOnce('{"repaired": true, "actionType": "create_invoice", "payload": {}, "reason": "Still missing the amount."}');
+    const planner = new LLMPlanner(createDefaultPluginRegistry(), stubPlannerProvider("create_invoice", {}));
+    await expect(planner.plan("Create an invoice.", tenantContext(), emptyMemory())).rejects.toThrow(/Schema repair failed for create_invoice after one attempt/);
+  });
 });
