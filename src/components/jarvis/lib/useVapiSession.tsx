@@ -5,7 +5,7 @@
 // what works). Extended with volume-level + speech-start/end for the waveform ring and
 // caption, which the original didn't need.
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react"
 import { sfx } from "../sound"
 
 const VAPI_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPI_PUBLIC_KEY ?? "ab65d198-5573-4d95-b7f2-4fd8db6f85fc"
@@ -17,11 +17,37 @@ export interface TranscriptLine {
   text: string
 }
 
+interface DailyCallLike {
+  participants: () => { local?: { tracks?: { audio?: { persistentTrack?: MediaStreamTrack } } } }
+}
+
 interface VapiInstance {
   start: (id: string) => void
   stop: () => void
   setMuted: (m: boolean) => void
   on: (e: string, cb: (m?: unknown) => void) => void
+  getDailyCallObject: () => DailyCallLike | null
+}
+
+// Real, hard mic release: `vapi.stop()` calls Daily's own `call.destroy()`, which
+// SHOULD stop the local audio track it opened — but the product owner reproduced,
+// live and repeatedly, Chrome's own mic-in-use indicator staying lit after ending a
+// session (across a fresh SDK version too), meaning that teardown isn't reliably
+// reaching the actual hardware-level MediaStreamTrack for this Daily version.
+// Belt-and-suspenders fix: reach into the Daily call object ourselves and call
+// `.stop()` directly on the real, persistent track — `track.stop()` is idempotent
+// and safe to call even if Daily's own teardown already handled it correctly.
+function forceReleaseMic(vapi: VapiInstance | null): void {
+  try {
+    const call = vapi?.getDailyCallObject?.()
+    const track = call?.participants?.().local?.tracks?.audio?.persistentTrack
+    if (track && track.readyState !== "ended") {
+      track.stop()
+      console.info("[JARVIS] force-stopped local mic track on end")
+    }
+  } catch (err) {
+    console.error("[JARVIS] forceReleaseMic failed", err)
+  }
 }
 
 const MIC_SILENCE_WARNING_MS = 8000
@@ -30,7 +56,20 @@ const MIC_SILENCE_WARNING_MS = 8000
 // SDK already samples the real mic input for us.
 const MIC_ACTIVITY_THRESHOLD = 0.02
 
-export function useVapiSession() {
+// Real structural bug, found on top of the mic-release fix above: this hook used
+// to be called independently in BOTH JarvisCommandCenter.tsx and bridge/Bridge.tsx
+// — two completely separate top-level components, each running its own copy of
+// this hook, each creating its OWN separate `Vapi`/Daily call object with its OWN
+// separate microphone session, with zero coordination between them. Normal
+// Next.js route navigation unmounts the previous page cleanly, but ANY case where
+// that doesn't happen instantly (or where both ever render at once) leaves two
+// independent sessions competing for the same physical mic — a real, structural
+// risk, not just a one-off bug. Converted to a single Context-provided instance
+// (VapiSessionProvider, mounted once in src/app/jarvis/layout.tsx) so there is
+// exactly one Vapi instance, ever, for the whole /jarvis section, matching the
+// same singleton-provider pattern JarvisDataProvider/JarvisAuthProvider already
+// use in this codebase.
+function useVapiSessionInternal() {
   const [voiceState, setVoiceState] = useState<VoiceState>("idle")
   const [volumeLevel, setVolumeLevel] = useState(0)
   const [transcript, setTranscript] = useState<TranscriptLine[]>([])
@@ -87,6 +126,7 @@ export function useVapiSession() {
           setVoiceState("idle")
           callStartRef.current = null
           stopMicWatchdog()
+          forceReleaseMic(vapiRef.current)
           sfx.voiceOff()
         })
         vapi.on("error", (err?: unknown) => {
@@ -100,6 +140,7 @@ export function useVapiSession() {
           setLastError(message)
           setVoiceState("idle")
           stopMicWatchdog()
+          forceReleaseMic(vapiRef.current)
         })
         vapi.on("volume-level", (m?: unknown) => {
           const level = typeof m === "number" ? m : 0
@@ -123,6 +164,7 @@ export function useVapiSession() {
     return () => {
       mounted = false
       stopMicWatchdog()
+      forceReleaseMic(vapiRef.current)
       vapiRef.current?.stop()
     }
   }, [startMicWatchdog, stopMicWatchdog])
@@ -152,14 +194,24 @@ export function useVapiSession() {
   // we just no longer duplicate the request ourselves first.
   const toggleVoice = useCallback(() => {
     if (voiceState === "live" || voiceState === "speaking") {
-      vapiRef.current?.stop()
+      // Don't wait solely on Vapi's own async `call-end` event to update state or
+      // release the mic — if that event is ever slow/unreliable, the UI would be
+      // stuck showing "live" and the hardware track would stay open. Release and
+      // reset immediately; `call-end`, when it does fire, just confirms the same
+      // state (both stopMicWatchdog/forceReleaseMic are safe to call twice).
+      stopMicWatchdog()
+      forceReleaseMic(vapiRef.current)
+      setVoiceState("idle")
+      callStartRef.current = null
+      sfx.voiceOff()
+      void vapiRef.current?.stop()
       return
     }
     setLastError(null)
     setVoiceState("connecting")
     setCallDurationSec(0)
     vapiRef.current?.start(VAPI_ASSISTANT_ID)
-  }, [voiceState])
+  }, [voiceState, stopMicWatchdog])
 
   const toggleMute = useCallback(() => {
     setMutedState((m) => {
@@ -180,4 +232,24 @@ export function useVapiSession() {
     lastError,
     micSilenceWarning,
   }
+}
+
+type VapiSessionValue = ReturnType<typeof useVapiSessionInternal>
+
+const VapiSessionContext = createContext<VapiSessionValue | null>(null)
+
+export function VapiSessionProvider({ children }: { children: ReactNode }) {
+  const session = useVapiSessionInternal()
+  return <VapiSessionContext.Provider value={session}>{children}</VapiSessionContext.Provider>
+}
+
+/** Consumer hook — every JARVIS surface (Command Center, Bridge, …) calls this,
+ *  never `useVapiSessionInternal` directly, so they all share the exact same
+ *  Vapi instance and mic session provided once by `VapiSessionProvider`. */
+export function useVapiSession(): VapiSessionValue {
+  const ctx = useContext(VapiSessionContext)
+  if (!ctx) {
+    throw new Error("useVapiSession() must be used within a <VapiSessionProvider> (see src/app/jarvis/layout.tsx)")
+  }
+  return ctx
 }
