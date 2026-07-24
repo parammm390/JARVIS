@@ -19,12 +19,15 @@ export interface TranscriptLine {
 
 interface DailyCallLike {
   participants: () => { local?: { tracks?: { audio?: { persistentTrack?: MediaStreamTrack; track?: MediaStreamTrack } } } }
+  setLocalAudio?: (enabled: boolean) => void
+  updateInputSettings?: (settings: { audio: { processor: { type: "none" } } }) => Promise<void>
 }
 
 interface VapiInstance {
   start: (id: string) => Promise<unknown>
   stop: () => Promise<void>
   end: () => void
+  send: (message: { type: "end-call" }) => void
   setMuted: (m: boolean) => void
   on: (e: string, cb: (m?: unknown) => void) => void
   getDailyCallObject: () => DailyCallLike | null
@@ -90,6 +93,10 @@ function useVapiSessionInternal() {
   const voiceStateRef = useRef<VoiceState>("idle")
   const lastAudioAtRef = useRef<number>(0)
   const micWatchdogRef = useRef<number | null>(null)
+  // React state is asynchronous. This ref is the synchronous lock that prevents
+  // a second click during "Connecting…" from starting another Daily call before
+  // React has rendered the first state update.
+  const sessionTransitionRef = useRef(false)
 
   const stopMicWatchdog = useCallback(() => {
     if (micWatchdogRef.current) {
@@ -135,12 +142,22 @@ function useVapiSessionInternal() {
           callStartRef.current = Date.now()
           startMicWatchdog()
           sfx.voiceOn()
+          // Vapi enables Daily's optional noise-cancellation processor by
+          // default. On affected Chrome/Daily combinations it can retain a live
+          // hardware track while delivering silence upstream. Use Daily's raw
+          // browser input; Deepgram performs the voice processing server-side.
+          const call = vapi.getDailyCallObject?.()
+          void call?.updateInputSettings?.({ audio: { processor: { type: "none" } } }).catch((error) => {
+            console.warn("[JARVIS] could not disable Daily audio processor", error)
+          })
+          call?.setLocalAudio?.(true)
         })
         vapi.on("call-end", () => {
           setVoiceState("idle")
           callStartRef.current = null
           stopMicWatchdog()
           forceReleaseMic(vapiRef.current)
+          sessionTransitionRef.current = false
           sfx.voiceOff()
         })
         vapi.on("error", (err?: unknown) => {
@@ -155,6 +172,7 @@ function useVapiSessionInternal() {
           setVoiceState("idle")
           stopMicWatchdog()
           forceReleaseMic(vapiRef.current)
+          sessionTransitionRef.current = false
         })
         vapi.on("volume-level", (m?: unknown) => {
           // `volume-level` is the remote Vapi speaker. It drives the assistant
@@ -213,6 +231,8 @@ function useVapiSessionInternal() {
   // we just no longer duplicate the request ourselves first.
   const toggleVoice = useCallback(async () => {
     if (voiceState === "live" || voiceState === "speaking") {
+      if (sessionTransitionRef.current) return
+      sessionTransitionRef.current = true
       // Don't wait solely on Vapi's own async `call-end` event to update state or
       // release the mic — if that event is ever slow/unreliable, the UI would be
       // stuck showing "live" and the hardware track would stay open. Release and
@@ -223,12 +243,22 @@ function useVapiSessionInternal() {
       setVoiceState("idle")
       callStartRef.current = null
       sfx.voiceOff()
-      // `end()` sends Vapi's explicit live-call end control before destroying
-      // Daily. That closes the room as well as releasing the local track, unlike
-      // relying on a later left-meeting callback alone.
-      vapiRef.current?.end()
+      // Notify Vapi first, then await Daily destruction. `end()` calls `stop()`
+      // without awaiting it; waiting here ensures the browser-owned track has
+      // actually been torn down before this handler completes.
+      try {
+        vapiRef.current?.send({ type: "end-call" })
+        await vapiRef.current?.stop()
+      } finally {
+        forceReleaseMic(vapiRef.current)
+        sessionTransitionRef.current = false
+      }
       return
     }
+    // A second click while the first async start is in flight used to create an
+    // overlapping Daily session. Never start again until that promise settles.
+    if (voiceState === "connecting" || sessionTransitionRef.current) return
+    sessionTransitionRef.current = true
     setLastError(null)
     setVoiceState("connecting")
     setCallDurationSec(0)
@@ -239,6 +269,8 @@ function useVapiSessionInternal() {
       setLastError("The microphone session could not start. Please try again.")
       setVoiceState("error")
       forceReleaseMic(vapiRef.current)
+    } finally {
+      sessionTransitionRef.current = false
     }
   }, [voiceState, stopMicWatchdog])
 

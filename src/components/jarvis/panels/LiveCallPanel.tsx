@@ -152,7 +152,9 @@ export function LiveCallPanel({ session }: { session: ReturnType<typeof useVapiS
           )}
           <motion.button
             onClick={toggleVoice}
-            disabled={!configured}
+            // Starting is asynchronous. Keep the control inert while it joins so
+            // a second tap cannot open a competing Daily microphone session.
+            disabled={!configured || voiceState === "connecting"}
             whileHover={reduced ? {} : { scale: 1.04 }}
             whileTap={reduced ? {} : { scale: 0.97 }}
             className={`inline-flex h-10 items-center gap-2 rounded-full px-6 text-[11px] font-black transition disabled:opacity-40 ${
