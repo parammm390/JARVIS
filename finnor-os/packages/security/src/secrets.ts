@@ -71,8 +71,11 @@ export async function ensureSecretsLoaded(): Promise<void> {
   loadedAt = Date.now();
   initialization = (async () => {
     if (provider() === "env") {
-      if (process.env.NODE_ENV === "production" && process.env.ALLOW_PLAINTEXT_ENV_SECRETS === "1") {
-        throw new Error("ALLOW_PLAINTEXT_ENV_SECRETS is forbidden in production; use platform-managed secrets or AWS Secrets Manager");
+      if (process.env.NODE_ENV === "production" && process.env.ALLOW_PLAINTEXT_ENV_SECRETS !== "1") {
+        // The only env-provider production path is a deliberate, noisy emergency
+        // override. Normal production boot must prove its managed provider instead.
+        console.error("[security] production refused: SECRETS_PROVIDER=aws-secrets-manager is required (set ALLOW_PLAINTEXT_ENV_SECRETS=1 only for an emergency override)");
+        throw new Error("Production requires SECRETS_PROVIDER=aws-secrets-manager; ALLOW_PLAINTEXT_ENV_SECRETS=1 is the loud emergency override");
       }
       return;
     }

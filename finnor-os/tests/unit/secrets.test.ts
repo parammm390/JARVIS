@@ -34,11 +34,12 @@ describe("secrets manager", () => {
     expect(secretProviderStatus().loaded).toBe(true);
   });
 
-  it("throws when ALLOW_PLAINTEXT_ENV_SECRETS=1 in production — a safety valve, never a silent allowance", async () => {
+  it("refuses the env provider in production unless the loud emergency override is set", async () => {
     vi.stubEnv("NODE_ENV", "production");
-    process.env.ALLOW_PLAINTEXT_ENV_SECRETS = "1";
     const { ensureSecretsLoaded } = await import("@finnor/security");
-    await expect(ensureSecretsLoaded()).rejects.toThrow(/forbidden in production/);
+    await expect(ensureSecretsLoaded()).rejects.toThrow(/requires SECRETS_PROVIDER/);
+    process.env.ALLOW_PLAINTEXT_ENV_SECRETS = "1";
+    await expect(ensureSecretsLoaded()).resolves.toBeUndefined();
   });
 
   it("aws-secrets-manager provider requires FINNOR_SECRET_IDS", async () => {

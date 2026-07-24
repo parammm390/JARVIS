@@ -3,6 +3,7 @@
 import "dotenv/config";
 
 import { initObservability, getLogger, applyEmulatorFaultsFromEnv } from "@finnor/tools";
+import { ensureSecretsLoaded } from "@finnor/security";
 import { JobQueue } from "./queue";
 import { sendMessage } from "./handlers/send-message";
 import { scheduledReminder } from "./handlers/scheduled-reminder";
@@ -131,6 +132,7 @@ if (isMain) {
   // Phase 16(e): the worker never initialized Sentry before this — a crash here was
   // console.error or nothing (ground-truth §5). initObservability() no-ops harmlessly
   // without SENTRY_DSN, so this is safe to call unconditionally at boot.
+  ensureSecretsLoaded().then(() => {
   initObservability();
   const log = getLogger();
   const controller = new AbortController();
@@ -171,4 +173,8 @@ if (isMain) {
       log.fatal({ err: err instanceof Error ? err.message : String(err) }, "[worker] run loop crashed");
       process.exit(1);
     });
+  }).catch((err) => {
+    console.error("[worker] refused to boot: managed secrets validation failed", err instanceof Error ? err.message : String(err));
+    process.exit(1);
+  });
 }
