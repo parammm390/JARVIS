@@ -41,6 +41,7 @@ export const tenantSettings = pgTable("tenant_settings", {
   tenantId: uuid("tenant_id").primaryKey().references(() => tenants.id),
   isDealerZero: boolean("is_dealer_zero").notNull().default(false),
   simulatorEnabled: boolean("simulator_enabled").notNull().default(false),
+  trainingMode: boolean("training_mode").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

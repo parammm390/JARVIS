@@ -520,3 +520,4 @@ export function providerForPolicy(policy: DomainPolicy) {
 }
 export * from "./workflow";
 export * from "./dealer-zero-replay";
+export * from "./training-mode";
