@@ -115,4 +115,21 @@ describe.skipIf(!available)("postgres job queue (§32.7)", () => {
       expect(await queue.tick()).toBe(false);
     }
   });
+
+  it("two worker instances drain every job once and interactive work wins over batch", async () => {
+    await getPool().query("DELETE FROM jobs");
+    const first = new JobQueue(); const second = new JobQueue();
+    const completed: string[] = [];
+    for (const queue of [first, second]) queue.register("drain_test", async (payload) => { completed.push(String(payload.id)); });
+    await first.enqueue("drain_test", { id: "batch-a" }, undefined, "batch");
+    await first.enqueue("drain_test", { id: "interactive" }, undefined, "interactive", 100);
+    await first.enqueue("drain_test", { id: "batch-b" }, undefined, "batch");
+    await Promise.all([first.tick(), second.tick()]);
+    await first.tick();
+    expect(completed).toHaveLength(3);
+    expect(new Set(completed).size).toBe(3);
+    expect(completed[0]).toBe("interactive");
+    const { rows } = await getPool().query("SELECT count(*)::int AS n FROM jobs WHERE type = 'drain_test' AND status = 'completed'");
+    expect(rows[0].n).toBe(3);
+  });
 });
