@@ -18,6 +18,7 @@ import { SchedulingScene } from "./flagships/SchedulingScene"
 import { InvoiceToCashScene } from "./flagships/InvoiceToCashScene"
 import { BulkNotifyScene } from "./flagships/BulkNotifyScene"
 import { LeadToWaterTestScene } from "./flagships/LeadToWaterTestScene"
+import { WaveTwoScene } from "./flagships/WaveTwoScenes"
 import { ACTION_FIXTURES } from "./fixtures"
 import type { ActionRendererProps, FieldSpec, RegistryEntry } from "./types"
 
@@ -39,6 +40,19 @@ const FLAGSHIP_COMPONENT: Record<string, ComponentType<ActionRendererProps>> = {
   start_invoice_to_cash_workflow: InvoiceToCashScene,
   bulk_notify_existing_customers: BulkNotifyScene,
   start_water_test_workflow: LeadToWaterTestScene,
+  renew_maintenance_agreement: WaveTwoScene,
+  search_web: WaveTwoScene,
+  scan_competitors: WaveTwoScene,
+  check_business_reviews: WaveTwoScene,
+  get_business_overview: WaveTwoScene,
+  answer_business_question: WaveTwoScene,
+  check_reminder_due: WaveTwoScene,
+  log_visit_report: WaveTwoScene,
+  flag_visit_issue: WaveTwoScene,
+  generate_compliance_summary: WaveTwoScene,
+  summarize_ad_performance: WaveTwoScene,
+  launch_ad_campaign: WaveTwoScene,
+  create_review_request: WaveTwoScene,
 }
 
 // ---------------------------------------------------------------------------
@@ -188,6 +202,13 @@ const FLAGSHIP_PLUGIN: Record<string, string> = {
   start_invoice_to_cash_workflow: "invoice-to-cash",
   bulk_notify_existing_customers: "bulk-notify",
   start_water_test_workflow: "lead-to-water-test",
+  renew_maintenance_agreement: "maintenance-agreement",
+  search_web: "web-research", scan_competitors: "web-research", check_business_reviews: "web-research",
+  get_business_overview: "ops-overview", answer_business_question: "ops-overview",
+  check_reminder_due: "service-reminders",
+  log_visit_report: "technician-reports", flag_visit_issue: "technician-reports",
+  generate_compliance_summary: "compliance-documentation",
+  summarize_ad_performance: "marketing", launch_ad_campaign: "marketing", create_review_request: "marketing",
 }
 
 function buildRegistry(): Record<string, RegistryEntry> {
