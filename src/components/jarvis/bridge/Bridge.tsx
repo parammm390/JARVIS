@@ -27,6 +27,7 @@ import { DailyBriefing } from "../panels/DailyBriefing"
 import { WorkflowTheater } from "../panels/WorkflowTheater"
 import { ApprovalCockpit } from "./ApprovalCockpit"
 import { CertificationStatus } from "../panels/CertificationStatus"
+import { SinceYouWereAway } from "../SinceYouWereAway"
 import { GridBackdrop } from "../ui/fx/GridBackdrop"
 import { choreo } from "../ui/motion/choreo"
 import { PulseBar } from "./PulseBar"
@@ -156,6 +157,7 @@ function CenterStage({ scene }: { scene: SceneId }) {
           >
             {scene === "overview" && (
               <>
+                <SinceYouWereAway />
                 <DailyBriefing />
                 <KpiStrip />
                 {role === "owner" && <CertificationStatus />}

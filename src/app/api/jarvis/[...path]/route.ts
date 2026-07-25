@@ -67,6 +67,7 @@ function isAllowedGet(segments: string[]): boolean {
   if (segments.length === 1 && a === "vitals") return true
   if (segments.length === 1 && a === "activity") return true
   if (segments.length === 1 && a === "user-prefs") return true
+  if (segments.length === 2 && a === "user-prefs" && b === "digest") return true
   void c
   return false
 }

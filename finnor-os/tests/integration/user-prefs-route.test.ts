@@ -4,6 +4,7 @@ import { closePool, tenants, users, userPrefs, withTenant } from "@finnor/db";
 import { eq } from "drizzle-orm";
 import { migrate } from "../../packages/db/migrate";
 import { DELETE, GET, PUT } from "../../apps/api/app/api/user-prefs/route";
+import { GET as digestGET } from "../../apps/api/app/api/user-prefs/digest/route";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
 const TENANT = "00000000-0000-4000-8000-000000000d61";
@@ -92,5 +93,13 @@ describe.skipIf(!available)("user preferences route (D6.T1)", () => {
     expect((await DELETE(request(OWNER, { method: "DELETE" }))).status).toBe(200);
     expect((await (await GET(request(OWNER))).json()).prefs.homepage).toBeNull();
     expect((await (await GET(request(DISPATCHER))).json()).prefs.homepage).toBe("map");
+  });
+
+  it("records an honest first-visit marker rather than fabricating a delta", async () => {
+    const first = await digestGET(request(OWNER));
+    expect(first.status).toBe(200);
+    expect((await first.json()).firstVisit).toBe(true);
+    const next = await digestGET(request(OWNER));
+    expect((await next.json()).firstVisit).toBe(false);
   });
 });

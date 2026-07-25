@@ -16,6 +16,7 @@ import { MyDay } from "./panels/MyDay"
 import { JarvisAuthProvider, useJarvisAuth, type JarvisRole } from "./lib/jarvis-auth"
 import { JarvisDataProvider } from "./lib/data-core"
 import { jarvisGet } from "./lib/api"
+import { SinceYouWereAway } from "./SinceYouWereAway"
 import "./jarvis-theme.css"
 
 type Homepage = "bridge" | "map" | "my-day" | null
@@ -47,7 +48,7 @@ function RoleLanding() {
   if (!session) return <JarvisCommandCenter />
   const selected = role && prefs && ALLOWED_HOME[role].includes(prefs.homepage) ? prefs.homepage! : DEFAULT_HOME[role!]
   if (selected === "bridge") return <SceneFrame accent={prefs?.accent ?? null}><Bridge /></SceneFrame>
-  return <SceneFrame accent={prefs?.accent ?? null}><JarvisDataProvider><main className="mx-auto min-h-screen max-w-7xl space-y-5 p-5 md:p-8">{selected === "map" ? <><header><div className="j-label flex items-center gap-2"><Map className="h-4 w-4" /> Dispatcher scene</div><h1 className="mt-1 text-2xl font-black">Dispatch and approvals</h1></header><DispatchMap /><ApprovalCockpit /></> : <><header><div className="j-label flex items-center gap-2"><Wrench className="h-4 w-4" /> Technician scene</div><h1 className="mt-1 text-2xl font-black">Your assigned day</h1></header><MyDay /></>}</main></JarvisDataProvider></SceneFrame>
+  return <SceneFrame accent={prefs?.accent ?? null}><JarvisDataProvider><main className="mx-auto min-h-screen max-w-7xl space-y-5 p-5 md:p-8"><SinceYouWereAway />{selected === "map" ? <><header><div className="j-label flex items-center gap-2"><Map className="h-4 w-4" /> Dispatcher scene</div><h1 className="mt-1 text-2xl font-black">Dispatch and approvals</h1></header><DispatchMap /><ApprovalCockpit /></> : <><header><div className="j-label flex items-center gap-2"><Wrench className="h-4 w-4" /> Technician scene</div><h1 className="mt-1 text-2xl font-black">Your assigned day</h1></header><MyDay /></>}</main></JarvisDataProvider></SceneFrame>
 }
 
 export default function PersonalizedHome() {

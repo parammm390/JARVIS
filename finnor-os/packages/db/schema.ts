@@ -1327,6 +1327,7 @@ export const userPrefs = pgTable(
     notificationPreferences: jsonb("notification_preferences").notNull().default({}),
     quietHoursStart: text("quiet_hours_start"),
     quietHoursEnd: text("quiet_hours_end"),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("user_prefs_tenant_idx").on(t.tenantId)],
