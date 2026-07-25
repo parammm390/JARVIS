@@ -223,6 +223,10 @@ function buildRegistry(): Record<string, RegistryEntry> {
     }
   }
   for (const [actionType, spec] of Object.entries(STANDARD_FIELDS)) {
+    // D7 scenes intentionally replace the schema-card tier for their action types.
+    // Keep the field spec for reference, but never overwrite a flagship registered
+    // above with it.
+    if (registry[actionType]) continue
     registry[actionType] = {
       tier: "standard",
       plugin: spec.plugin,

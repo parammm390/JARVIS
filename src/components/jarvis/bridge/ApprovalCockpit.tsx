@@ -52,6 +52,7 @@ import { RiskBadge, type RiskTier } from "../ui/primitives/RiskBadge"
 import { Flight } from "../ui/motion/primitives"
 import { choreo } from "../ui/motion/choreo"
 import { ActionRenderer } from "../ui/renderers/ActionRenderer"
+import { BorderBeam } from "../ui/fx/BorderBeam"
 
 // ---------------------------------------------------------------------------
 // Small local helpers (deliberately not imported from ApprovalDock.tsx — that file is
@@ -314,14 +315,14 @@ function ApprovalCard({
 function ExecutingDock({ flights }: { flights: Array<{ id: string; actionType: string }> }) {
   if (flights.length === 0) return null
   return (
-    <div className="mb-2 flex flex-wrap gap-1.5 rounded-lg border border-teal-300/20 bg-teal-300/[0.04] p-2">
+    <BorderBeam className="mb-2 rounded-lg"><div className="flex flex-wrap gap-1.5 rounded-lg border border-teal-300/20 bg-teal-300/[0.04] p-2">
       <span className="w-full text-[8.5px] font-black uppercase tracking-widest text-teal-300/70">Executing</span>
       {flights.map((f) => (
         <Flight key={f.id} layoutId={`approval-card-${f.id}`} className="rounded-full bg-teal-300/15 px-2.5 py-1 text-[9.5px] font-bold text-teal-200">
           {f.actionType.replaceAll("_", " ")}
         </Flight>
       ))}
-    </div>
+    </div></BorderBeam>
   )
 }
 

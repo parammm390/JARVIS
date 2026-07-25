@@ -34,6 +34,7 @@ import { PulseBar } from "./PulseBar"
 import { ActivityTheater } from "./ActivityTheater"
 import { Orb3D, type OrbState } from "./Orb3D"
 import { rankPanels, recordPanelOpen, type FrecencyLedger } from "../lib/frecency"
+import { CommandPaletteV2, useCommandPaletteV2 } from "../lib/CommandPaletteV2"
 import { jarvisClient } from "@/lib/jarvis-client"
 
 const ParticleField = dynamic(() => import("../panels/ParticleField").then((m) => m.ParticleField), { ssr: false })
@@ -191,6 +192,7 @@ function BridgeShell() {
   const [daypart, setDaypart] = useState<ReturnType<typeof getDaypart>>("day")
   const [mounted, setMounted] = useState(false)
   const { session, loading } = useJarvisAuth()
+  const palette = useCommandPaletteV2()
 
   useEffect(() => {
     setMounted(true)
@@ -262,6 +264,7 @@ function BridgeShell() {
         <CenterStage scene={scene} />
         <RightRail />
       </div>
+      {palette.open && <CommandPaletteV2 onClose={() => palette.setOpen(false)} onNavigate={chooseScene} />}
     </div>
   )
 }
