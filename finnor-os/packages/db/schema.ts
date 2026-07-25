@@ -50,6 +50,10 @@ export const users = pgTable("users", {
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
   email: text("email").notNull().unique(),
   role: text("role", { enum: ["owner", "dispatcher", "technician"] }).notNull(),
+  // D5.T1: the authenticated technician's durable link to their operational record.
+  // Nullable for owners/dispatchers and for existing invitations that have not yet
+  // been paired with a technician record.
+  technicianId: uuid("technician_id").references(() => technicians.id),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -61,6 +65,11 @@ export const households = pgTable("households", {
   waterProfile: jsonb("water_profile").notNull().default({}),
   // TCPA: bulk outreach filters on this — false means never contact promotionally.
   marketingConsent: boolean("marketing_consent").notNull().default(false),
+  // D5.T1: explicitly stored coordinates for dispatch. Null is meaningful: the UI
+  // must state that a household cannot be placed, never geocode silently in a map
+  // render or invent a location.
+  latitude: real("latitude"),
+  longitude: real("longitude"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

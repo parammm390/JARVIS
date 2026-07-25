@@ -12,7 +12,7 @@ import pg from "pg";
 import { migrate } from "../../packages/db/migrate";
 import { seed } from "../../packages/db/seed";
 import { withTenant, closePool, households, equipment, serviceVisits, maintenanceAgreements, leads, technicians, domainPolicies, priceBookItems, tenantSettings } from "@finnor/db";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { seedDealerZero, DEALER_ZERO_TENANT_ID } from "../../scripts/seed-dealer-zero";
 import { seedTenantPolicies } from "../../scripts/seed-tenant-policies";
 import { createDefaultPluginRegistry } from "@finnor/orchestration";
@@ -72,6 +72,14 @@ describe.skipIf(!available)("Dealer Zero seeding (§3.2/§3.6)", () => {
     expect(c.amcs).toBeLessThan(55);
     expect(c.equipment).toBeGreaterThan(0);
     expect(c.serviceVisits).toBeGreaterThan(0);
+
+    const mapped = await withTenant(DEALER_ZERO_TENANT_ID, (db) =>
+      db.select({ latitude: households.latitude, longitude: households.longitude }).from(households).where(and(eq(households.tenantId, DEALER_ZERO_TENANT_ID), sql`${households.latitude} is not null`, sql`${households.longitude} is not null`)).limit(1),
+    );
+    expect(Number(mapped[0]?.latitude)).toBeGreaterThan(29.5);
+    expect(Number(mapped[0]?.latitude)).toBeLessThan(30);
+    expect(Number(mapped[0]?.longitude)).toBeGreaterThan(-96);
+    expect(Number(mapped[0]?.longitude)).toBeLessThan(-95);
 
     const [settings] = await withTenant(DEALER_ZERO_TENANT_ID, (db) => db.select().from(tenantSettings).where(eq(tenantSettings.tenantId, DEALER_ZERO_TENANT_ID)));
     expect(settings?.isDealerZero).toBe(true);

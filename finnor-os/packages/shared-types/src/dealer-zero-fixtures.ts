@@ -33,7 +33,7 @@ export function hashSeed(...parts: Array<string | number>): number {
 export const DEALER_ZERO_SEED = 953187; // fixed — changing this reseeds a different (still deterministic) universe.
 export const DEALER_ZERO_TENANT_ID = "00000000-0000-4000-8000-0000000000d0";
 export const DEALER_ZERO_TENANT_NAME = "Finnor Water Co. (Dealer Zero)";
-export const DEALER_ZERO_AREA_CODE = "319"; // Cedar Falls / Waterloo, IA — same real metro this codebase's other synthetic fixtures already use.
+export const DEALER_ZERO_AREA_CODE = "713"; // Houston metro — synthetic Dealer Zero only.
 
 export function rngFor(...parts: Array<string | number>): () => number {
   return mulberry32(hashSeed(DEALER_ZERO_SEED, ...parts));
@@ -45,12 +45,13 @@ export function intBetween(rng: () => number, min: number, max: number): number 
   return min + Math.floor(rng() * (max - min + 1));
 }
 
-// Real Cedar Falls / Waterloo, IA street names.
+// Real Houston-metro street names. Dealer Zero remains synthetic; these names and
+// the deterministic coordinates below are fixtures, never customer locations.
 export const DEALER_ZERO_STREETS = [
-  "University Ave", "College St", "Ansborough Ave", "Kimball Ave", "Broadway St",
-  "Mullan Ave", "Rownd St", "Hudson Rd", "Greenhill Rd", "Franklin St",
-  "West 1st St", "Ridgeway Ave", "San Marnan Dr", "Cedar Heights Dr", "Prairie Pkwy",
-  "Main St", "Union Rd", "Viking Rd", "Dry Run Rd", "Shaulis Rd",
+  "Westheimer Rd", "Richmond Ave", "Memorial Dr", "Bellaire Blvd", "Kirby Dr",
+  "Washington Ave", "Almeda Rd", "Beechnut St", "Long Point Rd", "Telephone Rd",
+  "Montrose Blvd", "Shepherd Dr", "Ella Blvd", "Hillcroft Ave", "Fondren Rd",
+  "Gessner Rd", "Barker Cypress Rd", "Cullen Blvd", "Fannin St", "Navigation Blvd",
 ];
 export const DEALER_ZERO_FIRST_NAMES = [
   "James", "Mary", "Robert", "Patricia", "John", "Jennifer", "Michael", "Linda",
@@ -84,6 +85,8 @@ export interface SyntheticHousehold {
   ironPpm: number;
   source: "well" | "municipal";
   marketingConsent: boolean;
+  latitude: number;
+  longitude: number;
 }
 
 export function generateHousehold(keyPrefix: string, i: number): SyntheticHousehold {
@@ -92,17 +95,23 @@ export function generateHousehold(keyPrefix: string, i: number): SyntheticHouseh
   const last = pick(rng, DEALER_ZERO_LAST_NAMES);
   const street = pick(rng, DEALER_ZERO_STREETS);
   const houseNum = intBetween(rng, 10, 9999);
-  const city = rng() < 0.5 ? "Cedar Falls" : "Waterloo";
+  const city = pick(rng, ["Houston", "Bellaire", "Sugar Land", "Katy", "Pearland"]);
+  // Synthetic spread around Houston. A fixture coordinate is deliberately stored
+  // alongside its synthetic address so D5's map never performs undisclosed geocoding.
+  const latitude = Number((29.7604 + (rng() - 0.5) * 0.36).toFixed(6));
+  const longitude = Number((-95.3698 + (rng() - 0.5) * 0.46).toFixed(6));
   const phoneSuffix = String(2000 + i).padStart(4, "0");
   return {
     key: `${keyPrefix}-${String(i + 1).padStart(3, "0")}`,
     name: `${first} ${last}`,
-    address: `${houseNum} ${street}, ${city}, IA`,
+    address: `${houseNum} ${street}, ${city}, TX`,
     phone: `+1${DEALER_ZERO_AREA_CODE}555${phoneSuffix}`,
     email: `${first.toLowerCase()}.${last.toLowerCase()}${i}@dealerzero.finnorai.com`,
     hardnessGpg: Math.round((intBetween(rng, 30, 250) / 10) * 10) / 10, // 3.0-25.0 gpg
     ironPpm: Math.round(rng() * 20) / 10, // 0.0-2.0 ppm
     source: rng() < 0.6 ? "well" : "municipal",
     marketingConsent: rng() < 0.85, // ~85% consented at intake — realistic, not fabricated-uniform
+    latitude,
+    longitude,
   };
 }

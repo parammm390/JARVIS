@@ -1,7 +1,7 @@
 // Phase 3.2: Dealer Zero — a permanent, real, in-house tenant ("Finnor Water Co.") that
 // runs a realistic water-treatment business through the real inbox continuously,
-// forever (§3 DECISIONS). Real metro (Cedar Falls / Waterloo, IA — the same real metro
-// this codebase's existing synthetic fixtures already use, e.g. packages/db/seed.ts),
+// forever (§3 DECISIONS). Synthetic Houston-metro fixture geography is explicit so
+// dispatch views can render without silently geocoding customer data.
 // synthetic people: reserved-range phones (+1319555xxxx, the North American fictional
 // exchange), @dealerzero.finnorai.com emails. Labeled dealer-zero everywhere via the
 // real tenant_settings.is_dealer_zero flag (migration 0024) — never presented as
@@ -108,6 +108,7 @@ async function ensureEstablishedHouseholds(technicianIds: string[]): Promise<str
       let householdId: string;
       if (existing) {
         householdId = existing.id;
+        await db.update(households).set({ latitude: f.latitude, longitude: f.longitude }).where(eq(households.id, existing.id));
       } else {
         const [created] = await db
           .insert(households)
@@ -117,6 +118,8 @@ async function ensureEstablishedHouseholds(technicianIds: string[]): Promise<str
             contactInfo: { name: f.name, phone: f.phone, email: f.email, dealerZeroKey: f.key },
             waterProfile: { hardness_gpg: f.hardnessGpg, iron_ppm: f.ironPpm, source: f.source },
             marketingConsent: f.marketingConsent,
+            latitude: f.latitude,
+            longitude: f.longitude,
           })
           .returning();
         householdId = created!.id;
@@ -219,6 +222,9 @@ async function ensureOpenLeads(): Promise<void> {
         source: "voice",
         provenance: { sourceSystem: "dealer_zero_seed", externalId: f.key },
       });
+      // createLead owns its household insert; complete the synthetic map fixture on
+      // both fresh and idempotently re-used lead households.
+      await db.update(households).set({ latitude: f.latitude, longitude: f.longitude }).where(eq(households.id, result.householdId));
       // createLead defaults status to "new" — vary it deterministically (a pure
       // function of i, so idempotent regardless of alreadyExisted) so the lead
       // pipeline has real cases at every stage, not 15 identical fresh leads.

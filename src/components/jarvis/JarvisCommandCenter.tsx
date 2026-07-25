@@ -35,6 +35,8 @@ import { DlqBrowser } from "./panels/DlqBrowser"
 import { CertificationStatus } from "./panels/CertificationStatus"
 import { DispatcherBoard } from "./panels/DispatcherBoard"
 import { TechnicianBoard } from "./panels/TechnicianBoard"
+import { DispatchMap } from "./panels/DispatchMap"
+import { MyDay } from "./panels/MyDay"
 import { CommsFeed } from "./panels/CommsFeed"
 import { ActivityRail } from "./panels/ActivityRail"
 import { PipelinePulse } from "./panels/PipelinePulse"
@@ -42,7 +44,7 @@ import { CommandBar } from "./panels/CommandBar"
 import { ChannelDonut, ActionMixBars, AiPerformance } from "./panels/AnalyticsRow"
 import { SystemConsole } from "./panels/SystemConsole"
 import { JarvisOrb } from "./panels/JarvisOrb"
-import { Activity, BookUser, Boxes, CircleDollarSign, FlaskConical, Globe, LayoutGrid, PhoneCall, ShieldCheck, Users, Volume2, VolumeX, Workflow } from "lucide-react"
+import { Activity, BookUser, Boxes, CircleDollarSign, FlaskConical, Globe, LayoutGrid, Map, PhoneCall, ShieldCheck, Users, Volume2, VolumeX, Workflow, Wrench } from "lucide-react"
 
 const LiveCallPanel = dynamic(() => import("./panels/LiveCallPanel").then((m) => m.LiveCallPanel), { ssr: false })
 const ParticleField = dynamic(() => import("./panels/ParticleField").then((m) => m.ParticleField), { ssr: false })
@@ -58,6 +60,8 @@ const SIDEBAR = [
   { icon: FlaskConical, label: "Water Compliance" },
   { icon: Globe, label: "Web Research" },
   { icon: Activity, label: "Activity" },
+  { icon: Map, label: "Dispatch Map" },
+  { icon: Wrench, label: "My Day" },
   { icon: ShieldCheck, label: "Production Readiness" },
 ]
 
@@ -370,6 +374,8 @@ function Shell() {
             {view === "Water Compliance" && <ComplianceView />}
             {view === "Web Research" && <ResearchView />}
             {view === "Activity" && <ActivityRail />}
+            {view === "Dispatch Map" && <DispatchMap />}
+            {view === "My Day" && <MyDay />}
             {view === "Production Readiness" && <SystemHealthView />}
           </div>
 
