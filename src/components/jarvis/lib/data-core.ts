@@ -505,15 +505,28 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
   // ---- slow lane ----
   const pollSlow = useCallback(async () => {
     if (!visibleRef.current) return
-    const [pipeline, cash, sla, stock, followUp, techLoad, serviceDue, dataQuality, insights, reliability] = await Promise.allSettled([
+    // Read models are independent, but firing all ten at once alongside the fast,
+    // medium, and sanity lanes creates a 19-request mount burst. That can exhaust
+    // the production session pool before the UI has rendered. Keep a small batch
+    // width: the screen still refreshes every slow-lane cycle, while the API has
+    // room for approvals and instruction planning.
+    const [pipeline, cash] = await Promise.allSettled([
       jarvisGet<{ data: PipelineHealth }>("read-models/pipeline-health"),
       jarvisGet<{ data: CashCollections }>("read-models/cash-collections"),
+    ])
+    const [sla, stock] = await Promise.allSettled([
       jarvisGet<{ data: SlaBreaches }>("read-models/sla-breaches"),
       jarvisGet<{ data: StockRisk }>("read-models/stock-risk"),
+    ])
+    const [followUp, techLoad] = await Promise.allSettled([
       jarvisGet<{ data: FollowUpDebt }>("read-models/follow-up-debt"),
       jarvisGet<{ data: TechnicianLoad }>("read-models/technician-load"),
+    ])
+    const [serviceDue, dataQuality] = await Promise.allSettled([
       jarvisGet<{ data: ServiceDue }>("read-models/service-due"),
       jarvisGet<{ data: DataQuality }>("read-models/data-quality"),
+    ])
+    const [insights, reliability] = await Promise.allSettled([
       jarvisGet<Insights>("insights"),
       jarvisGet<{ data: ReliabilityMetrics }>("read-models/reliability"),
     ])
@@ -577,10 +590,14 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
     }
     document.addEventListener("visibilitychange", onVisibility)
 
-    void pollFast()
-    void pollMedium()
-    void pollSlow()
-    void pollSanity()
+    // Avoid mounting all four lanes simultaneously. Fast data makes the cockpit
+    // useful first; the lower-priority lanes follow without a connection spike.
+    void (async () => {
+      await pollFast()
+      await pollMedium()
+      await pollSlow()
+      await pollSanity()
+    })()
 
     const tFast = setInterval(pollFast, FAST_LANE_MS)
     const tMedium = setInterval(pollMedium, MEDIUM_LANE_MS)
