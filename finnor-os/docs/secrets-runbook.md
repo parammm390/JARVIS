@@ -131,3 +131,18 @@ plaintext env vars from a password manager / the previous deploy's config export
 production plaintext guard, which only fires if `ALLOW_PLAINTEXT_ENV_SECRETS=1` was
 also left set — leave that at `0`) — no code path depends on Secrets Manager having
 ever run, so this is a clean, immediate revert with no state to unwind.
+
+## 6. Rotation rehearsal (no secret values)
+
+1. Choose one non-production credential and create its replacement in the provider.
+2. Update the named secret value on Railway staging and Vercel Preview only; never put
+   the value in a terminal transcript, commit, issue, or this document.
+3. Deploy staging, run the integration-health probe, and confirm the provider reports
+   configured/healthy through a real authenticated no-op.
+4. Roll the old value back once to prove rollback, re-probe, then apply the replacement
+   again and record only the deployment id/time and pass/fail result.
+5. Promote the same value to production only after staging is green; retain the old
+   provider-side credential until production’s probe is green, then revoke it.
+
+The rehearsal is complete only when all steps above have an observed provider probe.
+It must never be “proved” by printing or comparing a secret value.

@@ -6,7 +6,9 @@
 // (object-src, frame-ancestors, base-uri, form-action) are still locked down.
 const JARVIS_CSP = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+  // Next's production runtime still needs inline bootstrap scripts, but no JARVIS
+  // feature requires eval. Removing it closes an avoidable XSS escalation path.
+  "script-src 'self' 'unsafe-inline'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: https:",
   "font-src 'self' data:",
@@ -17,6 +19,7 @@ const JARVIS_CSP = [
   "base-uri 'self'",
   "form-action 'self'",
   "frame-ancestors 'self'",
+  "script-src-attr 'none'",
 ].join("; ")
 
 const SECURITY_HEADERS = [
