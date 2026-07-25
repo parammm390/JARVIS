@@ -1,10 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import pg from "pg";
-import { closePool, tenants, users, userPrefs, withTenant } from "@finnor/db";
+import { closePool, pushSubscriptions, tenants, users, userPrefs, withTenant } from "@finnor/db";
 import { eq } from "drizzle-orm";
 import { migrate } from "../../packages/db/migrate";
 import { DELETE, GET, PUT } from "../../apps/api/app/api/user-prefs/route";
 import { GET as digestGET } from "../../apps/api/app/api/user-prefs/digest/route";
+import { DELETE as deletePushSubscription, POST as postPushSubscription } from "../../apps/api/app/api/push-subscriptions/route";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
 const TENANT = "00000000-0000-4000-8000-000000000d61";
@@ -44,6 +45,7 @@ describe.skipIf(!available)("user preferences route (D6.T1)", () => {
     }, OWNER);
     await withTenant(TENANT, async (db) => {
       await db.delete(userPrefs).where(eq(userPrefs.userId, DISPATCHER));
+      await db.delete(pushSubscriptions).where(eq(pushSubscriptions.tenantId, TENANT));
     }, DISPATCHER);
     await withTenant(TENANT, async (db) => {
       await db.delete(users).where(eq(users.tenantId, TENANT));
@@ -101,5 +103,21 @@ describe.skipIf(!available)("user preferences route (D6.T1)", () => {
     expect((await first.json()).firstVisit).toBe(true);
     const next = await digestGET(request(OWNER));
     expect((await next.json()).firstVisit).toBe(false);
+  });
+
+  it("stores and revokes only the authenticated user's push device", async () => {
+    const endpoint = "https://push.example.test/subscription/d6-owner-device";
+    const created = await postPushSubscription(request(OWNER, { method: "POST", body: JSON.stringify({ endpoint, keys: { p256dh: "owner-p256dh", auth: "owner-auth" } }) }));
+    expect(created.status).toBe(201);
+    await withTenant(TENANT, async (db) => {
+      const rows = await db.select().from(pushSubscriptions).where(eq(pushSubscriptions.endpoint, endpoint));
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.userId).toBe(OWNER);
+    }, OWNER);
+    expect((await deletePushSubscription(request(DISPATCHER, { method: "DELETE", body: JSON.stringify({ endpoint }) }))).status).toBe(204);
+    await withTenant(TENANT, async (db) => {
+      expect(await db.select().from(pushSubscriptions).where(eq(pushSubscriptions.endpoint, endpoint))).toHaveLength(1);
+    }, OWNER);
+    expect((await deletePushSubscription(request(OWNER, { method: "DELETE", body: JSON.stringify({ endpoint }) }))).status).toBe(204);
   });
 });

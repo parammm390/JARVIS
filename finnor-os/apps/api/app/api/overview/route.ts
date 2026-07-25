@@ -19,6 +19,17 @@ import { getOrchestrator } from "../../../lib/orchestrator";
 const ACTION_TYPE = "get_business_overview";
 const CACHE_WINDOW_MS = 5 * 60 * 1000;
 
+// Old receipts created before the overview contract settled can have an actual result
+// without the top-level dashboard fields. They are valid historical receipts, but not
+// valid cache entries for the live panel; reuse would otherwise return a 200 payload
+// that makes the authenticated Bridge crash. Treat that as a cache miss and produce a
+// fresh, receipted overview through the normal read-only action.
+function isOverviewOutput(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== "object") return false;
+  const output = value as Record<string, unknown>;
+  return ["leads", "pending", "inventory", "invoices", "visits"].every((key) => output[key] && typeof output[key] === "object");
+}
+
 export async function GET(req: Request): Promise<Response> {
   try {
     const ctx = await requireContext(req);
@@ -46,7 +57,9 @@ export async function GET(req: Request): Promise<Response> {
         );
         if (receipt?.actualResult) {
           const actual = receipt.actualResult as { output?: Record<string, unknown> };
-          return Response.json({ domainActionId: recent.id, receiptId: receipt.id, cached: true, ...actual.output });
+          if (isOverviewOutput(actual.output)) {
+            return Response.json({ domainActionId: recent.id, receiptId: receipt.id, cached: true, ...actual.output });
+          }
         }
       }
     }

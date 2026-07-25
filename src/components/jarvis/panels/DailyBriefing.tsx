@@ -25,6 +25,12 @@ interface OverviewResponse {
   visits: { upcomingCount: number; next: string[] }
 }
 
+function isOverviewResponse(value: unknown): value is OverviewResponse {
+  if (!value || typeof value !== "object") return false
+  const record = value as Record<string, unknown>
+  return ["leads", "pending", "inventory", "invoices", "visits"].every((key) => record[key] && typeof record[key] === "object")
+}
+
 function WhyBriefingButton({ domainActionId }: { domainActionId: string }) {
   const [receiptId, setReceiptId] = useState<string | null>(null)
   const [state, setState] = useState<"idle" | "loading" | "none">("idle")
@@ -71,6 +77,7 @@ export function DailyBriefing() {
     setError(null)
     try {
       const res = await jarvisGet<OverviewResponse>("overview", refresh ? { refresh: "1" } : undefined)
+      if (!isOverviewResponse(res)) throw new Error("The briefing response is incomplete; refresh to generate a new verified overview.")
       setData(res)
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't generate the briefing.")
