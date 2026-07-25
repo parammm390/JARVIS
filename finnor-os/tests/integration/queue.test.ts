@@ -6,7 +6,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import pg from "pg";
 import { migrate } from "../../packages/db/migrate";
 import { getPool, closePool } from "@finnor/db";
-import { JobQueue } from "../../apps/worker/src/queue";
+import { JobQueue, workerConcurrency } from "../../apps/worker/src/queue";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
 
@@ -131,5 +131,29 @@ describe.skipIf(!available)("postgres job queue (§32.7)", () => {
     expect(completed[0]).toBe("interactive");
     const { rows } = await getPool().query("SELECT count(*)::int AS n FROM jobs WHERE type = 'drain_test' AND status = 'completed'");
     expect(rows[0].n).toBe(3);
+  });
+
+  it("bounds each process's worker slots and drains an in-flight claim before SIGTERM shutdown", async () => {
+    expect(workerConcurrency("3")).toBe(3);
+    expect(workerConcurrency("0")).toBe(1);
+    expect(workerConcurrency("99")).toBe(1);
+    await getPool().query("DELETE FROM jobs");
+    const queue = new JobQueue();
+    const controller = new AbortController();
+    let release!: () => void;
+    const started = new Promise<void>((resolve) => {
+      queue.register("drain_on_shutdown", async () => {
+        resolve();
+        await new Promise<void>((done) => { release = done; });
+      });
+    });
+    await queue.enqueue("drain_on_shutdown", {});
+    const loop = queue.runLoop(5, controller.signal, 1);
+    await started;
+    controller.abort(); // no new claim after SIGTERM; current claim must finish.
+    release();
+    await loop;
+    const { rows } = await getPool().query("SELECT status FROM jobs WHERE type = 'drain_on_shutdown'");
+    expect(rows[0].status).toBe("completed");
   });
 });

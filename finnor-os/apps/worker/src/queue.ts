@@ -8,6 +8,12 @@ import { Sentry, logWithTrace } from "@finnor/tools";
 export type JobHandler = (payload: Record<string, unknown>) => Promise<void>;
 export type JobLane = "interactive" | "batch";
 
+/** A process-level cap: the database claim remains the cross-process boundary. */
+export function workerConcurrency(value = process.env.WORKER_CONCURRENCY): number {
+  const parsed = Number.parseInt(value ?? "1", 10);
+  return Number.isSafeInteger(parsed) && parsed >= 1 && parsed <= 8 ? parsed : 1;
+}
+
 export class JobQueue {
   private handlers = new Map<string, JobHandler>();
 
@@ -127,7 +133,13 @@ export class JobQueue {
     return true;
   }
 
-  async runLoop(pollMs = 2000, signal?: AbortSignal): Promise<void> {
+  async runLoop(pollMs = 2000, signal?: AbortSignal, concurrency = workerConcurrency()): Promise<void> {
+    // Each slot claims through FOR UPDATE SKIP LOCKED. The cap prevents one process
+    // from turning an outage into an unbounded set of in-flight provider calls.
+    await Promise.all(Array.from({ length: concurrency }, () => this.runSlot(pollMs, signal)));
+  }
+
+  private async runSlot(pollMs: number, signal?: AbortSignal): Promise<void> {
     while (!signal?.aborted) {
       let worked = false;
       try {
