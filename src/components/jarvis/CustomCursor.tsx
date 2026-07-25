@@ -1,8 +1,7 @@
 "use client"
 
-// Adaptive cursor for the JARVIS console: a blend-mode dot that reads WHITE over the
-// dark console and BLACK over the light page chrome automatically (mix-blend-difference
-// inverts against whatever is underneath — no zone bookkeeping, always correct).
+// High-contrast cursor for the JARVIS console. It stays white so it remains visible
+// over the console's dark materials instead of inverting to black and disappearing.
 // Grows over interactive elements; native cursor stays hidden only while inside the page.
 
 import { useEffect, useRef, useState } from "react"
@@ -60,7 +59,6 @@ export function CustomCursor() {
           y: springY,
           translateX: "-50%",
           translateY: "-50%",
-          mixBlendMode: "difference",
           opacity: visible ? 1 : 0,
         }}
         animate={{ width: hoveringClickable ? 44 : 26, height: hoveringClickable ? 44 : 26 }}
@@ -75,7 +73,6 @@ export function CustomCursor() {
           y,
           translateX: "-50%",
           translateY: "-50%",
-          mixBlendMode: "difference",
           opacity: visible ? 1 : 0,
         }}
         animate={{ width: hoveringClickable ? 5 : 7, height: hoveringClickable ? 5 : 7 }}

@@ -11,6 +11,14 @@ export default function CustomCursor() {
   const [variant, setVariant] = useState<CursorVariant>("default")
 
   useEffect(() => {
+    // JARVIS supplies its own high-contrast cursor.  Keeping this site-wide
+    // cursor out of that route prevents two cursors (including the dark one)
+    // from competing for visibility in the command center.
+    if (window.location.pathname.startsWith("/jarvis")) {
+      document.documentElement.removeAttribute("data-custom-cursor")
+      return
+    }
+
     const finePointer = window.matchMedia("(hover: hover) and (pointer: fine)")
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)")
     const canEnable = finePointer.matches && !reducedMotion.matches

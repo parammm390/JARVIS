@@ -15,9 +15,13 @@ export function PushOptIn() {
   const [state, setState] = useState<"idle" | "enabled" | "unavailable" | "error">("idle")
   async function enable() {
     const key = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
-    if (!session || !key || !("serviceWorker" in navigator) || !("PushManager" in window)) { setState("unavailable"); return }
+    // `registration.pushManager` is the authoritative capability. Some
+    // Chromium contexts do not expose the global `PushManager` constructor
+    // even though a registered service worker can subscribe successfully.
+    if (!session || !key || !("serviceWorker" in navigator)) { setState("unavailable"); return }
     try {
       const registration = await navigator.serviceWorker.register("/jarvis-push-sw.js", { scope: "/" });
+      if (!registration.pushManager) { setState("unavailable"); return }
       const permission = await Notification.requestPermission();
       if (permission !== "granted") { setState("unavailable"); return }
       const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: publicKeyToBytes(key) as unknown as BufferSource });
