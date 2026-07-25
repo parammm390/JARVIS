@@ -83,6 +83,7 @@ const API_PATHS = {
   policy: "/api/policies/{tenantId}/{actionType}",
   vitals: "/api/vitals",
   activity: "/api/activity",
+  dealerZeroTimeCompression: "/api/dealer-zero/time-compression",
 } as const satisfies Record<string, keyof paths>
 
 // ---------------------------------------------------------------------------
@@ -161,6 +162,25 @@ export interface Vitals {
   dlq: { openCount: number }
   bindings: Record<string, string>
   scans: Record<string, string | null>
+}
+
+export type DealerZeroScenario = "normal_day" | "brutal_summer" | "payment_crunch" | "equipment_recall" | "chaos_day"
+export interface ShowtimeFrame {
+  atMs: number
+  kind: "day_start" | "intake" | "approval" | "workflow" | "day_end"
+  label: string
+  // Null is honest when this Dealer Zero tenant has no matching persisted receipt
+  // yet; clients must not manufacture an inspect target.
+  receiptId: string | null
+}
+export interface TimeCompressedDemo {
+  demo: true
+  synthetic: true
+  dateSeed: string
+  scenario: DealerZeroScenario
+  multiplier: number
+  durationMs: number
+  frames: ShowtimeFrame[]
 }
 
 // Verified against finnor-os/apps/api/app/api/activity/route.ts (A2.T6).
@@ -277,6 +297,9 @@ export const jarvisClient = {
 
   activity: (params?: { since?: string; limit?: number }): Promise<ActivityPage> =>
     jarvisGet<ActivityPage>("activity", toStringParams(params)),
+
+  dealerZeroTimeCompression: (body: { dateSeed: string; scenario: DealerZeroScenario; multiplier: number }): Promise<TimeCompressedDemo> =>
+    jarvisPost<TimeCompressedDemo>("dealer-zero/time-compression", body),
 }
 
 // Referenced only for its compile-time `satisfies` check above (API_PATHS) and to

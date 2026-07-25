@@ -72,6 +72,7 @@ export interface paths {
                          */
                         channel?: "voice" | "text" | "console";
                         sessionId?: string;
+                        idempotencyKey?: string;
                     };
                 };
             };
@@ -92,6 +93,47 @@ export interface paths {
                 };
                 /** @description Bad auth */
                 401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/dealer-zero/time-compression": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Read-only, explicitly synthetic Dealer Zero time-compression script (owner-only) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description {demo:true, synthetic:true, frames} with optional real receipt ids */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Not an owner or not the Dealer Zero demo tenant */
+                403: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -1557,6 +1599,8 @@ export interface paths {
                         modelProvider?: string;
                         confirmationTimeoutHours?: number | null;
                         version?: number;
+                        /** Format: date-time */
+                        effectiveFrom?: string;
                     };
                 };
             };

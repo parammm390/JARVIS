@@ -116,3 +116,11 @@ test.describe("visual snapshots — /jarvis/bridge (D1 Command Bridge + D2 Appro
     await expect(page).toHaveScreenshot("bridge-owner-content.png", SCREENSHOT_OPTS)
   })
 })
+
+test.describe("/jarvis/showtime (D8)", () => {
+  test("keeps the Dealer Zero demo behind the honest signed-in gate", async ({ page }) => {
+    await page.goto("/jarvis/showtime")
+    await expect(page.getByText("Sign in required")).toBeVisible()
+    await expect(page.getByText(/Showtime is available only to the labeled Dealer Zero demo tenant/i)).toBeVisible()
+  })
+})

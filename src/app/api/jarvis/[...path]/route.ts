@@ -82,6 +82,9 @@ function isAllowedPost(segments: string[]): boolean {
   if (segments.length === 3 && a === "dlq" && (c === "replay" || c === "discard")) return true
   if (segments.length === 1 && a === "corrections") return true
   if (segments.length === 1 && a === "push-subscriptions") return true
+  // D8: owner/Dealer-Zero authorization remains entirely in finnor-os; this proxy
+  // only exposes the one existing, read-only time-compression route.
+  if (segments.length === 2 && a === "dealer-zero" && b === "time-compression") return true
   return false
 }
 

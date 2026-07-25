@@ -49,6 +49,12 @@ const doc = {
         responses: { "201": { description: "Planned domain actions" }, "400": { description: "Invalid payload" }, "401": { description: "Bad auth" } },
       },
     },
+    "/api/dealer-zero/time-compression": {
+      post: {
+        summary: "Read-only, explicitly synthetic Dealer Zero time-compression script (owner-only)",
+        responses: { "200": { description: "{demo:true, synthetic:true, frames} with optional real receipt ids" }, "403": { description: "Not an owner or not the Dealer Zero demo tenant" } },
+      },
+    },
     "/api/actions/pending": {
       get: {
         summary: "List actions awaiting confirmation (filter=blocked for stuck items)",

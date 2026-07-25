@@ -3,8 +3,8 @@
 // demo/synthetic explicitly. This route scripts a demo; it never changes business data.
 
 import { buildTimeCompressedDemo, isDealerZeroScenarioPack } from "@finnor/shared-types";
-import { tenantSettings, withTenant } from "@finnor/db";
-import { eq } from "drizzle-orm";
+import { decisionReceipts, tenantSettings, withTenant } from "@finnor/db";
+import { desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { AuthError, errorResponse, requireContext } from "../../../../lib/auth";
 
@@ -27,7 +27,28 @@ export async function POST(req: Request): Promise<Response> {
     // The zod enum is the runtime authority; retain the type guard so a future schema
     // edit cannot accidentally widen data passed into the shared deterministic script.
     if (!isDealerZeroScenarioPack(body.data.scenario)) throw new AuthError("Unknown demo scenario", 400);
-    return Response.json(buildTimeCompressedDemo(body.data.dateSeed, body.data.scenario, body.data.multiplier));
+    const demo = buildTimeCompressedDemo(body.data.dateSeed, body.data.scenario, body.data.multiplier);
+    // D8's pause-and-inspect surface must resolve to actual tenant receipts, not
+    // invented IDs or a second demo ledger.  The script remains deterministic; the
+    // current Dealer Zero receipt ids are only attached to its three inspectable
+    // narrative beats, and this read never creates or changes business data.
+    const receipts = await withTenant(ctx.tenantId, (db) =>
+      db
+        .select({ id: decisionReceipts.id })
+        .from(decisionReceipts)
+        .where(eq(decisionReceipts.tenantId, ctx.tenantId))
+        .orderBy(desc(decisionReceipts.createdAt))
+        .limit(3),
+    );
+    let receiptIndex = 0;
+    return Response.json({
+      ...demo,
+      frames: demo.frames.map((frame) => {
+        if (frame.kind === "day_start" || frame.kind === "day_end") return { ...frame, receiptId: null };
+        const receiptId = receipts.length > 0 ? receipts[receiptIndex++ % receipts.length]!.id : null;
+        return { ...frame, receiptId };
+      }),
+    });
   } catch (err) {
     return errorResponse(err);
   }
