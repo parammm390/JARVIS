@@ -10,7 +10,7 @@ Convention: same as `finnor-os/docs/phase-status.md` (P1/P2 style) — a box is 
 
 ## Session Log
 
-- 2026-07-26 · phase 24 (B7) · completed T1 in `a432482`: generated route→visible-guard authorization matrix, 1/1 drift test, and CI drift gate; next: B7.T2 · blockers: T2 retention purge is a material policy-design gap — no retention durations, eligible data classes, or legal-hold rule exist, and immutable audit tables must not be guessed at.
+- 2026-07-26 · phase 24 (B7) · completed T1/T2’s PII-redaction portion in `a432482`/`d45c734`: route→visible-guard matrix + CI drift gate; Pino redaction proof 1/1 and typecheck clean · next: B7.T2 retention purge · blockers: no authoritative retention durations, eligible data classes, or legal-hold rule; immutable audit tables must not be guessed at.
 
 - 2026-07-25 · phase 23 (A6) · COMPLETE WITH PARAM WAIVER: T1/T2 and the production 6543 cutover are verified; focused pool/embedding suites 8/8 and typecheck are clean. Param explicitly directed in this thread, “yeah i think we should skip that and do it now”; therefore the 48-hour quiet-soak observation is waived, not claimed as passed. The rollback remains managed `DATABASE_URL` port 5432 followed by API+worker redeploy · next: phase 23 complete under the stated waiver · blockers: none (the monitor may continue as operational observation, but it is not completion evidence).
 
