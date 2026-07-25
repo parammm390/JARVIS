@@ -1088,6 +1088,19 @@ export const dealerZeroReplayReports = pgTable("dealer_zero_replay_reports", {
   passed: boolean("passed").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+export const dealerZeroShadowReports = pgTable("dealer_zero_shadow_reports", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+  observationStartedAt: timestamp("observation_started_at", { withTimezone: true }).notNull(),
+  observationEndedAt: timestamp("observation_ended_at", { withTimezone: true }).notNull(),
+  sourceLabel: text("source_label").notNull(),
+  candidateLabel: text("candidate_label").notNull(),
+  sourceSnapshot: jsonb("source_snapshot").notNull(),
+  candidateSnapshot: jsonb("candidate_snapshot").notNull(),
+  diff: jsonb("diff").notNull(),
+  passed: boolean("passed").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 // Phase 2 (§2.3): terminal outbox/step failures land here instead of silently vanishing
 // into a generic reconciliation_case — a queryable, replayable row an owner can act on.

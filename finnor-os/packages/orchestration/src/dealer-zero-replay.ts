@@ -2,7 +2,7 @@
 // excluded: they are transport/runtime noise, not behavior. A changed action, expected
 // result, actual result, failure, or approval contract is a behavioral regression.
 
-import { dealerZeroReplayRecordings, dealerZeroReplayReports, decisionReceipts, withTenant } from "@finnor/db";
+import { dealerZeroReplayRecordings, dealerZeroReplayReports, dealerZeroShadowReports, decisionReceipts, withTenant } from "@finnor/db";
 import { and, eq, gte } from "drizzle-orm";
 import type { DealerZeroScenarioPack } from "@finnor/shared-types";
 
@@ -59,4 +59,12 @@ export async function writeReplayReport(tenantId: string, recordingId: string, c
     await db.insert(dealerZeroReplayReports).values({ tenantId, recordingId, candidateLabel, candidateSnapshot: candidate.map(normalizeReceipt), diff, passed: diff.equal });
     return diff;
   });
+}
+
+export async function writeShadowReport(
+  tenantId: string, sourceLabel: string, candidateLabel: string, observationStartedAt: Date, observationEndedAt: Date, source: ReceiptLike[], candidate: ReceiptLike[],
+): Promise<ReceiptDiff> {
+  const diff = diffNormalizedReceipts(source, candidate);
+  await withTenant(tenantId, (db) => db.insert(dealerZeroShadowReports).values({ tenantId, sourceLabel, candidateLabel, observationStartedAt, observationEndedAt, sourceSnapshot: source.map(normalizeReceipt), candidateSnapshot: candidate.map(normalizeReceipt), diff, passed: diff.equal }));
+  return diff;
 }
