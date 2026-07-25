@@ -7,6 +7,26 @@
 
 import pino from "pino";
 
+/**
+ * Structured PII fields that must never leave the process through Pino/Axiom.
+ * This is deliberately key-based: free-text logging is prohibited at call sites
+ * unless it has first passed through `redactText()` from @finnor/security.
+ */
+export const PII_LOG_REDACT_PATHS = [
+  "email", "phone", "mobile", "address", "street", "postalCode", "zip",
+  "contact.email", "contact.phone", "contact.mobile", "contact.address",
+  "customer.email", "customer.phone", "customer.mobile", "customer.address",
+  "household.address", "technician.email", "technician.phone",
+  "payload.email", "payload.phone", "payload.mobile", "payload.address",
+  "headers.authorization", "req.headers.authorization", "authorization",
+  "*.email", "*.phone", "*.mobile", "*.address",
+] as const;
+
+const loggerOptions = (level: string): pino.LoggerOptions => ({
+  level,
+  redact: { paths: [...PII_LOG_REDACT_PATHS], censor: "[REDACTED]" },
+});
+
 function buildTargets(): pino.TransportTargetOptions[] {
   const level = process.env.LOG_LEVEL ?? "info";
   const targets: pino.TransportTargetOptions[] = [];
@@ -39,16 +59,22 @@ export function getLogger(): pino.Logger {
   if (!instance) {
     const level = process.env.LOG_LEVEL ?? "info";
     try {
-      instance = pino({ level }, pino.transport({ targets: buildTargets() }));
+      instance = pino(loggerOptions(level), pino.transport({ targets: buildTargets() }));
     } catch (error) {
       // A deployment must never turn an already-handled request failure into a 500
       // merely because an optional log transport was not traced into its bundle.
       // Keep the error observable on stdout and let the original error response win.
       console.error("[observability] transport unavailable; falling back to stdout:", error instanceof Error ? error.message : error);
-      instance = pino({ level });
+      instance = pino(loggerOptions(level));
     }
   }
   return instance;
+}
+
+/** Test-only construction seam; avoids spawning a transport worker while proving the
+ * exact bytes sent to a Pino destination are redacted. */
+export function createRedactingLogger(destination: pino.DestinationStream): pino.Logger {
+  return pino(loggerOptions("info"), destination);
 }
 
 export interface TraceFields {
