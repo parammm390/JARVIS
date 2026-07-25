@@ -83,11 +83,11 @@ describe.skipIf(!available)("authz test wall (Phase 1.8)", () => {
 
   describe("anonymous requests are rejected on every private path", () => {
     it("resources/[kind]", async () => {
-      const res = await resourcesGET(anonReq(), { params: { kind: "households" } });
+      const res = await resourcesGET(anonReq(), { params: Promise.resolve({ kind: "households" }) });
       expect(res.status).toBe(401);
     });
     it("read-models/[view]", async () => {
-      const res = await readModelGET(anonReq(), { params: { view: "pipeline-health" } });
+      const res = await readModelGET(anonReq(), { params: Promise.resolve({ view: "pipeline-health" }) });
       expect(res.status).toBe(401);
     });
     it("actions/pending", async () => {
@@ -128,12 +128,12 @@ describe.skipIf(!available)("authz test wall (Phase 1.8)", () => {
       expect((await receiptsListGET(anonReq("http://localhost/api/receipts?domainActionId=00000000-0000-4000-8000-000000000000"))).status).toBe(401);
     });
     it("receipts/:id (Phase 7.3)", async () => {
-      const res = await receiptByIdGET(anonReq(), { params: { id: "00000000-0000-4000-8000-000000000000" } });
+      const res = await receiptByIdGET(anonReq(), { params: Promise.resolve({ id: "00000000-0000-4000-8000-000000000000" }) });
       expect(res.status).toBe(401);
     });
     it("actions/:id/escalate (Phase 7.1)", async () => {
       const res = await escalatePOST(new Request("http://localhost/api/test", { method: "POST", body: "{}" }), {
-        params: { id: "00000000-0000-4000-8000-000000000000" },
+        params: Promise.resolve({ id: "00000000-0000-4000-8000-000000000000" }),
       });
       expect(res.status).toBe(401);
     });
@@ -145,7 +145,7 @@ describe.skipIf(!available)("authz test wall (Phase 1.8)", () => {
     });
     it("data-quality/findings/:id/resolve (Phase 7.7)", async () => {
       const res = await resolveFindingPOST(new Request("http://localhost/api/test", { method: "POST" }), {
-        params: { id: "00000000-0000-4000-8000-000000000000" },
+        params: Promise.resolve({ id: "00000000-0000-4000-8000-000000000000" }),
       });
       expect(res.status).toBe(401);
     });
@@ -165,8 +165,8 @@ describe.skipIf(!available)("authz test wall (Phase 1.8)", () => {
     await closePool();
     try {
       await asAuthed(async () => {
-        const asA = await (await resourcesGET(reqAs(SEED_TENANT_ID), { params: { kind: "invoices" } })).json();
-        const asB = await (await resourcesGET(reqAs(TENANT_B), { params: { kind: "invoices" } })).json();
+        const asA = await (await resourcesGET(reqAs(SEED_TENANT_ID), { params: Promise.resolve({ kind: "invoices" }) })).json();
+        const asB = await (await resourcesGET(reqAs(TENANT_B), { params: Promise.resolve({ kind: "invoices" }) })).json();
         expect(asA.rows.length).toBeGreaterThan(0);
         expect(asB.rows).toHaveLength(0);
       });

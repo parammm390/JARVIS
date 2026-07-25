@@ -102,7 +102,7 @@ describe.skipIf(!available)("poison job -> dead-letter -> triage -> replay clean
   it("an owner replays it anyway once the underlying cause is fixed, and it delivers clean this time — for real", async () => {
     const [dl] = await withTenant(TENANT_ID, (db) => db.select().from(deadLetters).where(eq(deadLetters.relatedOutboxEventId, eventId)));
 
-    const replayRes = await replayDlq(req(`/api/dlq/${dl!.id}/replay`), { params: { id: dl!.id } });
+    const replayRes = await replayDlq(req(`/api/dlq/${dl!.id}/replay`), { params: Promise.resolve({ id: dl!.id }) });
     expect(replayRes.status).toBe(200);
 
     const [resetEvent] = await withTenant(TENANT_ID, (db) => db.select().from(outboxEvents).where(eq(outboxEvents.id, eventId)));

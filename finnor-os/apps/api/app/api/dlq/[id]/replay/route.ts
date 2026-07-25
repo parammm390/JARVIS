@@ -10,13 +10,14 @@ const STATUS_BY_REASON: Record<string, number> = {
   no_linked_outbox_event: 409,
 };
 
-export async function POST(req: Request, { params }: { params: { id: string } }): Promise<Response> {
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> {
   try {
+    const { id } = await params;
     const ctx = await requireContext(req);
     if (!(await canApprove(ctx, "*"))) {
       return Response.json({ error: `Your role (${ctx.role}) cannot replay dead letters` }, { status: 403 });
     }
-    const result = await replayDeadLetter(ctx.tenantId, params.id);
+    const result = await replayDeadLetter(ctx.tenantId, id);
     if (!result.replayed) {
       return Response.json({ error: result.reason }, { status: STATUS_BY_REASON[result.reason] ?? 409 });
     }

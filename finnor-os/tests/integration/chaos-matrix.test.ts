@@ -63,6 +63,7 @@ import {
 } from "@finnor/tools";
 import { FinnorOrchestrator } from "@finnor/orchestration";
 import { ToolRegistry } from "@finnor/tools";
+import { appendEpisode } from "@finnor/memory";
 import { scheduledReminder } from "../../apps/worker/src/handlers/scheduled-reminder";
 import { scanApprovalExpiry, DEFAULT_CONFIRMATION_TIMEOUT_HOURS } from "../../apps/worker/src/handlers/scan-approval-expiry";
 import type { DomainAction } from "@finnor/shared-types";
@@ -585,6 +586,7 @@ describe.skipIf(!available)("chaos matrix (§2.8)", () => {
       );
       const action = rows.find((r) => (r.payload as Record<string, unknown>).agreementId === agreementId)!;
       await withTenant(SEED_TENANT_ID, (db) => db.update(domainActions).set({ status: "approved" }).where(eq(domainActions.id, action.id)));
+      await appendEpisode(SEED_TENANT_ID, action.id, "confirmed", { by: "chaos-test" }, { channel: "test" });
 
       const orchestrator = new FinnorOrchestrator({ tools: mockToolsAlwaysSucceed() });
       const domainAction = toDomainAction(action, "approved");
@@ -635,6 +637,7 @@ describe.skipIf(!available)("chaos matrix (§2.8)", () => {
       );
       const action = rows.find((r) => (r.payload as Record<string, unknown>).agreementId === agreementId)!;
       await withTenant(SEED_TENANT_ID, (db) => db.update(domainActions).set({ status: "approved" }).where(eq(domainActions.id, action.id)));
+      await appendEpisode(SEED_TENANT_ID, action.id, "confirmed", { by: "chaos-test" }, { channel: "test" });
       const { reg } = mockToolsFlaky(0); // the plugin itself has no built-in retry across ghl_send_sms — this proves it succeeds first-try with a healthy mock; genuine retry lives at the tool-registration layer, tested directly in flows 1/2
       const orchestrator = new FinnorOrchestrator({ tools: reg });
       const domainAction = toDomainAction(action, "approved");
@@ -651,6 +654,7 @@ describe.skipIf(!available)("chaos matrix (§2.8)", () => {
       );
       const action = rows.find((r) => (r.payload as Record<string, unknown>).agreementId === agreementId)!;
       await withTenant(SEED_TENANT_ID, (db) => db.update(domainActions).set({ status: "approved" }).where(eq(domainActions.id, action.id)));
+      await appendEpisode(SEED_TENANT_ID, action.id, "confirmed", { by: "chaos-test" }, { channel: "test" });
       const orchestrator = new FinnorOrchestrator({ tools: mockToolsAlwaysFail() });
       const domainAction = toDomainAction(action, "approved");
       const policy = await orchestrator.loadPolicy(domainAction);

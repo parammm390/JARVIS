@@ -54,10 +54,10 @@ const VIEWS: Record<string, (tenantId: string, searchParams: URLSearchParams) =>
   "failure-injections": (tenantId) => failureInjectionLog(tenantId),
 };
 
-export async function GET(req: Request, { params }: { params: { view: string } }): Promise<Response> {
+export async function GET(req: Request, { params }: { params: Promise<{ view: string }> }): Promise<Response> {
   try {
     const ctx = await requireContext(req);
-    const { view } = params;
+    const { view } = await params;
     const fn = VIEWS[view];
     if (!fn) {
       return Response.json({ error: `Unknown read-model "${view}". Valid views: ${Object.keys(VIEWS).join(", ")}` }, { status: 404 });

@@ -8,16 +8,17 @@ import { getDocumentContent } from "@finnor/data-platform";
 import { and, eq } from "drizzle-orm";
 import { requireContext, errorResponse } from "../../../../lib/auth";
 
-export async function GET(req: Request, { params }: { params: { id: string } }): Promise<Response> {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> {
   try {
+    const { id } = await params;
     const ctx = await requireContext(req);
     const result = await withTenant(ctx.tenantId, async (db) => {
       const [doc] = await db
         .select()
         .from(documents)
-        .where(and(eq(documents.id, params.id), eq(documents.tenantId, ctx.tenantId)));
+        .where(and(eq(documents.id, id), eq(documents.tenantId, ctx.tenantId)));
       if (!doc) return null;
-      const content = await getDocumentContent(db, params.id);
+      const content = await getDocumentContent(db, id);
       return { doc, content };
     });
     if (!result || !result.content) return Response.json({ error: "Document not found or has no content yet" }, { status: 404 });
@@ -25,7 +26,7 @@ export async function GET(req: Request, { params }: { params: { id: string } }):
       status: 200,
       headers: {
         "content-type": result.content.contentType,
-        "content-disposition": `inline; filename="${result.doc.kind}-${params.id}.pdf"`,
+        "content-disposition": `inline; filename="${result.doc.kind}-${id}.pdf"`,
         "cache-control": "private, max-age=3600",
       },
     });

@@ -9,7 +9,7 @@ import { upsertPriceBookItem, listPriceBookItems } from "@finnor/data-platform";
 import { z } from "zod";
 import { requireContext, errorResponse } from "../../../../lib/auth";
 
-type Params = { params: { tenantId: string } };
+type Params = { params: Promise<{ tenantId: string }> };
 
 const UpsertPriceBookItemSchema = z.object({
   sku: z.string().min(1),
@@ -20,8 +20,9 @@ const UpsertPriceBookItemSchema = z.object({
 
 export async function GET(req: Request, { params }: Params): Promise<Response> {
   try {
+    const { tenantId } = await params;
     const ctx = await requireContext(req);
-    if (ctx.tenantId !== params.tenantId) {
+    if (ctx.tenantId !== tenantId) {
       return Response.json({ error: "Forbidden" }, { status: 403 });
     }
     const items = await withTenant(ctx.tenantId, (db) => listPriceBookItems(db, ctx.tenantId));
@@ -33,8 +34,9 @@ export async function GET(req: Request, { params }: Params): Promise<Response> {
 
 export async function PUT(req: Request, { params }: Params): Promise<Response> {
   try {
+    const { tenantId } = await params;
     const ctx = await requireContext(req);
-    if (ctx.tenantId !== params.tenantId) {
+    if (ctx.tenantId !== tenantId) {
       return Response.json({ error: "Forbidden" }, { status: 403 });
     }
     if (ctx.role !== "owner") {

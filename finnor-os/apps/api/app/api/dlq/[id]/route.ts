@@ -4,14 +4,15 @@ import { withTenant, deadLetters } from "@finnor/db";
 import { and, eq } from "drizzle-orm";
 import { requireContext, canApprove, errorResponse } from "../../../../lib/auth";
 
-export async function GET(req: Request, { params }: { params: { id: string } }): Promise<Response> {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> {
   try {
+    const { id } = await params;
     const ctx = await requireContext(req);
     if (!(await canApprove(ctx, "*"))) {
       return Response.json({ error: `Your role (${ctx.role}) cannot view the dead-letter queue` }, { status: 403 });
     }
     const [row] = await withTenant(ctx.tenantId, (db) =>
-      db.select().from(deadLetters).where(and(eq(deadLetters.id, params.id), eq(deadLetters.tenantId, ctx.tenantId))),
+      db.select().from(deadLetters).where(and(eq(deadLetters.id, id), eq(deadLetters.tenantId, ctx.tenantId))),
     );
     if (!row) return Response.json({ error: "Not found" }, { status: 404 });
     return Response.json({ deadLetter: row });

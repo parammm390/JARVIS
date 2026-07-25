@@ -79,7 +79,7 @@ describe.skipIf(!available)("POST /api/actions/:id/revert (D2.T4)", () => {
 
   it("reverts approved -> pending while genuinely unclaimed, and logs the revert", async () => {
     const id = await seedAction(TENANT_ID, "approved");
-    const res = await revertPOST(req(TENANT_ID, "owner"), { params: { id } });
+    const res = await revertPOST(req(TENANT_ID, "owner"), { params: Promise.resolve({ id }) });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body).toEqual({ status: "pending", reverted: true });
@@ -93,7 +93,7 @@ describe.skipIf(!available)("POST /api/actions/:id/revert (D2.T4)", () => {
 
   it("honestly 409s — already claimed — for an action that's executing, and does NOT change its status", async () => {
     const id = await seedAction(TENANT_ID, "executing");
-    const res = await revertPOST(req(TENANT_ID, "owner"), { params: { id } });
+    const res = await revertPOST(req(TENANT_ID, "owner"), { params: Promise.resolve({ id }) });
     expect(res.status).toBe(409);
     const body = await res.json();
     expect(body.status).toBe("executing");
@@ -103,33 +103,33 @@ describe.skipIf(!available)("POST /api/actions/:id/revert (D2.T4)", () => {
 
   it("honestly 409s for an action that never left pending (nothing to undo)", async () => {
     const id = await seedAction(TENANT_ID, "pending");
-    const res = await revertPOST(req(TENANT_ID, "owner"), { params: { id } });
+    const res = await revertPOST(req(TENANT_ID, "owner"), { params: Promise.resolve({ id }) });
     expect(res.status).toBe(409);
     expect(await actionStatus(TENANT_ID, id)).toBe("pending");
   });
 
   it("404s for an action that doesn't exist", async () => {
-    const res = await revertPOST(req(TENANT_ID, "owner"), { params: { id: "00000000-0000-4000-8000-000000000000" } });
+    const res = await revertPOST(req(TENANT_ID, "owner"), { params: Promise.resolve({ id: "00000000-0000-4000-8000-000000000000" }) });
     expect(res.status).toBe(404);
   });
 
   it("RBAC: a role without canApprove on this action_type is rejected 403, status unchanged", async () => {
     const id = await seedAction(TENANT_ID, "approved");
-    const res = await revertPOST(req(TENANT_ID, "technician"), { params: { id } });
+    const res = await revertPOST(req(TENANT_ID, "technician"), { params: Promise.resolve({ id }) });
     expect(res.status).toBe(403);
     expect(await actionStatus(TENANT_ID, id)).toBe("approved");
   });
 
   it("tenant isolation: tenant B cannot revert tenant A's action (404, not leaked)", async () => {
     const id = await seedAction(TENANT_ID, "approved");
-    const res = await revertPOST(req(OTHER_TENANT_ID, "owner"), { params: { id } });
+    const res = await revertPOST(req(OTHER_TENANT_ID, "owner"), { params: Promise.resolve({ id }) });
     expect(res.status).toBe(404);
     expect(await actionStatus(TENANT_ID, id)).toBe("approved");
   });
 
   it("racing the same revert twice — only the first wins (atomic conditional UPDATE, no double-revert)", async () => {
     const id = await seedAction(TENANT_ID, "approved");
-    const [first, second] = await Promise.all([revertPOST(req(TENANT_ID, "owner"), { params: { id } }), revertPOST(req(TENANT_ID, "owner"), { params: { id } })]);
+    const [first, second] = await Promise.all([revertPOST(req(TENANT_ID, "owner"), { params: Promise.resolve({ id }) }), revertPOST(req(TENANT_ID, "owner"), { params: Promise.resolve({ id }) })]);
     const statuses = [first.status, second.status].sort();
     expect(statuses).toEqual([200, 409]);
     expect(await actionStatus(TENANT_ID, id)).toBe("pending");

@@ -79,7 +79,7 @@ describe.skipIf(!available)("Phase 4 §4.2: real PDF documents (native binding)"
       sourceEntityId: proposal!.id,
     });
 
-    const res = await documentRoute(req(result.documentId), { params: { id: result.documentId } });
+    const res = await documentRoute(req(result.documentId), { params: Promise.resolve({ id: result.documentId }) });
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("application/pdf");
     const bytes = Buffer.from(await res.arrayBuffer());
@@ -107,7 +107,7 @@ describe.skipIf(!available)("Phase 4 §4.2: real PDF documents (native binding)"
     const otherTenantReq = new Request(`http://localhost/api/documents/${result.documentId}`, {
       headers: { "x-tenant-id": "00000000-0000-4000-8000-0000000000f6", "x-user-role": "owner" },
     });
-    const res = await documentRoute(otherTenantReq, { params: { id: result.documentId } });
+    const res = await documentRoute(otherTenantReq, { params: Promise.resolve({ id: result.documentId }) });
     expect(res.status).toBe(404);
 
     await withTenant(TENANT_ID, async (db) => {

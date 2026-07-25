@@ -250,19 +250,19 @@ describe.skipIf(!available)("household360 (Phase 11)", () => {
   });
 
   it("6. GET /api/read-models/household-360 requires householdId (400 without it)", async () => {
-    const res = await GET(req(""), { params: { view: "household-360" } });
+    const res = await GET(req(""), { params: Promise.resolve({ view: "household-360" }) });
     expect(res.status).toBe(400);
   });
 
   it("7. GET /api/read-models/household-360 returns the traversal for a valid householdId", async () => {
-    const res = await GET(req(`?householdId=${householdId}`), { params: { view: "household-360" } });
+    const res = await GET(req(`?householdId=${householdId}`), { params: Promise.resolve({ view: "household-360" }) });
     expect(res.status).toBe(200);
     const body = (await res.json()) as { data: { household: { address: string } } };
     expect(body.data.household.address).toBe("1 Traversal Ave");
   });
 
   it("8. GET returns 404 for a household id that doesn't exist", async () => {
-    const res = await GET(req(`?householdId=00000000-0000-4000-8000-00000000dead`), { params: { view: "household-360" } });
+    const res = await GET(req(`?householdId=00000000-0000-4000-8000-00000000dead`), { params: Promise.resolve({ view: "household-360" }) });
     expect(res.status).toBe(404);
   });
 });

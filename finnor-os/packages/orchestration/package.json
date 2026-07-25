@@ -12,10 +12,10 @@
     "@finnor/security": "*",
     "@finnor/shared-types": "*",
     "@finnor/tools": "*",
-    "@langchain/core": "^0.3.40",
-    "@langchain/langgraph": "^0.2.44",
-    "@langchain/langgraph-checkpoint-postgres": "^0.0.4",
-    "drizzle-orm": "^0.36.4",
+    "@langchain/core": "^1.2.3",
+    "@langchain/langgraph": "^1.4.8",
+    "@langchain/langgraph-checkpoint-postgres": "^1.0.4",
+    "drizzle-orm": "^0.45.2",
     "zod": "^3.23.8",
     "zod-to-json-schema": "^3.23.5"
   }

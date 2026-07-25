@@ -7,19 +7,20 @@ import { UpsertPolicySchema } from "@finnor/policy-schema";
 import { and, eq } from "drizzle-orm";
 import { requireContext, errorResponse } from "../../../../../lib/auth";
 
-type Params = { params: { tenantId: string; actionType: string } };
+type Params = { params: Promise<{ tenantId: string; actionType: string }> };
 
 export async function GET(req: Request, { params }: Params): Promise<Response> {
   try {
+    const { tenantId, actionType } = await params;
     const ctx = await requireContext(req);
-    if (ctx.tenantId !== params.tenantId) {
+    if (ctx.tenantId !== tenantId) {
       return Response.json({ error: "Forbidden" }, { status: 403 });
     }
     const rows = await withTenant(ctx.tenantId, (db) =>
       db
         .select()
         .from(domainPolicies)
-        .where(and(eq(domainPolicies.tenantId, ctx.tenantId), eq(domainPolicies.actionType, params.actionType))),
+        .where(and(eq(domainPolicies.tenantId, ctx.tenantId), eq(domainPolicies.actionType, actionType))),
     );
     if (rows.length === 0) return Response.json({ error: "No policy configured" }, { status: 404 });
     return Response.json({ policy: rows[0] });
@@ -30,8 +31,9 @@ export async function GET(req: Request, { params }: Params): Promise<Response> {
 
 export async function PUT(req: Request, { params }: Params): Promise<Response> {
   try {
+    const { tenantId, actionType } = await params;
     const ctx = await requireContext(req);
-    if (ctx.tenantId !== params.tenantId) {
+    if (ctx.tenantId !== tenantId) {
       return Response.json({ error: "Forbidden" }, { status: 403 });
     }
     if (ctx.role !== "owner") {
@@ -48,7 +50,7 @@ export async function PUT(req: Request, { params }: Params): Promise<Response> {
       const [existing] = await db
         .select()
         .from(domainPolicies)
-        .where(and(eq(domainPolicies.tenantId, ctx.tenantId), eq(domainPolicies.actionType, params.actionType)));
+        .where(and(eq(domainPolicies.tenantId, ctx.tenantId), eq(domainPolicies.actionType, actionType)));
       if (existing) {
         const [updated] = await db
           .update(domainPolicies)
@@ -71,7 +73,7 @@ export async function PUT(req: Request, { params }: Params): Promise<Response> {
         .insert(domainPolicies)
         .values({
           tenantId: ctx.tenantId,
-          actionType: params.actionType,
+          actionType,
           policy: body.data.policy,
           requiresConfirmation: body.data.requiresConfirmation,
           confirmationTemplate: body.data.confirmationTemplate ?? null,

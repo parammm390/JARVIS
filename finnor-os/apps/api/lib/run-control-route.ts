@@ -17,8 +17,9 @@ const STATUS_BY_REASON: Record<string, number> = {
 type RunControlFn = (tenantId: string, runId: string, expectedVersion: number, requestedBy: string) => Promise<RunControlResult>;
 
 export function makeRunControlRoute(fn: RunControlFn) {
-  return async function POST(req: Request, { params }: { params: { id: string } }): Promise<Response> {
+  return async function POST(req: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> {
     try {
+      const { id } = await params;
       const ctx = await requireContext(req);
       // Run controls are an owner-level operational lever over a live business
       // process — same canApprove(ctx, "*") gate as the DLQ routes, not a per-action
@@ -30,7 +31,7 @@ export function makeRunControlRoute(fn: RunControlFn) {
       if (!body.success) {
         return Response.json({ error: "Invalid body — expectedVersion (number) is required" }, { status: 400 });
       }
-      const result = await fn(ctx.tenantId, params.id, body.data.expectedVersion, ctx.userId);
+      const result = await fn(ctx.tenantId, id, body.data.expectedVersion, ctx.userId);
       if (!result.ok) {
         return Response.json({ error: result.reason }, { status: STATUS_BY_REASON[result.reason] ?? 409 });
       }

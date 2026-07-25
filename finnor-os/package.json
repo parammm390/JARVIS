@@ -35,18 +35,18 @@
   "dependencies": {
     "@aws-sdk/client-secrets-manager": "^3.1086.0",
     "@getzep/zep-cloud": "^3.24.0",
-    "@langchain/core": "^0.3.40",
-    "@langchain/langgraph": "^0.2.44",
-    "@langchain/langgraph-checkpoint-postgres": "^0.0.4",
+    "@langchain/core": "^1.2.3",
+    "@langchain/langgraph": "^1.4.8",
+    "@langchain/langgraph-checkpoint-postgres": "^1.0.4",
     "@modelcontextprotocol/sdk": "^1.12.0",
     "@sentry/node": "^10.65.0",
     "@supabase/supabase-js": "^2.45.1",
     "@vapi-ai/web": "^2.6.1",
     "dotenv": "^17.4.2",
-    "drizzle-orm": "^0.36.4",
+    "drizzle-orm": "^0.45.2",
     "groq-sdk": "^0.9.1",
     "ioredis": "^5.4.1",
-    "next": "^14.2.35",
+    "next": "^15.5.21",
     "nodemailer": "^9.0.3",
     "pdf-parse": "^2.4.5",
     "pg": "^8.13.1",
@@ -56,7 +56,12 @@
     "zod-to-json-schema": "^3.23.5"
   },
   "overrides": {
-    "@swc/core": "1.10.18"
+    "@swc/core": "1.10.18",
+    "@hono/node-server": "2.0.11",
+    "fast-uri": "3.1.4",
+    "postcss": "8.5.23",
+    "sharp": "0.35.3",
+    "esbuild": "0.25.12"
   },
   "devDependencies": {
     "@types/node": "^20",
@@ -64,11 +69,11 @@
     "@types/pg": "^8.11.10",
     "@types/react": "^18",
     "@types/react-dom": "^18",
-    "@vitest/ui": "^2.1.8",
-    "drizzle-kit": "^0.28.1",
+    "@vitest/ui": "^4.1.10",
+    "drizzle-kit": "^0.31.10",
     "embedded-postgres": "^18.4.0-beta.17",
     "tsx": "^4.19.2",
     "typescript": "^5",
-    "vitest": "^2.1.8"
+    "vitest": "^4.1.10"
   }
 }

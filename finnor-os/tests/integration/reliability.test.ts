@@ -135,16 +135,16 @@ describe.skipIf(!available)("reliability read-model (Phase 6)", () => {
   });
 
   it("GET /api/read-models/reliability requires auth and is tenant-scoped", async () => {
-    const anonRes = await GET(new Request("http://localhost/api/read-models/reliability"), { params: { view: "reliability" } });
+    const anonRes = await GET(new Request("http://localhost/api/read-models/reliability"), { params: Promise.resolve({ view: "reliability" }) });
     expect(anonRes.status).toBe(401);
 
-    const res = await GET(req(TENANT_ID, "?windowDays=30"), { params: { view: "reliability" } });
+    const res = await GET(req(TENANT_ID, "?windowDays=30"), { params: Promise.resolve({ view: "reliability" }) });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.data.tenantId).toBe(TENANT_ID);
     expect(body.data.reconciliationBacklog).toBe(1);
 
-    const otherRes = await GET(req(OTHER_TENANT_ID, "?windowDays=30"), { params: { view: "reliability" } });
+    const otherRes = await GET(req(OTHER_TENANT_ID, "?windowDays=30"), { params: Promise.resolve({ view: "reliability" }) });
     const otherBody = await otherRes.json();
     expect(otherBody.data.reconciliationBacklog).toBe(0);
   });

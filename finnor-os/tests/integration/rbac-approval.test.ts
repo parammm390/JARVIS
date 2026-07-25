@@ -76,13 +76,13 @@ describe.skipIf(!available)("RBAC — confirm route enforcement (Phase 16d)", ()
 
   it("dispatcher approves a scheduling action — 200", async () => {
     const id = await seedPendingAction(TENANT_ID, "schedule_water_test");
-    const res = await confirmPOST(req("dispatcher"), { params: { id } });
+    const res = await confirmPOST(req("dispatcher"), { params: Promise.resolve({ id }) });
     expect(res.status).toBe(200);
   });
 
   it("dispatcher is rejected (403) on create_invoice, and the action stays pending", async () => {
     const id = await seedPendingAction(TENANT_ID, "create_invoice");
-    const res = await confirmPOST(req("dispatcher"), { params: { id } });
+    const res = await confirmPOST(req("dispatcher"), { params: Promise.resolve({ id }) });
     expect(res.status).toBe(403);
     expect(await actionStatus(TENANT_ID, id)).toBe("pending");
   });
@@ -90,23 +90,23 @@ describe.skipIf(!available)("RBAC — confirm route enforcement (Phase 16d)", ()
   it("technician is rejected (403) on both a scheduling action and create_invoice", async () => {
     const schedId = await seedPendingAction(TENANT_ID, "schedule_water_test");
     const invId = await seedPendingAction(TENANT_ID, "create_invoice");
-    expect((await confirmPOST(req("technician"), { params: { id: schedId } })).status).toBe(403);
-    expect((await confirmPOST(req("technician"), { params: { id: invId } })).status).toBe(403);
+    expect((await confirmPOST(req("technician"), { params: Promise.resolve({ id: schedId }) })).status).toBe(403);
+    expect((await confirmPOST(req("technician"), { params: Promise.resolve({ id: invId }) })).status).toBe(403);
     expect(await actionStatus(TENANT_ID, schedId)).toBe("pending");
     expect(await actionStatus(TENANT_ID, invId)).toBe("pending");
   });
 
   it("owner's wildcard row is honored for an action type with no explicit grant", async () => {
     const id = await seedPendingAction(TENANT_ID, "__no_explicit_grant_probe__");
-    const res = await confirmPOST(req("owner"), { params: { id } });
+    const res = await confirmPOST(req("owner"), { params: Promise.resolve({ id }) });
     expect(res.status).toBe(200);
   });
 
   it("no role_permissions rows at all for a tenant falls back to owner-only (regression)", async () => {
     const id = await seedPendingAction(BARE_TENANT_ID, "schedule_water_test");
     const bareReq = (role: string) => new Request("http://localhost/api/test", { headers: { "x-tenant-id": BARE_TENANT_ID, "x-user-role": role } });
-    expect((await confirmPOST(bareReq("dispatcher"), { params: { id } })).status).toBe(403);
-    expect((await confirmPOST(bareReq("owner"), { params: { id } })).status).toBe(200);
+    expect((await confirmPOST(bareReq("dispatcher"), { params: Promise.resolve({ id }) })).status).toBe(403);
+    expect((await confirmPOST(bareReq("owner"), { params: Promise.resolve({ id }) })).status).toBe(200);
   });
 
   it("voice-path decide() only ever runs as the resolved owner identity — dispatcher-by-voice is not resolvable today", async () => {

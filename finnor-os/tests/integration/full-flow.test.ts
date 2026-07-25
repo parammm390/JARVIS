@@ -257,13 +257,13 @@ describe.skipIf(!available)("action_log immutability (§19)", () => {
       cadence: "annual",
     });
     await appendEpisode(SEED_TENANT_ID, action.id, "test_step", {}, {});
-    await expect(
-      withTenant(SEED_TENANT_ID, (db) =>
-        db.update(actionLog).set({ step: "tampered" }).where(eq(actionLog.domainActionId, action.id)),
-      ),
-    ).rejects.toThrow(/append-only/);
-    await expect(
-      withTenant(SEED_TENANT_ID, (db) => db.delete(actionLog).where(eq(actionLog.domainActionId, action.id))),
-    ).rejects.toThrow(/append-only/);
+    for (const mutation of [
+      () => withTenant(SEED_TENANT_ID, (db) => db.update(actionLog).set({ step: "tampered" }).where(eq(actionLog.domainActionId, action.id))),
+      () => withTenant(SEED_TENANT_ID, (db) => db.delete(actionLog).where(eq(actionLog.domainActionId, action.id))),
+    ]) {
+      await expect(mutation()).rejects.toMatchObject({
+        cause: expect.objectContaining({ message: expect.stringMatching(/append-only/) }),
+      });
+    }
   });
 });

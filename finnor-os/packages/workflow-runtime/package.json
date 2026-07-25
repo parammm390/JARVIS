@@ -9,6 +9,6 @@
     "@finnor/db": "*",
     "@finnor/memory": "*",
     "@finnor/shared-types": "*",
-    "drizzle-orm": "^0.36.4"
+    "drizzle-orm": "^0.45.2"
   }
 }

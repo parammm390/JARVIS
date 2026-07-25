@@ -90,7 +90,7 @@ describe.skipIf(!available)("DecisionReceipt.policyApplied + approval.approvedBy
         headers: { "x-tenant-id": DEALER_ZERO_TENANT_ID, "x-user-role": "owner", "content-type": "application/json" },
         body: JSON.stringify({}),
       }),
-      { params: { id: leadDraft.action.id } },
+      { params: Promise.resolve({ id: leadDraft.action.id }) },
     );
     expect(res.status).toBe(200);
 

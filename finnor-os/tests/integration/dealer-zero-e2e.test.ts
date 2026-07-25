@@ -153,7 +153,7 @@ describe.skipIf(!available)("Phase 3.6 proof tests — policy conformance + Deal
 
     // 4. Approve via the REAL API route (not a direct orchestrator.decide() call) —
     // exercises auth, RBAC, and the confirm route's own status transitions for real.
-    const res = await confirmRoute(confirmRequest(action.id), { params: { id: action.id } });
+    const res = await confirmRoute(confirmRequest(action.id), { params: Promise.resolve({ id: action.id }) });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.result.status).toBe("success");

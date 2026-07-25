@@ -69,16 +69,26 @@ describe.skipIf(!available)("tenant isolation via RLS (§32.2, §32.4, §32.9)",
   });
 
   it("tenant B cannot write a row claiming to belong to tenant A", async () => {
-    await expect(
-      withTenant(TENANT_B, (db) =>
+    let rejected: unknown;
+    try {
+      await withTenant(TENANT_B, (db) =>
         db.insert(domainActions).values({
           tenantId: SEED_TENANT_ID, // forged tenant id
           actionType: "schedule_water_test",
           payload: {},
           status: "draft",
         }),
-      ),
-    ).rejects.toThrow(/row-level security/);
+      );
+    } catch (error) {
+      rejected = error;
+    }
+    expect(rejected).toBeInstanceOf(Error);
+    // Drizzle 0.45 wraps PostgreSQL errors; keep asserting the database's actual
+    // RLS rejection instead of relying on the outer library-specific message.
+    const databaseCause = (rejected as Error & { cause?: unknown }).cause;
+    expect(`${(rejected as Error).message}\n${databaseCause instanceof Error ? databaseCause.message : String(databaseCause)}`).toMatch(
+      /row-level security/,
+    );
   });
 
   it("semantic memory round-trips within a tenant and never leaks across (§32.4, §32.9)", async () => {

@@ -8,6 +8,6 @@
   "dependencies": {
     "@finnor/db": "*",
     "@finnor/memory": "*",
-    "drizzle-orm": "^0.36.4"
+    "drizzle-orm": "^0.45.2"
   }
 }

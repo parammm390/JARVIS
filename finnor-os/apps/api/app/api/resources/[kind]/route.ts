@@ -14,11 +14,12 @@ import {
 import { desc, eq } from "drizzle-orm";
 import { requireContext, errorResponse } from "../../../../lib/auth";
 
-export async function GET(req: Request, { params }: { params: { kind: string } }): Promise<Response> {
+export async function GET(req: Request, { params }: { params: Promise<{ kind: string }> }): Promise<Response> {
   try {
+    const { kind } = await params;
     const ctx = await requireContext(req);
     const rows = await withTenant(ctx.tenantId, async (db) => {
-      switch (params.kind) {
+      switch (kind) {
         case "households":
           return db.select().from(households).orderBy(desc(households.createdAt)).limit(50);
         case "inventory":

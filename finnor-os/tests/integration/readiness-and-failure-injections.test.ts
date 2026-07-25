@@ -80,15 +80,15 @@ describe.skipIf(!available)("readiness_log + failure_injections (Phase 8)", () =
   });
 
   it("GET /api/read-models/readiness requires auth and is tenant-scoped", async () => {
-    const anonRes = await GET(new Request("http://localhost/api/read-models/readiness"), { params: { view: "readiness" } });
+    const anonRes = await GET(new Request("http://localhost/api/read-models/readiness"), { params: Promise.resolve({ view: "readiness" }) });
     expect(anonRes.status).toBe(401);
 
-    const res = await GET(req(TENANT_ID, "readiness"), { params: { view: "readiness" } });
+    const res = await GET(req(TENANT_ID, "readiness"), { params: Promise.resolve({ view: "readiness" }) });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.data).toHaveLength(1);
 
-    const otherRes = await GET(req(OTHER_TENANT_ID, "readiness"), { params: { view: "readiness" } });
+    const otherRes = await GET(req(OTHER_TENANT_ID, "readiness"), { params: Promise.resolve({ view: "readiness" }) });
     const otherBody = await otherRes.json();
     expect(otherBody.data).toHaveLength(0);
   });
@@ -111,7 +111,7 @@ describe.skipIf(!available)("readiness_log + failure_injections (Phase 8)", () =
     const decoy = await failureInjectionLog(OTHER_TENANT_ID);
     expect(decoy).toHaveLength(0);
 
-    const res = await GET(req(TENANT_ID, "failure-injections"), { params: { view: "failure-injections" } });
+    const res = await GET(req(TENANT_ID, "failure-injections"), { params: Promise.resolve({ view: "failure-injections" }) });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.data).toHaveLength(1);

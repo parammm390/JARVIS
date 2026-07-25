@@ -12,8 +12,9 @@ import { withTenant, dataQualityFindings } from "@finnor/db";
 import { and, eq, isNull } from "drizzle-orm";
 import { requireContext, canApprove, errorResponse } from "../../../../../../lib/auth";
 
-export async function POST(req: Request, { params }: { params: { id: string } }): Promise<Response> {
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> {
   try {
+    const { id } = await params;
     const ctx = await requireContext(req);
     if (!(await canApprove(ctx, "*"))) {
       return Response.json({ error: `Your role (${ctx.role}) cannot resolve data-quality findings` }, { status: 403 });
@@ -22,12 +23,12 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       db
         .update(dataQualityFindings)
         .set({ resolvedAt: new Date() })
-        .where(and(eq(dataQualityFindings.id, params.id), eq(dataQualityFindings.tenantId, ctx.tenantId), isNull(dataQualityFindings.resolvedAt)))
+        .where(and(eq(dataQualityFindings.id, id), eq(dataQualityFindings.tenantId, ctx.tenantId), isNull(dataQualityFindings.resolvedAt)))
         .returning(),
     );
     if (!row) {
       const [existing] = await withTenant(ctx.tenantId, (db) =>
-        db.select({ id: dataQualityFindings.id }).from(dataQualityFindings).where(and(eq(dataQualityFindings.id, params.id), eq(dataQualityFindings.tenantId, ctx.tenantId))),
+        db.select({ id: dataQualityFindings.id }).from(dataQualityFindings).where(and(eq(dataQualityFindings.id, id), eq(dataQualityFindings.tenantId, ctx.tenantId))),
       );
       if (!existing) return Response.json({ error: "Finding not found" }, { status: 404 });
       return Response.json({ resolved: true, idempotent: true });

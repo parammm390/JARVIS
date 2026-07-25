@@ -70,7 +70,7 @@ describe.skipIf(!available)("GET /api/receipts (Phase 7.1/7.3)", () => {
   });
 
   it("fetches a receipt directly by id", async () => {
-    const res = await getReceiptById(req(TENANT_A, `http://localhost/api/receipts/${receiptId}`), { params: { id: receiptId } });
+    const res = await getReceiptById(req(TENANT_A, `http://localhost/api/receipts/${receiptId}`), { params: Promise.resolve({ id: receiptId }) });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.receipt.id).toBe(receiptId);
@@ -79,7 +79,7 @@ describe.skipIf(!available)("GET /api/receipts (Phase 7.1/7.3)", () => {
   });
 
   it("404s for a receipt id from another tenant (RLS/tenant-scoping proof)", async () => {
-    const res = await getReceiptById(req(TENANT_B, `http://localhost/api/receipts/${receiptId}`), { params: { id: receiptId } });
+    const res = await getReceiptById(req(TENANT_B, `http://localhost/api/receipts/${receiptId}`), { params: Promise.resolve({ id: receiptId }) });
     expect(res.status).toBe(404);
   });
 
@@ -93,7 +93,7 @@ describe.skipIf(!available)("GET /api/receipts (Phase 7.1/7.3)", () => {
 
   it("404s an unknown receipt id", async () => {
     const res = await getReceiptById(req(TENANT_A, "http://localhost/api/receipts/00000000-0000-4000-8000-0000000000ff"), {
-      params: { id: "00000000-0000-4000-8000-0000000000ff" },
+      params: Promise.resolve({ id: "00000000-0000-4000-8000-0000000000ff" }),
     });
     expect(res.status).toBe(404);
   });

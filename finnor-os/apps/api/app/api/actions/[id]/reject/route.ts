@@ -8,8 +8,9 @@ import { and, eq } from "drizzle-orm";
 import { requireContext, canApprove, errorResponse } from "../../../../../lib/auth";
 import { getOrchestrator } from "../../../../../lib/orchestrator";
 
-export async function POST(req: Request, { params }: { params: { id: string } }): Promise<Response> {
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> {
   try {
+    const { id } = await params;
     const ctx = await requireContext(req);
     const body = RejectActionSchema.safeParse(await req.json().catch(() => ({})));
     if (!body.success) return Response.json({ error: "Invalid body" }, { status: 400 });
@@ -18,7 +19,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       const [r] = await db
         .select()
         .from(domainActions)
-        .where(and(eq(domainActions.id, params.id), eq(domainActions.tenantId, ctx.tenantId)));
+        .where(and(eq(domainActions.id, id), eq(domainActions.tenantId, ctx.tenantId)));
       return r;
     });
     if (!row) return Response.json({ error: "Action not found" }, { status: 404 });
@@ -27,7 +28,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     }
     if (row.status === "rejected") return Response.json({ status: "rejected", idempotent: true });
 
-    const result = await getOrchestrator().decide(params.id, ctx.tenantId, "reject", ctx.userId, { role: ctx.role, reason: body.data.reason ?? null });
+    const result = await getOrchestrator().decide(id, ctx.tenantId, "reject", ctx.userId, { role: ctx.role, reason: body.data.reason ?? null });
     if (result.output.idempotent) return Response.json({ status: result.output.status, idempotent: true });
     return Response.json({ status: "rejected" });
   } catch (err) {

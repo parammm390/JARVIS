@@ -71,26 +71,26 @@ describe.skipIf(!available)("data-quality findings (Phase 7.7)", () => {
   });
 
   it("a dispatcher cannot resolve a finding -> 403", async () => {
-    const res = await resolvePOST(req("dispatcher"), { params: { id: openId } });
+    const res = await resolvePOST(req("dispatcher"), { params: Promise.resolve({ id: openId }) });
     expect(res.status).toBe(403);
   });
 
   it("an owner resolves a finding -> 200, then it drops out of the unresolved list", async () => {
-    const res = await resolvePOST(req("owner"), { params: { id: openId } });
+    const res = await resolvePOST(req("owner"), { params: Promise.resolve({ id: openId }) });
     expect(res.status).toBe(200);
     const list = await (await findingsGET(req("owner"))).json();
     expect(list.findings.map((f: { id: string }) => f.id)).not.toContain(openId);
   });
 
   it("resolving an already-resolved finding is idempotent", async () => {
-    const res = await resolvePOST(req("owner"), { params: { id: openId } });
+    const res = await resolvePOST(req("owner"), { params: Promise.resolve({ id: openId }) });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.idempotent).toBe(true);
   });
 
   it("unknown finding id -> 404", async () => {
-    const res = await resolvePOST(req("owner"), { params: { id: "00000000-0000-4000-8000-0000000000ff" } });
+    const res = await resolvePOST(req("owner"), { params: Promise.resolve({ id: "00000000-0000-4000-8000-0000000000ff" }) });
     expect(res.status).toBe(404);
   });
 });

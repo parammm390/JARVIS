@@ -65,16 +65,16 @@ describe.skipIf(!available)("POST /api/actions/:id/escalate (Phase 7.1)", () => 
 
   it("owner escalates a pending action -> needs_human_review, 200", async () => {
     const id = await seedPendingAction("create_invoice");
-    const res = await escalatePOST(req("owner", { note: "double check the amount" }), { params: { id } });
+    const res = await escalatePOST(req("owner", { note: "double check the amount" }), { params: Promise.resolve({ id }) });
     expect(res.status).toBe(200);
     expect(await actionStatus(id)).toBe("needs_human_review");
   });
 
   it("escalating an already-needs_human_review action is idempotent, 200", async () => {
     const id = await seedPendingAction("create_invoice");
-    const first = await escalatePOST(req("owner"), { params: { id } });
+    const first = await escalatePOST(req("owner"), { params: Promise.resolve({ id }) });
     expect(first.status).toBe(200);
-    const second = await escalatePOST(req("owner"), { params: { id } });
+    const second = await escalatePOST(req("owner"), { params: Promise.resolve({ id }) });
     expect(second.status).toBe(200);
     const body = await second.json();
     expect(body.idempotent).toBe(true);
@@ -83,7 +83,7 @@ describe.skipIf(!available)("POST /api/actions/:id/escalate (Phase 7.1)", () => 
 
   it("dispatcher without permission on this action type -> 403, action stays pending", async () => {
     const id = await seedPendingAction("create_invoice");
-    const res = await escalatePOST(req("dispatcher"), { params: { id } });
+    const res = await escalatePOST(req("dispatcher"), { params: Promise.resolve({ id }) });
     expect(res.status).toBe(403);
     expect(await actionStatus(id)).toBe("pending");
   });
@@ -92,13 +92,13 @@ describe.skipIf(!available)("POST /api/actions/:id/escalate (Phase 7.1)", () => 
     const id = await seedPendingAction("create_invoice");
     await withTenant(TENANT_ID, (db) => db.update(domainActions).set({ status: "completed" }).where(eq(domainActions.id, id)));
     expect(await actionStatus(id)).toBe("completed");
-    const res = await escalatePOST(req("owner"), { params: { id } });
+    const res = await escalatePOST(req("owner"), { params: Promise.resolve({ id }) });
     expect(res.status).toBe(409);
     expect(await actionStatus(id)).toBe("completed");
   });
 
   it("unknown action id -> 404", async () => {
-    const res = await escalatePOST(req("owner"), { params: { id: "00000000-0000-4000-8000-00000000ffff" } });
+    const res = await escalatePOST(req("owner"), { params: Promise.resolve({ id: "00000000-0000-4000-8000-00000000ffff" }) });
     expect(res.status).toBe(404);
   });
 });

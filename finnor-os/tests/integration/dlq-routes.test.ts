@@ -126,19 +126,19 @@ describe.skipIf(!available)("DLQ routes (§2.3)", () => {
   });
 
   it("owner inspects a single dead letter; 404 for an unknown id", async () => {
-    const res = await inspectDlq(req(`/api/dlq/${openDeadLetterId}`), { params: { id: openDeadLetterId } });
+    const res = await inspectDlq(req(`/api/dlq/${openDeadLetterId}`), { params: Promise.resolve({ id: openDeadLetterId }) });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.deadLetter.lastError).toBe("provider timeout");
 
     const missing = await inspectDlq(req(`/api/dlq/00000000-0000-4000-9000-000000000000`), {
-      params: { id: "00000000-0000-4000-9000-000000000000" },
+      params: Promise.resolve({ id: "00000000-0000-4000-9000-000000000000" }),
     });
     expect(missing.status).toBe(404);
   });
 
   it("replay resets the linked outbox event to pending and marks the dead letter replayed", async () => {
-    const res = await replayDlq(req(`/api/dlq/${openDeadLetterId}/replay`, { method: "POST" }), { params: { id: openDeadLetterId } });
+    const res = await replayDlq(req(`/api/dlq/${openDeadLetterId}/replay`, { method: "POST" }), { params: Promise.resolve({ id: openDeadLetterId }) });
     expect(res.status).toBe(200);
     expect((await res.json() as { workflowRunId: string | null }).workflowRunId).toBe(linkedWorkflowRunId);
     const [dl] = await withTenant(TENANT_ID, (db) => db.select().from(deadLetters).where(eq(deadLetters.id, openDeadLetterId)));
@@ -147,7 +147,7 @@ describe.skipIf(!available)("DLQ routes (§2.3)", () => {
     expect(outboxRow!.status).toBe("pending");
 
     // Already replayed — a second replay is a conflict, not a silent success.
-    const again = await replayDlq(req(`/api/dlq/${openDeadLetterId}/replay`, { method: "POST" }), { params: { id: openDeadLetterId } });
+    const again = await replayDlq(req(`/api/dlq/${openDeadLetterId}/replay`, { method: "POST" }), { params: Promise.resolve({ id: openDeadLetterId }) });
     expect(again.status).toBe(409);
   });
 
@@ -166,7 +166,7 @@ describe.skipIf(!available)("DLQ routes (§2.3)", () => {
         })
         .returning(),
     );
-    const res = await discardDlq(req(`/api/dlq/${terminalDl!.id}/discard`, { method: "POST" }), { params: { id: terminalDl!.id } });
+    const res = await discardDlq(req(`/api/dlq/${terminalDl!.id}/discard`, { method: "POST" }), { params: Promise.resolve({ id: terminalDl!.id }) });
     expect(res.status).toBe(200);
     const [dl] = await withTenant(TENANT_ID, (db) => db.select().from(deadLetters).where(eq(deadLetters.id, terminalDl!.id)));
     expect(dl!.status).toBe("discarded");

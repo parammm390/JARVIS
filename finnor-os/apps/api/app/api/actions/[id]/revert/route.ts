@@ -23,8 +23,9 @@ import { requireContext, canApprove, errorResponse } from "../../../../../lib/au
 
 const RevertActionSchema = z.object({ note: z.string().optional() });
 
-export async function POST(req: Request, { params }: { params: { id: string } }): Promise<Response> {
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> {
   try {
+    const { id } = await params;
     const ctx = await requireContext(req);
     const body = RevertActionSchema.safeParse(await req.json().catch(() => ({})));
     if (!body.success) return Response.json({ error: "Invalid body" }, { status: 400 });
@@ -33,7 +34,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       const [r] = await db
         .select()
         .from(domainActions)
-        .where(and(eq(domainActions.id, params.id), eq(domainActions.tenantId, ctx.tenantId)));
+        .where(and(eq(domainActions.id, id), eq(domainActions.tenantId, ctx.tenantId)));
       return r;
     });
     if (!row) return Response.json({ error: "Action not found" }, { status: 404 });
@@ -45,18 +46,18 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       const [claimed] = await db
         .update(domainActions)
         .set({ status: "pending" })
-        .where(and(eq(domainActions.id, params.id), eq(domainActions.tenantId, ctx.tenantId), eq(domainActions.status, "approved")))
+        .where(and(eq(domainActions.id, id), eq(domainActions.tenantId, ctx.tenantId), eq(domainActions.status, "approved")))
         .returning();
       if (!claimed) {
         const [current] = await db
           .select()
           .from(domainActions)
-          .where(and(eq(domainActions.id, params.id), eq(domainActions.tenantId, ctx.tenantId)));
+          .where(and(eq(domainActions.id, id), eq(domainActions.tenantId, ctx.tenantId)));
         return { claimed: null as typeof claimed | null, current };
       }
       await db.insert(actionLog).values({
         tenantId: ctx.tenantId,
-        domainActionId: params.id,
+        domainActionId: id,
         step: "reverted",
         input: { by: ctx.userId },
         output: { note: body.data.note ?? null },
