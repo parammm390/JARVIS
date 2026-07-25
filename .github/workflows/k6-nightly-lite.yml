@@ -1,0 +1,32 @@
+name: k6 nightly lite
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+jobs:
+  staging:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: finnor-os
+    env:
+      BASE_URL: ${{ secrets.K6_STAGING_BASE_URL }}
+      TENANT_ID: ${{ secrets.K6_STAGING_TENANT_ID }}
+      AUTH_BEARER_TOKEN: ${{ secrets.K6_STAGING_AUTH_BEARER_TOKEN }}
+      MARKETING_WEBHOOK_SECRET: ${{ secrets.K6_STAGING_MARKETING_WEBHOOK_SECRET }}
+      VERCEL_BYPASS_SECRET: ${{ secrets.K6_STAGING_VERCEL_BYPASS_SECRET }}
+      INBOX_RATE: "5"
+      READ_VUS: "20"
+      APPROVAL_RATE: "5"
+      LOAD_DURATION: "60s"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Refuse an unconfigured run
+        run: test -n "$BASE_URL" -a -n "$TENANT_ID" -a -n "$AUTH_BEARER_TOKEN" -a -n "$MARKETING_WEBHOOK_SECRET"
+      - uses: grafana/setup-k6-action@v1
+      - run: k6 run --summary-export k6-nightly-lite-summary.json scripts/k6-load-test.js
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: k6-nightly-lite-summary
+          path: finnor-os/k6-nightly-lite-summary.json
