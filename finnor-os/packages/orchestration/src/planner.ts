@@ -118,7 +118,7 @@ export class LLMPlanner implements Planner {
     let raw: string;
     try {
       this.provider ??= resolveProvider();
-      raw = await this.provider.complete({ system, user, json: true });
+      raw = await this.provider.complete({ system, user, json: true, tenantId: tenantContext.tenantId, traceId: tenantContext.correlationId, purpose: "planning" });
     } catch (err) {
       throw new Error(`Planner LLM call failed: ${(err as Error).message}`);
     }
@@ -185,6 +185,8 @@ export class LLMPlanner implements Planner {
           allowedActionTypes: actionTypes,
           payloadSpec: this.plugins.payloadSpecJson(),
           validationError,
+          tenantId: tenantContext.tenantId,
+          traceId: tenantContext.correlationId,
         });
         const repairedPlugin = verdict.repaired ? this.plugins.resolve(verdict.actionType) : undefined;
         const repairedPolicy =
@@ -234,6 +236,8 @@ export class LLMPlanner implements Planner {
           valid[i]!.action_type,
           restoredPayloads[i]!,
           actionTypes,
+          tenantContext.tenantId,
+          tenantContext.correlationId,
         );
         return [i, candidateB] as const;
       }),
@@ -525,6 +529,8 @@ export class LLMPlanner implements Planner {
     candidateAActionType: string,
     candidateAPayload: Record<string, unknown>,
     allowedActionTypes: string[],
+    tenantId: string,
+    traceId?: string,
   ): Promise<{ actionType: string; payload: Record<string, unknown> } | null> {
     const system = [
       "This is a HIGH-STAKES action — a multi-step workflow or a large dollar amount — worth a second, independent look before a human reviews it.",
@@ -543,7 +549,7 @@ export class LLMPlanner implements Planner {
     );
     try {
       this.secondCandidateProvider ??= resolveProvider("groq");
-      const raw = await this.secondCandidateProvider.complete({ system, user, json: true });
+      const raw = await this.secondCandidateProvider.complete({ system, user, json: true, tenantId, traceId, purpose: "planning" });
       const parsed = SecondCandidateSchema.parse(JSON.parse(raw));
       if (!allowedActionTypes.includes(parsed.action_type)) return null;
       return { actionType: parsed.action_type, payload: parsed.payload };

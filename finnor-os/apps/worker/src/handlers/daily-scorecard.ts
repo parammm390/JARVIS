@@ -10,7 +10,8 @@
 // daily and already gated in CI on every push. The certification doc cites the CI
 // eval score directly rather than this table duplicating it.
 
-import { withTenant, readinessLog } from "@finnor/db";
+import { withTenant, readinessLog, llmCalls } from "@finnor/db";
+import { and, eq, gte, sql } from "drizzle-orm";
 import { reliability } from "@finnor/read-models";
 import type { JobHandler } from "../queue";
 
@@ -20,6 +21,8 @@ export const dailyScorecard: JobHandler = async (payload) => {
 
   const metrics = await reliability(tenantId, 1);
   const logDate = new Date().toISOString().slice(0, 10);
+  const start = new Date(`${logDate}T00:00:00.000Z`);
+  const [llm] = await withTenant(tenantId, (db) => db.select({ calls: sql<number>`count(*)`, spend: sql<number | null>`sum(${llmCalls.costUsd})` }).from(llmCalls).where(and(eq(llmCalls.tenantId, tenantId), gte(llmCalls.createdAt, start))));
 
   await withTenant(tenantId, (db) =>
     db
@@ -34,6 +37,8 @@ export const dailyScorecard: JobHandler = async (payload) => {
         reconciliationBacklog: metrics.reconciliationBacklog,
         dlqDepth: metrics.dlqDepth,
         receiptCompleteness: metrics.receiptCompleteness,
+        llmSpendUsd: llm?.spend === null || llm?.spend === undefined ? null : Number(llm.spend),
+        llmCalls: Number(llm?.calls ?? 0),
       })
       .onConflictDoUpdate({
         target: [readinessLog.tenantId, readinessLog.logDate],
@@ -45,6 +50,8 @@ export const dailyScorecard: JobHandler = async (payload) => {
           reconciliationBacklog: metrics.reconciliationBacklog,
           dlqDepth: metrics.dlqDepth,
           receiptCompleteness: metrics.receiptCompleteness,
+          llmSpendUsd: llm?.spend === null || llm?.spend === undefined ? null : Number(llm.spend),
+          llmCalls: Number(llm?.calls ?? 0),
         },
       }),
   );

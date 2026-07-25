@@ -1053,6 +1053,7 @@ export const decisionReceipts = pgTable(
     actualResult: jsonb("actual_result"),
     failure: jsonb("failure"),
     correlationId: text("correlation_id"),
+    llmCostUsd: real("llm_cost_usd"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     finalizedAt: timestamp("finalized_at", { withTimezone: true }),
   },
@@ -1061,6 +1062,39 @@ export const decisionReceipts = pgTable(
     index("decision_receipts_tenant_created_idx").on(t.tenantId, t.createdAt),
     index("decision_receipts_domain_action_idx").on(t.domainActionId),
   ],
+);
+
+// B5: every model invocation is an auditable cost event. Token counts and cost are
+// nullable because providers that do not return usage must never be represented as 0.
+export const llmCalls = pgTable(
+  "llm_calls",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    domainActionId: uuid("domain_action_id").references(() => domainActions.id),
+    traceId: text("trace_id"),
+    purpose: text("purpose").notNull(),
+    provider: text("provider").notNull(),
+    model: text("model").notNull(),
+    inputTokens: integer("input_tokens"),
+    outputTokens: integer("output_tokens"),
+    costUsd: real("cost_usd"),
+    status: text("status", { enum: ["completed", "deferred", "failed"] }).notNull(),
+    detail: jsonb("detail").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("llm_calls_tenant_created_idx").on(t.tenantId, t.createdAt), index("llm_calls_action_idx").on(t.domainActionId)],
+);
+
+// A missing row means no configured cap; that is distinct from a zero hard cap.
+export const tenantLlmBudgets = pgTable(
+  "tenant_llm_budgets",
+  {
+    tenantId: uuid("tenant_id").primaryKey().references(() => tenants.id),
+    dailyTokenBudget: integer("daily_token_budget").notNull(),
+    softLimitPercent: integer("soft_limit_percent").notNull().default(80),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
 );
 
 // B4.T3: immutable-ish synthetic day captures plus candidate receipt comparisons.
@@ -1245,6 +1279,8 @@ export const readinessLog = pgTable(
     reconciliationBacklog: integer("reconciliation_backlog").notNull(),
     dlqDepth: integer("dlq_depth").notNull(),
     receiptCompleteness: real("receipt_completeness"),
+    llmSpendUsd: real("llm_spend_usd"),
+    llmCalls: integer("llm_calls"),
     incidentNotes: text("incident_notes"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },

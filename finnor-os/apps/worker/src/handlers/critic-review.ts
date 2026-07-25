@@ -50,6 +50,9 @@ export const criticReview: JobHandler = async (payload) => {
     payload: row.payload as Record<string, unknown>,
     summary: row.summary ?? "",
     reasoning: (plannedOutput.reasoning as string | null) ?? null,
+    tenantId,
+    actionId,
+    traceId: payload._correlationId as string | undefined,
   });
 
   await appendEpisode(tenantId, actionId, "critic_review", { instruction }, { ...verdict });

@@ -8,12 +8,88 @@
 // moment a plugin needed an LLM call (the ops-overview grounded-QA action does).
 
 import Groq from "groq-sdk";
+import { withTenant, decisionReceipts, llmCalls, tenantLlmBudgets } from "@finnor/db";
+import { and, eq, gte, sql } from "drizzle-orm";
 import { initObservability, Sentry } from "./observability";
 import { recordOutcome, isDegraded } from "./provider-health";
 
+export type LLMPurpose = "planning" | "critic" | "repair" | "classification" | "answer";
+export interface LLMCallOptions {
+  system: string;
+  user: string;
+  json?: boolean;
+  tenantId?: string;
+  actionId?: string;
+  traceId?: string;
+  purpose?: LLMPurpose;
+  urgent?: boolean;
+}
+export interface LLMUsage {
+  model: string;
+  inputTokens: number | null;
+  outputTokens: number | null;
+}
 export interface LLMProvider {
   name: string;
-  complete(opts: { system: string; user: string; json?: boolean }): Promise<string>;
+  /** Usage belongs to the immediately preceding complete() call. Providers that do
+   * not return it leave it undefined rather than estimating it. */
+  lastUsage?: LLMUsage;
+  complete(opts: LLMCallOptions): Promise<string>;
+}
+
+/** Raised before a non-urgent call once the configured hard daily cap is reached.
+ * Callers can turn this into an honest CONFIG/deferred receipt; it is never a fake
+ * provider failure or a silent fallback. */
+export class LLMBudgetDeferredError extends Error {
+  constructor(readonly tenantId: string, readonly usedTokens: number, readonly limitTokens: number) {
+    super(`LLM daily token budget reached (${usedTokens}/${limitTokens}); non-urgent work deferred to the next window`);
+    this.name = "LLMBudgetDeferredError";
+  }
+}
+
+async function enforceBudget(opts: LLMCallOptions): Promise<void> {
+  if (!opts.tenantId || opts.urgent) return;
+  const start = new Date(); start.setUTCHours(0, 0, 0, 0);
+  const budget = await withTenant(opts.tenantId, async (db) => {
+    const [row] = await db.select().from(tenantLlmBudgets).where(eq(tenantLlmBudgets.tenantId, opts.tenantId!));
+    if (!row) return null;
+    const [usage] = await db.select({ tokens: sql<number>`coalesce(sum(coalesce(${llmCalls.inputTokens}, 0) + coalesce(${llmCalls.outputTokens}, 0)), 0)` })
+      .from(llmCalls).where(and(eq(llmCalls.tenantId, opts.tenantId!), gte(llmCalls.createdAt, start)));
+    return { ...row, used: Number(usage?.tokens ?? 0) };
+  });
+  if (budget && budget.used >= budget.dailyTokenBudget) throw new LLMBudgetDeferredError(opts.tenantId, budget.used, budget.dailyTokenBudget);
+}
+
+function configuredCostUsd(usage: LLMUsage | undefined): number | null {
+  if (!usage || usage.inputTokens === null || usage.outputTokens === null) return null;
+  // Rates are deployment configuration, never hard-coded market-price claims.
+  const inputRate = Number(process.env.LLM_INPUT_USD_PER_MILLION);
+  const outputRate = Number(process.env.LLM_OUTPUT_USD_PER_MILLION);
+  if (!Number.isFinite(inputRate) || !Number.isFinite(outputRate)) return null;
+  return (usage.inputTokens * inputRate + usage.outputTokens * outputRate) / 1_000_000;
+}
+
+async function recordCall(provider: LLMProvider, opts: LLMCallOptions, status: "completed" | "deferred" | "failed", detail: Record<string, unknown> = {}): Promise<void> {
+  if (!opts.tenantId) return;
+  const usage = provider.lastUsage;
+  await withTenant(opts.tenantId, async (db) => {
+    await db.insert(llmCalls).values({
+      tenantId: opts.tenantId!, domainActionId: opts.actionId ?? null, traceId: opts.traceId ?? null,
+      purpose: opts.purpose ?? "answer", provider: provider.name, model: usage?.model ?? "unknown",
+      inputTokens: usage?.inputTokens ?? null, outputTokens: usage?.outputTokens ?? null,
+      costUsd: configuredCostUsd(usage), status, detail,
+    });
+    // A deferred action has no external effect, but it is still a decision the
+    // operator needs to see. This standalone CONFIG receipt makes that explicit.
+    if (status === "deferred" && opts.actionId) {
+      await db.insert(decisionReceipts).values({
+        tenantId: opts.tenantId!, domainActionId: opts.actionId, objective: "LLM work deferred by configured daily token budget",
+        evidence: [], policyApplied: null, riskTier: "low", proposedAction: {}, approval: { required: false },
+        failure: { errorKind: "config", message: String(detail.error ?? "LLM budget reached"), recoveryPath: "Deferred until the next daily budget window." },
+        correlationId: opts.traceId ?? null, finalizedAt: new Date(),
+      });
+    }
+  });
 }
 
 /** Fetch with a hard timeout — Bedrock's runtime API has no client SDK dependency here,
@@ -32,13 +108,14 @@ async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: numbe
 /** Claude models on Bedrock — Anthropic Messages API shape, invoked via bearer-token auth. */
 export class BedrockAnthropicProvider implements LLMProvider {
   name = "bedrock-anthropic";
+  lastUsage?: LLMUsage;
   constructor(
     private modelId: string,
     private apiKey = process.env.AWS_BEDROCK_API_KEY,
     private region = process.env.AWS_BEDROCK_REGION ?? "us-east-1",
   ) {}
 
-  async complete(opts: { system: string; user: string; json?: boolean }): Promise<string> {
+  async complete(opts: LLMCallOptions): Promise<string> {
     if (!this.apiKey) throw new Error("AWS_BEDROCK_API_KEY is not set");
     const res = await fetchWithTimeout(
       `https://bedrock-runtime.${this.region}.amazonaws.com/model/${this.modelId}/invoke`,
@@ -59,7 +136,8 @@ export class BedrockAnthropicProvider implements LLMProvider {
       const body = await res.text().catch(() => "");
       throw new Error(`Bedrock (${this.modelId}) failed (${res.status}): ${body.slice(0, 300)}`);
     }
-    const data = (await res.json()) as { content?: Array<{ text?: string }> };
+    const data = (await res.json()) as { content?: Array<{ text?: string }>; usage?: { input_tokens?: number; output_tokens?: number } };
+    this.lastUsage = { model: this.modelId, inputTokens: data.usage?.input_tokens ?? null, outputTokens: data.usage?.output_tokens ?? null };
     return data.content?.[0]?.text ?? "";
   }
 }
@@ -68,13 +146,14 @@ export class BedrockAnthropicProvider implements LLMProvider {
  *  lower-stakes text generation (e.g. narrating an execution result), not planning. */
 export class BedrockOpenAICompatProvider implements LLMProvider {
   name = "bedrock-openai-compat";
+  lastUsage?: LLMUsage;
   constructor(
     private modelId: string,
     private apiKey = process.env.AWS_BEDROCK_API_KEY,
     private region = process.env.AWS_BEDROCK_REGION ?? "us-east-1",
   ) {}
 
-  async complete(opts: { system: string; user: string; json?: boolean }): Promise<string> {
+  async complete(opts: LLMCallOptions): Promise<string> {
     if (!this.apiKey) throw new Error("AWS_BEDROCK_API_KEY is not set");
     const res = await fetchWithTimeout(
       `https://bedrock-runtime.${this.region}.amazonaws.com/model/${this.modelId}/invoke`,
@@ -96,7 +175,8 @@ export class BedrockOpenAICompatProvider implements LLMProvider {
       const body = await res.text().catch(() => "");
       throw new Error(`Bedrock (${this.modelId}) failed (${res.status}): ${body.slice(0, 300)}`);
     }
-    const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+    const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }>; usage?: { prompt_tokens?: number; completion_tokens?: number } };
+    this.lastUsage = { model: this.modelId, inputTokens: data.usage?.prompt_tokens ?? null, outputTokens: data.usage?.completion_tokens ?? null };
     return data.choices?.[0]?.message?.content ?? "";
   }
 }
@@ -116,7 +196,8 @@ export class CompositeProvider implements LLMProvider {
   name = "composite";
   constructor(private providers: LLMProvider[]) {}
 
-  async complete(opts: { system: string; user: string; json?: boolean }): Promise<string> {
+  lastUsage?: LLMUsage;
+  async complete(opts: LLMCallOptions): Promise<string> {
     const ordered = [...this.providers.filter((p) => !isDegraded(p.name)), ...this.providers.filter((p) => isDegraded(p.name))];
     if (ordered.some((p, i) => p !== this.providers[i])) {
       initObservability();
@@ -127,6 +208,7 @@ export class CompositeProvider implements LLMProvider {
       const start = Date.now();
       try {
         const text = await p.complete(opts);
+        this.lastUsage = p.lastUsage;
         // Recorded here, per sub-provider — the outer withObservability() wrap (see
         // resolveProvider) only ever sees this composite as a single unit named
         // "composite", so it can't supply the per-provider data isDegraded() above
@@ -147,6 +229,7 @@ export class GroqProvider implements LLMProvider {
   name = "groq";
   private client: Groq;
   private models: string[];
+  lastUsage?: LLMUsage;
 
   constructor(apiKey = process.env.GROQ_API_KEY, model = process.env.GROQ_MODEL ?? "llama-3.3-70b-versatile") {
     if (!apiKey) throw new Error("GROQ_API_KEY is not set");
@@ -163,7 +246,7 @@ export class GroqProvider implements LLMProvider {
     this.models = [model, ...fallbacks.filter((m) => m !== model)];
   }
 
-  async complete(opts: { system: string; user: string; json?: boolean }): Promise<string> {
+  async complete(opts: LLMCallOptions): Promise<string> {
     let lastError: Error | null = null;
     for (const model of this.models) {
       try {
@@ -177,6 +260,7 @@ export class GroqProvider implements LLMProvider {
           max_tokens: 700,
           ...(opts.json ? { response_format: { type: "json_object" as const } } : {}),
         });
+        this.lastUsage = { model, inputTokens: res.usage?.prompt_tokens ?? null, outputTokens: res.usage?.completion_tokens ?? null };
         return res.choices[0]?.message?.content ?? "";
       } catch (err) {
         lastError = err as Error;
@@ -193,6 +277,7 @@ export class GroqProvider implements LLMProvider {
  *  against ListFoundationModels — anthropic.claude-sonnet-5 itself isn't enabled on
  *  this account (403), claude-sonnet-4-6 is the newest one that is. */
 const BEDROCK_SONNET_MODEL_ID = process.env.AWS_BEDROCK_SONNET_MODEL_ID ?? "us.anthropic.claude-sonnet-4-6";
+const BEDROCK_HAIKU_MODEL_ID = process.env.AWS_BEDROCK_HAIKU_MODEL_ID ?? "us.anthropic.claude-haiku-4-5";
 const BEDROCK_DEEPSEEK_MODEL_ID = process.env.AWS_BEDROCK_DEEPSEEK_MODEL_ID ?? "deepseek.v3.2";
 
 /** Resolve the provider for an action type. Registry is config-extensible. */
@@ -208,6 +293,7 @@ providers.set("groq", () =>
     : new GroqProvider(),
 );
 providers.set("bedrock-sonnet", () => new BedrockAnthropicProvider(BEDROCK_SONNET_MODEL_ID));
+providers.set("bedrock-haiku", () => new BedrockAnthropicProvider(BEDROCK_HAIKU_MODEL_ID));
 providers.set("bedrock-deepseek", () => new BedrockOpenAICompatProvider(BEDROCK_DEEPSEEK_MODEL_ID));
 
 export function registerProvider(name: string, factory: () => LLMProvider): void {
@@ -222,20 +308,25 @@ export function registerProvider(name: string, factory: () => LLMProvider): void
 function withObservability(provider: LLMProvider): LLMProvider {
   return {
     name: provider.name,
+    get lastUsage() { return provider.lastUsage; },
     async complete(opts) {
       initObservability();
       const start = Date.now();
       try {
+        await enforceBudget(opts);
         const text = await provider.complete(opts);
         const ms = Date.now() - start;
         Sentry.addBreadcrumb({ category: "llm", message: provider.name, data: { ok: true, ms } });
         recordOutcome(provider.name, true, ms);
+        await recordCall(provider, opts, "completed").catch(() => undefined);
         return text;
       } catch (err) {
         const ms = Date.now() - start;
         Sentry.addBreadcrumb({ category: "llm", message: provider.name, data: { ok: false, ms } });
         Sentry.captureMessage(`llm_failed:${provider.name}`, { level: "warning" });
         recordOutcome(provider.name, false, ms);
+        const deferred = err instanceof LLMBudgetDeferredError;
+        await recordCall(provider, opts, deferred ? "deferred" : "failed", { error: (err as Error).message }).catch(() => undefined);
         throw err;
       }
     },
@@ -245,4 +336,14 @@ function withObservability(provider: LLMProvider): LLMProvider {
 export function resolveProvider(name?: string): LLMProvider {
   const factory = providers.get(name ?? "groq") ?? providers.get("groq")!;
   return withObservability(factory());
+}
+
+/** One explicit router for call purpose. Environment overrides name a registered
+ * provider; unknown values safely fall back to the documented default. */
+export function resolveProviderForPurpose(purpose: LLMPurpose): LLMProvider {
+  const defaults: Record<LLMPurpose, string> = {
+    planning: "groq", critic: "bedrock-haiku", repair: "bedrock-haiku", classification: "bedrock-haiku", answer: "groq",
+  };
+  const override = process.env[`LLM_MODEL_${purpose.toUpperCase()}`];
+  return resolveProvider(override && providers.has(override) ? override : defaults[purpose]);
 }

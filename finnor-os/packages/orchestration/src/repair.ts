@@ -7,7 +7,7 @@
 // before opening any transaction.
 
 import { z } from "zod";
-import { type LLMProvider, resolveProvider } from "./llm";
+import { type LLMProvider, resolveProviderForPurpose } from "./llm";
 import { redactStructured, redactText } from "@finnor/security";
 
 export interface RepairCandidate {
@@ -24,6 +24,8 @@ export interface RepairInput {
   /** B2.T8: the plugin's concrete schema error, supplied for the one permitted
    * repair attempt before the planner fails loudly. */
   validationError?: string;
+  tenantId?: string;
+  traceId?: string;
 }
 
 export interface RepairVerdict {
@@ -150,7 +152,7 @@ export function repairLlmConfigured(): boolean {
 
 export async function repairAction(
   input: RepairInput,
-  provider: LLMProvider = resolveProvider("bedrock-deepseek"),
+  provider: LLMProvider = resolveProviderForPurpose("repair"),
 ): Promise<RepairVerdict> {
   const { flags, highConfidenceSuggestion } = runChecklist(input);
 
@@ -199,7 +201,7 @@ export async function repairAction(
 
   let verdict: RepairVerdict;
   try {
-    const raw = await provider.complete({ system, user, json: true });
+    const raw = await provider.complete({ system, user, json: true, tenantId: input.tenantId, traceId: input.traceId, purpose: "repair" });
     const parsed = RepairResponseSchema.parse(JSON.parse(raw));
     verdict = { ...parsed, deterministicFlags: flags };
   } catch (err) {

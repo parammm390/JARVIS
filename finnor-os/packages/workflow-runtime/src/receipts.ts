@@ -2,8 +2,8 @@
 // workflow_step, created at proposal time and finalized in place at completion — see
 // packages/db/schema.ts's decisionReceipts table and its unique(workflowStepId).
 
-import { withTenant, decisionReceipts } from "@finnor/db";
-import { eq } from "drizzle-orm";
+import { withTenant, decisionReceipts, llmCalls } from "@finnor/db";
+import { eq, and, sql } from "drizzle-orm";
 import type { ReceiptEvidence, ReceiptApproval, ReceiptFailure } from "@finnor/shared-types";
 
 export interface OpenReceiptParams {
@@ -25,8 +25,14 @@ export interface OpenReceiptParams {
  *  the effect ultimately succeeds, so "no receipt" can never mean "nothing happened,
  *  we just didn't record it." */
 export async function openReceipt(params: OpenReceiptParams): Promise<{ receiptId: string }> {
-  const [row] = await withTenant(params.tenantId, (db) =>
-    db
+  const [row] = await withTenant(params.tenantId, async (db) => {
+    // Cost is only a sum of provider-reported, configured-price rows. A null result
+    // remains unknown (not $0) when a provider supplied no usage/price.
+    const [cost] = params.domainActionId
+      ? await db.select({ total: sql<number | null>`sum(${llmCalls.costUsd})` }).from(llmCalls)
+          .where(and(eq(llmCalls.tenantId, params.tenantId), eq(llmCalls.domainActionId, params.domainActionId)))
+      : [{ total: null }];
+    return db
       .insert(decisionReceipts)
       .values({
         tenantId: params.tenantId,
@@ -41,9 +47,10 @@ export async function openReceipt(params: OpenReceiptParams): Promise<{ receiptI
         approval: params.approval,
         expectedResult: params.expectedResult ?? null,
         correlationId: params.correlationId ?? null,
+        llmCostUsd: cost?.total === null || cost?.total === undefined ? null : Number(cost.total),
       })
-      .returning({ id: decisionReceipts.id }),
-  );
+      .returning({ id: decisionReceipts.id });
+  });
   return { receiptId: row!.id };
 }
 

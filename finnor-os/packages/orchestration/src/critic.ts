@@ -8,7 +8,7 @@
 // wait costs zero added latency (see apps/worker/src/handlers/critic-review.ts).
 
 import { z } from "zod";
-import { type LLMProvider, resolveProvider } from "./llm";
+import { type LLMProvider, resolveProviderForPurpose } from "./llm";
 import { redactStructured } from "@finnor/security";
 
 export interface CriticInput {
@@ -17,6 +17,9 @@ export interface CriticInput {
   payload: Record<string, unknown>;
   summary: string;
   reasoning?: string | null;
+  tenantId?: string;
+  actionId?: string;
+  traceId?: string;
 }
 
 export interface CriticVerdict {
@@ -45,11 +48,11 @@ const SYSTEM_PROMPT = [
 
 export async function reviewAction(
   input: CriticInput,
-  provider: LLMProvider = resolveProvider("bedrock-deepseek"),
+  provider: LLMProvider = resolveProviderForPurpose("critic"),
 ): Promise<CriticVerdict> {
   let raw: string;
   try {
-    raw = await provider.complete({ system: SYSTEM_PROMPT, user: JSON.stringify(redactStructured(input)), json: true });
+    raw = await provider.complete({ system: SYSTEM_PROMPT, user: JSON.stringify(redactStructured(input)), json: true, tenantId: input.tenantId, actionId: input.actionId, traceId: input.traceId, purpose: "critic" });
   } catch (err) {
     throw new Error(`Critic LLM call failed: ${(err as Error).message}`);
   }

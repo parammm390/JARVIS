@@ -13,4 +13,6 @@ export {
   GroqProvider,
   registerProvider,
   resolveProvider,
+  resolveProviderForPurpose,
+  LLMBudgetDeferredError,
 } from "@finnor/tools";

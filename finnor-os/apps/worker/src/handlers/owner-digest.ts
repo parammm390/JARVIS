@@ -7,8 +7,8 @@
 // a timer regardless of whether there's anything to say, and a model call on every
 // empty tick would be pure wasted spend against a fixed budget.
 
-import { getPool, withTenant, scanFindings, domainActions } from "@finnor/db";
-import { and, eq, gte, isNull } from "drizzle-orm";
+import { getPool, withTenant, scanFindings, domainActions, llmCalls } from "@finnor/db";
+import { and, eq, gte, isNull, sql } from "drizzle-orm";
 import { placeVapiCall, VOICE_PERSONAS, logWithTrace } from "@finnor/tools";
 import { followUpDebt, cashCollections, intelligenceForecasts, routeSavingsBriefing, slaBreaches } from "@finnor/read-models";
 import type { JobHandler } from "../queue";
@@ -30,6 +30,7 @@ export const ownerDigest: JobHandler = async (payload) => {
   );
   const scanDraftTypes = new Set(["renew_maintenance_agreement", "bulk_notify_existing_customers"]);
   const freshScanDrafts = freshDrafts.filter((d) => scanDraftTypes.has(d.actionType));
+  const [llmSpend] = await withTenant(tenantId, (db) => db.select({ spend: sql<number | null>`sum(${llmCalls.costUsd})`, calls: sql<number>`count(*)` }).from(llmCalls).where(and(eq(llmCalls.tenantId, tenantId), gte(llmCalls.createdAt, since))));
 
   // Vertical workflow 6 (recurring "daily owner operating loop", docs/jarvis-90-
   // execution-blueprint.md §5): the same one-call-a-day digest now also carries the
@@ -64,6 +65,7 @@ export const ownerDigest: JobHandler = async (payload) => {
   const visitDay14 = forecasts.visitVolume?.[13];
   if (cashDay14 && visitDay14) parts.push(`The 14-day model estimates $${cashDay14.estimate.toFixed(2)} in collections and ${visitDay14.estimate.toFixed(1)} scheduled visits on day 14; its uncertainty bands are available in the intelligence forecast read model.`);
   if (sla.stuckWorkflowRuns > 0) parts.push(`${sla.stuckWorkflowRuns} in-progress workflow${sla.stuckWorkflowRuns === 1 ? "" : "s"} appear stuck and may need a look.`);
+  if (llmSpend?.spend !== null && llmSpend?.spend !== undefined) parts.push(`Model usage today is $${Number(llmSpend.spend).toFixed(4)} across ${Number(llmSpend.calls)} calls.`);
   const message = `Hi, this is Finnor with your daily update. ${parts.join(" ")}`;
 
   const { rows } = await getPool().query(`SELECT owner_phone FROM tenants WHERE id = $1`, [tenantId]);
