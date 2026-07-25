@@ -4,6 +4,7 @@ import { SubmitInstructionSchema } from "@finnor/policy-schema";
 import { requireContext, errorResponse, enforceRouteRateLimit } from "../../../lib/auth";
 import { getOrchestrator } from "../../../lib/orchestrator";
 import { claimOrGetCachedIntake, completeIntakeClaim } from "../../../lib/intake-idempotency";
+import { enforceBatchBackpressure } from "../../../lib/backpressure";
 
 export async function POST(req: Request): Promise<Response> {
   try {
@@ -15,6 +16,7 @@ export async function POST(req: Request): Promise<Response> {
     // actually reflects the env at call time, same convention as rate-limit.ts's own
     // default-parameter pattern.
     await enforceRouteRateLimit(`intake:${ctx.tenantId}`, Number(process.env.RATE_LIMIT_INTAKE_PER_MINUTE ?? 20));
+    await enforceBatchBackpressure();
     const body = SubmitInstructionSchema.safeParse(await req.json().catch(() => ({})));
     if (!body.success) {
       return Response.json(
