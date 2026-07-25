@@ -23,7 +23,14 @@ export function PushOptIn() {
       const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: publicKeyToBytes(key) as unknown as BufferSource });
       const token = getCurrentAccessToken();
       const response = await fetch("/api/jarvis/push-subscriptions", { method: "POST", headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(subscription) });
-      setState(response.ok ? "enabled" : "error");
+      if (!response.ok) { setState("error"); return }
+      // D6.T5's opt-in is a real preference as well as a browser subscription. Read
+      // first so enabling push never deletes another notification channel's setting.
+      const prefsResponse = await fetch("/api/jarvis/user-prefs", { headers: token ? { authorization: `Bearer ${token}` } : {} });
+      const prefs = prefsResponse.ok ? await prefsResponse.json() as { prefs?: { notificationPreferences?: Record<string, boolean> } } : null;
+      const preferences = { ...(prefs?.prefs?.notificationPreferences ?? {}), push: true };
+      const saved = await fetch("/api/jarvis/user-prefs", { method: "PUT", headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify({ notificationPreferences: preferences }) });
+      setState(saved.ok ? "enabled" : "error");
     } catch { setState("error"); }
   }
   if (!session) return null
