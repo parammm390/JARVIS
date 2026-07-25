@@ -35,6 +35,7 @@ import { repairPlanAfterTerminalFailure } from "./handlers/repair-plan-after-ter
 import { suggestDailyRoutes } from "./handlers/suggest-daily-routes";
 import { sendPushNotification } from "./handlers/send-push-notification";
 import { scanEwmaReorder } from "./handlers/scan-ewma-reorder";
+import { purgeRetention } from "./handlers/purge-retention";
 import { startScheduler, startGlobalScheduler, type ScheduledScan } from "./scheduler";
 import { startHeartbeat } from "./heartbeat";
 import { startSseServer } from "./sse-server";
@@ -71,6 +72,7 @@ export function createWorker(): JobQueue {
   queue.register("suggest_daily_routes", suggestDailyRoutes);
   queue.register("send_push_notification", sendPushNotification);
   queue.register("scan_ewma_reorder", scanEwmaReorder);
+  queue.register("purge_retention", purgeRetention);
   return queue;
 }
 
@@ -118,6 +120,7 @@ const PROACTIVE_SCANS: ScheduledScan[] = [
   { type: "owner_digest", intervalHours: 24, payload: (tenantId) => ({ tenantId }) },
   { type: "suggest_daily_routes", intervalHours: 24, payload: (tenantId) => ({ tenantId }) },
   { type: "scan_ewma_reorder", intervalHours: 24, payload: (tenantId) => ({ tenantId }) },
+  { type: "purge_retention", intervalHours: 24, payload: (tenantId) => ({ tenantId }) },
   // Phase 8 (§8.3): the 30-day certification's daily readiness row. Runs after the
   // scans above have had their own daily window to complete for the day, same
   // "close enough for a v1" reasoning as owner_digest.

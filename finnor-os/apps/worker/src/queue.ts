@@ -108,7 +108,7 @@ export class JobQueue {
       const ms = Date.now() - start;
       Sentry.addBreadcrumb({ category: "job", message: job.type, data: { ok: true, ms, correlationId } });
       log.info({ ok: true, ms }, `job ${job.type} completed`);
-      await getPool().query(`UPDATE jobs SET status = 'completed', started_at = NULL WHERE id = $1`, [job.id]);
+      await getPool().query(`UPDATE jobs SET status = 'completed', completed_at = now(), started_at = NULL WHERE id = $1`, [job.id]);
     } catch (err) {
       const ms = Date.now() - start;
       Sentry.addBreadcrumb({ category: "job", message: job.type, data: { ok: false, ms, correlationId } });

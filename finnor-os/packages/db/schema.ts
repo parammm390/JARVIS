@@ -350,6 +350,7 @@ export const jobs = pgTable(
     runAt: timestamp("run_at", { withTimezone: true }).notNull().defaultNow(),
     lastError: text("last_error"),
     startedAt: timestamp("started_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
     // Idempotency: callers may supply a key; enqueue is a no-op if it already exists.
     idempotencyKey: text("idempotency_key").unique(),
   },
