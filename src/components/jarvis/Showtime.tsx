@@ -85,6 +85,10 @@ function ShowtimeShell() {
   // loading state; a real owner session replaces it once it is resolved.
   if (loading) return <Gate title="Sign in required" detail="Showtime is available only to the labeled Dealer Zero demo tenant." />
   if (!session) return <Gate title="Sign in required" detail="Showtime is available only to the labeled Dealer Zero demo tenant." />
+  // `loading` covers only the local Supabase session.  The tenant role is fetched
+  // immediately afterward, so treating its brief null state as a non-owner would
+  // reject a real owner before `/api/me` can resolve.
+  if (role === null) return <div className="flex min-h-screen items-center justify-center bg-[#04070f] text-sm font-black text-white">Checking account access…</div>
   if (role !== "owner") return <Gate title="Owner access required" detail="Dealer Zero time-compression is owner-only because its receipts are tenant records." />
 
   return (
