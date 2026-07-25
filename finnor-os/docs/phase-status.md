@@ -1,5 +1,11 @@
 # JARVIS 95% — Phase Status
 
+## Maestro A5 — Guardrail Proof
+Status: GATE-GREEN (2026-07-25)
+
+- [x] A5.T1–T6 — approval-gate fuzz/property coverage; live protected Preview/production tenant-isolation probe; fail-closed boot; production AWS Secrets Manager proof; restricted-role cutover; and gitleaks/OSV remediation. Detailed evidence is in `JARVIS-MAESTRO-STATE.md`.
+- [x] Exit gate — hosted [security run 30137613800](https://github.com/parammm390/JARVIS/actions/runs/30137613800) completed gitleaks and OSV successfully; the deliberate staging bad-boot refusal is recorded in A5.T3; hosted [tenant-isolation run 30138122654](https://github.com/parammm390/JARVIS/actions/runs/30138122654) completed its protected Preview and production marker-aware probe successfully. Local end-ritual checks: API/console builds, full `npm test`, `npm run typecheck`, migration bundle, npm audit (0 vulnerabilities), and OSV Scanner (no issues).
+
 ## Phase 13 — D4 Pipeline Theater exit gate
 
 - [x] **Live Dealer Zero recording gate (2026-07-24):** authenticated the local SSE gateway as the dedicated Dealer Zero owner and observed a real two-step `lead_to_water_test` workflow (`c8df5bb8-0112-4168-aefc-edba5031eaf4`) emitting sequential `workflow_step` notifications, then `reliability` and `activity-snapshot` projection refreshes. A second Dealer Zero run (`01cd8ed9-947b-4abb-b805-0fa1cccca59a`) used a communications auth-fault injection after a real scheduling hold; the downstream call returned `false` and the existing compensation runtime released the hold successfully (`compensation_case` `2812e193-f2a1-4a7e-a2f3-dbe678b3af73`). The tenant is permanently labelled synthetic; no external customer/provider call was sent.
