@@ -32,6 +32,8 @@ import { choreo } from "../ui/motion/choreo"
 import { PulseBar } from "./PulseBar"
 import { ActivityTheater } from "./ActivityTheater"
 import { Orb3D, type OrbState } from "./Orb3D"
+import { rankPanels, recordPanelOpen, type FrecencyLedger } from "../lib/frecency"
+import { jarvisClient } from "@/lib/jarvis-client"
 
 const ParticleField = dynamic(() => import("../panels/ParticleField").then((m) => m.ParticleField), { ssr: false })
 
@@ -79,7 +81,7 @@ function CausticHeader() {
   )
 }
 
-function LeftRail({ scene, setScene }: { scene: SceneId; setScene: (s: SceneId) => void }) {
+function LeftRail({ scene, setScene, orderedScenes, unopened }: { scene: SceneId; setScene: (s: SceneId) => void; orderedScenes: SceneId[]; unopened: SceneId[] }) {
   const orbLive = useOrbLiveState()
   return (
     <aside className="sticky top-0 flex h-screen w-60 shrink-0 flex-col border-r border-white/6 bg-[#05090f]/85 backdrop-blur-xl">
@@ -94,7 +96,8 @@ function LeftRail({ scene, setScene }: { scene: SceneId; setScene: (s: SceneId) 
       </Link>
 
       <nav className="mt-2 space-y-0.5 px-3">
-        {SCENES.map(({ id, label, icon: Icon }) => {
+        {orderedScenes.map((id) => {
+          const { label, icon: Icon } = SCENES.find((candidate) => candidate.id === id)!
           const active = scene === id
           return (
             <button
@@ -111,6 +114,8 @@ function LeftRail({ scene, setScene }: { scene: SceneId; setScene: (s: SceneId) 
           )
         })}
       </nav>
+
+      {unopened.length > 0 && <div className="mx-3 mt-3 border-t border-white/8 pt-3"><div className="j-label mb-2">Ready next</div><div className="flex flex-wrap gap-1.5">{unopened.map((id) => <button key={id} onClick={() => setScene(id)} className="j-chip border border-white/10 bg-white/[.035] text-[color:var(--j-text-dim)] hover:text-cyan-100">{SCENES.find((candidate) => candidate.id === id)!.label}</button>)}</div></div>}
 
       <div className="flex-1" />
       <div className="space-y-3 px-4 pb-5">
@@ -178,6 +183,8 @@ function RightRail() {
 }
 
 function BridgeShell() {
+  const [ledger, setLedger] = useState<FrecencyLedger>({})
+  const orderedScenes = rankPanels(SCENES.map((entry) => entry.id), ledger, Date.now())
   const [scene, setScene] = useState<SceneId>("overview")
   const [daypart, setDaypart] = useState<ReturnType<typeof getDaypart>>("day")
   const [mounted, setMounted] = useState(false)
@@ -189,6 +196,32 @@ function BridgeShell() {
     const id = window.setInterval(() => setDaypart(getDaypart()), 5 * 60 * 1000)
     return () => window.clearInterval(id)
   }, [])
+  useEffect(() => {
+    const raw = window.localStorage.getItem("finnor.jarvis.panel-frecency.v1")
+    let prior: FrecencyLedger = {}
+    if (raw) {
+      try { prior = JSON.parse(raw) as FrecencyLedger } catch { window.localStorage.removeItem("finnor.jarvis.panel-frecency.v1") }
+    }
+    // Rendering the default overview is an actual open, so it earns one visit too.
+    const initial = recordPanelOpen(prior, "overview", Date.now())
+    window.localStorage.setItem("finnor.jarvis.panel-frecency.v1", JSON.stringify(initial))
+    setLedger(initial)
+  }, [])
+  useEffect(() => {
+    // Prefetch only actual authenticated APIs. A failure is deliberately ignored here:
+    // the mounted panel retains its own honest loading/error state.
+    const likely = orderedScenes[0]
+    if (likely === "overview") void jarvisClient.overview()
+    if (likely === "pipeline") void jarvisClient.workflowRuns()
+  }, [orderedScenes])
+  const chooseScene = (next: SceneId) => {
+    setScene(next)
+    setLedger((current) => {
+      const updated = recordPanelOpen(current, next, Date.now())
+      window.localStorage.setItem("finnor.jarvis.panel-frecency.v1", JSON.stringify(updated))
+      return updated
+    })
+  }
 
   if (!mounted || loading) {
     return (
@@ -223,7 +256,7 @@ function BridgeShell() {
       </div>
       <ParticleField />
       <div className="relative flex">
-        <LeftRail scene={scene} setScene={setScene} />
+        <LeftRail scene={scene} setScene={chooseScene} orderedScenes={orderedScenes} unopened={orderedScenes.filter((id) => !ledger[id])} />
         <CenterStage scene={scene} />
         <RightRail />
       </div>
