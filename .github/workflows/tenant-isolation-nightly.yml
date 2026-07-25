@@ -23,4 +23,6 @@ jobs:
           PRODUCTION_API_URL: ${{ secrets.TENANT_PROBE_PRODUCTION_API_URL }}
           TENANT_A_PROBE_JWT: ${{ secrets.TENANT_PROBE_A_JWT }}
           TENANT_B_PROBE_JWT: ${{ secrets.TENANT_PROBE_B_JWT }}
+          PRODUCTION_TENANT_A_MARKER_HOUSEHOLD_ID: ${{ secrets.TENANT_PROBE_PRODUCTION_MARKER_HOUSEHOLD_ID }}
+          STAGING_TENANT_A_MARKER_HOUSEHOLD_ID: ${{ secrets.TENANT_PROBE_STAGING_MARKER_HOUSEHOLD_ID }}
         run: npx tsx scripts/probe-tenant-isolation.ts
