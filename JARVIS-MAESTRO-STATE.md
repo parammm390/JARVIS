@@ -404,11 +404,11 @@ Status: ALL IMPLEMENTATION TASKS COMPLETE + DEPLOYED; exit-gate role/push proofs
 EXIT GATE: two-role recordings · real-delta digest · push→exact-card proof — **OPEN honestly.** The real-delta endpoint/UI implementation is verified locally, but the required authenticated role recordings and physical-device push proof need a signed-in dispatcher/technician session and B8.T1 respectively.
 
 ## D7 — Scenes Wave 2 + cmd-K
-Status: NOT STARTED
-- [ ] D7.T1 — remaining flagships (AMC ring, research cards, ops tiles, reminder timeline, tech report, compliance preview, marketing EMU cards, 360 upgrade)
-- [ ] D7.T2 — cmd-K (navigate/search/instruct → planner cards in palette)
-- [ ] D7.T3 — effects sweep w/ restraint + Empty/Error everywhere
-EXIT GATE: 41/41 designed proof · instruct-flow recording
+Status: IMPLEMENTATION COMPLETE — final video-recording artifact remains open
+- [x] D7.T1 — remaining flagships (AMC ring, research cards, ops tiles, reminder timeline, tech report, compliance preview, marketing EMU cards, 360 upgrade) (evidence: commits `56e8cfe` and `021a486`; `WaveTwoScenes.tsx` registers the eight named scene families without inventing post-execution artifacts, and Dispatch Map's tenant household-360 drawer now shows its actual `serviceVisits` count. `npx tsc --noEmit` + `npm run lint` pass; production deploy `dpl_BuRoSoXcCFMgtawLUQGoa815x1zb` Ready.)
+- [x] D7.T2 — cmd-K (navigate/search/instruct → planner cards in palette) (evidence: commit `c602af0`; `CommandPaletteV2` uses the real typed receipts/households/runs reads and normal `/actions` planner endpoint, then injects returned proposals into the existing approval-gated renderer. Live authenticated production DOM capture on 2026-07-25 showed Command palette → Instruct, the exact approval-only placeholder, and the explicit “normal approval gate” copy. No action was approved or executed during verification.)
+- [x] D7.T3 — effects sweep w/ restraint + Empty/Error everywhere (evidence: commits `c602af0` and `021a486`; executing cards use `BorderBeam` FLOW-17, palette tabs/submit use shared `Press` FLOW-04, all new panels use glass hierarchy, and palette uses shared `EmptyState`/`ErrorState`. The AMC ring respects `useReducedMotion`; `npx tsc --noEmit` + `npm run lint` pass.)
+EXIT GATE: 41/41 Stage proof remains from D3's catalog evidence, and D7's deployed Instruct UI was captured live (DOM + screenshot). **OPEN honestly:** this session captured an end-to-end interactive proof earlier and final deployed UI evidence, but no video-recording artifact exists, so it is not called a completed “instruct-flow recording.”
 
 ## D8 — Showtime
 Status: NOT STARTED
