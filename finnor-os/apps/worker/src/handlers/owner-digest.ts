@@ -7,11 +7,20 @@
 // a timer regardless of whether there's anything to say, and a model call on every
 // empty tick would be pure wasted spend against a fixed budget.
 
-import { getPool, withTenant, scanFindings, domainActions, llmCalls } from "@finnor/db";
+import { getPool, withTenant, scanFindings, domainActions, llmCalls, users } from "@finnor/db";
 import { and, eq, gte, isNull, sql } from "drizzle-orm";
-import { placeVapiCall, VOICE_PERSONAS, logWithTrace } from "@finnor/tools";
+import { placeVapiCall, VOICE_PERSONAS, logWithTrace, isAllowlistedRecipient, sendResendEmail } from "@finnor/tools";
 import { followUpDebt, cashCollections, intelligenceForecasts, routeSavingsBriefing, slaBreaches } from "@finnor/read-models";
 import type { JobHandler } from "../queue";
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>\"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[character]!);
+}
+
+function digestEmailHtml(parts: string[]): string {
+  const items = parts.map((part) => `<li>${escapeHtml(part)}</li>`).join("");
+  return `<main><h1>Your Finnor daily operating brief</h1><p>Here is what changed. Nothing has been approved or acted on without you.</p><ul>${items}</ul><p>Open JARVIS to review any pending approvals.</p></main>`;
+}
 
 export const ownerDigest: JobHandler = async (payload) => {
   const tenantId = String(payload.tenantId ?? "");
@@ -67,6 +76,39 @@ export const ownerDigest: JobHandler = async (payload) => {
   if (sla.stuckWorkflowRuns > 0) parts.push(`${sla.stuckWorkflowRuns} in-progress workflow${sla.stuckWorkflowRuns === 1 ? "" : "s"} appear stuck and may need a look.`);
   if (llmSpend?.spend !== null && llmSpend?.spend !== undefined) parts.push(`Model usage today is $${Number(llmSpend.spend).toFixed(4)} across ${Number(llmSpend.calls)} calls.`);
   const message = `Hi, this is Finnor with your daily update. ${parts.join(" ")}`;
+
+  // B8.T2: owners receive the same honest, query-backed operating brief by email.
+  // The adapter remains the one enforcement point for recipient allowlisting, budget,
+  // and provider circuit state. We pre-filter only to avoid spending a daily-budget
+  // claim on a recipient the adapter would necessarily block, and log the omission
+  // instead of pretending a personal address was delivered to.
+  const owners = await withTenant(tenantId, (db) =>
+    db.select({ email: users.email }).from(users).where(and(eq(users.tenantId, tenantId), eq(users.role, "owner"))),
+  );
+  const emailRecipients = owners.map((owner) => owner.email).filter(isAllowlistedRecipient);
+  const skippedOwners = owners.length - emailRecipients.length;
+  if (skippedOwners > 0) {
+    logWithTrace({ traceId: payload._correlationId as string | undefined, tenantId }).warn(
+      { skippedOwners }, "[owner_digest] owner email is outside the Resend pre-launch allowlist — not sent",
+    );
+  }
+  for (const to of emailRecipients) {
+    // This is deliberately awaited inside owner_digest: a transient provider failure
+    // makes this existing daily job retry through JobQueue, and findings are not marked
+    // digested until the real adapter accepts delivery.
+    const result = await sendResendEmail({
+      tenantId,
+      to,
+      subject: "Finnor daily operating brief",
+      html: digestEmailHtml(parts),
+    });
+    if (!result.sent) {
+      logWithTrace({ traceId: payload._correlationId as string | undefined, tenantId }).warn(
+        { reason: result.reason }, "[owner_digest] email was blocked — findings remain available",
+      );
+      return;
+    }
+  }
 
   const { rows } = await getPool().query(`SELECT owner_phone FROM tenants WHERE id = $1`, [tenantId]);
   const ownerPhone = rows[0]?.owner_phone as string | null | undefined;

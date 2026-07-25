@@ -25,6 +25,7 @@ import {
   contactMethods,
   technicians,
   appointments,
+  users,
 } from "@finnor/db";
 import { eq, and } from "drizzle-orm";
 import { scanLowInventory } from "../../apps/worker/src/handlers/scan-low-inventory";
@@ -33,6 +34,7 @@ import { scanColdLeads } from "../../apps/worker/src/handlers/scan-cold-leads";
 import { scanDataQuality } from "../../apps/worker/src/handlers/scan-data-quality";
 import { scheduledReminder } from "../../apps/worker/src/handlers/scheduled-reminder";
 import { ownerDigest } from "../../apps/worker/src/handlers/owner-digest";
+import { setResendFetchForTesting } from "../../packages/tools/src/resend";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
 const TENANT_ID = "00000000-0000-4000-8000-0000000000f1"; // dedicated, isolated from other fixtures
@@ -339,5 +341,41 @@ describe.skipIf(!available)("proactive scan handlers", () => {
       [TENANT_ID],
     );
     expect(rows[0].n).toBe(0);
+  });
+
+  it("owner_digest sends an allowlisted owner a query-backed daily email without claiming an approval happened", async () => {
+    const ownerId = "00000000-0000-4000-8000-0000000000f2";
+    const priorApiKey = process.env.RESEND_API_KEY;
+    const priorCap = process.env.RESEND_DAILY_CAP;
+    let requestBody: Record<string, unknown> | undefined;
+    try {
+      process.env.RESEND_API_KEY = "test-key-not-real";
+      process.env.RESEND_DAILY_CAP = "50";
+      await withTenant(TENANT_ID, (db) =>
+        db.insert(users).values({ id: ownerId, tenantId: TENANT_ID, email: "digest-owner@finnorai.com", role: "owner" }).onConflictDoNothing(),
+      );
+      await withTenant(TENANT_ID, (db) =>
+        db.insert(scanFindings).values({ tenantId: TENANT_ID, scanType: "low_inventory", summary: "Digest email inventory finding", details: {} }),
+      );
+      setResendFetchForTesting((async (_url: string, init?: RequestInit) => {
+        requestBody = JSON.parse(String(init?.body));
+        return new Response(JSON.stringify({ id: "digest-email-123" }), { status: 200 });
+      }) as unknown as typeof fetch);
+      await getPool().query(`UPDATE tenants SET owner_phone = NULL WHERE id = $1`, [TENANT_ID]);
+
+      await ownerDigest({ tenantId: TENANT_ID });
+
+      expect(requestBody).toMatchObject({
+        to: ["digest-owner@finnorai.com"],
+        subject: "Finnor daily operating brief",
+      });
+      expect(String(requestBody?.html)).toContain("Digest email inventory finding");
+      expect(String(requestBody?.html)).toContain("Nothing has been approved or acted on without you.");
+    } finally {
+      setResendFetchForTesting(null);
+      process.env.RESEND_API_KEY = priorApiKey;
+      process.env.RESEND_DAILY_CAP = priorCap;
+      await withTenant(TENANT_ID, (db) => db.delete(users).where(eq(users.id, ownerId)));
+    }
   });
 });
