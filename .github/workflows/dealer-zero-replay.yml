@@ -25,6 +25,8 @@ jobs:
       - run: npm ci
       - name: Compare normalized Dealer Zero receipts
         env:
-          DEALER_ZERO_REPLAY_BASELINE: ${{ secrets.DEALER_ZERO_REPLAY_BASELINE }}
-          DEALER_ZERO_REPLAY_CANDIDATE: ${{ secrets.DEALER_ZERO_REPLAY_CANDIDATE }}
+          # Repository secrets take precedence. Repository variables are permitted
+          # only for Dealer Zero's synthetic receipt fixtures, never customer data.
+          DEALER_ZERO_REPLAY_BASELINE: ${{ secrets.DEALER_ZERO_REPLAY_BASELINE || vars.DEALER_ZERO_REPLAY_BASELINE }}
+          DEALER_ZERO_REPLAY_CANDIDATE: ${{ secrets.DEALER_ZERO_REPLAY_CANDIDATE || vars.DEALER_ZERO_REPLAY_CANDIDATE }}
         run: npx tsx scripts/replay-dealer-zero.ts
