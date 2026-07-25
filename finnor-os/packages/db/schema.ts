@@ -351,6 +351,8 @@ export const jobs = pgTable(
     lastError: text("last_error"),
     startedAt: timestamp("started_at", { withTimezone: true }),
     completedAt: timestamp("completed_at", { withTimezone: true }),
+    lane: text("lane", { enum: ["interactive", "batch"] }).notNull().default("batch"),
+    priority: integer("priority").notNull().default(0),
     // Idempotency: callers may supply a key; enqueue is a no-op if it already exists.
     idempotencyKey: text("idempotency_key").unique(),
   },

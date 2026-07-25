@@ -6,6 +6,7 @@ import type { Job } from "@finnor/shared-types";
 import { Sentry, logWithTrace } from "@finnor/tools";
 
 export type JobHandler = (payload: Record<string, unknown>) => Promise<void>;
+export type JobLane = "interactive" | "batch";
 
 export class JobQueue {
   private handlers = new Map<string, JobHandler>();
@@ -14,11 +15,11 @@ export class JobQueue {
     this.handlers.set(type, handler);
   }
 
-  async enqueue(type: string, payload: Record<string, unknown>, idempotencyKey?: string): Promise<void> {
+  async enqueue(type: string, payload: Record<string, unknown>, idempotencyKey?: string, lane: JobLane = "batch", priority = 0): Promise<void> {
     await getPool().query(
-      `INSERT INTO jobs (type, payload, idempotency_key) VALUES ($1, $2, $3)
+      `INSERT INTO jobs (type, payload, idempotency_key, lane, priority) VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (idempotency_key) DO NOTHING`,
-      [type, JSON.stringify(payload), idempotencyKey ?? null],
+      [type, JSON.stringify(payload), idempotencyKey ?? null, lane, priority],
     );
   }
 
@@ -57,7 +58,7 @@ export class JobQueue {
         const { rows } = await client.query(
           `SELECT id, type, payload, attempts, max_attempts FROM jobs
            WHERE status = 'queued' AND run_at <= now()
-           ORDER BY run_at
+           ORDER BY CASE lane WHEN 'interactive' THEN 0 ELSE 1 END, priority DESC, run_at
            FOR UPDATE SKIP LOCKED
            LIMIT 1`,
         );

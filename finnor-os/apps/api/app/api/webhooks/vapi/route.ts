@@ -507,6 +507,8 @@ export async function POST(req: Request): Promise<Response> {
           _correlationId: correlationId,
         },
         idempotencyKey: msg.call?.id ? `vapi:${msg.call.id}` : null,
+        lane: "interactive",
+        priority: 100,
       })
       .onConflictDoNothing({ target: jobs.idempotencyKey });
   }

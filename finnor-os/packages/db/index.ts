@@ -193,11 +193,13 @@ export async function enqueueJob(
   payload: Record<string, unknown>,
   idempotencyKey?: string,
   correlationId?: string,
+  lane: "interactive" | "batch" = "batch",
+  priority = 0,
 ): Promise<void> {
   const fullPayload = correlationId ? { ...payload, _correlationId: correlationId } : payload;
   await getPool().query(
-    `INSERT INTO jobs (type, payload, idempotency_key) VALUES ($1, $2, $3)
+    `INSERT INTO jobs (type, payload, idempotency_key, lane, priority) VALUES ($1, $2, $3, $4, $5)
      ON CONFLICT (idempotency_key) DO NOTHING`,
-    [type, JSON.stringify(fullPayload), idempotencyKey ?? null],
+    [type, JSON.stringify(fullPayload), idempotencyKey ?? null, lane, priority],
   );
 }
