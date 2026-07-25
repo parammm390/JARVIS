@@ -10,6 +10,8 @@ Convention: same as `finnor-os/docs/phase-status.md` (P1/P2 style) — a box is 
 
 ## Session Log
 
+- 2026-07-25 · phase 18 (B4) · completed B4.T5 training bootstrap and implemented/proved local B4.T3 replay recordings + normalized report core + fail-closed workflow and B4.T4 persisted shadow reports; focused B4 verification 19/19 plus typecheck green; pushed commits `5232d0d`, `46d4db5`, `940fd83` · next: create actual baseline/candidate staging receipt artifacts, run the GitHub replay gate; configure a production read-only Dealer Zero intake mirror and observe a staging candidate for T4 · blockers: no real staging artifact pair or production mirror exists, so T3/T4 and the external B4 exit-gate shadow proof remain honestly open.
+
 - 2026-07-25 · phase 18 (B4) · completed B4.T1/T2: five seed-deterministic scenario packs now drive the real Dealer Zero simulator, and the owner-only, DB-flag-gated time-compression API returns explicitly DEMO/synthetic scripts at 1–120×. Began B4.T3 with a normalized receipt-diff core; its deliberate behavioral-change test is green, but persistent day recording, staging replay runner, and CI gate are not yet built, so T3 remains unchecked · next: B4.T3 persistence + staging/pre-release replay wiring · blockers: none.
 
 - 2026-07-25 · phase 17 (D5 exit-gate probe) · read the configured browser-control workflow and directly inspected both current-session and user browser tabs: both lists were empty, so no authenticated dispatcher/technician session exists to capture the required live map and phone-viewport evidence. No synthetic session, screenshot, or completion claim was created · next: sign in to a real linked Dispatcher/Technician account in the in-app browser, then capture the two required proofs · blockers: authenticated browser session absent.
@@ -246,8 +248,13 @@ Status: IN PROGRESS
 - [x] B4.T2 — time-compression API (DEMO-labeled, Dealer Zero only) (evidence: commit `2647c0e`; `POST /api/dealer-zero/time-compression` is owner-only and checks the DB-backed `tenant_settings.is_dealer_zero` flag on every call. It returns a deterministic 1–120× synthetic timeline with `demo:true` and `synthetic:true` labels on the response and first/last frames, without changing business data. `tests/integration/dealer-zero-time-compression-route.test.ts` 2/2 passed, proving same request→same script and non-demo/non-owner refusal; `npm run typecheck` passed.)
 - [ ] B4.T3 — counterfactual replay + normalized receipt-diff (nightly staging + pre-release gate)
 - [ ] B4.T4 — shadow-diff staging vs prod (manual → automated report)
-- [ ] B4.T5 — training-mode tenant bootstrap
+- [x] B4.T5 — training-mode tenant bootstrap (evidence: commit `940fd83`; `bootstrapTrainingTenant()` creates an explicit `training_mode=true`, non-Dealer-Zero, simulator-disabled practice tenant and copies only Dealer Zero configuration (policies, inventory, deduplicated price-book SKUs), not transactional history or integrations. `tests/integration/training-mode-bootstrap.test.ts` 1/1 passed; focused B4 suite 6 files / 19 tests and `npm run typecheck` passed.)
 EXIT GATE: determinism test green · deliberate change caught by replay diff · one shadow report
+
+### B4 open external evidence
+
+1. **B4.T3 is implemented locally but remains unchecked:** commits `5232d0d` and `8f4ff88` add durable synthetic-day recordings, normalized receipt snapshots/reports, the fail-closed `dealer-zero-replay` GitHub workflow, and a replay CLI. Local proof includes a deliberate `create_invoice` actual-result change exiting 1 with its added/removed normalized contracts. The workflow is registered on GitHub but needs its two real staging-run artifacts (`DEALER_ZERO_REPLAY_BASELINE` and `DEALER_ZERO_REPLAY_CANDIDATE`) before it can be run honestly.
+2. **B4.T4 is implemented locally but remains unchecked:** commit `46d4db5` adds persisted shadow reports and tests a passing and a failing candidate comparison. No production read-only Dealer Zero intake mirror or staging candidate observation has been configured/run yet, so no staging-vs-production shadow report is claimed.
 
 ## B5 — Cost Governor + Model Routing
 Status: NOT STARTED
