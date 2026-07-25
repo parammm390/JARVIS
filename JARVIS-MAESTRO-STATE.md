@@ -292,7 +292,7 @@ EXIT GATE: **GREEN** — persisted-receipt simulation report above · coverage l
 ## B7 — Fortress
 Status: NOT STARTED
 - [x] B7.T1 — authz matrix generated from routes + CI drift check (evidence: commit `a432482`; `scripts/generate-authz-matrix.ts` walks all `apps/api/app/api/**/route.ts` source and derives methods plus visible guard pattern into `docs/authz-matrix.md`; `tests/unit/authz-matrix.test.ts` 1/1 and `npm run authz:matrix:check` pass; CI runs the drift check before typecheck.)
-- [ ] B7.T2 — PII redaction (pino redact + tests) + retention purge job
+- [~] B7.T2 — PII redaction complete; retention purge job blocked on policy (evidence: commit `d45c734`; `packages/tools/src/logger.ts` configures Pino redaction for email/phone/mobile/address payload fields and bearer authorization paths; `logger-pii-redaction.test.ts` 1/1 proves raw values never reach a destination; `npm run typecheck` clean.)
   - Finding (2026-07-26): no data-retention policy/contract exists in policy schema, migrations, or seed data. The only verified retention is backup release pruning; `action_log` and `business_events` are explicitly immutable audit evidence. A purge job needs Param’s authoritative choices for eligible data classes/tables, per-class duration, legal-hold behavior, and whether tenant policy is authoritative. Per §0, no record category or duration was invented.
 - [ ] B7.T3 — degradation ladders ×6 (Redis/Axiom/Sentry/Voyage/Vapi/Resend), chaos-tested each
 - [ ] B7.T4 — fast-check webhook fuzzing all inbound routes
