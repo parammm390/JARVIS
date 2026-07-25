@@ -1337,3 +1337,6 @@ Status: GATE-GREEN — all 3 tasks done, all 3 EXIT GATE conditions met with rea
 - 2026-07-18 — Task 1.1 shipped and verified live: anonymous GET on `resources/households` and `audit` now 401; `stats`/`setup/status`/`integrations/status` remain public. This closes the live incident (public read access to real customer data) confirmed active at session start.
 - 2026-07-18 — Task 1.2: committed pre-existing coherent views.tsx diff separately (commit e4b87e2), tree was clean before further work began.
 - 2026-07-18 — Phase 1 execution started from the JARVIS 95% MAESTRO PACK. Entry check confirmed the incident was live (`curl` returned 200 on households/audit, not 401).
+## 2026-07-25 — B5 Cost Governor + Model Routing
+
+Shipped `5e985fc`: a shared LLM boundary now records provider-reported usage and configuration-derived cost in tenant-scoped `llm_calls`; receipts show linked per-action cost when known; purpose routing sends critic/repair/classification to Haiku; and a daily tenant token cap creates an explicit CONFIG/deferred receipt instead of silently dropping work. Daily readiness and owner digest expose only real priced spend. Focused database-backed proof: `cost-governor.test.ts` 2/2; typecheck clean.
