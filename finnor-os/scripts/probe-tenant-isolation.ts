@@ -10,6 +10,7 @@ const tenantAToken = process.env.TENANT_A_PROBE_JWT;
 const tenantBToken = process.env.TENANT_B_PROBE_JWT;
 const productionMarkerHouseholdId = process.env.PRODUCTION_TENANT_A_MARKER_HOUSEHOLD_ID;
 const stagingMarkerHouseholdId = process.env.STAGING_TENANT_A_MARKER_HOUSEHOLD_ID;
+const vercelAutomationBypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
 
 if (!tenantAToken || !tenantBToken || !productionMarkerHouseholdId || !stagingMarkerHouseholdId || environments.some((environment) => !environment.url)) {
   throw new Error("A5 tenant-isolation probe requires URLs, both JWTs, and one tenant-A marker household ID per environment");
@@ -17,7 +18,10 @@ if (!tenantAToken || !tenantBToken || !productionMarkerHouseholdId || !stagingMa
 
 async function householdIds(baseUrl: string, token: string): Promise<string[]> {
   const response = await fetch(new URL("/api/resources/households", baseUrl), {
-    headers: { authorization: `Bearer ${token}` },
+    headers: {
+      authorization: `Bearer ${token}`,
+      ...(vercelAutomationBypassSecret ? { "x-vercel-protection-bypass": vercelAutomationBypassSecret } : {}),
+    },
   });
   if (!response.ok) throw new Error(`household read returned HTTP ${response.status}`);
   const body = (await response.json()) as { rows?: Array<{ id?: unknown }> };

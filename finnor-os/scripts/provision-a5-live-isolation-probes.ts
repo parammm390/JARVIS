@@ -216,6 +216,29 @@ async function provisionDatabase(
   }
 }
 
+/** Reads, but never creates, the already-provisioned production marker. This is for
+ * credential refreshes where production's direct deployment credential is intentionally
+ * more privileged than the runtime role; creating through that credential would weaken
+ * the posture evidence the live HTTP probe is meant to establish. */
+async function readExistingMarker(databaseUrl: string, tenantAId: string): Promise<string> {
+  const pool = new Pool({ connectionString: databaseUrl, max: 1 });
+  const client = await pool.connect();
+  try {
+    await client.query("SET search_path = finnor_os, public");
+    await client.query("SELECT set_config('app.tenant_id', $1, false)", [tenantAId]);
+    const existing = await client.query<{ id: string }>(
+      "SELECT id FROM households WHERE tenant_id = $1 AND address = $2 LIMIT 1",
+      [tenantAId, "A5 internal isolation marker — not a customer address"],
+    );
+    const markerHouseholdId = existing.rows[0]?.id;
+    if (!markerHouseholdId) throw new Error("Expected an existing production A5 marker household, but none was found");
+    return markerHouseholdId;
+  } finally {
+    client.release();
+    await pool.end();
+  }
+}
+
 async function main(): Promise<void> {
   const args = parseArgs();
   const required = ["production-env", "staging-env", "email-a", "email-b", "credentials-output"];
@@ -225,6 +248,7 @@ async function main(): Promise<void> {
   const emailA = args["email-a"]!;
   const emailB = args["email-b"]!;
   const credentialsOutput = args["credentials-output"]!;
+  const productionAlreadyProvisioned = args["production-already-provisioned"] === "true";
   if (existsSync(credentialsOutput)) throw new Error("Refusing to overwrite credentials output; choose a new mode-0600 path");
 
   const [productionFileEnv, stagingEnv] = await Promise.all([
@@ -239,23 +263,43 @@ async function main(): Promise<void> {
   }
   if (productionEnv.SUPABASE_URL !== stagingEnv.SUPABASE_URL) throw new Error("Production and staging do not share Supabase Auth; provision separate principals intentionally");
 
-  // Auth administration uses the verified direct Vercel service key. Managed
-  // overrides are intentionally used below for runtime secrets such as DATABASE_URL,
-  // but an incorrectly mapped Auth key must not block or silently change principal
-  // provisioning.
-  const auth: AuthAdmin = { baseUrl: productionFileEnv.SUPABASE_URL!, serviceKey: productionFileEnv.SUPABASE_SERVICE_ROLE_KEY! };
+  // Prefer the production direct key, but verify it before mutating principals. The
+  // production runtime may resolve its service key from Secrets Manager while Vercel's
+  // direct environment value is stale; Preview is an allowed fallback only because the
+  // equality check above proves both environments use the same Supabase Auth project.
+  const authCandidates: Array<{ source: string; auth: AuthAdmin }> = [
+    { source: "production direct environment", auth: { baseUrl: productionFileEnv.SUPABASE_URL!, serviceKey: productionFileEnv.SUPABASE_SERVICE_ROLE_KEY! } },
+    { source: "production managed secret", auth: { baseUrl: productionEnv.SUPABASE_URL!, serviceKey: productionEnv.SUPABASE_SERVICE_ROLE_KEY! } },
+    { source: "staging environment", auth: { baseUrl: stagingEnv.SUPABASE_URL!, serviceKey: stagingEnv.SUPABASE_SERVICE_ROLE_KEY! } },
+  ];
+  let authUsers: Map<string, { id: string }> | undefined;
+  let auth: AuthAdmin | undefined;
+  let lastAuthError: unknown;
+  const authFailures: string[] = [];
+  for (const candidate of authCandidates) {
+    try {
+      authUsers = await listAuthUsers(candidate.auth);
+      auth = candidate.auth;
+      break;
+    } catch (error) {
+      lastAuthError = error;
+      authFailures.push(`${candidate.source}: ${error instanceof Error ? error.message : "unknown error"}`);
+    }
+  }
+  if (!auth || !authUsers) {
+    throw new Error(`No verified Supabase admin credential was available for A5 provisioning: ${authFailures.join("; ") || (lastAuthError instanceof Error ? lastAuthError.message : "unknown error")}`);
+  }
   const tenantAId = args["tenant-a-id"] ?? randomUUID();
   const tenantBId = args["tenant-b-id"] ?? randomUUID();
-  // Read once before changes; this avoids repeated Admin directory scans during a
-  // credential refresh while preserving explicit, per-account mutations below.
-  const authUsers = await listAuthUsers(auth);
   const principalA = await ensureAuthPrincipal(auth, emailA, authUsers.get(emailA.toLowerCase()));
   const principalB = await ensureAuthPrincipal(auth, emailB, authUsers.get(emailB.toLowerCase()));
   const [production, staging] = await Promise.all([
-    provisionDatabase(productionEnv.DATABASE_URL!, tenantAId, tenantBId, emailA, emailB),
-    // Preview currently exposes only its migration credential. This path seeds the
-    // internal marker, but the subsequent live HTTP probe is the authority for
-    // whether the deployed Preview API itself runs with RLS enforced.
+    productionAlreadyProvisioned
+      ? readExistingMarker(productionEnv.DATABASE_URL!, tenantAId).then((markerHouseholdId) => ({ posture: null, markerHouseholdId }))
+      : provisionDatabase(productionEnv.DATABASE_URL!, tenantAId, tenantBId, emailA, emailB),
+    // Preview may expose either a restricted app credential or a migration credential.
+    // Record the observed role posture; the subsequent live HTTP probe remains the
+    // authority for whether the deployed Preview API itself enforces isolation.
     provisionDatabase(stagingEnv.DATABASE_URL!, tenantAId, tenantBId, emailA, emailB, true),
   ]);
 
@@ -281,7 +325,11 @@ async function main(): Promise<void> {
       tenantAId,
       tenantBId,
       auth: { tenantAExistingCredentialReset: principalA.wasReset, tenantBExistingCredentialReset: principalB.wasReset },
-      production: { databaseRole: production.posture, markerHouseholdCreated: Boolean(production.markerHouseholdId) },
+      production: {
+        databaseRole: production.posture,
+        existingMarkerOnly: productionAlreadyProvisioned,
+        markerHouseholdCreated: Boolean(production.markerHouseholdId),
+      },
       staging: { databaseRole: staging.posture, privilegedSeedOnly: staging.posture.bypassRls, markerHouseholdCreated: Boolean(staging.markerHouseholdId) },
       credentialsWritten: true,
     }),
