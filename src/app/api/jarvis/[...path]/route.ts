@@ -81,6 +81,7 @@ function isAllowedPost(segments: string[]): boolean {
   if (segments.length === 4 && a === "workflows" && b === "runs" && RUN_CONTROL_VERBS.has(d!)) return true
   if (segments.length === 3 && a === "dlq" && (c === "replay" || c === "discard")) return true
   if (segments.length === 1 && a === "corrections") return true
+  if (segments.length === 1 && a === "push-subscriptions") return true
   return false
 }
 
@@ -187,7 +188,7 @@ export async function POST(req: NextRequest, { params }: { params: { path: strin
 // D6.T1: user preferences are the caller's own record. Keep the proxy surface as
 // narrow as the backend route: no generic PUT/DELETE tunnel is introduced.
 function isUserPrefs(segments: string[]): boolean {
-  return segments.length === 1 && segments[0] === "user-prefs";
+  return segments.length === 1 && (segments[0] === "user-prefs" || segments[0] === "push-subscriptions");
 }
 
 export async function PUT(req: NextRequest, { params }: { params: { path: string[] } }): Promise<Response> {

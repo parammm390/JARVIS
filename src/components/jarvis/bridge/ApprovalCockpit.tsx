@@ -448,6 +448,19 @@ export function ApprovalCockpit() {
     if (focusedIndex >= items.length) setFocusedIndex(Math.max(0, items.length - 1))
   }, [items.length, focusedIndex])
 
+  // B8/D6: the service worker opens /jarvis?approval=<id>. Resolve that opaque id
+  // against the live pending list and put keyboard focus on the exact card; a stale
+  // notification simply leaves the normal cockpit intact.
+  useEffect(() => {
+    const approvalId = new URLSearchParams(window.location.search).get("approval")
+    if (!approvalId) return
+    const index = items.findIndex((item) => item.id === approvalId)
+    if (index >= 0) {
+      setFocusedIndex(index)
+      window.history.replaceState(null, "", window.location.pathname)
+    }
+  }, [items])
+
   useEffect(() => {
     cardRefs.current[focusedIndex]?.focus()
   }, [focusedIndex])

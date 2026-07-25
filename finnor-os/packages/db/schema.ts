@@ -1333,6 +1333,24 @@ export const userPrefs = pgTable(
   (t) => [index("user_prefs_tenant_idx").on(t.tenantId)],
 );
 
+// B8.T1: Web Push's endpoint + encryption keys are per device/browser, never a
+// user preference blob. Keeping these rows separate makes revocation and 410 cleanup
+// explicit and lets RLS protect the opaque endpoint from tenant peers.
+export const pushSubscriptions = pgTable(
+  "push_subscriptions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    endpoint: text("endpoint").notNull(),
+    p256dh: text("p256dh").notNull(),
+    auth: text("auth").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique("push_subscriptions_user_endpoint_idx").on(t.userId, t.endpoint), index("push_subscriptions_tenant_user_idx").on(t.tenantId, t.userId)],
+);
+
 // A4.T6 (migration 0042): opt-in idempotency for POST /api/actions. `response` starts
 // null at claim time — the row itself is the claim, so a second INSERT for the same
 // (tenantId, idempotencyKey) conflicts and is rejected before the orchestrator runs

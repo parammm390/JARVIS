@@ -33,6 +33,7 @@ import { dailyScorecard } from "./handlers/daily-scorecard";
 import { projectReadModels } from "./handlers/project-read-models";
 import { repairPlanAfterTerminalFailure } from "./handlers/repair-plan-after-terminal-failure";
 import { suggestDailyRoutes } from "./handlers/suggest-daily-routes";
+import { sendPushNotification } from "./handlers/send-push-notification";
 import { scanEwmaReorder } from "./handlers/scan-ewma-reorder";
 import { startScheduler, startGlobalScheduler, type ScheduledScan } from "./scheduler";
 import { startHeartbeat } from "./heartbeat";
@@ -68,6 +69,7 @@ export function createWorker(): JobQueue {
   queue.register("project_read_models", projectReadModels);
   queue.register("repair_plan_after_terminal_failure", repairPlanAfterTerminalFailure);
   queue.register("suggest_daily_routes", suggestDailyRoutes);
+  queue.register("send_push_notification", sendPushNotification);
   queue.register("scan_ewma_reorder", scanEwmaReorder);
   return queue;
 }

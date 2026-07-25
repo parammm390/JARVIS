@@ -65,6 +65,12 @@ export function makeGateNode() {
         .where(and(eq(domainActions.id, state.actionId), eq(domainActions.tenantId, state.tenantId)));
     });
     await appendEpisode(state.tenantId, state.actionId, "gate", {}, { gated: true, summary: state.draft!.summary });
+    await enqueueJob(
+      "send_push_notification",
+      { tenantId: state.tenantId, kind: "approval-needed", actionId: state.actionId, body: state.draft!.summary },
+      `push:approval-needed:${state.actionId}`,
+      state.correlationId,
+    ).catch(() => undefined);
     if (process.env.VAPI_API_KEY) {
       await enqueueJob(
         "voice_confirm_request",

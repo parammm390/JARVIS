@@ -58,6 +58,12 @@ export class GatedExecutor implements Executor {
           .where(and(eq(domainActions.id, action.id), eq(domainActions.tenantId, action.tenantId)));
       });
       await appendEpisode(action.tenantId, action.id, "gate", {}, { gated: true, summary: draft.summary });
+      await enqueueJob(
+        "send_push_notification",
+        { tenantId: action.tenantId, kind: "approval-needed", actionId: action.id, body: draft.summary },
+        `push:approval-needed:${action.id}`,
+        action.correlationId,
+      ).catch(() => undefined); // a push is a nudge, never the gate itself
       // Voice-native confirmation: if Vapi is configured, have it read the draft to the
       // owner and capture the spoken yes/no. The queue UI remains the audit/fallback view.
       if (process.env.VAPI_API_KEY) {

@@ -196,6 +196,13 @@ export const scanWatchdog: JobHandler = async (payload) => {
       extra: finding.detail,
       tags: { watchdog_kind: finding.kind, tenant_id: tenantId },
     });
+    if (severityFor(finding.kind) === "error") {
+      await enqueueJob(
+        "send_push_notification",
+        { tenantId, kind: "watchdog-critical", actionId: finding.domainActionId, body: `Watchdog found ${finding.kind.replaceAll("_", " ")}.` },
+        `push:watchdog-critical:${tenantId}:${finding.kind}:${finding.refId}`,
+      ).catch(() => undefined);
+    }
     if (finding.domainActionId) {
       await appendEpisode(tenantId, finding.domainActionId, "watchdog_finding", {}, { kind: finding.kind, ...finding.detail }).catch(() => undefined);
     }

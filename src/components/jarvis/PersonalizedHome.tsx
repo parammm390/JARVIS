@@ -17,6 +17,7 @@ import { JarvisAuthProvider, useJarvisAuth, type JarvisRole } from "./lib/jarvis
 import { JarvisDataProvider } from "./lib/data-core"
 import { jarvisGet } from "./lib/api"
 import { SinceYouWereAway } from "./SinceYouWereAway"
+import { PushOptIn } from "./PushOptIn"
 import "./jarvis-theme.css"
 
 type Homepage = "bridge" | "map" | "my-day" | null
@@ -25,7 +26,7 @@ const DEFAULT_HOME: Record<JarvisRole, Exclude<Homepage, null>> = { owner: "brid
 const ALLOWED_HOME: Record<JarvisRole, Homepage[]> = { owner: ["bridge"], dispatcher: ["map"], technician: ["my-day"] }
 
 function SceneFrame({ children, accent }: { children: React.ReactNode; accent: string | null }) {
-  return <div className="jarvis-root min-h-screen bg-[var(--j-bg)] text-[color:var(--j-text)]" data-tenant-accent={accent ?? undefined}>{children}</div>
+  return <div className="jarvis-root min-h-screen bg-[var(--j-bg)] text-[color:var(--j-text)]" data-tenant-accent={accent ?? undefined}><div className="fixed right-3 top-3 z-50"><PushOptIn /></div>{children}</div>
 }
 
 function RoleLanding() {
