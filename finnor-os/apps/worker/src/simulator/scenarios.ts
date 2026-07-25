@@ -3,8 +3,10 @@
 // still uses the normal gated runtime. A fault hint is an observation for a scenario
 // report; it never mutates process-wide emulator fault configuration.
 
-export const SCENARIO_PACKS = ["normal_day", "brutal_summer", "payment_crunch", "equipment_recall", "chaos_day"] as const;
-export type ScenarioPack = (typeof SCENARIO_PACKS)[number];
+import { DEALER_ZERO_SCENARIO_PACKS, isDealerZeroScenarioPack, type DealerZeroScenarioPack } from "@finnor/shared-types";
+
+export const SCENARIO_PACKS = DEALER_ZERO_SCENARIO_PACKS;
+export type ScenarioPack = DealerZeroScenarioPack;
 
 export interface ScenarioProfile {
   leadRange: readonly [number, number];
@@ -25,7 +27,7 @@ const PROFILES: Record<ScenarioPack, ScenarioProfile> = {
 };
 
 export function isScenarioPack(value: unknown): value is ScenarioPack {
-  return typeof value === "string" && (SCENARIO_PACKS as readonly string[]).includes(value);
+  return isDealerZeroScenarioPack(value);
 }
 
 export function scenarioProfile(scenario: ScenarioPack = "normal_day"): ScenarioProfile {

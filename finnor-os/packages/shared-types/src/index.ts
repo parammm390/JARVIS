@@ -2,6 +2,8 @@
 // Every subsystem (orchestration, plugins, memory, tools, workers) compiles against these.
 
 export * from "./dealer-zero-fixtures";
+export * from "./dealer-zero-scenarios";
+export * from "./dealer-zero-time-compression";
 
 export type Role = "owner" | "dispatcher" | "technician";
 
