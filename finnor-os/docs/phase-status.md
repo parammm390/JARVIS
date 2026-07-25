@@ -1,5 +1,9 @@
 # JARVIS 95% — Phase Status
 
+## B4 — Dealer Zero 2.0 (2026-07-25)
+
+- [x] Scenario packs, DEMO time compression, deterministic replay, production-read-only shadow comparison, and training bootstrap complete. Hosted [replay run 30166087822](https://github.com/parammm390/JARVIS/actions/runs/30166087822) passed. Staging report `22513b7d-cf78-457f-8c61-69b2a022ad6e` compares 23 production Dealer Zero receipt contracts with zero normalized delta; staging deployment `9aeedb89-194a-4884-ab46-2d664f181e71` healthy. Dealer Zero remains synthetic; production was read only.
+
 ## Maestro A5 — Guardrail Proof
 Status: GATE-GREEN (2026-07-25)
 
