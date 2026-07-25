@@ -1340,3 +1340,7 @@ Status: GATE-GREEN — all 3 tasks done, all 3 EXIT GATE conditions met with rea
 ## 2026-07-25 — B5 Cost Governor + Model Routing
 
 Shipped `5e985fc`: a shared LLM boundary now records provider-reported usage and configuration-derived cost in tenant-scoped `llm_calls`; receipts show linked per-action cost when known; purpose routing sends critic/repair/classification to Haiku; and a daily tenant token cap creates an explicit CONFIG/deferred receipt instead of silently dropping work. Daily readiness and owner digest expose only real priced spend. Focused database-backed proof: `cost-governor.test.ts` 2/2; typecheck clean.
+
+## 2026-07-26 — Phase 21 D7 Scenes Wave 2 + cmd-K
+
+**GATE-GREEN.** Production migration `0057_llm_cost_governor.sql` was applied through the protected admin migration endpoint (`HTTP 200`, `langGraphSchemaReady:true`). An authenticated production Command Bridge run then submitted “Create an invoice for $1 for the Hendersons.” and materialized the normal approval-gated `create invoice` proposal, showing Hendersons, `$1.00`, `critic cleared`, and explicit Approve/Reject/Escalate controls. The proposal was deliberately not approved, so no consequential action executed. `D7-instruct-flow.webm` is the four-second 1633×865 direct capture of Bridge → cmd-K → Instruct → that verified proposal. D3’s existing 41/41 Stage proof remains the design-catalog evidence. Root TypeScript/lint and finnor-os typecheck plus `pool-load.test.ts` 2/2 are clean.
