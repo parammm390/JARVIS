@@ -144,6 +144,7 @@ export function adminDb(): Db {
 export async function withTenant<T>(
   tenantId: string,
   fn: (db: Db) => Promise<T>,
+  userId?: string,
 ): Promise<T> {
   const client = await getPool().connect();
   try {
@@ -151,6 +152,10 @@ export async function withTenant<T>(
     await client.query("SET LOCAL search_path = finnor_os, public");
     await client.query("SET LOCAL statement_timeout = 10000");
     await client.query("SELECT set_config('app.tenant_id', $1, true)", [tenantId]);
+    // D6.T1: only user-scoped tables opt into this second RLS dimension. It stays
+    // transaction-local alongside tenant_id, so it cannot leak through a pooled
+    // connection into a later request.
+    if (userId) await client.query("SELECT set_config('app.user_id', $1, true)", [userId]);
     const context = await client.query<{ tenant_id: string | null }>("SELECT current_setting('app.tenant_id', true) AS tenant_id");
     if (context.rows[0]?.tenant_id !== tenantId) {
       throw new Error("Tenant RLS context was not established on the query connection");

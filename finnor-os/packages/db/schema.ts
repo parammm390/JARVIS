@@ -1309,6 +1309,29 @@ export const tenantIntegrations = pgTable(
   (t) => [unique("tenant_integrations_tenant_capability_idx").on(t.tenantId, t.capability)],
 );
 
+// D6.T1: an authenticated person's cockpit preferences. This is intentionally a
+// separate user-scoped row rather than tenant_settings: a dispatcher and an owner in
+// the same tenant can choose different homes, density, and notification posture.
+// `notificationPreferences` remains an extensible object because B8 owns the concrete
+// provider/subscription fields; quiet hours are first-class so they are validated now.
+export const userPrefs = pgTable(
+  "user_prefs",
+  {
+    userId: uuid("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    homepage: text("homepage", { enum: ["bridge", "map", "my-day"] }),
+    density: text("density", { enum: ["comfortable", "compact"] }).notNull().default("comfortable"),
+    pinnedPanels: jsonb("pinned_panels").notNull().default([]),
+    accent: text("accent"),
+    soundEnabled: boolean("sound_enabled").notNull().default(false),
+    notificationPreferences: jsonb("notification_preferences").notNull().default({}),
+    quietHoursStart: text("quiet_hours_start"),
+    quietHoursEnd: text("quiet_hours_end"),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("user_prefs_tenant_idx").on(t.tenantId)],
+);
+
 // A4.T6 (migration 0042): opt-in idempotency for POST /api/actions. `response` starts
 // null at claim time — the row itself is the claim, so a second INSERT for the same
 // (tenantId, idempotencyKey) conflicts and is rejected before the orchestrator runs
