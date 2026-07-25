@@ -10,6 +10,8 @@ Convention: same as `finnor-os/docs/phase-status.md` (P1/P2 style) — a box is 
 
 ## Session Log
 
+- 2026-07-25 · phase 19 (D6) · completed T1–T4: user-scoped RLS-backed preferences CRUD, role-first scenes with token-safe accents, browser-local frecency/prefetch/ready-next chips, and a real last-seen delta digest with skippable FLOW-23 reveal; commits `0f5d287`, `65aaa50`, `613e191`, `e7886fd` · next: B8.T1 then D6.T5 push opt-in/nudge exact-card proof; capture authenticated owner/dispatcher/technician recordings for D6 exit gate · blockers: B8 push infrastructure is not started; no authenticated browser/device session is available for recordings.
+
 - 2026-07-25 · phase 18 (B4) · **COMPLETE — 100%.** T3 hosted replay run 30166087822 green; T4 production-read-only→staging report `22513b7d-cf78-457f-8c61-69b2a022ad6e` passed with 23 contracts/zero normalized delta; staging deployment `9aeedb89` healthy after removing stale `AUTH_DEV_BYPASS` · next: phase 18 complete · blockers: none.
 
 - 2026-07-25 · phase 18 (B4) · completed B4.T5 training bootstrap and implemented/proved local B4.T3 replay recordings + normalized report core + fail-closed workflow and B4.T4 persisted shadow reports; focused B4 verification 19/19 plus typecheck green; pushed commits `5232d0d`, `46d4db5`, `940fd83` · next: create actual baseline/candidate staging receipt artifacts, run the GitHub replay gate; configure a production read-only Dealer Zero intake mirror and observe a staging candidate for T4 · blockers: no real staging artifact pair or production mirror exists, so T3/T4 and the external B4 exit-gate shadow proof remain honestly open.
@@ -387,13 +389,13 @@ Status: IMPLEMENTED — exit-gate recording/screenshot still open
 EXIT GATE: implementation is present, but **OPEN honestly** — no authenticated dispatcher/technician browser session was available to capture the required map-with-km-saved and phone-viewport proofs. No screenshot or live route is claimed.
 
 ## D6 — Personalization Engine
-Status: NOT STARTED
-- [ ] D6.T1 — user_prefs migration + CRUD
-- [ ] D6.T2 — role scenes + tenant accent theming
-- [ ] D6.T3 — frecency pre-staging + ticker-chip collapse
-- [ ] D6.T4 — since-you-were-away FLOW-23 + brand-voiced greeting
-- [ ] D6.T5 — push nudges deep-linking (B8)
-EXIT GATE: two-role recordings · real-delta digest · push→exact-card proof
+Status: IMPLEMENTATION COMPLETE EXCEPT D6.T5, which is correctly blocked on the not-yet-started B8 push infrastructure. Exit-gate recordings/push proof remain open; none are claimed without an authenticated browser/device session.
+- [x] D6.T1 — user_prefs migration + CRUD (evidence: commit `0f5d287`; migration `0054_user_prefs.sql` adds user-scoped homepage/density/pinned-panels/accent/sound/notification-preferences/quiet-hours storage. Its RLS policy requires both tenant context and the transaction-local verified `app.user_id`; `withTenant()` accepts that optional user context only for such routes. `GET`/`PUT`/`DELETE /api/user-prefs` return honest defaults before first save, validate paired 24-hour quiet hours, and never accept a caller-supplied user id. `tests/integration/user-prefs-route.test.ts` 6/6 and finnor-os typecheck passed.)
+- [x] D6.T2 — role scenes + tenant accent theming (evidence: commit `65aaa50`; authenticated `/jarvis` users land by backend-resolved role: owner → Bridge with the real Orb and CertificationStatus, dispatcher → DispatchMap + ApprovalCockpit, technician → MyDay. A saved homepage may override only to a scene allowed for that role; signed-out Command Center behavior stays intact. Accent is an explicit allowlist (`teal`/`violet`/`amber`) applied through existing JARVIS CSS tokens, never interpolated arbitrary CSS. Root `tsc --noEmit`, lint, and production build passed.)
+- [x] D6.T3 — frecency pre-staging + ticker-chip collapse (evidence: commit `613e191`; `src/components/jarvis/lib/frecency.ts` keeps only browser-local actual panel opens, visit counts, and timestamps, ranks with a deterministic seven-day decay, and never sends a behavioral profile to the server. Bridge prefetches the actual authenticated endpoint for the likely-first scene; never-opened scenes render as compact “Ready next” chips. `tests/unit/frecency.test.ts` 2/2, root `tsc --noEmit`, and lint passed.)
+- [x] D6.T4 — since-you-were-away FLOW-23 + brand-voiced greeting (evidence: commit `e7886fd`; migration `0055_user_prefs_last_seen.sql` adds the per-user marker. `GET /api/user-prefs/digest` reads real tenant-scoped newly created actions and current pending count since that marker, explicitly reports first visits/no deltas, and advances the marker only after the successful read. `SinceYouWereAway.tsx` uses the existing reduced-motion-safe DecryptText reveal, has a real Skip control, and deep-links its top items to the approval context. `user-prefs-route.test.ts` 7/7 plus finnor-os typecheck passed; root `tsc --noEmit`, lint, and production build passed with the pre-existing Sentry ESM warning.)
+- [~] D6.T5 — ⏸ BLOCKED ON B8: push nudges deep-linking requires B8.T1’s service worker, `push_subscriptions` persistence, opt-in, and worker sender. B8 is `NOT STARTED`; no push subscription, notification, or device proof exists, so none was fabricated.
+EXIT GATE: two-role recordings · real-delta digest · push→exact-card proof — **OPEN honestly.** The real-delta endpoint/UI implementation is verified locally, but the required authenticated role recordings and physical-device push proof need a signed-in dispatcher/technician session and B8.T1 respectively.
 
 ## D7 — Scenes Wave 2 + cmd-K
 Status: NOT STARTED
