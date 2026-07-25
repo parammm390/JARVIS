@@ -146,3 +146,12 @@ ever run, so this is a clean, immediate revert with no state to unwind.
 
 The rehearsal is complete only when all steps above have an observed provider probe.
 It must never be “proved” by printing or comparing a secret value.
+
+### B7 observed rehearsal — 2026-07-25
+
+Vercel Preview automation-bypass credential rotation was rehearsed against the isolated
+API Preview deployment. A new provider-side bypass credential was created, the GitHub
+Actions K6 secret was cut over, and an authenticated `GET /api/actions/pending` probe
+returned HTTP 200. The GitHub secret was then restored to the prior credential, the
+new rehearsal credential was revoked provider-side, and the same probe returned HTTP
+200 again. No credential value was written to source, logs, or this runbook.
