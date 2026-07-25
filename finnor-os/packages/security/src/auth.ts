@@ -48,7 +48,7 @@ export async function resolveTenantContextByEmail(email: string): Promise<Identi
   // only this already Supabase-verified email's mapping.
   const { rows } = await getPool().query(
     `SELECT user_id AS id, tenant_id, user_role AS role
-     FROM resolve_authenticated_identity($1)`,
+     FROM finnor_os.resolve_authenticated_identity($1)`,
     [email],
   );
   const row = rows[0];
