@@ -8,13 +8,13 @@ import { connectGhl, connectVapi, callMcpTool } from "./mcp-client";
 import { PLACEHOLDER_NEEDS_REAL_VALUE } from "@finnor/shared-types";
 import { registerSandboxComms } from "./sandbox";
 import { sendEmail } from "./email";
-import { sendResendEmail } from "./resend";
 import { geocodeAddress, distanceMiles } from "./maps";
 import { placeVapiCall } from "./vapi-rest";
 import { exaSearch } from "./exa";
 import { getAdPerformance, adsProviderStatus } from "./ads";
 import { syncInvoiceToQuickBooks } from "./quickbooks";
 import { launchAdCampaign, type CampaignLaunchInput } from "./ads-write";
+import { enqueueJob } from "@finnor/db";
 
 const ghlBacked = (name: string, description: string, mcpTool: string, inputSchema: z.ZodTypeAny, piiAllowlist?: readonly string[]): Tool => ({
   name,
@@ -190,13 +190,14 @@ function registerUniversalTools(registry: ToolRegistry): void {
     inputSchema: z.object({ tenantId: z.string().uuid(), to: z.string().email(), subject: z.string().min(1), html: z.string().min(1) }).passthrough(),
     piiAllowlist: ["to", "subject", "html"],
     async run(input) {
-      const result = await sendResendEmail({
-        tenantId: String(input.tenantId),
-        to: String(input.to),
-        subject: String(input.subject),
-        html: String(input.html),
+      // Provider failures must use the worker's real bounded retry/dead-letter
+      // lifecycle, not turn this synchronous tool call into a dropped notification.
+      // Allowlisting is still enforced inside the adapter when the job runs.
+      await enqueueJob("send_resend_email", {
+        tenantId: String(input.tenantId), to: String(input.to),
+        subject: String(input.subject), html: String(input.html),
       });
-      return { ...result };
+      return { queued: true, delivery: "pending" };
     },
   });
   registry.register({

@@ -36,6 +36,7 @@ import { suggestDailyRoutes } from "./handlers/suggest-daily-routes";
 import { sendPushNotification } from "./handlers/send-push-notification";
 import { scanEwmaReorder } from "./handlers/scan-ewma-reorder";
 import { purgeRetention } from "./handlers/purge-retention";
+import { sendResendEmailJob } from "./handlers/send-resend-email";
 import { startScheduler, startGlobalScheduler, type ScheduledScan } from "./scheduler";
 import { startHeartbeat } from "./heartbeat";
 import { startSseServer } from "./sse-server";
@@ -73,6 +74,7 @@ export function createWorker(): JobQueue {
   queue.register("send_push_notification", sendPushNotification);
   queue.register("scan_ewma_reorder", scanEwmaReorder);
   queue.register("purge_retention", purgeRetention);
+  queue.register("send_resend_email", sendResendEmailJob);
   return queue;
 }
 
