@@ -212,6 +212,14 @@ export async function embedManyCached(
   const client = await getPool().connect();
   let cached: Array<{ content_hash: string; embedding: unknown }>;
   try {
+    // This raw path deliberately bypasses Drizzle's vector mapper, but it must not
+    // bypass the transaction boundary that makes the tenant GUC safe for a
+    // transaction-mode pooler. `set_config(..., true)` outside BEGIN is scoped only
+    // to that one implicit statement, so the following cache read would otherwise
+    // have no RLS context on a reused PgBouncer backend.
+    await client.query("BEGIN");
+    await client.query("SET LOCAL search_path = finnor_os, public");
+    await client.query("SET LOCAL statement_timeout = 10000");
     await client.query("SELECT set_config('app.tenant_id', $1, true)", [tenantId]);
     const { rows } = await client.query(
       `SELECT content_hash, embedding FROM embedding_cache
@@ -219,6 +227,10 @@ export async function embedManyCached(
       [tenantId, embedder.name, hashes],
     );
     cached = rows;
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw err;
   } finally {
     client.release();
   }
@@ -295,6 +307,8 @@ export async function querySemantic(
   const client = await getPool().connect();
   try {
     await client.query("BEGIN");
+    await client.query("SET LOCAL search_path = finnor_os, public");
+    await client.query("SET LOCAL statement_timeout = 10000");
     await client.query("SELECT set_config('app.tenant_id', $1, true)", [tenantId]);
     const { rows: ext } = await client.query(
       `SELECT 1 FROM pg_extension WHERE extname = 'vector'`,

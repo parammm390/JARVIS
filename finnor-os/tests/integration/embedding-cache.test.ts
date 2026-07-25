@@ -6,10 +6,19 @@ import { describe, it, expect, beforeAll } from "vitest";
 import pg from "pg";
 import { migrate } from "../../packages/db/migrate";
 import { seed, SEED_TENANT_ID } from "../../packages/db/seed";
+import { closePool } from "@finnor/db";
 import { embedManyCached, EMBEDDING_DIMENSIONS, type EmbeddingProvider } from "@finnor/memory";
 
 const SUPER_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
 const TENANT_B = "00000000-0000-4000-8000-000000000002";
+
+function localAppUrl(url: string): string | null {
+  const parsed = new URL(url);
+  if (parsed.hostname !== "localhost" && parsed.hostname !== "127.0.0.1") return null;
+  parsed.username = "finnor_app";
+  parsed.password = "finnor_app";
+  return parsed.toString();
+}
 
 async function dbUp(): Promise<boolean> {
   const c = new pg.Client({ connectionString: SUPER_URL, connectionTimeoutMillis: 2000 });
@@ -22,6 +31,20 @@ async function dbUp(): Promise<boolean> {
   }
 }
 const available = await dbUp();
+const APP_URL = localAppUrl(SUPER_URL);
+
+async function appRoleUp(): Promise<boolean> {
+  if (!APP_URL) return false;
+  const c = new pg.Client({ connectionString: APP_URL, connectionTimeoutMillis: 2000 });
+  try {
+    await c.connect();
+    await c.end();
+    return true;
+  } catch {
+    return false;
+  }
+}
+const appRoleAvailable = await appRoleUp();
 
 /** Counts real embed calls so the test can assert cache hits never reach the "provider". */
 class CountingEmbedder implements EmbeddingProvider {
@@ -102,5 +125,22 @@ describe.skipIf(!available)("embedding cache (§5.1)", () => {
     const vecs = await embedManyCached(SEED_TENANT_ID, ["mixed batch alpha", "mixed batch beta"], embedder);
     expect(embedder.calls).toBe(2); // alpha was cached, only beta triggered a real call
     expect(vecs).toHaveLength(2);
+  });
+
+  it.skipIf(!appRoleAvailable)("uses a transaction-local tenant setting on the restricted app connection", async () => {
+    // This is the transaction-pooler regression proof.  The cache lookup bypasses
+    // Drizzle to handle both pgvector and jsonb rows, so it must establish the same
+    // transaction-local RLS context as withTenant() before reading.
+    const embedder = new CountingEmbedder("transaction-pooler-rls-test");
+    await closePool();
+    process.env.DATABASE_URL = APP_URL!;
+    try {
+      await embedManyCached(SEED_TENANT_ID, ["transaction pooler tenant context"], embedder);
+      await embedManyCached(SEED_TENANT_ID, ["transaction pooler tenant context"], embedder);
+      expect(embedder.calls).toBe(1);
+    } finally {
+      await closePool();
+      process.env.DATABASE_URL = SUPER_URL;
+    }
   });
 });
