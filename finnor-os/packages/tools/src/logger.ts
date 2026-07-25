@@ -6,6 +6,16 @@
 // just because Axiom isn't wired up.
 
 import pino from "pino";
+import { redactStructured, redactText } from "@finnor/security";
+
+const FALLBACK_BUFFER_LIMIT = 200;
+const fallbackBuffer: unknown[][] = [];
+export function recentFallbackLogs(): readonly unknown[][] { return fallbackBuffer; }
+export function clearFallbackLogsForTesting(): void { fallbackBuffer.length = 0; }
+function recordFallback(args: unknown[]): void {
+  fallbackBuffer.push(args.map((arg) => typeof arg === "string" ? redactText(arg).value : redactStructured(arg)));
+  if (fallbackBuffer.length > FALLBACK_BUFFER_LIMIT) fallbackBuffer.splice(0, fallbackBuffer.length - FALLBACK_BUFFER_LIMIT);
+}
 
 /**
  * Structured PII fields that must never leave the process through Pino/Axiom.
@@ -25,6 +35,7 @@ export const PII_LOG_REDACT_PATHS = [
 const loggerOptions = (level: string): pino.LoggerOptions => ({
   level,
   redact: { paths: [...PII_LOG_REDACT_PATHS], censor: "[REDACTED]" },
+  hooks: { logMethod(args, method) { recordFallback(args); return method.apply(this, args); } },
 });
 
 function buildTargets(): pino.TransportTargetOptions[] {
@@ -46,6 +57,9 @@ function buildTargets(): pino.TransportTargetOptions[] {
       level,
     });
   } else if (!(axiomToken && axiomDataset)) {
+    targets.push({ target: "pino/file", options: { destination: 1 }, level });
+  }
+  if (process.env.NODE_ENV === "production" && axiomToken && axiomDataset) {
     targets.push({ target: "pino/file", options: { destination: 1 }, level });
   }
   return targets;
