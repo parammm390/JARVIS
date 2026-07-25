@@ -1062,6 +1062,33 @@ export const decisionReceipts = pgTable(
   ],
 );
 
+// B4.T3: immutable-ish synthetic day captures plus candidate receipt comparisons.
+// Tenant-scoped despite Dealer Zero currently being the only writer: a future training
+// sandbox must never be able to read its source tenant's replay history.
+export const dealerZeroReplayRecordings = pgTable(
+  "dealer_zero_replay_recordings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    dateSeed: date("date_seed").notNull(),
+    scenario: text("scenario").notNull(),
+    eventStream: jsonb("event_stream").notNull(),
+    receiptSnapshot: jsonb("receipt_snapshot").notNull().default([]),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique("dealer_zero_replay_recordings_tenant_date_scenario_idx").on(t.tenantId, t.dateSeed, t.scenario)],
+);
+export const dealerZeroReplayReports = pgTable("dealer_zero_replay_reports", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+  recordingId: uuid("recording_id").notNull().references(() => dealerZeroReplayRecordings.id),
+  candidateLabel: text("candidate_label").notNull(),
+  candidateSnapshot: jsonb("candidate_snapshot").notNull(),
+  diff: jsonb("diff").notNull(),
+  passed: boolean("passed").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 // Phase 2 (§2.3): terminal outbox/step failures land here instead of silently vanishing
 // into a generic reconciliation_case — a queryable, replayable row an owner can act on.
 // Distinct from jobs.status='dead_letter' (apps/worker/src/queue.ts), which is the

@@ -14,7 +14,7 @@
 import { withTenant, tenantSettings, households, technicians, maintenanceAgreements, invoices, serviceVisits, communicationsLog } from "@finnor/db";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { createLead } from "@finnor/data-platform";
-import { FinnorOrchestrator } from "@finnor/orchestration";
+import { FinnorOrchestrator, recordDealerZeroDay } from "@finnor/orchestration";
 import { planDailyEvents, type DailySimulationContext } from "../simulator/plan";
 import { isScenarioPack, type ScenarioPack } from "../simulator/scenarios";
 
@@ -65,6 +65,7 @@ export async function runSimulatorTick(tenantId: string, dateSeed: string, scena
   if (!settings?.simulatorEnabled) return { ran: false };
 
   orchestrator ??= new FinnorOrchestrator();
+  const startedAt = new Date();
   const ctx = await loadContext(tenantId);
   const plan = planDailyEvents(dateSeed, ctx, scenario);
 
@@ -148,6 +149,7 @@ export async function runSimulatorTick(tenantId: string, dateSeed: string, scena
       { source: "dealer_zero_simulator" },
     );
   }
+  await recordDealerZeroDay(tenantId, dateSeed, scenario, plan, startedAt);
 
   return {
     ran: true,
