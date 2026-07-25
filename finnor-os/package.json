@@ -30,6 +30,8 @@
     "db:bundle": "tsx scripts/bundle-migrations.ts",
     "db:create-user": "tsx scripts/create-user.ts",
     "policy:lint": "tsx scripts/lint-policy-coverage.ts",
+    "authz:matrix": "tsx scripts/generate-authz-matrix.ts",
+    "authz:matrix:check": "tsx scripts/generate-authz-matrix.ts --check",
     "setup:langgraph": "tsx packages/orchestration/src/graph/setup.ts",
     "openapi": "tsx scripts/generate-openapi.ts"
   },
