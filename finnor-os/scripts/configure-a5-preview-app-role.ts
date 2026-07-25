@@ -37,6 +37,8 @@ async function main(): Promise<void> {
           CREATE ROLE finnor_preview_app LOGIN NOSUPERUSER NOBYPASSRLS INHERIT;
         END IF;
         EXECUTE format('ALTER ROLE finnor_preview_app LOGIN NOSUPERUSER NOBYPASSRLS INHERIT PASSWORD %L', p);
+        ALTER ROLE finnor_preview_app SET search_path = finnor_os, public;
+        ALTER ROLE finnor_preview_app SET statement_timeout = '10s';
       END $role$;`);
     await admin.query("GRANT finnor_app TO finnor_preview_app");
     await admin.query("SELECT set_config($1, $2, false)", ["app.a5_preview_role_password", ""]);

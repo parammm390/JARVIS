@@ -109,10 +109,10 @@ export function getPool(): pg.Pool {
       idleTimeoutMillis: unpooledLocal ? undefined : 8_000,
       connectionTimeoutMillis: unpooledLocal ? undefined : 5_000,
     });
-    // Do not issue client.query() from the pool's connect event. It races the first
-    // caller's BEGIN/set_config sequence in serverless runtimes (and Node now warns
-    // about concurrent client queries). Tenant paths set these values synchronously
-    // inside their transaction below; the role default covers unscoped admin reads.
+    // Do not issue client.query() from the pool's connect event: node-postgres does
+    // not await it, so a first caller can race that setup query. Restricted runtime
+    // roles receive their default search_path when provisioned; tenant paths set their
+    // own search_path and timeout synchronously inside the transaction below.
     // node-postgres's own docs: an idle client's background 'error' event (e.g. the
     // pooler or network dropping a connection that's just sitting in the pool, not
     // mid-query) has no other listener and crashes the ENTIRE process if unhandled --
