@@ -2,10 +2,10 @@
 // This module is the single entry point the API, webhooks, and workers all use.
 
 import type { DomainAction, DomainPolicy, TenantContext, ExecutionResult } from "@finnor/shared-types";
-import { withTenant, domainActions, domainPolicies, actionLog, decisionReceipts, planRepairs, enqueueJob } from "@finnor/db";
+import { withTenant, domainActions, domainPolicies, domainPolicyRevisions, actionLog, decisionReceipts, planRepairs, enqueueJob } from "@finnor/db";
 import { buildMemorySnapshot, appendEpisode, appendShortTerm, mirrorTurnToZep } from "@finnor/memory";
 import { createDefaultRegistry, type ToolRegistry } from "@finnor/tools";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, lte } from "drizzle-orm";
 import { LLMPlanner, type Planner } from "./planner";
 import { GatedExecutor, type Executor } from "./executor";
 import { OutcomeReflection, type Reflection } from "./reflection";
@@ -37,6 +37,7 @@ export * from "./graph/state";
 export * from "./plan-dag";
 export * from "./planning-health";
 export * from "./planner-memory";
+export * from "./policy-simulation";
 
 export interface Orchestrator {
   handleInstruction(
@@ -203,7 +204,7 @@ export class FinnorOrchestrator implements Orchestrator {
       tenantId: row.tenantId,
       actionType: row.actionType,
       payload: row.payload as Record<string, unknown>,
-      policyId: row.policyId,
+      policyId: row.policyId, policyVersion: row.policyVersion,
       status: row.status,
       createdAt: row.createdAt.toISOString(),
     };
@@ -219,8 +220,9 @@ export class FinnorOrchestrator implements Orchestrator {
     // traffic, not an edge case. version 0 is defaultPolicy()'s sentinel for "no real
     // row exists" (index.ts:58) — only persist a real, stored policy's id, never that.
     if (policy.version && policy.version > 0 && policy.id !== action.policyId) {
-      await withTenant(tenantId, (db) => db.update(domainActions).set({ policyId: policy.id }).where(eq(domainActions.id, action.id)));
+      await withTenant(tenantId, (db) => db.update(domainActions).set({ policyId: policy.id, policyVersion: policy.version }).where(eq(domainActions.id, action.id)));
       action.policyId = policy.id;
+      action.policyVersion = policy.version;
     }
     const result = await this.executor.execute(action, policy);
     await this.reflectWithRetry(action, policy, result);
@@ -274,7 +276,7 @@ export class FinnorOrchestrator implements Orchestrator {
       tenantId: claimed.tenantId,
       actionType: claimed.actionType,
       payload: claimed.payload as Record<string, unknown>,
-      policyId: claimed.policyId,
+      policyId: claimed.policyId, policyVersion: claimed.policyVersion,
       status: claimed.status,
       createdAt: claimed.createdAt.toISOString(),
       approvedBy,
@@ -376,7 +378,7 @@ export class FinnorOrchestrator implements Orchestrator {
   private policyCache = new Map<string, { at: number; policy: DomainPolicy }>();
 
   async loadPolicy(action: DomainAction): Promise<DomainPolicy> {
-    const cacheKey = `${action.tenantId}:${action.policyId ?? action.actionType}`;
+    const cacheKey = `${action.tenantId}:${action.policyId ?? action.actionType}:${action.policyVersion ?? "current"}`;
     const cached = this.policyCache.get(cacheKey);
     if (cached && Date.now() - cached.at < 30_000) return cached.policy;
     const row = await withTenant(action.tenantId, async (db) => {
@@ -386,14 +388,10 @@ export class FinnorOrchestrator implements Orchestrator {
       // unqualified `.limit(1)` by actionType alone can non-deterministically pick
       // up another tenant's policy row for the same action_type). Same convention
       // scan-low-inventory.ts and friends already follow.
-      const [r] = action.policyId
-        ? await db.select().from(domainPolicies).where(and(eq(domainPolicies.id, action.policyId), eq(domainPolicies.tenantId, action.tenantId)))
-        : await db
-            .select()
-            .from(domainPolicies)
-            .where(and(eq(domainPolicies.actionType, action.actionType), eq(domainPolicies.tenantId, action.tenantId)))
-            .limit(1);
-      return r;
+      const [revision] = action.policyId
+        ? await db.select().from(domainPolicyRevisions).where(and(eq(domainPolicyRevisions.policyId, action.policyId), eq(domainPolicyRevisions.tenantId, action.tenantId), action.policyVersion ? eq(domainPolicyRevisions.version, action.policyVersion) : lte(domainPolicyRevisions.effectiveFrom, new Date()))).orderBy(desc(domainPolicyRevisions.effectiveFrom)).limit(1)
+        : await db.select().from(domainPolicyRevisions).where(and(eq(domainPolicyRevisions.actionType, action.actionType), eq(domainPolicyRevisions.tenantId, action.tenantId), lte(domainPolicyRevisions.effectiveFrom, new Date()))).orderBy(desc(domainPolicyRevisions.effectiveFrom)).limit(1);
+      return revision;
     });
     const policy: DomainPolicy = !row
       ? defaultPolicy(action.tenantId, action.actionType)
@@ -431,6 +429,7 @@ export class FinnorOrchestrator implements Orchestrator {
     const fromStatuses = decision === "escalate" ? (["pending"] as const) : (["pending", "needs_human_review"] as const);
     const toStatus = decision === "approve" ? "approved" : decision === "reject" ? "rejected" : "needs_human_review";
     const transition = await withTenant(tenantId, async (db) => {
+      const [before] = await db.select().from(domainActions).where(and(eq(domainActions.id, actionId), eq(domainActions.tenantId, tenantId)));
       const [claimed] = await db
         .update(domainActions)
         .set({ status: toStatus })
@@ -446,6 +445,19 @@ export class FinnorOrchestrator implements Orchestrator {
         const [current] = await db.select().from(domainActions).where(and(eq(domainActions.id, actionId), eq(domainActions.tenantId, tenantId)));
         return { claimed: null, current };
       }
+      const [currentRevision] = decision === "approve" && claimed.policyId
+        ? await db.select().from(domainPolicyRevisions).where(and(eq(domainPolicyRevisions.policyId, claimed.policyId), eq(domainPolicyRevisions.tenantId, tenantId), lte(domainPolicyRevisions.effectiveFrom, new Date()))).orderBy(desc(domainPolicyRevisions.effectiveFrom)).limit(1)
+        : [];
+      const [draftRevision] = decision === "approve" && before?.policyId && before.policyVersion
+        ? await db.select().from(domainPolicyRevisions).where(and(eq(domainPolicyRevisions.policyId, before.policyId), eq(domainPolicyRevisions.version, before.policyVersion))).limit(1)
+        : [];
+      const policyDrift = draftRevision && currentRevision && draftRevision.version !== currentRevision.version
+        ? { draftedVersion: draftRevision.version, approvedVersion: currentRevision.version, changed: {
+            policy: JSON.stringify(draftRevision.policy) !== JSON.stringify(currentRevision.policy),
+            requiresConfirmation: draftRevision.requiresConfirmation !== currentRevision.requiresConfirmation,
+            confirmationTemplate: draftRevision.confirmationTemplate !== currentRevision.confirmationTemplate,
+          } }
+        : null;
       await db.insert(actionLog).values({
         tenantId,
         domainActionId: actionId,
@@ -453,7 +465,7 @@ export class FinnorOrchestrator implements Orchestrator {
         input: { by: decidedBy, ...(opts?.role ? { role: opts.role } : {}) },
         output: {
           channel: decidedBy.startsWith("voice:") ? "voice" : "console",
-          ...(decision === "approve" ? { note: opts?.note ?? null } : decision === "reject" ? { reason: opts?.reason ?? null } : { note: opts?.note ?? null }),
+          ...(decision === "approve" ? { note: opts?.note ?? null, policyDrift } : decision === "reject" ? { reason: opts?.reason ?? null } : { note: opts?.note ?? null }),
         },
       });
       return { claimed, current: claimed };

@@ -11,13 +11,15 @@ aspirational.
 npx tsx scripts/provision-tenant.ts --name="Acme Water Co" --ownerEmail=owner@acme.com [--timezone=America/Chicago] [--reviewLinkUrl=https://g.page/r/...]
 ```
 
-This one command (`scripts/provision-tenant.ts`, built this phase) does three real
+This one command (`scripts/provision-tenant.ts`, extended in B6) does four real
 things, each already independently tested elsewhere in this codebase:
 1. Creates the tenant row.
 2. Seeds all 42 action-type policies + the price book via `seedTenantPolicies()` —
    the exact function `scripts/seed-tenant-policies.ts`'s own CLI calls (used for
    real to provision both the primary tenant and Dealer Zero in Phase 3).
-3. Creates the owner's real Supabase login via `scripts/create-user.ts` (used for
+3. Creates all nine integration checklist rows (native CRM/scheduling/inventory/documents;
+   explicitly labeled emulator rows for unconfigured external providers).
+4. Creates the owner's real Supabase login via `scripts/create-user.ts` (used for
    real to create the actual production owner account in Phase 1).
 
 If `--reviewLinkUrl` is omitted, `create_review_request`'s policy is left as

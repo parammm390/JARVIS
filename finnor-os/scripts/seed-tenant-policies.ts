@@ -33,7 +33,7 @@ interface PolicyRow {
 // order as the matrix's sections. `reviewLinkUrl` is threaded in below, not hardcoded
 // here, since it's the one genuinely tenant-specific field (see the matrix's
 // "Owner-blocked field" section).
-function policyRows(reviewLinkUrl: string | null): PolicyRow[] {
+export function policyRows(reviewLinkUrl: string | null): PolicyRow[] {
   return [
     { actionType: "schedule_water_test", policy: { service_radius_miles: 25, default_duration_minutes: 45, allowed_windows: ["09:00-12:00", "13:00-17:00"] }, requiresConfirmation: true, confirmationTemplate: "Schedule a water test at {{address}} on {{scheduled_at}} with {{technician}}. Approve?" },
     { actionType: "renew_maintenance_agreement", policy: { renewal_window_days: 30, price_usd: 249, cadence_options: ["annual", "semi_annual"] }, requiresConfirmation: true, confirmationTemplate: "Send a renewal offer to {{household}} for their {{cadence}} maintenance agreement. Approve?" },

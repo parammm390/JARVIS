@@ -82,6 +82,8 @@ export const UpsertPolicySchema = z.object({
   // Server-side upsert logic bumps this on a real config change (see
   // scripts/seed-tenant-policies.ts) — a caller may omit it and let the server decide.
   version: z.number().int().positive().optional(),
+  // A future effective date stages a revision; past dates are rejected by the route.
+  effectiveFrom: z.string().datetime().optional(),
 });
 
 export const AuditQuerySchema = z.object({

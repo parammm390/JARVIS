@@ -2,7 +2,7 @@
 // match the caller's own tenant — cross-tenant policy access is a hard 403 before
 // RLS would return empty anyway (defense in depth).
 
-import { withTenant, domainPolicies } from "@finnor/db";
+import { withTenant, domainPolicies, domainPolicyRevisions } from "@finnor/db";
 import { UpsertPolicySchema } from "@finnor/policy-schema";
 import { and, eq } from "drizzle-orm";
 import { requireContext, errorResponse } from "../../../../../lib/auth";
@@ -46,12 +46,29 @@ export async function PUT(req: Request, { params }: Params): Promise<Response> {
         { status: 400 },
       );
     }
+    const effectiveFrom = body.data.effectiveFrom ? new Date(body.data.effectiveFrom) : new Date();
+    if (Number.isNaN(effectiveFrom.valueOf()) || effectiveFrom < new Date(Date.now() - 1_000)) {
+      return Response.json({ error: "effectiveFrom must be now or in the future" }, { status: 400 });
+    }
     const row = await withTenant(ctx.tenantId, async (db) => {
       const [existing] = await db
         .select()
         .from(domainPolicies)
         .where(and(eq(domainPolicies.tenantId, ctx.tenantId), eq(domainPolicies.actionType, actionType)));
       if (existing) {
+        // A scheduled change must not replace the live row early. The revision is
+        // selected by effective time at planning/execution; the mutable row remains
+        // the current fast path until an immediate edit supersedes it.
+        if (effectiveFrom > new Date()) {
+          const version = existing.version + 1;
+          const [scheduled] = await db.insert(domainPolicyRevisions).values({
+            tenantId: ctx.tenantId, policyId: existing.id, actionType, version,
+            policy: body.data.policy, requiresConfirmation: body.data.requiresConfirmation,
+            confirmationTemplate: body.data.confirmationTemplate ?? null, modelProvider: body.data.modelProvider ?? null,
+            confirmationTimeoutHours: body.data.confirmationTimeoutHours ?? null, effectiveFrom,
+          }).returning();
+          return scheduled!;
+        }
         const [updated] = await db
           .update(domainPolicies)
           .set({
@@ -64,9 +81,16 @@ export async function PUT(req: Request, { params }: Params): Promise<Response> {
             // client can't be trusted to increment its own audit trail), always +1
             // from whatever's actually stored, regardless of what body.data.version says.
             version: existing.version + 1,
+            effectiveFrom,
           })
           .where(eq(domainPolicies.id, existing.id))
           .returning();
+        await db.insert(domainPolicyRevisions).values({
+          tenantId: ctx.tenantId, policyId: updated!.id, actionType, version: updated!.version,
+          policy: updated!.policy, requiresConfirmation: updated!.requiresConfirmation,
+          confirmationTemplate: updated!.confirmationTemplate, modelProvider: updated!.modelProvider,
+          confirmationTimeoutHours: updated!.confirmationTimeoutHours, effectiveFrom,
+        });
         return updated!;
       }
       const [created] = await db
@@ -79,9 +103,16 @@ export async function PUT(req: Request, { params }: Params): Promise<Response> {
           confirmationTemplate: body.data.confirmationTemplate ?? null,
           modelProvider: body.data.modelProvider ?? null,
           confirmationTimeoutHours: body.data.confirmationTimeoutHours ?? null,
+          effectiveFrom,
           // version omitted — column default (1) applies to a genuinely first-ever row.
         })
         .returning();
+      await db.insert(domainPolicyRevisions).values({
+        tenantId: ctx.tenantId, policyId: created!.id, actionType, version: created!.version,
+        policy: created!.policy, requiresConfirmation: created!.requiresConfirmation,
+        confirmationTemplate: created!.confirmationTemplate, modelProvider: created!.modelProvider,
+        confirmationTimeoutHours: created!.confirmationTimeoutHours, effectiveFrom,
+      });
       return created!;
     });
     return Response.json({ policy: row });

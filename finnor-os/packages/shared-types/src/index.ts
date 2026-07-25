@@ -46,6 +46,7 @@ export interface DomainAction {
   actionType: string;
   payload: Record<string, unknown>;
   policyId: string | null;
+  policyVersion?: number | null;
   status: DomainActionStatus;
   createdAt: string;
   /** Why the LLM planner chose this action_type/payload — optional (only the LLM

@@ -2,8 +2,8 @@
 // Only registered action_types are ever planned; unknown intents surface as such.
 
 import type { TenantContext, MemorySnapshot, DomainAction, DomainPolicy } from "@finnor/shared-types";
-import { withTenant, domainActions, domainPolicies } from "@finnor/db";
-import { and, eq, inArray } from "drizzle-orm";
+import { withTenant, domainActions, domainPolicyRevisions } from "@finnor/db";
+import { and, desc, eq, inArray, lte } from "drizzle-orm";
 import type { LLMProvider } from "./llm";
 import { resolveProvider } from "./llm";
 import type { PluginRegistry } from "./plugin-registry";
@@ -153,14 +153,17 @@ export class LLMPlanner implements Planner {
     const policyByType = await withTenant(tenantContext.tenantId, async (db) => {
       const rows = await db
         .select()
-        .from(domainPolicies)
+        .from(domainPolicyRevisions)
         .where(
           and(
-            eq(domainPolicies.tenantId, tenantContext.tenantId),
-            inArray(domainPolicies.actionType, [...new Set(valid.map((a) => a.action_type))]),
+            eq(domainPolicyRevisions.tenantId, tenantContext.tenantId),
+            inArray(domainPolicyRevisions.actionType, [...new Set(valid.map((a) => a.action_type))]),
+            lte(domainPolicyRevisions.effectiveFrom, new Date()),
           ),
-        );
-      return new Map(rows.map((p) => [p.actionType, p as DomainPolicy]));
+        )
+        .orderBy(desc(domainPolicyRevisions.effectiveFrom));
+      // Ordering makes the first revision for each type the policy effective now.
+      return new Map(rows.filter((p, i, all) => all.findIndex((x) => x.actionType === p.actionType) === i).map((p) => [p.actionType, ({ ...p, id: p.policyId } as DomainPolicy)]));
     });
 
     // B2.T8: schema-invalid model output gets exactly one explicit repair attempt.
@@ -415,6 +418,7 @@ export class LLMPlanner implements Planner {
             actionType: c.actionType,
             payload: c.payload,
             policyId: policyByType.get(c.actionType)?.id || null,
+            policyVersion: policyByType.get(c.actionType)?.version ?? null,
             status: "draft" as const,
             groundedPayload: compiled[i]!.groundedPayload,
             compiledGraph: compiled[i]!.compiledGraph,

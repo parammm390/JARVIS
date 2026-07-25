@@ -22,10 +22,10 @@ import "dotenv/config";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { adminDb, tenants, closePool } from "@finnor/db";
-import { seedTenantPolicies } from "./seed-tenant-policies";
+import { closePool } from "@finnor/db";
+import { bootstrapTenant } from "./tenant-bootstrap";
 
-function parseArgs(): { name: string; ownerEmail: string; timezone: string; reviewLinkUrl?: string } {
+function parseArgs(): { name: string; ownerEmail: string; timezone: string; reviewLinkUrl?: string; trainingMode: boolean } {
   const args = Object.fromEntries(
     process.argv.slice(2).map((a) => {
       const [k, ...rest] = a.replace(/^--/, "").split("=");
@@ -36,17 +36,16 @@ function parseArgs(): { name: string; ownerEmail: string; timezone: string; revi
     console.error("Usage: npx tsx scripts/provision-tenant.ts --name=\"Acme Water Co\" --ownerEmail=owner@acme.com [--timezone=America/Chicago] [--reviewLinkUrl=...]");
     process.exit(1);
   }
-  return { name: args.name, ownerEmail: args.ownerEmail, timezone: args.timezone ?? "America/Chicago", reviewLinkUrl: args.reviewLinkUrl };
+  return { name: args.name, ownerEmail: args.ownerEmail, timezone: args.timezone ?? "America/Chicago", reviewLinkUrl: args.reviewLinkUrl, trainingMode: "trainingMode" in args };
 }
 
 async function main(): Promise<void> {
-  const { name, ownerEmail, timezone, reviewLinkUrl } = parseArgs();
+  const { name, ownerEmail, timezone, reviewLinkUrl, trainingMode } = parseArgs();
 
-  const [tenant] = await adminDb().insert(tenants).values({ name, timezone }).returning();
-  const tenantId = tenant!.id;
+  const bootstrap = await bootstrapTenant({ name, timezone, reviewLinkUrl, trainingMode });
+  const tenantId = bootstrap.tenantId;
   console.log(`1/3 tenant created: ${tenantId} (${name})`);
-
-  const policyResult = await seedTenantPolicies(tenantId, { reviewLinkUrl: reviewLinkUrl ?? null });
+  const policyResult = bootstrap.policies;
   console.log(`2/3 policies seeded: ${policyResult.actionTypesSeeded} action types, ${policyResult.priceBookItemsSeeded} price-book items`);
   if (!reviewLinkUrl) {
     console.warn("    create_review_request.review_link_url left as PLACEHOLDER_NEEDS_REAL_VALUE — pass --reviewLinkUrl once the dealer's Google review link exists.");

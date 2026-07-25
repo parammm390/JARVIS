@@ -154,8 +154,31 @@ export const domainPolicies = pgTable(
     // what decision_receipts.policy_applied.version actually cites (previously always
     // null, migration 0023).
     version: integer("version").notNull().default(1),
+    effectiveFrom: timestamp("effective_from", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("domain_policies_tenant_action_idx").on(t.tenantId, t.actionType)],
+);
+
+export const domainPolicyRevisions = pgTable(
+  "domain_policy_revisions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    policyId: uuid("policy_id").notNull().references(() => domainPolicies.id),
+    actionType: text("action_type").notNull(),
+    version: integer("version").notNull(),
+    policy: jsonb("policy").notNull().default({}),
+    requiresConfirmation: boolean("requires_confirmation").notNull(),
+    confirmationTemplate: text("confirmation_template"),
+    modelProvider: text("model_provider"),
+    confirmationTimeoutHours: integer("confirmation_timeout_hours"),
+    effectiveFrom: timestamp("effective_from", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("domain_policy_revisions_policy_version_idx").on(t.policyId, t.version),
+    index("domain_policy_revisions_tenant_action_effective_idx").on(t.tenantId, t.actionType, t.effectiveFrom),
+  ],
 );
 
 export const domainActions = pgTable(
@@ -166,6 +189,7 @@ export const domainActions = pgTable(
     actionType: text("action_type").notNull(),
     payload: jsonb("payload").notNull().default({}),
     policyId: uuid("policy_id").references(() => domainPolicies.id),
+    policyVersion: integer("policy_version"),
     status: text("status", {
       enum: [
         "draft",
