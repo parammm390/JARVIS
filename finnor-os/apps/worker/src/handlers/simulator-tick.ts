@@ -145,7 +145,7 @@ export async function runSimulatorTick(tenantId: string, dateSeed: string, scena
       "flag_visit_issue",
       { issue: "DEMO equipment-recall scenario: inspect installed equipment and contact the household.", householdId },
       tenantId,
-      { source: "dealer_zero_simulator", scenario },
+      { source: "dealer_zero_simulator" },
     );
   }
 

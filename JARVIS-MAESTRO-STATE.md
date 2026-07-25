@@ -239,9 +239,9 @@ EXIT GATE: ✅ CLOSED
 - [x] Receipt with public-document chunk citations: receipt `5ac88267-6779-4f3c-8f4a-e4ecfe894f2f` above.
 
 ## B4 — Dealer Zero 2.0
-Status: NOT STARTED
-- [ ] B4.T1 — scenario packs (normal/brutal_summer/payment_crunch/recall/chaos), seed-deterministic
-- [ ] B4.T2 — time-compression API (DEMO-labeled, Dealer Zero only)
+Status: IN PROGRESS
+- [x] B4.T1 — scenario packs (normal/brutal_summer/payment_crunch/recall/chaos), seed-deterministic (evidence: commit `8688e95`; `apps/worker/src/simulator/scenarios.ts` adds the five named, data-only profiles, and `planDailyEvents()` now consumes the selected pack through the existing real simulator apply path. Fresh `npm run test:unit -- --run tests/unit/simulator-plan.test.ts`: 40 files / 242 tests passed; it includes deterministic same-seed assertions for every pack. `npm run typecheck` passed. Corrected a pre-existing simulator test from hard-coded `319` to the authoritative shared Dealer Zero `713` fixture constant; the generator has always emitted `713`.)
+- [x] B4.T2 — time-compression API (DEMO-labeled, Dealer Zero only) (evidence: commit `2647c0e`; `POST /api/dealer-zero/time-compression` is owner-only and checks the DB-backed `tenant_settings.is_dealer_zero` flag on every call. It returns a deterministic 1–120× synthetic timeline with `demo:true` and `synthetic:true` labels on the response and first/last frames, without changing business data. `tests/integration/dealer-zero-time-compression-route.test.ts` 2/2 passed, proving same request→same script and non-demo/non-owner refusal; `npm run typecheck` passed.)
 - [ ] B4.T3 — counterfactual replay + normalized receipt-diff (nightly staging + pre-release gate)
 - [ ] B4.T4 — shadow-diff staging vs prod (manual → automated report)
 - [ ] B4.T5 — training-mode tenant bootstrap
