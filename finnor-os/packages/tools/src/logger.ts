@@ -37,7 +37,16 @@ let instance: pino.Logger | null = null;
  *  the pino.transport() worker thread is only spun up once per process. */
 export function getLogger(): pino.Logger {
   if (!instance) {
-    instance = pino({ level: process.env.LOG_LEVEL ?? "info" }, pino.transport({ targets: buildTargets() }));
+    const level = process.env.LOG_LEVEL ?? "info";
+    try {
+      instance = pino({ level }, pino.transport({ targets: buildTargets() }));
+    } catch (error) {
+      // A deployment must never turn an already-handled request failure into a 500
+      // merely because an optional log transport was not traced into its bundle.
+      // Keep the error observable on stdout and let the original error response win.
+      console.error("[observability] transport unavailable; falling back to stdout:", error instanceof Error ? error.message : error);
+      instance = pino({ level });
+    }
   }
   return instance;
 }
