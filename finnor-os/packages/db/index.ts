@@ -105,12 +105,12 @@ export function getPool(): pg.Pool {
     // makes every other request wait behind requests nobody is listening for anymore.
     pool = new pg.Pool({
       ...cfg,
-      // Vercel can run enough API instances concurrently that five sessions per
-      // instance exhausts Supavisor's 40-session production pool (observed as
-      // EMAXCONNSESSION under Bridge polling). Keep the production budget at two;
-      // localhost/CI remains intentionally generous.
-      max: unpooledLocal ? 10 : 2,
-      idleTimeoutMillis: unpooledLocal ? undefined : 8_000,
+      // Vercel can run enough API instances concurrently that even two sessions per
+      // instance exhaust Supavisor's 40-session production pool (observed as
+      // EMAXCONNSESSION under Bridge polling). Production functions therefore use
+      // one short-lived session each; localhost/CI remains intentionally generous.
+      max: unpooledLocal ? 10 : 1,
+      idleTimeoutMillis: unpooledLocal ? undefined : 1_000,
       connectionTimeoutMillis: unpooledLocal ? undefined : 5_000,
     });
     // Do not issue client.query() from the pool's connect event: node-postgres does
