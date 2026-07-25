@@ -4,6 +4,8 @@
 
 import { describe, it, expect } from "vitest";
 import { planDailyEvents, type DailySimulationContext } from "../../apps/worker/src/simulator/plan";
+import { SCENARIO_PACKS } from "../../apps/worker/src/simulator/scenarios";
+import { DEALER_ZERO_AREA_CODE } from "@finnor/shared-types";
 
 const CTX: DailySimulationContext = {
   amcHouseholdIds: ["hh-1", "hh-2", "hh-3"],
@@ -29,13 +31,33 @@ describe("planDailyEvents (§3.3 determinism)", () => {
     expect(plan2).not.toEqual(plan1);
   });
 
+  it("all named B4 scenario packs are deterministic and preserve their identity", () => {
+    for (const scenario of SCENARIO_PACKS) {
+      const first = planDailyEvents("2026-07-19", CTX, scenario);
+      expect(planDailyEvents("2026-07-19", CTX, scenario)).toEqual(first);
+      expect(first.scenario).toBe(scenario);
+    }
+  });
+
+  it("scenario packs change the intended observable pressure without using ambient randomness", () => {
+    const normal = planDailyEvents("2026-07-19", CTX, "normal_day");
+    const brutal = planDailyEvents("2026-07-19", CTX, "brutal_summer");
+    const crunch = planDailyEvents("2026-07-19", CTX, "payment_crunch");
+    const recall = planDailyEvents("2026-07-19", CTX, "equipment_recall");
+    const chaos = planDailyEvents("2026-07-19", CTX, "chaos_day");
+    expect(brutal.newLeads.length).toBeGreaterThanOrEqual(normal.newLeads.length);
+    expect(crunch.paymentsToRecord.length).toBeLessThanOrEqual(normal.paymentsToRecord.length);
+    expect(recall.recallHouseholdIds.length).toBeGreaterThanOrEqual(0);
+    expect(chaos.faultHints).toContain("communications:provider_down");
+  });
+
   it("new leads: 1-3 per day, each a full synthetic household with a stable per-day key", () => {
     const plan = planDailyEvents("2026-08-01", CTX);
     expect(plan.newLeads.length).toBeGreaterThanOrEqual(1);
     expect(plan.newLeads.length).toBeLessThanOrEqual(3);
     for (const lead of plan.newLeads) {
       expect(lead.key).toContain("2026-08-01");
-      expect(lead.phone).toMatch(/^\+1319555\d{4}$/);
+      expect(lead.phone).toMatch(new RegExp(`^\\+1${DEALER_ZERO_AREA_CODE}555\\d{4}$`));
       expect(lead.email).toContain("@dealerzero.finnorai.com");
     }
   });

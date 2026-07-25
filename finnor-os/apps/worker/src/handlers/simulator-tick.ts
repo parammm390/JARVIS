@@ -16,6 +16,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { createLead } from "@finnor/data-platform";
 import { FinnorOrchestrator } from "@finnor/orchestration";
 import { planDailyEvents, type DailySimulationContext } from "../simulator/plan";
+import { isScenarioPack, type ScenarioPack } from "../simulator/scenarios";
 
 let orchestrator: FinnorOrchestrator | null = null;
 
@@ -54,15 +55,18 @@ export interface SimulatorTickResult {
   complaintLogged?: boolean;
   invoicesDrafted?: number;
   paymentsDrafted?: number;
+  recallActionsDrafted?: number;
+  scenario?: ScenarioPack;
+  faultHints?: readonly string[];
 }
 
-export async function runSimulatorTick(tenantId: string, dateSeed: string): Promise<SimulatorTickResult> {
+export async function runSimulatorTick(tenantId: string, dateSeed: string, scenario: ScenarioPack = "normal_day"): Promise<SimulatorTickResult> {
   const [settings] = await withTenant(tenantId, (db) => db.select().from(tenantSettings).where(eq(tenantSettings.tenantId, tenantId)));
   if (!settings?.simulatorEnabled) return { ran: false };
 
   orchestrator ??= new FinnorOrchestrator();
   const ctx = await loadContext(tenantId);
-  const plan = planDailyEvents(dateSeed, ctx);
+  const plan = planDailyEvents(dateSeed, ctx, scenario);
 
   for (const lead of plan.newLeads) {
     await withTenant(tenantId, (db) =>
@@ -136,6 +140,14 @@ export async function runSimulatorTick(tenantId: string, dateSeed: string): Prom
   for (const payment of plan.paymentsToRecord) {
     await orchestrator.draftKnownAction("record_payment", { invoiceId: payment.invoiceId }, tenantId, { source: "dealer_zero_simulator" });
   }
+  for (const householdId of plan.recallHouseholdIds) {
+    await orchestrator.draftKnownAction(
+      "flag_visit_issue",
+      { issue: "DEMO equipment-recall scenario: inspect installed equipment and contact the household.", householdId },
+      tenantId,
+      { source: "dealer_zero_simulator", scenario },
+    );
+  }
 
   return {
     ran: true,
@@ -145,6 +157,9 @@ export async function runSimulatorTick(tenantId: string, dateSeed: string): Prom
     complaintLogged: plan.complaintHouseholdId !== null,
     invoicesDrafted: plan.invoicesToCreate.length,
     paymentsDrafted: plan.paymentsToRecord.length,
+    recallActionsDrafted: plan.recallHouseholdIds.length,
+    scenario,
+    faultHints: plan.faultHints,
   };
 }
 
@@ -152,5 +167,6 @@ export const simulatorTick = async (payload: Record<string, unknown>): Promise<v
   const tenantId = String(payload.tenantId ?? "");
   if (!tenantId) throw new Error("simulator_tick requires tenantId");
   const dateSeed = typeof payload.dateSeed === "string" ? payload.dateSeed : new Date().toISOString().slice(0, 10);
-  await runSimulatorTick(tenantId, dateSeed);
+  const scenario = isScenarioPack(payload.scenario) ? payload.scenario : "normal_day";
+  await runSimulatorTick(tenantId, dateSeed, scenario);
 };

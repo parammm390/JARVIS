@@ -11,6 +11,7 @@
 // need its own per-event dedup on top of that.
 
 import { rngFor, pick, intBetween, generateHousehold, type SyntheticHousehold } from "@finnor/shared-types";
+import { scenarioProfile, type ScenarioPack } from "./scenarios";
 
 export interface DailySimulationContext {
   /** Household ids with an active maintenance agreement — those visits price at the
@@ -33,34 +34,38 @@ export interface VisitOutcome {
 
 export interface DailyPlan {
   dateSeed: string;
+  scenario: ScenarioPack;
   newLeads: SyntheticHousehold[];
   visitOutcomes: VisitOutcome[];
   complaintHouseholdId: string | null;
   invoicesToCreate: Array<{ householdId: string; amountUsd: number }>;
   paymentsToRecord: Array<{ invoiceId: string }>;
+  recallHouseholdIds: string[];
+  faultHints: readonly string[];
 }
 
 const AMC_VISIT_PRICE_USD = 249; // matches policy-matrix.md's renew_maintenance_agreement.price_usd
 const FLAT_VISIT_FEE_USD = 129; // one-time service visit for a non-AMC household — a real, plausible mid-market price, not a guess tied to any policy row
 
-export function planDailyEvents(dateSeed: string, ctx: DailySimulationContext): DailyPlan {
-  const newLeadCount = intBetween(rngFor("simulator", dateSeed, "lead-count"), 1, 3);
+export function planDailyEvents(dateSeed: string, ctx: DailySimulationContext, scenario: ScenarioPack = "normal_day"): DailyPlan {
+  const profile = scenarioProfile(scenario);
+  const newLeadCount = intBetween(rngFor("simulator", dateSeed, scenario, "lead-count"), ...profile.leadRange);
   const newLeads: SyntheticHousehold[] = Array.from({ length: newLeadCount }, (_, i) => generateHousehold(`sim-lead-${dateSeed}`, i));
 
-  const visitCount = ctx.establishedHouseholdIds.length === 0 ? 0 : intBetween(rngFor("simulator", dateSeed, "visit-count"), 2, 5);
+  const visitCount = ctx.establishedHouseholdIds.length === 0 ? 0 : intBetween(rngFor("simulator", dateSeed, scenario, "visit-count"), ...profile.visitRange);
   const amcSet = new Set(ctx.amcHouseholdIds);
   const visitOutcomes: VisitOutcome[] = [];
   for (let i = 0; i < visitCount; i++) {
-    const householdIdx = Math.floor(rngFor("simulator", dateSeed, "visit-household", i)() * ctx.establishedHouseholdIds.length);
+    const householdIdx = Math.floor(rngFor("simulator", dateSeed, scenario, "visit-household", i)() * ctx.establishedHouseholdIds.length);
     const householdId = ctx.establishedHouseholdIds[householdIdx]!;
-    const technicianId = pick(rngFor("simulator", dateSeed, "visit-tech", i), ctx.technicianIds);
-    const outcome = rngFor("simulator", dateSeed, "visit-outcome", i)() < 0.9 ? "completed" : "no_show";
+    const technicianId = pick(rngFor("simulator", dateSeed, scenario, "visit-tech", i), ctx.technicianIds);
+    const outcome = rngFor("simulator", dateSeed, scenario, "visit-outcome", i)() < profile.completionRate ? "completed" : "no_show";
     visitOutcomes.push({ householdId, technicianId, outcome, hasAmc: amcSet.has(householdId) });
   }
 
   let complaintHouseholdId: string | null = null;
-  if (ctx.establishedHouseholdIds.length > 0 && rngFor("simulator", dateSeed, "complaint-chance")() < 0.08) {
-    const idx = Math.floor(rngFor("simulator", dateSeed, "complaint-household")() * ctx.establishedHouseholdIds.length);
+  if (ctx.establishedHouseholdIds.length > 0 && rngFor("simulator", dateSeed, scenario, "complaint-chance")() < profile.complaintChance) {
+    const idx = Math.floor(rngFor("simulator", dateSeed, scenario, "complaint-household")() * ctx.establishedHouseholdIds.length);
     complaintHouseholdId = ctx.establishedHouseholdIds[idx]!;
   }
 
@@ -68,7 +73,10 @@ export function planDailyEvents(dateSeed: string, ctx: DailySimulationContext): 
     .filter((v) => v.outcome === "completed")
     .map((v) => ({ householdId: v.householdId, amountUsd: v.hasAmc ? AMC_VISIT_PRICE_USD : FLAT_VISIT_FEE_USD }));
 
-  const paymentsToRecord = ctx.openInvoices.filter((inv) => rngFor("simulator", dateSeed, "payment", inv.id)() < 0.8).map((inv) => ({ invoiceId: inv.id }));
+  const paymentsToRecord = ctx.openInvoices.filter((inv) => rngFor("simulator", dateSeed, scenario, "payment", inv.id)() < profile.paymentRate).map((inv) => ({ invoiceId: inv.id }));
+  const recallHouseholdIds = profile.recall
+    ? ctx.establishedHouseholdIds.filter((id) => rngFor("simulator", dateSeed, scenario, "recall", id)() < 0.18)
+    : [];
 
-  return { dateSeed, newLeads, visitOutcomes, complaintHouseholdId, invoicesToCreate, paymentsToRecord };
+  return { dateSeed, scenario, newLeads, visitOutcomes, complaintHouseholdId, invoicesToCreate, paymentsToRecord, recallHouseholdIds, faultHints: profile.faultHints };
 }
