@@ -10,6 +10,8 @@ Convention: same as `finnor-os/docs/phase-status.md` (P1/P2 style) — a box is 
 
 ## Session Log
 
+- 2026-07-25 · phase 19 (D6 exit-gate probe) · directly inspected the existing `https://finnorai.com/jarvis` Chrome tab under the browser-control workflow: its visible profile affordance is `Sign in`, and every private proxy request (`/actions/pending`, `/workflows/runs`, etc.) returned 401. Therefore it is not an authenticated owner/dispatcher/technician session and cannot truthfully provide either role recording or an approval-card deep-link proof · next: sign in to real owner + dispatcher/technician accounts in that tab, then capture the role landing and exact-card proof; B8.T1 still required for physical push · blockers: authenticated session absent; B8 not started.
+
 - 2026-07-25 · phase 19 (D6) · completed T1–T4: user-scoped RLS-backed preferences CRUD, role-first scenes with token-safe accents, browser-local frecency/prefetch/ready-next chips, and a real last-seen delta digest with skippable FLOW-23 reveal; commits `0f5d287`, `65aaa50`, `613e191`, `e7886fd` · next: B8.T1 then D6.T5 push opt-in/nudge exact-card proof; capture authenticated owner/dispatcher/technician recordings for D6 exit gate · blockers: B8 push infrastructure is not started; no authenticated browser/device session is available for recordings.
 
 - 2026-07-25 · phase 18 (B4) · **COMPLETE — 100%.** T3 hosted replay run 30166087822 green; T4 production-read-only→staging report `22513b7d-cf78-457f-8c61-69b2a022ad6e` passed with 23 contracts/zero normalized delta; staging deployment `9aeedb89` healthy after removing stale `AUTH_DEV_BYPASS` · next: phase 18 complete · blockers: none.
