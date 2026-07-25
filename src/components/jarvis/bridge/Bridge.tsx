@@ -26,6 +26,7 @@ import { KpiStrip } from "../panels/KpiStrip"
 import { DailyBriefing } from "../panels/DailyBriefing"
 import { WorkflowTheater } from "../panels/WorkflowTheater"
 import { ApprovalCockpit } from "./ApprovalCockpit"
+import { CertificationStatus } from "../panels/CertificationStatus"
 import { GridBackdrop } from "../ui/fx/GridBackdrop"
 import { choreo } from "../ui/motion/choreo"
 import { PulseBar } from "./PulseBar"
@@ -120,6 +121,7 @@ function LeftRail({ scene, setScene }: { scene: SceneId; setScene: (s: SceneId) 
 }
 
 function CenterStage({ scene }: { scene: SceneId }) {
+  const { role } = useJarvisAuth()
   return (
     <main className="relative min-w-0 flex-1 overflow-hidden">
       <div className="pointer-events-none absolute inset-0 opacity-60">
@@ -151,6 +153,7 @@ function CenterStage({ scene }: { scene: SceneId }) {
               <>
                 <DailyBriefing />
                 <KpiStrip />
+                {role === "owner" && <CertificationStatus />}
               </>
             )}
             {scene === "pipeline" && <WorkflowTheater />}

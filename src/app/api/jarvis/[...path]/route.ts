@@ -66,6 +66,7 @@ function isAllowedGet(segments: string[]): boolean {
   // that D1 actually consumes them.
   if (segments.length === 1 && a === "vitals") return true
   if (segments.length === 1 && a === "activity") return true
+  if (segments.length === 1 && a === "user-prefs") return true
   void c
   return false
 }
@@ -126,7 +127,7 @@ function clientIp(req: NextRequest): string {
   return req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? req.headers.get("x-real-ip") ?? "unknown";
 }
 
-async function doForward(req: NextRequest, segments: string[], method: "GET" | "POST", authorization: string): Promise<Response> {
+async function doForward(req: NextRequest, segments: string[], method: "GET" | "POST" | "PUT" | "DELETE", authorization: string): Promise<Response> {
   if (!OS_API) return Response.json({ error: "Jarvis proxy is not configured" }, { status: 500 });
 
   const url = new URL(`${OS_API}/api/${segments.join("/")}`);
@@ -137,7 +138,7 @@ async function doForward(req: NextRequest, segments: string[], method: "GET" | "
     headers: { authorization, "content-type": "application/json" },
     cache: "no-store",
   };
-  if (method === "POST") {
+  if (method === "POST" || method === "PUT") {
     const body = await req.text();
     init.body = body.length > 0 ? body : "{}";
   }
@@ -180,4 +181,26 @@ export async function POST(req: NextRequest, { params }: { params: { path: strin
   const auth = req.headers.get("authorization");
   if (!auth?.startsWith("Bearer ")) return Response.json({ error: "Sign in required" }, { status: 401 });
   return doForward(req, segments, "POST", auth);
+}
+
+// D6.T1: user preferences are the caller's own record. Keep the proxy surface as
+// narrow as the backend route: no generic PUT/DELETE tunnel is introduced.
+function isUserPrefs(segments: string[]): boolean {
+  return segments.length === 1 && segments[0] === "user-prefs";
+}
+
+export async function PUT(req: NextRequest, { params }: { params: { path: string[] } }): Promise<Response> {
+  const segments = params.path;
+  if (!validSegments(segments) || !isUserPrefs(segments)) return Response.json({ error: "Not found" }, { status: 404 });
+  const auth = req.headers.get("authorization");
+  if (!auth?.startsWith("Bearer ")) return Response.json({ error: "Sign in required" }, { status: 401 });
+  return doForward(req, segments, "PUT", auth);
+}
+
+export async function DELETE(req: NextRequest, { params }: { params: { path: string[] } }): Promise<Response> {
+  const segments = params.path;
+  if (!validSegments(segments) || !isUserPrefs(segments)) return Response.json({ error: "Not found" }, { status: 404 });
+  const auth = req.headers.get("authorization");
+  if (!auth?.startsWith("Bearer ")) return Response.json({ error: "Sign in required" }, { status:401 });
+  return doForward(req, segments, "DELETE", auth);
 }

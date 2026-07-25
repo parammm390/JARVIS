@@ -34,6 +34,16 @@
   --accent: var(--j-amber);
 }
 
+/* D6.T2: an explicit, user-selected tenant accent can tint the existing token
+   surface without adding a parallel theme. Unknown values intentionally fall back to
+   the verified cyan default rather than being interpolated into CSS. */
+.jarvis-root[data-tenant-accent="teal"] { --accent: var(--j-teal); --j-cyan: var(--j-teal); }
+.jarvis-root[data-tenant-accent="violet"] { --accent: var(--j-violet); --j-cyan: var(--j-violet); }
+.jarvis-root[data-tenant-accent="amber"] { --accent: var(--j-amber); --j-cyan: var(--j-amber); }
+html[data-jarvis-tenant-accent="teal"] .jarvis-root { --accent: var(--j-teal); --j-cyan: var(--j-teal); }
+html[data-jarvis-tenant-accent="violet"] .jarvis-root { --accent: var(--j-violet); --j-cyan: var(--j-violet); }
+html[data-jarvis-tenant-accent="amber"] .jarvis-root { --accent: var(--j-amber); --j-cyan: var(--j-amber); }
+
 /* D1.T5 — FLOW-24 ThemeTide: a subtle day-part tint layered on top of the mood
    system above, keyed off the REAL device clock (Bridge.tsx's getDaypart(), never a
    fabricated cycle). This app has no light/dark theme (grepped, confirmed C3) — these

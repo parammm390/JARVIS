@@ -1,5 +1,5 @@
 import type { Metadata } from "next"
-import JarvisCommandCenter from "@/components/jarvis/JarvisCommandCenter"
+import PersonalizedHome from "@/components/jarvis/PersonalizedHome"
 
 export const metadata: Metadata = {
   title: "FINNOR JARVIS — Live AI Command Center for Water Treatment",
@@ -8,5 +8,5 @@ export const metadata: Metadata = {
 }
 
 export default function JarvisPage() {
-  return <JarvisCommandCenter />
+  return <PersonalizedHome />
 }
