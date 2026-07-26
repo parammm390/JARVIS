@@ -85,7 +85,10 @@ jobs:
           npx wait-on http://localhost:3000 --timeout 60000
           set +e
           chrome_path="$(node -e 'const { chromium } = require("@playwright/test"); process.stdout.write(chromium.executablePath())')"
-          npx --yes lighthouse@11 http://localhost:3000/jarvis --preset=desktop --only-categories=performance,accessibility --chrome-path="$chrome_path" --output=json --output-path=./lighthouse-jarvis.json > lighthouse.log 2>&1
+          # Playwright's downloaded Chromium needs the no-sandbox launch mode on
+          # GitHub's containerized Linux runner; without it Lighthouse waits until
+          # its launcher timeout before any audit begins.
+          npx --yes lighthouse@11 http://localhost:3000/jarvis --preset=desktop --only-categories=performance,accessibility --chrome-path="$chrome_path" --chrome-flags="--headless --no-sandbox --disable-dev-shm-usage" --output=json --output-path=./lighthouse-jarvis.json > lighthouse.log 2>&1
           node -e 'const report=require("./lighthouse-jarvis.json"); const categories=report.categories; const cls=report.audits["cumulative-layout-shift"].numericValue; if (categories.performance.score < .9 || categories.accessibility.score < .95 || cls > .01) { console.error(JSON.stringify({performance: categories.performance.score, accessibility: categories.accessibility.score, cls}, null, 2)); process.exit(1) } console.log(JSON.stringify({performance: categories.performance.score, accessibility: categories.accessibility.score, cls}, null, 2))'
           lighthouse_status=$?
           npx playwright test --reporter=list > playwright.log 2>&1
