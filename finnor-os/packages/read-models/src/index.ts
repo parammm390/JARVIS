@@ -52,6 +52,7 @@ export * from "./holt-winters";
 export * from "./anomaly-detector";
 export * from "./churn-risk";
 export * from "./reorder-points";
+export * from "./failure-injection-calendar";
 
 export interface IntelligenceForecasts {
   cashCollections: ForecastPoint[] | null;
@@ -801,6 +802,54 @@ export async function readinessTrend(tenantId: string, days = 30): Promise<Readi
       .limit(days),
   );
   return rows;
+}
+
+export interface ReadinessSlo {
+  id: string;
+  label: string;
+  value: number | null;
+  target: { operator: ">=" | "<=" | "<"; value: number; unit: "ratio" | "ms" | "count" | "seconds" | "minutes" } | null;
+  trend30d: Array<{ logDate: string; value: number | null }>;
+  errorBudgetBurn: number | null;
+  unavailableReason?: string;
+}
+
+function ratioBurn(value: number | null, target: number): number | null {
+  if (value === null) return null;
+  if (value >= target) return 0;
+  // A value at 98% against a 99% objective burns one whole day's error budget.
+  return (target - value) / (1 - target);
+}
+
+/** A7: scorecard rows are derived from durable readiness history. Claims without a
+ * durable source are emitted as unavailable rather than guessed or painted green. */
+export async function readinessSloScorecard(tenantId: string): Promise<ReadinessSlo[]> {
+  const trend = await readinessTrend(tenantId, 30);
+  const chronological = [...trend].reverse();
+  const workflowTrend = chronological.map((day) => ({ logDate: day.logDate, value: day.workflowSuccessRate }));
+  const latencyTrend = chronological.map((day) => ({ logDate: day.logDate, value: day.stepLatencyP95Ms }));
+  const dlqTrend = chronological.map((day) => ({ logDate: day.logDate, value: day.dlqDepth }));
+  const latest = chronological.at(-1);
+  const live = await reliability(tenantId, 30);
+  const predictionCompared = live.predictionAccuracy.reduce((sum, row) => sum + row.comparedFields, 0);
+  const predictionMatched = live.predictionAccuracy.reduce((sum, row) => sum + row.matchedFields, 0);
+  const predictionValue = predictionCompared > 0 ? predictionMatched / predictionCompared : null;
+
+  return [
+    { id: "post_approval_success", label: "Post-approval success", value: latest?.workflowSuccessRate ?? null, target: { operator: ">=", value: 0.99, unit: "ratio" }, trend30d: workflowTrend, errorBudgetBurn: ratioBurn(latest?.workflowSuccessRate ?? null, 0.99) },
+    { id: "workflow_p95", label: "Workflow p95 latency", value: latest?.stepLatencyP95Ms ?? null, target: null, trend30d: latencyTrend, errorBudgetBurn: null, unavailableReason: "Per-workflow-kind latency budgets have not been configured; existing scorecard is aggregate." },
+    { id: "queue_oldest_pending", label: "Queue oldest pending", value: null, target: { operator: "<", value: 60, unit: "seconds" }, trend30d: [], errorBudgetBurn: null, unavailableReason: "Jobs are global and do not carry tenant_id, so a tenant readiness view cannot truthfully attribute this metric." },
+    { id: "worker_heartbeat", label: "Worker heartbeat", value: null, target: { operator: ">=", value: 0.999, unit: "ratio" }, trend30d: [], errorBudgetBurn: null, unavailableReason: "Heartbeat freshness is global and has no durable daily availability series." },
+    { id: "dlq_depth", label: "DLQ depth", value: latest?.dlqDepth ?? null, target: { operator: "<=", value: 0, unit: "count" }, trend30d: dlqTrend, errorBudgetBurn: latest ? (latest.dlqDepth === 0 ? 0 : null) : null },
+    { id: "dlq_triage", label: "DLQ triage", value: null, target: { operator: "<", value: 24, unit: "minutes" }, trend30d: [], errorBudgetBurn: null, unavailableReason: "No durable triage-completed timestamp exists yet." },
+    { id: "api_5xx", label: "API 5xx rate", value: null, target: { operator: "<", value: 0.001, unit: "ratio" }, trend30d: [], errorBudgetBurn: null, unavailableReason: "No durable HTTP request-status series exists in the application database." },
+    { id: "planner_eval", label: "Planner eval", value: null, target: { operator: ">=", value: 0.95, unit: "ratio" }, trend30d: [], errorBudgetBurn: null, unavailableReason: "Planner CI results are not persisted as a tenant readiness metric." },
+    { id: "critic_catch", label: "Critic catch", value: null, target: { operator: ">=", value: 0.9, unit: "ratio" }, trend30d: [], errorBudgetBurn: null, unavailableReason: "Critic eval results are not persisted as a tenant readiness metric." },
+    { id: "cross_tenant_leaks", label: "Cross-tenant leaks", value: null, target: { operator: "<=", value: 0, unit: "count" }, trend30d: [], errorBudgetBurn: null, unavailableReason: "Nightly isolation-probe outcomes are not persisted in the tenant database." },
+    { id: "restore_drill", label: "Restore drill", value: null, target: { operator: "<", value: 30, unit: "minutes" }, trend30d: [], errorBudgetBurn: null, unavailableReason: "Restore duration is recorded in failure-injection detail, not yet projected into a scalar series." },
+    { id: "event_to_pixel", label: "Event to pixel", value: null, target: { operator: "<", value: 2, unit: "seconds" }, trend30d: [], errorBudgetBurn: null, unavailableReason: "No client telemetry currently records event-to-pixel latency." },
+    { id: "prediction_accuracy", label: "Prediction accuracy", value: predictionValue, target: null, trend30d: [], errorBudgetBurn: null, unavailableReason: predictionValue === null ? "No comparable prediction diffs in the 30-day window." : undefined },
+  ];
 }
 
 // Phase 8 (§8.2): the failure-injection calendar's real log, newest first.

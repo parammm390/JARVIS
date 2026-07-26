@@ -1323,7 +1323,7 @@ export const failureInjections = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
     kind: text("kind", {
-      enum: ["worker_kill", "webhook_replay", "provider_egress_block", "approval_expiry_pileup", "secrets_store_hiccup", "deploy_mid_workflow"],
+      enum: ["worker_kill", "webhook_replay", "provider_egress_block", "approval_expiry_pileup", "secrets_store_hiccup", "deploy_mid_workflow", "restore_drill", "secrets_boot", "pooling_load"],
     }).notNull(),
     injectedAt: timestamp("injected_at", { withTimezone: true }).notNull().defaultNow(),
     detectedAt: timestamp("detected_at", { withTimezone: true }),

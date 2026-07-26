@@ -15,6 +15,7 @@ import {
   household360,
   reliability,
   readinessTrend,
+  readinessSloScorecard,
   failureInjectionLog,
 } from "@finnor/read-models";
 import { getProjection } from "@finnor/projections";
@@ -50,6 +51,7 @@ const VIEWS: Record<string, (tenantId: string, searchParams: URLSearchParams) =>
     const days = Number(searchParams.get("days") ?? 30);
     return readinessTrend(tenantId, Number.isFinite(days) && days > 0 ? days : 30);
   },
+  "readiness-slo": (tenantId) => readinessSloScorecard(tenantId),
   // Phase 8 (§8.2): the failure-injection calendar's real log.
   "failure-injections": (tenantId) => failureInjectionLog(tenantId),
 };
