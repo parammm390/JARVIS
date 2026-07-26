@@ -74,7 +74,7 @@ const initialMessages: ChatMessage[] = [
     id: "assistant-initial",
     role: "assistant",
     content:
-      "FINNOR is an AI booking and lead recovery system for water treatment dealers, water companies, and well pump service teams. It helps turn missed calls, after-hours inquiries, overflow, and slow web leads into booked water tests, service appointments, or urgent owner/on-call routes. I can explain the system, compare workflows, or check your fit.",
+      "FINNOR runs on JARVIS — it drafts a plan from your instruction and holds it for your approval before anything executes. For water treatment dealers, water companies, and well pump service teams, that means missed calls, after-hours inquiries, overflow, and slow web leads become drafted water tests, service appointments, or urgent routes, never booked without your yes. I can explain the system, compare workflows, or check your fit.",
   },
 ]
 
@@ -235,7 +235,7 @@ export function FinnorAIConcierge() {
       await waitForThinkingDelay()
       addAssistantMessage({
         content:
-          "FINNOR is an AI booking and lead recovery system for water treatment dealers, water companies, and well pump service teams. It helps turn missed calls, after-hours inquiries, overflow, and slow web leads into booked water tests, service appointments, or urgent owner/on-call routes.",
+          "FINNOR runs on JARVIS: every missed call, after-hours inquiry, overflow lead, or slow web lead becomes a drafted water test, service appointment, or urgent route — held for your approval before anything books. Nothing executes without your yes.",
       })
       setActiveField(null)
       setIsFitFlow(false)

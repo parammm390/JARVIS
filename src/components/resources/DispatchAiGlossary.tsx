@@ -6,6 +6,8 @@ import { ResourceFrame } from "./ResourceFrame"
 import { ResourceHero } from "./ResourceHero"
 
 const terms = [
+  ["Approval gate", "The point where a drafted plan — a quote, a booking, an urgent route — waits for a human yes. Nothing executes before it, database-enforced, not a UI suggestion."],
+  ["Receipt", "The record JARVIS files after a plan executes: what was proposed, what was approved, what happened, what it cost."],
   ["Missed call recovery", "Answering or following up fast enough to turn a voicemail-bound water lead into a booked next step."],
   ["Water test booking", "Moving a homeowner's water concern, source, system interest, timeline, address, and callback toward a booked water test or sales callback."],
   ["No-water urgent route", "A scoped workflow for routing urgent no-water context to the approved owner, dispatcher, or on-call technician."],
@@ -25,8 +27,8 @@ export function DispatchAiGlossary() {
     <ResourceFrame>
       <ResourceHero
         kicker="Operator glossary"
-        title="Water booking and lead recovery terms without the jargon."
-        copy="Short definitions for water treatment, water dealer, and well pump teams evaluating missed-call recovery, form follow-up, booking routes, and urgency routing."
+        title="JARVIS terms without the jargon."
+        copy="Short definitions for water treatment, water dealer, and well pump teams evaluating drafted plans, approval gates, receipts, and household memory records."
         icon={BookOpenText}
         aside={<GlossaryIndex />}
       />

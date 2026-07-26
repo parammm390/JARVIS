@@ -6,7 +6,6 @@ export const siteConfig = {
   contactEmail: "param@finnorai.com",
   ctaLink: "https://calendly.com/pdave9807",
   demoLink: "/demo",
-  dashboardDemoLink: "/dashboard-demo",
   calendlyLink: "https://calendly.com/pdave9807",
   calendlyCta: "Apply for Founding Pilot",
   calendlySupport:

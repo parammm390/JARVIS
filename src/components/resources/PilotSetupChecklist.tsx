@@ -24,8 +24,8 @@ export function PilotSetupChecklist() {
     <ResourceFrame>
       <ResourceHero
         kicker="Founding pilot checklist"
-        title="Booking & Lead Recovery Pilot Setup Checklist"
-        copy="Use this checklist before routing real calls and inbound leads. Define coverage, lead sources, booking questions, alerts, recovery fields, and human decisions before launch."
+        title="JARVIS Pilot Setup Checklist"
+        copy="Use this checklist before JARVIS drafts real plans from real instructions. Define coverage, lead sources, approval rules, alerts, recovery fields, and human decisions before launch."
         icon={ClipboardCheck}
         aside={<PilotRouteCard />}
       />

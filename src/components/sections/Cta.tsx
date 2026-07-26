@@ -33,9 +33,9 @@ export function Cta() {
                 How many quotable jobs died in your voicemail last week?
               </h2>
               <p className="mt-6 max-w-2xl text-lg font-semibold leading-relaxed text-slate-700 md:text-xl">
-                Every one of them was a household memory record you never got to open: the call,
-                the water data, the pre-qualified range, the booked visit, and two years of revenue after
-                it. FINNOR opens the record on ring two.
+                Every one of them was a household memory record you never got to open: the
+                instruction, the water data, the drafted range, the booked visit, and two years of
+                revenue after it. JARVIS opens the record on the first instruction.
               </p>
             </div>
 

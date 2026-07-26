@@ -44,7 +44,7 @@ const resourceCards = [
     icon: ShieldCheck,
     kicker: "Control model",
     title: "Trust & Safety",
-    copy: "How Finnor routes urgent water calls without quoting, diagnosing, or promising an arrival time.",
+    copy: "How JARVIS drafts and routes urgent water calls, held for approval, without quoting, diagnosing, or promising an arrival time.",
   },
   {
     href: "/resources#answering-service",
@@ -111,8 +111,8 @@ export function ResourcesHub() {
     <ResourceFrame>
       <ResourceHero
         kicker="Resource hub"
-        title="Practical tools for booking and lead recovery."
-        copy="For water treatment, water dealer, and well pump companies that cannot afford to lose quote requests, no-water calls, form leads, or after-hours inquiries."
+        title="Practical tools for a system that asks before it acts."
+        copy="For water treatment, water dealer, and well pump companies evaluating JARVIS — how it drafts, what it holds for approval, and what it never invents."
         icon={BookOpenText}
         aside={<HubSignalCard />}
       />
@@ -212,10 +212,10 @@ function HubSignalCard() {
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_0%,rgba(14,165,233,0.12),transparent_36%),linear-gradient(135deg,rgba(45,212,191,0.08),transparent_50%)]" />
       <div className="relative">
         <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-600">
-          Booking and recovery operating loop
+          The JARVIS loop
         </p>
         <div className="signal-thread mt-5 flex min-h-14 flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-3">
-          {["Answer", "Book", "Route", "Human promise"].map((item) => (
+          {["Instruction", "Plan", "Approve", "Receipt"].map((item) => (
             <span
               key={item}
               className="relative z-10 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-700 shadow-sm"
@@ -225,8 +225,8 @@ function HubSignalCard() {
           ))}
         </div>
         <p className="mt-6 rounded-2xl border border-teal-200 bg-teal-50 p-4 text-sm font-semibold leading-relaxed text-slate-700">
-          Use these resources to map the full recovery path: answer or follow up, book the next
-          step when appropriate, route urgency fast, and keep quotes, ETAs, and service promises with your team.
+          Use these resources to map how JARVIS handles your leads: draft the next step, hold it
+          for approval, route urgency fast, and keep quotes, ETAs, and service promises with your team.
         </p>
       </div>
     </div>

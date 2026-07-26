@@ -15,37 +15,37 @@ import {
 const steps = [
   {
     day: "Day 1",
-    title: "Map call paths and pull your service area's live water data by ZIP",
+    title: "Map every instruction channel — call, text, typed — and pull your service area's live water data by ZIP",
     icon: PhoneForwarded,
   },
   {
     day: "Day 2",
-    title: "Load your pricing tiers, install mix, and sizing rules into FINNOR",
+    title: "Load your pricing tiers, install mix, and sizing rules into JARVIS's price book",
     icon: ClipboardList,
   },
   {
     day: "Day 3",
-    title: "Set the rails: what the agent quotes, what it never says, and where humans take over",
+    title: "Set the approval rails: what JARVIS can draft, what always waits for a human, and who approves what",
     icon: GitBranch,
   },
   {
     day: "Day 4",
-    title: "Wire the memory: booking slots, SMS routes, review asks, check-in cadence, referral logging",
+    title: "Wire the integrations: booking calendar, SMS routes, CRM, and the household memory record",
     icon: BellRing,
   },
   {
     day: "Day 5",
-    title: "Test live: quote calls, no-water emergencies, tap-to-book texts, and household record writes",
+    title: "Test live: draft quotes, urgent routes, and bookings — approve, reject, and watch the receipts land",
     icon: FlaskConical,
   },
   {
     day: "Day 6",
-    title: "Review every test record with your team: quotes, routes, next revenue actions, ownership",
+    title: "Review every test record with your team: what was drafted, what was approved, what the receipt shows",
     icon: FileCheck2,
   },
   {
     day: "Day 7",
-    title: "Go live. Every call from here opens a household memory record",
+    title: "Go live. Every instruction from here opens a household memory record and waits for your yes",
     icon: Route,
   },
 ]
@@ -78,7 +78,7 @@ export function FirstSevenDays() {
             transition={{ delay: 0.05, duration: 0.6 }}
             className="text-4xl font-black tracking-tight text-slate-950 md:text-5xl"
           >
-            Quoting real ranges in seven days, or your money back.
+            Live approvals in seven days, or your money back.
           </motion.h2>
           <motion.p
             initial={{ opacity: 0, y: 16 }}
@@ -87,9 +87,9 @@ export function FirstSevenDays() {
             transition={{ delay: 0.1 }}
             className="mt-5 max-w-2xl text-lg font-medium leading-relaxed text-slate-600"
           >
-            One week from access to a live booking and lead recovery system with your water data, your pricing, and
-            your rails. Every scenario is tested with your team before a real caller ever touches
-            it. Miss the seven days and the initial payment comes back.
+            One week from access to JARVIS running your real price book, your approval rails, and
+            your water data. Every scenario is tested with your team before a real instruction
+            ever executes. Miss the seven days and the initial payment comes back.
           </motion.p>
         </div>
 

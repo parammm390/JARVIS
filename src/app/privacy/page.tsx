@@ -3,7 +3,7 @@ import { Footer } from "@/components/sections/Footer"
 
 export const metadata: Metadata = {
   title: "Privacy",
-  description: "Privacy overview for FINNOR AI voice dispatch demo and website inquiries.",
+  description: "Privacy overview for FINNOR's JARVIS demo builder and website inquiries.",
   alternates: { canonical: "https://finnorai.com/privacy" },
   openGraph: {
     title: "Privacy | Finnor AI",

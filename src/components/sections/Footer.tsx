@@ -4,12 +4,12 @@ import { motion } from "framer-motion"
 import { siteConfig } from "@/config/site"
 
 const footerLinks = [
-  { href: "/demo", label: "Live Call Demo" },
-  { href: "/dashboard-demo", label: "Dashboard Demo" },
-  { href: "/#problem", label: "Problem" },
-  { href: "/#workflow", label: "Workflow" },
+  { href: "/demo", label: "Try JARVIS" },
+  { href: "/#problem", label: "The Stakes" },
+  { href: "/#workflow", label: "The Loop" },
   { href: "/#pricing", label: "Pricing" },
   { href: "/#faq", label: "FAQ" },
+  { href: "/trust-safety", label: "Trust" },
   { href: siteConfig.calendlyLink, label: "Apply for Founding Pilot" },
 ]
 
@@ -32,8 +32,9 @@ export function Footer() {
           >
             <span className="text-3xl font-black tracking-tight text-slate-950">{siteConfig.name}</span>
             <p className="mt-3 text-base font-medium leading-relaxed text-slate-600">
-              AI booking and lead recovery for water treatment leads, well pump service calls,
-              after-hours inquiries, and slow web leads.
+              FINNOR runs on JARVIS: instructions from water treatment leads, well pump service
+              calls, after-hours inquiries, and slow web leads get drafted, held for your
+              approval, and receipted.
             </p>
             <p className="mt-5 text-sm font-bold text-slate-600">
               Founder contact:{" "}
