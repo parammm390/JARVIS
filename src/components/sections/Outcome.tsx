@@ -6,18 +6,18 @@ import { AlertTriangle, CheckCircle2, FileLock2, ShieldCheck, UserRoundCheck } f
 const scopeItems = [
   {
     icon: CheckCircle2,
-    title: "Quotes from your numbers only",
-    copy: "Ranges come from real public water data, sizing math, and the pricing tier you set. FINNOR never invents a price, a contaminant, or a health claim.",
+    title: "Drafts from your numbers only",
+    copy: "Ranges come from real public water data, sizing math, and the pricing tier you set. JARVIS never invents a price, a contaminant, or a health claim.",
   },
   {
     icon: UserRoundCheck,
-    title: "Human decision path",
-    copy: "The final on-site figure, repair calls, diagnosis, ETAs, and customer promises stay with your team. The agent quotes the range; your people close.",
+    title: "Nothing runs without your yes",
+    copy: "The final on-site figure, repair calls, diagnosis, ETAs, and customer promises stay with your team. JARVIS drafts the plan; a human approves before anything executes.",
   },
   {
     icon: ShieldCheck,
-    title: "Scoped launch terms",
-    copy: "Routing, alert paths, escalation rules, pricing tiers, integrations, and data handling are defined before live deployment.",
+    title: "Scoped before it goes live",
+    copy: "Approval rules, escalation paths, pricing tiers, integrations, and data handling are all defined and agreed before launch — not discovered after.",
   },
 ]
 
@@ -42,7 +42,7 @@ export function Outcome() {
               viewport={{ once: true }}
               className="text-4xl font-black tracking-tight text-slate-950 md:text-6xl"
             >
-            Quotes from your pricing. Decisions stay yours.
+            Drafts from your pricing. Decisions stay yours.
             </motion.h2>
             <motion.p
               initial={{ opacity: 0, y: 16 }}
@@ -51,10 +51,10 @@ export function Outcome() {
               transition={{ delay: 0.08 }}
               className="mt-6 max-w-2xl text-lg font-medium leading-relaxed text-slate-600"
             >
-              The booking and lead recovery system works inside hard rails. It quotes ranges computed from the water
-              and the tier you priced, books the visit, and keeps the record alive for years. It
-              does not diagnose repairs, promise ETAs, or freelance a discount. Your team owns
-              every final call.
+              JARVIS works inside hard rails. It drafts ranges computed from the water and the
+              tier you priced, books the visit, and keeps the record alive for years. It does not
+              diagnose repairs, promise ETAs, or freelance a discount. Your team owns every final
+              call.
             </motion.p>
           </div>
 
@@ -96,8 +96,10 @@ export function Outcome() {
         <div className="mt-6 flex items-start gap-3 rounded-2xl border border-orange-200 bg-orange-50 p-5 text-sm font-semibold leading-relaxed text-orange-900">
           <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
           <p>
-            This page does not claim full operational data handling compliance. Compliance depends on the deployed
-            stack, vendor agreements, access controls, and signed terms.
+            This isn&apos;t a fit for every shop. If you want a system that acts without asking, or
+            need a full CRM replacement, JARVIS isn&apos;t that. And this page does not claim full
+            operational data handling compliance — that depends on the deployed stack, vendor
+            agreements, access controls, and signed terms.
           </p>
         </div>
       </div>

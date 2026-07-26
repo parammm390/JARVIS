@@ -4,18 +4,16 @@ import { motion } from "framer-motion"
 import {
   BellRing,
   BookOpenCheck,
-  ClipboardList,
+  CalendarClock,
+  ClipboardCheck,
   FileText,
   GitBranch,
   LayoutDashboard,
-  MessagesSquare,
-  PhoneForwarded,
   PhoneIncoming,
-  PhoneMissed,
   Radar,
   Route,
   ShieldCheck,
-  Mic2,
+  ScrollText,
   BarChart3,
   Rocket,
 } from "lucide-react"
@@ -23,14 +21,14 @@ import type { LucideIcon } from "lucide-react"
 
 const capabilities: Array<{ icon: LucideIcon; title: string; copy: string }> = [
   {
-    icon: PhoneMissed,
-    title: "Every Call Answered",
-    copy: "Ring two, after hours, overflow, weekends. The intake is captured, and a household memory record opens on the spot.",
+    icon: LayoutDashboard,
+    title: "One Record Per Household",
+    copy: "Water profile, quotes, jobs, plan, reviews, referrals, lifetime value, and the computed next revenue action — all in one place, kept the same way for years.",
   },
   {
     icon: Radar,
     title: "Live Water Data Pull",
-    copy: "Public water records for the caller's area, plus a free onsite test to confirm the exact numbers for their home.",
+    copy: "Public water records for the household's area, plus a free onsite test to confirm the exact numbers for their home.",
   },
   {
     icon: BarChart3,
@@ -39,16 +37,11 @@ const capabilities: Array<{ icon: LucideIcon; title: string; copy: string }> = [
   },
   {
     icon: FileText,
-    title: "Quote Range on the Call",
-    copy: "Computed from your pricing tier and the actual water. Never invented, never discounted on a whim. The final figure stays with your team.",
+    title: "Quote Drafted, Then Held for Approval",
+    copy: "Computed from your pricing tier and the actual water — never invented, never discounted on a whim. It waits for your yes before it goes out.",
   },
   {
-    icon: MessagesSquare,
-    title: "Text-Back in 60 Seconds",
-    copy: "The water report, the numbers, and three booking slots land by SMS before the homeowner finishes googling your competitor.",
-  },
-  {
-    icon: ClipboardList,
+    icon: ClipboardCheck,
     title: "Booked and Confirmed",
     copy: "Tap-to-book slots, confirmation in-thread, reminder at T-24h. The appointment goes on the record, not on a sticky note.",
   },
@@ -83,24 +76,19 @@ const capabilities: Array<{ icon: LucideIcon; title: string; copy: string }> = [
     copy: "Media near capacity, a changed water report, usage trending up. Offers fire when the data says so, priced with the system discount.",
   },
   {
-    icon: LayoutDashboard,
-    title: "Household Memory Records",
-    copy: "One record per customer: water profile, quotes, jobs, plan, reviews, referrals, LTV, and the computed next revenue action.",
+    icon: CalendarClock,
+    title: "Years, Not Weeks",
+    copy: "A household record from three years ago reads exactly like one from this morning. Nothing decays, nothing gets summarized away.",
   },
   {
-    icon: PhoneForwarded,
-    title: "Speed-to-Lead Outbound",
-    copy: "Website forms, Google and Facebook leads, and quote requests get called back in under a minute, while intent is still hot.",
-  },
-  {
-    icon: Mic2,
-    title: "Transcripts and Recordings",
-    copy: "Every call structured, transcribed, and reviewable. The handoff your team gets is a record, not a rumor.",
+    icon: ScrollText,
+    title: "Every Interaction, on the Record",
+    copy: "Whatever channel it came in on — a call, a text, someone typing it in — the plan JARVIS drafts and the approval it waits for are logged the same way.",
   },
   {
     icon: ShieldCheck,
     title: "Hard Rails",
-    copy: "No invented prices, no diagnosis, no ETAs, no health claims. The agent quotes ranges from your numbers; humans own every final call.",
+    copy: "No invented prices, no diagnosis, no ETAs, no health claims. JARVIS drafts ranges from your numbers; your team owns every final call.",
   },
 ]
 
@@ -116,7 +104,7 @@ export function Solution() {
             viewport={{ once: true }}
             className="mb-5 inline-flex rounded-full border border-teal-200 bg-teal-50 px-4 py-2 text-xs font-black uppercase tracking-[0.18em] text-teal-700"
           >
-            The full lifecycle, A to Z
+            The call was minute one
           </motion.div>
           <motion.h2
             initial={{ opacity: 0, y: 18 }}
@@ -124,7 +112,7 @@ export function Solution() {
             viewport={{ once: true }}
             className="text-4xl font-black tracking-tight text-slate-950 md:text-6xl"
           >
-            One memory runs the whole customer lifecycle.
+            This is the next two years.
           </motion.h2>
           <motion.p
             initial={{ opacity: 0, y: 16 }}
@@ -133,9 +121,8 @@ export function Solution() {
             transition={{ delay: 0.08 }}
             className="mx-auto mt-6 max-w-2xl text-lg font-medium leading-relaxed text-slate-600"
           >
-            Answer, pull the real water data, size it, quote it at your prices, book it, document
-            it, ask for the review, check in on schedule, log the referral, and know what to offer
-            next. Sixteen capabilities, one record, years deep.
+            One record for the household — the water test, the quote, the job, the reminder, the
+            referral — kept the same way whether you look at it in a week or in three years.
           </motion.p>
         </div>
 
@@ -162,9 +149,9 @@ export function Solution() {
         </div>
 
         <p className="mx-auto mt-8 max-w-3xl text-center text-sm font-bold leading-relaxed text-slate-600">
-          Any one of these is a commodity you can rent for $99 a month. The moat is that one
-          continuous memory carries all of them, for every household, for years. Nothing else in
-          this market does that.
+          Any one of these is a commodity you can rent for $99 a month. What makes it a moat is
+          that one continuous memory carries all of them, for every household, for years — not a
+          feature list, a record that keeps growing.
         </p>
       </div>
     </section>

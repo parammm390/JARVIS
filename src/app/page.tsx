@@ -4,6 +4,7 @@ import { PersonalizedDemoBuilder } from "@/components/sections/PersonalizedDemoB
 import { Solution } from "@/components/sections/Solution"
 import { RevenueLeak } from "@/components/sections/RevenueLeak"
 import { LiveWorkflow } from "@/components/sections/LiveWorkflow"
+import { CommandBridgeProof } from "@/components/sections/jarvis-proof/CommandBridgeProof"
 import { Outcome } from "@/components/sections/Outcome"
 import { Pricing } from "@/components/sections/Pricing"
 import { FirstSevenDays } from "@/components/sections/FirstSevenDays"
@@ -55,9 +56,10 @@ export default function Home() {
       <Hero />
       <RevenueLeak />
       <LiveWorkflow />
-      <PersonalizedDemoBuilder />
+      <CommandBridgeProof />
       <Solution />
       <Outcome />
+      <PersonalizedDemoBuilder />
       <Pricing />
       <FirstSevenDays />
       <FAQ />
