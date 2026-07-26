@@ -14,37 +14,37 @@ import { Footer } from "@/components/sections/Footer"
 
 export const metadata: Metadata = {
   title: {
-    absolute: "Finnor AI | Never Lose Another After-Hours Water Call",
+    absolute: "Finnor AI | Give It an Instruction. Watch It Ask Before It Acts.",
   },
   description:
-    "The call you miss after 5pm books with your competitor tonight. FINNOR answers every one, pulls real water data, pre-qualifies the lead with a range from your pricing, books the free water test, and remembers every household for years of reviews, check-ins, referrals, and upsells.",
+    "JARVIS drafts the quote, the invoice, the reschedule — against your real price book, in seconds. Then it waits for your yes. Approve it and there's a receipt. For water treatment and well pump companies.",
   alternates: {
     canonical: "https://finnorai.com/",
   },
   openGraph: {
-    title: "Finnor AI | Never Lose Another After-Hours Water Call",
+    title: "Finnor AI | Give It an Instruction. Watch It Ask Before It Acts.",
     description:
-      "The call you miss at 6pm is a job your competitor books tonight. FINNOR answers it, pulls real water data, and pre-qualifies the lead with a range from your pricing before your team ever drives out.",
+      "JARVIS drafts the quote, the invoice, the reschedule — against your real price book, in seconds. Then it waits for your yes. Approve it and there's a receipt.",
     url: "https://finnorai.com/",
     images: [
       {
         url: "https://finnorai.com/og-image.svg",
         width: 1200,
         height: 630,
-        alt: "Finnor AI booking and lead recovery for water treatment and well pump companies",
+        alt: "JARVIS, an operations console for water treatment and well pump companies",
       },
     ],
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Finnor AI | Never Lose Another After-Hours Water Call",
+    title: "Finnor AI | Give It an Instruction. Watch It Ask Before It Acts.",
     description:
-      "The call you miss at 6pm is a job your competitor books tonight. FINNOR answers it, pulls real water data, and pre-qualifies the lead with a range from your pricing before your team ever drives out.",
+      "JARVIS drafts the quote, the invoice, the reschedule — against your real price book, in seconds. Then it waits for your yes. Approve it and there's a receipt.",
     images: [
       {
         url: "https://finnorai.com/og-image.svg",
-        alt: "Finnor AI booking and lead recovery for water treatment and well pump companies",
+        alt: "JARVIS, an operations console for water treatment and well pump companies",
       },
     ],
   },

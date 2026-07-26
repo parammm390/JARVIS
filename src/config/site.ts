@@ -1,8 +1,8 @@
 export const siteConfig = {
   name: "FINNOR",
-  tagline: "AI booking and lead recovery for water treatment and well pump companies.",
+  tagline: "JARVIS for water treatment and well pump companies — it asks before it acts.",
   description:
-    "FINNOR answers every call, pulls live public water data, gives a real range from your pricing tier, books the visit by text, and remembers every household for years of reviews, check-ins, referrals, and upsells.",
+    "FINNOR runs on JARVIS: an instruction becomes a drafted plan, held for your approval, executed, and receipted. Live water data, a real range from your pricing tier, booked visits, and a household record that keeps producing revenue for years.",
   contactEmail: "param@finnorai.com",
   ctaLink: "https://calendly.com/pdave9807",
   demoLink: "/demo",

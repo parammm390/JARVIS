@@ -15,23 +15,23 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://finnorai.com"),
   applicationName: "Finnor AI",
   title: {
-    default: "Finnor | AI Booking and Lead Recovery for Water Treatment & Well Pump Companies",
+    default: "Finnor | JARVIS for Water Treatment & Well Pump Companies",
     template: "%s | Finnor AI",
   },
   description:
-    "FINNOR answers every missed call, pulls live public water data by ZIP, sizes the system with real math, gives a real range from your pricing tier, books by text, and remembers every household for years: reviews, check-ins, referrals, upsells, LTV.",
+    "JARVIS turns an instruction into an approved, executed, evidenced action for water treatment and well pump companies: a quote drafted from your price book, held for your yes, executed, and receipted. Live water data, real ranges, and a household memory that runs for years.",
   keywords: [
     "water lead recovery",
     "water appointment booking",
     "water test booking",
     "water treatment lead follow-up",
-    "well pump repair answering service",
+    "well pump service operations platform",
     "water well service dispatch",
     "no-water emergency route",
     "after-hours well pump dispatch",
-    "missed call booking for well service companies",
+    "AI operations console for water dealers",
     "Finnor AI",
-    "Finnor water lead recovery",
+    "JARVIS water treatment",
   ],
   authors: [{ name: "Finnor AI", url: "https://finnorai.com" }],
   creator: "Finnor AI",
@@ -41,9 +41,9 @@ export const metadata: Metadata = {
     canonical: "https://finnorai.com/",
   },
   openGraph: {
-    title: "Finnor | AI Booking and Lead Recovery for Water Companies",
+    title: "Finnor | JARVIS for Water Treatment & Well Pump Companies",
     description:
-      "Book more jobs from the leads you already get: missed calls, after-hours inquiries, overflow calls, and slow web forms.",
+      "Give it an instruction. Watch it ask before it acts. JARVIS drafts the quote, the booking, the urgent route — against your real price book — then waits for your yes.",
     url: "https://finnorai.com/",
     siteName: "Finnor AI",
     images: [
@@ -51,16 +51,16 @@ export const metadata: Metadata = {
         url: "/og-image.svg",
         width: 1200,
         height: 630,
-        alt: "Finnor booking and lead recovery system for water treatment and well pump companies",
+        alt: "JARVIS, an operations console for water treatment and well pump companies",
       },
     ],
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Finnor | AI Booking and Lead Recovery for Water Companies",
+    title: "Finnor | JARVIS for Water Treatment & Well Pump Companies",
     description:
-      "Book more jobs from the leads you already get: missed calls, after-hours inquiries, overflow calls, and slow web forms.",
+      "Give it an instruction. Watch it ask before it acts. JARVIS drafts the quote, the booking, the urgent route — against your real price book — then waits for your yes.",
     images: ["/og-image.svg"],
   },
   robots: {
@@ -98,7 +98,7 @@ export default function RootLayout({
                   url: "https://finnorai.com",
                   email: "param@finnorai.com",
                   description:
-                    "AI booking and lead recovery system for water treatment leads, well pump emergencies, web inquiries, and speed-to-lead follow-up.",
+                    "FINNOR runs on JARVIS, an operations platform that drafts plans from an instruction, holds them for approval, executes, and files a receipt — for water treatment leads, well pump emergencies, web inquiries, and speed-to-lead follow-up.",
                   sameAs: ["https://www.linkedin.com/in/param-dave16"],
                 },
                 {
@@ -114,27 +114,21 @@ export default function RootLayout({
                   "@type": "WebPage",
                   "@id": "https://finnorai.com/#webpage",
                   url: "https://finnorai.com",
-                  name: "Finnor | AI Booking and Lead Recovery for Water Companies",
+                  name: "Finnor | JARVIS for Water Treatment & Well Pump Companies",
                   description:
-                    "Finnor turns missed calls, after-hours inquiries, overflow calls, and slow web leads into booked water tests, service appointments, or urgent owner/on-call routes.",
+                    "JARVIS turns missed calls, after-hours inquiries, overflow calls, and slow web leads into drafted water tests, service appointments, or urgent routes — held for your approval before anything executes.",
                   isPartOf: { "@id": "https://finnorai.com/#website" },
                   about: { "@id": "https://finnorai.com/#organization" },
                   inLanguage: "en-US",
                 },
                 {
                   "@type": "SoftwareApplication",
-                  name: "Finnor Booking and Lead Recovery System",
+                  name: "JARVIS",
                   applicationCategory: "BusinessApplication",
                   operatingSystem: "Cloud",
                   url: "https://finnorai.com",
                   description:
-                    "Productized booking and lead recovery workflows for water treatment leads, well pump emergencies, web inquiries, and speed-to-lead follow-up.",
-                  offers: {
-                    "@type": "AggregateOffer",
-                    lowPrice: "799",
-                    highPrice: "1500",
-                    priceCurrency: "USD",
-                  },
+                    "An operations platform for water treatment and well pump companies: instruction, drafted plan, human approval, execution, receipt. No public pricing is listed — pricing is scoped per pilot; see /pricing on the site for tier structure.",
                 },
               ],
             }),
