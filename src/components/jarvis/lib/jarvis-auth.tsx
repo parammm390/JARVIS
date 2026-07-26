@@ -40,7 +40,10 @@ const JarvisAuthContext = createContext<JarvisAuthState>({ session: null, loadin
 
 export function JarvisAuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
-  const [loading, setLoading] = useState(true)
+  // The signed-out command center is intentionally public and every private API is
+  // still backend-gated. Rendering it while Supabase restores a session avoids a
+  // blank full-screen LCP delay for every cold public visit.
+  const [loading, setLoading] = useState(false)
   const [role, setRole] = useState<JarvisRole | null>(null)
 
   useEffect(() => {

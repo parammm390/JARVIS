@@ -51,7 +51,9 @@ export function BootSequence({ onDone }: { onDone: () => void }) {
     jarvisGet("read-models/pipeline-health").then(() => settle("models", true), () => settle("models", false))
     jarvisGet("events").then(() => settle("events", true), () => settle("events", false))
     jarvisGet("actions/pending", { filter: "pending" }).then(() => settle("gate", true), () => settle("gate", false))
-    import("@vapi-ai/web").then(() => settle("voice", true), () => settle("voice", false))
+    // Voice configuration is known at build time; loading the browser SDK itself is
+    // intentionally deferred until the user starts a voice session (D9 perf).
+    settle("voice", true)
 
     const cap = setTimeout(() => {
       if (cancelled) return
@@ -153,7 +155,10 @@ export function BootSequence({ onDone }: { onDone: () => void }) {
 export function shouldShowBoot(): boolean {
   if (typeof window === "undefined") return false
   try {
-    return window.sessionStorage.getItem(SESSION_KEY) !== "1"
+    // D9: a 2.5s full-screen animation cannot sit in front of every operational
+    // visit. It remains available for an intentional demo/replay (`?boot=1`),
+    // but the normal command center opens directly to live work.
+    return new URLSearchParams(window.location.search).get("boot") === "1" && window.sessionStorage.getItem(SESSION_KEY) !== "1"
   } catch {
     return false
   }

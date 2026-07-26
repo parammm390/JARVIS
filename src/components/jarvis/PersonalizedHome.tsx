@@ -45,7 +45,10 @@ function RoleLanding() {
     return () => { delete root.dataset.jarvisTenantAccent }
   }, [prefs?.accent])
 
-  if (loading || (session && !role)) return <div className="min-h-screen bg-[#04070f]" />
+  // A public JARVIS shell is safe before session restoration; private requests keep
+  // failing closed until the bearer is present. Only wait for a role once a real
+  // session has been restored, avoiding an avoidable blank first paint.
+  if (session && !role) return <div className="min-h-screen bg-[#04070f]" />
   if (!session) return <JarvisCommandCenter />
   const selected = role && prefs && ALLOWED_HOME[role].includes(prefs.homepage) ? prefs.homepage! : DEFAULT_HOME[role!]
   if (selected === "bridge") return <SceneFrame accent={prefs?.accent ?? null}><Bridge /></SceneFrame>

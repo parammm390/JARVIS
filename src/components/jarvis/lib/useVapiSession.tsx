@@ -89,6 +89,7 @@ function useVapiSessionInternal() {
   const [lastError, setLastError] = useState<string | null>(null)
   const [micSilenceWarning, setMicSilenceWarning] = useState(false)
   const vapiRef = useRef<VapiInstance | null>(null)
+  const vapiLoadRef = useRef<Promise<VapiInstance | null> | null>(null)
   const callStartRef = useRef<number | null>(null)
   const voiceStateRef = useRef<VoiceState>("idle")
   const lastAudioAtRef = useRef<number>(0)
@@ -123,11 +124,15 @@ function useVapiSessionInternal() {
     }, 1000)
   }, [stopMicWatchdog])
 
-  useEffect(() => {
-    let mounted = true
-    import("@vapi-ai/web")
+  // The Vapi browser SDK is large and only useful after an explicit voice action.
+  // Loading it at layout mount penalizes every Command Center visit (including
+  // users who never touch voice) and makes the boot overlay compete with the main
+  // application. This retains one shared instance, but creates it on demand.
+  const ensureVapi = useCallback(async (): Promise<VapiInstance | null> => {
+    if (vapiRef.current) return vapiRef.current
+    if (vapiLoadRef.current) return vapiLoadRef.current
+    vapiLoadRef.current = import("@vapi-ai/web")
       .then(({ default: Vapi }) => {
-        if (!mounted) return
         // Daily's Chrome 140+ microphone path requires this flag. Without it,
         // Chrome can keep the hardware track open while Daily joins without a
         // usable upstream audio track: TTS still works, but Vapi receives no
@@ -196,10 +201,17 @@ function useVapiSessionInternal() {
           }
         })
         vapiRef.current = vapi
+        return vapi
       })
-      .catch(() => setConfigured(false))
+      .catch(() => {
+        setConfigured(false)
+        return null
+      })
+    return vapiLoadRef.current
+  }, [startMicWatchdog, stopMicWatchdog])
+
+  useEffect(() => {
     return () => {
-      mounted = false
       stopMicWatchdog()
       forceReleaseMic(vapiRef.current)
       void vapiRef.current?.stop()
@@ -263,7 +275,9 @@ function useVapiSessionInternal() {
     setVoiceState("connecting")
     setCallDurationSec(0)
     try {
-      await vapiRef.current?.start(VAPI_ASSISTANT_ID)
+      const vapi = await ensureVapi()
+      if (!vapi) throw new Error("Voice session is unavailable")
+      await vapi.start(VAPI_ASSISTANT_ID)
     } catch (error) {
       console.error("[JARVIS] unable to start voice session", error)
       setLastError("The microphone session could not start. Please try again.")
@@ -272,7 +286,7 @@ function useVapiSessionInternal() {
     } finally {
       sessionTransitionRef.current = false
     }
-  }, [voiceState, stopMicWatchdog])
+  }, [voiceState, stopMicWatchdog, ensureVapi])
 
   const toggleMute = useCallback(() => {
     setMutedState((m) => {

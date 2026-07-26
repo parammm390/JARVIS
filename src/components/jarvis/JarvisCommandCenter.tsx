@@ -257,7 +257,10 @@ function Sidebar({ view, setView }: { view: string; setView: (v: string) => void
 
 function Shell() {
   const data = useJarvis()
-  const [mounted, setMounted] = useState(false)
+  // The shell itself is deterministic on the server. Rendering it immediately
+  // avoids replacing a full-screen "Waking JARVIS…" placeholder after hydration,
+  // which was the primary LCP element on every cold visit.
+  const [mounted, setMounted] = useState(true)
   const [view, setView] = useState("Command Center")
   // D9: synthesized cues are intentionally off until this browser opts in.
   const [soundOn, setSoundOn] = useState(false)
@@ -285,17 +288,6 @@ function Shell() {
 
   const live = !data.statsDegraded && data.stats !== null
   const mood = deriveMood({ voiceLive: session.voiceState === "live" || session.voiceState === "speaking", degraded: data.statsDegraded })
-
-  if (!mounted) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[#04070f]">
-        <div className="flex items-center gap-3 text-lg font-black tracking-tight text-white">
-          <span className="flex h-9 w-9 animate-pulse items-center justify-center rounded-xl bg-cyan-400/20 text-xs font-black text-cyan-200 shadow-lg">F</span>
-          Waking JARVIS…
-        </div>
-      </div>
-    )
-  }
 
   return (
     <div className="jarvis-cursor-zone jarvis-root relative min-h-screen bg-[#04070f] text-[color:var(--j-text)]" data-mood={mood}>
