@@ -47,15 +47,23 @@ export async function jarvisGet<T>(path: string, params?: Record<string, string>
   const qs = params ? `?${new URLSearchParams(params).toString()}` : ""
   const started = performance.now()
   let status = 0
+  // The public console already has an explicit degraded/sample-data state. A
+  // read that never settles cannot add truth, but it does keep the initial page
+  // load open forever when the upstream is unreachable (notably in release
+  // audits). Bound it so the UI can honestly enter that existing state.
+  const controller = new AbortController()
+  const timeoutId = window.setTimeout(() => controller.abort(), 5_000)
   try {
     const res = await fetch(`/api/jarvis/${path}${qs}`, {
       cache: "no-store",
       headers: authHeaders(),
+      signal: controller.signal,
     })
     status = res.status
     if (!res.ok) throw new JarvisApiError(`GET ${path} failed (${res.status})`, res.status)
     return (await res.json()) as T
   } finally {
+    window.clearTimeout(timeoutId)
     publish({ method: "GET", path: `/${path}`, status, ms: Math.round(performance.now() - started), at: Date.now() })
   }
 }
