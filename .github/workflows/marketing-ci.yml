@@ -33,8 +33,20 @@ jobs:
           node-version: 22
       # This project has seen npm's hosted cache fail before any test runs. The
       # lockfile is small enough that a fresh registry install is preferable to a
-      # flaky cache hit for the workflow that protects release evidence.
-      - run: npm ci --prefer-online --no-audit
+      # flaky cache hit for the workflow that protects release evidence. Emit an
+      # annotation tail on failure: the public Checks API exposes annotations but
+      # not raw Actions logs to a signed-out diagnosis session.
+      - name: Install locked dependencies
+        run: |
+          set +e
+          npm ci --prefer-online --no-audit > npm-ci.log 2>&1
+          install_status=$?
+          if [ "$install_status" -ne 0 ]; then
+            tail -n 25 npm-ci.log | while IFS= read -r line; do
+              echo "::error file=.github/workflows/marketing-ci.yml::$line"
+            done
+          fi
+          exit "$install_status"
       # Phase 7 §7.8: no-restricted-properties(Math.random) under src/components/
       # jarvis and src/app/jarvis, defined in .eslintrc.cjs — this is what actually
       # enforces it; running lint in CI is what makes that enforcement real instead
