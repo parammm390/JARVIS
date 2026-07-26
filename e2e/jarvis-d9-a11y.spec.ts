@@ -12,6 +12,7 @@ test("command palette is keyboard reachable and Escape restores its trigger", as
   await page.goto("/jarvis")
   const trigger = page.getByPlaceholder(/what would you like me to do/i)
   await expect(trigger).toBeVisible({ timeout: 15_000 })
+  await expect(page.locator("html[data-jarvis-palette-ready='true']")).toBeVisible()
   await trigger.focus()
   await page.keyboard.press("Control+k")
   const paletteInput = page.getByPlaceholder(/jump to a view or draft an instruction/i)

@@ -41,6 +41,10 @@ function fuzzyMatch(query: string, label: string): boolean {
 export function useCommandPalette() {
   const [open, setOpen] = useState(false)
   useEffect(() => {
+    // Expose the listener's readiness for the e2e keyboard proof. The input is
+    // SSR-visible before this effect attaches, so visibility alone is not a
+    // valid indication that Ctrl/Cmd+K can already be received on a slow device.
+    document.documentElement.dataset.jarvisPaletteReady = "true"
     function onKey(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault()
@@ -51,7 +55,10 @@ export function useCommandPalette() {
       }
     }
     window.addEventListener("keydown", onKey)
-    return () => window.removeEventListener("keydown", onKey)
+    return () => {
+      window.removeEventListener("keydown", onKey)
+      delete document.documentElement.dataset.jarvisPaletteReady
+    }
   }, [])
   return { open, setOpen }
 }
