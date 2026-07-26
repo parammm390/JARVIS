@@ -1,28 +1,28 @@
 "use client"
 
 import { motion } from "framer-motion"
-import { ArrowRight, BellRing, PhoneOff, Search, TimerReset, UserRoundX } from "lucide-react"
+import { ArrowRight, FileX, History, Shuffle, UserRoundX } from "lucide-react"
 
 const problemCards = [
   {
-    icon: PhoneOff,
-    title: "Voicemail eats the call",
-    copy: "6:47 PM, crew under a house. The quote request hits voicemail, the homeowner keeps dialing, and the first shop that answers wins the job.",
+    icon: History,
+    title: "Every call starts from zero",
+    copy: "Nobody remembers the water test from two years ago, the softener that's due for salt, or why this quote is different from the last one. The history exists somewhere. It's just never where you need it.",
   },
   {
-    icon: Search,
-    title: "The quote is a guess",
-    copy: "A rep reads a rate sheet, not the water. Homeowners now bring independent water tests because dealer numbers stopped holding up. The guess costs trust and margin.",
+    icon: FileX,
+    title: "Nobody can say why",
+    copy: "A price was given, a job was booked, an invoice went out — and if a customer asks why, there's no record of what was actually approved, or by whom. Just someone's memory of a phone call.",
+  },
+  {
+    icon: Shuffle,
+    title: "The price depends on who answered",
+    copy: "Two reps, two different numbers, same softener. Not because anyone's dishonest — because nothing ties a quote to your actual price book. Homeowners now bring their own water tests because dealer numbers stopped holding up.",
   },
   {
     icon: UserRoundX,
-    title: "The job goes undocumented",
-    copy: "No serials, no before-and-after numbers, no itemized invoice. That is where surprise bills, disputes, and one-star reviews are born.",
-  },
-  {
-    icon: TimerReset,
-    title: "The customer is forgotten",
-    copy: "No review ask, no salt check-in, no re-test, no referral capture. They buy salt at the hardware store and their neighbor calls someone else.",
+    title: "The work ends at the invoice",
+    copy: "No review ask, no salt check-in, no re-test reminder, no referral capture. They buy salt at the hardware store and their neighbor calls someone else.",
   },
 ]
 
@@ -48,7 +48,7 @@ export function RevenueLeak() {
               transition={{ delay: 0.05 }}
               className="text-4xl font-black tracking-tight text-slate-950 md:text-6xl"
             >
-              The call you missed was worth two years of revenue, not one job.
+              A missed call is the cheapest mistake your business makes.
             </motion.h2>
           </div>
           <motion.p
@@ -58,10 +58,10 @@ export function RevenueLeak() {
             transition={{ delay: 0.1 }}
             className="max-w-2xl text-lg font-medium leading-relaxed text-slate-600 md:text-xl"
           >
-            One missed softener call is an install, a service plan, seven salt deliveries, a
-            5-star review, a same-street referral, and the year-two upgrade. Lead tools see the
-            click, CRMs see the invoice, review apps see the star. Nobody remembers the
-            household, so the revenue after the invoice never happens.
+            The expensive ones happen after you pick up. Every quote your team gives, every job
+            you schedule, every price you promise — if none of it is written down the same way
+            twice, you&apos;re not running a business, you&apos;re running on memory. JARVIS
+            keeps the record: what was quoted, what was approved, what happened next.
           </motion.p>
         </div>
 
@@ -98,17 +98,17 @@ export function RevenueLeak() {
             <BeforeAfterPanel
               tone="risk"
               title="The memoryless path"
-              label="Same lead, no memory"
-              items={["Voicemail at 6:47 PM", "Rate-sheet guess", "One invoice, disputed", "Never contacted again"]}
+              label="Same decision, no record"
+              items={["Quote given, never logged", "Price drifted rep to rep", "Invoice sent, no approval trail", "Never followed up"]}
             />
             <div className="hidden items-center justify-center px-2 lg:flex">
               <ArrowRight className="h-6 w-6 text-slate-500" />
             </div>
             <BeforeAfterPanel
               tone="safe"
-              title="The FINNOR record"
-              label="One household memory"
-              items={["Answered on ring two", "Quoted from the water", "Booked and documented", "Remembered for years"]}
+              title="The JARVIS record"
+              label="One record, every time"
+              items={["Quote drafted from your price book", "Held for your approval", "Every action has a receipt", "Follow-up scheduled automatically"]}
             />
           </div>
         </motion.div>
@@ -146,22 +146,21 @@ function BeforeAfterPanel({
         </div>
         {safe ? (
           <span className="status-pulse rounded-full bg-teal-600 px-3 py-1.5 text-xs font-black text-white">
-            Route sent
+            Receipt filed
           </span>
         ) : (
           <span className="rounded-full bg-orange-100 px-3 py-1.5 text-xs font-black text-orange-800">
-            Caller cold
+            No record
           </span>
         )}
       </div>
       <div className="space-y-3">
         {items.map((item, index) => (
           <div key={item} className="flex items-center gap-3 rounded-2xl border border-slate-900/8 bg-white/78 p-4">
-            {safe ? (
-              <BellRing className="h-4 w-4 text-teal-600" />
-            ) : (
-              <PhoneOff className="h-4 w-4 text-orange-600" />
-            )}
+            <span
+              className={`h-2.5 w-2.5 shrink-0 rounded-full ${safe ? "bg-teal-600" : "bg-orange-500"}`}
+              aria-hidden
+            />
             <span className="text-sm font-black text-slate-700">{item}</span>
             <span className="ml-auto text-xs font-black text-slate-500">0{index + 1}</span>
           </div>

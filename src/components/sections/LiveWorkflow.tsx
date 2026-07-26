@@ -6,28 +6,28 @@ import { BellRing, ClipboardList, PhoneCall, ShieldAlert, UserRoundCheck } from 
 const workflow = [
   {
     icon: PhoneCall,
-    title: "Answered on ring two",
-    detail: "Missed, overflow, after-hours, weekends. The call is taken, the concern is captured, and a household memory record opens before the caller hangs up.",
+    title: "An instruction arrives",
+    detail: "By voice, by text, or someone typing it into the console. However it gets there, a plan starts the same way — and a record opens before anything happens.",
   },
   {
     icon: ClipboardList,
-    title: "Water pulled, system sized",
-    detail: "Public water records for the caller's area, plus a free onsite test to confirm the exact numbers for their home.",
+    title: "JARVIS drafts a plan",
+    detail: "Grounded against your real data — price book, household history, live water records where they matter. Fields it can't verify get flagged as unverified, never guessed.",
   },
   {
     icon: ShieldAlert,
-    title: "Quoted from your pricing",
-    detail: "A real range from the tier you set, like $3,800 to $4,250 installed. Urgent no-water language skips the quote and routes straight to on-call.",
+    title: "It waits for your yes",
+    detail: "Nothing executes until someone approves it. Not a formality — a database-enforced gate. Reject it and the plan simply never runs.",
   },
   {
     icon: BellRing,
-    title: "Booked by text",
-    detail: "The report and three tap-to-book slots land by SMS within 60 seconds of hang-up. The appointment writes itself onto the record.",
+    title: "Approved work executes",
+    detail: "The quote goes out, the visit gets scheduled, the invoice is sent — exactly what was approved, nothing more.",
   },
   {
     icon: UserRoundCheck,
-    title: "The memory keeps working",
-    detail: "Review ask, salt cadence, re-test clocks, referral attribution, and the year-two offer, all fired from the same record. Your team owns every final call.",
+    title: "The receipt stays",
+    detail: "What was proposed, what was approved, what happened, what it cost. Every time. That record is what the rest of your business runs on.",
   },
 ]
 
@@ -43,7 +43,7 @@ export function LiveWorkflow() {
             viewport={{ once: true }}
             className="mb-5 inline-flex rounded-full border border-sky-200 bg-sky-50 px-4 py-2 text-xs font-black uppercase tracking-[0.18em] text-sky-800"
           >
-            Booking workflow
+            How it actually works
           </motion.div>
           <motion.h2
             initial={{ opacity: 0, y: 18 }}
@@ -51,7 +51,7 @@ export function LiveWorkflow() {
             viewport={{ once: true }}
             className="text-4xl font-black tracking-tight text-slate-950 md:text-6xl"
           >
-            Ring two to booked job in one continuous motion.
+            One loop. Every decision. No exceptions.
           </motion.h2>
           <motion.p
             initial={{ opacity: 0, y: 16 }}
@@ -60,8 +60,9 @@ export function LiveWorkflow() {
             transition={{ delay: 0.08 }}
             className="mx-auto mt-6 max-w-2xl text-lg font-medium leading-relaxed text-slate-600"
           >
-            Answer, pull the water record, size it, quote it, book it. Five moves, under three
-            minutes, and the household memory holds all of it for the years after.
+            Whatever set it off — a call, a text, a typed line — JARVIS drafts a plan, holds it
+            for your approval, executes exactly what you approved, and leaves a receipt. Five
+            steps, the same shape, every time.
           </motion.p>
         </div>
 
@@ -118,7 +119,7 @@ function WorkflowMap() {
   return (
     <div className="relative">
       <div className="hidden md:block">
-        <svg viewBox="0 0 1120 300" className="h-auto w-full" role="img" aria-label="Response workflow map">
+        <svg viewBox="0 0 1120 300" className="h-auto w-full" role="img" aria-label="The JARVIS loop, from instruction to receipt">
           <defs>
             <linearGradient id="lightWorkflowLine" x1="0" x2="1" y1="0" y2="0">
               <stop offset="0%" stopColor="rgba(14,165,181,0.12)" />
@@ -155,7 +156,7 @@ function WorkflowMap() {
             return (
               <g key={step.title}>
                 <circle cx={x} cy={y} r="48" fill="#ffffff" stroke="rgba(30,64,95,0.16)" strokeWidth="2" />
-                <circle cx={x} cy={y} r="34" fill={index === 3 ? "#0f766e" : "#0f2437"} />
+                <circle cx={x} cy={y} r="34" fill={index === 2 ? "#0f766e" : "#0f2437"} />
                 <text x={x} y={y + 6} textAnchor="middle" fill="#ffffff" fontSize="17" fontWeight="900">
                   0{index + 1}
                 </text>
@@ -186,7 +187,7 @@ function HandoffReel() {
     <div className="mt-6 grid gap-4 border-t border-slate-200 pt-6 lg:grid-cols-[1fr_0.72fr_1fr] lg:items-center">
       <div className="rounded-[1.35rem] border border-orange-200 bg-orange-50/70 p-5">
         <p className="text-xs font-black uppercase tracking-[0.2em] text-orange-700">
-          Raw missed-lead moment
+          Raw instruction, however it arrives
         </p>
         <div className="mt-5 space-y-3">
           {["Caller: Jennifer", "Location: 142 Millbrook Rd, Harrisonburg VA", "Concern: Sulfur smell and hard water"].map((item) => (
@@ -198,7 +199,7 @@ function HandoffReel() {
       </div>
 
       <div className="signal-thread min-h-20 rounded-[1.35rem] border border-slate-200 bg-white px-4 py-5">
-        <div className="relative z-10 mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-slate-950 text-xs font-black text-white shadow-[0_0_0_6px_rgba(30,91,141,0.08)]">
+        <div className="relative z-10 mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-slate-950 text-xs font-black text-white shadow-[0_0_0_6px_rgba(34,211,238,0.12)]">
           AI
         </div>
       </div>
@@ -206,14 +207,14 @@ function HandoffReel() {
       <div className="rounded-[1.35rem] border border-teal-200 bg-teal-50/70 p-5">
         <div className="flex items-center justify-between gap-3">
           <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-700">
-            Booking route
+            Plan, gated and receipted
           </p>
           <span className="status-pulse rounded-full bg-teal-600 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-white">
-            Alert sent
+            Awaiting approval
           </span>
         </div>
         <div className="mt-5 grid gap-3 sm:grid-cols-2">
-          {["Concern tagged", "Callback confirmed", "Urgency screened", "Booking path ready"].map((item) => (
+          {["Plan drafted", "Held for approval", "Price grounded in your book", "Ready on your yes"].map((item) => (
             <div key={item} className="rounded-2xl border border-teal-200 bg-white px-4 py-3 text-sm font-black text-slate-800">
               {item}
             </div>
@@ -235,14 +236,14 @@ function AlertSummary() {
       <div className="mb-6 flex items-center justify-between gap-4">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-700">
-            Team route
+            Approval queue
           </p>
           <h3 className="mt-2 text-2xl font-black tracking-tight text-slate-950">
-            Ready to book or escalate
+            Held for your approval
           </h3>
         </div>
         <span className="status-pulse rounded-full bg-teal-600 px-3 py-1.5 text-xs font-black text-white">
-          Sent
+          Pending
         </span>
       </div>
       <div className="space-y-3">
@@ -252,8 +253,8 @@ function AlertSummary() {
           ["Concern", "Sulfur smell and hard water"],
           ["Water source", "Well water"],
           ["Interest", "Softener + whole-house filtration"],
-          ["Next step", "Book water test"],
-          ["Status", "Ready for front-office follow-up"],
+          ["Proposed action", "Schedule water test"],
+          ["Status", "Waiting for your yes"],
         ].map(([label, value]) => (
           <div key={label} className="grid gap-1 rounded-2xl border border-slate-900/8 bg-white/72 p-4 sm:grid-cols-[142px_1fr]">
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-600">
@@ -264,8 +265,8 @@ function AlertSummary() {
         ))}
       </div>
       <p className="mt-5 rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm font-semibold leading-relaxed text-slate-600">
-        Finnor does not diagnose, quote, promise arrival times, or make repair decisions. It helps
-        your team respond faster and book the right next step.
+        JARVIS doesn&apos;t diagnose, finalize a quote, promise arrival times, or make repair
+        decisions on its own. It drafts the next step and waits for your team to approve it.
       </p>
     </motion.div>
   )

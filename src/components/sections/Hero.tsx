@@ -1,75 +1,59 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import dynamic from "next/dynamic"
 import { motion } from "framer-motion"
-import {
-  BellRing,
-  CalendarDays,
-  CheckCircle2,
-  Clock3,
-  FileText,
-  PhoneCall,
-  Play,
-  ShieldCheck,
-  UserRoundCheck,
-  Waves,
-} from "lucide-react"
+import { CalendarDays, FileText, Play, ShieldCheck, Waves } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { siteConfig } from "@/config/site"
 import { Magnetic } from "@/components/ui/magnetic"
+import { JarvisProofSurface } from "@/components/sections/jarvis-proof/JarvisProofSurface"
+
+// Three.js (via Orb3D) is real weight (~140kB) that a public, SEO-facing homepage
+// shouldn't pay for on first paint. Deferred client-only — same lazy-load discipline
+// hard rule #4 asks for, applied at the bundle-splitting level, not just the
+// animation level. The static gradient fallback below mirrors Orb3D's own reduced-
+// motion/low-power collapse look, so there's no visual pop when the real module lands.
+const MarketingOrb = dynamic(
+  () => import("@/components/sections/jarvis-proof/MarketingOrb").then((m) => m.MarketingOrb),
+  {
+    ssr: false,
+    loading: () => (
+      <div
+        className="h-full w-full rounded-full"
+        style={{
+          background: "radial-gradient(circle at 38% 32%, rgba(34,211,238,0.35) 0%, rgba(34,211,238,0.12) 45%, rgba(6,11,24,0.05) 72%)",
+        }}
+      />
+    ),
+  },
+)
 
 const navItems = [
-  { href: "#problem", label: "Problem" },
-  { href: "#workflow", label: "Workflow" },
+  { href: "#problem", label: "The Stakes" },
+  { href: "#workflow", label: "The Loop" },
   { href: "/resources", label: "Resources" },
   { href: "/trust-safety", label: "Trust" },
   { href: "#pricing", label: "Pricing" },
   { href: "#faq", label: "FAQ" },
 ]
 
-const callStates = ["Ringing", "Answered", "Water data pulled", "Quoted + booked"]
-
-const intakeRows = [
-  ["Caller", "Jennifer"],
-  ["Location", "142 Millbrook Rd - Harrisonburg VA"],
-  ["Concern", "Sulfur smell and hard water"],
-  ["Area water", "14.3 gpg, 51 well samples (USGS)"],
-  ["Sized system", "40k softener + sulfur filter"],
-  ["Quote range", "$3,800-$4,250 installed"],
-  ["Status", "Booked Thu 10:00 AM, record open"],
-]
-
-const workflowStateItems: Array<{ icon: LucideIcon; label: string }> = [
-  { icon: Waves, label: "Answered ring two" },
-  { icon: CheckCircle2, label: "Water data pulled" },
-  { icon: ShieldCheck, label: "Quoted from your pricing" },
-  { icon: BellRing, label: "Booked by text" },
-]
-
 const miniStatusItems: Array<{ icon: LucideIcon; label: string }> = [
-  { icon: PhoneCall, label: "Call answered" },
-  { icon: CheckCircle2, label: "Quote delivered" },
-  { icon: BellRing, label: "Record opened" },
+  { icon: Waves, label: "Instruction understood" },
+  { icon: ShieldCheck, label: "Approved by you" },
+  { icon: FileText, label: "Receipt filed" },
 ]
 
-const signalSteps = ["Incoming call", "Live water data", "Pre-qualified range", "Booked + remembered"]
+const loopSteps = ["Instruction given", "Plan drafted", "You approve", "Executed + receipt"]
 
 export function Hero() {
   const [scrolled, setScrolled] = useState(false)
-  const [activeState, setActiveState] = useState(0)
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 16)
     onScroll()
     window.addEventListener("scroll", onScroll, { passive: true })
     return () => window.removeEventListener("scroll", onScroll)
-  }, [])
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      setActiveState((current) => (current + 1) % callStates.length)
-    }, 1550)
-    return () => window.clearInterval(timer)
   }, [])
 
   return (
@@ -111,7 +95,7 @@ export function Hero() {
               href="#demo-builder"
               className="cta-secondary hidden h-11 items-center justify-center rounded-full border border-slate-900/12 bg-white px-4 text-xs font-black text-slate-800 transition hover:-translate-y-0.5 hover:border-slate-900/22 md:inline-flex"
             >
-              Explore Live Demos
+              See JARVIS Work
             </a>
             <a
               href={siteConfig.calendlyLink}
@@ -136,7 +120,7 @@ export function Hero() {
               className="mb-6 inline-flex max-w-full items-center rounded-full border border-sky-900/10 bg-white px-4 py-2 text-sm font-bold leading-snug text-slate-700 shadow-sm"
             >
               <span className="mr-2 h-2 w-2 rounded-full bg-teal-500 shadow-[0_0_0_4px_rgba(20,184,166,0.12)]" />
-              After 5pm, the calls you miss book with someone else
+              Introducing JARVIS — an operations console for water treatment dealers
             </motion.div>
 
             <motion.h1
@@ -145,7 +129,7 @@ export function Hero() {
               transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
               className="max-w-[22rem] break-words text-[2.18rem] font-black leading-[0.99] tracking-tight text-slate-950 sm:max-w-4xl sm:text-6xl md:text-7xl lg:text-[5.75rem]"
             >
-              The job you lose tonight is booked with your competitor by morning.
+              Give it an instruction. Watch it ask before it acts.
             </motion.h1>
 
             <motion.p
@@ -154,11 +138,9 @@ export function Hero() {
               transition={{ delay: 0.1, duration: 0.62 }}
               className="mt-7 max-w-[22rem] text-base font-semibold leading-relaxed text-slate-700 sm:max-w-2xl sm:text-lg md:text-xl"
             >
-              FINNOR answers every call your team misses, pulls the real water data for the
-              caller&apos;s ZIP, and gives a pre-qualified range from your pricing before anyone
-              drives out. Then it books the free onsite water test, same as your team already
-              runs. Every customer stays in memory for years — reviews, check-ins, referrals, and
-              upsells.
+              JARVIS drafts the quote, the invoice, the reschedule — against your real price book,
+              in seconds. Then it waits for your yes. Approve it and there&apos;s a receipt. Reject
+              it and nothing ran.
             </motion.p>
 
             <motion.p
@@ -167,9 +149,8 @@ export function Hero() {
               transition={{ delay: 0.18, duration: 0.55 }}
               className="mt-5 flex w-full max-w-full rounded-2xl border border-teal-800/14 bg-white px-4 py-3 text-sm font-black leading-relaxed text-slate-700 shadow-sm"
             >
-              Every lead becomes a household memory record. Every record carries a next revenue
-              action. Every action is tracked to lifetime value. Water treatment and well pump
-              companies only.
+              Every decision leaves a receipt — what was approved, what changed, what it cost.
+              Nothing happens without one. Water treatment and well pump companies only.
             </motion.p>
 
             <motion.div
@@ -197,7 +178,7 @@ export function Hero() {
                   className="cta-secondary inline-flex min-h-[3.75rem] items-center justify-center gap-2 rounded-full border border-slate-900/14 bg-white px-8 py-4 text-sm font-black text-slate-900 transition hover:-translate-y-0.5 hover:border-slate-900/24"
                 >
                   <Play className="h-4 w-4 fill-slate-800" />
-                  Explore Both Live Demos
+                  See JARVIS Work
                 </a>
               </Magnetic>
             </motion.div>
@@ -211,7 +192,7 @@ export function Hero() {
             transition={{ delay: 0.18, duration: 0.78, ease: [0.16, 1, 0.3, 1] }}
             className="relative"
           >
-            <DispatchCommandVisual activeState={activeState} />
+            <JarvisOrbPanel />
           </motion.div>
         </div>
       </div>
@@ -221,149 +202,26 @@ export function Hero() {
   )
 }
 
-function DispatchCommandVisual({ activeState }: { activeState: number }) {
+function JarvisOrbPanel() {
   return (
-    <div className="relative mx-auto max-w-[720px]">
+    <div className="relative mx-auto max-w-[560px]">
       <div className="absolute -inset-6 rounded-[2.25rem] bg-gradient-to-br from-sky-200/52 via-white/40 to-teal-100/45 blur-2xl" />
-      <div className="relative overflow-hidden rounded-[2rem] border border-slate-900 bg-slate-950 p-4 text-white shadow-[0_34px_110px_rgba(8,24,39,0.34)] md:p-5">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_22%_0%,rgba(125,211,252,0.22),transparent_34%),linear-gradient(135deg,rgba(45,212,191,0.11),transparent_46%)]" />
-        <div className="absolute inset-0 command-grid opacity-50" />
-        <div className="relative">
-          <div className="flex flex-wrap items-start justify-between gap-4 border-b border-white/10 pb-4">
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.22em] text-sky-100">
-                Finnor booking console
-              </p>
-              <h2 className="mt-2 text-2xl font-black tracking-tight">Quote, book, remember</h2>
-            </div>
-            <span className="inline-flex items-center rounded-full border border-teal-300/30 bg-teal-300/16 px-3 py-1.5 text-xs font-black text-teal-100">
-              <span className="mr-2 h-2 w-2 animate-pulse rounded-full bg-teal-300" />
-              {callStates[activeState]}
-            </span>
-          </div>
-
-          <div className="signal-thread my-4 flex min-h-12 flex-wrap items-center justify-start gap-2 rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-2 md:justify-between">
-            {signalSteps.map((step, index) => (
-              <span
-                key={step}
-                className={`relative z-10 rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-widest ${
-                  index <= activeState
-                    ? "border-teal-200/35 bg-teal-200/15 text-teal-50"
-                    : "border-white/10 bg-slate-950 text-slate-300"
-                }`}
-              >
-                {step}
-              </span>
-            ))}
-          </div>
-
-          <div className="grid gap-4 py-4 md:grid-cols-[0.86fr_1.14fr]">
-            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-300/12">
-                    <span className="absolute inset-0 animate-ping rounded-2xl border border-sky-200/20" />
-                    <PhoneCall className="relative h-5 w-5 text-sky-100" />
-                  </span>
-                  <div>
-                    <p className="font-black">Incoming water treatment inquiry</p>
-                    <p className="text-sm font-semibold text-slate-300">Inbound water treatment call</p>
-                  </div>
-                </div>
-              </div>
-              <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4">
-                <div className="mb-3 flex items-center justify-between text-xs font-black uppercase tracking-widest text-slate-300">
-                  <span>Voice signal</span>
-                  <span>Live</span>
-                </div>
-                <HeroWaveform />
-              </div>
-              <div className="mt-4 rounded-2xl border border-orange-200/20 bg-orange-200/10 p-4">
-                <p className="text-xs font-black uppercase tracking-widest text-orange-100">
-                  Booking opportunity
-                </p>
-                <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-200">
-                  Well water. Sulfur smell and hard water. Interested in a softener and
-                  whole-house filtration. Ready to book a water test.
-                </p>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-300">
-                    Booking context
-                  </p>
-                  <h3 className="mt-1 text-xl font-black">Next step ready</h3>
-                </div>
-                <FileText className="h-5 w-5 text-sky-100" />
-              </div>
-              <div className="space-y-2">
-                {intakeRows.map(([label, value], index) => (
-                  <motion.div
-                    key={label}
-                    initial={false}
-                    animate={{
-                      opacity: index <= activeState + 3 ? 1 : 0.72,
-                      y: 0,
-                    }}
-                    className="grid gap-1 rounded-xl border border-white/10 bg-black/20 p-3 sm:grid-cols-[132px_1fr]"
-                  >
-                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-300">
-                      {label}
-                    </span>
-                    <span className="text-sm font-bold text-white">{value}</span>
-                  </motion.div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div className="grid gap-4 border-t border-white/10 pt-4 md:grid-cols-[1fr_0.92fr]">
-            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-              <p className="mb-4 text-xs font-black uppercase tracking-[0.22em] text-slate-300">
-                Workflow state
-              </p>
-              <div className="grid grid-cols-2 gap-3">
-                {workflowStateItems.map(({ icon: Icon, label }, index) => (
-                  <div
-                    key={label}
-                    className={`rounded-2xl border p-3 transition ${
-                      index <= activeState
-                        ? "border-teal-300/30 bg-teal-300/16 text-teal-50"
-                        : "border-white/10 bg-black/24 text-slate-400"
-                    }`}
-                  >
-                    <Icon className="mb-3 h-4 w-4" />
-                    <p className="text-xs font-black uppercase tracking-widest">{label}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-teal-300/20 bg-teal-300/10 p-4">
-              <div className="mb-4 flex items-center justify-between">
-                <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-100">
-                  Water treatment booking route
-                </p>
-                <span className="status-pulse rounded-full bg-teal-200 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-slate-950">
-                  Sent
-                </span>
-              </div>
-              <p className="text-sm font-semibold leading-relaxed text-white">
-                Water treatment lead recovered. Homeowner is on well water and reports sulfur smell
-                plus hard water. Interested in softener and whole-house filtration options.
-                Address and callback confirmed. Ready to book a water test.
-              </p>
-              <div className="mt-4 flex items-center gap-3 rounded-xl border border-white/10 bg-black/18 p-3">
-                <UserRoundCheck className="h-5 w-5 text-teal-100" />
-                <span className="text-sm font-black text-white">Human team stays in control</span>
-              </div>
-            </div>
-          </div>
+      <JarvisProofSurface className="relative overflow-hidden rounded-[2rem] border border-white/10 p-6 shadow-[0_34px_110px_rgba(8,24,39,0.34)] md:p-8">
+        <div className="mb-6 flex items-center justify-between">
+          <p className="text-xs font-black uppercase tracking-[0.22em] text-[color:var(--j-text-dim)]">
+            JARVIS
+          </p>
+          <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[10px] font-black uppercase tracking-widest text-[color:var(--j-text-dim)]">
+            Sample states
+          </span>
         </div>
-      </div>
+        <div className="mx-auto aspect-square w-full max-w-[400px]">
+          <MarketingOrb className="h-full w-full" />
+        </div>
+        <p className="mt-6 text-center text-sm font-semibold text-[color:var(--j-text-dim)]">
+          Idle. Planning. Executing. The same states every real approval moves through.
+        </p>
+      </JarvisProofSurface>
     </div>
   )
 }
@@ -377,11 +235,11 @@ function SignalHandoffStrip() {
       className="mt-8 max-w-full rounded-[1.5rem] border border-slate-900/10 bg-white/92 p-4 shadow-[0_18px_42px_rgba(15,38,62,0.08)] md:max-w-2xl"
     >
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs font-black uppercase tracking-[0.2em] text-slate-600">
-        <span>Lead signal to booking route</span>
-        <span className="text-teal-700">Live recovery path</span>
+        <span>How an instruction becomes a receipt</span>
+        <span className="text-teal-700">Every time, no exceptions</span>
       </div>
       <div className="signal-thread flex min-h-12 flex-wrap items-center justify-start gap-2 rounded-2xl bg-slate-50 px-3 py-2 md:justify-between">
-        {signalSteps.map((step) => (
+        {loopSteps.map((step) => (
           <span
             key={step}
             className="relative z-10 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-700 shadow-sm"
@@ -391,21 +249,6 @@ function SignalHandoffStrip() {
         ))}
       </div>
     </motion.div>
-  )
-}
-
-function HeroWaveform() {
-  return (
-    <div className="flex h-16 items-end justify-center gap-1.5">
-      {Array.from({ length: 22 }).map((_, index) => (
-        <motion.span
-          key={index}
-          animate={{ scaleY: [0.35, 0.9 - (index % 5) * 0.08, 0.45] }}
-          transition={{ duration: 0.85, repeat: Infinity, delay: index * 0.025 }}
-          className="h-12 w-1.5 origin-bottom rounded-full bg-gradient-to-t from-teal-300/30 via-sky-200/80 to-white"
-        />
-      ))}
-    </div>
   )
 }
 
