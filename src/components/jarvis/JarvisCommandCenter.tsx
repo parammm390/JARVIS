@@ -334,7 +334,7 @@ function Shell() {
             <div className="min-w-0 flex-1">
               <OpsTicker soundOn={soundOn} onToggleSound={() => setSoundOn((v) => !v)} />
             </div>
-            <span className={`j-chip shrink-0 uppercase tracking-widest ${live ? "bg-teal-300/12 text-teal-200" : "bg-amber-300/12 text-amber-200"}`}>
+            <span className={`j-chip flex min-w-[6.75rem] shrink-0 justify-center uppercase tracking-widest ${live ? "bg-teal-300/12 text-teal-200" : "bg-amber-300/12 text-amber-200"}`}>
               <span key={live ? "live" : "sim"} className="jarvis-flip-in inline-flex items-center gap-[0.3rem]">
                 {live && <LiveDot />}
                 {live ? "Live" : "Simulation"}
