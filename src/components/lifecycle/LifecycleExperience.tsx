@@ -191,7 +191,7 @@ export function LifecycleExperience({ sample }: { sample: LifecycleScenario }) {
               transition={{ delay: 0.12, duration: 0.7 }}
               className="mt-6 max-w-3xl text-lg font-medium leading-relaxed text-slate-600 md:text-xl"
             >
-              Lead tools see the click. CRMs see the invoice. Review apps see the star. FINNOR
+              Lead tools see the click. CRMs see the invoice. Review apps see the star. JARVIS
               carries one memory of the customer through all of it. Here it is for one household,
               compressed into two minutes.
             </motion.p>
@@ -203,8 +203,8 @@ export function LifecycleExperience({ sample }: { sample: LifecycleScenario }) {
               className="mt-4 text-xs font-semibold leading-relaxed text-slate-500"
             >
               {scenario.live && view === "playing"
-                ? `Computed for ${scenario.dealer.name}, ${scenario.dealer.location}, ${scenario.dealer.tierLabel} pricing. The water data, sizing, and range are live from public records. The household is a composite; the timeline is simulated, and the workflow is exactly what FINNOR runs.`
-                : "One composite household on real county water medians. The timeline is simulated, and the workflow is exactly what FINNOR runs."}
+                ? `Computed for ${scenario.dealer.name}, ${scenario.dealer.location}, ${scenario.dealer.tierLabel} pricing. The water data, sizing, and range are live from public records. The household is a composite; the timeline is simulated, and the workflow is exactly what JARVIS runs.`
+                : "One composite household on real county water medians. The timeline is simulated, and the workflow is exactly what JARVIS runs."}
             </motion.p>
 
             {view === "entry" ? (
@@ -218,12 +218,12 @@ export function LifecycleExperience({ sample }: { sample: LifecycleScenario }) {
                   The 15-second version
                 </p>
                 <p className="mt-2.5 text-sm font-semibold leading-relaxed text-slate-700">
-                  FINNOR answers the call you missed, pulls the real water record for that address,
-                  sizes the system with math, gives a real range at your prices, books the visit by text,
-                  documents the job, asks for the review at the right moment, checks in on
-                  schedule, logs the referral it produced, and knows when the next offer actually
-                  makes sense. Two years, one memory. Everything below is that story on a timeline
-                  you can drive.
+                  JARVIS drafts an answer to the call you missed, pulls the real water record for
+                  that address, sizes the system with math, gives a real range at your prices,
+                  books the visit by text, documents the job, asks for the review at the right
+                  moment, checks in on schedule, logs the referral it produced, and knows when the
+                  next offer actually makes sense — holding for your approval at every step. Two
+                  years, one memory. Everything below is that story on a timeline you can drive.
                 </p>
               </motion.div>
             ) : null}

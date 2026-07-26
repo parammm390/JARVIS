@@ -24,11 +24,17 @@ import { voiceConfig } from "@/lib/voice/config"
 import { buildDemoPreviewHandoff } from "@/lib/demo/intake-extraction"
 import { getWorkflowDefinition, type DemoWorkflowType } from "@/lib/demo/workflows"
 import { Button } from "@/components/ui/button"
-import {
-  buildIntakeSnapshot,
-  MemoPostCallHandoff,
-  type DemoTranscriptItem,
-} from "@/components/demo/PostCallHandoff"
+import dynamic from "next/dynamic"
+import { buildIntakeSnapshot, type DemoTranscriptItem } from "@/components/demo/PostCallHandoff"
+
+// The JARVIS result card pulls in ActionRenderer's full registry (all flagship
+// scene components) — real weight that a page whose main job is a live voice call
+// shouldn't pay for before the call even starts. Deferred client-only until a call
+// actually ends, same discipline Hero.tsx applies to MarketingOrb/Orb3D.
+const JarvisResultCard = dynamic(
+  () => import("@/components/demo/JarvisResultCard").then((m) => m.JarvisResultCard),
+  { ssr: false },
+)
 
 type CallState =
   | "ready"
@@ -983,12 +989,7 @@ export function PersonalizedDemoPanel({
         ) : null}
         {callState === "ended" && handoffIntake ? (
           <div ref={postCallRef}>
-            <MemoPostCallHandoff
-              companyName={result.profile.company_name}
-              transcript={transcript}
-              artifacts={result.artifacts}
-              intake={handoffIntake}
-            />
+            <JarvisResultCard companyName={result.profile.company_name} intake={handoffIntake} />
           </div>
         ) : null}
       </div>

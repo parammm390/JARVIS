@@ -7,8 +7,6 @@ import type { DemoGenerationStage, GenerateDemoResponse } from "@/lib/demo/types
 import { DemoSetupForm } from "@/components/demo/DemoSetupForm"
 import { DemoLimitReached } from "@/components/demo/DemoLimitReached"
 import { PersonalizedDemoPanel } from "@/components/demo/PersonalizedDemoPanel"
-import { ProofArtifacts } from "@/components/demo/ProofArtifacts"
-import { WorkflowModule } from "@/components/demo/WorkflowModule"
 import { CalendlyCta } from "@/components/demo/CalendlyCta"
 import type { DemoWorkflowType } from "@/lib/demo/workflows"
 import { getWorkflowDefinition } from "@/lib/demo/workflows"
@@ -22,8 +20,6 @@ export function DemoExperience() {
   const [error, setError] = useState("")
   const [duplicateMessage, setDuplicateMessage] = useState("")
   const [duplicateCalendlyUrl, setDuplicateCalendlyUrl] = useState("")
-  const [activeStep, setActiveStep] = useState(0)
-  const [callHasActivity, setCallHasActivity] = useState(false)
   const [selectedWorkflow, setSelectedWorkflow] =
     useState<DemoWorkflowType>("water_treatment")
   const callConsoleRef = useRef<HTMLDivElement>(null)
@@ -80,8 +76,6 @@ export function DemoExperience() {
       setError("")
       setDuplicateMessage("")
       setDuplicateCalendlyUrl("")
-      setActiveStep(0)
-      setCallHasActivity(false)
 
       try {
         const localKey = localDemoKey(companyName, websiteUrl, workflowType)
@@ -187,13 +181,11 @@ export function DemoExperience() {
           <div ref={callConsoleRef}>
             <PersonalizedDemoPanel
               result={result}
-              onActiveStepChange={setActiveStep}
-              onCallActivity={() => setCallHasActivity(true)}
+              onActiveStepChange={() => {}}
+              onCallActivity={() => {}}
               onCallStatusChange={setStage}
             />
           </div>
-          <WorkflowModule activeStep={activeStep} workflowType={result.profile.workflowType} />
-          <ProofArtifacts artifacts={result.artifacts} activated={callHasActivity} />
           <section className="border-t border-slate-200 py-16">
             <div className="container px-4 md:px-6">
               <CalendlyCta />

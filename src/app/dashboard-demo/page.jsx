@@ -1,21 +1,9 @@
-import PersonalizedDashboardPage from "@/app/demo/[slug]/page"
+import { redirect } from "next/navigation"
 
-export const metadata = {
-  title: "Build Your FINNOR Operations Dashboard Demo",
-  description:
-    "Create a company-specific FINNOR operations dashboard with live call controls, missed-call recovery, speed-to-lead tools, transcripts, handoffs, and service workflow data.",
-  alternates: {
-    canonical: "https://finnorai.com/dashboard-demo",
-  },
-  openGraph: {
-    title: "Build Your FINNOR Operations Dashboard Demo",
-    description:
-      "Configure your company, services, market, team, and lead sources to generate a working FINNOR operations dashboard.",
-    url: "https://finnorai.com/dashboard-demo",
-    type: "website",
-  },
-}
-
+// M4.T4 — this route rendered the same fake "operations dashboard" as
+// /demo/[slug] (identical component, confirmed in M0/M1 source review). Cut per
+// docs/marketing-demo-merge-contract.md; redirecting rather than deleting the route
+// outright so any existing inbound link lands somewhere real instead of 404ing.
 export default function DashboardDemoPage() {
-  return <PersonalizedDashboardPage />
+  redirect("/demo")
 }
