@@ -79,6 +79,30 @@ html[data-jarvis-tenant-accent="amber"] .jarvis-root { --accent: var(--j-amber);
     0 18px 44px rgba(2, 6, 16, 0.55);
 }
 
+/* D9: manual low-power mode trades decorative glass and ambient motion for
+   predictable interaction speed. Data, content, and controls are unchanged. */
+.jarvis-root[data-low-power="true"] [data-jarvis-atmosphere],
+.jarvis-root[data-low-power="true"] .jarvis-caustic-layer,
+.jarvis-root[data-low-power="true"] .jarvis-ambient {
+  display: none !important;
+}
+.jarvis-root[data-low-power="true"] .j-panel,
+.jarvis-root[data-low-power="true"] [class*="backdrop-blur"] {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+.jarvis-root[data-low-power="true"] .j-panel {
+  background: var(--j-panel-solid);
+  box-shadow: inset 0 1px 0 rgba(148, 197, 255, 0.07);
+  transition: none;
+}
+.jarvis-root[data-low-power="true"] *,
+.jarvis-root[data-low-power="true"] *::before,
+.jarvis-root[data-low-power="true"] *::after {
+  animation: none !important;
+  transition-duration: 0ms !important;
+}
+
 .j-label {
   font-size: 11px;
   font-weight: 700;

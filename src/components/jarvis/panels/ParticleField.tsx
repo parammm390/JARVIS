@@ -37,13 +37,14 @@ function initParticles(w: number, h: number): Particle[] {
   }))
 }
 
-export function ParticleField() {
+export function ParticleField({ disabled = false }: { disabled?: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const particlesRef = useRef<Particle[]>([])
   const sparksRef = useRef<Spark[]>([])
   const lastRef = useRef<number | null>(null)
 
   useEffect(() => {
+    if (disabled) return
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
     const canvas = canvasRef.current
     if (!canvas) return
@@ -105,7 +106,8 @@ export function ParticleField() {
       off()
       window.removeEventListener("resize", resize)
     }
-  }, [])
+  }, [disabled])
 
+  if (disabled) return null
   return <canvas ref={canvasRef} aria-hidden className="jarvis-ambient pointer-events-none fixed inset-0 -z-10" style={{ width: "100vw", height: "100vh" }} />
 }

@@ -265,6 +265,7 @@ function Shell() {
   const [view, setView] = useState("Command Center")
   // D9: synthesized cues are intentionally off until this browser opts in.
   const [soundOn, setSoundOn] = useState(false)
+  const [lowPower, setLowPower] = useState(false)
   const [booting, setBooting] = useState(false)
   const [prefill, setPrefill] = useState<string | undefined>(undefined)
   const [igniteKey, setIgniteKey] = useState(0)
@@ -276,11 +277,15 @@ function Shell() {
     setMounted(true)
     setBooting(shouldShowBoot())
     setSoundOn(window.localStorage.getItem("finnor.jarvis.sound-enabled") === "true")
+    setLowPower(window.localStorage.getItem("finnor.jarvis.low-power.v1") === "1")
   }, [])
   useEffect(() => setMuted(!soundOn), [soundOn])
   useEffect(() => {
     if (mounted) window.localStorage.setItem("finnor.jarvis.sound-enabled", String(soundOn))
   }, [mounted, soundOn])
+  useEffect(() => {
+    if (mounted) window.localStorage.setItem("finnor.jarvis.low-power.v1", lowPower ? "1" : "0")
+  }, [mounted, lowPower])
 
   useEffect(() => {
     if (wasDegradedRef.current && !data.statsDegraded) setIgniteKey((k) => k + 1)
@@ -291,13 +296,13 @@ function Shell() {
   const mood = deriveMood({ voiceLive: session.voiceState === "live" || session.voiceState === "speaking", degraded: data.statsDegraded })
 
   return (
-    <div className="jarvis-cursor-zone jarvis-root relative min-h-screen bg-[#04070f] text-[color:var(--j-text)]" data-mood={mood}>
+    <div className="jarvis-cursor-zone jarvis-root relative min-h-screen bg-[#04070f] text-[color:var(--j-text)]" data-mood={mood} data-low-power={lowPower || undefined}>
       {/* atmosphere pinned behind everything */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden" style={{ opacity: "var(--aurora-opacity)" }}>
-        <ConsoleAtmosphere />
-        <div className="jarvis-gridfloor jarvis-ambient" aria-hidden />
+      <div className="pointer-events-none fixed inset-0 overflow-hidden" data-jarvis-atmosphere style={{ opacity: "var(--aurora-opacity)" }}>
+        {!lowPower && <ConsoleAtmosphere />}
+        {!lowPower && <div className="jarvis-gridfloor jarvis-ambient" aria-hidden />}
       </div>
-      <ParticleField />
+      <ParticleField disabled={lowPower} />
       <EventFXLayer />
       <div
         className="pointer-events-none fixed inset-0 z-20 transition-opacity duration-700"
@@ -340,6 +345,9 @@ function Shell() {
                 {live ? "Live" : "Simulation"}
               </span>
             </span>
+            <button type="button" onClick={() => setLowPower((current) => !current)} aria-pressed={lowPower} className="j-chip shrink-0 border border-white/12 text-white/70 hover:text-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60">
+              {lowPower ? "Low power on" : "Low power off"}
+            </button>
             <div className="lg:hidden">
               <MobileProfileChip />
             </div>

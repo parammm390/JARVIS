@@ -287,14 +287,15 @@ function BridgeShell() {
   }
 
   return (
-    <div className="jarvis-cursor-zone jarvis-root relative min-h-screen bg-[#04070f] text-[color:var(--j-text)]" data-mood="idle" data-daypart={daypart}>
+    <div className="jarvis-cursor-zone jarvis-root relative min-h-screen bg-[#04070f] text-[color:var(--j-text)]" data-mood="idle" data-daypart={daypart} data-low-power={forceLowPower || undefined}>
       <div
         className="pointer-events-none fixed inset-0 overflow-hidden"
+        data-jarvis-atmosphere
         style={{ opacity: "var(--aurora-opacity)", backgroundColor: "var(--day-tint)", transition: "background-color 2s ease" }}
       >
-        <ConsoleAtmosphere />
+        {!forceLowPower && <ConsoleAtmosphere />}
       </div>
-      <ParticleField />
+      <ParticleField disabled={forceLowPower} />
       <div className="relative flex">
         <LeftRail scene={scene} setScene={chooseScene} orderedScenes={orderedScenes} unopened={orderedScenes.filter((id) => !ledger[id])} forceLowPower={forceLowPower} />
         <CenterStage scene={scene} forceLowPower={forceLowPower} onToggleLowPower={toggleLowPower} />
