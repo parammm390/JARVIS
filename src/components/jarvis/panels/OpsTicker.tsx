@@ -28,11 +28,17 @@ export const OPS_STREAM = [
 export function OpsTicker({ soundOn, onToggleSound }: { soundOn: boolean; onToggleSound: () => void }) {
   const data = useJarvisData()
   const [index, setIndex] = useState(0)
+  // F2.T3 — FLOW-47 TickerGlide: pause the advance on hover (you're reading this
+  // line, not asking for the next one) — the only functionally-testable part of
+  // "inertial glide"; the existing decelerate-curve transition below already reads
+  // as a glide rather than a hard cut.
+  const [paused, setPaused] = useState(false)
 
   useEffect(() => {
+    if (paused) return
     const t = setInterval(() => setIndex((i) => i + 1), 3200)
     return () => clearInterval(t)
-  }, [])
+  }, [paused])
 
   const degraded = data.statsDegraded && data.readModelsDegraded
   const items = useMemo(() => {
@@ -52,7 +58,11 @@ export function OpsTicker({ soundOn, onToggleSound }: { soundOn: boolean; onTogg
   const item = items[index % items.length]!
 
   return (
-    <div className="relative flex items-center gap-3 overflow-hidden border-b border-white/8 bg-white/[0.03] px-5 py-2.5 backdrop-blur-sm">
+    <div
+      className="relative flex items-center gap-3 overflow-hidden border-b border-white/8 bg-white/[0.03] px-5 py-2.5 backdrop-blur-sm"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+    >
       <span className="flex shrink-0 items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-teal-200/90">
         <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-teal-300" /> Live Ops
       </span>

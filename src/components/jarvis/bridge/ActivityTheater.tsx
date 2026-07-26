@@ -8,14 +8,16 @@
 // DecisionReceipt via ReceiptDrawer for the two sources that have one
 // (action_log/workflow_step — calls don't carry a receipt, so they're inert).
 
-import { useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { jarvisClient, type ActivityItem, type ActivityPage } from "@/lib/jarvis-client"
 import { useLiveQuery } from "@/lib/jarvis/useLiveQuery"
 import { getCurrentAccessToken, useJarvisAuth } from "../lib/jarvis-auth"
 import { ReceiptDrawer } from "../lib/ReceiptDrawer"
+import { flash } from "../lib/EventFX"
 import { Enter } from "../ui/motion/primitives"
 import { ActionRenderer } from "../ui/renderers/ActionRenderer"
+import { METEOR_FLIGHT_MS, publishActivityArrival, registerAnchor } from "../lib/pulse-bus"
 
 const SOURCE_ICON: Record<ActivityItem["source"], string> = {
   action_log: "bg-cyan-400",
@@ -53,6 +55,14 @@ function sseUrlFor(): string | undefined {
 export function ActivityTheater() {
   const { session } = useJarvisAuth()
   const [openReceiptId, setOpenReceiptId] = useState<string | null>(null)
+  const feedRef = useRef<HTMLDivElement | null>(null)
+  const rowRefs = useRef<Map<string, HTMLButtonElement>>(new Map())
+  const seenIdsRef = useRef<Set<string> | null>(null)
+
+  // F2.T1/T2 — this feed is EventMeteor's (FLOW-39) real landing zone: registers its
+  // own rect so ParticleField can draw a flight from the orb here without either
+  // component knowing the other's DOM.
+  useEffect(() => registerAnchor("activity-feed", () => feedRef.current?.getBoundingClientRect() ?? null), [])
 
   const { data, connection } = useLiveQuery<ActivityPage, string>({
     sseUrl: sseUrlFor(),
@@ -70,7 +80,28 @@ export function ActivityTheater() {
     enabled: !!session,
   })
 
-  const items = data?.items ?? []
+  const items = useMemo(() => data?.items ?? [], [data])
+
+  // F2.T2 — FLOW-39 EventMeteor's trigger: a genuinely new row, not a re-fetch of
+  // rows already shown. The FIRST populated page is baseline, never a meteor storm
+  // on mount; every id that appears afterward is real (an SSE frame or a poll that
+  // actually changed) and fires exactly one meteor + one delayed row-flash, on the
+  // same beat (METEOR_FLIGHT_MS) so the flight visually lands where the glow starts.
+  useEffect(() => {
+    if (items.length === 0) return
+    if (seenIdsRef.current === null) {
+      seenIdsRef.current = new Set(items.map((i) => i.id))
+      return
+    }
+    const seen = seenIdsRef.current
+    for (const item of items) {
+      if (seen.has(item.id)) continue
+      publishActivityArrival(item.id)
+      const rowEl = rowRefs.current.get(item.id) ?? null
+      window.setTimeout(() => flash(rowEl), METEOR_FLIGHT_MS)
+    }
+    seenIdsRef.current = new Set(items.map((i) => i.id))
+  }, [items])
 
   async function openReceiptFor(item: ActivityItem): Promise<void> {
     try {
@@ -104,7 +135,7 @@ export function ActivityTheater() {
           {connection}
         </span>
       </div>
-      <div className="flex-1 space-y-1.5 overflow-y-auto px-3 py-3" aria-live="polite" aria-relevant="additions text">
+      <div ref={feedRef} className="flex-1 space-y-1.5 overflow-y-auto px-3 py-3" aria-live="polite" aria-relevant="additions text">
         {items.length === 0 && <div className="text-[11px] text-[color:var(--j-text-faint)]">No activity yet — the feed fills as Finnor works.</div>}
         <AnimatePresence initial={false}>
           {items.map((item) => {
@@ -117,6 +148,10 @@ export function ActivityTheater() {
             return (
               <Enter key={item.id} y={-6}>
                 <button
+                  ref={(el) => {
+                    if (el) rowRefs.current.set(item.id, el)
+                    else rowRefs.current.delete(item.id)
+                  }}
                   type="button"
                   onClick={() => void openReceiptFor(item)}
                   disabled={item.source === "call"}

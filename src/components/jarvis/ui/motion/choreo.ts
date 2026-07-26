@@ -194,6 +194,35 @@ export const shakeDeny: FlowChoreo = {
   },
 }
 
+// FLOW-38 OrbAuraRipple: one-shot expanding ring off the orb, ≥3s throttled by the
+// caller (pulse-bus.ORB_AURA_THROTTLE_MS) → static aura (reduced). Deliberately NOT
+// `repeat: Infinity` like the rhyming pinAura/valvePulse presets above — this fires
+// once per real qualifying pulse, never a standing ambient loop, so it never counts
+// against hard rule #10's ≤2-loop budget.
+export const orbAuraRipple: FlowChoreo = {
+  variants: {
+    initial: { scale: 0.6, opacity: 0 },
+    animate: { scale: [0.6, 1.8], opacity: [0, 0.55, 0], transition: { duration: 1.1, ease: EASE.decelerate } },
+  },
+  reducedVariants: {
+    initial: { scale: 0.6, opacity: 0 },
+    animate: { scale: 1, opacity: [0, 0.4, 0], transition: { duration: 0.3 } },
+  },
+}
+
+// FLOW-42 SceneDock: outgoing scene shrinks toward the nav rail, incoming unfurls
+// from the same origin → crossfade (reduced).
+export const sceneDockExit: FlowChoreo = {
+  variants: {
+    initial: { opacity: 1, scale: 1, x: 0 },
+    animate: { opacity: 0, scale: 0.82, x: -48, transition: { duration: DURATION.slow, ease: EASE.accelerate } },
+  },
+  reducedVariants: {
+    initial: { opacity: 1, scale: 1, x: 0 },
+    animate: { opacity: 0, transition: { duration: DURATION.fast } },
+  },
+}
+
 export const choreo = {
   liquidFill,
   valvePulse,
@@ -208,4 +237,6 @@ export const choreo = {
   pinAura,
   themeTide,
   shakeDeny,
+  orbAuraRipple,
+  sceneDockExit,
 }

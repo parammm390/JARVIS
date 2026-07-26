@@ -62,19 +62,19 @@ export const FLOW_INDEX: FlowEntry[] = [
   { id: 36, key: "CountBadgePop", band: "F1", phase: "F1", status: "shipped", dataSource: "real diffs via onJarvisEvent" },
   { id: 37, key: "InlineEditRipple", band: "F1", phase: "F1", status: "shipped", dataSource: "real form save" },
 
-  // ---- Band F2 — Command Surface (38-49) ----
-  { id: 38, key: "OrbAuraRipple", band: "F2", phase: "F2", status: "planned", dataSource: "SSE/poll events (pulse-bus)" },
-  { id: 39, key: "EventMeteor", band: "F2", phase: "F2", status: "planned", dataSource: "same event, orb->feed row" },
-  { id: 40, key: "PulseLiquidGauges", band: "F2", phase: "F2", status: "planned", dataSource: "GET /api/vitals" },
-  { id: 41, key: "NavCurrent", band: "F2", phase: "F2", status: "planned", dataSource: "route state" },
-  { id: 42, key: "SceneDock", band: "F2", phase: "F2", status: "planned", dataSource: "UI scene switch" },
-  { id: 43, key: "HeaderTide", band: "F2", phase: "F2", status: "planned", dataSource: "data-core events/min ring buffer" },
-  { id: 44, key: "BridgeBoot", band: "F2", phase: "F2", status: "planned", dataSource: "session state" },
-  { id: 45, key: "VitalsBreath", band: "F2", phase: "F2", status: "planned", dataSource: "worker_heartbeat age" },
-  { id: 46, key: "OrbSpeechSync", band: "F2", phase: "F2", status: "planned", dataSource: "@vapi-ai/web volume-level (honest cut if SDK lacks it)" },
-  { id: 47, key: "TickerGlide", band: "F2", phase: "F2", status: "planned", dataSource: "ticker items" },
-  { id: 48, key: "CommandGravity", band: "F2", phase: "F2", status: "planned", dataSource: "focus state" },
-  { id: 49, key: "ConstellationLink", band: "F2", phase: "F2", status: "planned", dataSource: "hand-authored KPI lineage map" },
+  // ---- Band F2 — Command Surface (38-49) — shipped this phase ----
+  { id: 38, key: "OrbAuraRipple", band: "F2", phase: "F2", status: "shipped", dataSource: "pulse-bus (data-core onJarvisEvent + activity arrivals)" },
+  { id: 39, key: "EventMeteor", band: "F2", phase: "F2", status: "shipped", dataSource: "real new activity-feed row (pulse-bus 'activity' kind), orb->feed anchor rects" },
+  { id: 40, key: "PulseLiquidGauges", band: "F2", phase: "F2", status: "shipped", dataSource: "GET /api/vitals (queue.depth, dlq.openCount)" },
+  { id: 41, key: "NavCurrent", band: "F2", phase: "F2", status: "shipped", dataSource: "active scene + hover state" },
+  { id: 42, key: "SceneDock", band: "F2", phase: "F2", status: "shipped", dataSource: "UI scene switch" },
+  { id: 43, key: "HeaderTide", band: "F2", phase: "F2", status: "shipped", dataSource: "pulse-bus event rate, trailing 60s window" },
+  { id: 44, key: "BridgeBoot", band: "F2", phase: "F2", status: "shipped", dataSource: "session state (sessionStorage-gated)" },
+  { id: 45, key: "VitalsBreath", band: "F2", phase: "F2", status: "shipped", dataSource: "GET /api/vitals heartbeat.ageSeconds/healthy" },
+  { id: 46, key: "OrbSpeechSync", band: "F2", phase: "F2", status: "shipped", dataSource: "@vapi-ai/web volume-level via useVapiSession().volumeLevel — real, confirmed live in this SDK" },
+  { id: 47, key: "TickerGlide", band: "F2", phase: "F2", status: "shipped", dataSource: "ticker items + real hover state (pause)" },
+  { id: 48, key: "CommandGravity", band: "F2", phase: "F2", status: "shipped", dataSource: "real :focus-within + CommandPaletteV2's own backdrop dim" },
+  { id: 49, key: "ConstellationLink", band: "F2", phase: "F2", status: "shipped", dataSource: "hand-authored KPI->panel lineage map (ConstellationLink.tsx)" },
 
   // ---- Band F3 — Decision Theater (50-58) ----
   { id: 50, key: "GateValve", band: "F3", phase: "F3", status: "planned", dataSource: "action status" },

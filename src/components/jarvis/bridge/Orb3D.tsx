@@ -35,6 +35,7 @@
 import { useEffect, useRef, useState } from "react"
 import * as THREE from "three"
 import { useReducedMotion } from "framer-motion"
+import { registerAnchor } from "../lib/pulse-bus"
 
 export type OrbState = "idle" | "planning" | "executing" | "blocked" | "error"
 
@@ -120,6 +121,15 @@ function buildGeometry(): THREE.BufferGeometry {
 export interface OrbLiveState {
   state: OrbState
   activeRunCount: number
+  /** F2.T2 — FLOW-46 OrbSpeechSync: the REAL assistant output level from
+   *  useVapiSession().volumeLevel (Vapi's own `volume-level` event, 0-1, confirmed
+   *  live in this SDK — see useVapiSession.tsx's own header). Only ever non-zero
+   *  while state is "executing" (Bridge's useOrbLiveState() only reaches executing
+   *  from a real running workflow OR voiceState speaking); Orb3D ignores it
+   *  otherwise, so a stale value from a just-ended call can never leak into an
+   *  unrelated state's energy. Omitted entirely is a valid "no voice session" state,
+   *  never coerced to a fabricated 0-implies-something reading. */
+  voiceAmplitude?: number
 }
 
 // Real, non-fabricated low-power signal: navigator.deviceMemory (Chrome/Edge/Android;
@@ -169,6 +179,10 @@ export function Orb3D({ live, forceLowPower = false }: { live: OrbLiveState; for
     setMounted(true)
     setLowPower(isLowPowerDevice())
   }, [])
+
+  // F2.T2 — FLOW-38/39's real source anchor: OrbAuraRipple/EventMeteor read this
+  // rect via pulse-bus, never their own duplicate ref into this component's DOM.
+  useEffect(() => registerAnchor("orb", () => containerRef.current?.getBoundingClientRect() ?? null), [])
 
   const useStatic = mounted && (!!reduced || lowPower || forceLowPower)
 
@@ -245,7 +259,11 @@ export function Orb3D({ live, forceLowPower = false }: { live: OrbLiveState; for
       const [r, g, b] = STATE_COLOR[state]
       const mat = material as THREE.ShaderMaterial
       mat.uniforms.uTime.value = t
-      mat.uniforms.uEnergy.value = STATE_ENERGY[state]
+      // FLOW-46 OrbSpeechSync: real Vapi output level, only while genuinely
+      // speaking — never a synthesized amplitude. Blends UP from the state's base
+      // energy (never down, so a quiet moment mid-call doesn't read as "idle").
+      const amp = state === "executing" ? (liveRef.current.voiceAmplitude ?? 0) : 0
+      mat.uniforms.uEnergy.value = Math.min(1, Math.max(STATE_ENERGY[state], amp))
       ;(mat.uniforms.uColor.value as THREE.Color).setRGB(r, g, b)
       mat.uniforms.uFracture.value = Math.max(0, fractureUntil - t) * 0.9
 

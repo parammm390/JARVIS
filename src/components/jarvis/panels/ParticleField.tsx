@@ -3,10 +3,21 @@
 // Ambient reactive starfield. Pure decoration: 48 drifting dots plus short-lived
 // spark bursts fired only from real events (WorkflowTheater step completion). No
 // numerals, units, or data-shaped labels ever render here (§1 honesty engine).
+//
+// F2.T2 — FLOW-39 EventMeteor extends this SAME canvas (plan's own instruction:
+// "still one canvas") with a directed-flight emitter: on a real new activity-feed
+// arrival (pulse-bus's "activity" kind, published by ActivityTheater itself, never a
+// synthetic tick), one particle flies from the orb's real screen rect to the
+// activity feed's real screen rect (both read live via pulse-bus's anchor registry —
+// neither component knows the other's DOM), then hands off to the existing spark
+// burst at the landing point. Only mounts/fires when both anchors are actually
+// present (Bridge route with both Orb3D and ActivityTheater live); elsewhere this is
+// a harmless no-op, same as the pre-existing burst queue when nothing calls burstAt.
 
 import { useEffect, useRef } from "react"
 import { onFrame } from "../lib/raf-bus"
-import { consumeBursts } from "../lib/EventFX"
+import { consumeBursts, burstAt } from "../lib/EventFX"
+import { getAnchorRect, onPulse, METEOR_FLIGHT_MS } from "../lib/pulse-bus"
 
 interface Particle {
   x: number
@@ -22,6 +33,14 @@ interface Spark {
   vx: number
   vy: number
   bornAt: number
+}
+interface Meteor {
+  fromX: number
+  fromY: number
+  toX: number
+  toY: number
+  bornAt: number
+  landed: boolean
 }
 
 const COUNT = 48
@@ -41,7 +60,29 @@ export function ParticleField({ disabled = false }: { disabled?: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const particlesRef = useRef<Particle[]>([])
   const sparksRef = useRef<Spark[]>([])
+  const meteorsRef = useRef<Meteor[]>([])
   const lastRef = useRef<number | null>(null)
+
+  // FLOW-39's real trigger: one meteor per genuinely new activity row, only when
+  // both real anchors exist (nothing fabricated if the Bridge isn't mounted).
+  useEffect(() => {
+    if (disabled) return
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
+    return onPulse((pulse) => {
+      if (pulse.kind !== "activity") return
+      const from = getAnchorRect("orb")
+      const to = getAnchorRect("activity-feed")
+      if (!from || !to) return
+      meteorsRef.current.push({
+        fromX: from.left + from.width / 2,
+        fromY: from.top + from.height / 2,
+        toX: to.left + Math.min(24, to.width / 2),
+        toY: to.top + 8,
+        bornAt: performance.now(),
+        landed: false,
+      })
+    })
+  }, [disabled])
 
   useEffect(() => {
     if (disabled) return
@@ -97,6 +138,38 @@ export function ParticleField({ disabled = false }: { disabled?: boolean }) {
         ctx!.beginPath()
         ctx!.arc(s.x, s.y, 1.6, 0, Math.PI * 2)
         ctx!.fillStyle = `rgba(34,211,238,${alpha})`
+        ctx!.fill()
+      }
+
+      // FLOW-39 EventMeteor: eased travel from the orb's real rect to the activity
+      // feed's real rect, a short bright trail behind the head, then a landing
+      // burst at the exact arrival point (reusing the existing spark engine above —
+      // one canvas, one particle system, per the plan's own instruction).
+      meteorsRef.current = meteorsRef.current.filter((m) => t - m.bornAt < METEOR_FLIGHT_MS + 32)
+      for (const m of meteorsRef.current) {
+        const elapsed = t - m.bornAt
+        const progress = Math.min(1, elapsed / METEOR_FLIGHT_MS)
+        const eased = 1 - (1 - progress) * (1 - progress)
+        const x = m.fromX + (m.toX - m.fromX) * eased
+        const y = m.fromY + (m.toY - m.fromY) * eased
+        if (elapsed >= METEOR_FLIGHT_MS) {
+          if (!m.landed) {
+            m.landed = true
+            burstAt(m.toX, m.toY)
+          }
+          continue
+        }
+        const trailX = m.fromX + (m.toX - m.fromX) * Math.max(0, eased - 0.08)
+        const trailY = m.fromY + (m.toY - m.fromY) * Math.max(0, eased - 0.08)
+        ctx!.strokeStyle = "rgba(34,211,238,0.35)"
+        ctx!.lineWidth = 1.4
+        ctx!.beginPath()
+        ctx!.moveTo(trailX, trailY)
+        ctx!.lineTo(x, y)
+        ctx!.stroke()
+        ctx!.beginPath()
+        ctx!.arc(x, y, 2.2, 0, Math.PI * 2)
+        ctx!.fillStyle = "rgba(190,240,255,0.95)"
         ctx!.fill()
       }
     }

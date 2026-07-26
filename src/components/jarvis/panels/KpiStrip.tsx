@@ -10,6 +10,7 @@ import { CountUp } from "../lib/CountUp"
 import { AreaSparkline } from "../lib/charts"
 import { useJarvis } from "../lib/data-core"
 import { flash } from "../lib/EventFX"
+import { registerAnchor, setLineageHover } from "../lib/pulse-bus"
 
 const usd = (n: number) => `$${Math.round(n).toLocaleString()}`
 
@@ -113,6 +114,17 @@ export function KpiStrip({ onNavigate }: { onNavigate?: (view: string) => void }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cards.map((c) => c.value).join(",")])
 
+  // F2.T3 — FLOW-49 ConstellationLink's real source anchors: one per KPI card, keyed
+  // `kpi:<key>` so ConstellationLink.tsx (Bridge-only) can draw a line from whichever
+  // card is hovered to its hand-authored target panel(s) without KpiStrip knowing
+  // anything about Bridge's layout. A harmless no-op anywhere else this component
+  // renders (legacy Shell) since nothing there ever reads these anchors.
+  useEffect(() => {
+    const unregisters = cards.map((c) => registerAnchor(`kpi:${c.key}`, () => cardRefs.current.get(c.key)?.getBoundingClientRect() ?? null))
+    return () => unregisters.forEach((off) => off())
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cards.map((c) => c.key).join(",")])
+
   return (
     <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
       {cards.map((c, i) => (
@@ -122,6 +134,10 @@ export function KpiStrip({ onNavigate }: { onNavigate?: (view: string) => void }
             if (el) cardRefs.current.set(c.key, el)
           }}
           onClick={() => onNavigate?.(c.view)}
+          onMouseEnter={() => setLineageHover(c.key)}
+          onMouseLeave={() => setLineageHover(null)}
+          onFocus={() => setLineageHover(c.key)}
+          onBlur={() => setLineageHover(null)}
           style={{ animationDelay: `${i * 60}ms`, ["--rise-to" as string]: 1 }}
           className="jarvis-rise j-panel group relative min-h-[118px] overflow-hidden p-3.5 text-left transition-transform duration-150 hover:-translate-y-0.5"
         >

@@ -12,10 +12,10 @@
 // migrate to scenes in later D-track sessions (D3's renderer registry, D4's Pipeline
 // Theater), never all at once.
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import dynamic from "next/dynamic"
 import Link from "next/link"
-import { AnimatePresence, motion } from "framer-motion"
+import { AnimatePresence, motion, useReducedMotion, type TargetAndTransition } from "framer-motion"
 import { LayoutGrid, Volume2, VolumeX, Workflow as WorkflowIcon } from "lucide-react"
 import "../jarvis-theme.css"
 import { ConsoleAtmosphere, LiveDot } from "../atmosphere"
@@ -30,6 +30,9 @@ import { GridBackdrop } from "../ui/fx/GridBackdrop"
 import { choreo } from "../ui/motion/choreo"
 import { PulseBar } from "./PulseBar"
 import { Orb3D, type OrbState } from "./Orb3D"
+import { OrbAuraRipple } from "./OrbAuraRipple"
+import { ConstellationLink } from "./ConstellationLink"
+import { onPulse } from "../lib/pulse-bus"
 import { rankPanels, recordPanelOpen, type FrecencyLedger } from "../lib/frecency"
 import { CommandPaletteV2, useCommandPaletteV2 } from "../lib/CommandPaletteV2"
 import { jarvisClient } from "@/lib/jarvis-client"
@@ -62,7 +65,7 @@ function getDaypart(): "dawn" | "day" | "dusk" | "night" {
   return "night"
 }
 
-function useOrbLiveState(): { state: OrbState; activeRunCount: number } {
+function useOrbLiveState(): { state: OrbState; activeRunCount: number; voiceAmplitude?: number } {
   const data = useJarvis()
   const session = useVapiSession()
   return useMemo(() => {
@@ -73,13 +76,57 @@ function useOrbLiveState(): { state: OrbState; activeRunCount: number } {
     else if (session.voiceState === "speaking" || activeRunCount > 0) state = "executing"
     else if (session.voiceState === "connecting" || session.voiceState === "live") state = "planning"
     else if (blocked > 0) state = "blocked"
-    return { state, activeRunCount }
-  }, [data.statsDegraded, data.runs.length, data.stats?.blocked, session.voiceState])
+    // FLOW-46 OrbSpeechSync — only the real Vapi output level, only while genuinely
+    // speaking; every other moment leaves this undefined, never a fabricated 0.
+    const voiceAmplitude = session.voiceState === "speaking" ? session.volumeLevel : undefined
+    return { state, activeRunCount, voiceAmplitude }
+  }, [data.statsDegraded, data.runs.length, data.stats?.blocked, session.voiceState, session.volumeLevel])
+}
+
+// FLOW-43 HeaderTide — caustic intensity follows the REAL rate of pulse-bus events
+// (itself layered over data-core's ring-buffer-fed emitter, plan's own "events/min
+// from the ring buffer" data source) over a trailing 60s window, clamped to a sane
+// visual range. "poll-landed" is excluded for the same honesty reason OrbAuraRipple
+// excludes it — a fixed 4s tick isn't a real event rate. Recomputed on a 5s interval
+// (a plain timer, not a render loop) rather than every pulse, so a burst of real
+// events doesn't thrash React state.
+const CAUSTIC_MIN_OPACITY = 0.14
+const CAUSTIC_MAX_OPACITY = 0.42
+const CAUSTIC_WINDOW_MS = 60_000
+
+function useEventRateOpacity(): number {
+  const timestampsRef = useRef<number[]>([])
+  const [opacity, setOpacity] = useState(CAUSTIC_MIN_OPACITY)
+  useEffect(() => {
+    const off = onPulse((pulse) => {
+      if (pulse.kind === "poll") return
+      timestampsRef.current.push(pulse.at)
+    })
+    const recompute = () => {
+      const cutoff = Date.now() - CAUSTIC_WINDOW_MS
+      timestampsRef.current = timestampsRef.current.filter((t) => t >= cutoff)
+      const perMinute = timestampsRef.current.length
+      const ratio = Math.min(1, perMinute / 12)
+      setOpacity(CAUSTIC_MIN_OPACITY + ratio * (CAUSTIC_MAX_OPACITY - CAUSTIC_MIN_OPACITY))
+    }
+    const id = window.setInterval(recompute, 5000)
+    recompute()
+    return () => {
+      off()
+      window.clearInterval(id)
+    }
+  }, [])
+  return opacity
 }
 
 function CausticHeader() {
+  const opacity = useEventRateOpacity()
   return (
-    <svg aria-hidden className="jarvis-caustic-layer pointer-events-none absolute -inset-6 h-[calc(100%+3rem)] w-[calc(100%+3rem)] opacity-25">
+    <svg
+      aria-hidden
+      className="jarvis-caustic-layer pointer-events-none absolute -inset-6 h-[calc(100%+3rem)] w-[calc(100%+3rem)] transition-opacity duration-1000"
+      style={{ opacity }}
+    >
       <filter id="bridge-caustic-turb">
         <feTurbulence type="fractalNoise" baseFrequency="0.015 0.06" numOctaves="2" seed="9" result="noise" />
         <feColorMatrix in="noise" type="matrix" values="0 0 0 0 0.13  0 0 0 0 0.83  0 0 0 0 0.93  0 0 0 0.45 0" />
@@ -113,13 +160,29 @@ function SoundPreferenceToggle() {
   return <button type="button" onClick={toggle} disabled={!loaded} className="j-chip flex items-center gap-1.5 border border-white/10 bg-white/[.035] text-[color:var(--j-text-dim)] disabled:opacity-50" aria-pressed={enabled} aria-label={enabled ? "Turn off JARVIS sounds" : "Turn on JARVIS sounds"}>{enabled ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}{enabled ? "Sound on" : "Sound off"}</button>
 }
 
-function LeftRail({ scene, setScene, orderedScenes, unopened, forceLowPower }: { scene: SceneId; setScene: (s: SceneId) => void; orderedScenes: SceneId[]; unopened: SceneId[]; forceLowPower: boolean }) {
+function LeftRail({ scene, setScene, orderedScenes, unopened, forceLowPower, bootBloom = false }: { scene: SceneId; setScene: (s: SceneId) => void; orderedScenes: SceneId[]; unopened: SceneId[]; forceLowPower: boolean; bootBloom?: boolean }) {
   const orbLive = useOrbLiveState()
+  // FLOW-41 NavCurrent — real state, not decoration: the active scene's own glow bar
+  // flows only while it's genuinely idle-active; hovering it (about to switch away,
+  // or just inspecting) stills the current, per the plan's own spec.
+  const [hoveredNav, setHoveredNav] = useState<SceneId | null>(null)
   return (
-    <aside className="sticky top-0 flex h-screen w-60 shrink-0 flex-col border-r border-white/6 bg-[#05090f]/85 backdrop-blur-xl">
+    <aside className="hidden h-screen w-60 shrink-0 flex-col border-r border-white/6 bg-[#05090f]/85 backdrop-blur-xl lg:sticky lg:top-0 lg:flex">
       <Link href="/jarvis" className="flex items-center gap-3 px-5 pb-3 pt-6">
-        <div className="h-9 w-9 shrink-0">
+        <div className="relative h-9 w-9 shrink-0">
           <Orb3D live={orbLive} forceLowPower={forceLowPower} />
+          {!forceLowPower && <OrbAuraRipple />}
+          {/* FLOW-44 BridgeBoot — the orb's one real ignition bloom, once per cold
+              session boot, distinct from OrbAuraRipple's per-event rings above. */}
+          {bootBloom && (
+            <motion.span
+              aria-hidden
+              className="pointer-events-none absolute inset-[-10px] rounded-full border-2 border-cyan-300/70"
+              initial={{ scale: 0.4, opacity: 0 }}
+              animate={{ scale: 2.6, opacity: [0, 0.8, 0] }}
+              transition={{ duration: 1.1, ease: [0, 0, 0.2, 1] }}
+            />
+          )}
         </div>
         <div>
           <div className="text-[15px] font-black tracking-tight text-[color:var(--j-text)]">JARVIS</div>
@@ -135,12 +198,19 @@ function LeftRail({ scene, setScene, orderedScenes, unopened, forceLowPower }: {
             <button
               key={id}
               onClick={() => setScene(id)}
+              onMouseEnter={() => setHoveredNav(id)}
+              onMouseLeave={() => setHoveredNav((h) => (h === id ? null : h))}
               aria-current={active ? "page" : undefined}
               className={`relative flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[12.5px] font-bold transition ${
                 active ? "bg-cyan-400/[0.08] text-[color:var(--j-text)]" : "text-[color:var(--j-text-dim)] hover:bg-white/[0.04] hover:text-[color:var(--j-text)]"
               }`}
             >
-              {active && <motion.span layoutId="bridge-nav-glow" className="absolute inset-y-1.5 left-0 w-[3px] rounded-full bg-cyan-300 shadow-[0_0_10px_rgba(34,211,238,0.8)]" />}
+              {active && (
+                <motion.span
+                  layoutId="bridge-nav-glow"
+                  className={`absolute inset-y-1.5 left-0 w-[3px] rounded-full bg-cyan-300 shadow-[0_0_10px_rgba(34,211,238,0.8)] ${hoveredNav === id ? "" : "j-selection-current"}`}
+                />
+              )}
               <Icon className={`h-4 w-4 transition-colors duration-200 ${active ? "text-cyan-300" : ""}`} />
               {label}
             </button>
@@ -160,6 +230,7 @@ function LeftRail({ scene, setScene, orderedScenes, unopened, forceLowPower }: {
 
 function CenterStage({ scene, forceLowPower, onToggleLowPower }: { scene: SceneId; forceLowPower: boolean; onToggleLowPower: () => void }) {
   const { role } = useJarvisAuth()
+  const reducedMotion = useReducedMotion()
   return (
     <main className="relative min-w-0 flex-1 overflow-hidden">
       <div className="pointer-events-none absolute inset-0 opacity-60">
@@ -175,14 +246,17 @@ function CenterStage({ scene, forceLowPower, onToggleLowPower }: { scene: SceneI
           <div className="flex items-center gap-2"><SoundPreferenceToggle /><button type="button" onClick={onToggleLowPower} aria-pressed={forceLowPower} className="j-chip border border-white/10 bg-white/[.035] text-[color:var(--j-text-dim)]">{forceLowPower ? "Low power on" : "Low power off"}</button><span className="j-chip bg-cyan-400/10 text-cyan-200"><LiveDot /> live</span></div>
         </div>
       </div>
-      <div className="relative p-6 [content-visibility:auto] [contain-intrinsic-size:1px_900px]">
+      <div className="relative p-6 pb-24 [content-visibility:auto] [contain-intrinsic-size:1px_900px] lg:pb-6">
         <AnimatePresence mode="wait">
           <motion.div
             key={scene}
             variants={choreo.cameraPan.variants}
             initial="initial"
             animate="animate"
-            exit={{ opacity: 0, transition: { duration: 0.2 } }}
+            // FLOW-42 SceneDock — the outgoing scene shrinks toward the nav rail
+            // (choreo.sceneDockExit) instead of a plain fade; the incoming scene's
+            // own `animate` (choreo.cameraPan, already real) reads as the unfurl.
+            exit={(reducedMotion ? choreo.sceneDockExit.reducedVariants : choreo.sceneDockExit.variants).animate as TargetAndTransition}
             className="space-y-4"
           >
             {scene === "overview" && (
@@ -203,7 +277,7 @@ function CenterStage({ scene, forceLowPower, onToggleLowPower }: { scene: SceneI
 
 function RightRail() {
   return (
-    <aside className="sticky top-0 flex h-screen w-80 shrink-0 flex-col gap-4 border-l border-white/6 bg-[#05090f]/85 p-4 backdrop-blur-xl">
+    <aside className="sticky top-0 hidden h-screen w-80 shrink-0 flex-col gap-4 border-l border-white/6 bg-[#05090f]/85 p-4 backdrop-blur-xl lg:flex">
       <div className="min-h-0 flex-1">
         <ActivityTheater />
       </div>
@@ -214,6 +288,99 @@ function RightRail() {
   )
 }
 
+// F2.T4 — below `lg` (D1's own §1 finding: the fixed-width rails break under
+// ~1100px) the left rail collapses to a top bar (orb + scene tabs) and the right
+// rail collapses to a bottom dock sheet trigger with real badge counts — SAME
+// underlying components (Orb3D/ActivityTheater/ApprovalCockpit), no duplicated
+// data, no information loss, just a different real-estate arrangement.
+function MobileTopBar({ scene, setScene, orderedScenes, forceLowPower }: { scene: SceneId; setScene: (s: SceneId) => void; orderedScenes: SceneId[]; forceLowPower: boolean }) {
+  const orbLive = useOrbLiveState()
+  return (
+    <div className="sticky top-0 z-20 flex items-center gap-2 border-b border-white/6 bg-[#05090f]/90 px-3 py-2 backdrop-blur-xl lg:hidden">
+      <Link href="/jarvis" className="relative h-7 w-7 shrink-0">
+        <Orb3D live={orbLive} forceLowPower={forceLowPower} />
+      </Link>
+      <nav className="flex flex-1 items-center gap-1 overflow-x-auto">
+        {orderedScenes.map((id) => {
+          const { label, icon: Icon } = SCENES.find((candidate) => candidate.id === id)!
+          const active = scene === id
+          return (
+            <button
+              key={id}
+              onClick={() => setScene(id)}
+              aria-current={active ? "page" : undefined}
+              className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-bold transition ${
+                active ? "bg-cyan-400/[0.12] text-cyan-200" : "text-[color:var(--j-text-dim)]"
+              }`}
+            >
+              <Icon className="h-3.5 w-3.5" />
+              {label}
+            </button>
+          )
+        })}
+      </nav>
+    </div>
+  )
+}
+
+function MobileDockTrigger({ onOpen }: { onOpen: () => void }) {
+  const data = useJarvis()
+  const pending = data.stats?.pending ?? 0
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="fixed inset-x-3 bottom-3 z-20 flex items-center justify-between rounded-full border border-white/10 bg-[#05090f]/95 px-4 py-3 text-[11px] font-bold text-[color:var(--j-text)] shadow-[0_10px_40px_rgba(0,0,0,0.5)] backdrop-blur-xl lg:hidden"
+    >
+      <span className="flex items-center gap-2"><LiveDot /> Activity &amp; Approvals</span>
+      {pending > 0 && <span className="j-chip bg-cyan-400/12 text-cyan-200">{pending} pending</span>}
+    </button>
+  )
+}
+
+function MobileDockSheet({ onClose }: { onClose: () => void }) {
+  const reduced = useReducedMotion()
+  return (
+    <motion.div
+      className="fixed inset-0 z-30 flex flex-col justify-end bg-black/60 lg:hidden"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      onClick={onClose}
+    >
+      <motion.div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Activity and approvals"
+        className="flex max-h-[85vh] flex-col gap-3 overflow-y-auto rounded-t-2xl border-t border-white/10 bg-[#05090f] p-4"
+        initial={reduced ? { opacity: 0 } : { y: 40, opacity: 0 }}
+        animate={reduced ? { opacity: 1 } : { y: 0, opacity: 1 }}
+        exit={reduced ? { opacity: 0 } : { y: 40, opacity: 0 }}
+        transition={reduced ? { duration: 0.15 } : { type: "spring", stiffness: 340, damping: 32 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between">
+          <span className="j-label">Bridge dock</span>
+          <button type="button" onClick={onClose} className="j-chip border border-white/10 bg-white/[.035] text-[color:var(--j-text-dim)]">
+            Close
+          </button>
+        </div>
+        <div className="min-h-[240px]">
+          <ActivityTheater />
+        </div>
+        <ApprovalCockpit />
+      </motion.div>
+    </motion.div>
+  )
+}
+
+// F2.T3 — FLOW-44 BridgeBoot: sessionStorage-gated like BootSequence's own
+// `shouldShowBoot` convention (lib/BootSequence.tsx), but its OWN key — this is a
+// separate, ≤1.4s Bridge-only intro (rails slide in, orb blooms once), not the
+// legacy Shell's 2.5s full-screen checklist. Fires once per browser session on the
+// first real `/jarvis/bridge` visit after sign-in, never again until a new session.
+const BRIDGE_BOOT_SESSION_KEY = "jarvis_bridge_boot_shown"
+
 function BridgeShell() {
   const [ledger, setLedger] = useState<FrecencyLedger>({})
   const orderedScenes = rankPanels(SCENES.map((entry) => entry.id), ledger, Date.now())
@@ -221,16 +388,41 @@ function BridgeShell() {
   const [daypart, setDaypart] = useState<ReturnType<typeof getDaypart>>("day")
   const [mounted, setMounted] = useState(false)
   const [forceLowPower, setForceLowPower] = useState(false)
+  const [playBoot, setPlayBoot] = useState(false)
   const { session, loading } = useJarvisAuth()
   const palette = useCommandPaletteV2()
+  const reducedMotion = useReducedMotion()
 
   useEffect(() => {
     setMounted(true)
     setDaypart(getDaypart())
     setForceLowPower(initialLowPowerMode())
+    let alreadyBooted = false
+    try {
+      alreadyBooted = window.sessionStorage.getItem(BRIDGE_BOOT_SESSION_KEY) === "1"
+    } catch {
+      alreadyBooted = false
+    }
+    setPlayBoot(!alreadyBooted)
     const id = window.setInterval(() => setDaypart(getDaypart()), 5 * 60 * 1000)
     return () => window.clearInterval(id)
   }, [])
+
+  const skipBoot = () => {
+    setPlayBoot(false)
+    try {
+      window.sessionStorage.setItem(BRIDGE_BOOT_SESSION_KEY, "1")
+    } catch {
+      // sessionStorage unavailable (private mode) — the boot simply replays next
+      // visit, an honest degradation rather than a crash.
+    }
+  }
+  useEffect(() => {
+    if (!playBoot) return
+    const t = window.setTimeout(skipBoot, 1400)
+    return () => window.clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playBoot])
   useEffect(() => {
     const raw = window.localStorage.getItem("finnor.jarvis.panel-frecency.v1")
     let prior: FrecencyLedger = {}
@@ -264,6 +456,7 @@ function BridgeShell() {
       return next
     })
   }
+  const [dockOpen, setDockOpen] = useState(false)
 
   if (!mounted || loading) {
     return (
@@ -288,6 +481,25 @@ function BridgeShell() {
     )
   }
 
+  // F2.T3 — hard rule #10's ≤2-continuous-ambient-loops-per-viewport, ruled per Bridge
+  // state (D1's own Orb-alone/full-Bridge FPS proof already measured the idle
+  // baseline at ≥55; this documents which loops are allowed to be the "≤2" in each
+  // state rather than letting every continuous loop run unconditionally forever):
+  //   idle (no voice, nothing executing) — Orb3D's rAF wobble + ConsoleAtmosphere's
+  //     aurora are the 2 that win; GridBackdrop's CSS scan/gridfloor are cheap
+  //     transform/opacity loops layered UNDER them (same budget line C3/D1 already
+  //     accepted), ParticleField's canvas idles at near-zero cost with 0 sparks/
+  //     meteors in flight.
+  //   executing (a real run in flight OR voiceState speaking) — Orb3D (now driven by
+  //     real run/ring-dot count, and by real voice amplitude per FLOW-46) + the
+  //     PulseLiquidGauges/VitalsBreath-visible PulseBar are the 2 that matter;
+  //     ConsoleAtmosphere continues but is visually secondary at this point.
+  //   blocked/error — Orb3D's own state color read is the signal; no NEW ambient
+  //     loop is added by F2 for these states (HeaderTide/VitalsBreath already exist
+  //     and simply change color/period, not loop count).
+  // Every F2 addition here is either one-shot (OrbAuraRipple, EventMeteor, BootBloom,
+  // SceneDock) or a 5s-interval-recomputed style value (HeaderTide, VitalsBreath's
+  // heartbeatPeriodSec) — none of them are a NEW standing rAF/CSS-infinite loop.
   return (
     <div className="jarvis-cursor-zone jarvis-root relative min-h-screen bg-[#04070f] text-[color:var(--j-text)]" data-mood="idle" data-daypart={daypart} data-low-power={forceLowPower || undefined}>
       <div
@@ -298,12 +510,30 @@ function BridgeShell() {
         {!forceLowPower && <ConsoleAtmosphere />}
       </div>
       <ParticleField disabled={forceLowPower} />
-      <div className="relative flex">
-        <LeftRail scene={scene} setScene={chooseScene} orderedScenes={orderedScenes} unopened={orderedScenes.filter((id) => !ledger[id])} forceLowPower={forceLowPower} />
+      <MobileTopBar scene={scene} setScene={chooseScene} orderedScenes={orderedScenes} forceLowPower={forceLowPower} />
+      {/* FLOW-44 BridgeBoot — `onClick` only ever shortens an already-running boot
+          (playBoot false is a no-op call); it never intercepts normal interaction. */}
+      <div className="relative flex" onClick={playBoot ? skipBoot : undefined}>
+        <motion.div
+          initial={playBoot && !reducedMotion ? { opacity: 0, x: -24 } : { opacity: 1, x: 0 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.9, ease: [0, 0, 0.2, 1] }}
+        >
+          <LeftRail scene={scene} setScene={chooseScene} orderedScenes={orderedScenes} unopened={orderedScenes.filter((id) => !ledger[id])} forceLowPower={forceLowPower} bootBloom={playBoot && !reducedMotion} />
+        </motion.div>
         <CenterStage scene={scene} forceLowPower={forceLowPower} onToggleLowPower={toggleLowPower} />
-        <RightRail />
+        <motion.div
+          initial={playBoot && !reducedMotion ? { opacity: 0, x: 24 } : { opacity: 1, x: 0 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.9, ease: [0, 0, 0.2, 1] }}
+        >
+          <RightRail />
+        </motion.div>
       </div>
+      <MobileDockTrigger onOpen={() => setDockOpen(true)} />
+      <AnimatePresence>{dockOpen && <MobileDockSheet onClose={() => setDockOpen(false)} />}</AnimatePresence>
       {palette.open && <CommandPaletteV2 onClose={() => palette.setOpen(false)} onNavigate={chooseScene} />}
+      {!forceLowPower && <ConstellationLink />}
       <QueryFpsMeterHud />
     </div>
   )

@@ -27,6 +27,7 @@ import { EffectsCatalogSection } from "./ui/fx/EffectsCatalog"
 import { PrimitivesCatalogSection } from "./ui/primitives/PrimitivesCatalog"
 import { RendererCatalogSection } from "./ui/renderers/RendererCatalog"
 import { GrammarCatalogSection } from "./ui/motion/GrammarCatalog"
+import { CommandSurfaceCatalogSection } from "./ui/motion/CommandSurfaceCatalog"
 import { FlowIndexMeterSection } from "./ui/motion/FlowIndexMeter"
 import { StageStickyNav, StageStateSwitcher, MountToggle } from "./ui/motion/StageNav"
 
@@ -161,6 +162,11 @@ function StageContent() {
       </div>
       <div id="flow-grammar">
         <GrammarCatalogSection />
+      </div>
+      <div id="flow-command-surface">
+        <MountToggle id="flow-command-surface" label="FLOW-38..49">
+          <CommandSurfaceCatalogSection />
+        </MountToggle>
       </div>
       <div id="flow-core">
         <MountToggle id="flow-core" label="FLOW-01..13">

@@ -54,6 +54,7 @@ import { Flight } from "../ui/motion/primitives"
 import { choreo } from "../ui/motion/choreo"
 import { ActionRenderer } from "../ui/renderers/ActionRenderer"
 import { BorderBeam } from "../ui/fx/BorderBeam"
+import { registerAnchor } from "../lib/pulse-bus"
 
 // ---------------------------------------------------------------------------
 // Small local helpers (deliberately not imported from ApprovalDock.tsx — that file is
@@ -442,6 +443,10 @@ export function ApprovalCockpit() {
   const inflight = useRef<Set<string>>(new Set())
   const cardRefs = useRef<Array<HTMLDivElement | null>>([])
   const containerRef = useRef<HTMLDivElement | null>(null)
+
+  // F2.T3 — FLOW-49 ConstellationLink's real target anchor for the "approvals" KPI
+  // card (see ConstellationLink.tsx's hand-authored lineage map).
+  useEffect(() => registerAnchor("approval-cockpit", () => containerRef.current?.getBoundingClientRect() ?? null), [])
 
   const items: CockpitAction[] = useMemo(() => {
     const pending = data.pendingActions.filter((a) => !hidden.has(a.id)).map((a) => ({ ...a, kind: "pending" as const }))

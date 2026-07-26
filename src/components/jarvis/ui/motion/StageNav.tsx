@@ -16,6 +16,7 @@ export const STAGE_SECTIONS = [
   { id: "flow-index", label: "Catalog" },
   { id: "live-query", label: "LiveQuery" },
   { id: "flow-grammar", label: "F1 Grammar" },
+  { id: "flow-command-surface", label: "F2 Command Surface" },
   { id: "flow-core", label: "FLOW-01..13" },
   { id: "flow-ambient", label: "FLOW-14..25" },
   { id: "fx-toolkit", label: "FX" },
