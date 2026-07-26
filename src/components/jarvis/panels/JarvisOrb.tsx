@@ -62,13 +62,17 @@ export function JarvisOrb({
             const a = (i / 24) * Math.PI * 2
             const r1 = 46
             const r2 = i % 6 === 0 ? 41.5 : 43.5
+            // SVG attributes are serialized by the server and recomputed in the
+            // browser. Round trigonometric results so engine-level float precision
+            // cannot turn the initial render into a hydration mismatch.
+            const coordinate = (value: number) => Number(value.toFixed(4))
             return (
               <line
                 key={i}
-                x1={c + Math.cos(a) * r1}
-                y1={c + Math.sin(a) * r1}
-                x2={c + Math.cos(a) * r2}
-                y2={c + Math.sin(a) * r2}
+                x1={coordinate(c + Math.cos(a) * r1)}
+                y1={coordinate(c + Math.sin(a) * r1)}
+                x2={coordinate(c + Math.cos(a) * r2)}
+                y2={coordinate(c + Math.sin(a) * r2)}
                 stroke={ringDim}
                 strokeWidth={i % 6 === 0 ? 1.6 : 0.9}
               />

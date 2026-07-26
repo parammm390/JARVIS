@@ -68,10 +68,13 @@ export function CommandPalette({
   const [query, setQuery] = useState("")
   const [index, setIndex] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
+  const priorFocusRef = useRef<HTMLElement | null>(null)
   const items = useMemo(() => buildItems().filter((i) => fuzzyMatch(query, i.label)), [query])
 
   useEffect(() => {
+    priorFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
     inputRef.current?.focus()
+    return () => priorFocusRef.current?.focus()
   }, [])
 
   function select(item: PaletteItem) {

@@ -32,6 +32,15 @@ const SIDEBAR_VIEWS = [
   "Production Readiness",
 ]
 
+// The compact sidebar intentionally shortens these two labels at narrow widths.
+// Keep the same logical view and baseline name across viewports while targeting the
+// control a mobile user can actually see.
+function sidebarAccessibleName(label: string): string | RegExp {
+  if (label === "Leads & CRM") return /^(Leads & CRM|Leads)$/
+  if (label === "Water Compliance") return /^(Water Compliance|Compliance)$/
+  return label
+}
+
 async function waitForAppReady(page: Page): Promise<void> {
   await expect(page.locator("main").getByText(/^(Live|Simulation)$/).first()).toBeVisible({ timeout: 15_000 })
   // Let the boot sequence / first poll settle so the snapshot isn't mid-fade-in.
@@ -57,7 +66,7 @@ test.describe("visual snapshots — sidebar views (logged out, sample-data mode)
   for (const label of SIDEBAR_VIEWS) {
     test(`${label} view`, async ({ page }) => {
       if (label !== "Command Center") {
-        await page.getByRole("button", { name: label }).first().click()
+        await page.getByRole("button", { name: sidebarAccessibleName(label) }).first().click()
         await page.waitForTimeout(300) // view-switch transition settle
       }
       const opts = PER_VIEW_TOLERANCE[label] ? { ...SCREENSHOT_OPTS, maxDiffPixelRatio: PER_VIEW_TOLERANCE[label] } : SCREENSHOT_OPTS
