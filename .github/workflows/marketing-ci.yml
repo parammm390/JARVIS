@@ -27,7 +27,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # package-lock.json includes @mapbox/jsonlint-lines-primitives@2.0.3,
+          # which declares node >=22. Node 20 makes npm ci exit EBADENGINE on
+          # the hosted runner before any of this workflow's actual checks run.
+          node-version: 22
           cache: npm
       - run: npm ci
       # Phase 7 §7.8: no-restricted-properties(Math.random) under src/components/
