@@ -111,13 +111,13 @@ function SoundPreferenceToggle() {
   return <button type="button" onClick={toggle} disabled={!loaded} className="j-chip flex items-center gap-1.5 border border-white/10 bg-white/[.035] text-[color:var(--j-text-dim)] disabled:opacity-50" aria-pressed={enabled} aria-label={enabled ? "Turn off JARVIS sounds" : "Turn on JARVIS sounds"}>{enabled ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}{enabled ? "Sound on" : "Sound off"}</button>
 }
 
-function LeftRail({ scene, setScene, orderedScenes, unopened }: { scene: SceneId; setScene: (s: SceneId) => void; orderedScenes: SceneId[]; unopened: SceneId[] }) {
+function LeftRail({ scene, setScene, orderedScenes, unopened, forceLowPower }: { scene: SceneId; setScene: (s: SceneId) => void; orderedScenes: SceneId[]; unopened: SceneId[]; forceLowPower: boolean }) {
   const orbLive = useOrbLiveState()
   return (
     <aside className="sticky top-0 flex h-screen w-60 shrink-0 flex-col border-r border-white/6 bg-[#05090f]/85 backdrop-blur-xl">
       <Link href="/jarvis" className="flex items-center gap-3 px-5 pb-3 pt-6">
         <div className="h-9 w-9 shrink-0">
-          <Orb3D live={orbLive} />
+          <Orb3D live={orbLive} forceLowPower={forceLowPower} />
         </div>
         <div>
           <div className="text-[15px] font-black tracking-tight text-[color:var(--j-text)]">JARVIS</div>
@@ -155,7 +155,7 @@ function LeftRail({ scene, setScene, orderedScenes, unopened }: { scene: SceneId
   )
 }
 
-function CenterStage({ scene }: { scene: SceneId }) {
+function CenterStage({ scene, forceLowPower, onToggleLowPower }: { scene: SceneId; forceLowPower: boolean; onToggleLowPower: () => void }) {
   const { role } = useJarvisAuth()
   return (
     <main className="relative min-w-0 flex-1 overflow-hidden">
@@ -169,7 +169,7 @@ function CenterStage({ scene }: { scene: SceneId }) {
             <h1 className="text-base font-black text-[color:var(--j-text)]">Command Bridge</h1>
             <p className="text-[11px] text-[color:var(--j-text-dim)]">D1 — real vitals, real activity, one continuous space</p>
           </div>
-          <div className="flex items-center gap-2"><SoundPreferenceToggle /><span className="j-chip bg-cyan-400/10 text-cyan-200"><LiveDot /> live</span></div>
+          <div className="flex items-center gap-2"><SoundPreferenceToggle /><button type="button" onClick={onToggleLowPower} aria-pressed={forceLowPower} className="j-chip border border-white/10 bg-white/[.035] text-[color:var(--j-text-dim)]">{forceLowPower ? "Low power on" : "Low power off"}</button><span className="j-chip bg-cyan-400/10 text-cyan-200"><LiveDot /> live</span></div>
         </div>
       </div>
       <div className="relative p-6 [content-visibility:auto] [contain-intrinsic-size:1px_900px]">
@@ -217,12 +217,14 @@ function BridgeShell() {
   const [scene, setScene] = useState<SceneId>("overview")
   const [daypart, setDaypart] = useState<ReturnType<typeof getDaypart>>("day")
   const [mounted, setMounted] = useState(false)
+  const [forceLowPower, setForceLowPower] = useState(false)
   const { session, loading } = useJarvisAuth()
   const palette = useCommandPaletteV2()
 
   useEffect(() => {
     setMounted(true)
     setDaypart(getDaypart())
+    setForceLowPower(window.localStorage.getItem("finnor.jarvis.low-power.v1") === "1")
     const id = window.setInterval(() => setDaypart(getDaypart()), 5 * 60 * 1000)
     return () => window.clearInterval(id)
   }, [])
@@ -250,6 +252,13 @@ function BridgeShell() {
       const updated = recordPanelOpen(current, next, Date.now())
       window.localStorage.setItem("finnor.jarvis.panel-frecency.v1", JSON.stringify(updated))
       return updated
+    })
+  }
+  const toggleLowPower = () => {
+    setForceLowPower((current) => {
+      const next = !current
+      window.localStorage.setItem("finnor.jarvis.low-power.v1", next ? "1" : "0")
+      return next
     })
   }
 
@@ -286,8 +295,8 @@ function BridgeShell() {
       </div>
       <ParticleField />
       <div className="relative flex">
-        <LeftRail scene={scene} setScene={chooseScene} orderedScenes={orderedScenes} unopened={orderedScenes.filter((id) => !ledger[id])} />
-        <CenterStage scene={scene} />
+        <LeftRail scene={scene} setScene={chooseScene} orderedScenes={orderedScenes} unopened={orderedScenes.filter((id) => !ledger[id])} forceLowPower={forceLowPower} />
+        <CenterStage scene={scene} forceLowPower={forceLowPower} onToggleLowPower={toggleLowPower} />
         <RightRail />
       </div>
       {palette.open && <CommandPaletteV2 onClose={() => palette.setOpen(false)} onNavigate={chooseScene} />}

@@ -146,7 +146,7 @@ function StaticOrb({ state }: { state: OrbState }) {
   )
 }
 
-export function Orb3D({ live }: { live: OrbLiveState }) {
+export function Orb3D({ live, forceLowPower = false }: { live: OrbLiveState; forceLowPower?: boolean }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const reduced = useReducedMotion()
   const [lowPower, setLowPower] = useState(false)
@@ -170,7 +170,7 @@ export function Orb3D({ live }: { live: OrbLiveState }) {
     setLowPower(isLowPowerDevice())
   }, [])
 
-  const useStatic = mounted && (!!reduced || lowPower)
+  const useStatic = mounted && (!!reduced || lowPower || forceLowPower)
 
   useEffect(() => {
     if (useStatic || !containerRef.current) return
