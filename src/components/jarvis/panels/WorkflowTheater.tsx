@@ -605,6 +605,7 @@ function RunBrowser({ runs, now, onOpen, onSelectStep }: { runs: WorkflowRun[]; 
   const [status, setStatus] = useState("all")
   const [age, setAge] = useState("all")
   const [expandedRunId, setExpandedRunId] = useState<string | null>(null)
+  const [scrollTop, setScrollTop] = useState(0)
   const kinds = [...new Set(runs.map((run) => run.workflowType))].sort()
   const statuses = [...new Set(runs.map((run) => run.status))].sort()
   const maxAgeMs = age === "1h" ? 3_600_000 : age === "24h" ? 86_400_000 : age === "7d" ? 604_800_000 : Infinity
@@ -612,6 +613,30 @@ function RunBrowser({ runs, now, onOpen, onSelectStep }: { runs: WorkflowRun[]; 
     (kind === "all" || run.workflowType === kind) &&
     (status === "all" || run.status === status) &&
     now - new Date(run.updatedAt).getTime() <= maxAgeMs,
+  )
+  // Real tenants can accumulate a long terminal-run history. Keep the normal small
+  // list fully rendered (better for find-in-page and screen readers), but window
+  // only the compact rows once the list is genuinely long. An expanded run falls
+  // back to the complete list because its detail has variable height.
+  const ROW_HEIGHT = 58
+  const VIEWPORT_HEIGHT = 348
+  const OVERSCAN = 6
+  const virtualized = filtered.length > 40 && expandedRunId === null
+  const firstVisible = virtualized ? Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN) : 0
+  const lastVisible = virtualized ? Math.min(filtered.length, Math.ceil((scrollTop + VIEWPORT_HEIGHT) / ROW_HEIGHT) + OVERSCAN) : filtered.length
+  const renderedRuns = virtualized ? filtered.slice(firstVisible, lastVisible) : filtered
+
+  const runRow = (run: WorkflowRun) => (
+    <div key={run.id} className="rounded-xl border border-white/8 bg-black/10 p-2.5">
+      <button type="button" onClick={() => setExpandedRunId((current) => current === run.id ? null : run.id)} className="flex w-full items-center justify-between gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60">
+        <span className="min-w-0 truncate text-[11px] font-bold text-[color:var(--j-text)]">{humanizeWorkflowType(run.workflowType)}</span>
+        <span className="flex shrink-0 items-center gap-1.5 text-[9px] text-[color:var(--j-text-dim)]">
+          {run.watchdogFlagged && <span className="rounded-full bg-red-400/10 px-1.5 py-0.5 font-black text-red-300">watchdog stuck</span>}
+          <span>{run.status}</span><span>·</span><span>{ageLabel(run.updatedAt, now)}</span>
+        </span>
+      </button>
+      {expandedRunId === run.id && <div className="mt-3"><LiveRunRow run={run} now={now} onOpen={() => onOpen(run.id)} onSelectStep={onSelectStep} /></div>}
+    </div>
   )
 
   return (
@@ -638,19 +663,19 @@ function RunBrowser({ runs, now, onOpen, onSelectStep }: { runs: WorkflowRun[]; 
           </select>
         </div>
       </div>
-      <div className="space-y-2">
-        {filtered.map((run) => (
-          <div key={run.id} className="rounded-xl border border-white/8 bg-black/10 p-2.5">
-            <button type="button" onClick={() => setExpandedRunId((current) => current === run.id ? null : run.id)} className="flex w-full items-center justify-between gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60">
-              <span className="min-w-0 truncate text-[11px] font-bold text-[color:var(--j-text)]">{humanizeWorkflowType(run.workflowType)}</span>
-              <span className="flex shrink-0 items-center gap-1.5 text-[9px] text-[color:var(--j-text-dim)]">
-                {run.watchdogFlagged && <span className="rounded-full bg-red-400/10 px-1.5 py-0.5 font-black text-red-300">watchdog stuck</span>}
-                <span>{run.status}</span><span>·</span><span>{ageLabel(run.updatedAt, now)}</span>
-              </span>
-            </button>
-            {expandedRunId === run.id && <div className="mt-3"><LiveRunRow run={run} now={now} onOpen={() => onOpen(run.id)} onSelectStep={onSelectStep} /></div>}
+      <div
+        className={virtualized ? "overflow-y-auto" : "space-y-2"}
+        style={virtualized ? { maxHeight: VIEWPORT_HEIGHT } : undefined}
+        onScroll={virtualized ? (event) => setScrollTop(event.currentTarget.scrollTop) : undefined}
+        data-testid={virtualized ? "workflow-run-browser-virtualized" : undefined}
+      >
+        {virtualized ? (
+          <div style={{ height: filtered.length * ROW_HEIGHT }}>
+            <div className="space-y-2" style={{ transform: `translateY(${firstVisible * ROW_HEIGHT}px)` }}>
+              {renderedRuns.map(runRow)}
+            </div>
           </div>
-        ))}
+        ) : renderedRuns.map(runRow)}
         {filtered.length === 0 && <p className="rounded-lg border border-dashed border-white/10 p-3 text-center text-[10px] text-[color:var(--j-text-dim)]">No real runs match these filters.</p>}
       </div>
     </div>
