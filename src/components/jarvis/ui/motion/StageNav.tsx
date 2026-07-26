@@ -18,6 +18,7 @@ export const STAGE_SECTIONS = [
   { id: "flow-grammar", label: "F1 Grammar" },
   { id: "flow-command-surface", label: "F2 Command Surface" },
   { id: "flow-decision-theater", label: "F3 Decision Theater" },
+  { id: "flow-dataviz", label: "F5 Data-Viz" },
   { id: "flow-core", label: "FLOW-01..13" },
   { id: "flow-ambient", label: "FLOW-14..25" },
   { id: "fx-toolkit", label: "FX" },

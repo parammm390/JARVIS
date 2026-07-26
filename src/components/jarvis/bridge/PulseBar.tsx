@@ -17,6 +17,7 @@ import { StatusDot } from "../ui/primitives/StatusDot"
 import { choreo } from "../ui/motion/choreo"
 import { Ticker } from "../ui/motion/primitives"
 import { registerAnchor } from "../lib/pulse-bus"
+import { AreaSparkline } from "../lib/charts"
 
 // F2.T3 — FLOW-45 VitalsBreath: the heartbeat dot's period is a real function of its
 // own real age (fresher = faster breathing, matching a genuinely healthy worker),
@@ -89,33 +90,13 @@ function ageLabel(seconds: number | null): string {
   return `${Math.round(seconds / 3600)}h`
 }
 
+// F5.T3 — adoption: this used to be a bespoke FLOW-20 DrawSpark-only path (no
+// gradient fill, no latest-point pulse). Swapped for the grammar AreaSparkline so
+// PulseBar's queue trend gets FLOW-84 SparkPulse (and FLOW-81 AxisEtch) for free,
+// same real `history` data, zero new fetches.
 function QueueSparkline({ values }: { values: number[] }) {
   if (values.length < 2) return <div className="h-6 w-full" />
-  const w = 108
-  const h = 24
-  const max = Math.max(1, ...values)
-  const points = values.map((v, i) => {
-    const x = (i / (values.length - 1)) * w
-    const y = h - (v / max) * (h - 4) - 2
-    return `${x.toFixed(1)},${y.toFixed(1)}`
-  })
-  const d = `M${points.join(" L")}`
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} width={w} height={h} className="overflow-visible">
-      <motion.path
-        key={values.length}
-        d={d}
-        fill="none"
-        stroke="var(--j-cyan)"
-        strokeWidth={1.5}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        variants={choreo.drawSpark.variants}
-        initial="initial"
-        animate="animate"
-      />
-    </svg>
-  )
+  return <AreaSparkline values={values} width={108} height={24} color="var(--j-cyan)" className="w-full" axisEtch />
 }
 
 function bindingStatus(mode: string): "ok" | "degraded" | "unknown" {

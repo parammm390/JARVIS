@@ -5,9 +5,9 @@
 // stats from /api/insights), and a live performance panel whose latency line REDRAWS
 // every 4s from genuinely measured round-trips.
 
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import { LiveDot } from "../atmosphere"
-import { AreaSparkline, Donut, GradientBar } from "../lib/charts"
+import { AnomalyFlare, AreaSparkline, Donut, ForecastBand, GradientBar, toPoints } from "../lib/charts"
 import { CountUp } from "../lib/CountUp"
 import { useJarvis } from "../lib/data-core"
 
@@ -34,6 +34,10 @@ export function ChannelDonut() {
       .map(([label, value]) => ({ label, value, color: CHANNEL_COLORS[label] ?? "#64809f" }))
   }, [data.comms])
   const total = segments.reduce((s, x) => s + x.value, 0)
+  // FLOW-83 DonutCarve: hovering/focusing a legend row lifts its matching arc —
+  // cross-highlight driven from the legend since the donut svg itself is
+  // decorative (aria-hidden).
+  const [active, setActive] = useState<string | null>(null)
 
   return (
     <div className="j-panel">
@@ -47,10 +51,18 @@ export function ChannelDonut() {
         <div className="py-8 text-center text-[12px] text-[color:var(--j-text-faint)]">No communications yet.</div>
       ) : (
         <div className="flex items-center gap-5">
-          <Donut segments={segments} size={124} thickness={13} centerLabel={String(total)} centerSub="total" />
+          <Donut segments={segments} size={124} thickness={13} centerLabel={String(total)} centerSub="total" active={active} />
           <div className="min-w-0 flex-1 space-y-2">
             {segments.map((s) => (
-              <div key={s.label} className="flex items-center gap-2 text-[11.5px]">
+              <div
+                key={s.label}
+                onMouseEnter={() => setActive(s.label)}
+                onMouseLeave={() => setActive(null)}
+                onFocus={() => setActive(s.label)}
+                onBlur={() => setActive(null)}
+                tabIndex={0}
+                className="flex items-center gap-2 text-[11.5px] focus-visible:outline-none"
+              >
                 <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: s.color }} />
                 <span className="flex-1 capitalize text-[color:var(--j-text-dim)]">{s.label}</span>
                 <span className="j-num font-mono font-bold text-[color:var(--j-text)]">{Math.round((s.value / total) * 100)}%</span>
@@ -94,7 +106,7 @@ export function ActionMixBars() {
                 <span className="capitalize text-[color:var(--j-text-dim)]">{r.actionType.replaceAll("_", " ")}</span>
                 <span className="j-num font-mono font-bold text-[color:var(--j-text)]">{r.total}</span>
               </div>
-              <GradientBar pct={(r.total / max) * 100} from={BAR_GRADS[i % BAR_GRADS.length]![0]} to={BAR_GRADS[i % BAR_GRADS.length]![1]} />
+              <GradientBar pct={(r.total / max) * 100} from={BAR_GRADS[i % BAR_GRADS.length]![0]} to={BAR_GRADS[i % BAR_GRADS.length]![1]} index={i} />
             </div>
           ))}
         </div>
@@ -118,6 +130,20 @@ export function AiPerformance() {
     return { approvalRate: dec > 0 ? Math.round(((dec - rej) / dec) * 100) : null, decided: dec }
   }, [data.insights])
 
+  // F5.T2 — FLOW-86/87 graceful-absent wiring: Insights.forecastBand/anomalies
+  // (data-core.ts) aren't returned by any real API deploy yet (B3's job), so
+  // `anomaly` and `forecastBand` below are always undefined today — ForecastBand
+  // and AnomalyFlare both render nothing until B3 ships. The point math reuses the
+  // SAME toPoints scale AreaSparkline draws with, so alignment is exact the moment
+  // real data arrives, not approximated.
+  const anomaly = data.insights?.anomalies?.[0]
+  const anomalyPoint = useMemo(() => {
+    if (!anomaly || data.latencyHistory.length < 2) return null
+    const pts = toPoints(data.latencyHistory, 260, 44)
+    const p = pts[anomaly.index]
+    return p ? { x: p[0], y: p[1] } : null
+  }, [anomaly, data.latencyHistory])
+
   return (
     <div className="j-panel">
       <div className="flex items-center justify-between border-b border-white/6 px-4 py-2.5">
@@ -134,8 +160,10 @@ export function AiPerformance() {
           </span>
         </div>
         {data.latencyHistory.length > 1 && (
-          <div className="rounded-lg border border-white/5 bg-black/20 px-2 py-1.5">
-            <AreaSparkline values={data.latencyHistory} width={260} height={44} color="var(--j-cyan)" className="w-full" />
+          <div className="relative rounded-lg border border-white/5 bg-black/20 px-2 py-1.5">
+            <ForecastBand band={data.insights?.forecastBand} width={260} height={44} />
+            <AreaSparkline values={data.latencyHistory} width={260} height={44} color="var(--j-cyan)" className="w-full" axisEtch />
+            <AnomalyFlare point={anomalyPoint} label={anomaly?.label} />
             <div className="mt-0.5 flex justify-between text-[8.5px] font-bold uppercase tracking-widest text-[color:var(--j-text-faint)]">
               <span>measured live · one point per poll</span>
               <span>{data.latencyHistory.length} samples</span>

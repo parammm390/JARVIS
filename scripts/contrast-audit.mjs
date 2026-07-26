@@ -101,6 +101,16 @@ for (const [tier, { text, bg }] of Object.entries(RISK_BADGE)) {
   check(`RiskBadge ${tier} text vs material`, contrastRatio(hexToRgb(text), bgOverPage), NORMAL_TEXT_MIN)
 }
 
+// F5.T2 (JARVIS-FRONTEND-MAESTRO F5) — FLOW-87 AnomalyFlare's annotation chip
+// (lib/charts.tsx): the one genuinely NEW text/bg color pairing this phase
+// introduces (every other F5 chart color reuses an existing, already-audited
+// token). Spot-checked per the F5 exit gate's "contrast spot-check pasted"
+// requirement.
+{
+  const anomalyBgOverPage = compositeOver("rgba(69,10,10,0.8)", TOKENS.jBg) // bg-red-950/80 over --j-bg
+  check("AnomalyFlare label text (red-200) vs annotation chip bg (red-950/80)", contrastRatio(hexToRgb("#fecaca"), anomalyBgOverPage), NORMAL_TEXT_MIN)
+}
+
 const failed = checks.filter((c) => c.gates && !c.pass)
 console.log(JSON.stringify({ checks, failedCount: failed.length }, null, 2))
 if (failed.length) {

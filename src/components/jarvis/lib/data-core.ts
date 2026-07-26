@@ -150,6 +150,15 @@ export interface Insights {
    *  sessions whose confirmation eventually resolved — self-cleans once a phrase is
    *  added to policy. Optional: older API deploys won't carry this field yet. */
   unclearConfirmations?: UnclearConfirmation[]
+  /** F5.T2 (B3, not yet shipped): a forecast confidence band per read-model series.
+   *  Optional: no real API deploy returns this yet. `lib/charts.tsx`'s ForecastBand
+   *  (FLOW-86) is wired against this field now (graceful-absent — renders nothing
+   *  while it stays undefined) so it lights up the moment B3 ships it; never
+   *  fetched or fabricated here. */
+  forecastBand?: Array<{ lo: number; hi: number }>
+  /** Same B3-not-shipped-yet contract as forecastBand above — AnomalyFlare
+   *  (FLOW-87) wires against this field, graceful-absent. */
+  anomalies?: Array<{ index: number; label: string }>
 }
 export interface SetupStatusEntry {
   actionType: string

@@ -115,14 +115,14 @@ export const FLOW_INDEX: FlowEntry[] = [
   { id: 79, key: "ZoneBreath", band: "F9", phase: "F9", status: "planned", dataSource: "job counts", note: "LOCKED — prereq main D5" },
   { id: 80, key: "MapFocusDive", band: "F9", phase: "F9", status: "planned", dataSource: "UI pin click", note: "LOCKED — prereq main D5" },
 
-  // ---- Band F5 — Data-Viz Language (81-87) ----
-  { id: 81, key: "AxisEtch", band: "F5", phase: "F5", status: "planned", dataSource: "any chart" },
-  { id: 82, key: "BarSettle", band: "F5", phase: "F5", status: "planned", dataSource: "read-models" },
-  { id: 83, key: "DonutCarve", band: "F5", phase: "F5", status: "planned", dataSource: "read-models" },
-  { id: 84, key: "SparkPulse", band: "F5", phase: "F5", status: "planned", dataSource: "live series" },
-  { id: 85, key: "DeltaShimmer", band: "F5", phase: "F5", status: "planned", dataSource: "real diffs" },
-  { id: 86, key: "BandBreath", band: "F5", phase: "F5", status: "planned", dataSource: "B3 forecasts (fixture until shipped, labeled)" },
-  { id: 87, key: "AnomalyFlare", band: "F5", phase: "F5", status: "planned", dataSource: "B3 anomalies (fixture until shipped, labeled)" },
+  // ---- Band F5 — Data-Viz Language (81-87) — shipped this phase ----
+  { id: 81, key: "AxisEtch", band: "F5", phase: "F5", status: "shipped", dataSource: "any chart (AreaSparkline's real values, opt-in axisEtch prop)" },
+  { id: 82, key: "BarSettle", band: "F5", phase: "F5", status: "shipped", dataSource: "read-models (real planner actionTypeStats, ActionMixBars' own sort order)" },
+  { id: 83, key: "DonutCarve", band: "F5", phase: "F5", status: "shipped", dataSource: "read-models (real communications-log counts, ChannelDonut)" },
+  { id: 84, key: "SparkPulse", band: "F5", phase: "F5", status: "shipped", dataSource: "live series (always-on inside AreaSparkline)" },
+  { id: 85, key: "DeltaShimmer", band: "F5", phase: "F5", status: "shipped", dataSource: "real diffs (KpiStrip's delta chip, DeltaChip)" },
+  { id: 86, key: "BandBreath", band: "F5", phase: "F5", status: "shipped", dataSource: "Insights.forecastBand (typed in data-core.ts, graceful-absent — B3 hasn't shipped real values yet)", note: "Stage card is FIXTURE-labeled; production wiring (AnalyticsRow) renders nothing until B3 ships forecastBand" },
+  { id: 87, key: "AnomalyFlare", band: "F5", phase: "F5", status: "shipped", dataSource: "Insights.anomalies (typed in data-core.ts, graceful-absent — B3 hasn't shipped real values yet)", note: "Stage card is FIXTURE-labeled; production wiring (AnalyticsRow) renders nothing until B3 ships anomalies" },
 
   // ---- Band F6 — State Narratives (88-93) ----
   { id: 88, key: "EmptyTerrarium", band: "F6", phase: "F6", status: "planned", dataSource: "row counts" },

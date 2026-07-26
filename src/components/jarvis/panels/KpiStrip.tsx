@@ -7,7 +7,7 @@
 import { useEffect, useRef } from "react"
 import { LiveDot } from "../atmosphere"
 import { CountUp } from "../lib/CountUp"
-import { AreaSparkline } from "../lib/charts"
+import { AreaSparkline, DeltaChip } from "../lib/charts"
 import { useJarvis } from "../lib/data-core"
 import { flash } from "../lib/EventFX"
 import { registerAnchor, setLineageHover } from "../lib/pulse-bus"
@@ -151,9 +151,7 @@ export function KpiStrip({ onNavigate }: { onNavigate?: (view: string) => void }
               <LiveDot />
               <span className="j-label">{c.label}</span>
             </span>
-            {c.delta && (
-              <span className={`j-chip shrink-0 ${c.deltaTone === "warn" ? "bg-amber-400/12 text-amber-300" : "bg-teal-400/12 text-teal-300"}`}>{c.delta}</span>
-            )}
+            {c.delta && <DeltaChip label={c.delta} tone={c.deltaTone ?? "up"} />}
           </div>
           <div className="mt-2 flex items-end justify-between gap-2">
             <CountUp value={c.value} format={c.format} className="j-num j-num-glow text-[30px] font-black leading-none text-[color:var(--j-text)]" />
