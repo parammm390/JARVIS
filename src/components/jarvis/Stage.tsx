@@ -28,6 +28,7 @@ import { PrimitivesCatalogSection } from "./ui/primitives/PrimitivesCatalog"
 import { RendererCatalogSection } from "./ui/renderers/RendererCatalog"
 import { GrammarCatalogSection } from "./ui/motion/GrammarCatalog"
 import { CommandSurfaceCatalogSection } from "./ui/motion/CommandSurfaceCatalog"
+import { DecisionTheaterCatalogSection } from "./ui/motion/DecisionTheaterCatalog"
 import { FlowIndexMeterSection } from "./ui/motion/FlowIndexMeter"
 import { StageStickyNav, StageStateSwitcher, MountToggle } from "./ui/motion/StageNav"
 
@@ -166,6 +167,11 @@ function StageContent() {
       <div id="flow-command-surface">
         <MountToggle id="flow-command-surface" label="FLOW-38..49">
           <CommandSurfaceCatalogSection />
+        </MountToggle>
+      </div>
+      <div id="flow-decision-theater">
+        <MountToggle id="flow-decision-theater" label="FLOW-50..58">
+          <DecisionTheaterCatalogSection />
         </MountToggle>
       </div>
       <div id="flow-core">

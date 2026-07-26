@@ -77,15 +77,15 @@ export const FLOW_INDEX: FlowEntry[] = [
   { id: 49, key: "ConstellationLink", band: "F2", phase: "F2", status: "shipped", dataSource: "hand-authored KPI->panel lineage map (ConstellationLink.tsx)" },
 
   // ---- Band F3 — Decision Theater (50-58) ----
-  { id: 50, key: "GateValve", band: "F3", phase: "F3", status: "planned", dataSource: "action status" },
-  { id: 51, key: "InkBleed", band: "F3", phase: "F3", status: "planned", dataSource: "decision" },
-  { id: 52, key: "RiskCharge", band: "F3", phase: "F3", status: "planned", dataSource: "riskTier" },
-  { id: 53, key: "DiffWipe", band: "F3", phase: "F3", status: "planned", dataSource: "price-book provenance" },
-  { id: 54, key: "BatchDeckShuffle", band: "F3", phase: "F3", status: "planned", dataSource: "batch selection" },
-  { id: 55, key: "ConsequenceTrail", band: "F3", phase: "F3", status: "planned", dataSource: "real post-decision refetch" },
+  { id: 50, key: "GateValve", band: "F3", phase: "F3", status: "shipped", dataSource: "action status (decide() verb)" },
+  { id: 51, key: "InkBleed", band: "F3", phase: "F3", status: "shipped", dataSource: "decision (extends ApproveStamp)" },
+  { id: 52, key: "RiskCharge", band: "F3", phase: "F3", status: "shipped", dataSource: "riskTier, hover/focus state" },
+  { id: 53, key: "DiffWipe", band: "F3", phase: "F3", status: "shipped", dataSource: "price-book provenance (D2.T1)" },
+  { id: 54, key: "BatchDeckShuffle", band: "F3", phase: "F3", status: "shipped", dataSource: "batch selection" },
+  { id: 55, key: "ConsequenceTrail", band: "F3", phase: "F3", status: "shipped", dataSource: "real post-decision refetch + pulse-bus activity-feed anchor" },
   { id: 56, key: "UndoRing", band: "F3", phase: "F1", status: "shipped", dataSource: "revert window (undo countdown)", note: "F1.T2 pre-delivered the ring inside the F1 Toast shell (ApprovalCockpit's UndoToast); F3.T1 owns full decision-theater polish" },
-  { id: 57, key: "EscalateBeacon", band: "F3", phase: "F3", status: "planned", dataSource: "decision" },
-  { id: 58, key: "KeymapHUD", band: "F3", phase: "F3", status: "planned", dataSource: "real keydown" },
+  { id: 57, key: "EscalateBeacon", band: "F3", phase: "F3", status: "shipped", dataSource: "decision (escalate verb)" },
+  { id: 58, key: "KeymapHUD", band: "F3", phase: "F3", status: "shipped", dataSource: "real keydown" },
 
   // ---- Band F8 — Pipeline Theater amplifier (59-66) — LOCKED behind main D4 ----
   { id: 59, key: "ChamberPressure", band: "F8", phase: "F8", status: "planned", dataSource: "workflow_steps.attempts", note: "LOCKED — prereq main D4 GATE-GREEN" },

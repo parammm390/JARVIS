@@ -223,6 +223,33 @@ export const sceneDockExit: FlowChoreo = {
   },
 }
 
+// FLOW-51 InkBleed: extends FLOW-10 StampApprove — after the stamp's own punch
+// settles, its border bleeds in over 400ms then holds (crystallize = no further
+// motion, an end-state, never a loop) → border flash only (reduced).
+export const inkBleed: FlowChoreo = {
+  variants: {
+    initial: { opacity: 0 },
+    animate: { opacity: [0, 1, 1], transition: { duration: 0.4, times: [0, 0.85, 1], ease: EASE.decelerate } },
+  },
+  reducedVariants: {
+    initial: { opacity: 0 },
+    animate: { opacity: 1, transition: { duration: 0 } },
+  },
+}
+
+// FLOW-57 EscalateBeacon: a beacon pulse travels from the escalated card up toward
+// the rail's top edge, fading as it goes → static chip (reduced, no travel).
+export const escalateBeacon: FlowChoreo = {
+  variants: {
+    initial: { opacity: 0.9, y: 0, scale: 1 },
+    animate: { opacity: 0, y: -160, scale: 0.7, transition: { duration: 0.9, ease: EASE.accelerate } },
+  },
+  reducedVariants: {
+    initial: { opacity: 0.9, y: 0, scale: 1 },
+    animate: { opacity: 0, transition: { duration: 0.3 } },
+  },
+}
+
 export const choreo = {
   liquidFill,
   valvePulse,
@@ -239,4 +266,6 @@ export const choreo = {
   shakeDeny,
   orbAuraRipple,
   sceneDockExit,
+  inkBleed,
+  escalateBeacon,
 }

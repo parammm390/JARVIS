@@ -5,11 +5,32 @@
 // Approval Inbox (ApprovalDock) and the live run timeline (WorkflowTheater) so the
 // same honest, complete view backs both entry points.
 
-import { useEffect, useState, type CSSProperties } from "react"
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react"
+import { Tag, User, Calendar, MessageSquare, Wrench, FileText, Package, DollarSign } from "lucide-react"
 import { jarvisGet } from "./api"
 import { Drawer } from "../ui/primitives/Drawer"
 import { ActionRenderer } from "../ui/renderers/ActionRenderer"
 import { getRendererEntry } from "../ui/renderers/registry"
+import { RiskBadge, type RiskTier } from "../ui/primitives/RiskBadge"
+import { Stagger } from "../ui/motion/primitives"
+
+// F3.T3 — FLOW-58's sibling receipt-depth task: evidence source iconography. A
+// keyword lookup against the REAL `source` string every evidence row already
+// carries (packages/shared-types' DecisionReceipt) — never a fabricated taxonomy,
+// just a designed icon instead of the bare source string for the common families;
+// an unmatched source still renders honestly (its own text label), just no icon.
+const SOURCE_ICON: Array<{ match: RegExp; Icon: typeof Tag }> = [
+  { match: /price.?book|pricing/i, Icon: DollarSign },
+  { match: /crm|lead|household|customer/i, Icon: User },
+  { match: /schedul|visit|appointment/i, Icon: Calendar },
+  { match: /sms|communicat|notify|message/i, Icon: MessageSquare },
+  { match: /technician|maintenance|equipment/i, Icon: Wrench },
+  { match: /inventory|stock|part/i, Icon: Package },
+  { match: /tag|label/i, Icon: Tag },
+]
+function sourceIcon(source: string) {
+  return SOURCE_ICON.find((s) => s.match.test(source))?.Icon ?? FileText
+}
 
 export interface FullReceipt {
   id: string
@@ -102,64 +123,91 @@ export function ReceiptDrawer({ receiptId, onClose }: { receiptId: string; onClo
 
         {receipt && (
           <>
-            <Section label="Objective">
-              <div className="text-[12px] leading-relaxed text-[color:var(--j-text)]">{receipt.objective}</div>
-            </Section>
-
-            <div className="mb-4 flex flex-wrap gap-1">
-              <span className="rounded-full bg-white/8 px-2 py-0.5 text-[9px] font-black uppercase text-white/60">{receipt.riskTier} risk</span>
-              {receipt.policyApplied && (
-                <span className="rounded-full bg-white/8 px-2 py-0.5 text-[9px] font-black text-white/60">
-                  policy {receipt.policyApplied.id.slice(0, 8)} · v{receipt.policyApplied.version}
+            {/* F3.T3 — risk material header: RiskBadge's own three real materials
+                (green glass / amber steel / red obsidian, C3) replace the plain pill,
+                with a faint tier-matched wash behind the whole header — presentation
+                of the SAME riskTier the receipt already carries, no new data. */}
+            <div
+              className="-mx-5 -mt-5 mb-4 border-b border-white/6 px-5 pb-4 pt-5"
+              style={{
+                background:
+                  receipt.riskTier === "high"
+                    ? "linear-gradient(180deg, rgba(248,113,113,0.08), transparent)"
+                    : receipt.riskTier === "medium"
+                      ? "linear-gradient(180deg, rgba(245,185,66,0.08), transparent)"
+                      : "linear-gradient(180deg, rgba(52,211,153,0.06), transparent)",
+              }}
+            >
+              <Section label="Objective">
+                <div className="text-[12px] leading-relaxed text-[color:var(--j-text)]">{receipt.objective}</div>
+              </Section>
+              <div className="flex flex-wrap gap-1">
+                <RiskBadge tier={receipt.riskTier as RiskTier} />
+                {receipt.policyApplied && (
+                  <span className="rounded-full bg-white/8 px-2 py-0.5 text-[9px] font-black text-white/60">
+                    policy {receipt.policyApplied.id.slice(0, 8)} · v{receipt.policyApplied.version}
+                  </span>
+                )}
+                <span className={`rounded-full px-2 py-0.5 text-[9px] font-black ${receipt.finalizedAt ? "bg-teal-300/12 text-teal-200" : "bg-amber-300/12 text-amber-200"}`}>
+                  {receipt.finalizedAt ? "finalized" : "in progress"}
                 </span>
-              )}
-              <span className={`rounded-full px-2 py-0.5 text-[9px] font-black ${receipt.finalizedAt ? "bg-teal-300/12 text-teal-200" : "bg-amber-300/12 text-amber-200"}`}>
-                {receipt.finalizedAt ? "finalized" : "in progress"}
-              </span>
+              </div>
             </div>
 
-            {receipt.evidence.length > 0 && (
-              <Section label="Evidence / citations">
-                <div className="flex flex-wrap gap-1">
-                  {receipt.evidence.map((e, i) => (
-                    <span key={i} title={new Date(e.timestamp).toLocaleString()} className="rounded-full bg-white/6 px-2 py-0.5 text-[10px] text-white/60">
-                      {e.source}:{e.ref}
-                    </span>
-                  ))}
-                </div>
-              </Section>
-            )}
+            {/* F3.T3 — stagger-unfurl: the remaining sections cascade in (30ms/item,
+                <Stagger>, C2's own primitive) instead of all appearing at once —
+                presentation only, same data, same order. */}
+            <Stagger staggerMs={45} className="space-y-0">
+              {(
+                [
+                  receipt.evidence.length > 0 ? (
+                    <Section key="evidence" label="Evidence / citations">
+                      <div className="flex flex-wrap gap-1">
+                        {receipt.evidence.map((e, i) => {
+                          const Icon = sourceIcon(e.source)
+                          return (
+                            <span
+                              key={i}
+                              title={new Date(e.timestamp).toLocaleString()}
+                              className="inline-flex items-center gap-1 rounded-full bg-white/6 px-2 py-0.5 text-[10px] text-white/60"
+                            >
+                              <Icon className="h-2.5 w-2.5 shrink-0" />
+                              {e.source}:{e.ref}
+                            </span>
+                          )
+                        })}
+                      </div>
+                    </Section>
+                  ) : null,
+                  <Section key="approval" label="Approval">
+                    <div className="text-[11px] text-[color:var(--j-text-dim)]">
+                      {receipt.approval.required ? (receipt.approval.approvedBy ? `approved by ${receipt.approval.approvedBy}` : "awaiting approval") : "no approval required (ungated read)"}
+                      {receipt.approval.at ? ` · ${new Date(receipt.approval.at).toLocaleString()}` : ""}
+                    </div>
+                  </Section>,
+                  <Section key="proposed" label="Proposed action">
+                    <ProposedActionSection proposedAction={receipt.proposedAction} />
+                  </Section>,
+                  <Section key="expected" label="Expected result">
+                    <JsonBlock value={receipt.expectedResult} />
+                  </Section>,
+                  <Section key="actual" label="Actual result">
+                    <JsonBlock value={receipt.actualResult} />
+                  </Section>,
+                  receipt.failure ? (
+                    <Section key="failure" label="Failure + recovery path">
+                      <div className="rounded-lg border border-red-400/25 bg-red-400/5 p-2 text-[11px] text-red-300">
+                        <div className="font-bold">{receipt.failure.errorKind}</div>
+                        <div className="mt-1">{receipt.failure.message}</div>
+                        <div className="mt-1 text-red-200/80">recovery: {receipt.failure.recoveryPath}</div>
+                      </div>
+                    </Section>
+                  ) : null,
+                ] as ReactNode[]
+              ).filter(Boolean)}
+            </Stagger>
 
-            <Section label="Approval">
-              <div className="text-[11px] text-[color:var(--j-text-dim)]">
-                {receipt.approval.required ? (receipt.approval.approvedBy ? `approved by ${receipt.approval.approvedBy}` : "awaiting approval") : "no approval required (ungated read)"}
-                {receipt.approval.at ? ` · ${new Date(receipt.approval.at).toLocaleString()}` : ""}
-              </div>
-            </Section>
-
-            <Section label="Proposed action">
-              <ProposedActionSection proposedAction={receipt.proposedAction} />
-            </Section>
-
-            <Section label="Expected result">
-              <JsonBlock value={receipt.expectedResult} />
-            </Section>
-
-            <Section label="Actual result">
-              <JsonBlock value={receipt.actualResult} />
-            </Section>
-
-            {receipt.failure && (
-              <Section label="Failure + recovery path">
-                <div className="rounded-lg border border-red-400/25 bg-red-400/5 p-2 text-[11px] text-red-300">
-                  <div className="font-bold">{receipt.failure.errorKind}</div>
-                  <div className="mt-1">{receipt.failure.message}</div>
-                  <div className="mt-1 text-red-200/80">recovery: {receipt.failure.recoveryPath}</div>
-                </div>
-              </Section>
-            )}
-
-            <div className="font-mono text-[9.5px] text-[color:var(--j-text-faint)]">
+            <div className="mt-4 font-mono text-[9.5px] text-[color:var(--j-text-faint)]">
               opened {new Date(receipt.createdAt).toLocaleString()}
               {receipt.finalizedAt ? ` · finalized ${new Date(receipt.finalizedAt).toLocaleString()}` : ""}
             </div>

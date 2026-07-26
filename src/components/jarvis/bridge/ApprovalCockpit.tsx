@@ -50,11 +50,13 @@ import { jarvisPost, JarvisApiError } from "../lib/api"
 import { ReceiptDrawer } from "../lib/ReceiptDrawer"
 import { RiskBadge, type RiskTier } from "../ui/primitives/RiskBadge"
 import { ToastShell, CountdownRing } from "../ui/primitives/Toast"
-import { Flight } from "../ui/motion/primitives"
+import { Flight, Ticker } from "../ui/motion/primitives"
 import { choreo } from "../ui/motion/choreo"
+import { EASE } from "../ui/motion/tokens"
 import { ActionRenderer } from "../ui/renderers/ActionRenderer"
 import { BorderBeam } from "../ui/fx/BorderBeam"
-import { registerAnchor } from "../lib/pulse-bus"
+import { registerAnchor, getAnchorRect } from "../lib/pulse-bus"
+import { KeymapHUD } from "./KeymapHUD"
 
 // ---------------------------------------------------------------------------
 // Small local helpers (deliberately not imported from ApprovalDock.tsx — that file is
@@ -73,6 +75,59 @@ function GroundedBadge({ field, status }: { field: string; status: string }) {
 
 function riskRank(tier: RiskTier | undefined): number {
   return tier === "high" ? 2 : tier === "medium" ? 1 : 0
+}
+
+// ---------------------------------------------------------------------------
+// F3.T1 — FLOW-50 GateValve: a valve glyph mounted on ApproveStamp/RejectGhost (the
+// same fixed-rect overlays that already play at decide-time, since the real card
+// they cover unmounts almost immediately once decide() hides it — see D2.T4's
+// synchronous-execution finding). Approve rotates the bar open; reject seals it shut.
+// ---------------------------------------------------------------------------
+export function GateValveGlyph({ variant, reduced }: { variant: "open" | "seal"; reduced: boolean }) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden className="shrink-0">
+      <circle cx="7" cy="7" r="6" fill="none" stroke="currentColor" strokeOpacity="0.35" strokeWidth="1.2" />
+      <motion.line
+        x1="2" y1="7" x2="12" y2="7"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        initial={{ rotate: 0, opacity: 1 }}
+        animate={
+          variant === "open"
+            ? { rotate: 90, opacity: 1 }
+            : { rotate: 0, opacity: reduced ? 0.4 : [1, 0.9, 0.3] }
+        }
+        transition={{ duration: reduced ? 0 : 0.32, ease: EASE.overshoot }}
+        style={{ transformOrigin: "7px 7px" }}
+      />
+    </svg>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// F3.T1 — FLOW-52 RiskCharge: the card's own RiskBadge material (green glass / amber
+// steel / red obsidian, C3) animates ONLY while the card is genuinely hovered or
+// keyboard-focused — an ambient-budget-respecting one-shot per hover, never a
+// standing loop (hard rule F4). Static at rest, matching the plan's own wording.
+// ---------------------------------------------------------------------------
+const RISK_CHARGE_GRADIENT: Record<RiskTier, string> = {
+  low: "linear-gradient(120deg, transparent, rgba(52,211,153,0.16), transparent)",
+  medium: "linear-gradient(120deg, transparent, rgba(245,185,66,0.22), transparent)",
+  high: "linear-gradient(120deg, transparent, rgba(248,113,113,0.2), transparent)",
+}
+export function RiskChargeOverlay({ tier, active, reduced }: { tier: RiskTier; active: boolean; reduced: boolean }) {
+  if (!active || reduced) return null
+  return (
+    <motion.div
+      aria-hidden
+      className="pointer-events-none absolute inset-0 rounded-xl"
+      style={{ background: RISK_CHARGE_GRADIENT[tier], backgroundSize: "200% 100%" }}
+      initial={{ backgroundPositionX: "0%", opacity: 0 }}
+      animate={{ backgroundPositionX: "100%", opacity: [0, 1, 0] }}
+      transition={{ duration: 1.1, ease: "easeInOut" }}
+    />
+  )
 }
 
 const RANK_TO_TIER: RiskTier[] = ["low", "medium", "high"]
@@ -141,6 +196,8 @@ function ApprovalCard({
   reduced: boolean
 }) {
   const [expanded, setExpanded] = useState(false)
+  const [hovered, setHovered] = useState(false)
+  const [diffOpenSku, setDiffOpenSku] = useState<string | null>(null)
   const tilt = useTilt(reduced)
   const tier: RiskTier = (action.receipt?.riskTier as RiskTier) ?? "low"
   const isUnavailable = action.status === "blocked_integration_unavailable"
@@ -160,12 +217,19 @@ function ApprovalCard({
       exit={{ opacity: 0, x: -60 }}
       transition={{ duration: 0.3 }}
       onMouseMove={tilt.onMouseMove}
-      onMouseLeave={tilt.onMouseLeave}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => {
+        setHovered(false)
+        tilt.onMouseLeave()
+      }}
       style={{ perspective: 800 }}
       className={`relative overflow-hidden rounded-xl border p-3 outline-none transition-colors ${
         focused ? "border-cyan-300/60 ring-2 ring-cyan-300/30" : "border-white/10"
       } ${isUnavailable ? "bg-white/[0.015] opacity-70" : "bg-white/[0.02]"}`}
     >
+      {/* FLOW-52 RiskCharge: the tier material animates only while genuinely
+          hovered/focused — static at rest, per the plan's ambient-budget wording. */}
+      <RiskChargeOverlay tier={tier} active={hovered || focused} reduced={reduced} />
       <motion.div
         style={{ rotateX: tilt.rotateX, rotateY: tilt.rotateY, transformStyle: "preserve-3d" }}
         variants={reduced ? choreo.shakeDeny.reducedVariants : choreo.shakeDeny.variants}
@@ -250,19 +314,52 @@ function ApprovalCard({
         {(action.groundedPayload?.length || action.priceBookProvenance?.length) ? (
           <div className="mt-2 flex flex-wrap gap-1">
             {action.groundedPayload?.map((g) => <GroundedBadge key={g.field} field={g.field} status={g.status} />)}
-            {action.priceBookProvenance?.map((p) => (
-              <span
-                key={p.sku}
-                title={`price book: $${p.priceBookPriceUsd.toFixed(2)} · proposed: ${p.payloadPriceUsd === null ? "n/a" : `$${p.payloadPriceUsd.toFixed(2)}`}`}
-                className={`rounded-full px-2 py-0.5 text-[9px] font-black ${
-                  p.matches === false ? "bg-amber-300/12 text-amber-200" : "bg-white/8 text-white/50"
-                }`}
-              >
-                {p.matches === false ? "override" : "matches price book"} · {p.sku}
-              </span>
-            ))}
+            {action.priceBookProvenance?.map((p) =>
+              p.matches === false ? (
+                // FLOW-53 DiffWipe: an "override" is the one real before/after this
+                // cockpit has (D2.T1's own scoped price-book diff) — clicking it wipes
+                // in the price-book value vs. the proposed value with a scanline.
+                <button
+                  key={p.sku}
+                  type="button"
+                  onClick={() => setDiffOpenSku((cur) => (cur === p.sku ? null : p.sku))}
+                  className="rounded-full bg-amber-300/12 px-2 py-0.5 text-[9px] font-black text-amber-200"
+                  aria-expanded={diffOpenSku === p.sku}
+                >
+                  override · {p.sku} {diffOpenSku === p.sku ? "▲" : "▼"}
+                </button>
+              ) : (
+                <span key={p.sku} title={`price book: $${p.priceBookPriceUsd.toFixed(2)}`} className="rounded-full bg-white/8 px-2 py-0.5 text-[9px] font-black text-white/50">
+                  matches price book · {p.sku}
+                </span>
+              ),
+            )}
           </div>
         ) : null}
+
+        <AnimatePresence initial={false}>
+          {diffOpenSku &&
+            action.priceBookProvenance
+              ?.filter((p) => p.sku === diffOpenSku)
+              .map((p) => (
+                <motion.div key={p.sku} initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+                  <div className="relative mt-2 flex items-center gap-3 overflow-hidden rounded-lg border border-amber-300/25 bg-amber-300/[0.04] p-2 text-[11px]">
+                    <motion.div
+                      aria-hidden
+                      initial={{ x: "-100%" }}
+                      animate={{ x: "160%" }}
+                      transition={{ duration: reduced ? 0 : 0.5, ease: EASE.standard }}
+                      className="pointer-events-none absolute inset-y-0 w-1/3 bg-gradient-to-r from-transparent via-amber-200/25 to-transparent"
+                    />
+                    <span className="text-white/50">price book</span>
+                    <span className="font-mono font-bold text-white/80">${p.priceBookPriceUsd.toFixed(2)}</span>
+                    <span className="text-white/30">→</span>
+                    <span className="text-white/50">proposed</span>
+                    <span className="font-mono font-bold text-amber-200">{p.payloadPriceUsd === null ? "n/a" : `$${p.payloadPriceUsd.toFixed(2)}`}</span>
+                  </div>
+                </motion.div>
+              ))}
+        </AnimatePresence>
 
         <AnimatePresence initial={false}>
           {expanded && action.critic && (
@@ -345,8 +442,9 @@ function RejectGhost({ rect, label, reduced }: { rect: DOMRect; label: string; r
       initial="initial"
       animate="animate"
       style={{ position: "fixed", top: rect.top, left: rect.left, width: rect.width, height: rect.height, zIndex: 55 }}
-      className="pointer-events-none flex items-center justify-center rounded-xl border border-red-400/40 bg-red-400/10 text-[11px] font-black text-red-300"
+      className="pointer-events-none flex items-center justify-center gap-1.5 rounded-xl border border-red-400/40 bg-red-400/10 text-[11px] font-black text-red-300"
     >
+      <GateValveGlyph variant="seal" reduced={reduced} />
       REJECTED — {label.replaceAll("_", " ")}
     </motion.div>
   )
@@ -360,15 +458,73 @@ function RejectGhost({ rect, label, reduced }: { rect: DOMRect; label: string; r
 // ---------------------------------------------------------------------------
 function ApproveStamp({ rect, label, reduced }: { rect: DOMRect; label: string; reduced: boolean }) {
   const v = reduced ? choreo.stampApprove.reducedVariants : choreo.stampApprove.variants
+  const inkV = reduced ? choreo.inkBleed.reducedVariants : choreo.inkBleed.variants
   return (
     <motion.div
       variants={v}
       initial="initial"
       animate="animate"
       style={{ position: "fixed", top: rect.top, left: rect.left, width: rect.width, height: rect.height, zIndex: 55 }}
-      className="pointer-events-none flex items-center justify-center rounded-xl border border-teal-300/50 bg-teal-300/15 text-[11px] font-black text-teal-200"
+      className="pointer-events-none flex items-center justify-center gap-1.5 rounded-xl bg-teal-300/15 text-[11px] font-black text-teal-200"
     >
+      {/* FLOW-51 InkBleed: the stamp's border bleeds in after the punch settles, then
+          crystallizes (holds, no further motion) — a separate layered border so the
+          punch (scale/shake) and the bleed (opacity ramp) don't fight the same prop. */}
+      <motion.span
+        aria-hidden
+        className="absolute inset-0 rounded-xl border-2 border-teal-300/60"
+        variants={inkV}
+        initial="initial"
+        animate="animate"
+      />
+      <GateValveGlyph variant="open" reduced={reduced} />
       APPROVED — {label.replaceAll("_", " ")}
+    </motion.div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// F3.T1 — FLOW-57 EscalateBeacon: a beacon pulse travels from the escalated card
+// upward, toward the top of the cockpit's own rail — same fixed-rect-overlay
+// technique as ApproveStamp/RejectGhost, pinned at click time, self-expiring once
+// the travel finishes.
+// ---------------------------------------------------------------------------
+export function EscalateBeacon({ rect, reduced }: { rect: DOMRect; reduced: boolean }) {
+  const v = reduced ? choreo.escalateBeacon.reducedVariants : choreo.escalateBeacon.variants
+  return (
+    <motion.div
+      variants={v}
+      initial="initial"
+      animate="animate"
+      style={{ position: "fixed", top: rect.top + rect.height / 2 - 4, left: rect.left + 10, zIndex: 55 }}
+      className="pointer-events-none flex h-2 w-2 items-center justify-center rounded-full bg-amber-300 shadow-[var(--j-glow-amber)]"
+    />
+  )
+}
+
+// ---------------------------------------------------------------------------
+// F3.T1 — FLOW-55 ConsequenceTrail: once an approval lands, a small receipt chip
+// flies from the card's own last rect to the real ActivityTheater feed anchor
+// (pulse-bus's named registry — the same real "activity-feed" rect EventMeteor
+// already draws to), while the header's pending-count Ticker decrements in the same
+// beat (the real optimistic hide + eventual refetch, not a fabricated countdown).
+// Honest-absent when no feed anchor is mounted (e.g. this component alone on Stage,
+// outside the real Bridge) — fades in place instead of flying nowhere.
+// ---------------------------------------------------------------------------
+export function ConsequenceChip({ rect, label, reduced }: { rect: DOMRect; label: string; reduced: boolean }) {
+  const target = getAnchorRect("activity-feed")
+  const dx = target ? target.left + target.width / 2 - (rect.left + rect.width / 2) : 0
+  const dy = target ? target.top + target.height / 2 - (rect.top + rect.height / 2) : -12
+  return (
+    <motion.div
+      initial={{ opacity: 1, x: 0, y: 0, scale: 1 }}
+      animate={reduced ? { opacity: 0 } : { opacity: [1, 1, 0], x: dx, y: dy, scale: 0.5 }}
+      transition={{ duration: reduced ? 0.2 : 0.55, ease: EASE.accelerate }}
+      style={{ position: "fixed", top: rect.top + rect.height / 2 - 8, left: rect.left + rect.width / 2 - 8, zIndex: 56 }}
+      className="pointer-events-none flex h-4 w-4 items-center justify-center rounded-full bg-cyan-300/80 text-[7px] font-black text-slate-950"
+      title={label}
+    >
+      ✓
     </motion.div>
   )
 }
@@ -434,6 +590,9 @@ export function ApprovalCockpit() {
   const [flights, setFlights] = useState<Array<{ id: string; actionType: string }>>([])
   const [rejectGhosts, setRejectGhosts] = useState<Array<{ id: string; rect: DOMRect; label: string }>>([])
   const [approveStamps, setApproveStamps] = useState<Array<{ id: string; rect: DOMRect; label: string }>>([])
+  const [escalateBeacons, setEscalateBeacons] = useState<Array<{ id: string; rect: DOMRect }>>([])
+  const [consequenceChips, setConsequenceChips] = useState<Array<{ id: string; rect: DOMRect; label: string }>>([])
+  const [keymapOpen, setKeymapOpen] = useState(false)
   const [undo, setUndo] = useState<{ id: string; actionType: string; expiresAt: number; status: "waiting" | "reverting" | "reverted" | "already-claimed" } | null>(
     null,
   )
@@ -503,9 +662,25 @@ export function ApprovalCockpit() {
   // Approve stamps self-expire once StampApprove's own animation has finished.
   useEffect(() => {
     if (approveStamps.length === 0) return
-    const t = window.setTimeout(() => setApproveStamps((prev) => prev.slice(1)), reduced ? 0 : 320)
+    // FLOW-51 InkBleed extends the stamp's own life from 320ms to 420ms so the
+    // border-bleed-then-crystallize sequence (0.4s) is never cut off mid-animation.
+    const t = window.setTimeout(() => setApproveStamps((prev) => prev.slice(1)), reduced ? 0 : 420)
     return () => window.clearTimeout(t)
   }, [approveStamps, reduced])
+
+  // FLOW-57 EscalateBeacon self-expires once its travel animation has finished.
+  useEffect(() => {
+    if (escalateBeacons.length === 0) return
+    const t = window.setTimeout(() => setEscalateBeacons((prev) => prev.slice(1)), reduced ? 300 : 900)
+    return () => window.clearTimeout(t)
+  }, [escalateBeacons, reduced])
+
+  // FLOW-55 ConsequenceTrail's chip self-expires once its flight has landed.
+  useEffect(() => {
+    if (consequenceChips.length === 0) return
+    const t = window.setTimeout(() => setConsequenceChips((prev) => prev.slice(1)), reduced ? 200 : 550)
+    return () => window.clearTimeout(t)
+  }, [consequenceChips, reduced])
 
   const decide = useCallback(
     async (action: CockpitAction, verb: Verb) => {
@@ -523,17 +698,17 @@ export function ApprovalCockpit() {
       }
       if (inflight.current.has(action.id)) return
       inflight.current.add(action.id)
+      const idx = items.findIndex((x) => x.id === action.id)
+      const cardRect = cardRefs.current[idx]?.getBoundingClientRect() ?? null
       if (verb === "confirm") {
         sfx.approve()
-        const idx = items.findIndex((x) => x.id === action.id)
-        const rect = cardRefs.current[idx]?.getBoundingClientRect()
-        if (rect) setApproveStamps((s) => [...s, { id: action.id, rect, label: action.actionType }])
+        if (cardRect) setApproveStamps((s) => [...s, { id: action.id, rect: cardRect, label: action.actionType }])
         setFlights((f) => [...f, { id: action.id, actionType: action.actionType }])
       } else if (verb === "reject") {
         sfx.reject()
-        const idx = items.findIndex((x) => x.id === action.id)
-        const rect = cardRefs.current[idx]?.getBoundingClientRect()
-        if (rect) setRejectGhosts((g) => [...g, { id: action.id, rect, label: action.actionType }])
+        if (cardRect) setRejectGhosts((g) => [...g, { id: action.id, rect: cardRect, label: action.actionType }])
+      } else if (verb === "escalate") {
+        if (cardRect) setEscalateBeacons((b) => [...b, { id: action.id, rect: cardRect }])
       }
       if (verb !== "escalate") setHidden((h) => new Set(h).add(action.id))
       try {
@@ -541,6 +716,10 @@ export function ApprovalCockpit() {
         data.recordDecision(verb)
         if (verb === "confirm") {
           setUndo({ id: action.id, actionType: action.actionType, expiresAt: Date.now() + UNDO_WINDOW_MS, status: "waiting" })
+          // FLOW-55 ConsequenceTrail: only once the approval has genuinely landed
+          // (this POST resolved) does the receipt chip fly toward the real activity
+          // feed — never on the optimistic hide alone.
+          if (cardRect) setConsequenceChips((c) => [...c, { id: action.id, rect: cardRect, label: action.actionType }])
         }
       } catch (e) {
         setHidden((h) => {
@@ -603,6 +782,12 @@ export function ApprovalCockpit() {
   function onContainerKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
     const target = e.target as HTMLElement
     if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return
+    // FLOW-58 KeymapHUD: real keydown, independent of whether any card is focused.
+    if (e.key === "?") {
+      e.preventDefault()
+      setKeymapOpen(true)
+      return
+    }
     if (items.length === 0) return
     const current = items[focusedIndex]
     if (e.key === "j") {
@@ -633,7 +818,12 @@ export function ApprovalCockpit() {
       <div className="flex items-center justify-between border-b border-white/6 px-4 py-2.5">
         <span className="j-label">Awaiting Your Approval</span>
         <div className="flex items-center gap-2">
-          {items.length > 0 && <span className="rounded-full bg-cyan-300/15 px-2 py-0.5 text-[10px] font-black text-cyan-200">{items.length}</span>}
+          {items.length > 0 && (
+            <span className="rounded-full bg-cyan-300/15 px-2 py-0.5 text-[10px] font-black text-cyan-200">
+              {/* FLOW-55 ConsequenceTrail: the pending-count odometer, real refetch-driven */}
+              <Ticker value={items.length} />
+            </span>
+          )}
           <button
             type="button"
             onClick={() => {
@@ -690,11 +880,17 @@ export function ApprovalCockpit() {
           <div className="mt-3 rounded-xl border border-cyan-300/25 bg-cyan-300/[0.04] p-3">
             <div className="mb-2 flex items-center gap-1">
               {selectedItems.slice(0, 5).map((a, i) => (
+                // FLOW-54 BatchDeckShuffle: `layout` (on top of D2's own DeckFan
+                // scale/opacity variant) springs each card into its new fanned slot
+                // as the real selection set changes — the "magnetize together" the
+                // plan asks for, driven by genuine (de)selection, not a scripted demo.
                 <motion.div
                   key={a.id}
+                  layout
                   variants={reduced ? choreo.deckFan.reducedVariants : choreo.deckFan.variants}
                   initial="initial"
                   animate="animate"
+                  transition={reduced ? { duration: 0 } : { type: "spring", stiffness: 340, damping: 30 }}
                   style={{ rotate: (i - selectedItems.length / 2) * 6, marginLeft: i === 0 ? 0 : -18 }}
                   className="h-8 w-12 rounded-md border border-white/15 bg-white/8"
                 />
@@ -737,6 +933,17 @@ export function ApprovalCockpit() {
           <ApproveStamp key={s.id} rect={s.rect} label={s.label} reduced={reduced} />
         ))}
       </AnimatePresence>
+      <AnimatePresence>
+        {escalateBeacons.map((b) => (
+          <EscalateBeacon key={b.id} rect={b.rect} reduced={reduced} />
+        ))}
+      </AnimatePresence>
+      <AnimatePresence>
+        {consequenceChips.map((c) => (
+          <ConsequenceChip key={c.id} rect={c.rect} label={c.label} reduced={reduced} />
+        ))}
+      </AnimatePresence>
+      <KeymapHUD open={keymapOpen} onClose={() => setKeymapOpen(false)} />
     </div>
   )
 }
