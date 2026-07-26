@@ -140,7 +140,7 @@ export function KpiStrip({ onNavigate }: { onNavigate?: (view: string) => void }
             )}
           </div>
           <div className="mt-2 flex items-end justify-between gap-2">
-            <CountUp value={c.value} format={c.format} className="j-num-glow text-[30px] font-black tabular-nums leading-none text-[color:var(--j-text)]" />
+            <CountUp value={c.value} format={c.format} className="j-num j-num-glow text-[30px] font-black leading-none text-[color:var(--j-text)]" />
             {c.spark.length > 1 && <AreaSparkline values={c.spark} width={96} height={40} color={c.color} className="w-24 shrink-0" />}
           </div>
           <div className="mt-1.5 truncate text-[11px] text-[color:var(--j-text-dim)]">{c.sub}</div>

@@ -107,7 +107,7 @@ export function DailyBriefing() {
       </div>
       <div className="px-4 py-3">
         {error && <div className="mb-2 rounded-lg border border-red-400/30 bg-red-400/5 px-3 py-2 text-[11px] text-red-300">{error}</div>}
-        {!data && !error && <div className="h-20 animate-pulse rounded-lg bg-white/5" />}
+        {!data && !error && <div className="jarvis-skeleton-tide h-20 rounded-lg bg-white/5" />}
         {data && (
           <>
             <p className="text-[12px] leading-relaxed text-[color:var(--j-text)]">{data.spokenSummary}</p>

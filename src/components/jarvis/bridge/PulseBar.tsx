@@ -15,6 +15,7 @@ import { useLiveQuery } from "@/lib/jarvis/useLiveQuery"
 import { useJarvisAuth } from "../lib/jarvis-auth"
 import { StatusDot } from "../ui/primitives/StatusDot"
 import { choreo } from "../ui/motion/choreo"
+import { Ticker } from "../ui/motion/primitives"
 
 const HISTORY_LEN = 24
 
@@ -115,17 +116,17 @@ export function PulseBar({ compact = false }: { compact?: boolean }) {
           <StatusDot status={data.heartbeat.healthy ? "ok" : "down"} />
           <span className="text-[10px] font-bold uppercase tracking-widest text-[color:var(--j-text-dim)]">Worker</span>
         </div>
-        <span className="font-mono text-[10px] font-bold text-[color:var(--j-text)]">{ageLabel(data.heartbeat.ageSeconds)}</span>
+        <span className="j-num font-mono text-[10px] font-bold text-[color:var(--j-text)]">{ageLabel(data.heartbeat.ageSeconds)}</span>
       </div>
 
       <div>
         <div className="flex items-center justify-between">
           <span className="text-[10px] font-bold uppercase tracking-widest text-[color:var(--j-text-dim)]">Queue</span>
-          <span className="font-mono text-[11px] font-black text-[color:var(--j-text)]">{data.queue.depth}</span>
+          <Ticker value={data.queue.depth} className="j-num font-mono text-[11px] font-black text-[color:var(--j-text)]" />
         </div>
         {!compact && <QueueSparkline values={history} />}
         {data.queue.oldestPendingAgeSeconds !== null && (
-          <p className="text-[9px] text-[color:var(--j-text-faint)]">oldest pending {ageLabel(data.queue.oldestPendingAgeSeconds)}</p>
+          <p className="j-num text-[9px] text-[color:var(--j-text-faint)]">oldest pending {ageLabel(data.queue.oldestPendingAgeSeconds)}</p>
         )}
       </div>
 
@@ -155,7 +156,7 @@ export function PulseBar({ compact = false }: { compact?: boolean }) {
 
       <div className="flex items-center justify-between">
         <span className="text-[10px] font-bold uppercase tracking-widest text-[color:var(--j-text-dim)]">Scans</span>
-        <span className={`font-mono text-[10px] font-bold ${scanAge !== null && scanAge > 3600 ? "text-amber-300" : "text-[color:var(--j-text)]"}`}>
+        <span className={`j-num font-mono text-[10px] font-bold ${scanAge !== null && scanAge > 3600 ? "text-amber-300" : "text-[color:var(--j-text)]"}`}>
           {scanAge === null ? "none yet" : `${ageLabel(scanAge)} oldest`}
         </span>
       </div>

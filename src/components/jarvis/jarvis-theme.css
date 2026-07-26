@@ -422,3 +422,167 @@ html[data-jarvis-tenant-accent="amber"] .jarvis-root { --accent: var(--j-amber);
     animation: none !important;
   }
 }
+
+/* ---- F1.T1: codex CSS layer (FLOW-27 FocusHalo, ::selection, designed
+   scrollbars, .j-num). Global inside .jarvis-root so no per-component opt-in is
+   needed — every focusable element gets the halo, every panel gets the recipe
+   scrollbar automatically. ---- */
+.jarvis-root :focus-visible {
+  outline: none;
+  border-radius: 4px;
+  box-shadow: 0 0 0 2px var(--j-bg), 0 0 0 4px var(--accent), 0 0 16px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .jarvis-root :focus-visible {
+    box-shadow: 0 0 0 2px var(--j-bg), 0 0 0 4px var(--accent);
+  }
+}
+
+.jarvis-root ::selection {
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+  color: var(--j-text);
+}
+
+/* Designed scrollbar (Firefox + WebKit) — opt-in via .j-scroll-visible where a
+   visible scroll affordance is wanted (`.j-scroll` above stays the chromeless
+   variant for horizontal graph scrollers). */
+.j-scroll-visible {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(56, 189, 248, 0.35) transparent;
+}
+.j-scroll-visible::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.j-scroll-visible::-webkit-scrollbar-track {
+  background: transparent;
+}
+.j-scroll-visible::-webkit-scrollbar-thumb {
+  background: rgba(56, 189, 248, 0.28);
+  border-radius: 9999px;
+}
+.j-scroll-visible::-webkit-scrollbar-thumb:hover {
+  background: rgba(56, 189, 248, 0.45);
+}
+
+/* Numeric utility: tabular figures for any live-updating value, sweeping the
+   plan's "21 uses today" gap (F1.T4 adopts this on KpiStrip/PulseBar/AnalyticsRow). */
+.j-num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+/* ---- F1.T2: interaction grammar recipes (FLOW-26 HoverLift, FLOW-28 PressSink) ---- */
+.j-lift {
+  transition: transform 0.15s var(--j-ease, ease), border-color 0.15s ease, box-shadow 0.2s ease;
+}
+.j-lift:hover {
+  transform: translateY(-2px);
+  border-color: var(--j-border-hot);
+}
+.j-sink:active {
+  transform: scale(0.985);
+}
+@media (prefers-reduced-motion: reduce) {
+  .j-lift,
+  .j-lift:hover,
+  .j-sink:active {
+    transform: none;
+    transition: border-color 0.15s ease;
+  }
+}
+
+/* ---- F1.T2: FLOW-34 ScrollGlow — top/bottom fade + edge glow while a container
+   is actually scrollable, driven by data attrs the ScrollGlow wrapper toggles from
+   real scroll position (never a static decoration). ---- */
+.j-scrollglow {
+  position: relative;
+}
+.j-scrollglow::before,
+.j-scrollglow::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 24px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  z-index: 1;
+}
+.j-scrollglow::before {
+  top: 0;
+  background: linear-gradient(to bottom, var(--j-bg) 0%, transparent 100%);
+}
+.j-scrollglow::after {
+  bottom: 0;
+  background: linear-gradient(to top, var(--j-bg) 0%, transparent 100%);
+}
+.j-scrollglow[data-scroll-top="false"]::before {
+  opacity: 1;
+}
+.j-scrollglow[data-scroll-bottom="false"]::after {
+  opacity: 1;
+}
+
+/* ---- F1.T2: FLOW-35 SelectionCurrent — flowing dash current on a selected row's
+   left bar (reuses jarvis-dashflow's keyframe, already defined above for edges). ---- */
+.j-selection-current {
+  position: relative;
+}
+.j-selection-current::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: repeating-linear-gradient(to bottom, var(--accent) 0 6px, transparent 6px 10px);
+  animation: jarvis-dashflow 1.2s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .j-selection-current::before {
+    animation: none;
+    background: var(--accent);
+  }
+}
+
+/* ---- F1.T2: FLOW-37 InlineEditRipple — one ripple along an input's underline on
+   real save (class toggled by JS, not a loop). ---- */
+@keyframes jarvis-underline-ripple {
+  from { background-position: -150% 0; }
+  to { background-position: 250% 0; }
+}
+.jarvis-underline-ripple {
+  background-image: linear-gradient(90deg, transparent 40%, var(--j-green) 50%, transparent 60%);
+  background-size: 250% 100%;
+  animation: jarvis-underline-ripple 0.5s ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .jarvis-underline-ripple {
+    animation-duration: 0.01s !important;
+  }
+}
+
+/* ---- F1.T2/T4: FLOW-29 SkeletonTide — replaces bare `animate-pulse` with one slow
+   water-sweep pass across the geometry-matched shape, staggered by DOM order via
+   --tide-delay (set inline per skeleton by the caller's index). Reduced motion:
+   static block, no sweep (the plan's own fallback line). ---- */
+@keyframes jarvis-skeleton-tide {
+  0% { background-position: -160% 0; opacity: 0.55; }
+  50% { opacity: 0.9; }
+  100% { background-position: 160% 0; opacity: 0.55; }
+}
+.jarvis-skeleton-tide {
+  background-image: linear-gradient(100deg, rgba(255, 255, 255, 0.05) 30%, rgba(148, 210, 255, 0.14) 50%, rgba(255, 255, 255, 0.05) 70%);
+  background-size: 250% 100%;
+  animation: jarvis-skeleton-tide 2.2s ease-in-out infinite;
+  animation-delay: var(--tide-delay, 0ms);
+}
+@media (prefers-reduced-motion: reduce) {
+  .jarvis-skeleton-tide {
+    animation: none;
+    background-image: none;
+    opacity: 0.6;
+  }
+}

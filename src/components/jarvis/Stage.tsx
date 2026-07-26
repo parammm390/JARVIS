@@ -26,6 +26,9 @@ import { FpsMeterHud } from "./ui/motion/FpsMeter"
 import { EffectsCatalogSection } from "./ui/fx/EffectsCatalog"
 import { PrimitivesCatalogSection } from "./ui/primitives/PrimitivesCatalog"
 import { RendererCatalogSection } from "./ui/renderers/RendererCatalog"
+import { GrammarCatalogSection } from "./ui/motion/GrammarCatalog"
+import { FlowIndexMeterSection } from "./ui/motion/FlowIndexMeter"
+import { StageStickyNav, StageStateSwitcher, MountToggle } from "./ui/motion/StageNav"
 
 // Same ssr:false convention JarvisCommandCenter already uses for this exact
 // component — canvas + matchMedia only run client-side anyway, and it lets the
@@ -148,12 +151,36 @@ function StageContent() {
           Sign out
         </button>
       </div>
-      <LiveQueryFixtureSection />
-      <FlowCatalogSection />
-      <FlowCatalogAmbientSection />
-      <EffectsCatalogSection />
-      <PrimitivesCatalogSection />
-      <RendererCatalogSection />
+      <StageStickyNav />
+      <div id="flow-index">
+        <FlowIndexMeterSection />
+      </div>
+      <StageStateSwitcher />
+      <div id="live-query">
+        <LiveQueryFixtureSection />
+      </div>
+      <div id="flow-grammar">
+        <GrammarCatalogSection />
+      </div>
+      <div id="flow-core">
+        <MountToggle id="flow-core" label="FLOW-01..13">
+          <FlowCatalogSection />
+        </MountToggle>
+      </div>
+      <div id="flow-ambient">
+        <MountToggle id="flow-ambient" label="FLOW-14..25">
+          <FlowCatalogAmbientSection />
+        </MountToggle>
+      </div>
+      <div id="fx-toolkit">
+        <EffectsCatalogSection />
+      </div>
+      <div id="primitives">
+        <PrimitivesCatalogSection />
+      </div>
+      <div id="renderers">
+        <RendererCatalogSection />
+      </div>
       <FpsMeterHud />
       <ParticleField />
     </div>

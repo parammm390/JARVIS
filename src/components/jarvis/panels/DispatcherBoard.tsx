@@ -50,7 +50,7 @@ export function DispatcherBoard() {
           </span>
         </div>
         <div className="space-y-2 px-4 py-3">
-          {!data.technicianLoad && <div className="h-16 animate-pulse rounded-lg bg-white/5" />}
+          {!data.technicianLoad && <div className="jarvis-skeleton-tide h-16 rounded-lg bg-white/5" />}
           {data.technicianLoad?.length === 0 && <div className="text-[12px] text-[color:var(--j-text-dim)]">No technicians on file.</div>}
           {data.technicianLoad?.map((t) => (
             <div key={t.technicianId} className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2">
@@ -75,7 +75,7 @@ export function DispatcherBoard() {
         </div>
         <div className="space-y-2 px-4 py-3">
           {error && <div className="rounded-lg border border-red-400/30 bg-red-400/5 px-3 py-2 text-[11px] text-red-300">{error}</div>}
-          {!visits && !error && <div className="h-16 animate-pulse rounded-lg bg-white/5" />}
+          {!visits && !error && <div className="jarvis-skeleton-tide h-16 rounded-lg bg-white/5" />}
           {visits && overdue.length === 0 && upcoming.length === 0 && (
             <div className="rounded-xl border border-white/8 bg-white/[0.02] px-4 py-6 text-center text-[12px] text-[color:var(--j-text-dim)]">Nothing overdue or imminent.</div>
           )}

@@ -49,6 +49,7 @@ import { useJarvis, ageLabel, type PendingAction } from "../lib/data-core"
 import { jarvisPost, JarvisApiError } from "../lib/api"
 import { ReceiptDrawer } from "../lib/ReceiptDrawer"
 import { RiskBadge, type RiskTier } from "../ui/primitives/RiskBadge"
+import { ToastShell, CountdownRing } from "../ui/primitives/Toast"
 import { Flight } from "../ui/motion/primitives"
 import { choreo } from "../ui/motion/choreo"
 import { ActionRenderer } from "../ui/renderers/ActionRenderer"
@@ -279,7 +280,7 @@ function ApprovalCard({
               whileTap={{ scale: 0.96 }}
               aria-disabled={isUnavailable}
               title={isUnavailable ? "Integration unavailable — can't execute yet" : undefined}
-              className={`inline-flex items-center gap-1 rounded-full bg-teal-300 px-3 py-1 text-[10px] font-black text-slate-950 shadow-[var(--j-glow-teal)] transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60 ${
+              className={`inline-flex items-center gap-1 rounded-full bg-teal-300 px-3 py-1 text-[10px] font-black text-slate-950 shadow-[var(--j-glow-teal)] transition hover:-translate-y-0.5 focus-visible:outline-none ${
                 isUnavailable ? "opacity-40 hover:translate-y-0" : ""
               }`}
             >
@@ -288,14 +289,14 @@ function ApprovalCard({
             <motion.button
               onClick={() => onDecide(action, "reject")}
               whileTap={{ scale: 0.96 }}
-              className="inline-flex items-center gap-1 rounded-full border border-white/15 px-3 py-1 text-[10px] font-black text-white/70 transition hover:-translate-y-0.5 hover:text-red-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60"
+              className="inline-flex items-center gap-1 rounded-full border border-white/15 px-3 py-1 text-[10px] font-black text-white/70 transition hover:-translate-y-0.5 hover:text-red-300 focus-visible:outline-none"
             >
               <X className="h-3 w-3" /> Reject
             </motion.button>
             <motion.button
               onClick={() => onDecide(action, "escalate")}
               whileTap={{ scale: 0.96 }}
-              className="inline-flex items-center gap-1 rounded-full border border-white/15 px-3 py-1 text-[10px] font-black text-white/50 transition hover:-translate-y-0.5 hover:text-amber-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60"
+              className="inline-flex items-center gap-1 rounded-full border border-white/15 px-3 py-1 text-[10px] font-black text-white/50 transition hover:-translate-y-0.5 hover:text-amber-200 focus-visible:outline-none"
             >
               <AlertTriangle className="h-3 w-3" /> Escalate
             </motion.button>
@@ -379,25 +380,28 @@ function UndoToast({
   msLeft,
   status,
   onUndo,
+  durationMs = 5000,
 }: {
   actionType: string
   msLeft: number
   status: "waiting" | "reverting" | "reverted" | "already-claimed"
   onUndo: () => void
+  durationMs?: number
 }) {
+  // F1.T2 — shell extracted to ui/primitives/Toast.tsx (ToastShell); identical
+  // classNames/output to the pre-F1 inline motion.div, now shared with any future
+  // toast consumer. FLOW-56 UndoRing: CountdownRing replaces the plain "(Ns)" text
+  // with a draining ring that shifts cyan -> amber -> red; numeric fallback preserved
+  // alongside it for reduced-motion/at-a-glance precision (plan's own instruction).
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 12 }}
-      className="fixed bottom-5 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full border border-white/15 bg-[#0a1220] px-4 py-2 text-[11px] font-bold text-white shadow-2xl"
-    >
+    <ToastShell>
       {status === "waiting" && (
         <>
           <span>
             Approved <span className="text-white/50">{actionType.replaceAll("_", " ")}</span>
           </span>
-          <button onClick={onUndo} className="inline-flex items-center gap-1 rounded-full bg-cyan-300/15 px-2.5 py-1 text-cyan-200 hover:bg-cyan-300/25">
+          <button onClick={onUndo} className="inline-flex items-center gap-1.5 rounded-full bg-cyan-300/15 px-2.5 py-1 text-cyan-200 hover:bg-cyan-300/25">
+            <CountdownRing msLeft={msLeft} durationMs={durationMs} />
             <Undo2 className="h-3 w-3" /> Undo ({Math.ceil(msLeft / 1000)}s)
           </button>
         </>
@@ -405,7 +409,7 @@ function UndoToast({
       {status === "reverting" && <span className="text-white/60">Undoing…</span>}
       {status === "reverted" && <span className="text-teal-300">Undone — back in the queue.</span>}
       {status === "already-claimed" && <span className="text-amber-300">Already claimed — it&rsquo;s executing, can&rsquo;t undo.</span>}
-    </motion.div>
+    </ToastShell>
   )
 }
 
@@ -716,7 +720,7 @@ export function ApprovalCockpit() {
 
       {openReceiptId && <ReceiptDrawer receiptId={openReceiptId} onClose={() => setOpenReceiptId(null)} />}
       <AnimatePresence>
-        {undo && <UndoToast actionType={undo.actionType} msLeft={msLeft} status={undo.status} onUndo={undoNow} />}
+        {undo && <UndoToast actionType={undo.actionType} msLeft={msLeft} status={undo.status} onUndo={undoNow} durationMs={UNDO_WINDOW_MS} />}
       </AnimatePresence>
       <AnimatePresence>
         {rejectGhosts.map((g) => (

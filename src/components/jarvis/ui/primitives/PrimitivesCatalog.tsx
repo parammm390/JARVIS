@@ -61,7 +61,7 @@ function StatusDotDemo() {
 
 function SkeletonsDemo() {
   return (
-    <FlowCard id="PRIM-05" title="Skeletons" reducedFallback="n/a — CSS animate-pulse only, no framer-motion to reduce">
+    <FlowCard id="PRIM-05" title="Skeletons (FLOW-29 SkeletonTide)" reducedFallback="static block, no water-sweep (F1.T2 upgrade — see jarvis-skeleton-tide)">
       <div className="w-full space-y-2">
         <SkeletonText width="60%" />
         <SkeletonRow />

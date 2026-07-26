@@ -53,7 +53,7 @@ export function ChannelDonut() {
               <div key={s.label} className="flex items-center gap-2 text-[11.5px]">
                 <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: s.color }} />
                 <span className="flex-1 capitalize text-[color:var(--j-text-dim)]">{s.label}</span>
-                <span className="font-mono font-bold tabular-nums text-[color:var(--j-text)]">{Math.round((s.value / total) * 100)}%</span>
+                <span className="j-num font-mono font-bold text-[color:var(--j-text)]">{Math.round((s.value / total) * 100)}%</span>
               </div>
             ))}
           </div>
@@ -92,7 +92,7 @@ export function ActionMixBars() {
             <div key={r.actionType}>
               <div className="mb-1 flex items-center justify-between text-[11.5px]">
                 <span className="capitalize text-[color:var(--j-text-dim)]">{r.actionType.replaceAll("_", " ")}</span>
-                <span className="font-mono font-bold tabular-nums text-[color:var(--j-text)]">{r.total}</span>
+                <span className="j-num font-mono font-bold text-[color:var(--j-text)]">{r.total}</span>
               </div>
               <GradientBar pct={(r.total / max) * 100} from={BAR_GRADS[i % BAR_GRADS.length]![0]} to={BAR_GRADS[i % BAR_GRADS.length]![1]} />
             </div>
@@ -129,7 +129,7 @@ export function AiPerformance() {
       <div className="space-y-2.5">
         <div className="flex items-baseline justify-between">
           <span className="text-[11.5px] text-[color:var(--j-text-dim)]">API round-trip</span>
-          <span className="font-mono text-lg font-bold tabular-nums text-cyan-300">
+          <span className="j-num font-mono text-lg font-bold text-cyan-300">
             {data.apiLatencyMs != null ? <CountUp value={data.apiLatencyMs} format={(n) => `${Math.round(n)}ms`} /> : "—"}
           </span>
         </div>
@@ -144,11 +144,11 @@ export function AiPerformance() {
         )}
         <div className="flex items-baseline justify-between">
           <span className="text-[11.5px] text-[color:var(--j-text-dim)]">Owner approval rate</span>
-          <span className="font-mono text-lg font-bold tabular-nums text-emerald-300">{approvalRate != null ? `${approvalRate}%` : "—"}</span>
+          <span className="j-num font-mono text-lg font-bold text-emerald-300">{approvalRate != null ? `${approvalRate}%` : "—"}</span>
         </div>
         <div className="flex items-baseline justify-between">
           <span className="text-[11.5px] text-[color:var(--j-text-dim)]">Decisions made</span>
-          <span className="font-mono text-lg font-bold tabular-nums text-[color:var(--j-text)]">{decided}</span>
+          <span className="j-num font-mono text-lg font-bold text-[color:var(--j-text)]">{decided}</span>
         </div>
         {data.approvalsThisSession + data.rejectionsThisSession > 0 && (
           <div className="flex items-baseline justify-between">

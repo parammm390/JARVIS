@@ -5,7 +5,7 @@
 // Approval Inbox (ApprovalDock) and the live run timeline (WorkflowTheater) so the
 // same honest, complete view backs both entry points.
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, type CSSProperties } from "react"
 import { jarvisGet } from "./api"
 import { Drawer } from "../ui/primitives/Drawer"
 import { ActionRenderer } from "../ui/renderers/ActionRenderer"
@@ -94,9 +94,9 @@ export function ReceiptDrawer({ receiptId, onClose }: { receiptId: string; onClo
 
         {!receipt && !error && (
           <div className="space-y-3">
-            <div className="h-4 w-2/3 animate-pulse rounded bg-white/5" />
-            <div className="h-16 animate-pulse rounded-lg bg-white/5" />
-            <div className="h-16 animate-pulse rounded-lg bg-white/5" />
+            <div className="jarvis-skeleton-tide h-4 w-2/3 rounded bg-white/5" />
+            <div className="jarvis-skeleton-tide h-16 rounded-lg bg-white/5" style={{ "--tide-delay": "120ms" } as CSSProperties} />
+            <div className="jarvis-skeleton-tide h-16 rounded-lg bg-white/5" style={{ "--tide-delay": "240ms" } as CSSProperties} />
           </div>
         )}
 
