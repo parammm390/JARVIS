@@ -449,7 +449,7 @@ EXIT GATE: **GREEN — 2026-07-26.** Production root deployment `dpl_4EkioEEFivz
 
 ## D9 — Sound + 60fps + A11y + Ship
 Status: IN PROGRESS
-- [x] D9.T1 — Web Audio layer (off-default, prefs toggle) (evidence: commit `c296f2e`; `finnor-os` `npm test -- --run tests/integration/user-prefs-route.test.ts` 8/8 passes against local Postgres, proving the existing RLS-backed `soundEnabled` preference is safely read/written; root `npx tsc --noEmit` and `npm run lint` pass. Existing synthesized cues remain asset-free; their shared module is now fail-closed/off by default, the public console persists its browser opt-in, and authenticated Bridge users persist the opt-in through that existing preference route.)
+- [x] D9.T1 — Web Audio layer (off-default, prefs toggle) (evidence: commit `904a502`; `finnor-os` `npm test -- --run tests/integration/user-prefs-route.test.ts` 8/8 passes against local Postgres, proving the existing RLS-backed `soundEnabled` preference is safely read/written; root `npx tsc --noEmit` and `npm run lint` pass. Existing synthesized cues remain asset-free; their shared module is now fail-closed/off by default, the public console persists its browser opt-in, and authenticated Bridge users persist the opt-in through that existing preference route.)
 - [ ] D9.T2 — perf (virtualize, split, lazy, content-visibility, low-power, FPS proofs)
 - [ ] D9.T3 — a11y (focus, aria-live, contrast, reduced-motion QA, keyboard paths)
 - [ ] D9.T4 — Lighthouse ≥90/≥95 + snapshots green + zero-CLS proof
