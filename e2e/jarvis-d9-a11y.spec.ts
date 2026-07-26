@@ -23,6 +23,24 @@ test("command palette is keyboard reachable and Escape restores its trigger", as
   await expect(trigger).toBeFocused()
 })
 
+test("sidebar view switcher is keyboard-operable and announces the active view", async ({ page }) => {
+  await page.goto("/jarvis")
+  const commandCenterNav = page.getByRole("button", { name: "Command Center" })
+  await expect(commandCenterNav).toBeVisible({ timeout: 15_000 })
+  // D9.T3 finding: the active nav button only carried a visual class, nothing in
+  // the accessibility tree distinguished it — a screen-reader user had no way to
+  // tell which view was current. Fixed with aria-current="page" in
+  // JarvisCommandCenter.tsx/Bridge.tsx; this proves the fix and that it moves.
+  await expect(commandCenterNav).toHaveAttribute("aria-current", "page")
+
+  const workflowsNav = page.getByRole("button", { name: "Workflows", exact: true })
+  await workflowsNav.focus()
+  await page.keyboard.press("Enter")
+  await expect(workflowsNav).toHaveAttribute("aria-current", "page")
+  await expect(commandCenterNav).not.toHaveAttribute("aria-current", "page")
+  await expect(page.getByRole("heading", { name: /workflow/i }).first()).toBeVisible()
+})
+
 test("reduced motion renders without hydration or unexpected console errors", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" })
   const unexpected: string[] = []

@@ -135,6 +135,7 @@ function LeftRail({ scene, setScene, orderedScenes, unopened, forceLowPower }: {
             <button
               key={id}
               onClick={() => setScene(id)}
+              aria-current={active ? "page" : undefined}
               className={`relative flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[12.5px] font-bold transition ${
                 active ? "bg-cyan-400/[0.08] text-[color:var(--j-text)]" : "text-[color:var(--j-text-dim)] hover:bg-white/[0.04] hover:text-[color:var(--j-text)]"
               }`}
