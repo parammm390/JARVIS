@@ -38,12 +38,34 @@ test("reduced motion renders without hydration or unexpected console errors", as
 
 test("primary console settles without unexpected layout shift", async ({ page }) => {
   await page.addInitScript(() => {
-    const target = window as typeof window & { __jarvisD9Cls?: number }
+    type ShiftSource = { node?: Node | null }
+    type LayoutShift = PerformanceEntry & {
+      value: number
+      hadRecentInput: boolean
+      sources?: ShiftSource[]
+    }
+    const target = window as typeof window & {
+      __jarvisD9Cls?: number
+      __jarvisD9Shifts?: Array<{ value: number; sources: string[] }>
+    }
     target.__jarvisD9Cls = 0
+    target.__jarvisD9Shifts = []
     new PerformanceObserver((list) => {
       for (const entry of list.getEntries() as PerformanceEntryList) {
-        const shift = entry as PerformanceEntry & { value: number; hadRecentInput: boolean }
-        if (!shift.hadRecentInput) target.__jarvisD9Cls! += shift.value
+        const shift = entry as LayoutShift
+        if (!shift.hadRecentInput) {
+          target.__jarvisD9Cls! += shift.value
+          target.__jarvisD9Shifts!.push({
+            value: shift.value,
+            sources: (shift.sources ?? []).map(({ node }) => {
+              if (!(node instanceof HTMLElement)) return "unknown"
+              const id = node.id ? `#${node.id}` : ""
+              const classes = [...node.classList].slice(0, 3).map((name) => `.${name}`).join("")
+              const label = node.getAttribute("aria-label")
+              return `${node.tagName.toLowerCase()}${id}${classes}${label ? `[aria-label=${label}]` : ""}`
+            }),
+          })
+        }
       }
     }).observe({ type: "layout-shift", buffered: true })
   })
@@ -51,5 +73,12 @@ test("primary console settles without unexpected layout shift", async ({ page })
   await page.goto("/jarvis")
   await expect(page.getByPlaceholder(/what would you like me to do/i)).toBeVisible({ timeout: 15_000 })
   await page.waitForTimeout(3_000)
-  expect(await page.evaluate(() => (window as typeof window & { __jarvisD9Cls?: number }).__jarvisD9Cls)).toBe(0)
+  const result = await page.evaluate(() => {
+    const target = window as typeof window & {
+      __jarvisD9Cls?: number
+      __jarvisD9Shifts?: Array<{ value: number; sources: string[] }>
+    }
+    return { cls: target.__jarvisD9Cls, shifts: target.__jarvisD9Shifts }
+  })
+  expect(result.cls, JSON.stringify(result.shifts)).toBe(0)
 })

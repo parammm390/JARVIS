@@ -69,7 +69,7 @@ export function HeaderBand({ session }: { session?: ReturnType<typeof useVapiSes
           {statusSentence(pendingCount, data.runs.length, overdueCount, eventsToday)}
         </motion.p>
       </div>
-      <div className="flex items-center gap-2.5">
+      <div className="flex items-center gap-2.5 md:min-w-[25rem]">
         <div
           className={`flex items-center gap-2 rounded-full border px-3.5 py-1.5 transition-[width] duration-300 ${
             voiceLive ? "j-panel-hot border-cyan-400/40 bg-cyan-400/8 text-cyan-200" : "border-white/10 bg-white/[0.03] text-[color:var(--j-text-dim)]"
@@ -108,7 +108,7 @@ export function HeaderBand({ session }: { session?: ReturnType<typeof useVapiSes
           </span>
         </div>
         <div className="group relative">
-          <span className={`j-chip cursor-default uppercase tracking-widest ${TONE_CLASS[status.tone]}`}>{status.label}</span>
+          <span className={`j-chip min-w-[7.75rem] justify-center cursor-default uppercase tracking-widest ${TONE_CLASS[status.tone]}`}>{status.label}</span>
           {status.unconfigured.length > 0 && (
             <div className="pointer-events-none absolute right-0 top-full z-20 mt-2 w-64 rounded-xl border border-[color:var(--j-border)] bg-[#070d1a] p-3 text-[10.5px] leading-relaxed text-[color:var(--j-text-dim)] opacity-0 shadow-2xl transition group-hover:opacity-100">
             {status.unconfigured.length} action types not yet configured: {status.unconfigured.slice(0, 6).map((a) => a.replaceAll("_", " ")).join(", ")}
@@ -116,17 +116,19 @@ export function HeaderBand({ session }: { session?: ReturnType<typeof useVapiSes
             </div>
           )}
         </div>
-        <span className="hidden font-mono text-xs font-bold tabular-nums tracking-wider text-[color:var(--j-text-dim)] md:inline">{clock}</span>
-        {data.lastPollAtMs != null && (
-          <span className="hidden items-center gap-1.5 font-mono text-[10.5px] font-bold tabular-nums text-[color:var(--j-text-faint)] md:flex">
+        <span className="hidden w-[5.5rem] font-mono text-xs font-bold tabular-nums tracking-wider text-[color:var(--j-text-dim)] md:inline">{clock}</span>
+        <span className={`hidden w-[12rem] items-center gap-1.5 font-mono text-[10.5px] font-bold tabular-nums text-[color:var(--j-text-faint)] md:flex ${data.lastPollAtMs == null ? "invisible" : ""}`}>
+          {data.lastPollAtMs != null && (
+            <>
             <span className="relative flex h-1.5 w-1.5">
               <span className="absolute h-full w-full animate-ping rounded-full bg-cyan-300 opacity-60" />
               <span className="relative h-1.5 w-1.5 rounded-full bg-cyan-300" />
             </span>
             synced {Math.max(0, Math.round((data.now - data.lastPollAtMs) / 1000))}s ago
             {data.apiLatencyMs != null ? ` · ${data.apiLatencyMs}ms` : ""}
-          </span>
-        )}
+            </>
+          )}
+        </span>
       </div>
     </div>
   )
