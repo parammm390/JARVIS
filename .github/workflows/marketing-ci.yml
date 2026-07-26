@@ -89,13 +89,13 @@ jobs:
           # GitHub's containerized Linux runner; without it Lighthouse waits until
           # its launcher timeout before any audit begins.
           npx --yes lighthouse@11 http://localhost:3000/jarvis --preset=desktop --only-categories=performance,accessibility --chrome-path="$chrome_path" --chrome-flags="--headless --no-sandbox --disable-dev-shm-usage" --output=json --output-path=./lighthouse-jarvis.json > lighthouse.log 2>&1
-          node -e 'const report=require("./lighthouse-jarvis.json"); const categories=report.categories; const cls=report.audits["cumulative-layout-shift"].numericValue; if (categories.performance.score < .9 || categories.accessibility.score < .95 || cls > .01) { console.error(JSON.stringify({performance: categories.performance.score, accessibility: categories.accessibility.score, cls}, null, 2)); process.exit(1) } console.log(JSON.stringify({performance: categories.performance.score, accessibility: categories.accessibility.score, cls}, null, 2))'
+          node -e 'const report=require("./lighthouse-jarvis.json"); const categories=report.categories; const cls=report.audits["cumulative-layout-shift"].numericValue; if (categories.performance.score < .9 || categories.accessibility.score < .95 || cls > .01) { console.error(JSON.stringify({performance: categories.performance.score, accessibility: categories.accessibility.score, cls}, null, 2)); process.exit(1) } console.log(JSON.stringify({performance: categories.performance.score, accessibility: categories.accessibility.score, cls}, null, 2))' > lighthouse-gate.log 2>&1
           lighthouse_status=$?
           npx playwright test --reporter=list > playwright.log 2>&1
           test_status=$?
           kill "$server_pid" 2>/dev/null || true
           if [ "$lighthouse_status" -ne 0 ] || [ "$test_status" -ne 0 ]; then
-            for log in lighthouse.log playwright.log; do
+            for log in lighthouse-gate.log playwright.log; do
               tail -n 35 "$log" | while IFS= read -r line; do
                 echo "::error file=.github/workflows/marketing-ci.yml::${log}: ${line}"
               done
