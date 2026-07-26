@@ -13,18 +13,18 @@ const tiers = [
   {
     id: "quoting",
     kicker: "Tier 1",
-    title: "Booking & Lead Recovery",
-    subtitle: "Answer, quote, and book — inbound and outbound.",
+    title: "The Core Loop",
+    subtitle: "Every instruction drafted, approved, executed, receipted.",
     description:
-      "The full booking and lead recovery system on every missed, overflow, and after-hours call, plus outbound speed-to-lead follow-up on your web and paid leads, with messaging automation that sends the quote and booking link within seconds of the call ending.",
+      "Every quote, booking, and urgent route runs through the same loop: JARVIS drafts a plan from your real price book, holds it for your approval, executes exactly what you approved, and files the receipt. Water data pulled live, sizing shown line by line, nothing invented.",
     features: [
-      "Inbound booking and lead recovery — missed, overflow, and after-hours calls",
-      "Outbound speed-to-lead callbacks on forms and paid leads",
+      "Plans drafted from your real price book — quotes, bookings, urgent routes",
+      "Every plan held for your approval before anything executes",
       "Public water records plus a free onsite test to confirm the exact number",
-      "Sizing and quote ranges computed from your own pricing tiers",
-      "Tap-to-book SMS with the water report and open time slots, sent within seconds of the call ending",
+      "Voice, text, or typed instruction — the same loop either way",
+      "Tap-to-book confirmation sent within seconds of your approval",
       "No-water urgent route with safety screen and on-call handoff",
-      "Operations dashboard — call log, recovery queue, live calls",
+      "Full activity log — every plan, approval, and receipt",
     ],
     cta: "Book a demo to see pricing",
     highlight: false,
@@ -33,11 +33,11 @@ const tiers = [
     id: "growth",
     kicker: "Tier 2",
     title: "Growth & Memory",
-    subtitle: "Booking and lead recovery, plus a two-year household memory.",
+    subtitle: "The core loop, plus a two-year household memory.",
     description:
-      "Everything in Booking & Lead Recovery, and then the record keeps working after the invoice — every lead becomes a household memory that drives review requests, maintenance check-ins, referral tracking, and the right upsell moment, automatically, for two years.",
+      "Everything in the Core Loop, and then the record keeps working after the invoice — every lead becomes a household memory that drives review requests, maintenance check-ins, referral tracking, and the right upsell moment, automatically, for two years.",
     features: [
-      "Everything in Booking & Lead Recovery, plus:",
+      "Everything in the Core Loop, plus:",
       "Two-year household memory record on every lead",
       "A standing next revenue action on every record",
       "Review requests timed to the right moment after install",
@@ -109,12 +109,12 @@ export function Pricing() {
             viewport={{ once: true }}
             className="text-4xl font-black tracking-tight text-slate-950 md:text-6xl"
           >
-            One pilot. AI booking and lead recovery, and a memory your competitors cannot copy.
+            One pilot. A platform that asks before it acts, and a memory your competitors cannot copy.
           </motion.h2>
           <p className="mx-auto mt-5 max-w-2xl text-lg font-medium leading-relaxed text-slate-600">
-            The full system: answered calls, live water data, a real range from your pricing,
-            booked visits, and a household record that keeps producing revenue for years. Humans
-            keep every final decision.
+            The full system: instructions drafted and held for approval, live water data, a real
+            range from your pricing, booked visits, and a household record that keeps producing
+            revenue for years. You keep every final decision.
           </p>
         </div>
 
@@ -235,7 +235,7 @@ export function Pricing() {
                   through the agreed pilot setup, inside the approved workflow scope.
                 </p>
                 <p className="rounded-xl border border-white/10 bg-white/[0.035] px-4 py-3">
-                  <strong className="text-white">Trust boundary:</strong> the agent quotes ranges
+                  <strong className="text-white">Trust boundary:</strong> JARVIS drafts ranges
                   computed from your pricing and the real water, and never invents a number. Final
                   figures, ETAs, repairs, and customer promises stay with your team.
                 </p>
