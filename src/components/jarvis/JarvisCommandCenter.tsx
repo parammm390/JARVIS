@@ -249,7 +249,8 @@ function Shell() {
   const data = useJarvis()
   const [mounted, setMounted] = useState(false)
   const [view, setView] = useState("Command Center")
-  const [soundOn, setSoundOn] = useState(true)
+  // D9: synthesized cues are intentionally off until this browser opts in.
+  const [soundOn, setSoundOn] = useState(false)
   const [booting, setBooting] = useState(false)
   const [prefill, setPrefill] = useState<string | undefined>(undefined)
   const [igniteKey, setIgniteKey] = useState(0)
@@ -260,8 +261,12 @@ function Shell() {
   useEffect(() => {
     setMounted(true)
     setBooting(shouldShowBoot())
+    setSoundOn(window.localStorage.getItem("finnor.jarvis.sound-enabled") === "true")
   }, [])
   useEffect(() => setMuted(!soundOn), [soundOn])
+  useEffect(() => {
+    if (mounted) window.localStorage.setItem("finnor.jarvis.sound-enabled", String(soundOn))
+  }, [mounted, soundOn])
 
   useEffect(() => {
     if (wasDegradedRef.current && !data.statsDegraded) setIgniteKey((k) => k + 1)

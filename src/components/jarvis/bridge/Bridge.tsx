@@ -16,7 +16,7 @@ import { useEffect, useMemo, useState } from "react"
 import dynamic from "next/dynamic"
 import Link from "next/link"
 import { AnimatePresence, motion } from "framer-motion"
-import { LayoutGrid, Workflow as WorkflowIcon } from "lucide-react"
+import { LayoutGrid, Volume2, VolumeX, Workflow as WorkflowIcon } from "lucide-react"
 import "../jarvis-theme.css"
 import { ConsoleAtmosphere, LiveDot } from "../atmosphere"
 import { JarvisDataProvider, useJarvis } from "../lib/data-core"
@@ -24,20 +24,24 @@ import { JarvisAuthProvider, useJarvisAuth } from "../lib/jarvis-auth"
 import { useVapiSession } from "../lib/useVapiSession"
 import { KpiStrip } from "../panels/KpiStrip"
 import { DailyBriefing } from "../panels/DailyBriefing"
-import { WorkflowTheater } from "../panels/WorkflowTheater"
-import { ApprovalCockpit } from "./ApprovalCockpit"
 import { CertificationStatus } from "../panels/CertificationStatus"
 import { SinceYouWereAway } from "../SinceYouWereAway"
 import { GridBackdrop } from "../ui/fx/GridBackdrop"
 import { choreo } from "../ui/motion/choreo"
 import { PulseBar } from "./PulseBar"
-import { ActivityTheater } from "./ActivityTheater"
 import { Orb3D, type OrbState } from "./Orb3D"
 import { rankPanels, recordPanelOpen, type FrecencyLedger } from "../lib/frecency"
 import { CommandPaletteV2, useCommandPaletteV2 } from "../lib/CommandPaletteV2"
 import { jarvisClient } from "@/lib/jarvis-client"
+import { jarvisGet, jarvisPut } from "../lib/api"
+import { setMuted } from "../sound"
 
 const ParticleField = dynamic(() => import("../panels/ParticleField").then((m) => m.ParticleField), { ssr: false })
+// D9: the expensive theater and live rails are separate client chunks. They are only
+// requested after the authenticated Bridge shell is interactive.
+const WorkflowTheater = dynamic(() => import("../panels/WorkflowTheater").then((m) => m.WorkflowTheater), { ssr: false })
+const ApprovalCockpit = dynamic(() => import("./ApprovalCockpit").then((m) => m.ApprovalCockpit), { ssr: false })
+const ActivityTheater = dynamic(() => import("./ActivityTheater").then((m) => m.ActivityTheater), { ssr: false })
 
 type SceneId = "overview" | "pipeline"
 const SCENES: { id: SceneId; label: string; icon: typeof LayoutGrid }[] = [
@@ -81,6 +85,30 @@ function CausticHeader() {
       <rect width="100%" height="100%" filter="url(#bridge-caustic-turb)" />
     </svg>
   )
+}
+
+function SoundPreferenceToggle() {
+  const [enabled, setEnabled] = useState(false)
+  const [loaded, setLoaded] = useState(false)
+  useEffect(() => {
+    let cancelled = false
+    void jarvisGet<{ prefs: { soundEnabled: boolean } }>("user-prefs")
+      .then(({ prefs }) => { if (!cancelled) { setEnabled(prefs.soundEnabled); setMuted(!prefs.soundEnabled) } })
+      .catch(() => { if (!cancelled) setMuted(true) })
+      .finally(() => { if (!cancelled) setLoaded(true) })
+    return () => { cancelled = true }
+  }, [])
+  const toggle = () => {
+    const next = !enabled
+    setEnabled(next)
+    setMuted(!next)
+    void jarvisPut("user-prefs", { soundEnabled: next }).catch(() => {
+      // Keep sound fail-closed if the durable preference cannot be saved.
+      setEnabled(false)
+      setMuted(true)
+    })
+  }
+  return <button type="button" onClick={toggle} disabled={!loaded} className="j-chip flex items-center gap-1.5 border border-white/10 bg-white/[.035] text-[color:var(--j-text-dim)] disabled:opacity-50" aria-pressed={enabled} aria-label={enabled ? "Turn off JARVIS sounds" : "Turn on JARVIS sounds"}>{enabled ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}{enabled ? "Sound on" : "Sound off"}</button>
 }
 
 function LeftRail({ scene, setScene, orderedScenes, unopened }: { scene: SceneId; setScene: (s: SceneId) => void; orderedScenes: SceneId[]; unopened: SceneId[] }) {
@@ -141,12 +169,10 @@ function CenterStage({ scene }: { scene: SceneId }) {
             <h1 className="text-base font-black text-[color:var(--j-text)]">Command Bridge</h1>
             <p className="text-[11px] text-[color:var(--j-text-dim)]">D1 — real vitals, real activity, one continuous space</p>
           </div>
-          <span className="j-chip bg-cyan-400/10 text-cyan-200">
-            <LiveDot /> live
-          </span>
+          <div className="flex items-center gap-2"><SoundPreferenceToggle /><span className="j-chip bg-cyan-400/10 text-cyan-200"><LiveDot /> live</span></div>
         </div>
       </div>
-      <div className="relative p-6">
+      <div className="relative p-6 [content-visibility:auto] [contain-intrinsic-size:1px_900px]">
         <AnimatePresence mode="wait">
           <motion.div
             key={scene}

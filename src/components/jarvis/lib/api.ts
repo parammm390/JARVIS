@@ -23,7 +23,7 @@ export class JarvisApiError extends Error {
 // SystemConsole can stream genuine backend traffic (method, status, measured ms).
 // ---------------------------------------------------------------------------
 export interface JarvisRequestLog {
-  method: "GET" | "POST"
+  method: "GET" | "POST" | "PUT"
   path: string
   status: number
   ms: number
@@ -77,5 +77,25 @@ export async function jarvisPost<T>(path: string, body: unknown): Promise<T> {
     return json
   } finally {
     publish({ method: "POST", path: `/${path}`, status, ms: Math.round(performance.now() - started), at: Date.now() })
+  }
+}
+
+export async function jarvisPut<T>(path: string, body: unknown): Promise<T> {
+  const auth = authHeaders()
+  if (!auth) throw new JarvisApiError("Sign in required", 401)
+  const started = performance.now()
+  let status = 0
+  try {
+    const res = await fetch(`/api/jarvis/${path}`, {
+      method: "PUT",
+      headers: { "content-type": "application/json", ...auth },
+      body: JSON.stringify(body ?? {}),
+    })
+    status = res.status
+    const json = (await res.json().catch(() => ({}))) as T & { error?: string }
+    if (!res.ok) throw new JarvisApiError(json?.error ?? `PUT ${path} failed (${res.status})`, res.status)
+    return json
+  } finally {
+    publish({ method: "PUT", path: `/${path}`, status, ms: Math.round(performance.now() - started), at: Date.now() })
   }
 }

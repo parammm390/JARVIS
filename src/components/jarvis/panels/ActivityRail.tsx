@@ -54,7 +54,7 @@ export function ActivityRail() {
         </span>
       </div>
       <div className="px-4 py-3">
-        <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+        <div className="max-h-64 space-y-2 overflow-y-auto pr-1" aria-live="polite" aria-relevant="additions text">
           {items.length === 0 && <div className="text-[12px] text-[color:var(--j-text-faint)]">No events yet — the timeline fills as Finnor works.</div>}
           {items.map((e) => (
             <motion.div key={e.id} initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-2 text-[11px]">

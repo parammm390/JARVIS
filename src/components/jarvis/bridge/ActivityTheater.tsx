@@ -104,7 +104,7 @@ export function ActivityTheater() {
           {connection}
         </span>
       </div>
-      <div className="flex-1 space-y-1.5 overflow-y-auto px-3 py-3">
+      <div className="flex-1 space-y-1.5 overflow-y-auto px-3 py-3" aria-live="polite" aria-relevant="additions text">
         {items.length === 0 && <div className="text-[11px] text-[color:var(--j-text-faint)]">No activity yet — the feed fills as Finnor works.</div>}
         <AnimatePresence initial={false}>
           {items.map((item) => {

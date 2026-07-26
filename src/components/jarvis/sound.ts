@@ -5,7 +5,9 @@
 
 let ctx: AudioContext | null = null
 let master: GainNode | null = null
-let muted = false
+// Sound is opt-in. This module is shared by the signed-out console as well as the
+// authenticated surfaces, so the safe default must live here rather than in one UI.
+let muted = true
 
 function ensure(): { ctx: AudioContext; master: GainNode } | null {
   if (typeof window === "undefined") return null
