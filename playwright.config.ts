@@ -19,6 +19,10 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: [["html", { open: "never" }]],
+  // Baselines were deliberately reviewed and committed on macOS. Linux CI must
+  // compare to that same reviewed set rather than treating every snapshot as new.
+  // The per-view visual tolerances in the spec continue to catch real regressions.
+  snapshotPathTemplate: process.env.CI ? "{testDir}/{testFilePath}-snapshots/{arg}-{projectName}-darwin{ext}" : undefined,
   expect: { timeout: 10_000 },
   use: {
     baseURL,

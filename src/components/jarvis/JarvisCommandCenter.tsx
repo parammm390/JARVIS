@@ -42,6 +42,7 @@ import { ChannelDonut, ActionMixBars, AiPerformance } from "./panels/AnalyticsRo
 import { SystemConsole } from "./panels/SystemConsole"
 import { JarvisOrb } from "./panels/JarvisOrb"
 import { QueryFpsMeterHud } from "./ui/motion/FpsMeter"
+import { initialLowPowerMode, persistLowPowerMode } from "./lib/low-power"
 import { Activity, BookUser, Boxes, CircleDollarSign, FlaskConical, Globe, LayoutGrid, Map, PhoneCall, ShieldCheck, Users, Volume2, VolumeX, Workflow, Wrench } from "lucide-react"
 
 const LiveCallPanel = dynamic(() => import("./panels/LiveCallPanel").then((m) => m.LiveCallPanel), { ssr: false })
@@ -277,14 +278,14 @@ function Shell() {
     setMounted(true)
     setBooting(shouldShowBoot())
     setSoundOn(window.localStorage.getItem("finnor.jarvis.sound-enabled") === "true")
-    setLowPower(window.localStorage.getItem("finnor.jarvis.low-power.v1") === "1")
+    setLowPower(initialLowPowerMode())
   }, [])
   useEffect(() => setMuted(!soundOn), [soundOn])
   useEffect(() => {
     if (mounted) window.localStorage.setItem("finnor.jarvis.sound-enabled", String(soundOn))
   }, [mounted, soundOn])
   useEffect(() => {
-    if (mounted) window.localStorage.setItem("finnor.jarvis.low-power.v1", lowPower ? "1" : "0")
+    if (mounted) persistLowPowerMode(lowPower)
   }, [mounted, lowPower])
 
   useEffect(() => {

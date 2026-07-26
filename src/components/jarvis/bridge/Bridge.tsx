@@ -36,6 +36,7 @@ import { jarvisClient } from "@/lib/jarvis-client"
 import { jarvisGet, jarvisPut } from "../lib/api"
 import { setMuted } from "../sound"
 import { QueryFpsMeterHud } from "../ui/motion/FpsMeter"
+import { initialLowPowerMode, persistLowPowerMode } from "../lib/low-power"
 
 const ParticleField = dynamic(() => import("../panels/ParticleField").then((m) => m.ParticleField), { ssr: false })
 // D9: the expensive theater and live rails are separate client chunks. They are only
@@ -225,7 +226,7 @@ function BridgeShell() {
   useEffect(() => {
     setMounted(true)
     setDaypart(getDaypart())
-    setForceLowPower(window.localStorage.getItem("finnor.jarvis.low-power.v1") === "1")
+    setForceLowPower(initialLowPowerMode())
     const id = window.setInterval(() => setDaypart(getDaypart()), 5 * 60 * 1000)
     return () => window.clearInterval(id)
   }, [])
@@ -258,7 +259,7 @@ function BridgeShell() {
   const toggleLowPower = () => {
     setForceLowPower((current) => {
       const next = !current
-      window.localStorage.setItem("finnor.jarvis.low-power.v1", next ? "1" : "0")
+      persistLowPowerMode(next)
       return next
     })
   }
