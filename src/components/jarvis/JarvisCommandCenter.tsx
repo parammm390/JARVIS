@@ -41,6 +41,7 @@ import { CommandBar } from "./panels/CommandBar"
 import { ChannelDonut, ActionMixBars, AiPerformance } from "./panels/AnalyticsRow"
 import { SystemConsole } from "./panels/SystemConsole"
 import { JarvisOrb } from "./panels/JarvisOrb"
+import { QueryFpsMeterHud } from "./ui/motion/FpsMeter"
 import { Activity, BookUser, Boxes, CircleDollarSign, FlaskConical, Globe, LayoutGrid, Map, PhoneCall, ShieldCheck, Users, Volume2, VolumeX, Workflow, Wrench } from "lucide-react"
 
 const LiveCallPanel = dynamic(() => import("./panels/LiveCallPanel").then((m) => m.LiveCallPanel), { ssr: false })
@@ -305,6 +306,7 @@ function Shell() {
       />
 
       <CustomCursor />
+      <QueryFpsMeterHud />
       {booting && (
         <BootSequence
           onDone={() => {

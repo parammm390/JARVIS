@@ -35,6 +35,7 @@ import { CommandPaletteV2, useCommandPaletteV2 } from "../lib/CommandPaletteV2"
 import { jarvisClient } from "@/lib/jarvis-client"
 import { jarvisGet, jarvisPut } from "../lib/api"
 import { setMuted } from "../sound"
+import { QueryFpsMeterHud } from "../ui/motion/FpsMeter"
 
 const ParticleField = dynamic(() => import("../panels/ParticleField").then((m) => m.ParticleField), { ssr: false })
 // D9: the expensive theater and live rails are separate client chunks. They are only
@@ -300,6 +301,7 @@ function BridgeShell() {
         <RightRail />
       </div>
       {palette.open && <CommandPaletteV2 onClose={() => palette.setOpen(false)} onNavigate={chooseScene} />}
+      <QueryFpsMeterHud />
     </div>
   )
 }

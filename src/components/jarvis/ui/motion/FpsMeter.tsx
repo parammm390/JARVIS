@@ -56,3 +56,16 @@ export function FpsMeterHud() {
     </div>
   )
 }
+
+// D9 evidence is collected in the real, authenticated scenes. Keep the meter out
+// of normal customer rendering, but make it available to a reviewer who explicitly
+// opts in with `?fps=1`. Reading the URL after hydration preserves the server shell.
+export function QueryFpsMeterHud() {
+  const [enabled, setEnabled] = useState(false)
+
+  useEffect(() => {
+    setEnabled(new URLSearchParams(window.location.search).get("fps") === "1")
+  }, [])
+
+  return enabled ? <FpsMeterHud /> : null
+}
