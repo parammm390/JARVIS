@@ -19,6 +19,15 @@ import { burstAt } from "../lib/EventFX"
 import { ReceiptDrawer } from "../lib/ReceiptDrawer"
 import { useJarvisAuth } from "../lib/jarvis-auth"
 
+// `useReducedMotion()` can resolve differently during SSR and the first client
+// render. Defer its effect until after hydration wherever it changes SVG/DOM shape.
+function useHydratedReducedMotion() {
+  const preference = useReducedMotion()
+  const [reduced, setReduced] = useState(false)
+  useEffect(() => setReduced(Boolean(preference)), [preference])
+  return reduced
+}
+
 const NODE_W = 172
 const NODE_H = 72
 const GAP_X = 56
@@ -106,7 +115,7 @@ function edgePath(from: GraphNode, to: GraphNode): string {
 type EdgeState = "done" | "flowing" | "future" | "blueprint"
 
 function GraphEdges({ nodes, edges, edgeState }: { nodes: GraphNode[]; edges: GraphEdge[]; edgeState: (e: GraphEdge) => EdgeState }) {
-  const reduced = useReducedMotion()
+  const reduced = useHydratedReducedMotion()
   const byId = new Map(nodes.map((n) => [n.id, n]))
   const maxCol = Math.max(...nodes.map((n) => n.col))
   const maxRow = Math.max(...nodes.map((n) => n.row))
@@ -184,7 +193,7 @@ const NODE_TONE: Record<string, { border: string; iconBg: string; icon: string; 
 }
 
 function GraphNodeCard({ node, now, blueprint, onSelect }: { node: GraphNode; now: number; blueprint?: boolean; onSelect?: (node: GraphNode) => void }) {
-  const reduced = useReducedMotion()
+  const reduced = useHydratedReducedMotion()
   const tone = NODE_TONE[node.status] ?? NODE_TONE.pending!
   const isLeased = node.status === "leased"
   const isDone = node.status === "completed"

@@ -81,15 +81,22 @@ jobs:
           TEST_OWNER_PASSWORD: ${{ secrets.TEST_OWNER_PASSWORD }}
         run: |
           set -e
-          npm run start & server_pid=$!
+          npm run start > server.log 2>&1 & server_pid=$!
           npx wait-on http://localhost:3000 --timeout 60000
           set +e
           chrome_path="$(node -e 'const { chromium } = require("@playwright/test"); process.stdout.write(chromium.executablePath())')"
-          npx --yes lighthouse@11 http://localhost:3000/jarvis --preset=desktop --only-categories=performance,accessibility --chrome-path="$chrome_path" --output=json --output-path=./lighthouse-jarvis.json
+          npx --yes lighthouse@11 http://localhost:3000/jarvis --preset=desktop --only-categories=performance,accessibility --chrome-path="$chrome_path" --output=json --output-path=./lighthouse-jarvis.json > lighthouse.log 2>&1
           node -e 'const report=require("./lighthouse-jarvis.json"); const categories=report.categories; const cls=report.audits["cumulative-layout-shift"].numericValue; if (categories.performance.score < .9 || categories.accessibility.score < .95 || cls > .01) { console.error(JSON.stringify({performance: categories.performance.score, accessibility: categories.accessibility.score, cls}, null, 2)); process.exit(1) } console.log(JSON.stringify({performance: categories.performance.score, accessibility: categories.accessibility.score, cls}, null, 2))'
           lighthouse_status=$?
-          npx playwright test --reporter=list
+          npx playwright test --reporter=list > playwright.log 2>&1
           test_status=$?
           kill "$server_pid" 2>/dev/null || true
+          if [ "$lighthouse_status" -ne 0 ] || [ "$test_status" -ne 0 ]; then
+            for log in lighthouse.log playwright.log; do
+              tail -n 35 "$log" | while IFS= read -r line; do
+                echo "::error file=.github/workflows/marketing-ci.yml::${log}: ${line}"
+              done
+            done
+          fi
           test "$lighthouse_status" -eq 0 && exit "$test_status"
           exit "$lighthouse_status"

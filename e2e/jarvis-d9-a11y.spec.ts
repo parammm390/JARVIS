@@ -35,3 +35,21 @@ test("reduced motion renders without hydration or unexpected console errors", as
   await expect(page.locator(".jarvis-gridfloor")).toHaveCSS("animation-duration", "0s")
   expect(unexpected).toEqual([])
 })
+
+test("primary console settles without unexpected layout shift", async ({ page }) => {
+  await page.addInitScript(() => {
+    const target = window as typeof window & { __jarvisD9Cls?: number }
+    target.__jarvisD9Cls = 0
+    new PerformanceObserver((list) => {
+      for (const entry of list.getEntries() as PerformanceEntryList) {
+        const shift = entry as PerformanceEntry & { value: number; hadRecentInput: boolean }
+        if (!shift.hadRecentInput) target.__jarvisD9Cls! += shift.value
+      }
+    }).observe({ type: "layout-shift", buffered: true })
+  })
+
+  await page.goto("/jarvis")
+  await expect(page.getByPlaceholder(/what would you like me to do/i)).toBeVisible({ timeout: 15_000 })
+  await page.waitForTimeout(3_000)
+  expect(await page.evaluate(() => (window as typeof window & { __jarvisD9Cls?: number }).__jarvisD9Cls)).toBe(0)
+})

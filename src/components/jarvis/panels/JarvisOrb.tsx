@@ -89,17 +89,14 @@ export function JarvisOrb({
           <circle cx={c} cy={c} r={31} fill="none" stroke={ringDim} strokeWidth={1.4} strokeLinecap="round" strokeDasharray="40 155" />
         </motion.g>
 
-        {/* orbiting satellites */}
-        {!reduced && (
-          <>
-            <motion.g style={{ originX: "50%", originY: "50%" }} animate={{ rotate: 360 }} transition={spinT(11)}>
-              <circle cx={c + 37} cy={c} r={2.4} fill={ring} />
-            </motion.g>
-            <motion.g style={{ originX: "50%", originY: "50%" }} animate={{ rotate: -360 }} transition={spinT(17)}>
-              <circle cx={c - 31} cy={c} r={1.7} fill={ringDim} />
-            </motion.g>
-          </>
-        )}
+        {/* Keep the SVG tree identical across SSR and a client-side reduced-motion
+            preference. Reduced motion disables animation, never the nodes. */}
+        <motion.g style={{ originX: "50%", originY: "50%" }} animate={reduced ? {} : { rotate: 360 }} transition={spinT(11)}>
+          <circle cx={c + 37} cy={c} r={2.4} fill={ring} />
+        </motion.g>
+        <motion.g style={{ originX: "50%", originY: "50%" }} animate={reduced ? {} : { rotate: -360 }} transition={spinT(17)}>
+          <circle cx={c - 31} cy={c} r={1.7} fill={ringDim} />
+        </motion.g>
 
         {/* core */}
         <motion.g
