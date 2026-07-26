@@ -10,6 +10,8 @@
 import { useState, type ReactNode } from "react"
 import { EmptyState } from "../primitives/EmptyState"
 import { ErrorState } from "../primitives/ErrorState"
+import { PermissionVeil } from "../primitives/PermissionVeil"
+import { StaleFog } from "../primitives/StaleFog"
 import { SkeletonCard } from "../primitives/Skeletons"
 
 export const STAGE_SECTIONS = [
@@ -19,6 +21,7 @@ export const STAGE_SECTIONS = [
   { id: "flow-command-surface", label: "F2 Command Surface" },
   { id: "flow-decision-theater", label: "F3 Decision Theater" },
   { id: "flow-dataviz", label: "F5 Data-Viz" },
+  { id: "flow-state-narratives", label: "F6 State Narratives" },
   { id: "flow-core", label: "FLOW-01..13" },
   { id: "flow-ambient", label: "FLOW-14..25" },
   { id: "fx-toolkit", label: "FX" },
@@ -61,16 +64,24 @@ export function MountToggle({ id, label, children }: { id: string; label: string
   )
 }
 
-type FixtureState = "normal" | "loading" | "error" | "empty"
+type FixtureState = "normal" | "loading" | "error" | "empty" | "stale" | "veil"
 
+// F6.T1/T2 — the six states below now drive the REAL FLOW-88..93 components (not
+// look-alikes): EmptyState (FLOW-88 EmptyTerrarium, family diorama), ErrorState
+// (FLOW-89 ErrorFracture, crack-seal-on-retry), StaleFog (FLOW-92, real fog+timestamp
+// wrapper), PermissionVeil (FLOW-93). FirstRunTide (91) and OfflineDrift (90) are
+// covered by their own dedicated demos in StateNarrativesCatalog.tsx instead (91 has
+// no representative single-panel form; 90 is a whole-console mood change, not a
+// per-panel state) — this switcher's job is the per-panel four-plus-two states a
+// normal panel can actually be in.
 export function StageStateSwitcher() {
   const [state, setState] = useState<FixtureState>("normal")
   return (
     <section className="j-panel space-y-3 p-5">
       <div className="mb-1 flex items-center justify-between">
         <h2 className="j-label">Stage 2.0 — fixture-state switcher</h2>
-        <div className="flex gap-1">
-          {(["normal", "loading", "error", "empty"] as const).map((s) => (
+        <div className="flex flex-wrap gap-1">
+          {(["normal", "loading", "error", "empty", "stale", "veil"] as const).map((s) => (
             <button
               key={s}
               onClick={() => setState(s)}
@@ -82,9 +93,8 @@ export function StageStateSwitcher() {
         </div>
       </div>
       <p className="text-[10.5px] text-[color:var(--j-text-dim)]">
-        Drives a representative panel through the four lane states every real panel can be in. FIXTURE — F6 (FLOW-88..93) wires the real
-        per-lane triggers (genuine emptiness, real degraded state, real lane-SLA staleness); this switcher exists now so F6 has a harness
-        to mount into, not fabricated live data.
+        Drives a representative panel through the states every real panel can be in, using the SAME real FLOW-88..93 components production
+        panels mount (ActivityTheater/PulseBar/ApprovalCockpit/KpiStrip) — not fixture look-alikes.
       </p>
       <div className="min-h-[110px]">
         {state === "normal" && (
@@ -92,7 +102,13 @@ export function StageStateSwitcher() {
         )}
         {state === "loading" && <SkeletonCard />}
         {state === "error" && <ErrorState message="Couldn't load (FIXTURE)" onRetry={() => setState("normal")} />}
-        {state === "empty" && <EmptyState title="No rows yet (FIXTURE)" description="Nothing to show for this fixture panel." actionLabel="Reset" onAction={() => setState("normal")} />}
+        {state === "empty" && <EmptyState family="activity" title="No rows yet (FIXTURE)" description="Nothing to show for this fixture panel." actionLabel="Reset" onAction={() => setState("normal")} />}
+        {state === "stale" && (
+          <StaleFog ageMs={120_000} staleAfterMs={90_000}>
+            <div className="j-panel p-4 text-[11px] text-[color:var(--j-text)]">Representative panel content — real data, just not refreshed recently (FIXTURE age).</div>
+          </StaleFog>
+        )}
+        {state === "veil" && <PermissionVeil reason="Sign in to see this panel's real data (FIXTURE)." actionLabel="Sign in" actionHref="/jarvis/login" />}
       </div>
     </section>
   )

@@ -8,9 +8,10 @@ import { useEffect, useRef } from "react"
 import { LiveDot } from "../atmosphere"
 import { CountUp } from "../lib/CountUp"
 import { AreaSparkline, DeltaChip } from "../lib/charts"
-import { useJarvis } from "../lib/data-core"
+import { laneAgeMs, SLOW_LANE_STALE_MS, useJarvis } from "../lib/data-core"
 import { flash } from "../lib/EventFX"
 import { registerAnchor, setLineageHover } from "../lib/pulse-bus"
+import { StaleFog } from "../ui/primitives/StaleFog"
 
 const usd = (n: number) => `$${Math.round(n).toLocaleString()}`
 
@@ -125,7 +126,13 @@ export function KpiStrip({ onNavigate }: { onNavigate?: (view: string) => void }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cards.map((c) => c.key).join(",")])
 
+  // F6.T2 — FLOW-92 StaleFog: most of these cards (cashCollections/pipelineHealth/
+  // slaBreaches) are slow-lane read-models; the pending/runs cards are fast-lane and
+  // stay fresher than this — an honest, documented mixed-lane approximation (the
+  // whole strip fogs by the slow lane's own real last-success timestamp) rather than
+  // per-card lane tracking, which no other panel in this codebase does either.
   return (
+    <StaleFog ageMs={laneAgeMs(data.slowLastSuccessMs, data.now)} staleAfterMs={SLOW_LANE_STALE_MS}>
     <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
       {cards.map((c, i) => (
         <button
@@ -161,5 +168,6 @@ export function KpiStrip({ onNavigate }: { onNavigate?: (view: string) => void }
         </button>
       ))}
     </div>
+    </StaleFog>
   )
 }

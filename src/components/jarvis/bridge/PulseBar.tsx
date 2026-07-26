@@ -18,6 +18,8 @@ import { choreo } from "../ui/motion/choreo"
 import { Ticker } from "../ui/motion/primitives"
 import { registerAnchor } from "../lib/pulse-bus"
 import { AreaSparkline } from "../lib/charts"
+import { ErrorState } from "../ui/primitives/ErrorState"
+import { PermissionVeil } from "../ui/primitives/PermissionVeil"
 
 // F2.T3 — FLOW-45 VitalsBreath: the heartbeat dot's period is a real function of its
 // own real age (fresher = faster breathing, matching a genuinely healthy worker),
@@ -126,7 +128,7 @@ export function PulseBar({ compact = false }: { compact?: boolean }) {
   // KPI cards (see ConstellationLink.tsx's hand-authored lineage map).
   useEffect(() => registerAnchor("pulse-bar", () => rootRef.current?.getBoundingClientRect() ?? null), [])
 
-  const { data, connection } = useLiveQuery<Vitals & { cursor: null }, null>({
+  const { data, connection, error } = useLiveQuery<Vitals & { cursor: null }, null>({
     fetchPage: async () => {
       const v = await jarvisClient.vitals()
       return { ...v, cursor: null }
@@ -145,13 +147,25 @@ export function PulseBar({ compact = false }: { compact?: boolean }) {
 
   if (!session) {
     return (
-      <div className="rounded-xl border border-white/8 bg-white/[0.02] p-3 text-center text-[10px] font-semibold text-[color:var(--j-text-faint)]">
-        Sign in for live vitals
+      <div className="rounded-xl border border-white/8 bg-white/[0.02] p-3">
+        <PermissionVeil reason="Sign in for live vitals — real worker heartbeat, queue depth, and DLQ backlog for your own tenant." actionLabel="Sign in" actionHref="/jarvis/login" />
       </div>
     )
   }
 
   if (!data) {
+    // F6.T3 — FLOW-89 ErrorFracture: a genuine poll failure (not merely "still
+    // loading" — useLiveQuery's own `error` distinguishes the two) surfaces the real
+    // message instead of the generic "Reading pulse…" forever. No onRetry here: the
+    // hook already retries on its own visibleIntervalMs cadence — a fake retry button
+    // would just be theater on top of behavior that already happens.
+    if (error) {
+      return (
+        <div className="rounded-xl border border-white/8 bg-white/[0.02] p-3">
+          <ErrorState message={`Vitals unreachable: ${error}`} />
+        </div>
+      )
+    }
     return <div className="rounded-xl border border-white/8 bg-white/[0.02] p-3 text-[10px] text-[color:var(--j-text-faint)]">Reading pulse…</div>
   }
 

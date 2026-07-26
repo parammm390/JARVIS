@@ -22,6 +22,7 @@ import { ConsoleAtmosphere, LiveDot } from "../atmosphere"
 import { JarvisDataProvider, useJarvis } from "../lib/data-core"
 import { JarvisAuthProvider, useJarvisAuth } from "../lib/jarvis-auth"
 import { useVapiSession } from "../lib/useVapiSession"
+import { deriveMood } from "../lib/mood"
 import { KpiStrip } from "../panels/KpiStrip"
 import { DailyBriefing } from "../panels/DailyBriefing"
 import { CertificationStatus } from "../panels/CertificationStatus"
@@ -81,6 +82,34 @@ function useOrbLiveState(): { state: OrbState; activeRunCount: number; voiceAmpl
     const voiceAmplitude = session.voiceState === "speaking" ? session.volumeLevel : undefined
     return { state, activeRunCount, voiceAmplitude }
   }, [data.statsDegraded, data.runs.length, data.stats?.blocked, session.voiceState, session.volumeLevel])
+}
+
+// F6.T2 — FLOW-90 OfflineDrift formalizes the legacy Shell's own "standalone" mood
+// (jarvis-theme.css's `[data-mood="standalone"]` already dims `--aurora-opacity` to
+// 0.45 and swaps the accent to amber — real, shipped CSS, just never wired into the
+// Bridge, which hardcoded `data-mood="idle"` unconditionally). Reuses that existing
+// system rather than inventing a second "degraded" visual language: real signal is
+// `data.statsDegraded` (the fast lane's own API-unreachable truth, already what
+// useOrbLiveState above keys its "error" orb state on). Adds the one genuinely new
+// piece the legacy Shell never had — a one-shot "relight" cascade on the transition
+// BACK to reachable, so recovery reads as an event, not a silent color swap.
+function useOfflineDrift(): { mood: ReturnType<typeof deriveMood>; relighting: boolean } {
+  const data = useJarvis()
+  const session = useVapiSession()
+  const voiceLive = session.voiceState === "live" || session.voiceState === "speaking"
+  const mood = deriveMood({ voiceLive, degraded: data.statsDegraded })
+  const [relighting, setRelighting] = useState(false)
+  const wasDegradedRef = useRef(data.statsDegraded)
+  useEffect(() => {
+    if (wasDegradedRef.current && !data.statsDegraded) {
+      setRelighting(true)
+      const t = window.setTimeout(() => setRelighting(false), 900)
+      wasDegradedRef.current = data.statsDegraded
+      return () => window.clearTimeout(t)
+    }
+    wasDegradedRef.current = data.statsDegraded
+  }, [data.statsDegraded])
+  return { mood, relighting }
 }
 
 // FLOW-43 HeaderTide — caustic intensity follows the REAL rate of pulse-bus events
@@ -231,6 +260,7 @@ function LeftRail({ scene, setScene, orderedScenes, unopened, forceLowPower, boo
 function CenterStage({ scene, forceLowPower, onToggleLowPower }: { scene: SceneId; forceLowPower: boolean; onToggleLowPower: () => void }) {
   const { role } = useJarvisAuth()
   const reducedMotion = useReducedMotion()
+  const data = useJarvis()
   return (
     <main className="relative min-w-0 flex-1 overflow-hidden">
       <div className="pointer-events-none absolute inset-0 opacity-60">
@@ -243,7 +273,20 @@ function CenterStage({ scene, forceLowPower, onToggleLowPower }: { scene: SceneI
             <h1 className="text-base font-black text-[color:var(--j-text)]">Command Bridge</h1>
             <p className="text-[11px] text-[color:var(--j-text-dim)]">D1 — real vitals, real activity, one continuous space</p>
           </div>
-          <div className="flex items-center gap-2"><SoundPreferenceToggle /><button type="button" onClick={onToggleLowPower} aria-pressed={forceLowPower} className="j-chip border border-white/10 bg-white/[.035] text-[color:var(--j-text-dim)]">{forceLowPower ? "Low power on" : "Low power off"}</button><span className="j-chip bg-cyan-400/10 text-cyan-200"><LiveDot /> live</span></div>
+          <div className="flex items-center gap-2">
+            <SoundPreferenceToggle />
+            <button type="button" onClick={onToggleLowPower} aria-pressed={forceLowPower} className="j-chip border border-white/10 bg-white/[.035] text-[color:var(--j-text-dim)]">
+              {forceLowPower ? "Low power on" : "Low power off"}
+            </button>
+            {/* F6.T2 — FLOW-90 OfflineDrift's honest banner half: this chip used to
+                read a hardcoded "live" regardless of reality. Now it names the real
+                fast-lane reachability signal Orb3D's "error" state already keys on. */}
+            {data.statsDegraded ? (
+              <span className="j-chip bg-amber-400/12 text-amber-200">reconnecting</span>
+            ) : (
+              <span className="j-chip bg-cyan-400/10 text-cyan-200"><LiveDot /> live</span>
+            )}
+          </div>
         </div>
       </div>
       <div className="relative p-6 pb-24 [content-visibility:auto] [contain-intrinsic-size:1px_900px] lg:pb-6">
@@ -392,6 +435,7 @@ function BridgeShell() {
   const { session, loading } = useJarvisAuth()
   const palette = useCommandPaletteV2()
   const reducedMotion = useReducedMotion()
+  const { mood, relighting } = useOfflineDrift()
 
   useEffect(() => {
     setMounted(true)
@@ -501,7 +545,13 @@ function BridgeShell() {
   // SceneDock) or a 5s-interval-recomputed style value (HeaderTide, VitalsBreath's
   // heartbeatPeriodSec) — none of them are a NEW standing rAF/CSS-infinite loop.
   return (
-    <div className="jarvis-cursor-zone jarvis-root relative min-h-screen bg-[#04070f] text-[color:var(--j-text)]" data-mood="idle" data-daypart={daypart} data-low-power={forceLowPower || undefined}>
+    <div
+      className="jarvis-cursor-zone jarvis-root relative min-h-screen bg-[#04070f] text-[color:var(--j-text)]"
+      data-mood={mood}
+      data-relighting={relighting || undefined}
+      data-daypart={daypart}
+      data-low-power={forceLowPower || undefined}
+    >
       <div
         className="pointer-events-none fixed inset-0 overflow-hidden"
         data-jarvis-atmosphere
@@ -509,6 +559,23 @@ function BridgeShell() {
       >
         {!forceLowPower && <ConsoleAtmosphere />}
       </div>
+      {/* F6.T2 — FLOW-90 OfflineDrift's "reconnect relights in cascade" half: a single
+          one-shot light sweep left->right the instant `data.statsDegraded` flips back
+          to false, formalizing the mood-driven aurora dim above (which already fades
+          back on its own 0.6s `--aurora-opacity` transition) with a real "this just
+          recovered" event rather than a silent color settle. GPU-safe transform/
+          opacity only; reduced motion collapses to an instant flash via useOfflineDrift
+          keeping the same 900ms window either way (AnimatePresence unmount handles it). */}
+      {relighting && (
+        <motion.div
+          aria-hidden
+          className="pointer-events-none fixed inset-0 z-10"
+          initial={reducedMotion ? { opacity: 0.5 } : { opacity: 0, x: "-100%" }}
+          animate={reducedMotion ? { opacity: 0 } : { opacity: [0, 0.35, 0], x: "100%" }}
+          transition={{ duration: reducedMotion ? 0.3 : 0.9, ease: "easeOut" }}
+          style={{ background: "linear-gradient(90deg, transparent, rgba(34,211,238,0.5), transparent)" }}
+        />
+      )}
       <ParticleField disabled={forceLowPower} />
       <MobileTopBar scene={scene} setScene={chooseScene} orderedScenes={orderedScenes} forceLowPower={forceLowPower} />
       {/* FLOW-44 BridgeBoot — `onClick` only ever shortens an already-running boot

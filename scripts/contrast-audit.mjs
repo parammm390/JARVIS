@@ -111,6 +111,15 @@ for (const [tier, { text, bg }] of Object.entries(RISK_BADGE)) {
   check("AnomalyFlare label text (red-200) vs annotation chip bg (red-950/80)", contrastRatio(hexToRgb("#fecaca"), anomalyBgOverPage), NORMAL_TEXT_MIN)
 }
 
+// F6.T2 (JARVIS-FRONTEND-MAESTRO F6) — FLOW-90 OfflineDrift's new "reconnecting"
+// chip (Bridge.tsx CenterStage): the one genuinely NEW text/bg color pairing this
+// phase introduces (bg-amber-400/12, a different opacity than DegradedBanner's
+// existing bg-amber-300/8 pairing, so not covered by an existing check).
+{
+  const reconnectingBgOverPage = compositeOver("rgba(251,191,36,0.12)", TOKENS.jBg) // bg-amber-400/12 over --j-bg
+  check("OfflineDrift 'reconnecting' chip text (amber-200) vs chip bg (amber-400/12)", contrastRatio(hexToRgb("#fde68a"), reconnectingBgOverPage), NORMAL_TEXT_MIN)
+}
+
 const failed = checks.filter((c) => c.gates && !c.pass)
 console.log(JSON.stringify({ checks, failedCount: failed.length }, null, 2))
 if (failed.length) {

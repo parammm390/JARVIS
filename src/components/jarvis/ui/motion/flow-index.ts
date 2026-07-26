@@ -124,13 +124,13 @@ export const FLOW_INDEX: FlowEntry[] = [
   { id: 86, key: "BandBreath", band: "F5", phase: "F5", status: "shipped", dataSource: "Insights.forecastBand (typed in data-core.ts, graceful-absent — B3 hasn't shipped real values yet)", note: "Stage card is FIXTURE-labeled; production wiring (AnalyticsRow) renders nothing until B3 ships forecastBand" },
   { id: 87, key: "AnomalyFlare", band: "F5", phase: "F5", status: "shipped", dataSource: "Insights.anomalies (typed in data-core.ts, graceful-absent — B3 hasn't shipped real values yet)", note: "Stage card is FIXTURE-labeled; production wiring (AnalyticsRow) renders nothing until B3 ships anomalies" },
 
-  // ---- Band F6 — State Narratives (88-93) ----
-  { id: 88, key: "EmptyTerrarium", band: "F6", phase: "F6", status: "planned", dataSource: "row counts" },
-  { id: 89, key: "ErrorFracture", band: "F6", phase: "F6", status: "planned", dataSource: "error state" },
-  { id: 90, key: "OfflineDrift", band: "F6", phase: "F6", status: "planned", dataSource: "degraded state" },
-  { id: 91, key: "FirstRunTide", band: "F6", phase: "F6", status: "planned", dataSource: "real emptiness" },
-  { id: 92, key: "StaleFog", band: "F6", phase: "F6", status: "planned", dataSource: "lane timestamps" },
-  { id: 93, key: "PermissionVeil", band: "F6", phase: "F6", status: "planned", dataSource: "auth state" },
+  // ---- Band F6 — State Narratives (88-93) — shipped this phase ----
+  { id: 88, key: "EmptyTerrarium", band: "F6", phase: "F6", status: "shipped", dataSource: "real row counts (ActivityTheater items.length, ApprovalCockpit items.length)" },
+  { id: 89, key: "ErrorFracture", band: "F6", phase: "F6", status: "shipped", dataSource: "real error state (useLiveQuery error, decide() POST failure)" },
+  { id: 90, key: "OfflineDrift", band: "F6", phase: "F6", status: "shipped", dataSource: "data.statsDegraded (fast-lane reachability, same signal Orb3D's error state already keys on)" },
+  { id: 91, key: "FirstRunTide", band: "F6", phase: "F6", status: "shipped", dataSource: "real emptiness (component built; no genuinely-zero-row tenant exists to wire it live)", note: "Stage card is FIXTURE-labeled per the plan's own allowance — no real zero-row-tenant signal exists in this codebase (every seeded/real dealer already has rows), same graceful-absent category as F5's forecastBand/anomalies" },
+  { id: 92, key: "StaleFog", band: "F6", phase: "F6", status: "shipped", dataSource: "data-core.slowLastSuccessMs vs SLOW_LANE_STALE_MS (real lane timestamp)" },
+  { id: 93, key: "PermissionVeil", band: "F6", phase: "F6", status: "shipped", dataSource: "real auth state (!session guards in ActivityTheater/PulseBar)" },
 
   // ---- Band F7 — Continuity (94-97) ----
   { id: 94, key: "RouteHandoff", band: "F7", phase: "F7", status: "planned", dataSource: "navigation" },

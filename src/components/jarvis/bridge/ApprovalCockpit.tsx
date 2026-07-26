@@ -57,6 +57,8 @@ import { ActionRenderer } from "../ui/renderers/ActionRenderer"
 import { BorderBeam } from "../ui/fx/BorderBeam"
 import { registerAnchor, getAnchorRect } from "../lib/pulse-bus"
 import { KeymapHUD } from "./KeymapHUD"
+import { EmptyState } from "../ui/primitives/EmptyState"
+import { ErrorState } from "../ui/primitives/ErrorState"
 
 // ---------------------------------------------------------------------------
 // Small local helpers (deliberately not imported from ApprovalDock.tsx — that file is
@@ -840,18 +842,18 @@ export function ApprovalCockpit() {
       </div>
 
       <div className="px-4 py-3">
-        {error && <div className="mb-2 rounded-lg border border-red-400/30 bg-red-400/5 px-3 py-2 text-[11px] text-red-300">{error}</div>}
+        {/* F6.T3 — FLOW-89 ErrorFracture: real decide()-POST failure. "Retry" dismisses
+            the banner rather than replaying the POST itself — the failed action is
+            already restored to the visible queue above (the `hidden` rollback a few
+            lines up), so the honest next step is a fresh click, not a hidden re-fire. */}
+        {error && <ErrorState message={error} onRetry={() => setError(null)} />}
         <ExecutingDock flights={flights} />
 
         <div className="space-y-2">
           <AnimatePresence initial={false}>
             {items.length === 0 && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="rounded-xl border border-white/8 bg-white/[0.02] px-4 py-6 text-center text-[12px] text-[color:var(--j-text-dim)]"
-              >
-                Nothing needs you. Finnor is holding the line.
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                <EmptyState family="approvals" title="Nothing needs you" description="Finnor is holding the line — approvals land here the moment something needs a human." />
               </motion.div>
             )}
             {items.map((a, i) => (

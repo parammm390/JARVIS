@@ -18,6 +18,8 @@ import { flash } from "../lib/EventFX"
 import { Enter } from "../ui/motion/primitives"
 import { ActionRenderer } from "../ui/renderers/ActionRenderer"
 import { METEOR_FLIGHT_MS, publishActivityArrival, registerAnchor } from "../lib/pulse-bus"
+import { EmptyState } from "../ui/primitives/EmptyState"
+import { PermissionVeil } from "../ui/primitives/PermissionVeil"
 
 const SOURCE_ICON: Record<ActivityItem["source"], string> = {
   action_log: "bg-cyan-400",
@@ -123,7 +125,9 @@ export function ActivityTheater() {
 
   if (!session) {
     return (
-      <div className="j-panel p-4 text-center text-[11px] text-[color:var(--j-text-faint)]">Sign in for the live activity feed</div>
+      <div className="j-panel p-4">
+        <PermissionVeil reason="Sign in for the live activity feed — this pulls your own tenant's real events." actionLabel="Sign in" actionHref="/jarvis/login" />
+      </div>
     )
   }
 
@@ -136,7 +140,7 @@ export function ActivityTheater() {
         </span>
       </div>
       <div ref={feedRef} className="flex-1 space-y-1.5 overflow-y-auto px-3 py-3" aria-live="polite" aria-relevant="additions text">
-        {items.length === 0 && <div className="text-[11px] text-[color:var(--j-text-faint)]">No activity yet — the feed fills as Finnor works.</div>}
+        {items.length === 0 && <EmptyState family="activity" title="No activity yet" description="The feed fills as Finnor works — approvals, workflow steps, and calls all land here." />}
         <AnimatePresence initial={false}>
           {items.map((item) => {
             // D3.T1: action_log rows now carry actionType+payload (GET /api/activity's

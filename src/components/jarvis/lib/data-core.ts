@@ -276,6 +276,12 @@ interface JarvisDataState {
   /** Latest 20 REAL terminal runs (completed/failed) — fuel for the honest replay theater. */
   terminalRuns: WorkflowRun[]
   lastPollAtMs: number | null
+  /** F6.T2 — FLOW-92 StaleFog's real lane timestamp: the wall-clock moment the slow
+   *  lane (read-models) last had ANY successful fetch, not merely "not currently
+   *  rejected." A panel can be showing 90s-old numbers while readModelsDegraded is
+   *  false the whole time (a fetch simply hasn't landed yet) — this is the honest
+   *  signal staleness needs, distinct from the degraded booleans above. */
+  slowLastSuccessMs: number | null
   apiLatencyMs: number | null
   /** Last 30 REAL measured fast-lane latencies — the page's always-moving honest chart. */
   latencyHistory: number[]
@@ -329,6 +335,7 @@ const EMPTY_STATE: JarvisDataState = {
   runsDegraded: false,
   terminalRuns: [],
   lastPollAtMs: null,
+  slowLastSuccessMs: null,
   apiLatencyMs: null,
   latencyHistory: [],
   metricHistory: {},
@@ -368,6 +375,17 @@ const FAST_LANE_MS = 4000
 const MEDIUM_LANE_MS = 8000
 const SLOW_LANE_MS = 30000
 const SANITY_LANE_MS = 60000
+
+/** F6.T2 — FLOW-92 StaleFog's lane SLA: 3x the slow lane's own poll interval, the
+ *  same "generous slack before calling it stale" ratio PulseBar's own
+ *  HEARTBEAT_STALE_S already established for the fast/heartbeat lane (2-3x cadence,
+ *  never the raw interval itself — a single slow poll shouldn't flash a false alarm). */
+export const SLOW_LANE_STALE_MS = SLOW_LANE_MS * 3
+
+export function laneAgeMs(lastSuccessMs: number | null, now: number): number | null {
+  if (lastSuccessMs === null) return null
+  return now - lastSuccessMs
+}
 const RING_BUFFER_SIZE = 30
 
 export function JarvisDataProvider({ children }: { children: React.ReactNode }): React.ReactElement {
@@ -540,8 +558,11 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
       jarvisGet<{ data: ReliabilityMetrics }>("read-models/reliability"),
     ])
     const anyDegraded = [pipeline, cash, sla, stock, followUp, techLoad, serviceDue, dataQuality].some((r) => r.status === "rejected")
+    const anySucceeded = [pipeline, cash, sla, stock, followUp, techLoad, serviceDue, dataQuality].some((r) => r.status === "fulfilled")
+    const nowTs = Date.now()
     setState((prev) => ({
       ...prev,
+      slowLastSuccessMs: anySucceeded ? nowTs : prev.slowLastSuccessMs,
       pipelineHealth: pipeline.status === "fulfilled" ? pipeline.value.data : prev.pipelineHealth,
       cashCollections: cash.status === "fulfilled" ? cash.value.data : prev.cashCollections,
       slaBreaches: sla.status === "fulfilled" ? sla.value.data : prev.slaBreaches,
