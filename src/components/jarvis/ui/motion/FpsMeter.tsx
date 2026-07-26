@@ -39,12 +39,12 @@ export function useFpsMeter() {
   return { fps, minFps, reset: () => setMinFps(null) }
 }
 
-export function FpsMeterHud() {
+export function FpsMeterHud({ placement = "bottom-4 right-4" }: { placement?: string }) {
   const { fps, minFps, reset } = useFpsMeter()
   const tone = minFps === null ? "text-white/50" : minFps >= 55 ? "text-green-300" : "text-red-300"
 
   return (
-    <div className="j-panel fixed bottom-4 right-4 z-50 flex items-center gap-3 px-3 py-1.5" data-testid="fps-meter">
+    <div className={`j-panel fixed z-50 flex items-center gap-3 px-3 py-1.5 ${placement}`} data-testid="fps-meter">
       <span className="j-label">FPS</span>
       <span className={`font-mono text-[13px] font-black ${tone}`}>{fps ?? "…"}</span>
       <span className="text-[9px] text-[color:var(--j-text-faint)]">
@@ -67,5 +67,6 @@ export function QueryFpsMeterHud() {
     setEnabled(new URLSearchParams(window.location.search).get("fps") === "1")
   }, [])
 
-  return enabled ? <FpsMeterHud /> : null
+  // Centered so the production site's support launcher cannot cover the proof.
+  return enabled ? <FpsMeterHud placement="bottom-4 left-1/2 -translate-x-1/2" /> : null
 }
