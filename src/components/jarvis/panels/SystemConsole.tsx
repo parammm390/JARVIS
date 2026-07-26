@@ -14,6 +14,11 @@ interface Line extends JarvisRequestLog {
   key: number
 }
 
+// A module-level sequence survives React development remounts. The telemetry event
+// bus can publish while a Strict Mode cleanup/re-subscribe cycle is in flight, so a
+// component-local ref can otherwise repeat keys in one rendered list.
+let telemetryLineKey = 0
+
 function statusColor(status: number): string {
   if (status >= 200 && status < 300) return "text-emerald-300"
   if (status === 0) return "text-red-400"
@@ -24,14 +29,13 @@ function statusColor(status: number): string {
 
 export function SystemConsole() {
   const [lines, setLines] = useState<Line[]>([])
-  const keyRef = useRef(0)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(
     () =>
       onJarvisRequest((r) => {
-        keyRef.current += 1
-        setLines((prev) => [...prev, { ...r, key: keyRef.current }].slice(-22))
+        telemetryLineKey += 1
+        setLines((prev) => [...prev, { ...r, key: telemetryLineKey }].slice(-22))
       }),
     [],
   )
@@ -51,15 +55,19 @@ export function SystemConsole() {
       <div ref={scrollRef} className="h-[196px] overflow-y-auto px-4 py-2 font-mono text-[10.5px] leading-[1.75]">
         {lines.length === 0 && <div className="text-[color:var(--j-text-faint)]">awaiting first poll…</div>}
         <AnimatePresence initial={false}>
-          {lines.map((l) => (
+          {lines.map((l, index) => (
             <motion.div
-              key={l.key}
+              // The request bus can legitimately emit the same telemetry event to
+              // more than one mounted console during responsive/StrictMode swaps.
+              // Keep each rendered row's identity unique without pretending those
+              // events are one request.
+              key={`${l.key}-${index}`}
               initial={{ opacity: 0, x: -6 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.25 }}
               className="j-console-line flex gap-2 whitespace-nowrap"
             >
-              <span className="text-[color:var(--j-text-faint)]">{new Date(l.at).toLocaleTimeString([], { hour12: false })}</span>
+              <span className="text-[color:var(--j-text-faint)]">{new Date(l.at).toLocaleTimeString("en-US", { hour12: false })}</span>
               <span className={l.method === "GET" ? "text-sky-300" : "text-violet-300"}>{l.method}</span>
               <span className="min-w-0 flex-1 truncate text-[color:var(--j-text-dim)]">{l.path}</span>
               <span className={statusColor(l.status)}>{l.status || "ERR"}</span>

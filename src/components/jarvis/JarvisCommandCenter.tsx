@@ -14,7 +14,6 @@ import "./jarvis-theme.css"
 import { ConsoleAtmosphere, LiveDot } from "./atmosphere"
 import { CustomCursor } from "./CustomCursor"
 import { setMuted, sfx } from "./sound"
-import { LeadsView, WorkflowsView, InventoryView, InvoicesView, ComplianceView, ResearchView, VoiceConsoleView, CustomersView, SystemHealthView } from "./views"
 import { JarvisDataProvider, useJarvis } from "./lib/data-core"
 import { JarvisAuthProvider, useJarvisAuth } from "./lib/jarvis-auth"
 import { useVapiSession } from "./lib/useVapiSession"
@@ -35,8 +34,6 @@ import { DlqBrowser } from "./panels/DlqBrowser"
 import { CertificationStatus } from "./panels/CertificationStatus"
 import { DispatcherBoard } from "./panels/DispatcherBoard"
 import { TechnicianBoard } from "./panels/TechnicianBoard"
-import { DispatchMap } from "./panels/DispatchMap"
-import { MyDay } from "./panels/MyDay"
 import { CommsFeed } from "./panels/CommsFeed"
 import { ActivityRail } from "./panels/ActivityRail"
 import { PipelinePulse } from "./panels/PipelinePulse"
@@ -48,6 +45,19 @@ import { Activity, BookUser, Boxes, CircleDollarSign, FlaskConical, Globe, Layou
 
 const LiveCallPanel = dynamic(() => import("./panels/LiveCallPanel").then((m) => m.LiveCallPanel), { ssr: false })
 const ParticleField = dynamic(() => import("./panels/ParticleField").then((m) => m.ParticleField), { ssr: false })
+// D9: views that are not on the initial command-center path must not inflate its
+// parse/execute cost. These chunks load only when their real view is selected.
+const LeadsView = dynamic(() => import("./views").then((m) => m.LeadsView))
+const WorkflowsView = dynamic(() => import("./views").then((m) => m.WorkflowsView))
+const InventoryView = dynamic(() => import("./views").then((m) => m.InventoryView))
+const InvoicesView = dynamic(() => import("./views").then((m) => m.InvoicesView))
+const ComplianceView = dynamic(() => import("./views").then((m) => m.ComplianceView))
+const ResearchView = dynamic(() => import("./views").then((m) => m.ResearchView))
+const VoiceConsoleView = dynamic(() => import("./views").then((m) => m.VoiceConsoleView))
+const CustomersView = dynamic(() => import("./views").then((m) => m.CustomersView))
+const SystemHealthView = dynamic(() => import("./views").then((m) => m.SystemHealthView))
+const DispatchMap = dynamic(() => import("./panels/DispatchMap").then((m) => m.DispatchMap), { ssr: false })
+const MyDay = dynamic(() => import("./panels/MyDay").then((m) => m.MyDay))
 
 const SIDEBAR = [
   { icon: LayoutGrid, label: "Command Center" },

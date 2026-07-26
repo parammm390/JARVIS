@@ -8,7 +8,9 @@ const JARVIS_CSP = [
   "default-src 'self'",
   // Next's production runtime still needs inline bootstrap scripts, but no JARVIS
   // feature requires eval. Removing it closes an avoidable XSS escalation path.
-  "script-src 'self' 'unsafe-inline'",
+  // Next's development client bundles use eval for source maps. Keep the production
+  // policy eval-free, but allow dev hydration so browser QA can exercise JARVIS.
+  `script-src 'self' 'unsafe-inline'${process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : ""}`,
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: https:",
   "font-src 'self' data:",
