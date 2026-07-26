@@ -2,12 +2,6 @@
 
 import { ReactNode, useEffect } from "react"
 import Lenis from "lenis"
-import { gsap } from "gsap"
-import { ScrollTrigger } from "gsap/ScrollTrigger"
-
-if (typeof window !== "undefined") {
-  gsap.registerPlugin(ScrollTrigger)
-}
 
 export default function SmoothScroll({ children }: { children: ReactNode }) {
   useEffect(() => {
@@ -30,28 +24,15 @@ export default function SmoothScroll({ children }: { children: ReactNode }) {
         Boolean(node.closest("[data-lenis-prevent]")),
     })
 
-    lenis.on("scroll", ScrollTrigger.update)
-
     let rafId = 0
-    const raf = (time: number) => {
-      lenis.raf(time * 1000)
+    function raf(time: number) {
+      lenis.raf(time)
+      rafId = requestAnimationFrame(raf)
     }
-
-    gsap.ticker.add(raf)
-    gsap.ticker.lagSmoothing(500, 33)
-
-    const refresh = () => {
-      cancelAnimationFrame(rafId)
-      rafId = requestAnimationFrame(() => ScrollTrigger.refresh())
-    }
-    window.addEventListener("resize", refresh)
-    window.addEventListener("hashchange", refresh)
+    rafId = requestAnimationFrame(raf)
 
     return () => {
       cancelAnimationFrame(rafId)
-      window.removeEventListener("resize", refresh)
-      window.removeEventListener("hashchange", refresh)
-      gsap.ticker.remove(raf)
       lenis.destroy()
     }
   }, [])
