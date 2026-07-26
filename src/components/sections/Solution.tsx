@@ -23,7 +23,7 @@ const capabilities: Array<{ icon: LucideIcon; title: string; copy: string }> = [
   {
     icon: LayoutDashboard,
     title: "One Record Per Household",
-    copy: "Water profile, quotes, jobs, plan, reviews, referrals, lifetime value, and the computed next revenue action — all in one place, kept the same way for years.",
+    copy: "Water profile, quotes, jobs, plan, reviews, referrals, lifetime value, and the computed next revenue action, all in one place, kept the same way for years.",
   },
   {
     icon: Radar,
@@ -38,7 +38,7 @@ const capabilities: Array<{ icon: LucideIcon; title: string; copy: string }> = [
   {
     icon: FileText,
     title: "Quote Drafted, Then Held for Approval",
-    copy: "Computed from your pricing tier and the actual water — never invented, never discounted on a whim. It waits for your yes before it goes out.",
+    copy: "Computed from your pricing tier and the actual water, never invented, never discounted on a whim. It waits for your yes before it goes out.",
   },
   {
     icon: ClipboardCheck,
@@ -83,7 +83,7 @@ const capabilities: Array<{ icon: LucideIcon; title: string; copy: string }> = [
   {
     icon: ScrollText,
     title: "Every Interaction, on the Record",
-    copy: "Whatever channel it came in on — a call, a text, someone typing it in — the plan JARVIS drafts and the approval it waits for are logged the same way.",
+    copy: "Whatever channel it came in on, a call, a text, someone typing it in, the plan JARVIS drafts and the approval it waits for are logged the same way.",
   },
   {
     icon: ShieldCheck,
@@ -121,8 +121,8 @@ export function Solution() {
             transition={{ delay: 0.08 }}
             className="mx-auto mt-6 max-w-2xl text-lg font-medium leading-relaxed text-slate-600"
           >
-            One record for the household — the water test, the quote, the job, the reminder, the
-            referral — kept the same way whether you look at it in a week or in three years.
+            One record for the household, the water test, the quote, the job, the reminder, the
+            referral, kept the same way whether you look at it in a week or in three years.
           </motion.p>
         </div>
 
@@ -150,7 +150,7 @@ export function Solution() {
 
         <p className="mx-auto mt-8 max-w-3xl text-center text-sm font-bold leading-relaxed text-slate-600">
           Any one of these is a commodity you can rent for $99 a month. What makes it a moat is
-          that one continuous memory carries all of them, for every household, for years — not a
+          that one continuous memory carries all of them, for every household, for years, not a
           feature list, a record that keeps growing.
         </p>
       </div>

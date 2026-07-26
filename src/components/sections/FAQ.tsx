@@ -13,12 +13,12 @@ const faqs = [
   {
     question: "What actually happens before JARVIS acts?",
     answer:
-      "It drafts a plan — a quote, a booking, a route — grounded in your real price book and household history, and it waits. Nothing executes until you or your team approves it. That's not a UI nicety; it's a database-enforced gate. Reject the plan and it simply never runs. Approve it and there's a receipt: what was proposed, what was approved, what happened, what it cost.",
+      "It drafts a plan, a quote, a booking, a route, grounded in your real price book and household history, and it waits. Nothing executes until you or your team approves it. That's not a UI nicety; it's a database-enforced gate. Reject the plan and it simply never runs. Approve it and there's a receipt: what was proposed, what was approved, what happened, what it cost.",
   },
   {
     question: "Does it quote a final number, or just a range?",
     answer:
-      "A range, never a final number. JARVIS pulls the real public water record for the household's area, runs the sizing math against household size, and drafts a preliminary range from your pricing tier — something like $3,800 to $4,250 installed — so the lead is pre-qualified before anyone drives out. It never invents a number. Then it drafts the free onsite water test booking, same as your team already runs, where your tech confirms the exact numbers in person and gives the real quote.",
+      "A range, never a final number. JARVIS pulls the real public water record for the household's area, runs the sizing math against household size, and drafts a preliminary range from your pricing tier, something like $3,800 to $4,250 installed, so the lead is pre-qualified before anyone drives out. It never invents a number. Then it drafts the free onsite water test booking, same as your team already runs, where your tech confirms the exact numbers in person and gives the real quote.",
   },
   {
     question: "What is a household memory record?",
@@ -38,7 +38,7 @@ const faqs = [
   {
     question: "Does it work over the phone?",
     answer:
-      "Voice is one of the ways an instruction reaches JARVIS. A call, a text, or someone typing it in — the plan it drafts and the approval it waits for are exactly the same either way. No-water and urgent pump language routes straight to your configured on-call contact with a structured handoff: scope, since when, people affected, safety screen, callback.",
+      "Voice is one of the ways an instruction reaches JARVIS. A call, a text, or someone typing it in, the plan it drafts and the approval it waits for are exactly the same either way. No-water and urgent pump language routes straight to your configured on-call contact with a structured handoff: scope, since when, people affected, safety screen, callback.",
   },
   {
     question: "What are the guarantees?",

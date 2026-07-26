@@ -12,12 +12,12 @@ const problemCards = [
   {
     icon: FileX,
     title: "Nobody can say why",
-    copy: "A price was given, a job was booked, an invoice went out — and if a customer asks why, there's no record of what was actually approved, or by whom. Just someone's memory of a phone call.",
+    copy: "A price was given, a job was booked, an invoice went out, and if a customer asks why, there's no record of what was actually approved, or by whom. Just someone's memory of a phone call.",
   },
   {
     icon: Shuffle,
     title: "The price depends on who answered",
-    copy: "Two reps, two different numbers, same softener. Not because anyone's dishonest — because nothing ties a quote to your actual price book. Homeowners now bring their own water tests because dealer numbers stopped holding up.",
+    copy: "Two reps, two different numbers, same softener. Not because anyone's dishonest, because nothing ties a quote to your actual price book. Homeowners now bring their own water tests because dealer numbers stopped holding up.",
   },
   {
     icon: UserRoundX,
@@ -59,7 +59,7 @@ export function RevenueLeak() {
             className="max-w-2xl text-lg font-medium leading-relaxed text-slate-600 md:text-xl"
           >
             The expensive ones happen after you pick up. Every quote your team gives, every job
-            you schedule, every price you promise — if none of it is written down the same way
+            you schedule, every price you promise, if none of it is written down the same way
             twice, you&apos;re not running a business, you&apos;re running on memory. JARVIS
             keeps the record: what was quoted, what was approved, what happened next.
           </motion.p>

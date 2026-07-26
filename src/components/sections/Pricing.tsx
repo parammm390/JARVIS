@@ -18,13 +18,13 @@ const tiers = [
     description:
       "Every quote, booking, and urgent route runs through the same loop: JARVIS drafts a plan from your real price book, holds it for your approval, executes exactly what you approved, and files the receipt. Water data pulled live, sizing shown line by line, nothing invented.",
     features: [
-      "Plans drafted from your real price book — quotes, bookings, urgent routes",
+      "Plans drafted from your real price book, quotes, bookings, urgent routes",
       "Every plan held for your approval before anything executes",
       "Public water records plus a free onsite test to confirm the exact number",
-      "Voice, text, or typed instruction — the same loop either way",
+      "Voice, text, or typed instruction, the same loop either way",
       "Tap-to-book confirmation sent within seconds of your approval",
       "No-water urgent route with safety screen and on-call handoff",
-      "Full activity log — every plan, approval, and receipt",
+      "Full activity log, every plan, approval, and receipt",
     ],
     cta: "Book a demo to see pricing",
     highlight: false,
@@ -35,7 +35,7 @@ const tiers = [
     title: "Growth & Memory",
     subtitle: "The core loop, plus a two-year household memory.",
     description:
-      "Everything in the Core Loop, and then the record keeps working after the invoice — every lead becomes a household memory that drives review requests, maintenance check-ins, referral tracking, and the right upsell moment, automatically, for two years.",
+      "Everything in the Core Loop, and then the record keeps working after the invoice, every lead becomes a household memory that drives review requests, maintenance check-ins, referral tracking, and the right upsell moment, automatically, for two years.",
     features: [
       "Everything in the Core Loop, plus:",
       "Two-year household memory record on every lead",
@@ -55,10 +55,10 @@ const tiers = [
     title: "Multi-Location",
     subtitle: "Scoped to your locations, built around your operation.",
     description:
-      "For dealers running more than one location or multiple lead sources — scoped by location, lead source, coverage window, and workflow complexity, priced to the actual build, not a menu.",
+      "For dealers running more than one location or multiple lead sources, scoped by location, lead source, coverage window, and workflow complexity, priced to the actual build, not a menu.",
     features: [
       "Everything in Growth & Memory, plus:",
-      "Per-location scoping — calls, coverage, and lead sources",
+      "Per-location scoping, calls, coverage, and lead sources",
       "Custom CRM and webhook integrations into your existing stack",
       "Bulk missed-call recovery across every location",
       "Consolidated reporting across the whole account",

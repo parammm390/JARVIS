@@ -1,11 +1,11 @@
 "use client"
 
-// M3.T1 — the Command Bridge proof section (plan §2.4 beat 4). Every capability named
+// M3.T1, the Command Bridge proof section (plan §2.4 beat 4). Every capability named
 // here is real and already shipped in the authenticated console (`src/app/jarvis/*`,
-// `src/components/jarvis/*`) — the Orb (`bridge/Orb3D.tsx`), Pipeline Theater
+// `src/components/jarvis/*`), the Orb (`bridge/Orb3D.tsx`), Pipeline Theater
 // (`JARVIS-MAESTRO-PLAN.md` D4, `ActivityTheater.tsx`), and the activity feed backed by
 // a real `GET /api/activity` join (`JARVIS-MAESTRO-STATE.md` D3 session log). No screen
-// recording exists yet (M1.T4 stayed PARAM-blocked — no owner test credentials in this
+// recording exists yet (M1.T4 stayed PARAM-blocked, no owner test credentials in this
 // environment), so this section proves the console with the real Orb plus a written,
 // source-grounded description instead of fabricated or placeholder footage.
 
@@ -39,21 +39,21 @@ const panels: Array<{ icon: LucideIcon; title: string; copy: string; tier: "low"
     icon: Radio,
     title: "The Orb",
     copy:
-      "One shape, three states — idle, planning, executing. It's the same read whether you're watching one instruction or twenty.",
+      "One shape, three states, idle, planning, executing. It's the same read whether you're watching one instruction or twenty.",
     tier: "low",
   },
   {
     icon: GitBranch,
     title: "Pipeline Theater",
     copy:
-      "Every durable run shown as it actually executes — step by step, with compensation and failure states visible, not hidden in a log file.",
+      "Every durable run shown as it actually executes, step by step, with compensation and failure states visible, not hidden in a log file.",
     tier: "medium",
   },
   {
     icon: Activity,
     title: "The activity feed",
     copy:
-      "Every approval, every receipt, every rejected action — one ordered record instead of a scattered set of notifications.",
+      "Every approval, every receipt, every rejected action, one ordered record instead of a scattered set of notifications.",
     tier: "high",
   },
 ]
@@ -88,7 +88,7 @@ export function CommandBridgeProof() {
               transition={{ delay: 0.08 }}
               className="mx-auto mt-6 max-w-2xl text-lg font-medium leading-relaxed text-[color:var(--j-text-dim)]"
             >
-              Every screen below is a real, shipped part of the JARVIS console — the same one your
+              Every screen below is a real, shipped part of the JARVIS console, the same one your
               team would sign into. What you see here is the Orb rendering live and a description
               of the rest, grounded in what the product actually does today.
             </motion.p>
@@ -145,7 +145,7 @@ export function CommandBridgeProof() {
             className="mx-auto mt-10 flex max-w-2xl items-start gap-2 text-center text-xs font-semibold leading-relaxed text-[color:var(--j-text-dim)]"
           >
             <Layers className="mt-0.5 hidden h-3.5 w-3.5 shrink-0 sm:block" aria-hidden />
-            The console itself is sign-in gated — it runs your operations, not a public demo.
+            The console itself is sign-in gated, it runs your operations, not a public demo.
             Try what a visitor actually can below.
             <Waves className="mt-0.5 hidden h-3.5 w-3.5 shrink-0 sm:block" aria-hidden />
           </motion.p>

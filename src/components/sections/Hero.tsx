@@ -10,7 +10,7 @@ import { Magnetic } from "@/components/ui/magnetic"
 import { JarvisProofSurface } from "@/components/sections/jarvis-proof/JarvisProofSurface"
 
 // Three.js (via Orb3D) is real weight (~140kB) that a public, SEO-facing homepage
-// shouldn't pay for on first paint. Deferred client-only — same lazy-load discipline
+// shouldn't pay for on first paint. Deferred client-only, same lazy-load discipline
 // hard rule #4 asks for, applied at the bundle-splitting level, not just the
 // animation level. The static gradient fallback below mirrors Orb3D's own reduced-
 // motion/low-power collapse look, so there's no visual pop when the real module lands.
@@ -120,7 +120,7 @@ export function Hero() {
               className="mb-6 inline-flex max-w-full items-center rounded-full border border-sky-900/10 bg-white px-4 py-2 text-sm font-bold leading-snug text-slate-700 shadow-sm"
             >
               <span className="mr-2 h-2 w-2 rounded-full bg-teal-500 shadow-[0_0_0_4px_rgba(20,184,166,0.12)]" />
-              Introducing JARVIS — an operations console for water treatment dealers
+              Introducing JARVIS, an operations console for water treatment dealers
             </motion.div>
 
             <motion.h1
@@ -138,7 +138,7 @@ export function Hero() {
               transition={{ delay: 0.1, duration: 0.62 }}
               className="mt-7 max-w-[22rem] text-base font-semibold leading-relaxed text-slate-700 sm:max-w-2xl sm:text-lg md:text-xl"
             >
-              JARVIS drafts the quote, the invoice, the reschedule — against your real price book,
+              JARVIS drafts the quote, the invoice, the reschedule, against your real price book,
               in seconds. Then it waits for your yes. Approve it and there&apos;s a receipt. Reject
               it and nothing ran.
             </motion.p>
@@ -149,7 +149,7 @@ export function Hero() {
               transition={{ delay: 0.18, duration: 0.55 }}
               className="mt-5 flex w-full max-w-full rounded-2xl border border-teal-800/14 bg-white px-4 py-3 text-sm font-black leading-relaxed text-slate-700 shadow-sm"
             >
-              Every decision leaves a receipt — what was approved, what changed, what it cost.
+              Every decision leaves a receipt, what was approved, what changed, what it cost.
               Nothing happens without one. Water treatment and well pump companies only.
             </motion.p>
 

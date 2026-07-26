@@ -7,22 +7,22 @@ const workflow = [
   {
     icon: PhoneCall,
     title: "An instruction arrives",
-    detail: "By voice, by text, or someone typing it into the console. However it gets there, a plan starts the same way — and a record opens before anything happens.",
+    detail: "By voice, by text, or someone typing it into the console. However it gets there, a plan starts the same way, and a record opens before anything happens.",
   },
   {
     icon: ClipboardList,
     title: "JARVIS drafts a plan",
-    detail: "Grounded against your real data — price book, household history, live water records where they matter. Fields it can't verify get flagged as unverified, never guessed.",
+    detail: "Grounded against your real data, price book, household history, live water records where they matter. Fields it can't verify get flagged as unverified, never guessed.",
   },
   {
     icon: ShieldAlert,
     title: "It waits for your yes",
-    detail: "Nothing executes until someone approves it. Not a formality — a database-enforced gate. Reject it and the plan simply never runs.",
+    detail: "Nothing executes until someone approves it. Not a formality, a database-enforced gate. Reject it and the plan simply never runs.",
   },
   {
     icon: BellRing,
     title: "Approved work executes",
-    detail: "The quote goes out, the visit gets scheduled, the invoice is sent — exactly what was approved, nothing more.",
+    detail: "The quote goes out, the visit gets scheduled, the invoice is sent, exactly what was approved, nothing more.",
   },
   {
     icon: UserRoundCheck,
@@ -60,7 +60,7 @@ export function LiveWorkflow() {
             transition={{ delay: 0.08 }}
             className="mx-auto mt-6 max-w-2xl text-lg font-medium leading-relaxed text-slate-600"
           >
-            Whatever set it off — a call, a text, a typed line — JARVIS drafts a plan, holds it
+            Whatever set it off, a call, a text, a typed line, JARVIS drafts a plan, holds it
             for your approval, executes exactly what you approved, and leaves a receipt. Five
             steps, the same shape, every time.
           </motion.p>

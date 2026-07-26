@@ -5,11 +5,11 @@ import { ArrowRight, History, PhoneCall, ShieldCheck } from "lucide-react"
 import { siteConfig } from "@/config/site"
 import { Magnetic } from "@/components/ui/magnetic"
 
-// M3.T3 — reframed into the single "try it on your business" CTA (plan §2.4 beat 6).
+// M3.T3, reframed into the single "try it on your business" CTA (plan §2.4 beat 6).
 // Was a 3-card grid pointing at three separate demo routes, including the fake-data
 // `/dashboard-demo` ops dashboard. That route is cut in M4 (merge-contract §"what gets
-// cut"), so this points only at the two real, live mechanisms — /demo (scrape + live
-// Vapi call) chained into /demo/lifecycle (the two-year household record) — matching
+// cut"), so this points only at the two real, live mechanisms, /demo (scrape + live
+// Vapi call) chained into /demo/lifecycle (the two-year household record), matching
 // what M4 wires as one continuous flow. Link target stays siteConfig.demoLink; no
 // change needed once M4 lands since Act 1 already terminates by handing off into Act 2.
 const steps = [
@@ -21,7 +21,7 @@ const steps = [
   {
     icon: ShieldCheck,
     label: "It drafts, you'd approve",
-    copy: "The call becomes a real, JARVIS-styled draft — labeled sample, never executed.",
+    copy: "The call becomes a real, JARVIS-styled draft, labeled sample, never executed.",
   },
   {
     icon: History,
@@ -60,7 +60,7 @@ export function PersonalizedDemoBuilder() {
             className="mx-auto mt-6 max-w-2xl text-lg font-medium leading-relaxed text-slate-600"
           >
             Enter your company name and website. JARVIS configures itself as your business, takes
-            a real call, and shows you exactly what it would have drafted — then carries that same
+            a real call, and shows you exactly what it would have drafted, then carries that same
             household two years forward on real public water data. No account needed.
           </motion.p>
         </div>
@@ -104,7 +104,7 @@ export function PersonalizedDemoBuilder() {
         </motion.div>
 
         <p className="mx-auto mt-6 max-w-xl text-center text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
-          Live, interactive, and clearly labeled DEMO — not a real approval, not a real record.
+          Live, interactive, and clearly labeled DEMO, not a real approval, not a real record.
         </p>
       </div>
     </section>

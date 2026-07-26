@@ -1,6 +1,6 @@
 export const siteConfig = {
   name: "FINNOR",
-  tagline: "JARVIS for water treatment and well pump companies — it asks before it acts.",
+  tagline: "JARVIS for water treatment and well pump companies. It asks before it acts.",
   description:
     "FINNOR runs on JARVIS: an instruction becomes a drafted plan, held for your approval, executed, and receipted. Live water data, a real range from your pricing tier, booked visits, and a household record that keeps producing revenue for years.",
   contactEmail: "param@finnorai.com",

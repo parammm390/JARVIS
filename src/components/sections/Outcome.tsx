@@ -17,7 +17,7 @@ const scopeItems = [
   {
     icon: ShieldCheck,
     title: "Scoped before it goes live",
-    copy: "Approval rules, escalation paths, pricing tiers, integrations, and data handling are all defined and agreed before launch — not discovered after.",
+    copy: "Approval rules, escalation paths, pricing tiers, integrations, and data handling are all defined and agreed before launch, not discovered after.",
   },
 ]
 
@@ -98,7 +98,7 @@ export function Outcome() {
           <p>
             This isn&apos;t a fit for every shop. If you want a system that acts without asking, or
             need a full CRM replacement, JARVIS isn&apos;t that. And this page does not claim full
-            operational data handling compliance — that depends on the deployed stack, vendor
+            operational data handling compliance, that depends on the deployed stack, vendor
             agreements, access controls, and signed terms.
           </p>
         </div>

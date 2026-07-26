@@ -1,21 +1,21 @@
 "use client"
 
 // A marketing-only interactive particle sphere. This is NOT a wrapper around the
-// shared src/components/jarvis/bridge/Orb3D.tsx — that component is read-only/shared
+// shared src/components/jarvis/bridge/Orb3D.tsx, that component is read-only/shared
 // per JARVIS-MARKETING-MAESTRO-PLAN.md §6 (it's the same component the authenticated
 // Bridge and Showtime use) and has no hook for cursor interaction, no exposed ref, and
-// a closed-over render loop — there's no way to layer live mouse-reactivity onto it
+// a closed-over render loop, there's no way to layer live mouse-reactivity onto it
 // without editing the shared file, which is out of bounds. This component mirrors its
 // visual language on purpose (same Fibonacci-sphere particle field, the same
 // jarvis-theme.css-derived state colors/energy/spin vocabulary, the same additive-
-// blended soft-circle point shader) so it reads as the same material — but every line
+// blended soft-circle point shader) so it reads as the same material, but every line
 // here is independently owned so a genuine, GPU-driven cursor interaction can exist.
 //
 // The interaction itself: every particle's screen-space (NDC) distance to the live
-// cursor position is computed in the vertex shader every frame (cheap — no raycasting,
+// cursor position is computed in the vertex shader every frame (cheap, no raycasting,
 // no per-frame CPU loop over 14k points). Particles within the influence radius are
 // pushed outward along the sphere's radial direction, grow, and brighten toward white
-// — like a hand disturbing a water surface. Ambient idle/planning/executing motion
+//, like a hand disturbing a water surface. Ambient idle/planning/executing motion
 // (mirroring Orb3D's real FLOW-14 vocabulary) keeps running underneath at all times,
 // so the sphere is never static even when nothing is being touched.
 import { useEffect, useRef, useState } from "react"
@@ -25,7 +25,7 @@ import { useReducedMotion } from "framer-motion"
 type OrbState = "idle" | "planning" | "executing"
 
 // Real hex values from jarvis-theme.css's own --j-cyan/--j-violet/--j-teal tokens,
-// normalized to 0-1 — the same values Orb3D's STATE_COLOR uses, not re-invented.
+// normalized to 0-1, the same values Orb3D's STATE_COLOR uses, not re-invented.
 const STATE_COLOR: Record<OrbState, [number, number, number]> = {
   idle: [0.133, 0.827, 0.933],
   planning: [0.545, 0.361, 0.965],
@@ -40,7 +40,7 @@ const SCRIPT: Array<{ state: OrbState; holdMs: number }> = [
   { state: "executing", holdMs: 3400 },
 ]
 
-// Deterministic hash — this repo's eslint rule bans Math.random() under jarvis scope;
+// Deterministic hash, this repo's eslint rule bans Math.random() under jarvis scope;
 // this file isn't under that path, but the same discipline applies to any jitter here
 // (matches Orb3D/atmosphere.tsx's own technique).
 function hash(n: number): number {
@@ -167,7 +167,7 @@ export function MarketingOrb({ className = "h-[440px] w-[440px]" }: { className?
     if (useStatic || !containerRef.current) return
     const el = containerRef.current
     // Seed synchronously from a direct measurement rather than waiting on
-    // IntersectionObserver's first (async, spec-unscheduled-timing) callback —
+    // IntersectionObserver's first (async, spec-unscheduled-timing) callback
     // observed unreliable/delayed in at least one real environment. The observer
     // below still owns all subsequent pause/resume behavior on scroll.
     const rect = el.getBoundingClientRect()
@@ -212,7 +212,7 @@ export function MarketingOrb({ className = "h-[440px] w-[440px]" }: { className?
     const points = new THREE.Points(geometry, material)
     scene.add(points)
 
-    // Screen-space (NDC) mouse tracking, updated on pointer events only — no per-frame
+    // Screen-space (NDC) mouse tracking, updated on pointer events only, no per-frame
     // getBoundingClientRect() calls, and no raycasting against 14k points. `active`
     // eases toward 1 on movement/enter and back toward 0 on leave, so the influence
     // fades smoothly rather than snapping off.

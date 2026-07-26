@@ -17,14 +17,14 @@ export const metadata: Metadata = {
     absolute: "Finnor AI | Give It an Instruction. Watch It Ask Before It Acts.",
   },
   description:
-    "JARVIS drafts the quote, the invoice, the reschedule — against your real price book, in seconds. Then it waits for your yes. Approve it and there's a receipt. For water treatment and well pump companies.",
+    "JARVIS drafts the quote, the invoice, the reschedule, all against your real price book, in seconds. Then it waits for your yes. Approve it and there's a receipt. For water treatment and well pump companies.",
   alternates: {
     canonical: "https://finnorai.com/",
   },
   openGraph: {
     title: "Finnor AI | Give It an Instruction. Watch It Ask Before It Acts.",
     description:
-      "JARVIS drafts the quote, the invoice, the reschedule — against your real price book, in seconds. Then it waits for your yes. Approve it and there's a receipt.",
+      "JARVIS drafts the quote, the invoice, the reschedule, all against your real price book, in seconds. Then it waits for your yes. Approve it and there's a receipt.",
     url: "https://finnorai.com/",
     images: [
       {
@@ -40,7 +40,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Finnor AI | Give It an Instruction. Watch It Ask Before It Acts.",
     description:
-      "JARVIS drafts the quote, the invoice, the reschedule — against your real price book, in seconds. Then it waits for your yes. Approve it and there's a receipt.",
+      "JARVIS drafts the quote, the invoice, the reschedule, all against your real price book, in seconds. Then it waits for your yes. Approve it and there's a receipt.",
     images: [
       {
         url: "https://finnorai.com/og-image.svg",

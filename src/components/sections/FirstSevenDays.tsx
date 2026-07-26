@@ -15,7 +15,7 @@ import {
 const steps = [
   {
     day: "Day 1",
-    title: "Map every instruction channel — call, text, typed — and pull your service area's live water data by ZIP",
+    title: "Map every instruction channel, call, text, typed, and pull your service area's live water data by ZIP",
     icon: PhoneForwarded,
   },
   {
@@ -35,7 +35,7 @@ const steps = [
   },
   {
     day: "Day 5",
-    title: "Test live: draft quotes, urgent routes, and bookings — approve, reject, and watch the receipts land",
+    title: "Test live: draft quotes, urgent routes, and bookings, approve, reject, and watch the receipts land",
     icon: FlaskConical,
   },
   {
