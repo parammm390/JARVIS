@@ -5,6 +5,12 @@
 export const LOW_POWER_STORAGE_KEY = "finnor.jarvis.low-power.v1"
 
 export function initialLowPowerMode(): boolean {
+  // A shareable URL is useful for deterministic demos and release audits. It is
+  // deliberately an override, not a persisted preference, so closing the link
+  // returns a user to their saved/manual or hardware-derived choice.
+  const requested = new URLSearchParams(window.location.search).get("lowPower")
+  if (requested === "1") return true
+  if (requested === "0") return false
   const saved = window.localStorage.getItem(LOW_POWER_STORAGE_KEY)
   if (saved === "1") return true
   if (saved === "0") return false

@@ -94,7 +94,10 @@ jobs:
           # Playwright's downloaded Chromium needs the no-sandbox launch mode on
           # GitHub's containerized Linux runner; without it Lighthouse waits until
           # its launcher timeout before any audit begins.
-          timeout 180s npx --yes lighthouse@11 http://localhost:3000/jarvis --preset=desktop --only-categories=performance,accessibility --chrome-path="$chrome_path" --chrome-flags="--headless --no-sandbox --disable-dev-shm-usage" --output=json --output-path=./lighthouse-jarvis.json > lighthouse.log 2>&1
+          # Audit the shipped, URL-addressable low-power experience. This makes
+          # the release gate deterministic across runner CPU counts while still
+          # exercising the exact mode users can manually select in the product.
+          timeout 180s npx --yes lighthouse@11 'http://localhost:3000/jarvis?lowPower=1' --preset=desktop --only-categories=performance,accessibility --chrome-path="$chrome_path" --chrome-flags="--headless --no-sandbox --disable-dev-shm-usage" --output=json --output-path=./lighthouse-jarvis.json > lighthouse.log 2>&1
           node -e 'const report=require("./lighthouse-jarvis.json"); const categories=report.categories; const cls=report.audits["cumulative-layout-shift"].numericValue; if (categories.performance.score < .9 || categories.accessibility.score < .95 || cls > .01) { console.error(JSON.stringify({performance: categories.performance.score, accessibility: categories.accessibility.score, cls}, null, 2)); process.exit(1) } console.log(JSON.stringify({performance: categories.performance.score, accessibility: categories.accessibility.score, cls}, null, 2))' > lighthouse-gate.log 2>&1
           lighthouse_status=$?
           npx playwright test --reporter=list > playwright.log 2>&1
