@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 
-type CursorVariant = "default" | "hover" | "text" | "pressed"
+type CursorVariant = "default" | "hover" | "text" | "pressed" | "invert"
 
 export default function CustomCursor() {
   const dotRef = useRef<HTMLDivElement>(null)
@@ -63,6 +63,10 @@ export default function CustomCursor() {
         setVariant("text")
       } else if (element.closest("a, button, [role='button'], [data-cursor='hover']")) {
         setVariant("hover")
+      } else if (element.closest("[data-cursor='invert']")) {
+        // Dark JARVIS-proof surfaces (the Orb panel) — the default dark dot/ring
+        // disappears against a near-black background, so this flips to white.
+        setVariant("invert")
       } else {
         setVariant("default")
       }
@@ -103,20 +107,26 @@ export default function CustomCursor() {
     <>
       <div
         ref={dotRef}
-        className="pointer-events-none fixed left-0 top-0 z-[9999] h-[5px] w-[5px] rounded-full bg-slate-950 shadow-[0_0_16px_rgba(8,24,39,0.45)]"
+        className={`pointer-events-none fixed left-0 top-0 z-[9999] h-[5px] w-[5px] rounded-full transition-[background-color,box-shadow] duration-150 ease-out ${
+          variant === "invert"
+            ? "bg-white shadow-[0_0_18px_rgba(255,255,255,0.55)]"
+            : "bg-slate-950 shadow-[0_0_16px_rgba(8,24,39,0.45)]"
+        }`}
         style={{ transform: "translate3d(-120px, -120px, 0)" }}
         aria-hidden
       />
       <div
         ref={ringRef}
         className={`pointer-events-none fixed left-0 top-0 z-[9998] rounded-full border transition-[width,height,border-color,background-color,opacity] duration-200 ease-out ${
-          variant === "hover"
-            ? "h-12 w-12 border-slate-950/80 bg-slate-950/[0.055] opacity-100"
-            : variant === "text"
-              ? "h-8 w-[3px] rounded-none border-slate-800 bg-slate-800 opacity-90"
-              : variant === "pressed"
-                ? "h-7 w-7 border-slate-950 bg-slate-950/[0.08] opacity-100"
-                : "h-9 w-9 border-slate-950/60 bg-slate-950/[0.025] opacity-100"
+          variant === "invert"
+            ? "h-14 w-14 border-white/85 bg-white/[0.08] opacity-100"
+            : variant === "hover"
+              ? "h-12 w-12 border-slate-950/80 bg-slate-950/[0.055] opacity-100"
+              : variant === "text"
+                ? "h-8 w-[3px] rounded-none border-slate-800 bg-slate-800 opacity-90"
+                : variant === "pressed"
+                  ? "h-7 w-7 border-slate-950 bg-slate-950/[0.08] opacity-100"
+                  : "h-9 w-9 border-slate-950/60 bg-slate-950/[0.025] opacity-100"
         }`}
         style={{ transform: "translate3d(-120px, -120px, 0)" }}
         aria-hidden
