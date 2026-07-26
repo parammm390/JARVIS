@@ -23,6 +23,7 @@ export default defineConfig({
   use: {
     baseURL,
     trace: "on-first-retry",
+    video: process.env.PLAYWRIGHT_RECORD_VIDEO === "1" ? "on" : "off",
     screenshot: "only-on-failure",
   },
   projects: [
