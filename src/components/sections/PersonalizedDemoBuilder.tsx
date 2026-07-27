@@ -15,18 +15,18 @@ import { Magnetic } from "@/components/ui/magnetic";
 const steps = [
   {
     icon: PhoneCall,
-    label: "You give JARVIS a business outcome",
-    copy: "Tell it your company. It calls, live, configured as your business.",
+    label: "Choose a business outcome",
+    copy: "Select what you want JARVIS to accomplish: leads, proposals, scheduling, collections, campaigns or operational intelligence.",
   },
   {
     icon: ShieldCheck,
-    label: "It drafts, you'd approve",
-    copy: "The call becomes a real, JARVIS-styled draft, labeled sample, never executed.",
+    label: "See the workflow draft",
+    copy: "JARVIS builds a clearly labelled demonstration using public website information and the details you provide.",
   },
   {
     icon: History,
-    label: "Then the record keeps going",
-    copy: "See the same household two years deep, on real public water data for your ZIP.",
+    label: "Review the execution",
+    copy: "See what was planned, what would require approval, and what the verification would show.",
   },
 ];
 
@@ -50,7 +50,7 @@ export function PersonalizedDemoBuilder() {
             viewport={{ once: true }}
             className="text-4xl font-black tracking-tight text-slate-950 md:text-6xl"
           >
-            Give it your company. Watch what it drafts.
+            See JARVIS operate your business.
           </motion.h2>
           <motion.p
             initial={{ opacity: 0, y: 16 }}
@@ -59,10 +59,7 @@ export function PersonalizedDemoBuilder() {
             transition={{ delay: 0.08 }}
             className="mx-auto mt-6 max-w-2xl text-lg font-medium leading-relaxed text-slate-600"
           >
-            Enter your company name and website. JARVIS configures itself as
-            your business, takes a real call, and shows you exactly what it
-            would have drafted, then carries that same household two years
-            forward on real public water data. No account needed.
+            Enter your company and choose a business outcome. JARVIS builds a clearly labelled demonstration using public website information and the details you provide. Unknown information stays marked unknown. No account needed.
           </motion.p>
         </div>
 

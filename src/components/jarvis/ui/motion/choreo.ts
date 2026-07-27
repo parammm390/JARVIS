@@ -279,6 +279,36 @@ export const stepIgnition: FlowChoreo = {
   },
 }
 
+// FLOW-94 RouteHandoff: a 250ms caustic wipe veil fades out on real /jarvis/*
+// navigation (mounted once per client-side route change by src/app/jarvis/
+// template.tsx, which Next.js remounts on every navigation) → instant fade, no
+// wipe (reduced).
+export const routeHandoff: FlowChoreo = {
+  variants: {
+    initial: { opacity: 1 },
+    animate: { opacity: 0, transition: { duration: 0.25, ease: EASE.decelerate } },
+  },
+  reducedVariants: {
+    initial: { opacity: 1 },
+    animate: { opacity: 0, transition: { duration: 0 } },
+  },
+}
+
+// FLOW-97 BackTrace: returning to a prior Bridge scene mirrors FLOW-15 CameraPan's
+// own forward transform (negative x instead of positive — the same wipe, run in
+// reverse) → crossfade (reduced, same fallback CameraPan itself uses — there's no
+// direction left to mirror once motion is off).
+export const backTrace: FlowChoreo = {
+  variants: {
+    initial: { opacity: 0, scale: 0.98, x: -16 },
+    animate: { opacity: 1, scale: 1, x: 0, transition: { duration: DURATION.slow, ease: EASE.standard } },
+  },
+  reducedVariants: {
+    initial: { opacity: 0, scale: 0.98, x: -16 },
+    animate: { opacity: 1, scale: 1, x: 0, transition: { duration: DURATION.base } },
+  },
+}
+
 export const choreo = {
   liquidFill,
   valvePulse,
@@ -299,4 +329,6 @@ export const choreo = {
   escalateBeacon,
   chamberPressure,
   stepIgnition,
+  routeHandoff,
+  backTrace,
 }

@@ -30,16 +30,13 @@ export function Cta() {
             <div className="relative">
               <div className="mb-7 inline-flex items-center rounded-full border border-slate-900/10 bg-white px-4 py-1.5 text-xs font-black uppercase tracking-[0.22em] text-sky-800 shadow-sm">
                 <Radio className="mr-2 h-3.5 w-3.5" />
-                Recover more jobs
+                See JARVIS in action
               </div>
               <h2 className="max-w-3xl text-4xl font-black leading-[1.02] tracking-tight text-slate-950 md:text-6xl">
-                How many quotable jobs died in your voicemail last week?
+                Run your business by talking to JARVIS.
               </h2>
               <p className="mt-6 max-w-2xl text-lg font-semibold leading-relaxed text-slate-700 md:text-xl">
-                Every one of them was a customer history record you never got to
-                open: the instruction, the water data, the drafted range, the
-                booked visit, and two years of revenue after it. JARVIS opens
-                the record on the first instruction.
+                Give JARVIS a business outcome. It plans the work, executes across your connected systems, asks for approval when risk requires it, and verifies what happened. Book a demo to see it work with your operation.
               </p>
             </div>
 

@@ -2,31 +2,31 @@ import type { Metadata } from "next";
 import { PilotSetupChecklist } from "@/components/resources/PilotSetupChecklist";
 
 export const metadata: Metadata = {
-  title: "JARVIS Operations Deployment Setup Checklist",
+  title: "JARVIS Deployment Checklist",
   description:
-    "Checklist for coverage windows, lead sources, booking questions, urgent routes, alert paths, and success metrics before a Finnor pilot.",
+    "Checklist for approval rules, integration scope, user permissions, operational boundaries, and success criteria before JARVIS launch.",
   alternates: {
     canonical: "https://finnorai.com/resources/pilot-setup-checklist",
   },
   openGraph: {
-    title: "Deployment Setup Checklist | Finnor AI",
+    title: "Deployment Checklist | JARVIS",
     description:
-      "Pre-launch checklist covering call routing, booking questions, alert paths, and human ownership review before a Finnor voice-native AI operations pilot goes live.",
+      "Pre-launch checklist covering approval rules, integrations, permissions, boundaries, and success criteria before JARVIS deployment.",
     url: "https://finnorai.com/resources/pilot-setup-checklist",
     images: [
       {
         url: "https://finnorai.com/og-image.svg",
         width: 1200,
         height: 630,
-        alt: "Finnor AI deployment setup checklist",
+        alt: "JARVIS deployment checklist",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Deployment Setup Checklist | Finnor AI",
+    title: "Deployment Checklist | JARVIS",
     description:
-      "Pre-launch checklist for routing, booking questions, and alert paths before a Finnor pilot goes live.",
+      "Pre-launch checklist for approval rules, integrations, and boundaries before JARVIS deployment.",
     images: ["https://finnorai.com/og-image.svg"],
   },
 };

@@ -45,7 +45,7 @@ export const metadata: Metadata = {
     title:
       "FINNOR JARVIS | Voice-Native AI Operations for Water Treatment Companies",
     description:
-      "Run your water-treatment company by talking to JARVIS. JARVIS drafts the quote, the booking, the urgent route, all against your real price book, then waits for your yes.",
+      "Run calls, CRM, scheduling, proposals, invoices, inventory, technicians and campaigns by talking to JARVIS—the voice-native AI operations platform for water-treatment companies.",
     url: "https://finnorai.com/",
     siteName: "FINNOR",
     images: [
@@ -53,7 +53,7 @@ export const metadata: Metadata = {
         url: "/og-image.svg",
         width: 1200,
         height: 630,
-        alt: "JARVIS, an command layer for water treatment and water-treatment companies",
+        alt: "JARVIS, the voice-native AI operations platform for water-treatment companies",
       },
     ],
     type: "website",
@@ -63,7 +63,7 @@ export const metadata: Metadata = {
     title:
       "FINNOR JARVIS | Voice-Native AI Operations for Water Treatment Companies",
     description:
-      "Run your water-treatment company by talking to JARVIS. JARVIS drafts the quote, the booking, the urgent route, all against your real price book, then waits for your yes.",
+      "Run calls, CRM, scheduling, proposals, invoices, inventory, technicians and campaigns by talking to JARVIS.",
     images: ["/og-image.svg"],
   },
   robots: {

@@ -4,27 +4,27 @@ import { Footer } from "@/components/sections/Footer";
 
 export const metadata: Metadata = {
   title: "JARVIS Operations Demo",
-  description: "See JARVIS operate your business.",
+  description: "Enter your company and choose a business outcome. JARVIS builds a demonstration using public website information and the details you provide.",
   alternates: {
     canonical: "https://finnorai.com/demo",
   },
   openGraph: {
-    title: "Demo Builder | Finnor AI",
+    title: "See JARVIS Operate Your Business",
     description:
-      "Build a personalized Finnor voice-native AI operations demo using your company name and website. See how unworked leads, web leads, and urgent water-treatment calls become executed business workflows.",
+      "Enter your company and choose a business outcome. JARVIS builds a clearly labelled demonstration using public website information and the details you provide. Unknown information stays marked unknown.",
     url: "https://finnorai.com/demo",
     images: [
       {
         url: "https://finnorai.com/og-image.svg",
         width: 1200,
         height: 630,
-        alt: "Finnor AI demo builder for water company voice-native AI operations workflows",
+        alt: "JARVIS demo: See the voice-native AI operations platform in action",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Demo Builder | Finnor AI",
+    title: "See JARVIS Operate Your Business",
     description: "Choose what you want JARVIS to accomplish.",
     images: ["https://finnorai.com/og-image.svg"],
   },

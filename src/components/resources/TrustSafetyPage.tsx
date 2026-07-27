@@ -27,7 +27,7 @@ const trustSections = [
   {
     icon: FileQuestion,
     title: "Role-based permissions",
-    copy: "Quote ranges come only from the pricing tiers you configured and the measured water data on record. JARVIS does not diagnose repairs, invent prices, guarantee ETAs, or make health claims about water.",
+    copy: "Quotes and proposals come only from your configured pricing and business data. JARVIS does not invent numbers, guarantee impossible outcomes, or make promises your team didn't authorize.",
   },
   {
     icon: AlertTriangle,
@@ -57,12 +57,12 @@ const trustSections = [
 ];
 
 const boundaries = [
-  "Your dispatcher or on-call technician",
-  "Repair decisions and troubleshooting",
-  "Repair diagnosis or equipment troubleshooting",
-  "The final on-site quote figure — JARVIS drafts ranges computed from your pricing and real water data, and never invents a number",
-  "Emergency services",
-  "A company's operating and safety policies",
+  "Your team's judgment and authorization",
+  "Business decisions requiring human approval",
+  "Operational risk assessment",
+  "Final pricing and customer commitments — JARVIS drafts from your configured rules, never invents",
+  "Safety and compliance policies",
+  "Company operating procedures",
   "The approval on every plan JARVIS drafts",
 ];
 

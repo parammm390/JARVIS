@@ -48,9 +48,9 @@ export function MissedCallCostCalculator() {
   return (
     <ResourceFrame>
       <ResourceHero
-        kicker="Booking recovery estimator"
-        title="Lead Follow-up Value Estimator"
-        copy="Estimate the booked job value exposed when calls or form leads go unanswered or receive slow follow-up. Start with conservative assumptions; this is a planning model, not a revenue promise."
+        kicker="Operations impact estimator"
+        title="Operations Impact Estimator"
+        copy="Estimate the business value at risk from unexecuted workflows, delayed approvals, and stalled customer actions. Start with conservative assumptions; this is a planning model, not a revenue promise."
         icon={Calculator}
         aside={
           <CalculatorSummary

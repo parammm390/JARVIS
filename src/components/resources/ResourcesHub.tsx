@@ -19,89 +19,89 @@ import { ResourceHero } from "./ResourceHero";
 
 const resourceCards = [
   {
-    href: "/resources/lead-follow-up-cost-calculator",
+    href: "/resources/missed-call-cost-calculator",
     icon: Calculator,
-    kicker: "Lead-follow-up estimator",
-    title: "Lead Follow-up Value Estimator",
-    copy: "Use conservative assumptions to estimate booked job value exposed by unanswered calls and slow form follow-up.",
+    kicker: "Business impact calculator",
+    title: "Operations Impact Estimator",
+    copy: "Estimate the business value at risk from unexecuted workflows, delayed approvals, and stalled customer actions.",
   },
   {
     href: "/resources/dispatch-ai-glossary",
     icon: BookOpenText,
-    kicker: "Operator glossary",
-    title: "Water JARVIS Operations Glossary",
-    copy: "Plain-English definitions for lead follow-up, quote follow-up, booking routes, and human-controlled service promises.",
+    kicker: "Operations glossary",
+    title: "JARVIS Operations Glossary",
+    copy: "Plain-English definitions for voice commands, execution workflows, approval rules, and operational boundaries.",
   },
   {
     href: "/resources/pilot-setup-checklist",
     icon: ClipboardCheck,
     kicker: "Deployment planning",
-    title: "JARVIS Operations Deployment Setup Checklist",
-    copy: "Define forwarding, lead sources, booking questions, urgent routes, alert paths, and ownership before launch.",
+    title: "JARVIS Deployment Checklist",
+    copy: "Define your approval rules, integration scope, user permissions, operational boundaries, and success criteria before launch.",
   },
   {
     href: "/trust-safety",
     icon: ShieldCheck,
     kicker: "Control model",
     title: "Trust & Safety",
-    copy: "How JARVIS drafts and routes urgent customer workflows, held for approval, without quoting, diagnosing, or promising an arrival time.",
+    copy: "How JARVIS operates within defined authority, executes approved workflows, asks for approval when required, and maintains complete audit records.",
   },
   {
     href: "/resources#answering-service",
     icon: Headset,
     kicker: "Comparison",
-    title: "JARVIS vs Answering Service",
-    copy: "Why executed business workflows and connected field workflows are different from generic message taking.",
+    title: "JARVIS vs Answering Services",
+    copy: "Why AI-executed business workflows are different from voice message taking and follow-up routing.",
   },
   {
     href: "/resources#generic-ai",
     icon: Route,
     kicker: "Comparison",
     title: "JARVIS vs Generic AI",
-    copy: "How water-specific booking and on-call routing differ from broad generic automation.",
+    copy: "How JARVIS operates within your business rules and connected systems instead of generic automation.",
   },
 ];
 
 const operatorProblems = [
   {
     icon: PhoneOff,
-    title: "The work falls between systems",
-    copy: "A homeowner without water needs a response path now, not the next morning.",
+    title: "Work falls between systems",
+    copy: "Customer requests, proposals, invoices and follow-ups stop moving when information doesn't connect across tools.",
   },
   {
     icon: Truck,
-    title: "A customer operations need attention",
-    copy: "The caller may be dealing with a scheduling conflicts, overdue invoices, stock risks or customers waiting for follow-up.",
+    title: "Operations visibility gaps",
+    copy: "Scheduling conflicts, overdue invoices, unanswered leads and inventory risks stay hidden until they cost money.",
   },
   {
     icon: AlertTriangle,
-    title: "Safety context gets buried",
-    copy: "Operational risks and customer-impacting issues needs to be visible in the first alert.",
+    title: "Approval and control risk",
+    copy: "Without defined authority boundaries, AI either does nothing or acts without guardrails.",
   },
   {
     icon: Clock3,
-    title: "The next company answers first",
-    copy: "Emergency buyers keep calling. The company that responds first and routes the job clearly has the advantage.",
+    title: "Repetitive work consumes the team",
+    copy: "Manual routing, data entry, reminders and status updates consume hours that should go to decisions requiring human judgment.",
   },
 ];
 
 const comparisonRows = [
   {
     id: "answering-service",
-    label: "JARVIS vs Answering Service",
+    label: "JARVIS vs Answering Services",
     points: [
-      "Clarifies caller, address, pump type, pressure issue, no-water duration, contamination risk, urgency, and callback.",
-      "Routes the urgent job to the owner, dispatcher, or on-call tech instead of leaving a loose message.",
-      "Quotes ranges from your pricing and real water data automatically. Keeps ETAs, repairs, diagnosis, and final figures with your human team.",
+      "Extracts the information needed to decide and act: customer details, request type, context, urgency and business data.",
+      "Routes approved workflows to the right person or system instead of leaving a message on a queue.",
+      "Executes business logic from your policies and pricing automatically. Holds decisions requiring judgment with your team.",
     ],
   },
   {
     id: "generic-ai",
     label: "JARVIS vs Generic AI",
     points: [
-      "Two equally-featured workflows: water treatment quoting (softeners, filtration, RO, iron/sulfur), and customer operations workflow.",
-      "Keeps unknown fields marked unknown instead of filling gaps confidently.",
-      "Recognizes urgency in both workflow types: treatment interest and timing from quotes, and emergency language like no water, zero pressure, pump failure, contamination risk.",
+      "Operates within your defined approval scope and permissions, not generic defaults.",
+      "Marks unknown information as unknown instead of confidently inventing answers.",
+      "Verifies outcomes against real business systems instead of silently reporting success.",
     ],
   },
 ];
@@ -111,8 +111,8 @@ export function ResourcesHub() {
     <ResourceFrame>
       <ResourceHero
         kicker="Resource hub"
-        title="Practical tools for a system that asks before it acts."
-        copy="For water treatment, water dealer, and water-treatment companies evaluating JARVIS — how it drafts, what it holds for approval, and what it never invents."
+        title="Tools for understanding JARVIS operations."
+        copy="For water-treatment companies evaluating how JARVIS operates, what requires approval, how it verifies outcomes, and what boundaries protect your business."
         icon={BookOpenText}
         aside={<HubSignalCard />}
       />
@@ -121,11 +121,10 @@ export function ResourcesHub() {
         <div className="container relative z-10 px-4 md:px-6">
           <div className="mb-12">
             <p className="text-xs font-black uppercase tracking-[0.2em] text-orange-700">
-              The operating problem
+              The operating challenge
             </p>
             <h2 className="mt-3 max-w-4xl text-3xl font-black tracking-tight text-slate-950 md:text-5xl">
-              A homeowner calls because the water is out. Your coverage
-              determines who gets the job.
+              Your team should not operate the software. JARVIS should.
             </h2>
             <div className="mt-7 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               {operatorProblems.map((problem) => (

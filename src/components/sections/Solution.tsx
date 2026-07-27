@@ -21,74 +21,44 @@ import type { LucideIcon } from "lucide-react";
 
 const capabilities: Array<{ icon: LucideIcon; title: string; copy: string }> = [
   {
-    icon: LayoutDashboard,
-    title: "One Record Per Household",
-    copy: "Water profile, quotes, jobs, plan, reviews, referrals, lifetime value, and the computed next revenue action, all in one place, kept the same way for years.",
-  },
-  {
-    icon: Radar,
-    title: "Live Water Data Pull",
-    copy: "Public water records for the household's area, plus a free onsite test to confirm the exact numbers for their home.",
-  },
-  {
-    icon: BarChart3,
-    title: "Sizing Math, Shown",
-    copy: "Compensated hardness, grains per day, the capacity ladder. The worksheet is visible line by line, not hidden behind a shrug.",
-  },
-  {
-    icon: FileText,
-    title: "Quote Drafted, Then Held for Approval",
-    copy: "Computed from your pricing tier and the actual water, never invented, never discounted on a whim. It waits for your yes before it goes out.",
-  },
-  {
-    icon: ClipboardCheck,
-    title: "Booked and Confirmed",
-    copy: "Tap-to-book slots, confirmation in-thread, reminder at T-24h. The appointment goes on the record, not on a sticky note.",
-  },
-  {
     icon: PhoneIncoming,
-    title: "Water-Treatment Emergency Routing",
-    copy: "No-water and pump-failure language routes straight to on-call with scope, since-when, people affected, and a safety screen attached.",
+    title: "Voice, Calls and Campaigns",
+    copy: "Natural voice and typed business commands. Inbound and outbound calling. Lead qualification and follow-up. Approved bulk campaigns with limits and compliance rules.",
   },
   {
-    icon: BookOpenCheck,
-    title: "Job Documentation",
-    copy: "Serials, install photos, before-and-after water numbers, and an itemized invoice that matches the quote. Disputes die here.",
-  },
-  {
-    icon: BellRing,
-    title: "The Right Review Ask",
-    copy: "One ask, 24 hours after install, referencing the actual fix. Not a drip campaign. That is why it converts.",
-  },
-  {
-    icon: Route,
-    title: "Cadence That Fires Itself",
-    copy: "Salt check-ins at month 3, 6, 9. Filter media clocks. Annual re-tests. Nobody at the shop has to remember, because nothing has to.",
-  },
-  {
-    icon: GitBranch,
-    title: "Referral Attribution",
-    copy: "When the neighbor calls and says Jennifer sent them, the record logs which review produced which install. Most shops never know.",
-  },
-  {
-    icon: Rocket,
-    title: "The Right Upsell Moment",
-    copy: "Media near capacity, a changed water report, usage trending up. Offers fire when the data says so, priced with the system discount.",
+    icon: LayoutDashboard,
+    title: "CRM and Customer Operations",
+    copy: "Create and update contacts, leads and opportunities. Search complete customer history. Move leads through defined workflows. Track conversations and next actions.",
   },
   {
     icon: CalendarClock,
-    title: "Years, Not Weeks",
-    copy: "A household record from three years ago reads exactly like one from this morning. Nothing decays, nothing gets summarized away.",
+    title: "Scheduling, Dispatch and Field Operations",
+    copy: "Schedule and reschedule appointments. Detect scheduling conflicts. Assign technicians and optimise routes. Send confirmations and track workload.",
+  },
+  {
+    icon: FileText,
+    title: "Quotes, Proposals and Sales",
+    copy: "Draft quotes from approved company data. Generate proposals and request signatures. Follow up on pending approvals. Move approved work into workflows.",
   },
   {
     icon: ScrollText,
-    title: "Every Interaction, on the Record",
-    copy: "Whatever channel it came in on, a call, a text, someone typing it in, the plan JARVIS drafts and the approval it waits for are logged the same way.",
+    title: "Finance and Collections",
+    copy: "Create and send invoices. Run invoice-to-cash workflows. Follow up on overdue balances. Record and verify payment outcomes.",
+  },
+  {
+    icon: Radar,
+    title: "Inventory and Service",
+    copy: "Check stock and reserve required inventory. Identify reorder risk. Create service reminders. Manage maintenance agreements and equipment history.",
+  },
+  {
+    icon: BarChart3,
+    title: "Marketing and Intelligence",
+    copy: "Run approved customer campaigns. Review performance. Detect pipeline and data-quality problems. Generate operational briefings and forecasts.",
   },
   {
     icon: ShieldCheck,
-    title: "Hard Rails",
-    copy: "No invented prices, no diagnosis, no ETAs, no health claims. JARVIS drafts ranges from your numbers; your team owns every final call.",
+    title: "Control and Reliability",
+    copy: "Role-based permissions and risk-based approval rules. Grounded business-data verification. Durable workflows with failure recovery. Complete audit receipts.",
   },
 ];
 
@@ -104,7 +74,7 @@ export function Solution() {
             viewport={{ once: true }}
             className="mb-5 inline-flex rounded-full border border-teal-200 bg-teal-50 px-4 py-2 text-xs font-black uppercase tracking-[0.18em] text-teal-700"
           >
-            The call was minute one
+            One command layer
           </motion.div>
           <motion.h2
             initial={{ opacity: 0, y: 18 }}
@@ -112,7 +82,7 @@ export function Solution() {
             viewport={{ once: true }}
             className="text-4xl font-black tracking-tight text-slate-950 md:text-6xl"
           >
-            This is the next two years.
+            Across your entire company.
           </motion.h2>
           <motion.p
             initial={{ opacity: 0, y: 16 }}
@@ -121,9 +91,7 @@ export function Solution() {
             transition={{ delay: 0.08 }}
             className="mx-auto mt-6 max-w-2xl text-lg font-medium leading-relaxed text-slate-600"
           >
-            One record for the household, the water test, the quote, the job,
-            the reminder, the referral, kept the same way whether you look at it
-            in a week or in three years.
+            Voice or typed commands control calls, CRM, scheduling, proposals, invoices, inventory, technicians, campaigns and operational intelligence.
           </motion.p>
         </div>
 
@@ -152,10 +120,7 @@ export function Solution() {
         </div>
 
         <p className="mx-auto mt-8 max-w-3xl text-center text-sm font-bold leading-relaxed text-slate-600">
-          Any one of these is a commodity you can rent for a monthly commodity
-          price. What makes it a moat is that one continuous memory carries all
-          of them, for every household, for years, not a feature list, a record
-          that keeps growing.
+          Each capability connects to the others. Voice commands trigger workflows, approvals, external system updates, verification and audit records—all in one execution layer above your existing tools.
         </p>
       </div>
     </section>

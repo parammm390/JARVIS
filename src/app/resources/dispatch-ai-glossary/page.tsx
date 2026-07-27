@@ -2,31 +2,31 @@ import type { Metadata } from "next";
 import { DispatchAiGlossary } from "@/components/resources/DispatchAiGlossary";
 
 export const metadata: Metadata = {
-  title: "Water JARVIS Operations Glossary",
+  title: "JARVIS Operations Glossary",
   description:
-    "Operator-friendly definitions for lead follow-up, water test booking, quote follow-up, urgency routing, and human-controlled service promises.",
+    "Plain-English definitions for voice commands, execution workflows, approval rules, and operational boundaries.",
   alternates: {
     canonical: "https://finnorai.com/resources/dispatch-ai-glossary",
   },
   openGraph: {
-    title: "AI Booking Glossary | Finnor AI",
+    title: "JARVIS Operations Glossary",
     description:
-      "Plain-English definitions for AI operations, speed-to-lead follow-up, urgency routing, and lead recovery for water treatment dealers and water-treatment operations operators.",
+      "Plain-English definitions for JARVIS voice commands, execution workflows, approval rules, and operational boundaries.",
     url: "https://finnorai.com/resources/dispatch-ai-glossary",
     images: [
       {
         url: "https://finnorai.com/og-image.svg",
         width: 1200,
         height: 630,
-        alt: "Finnor AI response glossary",
+        alt: "JARVIS operations glossary",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "AI Booking Glossary | Finnor AI",
+    title: "JARVIS Operations Glossary",
     description:
-      "Plain-English definitions for AI operations, urgency routing, and lead recovery for water business operators.",
+      "Definitions for JARVIS voice commands, execution workflows, and approval rules.",
     images: ["https://finnorai.com/og-image.svg"],
   },
 };

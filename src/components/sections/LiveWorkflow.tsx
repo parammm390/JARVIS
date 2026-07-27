@@ -53,7 +53,7 @@ export function LiveWorkflow() {
             viewport={{ once: true }}
             className="mb-5 inline-flex rounded-full border border-sky-200 bg-sky-50 px-4 py-2 text-xs font-black uppercase tracking-[0.18em] text-sky-800"
           >
-            How it actually works
+            How it works
           </motion.div>
           <motion.h2
             initial={{ opacity: 0, y: 18 }}
@@ -61,7 +61,7 @@ export function LiveWorkflow() {
             viewport={{ once: true }}
             className="text-4xl font-black tracking-tight text-slate-950 md:text-6xl"
           >
-            One loop. Every decision. No exceptions.
+            Speak the outcome. JARVIS runs the operation.
           </motion.h2>
           <motion.p
             initial={{ opacity: 0, y: 16 }}

@@ -16,43 +16,43 @@ const steps = [
   {
     day: "Map the operation",
     title:
-      "Map every instruction channel, call, text, typed, and pull your service area's live water data by ZIP",
+      "Understand your locations, team, workflow volume, lead sources and operational priorities",
     icon: PhoneForwarded,
   },
   {
     day: "Connect the systems",
     title:
-      "Load your pricing tiers, install mix, and sizing rules into JARVIS's price book",
+      "Integrate your existing calls, CRM, scheduling, accounting, payment and field systems",
     icon: ClipboardList,
   },
   {
-    day: "Configure authority",
+    day: "Configure and test the workflows",
     title:
-      "Set the approval rails: what JARVIS can draft, what always waits for a human, and who approves what",
+      "Define approval rules, permission boundaries, escalation paths and run failure and approval scenarios with your team",
     icon: GitBranch,
   },
   {
-    day: "Build workflows",
+    day: "Build the first production workflows",
     title:
-      "Wire the integrations: booking calendar, SMS routes, CRM, and the customer history record",
+      "Configure your highest-priority workflows: lead follow-up, quote generation, scheduling, collections or field operations",
     icon: BellRing,
   },
   {
-    day: "Test scenarios",
+    day: "Test failure and approval paths",
     title:
-      "Test live: draft quotes, urgent routes, and bookings, approve, reject, and watch the receipts land",
+      "Run test scenarios: approvals, rejections, system failures and verify audit records",
     icon: FlaskConical,
   },
   {
-    day: "Review outcomes",
+    day: "Review with your team",
     title:
-      "Review every test record with your team: what was drafted, what was approved, what the receipt shows",
+      "Review every test result: what was drafted, what was approved, what the audit record shows",
     icon: FileCheck2,
   },
   {
     day: "Launch with defined authority",
     title:
-      "Go live. Every instruction from here opens a customer history record and waits for your yes",
+      "Go live. Every instruction operates within your approved boundaries and generates a complete audit record",
     icon: Route,
   },
 ];
@@ -97,10 +97,7 @@ export function FirstSevenDays() {
             transition={{ delay: 0.1 }}
             className="mt-5 max-w-2xl text-lg font-medium leading-relaxed text-slate-600"
           >
-            One week from access to JARVIS running your real price book, your
-            approval rails, and your water data. Every scenario is tested with
-            your team before a real instruction ever executes. Miss the seven
-            days and the initial payment comes back.
+            We connect JARVIS to your operation, configure your permissions and policies, build the first production workflows, test failure and approval paths with your team, and launch only after the agreed scenarios pass.
           </motion.p>
         </div>
 

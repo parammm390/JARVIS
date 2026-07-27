@@ -200,12 +200,12 @@ export function LifecycleSetup({
                   </div>
                 ) : null}
                 <h2 className="text-2xl font-black tracking-tight text-slate-950 md:text-3xl">
-                  Real water. Real math. Your prices.
+                  Business outcomes. Real systems. Your authority.
                 </h2>
                 <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-600">
-                  The diagnosis, range, and two-year ledger below get computed
-                  from live public water records for your area and the pricing
-                  tier you actually sell at.
+                  The workflow, approvals, and audit record below get computed
+                  from your business data, configured authority rules, and
+                  connected systems.
                 </p>
               </div>
 

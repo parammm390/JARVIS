@@ -12,18 +12,23 @@ import {
 const scopeItems = [
   {
     icon: CheckCircle2,
-    title: "Drafts from your numbers only",
-    copy: "Ranges come from real public water data, sizing math, and the pricing tier you set. JARVIS never invents a price, a contaminant, or a health claim.",
+    title: "Understands your operation",
+    copy: "JARVIS checks your actual customers, schedules, policies, pricing and permissions before it acts. It doesn't guess or apply defaults.",
   },
   {
     icon: UserRoundCheck,
-    title: "High-risk work waits for authorised approval",
-    copy: "The final on-site figure, repair calls, diagnosis, ETAs, and customer promises stay with your team. JARVIS drafts the plan; a human approves before anything executes.",
+    title: "Executes across connected systems",
+    copy: "One voice command can trigger work across your calls, CRM, scheduling, proposals, invoices, inventory and campaigns. Everything updates in real systems.",
   },
   {
     icon: ShieldCheck,
-    title: "Scoped before it goes live",
-    copy: "Approval rules, escalation paths, pricing tiers, integrations, and data handling are all defined and agreed before launch, not discovered after.",
+    title: "Works within defined authority",
+    copy: "Approved low-risk work runs automatically. High-risk, financial, and irreversible actions wait for the person authorized to approve them.",
+  },
+  {
+    icon: AlertTriangle,
+    title: "Verifies every consequential outcome",
+    copy: "JARVIS doesn't silently report success. It checks the external system, records what happened, and surfaces anything incomplete or failed.",
   },
 ];
 
@@ -40,7 +45,7 @@ export function Outcome() {
               viewport={{ once: true }}
               className="mb-5 inline-flex rounded-full border border-sky-200 bg-sky-50 px-4 py-2 text-xs font-black uppercase tracking-[0.18em] text-sky-800"
             >
-              Operational safety boundaries
+              Built to execute business work
             </motion.div>
             <motion.h2
               initial={{ opacity: 0, y: 18 }}
@@ -48,7 +53,7 @@ export function Outcome() {
               viewport={{ once: true }}
               className="text-4xl font-black tracking-tight text-slate-950 md:text-6xl"
             >
-              Drafts from your pricing. Decisions stay yours.
+              ChatGPT-quality interaction. Built to execute business work.
             </motion.h2>
             <motion.p
               initial={{ opacity: 0, y: 16 }}
@@ -57,10 +62,7 @@ export function Outcome() {
               transition={{ delay: 0.08 }}
               className="mt-6 max-w-2xl text-lg font-medium leading-relaxed text-slate-600"
             >
-              JARVIS works inside hard rails. It drafts ranges computed from the
-              water and the tier you priced, books the visit, and keeps the
-              record alive for years. It does not diagnose repairs, promise
-              ETAs, or freelance a discount. Your team owns every final call.
+              A normal AI assistant answers questions. JARVIS operates against your real business data, policies and permissions. It coordinates multi-step work, pauses for approvals, survives failures, verifies external outcomes and shows exactly what happened.
             </motion.p>
           </div>
 
@@ -73,10 +75,10 @@ export function Outcome() {
             <div className="mb-6 flex items-center justify-between gap-4">
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.2em] text-sky-800">
-                  Operating scope
+                  Execution model
                 </p>
                 <h3 className="mt-2 text-2xl font-black tracking-tight text-slate-950">
-                  Rails the agent cannot cross.
+                  What makes it different.
                 </h3>
               </div>
               <FileLock2 className="h-6 w-6 text-slate-700" />
