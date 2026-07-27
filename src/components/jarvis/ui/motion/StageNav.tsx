@@ -25,6 +25,7 @@ export const STAGE_SECTIONS = [
   { id: "flow-voice-theater", label: "F4 Voice Theater" },
   { id: "flow-state-narratives", label: "F6 State Narratives" },
   { id: "flow-continuity", label: "F7 Continuity" },
+  { id: "flow-geo-cinema", label: "F9 Geo Cinema" },
   { id: "flow-core", label: "FLOW-01..13" },
   { id: "flow-ambient", label: "FLOW-14..25" },
   { id: "fx-toolkit", label: "FX" },

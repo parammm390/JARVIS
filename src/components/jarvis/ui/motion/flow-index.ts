@@ -114,14 +114,17 @@ export const FLOW_INDEX: FlowEntry[] = [
   },
   { id: 73, key: "HangupSettle", band: "F4", phase: "F4", status: "shipped", dataSource: "call end event (voiceState live->idle transition)" },
 
-  // ---- Band F9 — Geo Cinema (74-80) — LOCKED behind main D5 ----
-  { id: 74, key: "PinDrop", band: "F9", phase: "F9", status: "planned", dataSource: "map data", note: "LOCKED — prereq main D5" },
-  { id: 75, key: "RouteInk", band: "F9", phase: "F9", status: "planned", dataSource: "B3 route legs", note: "LOCKED — prereq main D5" },
-  { id: 76, key: "TechComet", band: "F9", phase: "F9", status: "planned", dataSource: "position/replay data", note: "LOCKED — prereq main D5" },
-  { id: 77, key: "DayScrub", band: "F9", phase: "F9", status: "planned", dataSource: "visit schedule", note: "LOCKED — prereq main D5" },
-  { id: 78, key: "KmSavedBloom", band: "F9", phase: "F9", status: "planned", dataSource: "B3 result", note: "LOCKED — prereq main D5" },
-  { id: 79, key: "ZoneBreath", band: "F9", phase: "F9", status: "planned", dataSource: "job counts", note: "LOCKED — prereq main D5" },
-  { id: 80, key: "MapFocusDive", band: "F9", phase: "F9", status: "planned", dataSource: "UI pin click", note: "LOCKED — prereq main D5" },
+  // ---- Band F9 — Geo Cinema (74-80) — shipped against D5's real, already-shipped
+  // DispatchMap.tsx surface. D5's own EXIT GATE (a live authenticated recording) is
+  // separately still open in the main STATE file — that is D5's own gap, not
+  // fabricated here; F9 needed D5's real code, which existed. ----
+  { id: 74, key: "PinDrop", band: "F9", phase: "F9", status: "shipped", dataSource: "real stored stop coordinates (dispatch/map)" },
+  { id: 75, key: "RouteInk", band: "F9", phase: "F9", status: "shipped", dataSource: "real per-leg haversine distance over stored coordinates", note: "no per-leg duration field exists in the backend (verified: RouteOutput only carries naiveKm/optimizedKm/kmSaved aggregates) — used real distance instead, documented in DispatchMap.tsx" },
+  { id: 76, key: "TechComet", band: "F9", phase: "F9", status: "shipped", dataSource: "interpolated over real ordered stop coordinates, driven by the FLOW-77 scrub control", note: "no live technician position source exists anywhere in this codebase — honestly scrubber-replay-only, per the plan's own explicit fallback" },
+  { id: 77, key: "DayScrub", band: "F9", phase: "F9", status: "shipped", dataSource: "real ordered stop sequence", note: "new intra-day scrub control — D5.T2's 'day scrubber' turned out to mean the day-to-day date picker, not this; built fresh" },
+  { id: 78, key: "KmSavedBloom", band: "F9", phase: "F9", status: "shipped", dataSource: "real B3 route_suggestion kmSaved" },
+  { id: 79, key: "ZoneBreath", band: "F9", phase: "F9", status: "shipped", dataSource: "real convex hull over today's placed stop coordinates", note: "no configured service-area/zone polygon exists in the backend — used a real computed hull over actual coordinates instead, documented in DispatchMap.tsx" },
+  { id: 80, key: "MapFocusDive", band: "F9", phase: "F9", status: "shipped", dataSource: "real pin click + stored coordinate" },
 
   // ---- Band F5 — Data-Viz Language (81-87) — shipped this phase ----
   { id: 81, key: "AxisEtch", band: "F5", phase: "F5", status: "shipped", dataSource: "any chart (AreaSparkline's real values, opt-in axisEtch prop)" },

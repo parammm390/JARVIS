@@ -625,3 +625,50 @@ html[data-jarvis-tenant-accent="amber"] .jarvis-root { --accent: var(--j-amber);
     opacity: 0.6;
   }
 }
+
+/* ---- F9.T1/T2 — Band F9 Geo Cinema (FLOW-74/77/78) CSS. FLOW-75/79/76 animate via
+   real MapLibre paint properties / marker updates in DispatchMap.tsx itself (JS-driven,
+   not CSS), so they have no keyframe here. ---- */
+@keyframes jarvis-pin-drop {
+  0% { transform: translateY(-22px) scale(0.4); opacity: 0; }
+  60% { transform: translateY(3px) scale(1.08); opacity: 1; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+.jarvis-pin-drop { animation: jarvis-pin-drop 0.42s cubic-bezier(0.34, 1.4, 0.64, 1) both; }
+
+@keyframes jarvis-pin-dustring {
+  0% { transform: scale(0.3); opacity: 0.55; }
+  100% { transform: scale(2.1); opacity: 0; }
+}
+.jarvis-pin-dustring {
+  position: absolute;
+  inset: 2px;
+  border-radius: 999px;
+  border: 1px solid rgba(103, 232, 249, 0.7);
+  animation: jarvis-pin-dustring 0.5s ease-out 0.28s both;
+  pointer-events: none;
+}
+
+.jarvis-comet-dot {
+  height: 8px;
+  width: 8px;
+  border-radius: 999px;
+  background: #fca5f7;
+  box-shadow: 0 0 10px rgba(252, 165, 247, 0.85);
+  transition: opacity 0.25s ease-out;
+}
+
+@keyframes jarvis-km-bloom {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+.jarvis-km-bloom { animation: jarvis-km-bloom 0.5s cubic-bezier(0.34, 1.4, 0.64, 1) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .jarvis-pin-drop,
+  .jarvis-pin-dustring,
+  .jarvis-km-bloom {
+    animation-duration: 0.01s !important;
+  }
+}

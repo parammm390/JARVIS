@@ -34,6 +34,7 @@ import { DataVizCatalogSection } from "./ui/motion/DataVizCatalog"
 import { VoiceTheaterCatalogSection } from "./ui/motion/VoiceTheaterCatalog"
 import { StateNarrativesCatalogSection } from "./ui/motion/StateNarrativesCatalog"
 import { ContinuityCatalogSection } from "./ui/motion/ContinuityCatalog"
+import { GeoCinemaCatalogSection } from "./ui/motion/GeoCinemaCatalog"
 import { FlowIndexMeterSection } from "./ui/motion/FlowIndexMeter"
 import { StageStickyNav, StageStateSwitcher, MountToggle } from "./ui/motion/StageNav"
 
@@ -202,6 +203,11 @@ function StageContent() {
       <div id="flow-continuity">
         <MountToggle id="flow-continuity" label="FLOW-94..97">
           <ContinuityCatalogSection />
+        </MountToggle>
+      </div>
+      <div id="flow-geo-cinema">
+        <MountToggle id="flow-geo-cinema" label="FLOW-74..80">
+          <GeoCinemaCatalogSection />
         </MountToggle>
       </div>
       <div id="flow-core">
