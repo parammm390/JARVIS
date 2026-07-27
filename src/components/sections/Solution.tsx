@@ -1,6 +1,6 @@
-"use client"
+"use client";
 
-import { motion } from "framer-motion"
+import { motion } from "framer-motion";
 import {
   BellRing,
   BookOpenCheck,
@@ -16,8 +16,8 @@ import {
   ScrollText,
   BarChart3,
   Rocket,
-} from "lucide-react"
-import type { LucideIcon } from "lucide-react"
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 const capabilities: Array<{ icon: LucideIcon; title: string; copy: string }> = [
   {
@@ -47,7 +47,7 @@ const capabilities: Array<{ icon: LucideIcon; title: string; copy: string }> = [
   },
   {
     icon: PhoneIncoming,
-    title: "Well Pump Emergency Routing",
+    title: "Water-Treatment Emergency Routing",
     copy: "No-water and pump-failure language routes straight to on-call with scope, since-when, people affected, and a safety screen attached.",
   },
   {
@@ -90,7 +90,7 @@ const capabilities: Array<{ icon: LucideIcon; title: string; copy: string }> = [
     title: "Hard Rails",
     copy: "No invented prices, no diagnosis, no ETAs, no health claims. JARVIS drafts ranges from your numbers; your team owns every final call.",
   },
-]
+];
 
 export function Solution() {
   return (
@@ -121,8 +121,9 @@ export function Solution() {
             transition={{ delay: 0.08 }}
             className="mx-auto mt-6 max-w-2xl text-lg font-medium leading-relaxed text-slate-600"
           >
-            One record for the household, the water test, the quote, the job, the reminder, the
-            referral, kept the same way whether you look at it in a week or in three years.
+            One record for the household, the water test, the quote, the job,
+            the reminder, the referral, kept the same way whether you look at it
+            in a week or in three years.
           </motion.p>
         </div>
 
@@ -140,7 +141,9 @@ export function Solution() {
               <div className="mb-7 flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-50 text-sky-800">
                 <capability.icon className="h-5 w-5" />
               </div>
-              <h3 className="text-lg font-black tracking-tight text-slate-950">{capability.title}</h3>
+              <h3 className="text-lg font-black tracking-tight text-slate-950">
+                {capability.title}
+              </h3>
               <p className="mt-3 text-sm font-medium leading-relaxed text-slate-600">
                 {capability.copy}
               </p>
@@ -149,11 +152,12 @@ export function Solution() {
         </div>
 
         <p className="mx-auto mt-8 max-w-3xl text-center text-sm font-bold leading-relaxed text-slate-600">
-          Any one of these is a commodity you can rent for $99 a month. What makes it a moat is
-          that one continuous memory carries all of them, for every household, for years, not a
-          feature list, a record that keeps growing.
+          Any one of these is a commodity you can rent for a monthly commodity
+          price. What makes it a moat is that one continuous memory carries all
+          of them, for every household, for years, not a feature list, a record
+          that keeps growing.
         </p>
       </div>
     </section>
-  )
+  );
 }

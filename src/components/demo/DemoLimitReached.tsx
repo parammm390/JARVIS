@@ -1,13 +1,16 @@
-"use client"
+"use client";
 
-import { CalendarDays } from "lucide-react"
-import { DEMO_LIMIT_CALENDLY_URL, DEMO_LIMIT_REACHED_MESSAGE } from "@/lib/demo/limits"
+import { CalendarDays } from "lucide-react";
+import {
+  DEMO_LIMIT_CALENDLY_URL,
+  DEMO_LIMIT_REACHED_MESSAGE,
+} from "@/lib/demo/limits";
 
 type DemoLimitReachedProps = {
-  message?: string
-  calendlyUrl?: string
-  onTryAnotherCompany?: () => void
-}
+  message?: string;
+  calendlyUrl?: string;
+  onTryAnotherCompany?: () => void;
+};
 
 export function DemoLimitReached({
   message = DEMO_LIMIT_REACHED_MESSAGE,
@@ -57,5 +60,5 @@ export function DemoLimitReached({
         </div>
       </div>
     </div>
-  )
+  );
 }

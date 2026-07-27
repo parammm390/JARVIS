@@ -13,15 +13,15 @@
 // demo's result card) renders inside one of these rather than hand-rolling its own
 // dark chrome, so a future change to the real jarvis-theme tokens propagates here
 // automatically instead of drifting.
-import "@/components/jarvis/jarvis-theme.css"
-import type { ReactNode } from "react"
+import "@/components/jarvis/jarvis-theme.css";
+import type { ReactNode } from "react";
 
 export function JarvisProofSurface({
   children,
   className = "",
 }: {
-  children: ReactNode
-  className?: string
+  children: ReactNode;
+  className?: string;
 }) {
   return (
     <div
@@ -30,5 +30,5 @@ export function JarvisProofSurface({
     >
       {children}
     </div>
-  )
+  );
 }

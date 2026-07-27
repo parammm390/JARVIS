@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 // M3.T1, the Command Bridge proof section (plan §2.4 beat 4). Every capability named
 // here is real and already shipped in the authenticated console (`src/app/jarvis/*`,
@@ -9,17 +9,20 @@
 // environment), so this section proves the console with the real Orb plus a written,
 // source-grounded description instead of fabricated or placeholder footage.
 
-import { motion } from "framer-motion"
-import { Activity, GitBranch, Layers, Radio, Waves } from "lucide-react"
-import type { LucideIcon } from "lucide-react"
-import { JarvisProofSurface } from "@/components/sections/jarvis-proof/JarvisProofSurface"
-import { Glass } from "@/components/jarvis/atmosphere"
-import { BorderBeam } from "@/components/jarvis/ui/fx/BorderBeam"
-import { RiskBadge } from "@/components/jarvis/ui/primitives/RiskBadge"
-import dynamic from "next/dynamic"
+import { motion } from "framer-motion";
+import { Activity, GitBranch, Layers, Radio, Waves } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { JarvisProofSurface } from "@/components/sections/jarvis-proof/JarvisProofSurface";
+import { Glass } from "@/components/jarvis/atmosphere";
+import { BorderBeam } from "@/components/jarvis/ui/fx/BorderBeam";
+import { RiskBadge } from "@/components/jarvis/ui/primitives/RiskBadge";
+import dynamic from "next/dynamic";
 
 const MarketingOrb = dynamic(
-  () => import("@/components/sections/jarvis-proof/MarketingOrb").then((m) => m.MarketingOrb),
+  () =>
+    import("@/components/sections/jarvis-proof/MarketingOrb").then(
+      (m) => m.MarketingOrb,
+    ),
   {
     ssr: false,
     loading: () => (
@@ -32,35 +35,40 @@ const MarketingOrb = dynamic(
       />
     ),
   },
-)
+);
 
-const panels: Array<{ icon: LucideIcon; title: string; copy: string; tier: "low" | "medium" | "high" }> = [
+const panels: Array<{
+  icon: LucideIcon;
+  title: string;
+  copy: string;
+  tier: "low" | "medium" | "high";
+}> = [
   {
     icon: Radio,
     title: "The Orb",
-    copy:
-      "One shape, three states, idle, planning, executing. It's the same read whether you're watching one instruction or twenty.",
+    copy: "One shape, three states, idle, planning, executing. It's the same read whether you're watching one instruction or twenty.",
     tier: "low",
   },
   {
     icon: GitBranch,
     title: "Pipeline Theater",
-    copy:
-      "Every durable run shown as it actually executes, step by step, with compensation and failure states visible, not hidden in a log file.",
+    copy: "Every durable run shown as it actually executes, step by step, with compensation and failure states visible, not hidden in a log file.",
     tier: "medium",
   },
   {
     icon: Activity,
     title: "The activity feed",
-    copy:
-      "Every approval, every receipt, every rejected action, one ordered record instead of a scattered set of notifications.",
+    copy: "Every approval, every receipt, every rejected action, one ordered record instead of a scattered set of notifications.",
     tier: "high",
   },
-]
+];
 
 export function CommandBridgeProof() {
   return (
-    <section id="command-bridge" className="relative overflow-hidden py-20 md:py-28">
+    <section
+      id="command-bridge"
+      className="relative overflow-hidden py-20 md:py-28"
+    >
       <JarvisProofSurface className="relative">
         <div className="absolute inset-0 operational-grid opacity-[0.06]" />
         <div className="container relative z-10 px-4 md:px-6">
@@ -88,9 +96,10 @@ export function CommandBridgeProof() {
               transition={{ delay: 0.08 }}
               className="mx-auto mt-6 max-w-2xl text-lg font-medium leading-relaxed text-[color:var(--j-text-dim)]"
             >
-              Every screen below is a real, shipped part of the JARVIS console, the same one your
-              team would sign into. What you see here is the Orb rendering live and a description
-              of the rest, grounded in what the product actually does today.
+              Every screen below is a real, shipped part of the JARVIS console,
+              the same one your team would sign into. What you see here is the
+              Orb rendering live and a description of the rest, grounded in what
+              the product actually does today.
             </motion.p>
           </div>
 
@@ -114,7 +123,11 @@ export function CommandBridgeProof() {
                   transition={{ delay: index * 0.08 }}
                 >
                   <BorderBeam className="rounded-2xl">
-                    <Glass className="rounded-2xl" glow={index === 2 ? "cyan" : "none"} noise>
+                    <Glass
+                      className="rounded-2xl"
+                      glow={index === 2 ? "cyan" : "none"}
+                      noise
+                    >
                       <div className="flex gap-4 p-5 md:p-6">
                         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/[0.05] text-[color:var(--j-cyan)]">
                           <panel.icon className="h-5 w-5" />
@@ -144,13 +157,19 @@ export function CommandBridgeProof() {
             viewport={{ once: true }}
             className="mx-auto mt-10 flex max-w-2xl items-start gap-2 text-center text-xs font-semibold leading-relaxed text-[color:var(--j-text-dim)]"
           >
-            <Layers className="mt-0.5 hidden h-3.5 w-3.5 shrink-0 sm:block" aria-hidden />
-            The console itself is sign-in gated, it runs your operations, not a public demo.
-            Try what a visitor actually can below.
-            <Waves className="mt-0.5 hidden h-3.5 w-3.5 shrink-0 sm:block" aria-hidden />
+            <Layers
+              className="mt-0.5 hidden h-3.5 w-3.5 shrink-0 sm:block"
+              aria-hidden
+            />
+            The console itself is sign-in gated, it runs your operations, not a
+            public demo. Try what a visitor actually can below.
+            <Waves
+              className="mt-0.5 hidden h-3.5 w-3.5 shrink-0 sm:block"
+              aria-hidden
+            />
           </motion.p>
         </div>
       </JarvisProofSurface>
     </section>
-  )
+  );
 }

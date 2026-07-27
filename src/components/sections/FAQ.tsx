@@ -1,60 +1,73 @@
-"use client"
+"use client";
 
-import { motion } from "framer-motion"
+import { motion } from "framer-motion";
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
-} from "@/components/ui/accordion"
-import { HelpCircle } from "lucide-react"
+} from "@/components/ui/accordion";
+import { HelpCircle } from "lucide-react";
 
 const faqs = [
   {
-    question: "What actually happens before JARVIS acts?",
+    question: "What is JARVIS?",
     answer:
-      "It drafts a plan, a quote, a booking, a route, grounded in your real price book and household history, and it waits. Nothing executes until you or your team approves it. That's not a UI nicety; it's a database-enforced gate. Reject the plan and it simply never runs. Approve it and there's a receipt: what was proposed, what was approved, what happened, what it cost.",
+      "JARVIS is a voice-native AI operations platform for water-treatment companies. It plans and executes business workflows across connected systems.",
   },
   {
-    question: "Does it quote a final number, or just a range?",
+    question: "Is this another answering service?",
     answer:
-      "A range, never a final number. JARVIS pulls the real public water record for the household's area, runs the sizing math against household size, and drafts a preliminary range from your pricing tier, something like $3,800 to $4,250 installed, so the lead is pre-qualified before anyone drives out. It never invents a number. Then it drafts the free onsite water test booking, same as your team already runs, where your tech confirms the exact numbers in person and gives the real quote.",
+      "No. Calling is one capability. JARVIS also works across CRM, scheduling, proposals, invoices, payments, inventory, technicians, campaigns and operational intelligence.",
   },
   {
-    question: "What is a household memory record?",
+    question: "Does JARVIS replace Jobber, ServiceTitan or our CRM?",
     answer:
-      "Every lead becomes one: the call, the water profile, the sizing math, the quote, the booked visit, the documented job, the review, the salt cadence, the referral it produced, and the next offer that actually makes sense. Every record carries a computed next revenue action, and every action is tracked to lifetime value. It reads the same whether you look at it in a week or in three years.",
+      "No. JARVIS can work above existing systems as the command and execution layer. The final integration scope depends on the systems you use.",
   },
   {
-    question: "Where does the water data come from?",
+    question: "Can JARVIS make outbound calls and run campaigns?",
     answer:
-      "Public records, plus a free onsite test to confirm the exact numbers for each customer's home. Thin coverage falls back to state groundwater records and is labeled as an estimate. Unknowns stay marked, always.",
+      "Yes, when the required calling or messaging provider is connected. Campaign limits, calling windows, permissions and compliance rules are configured before launch.",
   },
   {
-    question: "Does JARVIS replace my dispatcher or my sales team?",
+    question: "Is JARVIS fully autonomous?",
     answer:
-      "No. JARVIS drafts the plan, holds it for approval, and keeps the relationship warm for years once it's executed. Repairs, diagnosis, ETAs, and the final handshake stay with your people. It does the remembering and the drafting, so they can do the deciding and the closing.",
+      "JARVIS uses bounded autonomy. Approved low-risk actions can run automatically. Higher-risk actions wait for the authorised person.",
   },
   {
-    question: "Does it work over the phone?",
+    question: "What happens when an integration fails?",
     answer:
-      "Voice is one of the ways an instruction reaches JARVIS. A call, a text, or someone typing it in, the plan it drafts and the approval it waits for are exactly the same either way. No-water and urgent pump language routes straight to your configured on-call contact with a structured handoff: scope, since when, people affected, safety screen, callback.",
+      "JARVIS records the failure, retries when safe, verifies the final state and escalates anything unresolved instead of silently reporting success.",
   },
   {
-    question: "What are the guarantees?",
+    question: "What can we control by voice?",
     answer:
-      "If an eligible call reaches JARVIS and we miss it, your next month is free. If we do not launch your scoped workflow within 7 days of receiving required access, we refund your initial payment.",
+      "Customers, calls, follow-ups, appointments, schedules, proposals, invoices, payments, campaigns, inventory, technicians, reports and supported connected workflows.",
   },
   {
-    question: "Who is this NOT for?",
+    question: "How is pricing determined?",
     answer:
-      "If you are a one-truck shop that answers every call yourself and nothing you sell tops $1,500, keep your money. And if you want a system that acts without asking, or need a full CRM replacement, JARVIS isn't that either. It earns its keep when calls die in voicemail while your crew is under a house, when quotes still come off a rate sheet instead of the water, and when customers vanish the day the invoice is paid.",
+      "Pricing depends on locations, usage, integrations and workflow complexity. Contact us for a deployment scope and price.",
   },
-]
+  {
+    question: "Who is JARVIS for?",
+    answer:
+      "Established water-treatment companies that have multiple employees, meaningful operational volume and disconnected business workflows.",
+  },
+  {
+    question: "Can it support multiple locations?",
+    answer:
+      "Yes. Location-specific permissions, workflows, reporting, lead sources and operating rules can be scoped during deployment.",
+  },
+];
 
 export function FAQ() {
   return (
-    <section id="faq" className="healthcare-section relative overflow-hidden py-20 md:py-28">
+    <section
+      id="faq"
+      className="healthcare-section relative overflow-hidden py-20 md:py-28"
+    >
       <div className="pointer-events-none absolute right-[8%] top-0 h-[34rem] w-[34rem] rounded-full bg-teal-100/45 blur-[130px]" />
       <div className="container relative z-10 max-w-4xl px-4 md:px-6">
         <div className="mb-12 text-center md:mb-14">
@@ -83,8 +96,8 @@ export function FAQ() {
             transition={{ delay: 0.08 }}
             className="mx-auto mt-5 max-w-2xl text-lg font-medium leading-relaxed text-slate-600"
           >
-            What JARVIS actually does, where the water data comes from, what stays human, and
-            exactly who should not buy this.
+            What JARVIS actually does, where the water data comes from, what
+            stays human, and exactly who should not buy this.
           </motion.p>
         </div>
 
@@ -120,5 +133,5 @@ export function FAQ() {
         </motion.div>
       </div>
     </section>
-  )
+  );
 }

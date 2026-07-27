@@ -1,13 +1,13 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import dynamic from "next/dynamic"
-import { motion } from "framer-motion"
-import { CalendarDays, FileText, Play, ShieldCheck, Waves } from "lucide-react"
-import type { LucideIcon } from "lucide-react"
-import { siteConfig } from "@/config/site"
-import { Magnetic } from "@/components/ui/magnetic"
-import { JarvisProofSurface } from "@/components/sections/jarvis-proof/JarvisProofSurface"
+import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
+import { motion } from "framer-motion";
+import { CalendarDays, FileText, Play, ShieldCheck, Waves } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { siteConfig } from "@/config/site";
+import { Magnetic } from "@/components/ui/magnetic";
+import { JarvisProofSurface } from "@/components/sections/jarvis-proof/JarvisProofSurface";
 
 // Three.js (via Orb3D) is real weight (~140kB) that a public, SEO-facing homepage
 // shouldn't pay for on first paint. Deferred client-only, same lazy-load discipline
@@ -15,46 +15,56 @@ import { JarvisProofSurface } from "@/components/sections/jarvis-proof/JarvisPro
 // animation level. The static gradient fallback below mirrors Orb3D's own reduced-
 // motion/low-power collapse look, so there's no visual pop when the real module lands.
 const MarketingOrb = dynamic(
-  () => import("@/components/sections/jarvis-proof/MarketingOrb").then((m) => m.MarketingOrb),
+  () =>
+    import("@/components/sections/jarvis-proof/MarketingOrb").then(
+      (m) => m.MarketingOrb,
+    ),
   {
     ssr: false,
     loading: () => (
       <div
         className="h-full w-full rounded-full"
         style={{
-          background: "radial-gradient(circle at 38% 32%, rgba(34,211,238,0.35) 0%, rgba(34,211,238,0.12) 45%, rgba(6,11,24,0.05) 72%)",
+          background:
+            "radial-gradient(circle at 38% 32%, rgba(34,211,238,0.35) 0%, rgba(34,211,238,0.12) 45%, rgba(6,11,24,0.05) 72%)",
         }}
       />
     ),
   },
-)
+);
 
 const navItems = [
-  { href: "#problem", label: "The Stakes" },
-  { href: "#workflow", label: "The Loop" },
+  { href: "#product", label: "Product" },
+  { href: "#capabilities", label: "Capabilities" },
+  { href: "#workflow", label: "How It Works" },
   { href: "/resources", label: "Resources" },
   { href: "/trust-safety", label: "Trust" },
   { href: "#pricing", label: "Pricing" },
   { href: "#faq", label: "FAQ" },
-]
+];
 
 const miniStatusItems: Array<{ icon: LucideIcon; label: string }> = [
   { icon: Waves, label: "Instruction understood" },
   { icon: ShieldCheck, label: "Approved by you" },
   { icon: FileText, label: "Receipt filed" },
-]
+];
 
-const loopSteps = ["Instruction given", "Plan drafted", "You approve", "Executed + receipt"]
+const loopSteps = [
+  "Instruction given",
+  "Plan drafted",
+  "You approve",
+  "Executed + receipt",
+];
 
 export function Hero() {
-  const [scrolled, setScrolled] = useState(false)
+  const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 16)
-    onScroll()
-    window.addEventListener("scroll", onScroll, { passive: true })
-    return () => window.removeEventListener("scroll", onScroll)
-  }, [])
+    const onScroll = () => setScrolled(window.scrollY > 16);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   return (
     <section className="relative min-h-screen overflow-hidden px-0 pb-16 pt-24 md:pt-28">
@@ -73,7 +83,10 @@ export function Hero() {
         }`}
       >
         <div className="container flex h-20 items-center justify-between px-4 md:px-6">
-          <a href="/" className="flex items-center gap-3 text-xl font-black tracking-tight text-slate-950">
+          <a
+            href="/"
+            className="flex items-center gap-3 text-xl font-black tracking-tight text-slate-950"
+          >
             <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-950 text-xs font-black text-white shadow-lg">
               F
             </span>
@@ -104,7 +117,7 @@ export function Hero() {
               className="cta-primary inline-flex h-11 shrink-0 items-center justify-center rounded-full bg-slate-950 px-3 text-[10px] font-black text-white transition hover:-translate-y-0.5 hover:bg-slate-800 sm:px-5 sm:text-xs"
             >
               <span className="sm:hidden">Apply</span>
-              <span className="hidden sm:inline">Apply for Founding Pilot</span>
+              <span className="hidden sm:inline">Book a JARVIS Demo</span>
             </a>
           </div>
         </div>
@@ -120,7 +133,7 @@ export function Hero() {
               className="mb-6 inline-flex max-w-full items-center rounded-full border border-sky-900/10 bg-white px-4 py-2 text-sm font-bold leading-snug text-slate-700 shadow-sm"
             >
               <span className="mr-2 h-2 w-2 rounded-full bg-teal-500 shadow-[0_0_0_4px_rgba(20,184,166,0.12)]" />
-              Introducing JARVIS, an operations console for water treatment dealers
+              VOICE-NATIVE AI OPERATIONS FOR WATER-TREATMENT COMPANIES
             </motion.div>
 
             <motion.h1
@@ -129,7 +142,7 @@ export function Hero() {
               transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
               className="max-w-[22rem] break-words text-[2.18rem] font-black leading-[0.99] tracking-tight text-slate-950 sm:max-w-4xl sm:text-6xl md:text-7xl lg:text-[5.75rem]"
             >
-              Give it an instruction. Watch it ask before it acts.
+              Run your water-treatment company by talking to JARVIS.
             </motion.h1>
 
             <motion.p
@@ -138,9 +151,10 @@ export function Hero() {
               transition={{ delay: 0.1, duration: 0.62 }}
               className="mt-7 max-w-[22rem] text-base font-semibold leading-relaxed text-slate-700 sm:max-w-2xl sm:text-lg md:text-xl"
             >
-              JARVIS drafts the quote, the invoice, the reschedule, against your real price book,
-              in seconds. Then it waits for your yes. Approve it and there&apos;s a receipt. Reject
-              it and nothing ran.
+              Give JARVIS a business outcome. It plans the work, executes across
+              your calls, CRM, scheduling, proposals, invoices, inventory,
+              technicians and campaigns, asks for approval when the risk
+              requires it, and verifies what happened.
             </motion.p>
 
             <motion.p
@@ -149,8 +163,9 @@ export function Hero() {
               transition={{ delay: 0.18, duration: 0.55 }}
               className="mt-5 flex w-full max-w-full rounded-2xl border border-teal-800/14 bg-white px-4 py-3 text-sm font-black leading-relaxed text-slate-700 shadow-sm"
             >
-              Every decision leaves a receipt, what was approved, what changed, what it cost.
-              Nothing happens without one. Water treatment and well pump companies only.
+              Speak naturally or type the outcome you need. JARVIS works with
+              your existing systems and keeps the team focused on the decisions
+              that require their judgment.
             </motion.p>
 
             <motion.div
@@ -168,7 +183,7 @@ export function Hero() {
                   className="cta-primary inline-flex min-h-[3.75rem] items-center justify-center gap-2 rounded-full bg-slate-950 px-8 py-4 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-slate-800"
                 >
                   <CalendarDays className="h-4 w-4" />
-                  Apply for Founding Pilot
+                  Book a JARVIS Demo
                 </a>
               </Magnetic>
               <Magnetic strength={0.14}>
@@ -189,7 +204,11 @@ export function Hero() {
           <motion.div
             initial={{ opacity: 0, y: 24, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ delay: 0.18, duration: 0.78, ease: [0.16, 1, 0.3, 1] }}
+            transition={{
+              delay: 0.18,
+              duration: 0.78,
+              ease: [0.16, 1, 0.3, 1],
+            }}
             className="relative"
           >
             <JarvisOrbPanel />
@@ -199,7 +218,7 @@ export function Hero() {
 
       <MiniStatusBar visible={scrolled} />
     </section>
-  )
+  );
 }
 
 function JarvisOrbPanel() {
@@ -219,11 +238,12 @@ function JarvisOrbPanel() {
           <MarketingOrb className="h-full w-full" />
         </div>
         <p className="mt-6 text-center text-sm font-semibold text-[color:var(--j-text-dim)]">
-          Idle. Planning. Executing. The same states every real approval moves through.
+          Idle. Planning. Executing. The same states every real approval moves
+          through.
         </p>
       </JarvisProofSurface>
     </div>
-  )
+  );
 }
 
 function SignalHandoffStrip() {
@@ -249,7 +269,7 @@ function SignalHandoffStrip() {
         ))}
       </div>
     </motion.div>
-  )
+  );
 }
 
 function MiniStatusBar({ visible }: { visible: boolean }) {
@@ -271,5 +291,5 @@ function MiniStatusBar({ visible }: { visible: boolean }) {
         ))}
       </div>
     </div>
-  )
+  );
 }

@@ -1,36 +1,42 @@
-"use client"
+"use client";
 
-import { useEffect, useRef } from "react"
-import { motion } from "framer-motion"
-import type { LifecycleStage } from "@/lib/lifecycle/scenario"
+import { useEffect, useRef } from "react";
+import { motion } from "framer-motion";
+import type { LifecycleStage } from "@/lib/lifecycle/scenario";
 
-const EASE = [0.16, 1, 0.3, 1]
+const EASE = [0.16, 1, 0.3, 1];
 
 export function TimelineScrubber({
   stages,
   index,
   onSelect,
 }: {
-  stages: LifecycleStage[]
-  index: number
-  onSelect: (index: number) => void
+  stages: LifecycleStage[];
+  index: number;
+  onSelect: (index: number) => void;
 }) {
-  const insetPercent = 100 / (stages.length * 2)
-  const scrollRef = useRef<HTMLDivElement>(null)
+  const insetPercent = 100 / (stages.length * 2);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const container = scrollRef.current
-    if (!container || container.scrollWidth <= container.clientWidth) return
-    const active = container.querySelector<HTMLElement>('[aria-current="step"]')
-    if (!active) return
+    const container = scrollRef.current;
+    if (!container || container.scrollWidth <= container.clientWidth) return;
+    const active = container.querySelector<HTMLElement>(
+      '[aria-current="step"]',
+    );
+    if (!active) return;
     container.scrollTo({
-      left: active.offsetLeft - container.clientWidth / 2 + active.clientWidth / 2,
+      left:
+        active.offsetLeft - container.clientWidth / 2 + active.clientWidth / 2,
       behavior: "smooth",
-    })
-  }, [index])
+    });
+  }, [index]);
 
   return (
-    <div ref={scrollRef} className="-mx-4 overflow-x-auto px-4 md:mx-0 md:overflow-visible md:px-0">
+    <div
+      ref={scrollRef}
+      className="-mx-4 overflow-x-auto px-4 md:mx-0 md:overflow-visible md:px-0"
+    >
       <div className="relative min-w-[680px] pb-1 md:min-w-0">
         <div
           className="absolute top-[7px] h-px bg-slate-200"
@@ -50,11 +56,13 @@ export function TimelineScrubber({
 
         <div
           className="relative grid"
-          style={{ gridTemplateColumns: `repeat(${stages.length}, minmax(0, 1fr))` }}
+          style={{
+            gridTemplateColumns: `repeat(${stages.length}, minmax(0, 1fr))`,
+          }}
         >
           {stages.map((stage, stageIndex) => {
-            const isActive = stageIndex === index
-            const isComplete = stageIndex < index
+            const isActive = stageIndex === index;
+            const isComplete = stageIndex < index;
             return (
               <button
                 key={stage.id}
@@ -90,10 +98,10 @@ export function TimelineScrubber({
                   {stage.railLabel}
                 </span>
               </button>
-            )
+            );
           })}
         </div>
       </div>
     </div>
-  )
+  );
 }

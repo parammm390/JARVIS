@@ -1,12 +1,12 @@
-"use client"
+"use client";
 
-import { useEffect, useRef, useState } from "react"
-import { motion, useReducedMotion } from "framer-motion"
-import { CheckCheck, MessageSquare } from "lucide-react"
-import { applySlot, type SmsMessage } from "@/lib/lifecycle/scenario"
+import { useEffect, useRef, useState } from "react";
+import { motion, useReducedMotion } from "framer-motion";
+import { CheckCheck, MessageSquare } from "lucide-react";
+import { applySlot, type SmsMessage } from "@/lib/lifecycle/scenario";
 
-const EASE = [0.16, 1, 0.3, 1]
-const MONO = "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
+const EASE = [0.16, 1, 0.3, 1];
+const MONO = "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace";
 
 export function MessageThread({
   thread,
@@ -17,90 +17,97 @@ export function MessageThread({
   chosenSlot,
   onChipChosen,
 }: {
-  thread: SmsMessage[]
-  contactName: string
-  contactMeta: string
-  interactive?: boolean
-  autoPilot?: boolean
-  chosenSlot?: string
-  onChipChosen?: (chip: string) => void
+  thread: SmsMessage[];
+  contactName: string;
+  contactMeta: string;
+  interactive?: boolean;
+  autoPilot?: boolean;
+  chosenSlot?: string;
+  onChipChosen?: (chip: string) => void;
 }) {
-  const reduceMotion = useReducedMotion()
-  const chipGateIndex = interactive ? thread.findIndex((message) => message.chips?.length) : -1
-  const gated = interactive && chipGateIndex >= 0 && !chosenSlot
-  const targetCount = gated ? chipGateIndex + 1 : thread.length
+  const reduceMotion = useReducedMotion();
+  const chipGateIndex = interactive
+    ? thread.findIndex((message) => message.chips?.length)
+    : -1;
+  const gated = interactive && chipGateIndex >= 0 && !chosenSlot;
+  const targetCount = gated ? chipGateIndex + 1 : thread.length;
 
-  const visibleRef = useRef(0)
-  const threadRef = useRef(thread)
+  const visibleRef = useRef(0);
+  const threadRef = useRef(thread);
   if (threadRef.current !== thread) {
-    threadRef.current = thread
-    visibleRef.current = 0
+    threadRef.current = thread;
+    visibleRef.current = 0;
   }
 
-  const [visibleCount, setVisibleCount] = useState(reduceMotion ? targetCount : 0)
-  const [typingFrom, setTypingFrom] = useState<SmsMessage["from"] | null>(null)
+  const [visibleCount, setVisibleCount] = useState(
+    reduceMotion ? targetCount : 0,
+  );
+  const [typingFrom, setTypingFrom] = useState<SmsMessage["from"] | null>(null);
 
   useEffect(() => {
     if (reduceMotion) {
-      visibleRef.current = targetCount
-      setVisibleCount(targetCount)
-      setTypingFrom(null)
-      return
+      visibleRef.current = targetCount;
+      setVisibleCount(targetCount);
+      setTypingFrom(null);
+      return;
     }
 
-    let cancelled = false
-    const timers: number[] = []
+    let cancelled = false;
+    const timers: number[] = [];
     const later = (callback: () => void, ms: number) => {
       timers.push(
         window.setTimeout(() => {
-          if (!cancelled) callback()
-        }, ms)
-      )
-    }
+          if (!cancelled) callback();
+        }, ms),
+      );
+    };
 
-    setVisibleCount(visibleRef.current)
+    setVisibleCount(visibleRef.current);
     const step = () => {
-      const index = visibleRef.current
+      const index = visibleRef.current;
       if (index >= targetCount) {
-        setTypingFrom(null)
-        return
+        setTypingFrom(null);
+        return;
       }
-      const message = thread[index]
-      setTypingFrom(message.from)
-      later(() => {
-        setTypingFrom(null)
-        visibleRef.current = index + 1
-        setVisibleCount(index + 1)
-        later(step, message.from === "finnor" ? 700 : 560)
-      }, message.from === "finnor" ? 1150 : 820)
-    }
-    later(step, visibleRef.current === 0 ? 480 : 320)
+      const message = thread[index];
+      setTypingFrom(message.from);
+      later(
+        () => {
+          setTypingFrom(null);
+          visibleRef.current = index + 1;
+          setVisibleCount(index + 1);
+          later(step, message.from === "finnor" ? 700 : 560);
+        },
+        message.from === "finnor" ? 1150 : 820,
+      );
+    };
+    later(step, visibleRef.current === 0 ? 480 : 320);
 
     return () => {
-      cancelled = true
-      timers.forEach(window.clearTimeout)
-    }
-  }, [thread, targetCount, reduceMotion])
+      cancelled = true;
+      timers.forEach(window.clearTimeout);
+    };
+  }, [thread, targetCount, reduceMotion]);
 
-  const waitingAtGate = gated && visibleCount >= chipGateIndex + 1
+  const waitingAtGate = gated && visibleCount >= chipGateIndex + 1;
 
   useEffect(() => {
-    if (!waitingAtGate || !autoPilot) return
+    if (!waitingAtGate || !autoPilot) return;
     const timer = window.setTimeout(() => {
-      const gateMessage = thread[chipGateIndex]
-      const chip = gateMessage?.chosenChip || gateMessage?.chips?.[0]
-      if (chip) onChipChosen?.(chip)
-    }, 2600)
-    return () => window.clearTimeout(timer)
-  }, [waitingAtGate, autoPilot, thread, chipGateIndex, onChipChosen])
+      const gateMessage = thread[chipGateIndex];
+      const chip = gateMessage?.chosenChip || gateMessage?.chips?.[0];
+      if (chip) onChipChosen?.(chip);
+    }, 2600);
+    return () => window.clearTimeout(timer);
+  }, [waitingAtGate, autoPilot, thread, chipGateIndex, onChipChosen]);
 
   const lastFinnorIndex = (() => {
-    let last = -1
+    let last = -1;
     thread.forEach((message, index) => {
-      if (message.from === "finnor" && index < visibleCount) last = index
-    })
-    return last
-  })()
+      if (message.from === "finnor" && index < visibleCount) last = index;
+    });
+    return last;
+  })();
 
   return (
     <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_22px_58px_rgba(15,38,62,0.08)]">
@@ -127,7 +134,9 @@ export function MessageThread({
         {thread.slice(0, visibleCount).map((message, index) => (
           <div key={`${message.from}-${index}`}>
             <motion.div
-              initial={reduceMotion ? false : { opacity: 0, y: 12, scale: 0.97 }}
+              initial={
+                reduceMotion ? false : { opacity: 0, y: 12, scale: 0.97 }
+              }
               animate={{ opacity: 1, y: 0, scale: 1 }}
               transition={{ duration: 0.5, ease: EASE }}
               className={
@@ -148,8 +157,10 @@ export function MessageThread({
                   {message.chips.map((chip) => {
                     const chosen = chosenSlot
                       ? chip === chosenSlot
-                      : chip === message.chosenChip && visibleCount >= index + 2
-                    const clickable = interactive && index === chipGateIndex && !chosenSlot
+                      : chip === message.chosenChip &&
+                        visibleCount >= index + 2;
+                    const clickable =
+                      interactive && index === chipGateIndex && !chosenSlot;
                     return (
                       <button
                         key={chip}
@@ -167,12 +178,14 @@ export function MessageThread({
                       >
                         {chip}
                       </button>
-                    )
+                    );
                   })}
                 </div>
               ) : null}
             </motion.div>
-            {message.from === "finnor" && index === lastFinnorIndex && !waitingAtGate ? (
+            {message.from === "finnor" &&
+            index === lastFinnorIndex &&
+            !waitingAtGate ? (
               <motion.p
                 initial={reduceMotion ? false : { opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -184,7 +197,10 @@ export function MessageThread({
                 Delivered
               </motion.p>
             ) : null}
-            {interactive && index === chipGateIndex && waitingAtGate && !autoPilot ? (
+            {interactive &&
+            index === chipGateIndex &&
+            waitingAtGate &&
+            !autoPilot ? (
               <motion.p
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -200,7 +216,7 @@ export function MessageThread({
         {typingFrom ? <TypingIndicator from={typingFrom} /> : null}
       </div>
     </div>
-  )
+  );
 }
 
 function TypingIndicator({ from }: { from: SmsMessage["from"] }) {
@@ -219,7 +235,12 @@ function TypingIndicator({ from }: { from: SmsMessage["from"] }) {
           <motion.span
             key={dot}
             animate={{ y: [0, -3.5, 0], opacity: [0.4, 1, 0.4] }}
-            transition={{ duration: 0.9, repeat: Infinity, delay: dot * 0.14, ease: "easeInOut" }}
+            transition={{
+              duration: 0.9,
+              repeat: Infinity,
+              delay: dot * 0.14,
+              ease: "easeInOut",
+            }}
             className={`h-1.5 w-1.5 rounded-full ${
               from === "finnor" ? "bg-white/70" : "bg-slate-400"
             }`}
@@ -227,5 +248,5 @@ function TypingIndicator({ from }: { from: SmsMessage["from"] }) {
         ))}
       </span>
     </motion.div>
-  )
+  );
 }

@@ -53,9 +53,9 @@ export function buildProofArtifacts(profile: CompanyProfile): DemoProofArtifacts
     intakeSummary: {
       caller: "Sarah",
       client: "142 Millbrook Road, Harrisonburg VA",
-      concern: "No water - pump failure suspected",
+      concern: "No water - equipment failure suspected",
       safetyRisk: "Possible pump or pressure switch failure",
-      issueType: "Submersible well pump, pressure tank",
+      issueType: "Submersible water-treatment, water-treatment equipment",
       immediateDanger: "No immediate danger reported",
       callback: "Collected",
       status: "Ready for on-call dispatch",
@@ -63,7 +63,7 @@ export function buildProofArtifacts(profile: CompanyProfile): DemoProofArtifacts
     alertPreview: {
       to: "On-call dispatch",
       message:
-        "Well pump emergency captured. Whole house without water since 11pm. Pressure tank reads zero; submersible pump issue suspected. Family of 4 affected, no immediate danger reported. Ready for on-call dispatch.",
+        "Customer operations workflow captured. Whole house without water since 11pm. Pressure tank reads zero; water-treatment equipment issue suspected. Family of 4 affected, no immediate danger reported. Ready for on-call dispatch.",
       timestamp: "Emergency dispatch event",
       delivery: "Under 60 seconds target",
     },
@@ -82,7 +82,7 @@ export function buildProofArtifacts(profile: CompanyProfile): DemoProofArtifacts
       ],
       status: "Ready for on-call dispatch",
       priority: "High",
-      issueType: "well pump",
+      issueType: "water-treatment",
       source: "Voice AI",
     },
     dashboardEvent: {

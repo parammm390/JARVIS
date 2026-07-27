@@ -1,25 +1,25 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import { CalendarDays, Play } from "lucide-react"
-import { siteConfig } from "@/config/site"
+import { useEffect, useState } from "react";
+import { CalendarDays, Play } from "lucide-react";
+import { siteConfig } from "@/config/site";
 
 const navItems = [
   { href: "/resources", label: "Resources" },
   { href: "/trust-safety", label: "Trust" },
   { href: "/#pricing", label: "Pricing" },
   { href: "/#faq", label: "FAQ" },
-]
+];
 
 export function ResourceNav() {
-  const [scrolled, setScrolled] = useState(false)
+  const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 16)
-    onScroll()
-    window.addEventListener("scroll", onScroll, { passive: true })
-    return () => window.removeEventListener("scroll", onScroll)
-  }, [])
+    const onScroll = () => setScrolled(window.scrollY > 16);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   return (
     <nav
@@ -30,7 +30,10 @@ export function ResourceNav() {
       }`}
     >
       <div className="container flex h-20 items-center justify-between px-4 md:px-6">
-        <a href="/" className="flex items-center gap-3 text-xl font-black tracking-tight text-slate-950">
+        <a
+          href="/"
+          className="flex items-center gap-3 text-xl font-black tracking-tight text-slate-950"
+        >
           <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-950 text-xs font-black text-white shadow-lg">
             F
           </span>
@@ -63,10 +66,10 @@ export function ResourceNav() {
           >
             <CalendarDays className="hidden h-3.5 w-3.5 sm:block" />
             <span className="sm:hidden">Apply</span>
-            <span className="hidden sm:inline">Apply for Founding Pilot</span>
+            <span className="hidden sm:inline">Book a JARVIS Demo</span>
           </a>
         </div>
       </div>
     </nav>
-  )
+  );
 }

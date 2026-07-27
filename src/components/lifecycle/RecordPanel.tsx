@@ -1,31 +1,31 @@
-"use client"
+"use client";
 
-import { motion, useReducedMotion } from "framer-motion"
-import { ArrowRight, Brain } from "lucide-react"
+import { motion, useReducedMotion } from "framer-motion";
+import { ArrowRight, Brain } from "lucide-react";
 import {
   formatLtv,
   MEMORY_GROUP_ORDER,
   type CustomerRecord,
   type LifecycleScenario,
-} from "@/lib/lifecycle/scenario"
+} from "@/lib/lifecycle/scenario";
 
-const EASE = [0.16, 1, 0.3, 1]
-const MONO = "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
+const EASE = [0.16, 1, 0.3, 1];
+const MONO = "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace";
 
 export function RecordPanel({
   scenario,
   record,
   stageIndex,
 }: {
-  scenario: LifecycleScenario
-  record: CustomerRecord
-  stageIndex: number
+  scenario: LifecycleScenario;
+  record: CustomerRecord;
+  stageIndex: number;
 }) {
-  const reduceMotion = useReducedMotion()
+  const reduceMotion = useReducedMotion();
   const groups = MEMORY_GROUP_ORDER.map((group) => ({
     group,
     fields: record.fields.filter((field) => field.group === group),
-  })).filter((entry) => entry.fields.length > 0)
+  })).filter((entry) => entry.fields.length > 0);
 
   return (
     <div className="ops-card soft-edge overflow-hidden rounded-[2rem]">
@@ -96,7 +96,9 @@ export function RecordPanel({
       </div>
 
       <div className="border-b border-slate-200 bg-sky-50/75 p-4">
-        <p className="text-[10px] font-black uppercase tracking-widest text-sky-800">Next action</p>
+        <p className="text-[10px] font-black uppercase tracking-widest text-sky-800">
+          Next action
+        </p>
         <motion.p
           key={record.nextAction}
           initial={reduceMotion ? false : { opacity: 0, x: -10 }}
@@ -117,16 +119,24 @@ export function RecordPanel({
             </p>
             <div className="mt-2 space-y-1">
               {fields.map((field) => {
-                const isFresh = field.updatedAtStage === stageIndex
+                const isFresh = field.updatedAtStage === stageIndex;
                 return (
                   <motion.div
                     key={`${field.group}:${field.label}:${field.updatedAtStage}`}
                     initial={
                       reduceMotion || !isFresh
                         ? false
-                        : { backgroundColor: "rgba(45, 212, 191, 0.18)", opacity: 0, y: 6 }
+                        : {
+                            backgroundColor: "rgba(45, 212, 191, 0.18)",
+                            opacity: 0,
+                            y: 6,
+                          }
                     }
-                    animate={{ backgroundColor: "rgba(255, 255, 255, 0)", opacity: 1, y: 0 }}
+                    animate={{
+                      backgroundColor: "rgba(255, 255, 255, 0)",
+                      opacity: 1,
+                      y: 0,
+                    }}
                     transition={{ duration: 1.5, ease: "easeOut" }}
                     className="flex items-baseline justify-between gap-3 rounded-xl px-2.5 py-1.5"
                   >
@@ -140,7 +150,7 @@ export function RecordPanel({
                       {field.value}
                     </p>
                   </motion.div>
-                )
+                );
               })}
             </div>
           </div>
@@ -156,11 +166,13 @@ export function RecordPanel({
           className="mt-3 max-h-[220px] space-y-2.5 overflow-y-auto pr-1"
         >
           {record.events.map((event) => {
-            const isFresh = event.stage === stageIndex
+            const isFresh = event.stage === stageIndex;
             return (
               <motion.div
                 key={`${event.stage}-${event.text}`}
-                initial={reduceMotion || !isFresh ? false : { opacity: 0, y: -10 }}
+                initial={
+                  reduceMotion || !isFresh ? false : { opacity: 0, y: -10 }
+                }
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, ease: EASE }}
                 className="flex gap-3"
@@ -181,10 +193,10 @@ export function RecordPanel({
                   {event.text}
                 </p>
               </motion.div>
-            )
+            );
           })}
         </div>
       </div>
     </div>
-  )
+  );
 }

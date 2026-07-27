@@ -1,8 +1,8 @@
-"use client"
+"use client";
 
-import { useEffect, useMemo, useRef, useState } from "react"
-import { motion } from "framer-motion"
-import Vapi from "@vapi-ai/web"
+import { useEffect, useMemo, useRef, useState } from "react";
+import { motion } from "framer-motion";
+import Vapi from "@vapi-ai/web";
 import {
   AlertTriangle,
   Bot,
@@ -16,25 +16,41 @@ import {
   ShieldCheck,
   Sparkles,
   Waves,
-} from "lucide-react"
-import type { LucideIcon } from "lucide-react"
-import type { DemoGenerationStage, DemoIntakeHandoff, GenerateDemoResponse } from "@/lib/demo/types"
-import { missingVapiVariableKeys, toVapiVariableValues } from "@/lib/demo/voice-profile"
-import { voiceConfig } from "@/lib/voice/config"
-import { buildDemoPreviewHandoff } from "@/lib/demo/intake-extraction"
-import { getWorkflowDefinition, type DemoWorkflowType } from "@/lib/demo/workflows"
-import { Button } from "@/components/ui/button"
-import dynamic from "next/dynamic"
-import { buildIntakeSnapshot, type DemoTranscriptItem } from "@/components/demo/PostCallHandoff"
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import type {
+  DemoGenerationStage,
+  DemoIntakeHandoff,
+  GenerateDemoResponse,
+} from "@/lib/demo/types";
+import {
+  missingVapiVariableKeys,
+  toVapiVariableValues,
+} from "@/lib/demo/voice-profile";
+import { voiceConfig } from "@/lib/voice/config";
+import { buildDemoPreviewHandoff } from "@/lib/demo/intake-extraction";
+import {
+  getWorkflowDefinition,
+  type DemoWorkflowType,
+} from "@/lib/demo/workflows";
+import { Button } from "@/components/ui/button";
+import dynamic from "next/dynamic";
+import {
+  buildIntakeSnapshot,
+  type DemoTranscriptItem,
+} from "@/components/demo/PostCallHandoff";
 
 // The JARVIS result card pulls in ActionRenderer's full registry (all flagship
 // scene components) — real weight that a page whose main job is a live voice call
 // shouldn't pay for before the call even starts. Deferred client-only until a call
 // actually ends, same discipline Hero.tsx applies to MarketingOrb/Orb3D.
 const JarvisResultCard = dynamic(
-  () => import("@/components/demo/JarvisResultCard").then((m) => m.JarvisResultCard),
+  () =>
+    import("@/components/demo/JarvisResultCard").then(
+      (m) => m.JarvisResultCard,
+    ),
   { ssr: false },
-)
+);
 
 type CallState =
   | "ready"
@@ -44,28 +60,28 @@ type CallState =
   | "responding"
   | "extracting_handoff"
   | "ended"
-  | "error"
-type MicState = "unknown" | "requesting" | "granted" | "denied"
+  | "error";
+type MicState = "unknown" | "requesting" | "granted" | "denied";
 
-type TranscriptItem = DemoTranscriptItem
+type TranscriptItem = DemoTranscriptItem;
 
 type PersonalizedDemoPanelProps = {
-  result: GenerateDemoResponse
-  onActiveStepChange: (step: number) => void
-  onCallActivity: () => void
-  onCallStatusChange: (stage: DemoGenerationStage) => void
-}
+  result: GenerateDemoResponse;
+  onActiveStepChange: (step: number) => void;
+  onCallActivity: () => void;
+  onCallStatusChange: (stage: DemoGenerationStage) => void;
+};
 
-const CALL_MAX_DURATION_SECONDS = 210
-const CALL_SAFETY_TIMEOUT_MS = CALL_MAX_DURATION_SECONDS * 1000
+const CALL_MAX_DURATION_SECONDS = 210;
+const CALL_SAFETY_TIMEOUT_MS = CALL_MAX_DURATION_SECONDS * 1000;
 // Vapi's own volume-level reports near-zero when nothing audible is arriving.
-const MIC_ACTIVITY_THRESHOLD = 0.02
+const MIC_ACTIVITY_THRESHOLD = 0.02;
 
 function mockTranscriptFor(
   companyName: string,
-  workflowType: DemoWorkflowType
+  workflowType: DemoWorkflowType,
 ): TranscriptItem[] {
-  const timestamp = new Date().toISOString()
+  const timestamp = new Date().toISOString();
   if (workflowType === "water_treatment") {
     return [
       {
@@ -113,7 +129,7 @@ function mockTranscriptFor(
         text: "Understood. I will end the call and send the handoff now.",
         timestamp,
       },
-    ]
+    ];
   }
 
   return [
@@ -124,7 +140,7 @@ function mockTranscriptFor(
     },
     {
       role: "user",
-      text: "My name is Sarah. We are at 142 Millbrook Road in Harrisonburg. My family of 4 has had no water since 11pm, and the submersible well pump stopped working around midnight.",
+      text: "My name is Sarah. We are at 142 Millbrook Road in Harrisonburg. My family of 4 has had no water since 11pm, and the submersible water-treatment stopped working around midnight.",
       timestamp,
     },
     {
@@ -134,7 +150,7 @@ function mockTranscriptFor(
     },
     {
       role: "user",
-      text: "It is a submersible well pump with a pressure tank, and the tank is showing zero pressure.",
+      text: "It is a submersible water-treatment with a pressure tank, and the tank is showing zero pressure.",
       timestamp,
     },
     {
@@ -157,64 +173,64 @@ function mockTranscriptFor(
       text: "The best callback number is 555-123-4567.",
       timestamp,
     },
-      {
-        role: "assistant",
-        text: "Got it. I have structured the job details and alerted the on-call team. Do you need help with anything else?",
-        timestamp,
-      },
-      {
-        role: "user",
-        text: "No thanks.",
-        timestamp,
-      },
-      {
-        role: "assistant",
-        text: "Understood. I will end the call and send the handoff now.",
-        timestamp,
-      },
-  ]
+    {
+      role: "assistant",
+      text: "Got it. I have structured the job details and alerted the on-call team. Do you need help with anything else?",
+      timestamp,
+    },
+    {
+      role: "user",
+      text: "No thanks.",
+      timestamp,
+    },
+    {
+      role: "assistant",
+      text: "Understood. I will end the call and send the handoff now.",
+      timestamp,
+    },
+  ];
 }
 
 function shouldAutoEndCall(transcript: TranscriptItem[]) {
-  const latest = transcript[transcript.length - 1]
-  if (!latest || latest.role !== "user") return false
+  const latest = transcript[transcript.length - 1];
+  if (!latest || latest.role !== "user") return false;
 
-  const latestText = latest.text.toLowerCase()
+  const latestText = latest.text.toLowerCase();
   const userDeclinedMoreHelp =
     /\b(no thanks|no thank you|nope|nah|nothing else|that'?s all|that is all|all good|i'?m good|im good)\b/.test(
-      latestText
-    ) || /^no[.! ]*$/.test(latestText.trim())
+      latestText,
+    ) || /^no[.! ]*$/.test(latestText.trim());
 
-  if (!userDeclinedMoreHelp) return false
+  if (!userDeclinedMoreHelp) return false;
 
   return transcript.slice(-6, -1).some((item) => {
-    if (item.role !== "assistant") return false
-    const text = item.text.toLowerCase()
+    if (item.role !== "assistant") return false;
+    const text = item.text.toLowerCase();
     return (
       text.includes("anything else") ||
       text.includes("something else") ||
       /help with .+ else/.test(text) ||
       /need .+ else/.test(text)
-    )
-  })
+    );
+  });
 }
 
 function buildSuggestedCallerPrompt(
   workflowType: DemoWorkflowType,
-  onWell?: boolean
+  onWell?: boolean,
 ): string {
   if (workflowType === "well_pump_emergency") {
-    return "Hi, our whole house has had no water since 11 PM. The pressure tank reads zero, and I think the submersible well pump may have stopped working."
+    return "Hi, our whole house has had no water since 11 PM. The pressure tank reads zero, and I think the submersible water-treatment may have stopped working.";
   }
 
-  const waterSource = onWell ?? true
+  const waterSource = onWell ?? true;
   const waterConcern = waterSource
     ? "sulfur smell and hard water"
-    : "chlorine taste and hard water"
+    : "chlorine taste and hard water";
 
   return `Hi, I am looking into a water softener and maybe a whole-house filter. We are on ${
     waterSource ? "well water" : "city water"
-  }, there is a ${waterConcern}, and I would like to understand the options.`
+  }, there is a ${waterConcern}, and I would like to understand the options.`;
 }
 
 export function PersonalizedDemoPanel({
@@ -223,33 +239,35 @@ export function PersonalizedDemoPanel({
   onCallActivity,
   onCallStatusChange,
 }: PersonalizedDemoPanelProps) {
-  const workflow = getWorkflowDefinition(result.profile.workflowType)
+  const workflow = getWorkflowDefinition(result.profile.workflowType);
   const suggestedPrompt = buildSuggestedCallerPrompt(
     result.profile.workflowType,
-    result.qualification?.onWell
-  )
-  const [callState, setCallState] = useState<CallState>("ready")
-  const [micState, setMicState] = useState<MicState>("unknown")
-  const [transcript, setTranscript] = useState<TranscriptItem[]>([])
-  const [elapsedSeconds, setElapsedSeconds] = useState(0)
-  const [isMockCall, setIsMockCall] = useState(false)
-  const [callError, setCallError] = useState("")
-  const [handoffIntake, setHandoffIntake] = useState<DemoIntakeHandoff | null>(null)
-  const [micSilenceWarning, setMicSilenceWarning] = useState(false)
+    result.qualification?.onWell,
+  );
+  const [callState, setCallState] = useState<CallState>("ready");
+  const [micState, setMicState] = useState<MicState>("unknown");
+  const [transcript, setTranscript] = useState<TranscriptItem[]>([]);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [isMockCall, setIsMockCall] = useState(false);
+  const [callError, setCallError] = useState("");
+  const [handoffIntake, setHandoffIntake] = useState<DemoIntakeHandoff | null>(
+    null,
+  );
+  const [micSilenceWarning, setMicSilenceWarning] = useState(false);
 
-  const vapiRef = useRef<Vapi | null>(null)
-  const postCallRef = useRef<HTMLDivElement | null>(null)
-  const mediaStreamRef = useRef<MediaStream | null>(null)
-  const mockTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const callTimeoutRef = useRef<number | null>(null)
-  const autoEndTimerRef = useRef<number | null>(null)
-  const callIdRef = useRef<string | null>(null)
-  const callStartedAtRef = useRef<number | null>(null)
-  const transcriptRef = useRef<TranscriptItem[]>([])
-  const extractionStartedRef = useRef(false)
-  const autoEndQueuedRef = useRef(false)
-  const seenTranscriptRef = useRef<Set<string>>(new Set())
-  const callStateRef = useRef<CallState>("ready")
+  const vapiRef = useRef<Vapi | null>(null);
+  const postCallRef = useRef<HTMLDivElement | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const mockTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const callTimeoutRef = useRef<number | null>(null);
+  const autoEndTimerRef = useRef<number | null>(null);
+  const callIdRef = useRef<string | null>(null);
+  const callStartedAtRef = useRef<number | null>(null);
+  const transcriptRef = useRef<TranscriptItem[]>([]);
+  const extractionStartedRef = useRef(false);
+  const autoEndQueuedRef = useRef(false);
+  const seenTranscriptRef = useRef<Set<string>>(new Set());
+  const callStateRef = useRef<CallState>("ready");
   // Real regression, found and reverted: an earlier pass here added its OWN
   // `getUserMedia()` preflight, then kept that stream ALIVE for the whole call
   // (via `mediaStreamRef`) so an AnalyserNode could watch for real audio — on top
@@ -262,18 +280,21 @@ export function PersonalizedDemoPanel({
   // Restoring that single-request path — the silence watchdog below now reads
   // Vapi's own `volume-level` event (it already samples the real mic input it's
   // using) instead of holding a second, independent stream open.
-  const micWatchdogRef = useRef<number | null>(null)
-  const lastAudioAtRef = useRef<number>(0)
+  const micWatchdogRef = useRef<number | null>(null);
+  const lastAudioAtRef = useRef<number>(0);
 
   const hasVapiConfig = Boolean(
-    voiceConfig.vapiPublicKey && voiceConfig.vapiAssistantId && !voiceConfig.mockMode
-  )
+    voiceConfig.vapiPublicKey &&
+    voiceConfig.vapiAssistantId &&
+    !voiceConfig.mockMode,
+  );
   const isCallActive =
     callState === "preparing" ||
     callState === "connected" ||
     callState === "listening" ||
-    callState === "responding"
-  const callFinished = callState === "extracting_handoff" || callState === "ended"
+    callState === "responding";
+  const callFinished =
+    callState === "extracting_handoff" || callState === "ended";
 
   const vapiVariables = useMemo(
     () => ({
@@ -282,240 +303,261 @@ export function PersonalizedDemoPanel({
       // tier. New assistant prompts reference these; older prompts ignore them.
       ...(result.quoting?.variables ?? {}),
     }),
-    [result.voiceProfile, result.quoting]
-  )
-  const missingContextKeys = useMemo(() => missingVapiVariableKeys(vapiVariables), [vapiVariables])
-  const hasDemoContext = missingContextKeys.length === 0
+    [result.voiceProfile, result.quoting],
+  );
+  const missingContextKeys = useMemo(
+    () => missingVapiVariableKeys(vapiVariables),
+    [vapiVariables],
+  );
+  const hasDemoContext = missingContextKeys.length === 0;
   const intakeSnapshot = useMemo(
     () =>
       handoffIntake ||
       buildIntakeSnapshot(
         transcript,
         result.profile.company_name,
-        result.profile.workflowType
+        result.profile.workflowType,
       ),
-    [handoffIntake, result.profile.company_name, result.profile.workflowType, transcript]
-  )
+    [
+      handoffIntake,
+      result.profile.company_name,
+      result.profile.workflowType,
+      transcript,
+    ],
+  );
 
   useEffect(() => {
     console.info("[FINNOR demo voice config]", {
       publicKeyPresent: Boolean(voiceConfig.vapiPublicKey),
       assistantIdPresent: Boolean(voiceConfig.vapiAssistantId),
       mockMode: voiceConfig.mockMode,
-    })
+    });
 
     if (hasVapiConfig && !vapiRef.current) {
-      vapiRef.current = new Vapi(voiceConfig.vapiPublicKey.trim())
+      vapiRef.current = new Vapi(voiceConfig.vapiPublicKey.trim());
     }
-  }, [hasVapiConfig])
+  }, [hasVapiConfig]);
 
   useEffect(() => {
-    callStateRef.current = callState
+    callStateRef.current = callState;
     // Only the caller's own speaking turn ("listening") should ever trigger a
     // silence warning — reset the clock on every transition into it so a long
     // preceding assistant response never counts as "already gone quiet."
     if (callState === "listening") {
-      lastAudioAtRef.current = performance.now()
-      setMicSilenceWarning(false)
+      lastAudioAtRef.current = performance.now();
+      setMicSilenceWarning(false);
     }
     if (callState === "ended" || callState === "error") {
-      stopMicLevelWatch()
+      stopMicLevelWatch();
     }
-  }, [callState])
+  }, [callState]);
 
   useEffect(() => {
-    if (!isCallActive || callState === "preparing") return
-    const timer = setInterval(() => setElapsedSeconds((current) => current + 1), 1000)
-    return () => clearInterval(timer)
-  }, [callState, isCallActive])
+    if (!isCallActive || callState === "preparing") return;
+    const timer = setInterval(
+      () => setElapsedSeconds((current) => current + 1),
+      1000,
+    );
+    return () => clearInterval(timer);
+  }, [callState, isCallActive]);
 
   useEffect(() => {
-    if (!isCallActive) return
-    let step = 0
-    onActiveStepChange(step)
+    if (!isCallActive) return;
+    let step = 0;
+    onActiveStepChange(step);
     const timer = setInterval(() => {
-      step = Math.min(step + 1, 4)
-      onActiveStepChange(step)
-    }, 1450)
+      step = Math.min(step + 1, 4);
+      onActiveStepChange(step);
+    }, 1450);
 
-    return () => clearInterval(timer)
-  }, [isCallActive, onActiveStepChange])
+    return () => clearInterval(timer);
+  }, [isCallActive, onActiveStepChange]);
 
   useEffect(() => {
     return () => {
       if (mockTimerRef.current) {
-        clearInterval(mockTimerRef.current)
+        clearInterval(mockTimerRef.current);
       }
       if (callTimeoutRef.current) {
-        clearTimeout(callTimeoutRef.current)
+        clearTimeout(callTimeoutRef.current);
       }
       if (autoEndTimerRef.current) {
-        clearTimeout(autoEndTimerRef.current)
+        clearTimeout(autoEndTimerRef.current);
       }
       if (mediaStreamRef.current) {
-        mediaStreamRef.current.getTracks().forEach((track) => track.stop())
+        mediaStreamRef.current.getTracks().forEach((track) => track.stop());
       }
-      stopMicLevelWatch()
+      stopMicLevelWatch();
       if (vapiRef.current) {
-        vapiRef.current.removeAllListeners()
-        void vapiRef.current.stop()
+        vapiRef.current.removeAllListeners();
+        void vapiRef.current.stop();
       }
-    }
-  }, [])
+    };
+  }, []);
 
   useEffect(() => {
-    if (callState !== "ended") return
+    if (callState !== "ended") return;
     const timer = window.setTimeout(() => {
-      postCallRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
-    }, 450)
-    return () => window.clearTimeout(timer)
-  }, [callState])
+      postCallRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 450);
+    return () => window.clearTimeout(timer);
+  }, [callState]);
 
   async function startCall() {
-    if (isCallActive || callFinished) return
+    if (isCallActive || callFinished) return;
 
-    setIsMockCall(false)
-    setTranscript([])
-    transcriptRef.current = []
-    setHandoffIntake(null)
-    extractionStartedRef.current = false
-    autoEndQueuedRef.current = false
-    seenTranscriptRef.current.clear()
-    setElapsedSeconds(0)
-    setCallError("")
-    setCallState("preparing")
-    callStartedAtRef.current = performance.now()
-    onCallStatusChange("connecting")
-    onActiveStepChange(0)
+    setIsMockCall(false);
+    setTranscript([]);
+    transcriptRef.current = [];
+    setHandoffIntake(null);
+    extractionStartedRef.current = false;
+    autoEndQueuedRef.current = false;
+    seenTranscriptRef.current.clear();
+    setElapsedSeconds(0);
+    setCallError("");
+    setCallState("preparing");
+    callStartedAtRef.current = performance.now();
+    onCallStatusChange("connecting");
+    onActiveStepChange(0);
 
     if (!hasDemoContext) {
-      setCallState("error")
-      onCallStatusChange("error")
-      setCallError("Demo context is missing. Please generate the demo again.")
-      return
+      setCallState("error");
+      onCallStatusChange("error");
+      setCallError("Demo context is missing. Please generate the demo again.");
+      return;
     }
 
     if (hasVapiConfig) {
-      await startVapiCall()
-      return
+      await startVapiCall();
+      return;
     }
 
-    setIsMockCall(true)
-    setMicState("granted")
-    await startMockCall()
+    setIsMockCall(true);
+    setMicState("granted");
+    await startMockCall();
   }
 
   async function startVapiCall() {
     try {
-      const publicKey = voiceConfig.vapiPublicKey.trim()
-      const assistantId = voiceConfig.vapiAssistantId.trim()
+      const publicKey = voiceConfig.vapiPublicKey.trim();
+      const assistantId = voiceConfig.vapiAssistantId.trim();
       if (!publicKey) {
-        setCallState("error")
-        onCallStatusChange("error")
-        setCallError("Missing NEXT_PUBLIC_VAPI_PUBLIC_KEY")
-        return
+        setCallState("error");
+        onCallStatusChange("error");
+        setCallError("Missing NEXT_PUBLIC_VAPI_PUBLIC_KEY");
+        return;
       }
       if (!assistantId) {
-        setCallState("error")
-        onCallStatusChange("error")
-        setCallError("Missing NEXT_PUBLIC_VAPI_ASSISTANT_ID")
-        return
+        setCallState("error");
+        onCallStatusChange("error");
+        setCallError("Missing NEXT_PUBLIC_VAPI_ASSISTANT_ID");
+        return;
       }
 
-      const vapi = vapiRef.current || new Vapi(publicKey)
-      vapiRef.current = vapi
-      vapi.removeAllListeners()
+      const vapi = vapiRef.current || new Vapi(publicKey);
+      vapiRef.current = vapi;
+      vapi.removeAllListeners();
 
       vapi.on("call-start", () => {
         const startupMs = callStartedAtRef.current
           ? Math.round(performance.now() - callStartedAtRef.current)
-          : null
-        console.info("[FINNOR Vapi call-start]", { startupMs })
-        setMicState("granted")
-        setCallState("listening")
-        onCallStatusChange("live")
-        onCallActivity()
-        startMicLevelWatch()
+          : null;
+        console.info("[FINNOR Vapi call-start]", { startupMs });
+        setMicState("granted");
+        setCallState("listening");
+        onCallStatusChange("live");
+        onCallActivity();
+        startMicLevelWatch();
         void updateLead({
           call_started: true,
           status: "call_started",
           vapi_call_id: callIdRef.current,
-        })
+        });
         callTimeoutRef.current = window.setTimeout(() => {
-          console.info("Call auto-ended by safety timer")
-          void endCall()
-        }, CALL_SAFETY_TIMEOUT_MS)
-        console.info("Call safety timer started")
-      })
+          console.info("Call auto-ended by safety timer");
+          void endCall();
+        }, CALL_SAFETY_TIMEOUT_MS);
+        console.info("Call safety timer started");
+      });
 
       vapi.on("call-end", () => {
-        console.info("[FINNOR Vapi call-end]")
-        stopMicLevelWatch()
-        void finishCallAndExtract("call_ended")
-      })
+        console.info("[FINNOR Vapi call-end]");
+        stopMicLevelWatch();
+        void finishCallAndExtract("call_ended");
+      });
 
-      vapi.on("speech-start", () => setCallState("responding"))
-      vapi.on("speech-end", () => setCallState("listening"))
+      vapi.on("speech-start", () => setCallState("responding"));
+      vapi.on("speech-end", () => setCallState("listening"));
 
       // Vapi's own volume-level event already samples the real mic input IT is
       // using for the call — reusing that instead of a second, independent
       // getUserMedia+AnalyserNode stream (the exact anti-pattern reverted above).
       vapi.on("volume-level", (level?: unknown) => {
-        const value = typeof level === "number" ? level : 0
+        const value = typeof level === "number" ? level : 0;
         if (value > MIC_ACTIVITY_THRESHOLD) {
-          lastAudioAtRef.current = Date.now()
-          setMicSilenceWarning(false)
+          lastAudioAtRef.current = Date.now();
+          setMicSilenceWarning(false);
         }
-      })
+      });
 
       vapi.on("call-start-success", (event) => {
-        callIdRef.current = event.callId && event.callId !== "unknown" ? event.callId : callIdRef.current
-      })
+        callIdRef.current =
+          event.callId && event.callId !== "unknown"
+            ? event.callId
+            : callIdRef.current;
+      });
 
       vapi.on("call-start-progress", (event) => {
-        console.info("[FINNOR Vapi call-start-progress]", event)
-      })
+        console.info("[FINNOR Vapi call-start-progress]", event);
+      });
 
       vapi.on("call-start-failed", (event) => {
-        console.error("[FINNOR Vapi call-start-failed]", event)
-        clearCallTimeout()
-        stopMicLevelWatch()
-        setCallState("error")
-        onCallStatusChange("error")
-        setCallError("The live voice call could not start. Please check the Vapi configuration.")
-      })
+        console.error("[FINNOR Vapi call-start-failed]", event);
+        clearCallTimeout();
+        stopMicLevelWatch();
+        setCallState("error");
+        onCallStatusChange("error");
+        setCallError(
+          "The live voice call could not start. Please check the Vapi configuration.",
+        );
+      });
 
       vapi.on("message", (message: unknown) => {
-        const speechState = speechStateFromVapiMessage(message)
+        const speechState = speechStateFromVapiMessage(message);
         if (speechState) {
-          setCallState(speechState)
+          setCallState(speechState);
         }
-        const transcriptItems = transcriptItemsFromVapiMessage(message)
-        logTranscriptItems(transcriptItems)
-        appendTranscript(transcriptItems)
-      })
+        const transcriptItems = transcriptItemsFromVapiMessage(message);
+        logTranscriptItems(transcriptItems);
+        appendTranscript(transcriptItems);
+      });
 
       vapi.on("error", (error) => {
-        console.error("[FINNOR Vapi error]", error)
-        clearCallTimeout()
-        stopMicLevelWatch()
+        console.error("[FINNOR Vapi error]", error);
+        clearCallTimeout();
+        stopMicLevelWatch();
         if (voiceConfig.mockMode) {
-          setIsMockCall(true)
-          void startMockCall()
-          return
+          setIsMockCall(true);
+          void startMockCall();
+          return;
         }
 
-        setCallState("error")
-        onCallStatusChange("error")
-        setCallError("The live voice call could not start. Please check the Vapi configuration.")
-      })
+        setCallState("error");
+        onCallStatusChange("error");
+        setCallError(
+          "The live voice call could not start. Please check the Vapi configuration.",
+        );
+      });
 
       const call = (await vapi.start(
         assistantId,
         {
           firstMessage: workflow.firstMessage.replace(
             "{{company}}",
-            result.voiceProfile.companyName
+            result.voiceProfile.companyName,
           ),
           firstMessageMode: "assistant-speaks-first",
           maxDurationSeconds: CALL_MAX_DURATION_SECONDS,
@@ -524,88 +566,90 @@ export function PersonalizedDemoPanel({
         undefined,
         undefined,
         undefined,
-        { roomDeleteOnUserLeaveEnabled: true }
-      )) as { id?: string } | null
+        { roomDeleteOnUserLeaveEnabled: true },
+      )) as { id?: string } | null;
 
-      callIdRef.current = call?.id || null
+      callIdRef.current = call?.id || null;
       void updateLead({
         call_started: true,
         status: "call_started",
         vapi_call_id: callIdRef.current,
-      })
+      });
     } catch (error) {
-      console.error("[FINNOR Vapi start error]", error)
-      clearCallTimeout()
+      console.error("[FINNOR Vapi start error]", error);
+      clearCallTimeout();
       if (voiceConfig.mockMode) {
-        setIsMockCall(true)
-        await startMockCall()
-        return
+        setIsMockCall(true);
+        await startMockCall();
+        return;
       }
 
-      setCallState("error")
-      onCallStatusChange("error")
-      setCallError("The live voice call could not start. Please check the Vapi configuration.")
+      setCallState("error");
+      onCallStatusChange("error");
+      setCallError(
+        "The live voice call could not start. Please check the Vapi configuration.",
+      );
     }
   }
 
   async function startMockCall() {
-    clearMockTimer()
-    setMicState((current) => (current === "denied" ? "denied" : "granted"))
-    setCallState("connected")
-    onCallStatusChange("live")
-    onCallActivity()
-    void updateLead({ call_started: true, status: "mock_call_started" })
-    setCallState("listening")
+    clearMockTimer();
+    setMicState((current) => (current === "denied" ? "denied" : "granted"));
+    setCallState("connected");
+    onCallStatusChange("live");
+    onCallActivity();
+    void updateLead({ call_started: true, status: "mock_call_started" });
+    setCallState("listening");
 
-    let index = 0
+    let index = 0;
     const mockTranscript = mockTranscriptFor(
       result.voiceProfile.companyName,
-      result.profile.workflowType
-    )
+      result.profile.workflowType,
+    );
     mockTimerRef.current = setInterval(() => {
-      const item = mockTranscript[index]
+      const item = mockTranscript[index];
       if (!item) {
-        clearMockTimer()
-        clearCallTimeout()
+        clearMockTimer();
+        clearCallTimeout();
         window.setTimeout(() => {
-          void finishCallAndExtract("mock_call_ended")
-        }, 2600)
-        return
+          void finishCallAndExtract("mock_call_ended");
+        }, 2600);
+        return;
       }
 
-      setCallState(item.role === "assistant" ? "responding" : "listening")
-      appendTranscript([item])
-      index += 1
-    }, 1750)
+      setCallState(item.role === "assistant" ? "responding" : "listening");
+      appendTranscript([item]);
+      index += 1;
+    }, 1750);
   }
 
   async function endCall() {
-    if (callState === "ended" || callState === "extracting_handoff") return
-    onCallStatusChange("ending")
-    clearCallTimeout()
-    clearAutoEndTimer()
-    clearMockTimer()
-    cleanupLocalMedia()
+    if (callState === "ended" || callState === "extracting_handoff") return;
+    onCallStatusChange("ending");
+    clearCallTimeout();
+    clearAutoEndTimer();
+    clearMockTimer();
+    cleanupLocalMedia();
 
     if (vapiRef.current) {
-      await vapiRef.current.stop()
-      vapiRef.current = null
+      await vapiRef.current.stop();
+      vapiRef.current = null;
     }
 
-    await finishCallAndExtract(isMockCall ? "mock_call_ended" : "call_ended")
+    await finishCallAndExtract(isMockCall ? "mock_call_ended" : "call_ended");
   }
 
   async function finishCallAndExtract(status: string) {
-    if (extractionStartedRef.current) return
-    extractionStartedRef.current = true
-    clearCallTimeout()
-    clearAutoEndTimer()
-    clearMockTimer()
-    cleanupLocalMedia()
-    setCallState("extracting_handoff")
-    onCallStatusChange("extracting_handoff")
-    onActiveStepChange(4)
-    await updateLead({ call_ended: true, status })
+    if (extractionStartedRef.current) return;
+    extractionStartedRef.current = true;
+    clearCallTimeout();
+    clearAutoEndTimer();
+    clearMockTimer();
+    cleanupLocalMedia();
+    setCallState("extracting_handoff");
+    onCallStatusChange("extracting_handoff");
+    onActiveStepChange(4);
+    await updateLead({ call_ended: true, status });
 
     try {
       const response = await fetch("/api/demo/extract-intake", {
@@ -619,20 +663,20 @@ export function PersonalizedDemoPanel({
           householdId: result.household_id ?? null,
           household: result.household ?? null,
         }),
-      })
-      const intake = (await response.json()) as DemoIntakeHandoff
-      setHandoffIntake(intake)
+      });
+      const intake = (await response.json()) as DemoIntakeHandoff;
+      setHandoffIntake(intake);
     } catch {
       setHandoffIntake(
         buildDemoPreviewHandoff(
           result.profile.company_name,
           result.voiceProfile.safeDemoScenario,
-          result.profile.workflowType
-        )
-      )
+          result.profile.workflowType,
+        ),
+      );
     } finally {
-      setCallState("ended")
-      onCallStatusChange("ended")
+      setCallState("ended");
+      onCallStatusChange("ended");
     }
   }
 
@@ -642,55 +686,58 @@ export function PersonalizedDemoPanel({
   // regression (see the refs' own comment above): holding a second stream open
   // alongside Vapi/Daily's internal one caused real mic-capture contention.
   function startMicLevelWatch() {
-    stopMicLevelWatch()
-    lastAudioAtRef.current = Date.now()
-    const SILENCE_WARNING_MS = 8000
+    stopMicLevelWatch();
+    lastAudioAtRef.current = Date.now();
+    const SILENCE_WARNING_MS = 8000;
     micWatchdogRef.current = window.setInterval(() => {
-      if (callStateRef.current === "listening" && Date.now() - lastAudioAtRef.current > SILENCE_WARNING_MS) {
-        setMicSilenceWarning(true)
+      if (
+        callStateRef.current === "listening" &&
+        Date.now() - lastAudioAtRef.current > SILENCE_WARNING_MS
+      ) {
+        setMicSilenceWarning(true);
       }
-    }, 1000)
+    }, 1000);
   }
 
   function stopMicLevelWatch() {
     if (micWatchdogRef.current) {
-      window.clearInterval(micWatchdogRef.current)
-      micWatchdogRef.current = null
+      window.clearInterval(micWatchdogRef.current);
+      micWatchdogRef.current = null;
     }
-    setMicSilenceWarning(false)
+    setMicSilenceWarning(false);
   }
 
   function clearMockTimer() {
     if (mockTimerRef.current) {
-      clearInterval(mockTimerRef.current)
-      mockTimerRef.current = null
+      clearInterval(mockTimerRef.current);
+      mockTimerRef.current = null;
     }
   }
 
   function clearCallTimeout() {
     if (callTimeoutRef.current) {
-      clearTimeout(callTimeoutRef.current)
-      callTimeoutRef.current = null
-      console.info("Call safety timer cleared")
+      clearTimeout(callTimeoutRef.current);
+      callTimeoutRef.current = null;
+      console.info("Call safety timer cleared");
     }
   }
 
   function cleanupLocalMedia() {
-    clearMockTimer()
-    stopMicLevelWatch()
+    clearMockTimer();
+    stopMicLevelWatch();
     if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach((track) => track.stop())
-      mediaStreamRef.current = null
+      mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+      mediaStreamRef.current = null;
     }
   }
 
   async function updateLead(payload: {
-    call_started?: boolean
-    call_ended?: boolean
-    status?: string
-    vapi_call_id?: string | null
+    call_started?: boolean;
+    call_ended?: boolean;
+    status?: string;
+    vapi_call_id?: string | null;
   }) {
-    if (!result.lead_id) return
+    if (!result.lead_id) return;
 
     try {
       await fetch("/api/demo-leads/update", {
@@ -700,42 +747,42 @@ export function PersonalizedDemoPanel({
           lead_id: result.lead_id,
           ...payload,
         }),
-      })
+      });
     } catch {
       // Lead capture should never interrupt the demo.
     }
   }
 
   function appendTranscript(items: TranscriptItem[]) {
-    if (!items.length) return
+    if (!items.length) return;
     const nextItems = items.filter((item) => {
-      if (!item.text.trim()) return false
-      const key = `${item.role}:${item.text}`
-      if (seenTranscriptRef.current.has(key)) return false
-      seenTranscriptRef.current.add(key)
-      return true
-    })
-    if (!nextItems.length) return
-    transcriptRef.current = [...transcriptRef.current, ...nextItems]
-    setTranscript(transcriptRef.current)
-    queueAutoEndIfCallIsComplete(transcriptRef.current)
+      if (!item.text.trim()) return false;
+      const key = `${item.role}:${item.text}`;
+      if (seenTranscriptRef.current.has(key)) return false;
+      seenTranscriptRef.current.add(key);
+      return true;
+    });
+    if (!nextItems.length) return;
+    transcriptRef.current = [...transcriptRef.current, ...nextItems];
+    setTranscript(transcriptRef.current);
+    queueAutoEndIfCallIsComplete(transcriptRef.current);
   }
 
   function queueAutoEndIfCallIsComplete(nextTranscript: TranscriptItem[]) {
-    if (autoEndQueuedRef.current || extractionStartedRef.current) return
-    if (!shouldAutoEndCall(nextTranscript)) return
+    if (autoEndQueuedRef.current || extractionStartedRef.current) return;
+    if (!shouldAutoEndCall(nextTranscript)) return;
 
-    autoEndQueuedRef.current = true
+    autoEndQueuedRef.current = true;
     autoEndTimerRef.current = window.setTimeout(() => {
-      autoEndTimerRef.current = null
-      void endCall()
-    }, 900)
+      autoEndTimerRef.current = null;
+      void endCall();
+    }, 900);
   }
 
   function clearAutoEndTimer() {
     if (autoEndTimerRef.current) {
-      clearTimeout(autoEndTimerRef.current)
-      autoEndTimerRef.current = null
+      clearTimeout(autoEndTimerRef.current);
+      autoEndTimerRef.current = null;
     }
   }
 
@@ -744,11 +791,11 @@ export function PersonalizedDemoPanel({
       console.info("[FINNOR Vapi transcript]", {
         role: item.role,
         text: item.text,
-      })
-    })
+      });
+    });
   }
 
-  const statusLabel = statusCopy(callState)
+  const statusLabel = statusCopy(callState);
 
   return (
     <section className="relative border-t border-white/5 py-20 md:py-28">
@@ -768,14 +815,18 @@ export function PersonalizedDemoPanel({
                   <span className="inline-flex items-center rounded-full border border-cyan-200/20 bg-cyan-200/[0.06] px-4 py-1.5 text-xs font-black uppercase tracking-widest text-cyan-50">
                     <span
                       className={`mr-2 h-1.5 w-1.5 rounded-full ${
-                        isCallActive ? "animate-pulse bg-cyan-200" : "bg-cyan-200"
+                        isCallActive
+                          ? "animate-pulse bg-cyan-200"
+                          : "bg-cyan-200"
                       }`}
                     />
                     {statusLabel}
                   </span>
                   {isMockCall || !hasVapiConfig ? (
                     <span className="inline-flex items-center rounded-full border border-white/12 bg-white/[0.06] px-4 py-1.5 text-xs font-bold text-slate-200">
-                      {voiceConfig.mockMode ? "Mock demo mode" : "Voice not configured"}
+                      {voiceConfig.mockMode
+                        ? "Mock demo mode"
+                        : "Voice not configured"}
                     </span>
                   ) : null}
                 </div>
@@ -840,12 +891,26 @@ export function PersonalizedDemoPanel({
                 </p>
 
                 <div className="mt-6 grid gap-3 sm:grid-cols-3">
-                  <ConsoleMetric icon={Mic} label="Mic" value={micCopy(micState)} />
-                  <ConsoleMetric icon={Clock3} label="Timer" value={formatTimer(elapsedSeconds)} />
+                  <ConsoleMetric
+                    icon={Mic}
+                    label="Mic"
+                    value={micCopy(micState)}
+                  />
+                  <ConsoleMetric
+                    icon={Clock3}
+                    label="Timer"
+                    value={formatTimer(elapsedSeconds)}
+                  />
                   <ConsoleMetric
                     icon={ShieldCheck}
                     label="Mode"
-                    value={hasVapiConfig && !isMockCall ? "Vapi live" : voiceConfig.mockMode ? "Mock safe" : "Not configured"}
+                    value={
+                      hasVapiConfig && !isMockCall
+                        ? "Vapi live"
+                        : voiceConfig.mockMode
+                          ? "Mock safe"
+                          : "Not configured"
+                    }
                   />
                 </div>
                 {!hasDemoContext ? (
@@ -855,7 +920,8 @@ export function PersonalizedDemoPanel({
                 ) : null}
                 {!hasVapiConfig && !voiceConfig.mockMode ? (
                   <div className="mt-5 rounded-2xl border border-white/15 bg-white/[0.06] p-4 text-sm font-semibold leading-relaxed text-white">
-                    Live voice is not configured in this environment, so this run uses the safe preview call path.
+                    Live voice is not configured in this environment, so this
+                    run uses the safe preview call path.
                   </div>
                 ) : null}
                 {callError ? (
@@ -867,8 +933,9 @@ export function PersonalizedDemoPanel({
                   <div className="mt-5 flex items-start gap-3 rounded-2xl border border-amber-300/25 bg-amber-300/[0.08] p-4 text-sm font-semibold leading-relaxed text-amber-100">
                     <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                     <span>
-                      We&apos;re not picking up your microphone. Check that it isn&apos;t muted and that this site has
-                      mic permission in your browser, then try speaking again.
+                      We&apos;re not picking up your microphone. Check that it
+                      isn&apos;t muted and that this site has mic permission in
+                      your browser, then try speaking again.
                     </span>
                   </div>
                 ) : null}
@@ -887,7 +954,8 @@ export function PersonalizedDemoPanel({
                     Live call console
                   </p>
                   <h3 className="mt-2 text-2xl font-black tracking-tight text-white">
-                    Sarah is {callState === "responding" ? "responding" : "listening"}
+                    Sarah is{" "}
+                    {callState === "responding" ? "responding" : "listening"}
                   </h3>
                 </div>
                 <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl border border-white/10 bg-black/60">
@@ -904,7 +972,9 @@ export function PersonalizedDemoPanel({
 
               <div className="mt-6 grid gap-3 sm:grid-cols-2">
                 <StateIndicator
-                  active={callState === "listening" || callState === "connected"}
+                  active={
+                    callState === "listening" || callState === "connected"
+                  }
                   icon={Ear}
                   label="AI is listening"
                 />
@@ -931,7 +1001,12 @@ export function PersonalizedDemoPanel({
                       key={index}
                       animate={
                         isCallActive
-                          ? { scaleY: [0.35 + (index % 5) * 0.12, 0.92 + (index % 6) * 0.08] }
+                          ? {
+                              scaleY: [
+                                0.35 + (index % 5) * 0.12,
+                                0.92 + (index % 6) * 0.08,
+                              ],
+                            }
                           : { scaleY: 0.28 }
                       }
                       transition={{
@@ -969,13 +1044,15 @@ export function PersonalizedDemoPanel({
                         <CheckCircle2 className="h-3.5 w-3.5 text-cyan-100" />
                         {transcriptRoleLabel(item.role)}
                       </div>
-                      <p className="text-sm leading-relaxed text-white/70">{item.text}</p>
+                      <p className="text-sm leading-relaxed text-white/70">
+                        {item.text}
+                      </p>
                     </motion.div>
                   ))
                 ) : (
                   <div className="rounded-2xl border border-white/10 bg-white/[0.045] p-5 text-sm font-semibold leading-relaxed text-slate-300">
-                    Demo ready. Start the call to see transcript events, intake capture, and
-                    handoff signals.
+                    Demo ready. Start the call to see transcript events, intake
+                    capture, and handoff signals.
                   </div>
                 )}
               </div>
@@ -983,18 +1060,24 @@ export function PersonalizedDemoPanel({
           </div>
         </motion.div>
         {callState === "extracting_handoff" ? (
-          <div ref={postCallRef} className="mt-8 rounded-3xl border border-cyan-200/15 bg-cyan-200/[0.045] p-6 text-sm font-black uppercase tracking-widest text-cyan-50">
+          <div
+            ref={postCallRef}
+            className="mt-8 rounded-3xl border border-cyan-200/15 bg-cyan-200/[0.045] p-6 text-sm font-black uppercase tracking-widest text-cyan-50"
+          >
             Extracting {workflow.shortLabel.toLowerCase()} handoff...
           </div>
         ) : null}
         {callState === "ended" && handoffIntake ? (
           <div ref={postCallRef}>
-            <JarvisResultCard companyName={result.profile.company_name} intake={handoffIntake} />
+            <JarvisResultCard
+              companyName={result.profile.company_name}
+              intake={handoffIntake}
+            />
           </div>
         ) : null}
       </div>
     </section>
-  )
+  );
 }
 
 function ConsoleMetric({
@@ -1002,17 +1085,19 @@ function ConsoleMetric({
   label,
   value,
 }: {
-  icon: LucideIcon
-  label: string
-  value: string
+  icon: LucideIcon;
+  label: string;
+  value: string;
 }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-4">
       <Icon className="mb-3 h-4 w-4 text-cyan-100" />
-      <p className="text-[10px] font-black uppercase tracking-widest text-slate-300">{label}</p>
+      <p className="text-[10px] font-black uppercase tracking-widest text-slate-300">
+        {label}
+      </p>
       <p className="mt-1 text-sm font-bold text-white">{value}</p>
     </div>
-  )
+  );
 }
 
 function StateIndicator({
@@ -1020,9 +1105,9 @@ function StateIndicator({
   icon: Icon,
   label,
 }: {
-  active: boolean
-  icon: LucideIcon
-  label: string
+  active: boolean;
+  icon: LucideIcon;
+  label: string;
 }) {
   return (
     <div
@@ -1035,60 +1120,66 @@ function StateIndicator({
       <Icon className="mb-3 h-5 w-5" />
       <p className="text-xs font-black uppercase tracking-widest">{label}</p>
     </div>
-  )
+  );
 }
 
 function speechStateFromVapiMessage(message: unknown): CallState | null {
-  if (!message || typeof message !== "object") return null
-  const record = message as { type?: string; role?: string; status?: string }
+  if (!message || typeof message !== "object") return null;
+  const record = message as { type?: string; role?: string; status?: string };
 
-  if (record.type !== "speech-update") return null
+  if (record.type !== "speech-update") return null;
   if (record.status === "started") {
-    return record.role === "assistant" ? "responding" : "listening"
+    return record.role === "assistant" ? "responding" : "listening";
   }
-  if (record.status === "stopped") return "listening"
-  return null
+  if (record.status === "stopped") return "listening";
+  return null;
 }
 
 function transcriptItemsFromVapiMessage(message: unknown): TranscriptItem[] {
-  if (!message || typeof message !== "object") return []
+  if (!message || typeof message !== "object") return [];
   const record = message as {
-    type?: string
-    role?: string
-    transcript?: string
-    transcriptType?: string
-    message?: { role?: string; content?: string }
-    messages?: Array<{ role?: string; message?: string; content?: string }>
-    messagesOpenAIFormatted?: Array<{ role?: string; content?: unknown }>
-  }
-  const timestamp = new Date().toISOString()
+    type?: string;
+    role?: string;
+    transcript?: string;
+    transcriptType?: string;
+    message?: { role?: string; content?: string };
+    messages?: Array<{ role?: string; message?: string; content?: string }>;
+    messagesOpenAIFormatted?: Array<{ role?: string; content?: unknown }>;
+  };
+  const timestamp = new Date().toISOString();
 
   if (
-    (record.type === "transcript" || record.type === "transcript[transcriptType='final']") &&
+    (record.type === "transcript" ||
+      record.type === "transcript[transcriptType='final']") &&
     record.transcript &&
     record.transcriptType !== "partial"
   ) {
-    const role = normalizeTranscriptRole(record.role)
-    if (!role) return []
-    return [{
-      role,
-      text: record.transcript,
-      timestamp,
-    }]
+    const role = normalizeTranscriptRole(record.role);
+    if (!role) return [];
+    return [
+      {
+        role,
+        text: record.transcript,
+        timestamp,
+      },
+    ];
   }
 
   if (record.message?.content && record.message.role !== "system") {
-    const role = normalizeTranscriptRole(record.message.role)
-    if (!role) return []
-    return [{
-      role,
-      text: record.message.content,
-      timestamp,
-    }]
+    const role = normalizeTranscriptRole(record.message.role);
+    if (!role) return [];
+    return [
+      {
+        role,
+        text: record.message.content,
+        timestamp,
+      },
+    ];
   }
 
   if (record.type === "conversation-update") {
-    const messages: Array<{ role?: string; content: string }> = record.messages?.length
+    const messages: Array<{ role?: string; content: string }> = record.messages
+      ?.length
       ? record.messages.map((item) => ({
           role: item.role,
           content: item.message || item.content || "",
@@ -1096,7 +1187,7 @@ function transcriptItemsFromVapiMessage(message: unknown): TranscriptItem[] {
       : record.messagesOpenAIFormatted?.map((item) => ({
           role: item.role,
           content: extractTextContent(item.content),
-        })) || []
+        })) || [];
 
     return messages
       .filter((item) => item.role !== "system")
@@ -1105,56 +1196,57 @@ function transcriptItemsFromVapiMessage(message: unknown): TranscriptItem[] {
         text: item.content || "",
         timestamp,
       }))
-      .filter((item) => item.text.trim().length > 0 && Boolean(item.role))
+      .filter((item) => item.text.trim().length > 0 && Boolean(item.role));
   }
 
-  return []
+  return [];
 }
 
 function normalizeTranscriptRole(role: unknown): TranscriptItem["role"] | null {
-  if (role === "user" || role === "human" || role === "customer") return "user"
-  if (role === "assistant" || role === "bot" || role === "ai") return "assistant"
-  return null
+  if (role === "user" || role === "human" || role === "customer") return "user";
+  if (role === "assistant" || role === "bot" || role === "ai")
+    return "assistant";
+  return null;
 }
 
 function transcriptRoleLabel(role: TranscriptItem["role"]) {
-  return role === "assistant" ? "AI" : "Caller"
+  return role === "assistant" ? "AI" : "Caller";
 }
 
 function extractTextContent(content: unknown) {
-  if (typeof content === "string") return content
-  if (!Array.isArray(content)) return ""
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
   return content
     .map((part) => {
-      if (typeof part === "string") return part
+      if (typeof part === "string") return part;
       if (part && typeof part === "object" && "text" in part) {
-        const textPart = part as { text?: unknown }
-        return typeof textPart.text === "string" ? textPart.text : ""
+        const textPart = part as { text?: unknown };
+        return typeof textPart.text === "string" ? textPart.text : "";
       }
-      return ""
+      return "";
     })
     .filter(Boolean)
-    .join(" ")
+    .join(" ");
 }
 
 function statusCopy(state: CallState) {
   switch (state) {
     case "preparing":
-      return "Preparing"
+      return "Preparing";
     case "connected":
-      return "Connected"
+      return "Connected";
     case "listening":
-      return "Listening"
+      return "Listening";
     case "responding":
-      return "AI responding"
+      return "AI responding";
     case "extracting_handoff":
-      return "Extracting handoff"
+      return "Extracting handoff";
     case "ended":
-      return "Ended"
+      return "Ended";
     case "error":
-      return "Error"
+      return "Error";
     default:
-      return "Ready"
+      return "Ready";
   }
 }
 
@@ -1163,18 +1255,18 @@ function IntakeChecklist({
   active,
   workflowType,
 }: {
-  intake: ReturnType<typeof buildIntakeSnapshot>
-  active: boolean
-  workflowType: DemoWorkflowType
+  intake: ReturnType<typeof buildIntakeSnapshot>;
+  active: boolean;
+  workflowType: DemoWorkflowType;
 }) {
   const captured = (value: string) =>
     Boolean(
       value &&
-        value !== "Needs confirmation" &&
-        value !== "Not captured during call" &&
-        value !== "Not captured yet" &&
-        value !== "Waiting for caller"
-    )
+      value !== "Needs confirmation" &&
+      value !== "Not captured during call" &&
+      value !== "Not captured yet" &&
+      value !== "Waiting for caller",
+    );
   const items: Array<[string, boolean]> =
     workflowType === "water_treatment"
       ? [
@@ -1196,7 +1288,7 @@ function IntakeChecklist({
           ["Since when", captured(intake.sinceWhen)],
           ["People affected", captured(intake.peopleAffected)],
           ["Safety screen", captured(intake.safetyScreen)],
-        ]
+        ];
 
   return (
     <div className="mt-6 rounded-3xl border border-white/10 bg-black/45 p-5">
@@ -1219,24 +1311,24 @@ function IntakeChecklist({
         ))}
       </div>
     </div>
-  )
+  );
 }
 
 function micCopy(state: MicState) {
   switch (state) {
     case "requesting":
-      return "Requesting"
+      return "Requesting";
     case "granted":
-      return "Allowed"
+      return "Allowed";
     case "denied":
-      return "Mock only"
+      return "Mock only";
     default:
-      return "Ready"
+      return "Ready";
   }
 }
 
 function formatTimer(seconds: number) {
-  const minutes = Math.floor(seconds / 60)
-  const remainder = seconds % 60
-  return `${minutes}:${remainder.toString().padStart(2, "0")}`
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  return `${minutes}:${remainder.toString().padStart(2, "0")}`;
 }

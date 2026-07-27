@@ -1,14 +1,17 @@
-"use client"
+"use client";
 
-import { motion } from "framer-motion"
-import { ArrowRight, CalendarDays, Play, Radio } from "lucide-react"
-import { siteConfig } from "@/config/site"
-import { ContactForm } from "./ContactForm"
-import { Magnetic } from "@/components/ui/magnetic"
+import { motion } from "framer-motion";
+import { ArrowRight, CalendarDays, Play, Radio } from "lucide-react";
+import { siteConfig } from "@/config/site";
+import { ContactForm } from "./ContactForm";
+import { Magnetic } from "@/components/ui/magnetic";
 
 export function Cta() {
   return (
-    <section id="contact" className="healthcare-section relative overflow-hidden py-20 md:py-28">
+    <section
+      id="contact"
+      className="healthcare-section relative overflow-hidden py-20 md:py-28"
+    >
       <div className="absolute inset-0 operational-grid opacity-70" />
       <div className="pointer-events-none absolute left-[-12%] top-1/4 h-[30rem] w-[30rem] rounded-full bg-sky-200/35 blur-[120px]" />
       <div className="pointer-events-none absolute bottom-0 right-[-10%] h-[34rem] w-[34rem] rounded-full bg-teal-100/55 blur-[130px]" />
@@ -33,9 +36,10 @@ export function Cta() {
                 How many quotable jobs died in your voicemail last week?
               </h2>
               <p className="mt-6 max-w-2xl text-lg font-semibold leading-relaxed text-slate-700 md:text-xl">
-                Every one of them was a household memory record you never got to open: the
-                instruction, the water data, the drafted range, the booked visit, and two years of
-                revenue after it. JARVIS opens the record on the first instruction.
+                Every one of them was a customer history record you never got to
+                open: the instruction, the water data, the drafted range, the
+                booked visit, and two years of revenue after it. JARVIS opens
+                the record on the first instruction.
               </p>
             </div>
 
@@ -49,7 +53,7 @@ export function Cta() {
                   className="cta-primary inline-flex h-14 items-center justify-center gap-2 rounded-full bg-slate-950 px-7 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-slate-800"
                 >
                   <CalendarDays className="h-4 w-4" />
-                  Apply for Founding Pilot
+                  Book a JARVIS Demo
                   <ArrowRight className="h-4 w-4" />
                 </a>
               </Magnetic>
@@ -70,12 +74,16 @@ export function Cta() {
             initial={{ opacity: 0, y: 28 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: "-80px" }}
-            transition={{ delay: 0.08, duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
+            transition={{
+              delay: 0.08,
+              duration: 0.65,
+              ease: [0.16, 1, 0.3, 1],
+            }}
           >
             <ContactForm />
           </motion.div>
         </div>
       </div>
     </section>
-  )
+  );
 }

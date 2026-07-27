@@ -1,17 +1,23 @@
-"use client"
+"use client";
 
-import { motion } from "framer-motion"
-import type { LucideIcon } from "lucide-react"
+import { motion } from "framer-motion";
+import type { LucideIcon } from "lucide-react";
 
 type ResourceHeroProps = {
-  kicker: string
-  title: string
-  copy: string
-  icon: LucideIcon
-  aside?: React.ReactNode
-}
+  kicker: string;
+  title: string;
+  copy: string;
+  icon: LucideIcon;
+  aside?: React.ReactNode;
+};
 
-export function ResourceHero({ kicker, title, copy, icon: Icon, aside }: ResourceHeroProps) {
+export function ResourceHero({
+  kicker,
+  title,
+  copy,
+  icon: Icon,
+  aside,
+}: ResourceHeroProps) {
   return (
     <section className="relative overflow-hidden px-0 pb-14 pt-32 md:pb-20 md:pt-36">
       <div className="absolute inset-0 operational-grid opacity-45" />
@@ -51,7 +57,11 @@ export function ResourceHero({ kicker, title, copy, icon: Icon, aside }: Resourc
             <motion.div
               initial={{ opacity: 0, y: 22, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{ delay: 0.12, duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
+              transition={{
+                delay: 0.12,
+                duration: 0.65,
+                ease: [0.16, 1, 0.3, 1],
+              }}
             >
               {aside}
             </motion.div>
@@ -59,5 +69,5 @@ export function ResourceHero({ kicker, title, copy, icon: Icon, aside }: Resourc
         </div>
       </div>
     </section>
-  )
+  );
 }

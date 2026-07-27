@@ -1,7 +1,7 @@
-"use client"
+"use client";
 
-import { useRef } from "react"
-import { motion, useScroll, useTransform } from "framer-motion"
+import { useRef } from "react";
+import { motion, useScroll, useTransform } from "framer-motion";
 import {
   BellRing,
   ClipboardList,
@@ -10,56 +10,66 @@ import {
   GitBranch,
   PhoneForwarded,
   Route,
-} from "lucide-react"
+} from "lucide-react";
 
 const steps = [
   {
-    day: "Day 1",
-    title: "Map every instruction channel, call, text, typed, and pull your service area's live water data by ZIP",
+    day: "Map the operation",
+    title:
+      "Map every instruction channel, call, text, typed, and pull your service area's live water data by ZIP",
     icon: PhoneForwarded,
   },
   {
-    day: "Day 2",
-    title: "Load your pricing tiers, install mix, and sizing rules into JARVIS's price book",
+    day: "Connect the systems",
+    title:
+      "Load your pricing tiers, install mix, and sizing rules into JARVIS's price book",
     icon: ClipboardList,
   },
   {
-    day: "Day 3",
-    title: "Set the approval rails: what JARVIS can draft, what always waits for a human, and who approves what",
+    day: "Configure authority",
+    title:
+      "Set the approval rails: what JARVIS can draft, what always waits for a human, and who approves what",
     icon: GitBranch,
   },
   {
-    day: "Day 4",
-    title: "Wire the integrations: booking calendar, SMS routes, CRM, and the household memory record",
+    day: "Build workflows",
+    title:
+      "Wire the integrations: booking calendar, SMS routes, CRM, and the customer history record",
     icon: BellRing,
   },
   {
-    day: "Day 5",
-    title: "Test live: draft quotes, urgent routes, and bookings, approve, reject, and watch the receipts land",
+    day: "Test scenarios",
+    title:
+      "Test live: draft quotes, urgent routes, and bookings, approve, reject, and watch the receipts land",
     icon: FlaskConical,
   },
   {
-    day: "Day 6",
-    title: "Review every test record with your team: what was drafted, what was approved, what the receipt shows",
+    day: "Review outcomes",
+    title:
+      "Review every test record with your team: what was drafted, what was approved, what the receipt shows",
     icon: FileCheck2,
   },
   {
-    day: "Day 7",
-    title: "Go live. Every instruction from here opens a household memory record and waits for your yes",
+    day: "Launch with defined authority",
+    title:
+      "Go live. Every instruction from here opens a customer history record and waits for your yes",
     icon: Route,
   },
-]
+];
 
 export function FirstSevenDays() {
-  const timelineRef = useRef<HTMLDivElement>(null)
+  const timelineRef = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll({
     target: timelineRef,
     offset: ["start 70%", "end 35%"],
-  })
-  const lineScale = useTransform(scrollYProgress, [0, 1], [0, 1])
+  });
+  const lineScale = useTransform(scrollYProgress, [0, 1], [0, 1]);
 
   return (
-    <section id="rollout" className="healthcare-section relative overflow-hidden py-20 md:py-28">
+    <section
+      id="rollout"
+      className="healthcare-section relative overflow-hidden py-20 md:py-28"
+    >
       <div className="absolute left-0 top-1/2 h-[32rem] w-[32rem] -translate-y-1/2 rounded-full bg-sky-200/25 blur-[120px]" />
       <div className="container relative z-10 px-4 md:px-6">
         <div className="mb-12 max-w-3xl">
@@ -69,7 +79,7 @@ export function FirstSevenDays() {
             viewport={{ once: true }}
             className="mb-5 inline-flex items-center rounded-full border border-slate-200 bg-white/72 px-4 py-1.5 text-xs font-black uppercase tracking-[0.22em] text-slate-500 shadow-sm backdrop-blur"
           >
-            7-day rollout
+            DEPLOYMENT ROADMAP
           </motion.div>
           <motion.h2
             initial={{ opacity: 0, y: 20 }}
@@ -78,7 +88,7 @@ export function FirstSevenDays() {
             transition={{ delay: 0.05, duration: 0.6 }}
             className="text-4xl font-black tracking-tight text-slate-950 md:text-5xl"
           >
-            Live approvals in seven days, or your money back.
+            Your highest-value workflows, deployed around your business.
           </motion.h2>
           <motion.p
             initial={{ opacity: 0, y: 16 }}
@@ -87,13 +97,17 @@ export function FirstSevenDays() {
             transition={{ delay: 0.1 }}
             className="mt-5 max-w-2xl text-lg font-medium leading-relaxed text-slate-600"
           >
-            One week from access to JARVIS running your real price book, your approval rails, and
-            your water data. Every scenario is tested with your team before a real instruction
-            ever executes. Miss the seven days and the initial payment comes back.
+            One week from access to JARVIS running your real price book, your
+            approval rails, and your water data. Every scenario is tested with
+            your team before a real instruction ever executes. Miss the seven
+            days and the initial payment comes back.
           </motion.p>
         </div>
 
-        <div ref={timelineRef} className="relative mx-auto max-w-5xl pl-9 md:pl-16">
+        <div
+          ref={timelineRef}
+          className="relative mx-auto max-w-5xl pl-9 md:pl-16"
+        >
           <div className="absolute bottom-0 left-4 top-0 w-px bg-slate-200 md:left-7" />
           <motion.div
             style={{ scaleY: lineScale, transformOrigin: "top" }}
@@ -106,7 +120,11 @@ export function FirstSevenDays() {
                 initial={{ opacity: 0, x: -18 }}
                 whileInView={{ opacity: 1, x: 0 }}
                 viewport={{ once: true, margin: "-80px" }}
-                transition={{ delay: index * 0.045, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+                transition={{
+                  delay: index * 0.045,
+                  duration: 0.5,
+                  ease: [0.16, 1, 0.3, 1],
+                }}
                 className="ops-card ops-card-hover group relative overflow-hidden rounded-[1.35rem] bg-white/82 p-5 md:p-6"
                 data-cursor="hover"
               >
@@ -135,5 +153,5 @@ export function FirstSevenDays() {
         </div>
       </div>
     </section>
-  )
+  );
 }

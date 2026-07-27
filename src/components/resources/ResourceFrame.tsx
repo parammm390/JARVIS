@@ -1,6 +1,6 @@
-import type { ReactNode } from "react"
-import { Footer } from "@/components/sections/Footer"
-import { ResourceNav } from "./ResourceNav"
+import type { ReactNode } from "react";
+import { Footer } from "@/components/sections/Footer";
+import { ResourceNav } from "./ResourceNav";
 
 export function ResourceFrame({ children }: { children: ReactNode }) {
   return (
@@ -9,5 +9,5 @@ export function ResourceFrame({ children }: { children: ReactNode }) {
       {children}
       <Footer />
     </main>
-  )
+  );
 }

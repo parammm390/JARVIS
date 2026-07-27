@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 // M4.T2 — the merged demo's new termination point (docs/marketing-demo-merge-contract.md
 // Act 1 §1-4). Replaces PostCallHandoff.tsx's plain teal "Booking Route" card with a
@@ -21,28 +21,39 @@
 //   otherwise -> medium (it's already an emergency line); water_treatment -> low
 //   (a standard quote/system-interest inquiry, nothing time-critical).
 
-import { CheckCircle2, Sparkles } from "lucide-react"
-import { CalendarDays } from "lucide-react"
-import type { DemoIntakeHandoff } from "@/lib/demo/types"
-import { NEEDS_CONFIRMATION, NOT_CAPTURED } from "@/lib/demo/intake-extraction"
-import { JarvisProofSurface } from "@/components/sections/jarvis-proof/JarvisProofSurface"
-import { Glass } from "@/components/jarvis/atmosphere"
-import { RiskBadge, type RiskTier } from "@/components/jarvis/ui/primitives/RiskBadge"
-import { ActionRenderer } from "@/components/jarvis/ui/renderers/ActionRenderer"
-import { writeLifecycleHandoff } from "@/lib/memory/handoff"
+import { CheckCircle2, Sparkles } from "lucide-react";
+import { CalendarDays } from "lucide-react";
+import type { DemoIntakeHandoff } from "@/lib/demo/types";
+import { NEEDS_CONFIRMATION, NOT_CAPTURED } from "@/lib/demo/intake-extraction";
+import { JarvisProofSurface } from "@/components/sections/jarvis-proof/JarvisProofSurface";
+import { Glass } from "@/components/jarvis/atmosphere";
+import {
+  RiskBadge,
+  type RiskTier,
+} from "@/components/jarvis/ui/primitives/RiskBadge";
+import { ActionRenderer } from "@/components/jarvis/ui/renderers/ActionRenderer";
+import { writeLifecycleHandoff } from "@/lib/memory/handoff";
 
 function isCaptured(value: string) {
-  return Boolean(value && value !== NEEDS_CONFIRMATION && value !== NOT_CAPTURED && value !== "Not captured yet")
+  return Boolean(
+    value &&
+    value !== NEEDS_CONFIRMATION &&
+    value !== NOT_CAPTURED &&
+    value !== "Not captured yet",
+  );
 }
 
 function riskTierFor(intake: DemoIntakeHandoff): RiskTier {
   if (intake.workflowType === "well_pump_emergency") {
-    return intake.immediateDanger === "Yes" ? "high" : "medium"
+    return intake.immediateDanger === "Yes" ? "high" : "medium";
   }
-  return "low"
+  return "low";
 }
 
-function actionFor(intake: DemoIntakeHandoff): { actionType: string; payload: Record<string, unknown> } {
+function actionFor(intake: DemoIntakeHandoff): {
+  actionType: string;
+  payload: Record<string, unknown>;
+} {
   if (intake.workflowType === "well_pump_emergency") {
     return {
       actionType: "assign_technician_to_visit",
@@ -50,19 +61,23 @@ function actionFor(intake: DemoIntakeHandoff): { actionType: string; payload: Re
         visitId: "demo-preview",
         technicianName: "Next available on-call technician",
       },
-    }
+    };
   }
   const items = [intake.systemInterest, intake.timeline]
     .filter(isCaptured)
-    .filter((v) => v !== "Not captured yet")
+    .filter((v) => v !== "Not captured yet");
   return {
     actionType: "generate_quote",
     payload: {
-      householdLabel: isCaptured(intake.callerName) ? intake.callerName : "this household",
-      items: items.length ? items : ["System interest not yet captured on the call"],
+      householdLabel: isCaptured(intake.callerName)
+        ? intake.callerName
+        : "this household",
+      items: items.length
+        ? items
+        : ["System interest not yet captured on the call"],
       notes: isCaptured(intake.mainConcern) ? intake.mainConcern : undefined,
     },
-  }
+  };
 }
 
 function capturedFieldsFor(intake: DemoIntakeHandoff): Array<[string, string]> {
@@ -76,7 +91,7 @@ function capturedFieldsFor(intake: DemoIntakeHandoff): Array<[string, string]> {
       ["People affected", intake.peopleAffected],
       ["Immediate danger", intake.immediateDanger],
       ["Callback", intake.callbackNumber],
-    ]
+    ];
   }
   return [
     ["Caller", intake.callerName],
@@ -86,19 +101,19 @@ function capturedFieldsFor(intake: DemoIntakeHandoff): Array<[string, string]> {
     ["System interest", intake.systemInterest],
     ["Timeline", intake.timeline],
     ["Callback preference", intake.callbackPreference],
-  ]
+  ];
 }
 
 export function JarvisResultCard({
   companyName,
   intake,
 }: {
-  companyName: string
-  intake: DemoIntakeHandoff
+  companyName: string;
+  intake: DemoIntakeHandoff;
 }) {
-  const tier = riskTierFor(intake)
-  const { actionType, payload } = actionFor(intake)
-  const fields = capturedFieldsFor(intake)
+  const tier = riskTierFor(intake);
+  const { actionType, payload } = actionFor(intake);
+  const fields = capturedFieldsFor(intake);
 
   return (
     <div className="mt-8">
@@ -115,8 +130,9 @@ export function JarvisResultCard({
             {companyName}&apos;s draft, held for approval
           </h3>
           <p className="mt-2 max-w-2xl text-sm font-medium leading-relaxed text-[color:var(--j-text-dim)]">
-            This is not a real approval and nothing here executes — it&apos;s the same card shape a
-            real JARVIS approval uses, built from what the call actually captured.
+            This is not a real approval and nothing here executes — it&apos;s
+            the same card shape a real JARVIS approval uses, built from what the
+            call actually captured.
           </p>
         </div>
 
@@ -125,7 +141,11 @@ export function JarvisResultCard({
             <p className="mb-3 text-xs font-black uppercase tracking-widest text-[color:var(--j-text-dim)]">
               Proposed action
             </p>
-            <ActionRenderer actionType={actionType} payload={payload} compact={false} />
+            <ActionRenderer
+              actionType={actionType}
+              payload={payload}
+              compact={false}
+            />
           </div>
 
           <div>
@@ -135,7 +155,10 @@ export function JarvisResultCard({
             <Glass className="rounded-2xl" noise>
               <div className="grid gap-3 p-4 sm:grid-cols-2">
                 {fields.map(([label, value]) => (
-                  <div key={label} className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                  <div
+                    key={label}
+                    className="rounded-xl border border-white/10 bg-white/[0.03] p-3"
+                  >
                     <div className="mb-1.5 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-[color:var(--j-text-dim)]">
                       <CheckCircle2
                         className={`h-3.5 w-3.5 ${isCaptured(value) ? "text-[color:var(--j-teal)]" : "text-white/20"}`}
@@ -158,8 +181,8 @@ export function JarvisResultCard({
               type="button"
               data-cursor="hover"
               onClick={() => {
-                const record = intake.household
-                if (!record) return
+                const record = intake.household;
+                if (!record) return;
                 writeLifecycleHandoff({
                   householdId: record.id,
                   dealerName: record.dealer.name,
@@ -169,8 +192,8 @@ export function JarvisResultCard({
                   onWell: true,
                   customerName: record.customer.name,
                   concern: record.customer.concern,
-                })
-                window.location.href = "/demo/lifecycle"
+                });
+                window.location.href = "/demo/lifecycle";
               }}
               className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-[color:var(--j-cyan)] px-6 text-sm font-black text-[#03141c] transition hover:brightness-110"
             >
@@ -181,5 +204,5 @@ export function JarvisResultCard({
         ) : null}
       </JarvisProofSurface>
     </div>
-  )
+  );
 }

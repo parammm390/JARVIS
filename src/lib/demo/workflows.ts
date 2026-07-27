@@ -1,11 +1,11 @@
 export const WORKFLOW_TYPES = [
   "water_treatment",
   "well_pump_emergency",
-] as const
+] as const;
 
-export type DemoWorkflowType = (typeof WORKFLOW_TYPES)[number]
+export type DemoWorkflowType = (typeof WORKFLOW_TYPES)[number];
 
-export const DEFAULT_WORKFLOW_TYPE: DemoWorkflowType = "water_treatment"
+export const DEFAULT_WORKFLOW_TYPE: DemoWorkflowType = "water_treatment";
 
 export const workflowDefinitions = {
   water_treatment: {
@@ -52,33 +52,33 @@ export const workflowDefinitions = {
     ],
   },
   well_pump_emergency: {
-    label: "Well Pump / No-Water Emergency Dispatch",
+    label: "Customer Operations Workflow",
     shortLabel: "Emergency dispatch",
-    agentTitle: "Well Pump Emergency Dispatch AI",
+    agentTitle: "Customer Operations Workflow AI",
     heroEyebrow: "Account-specific response workflow preview",
     heroDescription:
       "Choose the response workflow you want to test. FINNOR uses confirmed public information from your site to build a company-specific intake and handoff preview.",
     formDescription:
-      "No-water, low-pressure, pump, and pressure tank calls with on-call technician routing.",
+      "No-water, low-pressure, pump, and water-treatment equipment calls with on-call technician routing.",
     loadingStep: "Mapping emergency dispatch logic",
     readyCopy:
-      "Demo ready. Start the no-water emergency call below, then review the on-call dispatch alert and technician handoff.",
+      "Demo ready. Start the field-service workflow call below, then review the on-call dispatch alert and technician handoff.",
     handoffStatus: "Ready for on-call dispatch",
-    handoffTitle: "Well pump emergency captured",
+    handoffTitle: "Customer operations workflow captured",
     handoffTarget: "On-call dispatch",
     alertLabel: "Dispatch Alert",
-    leadType: "Well pump / no-water emergency",
+    leadType: "Customer operations workflow",
     priority: "High priority",
     firstMessage:
       "Thanks for calling {{company}} emergency dispatch. This is Sarah. What's happening with your water?",
     suggestedCallerPrompt:
-      "Hi, our whole house has had no water since 11 PM. The pressure tank reads zero, and I think the submersible well pump may have stopped working.",
+      "Hi, our whole house has had no water since 11 PM. The water-treatment equipment reads zero, and I think the submersible water-treatment may have stopped working.",
     consoleDescription:
       "The call captures the no-water or low-pressure issue, whether it affects the whole property, when it started, service address, callback number, people affected, safety risk, and known equipment context for an on-call technician handoff.",
     chips: [
       "No water",
       "Low pressure",
-      "Pump / pressure tank",
+      "Pump / water-treatment equipment",
       "Whole-house or partial",
       "Safety screen",
       "On-call dispatch",
@@ -94,12 +94,15 @@ export const workflowDefinitions = {
       "Safety screen",
     ],
   },
-} as const
+} as const;
 
 export function isDemoWorkflowType(value: unknown): value is DemoWorkflowType {
-  return typeof value === "string" && WORKFLOW_TYPES.includes(value as DemoWorkflowType)
+  return (
+    typeof value === "string" &&
+    WORKFLOW_TYPES.includes(value as DemoWorkflowType)
+  );
 }
 
 export function getWorkflowDefinition(workflowType: DemoWorkflowType) {
-  return workflowDefinitions[workflowType]
+  return workflowDefinitions[workflowType];
 }

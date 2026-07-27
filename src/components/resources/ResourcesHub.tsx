@@ -1,6 +1,6 @@
-"use client"
+"use client";
 
-import { motion } from "framer-motion"
+import { motion } from "framer-motion";
 import {
   AlertTriangle,
   ArrowRight,
@@ -13,30 +13,30 @@ import {
   Route,
   ShieldCheck,
   Truck,
-} from "lucide-react"
-import { ResourceFrame } from "./ResourceFrame"
-import { ResourceHero } from "./ResourceHero"
+} from "lucide-react";
+import { ResourceFrame } from "./ResourceFrame";
+import { ResourceHero } from "./ResourceHero";
 
 const resourceCards = [
   {
-    href: "/resources/missed-call-cost-calculator",
+    href: "/resources/lead-follow-up-cost-calculator",
     icon: Calculator,
-    kicker: "Missed-call estimator",
-    title: "Missed-Call Booking Value Estimator",
+    kicker: "Lead-follow-up estimator",
+    title: "Lead Follow-up Value Estimator",
     copy: "Use conservative assumptions to estimate booked job value exposed by unanswered calls and slow form follow-up.",
   },
   {
     href: "/resources/dispatch-ai-glossary",
     icon: BookOpenText,
     kicker: "Operator glossary",
-    title: "Water Booking & Lead Recovery Glossary",
-    copy: "Plain-English definitions for missed-call recovery, quote follow-up, booking routes, and human-controlled service promises.",
+    title: "Water JARVIS Operations Glossary",
+    copy: "Plain-English definitions for lead follow-up, quote follow-up, booking routes, and human-controlled service promises.",
   },
   {
     href: "/resources/pilot-setup-checklist",
     icon: ClipboardCheck,
-    kicker: "Launch planning",
-    title: "Booking & Lead Recovery Pilot Setup Checklist",
+    kicker: "Deployment planning",
+    title: "JARVIS Operations Deployment Setup Checklist",
     copy: "Define forwarding, lead sources, booking questions, urgent routes, alert paths, and ownership before launch.",
   },
   {
@@ -44,51 +44,51 @@ const resourceCards = [
     icon: ShieldCheck,
     kicker: "Control model",
     title: "Trust & Safety",
-    copy: "How JARVIS drafts and routes urgent water calls, held for approval, without quoting, diagnosing, or promising an arrival time.",
+    copy: "How JARVIS drafts and routes urgent customer workflows, held for approval, without quoting, diagnosing, or promising an arrival time.",
   },
   {
     href: "/resources#answering-service",
     icon: Headset,
     kicker: "Comparison",
-    title: "Finnor vs Answering Service",
-    copy: "Why booked next steps and urgent water routes are different from generic message taking.",
+    title: "JARVIS vs Answering Service",
+    copy: "Why executed business workflows and connected field workflows are different from generic message taking.",
   },
   {
     href: "/resources#generic-ai",
     icon: Route,
     kicker: "Comparison",
-    title: "Finnor vs Generic AI",
+    title: "JARVIS vs Generic AI",
     copy: "How water-specific booking and on-call routing differ from broad generic automation.",
   },
-]
+];
 
 const operatorProblems = [
   {
     icon: PhoneOff,
-    title: "The emergency call reaches voicemail",
+    title: "The work falls between systems",
     copy: "A homeowner without water needs a response path now, not the next morning.",
   },
   {
     icon: Truck,
-    title: "A household has no water",
-    copy: "The caller may be dealing with a failed pump, zero tank pressure, livestock needs, or a family that cannot wait until morning.",
+    title: "A customer operations need attention",
+    copy: "The caller may be dealing with a scheduling conflicts, overdue invoices, stock risks or customers waiting for follow-up.",
   },
   {
     icon: AlertTriangle,
     title: "Safety context gets buried",
-    copy: "Possible contamination, electrical concerns, a dry-running pump, or a pressure system fault needs to be visible in the first alert.",
+    copy: "Operational risks and customer-impacting issues needs to be visible in the first alert.",
   },
   {
     icon: Clock3,
     title: "The next company answers first",
     copy: "Emergency buyers keep calling. The company that responds first and routes the job clearly has the advantage.",
   },
-]
+];
 
 const comparisonRows = [
   {
     id: "answering-service",
-    label: "Finnor vs Answering Service",
+    label: "JARVIS vs Answering Service",
     points: [
       "Clarifies caller, address, pump type, pressure issue, no-water duration, contamination risk, urgency, and callback.",
       "Routes the urgent job to the owner, dispatcher, or on-call tech instead of leaving a loose message.",
@@ -97,14 +97,14 @@ const comparisonRows = [
   },
   {
     id: "generic-ai",
-    label: "Finnor vs Generic AI",
+    label: "JARVIS vs Generic AI",
     points: [
-      "Two equally-featured workflows: water treatment quoting (softeners, filtration, RO, iron/sulfur), and well pump / no-water emergency dispatch.",
+      "Two equally-featured workflows: water treatment quoting (softeners, filtration, RO, iron/sulfur), and customer operations workflow.",
       "Keeps unknown fields marked unknown instead of filling gaps confidently.",
       "Recognizes urgency in both workflow types: treatment interest and timing from quotes, and emergency language like no water, zero pressure, pump failure, contamination risk.",
     ],
   },
-]
+];
 
 export function ResourcesHub() {
   return (
@@ -112,7 +112,7 @@ export function ResourcesHub() {
       <ResourceHero
         kicker="Resource hub"
         title="Practical tools for a system that asks before it acts."
-        copy="For water treatment, water dealer, and well pump companies evaluating JARVIS — how it drafts, what it holds for approval, and what it never invents."
+        copy="For water treatment, water dealer, and water-treatment companies evaluating JARVIS — how it drafts, what it holds for approval, and what it never invents."
         icon={BookOpenText}
         aside={<HubSignalCard />}
       />
@@ -124,7 +124,8 @@ export function ResourcesHub() {
               The operating problem
             </p>
             <h2 className="mt-3 max-w-4xl text-3xl font-black tracking-tight text-slate-950 md:text-5xl">
-              A homeowner calls because the water is out. Your coverage determines who gets the job.
+              A homeowner calls because the water is out. Your coverage
+              determines who gets the job.
             </h2>
             <div className="mt-7 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               {operatorProblems.map((problem) => (
@@ -162,8 +163,12 @@ export function ResourcesHub() {
                   <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-600">
                     {card.kicker}
                   </p>
-                  <h2 className="mt-3 text-2xl font-black tracking-tight text-slate-950">{card.title}</h2>
-                  <p className="mt-4 text-sm font-medium leading-relaxed text-slate-600">{card.copy}</p>
+                  <h2 className="mt-3 text-2xl font-black tracking-tight text-slate-950">
+                    {card.title}
+                  </h2>
+                  <p className="mt-4 text-sm font-medium leading-relaxed text-slate-600">
+                    {card.copy}
+                  </p>
                 </div>
                 <span className="mt-8 inline-flex items-center gap-2 text-sm font-black text-slate-950">
                   Open resource
@@ -187,12 +192,19 @@ export function ResourcesHub() {
                 <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-700">
                   Comparison note
                 </p>
-                <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950">{row.label}</h2>
+                <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950">
+                  {row.label}
+                </h2>
                 <div className="mt-6 space-y-3">
                   {row.points.map((point) => (
-                    <div key={point} className="flex gap-3 rounded-2xl border border-slate-900/8 bg-white/72 p-4">
+                    <div
+                      key={point}
+                      className="flex gap-3 rounded-2xl border border-slate-900/8 bg-white/72 p-4"
+                    >
                       <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-teal-700" />
-                      <p className="text-sm font-semibold leading-relaxed text-slate-700">{point}</p>
+                      <p className="text-sm font-semibold leading-relaxed text-slate-700">
+                        {point}
+                      </p>
                     </div>
                   ))}
                 </div>
@@ -202,7 +214,7 @@ export function ResourcesHub() {
         </div>
       </section>
     </ResourceFrame>
-  )
+  );
 }
 
 function HubSignalCard() {
@@ -225,10 +237,11 @@ function HubSignalCard() {
           ))}
         </div>
         <p className="mt-6 rounded-2xl border border-teal-200 bg-teal-50 p-4 text-sm font-semibold leading-relaxed text-slate-700">
-          Use these resources to map how JARVIS handles your leads: draft the next step, hold it
-          for approval, route urgency fast, and keep quotes, ETAs, and service promises with your team.
+          Use these resources to map how JARVIS handles your leads: draft the
+          next step, hold it for approval, route urgency fast, and keep quotes,
+          ETAs, and service promises with your team.
         </p>
       </div>
     </div>
-  )
+  );
 }

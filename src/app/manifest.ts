@@ -1,11 +1,11 @@
-import type { MetadataRoute } from "next"
+import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Finnor Booking and Lead Recovery",
+    name: "Finnor Voice-Native AI Operations",
     short_name: "Finnor AI",
     description:
-      "AI booking and lead recovery for water treatment leads, well pump emergencies, web inquiries, and speed-to-lead follow-up.",
+      "AI voice-native AI operations for water treatment leads, water-treatment emergencies, web inquiries, and speed-to-lead follow-up.",
     start_url: "/",
     display: "standalone",
     background_color: "#f8faf9",
@@ -17,5 +17,5 @@ export default function manifest(): MetadataRoute.Manifest {
         type: "image/svg+xml",
       },
     ],
-  }
+  };
 }

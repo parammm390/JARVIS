@@ -1,7 +1,13 @@
-"use client"
+"use client";
 
-import { motion } from "framer-motion"
-import { AlertTriangle, CheckCircle2, FileLock2, ShieldCheck, UserRoundCheck } from "lucide-react"
+import { motion } from "framer-motion";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  FileLock2,
+  ShieldCheck,
+  UserRoundCheck,
+} from "lucide-react";
 
 const scopeItems = [
   {
@@ -11,7 +17,7 @@ const scopeItems = [
   },
   {
     icon: UserRoundCheck,
-    title: "Nothing runs without your yes",
+    title: "High-risk work waits for authorised approval",
     copy: "The final on-site figure, repair calls, diagnosis, ETAs, and customer promises stay with your team. JARVIS drafts the plan; a human approves before anything executes.",
   },
   {
@@ -19,7 +25,7 @@ const scopeItems = [
     title: "Scoped before it goes live",
     copy: "Approval rules, escalation paths, pricing tiers, integrations, and data handling are all defined and agreed before launch, not discovered after.",
   },
-]
+];
 
 export function Outcome() {
   return (
@@ -42,7 +48,7 @@ export function Outcome() {
               viewport={{ once: true }}
               className="text-4xl font-black tracking-tight text-slate-950 md:text-6xl"
             >
-            Drafts from your pricing. Decisions stay yours.
+              Drafts from your pricing. Decisions stay yours.
             </motion.h2>
             <motion.p
               initial={{ opacity: 0, y: 16 }}
@@ -51,10 +57,10 @@ export function Outcome() {
               transition={{ delay: 0.08 }}
               className="mt-6 max-w-2xl text-lg font-medium leading-relaxed text-slate-600"
             >
-              JARVIS works inside hard rails. It drafts ranges computed from the water and the
-              tier you priced, books the visit, and keeps the record alive for years. It does not
-              diagnose repairs, promise ETAs, or freelance a discount. Your team owns every final
-              call.
+              JARVIS works inside hard rails. It drafts ranges computed from the
+              water and the tier you priced, books the visit, and keeps the
+              record alive for years. It does not diagnose repairs, promise
+              ETAs, or freelance a discount. Your team owns every final call.
             </motion.p>
           </div>
 
@@ -77,12 +83,17 @@ export function Outcome() {
             </div>
             <div className="grid gap-4">
               {scopeItems.map((item) => (
-                <div key={item.title} className="flex gap-4 rounded-2xl border border-slate-900/8 bg-white p-4">
+                <div
+                  key={item.title}
+                  className="flex gap-4 rounded-2xl border border-slate-900/8 bg-white p-4"
+                >
                   <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-sky-50 text-sky-800">
                     <item.icon className="h-5 w-5" />
                   </span>
                   <div>
-                    <h4 className="font-black tracking-tight text-slate-950">{item.title}</h4>
+                    <h4 className="font-black tracking-tight text-slate-950">
+                      {item.title}
+                    </h4>
                     <p className="mt-1 text-sm font-semibold leading-relaxed text-slate-600">
                       {item.copy}
                     </p>
@@ -96,13 +107,14 @@ export function Outcome() {
         <div className="mt-6 flex items-start gap-3 rounded-2xl border border-orange-200 bg-orange-50 p-5 text-sm font-semibold leading-relaxed text-orange-900">
           <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
           <p>
-            This isn&apos;t a fit for every shop. If you want a system that acts without asking, or
-            need a full CRM replacement, JARVIS isn&apos;t that. And this page does not claim full
-            operational data handling compliance, that depends on the deployed stack, vendor
-            agreements, access controls, and signed terms.
+            This isn&apos;t a fit for every shop. If you want a system that acts
+            without asking, or need a full CRM replacement, JARVIS isn&apos;t
+            that. And this page does not claim full operational data handling
+            compliance, that depends on the deployed stack, vendor agreements,
+            access controls, and signed terms.
           </p>
         </div>
       </div>
     </section>
-  )
+  );
 }

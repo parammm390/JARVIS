@@ -1,17 +1,17 @@
-"use client"
+"use client";
 
-import { motion } from "framer-motion"
-import { siteConfig } from "@/config/site"
+import { motion } from "framer-motion";
+import { siteConfig } from "@/config/site";
 
 const footerLinks = [
-  { href: "/demo", label: "Try JARVIS" },
-  { href: "/#problem", label: "The Stakes" },
-  { href: "/#workflow", label: "The Loop" },
+  { href: "/#product", label: "Product" },
+  { href: "/#capabilities", label: "Capabilities" },
+  { href: "/#workflow", label: "How It Works" },
   { href: "/#pricing", label: "Pricing" },
   { href: "/#faq", label: "FAQ" },
-  { href: "/trust-safety", label: "Trust" },
-  { href: siteConfig.calendlyLink, label: "Apply for Founding Pilot" },
-]
+  { href: "/trust-safety", label: "Trust & Safety" },
+  { href: siteConfig.calendlyLink, label: "Book a JARVIS Demo" },
+];
 
 export function Footer() {
   return (
@@ -30,15 +30,20 @@ export function Footer() {
             viewport={{ once: true }}
             className="max-w-md"
           >
-            <span className="text-3xl font-black tracking-tight text-slate-950">{siteConfig.name}</span>
+            <span className="text-3xl font-black tracking-tight text-slate-950">
+              {siteConfig.name}
+            </span>
             <p className="mt-3 text-base font-medium leading-relaxed text-slate-600">
-              FINNOR runs on JARVIS: instructions from water treatment leads, well pump service
-              calls, after-hours inquiries, and slow web leads get drafted, held for your
-              approval, and receipted.
+              FINNOR builds JARVIS, the voice-native AI operations platform for
+              water-treatment companies. It connects the systems your team
+              already uses and helps run the work from one command layer.
             </p>
             <p className="mt-5 text-sm font-bold text-slate-600">
               Founder contact:{" "}
-              <a className="text-slate-950 underline decoration-slate-300 underline-offset-4" href={`mailto:${siteConfig.contactEmail}`}>
+              <a
+                className="text-slate-950 underline decoration-slate-300 underline-offset-4"
+                href={`mailto:${siteConfig.contactEmail}`}
+              >
                 {siteConfig.contactEmail}
               </a>
             </p>
@@ -56,7 +61,11 @@ export function Footer() {
                 key={link.href}
                 href={link.href}
                 target={link.href.startsWith("http") ? "_blank" : undefined}
-                rel={link.href.startsWith("http") ? "noopener noreferrer" : undefined}
+                rel={
+                  link.href.startsWith("http")
+                    ? "noopener noreferrer"
+                    : undefined
+                }
                 className="transition hover:text-slate-950"
               >
                 {link.label}
@@ -74,7 +83,10 @@ export function Footer() {
         </div>
 
         <div className="flex flex-col justify-between gap-5 border-t border-slate-200 pt-7 text-sm font-medium text-slate-500 md:flex-row md:items-center">
-          <p>{new Date().getFullYear()} {siteConfig.name} Systems. All rights reserved.</p>
+          <p>
+            {new Date().getFullYear()} {siteConfig.name} Systems. All rights
+            reserved.
+          </p>
           <div className="flex flex-wrap gap-x-6 gap-y-3">
             <a href="/privacy" className="transition hover:text-slate-950">
               Privacy
@@ -86,5 +98,5 @@ export function Footer() {
         </div>
       </div>
     </footer>
-  )
+  );
 }

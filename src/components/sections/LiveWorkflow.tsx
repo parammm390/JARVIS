@@ -1,35 +1,45 @@
-"use client"
+"use client";
 
-import { motion } from "framer-motion"
-import { BellRing, ClipboardList, PhoneCall, ShieldAlert, UserRoundCheck } from "lucide-react"
+import { motion } from "framer-motion";
+import {
+  BellRing,
+  ClipboardList,
+  PhoneCall,
+  ShieldAlert,
+  UserRoundCheck,
+} from "lucide-react";
 
 const workflow = [
   {
     icon: PhoneCall,
-    title: "An instruction arrives",
-    detail: "By voice, by text, or someone typing it into the console. However it gets there, a plan starts the same way, and a record opens before anything happens.",
+    title: "Give JARVIS an instruction",
+    detail: "Speak naturally or type the outcome you need.",
   },
   {
     icon: ClipboardList,
-    title: "JARVIS drafts a plan",
-    detail: "Grounded against your real data, price book, household history, live water records where they matter. Fields it can't verify get flagged as unverified, never guessed.",
+    title: "JARVIS understands the business context",
+    detail:
+      "It checks real customers, schedules, policies, pricing, inventory and history instead of guessing.",
   },
   {
     icon: ShieldAlert,
-    title: "It waits for your yes",
-    detail: "Nothing executes until someone approves it. Not a formality, a database-enforced gate. Reject it and the plan simply never runs.",
+    title: "It builds the workflow",
+    detail:
+      "JARVIS combines the required actions, dependencies, integrations and approval rules.",
   },
   {
     icon: BellRing,
-    title: "Approved work executes",
-    detail: "The quote goes out, the visit gets scheduled, the invoice is sent, exactly what was approved, nothing more.",
+    title: "The work executes",
+    detail:
+      "Low-risk authorised work can run automatically. High-risk, financial or irreversible actions wait for the correct approval.",
   },
   {
     icon: UserRoundCheck,
-    title: "The receipt stays",
-    detail: "What was proposed, what was approved, what happened, what it cost. Every time. That record is what the rest of your business runs on.",
+    title: "JARVIS verifies the result",
+    detail:
+      "It checks the external system, records the outcome and surfaces anything incomplete, failed or requiring attention.",
   },
-]
+];
 
 export function LiveWorkflow() {
   return (
@@ -60,9 +70,8 @@ export function LiveWorkflow() {
             transition={{ delay: 0.08 }}
             className="mx-auto mt-6 max-w-2xl text-lg font-medium leading-relaxed text-slate-600"
           >
-            Whatever set it off, a call, a text, a typed line, JARVIS drafts a plan, holds it
-            for your approval, executes exactly what you approved, and leaves a receipt. Five
-            steps, the same shape, every time.
+            Speak the outcome. JARVIS runs the operation across connected
+            systems, with defined authority and verification at the end.
           </motion.p>
         </div>
 
@@ -112,14 +121,19 @@ export function LiveWorkflow() {
         </div>
       </div>
     </section>
-  )
+  );
 }
 
 function WorkflowMap() {
   return (
     <div className="relative">
       <div className="hidden md:block">
-        <svg viewBox="0 0 1120 300" className="h-auto w-full" role="img" aria-label="The JARVIS loop, from instruction to receipt">
+        <svg
+          viewBox="0 0 1120 300"
+          className="h-auto w-full"
+          role="img"
+          aria-label="The JARVIS loop, from instruction to receipt"
+        >
           <defs>
             <linearGradient id="lightWorkflowLine" x1="0" x2="1" y1="0" y2="0">
               <stop offset="0%" stopColor="rgba(14,165,181,0.12)" />
@@ -151,35 +165,67 @@ function WorkflowMap() {
               [560, 152],
               [802, 188],
               [1038, 152],
-            ]
-            const [x, y] = points[index]
+            ];
+            const [x, y] = points[index];
             return (
               <g key={step.title}>
-                <circle cx={x} cy={y} r="48" fill="#ffffff" stroke="rgba(30,64,95,0.16)" strokeWidth="2" />
-                <circle cx={x} cy={y} r="34" fill={index === 2 ? "#0f766e" : "#0f2437"} />
-                <text x={x} y={y + 6} textAnchor="middle" fill="#ffffff" fontSize="17" fontWeight="900">
+                <circle
+                  cx={x}
+                  cy={y}
+                  r="48"
+                  fill="#ffffff"
+                  stroke="rgba(30,64,95,0.16)"
+                  strokeWidth="2"
+                />
+                <circle
+                  cx={x}
+                  cy={y}
+                  r="34"
+                  fill={index === 2 ? "#0f766e" : "#0f2437"}
+                />
+                <text
+                  x={x}
+                  y={y + 6}
+                  textAnchor="middle"
+                  fill="#ffffff"
+                  fontSize="17"
+                  fontWeight="900"
+                >
                   0{index + 1}
                 </text>
-                <text x={x} y={y + 68} textAnchor="middle" fill="#334155" fontSize="12" fontWeight="900" letterSpacing="1.4">
+                <text
+                  x={x}
+                  y={y + 68}
+                  textAnchor="middle"
+                  fill="#334155"
+                  fontSize="12"
+                  fontWeight="900"
+                  letterSpacing="1.4"
+                >
                   {step.title.toUpperCase()}
                 </text>
               </g>
-            )
+            );
           })}
         </svg>
       </div>
       <div className="grid gap-3 md:hidden">
         {workflow.map((step, index) => (
-          <div key={step.title} className="flex items-center gap-3 rounded-2xl border border-slate-900/10 bg-white/80 p-4">
+          <div
+            key={step.title}
+            className="flex items-center gap-3 rounded-2xl border border-slate-900/10 bg-white/80 p-4"
+          >
             <span className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-950 text-xs font-black text-white">
               {index + 1}
             </span>
-            <span className="text-sm font-black uppercase tracking-widest text-slate-700">{step.title}</span>
+            <span className="text-sm font-black uppercase tracking-widest text-slate-700">
+              {step.title}
+            </span>
           </div>
         ))}
       </div>
     </div>
-  )
+  );
 }
 
 function HandoffReel() {
@@ -190,8 +236,15 @@ function HandoffReel() {
           Raw instruction, however it arrives
         </p>
         <div className="mt-5 space-y-3">
-          {["Caller: Jennifer", "Location: 142 Millbrook Rd, Harrisonburg VA", "Concern: Sulfur smell and hard water"].map((item) => (
-            <div key={item} className="rounded-2xl border border-orange-200 bg-white px-4 py-3 text-sm font-black text-slate-800">
+          {[
+            "Caller: Jennifer",
+            "Location: 142 Millbrook Rd, Harrisonburg VA",
+            "Concern: Sulfur smell and hard water",
+          ].map((item) => (
+            <div
+              key={item}
+              className="rounded-2xl border border-orange-200 bg-white px-4 py-3 text-sm font-black text-slate-800"
+            >
               {item}
             </div>
           ))}
@@ -214,15 +267,23 @@ function HandoffReel() {
           </span>
         </div>
         <div className="mt-5 grid gap-3 sm:grid-cols-2">
-          {["Plan drafted", "Held for approval", "Price grounded in your book", "Ready on your yes"].map((item) => (
-            <div key={item} className="rounded-2xl border border-teal-200 bg-white px-4 py-3 text-sm font-black text-slate-800">
+          {[
+            "Plan drafted",
+            "Held for approval",
+            "Price grounded in your book",
+            "Ready on your yes",
+          ].map((item) => (
+            <div
+              key={item}
+              className="rounded-2xl border border-teal-200 bg-white px-4 py-3 text-sm font-black text-slate-800"
+            >
               {item}
             </div>
           ))}
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 function AlertSummary() {
@@ -256,7 +317,10 @@ function AlertSummary() {
           ["Proposed action", "Schedule water test"],
           ["Status", "Waiting for your yes"],
         ].map(([label, value]) => (
-          <div key={label} className="grid gap-1 rounded-2xl border border-slate-900/8 bg-white/72 p-4 sm:grid-cols-[142px_1fr]">
+          <div
+            key={label}
+            className="grid gap-1 rounded-2xl border border-slate-900/8 bg-white/72 p-4 sm:grid-cols-[142px_1fr]"
+          >
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-600">
               {label}
             </span>
@@ -265,9 +329,10 @@ function AlertSummary() {
         ))}
       </div>
       <p className="mt-5 rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm font-semibold leading-relaxed text-slate-600">
-        JARVIS doesn&apos;t diagnose, finalize a quote, promise arrival times, or make repair
-        decisions on its own. It drafts the next step and waits for your team to approve it.
+        JARVIS doesn&apos;t diagnose, finalize a quote, promise arrival times,
+        or make repair decisions on its own. It drafts the next step and waits
+        for your team to approve it.
       </p>
     </motion.div>
-  )
+  );
 }

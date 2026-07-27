@@ -69,18 +69,18 @@ export function buildDemoPreviewHandoff(
     callerName: "Sarah",
     facilityName: "142 Millbrook Road, Harrisonburg VA",
     mainConcern:
-      concernFromText(safeDemoScenario, workflowType) || "No water - pump failure suspected",
+      concernFromText(safeDemoScenario, workflowType) || "No water - equipment failure suspected",
     issueType: "No-water / low-pressure issue",
-    equipmentType: equipmentFromText(safeDemoScenario) || "Submersible well pump and pressure tank",
+    equipmentType: equipmentFromText(safeDemoScenario) || "Submersible water-treatment and water-treatment equipment",
     immediateDanger: "No",
     callbackNumber: "Captured in demo",
     status: "Ready for on-call dispatch",
     callerIdentity: "Sarah, homeowner",
     clientContext: "142 Millbrook Road, Harrisonburg VA",
-    equipmentContext: "Submersible well pump and pressure tank; tank showing zero pressure",
+    equipmentContext: "Submersible water-treatment and water-treatment equipment; tank showing zero pressure",
     safetyScreen: "No immediate danger reported",
     followUpPath: "On-call dispatch alert",
-    leadType: "Well pump / no-water emergency",
+    leadType: "Customer operations workflow",
     priority: "High priority",
     companyName,
     wholeHouseOrPartial: "Whole house",
@@ -185,7 +185,7 @@ export function extractIntakeDeterministic({
           ? "No immediate danger reported"
           : "",
     followUpPath: callbackNumber ? `On-call dispatch can follow up at ${callbackNumber}` : "",
-    leadType: "Well pump / no-water emergency",
+    leadType: "Customer operations workflow",
     priority: immediateDanger === "Yes" ? "Urgent safety review" : "High priority",
     companyName,
     wholeHouseOrPartial,
@@ -263,7 +263,7 @@ export function withGeneratedCopy(intake: DemoIntakeHandoff): DemoIntakeHandoff 
     ...intake,
     dispatchAlertText:
       clean(intake.dispatchAlertText) ||
-      `Well pump emergency captured. Issue: ${safeCopy(intake.mainConcern)}. Scope: ${safeCopy(
+      `Customer operations workflow captured. Issue: ${safeCopy(intake.mainConcern)}. Scope: ${safeCopy(
         intake.wholeHouseOrPartial
       )}. Since: ${safeCopy(intake.sinceWhen)}. People affected: ${safeCopy(
         intake.peopleAffected
@@ -272,7 +272,7 @@ export function withGeneratedCopy(intake: DemoIntakeHandoff): DemoIntakeHandoff 
       )}.`,
     crmSummary:
       clean(intake.crmSummary) ||
-      `Well pump emergency created for ${safeCopy(intake.companyName)}. ${safeCopy(
+      `Customer operations workflow created for ${safeCopy(intake.companyName)}. ${safeCopy(
         intake.callerName
       )} reported ${safeCopy(intake.mainConcern)}. On-call dispatch owns follow-up.`,
   }
@@ -330,8 +330,8 @@ function concernFromText(text: string, workflowType: DemoWorkflowType) {
   if (lower.includes("no water")) return "No water / pump issue"
   if (lower.includes("zero pressure")) return "No water / zero pressure"
   if (lower.includes("low pressure")) return "Low-pressure issue"
-  if (lower.includes("pressure tank")) return "Pressure tank issue"
-  if (lower.includes("pump")) return "Well pump issue"
+  if (lower.includes("water-treatment equipment")) return "Pressure tank issue"
+  if (lower.includes("pump")) return "Water-treatment issue"
   return ""
 }
 
@@ -409,7 +409,7 @@ function peopleAffectedFromText(text: string) {
 
 function equipmentFromText(text: string) {
   const match = text.match(
-    /\b(submersible well pump|submersible pump|jet pump|well pump|pressure tank|pressure switch|bladder tank|water line)\b/i
+    /\b(submersible water-treatment|water-treatment equipment|jet pump|water-treatment|water-treatment equipment|pressure switch|bladder tank|water line)\b/i
   )
   return match?.[1] ? toTitleCase(match[1]) : ""
 }

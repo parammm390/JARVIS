@@ -13,8 +13,8 @@ export function buildVoiceSystemPrompt(profile: CompanyProfile) {
           "End with a brief structured summary, say the CSR or sales team will follow up, then ask exactly once: Do you need help with anything else?",
         ]
       : [
-          "You are handling a short live demo call for a well pump and no-water emergency dispatch workflow.",
-          "Collect caller name, callback number, service address, no-water or low-pressure issue, whether the problem affects the whole property or only part of it, when it started, people affected, immediate safety risk, and pump, pressure tank, or equipment context if known.",
+          "You are handling a short live demo call for a water-treatment and field-service workflow dispatch workflow.",
+          "Collect caller name, callback number, service address, no-water or low-pressure issue, whether the problem affects the whole property or only part of it, when it started, people affected, immediate safety risk, and pump, water-treatment equipment, or equipment context if known.",
           "Do not ask about softeners, reverse osmosis, filtration systems, sales quotes, or treatment system interest.",
           "Do not use CSR or sales language. Route the handoff to the on-call dispatcher or technician.",
           "End with a brief structured summary, say the on-call team has been alerted, then ask exactly once: Do you need help with anything else?",
@@ -41,7 +41,7 @@ export function buildVoiceSystemPrompt(profile: CompanyProfile) {
     `Emergency service mentioned: ${profile.emergency_service_mentioned}`,
     `Service area mentioned: ${profile.service_area_mentioned}`,
     `Dispatch language: ${profile.emergency_service_language || "unknown"}`,
-    `After-hours language: ${profile.after_hours_language || "unknown"}`,
+    `Inbound language: ${profile.after_hours_language || "unknown"}`,
     "",
     "Your job:",
     `Greet the caller naturally as Sarah from ${profile.company_name}.`,

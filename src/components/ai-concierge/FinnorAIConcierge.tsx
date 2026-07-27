@@ -1,7 +1,7 @@
-"use client"
+"use client";
 
-import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react"
-import { AnimatePresence, motion } from "framer-motion"
+import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowRight,
   Bot,
@@ -11,72 +11,72 @@ import {
   Send,
   Sparkles,
   X,
-} from "lucide-react"
-import { siteConfig } from "@/config/site"
-import { cn } from "@/lib/utils"
+} from "lucide-react";
+import { siteConfig } from "@/config/site";
+import { cn } from "@/lib/utils";
 
-type ChatRole = "assistant" | "user"
-type ConciergePlan = "Core" | "Growth" | "Custom" | "Not enough detail"
+type ChatRole = "assistant" | "user";
+type ConciergePlan = "Core" | "Growth" | "Custom" | "Not enough detail";
 
 type CollectedFields = {
-  name: string
-  company: string
-  website: string
-  role: string
-  email: string
-  pain: string
-  locations: string
-  currentSetup: string
-  desiredSystem: string
-  suggestedPlan: ConciergePlan
-}
+  name: string;
+  company: string;
+  website: string;
+  role: string;
+  email: string;
+  pain: string;
+  locations: string;
+  currentSetup: string;
+  desiredSystem: string;
+  suggestedPlan: ConciergePlan;
+};
 
-type FieldKey = keyof CollectedFields
+type FieldKey = keyof CollectedFields;
 
 type LeadSummary = {
-  company: string
-  website: string
-  role: string
-  mainPain: string
-  suggestedPlan: ConciergePlan
-  nextStep: "Apply for Founding Pilot"
-}
+  company: string;
+  website: string;
+  role: string;
+  mainPain: string;
+  suggestedPlan: ConciergePlan;
+  nextStep: "Book a JARVIS Demo";
+};
 
 type ConciergeApiReply = {
-  reply?: string
-  suggestedPlan?: ConciergePlan
-  leadSummary?: LeadSummary
+  reply?: string;
+  suggestedPlan?: ConciergePlan;
+  leadSummary?: LeadSummary;
   cta?: {
-    label: "Apply for Founding Pilot"
-    url: string
-  }
-}
+    label: "Book a JARVIS Demo";
+    url: string;
+  };
+};
 
 type ChatMessage = {
-  id: string
-  role: ChatRole
-  content: string
-  leadSummary?: LeadSummary
-  cta?: ConciergeApiReply["cta"]
-}
+  id: string;
+  role: ChatRole;
+  content: string;
+  leadSummary?: LeadSummary;
+  cta?: ConciergeApiReply["cta"];
+};
 
 const quickActions = [
   "What does Finnor do?",
   "Compare workflows",
   "Check my fit",
-  "Apply for Founding Pilot",
-]
+  "Book a JARVIS Demo",
+];
 
-const THINKING_DELAY_MS = 1000
+const THINKING_DELAY_MS = 1000;
 
 const initialMessages: ChatMessage[] = [
   {
     id: "assistant-initial",
     role: "assistant",
     content:
-      "FINNOR runs on JARVIS — it drafts a plan from your instruction and holds it for your approval before anything executes. For water treatment dealers, water companies, and well pump service teams, that means missed calls, after-hours inquiries, overflow, and slow web leads become drafted water tests, service appointments, or urgent routes, never booked without your yes. I can explain the system, compare workflows, or check your fit.",
+      "FINNOR runs on JARVIS — it drafts a plan from your instruction and holds it for your approval before anything executes. For water treatment dealers, water companies, and water-treatment operations teams, that means unworked leads, inbound inquiries, overflow, and slow web leads become drafted water tests, service appointments, or urgent routes, never booked without your yes. I can explain the system, compare workflows, or check your fit.",
   },
-]
+];
 
 const emptyCollectedFields: CollectedFields = {
   name: "",
@@ -89,104 +89,122 @@ const emptyCollectedFields: CollectedFields = {
   currentSetup: "",
   desiredSystem: "",
   suggestedPlan: "Not enough detail",
-}
+};
 
-const fitQuestionOrder = ["pain", "locations", "currentSetup", "desiredSystem"] as const
-type FitFieldKey = (typeof fitQuestionOrder)[number]
+const fitQuestionOrder = [
+  "pain",
+  "locations",
+  "currentSetup",
+  "desiredSystem",
+] as const;
+type FitFieldKey = (typeof fitQuestionOrder)[number];
 
 export function FinnorAIConcierge() {
-  const [isOpen, setIsOpen] = useState(false)
-  const [messages, setMessages] = useState<ChatMessage[]>(initialMessages)
+  const [isOpen, setIsOpen] = useState(false);
+  const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [collectedFields, setCollectedFields] =
-    useState<CollectedFields>(emptyCollectedFields)
-  const [activeField, setActiveField] = useState<FieldKey | null>(null)
-  const [isFitFlow, setIsFitFlow] = useState(false)
-  const [input, setInput] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
-  const scrollRef = useRef<HTMLDivElement | null>(null)
+    useState<CollectedFields>(emptyCollectedFields);
+  const [activeField, setActiveField] = useState<FieldKey | null>(null);
+  const [isFitFlow, setIsFitFlow] = useState(false);
+  const [input, setInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (!isOpen) return
+    if (!isOpen) return;
 
     const frame = requestAnimationFrame(() => {
-      scrollRef.current?.scrollIntoView({ behavior: "smooth", block: "end" })
-    })
+      scrollRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    });
 
-    return () => cancelAnimationFrame(frame)
-  }, [isOpen, messages, isLoading])
+    return () => cancelAnimationFrame(frame);
+  }, [isOpen, messages, isLoading]);
 
   async function submitMessage(rawText: string) {
-    const text = rawText.trim()
-    if (!text || isLoading) return
+    const text = rawText.trim();
+    if (!text || isLoading) return;
 
     const userMessage: ChatMessage = {
       id: createMessageId("user"),
       role: "user",
       content: text,
-    }
-    const fieldsAfterUser = collectFieldsFromUserText(text, collectedFields, activeField)
-    const nextMessages = [...messages, userMessage]
+    };
+    const fieldsAfterUser = collectFieldsFromUserText(
+      text,
+      collectedFields,
+      activeField,
+    );
+    const nextMessages = [...messages, userMessage];
 
-    setMessages(nextMessages)
-    setCollectedFields(fieldsAfterUser)
-    setInput("")
+    setMessages(nextMessages);
+    setCollectedFields(fieldsAfterUser);
+    setInput("");
 
     if (isBookIntent(text)) {
-      setIsLoading(true)
-      await waitForThinkingDelay()
-      addAssistantMessage(buildBookReply())
-      setActiveField(null)
-      setIsFitFlow(false)
-      setIsLoading(false)
-      return
+      setIsLoading(true);
+      await waitForThinkingDelay();
+      addAssistantMessage(buildBookReply());
+      setActiveField(null);
+      setIsFitFlow(false);
+      setIsLoading(false);
+      return;
     }
 
     if (isFitFlow) {
-      const nextFitQuestion = getNextFitQuestion(fieldsAfterUser)
+      const nextFitQuestion = getNextFitQuestion(fieldsAfterUser);
 
       if (nextFitQuestion) {
-        setIsLoading(true)
-        await waitForThinkingDelay()
-        setActiveField(nextFitQuestion.field)
-        addAssistantMessage({ content: nextFitQuestion.question })
-        setIsLoading(false)
-        return
+        setIsLoading(true);
+        await waitForThinkingDelay();
+        setActiveField(nextFitQuestion.field);
+        addAssistantMessage({ content: nextFitQuestion.question });
+        setIsLoading(false);
+        return;
       }
 
-      const finalFields = applySuggestedPlan(fieldsAfterUser)
-      setIsLoading(true)
-      await waitForThinkingDelay()
-      setCollectedFields(finalFields)
-      setActiveField(null)
-      setIsFitFlow(false)
-      addAssistantMessage(buildFitRecommendation(finalFields))
-      setIsLoading(false)
-      return
+      const finalFields = applySuggestedPlan(fieldsAfterUser);
+      setIsLoading(true);
+      await waitForThinkingDelay();
+      setCollectedFields(finalFields);
+      setActiveField(null);
+      setIsFitFlow(false);
+      addAssistantMessage(buildFitRecommendation(finalFields));
+      setIsLoading(false);
+      return;
     }
 
-    setIsLoading(true)
+    setIsLoading(true);
 
     try {
       const response = await fetch("/api/ai-concierge", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          messages: nextMessages.slice(-12).map(({ role, content }) => ({ role, content })),
+          messages: nextMessages
+            .slice(-12)
+            .map(({ role, content }) => ({ role, content })),
           collectedFields: fieldsAfterUser,
         }),
-      })
-      const payload = (await response.json()) as ConciergeApiReply & { error?: string }
+      });
+      const payload = (await response.json()) as ConciergeApiReply & {
+        error?: string;
+      };
 
       if (!response.ok) {
-        throw new Error(payload.error || "The concierge could not respond right now.")
+        throw new Error(
+          payload.error || "The concierge could not respond right now.",
+        );
       }
 
       const fieldsAfterReply = payload.suggestedPlan
         ? { ...fieldsAfterUser, suggestedPlan: payload.suggestedPlan }
-        : fieldsAfterUser
-      setCollectedFields(fieldsAfterReply)
-      const nextActiveField = inferAskedField(payload.reply || "", fieldsAfterReply)
-      setActiveField(nextActiveField)
+        : fieldsAfterUser;
+      setCollectedFields(fieldsAfterReply);
+      const nextActiveField = inferAskedField(
+        payload.reply || "",
+        fieldsAfterReply,
+      );
+      setActiveField(nextActiveField);
       setMessages((current) => [
         ...current,
         {
@@ -198,7 +216,7 @@ export function FinnorAIConcierge() {
           leadSummary: payload.leadSummary,
           cta: payload.cta,
         },
-      ])
+      ]);
     } catch {
       setMessages((current) => [
         ...current,
@@ -206,78 +224,80 @@ export function FinnorAIConcierge() {
           id: createMessageId("assistant"),
           role: "assistant",
           content:
-            "I'm having trouble reaching the concierge model. You can still apply for the founding pilot and bring the booking or lead recovery workflow you want fixed.",
+            "I'm having trouble reaching the concierge model. You can still apply for the JARVIS deployment and bring the booking or lead recovery workflow you want fixed.",
           cta: {
-            label: "Apply for Founding Pilot",
+            label: "Book a JARVIS Demo",
             url: siteConfig.calendlyLink,
           },
         },
-      ])
+      ]);
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
   }
 
   async function handleQuickAction(action: string) {
-    if (isLoading) return
+    if (isLoading) return;
 
     const userMessage: ChatMessage = {
       id: createMessageId("user"),
       role: "user",
       content: action,
-    }
+    };
 
-    setMessages((current) => [...current, userMessage])
-    setInput("")
-    setIsLoading(true)
+    setMessages((current) => [...current, userMessage]);
+    setInput("");
+    setIsLoading(true);
 
     if (action === "What does Finnor do?") {
-      await waitForThinkingDelay()
+      await waitForThinkingDelay();
       addAssistantMessage({
         content:
-          "FINNOR runs on JARVIS: every missed call, after-hours inquiry, overflow lead, or slow web lead becomes a drafted water test, service appointment, or urgent route — held for your approval before anything books. Nothing executes without your yes.",
-      })
-      setActiveField(null)
-      setIsFitFlow(false)
-      setIsLoading(false)
-      return
+          "FINNOR runs on JARVIS: every unworked lead, inbound inquiry, overflow lead, or slow web lead becomes a drafted water test, service appointment, or urgent route — held for your approval before anything books. Nothing executes without your yes.",
+      });
+      setActiveField(null);
+      setIsFitFlow(false);
+      setIsLoading(false);
+      return;
     }
 
     if (action === "Compare workflows") {
-      await waitForThinkingDelay()
+      await waitForThinkingDelay();
       addAssistantMessage({
         content:
-          "Most teams start with one workflow: missed-call recovery, after-hours coverage, overflow support, web/form speed-to-lead, or urgent well pump routing. The pilot call scopes the right workflow, coverage window, booking questions, urgent routes, and human ownership boundaries.",
-      })
-      setActiveField(null)
-      setIsFitFlow(false)
-      setIsLoading(false)
-      return
+          "Most teams start with one workflow: lead follow-up, inbound coverage, overflow support, web/form speed-to-lead, or urgent water-treatment routing. The pilot call scopes the right workflow, coverage window, booking questions, urgent routes, and human ownership boundaries.",
+      });
+      setActiveField(null);
+      setIsFitFlow(false);
+      setIsLoading(false);
+      return;
     }
 
     if (action === "Check my fit") {
-      const nextQuestion = getNextFitQuestion(collectedFields)
-      await waitForThinkingDelay()
-      setIsFitFlow(true)
-      setActiveField(nextQuestion?.field || null)
+      const nextQuestion = getNextFitQuestion(collectedFields);
+      await waitForThinkingDelay();
+      setIsFitFlow(true);
+      setActiveField(nextQuestion?.field || null);
       addAssistantMessage({
         content:
           nextQuestion?.question ||
           "I have the basics. The next move is a pilot review so we can map the actual booking or urgent-route path.",
-        leadSummary: nextQuestion ? undefined : buildLeadSummary(applySuggestedPlan(collectedFields)),
+        leadSummary: nextQuestion
+          ? undefined
+          : buildLeadSummary(applySuggestedPlan(collectedFields)),
         cta: nextQuestion ? undefined : workflowReviewCta(),
-      })
-      setIsLoading(false)
-      return
+      });
+      setIsLoading(false);
+      return;
     }
 
-    if (action === "Apply for Founding Pilot") {
-      await waitForThinkingDelay()
-      addAssistantMessage(buildBookReply())
-      setActiveField(null)
-      setIsFitFlow(false)
+    if (action === "Book a JARVIS Demo") {
+      await waitForThinkingDelay();
+      addAssistantMessage(buildBookReply());
+      setActiveField(null);
+      setIsFitFlow(false);
     }
-    setIsLoading(false)
+    setIsLoading(false);
   }
 
   function addAssistantMessage({
@@ -285,9 +305,9 @@ export function FinnorAIConcierge() {
     leadSummary,
     cta,
   }: {
-    content: string
-    leadSummary?: LeadSummary
-    cta?: ConciergeApiReply["cta"]
+    content: string;
+    leadSummary?: LeadSummary;
+    cta?: ConciergeApiReply["cta"];
   }) {
     setMessages((current) => [
       ...current,
@@ -298,18 +318,18 @@ export function FinnorAIConcierge() {
         leadSummary,
         cta,
       },
-    ])
+    ]);
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    void submitMessage(input)
+    event.preventDefault();
+    void submitMessage(input);
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === "Enter" && !event.shiftKey) {
-      event.preventDefault()
-      void submitMessage(input)
+      event.preventDefault();
+      void submitMessage(input);
     }
   }
 
@@ -347,7 +367,9 @@ export function FinnorAIConcierge() {
                       </div>
                       <div className="mt-1 inline-flex max-w-full items-center gap-2 rounded-full border border-emerald-300/20 bg-emerald-300/10 px-2.5 py-1 text-[11px] font-bold text-emerald-100">
                         <span className="h-1.5 w-1.5 rounded-full bg-emerald-300 shadow-[0_0_12px_rgba(110,231,183,0.9)]" />
-                        <span className="truncate">Online · Booking workflow assistant</span>
+                        <span className="truncate">
+                          Online · Booking workflow assistant
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -401,7 +423,10 @@ export function FinnorAIConcierge() {
                 <div ref={scrollRef} />
               </div>
 
-              <form onSubmit={handleSubmit} className="border-t border-white/10 p-3">
+              <form
+                onSubmit={handleSubmit}
+                className="border-t border-white/10 p-3"
+              >
                 <div className="flex items-end gap-2 rounded-2xl border border-white/10 bg-black/20 p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
                   <textarea
                     value={input}
@@ -430,7 +455,9 @@ export function FinnorAIConcierge() {
 
       <motion.button
         type="button"
-        aria-label={isOpen ? "Close Finnor AI Concierge" : "Open Finnor AI Concierge"}
+        aria-label={
+          isOpen ? "Close Finnor AI Concierge" : "Open Finnor AI Concierge"
+        }
         data-cursor="hover"
         onClick={() => setIsOpen((open) => !open)}
         className="fixed bottom-5 right-5 z-[91] grid h-16 w-16 place-items-center overflow-hidden rounded-full border border-cyan-200/25 bg-[#06111f] text-white shadow-[0_18px_48px_rgba(2,8,23,0.38),0_0_42px_rgba(34,211,238,0.2)] transition hover:border-cyan-100/50 focus:outline-none focus:ring-2 focus:ring-cyan-200/60"
@@ -448,7 +475,11 @@ export function FinnorAIConcierge() {
             transition={{ duration: 0.18 }}
             className="relative"
           >
-            {isOpen ? <X className="h-6 w-6" /> : <MessageCircle className="h-6 w-6" />}
+            {isOpen ? (
+              <X className="h-6 w-6" />
+            ) : (
+              <MessageCircle className="h-6 w-6" />
+            )}
           </motion.span>
         </AnimatePresence>
         {!isOpen ? (
@@ -458,116 +489,159 @@ export function FinnorAIConcierge() {
         ) : null}
       </motion.button>
     </>
-  )
+  );
 }
 
 function getNextFitQuestion(fields: CollectedFields) {
   for (const field of fitQuestionOrder) {
-    if (fields[field]) continue
+    if (fields[field]) continue;
 
     return {
       field,
       question: fitQuestions[field],
-    }
+    };
   }
 
-  return null
+  return null;
 }
 
 function waitForThinkingDelay() {
-  return new Promise((resolve) => window.setTimeout(resolve, THINKING_DELAY_MS))
+  return new Promise((resolve) =>
+    window.setTimeout(resolve, THINKING_DELAY_MS),
+  );
 }
 
 const fitQuestions: Record<FitFieldKey, string> = {
-  pain:
-    "What are you trying to fix first: missed calls, after-hours calls, overflow, website leads, slow follow-up, or urgent well pump routing?",
+  pain: "What are you trying to fix first: unworked leads, inbound calls, overflow, website leads, slow follow-up, or urgent water-treatment routing?",
   locations: "How many locations do you operate?",
   currentSetup:
     "How are calls handled today: internal human team, answering service, voicemail, or mixed?",
-  desiredSystem: "Do you need call coverage only, or call coverage plus web/form speed-to-lead?",
-}
+  desiredSystem:
+    "Do you need call coverage only, or call coverage plus web/form speed-to-lead?",
+};
 
 function collectFieldsFromUserText(
   text: string,
   fields: CollectedFields,
-  activeField: FieldKey | null
+  activeField: FieldKey | null,
 ): CollectedFields {
-  const next = { ...fields }
-  const cleaned = cleanFieldValue(text)
-  const lower = cleaned.toLowerCase()
-  const email = cleaned.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0]
-  const website = cleaned.match(/(?:https?:\/\/)?(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)+[^\s,]*/i)?.[0]
+  const next = { ...fields };
+  const cleaned = cleanFieldValue(text);
+  const lower = cleaned.toLowerCase();
+  const email = cleaned.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0];
+  const website = cleaned.match(
+    /(?:https?:\/\/)?(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)+[^\s,]*/i,
+  )?.[0];
 
-  if (email && !next.email) next.email = email
-  if (website && !next.website && !email) next.website = normalizeWebsite(website)
+  if (email && !next.email) next.email = email;
+  if (website && !next.website && !email)
+    next.website = normalizeWebsite(website);
 
   if (activeField && activeField !== "suggestedPlan" && cleaned) {
-    if (activeField === "pain") next.pain = normalizePain(cleaned)
-    else if (activeField === "locations") next.locations = normalizeLocations(cleaned)
-    else if (activeField === "currentSetup") next.currentSetup = normalizeCurrentSetup(cleaned)
-    else if (activeField === "desiredSystem") next.desiredSystem = normalizeDesiredSystem(cleaned)
-    else if (activeField === "company") next.company = cleaned
-    else if (activeField === "website") next.website = normalizeWebsite(cleaned)
-    else if (activeField === "role") next.role = cleaned
-    else if (activeField === "email") next.email = cleaned
-    else if (activeField === "name") next.name = cleaned
+    if (activeField === "pain") next.pain = normalizePain(cleaned);
+    else if (activeField === "locations")
+      next.locations = normalizeLocations(cleaned);
+    else if (activeField === "currentSetup")
+      next.currentSetup = normalizeCurrentSetup(cleaned);
+    else if (activeField === "desiredSystem")
+      next.desiredSystem = normalizeDesiredSystem(cleaned);
+    else if (activeField === "company") next.company = cleaned;
+    else if (activeField === "website")
+      next.website = normalizeWebsite(cleaned);
+    else if (activeField === "role") next.role = cleaned;
+    else if (activeField === "email") next.email = cleaned;
+    else if (activeField === "name") next.name = cleaned;
   }
 
   if (!next.pain) {
-    const pain = inferPain(lower)
-    if (pain) next.pain = pain
+    const pain = inferPain(lower);
+    if (pain) next.pain = pain;
   }
 
   if (!next.locations) {
-    const locations = inferLocations(lower)
-    if (locations) next.locations = locations
+    const locations = inferLocations(lower);
+    if (locations) next.locations = locations;
   }
 
   if (!next.currentSetup) {
-    const setup = inferCurrentSetup(lower)
-    if (setup) next.currentSetup = setup
+    const setup = inferCurrentSetup(lower);
+    if (setup) next.currentSetup = setup;
   }
 
   if (!next.desiredSystem) {
-    const desired = inferDesiredSystem(lower)
-    if (desired) next.desiredSystem = desired
+    const desired = inferDesiredSystem(lower);
+    if (desired) next.desiredSystem = desired;
   }
 
   if (!next.role) {
-    const role = inferRole(cleaned)
-    if (role) next.role = role
+    const role = inferRole(cleaned);
+    if (role) next.role = role;
   }
 
-  return applySuggestedPlan(next)
+  return applySuggestedPlan(next);
 }
 
-function inferAskedField(reply: string, fields: CollectedFields): FieldKey | null {
-  const lower = reply.toLowerCase()
+function inferAskedField(
+  reply: string,
+  fields: CollectedFields,
+): FieldKey | null {
+  const lower = reply.toLowerCase();
   const candidates: Array<[FieldKey, string[]]> = [
-    ["pain", ["trying to fix", "main leak", "biggest leak", "first gap", "workflow challenge"]],
-    ["locations", ["how many locations", "number of locations", "locations do you operate"]],
-    ["currentSetup", ["calls handled today", "handled today", "answering service", "voicemail", "internal dispatch"]],
-    ["desiredSystem", ["calls only", "call coverage", "voice only", "voice + web", "voice and web", "web leads"]],
+    [
+      "pain",
+      [
+        "trying to fix",
+        "main leak",
+        "biggest leak",
+        "first gap",
+        "workflow challenge",
+      ],
+    ],
+    [
+      "locations",
+      ["how many locations", "number of locations", "locations do you operate"],
+    ],
+    [
+      "currentSetup",
+      [
+        "calls handled today",
+        "handled today",
+        "answering service",
+        "voicemail",
+        "internal dispatch",
+      ],
+    ],
+    [
+      "desiredSystem",
+      [
+        "calls only",
+        "call coverage",
+        "voice only",
+        "voice + web",
+        "voice and web",
+        "web leads",
+      ],
+    ],
     ["company", ["company name", "company name", "organization name"]],
     ["website", ["website"]],
     ["role", ["your role", "what is your role"]],
     ["email", ["email"]],
     ["name", ["your name", "who should"]],
-  ]
+  ];
 
   for (const [field, phrases] of candidates) {
-    if (fields[field]) continue
-    if (phrases.some((phrase) => lower.includes(phrase))) return field
+    if (fields[field]) continue;
+    if (phrases.some((phrase) => lower.includes(phrase))) return field;
   }
 
-  return null
+  return null;
 }
 
 function applySuggestedPlan(fields: CollectedFields): CollectedFields {
   return {
     ...fields,
     suggestedPlan: recommendPlan(fields),
-  }
+  };
 }
 
 function recommendPlan(fields: CollectedFields): ConciergePlan {
@@ -578,59 +652,63 @@ function recommendPlan(fields: CollectedFields): ConciergePlan {
     fields.desiredSystem,
   ]
     .join(" ")
-    .toLowerCase()
+    .toLowerCase();
 
-  const locationCount = Number(fields.locations.match(/\d+/)?.[0] || 0)
+  const locationCount = Number(fields.locations.match(/\d+/)?.[0] || 0);
 
   if (
     locationCount > 1 ||
     /\b(crm|outbound|integration|integrations|multi-location|routing|custom|complex|booking|calendar)\b/.test(
-      signal
+      signal,
     )
   ) {
-    return "Custom"
+    return "Custom";
   }
 
   if (
-    /\b(web|website|chat|form|follow-up|follow up|callback|missed-call|missed call recovery|routing|booking|appointment)\b/.test(
-      signal
+    /\b(web|website|chat|form|follow-up|follow up|callback|lead-follow-up|unworked lead recovery|routing|booking|appointment)\b/.test(
+      signal,
     )
   ) {
-    return "Growth"
+    return "Growth";
   }
 
-  if (/\b(voice only|voice-only|calls?|missed|after-hours|after hours|overflow|voicemail)\b/.test(signal)) {
-    return "Core"
+  if (
+    /\b(voice only|voice-only|calls?|missed|inbound|after hours|overflow|voicemail)\b/.test(
+      signal,
+    )
+  ) {
+    return "Core";
   }
 
-  return fields.suggestedPlan || "Not enough detail"
+  return fields.suggestedPlan || "Not enough detail";
 }
 
 function buildFitRecommendation(fields: CollectedFields) {
-  const plan = fields.suggestedPlan
-  const summary = buildLeadSummary(fields)
+  const plan = fields.suggestedPlan;
+  const summary = buildLeadSummary(fields);
   const planLine =
     plan === "Custom"
       ? "This looks like a custom booking and recovery workflow. Multi-location, client-specific routing, integrations, or more complex booking paths should be scoped first."
       : plan === "Growth"
         ? "This looks like call coverage plus web/form speed-to-lead. Calls and web leads both need fast response and a booked next step."
         : plan === "Core"
-          ? "This looks like missed-call and after-hours recovery. The main job is answering quickly and moving the lead toward a booking or urgent route."
-          : "I need one more operational detail before I would call the plan."
+          ? "This looks like lead-follow-up and inbound recovery. The main job is answering quickly and moving the lead toward a booking or urgent route."
+          : "I need one more operational detail before I would call the plan.";
 
   return {
-    content: `${planLine} The clean next step is a founding pilot review.`,
+    content: `${planLine} The clean next step is a JARVIS deployment review.`,
     leadSummary: summary,
     cta: workflowReviewCta(),
-  }
+  };
 }
 
 function buildBookReply() {
   return {
     content:
-      "Best next step is a founding pilot review. Bring the missed-call, after-hours, overflow, web lead, or urgent well pump workflow you want fixed.",
+      "Best next step is a JARVIS deployment review. Bring the lead-follow-up, inbound, overflow, web lead, or urgent water-treatment workflow you want fixed.",
     cta: workflowReviewCta(),
-  }
+  };
 }
 
 function buildLeadSummary(fields: CollectedFields): LeadSummary {
@@ -640,93 +718,99 @@ function buildLeadSummary(fields: CollectedFields): LeadSummary {
     role: fields.role,
     mainPain: fields.pain,
     suggestedPlan: fields.suggestedPlan,
-    nextStep: "Apply for Founding Pilot",
-  }
+    nextStep: "Book a JARVIS Demo",
+  };
 }
 
 function workflowReviewCta() {
   return {
-    label: "Apply for Founding Pilot" as const,
+    label: "Book a JARVIS Demo" as const,
     url: siteConfig.calendlyLink,
-  }
+  };
 }
 
 function isBookIntent(text: string) {
-  return /\b(book|schedule|calendly|workflow review|pilot)\b/i.test(text)
+  return /\b(book|schedule|calendly|workflow review|pilot)\b/i.test(text);
 }
 
 function cleanFieldValue(value: string) {
-  return value.replace(/\s+/g, " ").trim().slice(0, 220)
+  return value.replace(/\s+/g, " ").trim().slice(0, 220);
 }
 
 function normalizeWebsite(value: string) {
-  return value.replace(/[.)]+$/, "").trim()
+  return value.replace(/[.)]+$/, "").trim();
 }
 
 function normalizePain(value: string) {
-  return cleanFieldValue(value)
+  return cleanFieldValue(value);
 }
 
 function normalizeLocations(value: string) {
-  const lower = value.toLowerCase()
-  if (/\bone\b/.test(lower)) return "1 location"
-  if (/\btwo\b/.test(lower)) return "2 locations"
-  if (/\bthree\b/.test(lower)) return "3 locations"
-  if (/\bfour\b/.test(lower)) return "4 locations"
-  const number = value.match(/\d+/)?.[0]
-  return number ? `${number} ${number === "1" ? "location" : "locations"}` : cleanFieldValue(value)
+  const lower = value.toLowerCase();
+  if (/\bone\b/.test(lower)) return "1 location";
+  if (/\btwo\b/.test(lower)) return "2 locations";
+  if (/\bthree\b/.test(lower)) return "3 locations";
+  if (/\bfour\b/.test(lower)) return "4 locations";
+  const number = value.match(/\d+/)?.[0];
+  return number
+    ? `${number} ${number === "1" ? "location" : "locations"}`
+    : cleanFieldValue(value);
 }
 
 function normalizeCurrentSetup(value: string) {
-  return cleanFieldValue(value)
+  return cleanFieldValue(value);
 }
 
 function normalizeDesiredSystem(value: string) {
-  const lower = value.toLowerCase()
-  if (/\bvoice\s*(\+|and)\s*web\b/.test(lower) || lower.includes("web intake")) return "Voice + web intake"
-  if (lower.includes("voice only") || lower.includes("voice-only")) return "Voice only"
-  return cleanFieldValue(value)
+  const lower = value.toLowerCase();
+  if (/\bvoice\s*(\+|and)\s*web\b/.test(lower) || lower.includes("web intake"))
+    return "Voice + web intake";
+  if (lower.includes("voice only") || lower.includes("voice-only"))
+    return "Voice only";
+  return cleanFieldValue(value);
 }
 
 function inferPain(lower: string) {
   const pains = [
-    ["missed calls", "missed calls"],
-    ["after-hours calls", "after-hours calls"],
-    ["after hours", "after-hours calls"],
+    ["unworked leads", "unworked leads"],
+    ["inbound calls", "inbound calls"],
+    ["after hours", "inbound calls"],
     ["overflow", "overflow calls"],
     ["website leads", "website leads"],
     ["web leads", "website leads"],
     ["follow-up", "follow-up"],
     ["follow up", "follow-up"],
     ["reporting", "reporting"],
-  ]
+  ];
 
-  return pains.find(([needle]) => lower.includes(needle))?.[1] || ""
+  return pains.find(([needle]) => lower.includes(needle))?.[1] || "";
 }
 
 function inferLocations(lower: string) {
-  if (/\bone location\b/.test(lower)) return "1 location"
-  const match = lower.match(/\b(\d+)\s*(locations?|companies|facilities?)\b/)
-  if (!match) return ""
-  return `${match[1]} ${match[1] === "1" ? "location" : "locations"}`
+  if (/\bone location\b/.test(lower)) return "1 location";
+  const match = lower.match(/\b(\d+)\s*(locations?|companies|facilities?)\b/);
+  if (!match) return "";
+  return `${match[1]} ${match[1] === "1" ? "location" : "locations"}`;
 }
 
 function inferCurrentSetup(lower: string) {
-  if (lower.includes("answering service")) return "Answering service"
-  if (lower.includes("voicemail")) return "Voicemail"
-  if (lower.includes("internal dispatch")) return "Internal human team"
-  if (lower.includes("mixed")) return "Mixed setup"
-  return ""
+  if (lower.includes("answering service")) return "Answering service";
+  if (lower.includes("voicemail")) return "Voicemail";
+  if (lower.includes("internal dispatch")) return "Internal human team";
+  if (lower.includes("mixed")) return "Mixed setup";
+  return "";
 }
 
 function inferDesiredSystem(lower: string) {
-  if (/\bvoice\s*(\+|and)\s*web\b/.test(lower) || lower.includes("web intake")) return "Voice + web intake"
-  if (lower.includes("voice only") || lower.includes("voice-only")) return "Voice only"
-  return ""
+  if (/\bvoice\s*(\+|and)\s*web\b/.test(lower) || lower.includes("web intake"))
+    return "Voice + web intake";
+  if (lower.includes("voice only") || lower.includes("voice-only"))
+    return "Voice only";
+  return "";
 }
 
 function inferRole(value: string) {
-  const lower = value.toLowerCase()
+  const lower = value.toLowerCase();
   const roles = [
     "founder",
     "owner",
@@ -737,20 +821,23 @@ function inferRole(value: string) {
     "director of dispatch",
     "marketing director",
     "growth lead",
-  ]
+  ];
 
-  return roles.find((role) => lower.includes(role)) || ""
+  return roles.find((role) => lower.includes(role)) || "";
 }
 
 function ChatBubble({ message }: { message: ChatMessage }) {
-  const isAssistant = message.role === "assistant"
+  const isAssistant = message.role === "assistant";
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.22 }}
-      className={cn("flex gap-2", isAssistant ? "justify-start" : "justify-end")}
+      className={cn(
+        "flex gap-2",
+        isAssistant ? "justify-start" : "justify-end",
+      )}
     >
       {isAssistant ? (
         <div className="mt-1 grid h-7 w-7 shrink-0 place-items-center rounded-full border border-cyan-200/15 bg-cyan-200/10">
@@ -758,13 +845,15 @@ function ChatBubble({ message }: { message: ChatMessage }) {
         </div>
       ) : null}
 
-      <div className={cn("max-w-[85%]", !isAssistant && "flex flex-col items-end")}>
+      <div
+        className={cn("max-w-[85%]", !isAssistant && "flex flex-col items-end")}
+      >
         <div
           className={cn(
             "rounded-2xl px-4 py-3 text-sm font-semibold leading-relaxed",
             isAssistant
               ? "rounded-tl-md border border-white/10 bg-white/[0.07] text-slate-100"
-              : "rounded-tr-md bg-cyan-200 text-slate-950 shadow-[0_10px_30px_rgba(34,211,238,0.16)]"
+              : "rounded-tr-md bg-cyan-200 text-slate-950 shadow-[0_10px_30px_rgba(34,211,238,0.16)]",
           )}
         >
           {message.content}
@@ -777,17 +866,23 @@ function ChatBubble({ message }: { message: ChatMessage }) {
         ) : null}
       </div>
     </motion.div>
-  )
+  );
 }
 
-function LeadSummaryCard({ summary, cta }: { summary: LeadSummary; cta?: ConciergeApiReply["cta"] }) {
+function LeadSummaryCard({
+  summary,
+  cta,
+}: {
+  summary: LeadSummary;
+  cta?: ConciergeApiReply["cta"];
+}) {
   const rows = [
     ["Company", summary.company],
     ["Role", summary.role],
     ["Main pain", summary.mainPain],
     ["Suggested plan", summary.suggestedPlan],
     ["Next step", summary.nextStep],
-  ]
+  ];
 
   return (
     <div className="mt-3 overflow-hidden rounded-2xl border border-cyan-200/15 bg-slate-950/70 shadow-[0_18px_44px_rgba(0,0,0,0.25)]">
@@ -800,9 +895,16 @@ function LeadSummaryCard({ summary, cta }: { summary: LeadSummary; cta?: Concier
 
       <dl className="space-y-2 px-4 py-3">
         {rows.map(([label, value]) => (
-          <div key={label} className="grid grid-cols-[6.5rem_1fr] gap-3 text-xs leading-relaxed">
-            <dt className="font-black uppercase tracking-[0.12em] text-slate-400">{label}</dt>
-            <dd className="font-bold text-slate-100">{value || "Not captured"}</dd>
+          <div
+            key={label}
+            className="grid grid-cols-[6.5rem_1fr] gap-3 text-xs leading-relaxed"
+          >
+            <dt className="font-black uppercase tracking-[0.12em] text-slate-400">
+              {label}
+            </dt>
+            <dd className="font-bold text-slate-100">
+              {value || "Not captured"}
+            </dd>
           </div>
         ))}
       </dl>
@@ -811,22 +913,22 @@ function LeadSummaryCard({ summary, cta }: { summary: LeadSummary; cta?: Concier
         <ConciergeCta
           cta={
             cta || {
-              label: "Apply for Founding Pilot",
+              label: "Book a JARVIS Demo",
               url: siteConfig.calendlyLink,
             }
           }
         />
       </div>
     </div>
-  )
+  );
 }
 
 function ConciergeCta({
   cta,
   className,
 }: {
-  cta: NonNullable<ConciergeApiReply["cta"]>
-  className?: string
+  cta: NonNullable<ConciergeApiReply["cta"]>;
+  className?: string;
 }) {
   return (
     <a
@@ -836,14 +938,14 @@ function ConciergeCta({
       data-cursor="hover"
       className={cn(
         "inline-flex w-full items-center justify-center gap-2 rounded-full bg-emerald-300 px-4 py-2.5 text-xs font-black text-slate-950 transition hover:bg-emerald-200",
-        className
+        className,
       )}
     >
       <CalendarDays className="h-4 w-4" />
       {cta.label}
       <ArrowRight className="h-4 w-4" />
     </a>
-  )
+  );
 }
 
 function TypingPulse() {
@@ -863,7 +965,7 @@ function TypingPulse() {
         ))}
       </div>
     </div>
-  )
+  );
 }
 
 function Waveform() {
@@ -884,9 +986,9 @@ function Waveform() {
         />
       ))}
     </div>
-  )
+  );
 }
 
 function createMessageId(prefix: string) {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }

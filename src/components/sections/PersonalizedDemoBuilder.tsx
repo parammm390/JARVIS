@@ -1,9 +1,9 @@
-"use client"
+"use client";
 
-import { motion } from "framer-motion"
-import { ArrowRight, History, PhoneCall, ShieldCheck } from "lucide-react"
-import { siteConfig } from "@/config/site"
-import { Magnetic } from "@/components/ui/magnetic"
+import { motion } from "framer-motion";
+import { ArrowRight, History, PhoneCall, ShieldCheck } from "lucide-react";
+import { siteConfig } from "@/config/site";
+import { Magnetic } from "@/components/ui/magnetic";
 
 // M3.T3, reframed into the single "try it on your business" CTA (plan §2.4 beat 6).
 // Was a 3-card grid pointing at three separate demo routes, including the fake-data
@@ -15,7 +15,7 @@ import { Magnetic } from "@/components/ui/magnetic"
 const steps = [
   {
     icon: PhoneCall,
-    label: "You give it an instruction",
+    label: "You give JARVIS a business outcome",
     copy: "Tell it your company. It calls, live, configured as your business.",
   },
   {
@@ -28,7 +28,7 @@ const steps = [
     label: "Then the record keeps going",
     copy: "See the same household two years deep, on real public water data for your ZIP.",
   },
-]
+];
 
 export function PersonalizedDemoBuilder() {
   return (
@@ -59,9 +59,10 @@ export function PersonalizedDemoBuilder() {
             transition={{ delay: 0.08 }}
             className="mx-auto mt-6 max-w-2xl text-lg font-medium leading-relaxed text-slate-600"
           >
-            Enter your company name and website. JARVIS configures itself as your business, takes
-            a real call, and shows you exactly what it would have drafted, then carries that same
-            household two years forward on real public water data. No account needed.
+            Enter your company name and website. JARVIS configures itself as
+            your business, takes a real call, and shows you exactly what it
+            would have drafted, then carries that same household two years
+            forward on real public water data. No account needed.
           </motion.p>
         </div>
 
@@ -79,8 +80,12 @@ export function PersonalizedDemoBuilder() {
               <span className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-sky-50 text-sky-800">
                 <step.icon className="h-5 w-5" />
               </span>
-              <h3 className="font-black tracking-tight text-slate-950">{step.label}</h3>
-              <p className="mt-2 text-sm font-medium leading-relaxed text-slate-600">{step.copy}</p>
+              <h3 className="font-black tracking-tight text-slate-950">
+                {step.label}
+              </h3>
+              <p className="mt-2 text-sm font-medium leading-relaxed text-slate-600">
+                {step.copy}
+              </p>
             </div>
           ))}
         </motion.div>
@@ -104,9 +109,10 @@ export function PersonalizedDemoBuilder() {
         </motion.div>
 
         <p className="mx-auto mt-6 max-w-xl text-center text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
-          Live, interactive, and clearly labeled DEMO, not a real approval, not a real record.
+          Live, interactive, and clearly labeled DEMO, not a real approval, not
+          a real record.
         </p>
       </div>
     </section>
-  )
+  );
 }

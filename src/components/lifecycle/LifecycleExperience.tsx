@@ -1,7 +1,7 @@
-"use client"
+"use client";
 
-import { useCallback, useEffect, useRef, useState } from "react"
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
+import { useCallback, useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   ArrowLeft,
   ArrowRight,
@@ -14,39 +14,50 @@ import {
   Settings2,
   Waves,
   Wrench,
-} from "lucide-react"
-import { recordAtStage, type LifecycleScenario } from "@/lib/lifecycle/scenario"
-import { isPricingTier } from "@/lib/lifecycle/pricing"
-import { clearLifecycleHandoff, readLifecycleHandoff } from "@/lib/memory/handoff"
-import { RecordPanel } from "@/components/lifecycle/RecordPanel"
-import { TimelineScrubber } from "@/components/lifecycle/TimelineScrubber"
-import { StageScene } from "@/components/lifecycle/scenes"
-import { LifecycleSetup, type LifecyclePrefill } from "@/components/lifecycle/LifecycleSetup"
-import { CalendlyCta } from "@/components/demo/CalendlyCta"
+} from "lucide-react";
+import {
+  recordAtStage,
+  type LifecycleScenario,
+} from "@/lib/lifecycle/scenario";
+import { isPricingTier } from "@/lib/lifecycle/pricing";
+import {
+  clearLifecycleHandoff,
+  readLifecycleHandoff,
+} from "@/lib/memory/handoff";
+import { RecordPanel } from "@/components/lifecycle/RecordPanel";
+import { TimelineScrubber } from "@/components/lifecycle/TimelineScrubber";
+import { StageScene } from "@/components/lifecycle/scenes";
+import {
+  LifecycleSetup,
+  type LifecyclePrefill,
+} from "@/components/lifecycle/LifecycleSetup";
+import { CalendlyCta } from "@/components/demo/CalendlyCta";
 
-const EASE = [0.16, 1, 0.3, 1]
-const MONO = "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
+const EASE = [0.16, 1, 0.3, 1];
+const MONO = "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace";
 
-type View = "entry" | "setup" | "playing"
+type View = "entry" | "setup" | "playing";
 
 export function LifecycleExperience({ sample }: { sample: LifecycleScenario }) {
-  const reduceMotion = useReducedMotion()
-  const [view, setView] = useState<View>("entry")
-  const [scenario, setScenario] = useState<LifecycleScenario>(sample)
-  const [chosenSlot, setChosenSlot] = useState<string | undefined>(undefined)
-  const [index, setIndex] = useState(0)
-  const [direction, setDirection] = useState(1)
-  const [playing, setPlaying] = useState(false)
-  const [prefill, setPrefill] = useState<LifecyclePrefill | undefined>(undefined)
-  const indexRef = useRef(index)
-  indexRef.current = index
+  const reduceMotion = useReducedMotion();
+  const [view, setView] = useState<View>("entry");
+  const [scenario, setScenario] = useState<LifecycleScenario>(sample);
+  const [chosenSlot, setChosenSlot] = useState<string | undefined>(undefined);
+  const [index, setIndex] = useState(0);
+  const [direction, setDirection] = useState(1);
+  const [playing, setPlaying] = useState(false);
+  const [prefill, setPrefill] = useState<LifecyclePrefill | undefined>(
+    undefined,
+  );
+  const indexRef = useRef(index);
+  indexRef.current = index;
 
   // Continuation from the live quoting call: the household record the visitor
   // just created carries straight into the two-year view.
   useEffect(() => {
-    const handoff = readLifecycleHandoff()
-    if (!handoff) return
-    clearLifecycleHandoff()
+    const handoff = readLifecycleHandoff();
+    if (!handoff) return;
+    clearLifecycleHandoff();
     setPrefill({
       zip: handoff.zip,
       shopName: handoff.dealerName,
@@ -58,78 +69,83 @@ export function LifecycleExperience({ sample }: { sample: LifecycleScenario }) {
             handoff.concern ? `, ${handoff.concern.toLowerCase()}` : ""
           }. Same memory, next two years.`
         : "Continuing the record from your live call. Same memory, next two years.",
-    })
-    setView("setup")
-  }, [])
+    });
+    setView("setup");
+  }, []);
 
-  const stage = scenario.stages[index]
-  const stageCount = scenario.stages.length
-  const record = recordAtStage(scenario, index, chosenSlot)
-  const atEnd = index === stageCount - 1
+  const stage = scenario.stages[index];
+  const stageCount = scenario.stages.length;
+  const record = recordAtStage(scenario, index, chosenSlot);
+  const atEnd = index === stageCount - 1;
 
   const goTo = useCallback(
     (next: number, fromAutoplay = false) => {
-      const clamped = Math.max(0, Math.min(stageCount - 1, next))
-      const current = indexRef.current
+      const clamped = Math.max(0, Math.min(stageCount - 1, next));
+      const current = indexRef.current;
       if (clamped === current) {
-        if (!fromAutoplay) setPlaying(false)
-        return
+        if (!fromAutoplay) setPlaying(false);
+        return;
       }
-      setDirection(clamped > current ? 1 : -1)
-      setIndex(clamped)
-      if (!fromAutoplay) setPlaying(false)
+      setDirection(clamped > current ? 1 : -1);
+      setIndex(clamped);
+      if (!fromAutoplay) setPlaying(false);
     },
-    [stageCount]
-  )
+    [stageCount],
+  );
 
   useEffect(() => {
-    if (!playing || view !== "playing") return
+    if (!playing || view !== "playing") return;
     if (index >= stageCount - 1) {
-      setPlaying(false)
-      return
+      setPlaying(false);
+      return;
     }
     const timer = window.setTimeout(
       () => goTo(index + 1, true),
-      reduceMotion ? 5000 : stage.autoMs
-    )
-    return () => window.clearTimeout(timer)
-  }, [playing, view, index, stage.autoMs, stageCount, goTo, reduceMotion])
+      reduceMotion ? 5000 : stage.autoMs,
+    );
+    return () => window.clearTimeout(timer);
+  }, [playing, view, index, stage.autoMs, stageCount, goTo, reduceMotion]);
 
   useEffect(() => {
-    if (view !== "playing") return
+    if (view !== "playing") return;
     const onKey = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null
-      if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return
-      if (event.key === "ArrowRight") goTo(indexRef.current + 1)
-      else if (event.key === "ArrowLeft") goTo(indexRef.current - 1)
-    }
-    window.addEventListener("keydown", onKey)
-    return () => window.removeEventListener("keydown", onKey)
-  }, [goTo, view])
+      const target = event.target as HTMLElement | null;
+      if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
+      if (event.key === "ArrowRight") goTo(indexRef.current + 1);
+      else if (event.key === "ArrowLeft") goTo(indexRef.current - 1);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [goTo, view]);
 
-  const startScenario = useCallback((next: LifecycleScenario, autoplay: boolean) => {
-    setScenario(next)
-    setChosenSlot(undefined)
-    setDirection(1)
-    setIndex(0)
-    setView("playing")
-    setPlaying(autoplay)
-    window.setTimeout(() => {
-      document.getElementById("lifecycle-timeline")?.scrollIntoView({ behavior: "smooth", block: "start" })
-    }, 350)
-  }, [])
+  const startScenario = useCallback(
+    (next: LifecycleScenario, autoplay: boolean) => {
+      setScenario(next);
+      setChosenSlot(undefined);
+      setDirection(1);
+      setIndex(0);
+      setView("playing");
+      setPlaying(autoplay);
+      window.setTimeout(() => {
+        document
+          .getElementById("lifecycle-timeline")
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 350);
+    },
+    [],
+  );
 
   const handlePlayToggle = () => {
     if (playing) {
-      setPlaying(false)
-      return
+      setPlaying(false);
+      return;
     }
     if (atEnd) {
-      setDirection(-1)
-      setIndex(0)
+      setDirection(-1);
+      setIndex(0);
     }
-    setPlaying(true)
-  }
+    setPlaying(true);
+  };
 
   return (
     <main className="healthcare-page relative min-h-screen w-full overflow-hidden selection:bg-teal-200/35">
@@ -191,9 +207,9 @@ export function LifecycleExperience({ sample }: { sample: LifecycleScenario }) {
               transition={{ delay: 0.12, duration: 0.7 }}
               className="mt-6 max-w-3xl text-lg font-medium leading-relaxed text-slate-600 md:text-xl"
             >
-              Lead tools see the click. CRMs see the invoice. Review apps see the star. JARVIS
-              carries one memory of the customer through all of it. Here it is for one household,
-              compressed into two minutes.
+              Lead tools see the click. CRMs see the invoice. Review apps see
+              the star. JARVIS carries one memory of the customer through all of
+              it. Here it is for one household, compressed into two minutes.
             </motion.p>
 
             <motion.p
@@ -218,12 +234,14 @@ export function LifecycleExperience({ sample }: { sample: LifecycleScenario }) {
                   The 15-second version
                 </p>
                 <p className="mt-2.5 text-sm font-semibold leading-relaxed text-slate-700">
-                  JARVIS drafts an answer to the call you missed, pulls the real water record for
-                  that address, sizes the system with math, gives a real range at your prices,
-                  books the visit by text, documents the job, asks for the review at the right
-                  moment, checks in on schedule, logs the referral it produced, and knows when the
-                  next offer actually makes sense — holding for your approval at every step. Two
-                  years, one memory. Everything below is that story on a timeline you can drive.
+                  JARVIS drafts an answer to the call you missed, pulls the real
+                  water record for that address, sizes the system with math,
+                  gives a real range at your prices, books the visit by text,
+                  documents the job, asks for the review at the right moment,
+                  checks in on schedule, logs the referral it produced, and
+                  knows when the next offer actually makes sense — holding for
+                  your approval at every step. Two years, one memory. Everything
+                  below is that story on a timeline you can drive.
                 </p>
               </motion.div>
             ) : null}
@@ -265,8 +283,8 @@ export function LifecycleExperience({ sample }: { sample: LifecycleScenario }) {
                   className="text-xs font-black uppercase tracking-widest text-slate-500"
                   style={{ fontFamily: MONO }}
                 >
-                  {String(index + 1).padStart(2, "0")} / {String(stageCount).padStart(2, "0")} ·{" "}
-                  {stage.timeLabel}
+                  {String(index + 1).padStart(2, "0")} /{" "}
+                  {String(stageCount).padStart(2, "0")} · {stage.timeLabel}
                 </p>
                 <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 px-3.5 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-600">
                   <Wrench className="h-3 w-3 text-teal-700" />
@@ -277,8 +295,8 @@ export function LifecycleExperience({ sample }: { sample: LifecycleScenario }) {
                 <button
                   type="button"
                   onClick={() => {
-                    setPlaying(false)
-                    setView("setup")
+                    setPlaying(false);
+                    setView("setup");
                   }}
                   data-cursor="hover"
                   className="inline-flex h-11 items-center gap-2 rounded-full border border-slate-200 bg-white px-4 text-[10px] font-black uppercase tracking-widest text-slate-600 shadow-sm transition hover:border-sky-200 hover:text-slate-950"
@@ -332,7 +350,11 @@ export function LifecycleExperience({ sample }: { sample: LifecycleScenario }) {
               </div>
             </div>
 
-            <TimelineScrubber stages={scenario.stages} index={index} onSelect={goTo} />
+            <TimelineScrubber
+              stages={scenario.stages}
+              index={index}
+              onSelect={goTo}
+            />
 
             <div className="mt-10 grid grid-cols-1 items-start gap-6 lg:grid-cols-[1.08fr_0.92fr] lg:gap-8">
               <div className="min-w-0">
@@ -385,7 +407,11 @@ export function LifecycleExperience({ sample }: { sample: LifecycleScenario }) {
               </div>
 
               <div className="lg:sticky lg:top-8">
-                <RecordPanel scenario={scenario} record={record} stageIndex={index} />
+                <RecordPanel
+                  scenario={scenario}
+                  record={record}
+                  stageIndex={index}
+                />
               </div>
             </div>
           </div>
@@ -401,13 +427,15 @@ export function LifecycleExperience({ sample }: { sample: LifecycleScenario }) {
                 This isn&apos;t for everyone.
               </h3>
               <p className="mt-5 text-base font-semibold leading-relaxed text-slate-700">
-                If you&apos;re a one-truck shop that answers every call yourself and nothing you
-                sell tops $1,500, keep your current workflow — you don&apos;t need this.
+                If you&apos;re a one-truck shop that answers every call yourself
+                and nothing you sell tops $1,500, keep your current workflow —
+                you don&apos;t need this.
               </p>
               <p className="mt-4 text-base font-medium leading-relaxed text-slate-600">
-                It&apos;s built for dealers whose calls die in voicemail while the crew is under a
-                house, whose quotes still come off a rate sheet instead of the water, and who lose
-                the customer the day the invoice is paid. If that&apos;s the shop, you just watched
+                It&apos;s built for dealers whose calls die in voicemail while
+                the crew is under a house, whose quotes still come off a rate
+                sheet instead of the water, and who lose the customer the day
+                the invoice is paid. If that&apos;s the shop, you just watched
                 two years of it run without anyone touching a thing.
               </p>
             </div>
@@ -431,13 +459,21 @@ export function LifecycleExperience({ sample }: { sample: LifecycleScenario }) {
         </div>
       </section>
     </main>
-  )
+  );
 }
 
-function EntryDoors({ onBuild, onSample }: { onBuild: () => void; onSample: () => void }) {
+function EntryDoors({
+  onBuild,
+  onSample,
+}: {
+  onBuild: () => void;
+  onSample: () => void;
+}) {
   return (
     <div className="ops-card soft-edge rounded-[1.8rem] p-6 md:p-7">
-      <p className="text-[10px] font-black uppercase tracking-[0.24em] text-sky-800">Two ways in</p>
+      <p className="text-[10px] font-black uppercase tracking-[0.24em] text-sky-800">
+        Two ways in
+      </p>
 
       <button
         type="button"
@@ -450,8 +486,8 @@ function EntryDoors({ onBuild, onSample }: { onBuild: () => void; onSample: () =
           <ArrowRight className="h-4 w-4 text-teal-200" />
         </span>
         <span className="mt-1.5 text-xs font-semibold leading-relaxed text-white/70">
-          Live water data for your ZIP, sizing math, and a real range at your pricing tier in 60 seconds
-          of setup.
+          Live water data for your ZIP, sizing math, and a real range at your
+          pricing tier in 60 seconds of setup.
         </span>
       </button>
 
@@ -466,15 +502,22 @@ function EntryDoors({ onBuild, onSample }: { onBuild: () => void; onSample: () =
           <Play className="h-4 w-4 text-teal-700" />
         </span>
         <span className="mt-1.5 text-xs font-semibold leading-relaxed text-slate-600">
-          Zero setup. It presses play on a Shenandoah Valley household and drives itself.
+          Zero setup. It presses play on a Shenandoah Valley household and
+          drives itself.
         </span>
       </button>
 
       <div className="mt-5 space-y-2.5 border-t border-slate-200 pt-5">
         {[
-          { icon: Waves, label: "Water data pulled live from EPA / USGS public records" },
+          {
+            icon: Waves,
+            label: "Water data pulled live from EPA / USGS public records",
+          },
           { icon: Gauge, label: "Sizing math shown line by line, not implied" },
-          { icon: Wrench, label: "Simulated timeline, real workflow, your prices" },
+          {
+            icon: Wrench,
+            label: "Simulated timeline, real workflow, your prices",
+          },
         ].map(({ icon: Icon, label }) => (
           <div key={label} className="flex items-center gap-2.5">
             <Icon className="h-4 w-4 shrink-0 text-teal-700" />
@@ -483,5 +526,5 @@ function EntryDoors({ onBuild, onSample }: { onBuild: () => void; onSample: () =
         ))}
       </div>
     </div>
-  )
+  );
 }

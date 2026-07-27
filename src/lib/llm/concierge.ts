@@ -30,7 +30,7 @@ export type ConciergeLeadSummary = {
   role: string
   mainPain: string
   suggestedPlan: ConciergePlan
-  nextStep: "Apply for Founding Pilot"
+  nextStep: "Book a JARVIS Demo"
 }
 
 export type ConciergeReply = {
@@ -38,7 +38,7 @@ export type ConciergeReply = {
   suggestedPlan: ConciergePlan
   leadSummary?: ConciergeLeadSummary
   cta?: {
-    label: "Apply for Founding Pilot"
+    label: "Book a JARVIS Demo"
     url: string
   }
 }
@@ -94,19 +94,19 @@ const CONCIERGE_RESPONSE_SCHEMA = {
 const SYSTEM_PROMPT = [
   "You are Finnor's AI Concierge.",
   "",
-  "You are Finnor's website assistant for water dealers, water treatment companies, and well pump or water well service teams.",
+  "You are Finnor's website assistant for water dealers, water treatment companies, and water-treatment or water-treatment operations teams.",
   "",
-  "FINNOR is an AI booking and lead recovery system with a household memory for water companies. It answers calls, pulls live public water data by ZIP (USGS well samples, EPA records), runs sizing math, quotes a range from the dealer's configured pricing tier, books the visit by text, and keeps one household memory record per customer: reviews, salt check-ins, referrals, upsells, and LTV, for years. It is not a generic assistant and does not sell AI minutes.",
+  "FINNOR is an voice-native AI operations platform with a customer history for water companies. It answers calls, pulls live public water data by ZIP (USGS well samples, EPA records), runs sizing math, quotes a range from the dealer's configured pricing tier, books the visit by text, and keeps one customer history record per customer: reviews, salt check-ins, referrals, upsells, and LTV, for years. It is not a generic assistant and does not sell AI minutes.",
   "FINNOR uses account-specific response workflows:",
-  "- Water Treatment Quoting & Booking (the AI booking and lead recovery system)",
-  "- Well Pump Emergency Dispatch",
+  "- Water Treatment Quoting & Booking (the voice-native AI operations platform)",
+  "- Customer Operations Workflow",
   "- Outbound Speed-to-Lead",
   "- Web Intake Assistant",
   "",
   "FINNOR helps water businesses stop losing leads and service calls from:",
-  "- missed calls",
+  "- unworked leads",
   "- overflow calls",
-  "- after-hours calls",
+  "- inbound calls",
   "- website inquiries",
   "- Google and Facebook lead forms",
   "- paid lead sources",
@@ -115,7 +115,7 @@ const SYSTEM_PROMPT = [
   "",
   "Current packages:",
   "Inbound Response Capture - $1,500/mo:",
-  "For missed calls, after-hours calls, overflow calls, urgent service calls, and basic lead capture. The configured workflow may cover water treatment quote intake or well pump emergency dispatch.",
+  "For unworked leads, inbound calls, overflow calls, urgent service calls, and basic lead capture. The configured workflow may cover water treatment quote intake or customer operations workflow.",
   "",
   "Inbound + Outbound Lead Response - $2,500/mo:",
   "For water dealers that need inbound call capture plus fast follow-up for website forms, Google/Facebook leads, quote requests, and paid lead sources.",
@@ -125,7 +125,7 @@ const SYSTEM_PROMPT = [
   "",
   "Workflow facts:",
   "- Water Treatment Quoting & Booking captures contact details, pulls the live water record for the caller's ZIP, runs the sizing math, quotes a range from the dealer's own pricing tier (never an invented number), and books the visit by text. The final on-site figure always stays with the human team.",
-  "- Well Pump Emergency Dispatch handles no-water calls, pressure issues, pump failure, safety screening, and on-call technician handoff.",
+  "- Customer Operations Workflow handles no-water calls, pressure issues, equipment failure, safety screening, and on-call technician handoff.",
   "- Outbound Speed-to-Lead follows up on website forms, Google/Facebook leads, quote requests, and paid lead sources.",
   "- Web Intake Assistant captures website inquiries and routes a structured handoff.",
   "- FINNOR can sit behind existing water marketing campaigns as the response layer after the lead is generated.",
@@ -152,18 +152,18 @@ const SYSTEM_PROMPT = [
   "- Never repeat a question if the answer is already known.",
   "- Never ask for a field that is present in collectedFields.",
   "- Do not ask 'what workflow challenge' unless pain is unknown.",
-  "- First qualify whether the visitor is a water treatment dealer/company, a well pump/water well service company, an agency serving water businesses, or a multi-location operator.",
-  "- Always bring serious visitors toward Apply for Founding Pilot.",
+  "- First qualify whether the visitor is a water treatment dealer/company, a water-treatment company, an agency serving water businesses, or a multi-location operator.",
+  "- Always bring serious visitors toward Book a JARVIS Demo.",
   "",
   "Fit flow:",
-  "1. Ask which business model fits: water treatment, well pump/water well service, agency, or multi-location dealer.",
-  "2. Ask which lead or call sources are being missed: phone, after-hours, website forms, paid leads, or urgent service calls.",
+  "1. Ask which business model fits: water treatment, water-treatment/water-treatment operations, agency, or multi-location dealer.",
+  "2. Ask which lead or call sources are being missed: phone, inbound, website forms, paid leads, or urgent service calls.",
   "3. Ask how those calls and leads are handled today.",
   "4. Ask how many locations they operate and who should own follow-up.",
   "5. Ask whether they need inbound response only or inbound + outbound speed-to-lead.",
   "",
   "Plan guidance:",
-  "- Recommend Core for Inbound Response Capture: missed, overflow, after-hours, urgent service, or basic lead capture.",
+  "- Recommend Core for Inbound Response Capture: missed, overflow, inbound, urgent service, or basic lead capture.",
   "- Recommend Growth for Inbound + Outbound Lead Response: website forms, paid leads, social lead forms, fast follow-up, or inbound + outbound response.",
   "- Recommend Custom for agencies, white-label deployment, multi-location operations, CRM-heavy workflows, dashboards, complex routing, or advanced integrations.",
   "",
@@ -179,7 +179,7 @@ const SYSTEM_PROMPT = [
         role: "",
         main_pain: "",
         suggested_plan: "Not enough detail",
-        next_step: "Apply for Founding Pilot",
+        next_step: "Book a JARVIS Demo",
       },
       cta: false,
     },
@@ -190,7 +190,7 @@ const SYSTEM_PROMPT = [
   "Lead summary rules:",
   "- show_lead_summary should be true when pain and a plan recommendation are known, even if company or role are still blank.",
   "- Use empty strings for unknown fields.",
-  "- next_step must always be Apply for Founding Pilot.",
+  "- next_step must always be Book a JARVIS Demo.",
   "- Set cta true when the visitor asks to book, or when show_lead_summary is true.",
 ].join("\n")
 
@@ -335,7 +335,7 @@ function normalizeConciergeReply(
     ...(showCta
       ? {
           cta: {
-            label: "Apply for Founding Pilot",
+            label: "Book a JARVIS Demo",
             url: siteConfig.calendlyLink,
           },
         }
@@ -361,7 +361,7 @@ function normalizeLeadSummary(value: unknown, fallbackPlan: ConciergePlan) {
     role,
     mainPain,
     suggestedPlan,
-    nextStep: "Apply for Founding Pilot" as const,
+    nextStep: "Book a JARVIS Demo" as const,
   }
 }
 
@@ -413,7 +413,7 @@ function buildFallbackReply(
         "Best next step is a Response Workflow Review. The goal is to map your lead and call paths, find response gaps, and scope the right inbound, inbound + outbound, or custom system.",
       suggestedPlan: collectedFields.suggestedPlan || "Not enough detail",
       cta: {
-        label: "Apply for Founding Pilot",
+        label: "Book a JARVIS Demo",
         url: siteConfig.calendlyLink,
       },
     }
@@ -422,7 +422,7 @@ function buildFallbackReply(
   if (/core|growth|compare|pricing|plan/.test(latest)) {
     return {
       reply:
-        "Inbound Response Capture covers missed, overflow, after-hours, urgent service, and basic lead intake. Inbound + Outbound Lead Response adds fast follow-up for website forms, Google/Facebook leads, quote requests, and paid lead sources.",
+        "Inbound Response Capture covers missed, overflow, inbound, urgent service, and basic lead intake. Inbound + Outbound Lead Response adds fast follow-up for website forms, Google/Facebook leads, quote requests, and paid lead sources.",
       suggestedPlan: collectedFields.suggestedPlan || "Not enough detail",
     }
   }
@@ -430,7 +430,7 @@ function buildFallbackReply(
   if (/what.*finnor|does finnor|finnor do|explain/.test(latest)) {
     return {
       reply:
-        "FINNOR is the AI booking and lead recovery system for water treatment dealers and well pump service teams. It answers the calls you miss, pulls live public water data, gives a real range from your pricing tier, books the visit by text, and keeps a household memory record per customer, tracked to lifetime value.",
+        "FINNOR is the voice-native AI operations platform for water treatment dealers and water-treatment companies. It answers the calls you miss, pulls live public water data, gives a real range from your pricing tier, books the visit by text, and keeps a customer history record per customer, tracked to lifetime value.",
       suggestedPlan: collectedFields.suggestedPlan || "Not enough detail",
     }
   }
@@ -445,7 +445,7 @@ function buildFallbackReply(
 
 function getFallbackQuestion(fields: ConciergeCollectedFields) {
   if (!fields.pain) {
-    return "What are you trying to fix first: missed calls, after-hours calls, overflow, website leads, follow-up, or reporting?"
+    return "What are you trying to fix first: unworked leads, inbound calls, overflow, website leads, follow-up, or reporting?"
   }
 
   if (!fields.locations) return "How many locations do you operate?"

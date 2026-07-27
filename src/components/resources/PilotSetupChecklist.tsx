@@ -1,30 +1,63 @@
-"use client"
+"use client";
 
-import { motion } from "framer-motion"
-import { CheckCircle2, ClipboardCheck, Route } from "lucide-react"
-import { ResourceFrame } from "./ResourceFrame"
-import { ResourceHero } from "./ResourceHero"
+import { motion } from "framer-motion";
+import { CheckCircle2, ClipboardCheck, Route } from "lucide-react";
+import { ResourceFrame } from "./ResourceFrame";
+import { ResourceHero } from "./ResourceHero";
 
 const checklist = [
-  ["Call forwarding rules", "Decide when calls forward: missed, overflow, after-hours, or a scoped test window."],
-  ["After-hours coverage window", "Set the exact nights, weekends, holidays, or overflow conditions included in the pilot."],
-  ["Quote/form lead sources", "List every inbound website form, Google/Facebook lead source, quote request, and old-inquiry queue in scope."],
-  ["Booking questions", "Approve the first-pass questions Finnor should ask for water tests, service appointments, callbacks, and urgent routes."],
-  ["Urgency escalation path", "Name the human path for no water, zero pressure, possible contamination, pump failure, or an immediate safety concern."],
-  ["SMS/email recipients", "Choose the owner, CSR, dispatcher, or on-call technician who receives each structured alert."],
-  ["Recovery fields", "Approve the call, lead, booking status, urgent route, recording, and recovered-opportunity fields your team needs to review."],
-  ["Call recording settings", "Confirm whether recording is enabled, where it appears, and any applicable notice requirements."],
-  ["Route format", "Approve the booking and urgent alert format your team can scan and act on quickly."],
-  ["7-day launch review", "Schedule the scoped launch review to inspect calls, routes, unknowns, and workflow adjustments."],
-  ["Pilot success metrics", "Track calls and leads answered, alerts delivered, response speed, booked next steps, and recovered opportunities."],
-]
+  [
+    "Call forwarding rules",
+    "Decide when calls forward: missed, overflow, inbound, or a scoped test window.",
+  ],
+  [
+    "Inbound coverage window",
+    "Set the exact nights, weekends, holidays, or overflow conditions included in the pilot.",
+  ],
+  [
+    "Quote/form lead sources",
+    "List every inbound website form, Google/Facebook lead source, quote request, and old-inquiry queue in scope.",
+  ],
+  [
+    "Booking questions",
+    "Approve the first-pass questions Finnor should ask for water tests, service appointments, callbacks, and urgent routes.",
+  ],
+  [
+    "Urgency escalation path",
+    "Name the human path for no water, zero pressure, possible contamination, pump failure, or an immediate safety concern.",
+  ],
+  [
+    "SMS/email recipients",
+    "Choose the owner, CSR, dispatcher, or on-call technician who receives each structured alert.",
+  ],
+  [
+    "Recovery fields",
+    "Approve the call, lead, booking status, urgent route, recording, and recovered-opportunity fields your team needs to review.",
+  ],
+  [
+    "Call recording settings",
+    "Confirm whether recording is enabled, where it appears, and any applicable notice requirements.",
+  ],
+  [
+    "Route format",
+    "Approve the booking and urgent alert format your team can scan and act on quickly.",
+  ],
+  [
+    "7-day launch review",
+    "Schedule the scoped launch review to inspect calls, routes, unknowns, and workflow adjustments.",
+  ],
+  [
+    "Pilot success metrics",
+    "Track calls and leads answered, alerts delivered, response speed, executed business workflows, and recovered opportunities.",
+  ],
+];
 
 export function PilotSetupChecklist() {
   return (
     <ResourceFrame>
       <ResourceHero
-        kicker="Founding pilot checklist"
-        title="JARVIS Pilot Setup Checklist"
+        kicker="JARVIS deployment checklist"
+        title="JARVIS Deployment Setup Checklist"
         copy="Use this checklist before JARVIS drafts real plans from real instructions. Define coverage, lead sources, approval rules, alerts, recovery fields, and human decisions before launch."
         icon={ClipboardCheck}
         aside={<PilotRouteCard />}
@@ -51,8 +84,12 @@ export function PilotSetupChecklist() {
                       <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">
                         Item {String(index + 1).padStart(2, "0")}
                       </p>
-                      <h2 className="mt-2 text-xl font-black tracking-tight text-slate-950">{title}</h2>
-                      <p className="mt-3 text-sm font-medium leading-relaxed text-slate-600">{copy}</p>
+                      <h2 className="mt-2 text-xl font-black tracking-tight text-slate-950">
+                        {title}
+                      </h2>
+                      <p className="mt-3 text-sm font-medium leading-relaxed text-slate-600">
+                        {copy}
+                      </p>
                     </div>
                   </div>
                 </motion.div>
@@ -62,7 +99,7 @@ export function PilotSetupChecklist() {
         </div>
       </section>
     </ResourceFrame>
-  )
+  );
 }
 
 function PilotRouteCard() {
@@ -76,9 +113,9 @@ function PilotRouteCard() {
         Pilot principle
       </p>
       <p className="mt-4 text-sm font-semibold leading-relaxed text-slate-600">
-        Start with one approved booking workflow, test every route, review edge cases at day seven,
-        then expand only when the team trusts the system.
+        Start with one approved booking workflow, test every route, review edge
+        cases at day seven, then expand only when the team trusts the system.
       </p>
     </div>
-  )
+  );
 }

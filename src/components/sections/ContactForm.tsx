@@ -1,49 +1,52 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { CalendarDays, CheckCircle2, Loader2 } from "lucide-react"
-import { siteConfig } from "@/config/site"
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { CalendarDays, CheckCircle2, Loader2 } from "lucide-react";
+import { siteConfig } from "@/config/site";
 
 export function ContactForm() {
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [isSuccess, setIsSuccess] = useState(false)
-  const [error, setError] = useState("")
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
+  const [error, setError] = useState("");
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    setIsSubmitting(true)
-    setError("")
+    event.preventDefault();
+    setIsSubmitting(true);
+    setError("");
 
-    const formData = new FormData(event.currentTarget)
+    const formData = new FormData(event.currentTarget);
 
     if (formData.get("website_url")) {
-      setIsSubmitting(false)
-      return
+      setIsSubmitting(false);
+      return;
     }
 
     try {
       const response = await fetch("/api/contact", {
         method: "POST",
         body: formData,
-      })
+      });
 
-      const data = await response.json()
+      const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Something went wrong")
+        throw new Error(data.error || "Something went wrong");
       }
 
-      setIsSuccess(true)
+      setIsSuccess(true);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Failed to submit. Please try again."
-      setError(message)
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Failed to submit. Please try again.";
+      setError(message);
     } finally {
-      setIsSubmitting(false)
+      setIsSubmitting(false);
     }
-  }
+  };
 
   if (isSuccess) {
     return (
@@ -55,8 +58,8 @@ export function ContactForm() {
           Response workflow review requested
         </h3>
         <p className="mx-auto mt-3 max-w-sm text-sm font-semibold leading-relaxed text-slate-600">
-          We will review your missed, overflow, and after-hours call path and reach out with the
-          next step.
+          We will review your missed, overflow, and inbound call path and reach
+          out with the next step.
         </p>
         <a
           href={siteConfig.calendlyLink}
@@ -65,10 +68,10 @@ export function ContactForm() {
           className="mt-7 inline-flex h-12 items-center justify-center gap-2 rounded-full bg-slate-950 px-6 text-sm font-black text-white transition hover:bg-slate-800"
         >
           <CalendarDays className="h-4 w-4" />
-          Apply for Founding Pilot
+          Book a JARVIS Demo
         </a>
       </div>
-    )
+    );
   }
 
   return (
@@ -77,7 +80,7 @@ export function ContactForm() {
 
       <div className="relative z-10">
         <h3 className="text-2xl font-black tracking-tight text-slate-950">
-          Apply for the founding pilot
+          Book a JARVIS Demo
         </h3>
         <div className="mt-5 rounded-2xl border border-sky-100 bg-sky-50/75 p-4">
           <p className="text-sm font-semibold leading-relaxed text-slate-600">
@@ -90,17 +93,28 @@ export function ContactForm() {
             className="mt-4 inline-flex h-11 items-center justify-center gap-2 rounded-full bg-slate-950 px-5 text-sm font-black text-white transition hover:bg-slate-800"
           >
             <CalendarDays className="h-4 w-4" />
-            Apply for Founding Pilot
+            Book a JARVIS Demo
           </a>
         </div>
 
         <form onSubmit={handleSubmit} className="mt-7 space-y-6">
           <div className="hidden" aria-hidden="true">
-            <input type="text" name="website_url" tabIndex={-1} autoComplete="off" />
+            <input
+              type="text"
+              name="website_url"
+              tabIndex={-1}
+              autoComplete="off"
+            />
           </div>
 
           <div className="grid gap-5 sm:grid-cols-2">
-            <Field label="Full Name" id="name" name="name" placeholder="John Doe" required />
+            <Field
+              label="Full Name"
+              id="name"
+              name="name"
+              placeholder="John Doe"
+              required
+            />
             <Field
               label="Work Email"
               id="email"
@@ -165,16 +179,17 @@ export function ContactForm() {
           >
             {isSubmitting ? (
               <>
-                <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Submitting request...
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Submitting
+                request...
               </>
             ) : (
-              "Apply for Founding Pilot"
+              "Book a JARVIS Demo"
             )}
           </Button>
         </form>
       </div>
     </div>
-  )
+  );
 }
 
 function Field({
@@ -182,12 +197,15 @@ function Field({
   id,
   ...props
 }: React.InputHTMLAttributes<HTMLInputElement> & {
-  label: string
-  id: string
+  label: string;
+  id: string;
 }) {
   return (
     <div className="space-y-3">
-      <Label htmlFor={id} className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
+      <Label
+        htmlFor={id}
+        className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500"
+      >
         {label}
       </Label>
       <Input
@@ -196,5 +214,5 @@ function Field({
         {...props}
       />
     </div>
-  )
+  );
 }

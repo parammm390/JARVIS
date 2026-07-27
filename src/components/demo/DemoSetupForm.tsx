@@ -1,7 +1,7 @@
-"use client"
+"use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react"
-import { motion } from "framer-motion"
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { motion } from "framer-motion";
 import {
   AlertTriangle,
   ArrowRight,
@@ -11,10 +11,17 @@ import {
   Loader2,
   ShieldCheck,
   Siren,
-} from "lucide-react"
-import type { DemoGenerationStage, GenerateDemoResponse } from "@/lib/demo/types"
-import type { DemoWorkflowType } from "@/lib/demo/workflows"
-import { PRICING_TIERS, TIER_DEFINITIONS, type PricingTier } from "@/lib/lifecycle/pricing"
+} from "lucide-react";
+import type {
+  DemoGenerationStage,
+  GenerateDemoResponse,
+} from "@/lib/demo/types";
+import type { DemoWorkflowType } from "@/lib/demo/workflows";
+import {
+  PRICING_TIERS,
+  TIER_DEFINITIONS,
+  type PricingTier,
+} from "@/lib/lifecycle/pricing";
 
 const QUALIFY_SERVICES = [
   "Water softeners",
@@ -22,48 +29,51 @@ const QUALIFY_SERVICES = [
   "RO drinking water",
   "Iron & sulfur treatment",
   "UV disinfection",
-  "Well pump service",
-]
-import { getWorkflowDefinition, workflowDefinitions } from "@/lib/demo/workflows"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+  "Water-treatment operations",
+];
+import {
+  getWorkflowDefinition,
+  workflowDefinitions,
+} from "@/lib/demo/workflows";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 function useHydrationAwareForms() {
-  const [isHydrated, setIsHydrated] = useState(false)
+  const [isHydrated, setIsHydrated] = useState(false);
   useEffect(() => {
-    setIsHydrated(true)
-  }, [])
-  return isHydrated
+    setIsHydrated(true);
+  }, []);
+  return isHydrated;
 }
 
 type DemoSetupFormProps = {
-  stage: DemoGenerationStage
-  statusText: string
-  result: GenerateDemoResponse | null
-  error: string
+  stage: DemoGenerationStage;
+  statusText: string;
+  result: GenerateDemoResponse | null;
+  error: string;
   onGenerate: (input: {
-    companyName: string
-    websiteUrl: string
-    workflowType: DemoWorkflowType
+    companyName: string;
+    websiteUrl: string;
+    workflowType: DemoWorkflowType;
     qualification: {
-      serviceZip: string
-      pricingTier: string
-      services: string[]
-      householdSize: number
-      onWell: boolean
-    }
-  }) => Promise<void>
-  loadingSteps?: string[]
-  loadingIndex?: number
-}
+      serviceZip: string;
+      pricingTier: string;
+      services: string[];
+      householdSize: number;
+      onWell: boolean;
+    };
+  }) => Promise<void>;
+  loadingSteps?: string[];
+  loadingIndex?: number;
+};
 
 const fallbackLoadingSteps = [
   "Reading company profile",
   "Mapping water treatment booking path",
   "Preparing voice script",
   "Building booking route preview",
-]
+];
 
 export function DemoSetupForm({
   stage,
@@ -74,69 +84,85 @@ export function DemoSetupForm({
   loadingSteps = fallbackLoadingSteps,
   loadingIndex = 0,
 }: DemoSetupFormProps) {
-  const isHydrated = useHydrationAwareForms()
-  const [companyName, setCompanyName] = useState("")
-  const [websiteUrl, setWebsiteUrl] = useState("")
-  const [workflowType, setWorkflowType] = useState<DemoWorkflowType>("water_treatment")
-  const [serviceZip, setServiceZip] = useState("")
-  const [pricingTier, setPricingTier] = useState<PricingTier>("standard")
-  const [services, setServices] = useState<string[]>(QUALIFY_SERVICES.slice(0, 4))
-  const [householdSize, setHouseholdSize] = useState(4)
-  const [onWell, setOnWell] = useState(true)
-  const workflow = getWorkflowDefinition(result?.profile.workflowType || workflowType)
+  const isHydrated = useHydrationAwareForms();
+  const [companyName, setCompanyName] = useState("");
+  const [websiteUrl, setWebsiteUrl] = useState("");
+  const [workflowType, setWorkflowType] =
+    useState<DemoWorkflowType>("water_treatment");
+  const [serviceZip, setServiceZip] = useState("");
+  const [pricingTier, setPricingTier] = useState<PricingTier>("standard");
+  const [services, setServices] = useState<string[]>(
+    QUALIFY_SERVICES.slice(0, 4),
+  );
+  const [householdSize, setHouseholdSize] = useState(4);
+  const [onWell, setOnWell] = useState(true);
+  const workflow = getWorkflowDefinition(
+    result?.profile.workflowType || workflowType,
+  );
 
   useEffect(() => {
-    if (!isHydrated) return
-    const form = document.querySelector('form[data-demo-setup]')
-    if (!form) return
-    const companyInput = form.querySelector<HTMLInputElement>('#companyName')
-    const urlInput = form.querySelector<HTMLInputElement>('#websiteUrl')
+    if (!isHydrated) return;
+    const form = document.querySelector("form[data-demo-setup]");
+    if (!form) return;
+    const companyInput = form.querySelector<HTMLInputElement>("#companyName");
+    const urlInput = form.querySelector<HTMLInputElement>("#websiteUrl");
     if (companyInput && companyInput.value !== companyName) {
-      companyInput.value = companyName
+      companyInput.value = companyName;
     }
     if (urlInput && urlInput.value !== websiteUrl) {
-      urlInput.value = websiteUrl
+      urlInput.value = websiteUrl;
     }
-  }, [isHydrated, companyName, websiteUrl])
+  }, [isHydrated, companyName, websiteUrl]);
 
-  const isLoading = stage === "checking_duplicate" || stage === "generating_profile"
-  const visibleLoadingSteps = loadingSteps.length ? loadingSteps : fallbackLoadingSteps
+  const isLoading =
+    stage === "checking_duplicate" || stage === "generating_profile";
+  const visibleLoadingSteps = loadingSteps.length
+    ? loadingSteps
+    : fallbackLoadingSteps;
   const loadingProgress = isLoading
     ? Math.round(((loadingIndex + 1) / visibleLoadingSteps.length) * 100)
-    : 0
+    : 0;
   const canSubmit =
     companyName.trim().length > 1 &&
     websiteUrl.trim().length > 3 &&
     /^\d{5}$/.test(serviceZip) &&
     services.length > 0 &&
-    !isLoading
+    !isLoading;
 
   const qualityText = useMemo(() => {
-    if (!result) return "Conservative extraction with fallback mode"
-    if (result.profile.confidence_level === "high") return "High confidence profile generated"
-    if (result.profile.confidence_level === "medium") return "Usable profile with factual guardrails"
-    return "Fallback workflow prepared with low-confidence fields marked"
-  }, [result])
+    if (!result) return "Conservative extraction with fallback mode";
+    if (result.profile.confidence_level === "high")
+      return "High confidence profile generated";
+    if (result.profile.confidence_level === "medium")
+      return "Usable profile with factual guardrails";
+    return "Fallback workflow prepared with low-confidence fields marked";
+  }, [result]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (!canSubmit) return
+    event.preventDefault();
+    if (!canSubmit) return;
     await onGenerate({
       companyName,
       websiteUrl,
       workflowType,
-      qualification: { serviceZip, pricingTier, services, householdSize, onWell },
-    })
+      qualification: {
+        serviceZip,
+        pricingTier,
+        services,
+        householdSize,
+        onWell,
+      },
+    });
   }
 
   const toggleService = useCallback((service: string) => {
     setServices((current) => {
       const updated = current.includes(service)
         ? current.filter((item) => item !== service)
-        : [...current, service]
-      return updated
-    })
-  }, [])
+        : [...current, service];
+      return updated;
+    });
+  }, []);
 
   return (
     <div className="ops-card relative overflow-hidden rounded-[1.6rem] bg-white/88 p-5 shadow-[0_24px_70px_rgba(15,23,42,0.1)] md:p-7 lg:p-8">
@@ -187,65 +213,66 @@ export function DemoSetupForm({
 
           <fieldset className="space-y-3">
             <legend className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
-              Workflow Type
+              Choose what you want JARVIS to accomplish
             </legend>
             <div className="grid gap-3">
-              {(
-                [
-                  ["water_treatment", Droplets],
-                  ["well_pump_emergency", Siren],
-                ] as const
-              ).map(([value, Icon]) => {
-                const option = workflowDefinitions[value]
-                const selected = workflowType === value
-                return (
-                  <button
-                    key={value}
-                    type="button"
-                    aria-pressed={selected}
-                    onClick={() => setWorkflowType(value)}
-                    className={`group relative overflow-hidden rounded-2xl border p-4 text-left transition-all ${
-                      selected
-                        ? "border-sky-300 bg-[linear-gradient(135deg,#f0f9ff_0%,#ecfeff_100%)] shadow-[0_16px_36px_rgba(14,165,233,0.1)]"
-                        : "border-slate-200 bg-white hover:border-sky-200 hover:bg-sky-50/35"
-                    }`}
-                  >
-                    <span
-                      className={`absolute inset-y-0 left-0 w-1 transition-colors ${
-                        selected ? "bg-gradient-to-b from-sky-500 to-teal-500" : "bg-transparent"
+              {([["water_treatment", Droplets]] as const).map(
+                ([value, Icon]) => {
+                  const option = workflowDefinitions[value];
+                  const selected = workflowType === value;
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => setWorkflowType(value)}
+                      className={`group relative overflow-hidden rounded-2xl border p-4 text-left transition-all ${
+                        selected
+                          ? "border-sky-300 bg-[linear-gradient(135deg,#f0f9ff_0%,#ecfeff_100%)] shadow-[0_16px_36px_rgba(14,165,233,0.1)]"
+                          : "border-slate-200 bg-white hover:border-sky-200 hover:bg-sky-50/35"
                       }`}
-                    />
-                    <span className="flex items-start gap-4">
+                    >
                       <span
-                        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border ${
+                        className={`absolute inset-y-0 left-0 w-1 transition-colors ${
                           selected
-                            ? "border-sky-200 bg-white text-sky-800"
-                            : "border-slate-200 bg-slate-50 text-slate-500"
+                            ? "bg-gradient-to-b from-sky-500 to-teal-500"
+                            : "bg-transparent"
                         }`}
-                      >
-                        <Icon className="h-5 w-5" />
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="flex items-center justify-between gap-3">
-                          <span className="text-sm font-black text-slate-950">{option.label}</span>
-                          <span
-                            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${
-                              selected
-                                ? "border-teal-500 bg-teal-500 text-white"
-                                : "border-slate-300 bg-white text-transparent"
-                            }`}
-                          >
-                            <CheckCircle2 className="h-3.5 w-3.5" />
+                      />
+                      <span className="flex items-start gap-4">
+                        <span
+                          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border ${
+                            selected
+                              ? "border-sky-200 bg-white text-sky-800"
+                              : "border-slate-200 bg-slate-50 text-slate-500"
+                          }`}
+                        >
+                          <Icon className="h-5 w-5" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-center justify-between gap-3">
+                            <span className="text-sm font-black text-slate-950">
+                              {option.label}
+                            </span>
+                            <span
+                              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${
+                                selected
+                                  ? "border-teal-500 bg-teal-500 text-white"
+                                  : "border-slate-300 bg-white text-transparent"
+                              }`}
+                            >
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                            </span>
+                          </span>
+                          <span className="mt-1.5 block text-xs font-semibold leading-relaxed text-slate-600">
+                            {option.formDescription}
                           </span>
                         </span>
-                        <span className="mt-1.5 block text-xs font-semibold leading-relaxed text-slate-600">
-                          {option.formDescription}
-                        </span>
                       </span>
-                    </span>
-                  </button>
-                )
-              })}
+                    </button>
+                  );
+                },
+              )}
             </div>
           </fieldset>
 
@@ -266,7 +293,9 @@ export function DemoSetupForm({
                   id="serviceZip"
                   value={serviceZip}
                   onChange={(event) =>
-                    setServiceZip(event.target.value.replace(/[^\d]/g, "").slice(0, 5))
+                    setServiceZip(
+                      event.target.value.replace(/[^\d]/g, "").slice(0, 5),
+                    )
                   }
                   placeholder="22801"
                   inputMode="numeric"
@@ -302,8 +331,8 @@ export function DemoSetupForm({
               </span>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                 {PRICING_TIERS.map((tierOption) => {
-                  const definition = TIER_DEFINITIONS[tierOption]
-                  const selected = pricingTier === tierOption
+                  const definition = TIER_DEFINITIONS[tierOption];
+                  const selected = pricingTier === tierOption;
                   return (
                     <button
                       key={tierOption}
@@ -323,7 +352,7 @@ export function DemoSetupForm({
                         {definition.band}
                       </span>
                     </button>
-                  )
+                  );
                 })}
               </div>
             </div>
@@ -334,7 +363,7 @@ export function DemoSetupForm({
               </span>
               <div className="flex flex-wrap gap-2">
                 {QUALIFY_SERVICES.map((service) => {
-                  const active = services.includes(service)
+                  const active = services.includes(service);
                   return (
                     <button
                       key={service}
@@ -348,7 +377,7 @@ export function DemoSetupForm({
                     >
                       {service}
                     </button>
-                  )
+                  );
                 })}
               </div>
             </div>
@@ -399,7 +428,10 @@ export function DemoSetupForm({
           </Button>
         </form>
 
-        <div className="mt-7 space-y-4 border-t border-slate-200 pt-6" aria-live="polite">
+        <div
+          className="mt-7 space-y-4 border-t border-slate-200 pt-6"
+          aria-live="polite"
+        >
           <StatusRow stage={stage} statusText={statusText} />
 
           {isLoading ? (
@@ -408,7 +440,9 @@ export function DemoSetupForm({
                 <span className="text-xs font-black uppercase tracking-widest text-sky-800">
                   Building preview
                 </span>
-                <span className="text-xs font-black text-slate-500">{loadingProgress}%</span>
+                <span className="text-xs font-black text-slate-500">
+                  {loadingProgress}%
+                </span>
               </div>
               <div className="overflow-hidden rounded-full border border-white bg-white p-1">
                 <div
@@ -422,8 +456,8 @@ export function DemoSetupForm({
           {isLoading ? (
             <div className="grid gap-2">
               {visibleLoadingSteps.map((step, index) => {
-                const active = index === loadingIndex
-                const complete = index < loadingIndex
+                const active = index === loadingIndex;
+                const complete = index < loadingIndex;
                 return (
                   <div
                     key={step}
@@ -438,7 +472,7 @@ export function DemoSetupForm({
                     <span>{step}</span>
                     <span>{complete ? "Done" : active ? "Now" : "Queued"}</span>
                   </div>
-                )
+                );
               })}
             </div>
           ) : null}
@@ -454,10 +488,10 @@ export function DemoSetupForm({
             <div>
               <p className="text-sm font-black text-slate-900">{qualityText}</p>
               <p className="mt-1 text-sm font-semibold leading-relaxed text-slate-600">
-                We only use confirmed information from your public website. We never fabricate
-                service areas, emergency availability, equipment serviced, brands supported, or
-                repair capabilities. If we cannot verify something, we mark it unknown rather than
-                guess.
+                We only use confirmed information from your public website. We
+                never fabricate service areas, emergency availability, equipment
+                serviced, brands supported, or repair capabilities. If we cannot
+                verify something, we mark it unknown rather than guess.
               </p>
             </div>
           </div>
@@ -470,15 +504,17 @@ export function DemoSetupForm({
             <Info className="h-3.5 w-3.5" />
             Operationally scoped workflow
             <span className="pointer-events-none absolute left-0 top-full z-20 mt-3 hidden w-[min(320px,80vw)] rounded-2xl border border-slate-200 bg-white p-4 text-left text-xs normal-case tracking-normal text-slate-600 shadow-2xl group-hover:block group-focus:block">
-              Finnor helps book the next step or route urgent service context. Repair decisions,
-              quotes, ETAs, and customer promises remain with your human team.
+              Finnor helps book the next step or route urgent service context.
+              Repair decisions, quotes, ETAs, and customer promises remain with
+              your human team.
             </span>
           </div>
 
           {result?.profile.fallback_used ? (
             <div className="rounded-2xl border border-sky-100 bg-sky-50/75 p-4 text-sm font-semibold leading-relaxed text-sky-900">
-              We could not fully verify every website detail, so this preview uses a standard
-              account-specific response workflow with factual fields kept conservative.
+              We could not fully verify every website detail, so this preview
+              uses a standard account-specific response workflow with factual
+              fields kept conservative.
             </div>
           ) : null}
 
@@ -499,12 +535,19 @@ export function DemoSetupForm({
         </div>
       </div>
     </div>
-  )
+  );
 }
 
-function StatusRow({ stage, statusText }: { stage: DemoGenerationStage; statusText: string }) {
-  const isReady = stage === "ready"
-  const isWorking = stage === "checking_duplicate" || stage === "generating_profile"
+function StatusRow({
+  stage,
+  statusText,
+}: {
+  stage: DemoGenerationStage;
+  statusText: string;
+}) {
+  const isReady = stage === "ready";
+  const isWorking =
+    stage === "checking_duplicate" || stage === "generating_profile";
 
   return (
     <div className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white/80 px-4 py-3">
@@ -515,7 +558,11 @@ function StatusRow({ stage, statusText }: { stage: DemoGenerationStage; statusTe
           ) : null}
           <span
             className={`relative inline-flex h-2.5 w-2.5 rounded-full ${
-              isReady ? "bg-teal-500" : isWorking ? "bg-sky-500" : "bg-slate-300"
+              isReady
+                ? "bg-teal-500"
+                : isWorking
+                  ? "bg-sky-500"
+                  : "bg-slate-300"
             }`}
           />
         </span>
@@ -532,5 +579,5 @@ function StatusRow({ stage, statusText }: { stage: DemoGenerationStage; statusTe
         </motion.span>
       ) : null}
     </div>
-  )
+  );
 }

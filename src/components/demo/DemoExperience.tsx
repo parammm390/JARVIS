@@ -1,28 +1,40 @@
-"use client"
+"use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { motion } from "framer-motion"
-import { Activity, ArrowLeft, CheckCircle2, Database, FileText, LockKeyhole, Network, ShieldCheck } from "lucide-react"
-import type { DemoGenerationStage, GenerateDemoResponse } from "@/lib/demo/types"
-import { DemoSetupForm } from "@/components/demo/DemoSetupForm"
-import { DemoLimitReached } from "@/components/demo/DemoLimitReached"
-import { PersonalizedDemoPanel } from "@/components/demo/PersonalizedDemoPanel"
-import { CalendlyCta } from "@/components/demo/CalendlyCta"
-import type { DemoWorkflowType } from "@/lib/demo/workflows"
-import { getWorkflowDefinition } from "@/lib/demo/workflows"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { motion } from "framer-motion";
+import {
+  Activity,
+  ArrowLeft,
+  CheckCircle2,
+  Database,
+  FileText,
+  LockKeyhole,
+  Network,
+  ShieldCheck,
+} from "lucide-react";
+import type {
+  DemoGenerationStage,
+  GenerateDemoResponse,
+} from "@/lib/demo/types";
+import { DemoSetupForm } from "@/components/demo/DemoSetupForm";
+import { DemoLimitReached } from "@/components/demo/DemoLimitReached";
+import { PersonalizedDemoPanel } from "@/components/demo/PersonalizedDemoPanel";
+import { CalendlyCta } from "@/components/demo/CalendlyCta";
+import type { DemoWorkflowType } from "@/lib/demo/workflows";
+import { getWorkflowDefinition } from "@/lib/demo/workflows";
 
-import { DEMO_LIMIT_REACHED_MESSAGE } from "@/lib/demo/limits"
+import { DEMO_LIMIT_REACHED_MESSAGE } from "@/lib/demo/limits";
 
 export function DemoExperience() {
-  const [stage, setStage] = useState<DemoGenerationStage>("idle")
-  const [loadingIndex, setLoadingIndex] = useState(0)
-  const [result, setResult] = useState<GenerateDemoResponse | null>(null)
-  const [error, setError] = useState("")
-  const [duplicateMessage, setDuplicateMessage] = useState("")
-  const [duplicateCalendlyUrl, setDuplicateCalendlyUrl] = useState("")
+  const [stage, setStage] = useState<DemoGenerationStage>("idle");
+  const [loadingIndex, setLoadingIndex] = useState(0);
+  const [result, setResult] = useState<GenerateDemoResponse | null>(null);
+  const [error, setError] = useState("");
+  const [duplicateMessage, setDuplicateMessage] = useState("");
+  const [duplicateCalendlyUrl, setDuplicateCalendlyUrl] = useState("");
   const [selectedWorkflow, setSelectedWorkflow] =
-    useState<DemoWorkflowType>("water_treatment")
-  const callConsoleRef = useRef<HTMLDivElement>(null)
+    useState<DemoWorkflowType>("water_treatment");
+  const callConsoleRef = useRef<HTMLDivElement>(null);
   const generationSteps = useMemo(
     () => [
       "Reading company profile",
@@ -30,27 +42,33 @@ export function DemoExperience() {
       "Preparing voice script",
       "Building booking route preview",
     ],
-    [selectedWorkflow]
-  )
+    [selectedWorkflow],
+  );
 
   useEffect(() => {
-    if (stage !== "checking_duplicate" && stage !== "generating_profile") return
-    setLoadingIndex(0)
+    if (stage !== "checking_duplicate" && stage !== "generating_profile")
+      return;
+    setLoadingIndex(0);
     const timer = setInterval(() => {
-      setLoadingIndex((current) => Math.min(current + 1, generationSteps.length - 1))
-    }, 1450)
+      setLoadingIndex((current) =>
+        Math.min(current + 1, generationSteps.length - 1),
+      );
+    }, 1450);
 
-    return () => clearInterval(timer)
-  }, [generationSteps.length, stage])
+    return () => clearInterval(timer);
+  }, [generationSteps.length, stage]);
 
   useEffect(() => {
-    if (stage !== "ready" || !result) return
+    if (stage !== "ready" || !result) return;
     const timer = setTimeout(() => {
-      callConsoleRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
-    }, 250)
+      callConsoleRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 250);
 
-    return () => clearTimeout(timer)
-  }, [result, stage])
+    return () => clearTimeout(timer);
+  }, [result, stage]);
 
   const handleGenerate = useCallback(
     async ({
@@ -59,28 +77,31 @@ export function DemoExperience() {
       workflowType,
       qualification,
     }: {
-      companyName: string
-      websiteUrl: string
-      workflowType: DemoWorkflowType
+      companyName: string;
+      websiteUrl: string;
+      workflowType: DemoWorkflowType;
       qualification: {
-        serviceZip: string
-        pricingTier: string
-        services: string[]
-        householdSize: number
-        onWell: boolean
-      }
+        serviceZip: string;
+        pricingTier: string;
+        services: string[];
+        householdSize: number;
+        onWell: boolean;
+      };
     }) => {
-      setSelectedWorkflow(workflowType)
-      setStage("checking_duplicate")
-      setResult(null)
-      setError("")
-      setDuplicateMessage("")
-      setDuplicateCalendlyUrl("")
+      setSelectedWorkflow(workflowType);
+      setStage("checking_duplicate");
+      setResult(null);
+      setError("");
+      setDuplicateMessage("");
+      setDuplicateCalendlyUrl("");
 
       try {
-        const localKey = localDemoKey(companyName, websiteUrl, workflowType)
-        const startedAt = Date.now()
-        const generationTimer = window.setTimeout(() => setStage("generating_profile"), 700)
+        const localKey = localDemoKey(companyName, websiteUrl, workflowType);
+        const startedAt = Date.now();
+        const generationTimer = window.setTimeout(
+          () => setStage("generating_profile"),
+          700,
+        );
         const response = await fetch("/api/generate-demo", {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -91,43 +112,50 @@ export function DemoExperience() {
             qualification,
             browserFingerprint: getBrowserFingerprint(),
           }),
-        })
-        window.clearTimeout(generationTimer)
+        });
+        window.clearTimeout(generationTimer);
 
-        const data = (await response.json()) as GenerateDemoResponse & { error?: string }
+        const data = (await response.json()) as GenerateDemoResponse & {
+          error?: string;
+        };
         if (response.status === 409 || data.duplicate) {
-          setDuplicateMessage(data.duplicateMessage || DEMO_LIMIT_REACHED_MESSAGE)
-          setDuplicateCalendlyUrl(data.calendlyUrl || "")
-          if (localKey) window.localStorage.setItem(localKey, "duplicate")
-          setStage("duplicate_blocked")
-          return
+          setDuplicateMessage(
+            data.duplicateMessage || DEMO_LIMIT_REACHED_MESSAGE,
+          );
+          setDuplicateCalendlyUrl(data.calendlyUrl || "");
+          if (localKey) window.localStorage.setItem(localKey, "duplicate");
+          setStage("duplicate_blocked");
+          return;
         }
 
         if (!response.ok) {
-          throw new Error(data.error || "The demo could not be generated.")
+          throw new Error(data.error || "The demo could not be generated.");
         }
 
-        const elapsed = Date.now() - startedAt
+        const elapsed = Date.now() - startedAt;
         if (elapsed < 900) {
-          await new Promise((resolve) => setTimeout(resolve, 900 - elapsed))
+          await new Promise((resolve) => setTimeout(resolve, 900 - elapsed));
         }
 
-        setStage("generating_profile")
-        setLoadingIndex(3)
-        await new Promise((resolve) => setTimeout(resolve, 650))
-        setResult(data)
-        if (localKey) window.localStorage.setItem(localKey, new Date().toISOString())
-        setStage("ready")
-        setLoadingIndex(3)
+        setStage("generating_profile");
+        setLoadingIndex(3);
+        await new Promise((resolve) => setTimeout(resolve, 650));
+        setResult(data);
+        if (localKey)
+          window.localStorage.setItem(localKey, new Date().toISOString());
+        setStage("ready");
+        setLoadingIndex(3);
       } catch (err) {
         const message =
-          err instanceof Error ? err.message : "The demo could not be generated. Please try again."
-        setError(message)
-        setStage("error")
+          err instanceof Error
+            ? err.message
+            : "The demo could not be generated. Please try again.";
+        setError(message);
+        setStage("error");
       }
     },
-    []
-  )
+    [],
+  );
 
   const statusText =
     stage === "ready"
@@ -135,30 +163,32 @@ export function DemoExperience() {
       : stage === "duplicate_blocked"
         ? "Demo limit reached"
         : stage === "error"
-        ? "Generation paused"
-        : stage === "connecting"
-          ? "Connecting live call"
-          : stage === "live"
-            ? "Live call in progress"
-            : stage === "ending"
-              ? "Ending call"
-              : stage === "extracting_handoff"
-                ? "Extracting booking route"
-              : stage === "ended"
-                ? "Call ended"
-        : stage === "checking_duplicate" || stage === "generating_profile"
-          ? "Analyzing company..."
-          : "Waiting for company details"
+          ? "Generation paused"
+          : stage === "connecting"
+            ? "Connecting live call"
+            : stage === "live"
+              ? "Live call in progress"
+              : stage === "ending"
+                ? "Ending call"
+                : stage === "extracting_handoff"
+                  ? "Extracting booking route"
+                  : stage === "ended"
+                    ? "Call ended"
+                    : stage === "checking_duplicate" ||
+                        stage === "generating_profile"
+                      ? "Analyzing company..."
+                      : "Waiting for company details";
 
-  const isGenerating = stage === "checking_duplicate" || stage === "generating_profile"
-  const isLimitReached = stage === "duplicate_blocked"
+  const isGenerating =
+    stage === "checking_duplicate" || stage === "generating_profile";
+  const isLimitReached = stage === "duplicate_blocked";
 
   const resetLimitState = useCallback(() => {
-    setStage("idle")
-    setDuplicateMessage("")
-    setDuplicateCalendlyUrl("")
-    setError("")
-  }, [])
+    setStage("idle");
+    setDuplicateMessage("");
+    setDuplicateCalendlyUrl("");
+    setError("");
+  }, []);
 
   return (
     <main className="healthcare-page relative min-h-screen w-full overflow-hidden selection:bg-teal-200/35">
@@ -198,7 +228,7 @@ export function DemoExperience() {
         <EmptyStatePreview />
       )}
     </main>
-  )
+  );
 }
 
 function DemoHero({
@@ -214,28 +244,28 @@ function DemoHero({
   loadingSteps,
   loadingIndex,
 }: {
-  stage: DemoGenerationStage
-  statusText: string
-  result: GenerateDemoResponse | null
-  error: string
-  duplicateMessage: string
-  duplicateCalendlyUrl: string
-  isLimitReached: boolean
-  onResetLimit: () => void
+  stage: DemoGenerationStage;
+  statusText: string;
+  result: GenerateDemoResponse | null;
+  error: string;
+  duplicateMessage: string;
+  duplicateCalendlyUrl: string;
+  isLimitReached: boolean;
+  onResetLimit: () => void;
   onGenerate: (input: {
-    companyName: string
-    websiteUrl: string
-    workflowType: DemoWorkflowType
+    companyName: string;
+    websiteUrl: string;
+    workflowType: DemoWorkflowType;
     qualification: {
-      serviceZip: string
-      pricingTier: string
-      services: string[]
-      householdSize: number
-      onWell: boolean
-    }
-  }) => Promise<void>
-  loadingSteps: string[]
-  loadingIndex: number
+      serviceZip: string;
+      pricingTier: string;
+      services: string[];
+      householdSize: number;
+      onWell: boolean;
+    };
+  }) => Promise<void>;
+  loadingSteps: string[];
+  loadingIndex: number;
 }) {
   return (
     <section className="relative flex min-h-screen max-w-[100vw] items-center overflow-hidden px-0 py-24 md:py-28">
@@ -274,7 +304,11 @@ function DemoHero({
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-teal-500 opacity-35" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-teal-500" />
               </span>
-              <span>{result ? getWorkflowDefinition(result.profile.workflowType).label : "Choose your response workflow"}</span>
+              <span>
+                {result
+                  ? getWorkflowDefinition(result.profile.workflowType).label
+                  : "Choose what you want JARVIS to accomplish"}
+              </span>
             </motion.div>
 
             <motion.h1
@@ -283,8 +317,8 @@ function DemoHero({
               transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
               className="max-w-full break-words text-[2.45rem] font-black leading-[1.02] tracking-tight text-slate-950 sm:text-[2.75rem] md:text-7xl lg:text-[6.4rem]"
             >
-              <span className="block">Your company.</span>
-              <span className="block">Your calls. Live.</span>
+              <span className="block">See JARVIS operate your business.</span>
+              <span className="block"></span>
             </motion.h1>
 
             <motion.p
@@ -293,9 +327,10 @@ function DemoHero({
               transition={{ delay: 0.15, duration: 0.7 }}
               className="mt-7 max-w-full break-words text-lg font-medium leading-relaxed text-slate-600 md:max-w-2xl md:text-xl lg:text-2xl"
             >
-              Choose the workflow you want to test. FINNOR builds an account-specific response
-              preview using confirmed public information from your site, with unknowns kept
-              explicitly unknown.
+              Enter your company and choose a business outcome. JARVIS builds a
+              clearly labelled demonstration using public website information
+              and the details you provide. Unknown information stays marked
+              unknown.
             </motion.p>
 
             <motion.div
@@ -333,7 +368,10 @@ function DemoHero({
                 { icon: Database, label: "Unknowns stay marked" },
                 { icon: ShieldCheck, label: "No fake service claims" },
               ].map((item) => (
-                <div key={item.label} className="flex min-w-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
+                <div
+                  key={item.label}
+                  className="flex min-w-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2"
+                >
                   <item.icon className="h-4 w-4 text-teal-700" />
                   <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
                     {item.label}
@@ -345,7 +383,7 @@ function DemoHero({
 
           <motion.div
             id="demo"
-              initial={false}
+            initial={false}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2, duration: 0.75, ease: [0.16, 1, 0.3, 1] }}
             className="max-w-full sm:max-w-none"
@@ -371,15 +409,15 @@ function DemoHero({
         </div>
       </div>
     </section>
-  )
+  );
 }
 
 function getBrowserFingerprint() {
-  const key = "finnor_demo_browser_id"
-  let existing = window.localStorage.getItem(key)
+  const key = "finnor_demo_browser_id";
+  let existing = window.localStorage.getItem(key);
   if (!existing) {
-    existing = `${Date.now()}-${crypto.randomUUID?.() || Math.random().toString(36).slice(2)}`
-    window.localStorage.setItem(key, existing)
+    existing = `${Date.now()}-${crypto.randomUUID?.() || Math.random().toString(36).slice(2)}`;
+    window.localStorage.setItem(key, existing);
   }
 
   return [
@@ -388,32 +426,34 @@ function getBrowserFingerprint() {
     navigator.language,
     Intl.DateTimeFormat().resolvedOptions().timeZone,
     `${screen.width}x${screen.height}`,
-  ].join("|")
+  ].join("|");
 }
 
 function localDemoKey(
   companyName: string,
   websiteUrl: string,
-  workflowType: DemoWorkflowType
+  workflowType: DemoWorkflowType,
 ) {
-  const domain = normalizeClientDomain(websiteUrl)
+  const domain = normalizeClientDomain(websiteUrl);
   const company = companyName
     .toLowerCase()
     .replace(/&/g, "and")
     .replace(/[^a-z0-9]+/g, " ")
     .replace(/\s+/g, " ")
-    .trim()
+    .trim();
   return domain && company
     ? `finnor_demo_generated:${domain}:${company}:${workflowType}`
-    : ""
+    : "";
 }
 
 function normalizeClientDomain(input: string) {
   try {
-    const url = new URL(/^https?:\/\//i.test(input) ? input : `https://${input}`)
-    return url.hostname.toLowerCase().replace(/^www\./, "")
+    const url = new URL(
+      /^https?:\/\//i.test(input) ? input : `https://${input}`,
+    );
+    return url.hostname.toLowerCase().replace(/^www\./, "");
   } catch {
-    return ""
+    return "";
   }
 }
 
@@ -421,8 +461,8 @@ function GenerationTheatre({
   activeIndex,
   steps,
 }: {
-  activeIndex: number
-  steps: string[]
+  activeIndex: number;
+  steps: string[];
 }) {
   return (
     <section className="relative border-t border-slate-200 py-16 md:py-20">
@@ -439,8 +479,8 @@ function GenerationTheatre({
             </p>
             <div className="mt-6 space-y-3">
               {steps.map((step, index) => {
-                const active = activeIndex === index
-                const complete = activeIndex > index
+                const active = activeIndex === index;
+                const complete = activeIndex > index;
                 return (
                   <div
                     key={step}
@@ -461,22 +501,31 @@ function GenerationTheatre({
                             : "border-slate-200 text-slate-600"
                       }`}
                     >
-                      {complete ? <CheckCircle2 className="h-4 w-4" /> : index + 1}
+                      {complete ? (
+                        <CheckCircle2 className="h-4 w-4" />
+                      ) : (
+                        index + 1
+                      )}
                     </span>
                     <span className="text-sm font-black uppercase tracking-widest text-slate-600">
                       {step}
                     </span>
                   </div>
-                )
+                );
               })}
             </div>
           </motion.div>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            {["Voice script", "Response workflow", "Handoff preview", "Proof panels"].map((label, index) => (
+            {[
+              "Voice script",
+              "Response workflow",
+              "Handoff preview",
+              "Proof panels",
+            ].map((label, index) => (
               <motion.div
                 key={label}
-              initial={false}
+                initial={false}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.08 }}
                 className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white/74 p-5 shadow-sm"
@@ -500,13 +549,13 @@ function GenerationTheatre({
         </div>
       </div>
     </section>
-  )
+  );
 }
 
 function SkeletonShimmer() {
   return (
     <div className="pointer-events-none absolute inset-0 -translate-x-full animate-[shimmer_1.8s_linear_infinite] bg-gradient-to-r from-transparent via-white/70 to-transparent" />
-  )
+  );
 }
 
 function EmptyStatePreview() {
@@ -515,7 +564,7 @@ function EmptyStatePreview() {
     { label: "Workflow pulse", type: "nodes" },
     { label: "Recovered lead route", type: "phone" },
     { label: "Booking route", type: "table" },
-  ]
+  ];
 
   return (
     <section className="relative border-t border-slate-200 py-16">
@@ -539,13 +588,15 @@ function EmptyStatePreview() {
                 </span>
               </div>
               <SkeletonPreview type={preview.type} />
-              <p className="mt-5 text-lg font-black tracking-tight text-slate-700">{preview.label}</p>
+              <p className="mt-5 text-lg font-black tracking-tight text-slate-700">
+                {preview.label}
+              </p>
             </motion.div>
           ))}
         </div>
       </div>
     </section>
-  )
+  );
 }
 
 function SkeletonPreview({ type }: { type: string }) {
@@ -556,12 +607,16 @@ function SkeletonPreview({ type }: { type: string }) {
           <motion.span
             key={index}
             animate={{ scaleY: [0.45, height, 0.5] }}
-            transition={{ duration: 1.1, repeat: Infinity, delay: index * 0.08 }}
+            transition={{
+              duration: 1.1,
+              repeat: Infinity,
+              delay: index * 0.08,
+            }}
             className="h-8 w-1.5 origin-bottom rounded-full bg-sky-400/45"
           />
         ))}
       </div>
-    )
+    );
   }
   if (type === "nodes") {
     return (
@@ -569,11 +624,13 @@ function SkeletonPreview({ type }: { type: string }) {
         {[0, 1, 2].map((item) => (
           <div key={item} className="flex flex-1 items-center gap-2">
             <span className="h-4 w-4 rounded-full bg-teal-400/55 shadow-[0_0_14px_rgba(20,184,166,0.18)]" />
-            {item < 2 ? <span className="h-px flex-1 bg-gradient-to-r from-teal-300/55 to-slate-200" /> : null}
+            {item < 2 ? (
+              <span className="h-px flex-1 bg-gradient-to-r from-teal-300/55 to-slate-200" />
+            ) : null}
           </div>
         ))}
       </div>
-    )
+    );
   }
   if (type === "phone") {
     return (
@@ -582,7 +639,7 @@ function SkeletonPreview({ type }: { type: string }) {
         <div className="mt-3 h-3 w-full rounded-full bg-slate-100" />
         <div className="mt-2 h-3 w-3/4 rounded-full bg-sky-100" />
       </div>
-    )
+    );
   }
   return (
     <div className="h-16 rounded-2xl border border-slate-200 bg-white p-4">
@@ -593,5 +650,5 @@ function SkeletonPreview({ type }: { type: string }) {
         </div>
       ))}
     </div>
-  )
+  );
 }

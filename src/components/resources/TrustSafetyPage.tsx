@@ -1,6 +1,6 @@
-"use client"
+"use client";
 
-import { motion } from "framer-motion"
+import { motion } from "framer-motion";
 import {
   AlertTriangle,
   ClipboardList,
@@ -9,52 +9,52 @@ import {
   Route,
   ShieldCheck,
   UserRoundCheck,
-} from "lucide-react"
-import { ResourceFrame } from "./ResourceFrame"
-import { ResourceHero } from "./ResourceHero"
+} from "lucide-react";
+import { ResourceFrame } from "./ResourceFrame";
+import { ResourceHero } from "./ResourceHero";
 
 const trustSections = [
   {
     icon: UserRoundCheck,
-    title: "Nothing executes without your approval",
-    copy: "JARVIS drafts a plan — a quote, a booking, an urgent route — and holds it for your yes. That's a database-enforced gate, not a UI suggestion. Reject the plan and it never runs.",
+    title: "Grounded in real company data",
+    copy: "JARVIS checks the company data, policies and permissions available to the deployment before it acts.",
   },
   {
     icon: ShieldCheck,
-    title: "Every approved action leaves a receipt",
+    title: "Risk-based approval boundaries",
     copy: "What was proposed, what was approved, what happened, what it cost. Every time. That record is what the rest of your business runs on, not a log file nobody reads.",
   },
   {
     icon: FileQuestion,
-    title: "JARVIS never invents numbers or diagnoses",
+    title: "Role-based permissions",
     copy: "Quote ranges come only from the pricing tiers you configured and the measured water data on record. JARVIS does not diagnose repairs, invent prices, guarantee ETAs, or make health claims about water.",
   },
   {
     icon: AlertTriangle,
-    title: "Urgent language routes to your escalation path",
+    title: "No silent success states",
     copy: "You define the escalation path for urgent or concerning language. JARVIS flags that language and routes it according to the approved process — it does not decide who responds.",
   },
   {
     icon: ClipboardList,
-    title: "Company-approved rules and knowledge boundaries",
+    title: "Independent outcome verification",
     copy: "Approval rules, booking questions, and knowledge boundaries are set and agreed before launch, so JARVIS stays within your operating model, not a generic default.",
   },
   {
     icon: Route,
-    title: "Unknown fields stay marked unknown",
+    title: "Durable workflows and recovery",
     copy: "If a caller does not provide a field, the record shows it as unknown rather than JARVIS inventing or assuming an answer.",
   },
   {
     icon: LockKeyhole,
-    title: "Data minimization during pilots",
+    title: "Complete audit history",
     copy: "Pilots use only the information needed to test drafted plans, approval routing, escalation, and follow-up workflow.",
   },
   {
     icon: ShieldCheck,
-    title: "Scoped deployment before production",
+    title: "Tenant-isolated data",
     copy: "JARVIS starts with a defined approval scope, reviewed rules, test scenarios, and clear human ownership before broader use.",
   },
-]
+];
 
 const boundaries = [
   "Your dispatcher or on-call technician",
@@ -64,15 +64,15 @@ const boundaries = [
   "Emergency services",
   "A company's operating and safety policies",
   "The approval on every plan JARVIS drafts",
-]
+];
 
 export function TrustSafetyPage() {
   return (
     <ResourceFrame>
       <ResourceHero
         kicker="Trust & safety"
-        title="A system that asks before it acts, and proves it."
-        copy="JARVIS drafts plans for missed, overflow, after-hours, and slow web leads while keeping every approval, decision, and escalation ownership with the service company."
+        title="Autonomy with permissions, verification and control."
+        copy="JARVIS is designed to execute real business work without giving an AI unlimited authority. Every deployment defines what it may do automatically, what requires approval and what it must never do."
         icon={ShieldCheck}
         aside={<TrustCommandCard />}
       />
@@ -96,8 +96,12 @@ export function TrustSafetyPage() {
                 <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">
                   Boundary {String(index + 1).padStart(2, "0")}
                 </p>
-                <h2 className="mt-3 text-2xl font-black tracking-tight text-slate-950">{section.title}</h2>
-                <p className="mt-4 text-sm font-medium leading-relaxed text-slate-600">{section.copy}</p>
+                <h2 className="mt-3 text-2xl font-black tracking-tight text-slate-950">
+                  {section.title}
+                </h2>
+                <p className="mt-4 text-sm font-medium leading-relaxed text-slate-600">
+                  {section.copy}
+                </p>
               </motion.div>
             ))}
           </div>
@@ -117,9 +121,14 @@ export function TrustSafetyPage() {
               </h2>
               <div className="mt-6 grid gap-3">
                 {boundaries.map((item) => (
-                  <div key={item} className="flex items-center gap-3 rounded-2xl border border-slate-900/8 bg-white/72 p-4">
+                  <div
+                    key={item}
+                    className="flex items-center gap-3 rounded-2xl border border-slate-900/8 bg-white/72 p-4"
+                  >
                     <UserRoundCheck className="h-4 w-4 text-teal-700" />
-                    <span className="text-sm font-black text-slate-700">{item}</span>
+                    <span className="text-sm font-black text-slate-700">
+                      {item}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -136,21 +145,24 @@ export function TrustSafetyPage() {
                 Deployment note
               </p>
               <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950">
-                Production scope depends on the final routing, systems, and agreements.
+                Production scope depends on the final routing, systems, and
+                agreements.
               </h2>
               <p className="mt-5 text-base font-semibold leading-relaxed text-slate-700">
-                Production readiness depends on final routing, data handling, vendor agreements,
-                access controls, retention settings, escalation procedures, and the company&apos;s
-                own policies. JARVIS scopes those decisions before launch.
+                Production readiness depends on final routing, data handling,
+                vendor agreements, access controls, retention settings,
+                escalation procedures, and the company&apos;s own policies.
+                JARVIS scopes those decisions before launch.
               </p>
               <div className="mt-7 rounded-2xl border border-teal-200 bg-teal-50 p-5">
                 <p className="text-sm font-black text-slate-950">
                   Conservative operating principle
                 </p>
                 <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-700">
-                  Draft only from configured pricing and measured water data, hold every plan for
-                  approval, route urgent language, and leave final figures, dispatch decisions,
-                  repair judgment, ETAs, and promises to the human team.
+                  Draft only from configured pricing and measured water data,
+                  hold every plan for approval, route urgent language, and leave
+                  final figures, dispatch decisions, repair judgment, ETAs, and
+                  promises to the human team.
                 </p>
               </div>
             </motion.div>
@@ -158,7 +170,7 @@ export function TrustSafetyPage() {
         </div>
       </section>
     </ResourceFrame>
-  )
+  );
 }
 
 function TrustCommandCard() {
@@ -172,10 +184,20 @@ function TrustCommandCard() {
           <p className="text-xs font-black uppercase tracking-[0.22em] text-sky-100">
             Operating boundary
           </p>
-          <h2 className="mt-2 text-2xl font-black tracking-tight">Human team owns next steps</h2>
+          <h2 className="mt-2 text-2xl font-black tracking-tight">
+            Human team owns next steps
+          </h2>
           <div className="mt-5 grid gap-3">
-            {["Plan drafted", "Held for approval", "Urgency routed", "Receipt filed"].map((item) => (
-              <div key={item} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+            {[
+              "Plan drafted",
+              "Held for approval",
+              "Urgency routed",
+              "Receipt filed",
+            ].map((item) => (
+              <div
+                key={item}
+                className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-4"
+              >
                 <ShieldCheck className="h-4 w-4 text-teal-200" />
                 <span className="text-sm font-black text-white">{item}</span>
               </div>
@@ -184,5 +206,5 @@ function TrustCommandCard() {
         </div>
       </div>
     </div>
-  )
+  );
 }

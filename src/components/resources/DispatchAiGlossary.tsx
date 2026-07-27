@@ -1,26 +1,68 @@
-"use client"
+"use client";
 
-import { motion } from "framer-motion"
-import { BookOpenText, Search } from "lucide-react"
-import { ResourceFrame } from "./ResourceFrame"
-import { ResourceHero } from "./ResourceHero"
+import { motion } from "framer-motion";
+import { BookOpenText, Search } from "lucide-react";
+import { ResourceFrame } from "./ResourceFrame";
+import { ResourceHero } from "./ResourceHero";
 
 const terms = [
-  ["Approval gate", "The point where a drafted plan — a quote, a booking, an urgent route — waits for a human yes. Nothing executes before it, database-enforced, not a UI suggestion."],
-  ["Receipt", "The record JARVIS files after a plan executes: what was proposed, what was approved, what happened, what it cost."],
-  ["Missed call recovery", "Answering or following up fast enough to turn a voicemail-bound water lead into a booked next step."],
-  ["Water test booking", "Moving a homeowner's water concern, source, system interest, timeline, address, and callback toward a booked water test or sales callback."],
-  ["No-water urgent route", "A scoped workflow for routing urgent no-water context to the approved owner, dispatcher, or on-call technician."],
-  ["Quote form follow-up", "Prompt follow-up on an inbound website quote request while the customer is still actively looking for help."],
-  ["Outbound speed-to-lead", "Fast follow-up for inbound website forms, Google/Facebook leads, paid leads, quote requests, or old inquiries, not cold calling."],
-  ["Booking route", "A clear next-step path that gives the owner, CSR, dispatcher, or on-call technician enough context to act without starting cold."],
-  ["Urgency routing", "Flagging approved urgent language and sending the route to the configured human escalation path."],
-  ["Human-in-the-loop", "A workflow where people remain responsible for repair decisions, quotes, ETAs, follow-up, and customer promises."],
-  ["Call recording", "An audio record available for quality and opportunity review where recording is configured and permitted."],
-  ["Recovered job opportunity", "A missed call or inbound lead Finnor helps move back into a booked appointment, service call, or human-owned next step."],
-  ["CRM/webhook route", "Sending booking or urgency context into a CRM, workflow tool, or endpoint approved by the company."],
-  ["Recovery view", "An account-specific view of calls, recordings, booked next steps, and recovered opportunities for review."],
-]
+  [
+    "Approval gate",
+    "The point where a drafted plan — a quote, a booking, an urgent route — waits for a human yes. Nothing executes before it, database-enforced, not a UI suggestion.",
+  ],
+  [
+    "Receipt",
+    "The record JARVIS files after a plan executes: what was proposed, what was approved, what happened, what it cost.",
+  ],
+  [
+    "Unworked lead recovery",
+    "Answering or following up fast enough to turn a voicemail-bound water lead into a booked next step.",
+  ],
+  [
+    "Water test booking",
+    "Moving a homeowner's water concern, source, system interest, timeline, address, and callback toward a booked water test or sales callback.",
+  ],
+  [
+    "No-water urgent route",
+    "A scoped workflow for routing urgent no-water context to the approved owner, dispatcher, or on-call technician.",
+  ],
+  [
+    "Quote form follow-up",
+    "Prompt follow-up on an inbound website quote request while the customer is still actively looking for help.",
+  ],
+  [
+    "Outbound speed-to-lead",
+    "Fast follow-up for inbound website forms, Google/Facebook leads, paid leads, quote requests, or old inquiries, not cold calling.",
+  ],
+  [
+    "Booking route",
+    "A clear next-step path that gives the owner, CSR, dispatcher, or on-call technician enough context to act without starting cold.",
+  ],
+  [
+    "Urgency routing",
+    "Flagging approved urgent language and sending the route to the configured human escalation path.",
+  ],
+  [
+    "Human-in-the-loop",
+    "A workflow where people remain responsible for repair decisions, quotes, ETAs, follow-up, and customer promises.",
+  ],
+  [
+    "Call recording",
+    "An audio record available for quality and opportunity review where recording is configured and permitted.",
+  ],
+  [
+    "Recovered job opportunity",
+    "A unworked lead or inbound lead Finnor helps move back into a booked appointment, service call, or human-owned next step.",
+  ],
+  [
+    "CRM/webhook route",
+    "Sending booking or urgency context into a CRM, workflow tool, or endpoint approved by the company.",
+  ],
+  [
+    "Recovery view",
+    "An account-specific view of calls, recordings, executed business workflows, and recovered opportunities for review.",
+  ],
+];
 
 export function DispatchAiGlossary() {
   return (
@@ -28,7 +70,7 @@ export function DispatchAiGlossary() {
       <ResourceHero
         kicker="Operator glossary"
         title="JARVIS terms without the jargon."
-        copy="Short definitions for water treatment, water dealer, and well pump teams evaluating drafted plans, approval gates, receipts, and household memory records."
+        copy="Short definitions for water treatment, water dealer, and water-treatment teams evaluating drafted plans, approval gates, receipts, and customer history records."
         icon={BookOpenText}
         aside={<GlossaryIndex />}
       />
@@ -48,15 +90,19 @@ export function DispatchAiGlossary() {
                 <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">
                   {String(index + 1).padStart(2, "0")}
                 </p>
-                <h2 className="mt-3 text-2xl font-black tracking-tight text-slate-950">{term}</h2>
-                <p className="mt-4 text-sm font-medium leading-relaxed text-slate-600">{definition}</p>
+                <h2 className="mt-3 text-2xl font-black tracking-tight text-slate-950">
+                  {term}
+                </h2>
+                <p className="mt-4 text-sm font-medium leading-relaxed text-slate-600">
+                  {definition}
+                </p>
               </motion.div>
             ))}
           </div>
         </div>
       </section>
     </ResourceFrame>
-  )
+  );
 }
 
 function GlossaryIndex() {
@@ -70,9 +116,10 @@ function GlossaryIndex() {
         Built for operators
       </p>
       <p className="mt-4 text-sm font-semibold leading-relaxed text-slate-600">
-        These definitions keep the focus on booked next steps, faster lead response, approved
-        escalation, and human-owned quotes, dispatch, repair decisions, and promises.
+        These definitions keep the focus on executed business workflows, faster
+        lead response, approved escalation, and human-owned quotes, dispatch,
+        repair decisions, and promises.
       </p>
     </div>
-  )
+  );
 }

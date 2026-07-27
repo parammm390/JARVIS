@@ -1,14 +1,18 @@
-"use client"
+"use client";
 
-import { useRef, useState } from "react"
-import { AnimatePresence, motion } from "framer-motion"
-import { Check, CheckCircle2, ChevronRight, Loader2, Play } from "lucide-react"
-import type { LifecycleScenario } from "@/lib/lifecycle/scenario"
-import { PRICING_TIERS, TIER_DEFINITIONS, type PricingTier } from "@/lib/lifecycle/pricing"
-import type { WaterLookup } from "@/lib/lifecycle/water-data"
+import { useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Check, CheckCircle2, ChevronRight, Loader2, Play } from "lucide-react";
+import type { LifecycleScenario } from "@/lib/lifecycle/scenario";
+import {
+  PRICING_TIERS,
+  TIER_DEFINITIONS,
+  type PricingTier,
+} from "@/lib/lifecycle/pricing";
+import type { WaterLookup } from "@/lib/lifecycle/water-data";
 
-const EASE = [0.16, 1, 0.3, 1]
-const MONO = "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
+const EASE = [0.16, 1, 0.3, 1];
+const MONO = "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace";
 
 const SERVICE_OPTIONS = [
   "Water softeners",
@@ -16,113 +20,116 @@ const SERVICE_OPTIONS = [
   "RO drinking water",
   "Iron & sulfur treatment",
   "UV disinfection",
-  "Well pump service",
-]
+  "Water-treatment operations",
+];
 
 const CONCERN_OPTIONS = [
   "Rotten-egg smell + hard water",
   "Iron staining",
   "Scale on fixtures + spotting",
   "Taste & odor",
-]
+];
 
-const HOUSEHOLD_OPTIONS = [2, 4, 6]
+const HOUSEHOLD_OPTIONS = [2, 4, 6];
 
 const GENERATION_STEPS = [
   "Locating the water system, EPA SDWIS",
   "Sampling county wells, USGS records",
   "Running the sizing math",
   "Writing the diagnosis + range",
-]
+];
 
-type Phase = "form" | "generating" | "error"
+type Phase = "form" | "generating" | "error";
 
 export type LifecyclePrefill = {
-  zip?: string
-  shopName?: string
-  tier?: PricingTier
-  services?: string[]
-  onWell?: boolean
-  banner?: string
-}
+  zip?: string;
+  shopName?: string;
+  tier?: PricingTier;
+  services?: string[];
+  onWell?: boolean;
+  banner?: string;
+};
 
 export function LifecycleSetup({
   onReady,
   onRunSample,
   prefill,
 }: {
-  onReady: (scenario: LifecycleScenario) => void
-  onRunSample: () => void
-  prefill?: LifecyclePrefill
+  onReady: (scenario: LifecycleScenario) => void;
+  onRunSample: () => void;
+  prefill?: LifecyclePrefill;
 }) {
-  const [phase, setPhase] = useState<Phase>("form")
-  const [zip, setZip] = useState(prefill?.zip || "")
-  const [shopName, setShopName] = useState(prefill?.shopName || "")
+  const [phase, setPhase] = useState<Phase>("form");
+  const [zip, setZip] = useState(prefill?.zip || "");
+  const [shopName, setShopName] = useState(prefill?.shopName || "");
   const [services, setServices] = useState<string[]>(
-    prefill?.services?.length ? prefill.services : SERVICE_OPTIONS.slice(0, 4)
-  )
-  const [tier, setTier] = useState<PricingTier>(prefill?.tier || "standard")
-  const [household, setHousehold] = useState(4)
-  const [concern, setConcern] = useState(CONCERN_OPTIONS[0])
-  const [onWell, setOnWell] = useState(prefill?.onWell ?? true)
-  const [formError, setFormError] = useState("")
-  const [stepIndex, setStepIndex] = useState(0)
-  const [provenance, setProvenance] = useState<string[]>([])
-  const [generationError, setGenerationError] = useState("")
-  const runIdRef = useRef(0)
+    prefill?.services?.length ? prefill.services : SERVICE_OPTIONS.slice(0, 4),
+  );
+  const [tier, setTier] = useState<PricingTier>(prefill?.tier || "standard");
+  const [household, setHousehold] = useState(4);
+  const [concern, setConcern] = useState(CONCERN_OPTIONS[0]);
+  const [onWell, setOnWell] = useState(prefill?.onWell ?? true);
+  const [formError, setFormError] = useState("");
+  const [stepIndex, setStepIndex] = useState(0);
+  const [provenance, setProvenance] = useState<string[]>([]);
+  const [generationError, setGenerationError] = useState("");
+  const runIdRef = useRef(0);
 
   function toggleService(service: string) {
     setServices((current) =>
       current.includes(service)
         ? current.filter((item) => item !== service)
-        : [...current, service]
-    )
+        : [...current, service],
+    );
   }
 
   async function generate(event: React.FormEvent) {
-    event.preventDefault()
+    event.preventDefault();
     if (!/^\d{5}$/.test(zip.trim())) {
-      setFormError("Enter the 5-digit ZIP where most of your customers are.")
-      return
+      setFormError("Enter the 5-digit ZIP where most of your customers are.");
+      return;
     }
     if (!services.length) {
-      setFormError("Pick at least one service you actually install.")
-      return
+      setFormError("Pick at least one service you actually install.");
+      return;
     }
 
-    setFormError("")
-    setGenerationError("")
-    setProvenance([])
-    setStepIndex(0)
-    setPhase("generating")
-    const runId = (runIdRef.current += 1)
-    const timers: number[] = []
+    setFormError("");
+    setGenerationError("");
+    setProvenance([]);
+    setStepIndex(0);
+    setPhase("generating");
+    const runId = (runIdRef.current += 1);
+    const timers: number[] = [];
     const later = (callback: () => void, ms: number) => {
       timers.push(
         window.setTimeout(() => {
-          if (runIdRef.current === runId) callback()
-        }, ms)
-      )
-    }
-    later(() => setStepIndex(1), 1400)
+          if (runIdRef.current === runId) callback();
+        }, ms),
+      );
+    };
+    later(() => setStepIndex(1), 1400);
 
     try {
       const waterResponse = await fetch("/api/lifecycle/water", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ zip: zip.trim() }),
-      })
-      const waterData = (await waterResponse.json()) as { water?: WaterLookup; error?: string }
-      timers.forEach(window.clearTimeout)
-      if (runIdRef.current !== runId) return
+      });
+      const waterData = (await waterResponse.json()) as {
+        water?: WaterLookup;
+        error?: string;
+      };
+      timers.forEach(window.clearTimeout);
+      if (runIdRef.current !== runId) return;
       if (!waterResponse.ok || !waterData.water) {
-        throw new Error(waterData.error || "The water lookup failed.")
+        throw new Error(waterData.error || "The water lookup failed.");
       }
 
-      setProvenance(waterData.water.provenance)
-      setStepIndex(2)
+      setProvenance(waterData.water.provenance);
+      setStepIndex(2);
 
-      later(() => setStepIndex(3), 1600)
+      later(() => setStepIndex(3), 1600);
       const diagnoseResponse = await fetch("/api/lifecycle/diagnose", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -135,32 +142,37 @@ export function LifecycleSetup({
           concernLabel: concern,
           onWell,
         }),
-      })
+      });
       const diagnoseData = (await diagnoseResponse.json()) as {
-        scenario?: LifecycleScenario
-        error?: string
-      }
-      timers.forEach(window.clearTimeout)
-      if (runIdRef.current !== runId) return
+        scenario?: LifecycleScenario;
+        error?: string;
+      };
+      timers.forEach(window.clearTimeout);
+      if (runIdRef.current !== runId) return;
       if (!diagnoseResponse.ok || !diagnoseData.scenario) {
-        throw new Error(diagnoseData.error || "The diagnosis could not be generated.")
+        throw new Error(
+          diagnoseData.error || "The diagnosis could not be generated.",
+        );
       }
 
-      setStepIndex(4)
-      later(() => onReady(diagnoseData.scenario as LifecycleScenario), 650)
+      setStepIndex(4);
+      later(() => onReady(diagnoseData.scenario as LifecycleScenario), 650);
     } catch (error) {
-      timers.forEach(window.clearTimeout)
-      if (runIdRef.current !== runId) return
+      timers.forEach(window.clearTimeout);
+      if (runIdRef.current !== runId) return;
       setGenerationError(
-        error instanceof Error ? error.message : "Something failed while building the diagnosis."
-      )
-      setPhase("error")
+        error instanceof Error
+          ? error.message
+          : "Something failed while building the diagnosis.",
+      );
+      setPhase("error");
     }
   }
 
   const inputClass =
-    "h-13 min-h-[3.25rem] w-full rounded-xl border border-slate-200 bg-white px-4 text-base font-semibold text-slate-900 outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100 placeholder:text-slate-400"
-  const labelClass = "text-[10px] font-black uppercase tracking-[0.2em] text-slate-500"
+    "h-13 min-h-[3.25rem] w-full rounded-xl border border-slate-200 bg-white px-4 text-base font-semibold text-slate-900 outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100 placeholder:text-slate-400";
+  const labelClass =
+    "text-[10px] font-black uppercase tracking-[0.2em] text-slate-500";
 
   return (
     <div className="ops-card soft-edge relative overflow-hidden rounded-[1.8rem] bg-white/88 p-5 md:p-7">
@@ -191,8 +203,9 @@ export function LifecycleSetup({
                   Real water. Real math. Your prices.
                 </h2>
                 <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-600">
-                  The diagnosis, range, and two-year ledger below get computed from live public
-                  water records for your area and the pricing tier you actually sell at.
+                  The diagnosis, range, and two-year ledger below get computed
+                  from live public water records for your area and the pricing
+                  tier you actually sell at.
                 </p>
               </div>
 
@@ -201,7 +214,11 @@ export function LifecycleSetup({
                   <span className={labelClass}>Service-area ZIP</span>
                   <input
                     value={zip}
-                    onChange={(event) => setZip(event.target.value.replace(/[^\d]/g, "").slice(0, 5))}
+                    onChange={(event) =>
+                      setZip(
+                        event.target.value.replace(/[^\d]/g, "").slice(0, 5),
+                      )
+                    }
                     inputMode="numeric"
                     placeholder="22801"
                     className={inputClass}
@@ -223,7 +240,7 @@ export function LifecycleSetup({
                 <p className={labelClass}>Services you install</p>
                 <div className="flex flex-wrap gap-2">
                   {SERVICE_OPTIONS.map((service) => {
-                    const active = services.includes(service)
+                    const active = services.includes(service);
                     return (
                       <button
                         key={service}
@@ -238,7 +255,7 @@ export function LifecycleSetup({
                         {active ? <Check className="h-3.5 w-3.5" /> : null}
                         {service}
                       </button>
-                    )
+                    );
                   })}
                 </div>
               </div>
@@ -247,8 +264,8 @@ export function LifecycleSetup({
                 <p className={labelClass}>Where you price</p>
                 <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
                   {PRICING_TIERS.map((tierOption) => {
-                    const definition = TIER_DEFINITIONS[tierOption]
-                    const active = tier === tierOption
+                    const definition = TIER_DEFINITIONS[tierOption];
+                    const active = tier === tierOption;
                     return (
                       <button
                         key={tierOption}
@@ -261,12 +278,14 @@ export function LifecycleSetup({
                             : "border-slate-200 bg-white hover:border-sky-200"
                         }`}
                       >
-                        <p className="text-sm font-black text-slate-950">{definition.label}</p>
+                        <p className="text-sm font-black text-slate-950">
+                          {definition.label}
+                        </p>
                         <p className="mt-1 text-[11px] font-bold leading-snug text-slate-500">
                           {definition.band}
                         </p>
                       </button>
-                    )
+                    );
                   })}
                 </div>
               </div>
@@ -330,7 +349,9 @@ export function LifecycleSetup({
                       }`}
                     >
                       <span>{option}</span>
-                      {concern === option ? <Check className="h-3.5 w-3.5 shrink-0 text-teal-600" /> : null}
+                      {concern === option ? (
+                        <Check className="h-3.5 w-3.5 shrink-0 text-teal-600" />
+                      ) : null}
                     </button>
                   ))}
                 </div>
@@ -375,8 +396,8 @@ export function LifecycleSetup({
               </p>
               <div className="mt-6 space-y-3">
                 {GENERATION_STEPS.map((step, index) => {
-                  const active = stepIndex === index
-                  const complete = stepIndex > index
+                  const active = stepIndex === index;
+                  const complete = stepIndex > index;
                   return (
                     <div
                       key={step}
@@ -409,7 +430,7 @@ export function LifecycleSetup({
                         {step}
                       </span>
                     </div>
-                  )
+                  );
                 })}
               </div>
 
@@ -478,5 +499,5 @@ export function LifecycleSetup({
         </AnimatePresence>
       </div>
     </div>
-  )
+  );
 }

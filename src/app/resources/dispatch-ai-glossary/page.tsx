@@ -1,17 +1,17 @@
-import type { Metadata } from "next"
-import { DispatchAiGlossary } from "@/components/resources/DispatchAiGlossary"
+import type { Metadata } from "next";
+import { DispatchAiGlossary } from "@/components/resources/DispatchAiGlossary";
 
 export const metadata: Metadata = {
-  title: "Water Booking & Lead Recovery Glossary",
+  title: "Water JARVIS Operations Glossary",
   description:
-    "Operator-friendly definitions for missed-call recovery, water test booking, quote follow-up, urgency routing, and human-controlled service promises.",
+    "Operator-friendly definitions for lead follow-up, water test booking, quote follow-up, urgency routing, and human-controlled service promises.",
   alternates: {
     canonical: "https://finnorai.com/resources/dispatch-ai-glossary",
   },
   openGraph: {
     title: "AI Booking Glossary | Finnor AI",
     description:
-      "Plain-English definitions for AI booking, speed-to-lead follow-up, urgency routing, and lead recovery for water treatment dealers and well pump service operators.",
+      "Plain-English definitions for AI operations, speed-to-lead follow-up, urgency routing, and lead recovery for water treatment dealers and water-treatment operations operators.",
     url: "https://finnorai.com/resources/dispatch-ai-glossary",
     images: [
       {
@@ -26,11 +26,11 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "AI Booking Glossary | Finnor AI",
     description:
-      "Plain-English definitions for AI booking, urgency routing, and lead recovery for water business operators.",
+      "Plain-English definitions for AI operations, urgency routing, and lead recovery for water business operators.",
     images: ["https://finnorai.com/og-image.svg"],
   },
-}
+};
 
 export default function DispatchAiGlossaryPage() {
-  return <DispatchAiGlossary />
+  return <DispatchAiGlossary />;
 }
