@@ -317,6 +317,24 @@ html[data-jarvis-tenant-accent="amber"] .jarvis-root { --accent: var(--j-amber);
 .j-node { transition: opacity 0.25s, transform 0.2s; }
 .j-node:hover { transform: scale(1.03); }
 [data-graph]:has(.j-node:hover) .j-node:not(:hover) { opacity: 0.35; }
+
+/* ---- F8.T1: FLOW-62 CompensationRewind — a compensation edge draws in reverse
+   hue (amber, not cyan) with its traveling dot moving backward (from→to reversed
+   via animateMotion keyPoints, JSX-side) → static amber path, no travel (reduced,
+   covered by the .jarvis-edge-flow rule below since this reuses that keyframe). */
+.jarvis-edge-rewind { animation: jarvis-dashflow 1.4s linear infinite reverse; }
+
+/* ---- F8.T2: FLOW-65 WatchdogFlare — a real watchdog-flagged run's badge flares
+   at the REAL A4 watchdog scan cadence (apps/worker/src/index.ts's
+   `intervalHours: 1/6` = 10 minutes, not an invented faster tempo) → static badge,
+   no flare (reduced). Budget-capped in JS to the first flagged row only (F3's own
+   "≤2 loops/viewport, else static" rule). */
+@keyframes jarvis-watchdog-flare {
+  0%, 92% { box-shadow: 0 0 0 rgba(248, 113, 113, 0); }
+  96% { box-shadow: 0 0 14px rgba(248, 113, 113, 0.55); }
+  100% { box-shadow: 0 0 0 rgba(248, 113, 113, 0); }
+}
+.jarvis-watchdog-flare { animation: jarvis-watchdog-flare 600s ease-in-out infinite; }
 [data-graph]:has(.j-node:hover) svg { opacity: 0.45; }
 
 @media (prefers-reduced-motion: reduce) {
@@ -367,6 +385,8 @@ html[data-jarvis-tenant-accent="amber"] .jarvis-root { --accent: var(--j-amber);
 .jarvis-root [data-hidden="true"] .jarvis-ambient,
 .jarvis-root [data-hidden="true"] .jarvis-edge-flow,
 .jarvis-root [data-hidden="true"] .jarvis-edge-blueprint,
+.jarvis-root [data-hidden="true"] .jarvis-edge-rewind,
+.jarvis-root [data-hidden="true"] .jarvis-watchdog-flare,
 .jarvis-root [data-hidden="true"] .jarvis-scan {
   animation-play-state: paused !important;
 }
@@ -374,9 +394,11 @@ html[data-jarvis-tenant-accent="amber"] .jarvis-root { --accent: var(--j-amber);
 @media (prefers-reduced-motion: reduce) {
   .jarvis-edge-flow,
   .jarvis-edge-blueprint,
+  .jarvis-edge-rewind,
   .jarvis-scan,
   .jarvis-breathe,
   .jarvis-pulse-ring,
+  .jarvis-watchdog-flare,
   .jarvis-gridfloor,
   .jarvis-cursor {
     animation: none !important;

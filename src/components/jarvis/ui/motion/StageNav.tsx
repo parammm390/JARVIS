@@ -20,6 +20,7 @@ export const STAGE_SECTIONS = [
   { id: "flow-grammar", label: "F1 Grammar" },
   { id: "flow-command-surface", label: "F2 Command Surface" },
   { id: "flow-decision-theater", label: "F3 Decision Theater" },
+  { id: "flow-pipeline-theater", label: "F8 Pipeline Theater" },
   { id: "flow-dataviz", label: "F5 Data-Viz" },
   { id: "flow-state-narratives", label: "F6 State Narratives" },
   { id: "flow-core", label: "FLOW-01..13" },

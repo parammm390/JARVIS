@@ -250,6 +250,35 @@ export const escalateBeacon: FlowChoreo = {
   },
 }
 
+// FLOW-59 ChamberPressure: a node's border/glow luminance breathes with its REAL
+// workflow_steps.attempts count (only ever mounted while attempts > 1, i.e. a
+// genuine retry) → static glow at the settled intensity, no breathing (reduced).
+export const chamberPressure: FlowChoreo = {
+  variants: {
+    initial: { opacity: 0.32 },
+    animate: { opacity: [0.32, 0.8, 0.32], transition: { duration: 1.5, repeat: Infinity, ease: "easeInOut" } },
+  },
+  reducedVariants: {
+    initial: { opacity: 0.32 },
+    animate: { opacity: 0.6, transition: { duration: 0 } },
+  },
+}
+
+// FLOW-61 StepIgnition (start half): one-shot burst the instant a node's REAL
+// status transitions into "leased" → color step only, no burst (reduced). The
+// completion half of this FLOW id reuses the existing jarvis-shockwave class
+// (same convention as C2's own completion burst), not duplicated here.
+export const stepIgnition: FlowChoreo = {
+  variants: {
+    initial: { scale: 0.5, opacity: 0 },
+    animate: { scale: [0.5, 1.25, 1], opacity: [0, 0.9, 0], transition: { duration: 0.42, ease: EASE.decelerate } },
+  },
+  reducedVariants: {
+    initial: { scale: 0.5, opacity: 0 },
+    animate: { scale: 1, opacity: 0, transition: { duration: 0 } },
+  },
+}
+
 export const choreo = {
   liquidFill,
   valvePulse,
@@ -268,4 +297,6 @@ export const choreo = {
   sceneDockExit,
   inkBleed,
   escalateBeacon,
+  chamberPressure,
+  stepIgnition,
 }

@@ -87,15 +87,15 @@ export const FLOW_INDEX: FlowEntry[] = [
   { id: 57, key: "EscalateBeacon", band: "F3", phase: "F3", status: "shipped", dataSource: "decision (escalate verb)" },
   { id: 58, key: "KeymapHUD", band: "F3", phase: "F3", status: "shipped", dataSource: "real keydown" },
 
-  // ---- Band F8 — Pipeline Theater amplifier (59-66) — LOCKED behind main D4 ----
-  { id: 59, key: "ChamberPressure", band: "F8", phase: "F8", status: "planned", dataSource: "workflow_steps.attempts", note: "LOCKED — prereq main D4 GATE-GREEN" },
-  { id: 60, key: "FlowParticulate", band: "F8", phase: "F8", status: "planned", dataSource: "run events (steps/min)", note: "LOCKED — prereq main D4" },
-  { id: 61, key: "StepIgnition", band: "F8", phase: "F8", status: "planned", dataSource: "step transitions", note: "LOCKED — prereq main D4" },
-  { id: 62, key: "CompensationRewind", band: "F8", phase: "F8", status: "planned", dataSource: "compensation steps", note: "LOCKED — prereq main D4" },
-  { id: 63, key: "DLQGravityWell", band: "F8", phase: "F8", status: "planned", dataSource: "DLQ events", note: "LOCKED — prereq main D4" },
-  { id: 64, key: "RunConstellation", band: "F8", phase: "F8", status: "planned", dataSource: "runs+steps", note: "LOCKED — prereq main D4" },
-  { id: 65, key: "WatchdogFlare", band: "F8", phase: "F8", status: "planned", dataSource: "A4 watchdog flags", note: "LOCKED — prereq main D4" },
-  { id: 66, key: "TriageWhisper", band: "F8", phase: "F8", status: "planned", dataSource: "A4.T3 suggested_disposition", note: "LOCKED — prereq main D4" },
+  // ---- Band F8 — Pipeline Theater amplifier (59-66) — shipped this phase ----
+  { id: 59, key: "ChamberPressure", band: "F8", phase: "F8", status: "shipped", dataSource: "real workflow_steps.attempts (WorkflowTheater.tsx's GraphNodeCard, leased+retrying nodes only)" },
+  { id: 60, key: "FlowParticulate", band: "F8", phase: "F8", status: "shipped", dataSource: "pulse-bus 'step' kind, trailing 60s real steps/min (useStepsPerMinute)" },
+  { id: 61, key: "StepIgnition", band: "F8", phase: "F8", status: "shipped", dataSource: "real step status transition into 'leased' (start half); completion half reuses the existing jarvis-shockwave burst" },
+  { id: 62, key: "CompensationRewind", band: "F8", phase: "F8", status: "shipped", dataSource: "real 'compensating'/'compensated' step status" },
+  { id: 63, key: "DLQGravityWell", band: "F8", phase: "F8", status: "shipped", dataSource: "real replay/discard verb from DlqBrowser's own act()" },
+  { id: 64, key: "RunConstellation", band: "F8", phase: "F8", status: "shipped", dataSource: "real workflow_step.status per run (RunBrowser's collapsed rows)" },
+  { id: 65, key: "WatchdogFlare", band: "F8", phase: "F8", status: "shipped", dataSource: "real run.watchdogFlagged; flare period = the real A4 watchdog scan cadence (apps/worker's intervalHours: 1/6 = 10min)" },
+  { id: 66, key: "TriageWhisper", band: "F8", phase: "F8", status: "shipped", dataSource: "real A4.T3 suggestionReason, revealed on a real row expand" },
 
   // ---- Band F4 — Voice Theater (67-73) ----
   { id: 67, key: "WaveformTruth", band: "F4", phase: "F4", status: "planned", dataSource: "Vapi volume events" },

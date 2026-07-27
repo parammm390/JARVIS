@@ -18,6 +18,44 @@ import { sfx } from "../sound"
 import { burstAt } from "../lib/EventFX"
 import { ReceiptDrawer } from "../lib/ReceiptDrawer"
 import { useJarvisAuth } from "../lib/jarvis-auth"
+import { onPulse } from "../lib/pulse-bus"
+import { choreo } from "../ui/motion/choreo"
+
+// F8.T1 — FLOW-60 FlowParticulate: real steps/min from pulse-bus's "step" kind
+// (the same real step-completed diffs data-core.ts's fast-lane poll already emits,
+// republished by F2's pulse-bus — no new transport, no polling of its own), a
+// trailing 60s window recomputed every 5s. Same shape as Bridge.tsx's own
+// useEventRateOpacity — mirrored here rather than imported since that hook is
+// Bridge-local and this needs a plain steps/min NUMBER, not a caustic opacity.
+const THROUGHPUT_WINDOW_MS = 60_000
+export function useStepsPerMinute(): number {
+  const timestampsRef = useRef<number[]>([])
+  const [perMinute, setPerMinute] = useState(0)
+  useEffect(() => {
+    const off = onPulse((pulse) => {
+      if (pulse.kind !== "step") return
+      timestampsRef.current.push(pulse.at)
+    })
+    const recompute = () => {
+      const cutoff = Date.now() - THROUGHPUT_WINDOW_MS
+      timestampsRef.current = timestampsRef.current.filter((t) => t >= cutoff)
+      setPerMinute(timestampsRef.current.length)
+    }
+    const id = window.setInterval(recompute, 5000)
+    recompute()
+    return () => {
+      off()
+      window.clearInterval(id)
+    }
+  }, [])
+  return perMinute
+}
+
+// F8.T2 — FLOW-65 WatchdogFlare's real cadence: apps/worker/src/index.ts schedules
+// `scan_watchdog` at `intervalHours: 1/6` (10 minutes) — the flare period below
+// (jarvis-watchdog-flare in jarvis-theme.css) uses this exact constant, not an
+// invented faster tempo, so "flares at real cadence" is literally true.
+export const WATCHDOG_SCAN_INTERVAL_MS = 10 * 60 * 1000
 
 // `useReducedMotion()` can resolve differently during SSR and the first client
 // render. Defer its effect until after hydration wherever it changes SVG/DOM shape.
@@ -35,7 +73,7 @@ const GAP_Y = 26
 const X = (col: number) => col * (NODE_W + GAP_X)
 const Y = (row: number) => row * (NODE_H + GAP_Y)
 
-interface GraphNode {
+export interface GraphNode {
   id: string
   stepType: string
   col: number
@@ -46,7 +84,7 @@ interface GraphNode {
   terminalReason?: string | null
   optional?: boolean
 }
-interface GraphEdge {
+export interface GraphEdge {
   from: string
   to: string
   optional?: boolean
@@ -112,9 +150,9 @@ function edgePath(from: GraphNode, to: GraphNode): string {
   return `M${x1},${y1} C${mid},${y1} ${mid},${y2} ${x2},${y2}`
 }
 
-type EdgeState = "done" | "flowing" | "future" | "blueprint"
+export type EdgeState = "done" | "flowing" | "future" | "blueprint" | "rewind"
 
-function GraphEdges({ nodes, edges, edgeState }: { nodes: GraphNode[]; edges: GraphEdge[]; edgeState: (e: GraphEdge) => EdgeState }) {
+function GraphEdges({ nodes, edges, edgeState, particulate = 1 }: { nodes: GraphNode[]; edges: GraphEdge[]; edgeState: (e: GraphEdge) => EdgeState; particulate?: number }) {
   const reduced = useHydratedReducedMotion()
   const byId = new Map(nodes.map((n) => [n.id, n]))
   const maxCol = Math.max(...nodes.map((n) => n.col))
@@ -136,36 +174,57 @@ function GraphEdges({ nodes, edges, edgeState }: { nodes: GraphNode[]; edges: Gr
         const d = edgePath(from, to)
         const state = edgeState(e)
         const stroke =
-          state === "done" ? "var(--j-green)" : state === "flowing" ? "var(--j-cyan)" : state === "blueprint" ? "rgba(59,130,246,0.5)" : "var(--j-text-faint)"
+          state === "done" ? "var(--j-green)" : state === "flowing" ? "var(--j-cyan)" : state === "rewind" ? "var(--j-amber)" : state === "blueprint" ? "rgba(59,130,246,0.5)" : "var(--j-text-faint)"
+        // FLOW-60 FlowParticulate: real steps/min (0/low/med/high tiers, never a
+        // fabricated smooth interpolation) scales BOTH the traveling-dot count and
+        // their travel speed on a genuinely flowing edge — idle real throughput
+        // shows one dot at the base 1.4s pace, busy real throughput shows all three
+        // at a faster pace. `particulate` defaults to 1 (LiveRunRow/ReplayRow that
+        // don't pass a real rate — e.g. blueprint/replay contexts — keep today's
+        // pre-F8 single-dot behavior unchanged).
+        const dotDur = particulate >= 3 ? "0.85s" : particulate === 2 ? "1.1s" : "1.4s"
         return (
           <g key={i}>
-            {(state === "flowing" || state === "blueprint") && (
-              <path d={d} fill="none" stroke={stroke} strokeWidth={6} opacity={state === "flowing" ? 0.3 : 0.12} style={{ filter: "blur(4px)" }} />
+            {(state === "flowing" || state === "rewind" || state === "blueprint") && (
+              <path d={d} fill="none" stroke={stroke} strokeWidth={6} opacity={state === "blueprint" ? 0.12 : 0.3} style={{ filter: "blur(4px)" }} />
             )}
             <path
               d={d}
               fill="none"
               stroke={stroke}
-              strokeWidth={state === "done" || state === "flowing" ? 2 : 1.4}
-              strokeDasharray={state === "done" ? undefined : state === "flowing" ? "5 8" : e.optional ? "2 7" : "3 8"}
-              className={!reduced && state === "flowing" ? "jarvis-edge-flow" : !reduced && state === "blueprint" ? "jarvis-edge-blueprint" : ""}
+              strokeWidth={state === "done" || state === "flowing" || state === "rewind" ? 2 : 1.4}
+              strokeDasharray={state === "done" ? undefined : state === "flowing" || state === "rewind" ? "5 8" : e.optional ? "2 7" : "3 8"}
+              className={!reduced && state === "flowing" ? "jarvis-edge-flow" : !reduced && state === "rewind" ? "jarvis-edge-rewind" : !reduced && state === "blueprint" ? "jarvis-edge-blueprint" : ""}
               opacity={state === "future" ? 0.35 : state === "blueprint" ? 0.7 : 1}
             />
             {!reduced && state === "flowing" && (
               <>
                 <circle r={3} fill="var(--j-cyan)">
-                  <animateMotion dur="1.4s" repeatCount="indefinite" path={d} />
+                  <animateMotion dur={dotDur} repeatCount="indefinite" path={d} />
                 </circle>
-                <circle r={2.2} fill="var(--j-cyan)" opacity={0.7}>
-                  <animateMotion dur="1.4s" repeatCount="indefinite" path={d} begin="0.15s" />
-                </circle>
-                <circle r={1.6} fill="var(--j-cyan)" opacity={0.45}>
-                  <animateMotion dur="1.4s" repeatCount="indefinite" path={d} begin="0.3s" />
-                </circle>
+                {particulate >= 2 && (
+                  <circle r={2.2} fill="var(--j-cyan)" opacity={0.7}>
+                    <animateMotion dur={dotDur} repeatCount="indefinite" path={d} begin="0.15s" />
+                  </circle>
+                )}
+                {particulate >= 3 && (
+                  <circle r={1.6} fill="var(--j-cyan)" opacity={0.45}>
+                    <animateMotion dur={dotDur} repeatCount="indefinite" path={d} begin="0.3s" />
+                  </circle>
+                )}
                 <circle r={6} fill="var(--j-cyan)" opacity={0.25}>
-                  <animateMotion dur="1.4s" repeatCount="indefinite" path={d} />
+                  <animateMotion dur={dotDur} repeatCount="indefinite" path={d} />
                 </circle>
               </>
+            )}
+            {/* FLOW-62 CompensationRewind: a compensation edge's dot travels the
+                path BACKWARD (keyPoints reversed) in amber, not cyan → static
+                amber path, no travel (reduced, handled by jarvis-edge-rewind's own
+                reduced-motion rule in jarvis-theme.css). */}
+            {!reduced && state === "rewind" && (
+              <circle r={2.6} fill="var(--j-amber)">
+                <animateMotion dur="1.4s" repeatCount="indefinite" path={d} keyPoints="1;0" keyTimes="0;1" />
+              </circle>
             )}
             {!reduced && state === "blueprint" && (
               <circle r={2} fill="rgba(94,197,255,0.8)">
@@ -182,7 +241,7 @@ function GraphEdges({ nodes, edges, edgeState }: { nodes: GraphNode[]; edges: Gr
   )
 }
 
-const NODE_TONE: Record<string, { border: string; iconBg: string; icon: string; shadow?: string }> = {
+export const NODE_TONE: Record<string, { border: string; iconBg: string; icon: string; shadow?: string }> = {
   pending: { border: "rgba(100,128,159,0.18)", iconBg: "rgba(100,128,159,0.1)", icon: "var(--j-text-dim)" },
   leased: { border: "var(--j-border-hot)", iconBg: "rgba(34,211,238,0.14)", icon: "var(--j-cyan)", shadow: "0 0 22px rgba(34,211,238,0.28)" },
   completed: { border: "rgba(52,211,153,0.45)", iconBg: "rgba(52,211,153,0.12)", icon: "var(--j-green)" },
@@ -192,13 +251,18 @@ const NODE_TONE: Record<string, { border: string; iconBg: string; icon: string; 
   blueprint: { border: "rgba(59,130,246,0.16)", iconBg: "rgba(59,130,246,0.08)", icon: "rgba(94,148,213,0.75)" },
 }
 
-function GraphNodeCard({ node, now, blueprint, onSelect }: { node: GraphNode; now: number; blueprint?: boolean; onSelect?: (node: GraphNode) => void }) {
+export function GraphNodeCard({ node, now, blueprint, onSelect }: { node: GraphNode; now: number; blueprint?: boolean; onSelect?: (node: GraphNode) => void }) {
   const reduced = useHydratedReducedMotion()
   const tone = NODE_TONE[node.status] ?? NODE_TONE.pending!
   const isLeased = node.status === "leased"
   const isDone = node.status === "completed"
+  // FLOW-59 ChamberPressure: only a genuinely leased node with a REAL retry
+  // (attempts > 1, straight from workflow_steps.attempts) gets the pressure glow —
+  // a first-attempt leased node keeps today's plain cyan pulse-ring unchanged.
+  const underPressure = isLeased && (node.attempts ?? 0) > 1
   const prevStatusRef = useRef(node.status)
   const [shockwaveKey, setShockwaveKey] = useState(0)
+  const [ignitionKey, setIgnitionKey] = useState(0)
   const nodeElRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -206,6 +270,12 @@ function GraphNodeCard({ node, now, blueprint, onSelect }: { node: GraphNode; no
       setShockwaveKey((k) => k + 1)
       const rect = nodeElRef.current?.getBoundingClientRect()
       if (rect) burstAt(rect.left + rect.width / 2, rect.top + rect.height / 2)
+    }
+    // FLOW-61 StepIgnition (start half): fires the instant a REAL step transitions
+    // into "leased" — never on first mount (a run opened mid-flight already has
+    // leased nodes; that's not an ignition, it's the current state).
+    if (prevStatusRef.current !== "leased" && node.status === "leased" && prevStatusRef.current !== node.status) {
+      setIgnitionKey((k) => k + 1)
     }
     prevStatusRef.current = node.status
   }, [node.status])
@@ -241,6 +311,27 @@ function GraphNodeCard({ node, now, blueprint, onSelect }: { node: GraphNode; no
       <span aria-hidden className="absolute -left-[3px] top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full border" style={{ background: "#0a1324", borderColor: isLeased ? "var(--j-cyan)" : "var(--j-border)" }} />
       <span aria-hidden className="absolute -right-[3px] top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full border" style={{ background: "#0a1324", borderColor: isLeased ? "var(--j-cyan)" : "var(--j-border)" }} />
       {!reduced && shockwaveKey > 0 && <span key={shockwaveKey} className="jarvis-shockwave" />}
+      {ignitionKey > 0 && (
+        <motion.span
+          key={ignitionKey}
+          aria-hidden
+          className="pointer-events-none absolute -inset-1 rounded-xl border-2"
+          style={{ borderColor: "var(--j-cyan)" }}
+          variants={reduced ? choreo.stepIgnition.reducedVariants : choreo.stepIgnition.variants}
+          initial="initial"
+          animate="animate"
+        />
+      )}
+      {underPressure && (
+        <motion.span
+          aria-hidden
+          className="pointer-events-none absolute -inset-1 rounded-xl"
+          style={{ boxShadow: `0 0 ${10 + Math.min(node.attempts ?? 0, 5) * 4}px rgba(251,191,36,0.5)` }}
+          variants={reduced ? choreo.chamberPressure.reducedVariants : choreo.chamberPressure.variants}
+          initial="initial"
+          animate="animate"
+        />
+      )}
       <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border" style={{ background: tone.iconBg, borderColor: tone.border, color: tone.icon }}>
         <StepIcon stepType={node.stepType} className="h-4 w-4" />
         {isLeased && !reduced && <span className="jarvis-pulse-ring absolute inset-0 rounded-full border border-cyan-300/60" />}
@@ -281,13 +372,13 @@ function GraphNodeCard({ node, now, blueprint, onSelect }: { node: GraphNode; no
   )
 }
 
-function Graph({ nodes, edges, edgeState, now, blueprint, onSelectNode }: { nodes: GraphNode[]; edges: GraphEdge[]; edgeState: (e: GraphEdge) => EdgeState; now: number; blueprint?: boolean; onSelectNode?: (node: GraphNode) => void }) {
+export function Graph({ nodes, edges, edgeState, now, blueprint, onSelectNode, particulate }: { nodes: GraphNode[]; edges: GraphEdge[]; edgeState: (e: GraphEdge) => EdgeState; now: number; blueprint?: boolean; onSelectNode?: (node: GraphNode) => void; particulate?: number }) {
   const maxCol = Math.max(...nodes.map((n) => n.col))
   const maxRow = Math.max(...nodes.map((n) => n.row))
   return (
     <div className="j-scroll overflow-x-auto pb-1 pt-1">
       <div data-graph className="relative" style={{ width: X(maxCol) + NODE_W, height: Y(maxRow) + NODE_H, minWidth: X(maxCol) + NODE_W }}>
-        <GraphEdges nodes={nodes} edges={edges} edgeState={edgeState} />
+        <GraphEdges nodes={nodes} edges={edges} edgeState={edgeState} particulate={particulate} />
         {nodes.map((n) => (
           <GraphNodeCard key={n.id} node={n} now={now} blueprint={blueprint} onSelect={onSelectNode} />
         ))}
@@ -310,8 +401,15 @@ function LiveRunRow({ run, now, onOpen, onSelectStep }: { run: WorkflowRun; now:
   const edges: GraphEdge[] = run.steps.slice(1).map((s, i) => ({ from: run.steps[i]!.id, to: s.id }))
   const leasedIdx = run.steps.findIndex((s) => s.status === "leased" || s.status === "pending")
   const pct = runProgressPct(run)
+  const stepsPerMin = useStepsPerMinute()
+  // FLOW-60 tiers: 0 real steps/min in the trailing 60s window = the pre-F8 single
+  // dot; 1-2 = two dots; 3+ = three dots (today's original always-3 look, now
+  // genuinely earned by real throughput instead of hardcoded).
+  const particulate = stepsPerMin >= 3 ? 3 : stepsPerMin >= 1 ? 2 : 1
 
   const edgeState = (e: GraphEdge): EdgeState => {
+    const toStep = run.steps.find((s) => s.id === e.to)
+    if (toStep?.status === "compensating" || toStep?.status === "compensated") return "rewind"
     const toIdx = run.steps.findIndex((s) => s.id === e.to)
     if (run.steps[toIdx]?.status === "completed") return "done"
     if (toIdx === leasedIdx) return "flowing"
@@ -353,7 +451,7 @@ function LiveRunRow({ run, now, onOpen, onSelectStep }: { run: WorkflowRun; now:
           </div>
         </div>
       </button>
-      <Graph nodes={nodes} edges={edges} edgeState={edgeState} now={now} onSelectNode={(node) => onSelectStep?.(node.id)} />
+      <Graph nodes={nodes} edges={edges} edgeState={edgeState} now={now} onSelectNode={(node) => onSelectStep?.(node.id)} particulate={particulate} />
     </motion.div>
   )
 }
@@ -634,13 +732,38 @@ function RunBrowser({ runs, now, onOpen, onSelectStep }: { runs: WorkflowRun[]; 
   const firstVisible = virtualized ? Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN) : 0
   const lastVisible = virtualized ? Math.min(filtered.length, Math.ceil((scrollTop + VIEWPORT_HEIGHT) / ROW_HEIGHT) + OVERSCAN) : filtered.length
   const renderedRuns = virtualized ? filtered.slice(firstVisible, lastVisible) : filtered
+  // FLOW-65 WatchdogFlare: motion-semantics table's own "needs human → pulse
+  // (≤2 loops/viewport, else static badge)" rule — only the FIRST currently
+  // rendered watchdog-flagged run gets the flaring loop; every other real
+  // watchdog-flagged row still shows the real badge, just static.
+  const firstFlaggedId = renderedRuns.find((r) => r.watchdogFlagged)?.id ?? null
 
   const runRow = (run: WorkflowRun) => (
     <div key={run.id} className="rounded-xl border border-white/8 bg-black/10 p-2.5">
       <button type="button" onClick={() => setExpandedRunId((current) => current === run.id ? null : run.id)} className="flex w-full items-center justify-between gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60">
-        <span className="min-w-0 truncate text-[11px] font-bold text-[color:var(--j-text)]">{humanizeWorkflowType(run.workflowType)}</span>
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="min-w-0 truncate text-[11px] font-bold text-[color:var(--j-text)]">{humanizeWorkflowType(run.workflowType)}</span>
+          {/* FLOW-64 RunConstellation: a mini dot per REAL step, colored by that
+              step's real status — always-on status dots, identical in both motion
+              modes (the plan's own reduced fallback for this id IS "status dots"). */}
+          <span className="flex shrink-0 items-center gap-[3px]" aria-hidden>
+            {run.steps.map((s) => (
+              <span
+                key={s.id}
+                className="h-1.5 w-1.5 rounded-full"
+                style={{ background: NODE_TONE[s.status]?.icon ?? NODE_TONE.pending!.icon, opacity: s.status === "pending" ? 0.35 : 1 }}
+              />
+            ))}
+          </span>
+        </span>
         <span className="flex shrink-0 items-center gap-1.5 text-[9px] text-[color:var(--j-text-dim)]">
-          {run.watchdogFlagged && <span className="rounded-full bg-red-400/10 px-1.5 py-0.5 font-black text-red-300">watchdog stuck</span>}
+          {run.watchdogFlagged && (
+            <span
+              className={`rounded-full bg-red-400/10 px-1.5 py-0.5 font-black text-red-300 ${run.id === firstFlaggedId ? "jarvis-watchdog-flare" : ""}`}
+            >
+              watchdog stuck
+            </span>
+          )}
           <span>{run.status}</span><span>·</span><span>{ageLabel(run.updatedAt, now)}</span>
         </span>
       </button>
