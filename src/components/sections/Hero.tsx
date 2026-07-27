@@ -56,8 +56,26 @@ const loopSteps = [
   "Executed + receipt",
 ];
 
+// The orb only knows three states (idle/planning/executing); the strip has
+// four beats. Map each orb state to the strip step it should light up so the
+// two stay honest about what's actually happening rather than drifting apart
+// on separate clocks. "Executing" holds the longest in the orb's own script,
+// so it gets two beats (approve, then executed) instead of one.
+const STEP_FOR_STATE: Record<string, number[]> = {
+  idle: [0],
+  planning: [1],
+  executing: [2, 3],
+};
+
+const ORB_CAPTION: Record<string, string> = {
+  idle: "Idle. Listening for the next instruction.",
+  planning: "Planning. Breaking the outcome into steps.",
+  executing: "Executing. Working the plan, verifying as it goes.",
+};
+
 export function Hero() {
   const [scrolled, setScrolled] = useState(false);
+  const [orbState, setOrbState] = useState<string>("idle");
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 16);
@@ -198,7 +216,7 @@ export function Hero() {
               </Magnetic>
             </motion.div>
 
-            <SignalHandoffStrip />
+            <SignalHandoffStrip orbState={orbState} />
           </div>
 
           <motion.div
@@ -211,17 +229,22 @@ export function Hero() {
             }}
             className="relative"
           >
-            <JarvisOrbPanel />
+            <JarvisOrbPanel onStateChange={setOrbState} />
           </motion.div>
         </div>
       </div>
 
-      <MiniStatusBar visible={scrolled} />
+      <MiniStatusBar visible={scrolled} activeIndex={STEP_FOR_STATE[orbState]?.[0] ?? 0} />
     </section>
   );
 }
 
-function JarvisOrbPanel() {
+function JarvisOrbPanel({
+  onStateChange,
+}: {
+  onStateChange: (state: string) => void;
+}) {
+  const [state, setState] = useState("idle");
   return (
     <div className="relative mx-auto max-w-[560px]">
       <div className="absolute -inset-6 rounded-[2.25rem] bg-gradient-to-br from-sky-200/52 via-white/40 to-teal-100/45 blur-2xl" />
@@ -230,23 +253,42 @@ function JarvisOrbPanel() {
           <p className="text-xs font-black uppercase tracking-[0.22em] text-[color:var(--j-text-dim)]">
             JARVIS
           </p>
-          <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[10px] font-black uppercase tracking-widest text-[color:var(--j-text-dim)]">
-            Sample states
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[10px] font-black uppercase tracking-widest text-[color:var(--j-text-dim)]">
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-teal-400/70" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-teal-300" />
+            </span>
+            Live sample states
           </span>
         </div>
-        <div className="mx-auto aspect-square w-full max-w-[400px]">
-          <MarketingOrb className="h-full w-full" />
+        <div
+          className="mx-auto aspect-square w-full max-w-[400px] cursor-pointer"
+          title="Click the orb"
+        >
+          <MarketingOrb
+            className="h-full w-full"
+            onStateChange={(s) => {
+              setState(s);
+              onStateChange(s);
+            }}
+          />
         </div>
-        <p className="mt-6 text-center text-sm font-semibold text-[color:var(--j-text-dim)]">
-          Idle. Planning. Executing. The same states every real approval moves
-          through.
-        </p>
+        <motion.p
+          key={state}
+          initial={{ opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="mt-6 text-center text-sm font-semibold text-[color:var(--j-text-dim)]"
+        >
+          {ORB_CAPTION[state]}
+        </motion.p>
       </JarvisProofSurface>
     </div>
   );
 }
 
-function SignalHandoffStrip() {
+function SignalHandoffStrip({ orbState }: { orbState: string }) {
+  const active = new Set(STEP_FOR_STATE[orbState] ?? [0]);
   return (
     <motion.div
       initial={{ opacity: 0, y: 14 }}
@@ -259,20 +301,44 @@ function SignalHandoffStrip() {
         <span className="text-teal-700">Every time, no exceptions</span>
       </div>
       <div className="signal-thread flex min-h-12 flex-wrap items-center justify-start gap-2 rounded-2xl bg-slate-50 px-3 py-2 md:justify-between">
-        {loopSteps.map((step) => (
-          <span
-            key={step}
-            className="relative z-10 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-700 shadow-sm"
-          >
-            {step}
-          </span>
-        ))}
+        {loopSteps.map((step, index) => {
+          const isActive = active.has(index);
+          return (
+            <motion.span
+              key={step}
+              animate={{
+                scale: isActive ? 1.05 : 1,
+                y: isActive ? -1 : 0,
+              }}
+              transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+              className={`relative z-10 flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[10px] font-black uppercase tracking-widest shadow-sm transition-colors duration-500 ${
+                isActive
+                  ? "border-teal-600/30 bg-slate-950 text-white"
+                  : "border-slate-200 bg-white text-slate-700"
+              }`}
+            >
+              {isActive && (
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-teal-300/80" />
+                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-teal-300" />
+                </span>
+              )}
+              {step}
+            </motion.span>
+          );
+        })}
       </div>
     </motion.div>
   );
 }
 
-function MiniStatusBar({ visible }: { visible: boolean }) {
+function MiniStatusBar({
+  visible,
+  activeIndex,
+}: {
+  visible: boolean;
+  activeIndex: number;
+}) {
   return (
     <div
       className={`pointer-events-none fixed bottom-5 left-1/2 z-40 hidden -translate-x-1/2 transition duration-300 lg:block ${
@@ -280,15 +346,24 @@ function MiniStatusBar({ visible }: { visible: boolean }) {
       }`}
     >
       <div className="flex items-center gap-2 rounded-full border border-slate-900/10 bg-white/82 p-2 shadow-[0_18px_48px_rgba(31,57,86,0.14)] backdrop-blur-xl">
-        {miniStatusItems.map(({ icon: Icon, label }) => (
-          <span
-            key={label}
-            className="inline-flex items-center gap-2 rounded-full bg-slate-950 px-4 py-2 text-xs font-black text-white"
-          >
-            <Icon className="h-3.5 w-3.5 text-teal-200" />
-            {label}
-          </span>
-        ))}
+        {miniStatusItems.map(({ icon: Icon, label }, index) => {
+          const isActive = index === activeIndex;
+          return (
+            <span
+              key={label}
+              className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-black transition-all duration-500 ${
+                isActive
+                  ? "scale-105 bg-teal-500 text-slate-950 shadow-[0_0_0_4px_rgba(20,184,166,0.18)]"
+                  : "bg-slate-950 text-white"
+              }`}
+            >
+              <Icon
+                className={`h-3.5 w-3.5 ${isActive ? "text-slate-950" : "text-teal-200"}`}
+              />
+              {label}
+            </span>
+          );
+        })}
       </div>
     </div>
   );

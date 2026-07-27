@@ -43,9 +43,9 @@ const STATE_SPIN: Record<OrbState, number> = {
 };
 
 const SCRIPT: Array<{ state: OrbState; holdMs: number }> = [
-  { state: "idle", holdMs: 3200 },
-  { state: "planning", holdMs: 2400 },
-  { state: "executing", holdMs: 3400 },
+  { state: "idle", holdMs: 4600 },
+  { state: "planning", holdMs: 3600 },
+  { state: "executing", holdMs: 4800 },
 ];
 
 // Deterministic hash, this repo's eslint rule bans Math.random() under jarvis scope;
@@ -63,6 +63,8 @@ const VERT = /* glsl */ `
   uniform float uEnergy;
   uniform vec2 uMouseNDC;
   uniform float uMouseActive;
+  uniform float uRippleTime;
+  uniform float uRippleActive;
   attribute float aSeed;
   varying float vSeed;
   varying float vInfluence;
@@ -76,13 +78,25 @@ const VERT = /* glsl */ `
     vec4 clip = projectionMatrix * mv;
     vec2 ndc = clip.xy / clip.w;
     float distToMouse = length(ndc - uMouseNDC);
-    float influence = smoothstep(0.42, 0.0, distToMouse) * uMouseActive;
+    float influence = smoothstep(0.5, 0.0, distToMouse) * uMouseActive;
     vInfluence = influence;
 
-    vec3 pushed = p + dir * influence * 0.55;
+    // A single expanding shell of displacement fired on click/tap, travelling
+    // outward from the sphere's own centre rather than the cursor, like a
+    // struck bell. uRippleTime is seconds-since-fire; the shell radius grows
+    // linearly and its band narrows as it goes, so it reads as a pulse, not
+    // a static bulge.
+    float ripple = 0.0;
+    if (uRippleActive > 0.0) {
+      float radius = uRippleTime * 2.2;
+      float band = abs(length(position) - radius);
+      ripple = smoothstep(0.5, 0.0, band) * uRippleActive * smoothstep(2.4, 0.0, uRippleTime);
+    }
+
+    vec3 pushed = p + dir * (influence * 0.55 + ripple * 0.4);
     vec4 mvFinal = modelViewMatrix * vec4(pushed, 1.0);
     float size = (1.1 + aSeed * 1.3) * (7.0 / -mvFinal.z) * (0.55 + uEnergy * 0.6);
-    gl_PointSize = min(size * (1.0 + influence * 2.4), 11.0);
+    gl_PointSize = min(size * (1.0 + influence * 2.4 + ripple * 1.6), 12.5);
     gl_Position = projectionMatrix * mvFinal;
   }
 `;
@@ -146,8 +160,14 @@ function StaticOrb({ state }: { state: OrbState }) {
 
 export function MarketingOrb({
   className = "h-[440px] w-[440px]",
+  onStateChange,
 }: {
   className?: string;
+  /** Fired whenever the orb's own idle/planning/executing script advances, so
+   * surrounding UI (the Hero's step strip, status chips) can stay in lockstep
+   * with what the sphere is actually doing instead of animating on its own
+   * unrelated timer. */
+  onStateChange?: (state: OrbState, index: number) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const reduced = useReducedMotion();
@@ -164,6 +184,11 @@ export function MarketingOrb({
     setMounted(true);
     setLowPower(isLowPowerDevice());
   }, []);
+
+  useEffect(() => {
+    onStateChange?.(SCRIPT[scriptIndex]!.state, scriptIndex);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scriptIndex]);
 
   useEffect(() => {
     const timer = setTimeout(
@@ -233,6 +258,8 @@ export function MarketingOrb({
         uColor: { value: new THREE.Color(...STATE_COLOR.idle) },
         uMouseNDC: { value: new THREE.Vector2(2, 2) },
         uMouseActive: { value: 0 },
+        uRippleTime: { value: 0 },
+        uRippleActive: { value: 0 },
       },
     });
     const points = new THREE.Points(geometry, material);
@@ -245,42 +272,88 @@ export function MarketingOrb({
     const mouseNDC = new THREE.Vector2(2, 2);
     let targetActive = 0;
     let active = 0;
+    // Slow parallax tilt: the whole sphere leans very slightly toward the
+    // cursor, independent of the per-particle push above, so the object reads
+    // as one thing responding to you rather than a static shell with sparkle.
+    let targetTiltX = 0;
+    let targetTiltY = 0;
+    let tiltX = 0;
+    let tiltY = 0;
 
     function setMouseFromClient(clientX: number, clientY: number) {
       const rect = el.getBoundingClientRect();
-      mouseNDC.x = ((clientX - rect.left) / rect.width) * 2 - 1;
-      mouseNDC.y = -(((clientY - rect.top) / rect.height) * 2 - 1);
+      const nx = ((clientX - rect.left) / rect.width) * 2 - 1;
+      const ny = -(((clientY - rect.top) / rect.height) * 2 - 1);
+      mouseNDC.x = nx;
+      mouseNDC.y = ny;
       targetActive = 1;
+      targetTiltY = nx * 0.18;
+      targetTiltX = -ny * 0.14;
     }
     function onPointerMove(e: PointerEvent) {
       setMouseFromClient(e.clientX, e.clientY);
     }
     function onPointerLeave() {
       targetActive = 0;
+      targetTiltX = 0;
+      targetTiltY = 0;
+    }
+    let rippleStart: number | null = null;
+    function onPointerDown(e: PointerEvent) {
+      setMouseFromClient(e.clientX, e.clientY);
+      rippleStart = clock.getElapsedTime();
     }
     el.addEventListener("pointermove", onPointerMove);
     el.addEventListener("pointerleave", onPointerLeave);
     el.addEventListener("pointercancel", onPointerLeave);
+    el.addEventListener("pointerdown", onPointerDown);
 
     let raf = 0;
     let stopped = false;
     const clock = new THREE.Clock();
+
+    // Eased state uniforms: colour/energy/spin glide toward their target
+    // instead of snapping the instant the script advances, so a state change
+    // reads as a slow tonal shift, not a hard cut.
+    const colorNow = new THREE.Color(...STATE_COLOR.idle);
+    let energyNow = STATE_ENERGY.idle;
+    let spinNow = STATE_SPIN.idle;
+    const colorTarget = new THREE.Color();
 
     function frame(): void {
       if (stopped) return;
       const t = clock.getElapsedTime();
       const state = stateRef.current;
 
-      active += (targetActive - active) * 0.08;
+      active += (targetActive - active) * 0.06;
+      tiltX += (targetTiltX - tiltX) * 0.045;
+      tiltY += (targetTiltY - tiltY) * 0.045;
+
+      const easeRate = 0.02;
+      colorTarget.setRGB(...STATE_COLOR[state]);
+      colorNow.lerp(colorTarget, easeRate);
+      energyNow += (STATE_ENERGY[state] - energyNow) * easeRate;
+      spinNow += (STATE_SPIN[state] - spinNow) * easeRate;
+
       const mat = material as THREE.ShaderMaterial;
       mat.uniforms.uTime.value = t;
-      mat.uniforms.uEnergy.value = STATE_ENERGY[state];
-      (mat.uniforms.uColor.value as THREE.Color).setRGB(...STATE_COLOR[state]);
+      mat.uniforms.uEnergy.value = energyNow;
+      (mat.uniforms.uColor.value as THREE.Color).copy(colorNow);
       (mat.uniforms.uMouseNDC.value as THREE.Vector2).copy(mouseNDC);
       mat.uniforms.uMouseActive.value = active;
 
-      points.rotation.y += STATE_SPIN[state] * 0.01;
-      points.rotation.x = Math.sin(t * 0.15) * 0.08;
+      if (rippleStart !== null) {
+        const elapsed = t - rippleStart;
+        mat.uniforms.uRippleTime.value = elapsed;
+        mat.uniforms.uRippleActive.value = 1;
+        if (elapsed > 2.4) rippleStart = null;
+      } else {
+        mat.uniforms.uRippleActive.value = 0;
+      }
+
+      points.rotation.y += spinNow * 0.01;
+      points.rotation.x = Math.sin(t * 0.15) * 0.08 + tiltX;
+      points.rotation.z = tiltY * 0.5;
 
       renderer.render(scene, camera);
       raf = requestAnimationFrame(frame);
@@ -315,6 +388,7 @@ export function MarketingOrb({
       el.removeEventListener("pointermove", onPointerMove);
       el.removeEventListener("pointerleave", onPointerLeave);
       el.removeEventListener("pointercancel", onPointerLeave);
+      el.removeEventListener("pointerdown", onPointerDown);
       ro.disconnect();
       geometry.dispose();
       material.dispose();
