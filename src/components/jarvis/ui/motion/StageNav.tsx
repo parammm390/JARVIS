@@ -22,6 +22,7 @@ export const STAGE_SECTIONS = [
   { id: "flow-decision-theater", label: "F3 Decision Theater" },
   { id: "flow-pipeline-theater", label: "F8 Pipeline Theater" },
   { id: "flow-dataviz", label: "F5 Data-Viz" },
+  { id: "flow-voice-theater", label: "F4 Voice Theater" },
   { id: "flow-state-narratives", label: "F6 State Narratives" },
   { id: "flow-continuity", label: "F7 Continuity" },
   { id: "flow-core", label: "FLOW-01..13" },

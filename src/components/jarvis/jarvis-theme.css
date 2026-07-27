@@ -79,6 +79,23 @@ html[data-jarvis-tenant-accent="amber"] .jarvis-root { --accent: var(--j-amber);
     0 18px 44px rgba(2, 6, 16, 0.55);
 }
 
+/* F4.T3 — FLOW-71 VoiceMoodWash: `data-mood`'s real `--aurora-opacity` swap (idle 1 /
+   voice 1 / standalone 0.45, jarvis-root rules above) previously applied with zero
+   transition on the atmosphere layer itself — a hard cut, not the "tide" the motion-
+   semantics table (plan §2) requires for a mode change. `opacity` is GPU-safe
+   (compositor-only) and this transitions the DOM element's own computed opacity, not
+   the CSS custom property — animatable regardless of the var() indirection. Reduced
+   motion collapses it to an instant snap via the media query below, same convention
+   as every other ambient transition in this file. */
+[data-jarvis-atmosphere] {
+  transition: opacity 2s ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-jarvis-atmosphere] {
+    transition: none;
+  }
+}
+
 /* D9: manual low-power mode trades decorative glass and ambient motion for
    predictable interaction speed. Data, content, and controls are unchanged. */
 .jarvis-root[data-low-power="true"] [data-jarvis-atmosphere],

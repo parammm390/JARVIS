@@ -4,6 +4,22 @@
 // waveform canvas fed by the REAL Vapi volume level (the page's single rAF loop, §9.2),
 // green mono duration timer, mute/end controls, and a Live Transcript feed with an
 // "AI is listening" pulse. Idle: the orb breathing + honest scope note.
+//
+// F4 (Voice Theater) additions, all real-state-driven, catalogued in flow-index.ts:
+// FLOW-67 WaveformTruth is the `WaveformStrip` below, unchanged — already real-
+// levels-only (draws nothing while `active` is false, never a synthesized fallback),
+// now exported so Stage can mount the SAME component. FLOW-68 TranscriptTide is the
+// existing per-line `motion.div` entrance further down — re-probed per discovery: the
+// Vapi `message` event's `transcript`/`transcriptType` fields carry no per-word
+// timestamps (grepped the SDK's message shape in useVapiSession.tsx), so this
+// honestly takes the plan's own documented "else line-enter" branch rather than a
+// fabricated per-word cadence. FLOW-69 IntentSpark, FLOW-70 CallOrbit, and FLOW-73
+// HangupSettle are new below. FLOW-71 VoiceMoodWash lives in JarvisCommandCenter.tsx/
+// Bridge.tsx (the mood attribute's own consumer). FLOW-72 HoldBreath is `cut` in
+// flow-index.ts — @vapi-ai/web's own `VapiEventNames` union (node_modules/@vapi-ai/web/
+// dist/vapi.d.ts) has no hold/resume client event; only a server-side "put the
+// customer on hold" experimental transfer flag exists, which this browser-mic session
+// never uses. No fake amplitude was built for a state the SDK doesn't expose.
 
 import { useEffect, useRef, useState } from "react"
 import { motion, useReducedMotion } from "framer-motion"
@@ -11,8 +27,11 @@ import { AlertTriangle, Mic, MicOff, PhoneOff } from "lucide-react"
 import { JarvisOrb } from "./JarvisOrb"
 import type { useVapiSession } from "../lib/useVapiSession"
 import { onFrame } from "../lib/raf-bus"
+import { EASE } from "../ui/motion/tokens"
+import { getAnchorRect } from "../lib/pulse-bus"
+import { useJarvis, type PendingAction } from "../lib/data-core"
 
-function WaveformStrip({ volumeLevel, active, color = "rgba(56,189,248," }: { volumeLevel: number; active: boolean; color?: string }) {
+export function WaveformStrip({ volumeLevel, active, color = "rgba(56,189,248," }: { volumeLevel: number; active: boolean; color?: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const volRef = useRef(volumeLevel)
   const historyRef = useRef<number[]>([])
@@ -58,6 +77,135 @@ function WaveformStrip({ volumeLevel, active, color = "rgba(56,189,248," }: { vo
   return <canvas ref={canvasRef} style={{ width: 340, height: 64, maxWidth: "100%" }} aria-hidden />
 }
 
+// FLOW-70 CallOrbit — a small DOM ring orbiting the orb container (SVG transform,
+// not WebGL — the plan's own explicit scope, distinct from Bridge's Orb3D). One
+// continuous loop, only while genuinely live; pauses (no `animate`) otherwise, so it
+// never adds to the ambient budget when the panel is idle.
+export function CallOrbitRing({ size, active }: { size: number; active: boolean }) {
+  const reduced = useReducedMotion()
+  if (!active) return null
+  return (
+    <motion.div
+      className="pointer-events-none absolute rounded-full border border-dashed border-cyan-300/35"
+      style={{ inset: -9, width: size + 18, height: size + 18 }}
+      animate={reduced ? {} : { rotate: 360 }}
+      transition={{ duration: 13, repeat: Infinity, ease: "linear" }}
+    >
+      <span className="absolute -top-[3px] left-1/2 h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-cyan-300 shadow-[0_0_9px_rgba(34,211,238,0.85)]" />
+    </motion.div>
+  )
+}
+
+// FLOW-73 HangupSettle — the orbit satellite's one-shot flight into the legacy
+// Shell's real ActivityRail panel (anchor registered there via F2's own pulse-bus
+// registry, "legacy-activity-rail" — no new transport). `from` is captured the
+// instant the call ends, before the live block (and its ref) unmounts.
+function HangupSettleChip({ from, reduced, onDone }: { from: DOMRect; reduced: boolean; onDone: () => void }) {
+  const to = getAnchorRect("legacy-activity-rail")
+  const dx = to ? to.left + to.width / 2 - (from.left + from.width / 2) : 0
+  const dy = to ? to.top + to.height / 2 - (from.top + from.height / 2) : 60
+  return (
+    <motion.div
+      initial={{ opacity: 1, x: 0, y: 0, scale: 1, rotate: 0 }}
+      animate={reduced ? { opacity: 0 } : { opacity: [1, 1, 0], x: dx, y: dy, scale: 0.25, rotate: 200 }}
+      transition={{ duration: reduced ? 0.2 : 0.6, ease: EASE.accelerate }}
+      onAnimationComplete={onDone}
+      style={{ position: "fixed", top: from.top + from.height / 2 - 5, left: from.left + from.width / 2 - 5, zIndex: 60 }}
+      className="pointer-events-none h-2.5 w-2.5 rounded-full bg-cyan-300 shadow-[0_0_10px_rgba(34,211,238,0.85)]"
+    />
+  )
+}
+
+// FLOW-69 IntentSpark — a real spawned-actions tray for this call. No `correlation_id`
+// column persists a callId onto `domain_actions` (re-probed, not assumed: `packages/
+// orchestration/src/index.ts` tags `correlationId` onto the in-memory DomainAction for
+// job threading only, "never a DB column" per its own comment) — so this correlates
+// honestly by time window (any real pending action created since the call started),
+// and says so in the UI copy rather than implying a stored call link that doesn't exist.
+function IntentSparkChip({ from, to, label, reduced, onDone }: { from: DOMRect; to: DOMRect; label: string; reduced: boolean; onDone: () => void }) {
+  const dx = to.left + to.width / 2 - (from.left + from.width / 2)
+  const dy = to.top + to.height / 2 - (from.top + from.height / 2)
+  return (
+    <motion.div
+      initial={{ opacity: 1, x: 0, y: 0, scale: 1 }}
+      animate={reduced ? { opacity: 0 } : { opacity: [1, 1, 0], x: dx, y: dy, scale: 0.6 }}
+      transition={{ duration: reduced ? 0.2 : 0.5, ease: EASE.accelerate }}
+      onAnimationComplete={onDone}
+      style={{ position: "fixed", top: from.top, left: from.left, zIndex: 60 }}
+      className="pointer-events-none whitespace-nowrap rounded-full bg-violet-300/85 px-2 py-0.5 text-[8.5px] font-black text-slate-950"
+    >
+      {label}
+    </motion.div>
+  )
+}
+
+export function IntentSparkTray({
+  pendingActions,
+  sinceMs,
+  active,
+  sourceRef,
+}: {
+  pendingActions: PendingAction[]
+  sinceMs: number | null
+  active: boolean
+  sourceRef: { current: HTMLElement | null }
+}) {
+  const trayRef = useRef<HTMLDivElement>(null)
+  const seenRef = useRef<Set<string>>(new Set())
+  const [items, setItems] = useState<PendingAction[]>([])
+  const [chips, setChips] = useState<Array<{ id: string; from: DOMRect; to: DOMRect; label: string }>>([])
+  const reduced = useReducedMotion()
+
+  useEffect(() => {
+    if (!active || sinceMs == null) {
+      return
+    }
+    const matched = pendingActions.filter((a) => new Date(a.createdAt).getTime() >= sinceMs)
+    const fresh = matched.filter((a) => !seenRef.current.has(a.id))
+    if (fresh.length > 0) {
+      fresh.forEach((a) => seenRef.current.add(a.id))
+      const from = sourceRef.current?.getBoundingClientRect()
+      const to = trayRef.current?.getBoundingClientRect()
+      if (from && to) {
+        setChips((c) => [...c, ...fresh.map((a) => ({ id: a.id, from, to, label: a.actionType.replaceAll("_", " ") }))])
+      }
+    }
+    if (matched.length !== items.length) setItems(matched)
+  }, [pendingActions, active, sinceMs, sourceRef, items.length])
+
+  useEffect(() => {
+    if (!active) {
+      seenRef.current.clear()
+      setItems([])
+    }
+  }, [active])
+
+  if (!active) return null
+
+  return (
+    <div ref={trayRef} className="relative mt-2 w-full rounded-lg border border-violet-400/20 bg-violet-400/5 p-2">
+      <div className="mb-1 text-[9px] font-black uppercase tracking-widest text-violet-300">
+        Actions from this call{items.length > 0 ? ` (${items.length})` : ""}
+      </div>
+      {items.length === 0 ? (
+        <div className="text-[10px] text-[color:var(--j-text-faint)]">Nothing created yet.</div>
+      ) : (
+        <div className="space-y-1">
+          {items.map((a) => (
+            <motion.div key={a.id} layout initial={{ opacity: 0, scale: 0.85 }} animate={{ opacity: 1, scale: 1 }} className="text-[10.5px] text-white/75">
+              {a.actionType.replaceAll("_", " ")} <span className="text-white/35">· {a.status}</span>
+            </motion.div>
+          ))}
+        </div>
+      )}
+      <p className="mt-1 text-[8.5px] text-white/25">matched by time window since call start, not a stored call id</p>
+      {chips.map((c) => (
+        <IntentSparkChip key={c.id} from={c.from} to={c.to} label={c.label} reduced={!!reduced} onDone={() => setChips((cur) => cur.filter((x) => x.id !== c.id))} />
+      ))}
+    </div>
+  )
+}
+
 export function LiveCallPanel({ session }: { session: ReturnType<typeof useVapiSession> }) {
   const reduced = useReducedMotion()
   const { voiceState, volumeLevel, transcript, callDurationSec, muted, toggleVoice, toggleMute, configured, lastError, micSilenceWarning } = session
@@ -66,10 +214,33 @@ export function LiveCallPanel({ session }: { session: ReturnType<typeof useVapiS
   const mm = String(Math.floor(callDurationSec / 60)).padStart(2, "0")
   const ss = String(callDurationSec % 60).padStart(2, "0")
   const feedRef = useRef<HTMLDivElement>(null)
+  const data = useJarvis()
 
   useEffect(() => {
     feedRef.current?.scrollTo({ top: feedRef.current.scrollHeight, behavior: "smooth" })
   }, [transcript])
+
+  // FLOW-73 HangupSettle — capture the orb's real rect continuously while live (cheap,
+  // layout here is static once mounted) so a rect is still available the instant
+  // `live` flips false and the live block (with its own ref) unmounts.
+  const orbContainerRef = useRef<HTMLDivElement>(null)
+  const lastOrbRectRef = useRef<DOMRect | null>(null)
+  const prevLiveRef = useRef(false)
+  const [settleChip, setSettleChip] = useState<{ id: number; from: DOMRect } | null>(null)
+  const callStartAtRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    if (live) lastOrbRectRef.current = orbContainerRef.current?.getBoundingClientRect() ?? null
+  }, [live, volumeLevel])
+
+  useEffect(() => {
+    if (live && callStartAtRef.current == null) callStartAtRef.current = Date.now()
+    if (prevLiveRef.current && !live) {
+      if (lastOrbRectRef.current) setSettleChip({ id: Date.now(), from: lastOrbRectRef.current })
+      callStartAtRef.current = null
+    }
+    prevLiveRef.current = live
+  }, [live])
 
   return (
     <div className={`j-panel relative flex h-full flex-col overflow-hidden xl:col-span-1 ${live ? "j-panel-hot" : ""}`}>
@@ -117,7 +288,10 @@ export function LiveCallPanel({ session }: { session: ReturnType<typeof useVapiS
         {live && (
           <>
             <div className="flex w-full items-center gap-3">
-              <JarvisOrb size={52} voiceState={voiceState} volumeLevel={volumeLevel} />
+              <div ref={orbContainerRef} className="relative shrink-0">
+                <CallOrbitRing size={52} active={live} />
+                <JarvisOrb size={52} voiceState={voiceState} volumeLevel={volumeLevel} />
+              </div>
               <div className="min-w-0 flex-1">
                 <div className="text-[13px] font-black text-[color:var(--j-text)]">Browser voice session</div>
                 <div className="text-[10.5px] text-[color:var(--j-text-dim)]">{voiceState === "speaking" ? "Finnor is speaking…" : "listening to you"}</div>
@@ -135,7 +309,11 @@ export function LiveCallPanel({ session }: { session: ReturnType<typeof useVapiS
                 <span>Not picking up your mic — check it isn&apos;t muted or blocked, then try speaking again.</span>
               </div>
             )}
+            <IntentSparkTray pendingActions={data.pendingActions} sinceMs={callStartAtRef.current} active={live} sourceRef={feedRef} />
           </>
+        )}
+        {settleChip && (
+          <HangupSettleChip from={settleChip.from} reduced={!!reduced} onDone={() => setSettleChip((c) => (c?.id === settleChip.id ? null : c))} />
         )}
 
         <div className="mt-4 flex items-center gap-2.5">

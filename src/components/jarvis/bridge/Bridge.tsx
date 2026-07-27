@@ -634,11 +634,14 @@ function BridgeShell() {
       </div>
       {/* F6.T2 — FLOW-90 OfflineDrift's "reconnect relights in cascade" half: a single
           one-shot light sweep left->right the instant `data.statsDegraded` flips back
-          to false, formalizing the mood-driven aurora dim above (which already fades
-          back on its own 0.6s `--aurora-opacity` transition) with a real "this just
-          recovered" event rather than a silent color settle. GPU-safe transform/
-          opacity only; reduced motion collapses to an instant flash via useOfflineDrift
-          keeping the same 900ms window either way (AnimatePresence unmount handles it). */}
+          to false, formalizing the mood-driven aurora dim above (which fades back on
+          the real `[data-jarvis-atmosphere]` 2s opacity transition F4.T3/FLOW-71 added
+          — this comment previously claimed that transition already existed at 0.6s;
+          re-probed while building F4 and it didn't, jarvis-theme.css now genuinely
+          has it) with a real "this just recovered" event rather than a silent color
+          settle. GPU-safe transform/opacity only; reduced motion collapses to an
+          instant flash via useOfflineDrift keeping the same 900ms window either way
+          (AnimatePresence unmount handles it). */}
       {relighting && (
         <motion.div
           aria-hidden

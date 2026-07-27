@@ -98,13 +98,21 @@ export const FLOW_INDEX: FlowEntry[] = [
   { id: 66, key: "TriageWhisper", band: "F8", phase: "F8", status: "shipped", dataSource: "real A4.T3 suggestionReason, revealed on a real row expand" },
 
   // ---- Band F4 — Voice Theater (67-73) ----
-  { id: 67, key: "WaveformTruth", band: "F4", phase: "F4", status: "planned", dataSource: "Vapi volume events" },
-  { id: 68, key: "TranscriptTide", band: "F4", phase: "F4", status: "planned", dataSource: "transcript" },
-  { id: 69, key: "IntentSpark", band: "F4", phase: "F4", status: "planned", dataSource: "real created domain_actions" },
-  { id: 70, key: "CallOrbit", band: "F4", phase: "F4", status: "planned", dataSource: "call state" },
-  { id: 71, key: "VoiceMoodWash", band: "F4", phase: "F4", status: "planned", dataSource: "voiceState" },
-  { id: 72, key: "HoldBreath", band: "F4", phase: "F4", status: "planned", dataSource: "call state (honest cut if SDK lacks hold)" },
-  { id: 73, key: "HangupSettle", band: "F4", phase: "F4", status: "planned", dataSource: "call end event" },
+  { id: 67, key: "WaveformTruth", band: "F4", phase: "F4", status: "shipped", dataSource: "Vapi local-volume-level (real mic level)" },
+  { id: 68, key: "TranscriptTide", band: "F4", phase: "F4", status: "shipped", dataSource: "transcript (line-enter — no per-word Vapi timestamps)" },
+  { id: 69, key: "IntentSpark", band: "F4", phase: "F4", status: "shipped", dataSource: "real pending domain_actions, time-window correlated to call start" },
+  { id: 70, key: "CallOrbit", band: "F4", phase: "F4", status: "shipped", dataSource: "call state (voiceState live/speaking)" },
+  { id: 71, key: "VoiceMoodWash", band: "F4", phase: "F4", status: "shipped", dataSource: "voiceState via deriveMood()/data-mood" },
+  {
+    id: 72,
+    key: "HoldBreath",
+    band: "F4",
+    phase: "F4",
+    status: "cut",
+    dataSource: "call state (no hold event in SDK)",
+    note: "@vapi-ai/web's VapiEventNames union (node_modules/@vapi-ai/web/dist/vapi.d.ts) has no client hold/resume event — only a server-side warm-transfer hold flag this browser-mic session never uses. No fake amplitude built for a state the SDK doesn't expose.",
+  },
+  { id: 73, key: "HangupSettle", band: "F4", phase: "F4", status: "shipped", dataSource: "call end event (voiceState live->idle transition)" },
 
   // ---- Band F9 — Geo Cinema (74-80) — LOCKED behind main D5 ----
   { id: 74, key: "PinDrop", band: "F9", phase: "F9", status: "planned", dataSource: "map data", note: "LOCKED — prereq main D5" },

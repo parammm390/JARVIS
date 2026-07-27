@@ -31,6 +31,7 @@ import { CommandSurfaceCatalogSection } from "./ui/motion/CommandSurfaceCatalog"
 import { DecisionTheaterCatalogSection } from "./ui/motion/DecisionTheaterCatalog"
 import { PipelineTheaterCatalogSection } from "./ui/motion/PipelineTheaterCatalog"
 import { DataVizCatalogSection } from "./ui/motion/DataVizCatalog"
+import { VoiceTheaterCatalogSection } from "./ui/motion/VoiceTheaterCatalog"
 import { StateNarrativesCatalogSection } from "./ui/motion/StateNarrativesCatalog"
 import { ContinuityCatalogSection } from "./ui/motion/ContinuityCatalog"
 import { FlowIndexMeterSection } from "./ui/motion/FlowIndexMeter"
@@ -186,6 +187,11 @@ function StageContent() {
       <div id="flow-dataviz">
         <MountToggle id="flow-dataviz" label="FLOW-81..87">
           <DataVizCatalogSection />
+        </MountToggle>
+      </div>
+      <div id="flow-voice-theater">
+        <MountToggle id="flow-voice-theater" label="FLOW-67..73">
+          <VoiceTheaterCatalogSection />
         </MountToggle>
       </div>
       <div id="flow-state-narratives">

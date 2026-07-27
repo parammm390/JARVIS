@@ -6,6 +6,7 @@ import { motion } from "framer-motion"
 import { LiveDot } from "../atmosphere"
 import { useJarvis, onJarvisEvent, ageLabel, type EventRow } from "../lib/data-core"
 import { eventPingThrottled } from "../sound"
+import { registerAnchor } from "../lib/pulse-bus"
 
 function familyColor(eventType: string): string {
   if (eventType.startsWith("quote_")) return "bg-violet-400"
@@ -21,8 +22,14 @@ export function ActivityRail() {
   const pausedRef = useRef(false)
   const queueRef = useRef<EventRow[]>([])
   const [displayEvents, setDisplayEvents] = useState<EventRow[]>(data.events)
+  const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => onJarvisEvent("new-business-event", () => eventPingThrottled()), [])
+
+  // FLOW-73 HangupSettle's real landing target — LiveCallPanel.tsx flies the ended
+  // call's orbit satellite here (same "legacy-activity-rail" anchor name registered
+  // through F2's own pulse-bus registry, no new transport).
+  useEffect(() => registerAnchor("legacy-activity-rail", () => containerRef.current?.getBoundingClientRect() ?? null), [])
 
   useEffect(() => {
     if (pausedRef.current) {
@@ -36,6 +43,7 @@ export function ActivityRail() {
 
   return (
     <div
+      ref={containerRef}
       className="j-panel"
       onMouseEnter={() => {
         pausedRef.current = true
