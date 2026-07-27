@@ -59,7 +59,7 @@ import { registerAnchor, getAnchorRect } from "../lib/pulse-bus"
 import { KeymapHUD } from "./KeymapHUD"
 import { EmptyState } from "../ui/primitives/EmptyState"
 import { ErrorState } from "../ui/primitives/ErrorState"
-import { useHapticsEnabled, vibrateIfEnabled } from "../lib/haptics"
+import { useHapticsEnabled, vibrateIfEnabled, HAPTIC_PATTERNS } from "../lib/haptics"
 
 // ---------------------------------------------------------------------------
 // Small local helpers (deliberately not imported from ApprovalDock.tsx — that file is
@@ -730,15 +730,15 @@ export function ApprovalCockpit() {
       const cardRect = cardRefs.current[idx]?.getBoundingClientRect() ?? null
       if (verb === "confirm") {
         sfx.approve()
-        // F10.T2 — placeholder single pulse; F11.T2 owns the real approve/
-        // reject/error-specific pattern table (10ms/30ms/10-30-10) per §5's own
-        // "patterns land in F11" split. Pref-gated, default off either way.
-        vibrateIfEnabled(hapticsEnabled, 10)
+        // F11.T2 — real approve pattern (plan §5: "approve 10ms"). Pref-gated
+        // (D6.T1's real `notificationPreferences.haptics`), default off.
+        vibrateIfEnabled(hapticsEnabled, HAPTIC_PATTERNS.approve)
         if (cardRect) setApproveStamps((s) => [...s, { id: action.id, rect: cardRect, label: action.actionType }])
         setFlights((f) => [...f, { id: action.id, actionType: action.actionType }])
       } else if (verb === "reject") {
         sfx.reject()
-        vibrateIfEnabled(hapticsEnabled, 10)
+        // F11.T2 — real reject pattern (plan §5: "reject 30ms").
+        vibrateIfEnabled(hapticsEnabled, HAPTIC_PATTERNS.reject)
         if (cardRect) setRejectGhosts((g) => [...g, { id: action.id, rect: cardRect, label: action.actionType }])
       } else if (verb === "escalate") {
         if (cardRect) setEscalateBeacons((b) => [...b, { id: action.id, rect: cardRect }])
@@ -762,7 +762,8 @@ export function ApprovalCockpit() {
         })
         setFlights((f) => f.filter((x) => x.id !== action.id))
         setError(e instanceof Error ? e.message : "Decision failed — action is back in the queue.")
-        vibrateIfEnabled(hapticsEnabled, 10) // F10.T2 placeholder error pulse — F11.T2 refines
+        // F11.T2 — real error pattern (plan §5: "error 10-30-10").
+        vibrateIfEnabled(hapticsEnabled, HAPTIC_PATTERNS.error)
       } finally {
         inflight.current.delete(action.id)
       }

@@ -6,7 +6,7 @@
 // caption, which the original didn't need.
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react"
-import { sfx } from "../sound"
+import { sfx, setVoiceLive } from "../sound"
 
 const VAPI_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPI_PUBLIC_KEY ?? "ab65d198-5573-4d95-b7f2-4fd8db6f85fc"
 const VAPI_ASSISTANT_ID = process.env.NEXT_PUBLIC_VAPI_ASSISTANT_ID ?? "59863f35-236e-4451-9cb8-cd8df4a3c440"
@@ -147,6 +147,7 @@ function useVapiSessionInternal() {
           callStartRef.current = Date.now()
           startMicWatchdog()
           sfx.voiceOn()
+          setVoiceLive(true) // F11.T1 — real call-live signal, ducks master -6dB
           // Vapi enables Daily's optional noise-cancellation processor by
           // default. On affected Chrome/Daily combinations it can retain a live
           // hardware track while delivering silence upstream. Use Daily's raw
@@ -164,6 +165,7 @@ function useVapiSessionInternal() {
           forceReleaseMic(vapiRef.current)
           sessionTransitionRef.current = false
           sfx.voiceOff()
+          setVoiceLive(false) // F11.T1 — real call-end signal, restores master gain
         })
         vapi.on("error", (err?: unknown) => {
           const message =
@@ -255,6 +257,7 @@ function useVapiSessionInternal() {
       setVoiceState("idle")
       callStartRef.current = null
       sfx.voiceOff()
+      setVoiceLive(false) // F11.T1 — manual-stop path, same real restore
       // Notify Vapi first, then await Daily destruction. `end()` calls `stop()`
       // without awaiting it; waiting here ensures the browser-owned track has
       // actually been torn down before this handler completes.

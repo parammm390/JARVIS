@@ -19,6 +19,15 @@ export function vibrateIfEnabled(enabled: boolean, pattern: number | number[]): 
   navigator.vibrate(pattern)
 }
 
+// F11.T2 — the real per-verb pattern table the plan's §5 F11.T2 line specifies
+// verbatim ("approve 10ms · reject 30ms · error 10-30-10"), landing here so
+// every call site shares one source of truth instead of repeating magic numbers.
+export const HAPTIC_PATTERNS = {
+  approve: 10,
+  reject: 30,
+  error: [10, 30, 10],
+} as const satisfies Record<string, number | number[]>
+
 export function useHapticsEnabled(): boolean {
   const [enabled, setEnabled] = useState(false)
   useEffect(() => {

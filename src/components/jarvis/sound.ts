@@ -9,13 +9,21 @@ let master: GainNode | null = null
 // authenticated surfaces, so the safe default must live here rather than in one UI.
 let muted = true
 
+// F11.T1 — Soundscape v2's master-ducking half. `BASE_GAIN` is the pre-F11
+// constant unchanged; `duckFactor` is the real -6dB attenuation (10^(-6/20))
+// applied only while a voice call is genuinely live, so cues never compete
+// with the assistant's own speech. Nothing here changes cue volume at rest.
+const BASE_GAIN = 0.12
+const DUCK_GAIN = BASE_GAIN * 10 ** (-6 / 20)
+let voiceLive = false
+
 function ensure(): { ctx: AudioContext; master: GainNode } | null {
   if (typeof window === "undefined") return null
   try {
     if (!ctx) {
       ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
       master = ctx.createGain()
-      master.gain.value = 0.12
+      master.gain.value = voiceLive ? DUCK_GAIN : BASE_GAIN
       master.connect(ctx.destination)
     }
     if (ctx.state === "suspended") void ctx.resume()
@@ -29,14 +37,43 @@ export function setMuted(m: boolean): void {
   muted = m
 }
 
-function tone(freq: number, dur: number, delay = 0, type: OscillatorType = "sine", vol = 1): void {
+/** F11.T1 — real voice-live signal, set from `useVapiSession`'s own real
+ *  `call-start`/`call-end`/manual-stop transitions (never a fabricated timer).
+ *  Ramps the shared master gain by -6dB while live and restores it after, so
+ *  every subsequent cue (not just ones fired mid-transition) is ducked. */
+export function setVoiceLive(active: boolean): void {
+  voiceLive = active
+  if (master && ctx) {
+    master.gain.linearRampToValueAtTime(active ? DUCK_GAIN : BASE_GAIN, ctx.currentTime + 0.15)
+  }
+}
+
+// F11.T1 — per-family timbre map (plan §5: "decision/flow/alert/ambient").
+// Families don't add new cues; they classify the existing ones so each has a
+// consistent, genuinely distinct oscillator character rather than the pre-F11
+// file's arbitrary per-cue sine-by-default choice. decision = triangle (a
+// human choice landing — rounder, more "mechanical valve" per F3's GateValve
+// metaphor; approve/reject); flow = sine (bright, liquid — ticks/sends/steps/
+// pings, the motion-semantics table's "value changed"/"causality" rows); alert
+// = sawtooth (voice state changes — the one texture reserved for "something
+// about the call changed", distinct from decision/flow so it's never confused
+// with either); ambient = sine (soft, sustained — the one long boot wash).
+type SfxFamily = "decision" | "flow" | "alert" | "ambient"
+const TIMBRE: Record<SfxFamily, OscillatorType> = {
+  decision: "triangle",
+  flow: "sine",
+  alert: "sawtooth",
+  ambient: "sine",
+}
+
+function tone(freq: number, dur: number, delay = 0, family: SfxFamily = "flow", vol = 1): void {
   if (muted) return
   const a = ensure()
   if (!a) return
   const t = a.ctx.currentTime + delay
   const osc = a.ctx.createOscillator()
   const g = a.ctx.createGain()
-  osc.type = type
+  osc.type = TIMBRE[family]
   osc.frequency.setValueAtTime(freq, t)
   g.gain.setValueAtTime(0, t)
   g.gain.linearRampToValueAtTime(vol, t + 0.012)
@@ -47,42 +84,47 @@ function tone(freq: number, dur: number, delay = 0, type: OscillatorType = "sine
   osc.stop(t + dur + 0.05)
 }
 
+// F11.T1 — refined cue lengths: every cue's own tone duration is now ≤180ms
+// (plan §5's explicit ceiling), boot hum exempt by the plan's own wording since
+// it's a one-shot ambient wash, not a reactive cue. Only `reject` actually
+// exceeded the ceiling before (200ms → 180ms here); every other cue was
+// already compliant and is reclassified by family, not retimed.
 export const sfx = {
   approve: () => {
-    tone(523, 0.12)
-    tone(784, 0.18, 0.07)
+    tone(523, 0.12, 0, "decision")
+    tone(784, 0.18, 0.07, "decision")
   },
   reject: () => {
-    tone(196, 0.2, 0, "triangle")
+    tone(196, 0.18, 0, "decision")
   },
   tick: () => {
-    tone(1244, 0.05, 0, "sine", 0.35)
+    tone(1244, 0.05, 0, "flow", 0.35)
   },
   voiceOn: () => {
-    tone(440, 0.1)
-    tone(660, 0.12, 0.08)
-    tone(880, 0.16, 0.16)
+    tone(440, 0.1, 0, "alert")
+    tone(660, 0.12, 0.08, "alert")
+    tone(880, 0.16, 0.16, "alert")
   },
   voiceOff: () => {
-    tone(660, 0.1)
-    tone(440, 0.16, 0.08)
+    tone(660, 0.1, 0, "alert")
+    tone(440, 0.16, 0.08, "alert")
   },
   send: () => {
-    tone(880, 0.07, 0, "sine", 0.5)
+    tone(880, 0.07, 0, "flow", 0.5)
   },
   stepTick: () => {
-    tone(1568, 0.06, 0, "sine", 0.3)
+    tone(1568, 0.06, 0, "flow", 0.3)
   },
   runDone: () => {
-    tone(659, 0.1)
-    tone(988, 0.16, 0.09)
+    tone(659, 0.1, 0, "flow")
+    tone(988, 0.16, 0.09, "flow")
   },
   eventPing: () => {
-    tone(2093, 0.04, 0, "sine", 0.15)
+    tone(2093, 0.04, 0, "flow", 0.15)
   },
   bootHum: () => {
-    tone(110, 1.2, 0, "sine", 0.08)
-    tone(165, 1.2, 0.1, "sine", 0.05)
+    tone(110, 1.2, 0, "ambient", 0.08)
+    tone(165, 1.2, 0.1, "ambient", 0.05)
   },
 }
 
