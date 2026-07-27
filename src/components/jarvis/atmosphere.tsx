@@ -4,7 +4,7 @@
 // rising water bubbles, and a caustic shimmer band. Pure decoration — every element
 // is pointer-events-none and aria-hidden; the console works identically without it.
 
-import { motion } from "framer-motion"
+import { motion, useReducedMotion } from "framer-motion"
 import { useMemo } from "react"
 
 // Film grain as an inline SVG turbulence texture — no asset request, ~300 bytes.
@@ -13,7 +13,23 @@ import { useMemo } from "react"
 export const GRAIN =
   "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E\")"
 
-export function ConsoleAtmosphere() {
+// F10.T1 — FLOW-100 QuietHours' "whole ambient layer respires slower" half: a
+// real config-driven multiplier (never a fabricated cycle), applied to every
+// existing continuous transition below rather than adding a new loop. `slow`
+// defaults to false so every pre-F10 call site (JarvisCommandCenter's
+// signed-out shell, which has no user-prefs concept) is byte-identical.
+const SLOW_FACTOR = 1.6
+
+export function ConsoleAtmosphere({ slow = false }: { slow?: boolean } = {}) {
+  // Reduced-motion only gates the NEW F10 multiplier here (never `initial`, the
+  // same safe pattern `ui/motion/primitives.tsx`'s `<Enter>` documents) — the
+  // loops themselves running regardless of reduced-motion in `bridge/Bridge.tsx`
+  // is a pre-existing condition (no `MotionConfig reducedMotion="user"` wraps
+  // the Bridge, unlike the legacy Shell) that predates and is out of scope for
+  // F10; this only ensures QuietHours' own addition never surprises a
+  // reduced-motion user with an even-longer-running animation.
+  const reduced = useReducedMotion()
+  const f = slow && !reduced ? SLOW_FACTOR : 1
   // Deterministic bubble field (no Math.random → no hydration drift).
   const bubbles = useMemo(
     () =>
@@ -36,24 +52,24 @@ export function ConsoleAtmosphere() {
       <motion.div
         className="absolute -left-40 -top-48 h-[34rem] w-[34rem] rounded-full bg-teal-400/14 blur-[110px]"
         animate={{ x: [0, 70, -20, 0], y: [0, 40, 10, 0], scale: [1, 1.15, 0.95, 1] }}
-        transition={{ duration: 26, repeat: Infinity, ease: "easeInOut" }}
+        transition={{ duration: 26 * f, repeat: Infinity, ease: "easeInOut" }}
       />
       <motion.div
         className="absolute -right-52 top-24 h-[30rem] w-[30rem] rounded-full bg-sky-500/12 blur-[120px]"
         animate={{ x: [0, -60, 30, 0], y: [0, 60, -20, 0], scale: [1, 0.9, 1.12, 1] }}
-        transition={{ duration: 31, repeat: Infinity, ease: "easeInOut" }}
+        transition={{ duration: 31 * f, repeat: Infinity, ease: "easeInOut" }}
       />
       <motion.div
         className="absolute bottom-[-12rem] left-1/3 h-[26rem] w-[36rem] rounded-full bg-indigo-500/10 blur-[130px]"
         animate={{ x: [0, 50, -50, 0], opacity: [0.7, 1, 0.6, 0.7] }}
-        transition={{ duration: 37, repeat: Infinity, ease: "easeInOut" }}
+        transition={{ duration: 37 * f, repeat: Infinity, ease: "easeInOut" }}
       />
 
       {/* caustic shimmer — a slow diagonal light band, like light through water */}
       <motion.div
         className="absolute inset-y-0 w-[55%] rotate-[18deg] bg-gradient-to-r from-transparent via-teal-200/[0.05] to-transparent"
         animate={{ x: ["-70%", "260%"] }}
-        transition={{ duration: 17, repeat: Infinity, ease: "linear" }}
+        transition={{ duration: 17 * f, repeat: Infinity, ease: "linear" }}
       />
 
       {/* rising bubbles — the water in the machine */}
@@ -63,7 +79,7 @@ export function ConsoleAtmosphere() {
           className="absolute bottom-[-24px] rounded-full border border-teal-200/25 bg-teal-100/10"
           style={{ left: b.left, width: b.size, height: b.size }}
           animate={{ y: [0, -900], x: [0, b.drift], opacity: [0, 0.7, 0.5, 0] }}
-          transition={{ duration: b.duration, delay: b.delay, repeat: Infinity, ease: "linear" }}
+          transition={{ duration: b.duration * f, delay: b.delay, repeat: Infinity, ease: "linear" }}
         />
       ))}
 

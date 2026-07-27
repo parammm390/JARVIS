@@ -35,6 +35,7 @@ import { VoiceTheaterCatalogSection } from "./ui/motion/VoiceTheaterCatalog"
 import { StateNarrativesCatalogSection } from "./ui/motion/StateNarrativesCatalog"
 import { ContinuityCatalogSection } from "./ui/motion/ContinuityCatalog"
 import { GeoCinemaCatalogSection } from "./ui/motion/GeoCinemaCatalog"
+import { AmbientIntelligenceCatalogSection } from "./ui/motion/AmbientIntelligenceCatalog"
 import { FlowIndexMeterSection } from "./ui/motion/FlowIndexMeter"
 import { StageStickyNav, StageStateSwitcher, MountToggle } from "./ui/motion/StageNav"
 
@@ -208,6 +209,11 @@ function StageContent() {
       <div id="flow-geo-cinema">
         <MountToggle id="flow-geo-cinema" label="FLOW-74..80">
           <GeoCinemaCatalogSection />
+        </MountToggle>
+      </div>
+      <div id="flow-ambient-intelligence">
+        <MountToggle id="flow-ambient-intelligence" label="FLOW-98..100">
+          <AmbientIntelligenceCatalogSection />
         </MountToggle>
       </div>
       <div id="flow-core">

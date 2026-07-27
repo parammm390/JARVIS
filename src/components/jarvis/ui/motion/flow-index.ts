@@ -149,10 +149,15 @@ export const FLOW_INDEX: FlowEntry[] = [
   { id: 96, key: "ListToDetail", band: "F7", phase: "F7", status: "shipped", dataSource: "shared layoutId (activity row dot → receipt scene header)" },
   { id: 97, key: "BackTrace", band: "F7", phase: "F7", status: "shipped", dataSource: "real Bridge scene-key history (prevKeyRef)" },
 
-  // ---- Band F10 — Ambient Intelligence (98-100) — LOCKED behind main D6 ----
-  { id: 98, key: "GreetingCurrent", band: "F10", phase: "F10", status: "planned", dataSource: "real deltas", note: "LOCKED — prereq main D6" },
-  { id: 99, key: "FrecencyGlow", band: "F10", phase: "F10", status: "planned", dataSource: "D6.T3 frecency store", note: "LOCKED — prereq main D6" },
-  { id: 100, key: "QuietHours", band: "F10", phase: "F10", status: "planned", dataSource: "D6 prefs", note: "LOCKED — prereq main D6" },
+  // ---- Band F10 — Ambient Intelligence (98-100) ----
+  // Deviation (disclosed, Param-directed — same precedent as F9/D5): main D6 is
+  // `IMPLEMENTED`, not `GATE-GREEN` (JARVIS-MAESTRO-STATE.md:444/450 — physical
+  // push-notification tap proof still open, standing no-test-creds limitation).
+  // Param explicitly chose to waive the gate for F10 rather than close D6 first.
+  // D6's own exit gate is NOT retroactively marked closed by this.
+  { id: 98, key: "GreetingCurrent", band: "F10", phase: "F10", status: "shipped", dataSource: "real D6.T4 digest (user-prefs/digest) cross-referenced against real useJarvis().pendingActions", note: "Digest endpoint never returns a full payload (never will — zero backend changes, hard rule); mini-scene renders only for digest items still genuinely in the real pending queue, else graceful-absent to the original plain chip." },
+  { id: 99, key: "FrecencyGlow", band: "F10", phase: "F10", status: "shipped", dataSource: "D6.T3 real frecency store (finnor.jarvis.panel-frecency.v1)" },
+  { id: 100, key: "QuietHours", band: "F10", phase: "F10", status: "shipped", dataSource: "D6 real user-prefs quietHoursStart/quietHoursEnd" },
 ]
 
 export function flowCompleteness() {

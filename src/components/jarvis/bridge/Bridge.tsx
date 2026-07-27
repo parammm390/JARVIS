@@ -37,6 +37,8 @@ import { onPulse } from "../lib/pulse-bus"
 import { onReceiptSceneRequest, type ReceiptSceneRequest } from "../lib/receipt-nav"
 import { ReceiptContent } from "../lib/ReceiptDrawer"
 import { rankPanels, recordPanelOpen, type FrecencyLedger } from "../lib/frecency"
+import { frecencyWarmth, frecencyGlowStyle } from "../lib/frecency-glow"
+import { useQuietHours } from "../lib/quiet-hours"
 import { CommandPaletteV2, useCommandPaletteV2 } from "../lib/CommandPaletteV2"
 import { jarvisClient } from "@/lib/jarvis-client"
 import { jarvisGet, jarvisPut } from "../lib/api"
@@ -167,32 +169,47 @@ function CausticHeader() {
   )
 }
 
-function SoundPreferenceToggle() {
+// F10.T1 — FLOW-100 QuietHours' sound-auto-mute half: `quiet` (the real
+// isQuietNow(prefs.quietHoursStart/End, now) result, lifted in BridgeShell so
+// this component and ConsoleAtmosphere's `slow` prop share one source of truth
+// rather than each re-deriving it) forces mute regardless of the saved
+// preference, without touching the saved preference itself — leaving quiet
+// hours restores exactly the toggle's own last state, never silently flips it.
+function SoundPreferenceToggle({ quiet }: { quiet: boolean }) {
   const [enabled, setEnabled] = useState(false)
   const [loaded, setLoaded] = useState(false)
   useEffect(() => {
     let cancelled = false
     void jarvisGet<{ prefs: { soundEnabled: boolean } }>("user-prefs")
-      .then(({ prefs }) => { if (!cancelled) { setEnabled(prefs.soundEnabled); setMuted(!prefs.soundEnabled) } })
-      .catch(() => { if (!cancelled) setMuted(true) })
+      .then(({ prefs }) => { if (!cancelled) setEnabled(prefs.soundEnabled) })
+      .catch(() => undefined)
       .finally(() => { if (!cancelled) setLoaded(true) })
     return () => { cancelled = true }
   }, [])
+  useEffect(() => { if (loaded) setMuted(quiet ? true : !enabled) }, [loaded, enabled, quiet])
   const toggle = () => {
     const next = !enabled
     setEnabled(next)
-    setMuted(!next)
     void jarvisPut("user-prefs", { soundEnabled: next }).catch(() => {
       // Keep sound fail-closed if the durable preference cannot be saved.
       setEnabled(false)
-      setMuted(true)
     })
   }
-  return <button type="button" onClick={toggle} disabled={!loaded} className="j-chip flex items-center gap-1.5 border border-white/10 bg-white/[.035] text-[color:var(--j-text-dim)] disabled:opacity-50" aria-pressed={enabled} aria-label={enabled ? "Turn off JARVIS sounds" : "Turn on JARVIS sounds"}>{enabled ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}{enabled ? "Sound on" : "Sound off"}</button>
+  return (
+    <div className="flex items-center gap-2">
+      {quiet && <span className="j-chip border border-white/10 bg-indigo-400/10 text-indigo-200">Quiet hours</span>}
+      <button type="button" onClick={toggle} disabled={!loaded} className="j-chip flex items-center gap-1.5 border border-white/10 bg-white/[.035] text-[color:var(--j-text-dim)] disabled:opacity-50" aria-pressed={enabled} aria-label={enabled ? "Turn off JARVIS sounds" : "Turn on JARVIS sounds"}>{enabled && !quiet ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}{enabled ? (quiet ? "Sound muted (quiet hours)" : "Sound on") : "Sound off"}</button>
+    </div>
+  )
 }
 
-function LeftRail({ scene, setScene, orderedScenes, unopened, forceLowPower, bootBloom = false }: { scene: SceneId; setScene: (s: SceneId) => void; orderedScenes: SceneId[]; unopened: SceneId[]; forceLowPower: boolean; bootBloom?: boolean }) {
+function LeftRail({ scene, setScene, orderedScenes, unopened, forceLowPower, bootBloom = false, ledger }: { scene: SceneId; setScene: (s: SceneId) => void; orderedScenes: SceneId[]; unopened: SceneId[]; forceLowPower: boolean; bootBloom?: boolean; ledger: FrecencyLedger }) {
   const orbLive = useOrbLiveState()
+  // FLOW-99 FrecencyGlow: real D6.T3 store, same one `orderedScenes`/`unopened`
+  // already read above this component — just a warmth read, no new data. Under
+  // reduced motion, per the plan's own "no tint" reduced fallback, this stays off
+  // entirely (it's non-essential presentation ranking cue, not information).
+  const reducedMotion = useReducedMotion()
   // FLOW-41 NavCurrent — real state, not decoration: the active scene's own glow bar
   // flows only while it's genuinely idle-active; hovering it (about to switch away,
   // or just inspecting) stills the current, per the plan's own spec.
@@ -225,6 +242,7 @@ function LeftRail({ scene, setScene, orderedScenes, unopened, forceLowPower, boo
         {orderedScenes.map((id) => {
           const { label, icon: Icon } = SCENES.find((candidate) => candidate.id === id)!
           const active = scene === id
+          const warmth = reducedMotion ? 0 : frecencyWarmth(id, ledger, Date.now())
           return (
             <button
               key={id}
@@ -232,7 +250,8 @@ function LeftRail({ scene, setScene, orderedScenes, unopened, forceLowPower, boo
               onMouseEnter={() => setHoveredNav(id)}
               onMouseLeave={() => setHoveredNav((h) => (h === id ? null : h))}
               aria-current={active ? "page" : undefined}
-              className={`relative flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[12.5px] font-bold transition ${
+              style={active ? undefined : frecencyGlowStyle(warmth)}
+              className={`relative flex w-full items-center gap-3 rounded-xl border border-transparent px-3 py-2.5 text-left text-[12.5px] font-bold transition ${
                 active ? "bg-cyan-400/[0.08] text-[color:var(--j-text)]" : "text-[color:var(--j-text-dim)] hover:bg-white/[0.04] hover:text-[color:var(--j-text)]"
               }`}
             >
@@ -299,12 +318,14 @@ function CenterStage({
   onToggleLowPower,
   receiptScene,
   onCloseReceipt,
+  quiet,
 }: {
   scene: SceneId
   forceLowPower: boolean
   onToggleLowPower: () => void
   receiptScene: ReceiptSceneRequest | null
   onCloseReceipt: () => void
+  quiet: boolean
 }) {
   const { role } = useJarvisAuth()
   const reducedMotion = useReducedMotion()
@@ -335,7 +356,7 @@ function CenterStage({
             <p className="text-[11px] text-[color:var(--j-text-dim)]">D1 — real vitals, real activity, one continuous space</p>
           </div>
           <div className="flex items-center gap-2">
-            <SoundPreferenceToggle />
+            <SoundPreferenceToggle quiet={quiet} />
             <button type="button" onClick={onToggleLowPower} aria-pressed={forceLowPower} className="j-chip border border-white/10 bg-white/[.035] text-[color:var(--j-text-dim)]">
               {forceLowPower ? "Low power on" : "Low power off"}
             </button>
@@ -501,6 +522,7 @@ function BridgeShell() {
   const palette = useCommandPaletteV2()
   const reducedMotion = useReducedMotion()
   const { mood, relighting } = useOfflineDrift()
+  const { quiet } = useQuietHours()
   const [receiptScene, setReceiptScene] = useState<ReceiptSceneRequest | null>(null)
 
   // F7.T2 — FLOW-95 DrawerToPage: subscribes to real requests from ActivityTheater
@@ -630,7 +652,7 @@ function BridgeShell() {
         data-jarvis-atmosphere
         style={{ opacity: "var(--aurora-opacity)", backgroundColor: "var(--day-tint)", transition: "background-color 2s ease" }}
       >
-        {!forceLowPower && <ConsoleAtmosphere />}
+        {!forceLowPower && <ConsoleAtmosphere slow={quiet} />}
       </div>
       {/* F6.T2 — FLOW-90 OfflineDrift's "reconnect relights in cascade" half: a single
           one-shot light sweep left->right the instant `data.statsDegraded` flips back
@@ -662,7 +684,7 @@ function BridgeShell() {
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.9, ease: [0, 0, 0.2, 1] }}
         >
-          <LeftRail scene={scene} setScene={chooseScene} orderedScenes={orderedScenes} unopened={orderedScenes.filter((id) => !ledger[id])} forceLowPower={forceLowPower} bootBloom={playBoot && !reducedMotion} />
+          <LeftRail scene={scene} setScene={chooseScene} orderedScenes={orderedScenes} unopened={orderedScenes.filter((id) => !ledger[id])} forceLowPower={forceLowPower} bootBloom={playBoot && !reducedMotion} ledger={ledger} />
         </motion.div>
         <CenterStage
           scene={scene}
@@ -670,6 +692,7 @@ function BridgeShell() {
           onToggleLowPower={toggleLowPower}
           receiptScene={receiptScene}
           onCloseReceipt={() => setReceiptScene(null)}
+          quiet={quiet}
         />
         <motion.div
           initial={playBoot && !reducedMotion ? { opacity: 0, x: 24 } : { opacity: 1, x: 0 }}

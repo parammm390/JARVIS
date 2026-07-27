@@ -59,6 +59,7 @@ import { registerAnchor, getAnchorRect } from "../lib/pulse-bus"
 import { KeymapHUD } from "./KeymapHUD"
 import { EmptyState } from "../ui/primitives/EmptyState"
 import { ErrorState } from "../ui/primitives/ErrorState"
+import { useHapticsEnabled, vibrateIfEnabled } from "../lib/haptics"
 
 // ---------------------------------------------------------------------------
 // Small local helpers (deliberately not imported from ApprovalDock.tsx — that file is
@@ -181,6 +182,7 @@ function ApprovalCard({
   onFocus,
   onDecide,
   onOpenReceipt,
+  onActivateMobile,
   cardRef,
   reduced,
 }: {
@@ -194,6 +196,7 @@ function ApprovalCard({
   onFocus: (i: number) => void
   onDecide: (a: CockpitAction, verb: Verb) => void
   onOpenReceipt: (id: string) => void
+  onActivateMobile: (id: string) => void
   cardRef: (el: HTMLDivElement | null) => void
   reduced: boolean
 }) {
@@ -374,33 +377,50 @@ function ApprovalCard({
         </AnimatePresence>
 
         {!batchMode && (
-          <div className="mt-2 flex gap-2">
-            <motion.button
-              onClick={() => onDecide(action, "confirm")}
-              whileTap={{ scale: 0.96 }}
-              aria-disabled={isUnavailable}
-              title={isUnavailable ? "Integration unavailable — can't execute yet" : undefined}
-              className={`inline-flex items-center gap-1 rounded-full bg-teal-300 px-3 py-1 text-[10px] font-black text-slate-950 shadow-[var(--j-glow-teal)] transition hover:-translate-y-0.5 focus-visible:outline-none ${
-                isUnavailable ? "opacity-40 hover:translate-y-0" : ""
-              }`}
+          <>
+            {/* Desktop: the original 3-pill row, unchanged, precision pointer input. */}
+            <div className="mt-2 hidden gap-2 lg:flex">
+              <motion.button
+                onClick={() => onDecide(action, "confirm")}
+                whileTap={{ scale: 0.96 }}
+                aria-disabled={isUnavailable}
+                title={isUnavailable ? "Integration unavailable — can't execute yet" : undefined}
+                className={`inline-flex items-center gap-1 rounded-full bg-teal-300 px-3 py-1 text-[10px] font-black text-slate-950 shadow-[var(--j-glow-teal)] transition hover:-translate-y-0.5 focus-visible:outline-none ${
+                  isUnavailable ? "opacity-40 hover:translate-y-0" : ""
+                }`}
+              >
+                <Check className="h-3 w-3" /> Approve
+              </motion.button>
+              <motion.button
+                onClick={() => onDecide(action, "reject")}
+                whileTap={{ scale: 0.96 }}
+                className="inline-flex items-center gap-1 rounded-full border border-white/15 px-3 py-1 text-[10px] font-black text-white/70 transition hover:-translate-y-0.5 hover:text-red-300 focus-visible:outline-none"
+              >
+                <X className="h-3 w-3" /> Reject
+              </motion.button>
+              <motion.button
+                onClick={() => onDecide(action, "escalate")}
+                whileTap={{ scale: 0.96 }}
+                className="inline-flex items-center gap-1 rounded-full border border-white/15 px-3 py-1 text-[10px] font-black text-white/50 transition hover:-translate-y-0.5 hover:text-amber-200 focus-visible:outline-none"
+              >
+                <AlertTriangle className="h-3 w-3" /> Escalate
+              </motion.button>
+            </div>
+            {/* F10.T2 — mobile one-thumb decisive actions: below `lg`, 3 small pills
+                packed together is a precision-pointer layout, not a thumb one. This
+                single full-width control replaces them, opening the fixed bottom
+                sheet (rendered once in ApprovalCockpit) with the SAME `onDecide`
+                calls and the SAME high-risk typed-confirm rule the batch bar already
+                enforces — never a second, looser decision path. */}
+            <button
+              type="button"
+              onClick={() => onActivateMobile(action.id)}
+              disabled={isUnavailable}
+              className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-white/15 bg-white/[0.03] py-2.5 text-[11px] font-black text-white/80 disabled:opacity-40 lg:hidden"
             >
-              <Check className="h-3 w-3" /> Approve
-            </motion.button>
-            <motion.button
-              onClick={() => onDecide(action, "reject")}
-              whileTap={{ scale: 0.96 }}
-              className="inline-flex items-center gap-1 rounded-full border border-white/15 px-3 py-1 text-[10px] font-black text-white/70 transition hover:-translate-y-0.5 hover:text-red-300 focus-visible:outline-none"
-            >
-              <X className="h-3 w-3" /> Reject
-            </motion.button>
-            <motion.button
-              onClick={() => onDecide(action, "escalate")}
-              whileTap={{ scale: 0.96 }}
-              className="inline-flex items-center gap-1 rounded-full border border-white/15 px-3 py-1 text-[10px] font-black text-white/50 transition hover:-translate-y-0.5 hover:text-amber-200 focus-visible:outline-none"
-            >
-              <AlertTriangle className="h-3 w-3" /> Escalate
-            </motion.button>
-          </div>
+              Decide <ChevronDown className="h-3 w-3" />
+            </button>
+          </>
         )}
       </motion.div>
     </motion.div>
@@ -600,6 +620,12 @@ export function ApprovalCockpit() {
   )
   const [now, setNow] = useState(Date.now())
   const [shakeId, setShakeId] = useState<string | null>(null)
+  // F10.T2 — mobile one-thumb bottom sheet: which single action (if any) is
+  // being decided via the mobile-only "Decide" affordance, plus its own typed-
+  // confirm text mirroring batchConfirmText's real high-risk gate below.
+  const [mobileActiveId, setMobileActiveId] = useState<string | null>(null)
+  const [mobileConfirmText, setMobileConfirmText] = useState("")
+  const hapticsEnabled = useHapticsEnabled()
 
   const inflight = useRef<Set<string>>(new Set())
   const cardRefs = useRef<Array<HTMLDivElement | null>>([])
@@ -704,10 +730,15 @@ export function ApprovalCockpit() {
       const cardRect = cardRefs.current[idx]?.getBoundingClientRect() ?? null
       if (verb === "confirm") {
         sfx.approve()
+        // F10.T2 — placeholder single pulse; F11.T2 owns the real approve/
+        // reject/error-specific pattern table (10ms/30ms/10-30-10) per §5's own
+        // "patterns land in F11" split. Pref-gated, default off either way.
+        vibrateIfEnabled(hapticsEnabled, 10)
         if (cardRect) setApproveStamps((s) => [...s, { id: action.id, rect: cardRect, label: action.actionType }])
         setFlights((f) => [...f, { id: action.id, actionType: action.actionType }])
       } else if (verb === "reject") {
         sfx.reject()
+        vibrateIfEnabled(hapticsEnabled, 10)
         if (cardRect) setRejectGhosts((g) => [...g, { id: action.id, rect: cardRect, label: action.actionType }])
       } else if (verb === "escalate") {
         if (cardRect) setEscalateBeacons((b) => [...b, { id: action.id, rect: cardRect }])
@@ -731,11 +762,12 @@ export function ApprovalCockpit() {
         })
         setFlights((f) => f.filter((x) => x.id !== action.id))
         setError(e instanceof Error ? e.message : "Decision failed — action is back in the queue.")
+        vibrateIfEnabled(hapticsEnabled, 10) // F10.T2 placeholder error pulse — F11.T2 refines
       } finally {
         inflight.current.delete(action.id)
       }
     },
-    [data, items],
+    [data, items, hapticsEnabled],
   )
 
   const undoNow = useCallback(async () => {
@@ -770,6 +802,20 @@ export function ApprovalCockpit() {
   const batchHighestTier = selectedItems.reduce((acc, a) => Math.max(acc, riskRank(a.receipt?.riskTier as RiskTier | undefined)), 0)
   const batchNeedsTypedConfirm = batchHighestTier === 2 // any selected item is high-tier
   const batchCanSubmit = selectedItems.length > 0 && (!batchNeedsTypedConfirm || batchConfirmText.trim().toUpperCase() === "APPROVE")
+
+  // F10.T2 — the mobile bottom sheet's own target + the SAME typed-confirm rule
+  // (riskRank tier "high") batchNeedsTypedConfirm already enforces, applied at
+  // the single-action level so moving decisive actions into this sheet on
+  // mobile never loosens what desktop's batch bar already requires.
+  const mobileActiveAction = items.find((a) => a.id === mobileActiveId) ?? null
+  const mobileNeedsTypedConfirm = riskRank(mobileActiveAction?.receipt?.riskTier as RiskTier | undefined) === 2
+  const mobileCanApprove = !mobileNeedsTypedConfirm || mobileConfirmText.trim().toUpperCase() === "APPROVE"
+  function decideMobile(verb: Verb) {
+    if (!mobileActiveAction) return
+    void decide(mobileActiveAction, verb)
+    setMobileActiveId(null)
+    setMobileConfirmText("")
+  }
 
   async function submitBatch() {
     if (!batchCanSubmit) return
@@ -869,6 +915,10 @@ export function ApprovalCockpit() {
                 onFocus={setFocusedIndex}
                 onDecide={decide}
                 onOpenReceipt={setOpenReceiptId}
+                onActivateMobile={(id) => {
+                  setMobileActiveId(id)
+                  setMobileConfirmText("")
+                }}
                 cardRef={(el) => {
                   cardRefs.current[i] = el
                 }}
@@ -920,6 +970,68 @@ export function ApprovalCockpit() {
           </div>
         )}
       </div>
+
+      {/* F10.T2 — mobile one-thumb bottom sheet. `lg:hidden` (desktop never
+          mounts this, even if `mobileActiveId` were somehow set); real actions
+          only, same `decide()` as every other entry point (keyboard j/k/Enter/
+          a/r/u, mouse pills, batch bar). */}
+      <AnimatePresence>
+        {mobileActiveAction && (
+          <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Decide: ${mobileActiveAction.actionType.replaceAll("_", " ")}`}
+            initial={reduced ? { opacity: 0 } : { y: "100%" }}
+            animate={reduced ? { opacity: 1 } : { y: 0 }}
+            exit={reduced ? { opacity: 0 } : { y: "100%" }}
+            transition={reduced ? { duration: 0.15 } : { type: "spring", stiffness: 380, damping: 34 }}
+            className="fixed inset-x-0 bottom-0 z-40 rounded-t-2xl border-t border-white/12 bg-[#05090f] p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] shadow-[0_-8px_30px_rgba(0,0,0,0.5)] lg:hidden"
+          >
+            <div className="mb-2 flex items-start justify-between gap-3">
+              <div>
+                <div className="text-[9px] font-black uppercase tracking-widest text-[color:var(--j-text-faint)]">{mobileActiveAction.actionType.replaceAll("_", " ")}</div>
+                <div className="mt-0.5 text-[12px] text-[color:var(--j-text)]">{mobileActiveAction.summary ?? "Drafted action awaiting approval."}</div>
+              </div>
+              <button type="button" onClick={() => setMobileActiveId(null)} aria-label="Close" className="shrink-0 rounded-full border border-white/15 p-1 text-white/50">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            {mobileNeedsTypedConfirm && (
+              <input
+                autoFocus
+                value={mobileConfirmText}
+                onChange={(e) => setMobileConfirmText(e.target.value)}
+                placeholder='High risk — type "APPROVE" to continue'
+                className="mb-2 w-full rounded-lg border border-amber-300/30 bg-black/30 px-2.5 py-2 text-[12px] text-white outline-none placeholder:text-white/30 focus:border-amber-300/60"
+              />
+            )}
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => decideMobile("confirm")}
+                disabled={!mobileCanApprove}
+                className="flex items-center justify-center gap-1 rounded-xl bg-teal-300 py-3 text-[12px] font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Check className="h-4 w-4" /> Approve
+              </button>
+              <button
+                type="button"
+                onClick={() => decideMobile("reject")}
+                className="flex items-center justify-center gap-1 rounded-xl border border-white/15 py-3 text-[12px] font-black text-white/80"
+              >
+                <X className="h-4 w-4" /> Reject
+              </button>
+              <button
+                type="button"
+                onClick={() => decideMobile("escalate")}
+                className="flex items-center justify-center gap-1 rounded-xl border border-white/15 py-3 text-[12px] font-black text-white/60"
+              >
+                <AlertTriangle className="h-4 w-4" /> Escalate
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {openReceiptId && <ReceiptDrawer receiptId={openReceiptId} onClose={() => setOpenReceiptId(null)} />}
       <AnimatePresence>
