@@ -32,6 +32,7 @@ import { DecisionTheaterCatalogSection } from "./ui/motion/DecisionTheaterCatalo
 import { PipelineTheaterCatalogSection } from "./ui/motion/PipelineTheaterCatalog"
 import { DataVizCatalogSection } from "./ui/motion/DataVizCatalog"
 import { StateNarrativesCatalogSection } from "./ui/motion/StateNarrativesCatalog"
+import { ContinuityCatalogSection } from "./ui/motion/ContinuityCatalog"
 import { FlowIndexMeterSection } from "./ui/motion/FlowIndexMeter"
 import { StageStickyNav, StageStateSwitcher, MountToggle } from "./ui/motion/StageNav"
 
@@ -190,6 +191,11 @@ function StageContent() {
       <div id="flow-state-narratives">
         <MountToggle id="flow-state-narratives" label="FLOW-88..93">
           <StateNarrativesCatalogSection />
+        </MountToggle>
+      </div>
+      <div id="flow-continuity">
+        <MountToggle id="flow-continuity" label="FLOW-94..97">
+          <ContinuityCatalogSection />
         </MountToggle>
       </div>
       <div id="flow-core">

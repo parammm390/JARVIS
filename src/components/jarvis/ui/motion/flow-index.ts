@@ -133,10 +133,10 @@ export const FLOW_INDEX: FlowEntry[] = [
   { id: 93, key: "PermissionVeil", band: "F6", phase: "F6", status: "shipped", dataSource: "real auth state (!session guards in ActivityTheater/PulseBar)" },
 
   // ---- Band F7 — Continuity (94-97) ----
-  { id: 94, key: "RouteHandoff", band: "F7", phase: "F7", status: "planned", dataSource: "navigation" },
-  { id: 95, key: "DrawerToPage", band: "F7", phase: "F7", status: "planned", dataSource: "UI" },
-  { id: 96, key: "ListToDetail", band: "F7", phase: "F7", status: "planned", dataSource: "UI" },
-  { id: 97, key: "BackTrace", band: "F7", phase: "F7", status: "planned", dataSource: "scene history" },
+  { id: 94, key: "RouteHandoff", band: "F7", phase: "F7", status: "shipped", dataSource: "real /jarvis/* navigation (src/app/jarvis/template.tsx remount)", note: "orb continuity is Bridge's own LeftRail placement, unchanged by this id; full cross-route persistence deferred until the legacy Shell is strangled" },
+  { id: 95, key: "DrawerToPage", band: "F7", phase: "F7", status: "shipped", dataSource: "real receipt id (ActivityTheater → Bridge center-stage scene)", note: "wired for ActivityTheater only — ApprovalCockpit keeps its existing side ReceiptDrawer, a deliberate scope narrowing to avoid touching D2's undo/keyboard machinery" },
+  { id: 96, key: "ListToDetail", band: "F7", phase: "F7", status: "shipped", dataSource: "shared layoutId (activity row dot → receipt scene header)" },
+  { id: 97, key: "BackTrace", band: "F7", phase: "F7", status: "shipped", dataSource: "real Bridge scene-key history (prevKeyRef)" },
 
   // ---- Band F10 — Ambient Intelligence (98-100) — LOCKED behind main D6 ----
   { id: 98, key: "GreetingCurrent", band: "F10", phase: "F10", status: "planned", dataSource: "real deltas", note: "LOCKED — prereq main D6" },

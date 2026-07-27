@@ -34,6 +34,8 @@ import { Orb3D, type OrbState } from "./Orb3D"
 import { OrbAuraRipple } from "./OrbAuraRipple"
 import { ConstellationLink } from "./ConstellationLink"
 import { onPulse } from "../lib/pulse-bus"
+import { onReceiptSceneRequest, type ReceiptSceneRequest } from "../lib/receipt-nav"
+import { ReceiptContent } from "../lib/ReceiptDrawer"
 import { rankPanels, recordPanelOpen, type FrecencyLedger } from "../lib/frecency"
 import { CommandPaletteV2, useCommandPaletteV2 } from "../lib/CommandPaletteV2"
 import { jarvisClient } from "@/lib/jarvis-client"
@@ -257,10 +259,69 @@ function LeftRail({ scene, setScene, orderedScenes, unopened, forceLowPower, boo
   )
 }
 
-function CenterStage({ scene, forceLowPower, onToggleLowPower }: { scene: SceneId; forceLowPower: boolean; onToggleLowPower: () => void }) {
+// F7.T2 — FLOW-95 DrawerToPage: the receipt scene reuses `ReceiptContent` (the same
+// fetch+render body ReceiptDrawer.tsx's side-panel `<Drawer>` wraps for every other
+// caller, unmodified in this phase) inside CenterStage's own scroll container
+// instead of a separate right-side panel — "scroll preserved" because this is a
+// client-side state swap within the already-mounted page, not a route navigation,
+// so the window never re-scrolls to the top the way a real page nav would.
+function ReceiptScene({ receiptId, rowLayoutId, onBack }: { receiptId: string; rowLayoutId: string; onBack: () => void }) {
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onBack()
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [onBack])
+  return (
+    <div className="space-y-3">
+      {/* F7.T2 — FLOW-97 BackTrace: the only way back to the prior scene is this
+          real click (or Escape above) — CenterStage below mirrors FLOW-15
+          CameraPan's own transform for the return trip, driven by this same
+          onBack call, not a scripted demo. */}
+      <button
+        type="button"
+        onClick={onBack}
+        className="j-chip flex items-center gap-1.5 border border-white/10 bg-white/[.035] text-[color:var(--j-text-dim)] hover:text-cyan-100"
+      >
+        ← Back
+      </button>
+      <div className="j-panel p-5">
+        <ReceiptContent receiptId={receiptId} headerLayoutId={rowLayoutId} />
+      </div>
+    </div>
+  )
+}
+
+function CenterStage({
+  scene,
+  forceLowPower,
+  onToggleLowPower,
+  receiptScene,
+  onCloseReceipt,
+}: {
+  scene: SceneId
+  forceLowPower: boolean
+  onToggleLowPower: () => void
+  receiptScene: ReceiptSceneRequest | null
+  onCloseReceipt: () => void
+}) {
   const { role } = useJarvisAuth()
   const reducedMotion = useReducedMotion()
   const data = useJarvis()
+  // F7.T2 — FLOW-97 BackTrace: the incoming transform mirrors direction. Entering
+  // the receipt scene is a forward hop (the existing FLOW-15 CameraPan transform,
+  // unchanged); leaving it back to whichever scene was active before is the SAME
+  // transform run in reverse (choreo.backTrace) — a real "previous key" ref, not a
+  // hardcoded guess, so scene<->scene nav (overview/pipeline) still always reads
+  // forward like it did before this phase.
+  const activeKey = receiptScene ? "receipt" : scene
+  const prevKeyRef = useRef(activeKey)
+  const returning = prevKeyRef.current === "receipt" && activeKey !== "receipt"
+  useEffect(() => {
+    prevKeyRef.current = activeKey
+  }, [activeKey])
+  const enterChoreo = activeKey === "receipt" ? choreo.cameraPan : returning ? choreo.backTrace : choreo.cameraPan
   return (
     <main className="relative min-w-0 flex-1 overflow-hidden">
       <div className="pointer-events-none absolute inset-0 opacity-60">
@@ -292,17 +353,21 @@ function CenterStage({ scene, forceLowPower, onToggleLowPower }: { scene: SceneI
       <div className="relative p-6 pb-24 [content-visibility:auto] [contain-intrinsic-size:1px_900px] lg:pb-6">
         <AnimatePresence mode="wait">
           <motion.div
-            key={scene}
-            variants={choreo.cameraPan.variants}
+            key={activeKey}
+            variants={reducedMotion ? enterChoreo.reducedVariants : enterChoreo.variants}
             initial="initial"
             animate="animate"
             // FLOW-42 SceneDock — the outgoing scene shrinks toward the nav rail
             // (choreo.sceneDockExit) instead of a plain fade; the incoming scene's
-            // own `animate` (choreo.cameraPan, already real) reads as the unfurl.
+            // own `animate` (cameraPan forward or backTrace mirrored, both real)
+            // reads as the unfurl.
             exit={(reducedMotion ? choreo.sceneDockExit.reducedVariants : choreo.sceneDockExit.variants).animate as TargetAndTransition}
             className="space-y-4"
           >
-            {scene === "overview" && (
+            {activeKey === "receipt" && receiptScene && (
+              <ReceiptScene receiptId={receiptScene.receiptId} rowLayoutId={receiptScene.rowLayoutId} onBack={onCloseReceipt} />
+            )}
+            {activeKey !== "receipt" && scene === "overview" && (
               <>
                 <SinceYouWereAway />
                 <DailyBriefing />
@@ -310,7 +375,7 @@ function CenterStage({ scene, forceLowPower, onToggleLowPower }: { scene: SceneI
                 {role === "owner" && <CertificationStatus />}
               </>
             )}
-            {scene === "pipeline" && <WorkflowTheater />}
+            {activeKey !== "receipt" && scene === "pipeline" && <WorkflowTheater />}
           </motion.div>
         </AnimatePresence>
       </div>
@@ -436,6 +501,14 @@ function BridgeShell() {
   const palette = useCommandPaletteV2()
   const reducedMotion = useReducedMotion()
   const { mood, relighting } = useOfflineDrift()
+  const [receiptScene, setReceiptScene] = useState<ReceiptSceneRequest | null>(null)
+
+  // F7.T2 — FLOW-95 DrawerToPage: subscribes to real requests from ActivityTheater
+  // (the only Bridge-side row source wired to this in this phase — ApprovalCockpit
+  // keeps its existing side <ReceiptDrawer>, a deliberate scope narrowing to avoid
+  // touching D2's sub-millisecond-undo keyboard/decision machinery in the same
+  // session; noted in F-STATE as a Deviation, not silently dropped).
+  useEffect(() => onReceiptSceneRequest(setReceiptScene), [])
 
   useEffect(() => {
     setMounted(true)
@@ -588,7 +661,13 @@ function BridgeShell() {
         >
           <LeftRail scene={scene} setScene={chooseScene} orderedScenes={orderedScenes} unopened={orderedScenes.filter((id) => !ledger[id])} forceLowPower={forceLowPower} bootBloom={playBoot && !reducedMotion} />
         </motion.div>
-        <CenterStage scene={scene} forceLowPower={forceLowPower} onToggleLowPower={toggleLowPower} />
+        <CenterStage
+          scene={scene}
+          forceLowPower={forceLowPower}
+          onToggleLowPower={toggleLowPower}
+          receiptScene={receiptScene}
+          onCloseReceipt={() => setReceiptScene(null)}
+        />
         <motion.div
           initial={playBoot && !reducedMotion ? { opacity: 0, x: 24 } : { opacity: 1, x: 0 }}
           animate={{ opacity: 1, x: 0 }}

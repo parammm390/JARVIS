@@ -8,12 +8,12 @@
 // DecisionReceipt via ReceiptDrawer for the two sources that have one
 // (action_log/workflow_step — calls don't carry a receipt, so they're inert).
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { jarvisClient, type ActivityItem, type ActivityPage } from "@/lib/jarvis-client"
 import { useLiveQuery } from "@/lib/jarvis/useLiveQuery"
 import { getCurrentAccessToken, useJarvisAuth } from "../lib/jarvis-auth"
-import { ReceiptDrawer } from "../lib/ReceiptDrawer"
+import { requestReceiptScene } from "../lib/receipt-nav"
 import { flash } from "../lib/EventFX"
 import { Enter } from "../ui/motion/primitives"
 import { ActionRenderer } from "../ui/renderers/ActionRenderer"
@@ -56,7 +56,6 @@ function sseUrlFor(): string | undefined {
 
 export function ActivityTheater() {
   const { session } = useJarvisAuth()
-  const [openReceiptId, setOpenReceiptId] = useState<string | null>(null)
   const feedRef = useRef<HTMLDivElement | null>(null)
   const rowRefs = useRef<Map<string, HTMLButtonElement>>(new Map())
   const seenIdsRef = useRef<Set<string> | null>(null)
@@ -105,6 +104,13 @@ export function ActivityTheater() {
     seenIdsRef.current = new Set(items.map((i) => i.id))
   }, [items])
 
+  // F7.T2 — FLOW-95 DrawerToPage: this used to hold `openReceiptId` locally and
+  // render its own <ReceiptDrawer> here. The receipt scene now lives in Bridge's
+  // CenterStage (a real center-stage swap, not a side panel), so a genuinely
+  // resolved receipt id is handed off via receipt-nav's single-listener channel —
+  // `rowLayoutId` is the SAME id this row's header wears below, giving
+  // framer-motion a real shared element to fly (FLOW-96 ListToDetail), not a
+  // fabricated one.
   async function openReceiptFor(item: ActivityItem): Promise<void> {
     try {
       const query =
@@ -116,10 +122,10 @@ export function ActivityTheater() {
       if (!query) return
       const res = await jarvisClient.receipts(query)
       const receipt = res.receipts[0]
-      if (receipt) setOpenReceiptId(receipt.id)
+      if (receipt) requestReceiptScene({ receiptId: receipt.id, rowLayoutId: `receipt-row-${item.id}` })
     } catch {
       // No receipt reachable (not yet finalized, or none exists) — silently a no-op,
-      // never a fake drawer.
+      // never a fake scene.
     }
   }
 
@@ -161,7 +167,11 @@ export function ActivityTheater() {
                   disabled={item.source === "call"}
                   className="flex w-full items-center gap-2 rounded-lg border border-white/6 bg-white/[0.015] px-2.5 py-1.5 text-left text-[11px] hover:bg-white/[0.04] disabled:cursor-default disabled:hover:bg-white/[0.015]"
                 >
-                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${SOURCE_ICON[item.source]}`} />
+                  {/* F7.T2 — FLOW-96 ListToDetail: this dot shares a layoutId with the
+                      receipt scene's header dot (Bridge.tsx's ReceiptScene) — the
+                      SAME element genuinely flies from this row to that header when a
+                      receipt for this item opens, rather than a plain cut. */}
+                  <motion.span layoutId={`receipt-row-${item.id}`} className={`h-1.5 w-1.5 shrink-0 rounded-full ${SOURCE_ICON[item.source]}`} />
                   <span className="min-w-0 flex-1 truncate text-[color:var(--j-text)]">
                     {actionType ? <ActionRenderer actionType={actionType} payload={item.detail.payload} compact /> : summarize(item)}
                   </span>
@@ -172,7 +182,6 @@ export function ActivityTheater() {
           })}
         </AnimatePresence>
       </div>
-      {openReceiptId && <ReceiptDrawer receiptId={openReceiptId} onClose={() => setOpenReceiptId(null)} />}
     </div>
   )
 }

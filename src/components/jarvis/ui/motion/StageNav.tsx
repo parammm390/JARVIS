@@ -23,6 +23,7 @@ export const STAGE_SECTIONS = [
   { id: "flow-pipeline-theater", label: "F8 Pipeline Theater" },
   { id: "flow-dataviz", label: "F5 Data-Viz" },
   { id: "flow-state-narratives", label: "F6 State Narratives" },
+  { id: "flow-continuity", label: "F7 Continuity" },
   { id: "flow-core", label: "FLOW-01..13" },
   { id: "flow-ambient", label: "FLOW-14..25" },
   { id: "fx-toolkit", label: "FX" },
