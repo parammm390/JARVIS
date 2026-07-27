@@ -2,9 +2,9 @@
 // drafts the existing gated, read-only reorder-review action; it never places an
 // order or changes inventory.
 
-import { withTenant, businessEvents, domainPolicies, inventoryItems, scanFindings } from "@finnor/db";
+import { withTenant, businessEvents, domainActions, domainPolicies, inventoryItems, scanFindings } from "@finnor/db";
 import { ewmaReorderSuggestion } from "@finnor/read-models";
-import { and, eq, gte } from "drizzle-orm";
+import { and, eq, gte, inArray, sql } from "drizzle-orm";
 import { FinnorOrchestrator } from "@finnor/orchestration";
 import type { JobHandler } from "../queue";
 
@@ -12,6 +12,12 @@ let orchestrator: FinnorOrchestrator | null = null;
 
 const DAY_MS = 86_400_000;
 const HISTORY_DAYS = 14;
+// Same "still open" set scan-low-inventory's own dedup guard uses — this scan runs
+// on the same 24h cadence and drafts the same flag_reorder_needed action type for
+// the same items, so without this it independently re-drafts (and doubles up
+// against scan-low-inventory's own drafts) every single day an item stays under
+// its EWMA reorder point.
+const OPEN_ACTION_STATUSES = ["draft", "pending", "approved", "executing", "needs_human_review", "blocked_integration_unavailable"] as const;
 
 const dayKey = (date: Date) => date.toISOString().slice(0, 10);
 
@@ -50,10 +56,28 @@ export const scanEwmaReorder: JobHandler = async (payload) => {
   if (candidates.length === 0) return;
 
   const autoDraft = (policies[0]?.policy as Record<string, unknown> | undefined)?.autoDraftReorderFlags === true;
+  const openSkus = autoDraft
+    ? new Set(
+        (
+          await withTenant(tenantId, (db) =>
+            db
+              .select({ sku: sql<string>`${domainActions.payload}->>'sku'` })
+              .from(domainActions)
+              .where(
+                and(
+                  eq(domainActions.tenantId, tenantId),
+                  eq(domainActions.actionType, "flag_reorder_needed"),
+                  inArray(domainActions.status, OPEN_ACTION_STATUSES),
+                ),
+              ),
+          )
+        ).map((r) => r.sku),
+      )
+    : new Set<string>();
   for (const { item, suggestion } of candidates) {
     const reasoning = `EWMA usage is ${suggestion.dailyUsage}/day from ${HISTORY_DAYS} days of recorded stock use; the explicit ${suggestion.horizonDays}-day planning horizon gives a reorder point of ${suggestion.reorderPoint}.`;
     let draftedActionId: string | undefined;
-    if (autoDraft) {
+    if (autoDraft && !(item.sku && openSkus.has(item.sku))) {
       const { action } = await orchestrator.draftKnownAction(
         "flag_reorder_needed",
         { sku: item.sku, name: item.name, reasoning, suggestedQuantity: suggestion.suggestedQuantity },

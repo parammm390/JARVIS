@@ -116,7 +116,16 @@ export function errorResponse(err: unknown): Response {
   // request's Sentry scope — reading it back here means this chokepoint (the one
   // every route's catch already flows through) needs no signature change anywhere.
   const traceId = Sentry.getCurrentScope().getScopeData().tags.correlation_id as string | undefined;
-  logWithTrace({ traceId }).error({ err: message }, "unhandled route failure");
+  // The driver's real root cause (e.g. drizzle's DrizzleQueryError wraps the actual
+  // Postgres error — "relation does not exist", "permission denied", a real
+  // connection failure — in `.cause`) was previously discarded here: every DB-level
+  // failure logged as the same undifferentiated "Failed query: <sql>" with no way to
+  // tell a missing-migration schema error apart from a connection outage apart from a
+  // permissions error without reproducing it live. Surface it (redacted, server-log
+  // only — the client-facing response below is unchanged) so the next one is
+  // diagnosable from logs alone.
+  const cause = err instanceof Error && err.cause instanceof Error ? redactText(err.cause.message).value : undefined;
+  logWithTrace({ traceId }).error({ err: message, cause }, "unhandled route failure");
   // Plain language outward, details stay in server logs (§22).
   return Response.json({ error: "Something went wrong on our side. Try again shortly." }, { status: 500 });
 }

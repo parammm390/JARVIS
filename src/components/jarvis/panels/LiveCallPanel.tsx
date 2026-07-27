@@ -22,14 +22,16 @@
 // never uses. No fake amplitude was built for a state the SDK doesn't expose.
 
 import { useEffect, useRef, useState } from "react"
+import Link from "next/link"
 import { motion, useReducedMotion } from "framer-motion"
-import { AlertTriangle, Mic, MicOff, PhoneOff } from "lucide-react"
+import { AlertTriangle, Lock, Mic, MicOff, PhoneOff } from "lucide-react"
 import { JarvisOrb } from "./JarvisOrb"
 import type { useVapiSession } from "../lib/useVapiSession"
 import { onFrame } from "../lib/raf-bus"
 import { EASE } from "../ui/motion/tokens"
 import { getAnchorRect } from "../lib/pulse-bus"
 import { useJarvis, type PendingAction } from "../lib/data-core"
+import { useJarvisAuth } from "../lib/jarvis-auth"
 
 export function WaveformStrip({ volumeLevel, active, color = "rgba(56,189,248," }: { volumeLevel: number; active: boolean; color?: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -209,6 +211,15 @@ export function IntentSparkTray({
 export function LiveCallPanel({ session }: { session: ReturnType<typeof useVapiSession> }) {
   const reduced = useReducedMotion()
   const { voiceState, volumeLevel, transcript, callDurationSec, muted, toggleVoice, toggleMute, configured, lastError, micSilenceWarning } = session
+  // Every other panel on this page is safely public — it calls the finnor-os backend,
+  // which 401s an unauthenticated request for free. Voice is the one exception: it
+  // talks directly to Vapi from the browser with a public client key, entirely
+  // bypassing that backend gate, so a signed-out visitor could otherwise start a
+  // real, billable voice session with no sign-in at all. Gated here, at the one
+  // control that actually opens a session, rather than hiding the whole panel — the
+  // page stays the "intentionally public" demo surface jarvis-auth.tsx documents.
+  const { session: authSession, loading: authLoading } = useJarvisAuth()
+  const signedIn = !!authSession
   const [tab, setTab] = useState<"transcript" | "details">("transcript")
   const live = voiceState === "live" || voiceState === "speaking"
   const mm = String(Math.floor(callDurationSec / 60)).padStart(2, "0")
@@ -331,8 +342,11 @@ export function LiveCallPanel({ session }: { session: ReturnType<typeof useVapiS
           <motion.button
             onClick={toggleVoice}
             // Starting is asynchronous. Keep the control inert while it joins so
-            // a second tap cannot open a competing Daily microphone session.
-            disabled={!configured || voiceState === "connecting"}
+            // a second tap cannot open a competing Daily microphone session. A
+            // signed-out visitor can still END a call already in progress (can't
+            // happen in practice since it can never start signed out) but can never
+            // START a fresh one — real Vapi minutes cost real money per use.
+            disabled={!configured || voiceState === "connecting" || (!live && (!signedIn || authLoading))}
             whileHover={reduced ? {} : { scale: 1.04 }}
             whileTap={reduced ? {} : { scale: 0.97 }}
             className={`inline-flex h-10 items-center gap-2 rounded-full px-6 text-[11px] font-black transition disabled:opacity-40 ${
@@ -345,6 +359,10 @@ export function LiveCallPanel({ session }: { session: ReturnType<typeof useVapiS
               <>
                 <PhoneOff className="h-3.5 w-3.5" /> End Call
               </>
+            ) : !signedIn && !authLoading ? (
+              <>
+                <Lock className="h-3.5 w-3.5" /> Sign in to talk
+              </>
             ) : (
               <>
                 <Mic className="h-3.5 w-3.5" /> Start Session
@@ -352,6 +370,14 @@ export function LiveCallPanel({ session }: { session: ReturnType<typeof useVapiS
             )}
           </motion.button>
         </div>
+        {!live && !signedIn && !authLoading && (
+          <p className="mt-2 text-center text-[10.5px] leading-relaxed text-[color:var(--j-text-faint)]">
+            <Link href="/jarvis/login" className="text-cyan-300/80 hover:text-cyan-200">
+              Sign in
+            </Link>{" "}
+            to start a live voice session — every other panel here is a public preview.
+          </p>
+        )}
 
         {/* transcript */}
         <div className="mt-4 flex w-full flex-1 flex-col">

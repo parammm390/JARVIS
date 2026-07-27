@@ -6,10 +6,18 @@
 // script). Absent that config, this still writes a real finding for the owner digest
 // instead of silently doing nothing.
 
-import { withTenant, domainPolicies, inventoryItems, scanFindings } from "@finnor/db";
-import { and, eq, lt } from "drizzle-orm";
+import { withTenant, domainPolicies, domainActions, inventoryItems, scanFindings } from "@finnor/db";
+import { and, eq, lt, inArray, sql } from "drizzle-orm";
 import { FinnorOrchestrator } from "@finnor/orchestration";
 import type { JobHandler } from "../queue";
+
+// A row this scan already drafted for a still-below-threshold item is still doing
+// its job — re-drafting on every 24h run (with no dedup) piled up one fresh
+// flag_reorder_needed per item per day for as long as the item stayed unrestocked,
+// flooding the activity feed with what reads as the same finding over and over.
+// These are the "still open" statuses; once an action leaves this set (approved →
+// completed/failed, or rejected) the item is fair game for a fresh flag again.
+const OPEN_ACTION_STATUSES = ["draft", "pending", "approved", "executing", "needs_human_review", "blocked_integration_unavailable"] as const;
 
 let orchestrator: FinnorOrchestrator | null = null;
 
@@ -40,10 +48,31 @@ export const scanLowInventory: JobHandler = async (payload) => {
   const autoDraft = (policy?.policy as Record<string, unknown> | undefined)?.autoDraftReorderFlags === true;
 
   if (autoDraft) {
+    // Which of today's low-stock SKUs already have an unresolved flag_reorder_needed
+    // sitting open from a previous run — checked once for the whole batch rather than
+    // once per item.
+    const openSkus = new Set(
+      (
+        await withTenant(tenantId, (db) =>
+          db
+            .select({ sku: sql<string>`${domainActions.payload}->>'sku'` })
+            .from(domainActions)
+            .where(
+              and(
+                eq(domainActions.tenantId, tenantId),
+                eq(domainActions.actionType, "flag_reorder_needed"),
+                inArray(domainActions.status, OPEN_ACTION_STATUSES),
+              ),
+            ),
+        )
+      ).map((r) => r.sku),
+    );
+
     // One gated action per item, drafted through the real plugin pipeline — payload
     // conforms to the inventory plugin's own ReorderCheckSchema (sku/name only, both
     // optional but at least one supplied here), never a bespoke shape.
     for (const item of low) {
+      if (item.sku && openSkus.has(item.sku)) continue;
       const { action } = await orchestrator.draftKnownAction(
         "flag_reorder_needed",
         { sku: item.sku, name: item.name },
