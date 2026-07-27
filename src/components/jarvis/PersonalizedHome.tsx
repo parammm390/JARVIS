@@ -50,6 +50,15 @@ function RoleLanding() {
   // session has been restored, avoiding an avoidable blank first paint.
   if (session && !role) return <div className="min-h-screen bg-[#04070f]" />
   if (!session) return <JarvisCommandCenter />
+  // Command Bridge (D1) is still mid-migration — only Overview/Pipeline scenes exist
+  // there today, and it has no voice entry point at all (it only reads voiceState to
+  // color the orb, never renders a mic control). Command Center already has every
+  // real feature (CRM, Voice Console, Customers, Workflows, Inventory, Water
+  // Compliance, Web Research, Activity, Dispatch Map, My Day) plus a working,
+  // properly auth-gated voice session, so an owner's signed-in home stays there until
+  // Bridge actually reaches feature parity. Bridge is still reachable directly at
+  // /jarvis/bridge for anyone who wants to see it.
+  if (role === "owner") return <JarvisCommandCenter />
   const selected = role && prefs && ALLOWED_HOME[role].includes(prefs.homepage) ? prefs.homepage! : DEFAULT_HOME[role!]
   if (selected === "bridge") return <SceneFrame accent={prefs?.accent ?? null}><Bridge /></SceneFrame>
   return <SceneFrame accent={prefs?.accent ?? null}><JarvisDataProvider><main className="mx-auto min-h-screen max-w-7xl space-y-5 p-5 md:p-8"><SinceYouWereAway />{selected === "map" ? <><header><div className="j-label flex items-center gap-2"><Map className="h-4 w-4" /> Dispatcher scene</div><h1 className="mt-1 text-2xl font-black">Dispatch and approvals</h1></header><DispatchMap /><ApprovalCockpit /></> : <><header><div className="j-label flex items-center gap-2"><Wrench className="h-4 w-4" /> Technician scene</div><h1 className="mt-1 text-2xl font-black">Your assigned day</h1></header><MyDay /></>}</main></JarvisDataProvider></SceneFrame>

@@ -396,7 +396,16 @@ export class FinnorOrchestrator implements Orchestrator {
     const policy: DomainPolicy = !row
       ? defaultPolicy(action.tenantId, action.actionType)
       : {
-          id: row.id,
+          // `row` comes from domainPolicyRevisions (queried above for versioned
+          // lookups), which has its OWN `id` distinct from the `domain_policies`
+          // row it's a revision of — that parent id lives in `row.policyId`.
+          // Using `row.id` here wrote a domain_policy_revisions id into
+          // domain_actions.policy_id, which foreign-keys to domain_policies(id),
+          // so every draftKnownAction call that resolved a real (version > 0)
+          // policy failed with "violates foreign key constraint
+          // domain_actions_policy_id_fkey" — this broke get_business_overview and
+          // every proactive scan.
+          id: row.policyId,
           tenantId: row.tenantId,
           actionType: row.actionType,
           policy: row.policy as Record<string, unknown>,
