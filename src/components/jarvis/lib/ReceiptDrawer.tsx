@@ -6,6 +6,7 @@
 // same honest, complete view backs both entry points.
 
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react"
+import { motion } from "framer-motion"
 import { Tag, User, Calendar, MessageSquare, Wrench, FileText, Package, DollarSign } from "lucide-react"
 import { jarvisGet } from "./api"
 import { Drawer } from "../ui/primitives/Drawer"
@@ -89,7 +90,13 @@ function Section({ label, children }: { label: string; children: React.ReactNode
   )
 }
 
-export function ReceiptDrawer({ receiptId, onClose }: { receiptId: string; onClose: () => void }) {
+// F7.T2 — DrawerToPage (FLOW-95) extracted this fetch+render body out of the Drawer
+// shell so a second real consumer (bridge/Bridge.tsx's center-stage ReceiptScene)
+// can reuse the SAME data path and sections instead of re-implementing them —
+// `ReceiptDrawer` below is now a thin `<Drawer>` wrapper around this, byte-identical
+// output for every existing call site (DailyBriefing/ApprovalDock/WorkflowTheater/
+// ApprovalCockpit's own drawer-only consumers, none of which change in this phase).
+export function ReceiptContent({ receiptId, headerLayoutId }: { receiptId: string; headerLayoutId?: string }) {
   const [receipt, setReceipt] = useState<FullReceipt | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -110,7 +117,7 @@ export function ReceiptDrawer({ receiptId, onClose }: { receiptId: string; onClo
   }, [receiptId])
 
   return (
-    <Drawer title="Why?" onClose={onClose}>
+    <>
         {error && <div className="rounded-lg border border-red-400/30 bg-red-400/5 px-3 py-2 text-[11px] text-red-300">{error}</div>}
 
         {!receipt && !error && (
@@ -126,8 +133,16 @@ export function ReceiptDrawer({ receiptId, onClose }: { receiptId: string; onClo
             {/* F3.T3 — risk material header: RiskBadge's own three real materials
                 (green glass / amber steel / red obsidian, C3) replace the plain pill,
                 with a faint tier-matched wash behind the whole header — presentation
-                of the SAME riskTier the receipt already carries, no new data. */}
-            <div
+                of the SAME riskTier the receipt already carries, no new data.
+                F7.T2 — FLOW-96 ListToDetail: when a Bridge-side caller supplies
+                `headerLayoutId` (the same id it put on the originating feed row),
+                this header becomes the OTHER end of that shared-layout id, so
+                framer-motion genuinely flies/morphs the row into this header instead
+                of a plain cut. Undefined (every existing Drawer-only call site) is a
+                no-op layoutId — byte-identical output, confirmed by the snapshot
+                suite below. */}
+            <motion.div
+              layoutId={headerLayoutId}
               className="-mx-5 -mt-5 mb-4 border-b border-white/6 px-5 pb-4 pt-5"
               style={{
                 background:
@@ -152,7 +167,7 @@ export function ReceiptDrawer({ receiptId, onClose }: { receiptId: string; onClo
                   {receipt.finalizedAt ? "finalized" : "in progress"}
                 </span>
               </div>
-            </div>
+            </motion.div>
 
             {/* F3.T3 — stagger-unfurl: the remaining sections cascade in (30ms/item,
                 <Stagger>, C2's own primitive) instead of all appearing at once —
@@ -213,6 +228,14 @@ export function ReceiptDrawer({ receiptId, onClose }: { receiptId: string; onClo
             </div>
           </>
         )}
+    </>
+  )
+}
+
+export function ReceiptDrawer({ receiptId, onClose }: { receiptId: string; onClose: () => void }) {
+  return (
+    <Drawer title="Why?" onClose={onClose}>
+      <ReceiptContent receiptId={receiptId} />
     </Drawer>
   )
 }
