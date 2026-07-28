@@ -7,11 +7,13 @@
 
 import { Panel } from "./Panel"
 import { Metric } from "../../lib/Metric"
+import type { Truth } from "../../kernel/types"
 
+// P1.T5: `value` is `Truth<number>` and the `source` prop is gone, tracking Metric's
+// own signature change. Provenance rides inside the Truth now.
 export function StatCard({
   label,
   value,
-  source,
   unit,
   format,
   delta,
@@ -20,8 +22,7 @@ export function StatCard({
   className = "",
 }: {
   label: string
-  value: number
-  source: "live" | "derived"
+  value: Truth<number>
   unit?: string
   format?: (n: number) => string
   delta?: string | null
@@ -31,7 +32,7 @@ export function StatCard({
 }) {
   return (
     <Panel hot={hot} className={`p-4 ${className}`}>
-      <Metric label={label} value={value} source={source} unit={unit} format={format} delta={delta} sparkline={sparkline} />
+      <Metric label={label} value={value} unit={unit} format={format} delta={delta} sparkline={sparkline} />
     </Panel>
   )
 }

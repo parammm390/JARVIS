@@ -13,6 +13,7 @@
 // semantic) and pauses via IntersectionObserver when scrolled offscreen, the same
 // convention bridge/Orb3D.tsx already established for its own ambient loop.
 
+import Link from "next/link"
 import { useEffect, useRef, useState } from "react"
 import { motion, useReducedMotion } from "framer-motion"
 
@@ -70,26 +71,42 @@ export function EmptyState({
   description,
   actionLabel,
   onAction,
+  actionHref,
+  tone = "neutral",
   family,
 }: {
   title: string
   description?: string
   actionLabel?: string
   onAction?: () => void
+  /** Plan v3 P1.T5: §5.5's `unavailable:not-configured` row needs a setup *link*,
+   *  not a callback. Takes precedence over `onAction` when both are given. */
+  actionHref?: string
+  /** Plan v3 P1.T5: §5.5 specifies "EmptyState amber" for `not-configured` —
+   *  §5.2 binds amber to "degraded, partial, awaiting human", which an
+   *  unconfigured integration is. Defaults to the pre-P1 neutral look. */
+  tone?: "neutral" | "amber"
   /** FLOW-88 EmptyTerrarium: which plugin-family diorama to show above the text.
    *  Omit for the plain pre-F6 look (used by generic/unclassified empty states). */
   family?: EmptyFamily
 }) {
+  const amber = tone === "amber"
+  const shell = amber ? "border-amber-400/30 bg-amber-400/[0.03]" : "border-white/10"
+  const action = amber
+    ? "border-amber-400/40 text-amber-200 hover:border-amber-400/70 hover:bg-amber-400/10"
+    : "border-cyan-400/30 text-cyan-200 hover:border-cyan-400/60 hover:bg-cyan-400/10"
   return (
-    <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-white/10 px-6 py-10 text-center">
+    <div className={`flex flex-col items-center gap-2 rounded-xl border border-dashed px-6 py-10 text-center ${shell}`}>
       {family && <Diorama family={family} />}
-      <div className="text-[12px] font-bold text-[color:var(--j-text-dim)]">{title}</div>
+      <div className={`text-[12px] font-bold ${amber ? "text-amber-200" : "text-[color:var(--j-text-dim)]"}`}>{title}</div>
       {description && <p className="max-w-xs text-[10.5px] leading-relaxed text-[color:var(--j-text-faint)]">{description}</p>}
-      {actionLabel && onAction && (
-        <button
-          onClick={onAction}
-          className="mt-2 rounded-full border border-cyan-400/30 px-3 py-1.5 text-[10px] font-bold text-cyan-200 hover:border-cyan-400/60 hover:bg-cyan-400/10"
-        >
+      {actionLabel && actionHref && (
+        <Link href={actionHref} className={`mt-2 rounded-full border px-3 py-1.5 text-[10px] font-bold ${action}`}>
+          {actionLabel}
+        </Link>
+      )}
+      {actionLabel && !actionHref && onAction && (
+        <button onClick={onAction} className={`mt-2 rounded-full border px-3 py-1.5 text-[10px] font-bold ${action}`}>
           {actionLabel}
         </button>
       )}

@@ -28,7 +28,13 @@ function PanelDemo() {
 function StatCardDemo() {
   return (
     <FlowCard id="PRIM-02" title="StatCard" reducedFallback="n/a — Metric's own odometer already documented under FLOW-03">
-      <StatCard label="queue depth" value={7} source="derived" sparkline={[3, 5, 4, 6, 7, 5, 7]} />
+      {/* Catalog demo — a legal fixture (§0.2 rule 3), and truthfully sourced as one:
+          `source: "fixture"` surfaces in the rendered `data-source` attribute. */}
+      <StatCard
+        label="queue depth"
+        value={{ status: "known", value: 7, source: "fixture", atMs: 0 }}
+        sparkline={[3, 5, 4, 6, 7, 5, 7]}
+      />
     </FlowCard>
   )
 }
