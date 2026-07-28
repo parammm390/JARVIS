@@ -24,6 +24,7 @@ export function useSelectorInput(): SelectorInput {
   return {
     signedIn: !!auth.session,
     authLoading: auth.loading,
+    accessDenied: data.accessDenied,
     now: data.now,
     stats: data.stats,
     statsDegraded: data.statsDegraded,

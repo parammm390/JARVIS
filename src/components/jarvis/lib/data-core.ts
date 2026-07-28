@@ -10,7 +10,8 @@
 // pulse/sound honestly — every flash traces to an actual diff, never a fake tick.
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react"
-import { jarvisGet } from "./api"
+import { jarvisGet, JarvisApiError } from "./api"
+import { hasActiveSession } from "./jarvis-auth"
 
 // ---------------------------------------------------------------------------
 // Types (§4 endpoint shapes, verified against the live API)
@@ -310,6 +311,10 @@ interface JarvisDataState {
   integrationsStatus: IntegrationsStatus | null
   integrationsDegraded: boolean
 
+  /** P1.T9 / C-15: non-null once the server refused our credentials on a private
+   *  lane. Every lane stops; `kernel/selectors.ts` turns this into `Truth.denied`
+   *  so the veil that appears is the real reason, not a zero. */
+  accessDenied: DeniedReason | null
   newPendingSinceOpen: number
   approvalsThisSession: number
   rejectionsThisSession: number
@@ -358,6 +363,7 @@ const EMPTY_STATE: JarvisDataState = {
   setupDegraded: false,
   integrationsStatus: null,
   integrationsDegraded: false,
+  accessDenied: null,
   newPendingSinceOpen: 0,
   approvalsThisSession: 0,
   rejectionsThisSession: 0,
@@ -376,6 +382,14 @@ const MEDIUM_LANE_MS = 8000
 const SLOW_LANE_MS = 30000
 const SANITY_LANE_MS = 60000
 
+/** Each lane's own cadence — the delay used whenever the lane is healthy. */
+const LANE_BASE_MS: Record<LaneName, number> = {
+  fast: FAST_LANE_MS,
+  medium: MEDIUM_LANE_MS,
+  slow: SLOW_LANE_MS,
+  sanity: SANITY_LANE_MS,
+}
+
 /** F6.T2 — FLOW-92 StaleFog's lane SLA: 3x the slow lane's own poll interval, the
  *  same "generous slack before calling it stale" ratio PulseBar's own
  *  HEARTBEAT_STALE_S already established for the fast/heartbeat lane (2-3x cadence,
@@ -385,6 +399,60 @@ export const SLOW_LANE_STALE_MS = SLOW_LANE_MS * 3
 export function laneAgeMs(lastSuccessMs: number | null, now: number): number | null {
   if (lastSuccessMs === null) return null
   return now - lastSuccessMs
+}
+
+// ---------------------------------------------------------------------------
+// Plan v3 P1.T9 — defect C-15: the signed-out 401 storm.
+//
+// Every lane above used to fire on a fixed interval regardless of whether anyone
+// was signed in. Signed out that is 21 requests per full cycle, all 401, forever —
+// roughly 90 req/min measured against production. Three rules fix it:
+//
+//   1. A private lane does not run at all without a session.
+//   2. A 401/403 STOPS its lane and records why. We were told no; asking again
+//      four seconds later is not going to change the answer.
+//   3. A 5xx or a network fault backs the lane off 4 -> 8 -> 16 -> 32 -> 60 s,
+//      resetting on the next success.
+//
+// The two helpers below are pure so the ladder and the classification are directly
+// unit-testable without a browser.
+// ---------------------------------------------------------------------------
+
+export type DeniedReason = "signed-out" | "role"
+
+export type LaneName = "fast" | "medium" | "slow" | "sanity"
+
+/** The backoff ladder, exactly as specified: 4 -> 8 -> 16 -> 32 -> 60 s. */
+export const BACKOFF_LADDER_MS = [4_000, 8_000, 16_000, 32_000, 60_000] as const
+
+/** Delay before the next attempt after `consecutiveFailures` failures in a row.
+ *  0 failures means "no backoff — use the lane's own interval". Saturates at 60 s. */
+export function nextBackoffMs(consecutiveFailures: number): number {
+  if (consecutiveFailures <= 0) return 0
+  const i = Math.min(consecutiveFailures, BACKOFF_LADDER_MS.length) - 1
+  return BACKOFF_LADDER_MS[i]
+}
+
+export interface LaneOutcome {
+  /** Non-null when the server refused our credentials. The lane must stop. */
+  denied: DeniedReason | null
+  /** A 5xx, a timeout or a network fault — retry, but slower each time. */
+  transientFailure: boolean
+}
+
+/** Classify a lane's settled results into "stop" vs "slow down" vs "fine". */
+export function classifyLaneOutcome(results: PromiseSettledResult<unknown>[]): LaneOutcome {
+  let denied: DeniedReason | null = null
+  let transientFailure = false
+  for (const r of results) {
+    if (r.status !== "rejected") continue
+    const err: unknown = r.reason
+    const status = err instanceof JarvisApiError ? err.status : 0
+    if (status === 401) denied = denied ?? "signed-out"
+    else if (status === 403) denied = denied ?? "role"
+    else transientFailure = true
+  }
+  return { denied, transientFailure }
 }
 const RING_BUFFER_SIZE = 30
 
@@ -416,6 +484,27 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
     emit("new-pending-action", { count: actions.length, source: "command-bar" })
   }, [])
 
+  // ---- P1.T9 / C-15: lane health ----
+  // `denied` stops every lane until the session changes. `failures` drives the
+  // per-lane backoff ladder. Both live in refs, not state: they steer the scheduler
+  // and must not themselves cause a render.
+  const deniedRef = useRef<DeniedReason | null>(null)
+  const failuresRef = useRef<Record<LaneName, number>>({ fast: 0, medium: 0, slow: 0, sanity: 0 })
+
+  const noteLaneOutcome = useCallback((lane: LaneName, results: PromiseSettledResult<unknown>[]) => {
+    const { denied, transientFailure } = classifyLaneOutcome(results)
+    if (denied) {
+      // Being told "no" is not a transient fault and must not be retried on a
+      // ladder. Stop everything and record the real reason once.
+      if (deniedRef.current !== denied) {
+        deniedRef.current = denied
+        setState((prev) => (prev.accessDenied === denied ? prev : { ...prev, accessDenied: denied }))
+      }
+      return
+    }
+    failuresRef.current[lane] = transientFailure ? failuresRef.current[lane] + 1 : 0
+  }, [])
+
   // ---- fast lane ----
   const pollFast = useCallback(async () => {
     if (!visibleRef.current) return
@@ -426,6 +515,7 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
       jarvisGet<{ actions: PendingAction[] }>("actions/pending", { filter: "blocked" }),
       jarvisGet<{ runs: WorkflowRun[] }>("workflows/runs", { status: "running" }),
     ])
+    noteLaneOutcome("fast", [statsRes, pendingRes, blockedRes, runsRes])
     const latency = Math.round(performance.now() - started)
     const nowTs = Date.now()
 
@@ -488,7 +578,7 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
     if (statsRes.status === "fulfilled") emit("poll-landed", { latency })
     // Poll failures surface as degraded/SIMULATION badges in the UI (§2, §9) — never
     // console.error here, so a kill-the-API pass stays console-clean by construction.
-  }, [])
+  }, [noteLaneOutcome])
 
   // ---- medium lane ----
   const prevEventIdsRef = useRef<Set<string>>(new Set())
@@ -502,6 +592,7 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
       }>("comms"),
       jarvisGet<{ runs: WorkflowRun[] }>("workflows/runs"),
     ])
+    noteLaneOutcome("medium", [eventsRes, commsRes, allRunsRes])
     if (eventsRes.status === "fulfilled") {
       const ids = new Set(eventsRes.value.events.map((e) => e.id))
       for (const e of eventsRes.value.events) {
@@ -527,7 +618,7 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
           ? allRunsRes.value.runs.filter((r) => r.status === "completed" || r.status === "failed" || r.status === "compensated")
           : prev.terminalRuns,
     }))
-  }, [])
+  }, [noteLaneOutcome])
 
   // ---- slow lane ----
   const pollSlow = useCallback(async () => {
@@ -557,6 +648,7 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
       jarvisGet<Insights>("insights"),
       jarvisGet<{ data: ReliabilityMetrics }>("read-models/reliability"),
     ])
+    noteLaneOutcome("slow", [pipeline, cash, sla, stock, followUp, techLoad, serviceDue, dataQuality, insights, reliability])
     const anyDegraded = [pipeline, cash, sla, stock, followUp, techLoad, serviceDue, dataQuality].some((r) => r.status === "rejected")
     const anySucceeded = [pipeline, cash, sla, stock, followUp, techLoad, serviceDue, dataQuality].some((r) => r.status === "fulfilled")
     const nowTs = Date.now()
@@ -587,15 +679,21 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
           : {}),
       },
     }))
-  }, [])
+  }, [noteLaneOutcome])
 
   // ---- sanity lane ----
   const pollSanity = useCallback(async () => {
     if (!visibleRef.current) return
-    const [res, integrations] = await Promise.all([
-      jarvisGet<SetupStatus>("setup/status").catch(() => null),
-      jarvisGet<IntegrationsStatus>("integrations/status").catch(() => null),
+    // P1.T9: `allSettled` rather than `.catch(() => null)` — swallowing the error
+    // threw away the status code, which is the one thing needed to tell "we were
+    // refused" (stop) from "it broke" (back off).
+    const [setupRes, integrationsRes] = await Promise.allSettled([
+      jarvisGet<SetupStatus>("setup/status"),
+      jarvisGet<IntegrationsStatus>("integrations/status"),
     ])
+    noteLaneOutcome("sanity", [setupRes, integrationsRes])
+    const res = setupRes.status === "fulfilled" ? setupRes.value : null
+    const integrations = integrationsRes.status === "fulfilled" ? integrationsRes.value : null
     setState((prev) => ({
       ...prev,
       setupStatus: res ?? prev.setupStatus,
@@ -603,7 +701,7 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
       integrationsStatus: integrations ?? prev.integrationsStatus,
       integrationsDegraded: integrations === null,
     }))
-  }, [])
+  }, [noteLaneOutcome])
 
   useEffect(() => {
     setState((prev) => ({ ...prev, mountedAt: Date.now(), now: Date.now(), recordDecision, injectOptimisticPending }))
@@ -611,7 +709,9 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
       const wasHidden = !visibleRef.current
       visibleRef.current = document.visibilityState !== "hidden"
       document.documentElement.setAttribute("data-hidden", (!visibleRef.current).toString())
-      if (visibleRef.current && wasHidden) {
+      // P1.T9: returning to the tab must not resurrect a refused or signed-out
+      // lane — that was one of the ways the 401 storm restarted itself.
+      if (visibleRef.current && wasHidden && hasActiveSession() && !deniedRef.current) {
         void pollFast()
         void pollMedium()
         void pollSlow()
@@ -620,27 +720,73 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
     }
     document.addEventListener("visibilitychange", onVisibility)
 
+    // P1.T9 / C-15 — the scheduler. Every lane reschedules itself rather than
+    // running on a fixed interval, because "when do we ask again" now depends on
+    // what happened last time:
+    //   - no session          -> do not ask at all; re-check at the lane's interval
+    //   - denied (401/403)    -> stop this lane permanently until the session changes
+    //   - transient failure   -> BACKOFF_LADDER_MS[n]: 4 -> 8 -> 16 -> 32 -> 60 s
+    //   - success             -> reset to the lane's own interval
+    const timers = new Map<LaneName, number>()
+    let stopped = false
+
+    const runLane = (lane: LaneName, poll: () => Promise<void>) => {
+      if (stopped) return
+      const base = LANE_BASE_MS[lane]
+
+      // Rule 1: a private lane never runs without a session. This alone takes the
+      // signed-out page from ~90 requests/min to zero.
+      if (!hasActiveSession()) {
+        timers.set(lane, window.setTimeout(() => runLane(lane, poll), base))
+        return
+      }
+
+      // Rule 2: we were refused. Asking again on a timer cannot change the answer.
+      if (deniedRef.current) return
+
+      void poll().finally(() => {
+        if (stopped || deniedRef.current) return
+        // Rule 3: back off on transient faults, reset on success.
+        const delay = nextBackoffMs(failuresRef.current[lane]) || base
+        timers.set(lane, window.setTimeout(() => runLane(lane, poll), delay))
+      })
+    }
+
     // Avoid mounting all four lanes simultaneously. Fast data makes the cockpit
     // useful first; the lower-priority lanes follow without a connection spike.
-    void (async () => {
-      await pollFast()
-      await pollMedium()
-      await pollSlow()
-      await pollSanity()
-    })()
+    runLane("fast", pollFast)
+    runLane("medium", pollMedium)
+    runLane("slow", pollSlow)
+    runLane("sanity", pollSanity)
 
-    const tFast = setInterval(pollFast, FAST_LANE_MS)
-    const tMedium = setInterval(pollMedium, MEDIUM_LANE_MS)
-    const tSlow = setInterval(pollSlow, SLOW_LANE_MS)
-    const tSanity = setInterval(pollSanity, SANITY_LANE_MS)
+    // When a session appears (or is replaced), clear the refusal and restart every
+    // lane immediately — a fresh token deserves a fresh answer, and waiting a full
+    // interval after sign-in would be a visible dead patch.
+    let hadSession = hasActiveSession()
+    const tSession = window.setInterval(() => {
+      const has = hasActiveSession()
+      if (has === hadSession) return
+      hadSession = has
+      if (!has) return
+      deniedRef.current = null
+      failuresRef.current = { fast: 0, medium: 0, slow: 0, sanity: 0 }
+      setState((prev) => (prev.accessDenied === null ? prev : { ...prev, accessDenied: null }))
+      for (const [, id] of timers) window.clearTimeout(id)
+      timers.clear()
+      runLane("fast", pollFast)
+      runLane("medium", pollMedium)
+      runLane("slow", pollSlow)
+      runLane("sanity", pollSanity)
+    }, 1000)
+
     const tTick = setInterval(() => setState((prev) => ({ ...prev, now: Date.now() })), 1000)
 
     return () => {
+      stopped = true
       document.removeEventListener("visibilitychange", onVisibility)
-      clearInterval(tFast)
-      clearInterval(tMedium)
-      clearInterval(tSlow)
-      clearInterval(tSanity)
+      for (const [, id] of timers) window.clearTimeout(id)
+      timers.clear()
+      window.clearInterval(tSession)
       clearInterval(tTick)
     }
   }, [pollFast, pollMedium, pollSlow, pollSanity, recordDecision, injectOptimisticPending])

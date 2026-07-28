@@ -29,6 +29,7 @@ function input(over: Partial<SelectorInput> = {}): SelectorInput {
   return {
     signedIn: true,
     authLoading: false,
+    accessDenied: null,
     now: NOW,
     stats: { pending: 3, blocked: 0, recentActions: [] },
     statsDegraded: false,
@@ -118,6 +119,21 @@ describe("the truth gate (defect C-01)", () => {
   it("a degraded read-model is unavailable, not zero", () => {
     const t = selectCollectedUsd(input({ readModelsDegraded: true, degradedSinceMs: NOW - 5_000 }))
     expect(t).toEqual({ status: "unavailable", reason: "network", sinceMs: NOW - 5_000 })
+  })
+
+  it("a 401 on a private lane is denied:signed-out even with a session object", () => {
+    const t = selectCollectedUsd(input({ signedIn: true, accessDenied: "signed-out" }))
+    expect(t).toEqual({ status: "denied", reason: "signed-out" })
+  })
+
+  it("a 403 on a private lane is denied:role", () => {
+    const t = selectCollectedUsd(input({ signedIn: true, accessDenied: "role" }))
+    expect(t).toEqual({ status: "denied", reason: "role" })
+  })
+
+  it("a refusal outranks a degraded lane — being told no is not a network fault", () => {
+    const t = selectCollectedUsd(input({ accessDenied: "role", readModelsDegraded: true }))
+    expect(t).toEqual({ status: "denied", reason: "role" })
   })
 
   it("signed in but nothing has landed yet is unknown:loading", () => {

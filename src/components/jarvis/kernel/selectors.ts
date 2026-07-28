@@ -19,6 +19,7 @@ import type {
   StatsResponse,
   WorkflowRun,
 } from "../lib/data-core"
+import type { DeniedReason } from "../lib/data-core"
 import type { Truth, TruthSource } from "./types"
 
 /** Verified against `finnor-os/apps/api/app/api/actions/pending/route.ts:49` —
@@ -33,6 +34,10 @@ export interface SelectorInput {
   /** From `useJarvisAuth()`. */
   signedIn: boolean
   authLoading: boolean
+  /** P1.T9 / C-15: the server refused our credentials on a private lane. Set even
+   *  when a session object exists — an expired or under-privileged token still
+   *  means no number may render. */
+  accessDenied: DeniedReason | null
   /** From `useJarvis()`. */
   now: number
   stats: StatsResponse | null
@@ -66,9 +71,11 @@ function gate(input: SelectorInput, degraded: boolean, data: unknown): Truth<nev
   if (input.authLoading) return { status: "unknown", reason: "loading" }
   // 2. Nobody is. Private facts are denied, never zeroed.
   if (!input.signedIn) return { status: "denied", reason: "signed-out" }
-  // 3. We asked and the lane is failing.
+  // 3. There is a session, but the server refused it. Still denied, never zeroed.
+  if (input.accessDenied) return { status: "denied", reason: input.accessDenied }
+  // 4. We asked and the lane is failing.
   if (degraded) return { status: "unavailable", reason: "network", sinceMs: input.degradedSinceMs }
-  // 4. Signed in, lane healthy, but nothing has landed yet.
+  // 5. Signed in, lane healthy, but nothing has landed yet.
   if (data === null || data === undefined) return { status: "unknown", reason: "loading" }
   return null
 }

@@ -20,10 +20,25 @@ export default defineConfig({
     // The plan fixes the script string as exactly `vitest run`, and also requires it to
     // exit 0 before any test exists (P1.T1). That lives here rather than as a CLI flag.
     passWithNoTests: true,
+    // `lib/jarvis-auth.tsx` constructs the Supabase browser client at module load,
+    // and that client validates its URL eagerly. Any test whose module graph reaches
+    // it therefore needs these present. They are placeholders for module construction
+    // only — nothing under test makes a network call, and no test asserts on them.
+    env: {
+      NEXT_PUBLIC_SUPABASE_URL: "http://localhost:54321",
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: "test-anon-key-not-a-real-credential",
+    },
   },
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),
     },
+  },
+  // tsconfig.json sets `"jsx": "preserve"` because Next does its own JSX transform.
+  // Vitest has no Next pipeline, so it must be told to actually transform JSX —
+  // otherwise importing any `.tsx` in a module graph fails to parse. Only matters
+  // for transitively-imported components; the tests themselves are pure TS.
+  oxc: {
+    jsx: { runtime: "automatic" },
   },
 })
