@@ -11,9 +11,14 @@ import {
   mapTruth,
   PENDING_LIST_CAP,
   selectCollectedUsd,
+  selectOpenLeads,
+  selectOpenReconciliation,
   selectOverdueInvoices,
+  selectPaymentLinksOpen,
   selectPendingApprovals,
+  selectQuotesSent,
   selectRunsInFlight,
+  selectStuckRuns,
   type SelectorInput,
 } from "./selectors"
 
@@ -35,6 +40,15 @@ function input(over: Partial<SelectorInput> = {}): SelectorInput {
       totalCollected: 12_500,
       paymentLinksAwaitingPayment: 2,
     },
+    pipelineHealth: {
+      leadsByStatus: [
+        { status: "new", count: 4 },
+        { status: "contacted", count: 3 },
+      ],
+      quotesByStatus: [{ status: "sent", count: 2 }],
+      proposalsByStatus: [],
+    },
+    slaBreaches: { stuckWorkflowRuns: 1, openReconciliationCases: 0 },
     readModelsDegraded: false,
     slowLastSuccessMs: NOW,
     slowLaneStaleAfterMs: 90_000,
@@ -59,11 +73,18 @@ function rows(n: number) {
 // C-01 — the gate. No private number renders without a signed-in, healthy read.
 // ---------------------------------------------------------------------------
 describe("the truth gate (defect C-01)", () => {
+  // Every selector, not just the four golden ones — the gate is the whole point and
+  // a supporting selector that skips it reintroduces C-01 in a smaller card.
   const all = {
     selectOverdueInvoices,
     selectCollectedUsd,
     selectPendingApprovals,
     selectRunsInFlight,
+    selectPaymentLinksOpen,
+    selectOpenLeads,
+    selectQuotesSent,
+    selectStuckRuns,
+    selectOpenReconciliation,
   }
 
   for (const [name, select] of Object.entries(all)) {
@@ -211,6 +232,45 @@ describe("selectCollectedUsd / selectRunsInFlight", () => {
 
   it("zero runs is a known zero, because the read succeeded", () => {
     expect(selectRunsInFlight(input({ runs: [] }))).toMatchObject({ status: "known", value: 0 })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The supporting read-model selectors the KPI strip needs (P1.T7)
+// ---------------------------------------------------------------------------
+describe("supporting read-model selectors", () => {
+  it("payment links open", () => {
+    expect(selectPaymentLinksOpen(input())).toMatchObject({ status: "known", value: 2 })
+  })
+
+  it("open leads sums every lead status", () => {
+    expect(selectOpenLeads(input())).toMatchObject({ status: "known", value: 7 })
+  })
+
+  it("quotes sent reads the 'sent' bucket", () => {
+    expect(selectQuotesSent(input())).toMatchObject({ status: "known", value: 2 })
+  })
+
+  it("no 'sent' bucket is a known zero, because the read succeeded", () => {
+    const t = selectQuotesSent(
+      input({ pipelineHealth: { leadsByStatus: [], quotesByStatus: [], proposalsByStatus: [] } }),
+    )
+    expect(t).toMatchObject({ status: "known", value: 0 })
+  })
+
+  it("stuck runs and open reconciliation read the SLA breach model", () => {
+    expect(selectStuckRuns(input())).toMatchObject({ status: "known", value: 1 })
+    expect(selectOpenReconciliation(input())).toMatchObject({ status: "known", value: 0 })
+  })
+
+  it("a null pipeline read-model is unknown, not zero", () => {
+    expect(selectOpenLeads(input({ pipelineHealth: null }))).toEqual({ status: "unknown", reason: "loading" })
+    expect(selectQuotesSent(input({ pipelineHealth: null }))).toEqual({ status: "unknown", reason: "loading" })
+  })
+
+  it("a null SLA read-model is unknown, not zero", () => {
+    expect(selectStuckRuns(input({ slaBreaches: null }))).toEqual({ status: "unknown", reason: "loading" })
+    expect(selectOpenReconciliation(input({ slaBreaches: null }))).toEqual({ status: "unknown", reason: "loading" })
   })
 })
 

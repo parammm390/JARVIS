@@ -14,6 +14,8 @@
 import type {
   CashCollections,
   PendingAction,
+  PipelineHealth,
+  SlaBreaches,
   StatsResponse,
   WorkflowRun,
 } from "../lib/data-core"
@@ -40,6 +42,8 @@ export interface SelectorInput {
   runs: WorkflowRun[]
   runsDegraded: boolean
   cashCollections: CashCollections | null
+  pipelineHealth: PipelineHealth | null
+  slaBreaches: SlaBreaches | null
   readModelsDegraded: boolean
   /** Wall-clock ms of the slow lane's last successful fetch; null = never landed. */
   slowLastSuccessMs: number | null
@@ -177,4 +181,50 @@ export function selectRunsInFlight(input: SelectorInput): Truth<number> {
   const blocked = gate(input, input.runsDegraded, input.runs)
   if (blocked) return blocked
   return fresh(input.runs.length, "api:workflow-runs", input, input.now)
+}
+
+// ---------------------------------------------------------------------------
+// Supporting read-model selectors.
+//
+// §4.7 names the four golden-journey selectors above. These are the remaining
+// facts the KPI strip already displayed before P1.T7 — same facts, same labels,
+// same copy, now routed through the same gate so none of them can render a
+// confident zero off a 401 either. No new fact is displayed by adding these.
+// ---------------------------------------------------------------------------
+
+/** Payment links sent and still awaiting payment. */
+export function selectPaymentLinksOpen(input: SelectorInput): Truth<number> {
+  const blocked = gate(input, input.readModelsDegraded, input.cashCollections)
+  if (blocked) return blocked
+  return fresh(input.cashCollections!.paymentLinksAwaitingPayment, "api:read-model", input, input.slowLastSuccessMs)
+}
+
+/** Open leads, summed across every lead status the pipeline read-model reports. */
+export function selectOpenLeads(input: SelectorInput): Truth<number> {
+  const blocked = gate(input, input.readModelsDegraded, input.pipelineHealth)
+  if (blocked) return blocked
+  const total = input.pipelineHealth!.leadsByStatus.reduce((sum, r) => sum + r.count, 0)
+  return fresh(total, "api:read-model", input, input.slowLastSuccessMs)
+}
+
+/** Quotes sent and awaiting signature. */
+export function selectQuotesSent(input: SelectorInput): Truth<number> {
+  const blocked = gate(input, input.readModelsDegraded, input.pipelineHealth)
+  if (blocked) return blocked
+  const row = input.pipelineHealth!.quotesByStatus.find((q) => q.status === "sent")
+  return fresh(row ? row.count : 0, "api:read-model", input, input.slowLastSuccessMs)
+}
+
+/** Workflow runs the SLA read-model considers stuck. */
+export function selectStuckRuns(input: SelectorInput): Truth<number> {
+  const blocked = gate(input, input.readModelsDegraded, input.slaBreaches)
+  if (blocked) return blocked
+  return fresh(input.slaBreaches!.stuckWorkflowRuns, "api:read-model", input, input.slowLastSuccessMs)
+}
+
+/** Reconciliation cases still open. */
+export function selectOpenReconciliation(input: SelectorInput): Truth<number> {
+  const blocked = gate(input, input.readModelsDegraded, input.slaBreaches)
+  if (blocked) return blocked
+  return fresh(input.slaBreaches!.openReconciliationCases, "api:read-model", input, input.slowLastSuccessMs)
 }
