@@ -41,21 +41,30 @@ export function OpsTicker({ soundOn, onToggleSound }: { soundOn: boolean; onTogg
   }, [paused])
 
   const degraded = data.statsDegraded && data.readModelsDegraded
-  const items = useMemo(() => {
-    if (degraded) return OPS_STREAM.map((o) => ({ icon: o.icon, text: `sim · ${o.text}` }))
+  // P1.T10 / defect C-05: `sim` is tracked as a fact about each row rather than
+  // sniffed back out of its text, so the header cannot drift away from what the
+  // rows actually are.
+  const sampleRows = () => OPS_STREAM.map((o) => ({ icon: o.icon, text: `sim · ${o.text}`, sim: true }))
 
-    const real: Array<{ icon: string; text: string }> = []
-    for (const c of data.insights?.topConcerns ?? []) real.push({ icon: "🧠", text: c })
+  const items = useMemo(() => {
+    if (degraded) return sampleRows()
+
+    const real: Array<{ icon: string; text: string; sim: boolean }> = []
+    for (const c of data.insights?.topConcerns ?? []) real.push({ icon: "🧠", text: c, sim: false })
     const latestEvent = data.events[0]
-    if (latestEvent) real.push({ icon: "⚡", text: `${latestEvent.eventType.replaceAll("_", " ")} · ${latestEvent.entityType}` })
-    if (data.apiLatencyMs != null) real.push({ icon: "📡", text: `API latency ${data.apiLatencyMs}ms — measured this poll` })
+    if (latestEvent) real.push({ icon: "⚡", text: `${latestEvent.eventType.replaceAll("_", " ")} · ${latestEvent.entityType}`, sim: false })
+    if (data.apiLatencyMs != null) real.push({ icon: "📡", text: `API latency ${data.apiLatencyMs}ms — measured this poll`, sim: false })
     const oldest = data.pendingActions[data.pendingActions.length - 1]
-    if (oldest) real.push({ icon: "🕐", text: `Oldest pending: ${oldest.actionType.replaceAll("_", " ")} · ${ageMinutes(oldest.createdAt, data.now)}m` })
-    if (real.length === 0) return OPS_STREAM.map((o) => ({ icon: o.icon, text: `sim · ${o.text}` }))
+    if (oldest) real.push({ icon: "🕐", text: `Oldest pending: ${oldest.actionType.replaceAll("_", " ")} · ${ageMinutes(oldest.createdAt, data.now)}m`, sim: false })
+    if (real.length === 0) return sampleRows()
     return real
   }, [degraded, data])
 
   const item = items[index % items.length]!
+
+  // C-05: the strip used to read "Live Ops" over `sim ·` rows — a live claim over
+  // sample content. If ANY row in the rotation is sample, the whole strip says so.
+  const anySample = items.some((i) => i.sim)
 
   return (
     <div
@@ -63,8 +72,15 @@ export function OpsTicker({ soundOn, onToggleSound }: { soundOn: boolean; onTogg
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
     >
-      <span className="flex shrink-0 items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-teal-200/90">
-        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-teal-300" /> Live Ops
+      <span
+        className={`flex shrink-0 items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.18em] ${
+          anySample ? "text-amber-200/90" : "text-teal-200/90"
+        }`}
+      >
+        {/* A pulsing live dot beside sample content is the same lie as the old
+            "Live Ops" label, so it goes static amber too (§5.2: amber = partial). */}
+        <span className={`h-1.5 w-1.5 rounded-full ${anySample ? "bg-amber-300" : "animate-pulse bg-teal-300"}`} />
+        {anySample ? "SAMPLE OPS" : "Live Ops"}
       </span>
       <div className="relative h-5 min-w-0 flex-1 overflow-hidden">
         <AnimatePresence mode="wait">
