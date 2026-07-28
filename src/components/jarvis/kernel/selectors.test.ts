@@ -11,6 +11,7 @@ import {
   mapTruth,
   PENDING_LIST_CAP,
   selectCollectedUsd,
+  selectFirstName,
   selectOpenLeads,
   selectOpenReconciliation,
   selectOverdueInvoices,
@@ -232,6 +233,57 @@ describe("selectCollectedUsd / selectRunsInFlight", () => {
 
   it("zero runs is a known zero, because the read succeeded", () => {
     expect(selectRunsInFlight(input({ runs: [] }))).toMatchObject({ status: "known", value: 0 })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// C-02 — the greeting must never borrow a name
+// ---------------------------------------------------------------------------
+describe("selectFirstName (defect C-02)", () => {
+  it("signed out has no name — this is the C-02 regression", () => {
+    expect(selectFirstName(null)).toBeNull()
+    expect(selectFirstName(undefined)).toBeNull()
+  })
+
+  it("never returns the hardcoded literal that shipped to production", () => {
+    const candidates = [
+      null,
+      undefined,
+      {},
+      { email: null, user_metadata: null },
+      { email: "", user_metadata: {} },
+      { user_metadata: { full_name: "   " } },
+    ]
+    for (const c of candidates) {
+      expect(selectFirstName(c)).not.toBe("Param")
+    }
+  })
+
+  it("takes the first token of a real profile name", () => {
+    expect(selectFirstName({ user_metadata: { full_name: "Ada Lovelace" } })).toBe("Ada")
+    expect(selectFirstName({ user_metadata: { full_name: "  Grace   Hopper " } })).toBe("Grace")
+    expect(selectFirstName({ user_metadata: { name: "Katherine Johnson" } })).toBe("Katherine")
+  })
+
+  it("prefers full_name over name", () => {
+    expect(selectFirstName({ user_metadata: { full_name: "Ada Lovelace", name: "Someone Else" } })).toBe("Ada")
+  })
+
+  it("falls back to the email local part, never to a placeholder", () => {
+    expect(selectFirstName({ email: "ada@example.com" })).toBe("ada")
+    expect(selectFirstName({ email: "ada@example.com", user_metadata: { full_name: "" } })).toBe("ada")
+  })
+
+  it("returns null when there is genuinely nothing to go on", () => {
+    expect(selectFirstName({})).toBeNull()
+    expect(selectFirstName({ email: "", user_metadata: {} })).toBeNull()
+    expect(selectFirstName({ email: "@example.com" })).toBeNull()
+    expect(selectFirstName({ user_metadata: { full_name: "   " } })).toBeNull()
+  })
+
+  it("ignores non-string metadata rather than coercing it", () => {
+    expect(selectFirstName({ user_metadata: { full_name: 42 } })).toBeNull()
+    expect(selectFirstName({ user_metadata: { full_name: { first: "Ada" } }, email: "ada@example.com" })).toBe("ada")
   })
 })
 

@@ -8,6 +8,8 @@
 import { useEffect, useState } from "react"
 import { motion } from "framer-motion"
 import { useJarvis } from "../lib/data-core"
+import { useJarvisAuth } from "../lib/jarvis-auth"
+import { selectFirstName } from "../kernel/selectors"
 import type { useVapiSession } from "../lib/useVapiSession"
 
 function systemStatus(data: ReturnType<typeof useJarvis>): { label: string; tone: "teal" | "amber" | "dim"; unconfigured: string[] } {
@@ -35,6 +37,12 @@ function statusSentence(pendingCount: number, runsInFlight: number, overdueCount
 
 export function HeaderBand({ session }: { session?: ReturnType<typeof useVapiSession> }) {
   const data = useJarvis()
+  // P1.T8 / defect C-02: this greeting used to hardcode one developer's own first
+  // name into the salutation shown to every visitor on production, signed in or
+  // not. Null means nobody is named — the greeting drops the name rather than
+  // borrowing one.
+  const auth = useJarvisAuth()
+  const firstName = selectFirstName(auth.session?.user)
   const [clock, setClock] = useState("")
   useEffect(() => {
     if (data.now) setClock(new Date(data.now).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }))
@@ -58,7 +66,7 @@ export function HeaderBand({ session }: { session?: ReturnType<typeof useVapiSes
           transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
           className="text-xl font-black tracking-tight text-[color:var(--j-text)] md:text-2xl"
         >
-          {timeOfDay}, Param <span className="inline-block">👋</span>
+          {firstName ? `${timeOfDay}, ${firstName}` : timeOfDay} <span className="inline-block">👋</span>
         </motion.h1>
         <motion.p
           initial={{ opacity: 0 }}

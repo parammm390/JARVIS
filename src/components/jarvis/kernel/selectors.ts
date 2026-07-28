@@ -184,6 +184,42 @@ export function selectRunsInFlight(input: SelectorInput): Truth<number> {
 }
 
 // ---------------------------------------------------------------------------
+// Identity (P1.T8, defect C-02)
+// ---------------------------------------------------------------------------
+
+/** The part of a Supabase user this derivation actually reads. Kept structural so
+ *  the rule is testable without dragging in the Supabase client's types. */
+export interface IdentityLike {
+  email?: string | null
+  user_metadata?: { full_name?: unknown; name?: unknown } | null
+}
+
+/**
+ * The signed-in user's first name, or null when there is nobody to name.
+ *
+ * Defect C-02: `HeaderBand.tsx:61` greeted every visitor on production — including
+ * signed-out ones — by one developer's own first name. Returning null rather
+ * than a placeholder is the
+ * whole point: no name is a truthful greeting, a borrowed one never is.
+ *
+ * Order: real profile name first; failing that the email's local part, which is
+ * still the signed-in user's own identifier and not an invention. Never a default.
+ */
+export function selectFirstName(user: IdentityLike | null | undefined): string | null {
+  if (!user) return null
+
+  const meta = user.user_metadata
+  for (const candidate of [meta?.full_name, meta?.name]) {
+    if (typeof candidate !== "string") continue
+    const first = candidate.trim().split(/\s+/)[0]
+    if (first) return first
+  }
+
+  const local = typeof user.email === "string" ? user.email.split("@")[0]?.trim() : ""
+  return local ? local : null
+}
+
+// ---------------------------------------------------------------------------
 // Supporting read-model selectors.
 //
 // §4.7 names the four golden-journey selectors above. These are the remaining
