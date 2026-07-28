@@ -672,3 +672,123 @@ html[data-jarvis-tenant-accent="amber"] .jarvis-root { --accent: var(--j-amber);
     animation-duration: 0.01s !important;
   }
 }
+
+/* ============================================================================
+   PLAN v3 P1.T2 — the design-system contract (plan §5.1, §5.2)
+
+   These are the ONLY type, spacing and colour-semantic values that ship. Call
+   sites are deliberately NOT swept here; that is P6.T5. This block establishes
+   the vocabulary so the sweep has a target.
+   ========================================================================= */
+
+.jarvis-root {
+  /* ---- §5.1 TYPE — 6 tokens, nothing else. Nothing below 11px ships. ----
+     Each token is a 4-part spec: size / line-height / weight / tracking.
+     The `--j-fs-*` name is the plan's; the `--j-lh-* / --j-fw-* / --j-ls-*`
+     companions carry the other three parts of the same token. Apply all four
+     at once with the matching `.j-fs-*` class below. */
+
+  /* --j-fs-micro   11 / 1.4 / 700 / 0.14em uppercase — block labels, chips */
+  --j-fs-micro: 11px;
+  --j-lh-micro: 1.4;
+  --j-fw-micro: 700;
+  --j-ls-micro: 0.14em;
+
+  /* --j-fs-sm      12.5 / 1.5 / 500 / 0 — secondary body, table cells */
+  --j-fs-sm: 12.5px;
+  --j-lh-sm: 1.5;
+  --j-fw-sm: 500;
+  --j-ls-sm: 0;
+
+  /* --j-fs-base    14 / 1.55 / 400 / 0 — body, transcript */
+  --j-fs-base: 14px;
+  --j-lh-base: 1.55;
+  --j-fw-base: 400;
+  --j-ls-base: 0;
+
+  /* --j-fs-lg      17 / 1.4 / 700 / -0.01em — block titles */
+  --j-fs-lg: 17px;
+  --j-lh-lg: 1.4;
+  --j-fw-lg: 700;
+  --j-ls-lg: -0.01em;
+
+  /* --j-fs-xl      22 / 1.25 / 800 / -0.02em — the instruction echo */
+  --j-fs-xl: 22px;
+  --j-lh-xl: 1.25;
+  --j-fw-xl: 800;
+  --j-ls-xl: -0.02em;
+
+  /* --j-fs-display 34 / 1.05 / 800 / -0.03em, tabular-nums —
+     the ONE money number per block */
+  --j-fs-display: 34px;
+  --j-lh-display: 1.05;
+  --j-fw-display: 800;
+  --j-ls-display: -0.03em;
+
+  /* ---- §5.2 SPACING — 4 base. Allowed 4, 8, 12, 16, 24, 32, 48. Nothing else.
+     The name IS the value; there is no other scale. */
+  --j-space-4: 4px;
+  --j-space-8: 8px;
+  --j-space-12: 12px;
+  --j-space-16: 16px;
+  --j-space-24: 24px;
+  --j-space-32: 32px;
+  --j-space-48: 48px;
+}
+
+/* ---- §5.2 COLOUR SEMANTICS — binding. ----------------------------------
+   All six tokens are already defined at the top of this file. What follows is
+   the binding contract for what each one is ALLOWED to mean. A colour used
+   against its "Never" column is a defect, not a style choice.
+
+     --j-cyan    JARVIS presence / attention      NEVER success
+     --j-green   verified success, cash collected NEVER in-progress
+     --j-amber   degraded, partial, awaiting human NEVER failure
+     --j-red     failure, overdue, destructive    NEVER warning
+     --j-violet  cognition — understanding & planning only  NEVER execution
+     --j-blue    execution in flight              NEVER idle
+
+   Field (depth 0) colours are NOT semantic and never encode state.
+   Surfaces: .j-panel · .j-panel-hot (active) · .j-chip.
+   Blur only on depth 2 and the rail.
+   ---------------------------------------------------------------------- */
+
+/* Apply a complete §5.1 type token (all four parts) in one class. */
+.j-fs-micro {
+  font-size: var(--j-fs-micro);
+  line-height: var(--j-lh-micro);
+  font-weight: var(--j-fw-micro);
+  letter-spacing: var(--j-ls-micro);
+  text-transform: uppercase;
+}
+.j-fs-sm {
+  font-size: var(--j-fs-sm);
+  line-height: var(--j-lh-sm);
+  font-weight: var(--j-fw-sm);
+  letter-spacing: var(--j-ls-sm);
+}
+.j-fs-base {
+  font-size: var(--j-fs-base);
+  line-height: var(--j-lh-base);
+  font-weight: var(--j-fw-base);
+  letter-spacing: var(--j-ls-base);
+}
+.j-fs-lg {
+  font-size: var(--j-fs-lg);
+  line-height: var(--j-lh-lg);
+  font-weight: var(--j-fw-lg);
+  letter-spacing: var(--j-ls-lg);
+}
+.j-fs-xl {
+  font-size: var(--j-fs-xl);
+  line-height: var(--j-lh-xl);
+  font-weight: var(--j-fw-xl);
+  letter-spacing: var(--j-ls-xl);
+}
+.j-fs-display {
+  font-size: var(--j-fs-display);
+  line-height: var(--j-lh-display);
+  font-weight: var(--j-fw-display);
+  letter-spacing: var(--j-ls-display);
+  font-variant-numeric: tabular-nums;
+}
