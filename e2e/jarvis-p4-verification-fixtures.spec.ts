@@ -49,6 +49,15 @@ const FIXTURE_RECEIPT = {
 const email = process.env.TEST_OWNER_EMAIL
 const password = process.env.TEST_OWNER_PASSWORD
 
+// Several tests in this file sign in for real against the same live tenant.
+// Real finding while building this evidence: running them concurrently
+// (fullyParallel's own default) races the SAME login form against itself
+// across workers and intermittently fails ("Sign in" stays disabled) — a
+// contention artifact of this harness, not a product bug. `serial` mode is
+// the correct fix (not a global --workers=1), matching Playwright's own
+// documented pattern for tests that share one real external resource.
+test.describe.configure({ mode: "serial" })
+
 test.describe("P4.T3/T6 — ThreadVerification + sandbox honesty, FIXTURE harness", () => {
   // jarvis-v3 finding while building this evidence: data-core.ts's own lanes
   // (P1.T9/C-15's own fix — "no session -> no request", verified at
@@ -63,6 +72,12 @@ test.describe("P4.T3/T6 — ThreadVerification + sandbox honesty, FIXTURE harnes
   test.skip(!email || !password, "TEST_OWNER_EMAIL/TEST_OWNER_PASSWORD not set")
 
   test("the receipt fixture renders the real two-column predicted<->actual diff and the sandbox literal, no raw JSON", async ({ page }) => {
+    // Real sign-in races itself under full-suite concurrency (--workers=2,
+    // fullyParallel) — same finding as every other real-session spec in this
+    // suite (jarvis-next-real-journey.spec.ts's own "single real-journey run"
+    // comment). One real login is enough to prove this; running it twice
+    // (once per project) buys nothing and adds real load to a shared tenant.
+    test.skip(test.info().project.name !== "desktop-chromium", "single real-session run")
     mkdirSync(OUT_DIR, { recursive: true })
     await page.route("**/api/jarvis/receipts?domainActionId=*", (route) => route.fulfill({ json: { receipts: [{ id: FIXTURE_RECEIPT_ID }] } }))
     await page.route(`**/api/jarvis/receipts/${FIXTURE_RECEIPT_ID}`, (route) => route.fulfill({ json: { receipt: FIXTURE_RECEIPT } }))
@@ -126,6 +141,7 @@ test.describe("P4.T3/T6 — ThreadVerification + sandbox honesty, FIXTURE harnes
   })
 
   test("P4.T7 — ⌘K opens the real Ops destination with the 4 real counts, never a route", async ({ page }) => {
+    test.skip(test.info().project.name !== "desktop-chromium", "single real-session run")
     mkdirSync(OUT_DIR, { recursive: true })
     await page.setViewportSize({ width: 1440, height: 900 })
     await page.goto("/jarvis/login", { waitUntil: "domcontentloaded" })
@@ -160,6 +176,7 @@ test.describe("P4.T3/T6 — ThreadVerification + sandbox honesty, FIXTURE harnes
   })
 
   test("P4.T2 — the approval card expands a real predicted outcome", async ({ page }) => {
+    test.skip(test.info().project.name !== "desktop-chromium", "single real-session run")
     mkdirSync(OUT_DIR, { recursive: true })
     const fixtureAction = {
       id: "fixture-action-0",
