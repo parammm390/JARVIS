@@ -6,7 +6,7 @@
 // same honest, complete view backs both entry points.
 
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react"
-import { motion } from "framer-motion"
+import { useReducedMotion, motion } from "framer-motion"
 import { Tag, User, Calendar, MessageSquare, Wrench, FileText, Package, DollarSign } from "lucide-react"
 import { jarvisGet } from "./api"
 import { Drawer } from "../ui/primitives/Drawer"
@@ -14,6 +14,7 @@ import { ActionRenderer } from "../ui/renderers/ActionRenderer"
 import { getRendererEntry } from "../ui/renderers/registry"
 import { RiskBadge, type RiskTier } from "../ui/primitives/RiskBadge"
 import { Stagger } from "../ui/motion/primitives"
+import { FieldList, ThreadVerification, type PredictedOutcome, type PredictionDiff } from "../bridge/ThreadVerification"
 
 // F3.T3 — FLOW-58's sibling receipt-depth task: evidence source iconography. A
 // keyword lookup against the REAL `source` string every evidence row already
@@ -47,15 +48,12 @@ export interface FullReceipt {
   correlationId: string | null
   createdAt: string
   finalizedAt: string | null
-}
-
-function JsonBlock({ value }: { value: unknown }) {
-  if (value === null || value === undefined) return <span className="text-[color:var(--j-text-faint)]">none yet</span>
-  return (
-    <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-lg bg-black/25 p-2 font-mono text-[10px] text-[color:var(--j-text-dim)]">
-      {JSON.stringify(value, null, 2)}
-    </pre>
-  )
+  /** jarvis-v3 P4.T1: the plugin's own simulate() prediction and its field-level
+   *  diff against the real outcome, joined server-side from this receipt's own
+   *  domain_action. Both null when no real simulate() ran for this action type
+   *  — the honest "No prediction was recorded" case, never a fabricated one. */
+  predicted?: PredictedOutcome | null
+  predictionDiff?: PredictionDiff | null
 }
 
 // D3.T1 — `proposedAction` (declared on FullReceipt but never rendered before this
@@ -99,6 +97,7 @@ function Section({ label, children }: { label: string; children: React.ReactNode
 export function ReceiptContent({ receiptId, headerLayoutId }: { receiptId: string; headerLayoutId?: string }) {
   const [receipt, setReceipt] = useState<FullReceipt | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const reducedMotion = useReducedMotion() ?? false
 
   useEffect(() => {
     let cancelled = false
@@ -169,6 +168,12 @@ export function ReceiptContent({ receiptId, headerLayoutId }: { receiptId: strin
               </div>
             </motion.div>
 
+            {/* jarvis-v3 P4.T3 — predicted <-> actual (§6⑦), the moat moment: this
+                is the SAME section every receipt renders, so a payment webhook
+                landing later (P4.T4) and re-fetching this same receipt id makes
+                the diff genuinely get truer in place, not a separate view. */}
+            <ThreadVerification predicted={receipt.predicted ?? null} predictionDiff={receipt.predictionDiff ?? null} reducedMotion={reducedMotion} />
+
             {/* F3.T3 — stagger-unfurl: the remaining sections cascade in (30ms/item,
                 <Stagger>, C2's own primitive) instead of all appearing at once —
                 presentation only, same data, same order. */}
@@ -204,10 +209,10 @@ export function ReceiptContent({ receiptId, headerLayoutId }: { receiptId: strin
                     <ProposedActionSection proposedAction={receipt.proposedAction} />
                   </Section>,
                   <Section key="expected" label="Expected result">
-                    <JsonBlock value={receipt.expectedResult} />
+                    <FieldList value={receipt.expectedResult} />
                   </Section>,
                   <Section key="actual" label="Actual result">
-                    <JsonBlock value={receipt.actualResult} />
+                    <FieldList value={receipt.actualResult} />
                   </Section>,
                   receipt.failure ? (
                     <Section key="failure" label="Failure + recovery path">

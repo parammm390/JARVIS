@@ -157,3 +157,31 @@ export function receiptSealVariants(reduced: boolean) {
 export const CONTEXT_GATHER_STAGGER_MS = STAGGER_MS.contextGather
 export const PLAN_DRAW_STAGGER_MS = STAGGER_MS.planDraw
 export const REJECT_SLICE_STAGGER_MS = STAGGER_MS.reject
+
+/** M16 TruthReveal (§5.3, wired P4.T3): "predicted column holds; actual column
+ *  slides in from x:12px 320 ms" — the Actual cell's own entrance, once a real
+ *  `predictionDiff` arrives. Reduced motion: "two static columns", i.e. no slide. */
+export function truthRevealActualVariants(reduced: boolean) {
+  const spec = MOTION_SPECS.M16
+  return {
+    initial: reduced ? { opacity: 1 } : { opacity: 0, x: 12 },
+    animate: { opacity: 1, x: 0 },
+    transition: reduced ? { duration: 0 } : { duration: spec.durationMs / 1000, ease: spec.easing as number[] },
+  }
+}
+
+/** M16's row-level outcome cue: "matching rows pulse green once (140 ms),
+ *  differing rows pulse amber and stay outlined." A one-shot background pulse
+ *  that settles — matched rows settle to transparent, differing rows settle to
+ *  a faint, lasting amber wash (the "stay outlined" half of the spec; the
+ *  persistent border itself is a static class, not motion). Reduced motion:
+ *  "diffs outlined" — the settled end-state renders immediately, no pulse. */
+export function truthRevealRowPulse(matched: boolean, reduced: boolean) {
+  const settled = matched ? "rgba(52,211,153,0)" : "rgba(245,185,66,0.08)"
+  if (reduced) return { initial: { backgroundColor: settled }, animate: { backgroundColor: settled }, transition: { duration: 0 } }
+  const peak = matched ? "rgba(52,211,153,0.22)" : "rgba(245,185,66,0.22)"
+  return { initial: { backgroundColor: peak }, animate: { backgroundColor: settled }, transition: { duration: 0.14, ease: "easeOut" as const } }
+}
+
+/** Wired P4.T3. */
+export const P4_PROMOTED_MOTIONS: MotionId[] = ["M16"]
