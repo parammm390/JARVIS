@@ -28,6 +28,10 @@ test.describe("golden baseline — signed-out /jarvis (P1 'before')", () => {
 
   for (const { label, width, height } of WIDTHS) {
     test(`signed-out /jarvis at ${label}px`, async ({ page, context }) => {
+      // This spec sets its own viewport per case, so running it under both Playwright
+      // projects would capture the same two images twice under two different snapshot
+      // names. Pin it to one project; the widths come from WIDTHS, not the project.
+      test.skip(test.info().project.name !== "desktop-chromium", "viewport is set per-test; one project is enough")
       mkdirSync(OUT_DIR, { recursive: true })
       await context.clearCookies()
       await page.setViewportSize({ width, height })
