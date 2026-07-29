@@ -30,65 +30,98 @@
 
 | | |
 |---|---|
-| **ACTIVE PHASE** | **P3 — Instruction Lifecycle & Realtime** |
-| **Latest verified commit** | `6efed15` |
-| **Phases complete** | 1 / 7 (P2 code-complete, exit gate 7/10 green, B-5 still open; **P3 code-complete, exit gate 3/6 green — BLOCKER B-6** (migration deliberately unapplied, see pre-flight decision) blocks the 3 live event-timing lines; 2 real bugs found+fixed via live testing this phase, on top of P2's own 2) |
-| **Sessions logged** | 4 |
-| **Product exists at** | end of P2 (session ~4); cognition (streamed context+plan, real SSE-with-fallback) visible end of P3 (session ~5) |
+| **ACTIVE PHASE** | **P4 — Complete Consequence Graph** |
+| **Latest verified commit** | `dd3dd65` |
+| **Phases complete** | 1 / 7 (P2 code-complete, exit gate 7/10 green, B-5 still open; P3 code-complete, exit gate 3/6 green, BLOCKER B-6 open; **P4 code-complete, exit gate 2/5 green — BLOCKER B-5** (live planner routed away from the safe action type 4/4 real attempts this session, despite an explicit conditional go-ahead) blocks the live predicted↔actual/webhook/consequence-checklist lines; 1 real raw-JSON gap + 1 real live-crash bug found+fixed this phase, on top of P2's 2 and P3's 2) |
+| **Sessions logged** | 5 |
+| **Product exists at** | end of P2 (session ~4); cognition visible end of P3 (session ~5); the consequence graph + predicted↔actual is built and fixture-verified end of P4 (session ~6), live proof still blocked on B-5 |
 
 ## NEXT EXACT TASK
 
-> **P3's code is done — all 12 tasks committed with evidence
-> (`6d38a25`..`bebd76c`), plus a real bugfix/evidence-gathering pass
-> (`10c65d2`) and an authz-doc regen (`ebc80ea`).** Exit gate is **3/6 green**.
+> **P4's code is done — all 8 tasks committed with evidence
+> (`c38c253`..`3dc63ed`), plus a raw-JSON-gap fix (`b1b8aee`), three
+> screenshot-evidence commits (`90d6387`, `de8086c`, and the T8 commit
+> itself), and a full-e2e-suite robustness pass (`dd3dd65`).** Exit gate is
+> **2/5 green** — see PHASE 4 below for the line-by-line breakdown.
 >
-> **Pre-flight migration check (required before P3.T1) found no safe migration
-> path in this environment** — `DATABASE_URL` unreachable, no docker/psql, no
-> other Postgres DSN anywhere. Asked in chat; the plan owner chose "write the
-> migration file only, don't apply it." Migration 0062 is written, bundled, and
-> type-checked, but **not applied anywhere** — see **BLOCKER B-6**.
+> **Pre-flight found no new migration was needed.** Verified from source before
+> writing any code: `domain_actions.predictedReceipt`/`predictionDiff` and
+> `decision_receipts.expectedResult`/`actualResult`/`finalizedAt` all predate
+> this phase (an earlier "B2.T2" phase this repo already shipped) and are
+> already populated by `orchestration/src/planner.ts` and
+> `orchestration/src/plan-dag.ts`. P4 is genuinely additive API + frontend
+> work on top of existing schema — confirmed, not assumed, and reported before
+> touching any code.
 >
-> **Real consequence of that decision, verified live this session:** the LIVE
-> deployed backend (nothing was deployed this session) has none of P3's new
-> `/api/instructions/*`/`/api/stream` routes. A real signed-in golden-journey
-> run's own trace poll real-404s every ~400ms for the whole run — and the rest
-> of the journey (Heard → Approval Cockpit → Reject → real receipt) still
-> completes correctly regardless, because the poll's own designed behavior is
-> "retry next tick, never fatal." This is why the exit gate's 3 event-timing
-> lines (≥5 ordered events, first event ≤800ms, event→pixel median) are
-> honestly unchecked — not fabricated, not silently redefined.
+> **BLOCKER B-5 was surfaced explicitly and early, per this session's own
+> binding, and the plan owner said go — conditionally: approve one real
+> action ONLY if its actionType is confirmed `start_invoice_to_cash_workflow`
+> first.** `e2e/golden-consequence.spec.ts` implements exactly that gate and
+> was run live against the real deployed backend **4 times** this session.
+> Every one of the 4 real attempts was honestly unsafe to approve — 3 real
+> attempts routed to `call_overdue_invoices` (the forbidden type,
+> screenshotted: `qa-screenshots/v3-P4/consequence-00-plan-1440.png`), 1
+> produced a genuine 0-action plan. The safety gate correctly rejected every
+> one and approved nothing. This is a stronger, more consistent finding than
+> P2/P3's own "sometimes" — 4/4 this session never produced the authorized
+> action type. **A second, independent finding, also live and also new:** the
+> real deployed backend's own `GET /api/setup/status` reports
+> `environment.nodeEnv: "production"`, so even a successful approval this
+> session could not have exercised the payment-webhook long tail live — no
+> `STRIPE_WEBHOOK_SECRET` there means the A3.T6 fail-closed fix 401s the
+> dev-shape webhook body unconditionally in that environment.
 >
-> **Two real bugs found and fixed via live testing this phase** (neither caught
-> by 211 unit tests), on top of P2's own 2:
-> 1. `ThreadBlocks.tsx` — duplicate React keys in the UNDERSTOOD chip grid when
->    ≥2 plan nodes share the same grounded field/status. Fixed: index-suffixed
->    key.
-> 2. `kernel/store.tsx`'s P3.T8 restore effect — TWO distinct bugs (an
->    effect-dependency race cancelling its own in-flight fetch on a benign
->    Supabase session-object reference change, and a mount-tracking ref
->    permanently flipped false by React's dev-mode StrictMode double-invoke,
->    never reset) that together made a real, intercepted-backend-response
->    restore test show the empty rest state instead of the restored thread,
->    even though both real GET calls succeeded. Both fixed; the restore e2e
->    now passes for real (`qa-screenshots/v3-P3/restore-after-refresh-1440.png`).
+> **Built around it, not blocked on it**, same posture as every prior phase:
+> every mechanism (predicted exposure, the two-column diff, the payment-webhook
+> receipt-merge, cross-surface invalidation, sandbox honesty) is real code,
+> unit/integration-tested, and additionally verified against the REAL rendered
+> component tree via a real signed-in session with only the 2-3 backend GET
+> responses intercepted (`e2e/jarvis-p4-verification-fixtures.spec.ts`, 4
+> passing tests, 4 real screenshots) — never a separate mock, never faked as
+> a live end-to-end proof.
 >
-> **What is still honestly unproven, and why:** the 3 event-timing exit-gate
-> lines (see BLOCKER B-6). The stream-kill/reconnect line is partially checked
-> (frontend behavior real and unit-tested; a live SSE connection genuinely
-> dying against a real backend is not, same root cause).
+> **Two real, live defects found and fixed this phase**, on top of P2's 2 and
+> P3's 2:
+> 1. `lib/ReceiptDrawer.tsx`'s `JsonBlock` dumped raw `JSON.stringify()` for
+>    every receipt's Expected/Actual result — a live hard-rule-8 violation on
+>    every surface that reuses `ReceiptContent` (ApprovalCockpit's drawer,
+>    WorkflowTheater, DailyBriefing, `/jarvis` and `/jarvis/next` alike).
+>    Fixed with a shared, designed `FieldList` — then the required grep sweep
+>    caught a SECOND instance of the same class of bug in my own new code
+>    (`formatFieldValue`'s array handling fell back to `JSON.stringify()` for
+>    array-of-objects, a genuinely reachable shape via `simulate()`'s own
+>    `fieldChanges`) — fixed too, not just noted.
+> 2. `views.tsx`'s `SystemHealthPanel`/`BindingChip` compared the real
+>    `environment.bindings` API response (`{mode, source}` objects) to the
+>    string `"emulator"` and rendered the object directly as a JSX child — a
+>    live crash ("Objects are not valid as a React child") on `/jarvis`'s own
+>    "Production Readiness" view. Found while wiring P4.T6's own sandbox
+>    detection (same field); fixed the type and the comparison.
 >
-> **Next:** get the plan owner's explicit go-ahead on a real, safe migration
-> path (a dev/staging Postgres DSN, or explicit authorization + a DSN for the
-> live/shared instance) — the same category of decision B-3/B-5 required.
-> Once a migrated database exists, re-run the golden journey live and paste
-> the real `instruction_events` rows + timing measurements to close P3's last 3
-> exit-gate lines. Absent that, document B-6 as accepted-open (same posture as
-> B-5) and move to P4 — do not apply a migration unilaterally to force the
-> gate green.
+> **Also found, out of scope, documented not fixed:** `ui/renderers/
+> FallbackRenderer.tsx` still renders raw JSON for any of the ~37 unregistered
+> action types — a real, live hard-rule-8 gap, but its fix is explicitly
+> already scheduled at §7.2/P5.T4 ("FallbackRenderer → owner-debug only"), not
+> invented as new P4 scope.
 >
-> Before resuming, read this session's full P3 task list + Exit gate section
-> above (every task's Evidence/Deviation) and `## BLOCKERS` B-5/B-6 in full —
-> do not re-derive what is already recorded there.
+> **What is still honestly unproven, and why:** all 3 of the exit gate's own
+> "live proof" lines (predicted↔actual from a real outcome, the webhook
+> updating a real receipt, the full consequence checklist) — see BLOCKER B-5's
+> updated entry for the complete reasoning. Nothing here was forced or faked
+> to make the gate look greener than it is.
+>
+> **Next:** get the plan owner's explicit direction on B-5 — either accept it
+> stays open (same posture as B-6) and move to P5 regardless (nothing in P5
+> structurally depends on P4's own live consequence proof), or, if the plan
+> owner wants to keep trying, decide how many more live attempts against the
+> shared production tenant are worth it given 4/4 this session already missed.
+> Do not keep re-submitting the golden phrase indefinitely hoping for a lucky
+> planner outcome — that drifts from "authorized, verified action" into
+> "fishing for permission the planner itself keeps declining."
+>
+> Before resuming, read this session's full P4 task list + Exit gate section
+> below (every task's Evidence/Deviation) and `## BLOCKERS` B-5 in full — do
+> not re-derive what is already recorded there.
 
 ---
 
@@ -99,7 +132,7 @@
 | P1 | Contract, Foundations & Regression Net | 1 | ✅ | ✅ | production stops lying — 5 KPI veils replace `$0`, no borrowed name, 84→0 req/30s |
 | **P2** | **Golden Vertical Slice on the Bridge** | **3** | 🟡 | 🟡 7/10 | **the product exists — full golden journey at `/jarvis/next`, typed and by voice**, proven live through Heard→Understood→Plan→Approval Cockpit against a real tenant with real overdue invoices (B-3 resolved); 2 real bugs found+fixed via that live test; real Execution/Receipt/fps evidence needs explicit sign-off to approve a real action for real (B-5) |
 | **P3** | **Instruction Lifecycle & Realtime** | **1** | 🟡 | 🟡 3/6 | **cognition streams in for real** — context chips (M4) and plan nodes (M5) arrive per real `instruction_events` row via a 400ms poll or real SSE-with-fallback, not after the whole POST resolves; mid-flight refresh genuinely resumes the thread (real e2e, intercepted backend responses); 2 more real bugs found+fixed via live testing. Real event-timing evidence (≥5 events, first-event/event→pixel timing) needs migration 0062 applied to a real DB — deliberately unapplied this session (**BLOCKER B-6**), same posture as B-5 |
-| P4 | Complete Consequence Graph | 2 | ⬜ | ⬜ | predicted↔actual; the receipt gets truer over time |
+| **P4** | **Complete Consequence Graph** | **1** | 🟡 | 🟡 2/5 | **predicted↔actual is real and wired** — the two-column diff (M16), the approval card's predicted-outcome expand, the payment-webhook receipt-merge, cross-surface invalidation, and sandbox honesty all real code, unit/integration-tested, and verified against the real component tree (real session + fixture data, real screenshots); live end-to-end proof needs a real approved `start_invoice_to_cash_workflow` action, which the live planner declined to produce in 4/4 real attempts this session despite an explicit conditional go-ahead (**BLOCKER B-5**, updated) |
 | P5 | Flagships B & C + Voice Continuity | 2–3 | ⬜ | ⬜ | two more workflows; follow-up references; barge-in |
 | P6 | Roles, Mobile, Onboarding, Demo, Cutover | 2 | ⬜ | ⬜ | `/jarvis` **is** the product |
 | P7 | Truth, Recovery, Performance, Certification | 2 | ⬜ | ⬜ | signed off |
@@ -172,11 +205,14 @@ Legend ⬜ not started · 🟡 in progress · ✅ complete · 🔴 blocked
 | **NEW-2** | MED | Real backend bug: `data-core.ts`'s `readModelsDegraded` marks **all 8** read-models degraded when **any one** 500s — a real `pipeline-health`/`reliability` 500 (verified via direct `curl`) masks a genuinely-working `cash-collections` fetch | — | 🔴 | Found via live testing against the real backend this session. Out of scope per this session's own binding (never touch `data-core.ts`'s lane logic) — documented, not fixed. See **BLOCKER B-5**. |
 | **NEW-3** | MED | Real backend behaviour: the live LLM planner is non-deterministic for the exact golden phrase *"Chase everyone more than thirty days overdue"* — same instruction sometimes yields 0 actions, and was observed at least once routing to `call_overdue_invoices` (a real outbound-call action) instead of the plan-assumed `start_invoice_to_cash_workflow` | — | 🔴 | Found via repeated real submissions this session. Out of scope (planner/model behaviour, not frontend code) — documented, not fixed. Directly why the real Execution/Receipt exit-gate lines stay open — see **BLOCKER B-5**. |
 | C-09/10/11 | MED | No stream; proxy buffers; `useLiveQuery` SSE dead | P3.T9–T11 | 🟡 | Built and unit/integration-tested: real backend `GET /api/stream` (`d3386bf`), a dedicated non-buffering edge relay proven via a real empirical before/after against a live dev server (`0840bb2`), and real frontend SSE-with-fallback (`bebd76c`, 14 tests). **Not** verified end-to-end against a real migrated backend — needs migration 0062 applied (**BLOCKER B-6**). Separately found: `useLiveQuery.ts`'s own "no real SSE endpoint" comment is stale — `apps/worker`'s SSE gateway is real and live (verified via curl) — out of scope to fix, noted for whoever touches that file next |
-| **NEW-4** | LOW | `e2e/jarvis-showtime.spec.ts` genuinely fails, first real run ever (previously always credential-skipped) — the real `TEST_OWNER_*` account (`owner@test-dealer.finnor.local`, the golden-journey seed tenant) is not the special "Dealer Zero demo tenant" this feature requires: real page text confirms *"Time-compression is available only for the labeled Dealer Zero demo tenant"* | — | 🔴 | Verified via screenshot, reproduced in isolation (not contention/flakiness). Unrelated to any P3 code — `Showtime.tsx` untouched this session, confirmed by diff. Out of scope (a different tenant-provisioning concern, not P3's) — documented, not fixed. |
-| **NEW-5** | LOW | `e2e/jarvis-visual-snapshots.spec.ts`'s owner-content specs for `/jarvis/bridge`/`/jarvis/stage` are flaky against the real golden-journey tenant once real credentials exist — "Awaiting Your Approval" intermittently never renders (real, reproduced on both desktop and mobile across two full-suite runs). `/jarvis/bridge` does not import `kernel/store.tsx` at all (confirmed by grep) — not reachable from any P3 code. Most likely real causes, both pre-existing: (a) NEW-2's own `readModelsDegraded` bug (any one of 8 read-models 500ing marks all degraded), observed live in the same run ("Collected/Overdue/Open Leads: Can't reach JARVIS"), and (b) this session's own heavy repeated real-tenant testing left 5 real pending "call overdue invoices" actions in the queue, which several specs sharing one tenant can race over | — | 🔴 | Found running the full suite twice this session (first time these credential-gated specs could ever run for real). Out of scope for P3 (`/jarvis/bridge`/`/jarvis/stage` are pre-existing D1/D2/C1 surfaces) — documented, not fixed. Newly-auto-generated baselines from these flaky runs were deliberately NOT committed (would bake in a non-representative reference captured under known-abnormal tenant load). |
+| **NEW-4** | LOW | `e2e/jarvis-showtime.spec.ts` genuinely fails, first real run ever (previously always credential-skipped) — the real `TEST_OWNER_*` account (`owner@test-dealer.finnor.local`, the golden-journey seed tenant) is not the special "Dealer Zero demo tenant" this feature requires: real page text confirms *"Time-compression is available only for the labeled Dealer Zero demo tenant"* | — | 🔴 | Verified via screenshot, reproduced in isolation (not contention/flakiness). Unrelated to any P3 code — `Showtime.tsx` untouched this session, confirmed by diff. Out of scope (a different tenant-provisioning concern, not P3's) — documented, not fixed. **Recurred identically in P4's own full-suite run** (both desktop and mobile-375) — same real cause, `Showtime.tsx` untouched, confirmed again by diff. |
+| **NEW-5** | LOW | `e2e/jarvis-visual-snapshots.spec.ts`'s owner-content specs for `/jarvis/bridge`/`/jarvis/stage` are flaky against the real golden-journey tenant once real credentials exist — "Awaiting Your Approval" intermittently never renders (real, reproduced on both desktop and mobile across two full-suite runs). `/jarvis/bridge` does not import `kernel/store.tsx` at all (confirmed by grep) — not reachable from any P3 code. Most likely real causes, both pre-existing: (a) NEW-2's own `readModelsDegraded` bug (any one of 8 read-models 500ing marks all degraded), observed live in the same run ("Collected/Overdue/Open Leads: Can't reach JARVIS"), and (b) this session's own heavy repeated real-tenant testing left 5 real pending "call overdue invoices" actions in the queue, which several specs sharing one tenant can race over | — | 🔴 | Found running the full suite twice this session (first time these credential-gated specs could ever run for real). Out of scope for P3 (`/jarvis/bridge`/`/jarvis/stage` are pre-existing D1/D2/C1 surfaces) — documented, not fixed. Newly-auto-generated baselines from these flaky runs were deliberately NOT committed (would bake in a non-representative reference captured under known-abnormal tenant load). **Recurred in P4's own full-suite run(s):** the `stage-owner-content`/`bridge-owner-content` (desktop) baselines were STILL never committed (confirmed: `git status` showed them as untracked `??` both times this session, not a P4 regression), and mobile's own "Awaiting Your Approval" intermittently-hidden flake reproduced again — consistent with (b): this session's own `golden-consequence.spec.ts` runs (4 real submissions) added more real queue contention on the same shared tenant. Newly-auto-generated baselines discarded again (`git clean`), not committed. |
 | C-08 | HIGH | `cancelled`/`escalated` unrendered | P7.T2 | 🔴 | |
 | C-17 | CRIT | Immersive surface unreachable (`PersonalizedHome.tsx:61`) | P6.T7 | 🔴 | |
 | C-21 | MED | Perf baseline unreproducible (56/95/98) | P1.T12 + P7.T7 | ✅ | 5 cold runs at final HEAD: **98/98/98/98/98**, TBT **0 ms** every run. Reproducible *because* P1.T9 removed the 401 storm from the load path. |
+| **NEW-6** | CRIT | `lib/ReceiptDrawer.tsx`'s `JsonBlock` rendered raw `JSON.stringify(expectedResult/actualResult, null, 2)` on every receipt — hard rule 8 violation, live on every surface reusing `ReceiptContent` (ApprovalCockpit drawer, WorkflowTheater, DailyBriefing, both `/jarvis` and `/jarvis/next`) | P4.T3 | ✅ | `de7c351` · replaced with the shared `FieldList` (`lib/field-format.tsx`). The required grep sweep then caught a second instance of the same class in this session's own new code — `formatFieldValue`'s array-of-objects fallback (`b1b8aee`) — fixed too. `grep -rn "JSON.stringify" src/components/jarvis --include="*.tsx"` shows only request-body serialization, storage writes, and search-string matching remaining — verified, not asserted. |
+| **NEW-7** | CRIT | `views.tsx`'s `SystemHealthPanel`/`BindingChip` typed `environment.bindings` as `Record<capability, string>`; the real API returns `Record<capability, {mode, source}>` — comparing an object to `"emulator"` is always false, and rendering the object directly as a JSX child crashes React ("Objects are not valid as a React child") on `/jarvis`'s own "Production Readiness" view | P4.T6 | ✅ | `49295eb` · fixed the type (`BindingResolution` in `data-core.ts`) and the comparison/render in `views.tsx`. Found while wiring the exact same field for sandbox-honesty detection. |
+| **NEW-8** | MED | `ui/renderers/FallbackRenderer.tsx` still renders raw `JSON.stringify(payload, null, 2)` for any of the ~37 unregistered action types — a real, live hard-rule-8 gap | P5.T4 | 🔴 | Found via this phase's own required raw-JSON grep sweep. Not fixed here: §7.2 already schedules this exact fix ("`FallbackRenderer` → owner-debug only") at P5.T4 — fixing it now would be inventing P5 scope inside P4. Documented so it is not silently missed. |
 
 Deliberately **not** fixed in v3 (out of scope, recorded honestly): C-04 partial, C-12, C-16, C-18, C-19, C-20 — these concern legacy surfaces that §7.4 leaves at `/jarvis/classic`.
 
@@ -376,6 +412,66 @@ genuinely 500 on the live backend (verified via direct `curl`), and
 `data-core.ts`'s `readModelsDegraded` aggregate flag marks ALL 8 read-models
 degraded when ANY ONE fails — masking a working `cash-collections` fetch
 behind the same two unrelated 500s. A real backend bug, correctly left alone.
+
+**P4 UPDATE · 2026-07-30 · still OPEN, conditional go-ahead exercised, real
+planner non-determinism confirmed 4/4.** This session's own binding required
+surfacing B-5 explicitly and early, before relying on it for P4's own exit
+gate, and asking for a specific go/no-go — not a general "is this ok." Did
+exactly that: named the exact tenant, verified from source that with Stripe/
+GHL/QuickBooks unconfigured the three invoice-to-cash steps all resolve to
+sandbox/emulator bindings (zero real external side effects), and asked
+whether to approve **one specific, named action type**
+(`start_invoice_to_cash_workflow`) conditional on confirming that's genuinely
+what's pending before clicking Approve. **The plan owner said go,
+conditionally.** `e2e/golden-consequence.spec.ts` implements exactly that
+condition (verify every planned action's `actionType` before ever touching
+Approve) and was run live against the real deployed backend **4 times**:
+
+| Attempt | Real outcome |
+|---|---|
+| 1 | `call_overdue_invoices` (forbidden — rejected, not approved) |
+| 2 | `call_overdue_invoices` (forbidden — rejected, not approved) |
+| 3 | `call_overdue_invoices` (forbidden — rejected, not approved) |
+| 4 | 0 actions (genuine empty plan — nothing to approve) |
+
+Screenshot of attempt 1's real plan card, undisguised:
+`qa-screenshots/v3-P4/consequence-00-plan-1440.png` — *"Place a real
+payment-reminder call to 11 customers with an unpaid invoice, totaling
+$21684.00. Approve to call all?"* Zero real actions were approved this
+session; zero real side effects beyond the plan rows themselves (which the
+safety gate always rejected or the empty-plan path already terminated
+honestly). This is a **stronger, more consistent** finding than P2/P3's own
+"sometimes" — 4/4 attempts this session, not a mix.
+
+**A second, independent, new finding from the same live runs:** `GET
+/api/jarvis/setup/status` against the real deployed backend reports
+`environment.nodeEnv: "production"`. Even if attempt 1-4 had produced the
+safe action type and been approved, the payment-webhook long-tail simulation
+(P4.T4/T5's own consequence) would have needed a real, signed Stripe webhook
+this environment has no secret to construct — the A3.T6 fail-closed fix
+401s an unsigned dev-shape body in production unconditionally. So P4's own
+live "receipt updates in place after a payment webhook" line has a SECOND,
+independent real blocker beyond the planner's own non-determinism.
+
+**Built around it, not blocked on it, same posture as every prior phase:**
+every P4 mechanism is real, additive code, unit/integration-tested, and
+ADDITIONALLY verified against the real rendered component tree via a real
+signed-in session with only the 2-3 backend GET responses intercepted
+(`e2e/jarvis-p4-verification-fixtures.spec.ts` — 4 passing tests, 4 real
+screenshots: the two-column diff at 100% matched, the sandbox literal, the
+"no prediction recorded" fallback, the real Ops panel, the real
+approval-card predicted-outcome expand). Never presented as live end-to-end
+proof — every one of those screenshots is honestly labelled `FIXTURE` or
+notes exactly which piece was intercepted.
+
+**What is needed:** the plan owner's explicit direction — accept B-5 stays
+open (same posture B-6 already has) and move to P5 regardless, since nothing
+in P5 structurally depends on P4's own live consequence proof; or decide how
+many more live attempts against the shared production tenant are worth
+trying. **Not recommended:** continuing to resubmit the golden phrase
+indefinitely hoping for a lucky planner outcome — 4 consecutive misses this
+session is a real signal, not bad luck, and each attempt creates real rows
+against a real, shared production tenant.
 
 ### B-6 · 2026-07-29/30 · P3 pre-flight · **No safe migration path exists in this environment — migration 0062 is written but unapplied anywhere, blocking real event-timing evidence.** OPEN
 Verified, not assumed, before falling back (P3's own pre-flight check, this
@@ -1562,45 +1658,328 @@ below, not fabricated.
 ---
 
 # PHASE 4 — Complete Consequence Graph
-**Status:** ⬜ · **Sessions:** 2 · **Depends on:** P3 · **Plan:** §8 → PHASE 4
+**Status:** 🟡 · **Sessions:** 1 · **Depends on:** P3 · **Plan:** §8 → PHASE 4
 
-### Consequence checklist — every one must be verified changed after approval
-- [ ] `invoices.status` — **Evidence:**
-- [ ] `communications_log` **or** `sandbox_outbox` row — **Evidence:**
-- [ ] `workflow_runs` + `workflow_steps` ×3 — **Evidence:**
-- [ ] `selectOverdueInvoices` recomputed — **Evidence:**
-- [ ] `selectCollectedUsd` recomputed — **Evidence:**
-- [ ] `selectRunsInFlight` recomputed — **Evidence:**
-- [ ] `selectPendingApprovals` decremented — **Evidence:**
-- [ ] Activity gained events — **Evidence:**
-- [ ] Field cooled (M17) — **Screenshot:**
-- [ ] `⌘K → Ops` counts changed — **Evidence:**
-- [ ] `decision_receipts` row created — **Evidence:**
+> All 8 tasks are real, additive, committed code with real evidence. The
+> consequence checklist and 3 of the exit gate's 5 lines need a real approved
+> `start_invoice_to_cash_workflow` action to prove live — see **BLOCKER B-5**
+> (updated this session): 4 real live attempts this session, 0 produced that
+> action type. Left honestly unchecked below, not fabricated.
+
+### Pre-flight
+- [x] Verify no new migration is needed before writing any code — **Evidence:**
+      Read `finnor-os/packages/db/schema.ts` directly: `domain_actions.predictedReceipt`/
+      `predictionDiff` (lines 222-223) and `decision_receipts.expectedResult`/
+      `actualResult`/`finalizedAt` (lines 1069-1096) already exist, predating
+      this phase (comment: "B2.T2: an explicitly labeled no-write prediction").
+      Confirmed populated by real code, not dormant columns:
+      `orchestration/src/planner.ts:376-427` writes `predictedReceipt` at
+      plan-creation time; `orchestration/src/plan-dag.ts:76-87`'s
+      `recordPredictionDiff` writes `predictionDiff` after execution;
+      `workflow-runtime/src/receipts.ts:57-82`'s `finalizeReceipt` already
+      does the exact "idempotent update-in-place" P4.T4 needs. **No migration
+      needed** — reported before writing any code, not assumed after.
+- [x] Surface BLOCKER B-5 explicitly and ask for an explicit go/no-go, per this
+      session's own binding — **Evidence:** Told the user plainly that P4's
+      own exit gate needs a real approval to evidence honestly; named the
+      exact tenant (`00000000-0000-4000-8000-000000000001`), the exact action
+      type (`start_invoice_to_cash_workflow`, never `call_overdue_invoices`),
+      and what it would really do (verified from source: with Stripe/GHL/
+      QuickBooks unconfigured, all 3 steps resolve to sandbox/emulator
+      bindings — zero real external side effects). Asked via `AskUserQuestion`
+      before relying on it for any evidence. **Answer: "Go, conditionally"**
+      — approve only if the actionType is confirmed `start_invoice_to_cash_workflow`
+      first. See BLOCKER B-5's own updated entry for what happened when this
+      was exercised live (4 real attempts, 0 safe outcomes).
+
+### Discovery
+```
+$ grep -n "predictedReceipt\|predictionDiff" finnor-os/packages/db/schema.ts
+222:    predictedReceipt: jsonb("predicted_receipt"),
+223:    predictionDiff: jsonb("prediction_diff"),
+
+$ grep -rn "predictedReceipt\|predictionDiff" finnor-os/packages/orchestration/src/*.ts | grep -v .test.
+planner.ts:376:  const predictedReceipts = await Promise.all(
+planner.ts:427:    predictedReceipt: predictedReceipts[i]!,
+plan-dag.ts:80-85: (recordPredictionDiff reads/writes predictionDiff)
+
+$ grep -c "^GOHIGHLEVEL_API_KEY=$" finnor-os/.env   -> 1 (set but EMPTY — unconfigured)
+$ grep -E "QUICKBOOKS_CLIENT_ID|QUICKBOOKS_CLIENT_SECRET|QUICKBOOKS_REFRESH_TOKEN|QUICKBOOKS_REALM_ID|STRIPE_SECRET_KEY" finnor-os/.env .env.local
+  -> no matches anywhere (all real capability configs absent)
+```
+Confirms: no migration needed (schema predates this phase); the seed
+tenant's invoice-to-cash workflow genuinely runs sandboxed end-to-end today.
 
 ### Tasks
-- [ ] **P4.T1** Expose `simulate()`'s `predicted` on `/api/actions/pending` and `/api/receipts/[id]`
-      **Evidence:** · **Deviation:**
-- [ ] **P4.T2** Approval card renders the predicted outcome
-      **Evidence:** · **Deviation:**
-- [ ] **P4.T3** `ThreadVerification.tsx` — two columns + M16; the "no prediction recorded" variant
-      **Evidence:** · **Deviation:**
-- [ ] **P4.T4** Payment webhook → **receipt updates in place** + M17 + `selectCollectedUsd`
-      **Evidence:** · **Deviation:**
-- [ ] **P4.T5** Cross-surface invalidation via one `applyServerFacts` fan-out
-      **Evidence:** · **Deviation:**
-- [ ] **P4.T6** Sandbox honesty literal string on step + receipt
-      **Evidence:** · **Deviation:**
-- [ ] **P4.T7** `⌘K → Ops` single destination with 4 real counts
-      **Evidence:** · **Deviation:**
-- [ ] **P4.T8** `e2e/golden-consequence.spec.ts` asserting the full checklist above
-      **Evidence:** · **Deviation:**
+- [x] **P4.T1** Expose `simulate()`'s `predicted` on `/api/actions/pending` and `/api/receipts/[id]`
+      **Evidence:** `c38c253`. New `finnor-os/apps/api/lib/predicted-outcome.ts`
+      (`extractPredicted`), additive field on both routes — `/api/actions/pending`'s
+      `predicted` derived from the already-spread `predictedReceipt` column;
+      `/api/receipts/[id]` newly joins to `domain_actions` via `domainActionId`
+      to expose `predicted`+`predictionDiff` alongside the receipt.
+      ```
+      $ npx vitest run tests/unit/predicted-outcome.test.ts
+       Test Files  1 passed (1) · Tests  5 passed (5)
+      $ npx tsc -p apps/api/tsconfig.json --noEmit  → exit 0
+      $ npx vitest run   (full backend suite)
+       Test Files  49 passed | 121 skipped (170)
+            Tests  261 passed | 554 skipped (815)
+      ```
+      **Deviation:** none — the plan's own wording ("already exist... except
+      predicted, which P4 adds") turned out to describe the API surface, not
+      the schema; the schema/writers already existed from an earlier phase.
+      Recorded here per §0.2 rule 1 (source wins), not silently assumed.
+- [x] **P4.T2** Approval card renders the predicted outcome
+      **Evidence:** `46a8b14` (code) + `de8086c` (real screenshot).
+      `PendingAction.predicted?: Record<string,unknown>|null` added; the
+      pre-provisioned "B2 predicted receipt" placeholder in `ApprovalCockpit.tsx`
+      (`action.receipt?.predicted`, always-null since predicted never lived on
+      `receipt`) now reads the real `action.predicted` field and expands to a
+      designed field list on click (same interaction pattern as the existing
+      critic chip). New `lib/field-format.tsx` (`FieldList`/`flattenForDisplay`/
+      `formatFieldValue`) is the shared non-JSON renderer this and P4.T3 both need.
+      Real screenshot (signed-in session, `actions/pending` intercepted with a
+      real-shaped fixture action): `qa-screenshots/v3-P4/approval-card-predicted-1440.png`
+      — shows `invoiceId`/`invoiceFound: yes`/`amountUsd: 890`/`steps:
+      create_payment_link, send_message, sync_invoice`, expanded from the
+      "predicted outcome" chip.
+      **Deviation:** the plan doesn't specify exact chip copy/interaction for
+      this addition (only that the card must show it); reused the critic
+      chip's own existing expand pattern rather than inventing a new one —
+      §0.1's own "internal helper" latitude, not a new design decision.
+- [x] **P4.T3** `ThreadVerification.tsx` — two columns + M16; the "no prediction recorded" variant
+      **Evidence:** `de7c351` (code) + `3dc63ed` (real screenshots, captured
+      building the P4.T8 fixture-evidence spec).
+      New `bridge/ThreadVerification.tsx`: two-column predicted/actual table
+      from `predictionDiff.fields`, M16 TruthReveal (new
+      `truthRevealActualVariants`/`truthRevealRowPulse` in `kernel/choreography.ts`,
+      `P4_PROMOTED_MOTIONS=["M16","M17"]`) — actual slides in from x:12px/320ms,
+      matched rows pulse green once, differing rows pulse amber and stay
+      outlined. Falls back to predicted-only, then to the literal **"No
+      prediction was recorded for this action."** — never hidden. Wired into
+      `lib/ReceiptDrawer.tsx`'s `ReceiptContent`, which **also fixed a real,
+      live raw-JSON violation** found while building this (see DEFECT LEDGER
+      NEW-6): the old `JsonBlock` dumped `JSON.stringify()` for Expected/Actual
+      result on every receipt, everywhere `ReceiptContent` is reused.
+      ```
+      $ npx vitest run src/components/jarvis/kernel/choreography.test.ts src/components/jarvis/lib/field-format.test.tsx
+       Test Files  2 passed (2) · Tests  16 passed (16) [+ later 12 after the array-object fix]
+      ```
+      Real screenshots (signed-in session, `receipts`/`receipts/:id` intercepted
+      with real-shaped data — invoiceId+amountPaidUsd both matched 100%):
+      `qa-screenshots/v3-P4/verification-diff-{1440,390}.png`,
+      `verification-no-prediction-1440.png`. No raw JSON anywhere in the
+      rendered receipt — asserted directly in the spec
+      (`expect(bodyText).not.toMatch(/[{[]\s*"[a-zA-Z]+"\s*:/)`) and confirmed
+      by grep (see exit gate).
+      **Deviation:** `flattenForDisplay`/`formatFieldValue`/`FieldList` were
+      extracted to `lib/field-format.tsx` (shared with P4.T2), not kept inside
+      `ThreadVerification.tsx` as the plan's own file name might imply —
+      §0.1's own "sibling file" latitude, needed because P4.T2 (committed
+      first) also needs them and P4.T3's own file shouldn't be a dependency
+      of an approval-card chip.
+- [x] **P4.T4** Payment webhook → **receipt updates in place** + `predictionDiff` amount comparison
+      **Evidence:** `be6d6c9`. `applyPaymentWebhookEvent` (invoice-to-cash
+      plugin) now, on `status:"succeeded"`: (1) finds this invoice's own most
+      recent `decision_receipts` row (same "order desc, keep first seen"
+      pattern `/api/actions/pending` already uses) and calls `finalizeReceipt`
+      a second time, merging `paymentReceived`/`amountPaidUsd`/`paidAt` into
+      `actualResult` alongside the workflow's original facts — never a second
+      receipt row (same function every workflow step's receipt is already
+      closed with); (2) appends a REAL predicted-vs-actual amount comparison
+      to `domain_actions.predictionDiff` (both sides real numbers already in
+      hand — the plugin's own `simulate()` prediction and the real payment
+      amount — never fabricated), recomputing the aggregate accuracy.
+      Real DB integration test written
+      (`finnor-os/tests/integration/payment-webhook-receipt.test.ts`, 4 cases:
+      merge-without-clobbering, honest mismatch, dedup-is-a-no-op, and a
+      payment for an invoice this plugin never touched is a safe no-op) —
+      **self-skips in this environment** (same B-6-class cause: no reachable
+      Postgres) — ready to pass the instant a migrated DB exists.
+      ```
+      $ npx vitest run tests/integration/payment-webhook-receipt.test.ts
+       Test Files  1 skipped (1) · Tests  4 skipped (4)
+      $ npx tsc -p tsconfig.json --noEmit → exit 0
+      ```
+      **Not live-verified this session** — see BLOCKER B-5's updated entry:
+      no real approved action ever reached execution, AND the deployed
+      backend's `NODE_ENV=production` would 401 the dev-shape webhook body
+      regardless (a second, independent real blocker, verified live via
+      `GET /api/jarvis/setup/status`).
+      **Deviation:** M17 FieldWarm (Field cools) is covered under P4.T5 below,
+      not duplicated here, since it's `selectOverdueInvoices`'s own
+      consequence, not the receipt's.
+- [x] **P4.T5** Cross-surface invalidation via one fan-out (not a second reconciliation path)
+      **Evidence:** `6cdcec7`. `data-core.ts` gains `refetchSlowLaneNow()` (an
+      out-of-band `pollSlow()` call — `cashCollections` defaults to the 30s
+      slow lane, which would otherwise make the KPI/Field consequence feel
+      sluggish). `kernel/store.tsx`'s new payment-watch effect reconciles
+      against `data.events` **exactly like** approval-watch/run-watch already
+      reconcile against `pendingActions`/`runs` — same shape, not a second
+      mechanism alongside P3's `applyTraceEvents`. A real `payment_recorded`
+      event (already fired by `recordPayment`'s own `recordBusinessEvent`
+      call — verified at `finnor-os/packages/data-platform/src/payments.ts:29-37`)
+      matching one of the thread's own invoiceIds triggers the slow-lane
+      refetch and bumps `Thread.receiptRefreshTick`, which `ReceiptContent`'s
+      new optional `refreshKey` prop turns into a silent re-fetch of the SAME
+      receipt (no skeleton flash). M17 FieldWarm wired in `ThreadField.tsx`
+      (`fieldWarmExitVariants`, 900ms/EASE_IO fade via `AnimatePresence`) — a
+      departing Field point (real overdue count dropped) fades instead of
+      vanishing.
+      ```
+      $ npx vitest run src/components/jarvis/kernel/payment-watch.test.ts
+       Test Files  1 passed (1) · Tests  8 passed (8)
+      ```
+      **Verified from source, not live, that the chain is real end-to-end:**
+      `payments.ts:29` sets `invoices.status='paid'`; `cashCollections()`
+      (`read-models/src/index.ts:191-208`) is a live, uncached query grouping
+      by `invoices.status` — no caching layer to invalidate, the very next
+      fetch is already correct. **Not live-verified** — no real payment ever
+      landed this session (BLOCKER B-5).
+      **Deviation:** "lane slow-down when live" style automatic re-poll is a
+      manual out-of-band trigger (`refetchSlowLaneNow`) rather than changing
+      the slow lane's own cadence — matches P3.T11's own precedent of not
+      touching `data-core.ts`'s lane timing itself.
+- [x] **P4.T6** Sandbox honesty literal string on the step and the receipt
+      **Evidence:** `49295eb`. New `lib/sandbox-detection.ts`
+      (`isSandboxStep`/`SANDBOX_LITERAL`), sourced from the tenant's real
+      `GET /api/setup/status`'s `environment.bindings` (already computed by
+      `resolveCapabilityBindingsForTenant` — no backend change needed).
+      Verified from source, not assumed: `create_payment_link`'s only
+      non-Stripe binding is `createPaymentLinkEmulatorBinding` (pure in-memory
+      fake, no `sandbox_outbox` row at all —
+      `finnor-os/packages/tools/src/emulators/accounting-emulator.ts:60-70`);
+      `send_message`'s default binding is `sendMessageNativeBinding`, which
+      genuinely writes `sandbox_outbox` (`packages/tools/src/sandbox.ts`'s
+      `recordOutbound`). Both render the literal **"Sent via sandbox — no
+      carrier hop. Row in sandbox_outbox."** Wired into `ReceiptDrawer.tsx`'s
+      header ("the receipt") and `WorkflowTheater.tsx`'s `GraphNodeCard` as an
+      accessible `title` + a compact "sandbox" badge ("the step").
+      ```
+      $ npx vitest run src/components/jarvis/lib/sandbox-detection.test.ts
+       Test Files  1 passed (1) · Tests  6 passed (6)
+      ```
+      Real screenshot: `qa-screenshots/v3-P4/verification-diff-1440.png` shows
+      the literal string exactly, amber, in the receipt header.
+      **Also fixed, found while wiring this** (DEFECT LEDGER NEW-7): `views.tsx`'s
+      `SystemHealthPanel`/`BindingChip` had the WRONG type for this exact
+      field (`string` instead of the real `{mode,source}`), causing a live
+      React crash on `/jarvis`'s "Production Readiness" view. Fixed the type
+      (`BindingResolution` in `data-core.ts`) and the render.
+      **Deviation:** the plan's own wording ("create_payment_link/send_message
+      resolving to sandbox_outbox") doesn't hold for `create_payment_link`
+      specifically — its non-Stripe binding is a pure in-memory emulator with
+      no `sandbox_outbox` row at all, verified from source. `isSandboxStep`
+      keys on "is this genuinely the real provider," not on which specific
+      table gets a row — source wins per §0.2 rule 1, recorded rather than
+      silently reworded to match.
+- [x] **P4.T7** `⌘K → Ops` single destination with 4 real counts
+      **Evidence:** `4dd945e` (code) + `90d6387` (real screenshot).
+      New `bridge/OpsPanel.tsx` — a small overlay (never a route), the SAME 4
+      golden `useKernel()` selectors the rest of the Thread already reads,
+      rendered through `Metric`/`Truth<T>` (a degraded lane veils here exactly
+      like everywhere else). Reached via `CommandPaletteV2`'s new optional
+      `onOpenOps` prop (additive — `/jarvis/bridge`'s own `chooseScene`,
+      typed `"overview"|"pipeline"` only, is untouched since it never supplies
+      the new prop).
+      Real screenshot (signed-in session, real `Meta+K` press, URL asserted
+      unchanged): `qa-screenshots/v3-P4/ops-panel-1440.png` — shows real
+      "Pending approvals: 0", "Runs in flight: 20" (live fast-lane data), and
+      "Overdue invoices"/"Collected" honestly showing the loading skeleton
+      (slow lane hadn't landed within the wait) rather than a fabricated zero
+      — real §5.5 Truth grammar behavior.
+      **Deviation:** none.
+- [x] **P4.T8** `e2e/golden-consequence.spec.ts` — the real safety gate + consequence assertions
+      **Evidence:** `3dc63ed` + robustness fixes in `dd3dd65`. Real sign-in,
+      real submission, and — per BLOCKER B-5's own conditional go-ahead — a
+      real gate verifying every planned action's `actionType` before ever
+      touching Approve. **Run live 4 times** against the real deployed
+      backend this session: see BLOCKER B-5's updated entry for the full
+      table (3× `call_overdue_invoices`, 1× a genuine 0-action plan — 0 safe
+      outcomes, 0 approvals, 0 real side effects beyond the plan rows
+      themselves). `e2e/jarvis-p4-verification-fixtures.spec.ts` (4 tests,
+      all passing) supplies the component-tree evidence the live planner
+      never let through — same posture as P2/P3's own fixture harnesses,
+      every screenshot honestly labelled.
+      **Deviation:** the plan's own task text doesn't specify how to handle
+      "the planner didn't cooperate" — built the explicit reject-and-report
+      branch as the only safe interpretation of the conditional go-ahead
+      (§0.1: never improvise past what's authorized).
+
+### Consequence checklist — every one must be verified changed after approval
+**NOT EXERCISED this session — BLOCKER B-5.** No real `start_invoice_to_cash_workflow`
+action was ever approved (4/4 live attempts this session produced an unsafe
+or empty plan instead — see BLOCKER B-5's updated entry). Each mechanism
+below is real, wired code verified by source citation and/or unit/integration
+test; none is a live before/after measurement.
+- [ ] `invoices.status` — **Evidence:** mechanism real (`recordPayment` sets
+      `status='paid'`, `data-platform/src/payments.ts:29`), never exercised live.
+- [ ] `communications_log` **or** `sandbox_outbox` row — **Evidence:** mechanism
+      real (`sandbox.ts`'s `recordOutbound`), never exercised live.
+- [ ] `workflow_runs` + `workflow_steps` ×3 — **Evidence:** mechanism
+      pre-existing and real (P2/P3 already proved workflow execution generally);
+      not exercised for THIS golden action this session.
+- [ ] `selectOverdueInvoices` recomputed — **Evidence:** mechanism real and
+      live-observable (`cashCollections()` is an uncached live query); not
+      exercised as a before/after of a real approval this session.
+- [ ] `selectCollectedUsd` recomputed — **Evidence:** same as above.
+- [ ] `selectRunsInFlight` recomputed — **Evidence:** real live number shown
+      in the Ops panel screenshot (20) but not a before/after of this
+      session's own approval (none happened).
+- [ ] `selectPendingApprovals` decremented — **Evidence:** not exercised (no
+      real approval decision was ever made on the safe action type).
+- [ ] Activity gained events — **Evidence:** mechanism real
+      (`recordBusinessEvent` on payment), not exercised for this workflow.
+- [ ] Field cooled (M17) — **Screenshot:** code real and unit-adjacent-verified
+      (`fieldWarmExitVariants`), never observed live (no real payment landed).
+- [ ] `⌘K → Ops` counts changed — **Evidence:** the destination itself is
+      real and screenshotted (P4.T7); a before/after count change from a real
+      approval was never exercised.
+- [ ] `decision_receipts` row created — **Evidence:** mechanism real, DB
+      integration test written and self-skipping (BLOCKER B-6-class — no
+      reachable Postgres), never exercised against a live DB.
 
 ### Exit gate
 - [ ] Predicted↔actual from **real** `simulate()` + real outcome — **Screenshot + source:**
+      **NOT CHECKED (live).** Real code, real source citations (P4.T1/T4
+      above), and real component-tree proof via a signed-in session + fixture
+      data shaped exactly like a real response:
+      `qa-screenshots/v3-P4/verification-diff-1440.png` (100% matched,
+      `invoiceId`+`amountPaidUsd` rows). Not from a genuinely live
+      `simulate()`-to-payment chain — BLOCKER B-5.
 - [ ] Payment webhook updates the **same** receipt in place — **Before/after:**
+      **NOT CHECKED (live).** Real code (`be6d6c9`) + a real, passing-when-DB-exists
+      integration test (`payment-webhook-receipt.test.ts`). Two independent
+      real blockers this session: no real approved action ever reached
+      execution (BLOCKER B-5), and the deployed backend's own
+      `environment.nodeEnv: "production"` (verified live) would 401 the
+      dev-shape webhook body regardless of the first blocker.
 - [ ] Full consequence checklist green — **Spec output:**
-- [ ] Sandbox labelled with the literal string — **Screenshot:**
-- [ ] No raw JSON in the receipt — **Grep + screenshot:**
+      **NOT CHECKED.** `golden-consequence.spec.ts` built and run live 4
+      times; correctly detected an unsafe or empty plan every time and
+      approved nothing — see the consequence checklist above and BLOCKER B-5.
+- [x] Sandbox labelled with the literal string — **Screenshot:**
+      `qa-screenshots/v3-P4/verification-diff-1440.png` shows *"Sent via
+      sandbox — no carrier hop. Row in sandbox_outbox."* exactly, rendered
+      from real tenant binding data (signed-in session, `setup/status`
+      intercepted with a real-shaped `{mode:"native"}` response). `WorkflowTheater.tsx`'s
+      step-tile `title` attribute + badge verified by source read (`49295eb`).
+- [x] No raw JSON in the receipt — **Grep + screenshot:**
+      ```
+      $ grep -rn "JSON.stringify" src/components/jarvis/ --include="*.tsx" --include="*.ts" | grep -v .test.
+      ```
+      Every remaining hit is request-body serialization (`api.ts`, `PushOptIn.tsx`),
+      `sessionStorage`/`localStorage` writes (`store.tsx`, `Bridge.tsx`), a
+      search-string equality check (`CommandPaletteV2.tsx`), or comments —
+      none render JSON to a customer. `grep -n "<pre" src/components/jarvis --include="*.tsx"`
+      finds exactly one real, live raw-JSON render left:
+      `ui/renderers/FallbackRenderer.tsx` (DEFECT LEDGER NEW-8) — out of
+      scope, already scheduled at P5.T4, not silently missed. This sweep
+      itself caught and fixed a real gap in this phase's own new code
+      (`formatFieldValue`'s array-of-objects fallback, `b1b8aee`) — the grep
+      is not vacuous. Screenshot proof:
+      `qa-screenshots/v3-P4/verification-diff-1440.png` (Expected/Actual
+      result sections render as clean field lists, no braces/quotes).
 
 ---
 
@@ -1716,6 +2095,93 @@ below, not fabricated.
 ## SESSION LOG
 
 <!-- Newest first. YYYY-MM-DD · P<n> · tasks done · findings · next task · blockers -->
+
+- **2026-07-30 · P4 T1–T8 CODE-COMPLETE (12 commits, `c38c253`..`dd3dd65`),
+  exit gate 2/5, BLOCKER B-5 exercised live 4x (0 safe outcomes), 2 more real
+  bugs found+fixed.** Pre-flight verified from source (before writing any
+  code) that no new migration is needed: `domain_actions.predictedReceipt`/
+  `predictionDiff` and `decision_receipts.expectedResult`/`actualResult`
+  predate this phase and are already populated by `planner.ts`/`plan-dag.ts`
+  — P4 is genuinely additive API/frontend work. Surfaced BLOCKER B-5
+  explicitly and early per this session's own binding, named the exact
+  tenant/action type/real-world consequence (verified: sandboxed, zero real
+  external side effects with Stripe/GHL/QuickBooks unconfigured), and asked
+  for an explicit go/no-go via `AskUserQuestion` before relying on it for any
+  evidence. **The plan owner said go, conditionally** — approve only if the
+  real actionType is confirmed `start_invoice_to_cash_workflow` first.
+  Built all 8 tasks in order: `predicted`/`predictionDiff` exposed on
+  `/api/actions/pending` + `/api/receipts/[id]` (additive, 5 unit tests); the
+  approval card's own pre-provisioned "B2 predicted receipt" placeholder now
+  reads the real field and expands a designed field list; new
+  `bridge/ThreadVerification.tsx` (two-column predicted↔actual, M16
+  TruthReveal, the "No prediction was recorded" literal); the payment webhook
+  now finalizes the SAME receipt in place (never a second row) and appends a
+  real predicted-vs-actual amount comparison to `predictionDiff`; cross-surface
+  invalidation via one fan-out (`refetchSlowLaneNow` + a payment-watch effect
+  shaped exactly like P2's approval-watch/run-watch, not a second
+  reconciliation path) plus M17 FieldWarm; sandbox honesty
+  (`isSandboxStep`/`SANDBOX_LITERAL`, sourced from the tenant's real capability
+  bindings) on both the receipt and the execution step tile; `⌘K → Ops` (a
+  real overlay, never a route, the same 4 golden selectors); and
+  `e2e/golden-consequence.spec.ts`, the real safety gate for B-5's own
+  conditional go-ahead.
+  **Ran the safety gate live 4 times against the real deployed backend.**
+  Every attempt was honest and none was approved: 3× the planner routed to
+  `call_overdue_invoices` (the forbidden type, screenshotted verbatim — "Place
+  a real payment-reminder call to 11 customers... Approve to call all?"), 1×
+  a genuine 0-action plan. Stronger and more consistent than P2/P3's own
+  "sometimes" finding — 4/4 this session. **A second, independent, new live
+  finding:** the deployed backend's own `environment.nodeEnv` is
+  `"production"` — even a successful approval could not have exercised the
+  payment-webhook long tail this session, since no `STRIPE_WEBHOOK_SECRET`
+  there means the dev-shape webhook body 401s unconditionally (the A3.T6
+  fail-closed fix). Documented both as BLOCKER B-5's updated entry.
+  Built real component-tree evidence for everything the live planner never
+  let through: `e2e/jarvis-p4-verification-fixtures.spec.ts` (4 passing
+  tests, real signed-in sessions with only 2-3 backend GET responses
+  intercepted, same posture as P3's own restore-after-refresh spec) —
+  real screenshots of the two-column diff at 100% matched, the sandbox
+  literal, the "no prediction recorded" fallback, the real Ops panel with
+  live numbers, and the approval card's predicted-outcome expand.
+  **Two more real, live defects found and fixed**, on top of P2's 2 and P3's
+  2 (DEFECT LEDGER NEW-6/NEW-7): (1) `lib/ReceiptDrawer.tsx`'s `JsonBlock`
+  dumped raw JSON on every receipt everywhere `ReceiptContent` is reused — a
+  live hard-rule-8 violation, fixed with a shared `FieldList`; the required
+  raw-JSON grep sweep then caught a SECOND instance in this session's own new
+  code (`formatFieldValue`'s array-of-objects fallback) and that was fixed
+  too, not just noted. (2) `views.tsx`'s `SystemHealthPanel` had the wrong
+  type for `environment.bindings` (string vs. the real `{mode,source}`
+  object), causing a live React crash on `/jarvis`'s "Production Readiness"
+  view — found while wiring P4.T6's identical field, fixed both the type and
+  the render. A third, pre-existing, out-of-scope raw-JSON gap
+  (`FallbackRenderer.tsx`) was found and documented, not fixed — already
+  scheduled at P5.T4 (DEFECT LEDGER NEW-8).
+  Ran the FULL e2e suite twice (`--workers=2`). First run surfaced 2 real
+  robustness gaps in this session's own new specs (fixed: a plan-detection
+  regex that didn't cover a genuine 0-action outcome, and a real-session
+  login race under full parallelism, fixed with `test.describe.configure({mode:
+  "serial"})` + desktop-only skips matching every other real-session spec's
+  own convention) — confirmed via isolated re-run that neither was a P4
+  regression (`jarvis-p3-restore-after-refresh.spec.ts` passed clean alone).
+  Second run: 88 passed, 7 failed — all 7 confirmed pre-existing/out-of-scope
+  (NEW-4 `jarvis-showtime.spec.ts` recurred identically; NEW-5's missing
+  `stage-owner-content`/`bridge-owner-content` baselines and mobile
+  "Awaiting Your Approval" flakiness recurred, consistent with this session's
+  own added real-tenant load from 4 live golden-consequence submissions).
+  Auto-generated snapshot "actuals" for the missing baselines were discarded
+  (`git clean`), not committed. P1/P2/P3's own committed screenshots,
+  incidentally re-captured (byte-different, not content-different) by
+  re-running their specs, were reverted to their original committed bytes.
+  245 frontend unit tests (up from 211), 261 backend tests passed / 558
+  skipped (up from 256/554).
+  **Next:** get the plan owner's explicit direction on B-5 (accept it stays
+  open, same posture as B-6, and move to P5 — nothing in P5 structurally
+  depends on P4's own live consequence proof; or decide how many more live
+  attempts against the shared production tenant are worth trying, given 4/4
+  misses this session is a real signal, not bad luck). **Blockers:** B-1
+  (DOM test env), B-2 (§5.5 `unavailable:"server"` row), B-5 (updated —
+  planner non-determinism + production webhook rejection), B-6 (migration
+  unapplied) — read all four in full before resuming.
 
 - **2026-07-29/30 · P3 T1–T12 CODE-COMPLETE (13 commits, `6d38a25`..`ebc80ea`),
   exit gate 3/6, two more real bugs found+fixed via live testing.** Executed
@@ -2045,6 +2511,10 @@ below, not fabricated.
 | D-22 | T4 | `POST /api/actions` "creates the session row" | Ambiguous whether that means inside the route file or inside `handleInstruction` | `ensureInstructionSession` called from inside `handleInstruction` (P3.T3) — functionally equivalent, keeps all trace logic in one place, both `instruction`/`ctx` already in scope there. |
 | D-23 | T9 | Backend `GET /api/stream` — no scope specified | A fully generic tenant-wide multiplexed relay would be real, unrequested scope beyond every other P3 mechanism (poll, restore), which are all instruction-scoped | Required `instructionId` query param — one stream per active instruction, consistent with the rest of the phase's architecture. |
 | D-24 | T11 | "lane slow-down when live" (fast 4→20s, medium 8→30s) | `data-core.ts`'s lane logic is explicitly not this phase's to touch (binding carried from P1/P2); there is no existing signal connecting one thread's own SSE health to the general lanes' cadence. | Not implemented — recorded rather than invented a new cross-module signal nowhere specified in the plan, or violating the standing binding. |
+| D-25 | P4 pre-flight | "verify from source whether predictedReceipt/predictionDiff... are sufficient... without any new migration" | They are — both columns, and their real writers (`planner.ts`, `plan-dag.ts`), predate this phase entirely (an earlier "B2.T2"). | No migration written. Reported as a pre-flight finding before any code, per the binding's own requirement to verify rather than assume this carries over from B-6. |
+| D-26 | T6 | "Sandbox execution (create_payment_link/send_message resolving to sandbox_outbox)" | `create_payment_link`'s only non-Stripe binding (`createPaymentLinkEmulatorBinding`) is a pure in-memory fake — it never writes a `sandbox_outbox` row at all. Only `send_message`'s default binding genuinely does. | `isSandboxStep` keys on "is the resolved binding genuinely the real provider" (per-capability mode check), not on which specific table gets written — source wins per §0.2 rule 1. |
+| D-27 | T8 | Approve the real action if it's the safe type | The live planner produced the safe type in 0 of 4 real attempts this session (3× `call_overdue_invoices`, 1× a 0-action plan) | Every attempt correctly rejected/terminated without approving anything. The consequence checklist and 3 exit-gate lines stay honestly unchecked — BLOCKER B-5 updated, not silently redefined or forced. |
+| D-28 | Exit gate | "No raw JSON in the receipt — grep... don't just assert it" | The grep found a real, live gap in this session's OWN new code: `formatFieldValue`'s array handling fell back to `JSON.stringify()` for arrays of objects (a genuinely reachable shape, `simulate()`'s own `fieldChanges`). | Fixed (`b1b8aee`), not just noted — `formatArrayElement` renders real key:value pairs instead. A second, pre-existing, out-of-scope instance (`FallbackRenderer.tsx`) was found and documented (DEFECT LEDGER NEW-8), not fixed — already scheduled at P5.T4. |
 
 ---
 
@@ -2060,8 +2530,9 @@ below, not fabricated.
 | B6 | `GET /api/instructions/{id}/events?after={seq}` | P3 | ✅ | `3e29ff5`. Same as above |
 | B7 | `GET /api/stream` (SSE) | P3 | ✅ | `d3386bf`. `id:` is real `instruction_events.seq`; bounded 120s; integration test self-skips (no DB) |
 | B8 | Non-buffering `src/app/api/jarvis/stream/route.ts` + allowlist | P3 | ✅ | `0840bb2`. Empirically verified before/after against a live dev server (file removed → catch-all's real 404; restored → dedicated route's real 401) |
-| B9 | `predicted` on `/api/actions/pending` and `/api/receipts/[id]` | P4 | ⬜ | |
+| B9 | `predicted`/`predictionDiff` on `/api/actions/pending` and `/api/receipts/[id]` | P4 | ✅ | `c38c253`. Additive fields only; no migration (columns predate this phase). 5 unit tests, full backend suite 261/0/554 skipped |
 | B10 | Web-only Vapi assistant (no `finnor_instruct`) | P2 | ✅ | Created via the Vapi API this session: `dff2a32c-fe61-431e-9919-34a2507fa756`, verified zero tools + no server webhook via an independent `GET` |
+| B11 | `applyPaymentWebhookEvent` finalizes the receipt + appends a `predictionDiff` amount comparison | P4 | ✅ | `be6d6c9`. Never creates a second receipt (same `finalizeReceipt`, called again on the same id). Real DB integration test, self-skips (no reachable DB, same B-6-class cause) |
 
 **Not touched by this plan:** `webhooks/vapi/route.ts` (the phone path stays exactly as it is).
 
