@@ -156,7 +156,7 @@ function ThreadPage() {
           />
         )}
       </div>
-      {isApproving && thread && <ThreadApprovalCockpit thread={thread} onClose={() => {}} />}
+      {isApproving && thread && <ThreadApprovalCockpit thread={thread} onClose={() => {}} reducedMotion={reducedMotion} />}
       <CommandRail />
     </div>
   )

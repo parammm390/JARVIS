@@ -9,13 +9,14 @@
 import { useEffect, useMemo, useState } from "react"
 import { motion } from "framer-motion"
 import type { Thread, ThreadNode } from "../kernel/store"
-import { planDrawNodeVariants, receiptSealVariants } from "../kernel/choreography"
+import { cockpitRiseVariants, planDrawNodeVariants, receiptSealVariants } from "../kernel/choreography"
 import { sfx, stepCueThrottled } from "../sound"
 import { ApprovalCockpit } from "./ApprovalCockpit"
 import { WorkflowTheater } from "../panels/WorkflowTheater"
 import { ReceiptContent } from "../lib/ReceiptDrawer"
 import { useKernel } from "../kernel/store"
 import { jarvisGet } from "../lib/api"
+import { DecryptText } from "../ui/fx/DecryptText"
 
 function formatUsd(n: number): string {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n)
@@ -42,7 +43,12 @@ export function ThreadHeard({ thread, onCancel }: { thread: Thread; onCancel: ()
   return (
     <div className="flex items-start justify-between gap-3">
       <div className="min-w-0 flex-1">
-        <p className="j-fs-xl font-extrabold text-[color:var(--j-text)]">{thread.instructionText}</p>
+        {/* M3 EchoResolve (§5.3): char-scrambled -> resolved L->R, 24ms/char cap.
+            Reduced motion renders the final text immediately (DecryptText's own
+            contract). */}
+        <p className="j-fs-xl font-extrabold text-[color:var(--j-text)]">
+          <DecryptText text={thread.instructionText} mode="decrypt" charMs={24} />
+        </p>
         {failed && (
           <p className="j-fs-sm mt-2 text-[color:var(--j-red)]">
             {thread.submitError ?? "I couldn't send that."}{" "}
@@ -77,6 +83,12 @@ export function ThreadUnderstood({ thread }: { thread: Thread }) {
     }
     return out
   }, [thread.nodes])
+
+  // §5.4: "think | `understanding` begins | a single low tick, then silence."
+  useEffect(() => {
+    sfx.think()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [thread.id])
 
   if (thread.machine.instructionState === "captured") return null
 
@@ -141,12 +153,24 @@ export function ThreadPlan({ thread, reducedMotion }: { thread: Thread; reducedM
         ))}
       </div>
       {thread.nodes.length > 0 && (
-        <p
-          className="j-fs-sm mt-3 border-l-2 pl-3 text-[color:var(--j-text-dim)]"
-          style={{ borderColor: "var(--j-amber)" }}
+        // M6 PolicyClamp (§5.3): a 2px amber bracket draws top->bottom, block
+        // shifts right 4px, 300ms EASE_IO.
+        <motion.div
+          className="relative mt-3 pl-3"
+          initial={reducedMotion ? { x: 0 } : { x: -4 }}
+          animate={{ x: 0 }}
+          transition={{ duration: 0.3, ease: [0.65, 0, 0.35, 1] }}
         >
-          {policyLine(thread.nodes)}
-        </p>
+          <motion.span
+            aria-hidden
+            className="absolute inset-y-0 left-0 w-[2px]"
+            style={{ background: "var(--j-amber)", transformOrigin: "top" }}
+            initial={reducedMotion ? { scaleY: 1 } : { scaleY: 0 }}
+            animate={{ scaleY: 1 }}
+            transition={{ duration: 0.3, ease: [0.65, 0, 0.35, 1] }}
+          />
+          <p className="j-fs-sm text-[color:var(--j-text-dim)]">{policyLine(thread.nodes)}</p>
+        </motion.div>
       )}
     </div>
   )
@@ -159,6 +183,12 @@ export function ThreadClarify({ thread, onAnswer, onSkip, onCancel }: { thread: 
   const clarification = thread.clarification
   const [answers, setAnswers] = useState<Record<string, string>>({})
   const [why, setWhy] = useState(false)
+  // §6④ Sound: "propose at lower pitch" — the SAME shape the cockpit uses, not
+  // a second unrelated cue.
+  useEffect(() => {
+    if (clarification) sfx.propose({ lower: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [thread.id, Boolean(clarification)])
   if (!clarification) return null
 
   const submit = () => {
@@ -213,8 +243,14 @@ export function ThreadClarify({ thread, onAnswer, onSkip, onCancel }: { thread: 
 // wide, unscoped) reused component per this session's binding: reuse, don't
 // rebuild `ApprovalCockpit`.
 // ---------------------------------------------------------------------------
-export function ThreadApprovalCockpit({ thread, onClose }: { thread: Thread; onClose: () => void }) {
+export function ThreadApprovalCockpit({ thread, onClose, reducedMotion }: { thread: Thread; onClose: () => void; reducedMotion: boolean }) {
   const total = thread.nodes.reduce((sum, n) => (n.amountUsd !== null ? sum + n.amountUsd : sum), 0)
+  const rise = cockpitRiseVariants(reducedMotion)
+  // §5.4: "propose | cockpit rises | two-note rising, brighter."
+  useEffect(() => {
+    sfx.propose()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [thread.id])
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -224,14 +260,21 @@ export function ThreadApprovalCockpit({ thread, onClose }: { thread: Thread; onC
       style={{ backdropFilter: "blur(20px)" }}
       onMouseDown={onClose}
     >
-      <div className="w-full max-w-[760px]" onMouseDown={(e) => e.stopPropagation()}>
+      {/* M7 CockpitRise (§5.3): translateY(24px)->0, 380ms EASE_OUT. */}
+      <motion.div
+        initial={rise.initial}
+        animate={rise.animate}
+        transition={rise.transition}
+        className="w-full max-w-[760px]"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         <div className="j-panel mb-3 rounded-xl border border-amber-300/20 px-4 py-3">
           <p className="j-fs-base font-bold text-[color:var(--j-text)]">
             {thread.nodes.length} action{thread.nodes.length === 1 ? "" : "s"} · {formatUsd(total)} · {thread.nodes.length} customer{thread.nodes.length === 1 ? "" : "s"} will be texted
           </p>
         </div>
         <ApprovalCockpit />
-      </div>
+      </motion.div>
     </motion.div>
   )
 }
