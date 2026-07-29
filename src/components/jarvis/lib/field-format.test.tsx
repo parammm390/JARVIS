@@ -64,4 +64,22 @@ describe("formatFieldValue", () => {
     expect(formatFieldValue({ a: 1 })).not.toContain("{")
     expect(formatFieldValue({})).toBe("—")
   })
+
+  // jarvis-v3 P4's own binding required grepping for raw JSON as exit-gate
+  // evidence, not just asserting it — this caught a real, live gap: an array
+  // of OBJECTS (not strings) fell through to JSON.stringify(). Genuinely
+  // reachable: invoice-to-cash/index.ts's simulate() returns
+  // `fieldChanges: [{field, from, to}]` inside `predicted`, which P4.T2's
+  // approval-card expand renders through this exact function.
+  it("never dumps raw JSON for an array of objects — the real fieldChanges shape simulate() returns", () => {
+    const rendered = formatFieldValue([{ field: "workflow", from: null, to: "invoice_to_cash" }])
+    expect(rendered).not.toContain("{")
+    expect(rendered).not.toContain('"')
+    expect(rendered).toBe("field: workflow, from: —, to: invoice_to_cash")
+  })
+
+  it("handles a nested array within an array element without ever falling back to JSON", () => {
+    const rendered = formatFieldValue([{ tags: ["a", "b"] }])
+    expect(rendered).not.toMatch(/[{}]/)
+  })
 })

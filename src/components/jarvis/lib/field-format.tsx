@@ -21,12 +21,27 @@ export function flattenForDisplay(value: unknown, path = ""): Array<{ path: stri
   return entries.flatMap(([key, child]) => flattenForDisplay(child, path ? `${path}.${key}` : key))
 }
 
+/** A single array element that isn't itself a primitive — e.g. `simulate()`'s
+ *  own `fieldChanges: [{field, from, to}]` (invoice-to-cash/index.ts). Formats
+ *  as `field: workflow, from: —, to: invoice_to_cash` — real key:value pairs,
+ *  never `JSON.stringify()` (hard rule 8: no raw JSON on any customer-facing
+ *  surface — a real, live gap found by this task's own required grep, since
+ *  this exact shape is reachable through the approval card's predicted-outcome
+ *  expand, P4.T2). */
+function formatArrayElement(value: unknown): string {
+  if (value === null || value === undefined) return "—"
+  if (typeof value !== "object") return formatFieldValue(value)
+  if (Array.isArray(value)) return value.length === 0 ? "none" : value.map(formatArrayElement).join("; ")
+  const entries = Object.entries(value as Record<string, unknown>)
+  return entries.length === 0 ? "—" : entries.map(([k, v]) => `${k}: ${formatFieldValue(v)}`).join(", ")
+}
+
 export function formatFieldValue(value: unknown): string {
   if (value === null || value === undefined) return "—"
   if (typeof value === "boolean") return value ? "yes" : "no"
   if (typeof value === "number") return Number.isFinite(value) ? String(value) : "—"
   if (typeof value === "object" && !Array.isArray(value)) return Object.keys(value as object).length === 0 ? "—" : "(nested)"
-  if (Array.isArray(value)) return value.length === 0 ? "none" : value.map((v) => (typeof v === "string" ? v : JSON.stringify(v))).join(", ")
+  if (Array.isArray(value)) return value.length === 0 ? "none" : value.map((v) => (typeof v === "string" ? v : formatArrayElement(v))).join(", ")
   return String(value)
 }
 
