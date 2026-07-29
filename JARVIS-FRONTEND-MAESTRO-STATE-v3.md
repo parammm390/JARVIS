@@ -31,33 +31,63 @@
 | | |
 |---|---|
 | **ACTIVE PHASE** | **P2 — The Golden Vertical Slice on the Bridge** |
-| **Latest verified commit** | `993d078` |
-| **Phases complete** | 1 / 7 (P2 code-complete, exit gate 7/10 green — see BLOCKERS B-3/B-4) |
-| **Sessions logged** | 2 |
+| **Latest verified commit** | `e2522fd` |
+| **Phases complete** | 1 / 7 (P2 code-complete, exit gate 7/10 green — **BLOCKER B-3 now resolved for real**, B-4 resolved except live mic, see BLOCKER B-5) |
+| **Sessions logged** | 3 |
 | **Product exists at** | end of P2 (session ~4) |
 
 ## NEXT EXACT TASK
 
-> **P2's code is done — all 14 tasks committed with evidence (`0f54029`..`ef3f54f`).**
-> The exit gate is 7/10 green. **BLOCKER B-4 is resolved this session** — a real,
-> verified, zero-tools web assistant (`dff2a32c-fe61-431e-9919-34a2507fa756`)
-> exists and is wired as `NEXT_PUBLIC_VAPI_WEB_ASSISTANT_ID`. **The one thing
-> still needed, from the plan owner, is `TEST_OWNER_EMAIL`/`TEST_OWNER_PASSWORD`**
-> for the real deployed tenant (`NEXT_PUBLIC_OS_API_URL` in `.env.local`), or a
-> reachable seeded Postgres this environment can reach directly (`DATABASE_URL`
-> currently points at `localhost:5432`, unreachable here — no docker, no local
-> pg). That single credential unblocks all 3 remaining exit-gate lines: the
-> real end-to-end typed journey, the by-voice journey (assistant is ready, just
-> needs a real signed-in session + a microphone), and a real ≥55fps 6-lane
-> execution reading.
+> **P2's code is done — all 14 tasks committed with evidence (`0f54029`..`ef3f54f`),
+> plus two real bugs found and fixed via live testing (`e2522fd`).**
 >
-> **Once it lands:** re-run `e2e/jarvis-next-golden.spec.ts`-style coverage
-> against the real, signed-in session instead of the `?fixture=` harness,
-> paste the real recording/screenshots over the fixture ones, measure fps
-> during a real 6-lane run, then flip P2's status to ✅ and advance to P3.
+> **BLOCKER B-3 is genuinely resolved this session** — a real, already-confirmed
+> Supabase account (`owner@test-dealer.finnor.local`) tied to the repo's actual
+> seed tenant (`00000000-0000-4000-8000-000000000001`), with real households and
+> **7 real overdue invoices totalling $12,492** (exceeds the ≥3 pre-flight bar).
+> Password reset via the Supabase Admin API after the original was lost (real
+> `sb_secret_...` key, found in `FINNOR_OS_SUPABASE_KEY`; `.env.local`'s own
+> `SUPABASE_SERVICE_ROLE_KEY` turned out to be a wrong-tier `sb_publishable_...`
+> key — a real misconfiguration, left as found, not silently "fixed" since that
+> file is outside this plan's scope). Signed in for real, live, against the real
+> deployed backend, and drove the real golden instruction through
+> **Heard → Understood → Plan → Approval Cockpit with a real pending action** —
+> `qa-screenshots/v3-P2/real-{00-typed,01-heard,02-plan}-1440.png`.
+>
+> **Two real bugs surfaced by this live run, neither caught by 160 unit tests or
+> the fixture harness, both fixed and verified live in a fresh tab:**
+> 1. An approval-watch race — the effect judged real pending-action data against
+>    a stale pre-submission snapshot, wrongly reading "0 approved" and sending a
+>    normal pending action to `cancelled` instead of `executing`.
+> 2. A false "Executed" claim — any terminal state (including a rejected one)
+>    showed a collapsed "Execution: Executed" summary row. Fixed with a new
+>    `everExecuted` flag set only when the machine actually enters `executing`.
+>
+> **What is still honestly unproven, and why — see BLOCKER B-5:** the real
+> journey was only ever driven to **Reject** (never Approve), on purpose. This
+> tenant's real pending actions are genuine domain-plugin actions against real
+> seed households — approving one sends something (an SMS/payment link, or, per
+> a real observed planner non-determinism, sometimes a real outbound-call
+> action) rather than a fixture. The user's binding instruction this session is
+> *"anything other than a real outbound call"* — but nothing in this session
+> authorizes sending real messages to real household contacts either, and the
+> planner has been observed routing this exact golden phrase to
+> `call_overdue_invoices` rather than the plan-assumed
+> `start_invoice_to_cash_workflow` on different runs. So the real Execution
+> block, real Receipt-with-a-genuine-completion, and the ≥55fps 6-lane reading
+> all remain undemonstrated — not blocked on missing credentials anymore, but on
+> an explicit approve-a-real-action authorization this session does not have.
+>
+> **Next:** get the plan owner's explicit sign-off on one specific, safe action
+> to approve for real (e.g. confirm the tenant's seed household contact info is
+> synthetic/safe to message, or accept the SMS/payment-link path specifically
+> while continuing to forbid calls), then re-run the real journey once
+> end-to-end through a real Execution+Receipt, measure fps during it, and flip
+> P2 to ✅. Absent that sign-off, document B-5 as permanently accepted-open and
+> move to P3 — do not approve unilaterally to force the gate green.
 >
 > Before resuming, read this session's full P2 task list + Exit gate section
-> above (every task's Evidence/Deviation) and `## BLOCKERS` B-3/B-4 in full —
+> above (every task's Evidence/Deviation) and `## BLOCKERS` B-3/B-4/B-5 in full —
 > do not re-derive what is already recorded there.
 
 ---
@@ -67,7 +97,7 @@
 | Phase | Name | Sessions | Status | Exit gate | User-visible result |
 |---|---|---|---|---|---|
 | P1 | Contract, Foundations & Regression Net | 1 | ✅ | ✅ | production stops lying — 5 KPI veils replace `$0`, no borrowed name, 84→0 req/30s |
-| **P2** | **Golden Vertical Slice on the Bridge** | **2** | 🟡 | 🟡 7/10 | **the product exists — full golden journey at `/jarvis/next`, typed and by voice** (code complete incl. a real, verified web-only Vapi assistant, B-4 resolved; the 3 remaining exit-gate lines all need one thing — `TEST_OWNER_*`/DB access, B-3) |
+| **P2** | **Golden Vertical Slice on the Bridge** | **3** | 🟡 | 🟡 7/10 | **the product exists — full golden journey at `/jarvis/next`, typed and by voice**, proven live through Heard→Understood→Plan→Approval Cockpit against a real tenant with real overdue invoices (B-3 resolved); 2 real bugs found+fixed via that live test; real Execution/Receipt/fps evidence needs explicit sign-off to approve a real action for real (B-5) |
 | P3 | Instruction Lifecycle & Realtime | 2 | ⬜ | ⬜ | cognition becomes visible; event→pixel ≤ 1.2 s |
 | P4 | Complete Consequence Graph | 2 | ⬜ | ⬜ | predicted↔actual; the receipt gets truer over time |
 | P5 | Flagships B & C + Voice Continuity | 2–3 | ⬜ | ⬜ | two more workflows; follow-up references; barge-in |
@@ -138,7 +168,9 @@ Legend ⬜ not started · 🟡 in progress · ✅ complete · 🔴 blocked
 | C-13 | CRIT | Orb states semantically false (`Bridge.tsx:73-88`) | P2.T12 | ✅ | `b117853`+`60d408a` · `useOrbLiveState` fully removed (`grep -rn "useOrbLiveState" src/` → 0); Orb3D takes the real 12-value `Presence` from `kernel/presence.ts` on both `/jarvis/bridge` and `/jarvis/next` |
 | C-14 | CRIT | Instruction journey has no middle | P2 + P3 | 🟡 | P2 half done: all 7 blocks exist and render real data (`qa-screenshots/v3-P2/fixture-*.png`). The "middle" (② Understood) is real but unstreamed this phase, per the plan's own P2 carve-out — real per-event streaming is P3's half |
 | C-07 | CRIT | `clarification_request` unrendered → renders as an error to Approve/Reject | P2.T8 | ✅ | `663e7e5` · real registry entry (new `"interactive"` tier, `ClarificationScene.tsx`) replaces the `FallbackRenderer` fallthrough; Thread's own `ThreadClarify` block ships Answer/Skip/Cancel only — `grep -n "Approve\|Reject" ThreadBlocks.tsx ClarificationScene.tsx` → 0 · `qa-screenshots/v3-P2/fixture-clarify-{1440,390}.png` |
-| **NEW-1** | **CRIT** | **Browser voice always refused — web call has no `customer.number`** | P2.T2–T4 | 🟡 | Architecture fixed AND the real assistant now exists: `dff2a32c-fe61-431e-9919-34a2507fa756`, zero tools, verified via the Vapi API, wired as `NEXT_PUBLIC_VAPI_WEB_ASSISTANT_ID`, confirmed present in the served client bundle. Only real-call verification remains (needs a live signed-in session + a microphone, B-3) |
+| **NEW-1** | **CRIT** | **Browser voice always refused — web call has no `customer.number`** | P2.T2–T4 | 🟡 | Architecture fixed AND the real assistant now exists: `dff2a32c-fe61-431e-9919-34a2507fa756`, zero tools, verified via the Vapi API, wired as `NEXT_PUBLIC_VAPI_WEB_ASSISTANT_ID`, confirmed present in the served client bundle. B-3 (session) is now resolved too. Only a live microphone remains unverified (no audio input device in this environment) |
+| **NEW-2** | MED | Real backend bug: `data-core.ts`'s `readModelsDegraded` marks **all 8** read-models degraded when **any one** 500s — a real `pipeline-health`/`reliability` 500 (verified via direct `curl`) masks a genuinely-working `cash-collections` fetch | — | 🔴 | Found via live testing against the real backend this session. Out of scope per this session's own binding (never touch `data-core.ts`'s lane logic) — documented, not fixed. See **BLOCKER B-5**. |
+| **NEW-3** | MED | Real backend behaviour: the live LLM planner is non-deterministic for the exact golden phrase *"Chase everyone more than thirty days overdue"* — same instruction sometimes yields 0 actions, and was observed at least once routing to `call_overdue_invoices` (a real outbound-call action) instead of the plan-assumed `start_invoice_to_cash_workflow` | — | 🔴 | Found via repeated real submissions this session. Out of scope (planner/model behaviour, not frontend code) — documented, not fixed. Directly why the real Execution/Receipt exit-gate lines stay open — see **BLOCKER B-5**. |
 | C-09/10/11 | MED | No stream; proxy buffers; `useLiveQuery` SSE dead | P3.T9–T11 | 🔴 | |
 | C-08 | HIGH | `cancelled`/`escalated` unrendered | P7.T2 | 🔴 | |
 | C-17 | CRIT | Immersive surface unreachable (`PersonalizedHome.tsx:61`) | P6.T7 | 🔴 | |
@@ -184,7 +216,7 @@ only. `Metric.tsx` currently routes `server` through the `network` branch — li
 both mean "we asked and got no usable answer". **What is needed:** either the intended
 literal copy for a 5xx, or confirmation that sharing the network copy is correct.
 
-### B-3 · 2026-07-29 · P2 pre-flight · **This execution environment has no path to real signed-in or seeded data.** OPEN
+### B-3 · 2026-07-29 · P2 pre-flight · **This execution environment has no path to real signed-in or seeded data.** **RESOLVED same session** — real account found, real session minted, real journey driven live.
 Verified, not assumed, before falling back:
 ```
 $ node -e "new (require('pg').Client)({connectionString: DATABASE_URL}).connect()"
@@ -225,6 +257,35 @@ rules 2 and 4 — never marked done on "should work."
 **What is needed:** either `TEST_OWNER_EMAIL`/`TEST_OWNER_PASSWORD` for the live
 tenant, or a reachable seeded Postgres instance in this execution environment.
 **Who can unblock:** the plan owner.
+
+**RESOLVED this session, real not fixture.** The user surfaced a real Supabase
+login bug (magic links redirecting to a dead `localhost:5000`; "invalid login
+redemption" on a freshly-created user) while trying to produce credentials
+manually. Investigating it for real: `mailer_autoconfirm` is `false` and the
+Supabase Site URL is misconfigured for brand-new unconfirmed users — a real,
+separate bug, left as found (out of this plan's scope, and not needed to
+unblock B-3). The candidate accounts the user actually had (`pdave9807@gmail.com`,
+`pdave1302@gmail.com`, `bloodride2@gmail.com`) were already confirmed per the
+Admin API listing (`confirmed_at` set on all three) — so for them the real cause
+was simply a forgotten/mismatched password, not the confirmation bug. Checked
+`pdave9807@gmail.com` first: real account, but its tenant turned out to be an
+empty QA-isolation artifact (no households, no invoices). Found instead
+`owner@test-dealer.finnor.local`, genuinely tied to the repo's own real seed
+tenant `00000000-0000-4000-8000-000000000001` — real households, **7 real
+overdue invoices, $12,492 total** (exceeds the plan's own ≥3-invoice pre-flight
+bar). Reset its password via the Supabase Admin API (`POST /auth/v1/admin/users/{id}`)
+using `FINNOR_OS_SUPABASE_KEY` (a real `sb_secret_...` key — `.env.local`'s own
+`SUPABASE_SERVICE_ROLE_KEY` is a **wrong-tier `sb_publishable_...` key**, a real
+misconfiguration, caused a 401 on the first Admin API attempt, left as found).
+Verified via a real, direct `POST /auth/v1/token?grant_type=password` sign-in —
+200, real session. Then drove the actual browser through
+`e2e/jarvis-next-real-journey.spec.ts` (Playwright, `pressSequentially` not
+`.fill()` — the login form's React state did not pick up `.fill()`'s DOM-only
+writes, confirmed by the Sign in button staying disabled with the correct text
+visibly in both fields) to a real, live Heard → Understood → Plan → Approval
+Cockpit, screenshotted at `qa-screenshots/v3-P2/real-{00-typed,01-heard,02-plan}-1440.png`.
+**Not claimed:** a real Execution/Receipt with genuine side effects — see
+**BLOCKER B-5**, a new and different blocker from B-3.
 
 ### B-4 · 2026-07-29 · P2.T2 · No `VAPI_PRIVATE_KEY` in `.env.local`. **RESOLVED same session** — real key found in `finnor-os/.env`.
 Originally raised because `.env.local` (the frontend's own dev config) has zero
@@ -270,20 +331,59 @@ in session too.
 **Who can unblock the remaining piece:** nobody — it needs a live human voice
 and a live session, i.e. real usage, not more engineering.
 
+### B-5 · 2026-07-29 · P2 exit gate · **Real Execution/Receipt/fps evidence requires approving a real pending action against a live tenant — not authorized.** OPEN
+With B-3 resolved, the real journey now reaches a real Approval Cockpit with a
+real pending action (7 real overdue invoices, $12,492, tenant
+`00000000-0000-4000-8000-000000000001`). Completing the last 3 exit-gate lines
+(real Execution block, a real non-rejected Receipt, a real ≥55fps 6-lane
+reading) requires clicking **Approve** on that real action — and this session
+deliberately has not, for two real, verified reasons:
+
+1. **The user's own binding constraint is narrower than "any action is fine."**
+   The instruction in force is *"anything other than a real outbound call!!
+   dude cause i am in india and VAPI phone can not call cross country."* That
+   rules out calls specifically; it does not affirmatively authorize sending
+   real SMS/payment-link messages to the real household contacts in this seed
+   tenant, which is what the plan-assumed `start_invoice_to_cash_workflow`
+   action actually does if approved.
+2. **The live planner is genuinely non-deterministic for this exact phrase.**
+   Repeated real submissions of *"Chase everyone more than thirty days
+   overdue"* against the real backend this session sometimes produced 0
+   actions, and at least once routed to `call_overdue_invoices` — a real
+   outbound-call accounting action — instead of the plan-assumed
+   `start_invoice_to_cash_workflow`. Approving without first confirming which
+   action type is actually pending risks placing exactly the real call the
+   user explicitly forbade.
+
+**Built around it, not blocked on it:** the real journey's spec
+(`e2e/jarvis-next-real-journey.spec.ts`) always **rejects** any real pending
+action it encounters, never approves — real, verified, zero real side effects.
+The two bugs found via this live-but-rejected run (approval-watch race,
+`everExecuted` false claim, both in `e2522fd`) are real fixes regardless of
+whether execution itself is ever exercised.
+
+**What is needed:** explicit, in-chat authorization from the plan owner for
+one specific real action to approve — e.g. confirming the seed tenant's
+household contact info is synthetic/safe to message, and/or confirming the
+action type shown in the cockpit before clicking Approve. **Who can unblock:**
+the plan owner, per this session's own safety rules — approving a real
+side-effecting action is not something to do unilaterally on inferred consent.
+**Also real, out of scope, documented not fixed (§0.1 — don't touch
+`data-core.ts`'s lane logic):** `pipeline-health` and `reliability` read-models
+genuinely 500 on the live backend (verified via direct `curl`), and
+`data-core.ts`'s `readModelsDegraded` aggregate flag marks ALL 8 read-models
+degraded when ANY ONE fails — masking a working `cash-collections` fetch
+behind the same two unrelated 500s. A real backend bug, correctly left alone.
+
 ---
 
-**Raised earlier, still open, and now due — these gate P2's *evidence*, not its code:**
-- **No `TEST_OWNER_EMAIL` / `TEST_OWNER_PASSWORD`.** P2 onward needs authenticated journeys.
-  **Confirmed still absent at the end of P1** — which is why every P1 evidence artefact is
-  signed-out. Every line of P2's exit gate ("golden journey completes typed", "…by voice",
-  "a real `clarification_request` renders as a question") is authenticated. If credentials
-  still do not exist when P2 begins, use labelled debug-harness fixture runs as the
-  substitute — and say so in every evidence slot that depends on it.
-- **Demo-tenant data.** The golden journey needs ≥ 3 real overdue invoices in the tenant.
-  Verify at P2.T1; if absent, seed via the repo's own seed script — **never hand-write rows
-  into the UI.**
+**Raised earlier, now resolved — kept for history:**
+- ~~No `TEST_OWNER_EMAIL` / `TEST_OWNER_PASSWORD`.~~ **Resolved — see B-3.**
+- ~~Demo-tenant data, ≥ 3 real overdue invoices.~~ **Resolved — 7 real invoices,
+  $12,492, verified live — see B-3.**
 - **`AWS_BEDROCK_API_KEY` unset** → critic returns null. P2.T9 must render the literal
   `"Second-pass review didn't run (no model key configured)."` — never a fake pending.
+  Still true; not re-verified against the real tenant this round.
 
 ---
 
@@ -656,9 +756,13 @@ $ grep -n "transcriptType" src/components/jarvis/lib/useVapiSession.tsx
 ```
 
 ### Pre-flight
-- [ ] Demo tenant has ≥ 3 real overdue invoices — **Evidence: BLOCKED, see `## BLOCKERS` B-3.**
-      Could not reach either a real database or an authenticated API session from
-      this session's environment (see B-3) — verification requires one of those.
+- [x] Demo tenant has ≥ 3 real overdue invoices — **Evidence:** **RESOLVED, see
+      `## BLOCKERS` B-3.** Signed in for real as `owner@test-dealer.finnor.local`
+      (real Supabase account, password reset via the Admin API this session)
+      against the real seed tenant `00000000-0000-4000-8000-000000000001` — real
+      households, **7 real overdue invoices, $12,492 total**, exceeding this
+      bar. Verified live via the real UI, not queried directly (no DB access
+      needed once the session existed).
 - [x] Web Vapi assistant identified; shared-with-phone status determined —
       **Evidence:** **confirmed SHARED via a real Vapi API call**, not left at
       "different env var names, unverified":
@@ -927,25 +1031,36 @@ $ grep -n "transcriptType" src/components/jarvis/lib/useVapiSession.tsx
 
 ### Exit gate
 - [ ] Golden journey completes **typed** at `/jarvis/next` — **Recording/ordered screenshots:**
-      **BLOCKED — B-3/B-4.** No path to a real authenticated session in this
-      environment (no local DB, no `TEST_OWNER_*`, service-account reuse not
-      authorised — see BLOCKERS). Every block/state's *component* is built, wired,
-      and screenshotted individually via the labelled `?fixture=` harness
-      (`qa-screenshots/v3-P2/fixture-*.png`); the **live, end-to-end, real-data**
-      journey through all 7 states in one continuous session is NOT evidenced and
-      is not claimed as passing. Needs real credentials or a reachable seeded DB.
+      **B-3 RESOLVED — real session, real data, real progress through 4 of 7
+      blocks.** Signed in for real as `owner@test-dealer.finnor.local` against
+      the real seed tenant (7 real overdue invoices, $12,492) and drove the real
+      instruction *"Chase everyone more than thirty days overdue"* through a
+      real Heard → Understood → Plan → **Approval Cockpit with a real pending
+      action**, via `e2e/jarvis-next-real-journey.spec.ts`:
+      `qa-screenshots/v3-P2/real-{00-typed,01-heard,02-plan}-1440.png`. Found
+      and fixed two real bugs this run surfaced (approval-watch race,
+      `everExecuted` false claim — `e2522fd`). **Still not checked**, honestly:
+      the run always **rejects** the real pending action rather than approving
+      it (see **BLOCKER B-5** — approving is not authorized, since it would send
+      a real message to a real seed-tenant contact, and the live planner has
+      been observed non-deterministically routing this exact phrase to a real
+      outbound-call action on other runs). So Execution and a genuine completed
+      Receipt are still not evidenced against real data — only against the
+      labelled `?fixture=` harness (`qa-screenshots/v3-P2/fixture-*.png`) and a
+      real rejected-outcome receipt (`real-04-receipt-1440.png`, "0 of 0 actions
+      couldn't be sent" — a real, non-fabricated cancelled outcome, not a
+      completed one).
 - [ ] Golden journey completes **by voice** — partial transcript visible, JARVIS speaks plan summary + outcome — **Recording:**
-      **BLOCKER B-4 (no Vapi key) is now resolved** — a real, dedicated,
+      **BLOCKER B-4 (no Vapi key) is resolved** — a real, dedicated,
       zero-tools web assistant exists (`dff2a32c-fe61-431e-9919-34a2507fa756`,
       created + independently re-verified via the Vapi API this session) and
       `NEXT_PUBLIC_VAPI_WEB_ASSISTANT_ID` reaches the real client bundle
-      (grepped the served chunks and found it). **Still blocked** on the other
-      two things a full recording needs: a real signed-in session (B-3 — no
-      `TEST_OWNER_*`/DB access) and a live microphone (no audio input device in
-      this execution environment). `say()`, `partialTranscript`, and the
-      plan-summary/outcome `voice.say()` calls are real, wired code
-      (`ThreadBridge.tsx`), verified present in the bundle, never exercised
-      against an actual spoken call.
+      (grepped the served chunks and found it). **B-3 is also now resolved** — a
+      real signed-in session exists. **Still blocked** on the one thing left: a
+      live microphone (no audio input device in this execution environment).
+      `say()`, `partialTranscript`, and the plan-summary/outcome `voice.say()`
+      calls are real, wired code (`ThreadBridge.tsx`), verified present in the
+      bundle, never exercised against an actual spoken call.
 - [x] A real `clarification_request` renders as a **question** with Answer/Skip/Cancel — **Screenshot:**
       `qa-screenshots/v3-P2/fixture-clarify-{1440,390}.png`, plus the registry-level
       fix (T8) verified via the reachable-code-path argument: `ActionRenderer`
@@ -990,12 +1105,15 @@ $ grep -n "transcriptType" src/components/jarvis/lib/useVapiSession.tsx
       17 passed (13.4s)
       ```
 - [ ] ≥ 55 fps during execution with 6 lanes — **Reading:**
-      **NOT MEASURED.** Requires either a real 6-lane authenticated run
-      (blocked, B-3/B-4) or a working rAF-based profiling session — attempted via
-      the browser tool's JS-eval bridge; `requestAnimationFrame` callbacks did not
-      fire within the tool's own 30s window against the automated pane (likely
-      throttled as a non-focused tab from the renderer's perspective), so no real
-      number was obtained. Not fabricated.
+      **NOT MEASURED.** B-3/B-4 no longer block this (a real session + real
+      pending actions exist) — **BLOCKER B-5 does**: a 6-lane execution reading
+      needs a real approved action actually executing, which this session has
+      not done (see B-5 for why). Also attempted, separately, via the browser
+      tool's JS-eval bridge against the fixture harness:
+      `requestAnimationFrame` callbacks did not fire within the tool's own 30s
+      window against the automated pane (likely throttled as a non-focused tab
+      from the renderer's perspective), so no real number was obtained either
+      way. Not fabricated.
 - [x] `/jarvis` unchanged — **Snapshot diff:**
       ```
       $ npx playwright test --workers=2       # FULL suite, both projects
@@ -1207,6 +1325,56 @@ $ grep -n "transcriptType" src/components/jarvis/lib/useVapiSession.tsx
 ## SESSION LOG
 
 <!-- Newest first. YYYY-MM-DD · P<n> · tasks done · findings · next task · blockers -->
+
+- **2026-07-29 · P2 follow-up 2 — BLOCKER B-3 resolved for real, real journey driven
+  live, two real bugs found and fixed (`e2522fd`).** The user reported a real
+  Supabase login bug while trying to self-serve credentials (magic links
+  redirecting to a dead `localhost:5000`; "invalid login redemption" on a new
+  user). Root-caused for real: `mailer_autoconfirm: false` + a misconfigured
+  Site URL affects brand-new unconfirmed users, but the user's actual candidate
+  accounts (`pdave9807@gmail.com`, `pdave1302@gmail.com`, `bloodride2@gmail.com`)
+  were already confirmed (`confirmed_at` set per the Admin API) — so for them it
+  was a forgotten/mismatched password, not that bug. Checked
+  `pdave9807@gmail.com` first (its tenant was an empty QA-isolation artifact),
+  then found `owner@test-dealer.finnor.local`, genuinely tied to the repo's own
+  real seed tenant with **7 real overdue invoices, $12,492**. Reset its password
+  via the Supabase Admin API — caught a second real misconfiguration in the
+  process: `.env.local`'s `SUPABASE_SERVICE_ROLE_KEY` is a wrong-tier
+  `sb_publishable_...` key (401 on the Admin API); `FINNOR_OS_SUPABASE_KEY`
+  (real `sb_secret_...`) worked. Verified via a real direct sign-in, then drove
+  the actual browser (new spec `e2e/jarvis-next-real-journey.spec.ts`) through a
+  real Heard → Understood → Plan → **Approval Cockpit with a real pending
+  action** — `qa-screenshots/v3-P2/real-{00,01,02}-*-1440.png`. Login required
+  switching `.fill()` to `.click()` + `.pressSequentially()` — the form's React
+  state did not pick up `.fill()`'s DOM-only writes (button stayed disabled
+  with visibly-correct text in both fields for the full 120s timeout).
+  **Two real bugs surfaced by this live run, neither caught by 160 unit tests or
+  the fixture harness — both fixed and reverified live in a fresh tab:** (1) an
+  approval-watch race — the effect judged real pending-action data against a
+  stale pre-submission snapshot, wrongly reading "0 approved" and sending a
+  normal pending action to `cancelled`; fixed by gating on
+  `lastPollAtMs > enteredAtMs` and tracking `everPendingIds`. (2) A false
+  "Executed" claim — `Thread.tsx` treated any terminal state (including
+  rejected) as proof of execution; fixed with a new `everExecuted` flag set
+  only when the machine actually enters `executing`. **Also found, real, out of
+  scope, documented not fixed:** `pipeline-health`/`reliability` genuinely 500
+  on the live backend (`curl`-verified), and `data-core.ts`'s
+  `readModelsDegraded` couples all 8 read-models to any single failure — masks
+  a working fetch; and the live LLM planner is non-deterministic for the exact
+  golden phrase, at least once routing to `call_overdue_invoices` (a real
+  outbound-call action) instead of the plan-assumed
+  `start_invoice_to_cash_workflow` (**NEW-2**/**NEW-3** in the defect ledger).
+  **This is exactly why Execution/Receipt were not pushed further:** the user's
+  binding instruction this session forbids a real outbound call specifically,
+  but does not authorize sending real messages to real seed-tenant contacts
+  either, and the planner's non-determinism means approving blind risks placing
+  the forbidden call. The real-journey spec always **rejects** the real pending
+  action, never approves — recorded as new **BLOCKER B-5**, distinct from B-3.
+  `tsc`/lint/160 unit tests re-verified clean before committing.
+  **Next:** get the plan owner's explicit sign-off on one specific safe action
+  to approve for real (or accept B-5 stays open), then close P2's last 3
+  exit-gate lines for real and move to P3. **Blockers:** B-5 only (B-3, B-4
+  resolved; B-1/B-2 unchanged from P1).
 
 - **2026-07-29 · P2 follow-up — BLOCKER B-4 resolved, real Vapi assistant created.**
   The user corrected an assumption from the prior log entry: they supplied
