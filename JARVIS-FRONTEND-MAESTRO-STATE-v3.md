@@ -31,7 +31,7 @@
 | | |
 |---|---|
 | **ACTIVE PHASE** | **P4 — Complete Consequence Graph** |
-| **Latest verified commit** | `dd3dd65` |
+| **Latest verified commit** | `8549870` |
 | **Phases complete** | 1 / 7 (P2 code-complete, exit gate 7/10 green, B-5 still open; P3 code-complete, exit gate 3/6 green, BLOCKER B-6 open; **P4 code-complete, exit gate 2/5 green — BLOCKER B-5** (live planner routed away from the safe action type 4/4 real attempts this session, despite an explicit conditional go-ahead) blocks the live predicted↔actual/webhook/consequence-checklist lines; 1 real raw-JSON gap + 1 real live-crash bug found+fixed this phase, on top of P2's 2 and P3's 2) |
 | **Sessions logged** | 5 |
 | **Product exists at** | end of P2 (session ~4); cognition visible end of P3 (session ~5); the consequence graph + predicted↔actual is built and fixture-verified end of P4 (session ~6), live proof still blocked on B-5 |
