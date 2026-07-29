@@ -31,7 +31,7 @@
 | | |
 |---|---|
 | **ACTIVE PHASE** | **P2 — The Golden Vertical Slice on the Bridge** |
-| **Latest verified commit** | `e2522fd` |
+| **Latest verified commit** | `a6c9adb` |
 | **Phases complete** | 1 / 7 (P2 code-complete, exit gate 7/10 green — **BLOCKER B-3 now resolved for real**, B-4 resolved except live mic, see BLOCKER B-5) |
 | **Sessions logged** | 3 |
 | **Product exists at** | end of P2 (session ~4) |
