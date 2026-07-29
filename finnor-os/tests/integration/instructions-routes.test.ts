@@ -1,0 +1,98 @@
+// jarvis-v3 P3.T5: GET /api/instructions/:id and GET /api/instructions/:id/events —
+// same describe.skipIf(!available) + migrate() + direct route-handler-import pattern
+// as tests/integration/dlq-routes.test.ts.
+
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { randomUUID } from "node:crypto";
+import pg from "pg";
+import { migrate } from "../../packages/db/migrate";
+import { closePool, withTenant, tenants } from "@finnor/db";
+import { ensureInstructionSession, emitInstructionEvent } from "../../packages/orchestration/src/instruction-trace";
+import { GET as getInstruction } from "../../apps/api/app/api/instructions/[id]/route";
+import { GET as getInstructionEvents } from "../../apps/api/app/api/instructions/[id]/events/route";
+
+const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
+const TENANT_ID = "00000000-0000-4000-8000-0000000000ea";
+const OTHER_TENANT_ID = "00000000-0000-4000-8000-0000000000eb";
+
+async function dbUp(): Promise<boolean> {
+  const c = new pg.Client({ connectionString: DB_URL, connectionTimeoutMillis: 2000 });
+  try {
+    await c.connect();
+    await c.end();
+    return true;
+  } catch {
+    return false;
+  }
+}
+const available = await dbUp();
+
+function req(url: string, tenantId = TENANT_ID): Request {
+  return new Request(`http://localhost${url}`, { headers: { "x-tenant-id": tenantId, "x-user-role": "owner" } });
+}
+
+describe.skipIf(!available)("GET /api/instructions/:id and /events (P3.T5)", () => {
+  beforeAll(async () => {
+    process.env.DATABASE_URL = DB_URL;
+    process.env.AUTH_DEV_BYPASS = "1";
+    await migrate(DB_URL);
+    await withTenant(TENANT_ID, (db) => db.insert(tenants).values({ id: TENANT_ID, name: "Instructions Route Test Dealer" }).onConflictDoNothing());
+    await withTenant(OTHER_TENANT_ID, (db) => db.insert(tenants).values({ id: OTHER_TENANT_ID, name: "Other Tenant" }).onConflictDoNothing());
+  });
+  afterAll(async () => {
+    await closePool();
+  });
+
+  it("GET /api/instructions/:id 404s for an unknown id", async () => {
+    const res = await getInstruction(req(`/api/instructions/${randomUUID()}`), { params: Promise.resolve({ id: randomUUID() }) });
+    expect(res.status).toBe(404);
+  });
+
+  it("GET /api/instructions/:id returns the real session row", async () => {
+    const id = randomUUID();
+    await ensureInstructionSession(TENANT_ID, id, "chase everyone more than thirty days overdue", { source: "typed" });
+    const res = await getInstruction(req(`/api/instructions/${id}`), { params: Promise.resolve({ id }) });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.instruction.id).toBe(id);
+    expect(body.instruction.instructionText).toBe("chase everyone more than thirty days overdue");
+    expect(body.instruction.source).toBe("typed");
+  });
+
+  it("a different tenant cannot read another tenant's instruction session (RLS)", async () => {
+    const id = randomUUID();
+    await ensureInstructionSession(TENANT_ID, id, "tenant isolation check", {});
+    const res = await getInstruction(req(`/api/instructions/${id}`, OTHER_TENANT_ID), { params: Promise.resolve({ id }) });
+    expect(res.status).toBe(404);
+  });
+
+  it("GET /api/instructions/:id/events returns events in ascending seq order", async () => {
+    const id = randomUUID();
+    await ensureInstructionSession(TENANT_ID, id, "events order check", {});
+    await emitInstructionEvent(TENANT_ID, id, "received");
+    await emitInstructionEvent(TENANT_ID, id, "context_retrieved", { chips: [] });
+    await emitInstructionEvent(TENANT_ID, id, "planning");
+    const res = await getInstructionEvents(req(`/api/instructions/${id}/events`), { params: Promise.resolve({ id }) });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.events.map((e: { phase: string }) => e.phase)).toEqual(["received", "context_retrieved", "planning"]);
+    expect(body.events.map((e: { seq: number }) => e.seq)).toEqual([1, 2, 3]);
+  });
+
+  it("?after= filters to only newer events — the trace poll's own use case", async () => {
+    const id = randomUUID();
+    await ensureInstructionSession(TENANT_ID, id, "after filter check", {});
+    await emitInstructionEvent(TENANT_ID, id, "received");
+    await emitInstructionEvent(TENANT_ID, id, "context_retrieved", {});
+    await emitInstructionEvent(TENANT_ID, id, "planning");
+    const res = await getInstructionEvents(req(`/api/instructions/${id}/events?after=1`), { params: Promise.resolve({ id }) });
+    const body = await res.json();
+    expect(body.events.map((e: { seq: number }) => e.seq)).toEqual([2, 3]);
+  });
+
+  it("GET /api/instructions/:id/events 404s for an unknown instructionId", async () => {
+    const id = randomUUID();
+    const res = await getInstructionEvents(req(`/api/instructions/${id}/events`), { params: Promise.resolve({ id }) });
+    expect(res.status).toBe(404);
+  });
+});

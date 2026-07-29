@@ -68,7 +68,14 @@ function isAllowedGet(segments: string[]): boolean {
   if (segments.length === 1 && a === "activity") return true
   if (segments.length === 1 && a === "user-prefs") return true
   if (segments.length === 2 && a === "user-prefs" && b === "digest") return true
-  void c
+  // jarvis-v3 P3.T5: the instruction lifecycle trace (§7.1) — GET /instructions/:id
+  // and GET /instructions/:id/events?after=. Deliberately does NOT include
+  // "stream" — that path is served by the dedicated, non-buffering
+  // src/app/api/jarvis/stream/route.ts (P3.T10), which Next.js's own static-segment
+  // routing resolves in preference to this catch-all for the exact path
+  // /api/jarvis/stream; it never reaches isAllowedGet at all.
+  if (segments.length === 2 && a === "instructions") return true
+  if (segments.length === 3 && a === "instructions" && c === "events") return true
   return false
 }
 
