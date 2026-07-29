@@ -94,7 +94,12 @@ export function Thread({ thread, onCancel, onAnswer, onSkip }: { thread: ThreadD
   const understoodCollapsed = understoodExists && activeIndex > 1 ? !manuallyExpanded.has("understood") : false
   const planExists = activeIndex >= 2
   const planCollapsed = planExists && activeIndex > 2 ? !manuallyExpanded.has("plan") : false
-  const executionExists = activeIndex >= 3
+  // `thread.everExecuted`, NOT "reached any terminal state" — a rejected or
+  // user-cancelled thread reaches a terminal state (§4.4) without ever
+  // executing anything. Found via a real live test: a rejected approval still
+  // showed a collapsed "Execution: Executed" row, claiming something happened
+  // that didn't — exactly the kind of thing this whole plan exists to prevent.
+  const executionExists = thread.everExecuted
   const executionCollapsed = executionExists && activeIndex > 3 ? !manuallyExpanded.has("execution") : false
 
   const heardSummary = thread.instructionText

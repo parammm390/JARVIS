@@ -64,11 +64,28 @@ export interface ClarificationData {
 }
 
 /** P2-scope correlation bookkeeping (see file header). Superseded by P3's real
- *  `domain_actions.instruction_id`. */
+ *  `domain_actions.instruction_id`.
+ *
+ *  `enteredAtMs`/`everPendingIds` exist because of a real race found via a live
+ *  test against a real tenant (not a hypothetical): the moment the machine
+ *  enters `awaiting_approval`, `data.pendingActions` is whatever the fast lane
+ *  last polled — possibly from BEFORE this submission, i.e. it does not yet
+ *  contain our new node ids at all. Evaluating "is anything still pending"
+ *  against that stale snapshot reads as "already fully decided, 0 approved",
+ *  which the machine (correctly, given that input) sends to `cancelled` — even
+ *  when the real action is a perfectly normal gated approval nobody has looked
+ *  at yet, or an ungated action that auto-executed with nothing to approve at
+ *  all. `enteredAtMs` gates evaluation until a poll has actually landed since
+ *  we started watching; `everPendingIds` remembers which of our own node ids
+ *  were EVER actually seen sitting in the pending list, so "never appeared at
+ *  all" (auto-executed, ungated) can be told apart from "appeared, then a real
+ *  human decision removed it." */
 interface ApprovalWatch {
   pendingNodeIds: Set<string>
   approvalsAtStart: number
   rejectionsAtStart: number
+  enteredAtMs: number
+  everPendingIds: Set<string>
 }
 interface RunWatch {
   priorRunIds: Set<string>
@@ -90,6 +107,14 @@ export interface Thread {
   /** Wall-clock ms the machine reached a terminal state, or null. Drives the 4s
    *  "resolved"/"wounded" presence bloom (§5.3 M15 / §6⑦) via `terminalDecayActive`. */
   terminalAtMs: number | null
+  /** True the moment the machine EVER enters "executing", never reset. A
+   *  rejected/cancelled thread reaches a terminal state (§4.4) without ever
+   *  executing anything — found via a real live test (a rejected approval
+   *  still showed a collapsed "Execution: Executed" row, a real truth
+   *  violation this field exists to prevent). Gates whether the Execution
+   *  block exists in Thread.tsx at all, instead of inferring it from "reached
+   *  any terminal state." */
+  everExecuted: boolean
 }
 
 const TERMINAL_DECAY_MS = 4000
@@ -224,12 +249,38 @@ function KernelInner({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!thread || thread.machine.instructionState !== "awaiting_approval" || !thread.approvalWatch) return
     const watch = thread.approvalWatch
-    const stillPending = new Set(data.pendingActions.map((a) => a.id))
-    const remaining = [...watch.pendingNodeIds].filter((id) => stillPending.has(id))
-    if (remaining.length > 0) return
-    const approvedCount = Math.max(0, data.approvalsThisSession - watch.approvalsAtStart)
-    const rejectedCount = Math.max(0, data.rejectionsThisSession - watch.rejectionsAtStart)
+
+    // Don't evaluate against a pendingActions snapshot older than the moment we
+    // started watching — see ApprovalWatch's own doc comment for the real race
+    // this guards against.
+    if (data.lastPollAtMs === null || data.lastPollAtMs <= watch.enteredAtMs) return
+
+    const currentlyPending = new Set(data.pendingActions.map((a) => a.id))
+    const everPendingIds = new Set(watch.everPendingIds)
+    for (const id of watch.pendingNodeIds) {
+      if (currentlyPending.has(id)) everPendingIds.add(id)
+    }
+    const stillPending = [...watch.pendingNodeIds].filter((id) => currentlyPending.has(id))
+
+    if (stillPending.length > 0) {
+      // Still waiting on at least one real decision — just remember what we've
+      // seen pending so far and check again on the next poll.
+      if (everPendingIds.size !== watch.everPendingIds.size) {
+        setThread((prev) => (prev && prev.id === thread.id ? { ...prev, approvalWatch: { ...watch, everPendingIds } } : prev))
+      }
+      return
+    }
+
+    // Nothing of ours is currently pending. Split into "genuinely gated, and a
+    // real decision removed it" vs. "never appeared pending at all" (ungated,
+    // auto-executed — nothing for a human to approve, so it counts as approved).
+    const neverGatedCount = watch.pendingNodeIds.size - everPendingIds.size
+    const sessionApproved = Math.max(0, data.approvalsThisSession - watch.approvalsAtStart)
+    const sessionRejected = Math.max(0, data.rejectionsThisSession - watch.rejectionsAtStart)
     const totalDecided = watch.pendingNodeIds.size
+    const approvedCount = Math.min(totalDecided, neverGatedCount + sessionApproved)
+    const rejectedCount = Math.min(totalDecided - approvedCount, sessionRejected)
+
     setThread((prev) => {
       if (!prev || prev.id !== thread.id) return prev
       const nextMachine = transition(prev.machine, { type: "APPROVAL_DECIDED", approvedCount, rejectedCount, totalDecided })
@@ -240,10 +291,11 @@ function KernelInner({ children }: { children: React.ReactNode }) {
         approvalWatch: null,
         runWatch: nowExecuting ? { priorRunIds: new Set(data.runs.map((r) => r.id)), correlatedRunIds: new Set() } : prev.runWatch,
         terminalAtMs: isTerminal(nextMachine.instructionState) ? Date.now() : prev.terminalAtMs,
+        everExecuted: prev.everExecuted || nowExecuting,
       }
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [thread?.id, thread?.machine.instructionState, data.pendingActions, data.approvalsThisSession, data.rejectionsThisSession])
+  }, [thread?.id, thread?.machine.instructionState, data.pendingActions, data.approvalsThisSession, data.rejectionsThisSession, data.lastPollAtMs])
 
   // ---- run-watch correlation + terminal detection (P2-scope, see file header) ----
   useEffect(() => {
@@ -289,6 +341,7 @@ function KernelInner({ children }: { children: React.ReactNode }) {
         approvalWatch: null,
         runWatch: null,
         terminalAtMs: null,
+        everExecuted: existing?.everExecuted ?? false,
       })
 
       let result: Awaited<ReturnType<typeof submitInstruction>>
@@ -361,7 +414,13 @@ function KernelInner({ children }: { children: React.ReactNode }) {
           clarification: null,
           approvalWatch:
             m.instructionState === "awaiting_approval"
-              ? { pendingNodeIds: new Set(nodes.map((n) => n.id)), approvalsAtStart: data.approvalsThisSession, rejectionsAtStart: data.rejectionsThisSession }
+              ? {
+                  pendingNodeIds: new Set(nodes.map((n) => n.id)),
+                  approvalsAtStart: data.approvalsThisSession,
+                  rejectionsAtStart: data.rejectionsThisSession,
+                  enteredAtMs: Date.now(),
+                  everPendingIds: new Set(),
+                }
               : null,
         }
       })

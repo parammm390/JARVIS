@@ -74,6 +74,7 @@ function baseThread(overrides: Partial<Thread>): Thread {
     approvalWatch: null,
     runWatch: null,
     terminalAtMs: null,
+    everExecuted: false,
     ...overrides,
   }
 }
@@ -99,8 +100,8 @@ export const THREAD_FIXTURES: Record<string, Thread> = {
     },
   }),
   approval: baseThread({ machine: stateFor("awaiting_approval"), nodes: goldenNodes() }),
-  execution: baseThread({ machine: stateFor("executing"), nodes: goldenNodes() }),
-  receipt: baseThread({ machine: stateFor("completed"), nodes: goldenNodes(), terminalAtMs: Date.now() }),
+  execution: baseThread({ machine: stateFor("executing"), nodes: goldenNodes(), everExecuted: true }),
+  receipt: baseThread({ machine: stateFor("completed"), nodes: goldenNodes(), terminalAtMs: Date.now(), everExecuted: true }),
 }
 
 export const FIXTURE_STATE_KEYS = Object.keys(THREAD_FIXTURES)
