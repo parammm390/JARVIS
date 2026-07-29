@@ -12,6 +12,7 @@ import { useVapiSession, VAPI_WEB_ASSISTANT_ID } from "../lib/useVapiSession"
 import { railCommitVariants } from "../kernel/choreography"
 import { sfx } from "../sound"
 import { CommandPaletteV2, useCommandPaletteV2 } from "../lib/CommandPaletteV2"
+import { OpsPanel } from "./OpsPanel"
 import type { InstructionState } from "../kernel/types"
 
 const DOT_COLOR: Record<"live" | "polling" | "reconnecting" | "offline", string> = {
@@ -41,6 +42,7 @@ export function CommandRail() {
   const kernel = useKernel()
   const voice = useVapiSession()
   const palette = useCommandPaletteV2()
+  const [opsOpen, setOpsOpen] = useState(false)
   const [value, setValue] = useState("")
   const [committing, setCommitting] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -148,11 +150,13 @@ export function CommandRail() {
       </motion.div>
       <div className="j-fs-micro text-[color:var(--j-text-faint)]">/ to type · hold Space to talk · ⌘K for anything else</div>
       {palette.open && (
-        // P4.T7 builds the real "⌘K → Ops" destination; the Search/Instruct tabs
-        // already work standalone here, Navigate's scene switches are legacy-
-        // Bridge-specific and are a no-op on this page until then.
-        <CommandPaletteV2 onClose={() => palette.setOpen(false)} onNavigate={() => palette.setOpen(false)} />
+        // P4.T7: the real "⌘K → Ops" destination opens OpsPanel below — a
+        // single deliberate overlay, never a route, never a landing page
+        // (§2.4/§8 PHASE 4). Navigate's scene switches ("Overview"/"Pipeline
+        // theater") are legacy-Bridge-specific and stay a no-op on this page.
+        <CommandPaletteV2 onClose={() => palette.setOpen(false)} onNavigate={() => palette.setOpen(false)} onOpenOps={() => setOpsOpen(true)} />
       )}
+      <OpsPanel open={opsOpen} onClose={() => setOpsOpen(false)} />
     </div>
   )
 }
