@@ -13,6 +13,7 @@
 
 import type {
   CashCollections,
+  EventRow,
   PendingAction,
   PipelineHealth,
   SlaBreaches,
@@ -46,6 +47,8 @@ export interface SelectorInput {
   pendingDegraded: boolean
   runs: WorkflowRun[]
   runsDegraded: boolean
+  events: EventRow[]
+  eventsDegraded: boolean
   cashCollections: CashCollections | null
   pipelineHealth: PipelineHealth | null
   slaBreaches: SlaBreaches | null
@@ -188,6 +191,15 @@ export function selectRunsInFlight(input: SelectorInput): Truth<number> {
   const blocked = gate(input, input.runsDegraded, input.runs)
   if (blocked) return blocked
   return fresh(input.runs.length, "api:workflow-runs", input, input.now)
+}
+
+/** Business events recorded today, by the device's own calendar day. */
+export function selectEventsToday(input: SelectorInput): Truth<number> {
+  const blocked = gate(input, input.eventsDegraded, input.events)
+  if (blocked) return blocked
+  const today = new Date(input.now).toDateString()
+  const n = input.events.filter((e) => new Date(e.occurredAt).toDateString() === today).length
+  return fresh(n, "api:activity", input, input.now)
 }
 
 // ---------------------------------------------------------------------------

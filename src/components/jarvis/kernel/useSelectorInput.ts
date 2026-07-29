@@ -9,6 +9,7 @@
 // nothing here to unit-test and nothing here that can contradict a selector.
 
 import { useJarvis, SLOW_LANE_STALE_MS } from "../lib/data-core"
+import type { SetupStatus } from "../lib/data-core"
 import { useJarvisAuth } from "../lib/jarvis-auth"
 import type { SelectorInput } from "./selectors"
 
@@ -32,6 +33,8 @@ export function useSelectorInput(): SelectorInput {
     pendingDegraded: data.pendingDegraded,
     runs: data.runs,
     runsDegraded: data.runsDegraded,
+    events: data.events,
+    eventsDegraded: data.eventsDegraded,
     cashCollections: data.cashCollections,
     pipelineHealth: data.pipelineHealth,
     slaBreaches: data.slaBreaches,
@@ -59,6 +62,15 @@ export interface LanePresentation {
   metricHistory: Record<string, number[]>
   newPendingSinceOpen: number
   slowLastSuccessMs: number | null
+  /** Transport health, not a business fact: when the last poll landed and how long
+   *  it took. Rendered as "synced 3s ago · 210ms", never as a number about the
+   *  business. */
+  lastPollAtMs: number | null
+  apiLatencyMs: number | null
+  /** This tenant's integration/config posture. `setupDegraded` already drives an
+   *  honest "Standalone" label rather than a fabricated "Optimal". */
+  setupStatus: SetupStatus | null
+  setupDegraded: boolean
 }
 
 export function useLanePresentation(): LanePresentation {
@@ -68,5 +80,9 @@ export function useLanePresentation(): LanePresentation {
     metricHistory: data.metricHistory,
     newPendingSinceOpen: data.newPendingSinceOpen,
     slowLastSuccessMs: data.slowLastSuccessMs,
+    lastPollAtMs: data.lastPollAtMs,
+    apiLatencyMs: data.apiLatencyMs,
+    setupStatus: data.setupStatus,
+    setupDegraded: data.setupDegraded,
   }
 }

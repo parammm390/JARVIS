@@ -11,6 +11,7 @@ import {
   mapTruth,
   PENDING_LIST_CAP,
   selectCollectedUsd,
+  selectEventsToday,
   selectFirstName,
   selectOpenLeads,
   selectOpenReconciliation,
@@ -37,6 +38,8 @@ function input(over: Partial<SelectorInput> = {}): SelectorInput {
     pendingDegraded: false,
     runs: [],
     runsDegraded: false,
+    events: [],
+    eventsDegraded: false,
     cashCollections: {
       invoicesByStatus: [{ status: "overdue", count: 6, totalUsd: 4200 }],
       totalCollected: 12_500,
@@ -249,6 +252,32 @@ describe("selectCollectedUsd / selectRunsInFlight", () => {
 
   it("zero runs is a known zero, because the read succeeded", () => {
     expect(selectRunsInFlight(input({ runs: [] }))).toMatchObject({ status: "known", value: 0 })
+  })
+})
+
+describe("selectEventsToday", () => {
+  const ev = (iso: string) => ({
+    id: iso, entityType: "invoice", entityId: "i1", eventType: "invoice_paid",
+    payload: {}, occurredAt: iso, source: "test",
+  })
+
+  it("counts only events on the same calendar day as `now`", () => {
+    const today = new Date(NOW)
+    const yesterday = new Date(NOW - 24 * 60 * 60 * 1000)
+    const t = selectEventsToday(input({ events: [ev(today.toISOString()), ev(today.toISOString()), ev(yesterday.toISOString())] }))
+    expect(t).toMatchObject({ status: "known", value: 2, source: "api:activity" })
+  })
+
+  it("no events today is a known zero, because the read succeeded", () => {
+    expect(selectEventsToday(input({ events: [] }))).toMatchObject({ status: "known", value: 0 })
+  })
+
+  it("a degraded events lane is unavailable, not zero", () => {
+    expect(selectEventsToday(input({ eventsDegraded: true })).status).toBe("unavailable")
+  })
+
+  it("signed out is denied — the header sentence must not claim the day was quiet", () => {
+    expect(selectEventsToday(input({ signedIn: false }))).toEqual({ status: "denied", reason: "signed-out" })
   })
 })
 

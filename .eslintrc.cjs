@@ -49,7 +49,6 @@ module.exports = {
         // Debt as of P1.T4. Do not add to this list.
         "src/components/jarvis/views.tsx",
         "src/components/jarvis/JarvisCommandCenter.tsx",
-        "src/components/jarvis/panels/HeaderBand.tsx", // removed by P1.T8
         "src/components/jarvis/panels/WorkflowTheater.tsx",
         "src/components/jarvis/panels/AnalyticsRow.tsx",
         "src/components/jarvis/panels/DispatchMap.tsx",
@@ -90,7 +89,6 @@ module.exports = {
         "src/components/jarvis/views.tsx",
         "src/components/jarvis/JarvisCommandCenter.tsx",
         "src/components/jarvis/SinceYouWereAway.tsx",
-        "src/components/jarvis/panels/HeaderBand.tsx",
         "src/components/jarvis/panels/ActivityRail.tsx",
         "src/components/jarvis/panels/AnalyticsRow.tsx",
         "src/components/jarvis/panels/ApprovalDock.tsx",

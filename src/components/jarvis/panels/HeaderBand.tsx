@@ -7,12 +7,21 @@
 
 import { useEffect, useState } from "react"
 import { motion } from "framer-motion"
-import { useJarvis } from "../lib/data-core"
 import { useJarvisAuth } from "../lib/jarvis-auth"
-import { selectFirstName } from "../kernel/selectors"
+import {
+  mapTruth,
+  selectEventsToday,
+  selectFirstName,
+  selectOverdueInvoices,
+  selectPendingApprovals,
+  selectRunsInFlight,
+} from "../kernel/selectors"
+import { useLanePresentation, useSelectorInput } from "../kernel/useSelectorInput"
+import type { LanePresentation } from "../kernel/useSelectorInput"
+import type { Truth } from "../kernel/types"
 import type { useVapiSession } from "../lib/useVapiSession"
 
-function systemStatus(data: ReturnType<typeof useJarvis>): { label: string; tone: "teal" | "amber" | "dim"; unconfigured: string[] } {
+function systemStatus(data: LanePresentation): { label: string; tone: "teal" | "amber" | "dim"; unconfigured: string[] } {
   if (data.setupDegraded || !data.setupStatus) return { label: "Standalone", tone: "dim", unconfigured: [] }
   const unconfigured = data.setupStatus.actionTypes.filter((e) => e.status !== "configured").map((e) => e.actionType)
   if (unconfigured.length === 0) return { label: "Optimal", tone: "teal", unconfigured: [] }
@@ -25,37 +34,72 @@ const TONE_CLASS: Record<string, string> = {
   dim: "bg-white/8 text-white/50",
 }
 
-function statusSentence(pendingCount: number, runsInFlight: number, overdueCount: number, eventsToday: number): string {
+/** A count we are allowed to put in a sentence: a `Truth` that actually resolved to
+ *  a number. Anything else contributes nothing — see `statusSentence`. */
+function knownCount(t: Truth<number>): number | null {
+  return t.status === "known" || t.status === "stale" || t.status === "partial" ? t.value : null
+}
+
+/**
+ * The one-line status under the greeting.
+ *
+ * P1 (C-01, in prose): this used to be built from nullish-coalesced zeros, so a signed-out
+ * visitor — four 401s — got all zeros, no clauses, and therefore the confident
+ * sentence "Systems idle." We do not know that the business is idle; we know we were
+ * not allowed to look. A fact contributes a clause only when it is actually known,
+ * and when nothing is known the sentence is omitted entirely rather than guessed.
+ *
+ * Returns null to mean "say nothing". The idle copy is unchanged and is now only
+ * reachable when every input genuinely resolved to zero.
+ */
+function statusSentence(
+  pending: Truth<number>,
+  runsInFlight: Truth<number>,
+  overdue: Truth<number>,
+  eventsToday: Truth<number>,
+): string | null {
+  const counts = [pending, runsInFlight, overdue, eventsToday].map(knownCount)
+  if (counts.every((c) => c === null)) return null
+
+  const [p, r, o, e] = counts
   const parts: string[] = []
-  if (pendingCount > 0) parts.push(`${pendingCount} approval${pendingCount === 1 ? "" : "s"} waiting on you`)
-  if (runsInFlight > 0) parts.push(`${runsInFlight} workflow${runsInFlight === 1 ? "" : "s"} running`)
-  if (overdueCount > 0) parts.push(`${overdueCount} overdue invoice${overdueCount === 1 ? "" : "s"}`)
-  if (eventsToday > 0) parts.push(`${eventsToday} business event${eventsToday === 1 ? "" : "s"} today`)
+  if (p !== null && p > 0) parts.push(`${p} approval${p === 1 ? "" : "s"} waiting on you`)
+  if (r !== null && r > 0) parts.push(`${r} workflow${r === 1 ? "" : "s"} running`)
+  if (o !== null && o > 0) parts.push(`${o} overdue invoice${o === 1 ? "" : "s"}`)
+  if (e !== null && e > 0) parts.push(`${e} business event${e === 1 ? "" : "s"} today`)
   if (parts.length === 0) return "Systems idle. Speak to Finnor to make something happen."
   return `Right now: ${parts.join(" · ")}.`
 }
 
 export function HeaderBand({ session }: { session?: ReturnType<typeof useVapiSession> }) {
-  const data = useJarvis()
+  const lane = useLanePresentation()
   // P1.T8 / defect C-02: this greeting used to hardcode one developer's own first
   // name into the salutation shown to every visitor on production, signed in or
   // not. Null means nobody is named — the greeting drops the name rather than
   // borrowing one.
   const auth = useJarvisAuth()
+  const selectorInput = useSelectorInput()
   const firstName = selectFirstName(auth.session?.user)
   const [clock, setClock] = useState("")
   useEffect(() => {
-    if (data.now) setClock(new Date(data.now).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }))
-  }, [data.now])
+    if (lane.now) setClock(new Date(lane.now).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }))
+  }, [lane.now])
 
-  const status = systemStatus(data)
-  const hour = data.now ? new Date(data.now).getHours() : 9
+  const status = systemStatus(lane)
+  const hour = lane.now ? new Date(lane.now).getHours() : 9
   const timeOfDay = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening"
-  const pendingCount = data.stats?.pending ?? 0
-  const overdueCount = data.cashCollections?.invoicesByStatus.find((s) => s.status === "overdue")?.count ?? 0
-  const eventsToday = data.events.filter((e) => new Date(e.occurredAt).toDateString() === new Date(data.now).toDateString()).length
+  // Every count in the status sentence comes from a selector and carries its own
+  // Truth, so a lane we were refused contributes nothing instead of a zero.
+  const pending = selectPendingApprovals(selectorInput)
+  const runsInFlight = selectRunsInFlight(selectorInput)
+  const overdue = mapTruth(selectOverdueInvoices(selectorInput), (o) => o.count)
+  const eventsToday = selectEventsToday(selectorInput)
+  const sentence = statusSentence(pending, runsInFlight, overdue, eventsToday)
   const voiceLive = session && (session.voiceState === "live" || session.voiceState === "speaking")
-  const volumeLevel = session?.volumeLevel ?? 0
+  // A local mic level, not a network fact: no session means the mic is closed, and
+  // silence is the real reading for a closed mic. Written as an explicit branch so
+  // the file carries no nullish-coalesced zero at all, network or otherwise.
+  const volumeLevel = typeof session?.volumeLevel === "number" ? session.volumeLevel : 0
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 px-1">
@@ -68,14 +112,16 @@ export function HeaderBand({ session }: { session?: ReturnType<typeof useVapiSes
         >
           {firstName ? `${timeOfDay}, ${firstName}` : timeOfDay} <span className="inline-block">👋</span>
         </motion.h1>
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.7, delay: 0.15 }}
-          className="mt-0.5 text-[12.5px] text-[color:var(--j-text-dim)]"
-        >
-          {statusSentence(pendingCount, data.runs.length, overdueCount, eventsToday)}
-        </motion.p>
+        {sentence && (
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.7, delay: 0.15 }}
+            className="mt-0.5 text-[12.5px] text-[color:var(--j-text-dim)]"
+          >
+            {sentence}
+          </motion.p>
+        )}
       </div>
       <div className="flex items-center gap-2.5 md:min-w-[25rem]">
         <div
@@ -125,15 +171,15 @@ export function HeaderBand({ session }: { session?: ReturnType<typeof useVapiSes
           )}
         </div>
         <span className="hidden w-[5.5rem] font-mono text-xs font-bold tabular-nums tracking-wider text-[color:var(--j-text-dim)] md:inline">{clock}</span>
-        <span className={`hidden w-[12rem] items-center gap-1.5 font-mono text-[10.5px] font-bold tabular-nums text-[color:var(--j-text-faint)] md:flex ${data.lastPollAtMs == null ? "invisible" : ""}`}>
-          {data.lastPollAtMs != null && (
+        <span className={`hidden w-[12rem] items-center gap-1.5 font-mono text-[10.5px] font-bold tabular-nums text-[color:var(--j-text-faint)] md:flex ${lane.lastPollAtMs == null ? "invisible" : ""}`}>
+          {lane.lastPollAtMs != null && (
             <>
             <span className="relative flex h-1.5 w-1.5">
               <span className="absolute h-full w-full animate-ping rounded-full bg-cyan-300 opacity-60" />
               <span className="relative h-1.5 w-1.5 rounded-full bg-cyan-300" />
             </span>
-            synced {Math.max(0, Math.round((data.now - data.lastPollAtMs) / 1000))}s ago
-            {data.apiLatencyMs != null ? ` · ${data.apiLatencyMs}ms` : ""}
+            synced {Math.max(0, Math.round((lane.now - lane.lastPollAtMs) / 1000))}s ago
+            {lane.apiLatencyMs != null ? ` · ${lane.apiLatencyMs}ms` : ""}
             </>
           )}
         </span>
