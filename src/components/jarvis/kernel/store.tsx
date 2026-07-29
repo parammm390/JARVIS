@@ -32,17 +32,15 @@ import {
 } from "./selectors"
 import { initialMachineState, transition, type MachineState } from "./machine"
 import { derivePresence } from "./presence"
-import { deriveTransportHealth, type TransportHealth } from "./transport"
+import { deriveTransportHealth, startInstructionTransport, type InstructionTransportHandle, type SseHealth, type TransportHealth } from "./transport"
 import { jarvisGet } from "../lib/api"
 import {
   getOrCreateSessionId,
   mintInstructionId,
-  startTracePoll,
   submitInstruction,
   type InstructionSource,
   type PlannedActionResponse,
   type TraceEvent,
-  type TracePollHandle,
 } from "./instruction"
 import type { InstructionState, Presence, Truth } from "./types"
 
@@ -486,11 +484,16 @@ function KernelInner({ children }: { children: React.ReactNode }) {
   const [voiceSpeaking, setVoiceSpeaking] = useState(false)
   const [terminalDecayActive, setTerminalDecayActive] = useState(false)
   const decayTimerRef = useRef<number | null>(null)
-  // jarvis-v3 P3.T6: the CURRENT submission's own trace-poll handle. A ref, not
-  // state — starting/stopping it is not itself a displayed fact (§4.7 only governs
-  // facts a selector produces).
-  const traceHandleRef = useRef<TracePollHandle | null>(null)
+  // jarvis-v3 P3.T6: the CURRENT submission's own trace-transport handle. A ref,
+  // not state — starting/stopping it is not itself a displayed fact (§4.7 only
+  // governs facts a selector produces).
+  const traceHandleRef = useRef<InstructionTransportHandle | null>(null)
   useEffect(() => () => traceHandleRef.current?.stop(), [])
+  // jarvis-v3 P3.T11: the active thread's own SSE health (null when no thread is
+  // tracing, or SSE is disabled) — a real selector-visible fact (feeds `transport`
+  // below, which the rail's connection dot reads), so it IS state, unlike the
+  // handle above.
+  const [sseHealth, setSseHealth] = useState<SseHealth>(null)
 
   // jarvis-v3 P3.T8: restore a non-terminal thread after a refresh. Runs its
   // real attempt exactly once, the first time auth actually resolves to a real
@@ -543,17 +546,18 @@ function KernelInner({ children }: { children: React.ReactNode }) {
           clearActiveThreadPointer()
         } else {
           const lastSeq = events.length > 0 ? events[events.length - 1]!.seq : 0
-          traceHandleRef.current = startTracePoll(
-            pointer.instructionId,
-            (newEvents) => {
+          traceHandleRef.current = startInstructionTransport({
+            instructionId: pointer.instructionId,
+            onEvents: (newEvents) => {
               setThread((prev) =>
                 prev && prev.id === pointer.id
                   ? applyTraceEvents(prev, newEvents, { approvalsThisSession: data.approvalsThisSession, rejectionsThisSession: data.rejectionsThisSession })
                   : prev,
               )
             },
-            lastSeq,
-          )
+            onHealthChange: setSseHealth,
+            sinceSeq: lastSeq,
+          })
         }
       } catch {
         // Best-effort — see this effect's own header.
@@ -580,7 +584,7 @@ function KernelInner({ children }: { children: React.ReactNode }) {
     }
   }, [data.statsDegraded, data.now])
   const degradedForMs = data.statsDegraded && degradedSinceRef.current !== null ? data.now - degradedSinceRef.current : null
-  const transport = deriveTransportHealth({ signedIn: !!auth.session, statsDegraded: data.statsDegraded, degradedForMs })
+  const transport = deriveTransportHealth({ signedIn: !!auth.session, statsDegraded: data.statsDegraded, degradedForMs, sseHealth })
 
   // ---- terminal decay timer (4s bloom, §5.3 M15) ----
   useEffect(() => {
@@ -702,6 +706,7 @@ function KernelInner({ children }: { children: React.ReactNode }) {
 
       traceHandleRef.current?.stop()
       traceHandleRef.current = null
+      setSseHealth(null)
 
       // ① HEARD — captured, immediately, with the verbatim text (§6①).
       setThread({
@@ -733,12 +738,16 @@ function KernelInner({ children }: { children: React.ReactNode }) {
       // nodes appearing one at a time), not after its whole response resolves.
       // Guarded on `prev.id === id`, same convention every setThread callback in
       // this file already uses.
-      traceHandleRef.current = startTracePoll(instructionId, (events) => {
-        setThread((prev) =>
-          prev && prev.id === id
-            ? applyTraceEvents(prev, events, { approvalsThisSession: data.approvalsThisSession, rejectionsThisSession: data.rejectionsThisSession })
-            : prev,
-        )
+      traceHandleRef.current = startInstructionTransport({
+        instructionId,
+        onEvents: (events) => {
+          setThread((prev) =>
+            prev && prev.id === id
+              ? applyTraceEvents(prev, events, { approvalsThisSession: data.approvalsThisSession, rejectionsThisSession: data.rejectionsThisSession })
+              : prev,
+          )
+        },
+        onHealthChange: setSseHealth,
       })
 
       let result: Awaited<ReturnType<typeof submitInstruction>>
@@ -746,6 +755,7 @@ function KernelInner({ children }: { children: React.ReactNode }) {
         result = await submitInstruction(text, { source, sessionId, instructionId })
       } catch (err) {
         traceHandleRef.current?.stop()
+        setSseHealth(null)
         setThread((prev) =>
           prev && prev.id === id
             ? { ...prev, machine: transition(prev.machine, { type: "SUBMIT_FAILED" }), submitError: err instanceof Error ? err.message : "I couldn't send that." }
@@ -833,8 +843,9 @@ function KernelInner({ children }: { children: React.ReactNode }) {
       })
       // Nothing more will ever change this turn's own trace (a gated plan's real
       // backend trace stops at action_gated; the aggregate decision above is now
-      // made) — stop polling rather than waiting out the full 120s ceiling.
+      // made) — stop the transport rather than waiting out the full 120s ceiling.
       traceHandleRef.current?.stop()
+      setSseHealth(null)
 
       data.injectOptimisticPending(
         planned
@@ -875,6 +886,7 @@ function KernelInner({ children }: { children: React.ReactNode }) {
 
   const cancelThread = useCallback(() => {
     traceHandleRef.current?.stop()
+    setSseHealth(null)
     clearActiveThreadPointer()
     setThread((prev) => (prev ? { ...prev, machine: transition(prev.machine, { type: "USER_CANCELLED" }), terminalAtMs: Date.now() } : prev))
   }, [])

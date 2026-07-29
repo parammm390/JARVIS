@@ -25,17 +25,23 @@ const OS_API = process.env.NEXT_PUBLIC_OS_API_URL
 export async function GET(req: Request): Promise<Response> {
   if (!OS_API) return Response.json({ error: "Jarvis proxy is not configured" }, { status: 500 })
 
-  const auth = req.headers.get("authorization")
-  if (!auth?.startsWith("Bearer ")) return Response.json({ error: "Sign in required" }, { status: 401 })
-
   const incoming = new URL(req.url)
+  // A native browser EventSource cannot set custom request headers — same real
+  // limitation apps/worker/src/sse/gateway.ts's own header comment documents, and
+  // the same workaround: accept the token as a `?token=` query param too. The
+  // header path stays authoritative for fetch/curl-style callers (kept first).
+  const headerAuth = req.headers.get("authorization")
+  const queryToken = incoming.searchParams.get("token")
+  const bearer = headerAuth?.startsWith("Bearer ") ? headerAuth.slice("Bearer ".length) : queryToken
+  if (!bearer) return Response.json({ error: "Sign in required" }, { status: 401 })
+
   const instructionId = incoming.searchParams.get("instructionId")
   if (!instructionId) return Response.json({ error: "instructionId is required" }, { status: 400 })
 
   const upstreamUrl = new URL(`${OS_API}/api/stream`)
   upstreamUrl.searchParams.set("instructionId", instructionId)
 
-  const headers: Record<string, string> = { authorization: auth }
+  const headers: Record<string, string> = { authorization: `Bearer ${bearer}` }
   // Forwarded verbatim so a browser EventSource's own automatic Last-Event-ID
   // resume (P3.T9's own real resume point — instruction_events.seq itself) works
   // end-to-end through this relay, not just direct-to-backend.
