@@ -38,22 +38,20 @@
 
 ## NEXT EXACT TASK
 
-> **P2's code is done — all 14 tasks committed with evidence (`0f54029`..`4ad7afc`).**
-> The exit gate is 7/10 green. The 3 unchecked lines are **not a coding task** —
-> they need one of the following from the plan owner, then a short verification
-> pass, before P2 can be marked ✅ and P3 can start:
+> **P2's code is done — all 14 tasks committed with evidence (`0f54029`..`ef3f54f`).**
+> The exit gate is 7/10 green. **BLOCKER B-4 is resolved this session** — a real,
+> verified, zero-tools web assistant (`dff2a32c-fe61-431e-9919-34a2507fa756`)
+> exists and is wired as `NEXT_PUBLIC_VAPI_WEB_ASSISTANT_ID`. **The one thing
+> still needed, from the plan owner, is `TEST_OWNER_EMAIL`/`TEST_OWNER_PASSWORD`**
+> for the real deployed tenant (`NEXT_PUBLIC_OS_API_URL` in `.env.local`), or a
+> reachable seeded Postgres this environment can reach directly (`DATABASE_URL`
+> currently points at `localhost:5432`, unreachable here — no docker, no local
+> pg). That single credential unblocks all 3 remaining exit-gate lines: the
+> real end-to-end typed journey, the by-voice journey (assistant is ready, just
+> needs a real signed-in session + a microphone), and a real ≥55fps 6-lane
+> execution reading.
 >
-> 1. **`TEST_OWNER_EMAIL`/`TEST_OWNER_PASSWORD`** for the real deployed tenant
->    (`NEXT_PUBLIC_OS_API_URL` in `.env.local`), OR a reachable seeded Postgres
->    this environment can reach directly (`DATABASE_URL` currently points at
->    `localhost:5432`, unreachable here — no docker, no local pg). Either
->    unblocks: the real end-to-end typed journey, keyboard-only completion
->    against real data, and a real ≥55fps 6-lane execution reading.
-> 2. **A real Vapi web assistant id** (`NEXT_PUBLIC_VAPI_WEB_ASSISTANT_ID`) —
->    needs `VAPI_PRIVATE_KEY` (absent, see B-4) or manual creation via the Vapi
->    dashboard. Unblocks the by-voice journey.
->
-> **Once either lands:** re-run `e2e/jarvis-next-golden.spec.ts`-style coverage
+> **Once it lands:** re-run `e2e/jarvis-next-golden.spec.ts`-style coverage
 > against the real, signed-in session instead of the `?fixture=` harness,
 > paste the real recording/screenshots over the fixture ones, measure fps
 > during a real 6-lane run, then flip P2's status to ✅ and advance to P3.
@@ -69,7 +67,7 @@
 | Phase | Name | Sessions | Status | Exit gate | User-visible result |
 |---|---|---|---|---|---|
 | P1 | Contract, Foundations & Regression Net | 1 | ✅ | ✅ | production stops lying — 5 KPI veils replace `$0`, no borrowed name, 84→0 req/30s |
-| **P2** | **Golden Vertical Slice on the Bridge** | **2** | 🟡 | 🟡 7/10 | **the product exists — full golden journey at `/jarvis/next`, typed and by voice** (code complete; the live authenticated journey + voice journey + fps reading are blocked on credentials/Vapi key, B-3/B-4) |
+| **P2** | **Golden Vertical Slice on the Bridge** | **2** | 🟡 | 🟡 7/10 | **the product exists — full golden journey at `/jarvis/next`, typed and by voice** (code complete incl. a real, verified web-only Vapi assistant, B-4 resolved; the 3 remaining exit-gate lines all need one thing — `TEST_OWNER_*`/DB access, B-3) |
 | P3 | Instruction Lifecycle & Realtime | 2 | ⬜ | ⬜ | cognition becomes visible; event→pixel ≤ 1.2 s |
 | P4 | Complete Consequence Graph | 2 | ⬜ | ⬜ | predicted↔actual; the receipt gets truer over time |
 | P5 | Flagships B & C + Voice Continuity | 2–3 | ⬜ | ⬜ | two more workflows; follow-up references; barge-in |
@@ -140,7 +138,7 @@ Legend ⬜ not started · 🟡 in progress · ✅ complete · 🔴 blocked
 | C-13 | CRIT | Orb states semantically false (`Bridge.tsx:73-88`) | P2.T12 | ✅ | `b117853`+`60d408a` · `useOrbLiveState` fully removed (`grep -rn "useOrbLiveState" src/` → 0); Orb3D takes the real 12-value `Presence` from `kernel/presence.ts` on both `/jarvis/bridge` and `/jarvis/next` |
 | C-14 | CRIT | Instruction journey has no middle | P2 + P3 | 🟡 | P2 half done: all 7 blocks exist and render real data (`qa-screenshots/v3-P2/fixture-*.png`). The "middle" (② Understood) is real but unstreamed this phase, per the plan's own P2 carve-out — real per-event streaming is P3's half |
 | C-07 | CRIT | `clarification_request` unrendered → renders as an error to Approve/Reject | P2.T8 | ✅ | `663e7e5` · real registry entry (new `"interactive"` tier, `ClarificationScene.tsx`) replaces the `FallbackRenderer` fallthrough; Thread's own `ThreadClarify` block ships Answer/Skip/Cancel only — `grep -n "Approve\|Reject" ThreadBlocks.tsx ClarificationScene.tsx` → 0 · `qa-screenshots/v3-P2/fixture-clarify-{1440,390}.png` |
-| **NEW-1** | **CRIT** | **Browser voice always refused — web call has no `customer.number`** | P2.T2–T4 | 🟡 | Architecture fixed (browser voice is transcription+TTS only, §3.2; `assistantIdOverride` + `NEXT_PUBLIC_VAPI_WEB_ASSISTANT_ID` wired, no fallback to the phone-shared id) — but no real Vapi assistant id exists yet to actually flip the switch (B-4: no `VAPI_PRIVATE_KEY`). Code-complete, not yet live |
+| **NEW-1** | **CRIT** | **Browser voice always refused — web call has no `customer.number`** | P2.T2–T4 | 🟡 | Architecture fixed AND the real assistant now exists: `dff2a32c-fe61-431e-9919-34a2507fa756`, zero tools, verified via the Vapi API, wired as `NEXT_PUBLIC_VAPI_WEB_ASSISTANT_ID`, confirmed present in the served client bundle. Only real-call verification remains (needs a live signed-in session + a microphone, B-3) |
 | C-09/10/11 | MED | No stream; proxy buffers; `useLiveQuery` SSE dead | P3.T9–T11 | 🔴 | |
 | C-08 | HIGH | `cancelled`/`escalated` unrendered | P7.T2 | 🔴 | |
 | C-17 | CRIT | Immersive surface unreachable (`PersonalizedHome.tsx:61`) | P6.T7 | 🔴 | |
@@ -228,26 +226,49 @@ rules 2 and 4 — never marked done on "should work."
 tenant, or a reachable seeded Postgres instance in this execution environment.
 **Who can unblock:** the plan owner.
 
-### B-4 · 2026-07-29 · P2.T2 · **No `VAPI_PRIVATE_KEY` — cannot create the real web-only Vapi assistant.** OPEN
-`.env.local` (this environment's real dev config) contains **zero** Vapi-related
-keys at all — verified: `grep -iE "VAPI" .env.local` → no matches. `useVapiSession.tsx`
-runs on its hardcoded fallback public key/assistant id (`ab65d198-...`/`59863f35-...`)
-locally. P2.T2 requires creating a real, separate Vapi assistant resource
-(transcription+TTS only, no `finnor_instruct` tool) and putting its id in
-`NEXT_PUBLIC_VAPI_WEB_ASSISTANT_ID` — that is a real external-service API call
-this session cannot make without a private key, and is not something to
-attempt blind even with one (real billing/production implications on a
-third-party service; this session is not authorised to make that architecture
-call unilaterally per §0.1).
-**Built around it, not blocked on it:** the code path is fully ready —
-`NEXT_PUBLIC_VAPI_WEB_ASSISTANT_ID` is read with no fallback to the phone-shared
-var, and `toggleVoice(assistantIdOverride)` uses it exclusively when set. The
-moment a real id exists (created via the Vapi dashboard or API, by whoever holds
-the private key), setting the env var is the entire remaining step.
-**What is needed:** a `VAPI_PRIVATE_KEY` (to create it programmatically) or a
-manually-created assistant id (created via the Vapi dashboard) — either way, a
-decision by whoever owns the Vapi account, not this session.
-**Who can unblock:** the plan owner / whoever holds Vapi account access.
+### B-4 · 2026-07-29 · P2.T2 · No `VAPI_PRIVATE_KEY` in `.env.local`. **RESOLVED same session** — real key found in `finnor-os/.env`.
+Originally raised because `.env.local` (the frontend's own dev config) has zero
+Vapi keys. `finnor-os/.env` (checked later, on the user's own correction) does:
+`VAPI_API_KEY`, `VAPI_PUBLIC_KEY`, `VAPI_ASSISTANT_ID`, `VAPI_PHONE_NUMBER_ID`.
+**Both parts of P2.T2 now done with real, verified evidence, not assumed:**
+
+1. **Confirmed the assistants ARE shared** (the pre-flight question) via a real
+   `GET https://api.vapi.ai/assistant/59863f35-236e-4451-9cb8-cd8df4a3c440`
+   (Bearer `VAPI_API_KEY`) — HTTP 200, name `"JARVIS"`, and
+   **`model.tools` contains exactly `finnor_instruct` and `finnor_confirm`**.
+   `finnor-os/.env` sets `VAPI_ASSISTANT_ID` (phone, server-only) to the
+   **identical** value as the browser's pre-existing `NEXT_PUBLIC_VAPI_ASSISTANT_ID`
+   fallback — confirmed the exact NEW-1 shared-assistant scenario, not inferred.
+2. **Created a real, separate web-only assistant** via
+   `POST https://api.vapi.ai/assistant` (same `VAPI_API_KEY`) — same voice
+   (`vapi`/`Emma`) and transcriber (`deepgram`/`flux-general-en`) as the phone
+   assistant, **zero tools**, no server webhook, `firstMessageMode:
+   "assistant-waits-for-user"` (so it never speaks unprompted — the app's own
+   `say()` calls are the only thing that makes it talk, per §3.2/§3.4). Verified
+   with a **second, independent** `GET` after creation (not just trusting the
+   `POST` response): `id: dff2a32c-fe61-431e-9919-34a2507fa756`, `tools: []`, `server: None`.
+   `NEXT_PUBLIC_VAPI_WEB_ASSISTANT_ID` set to it in `.env.local` (gitignored, not
+   committed — same as every other real key in that file); **verified reaching
+   the actual client bundle** by grepping the served `/_next/static/chunks/
+   app/jarvis/{layout,next/page}.js` for the literal id after a server restart —
+   present in both, alongside the UNCHANGED original id (`59863f35-...`), proving
+   `/jarvis`/`/jarvis/bridge` still resolve to the old shared assistant while
+   `/jarvis/next` resolves to the new dedicated one.
+
+**Not done, still real limitations:** the system prompt/model config for the
+new assistant's own fallback behaviour (what it says if Vapi's own model layer
+ever gets invoked outside an explicit `say()`) is this session's own reasoned,
+minimal choice — the plan specifies exactly two things JARVIS ever says in the
+browser (§3.4 point 4/6), both driven by the app's `say()` calls, not the
+assistant's own prompt, so the prompt itself was written narrowly ("you have no
+tools, never claim to act, defer to the app") rather than copied from the phone
+assistant's business-instruction prompt. **No real microphone/live call was
+exercised this session** (no audio input device in this environment) — the
+assistant exists and is wired in, but "browser voice completes the golden
+journey" is still not evidenced end-to-end; that still needs B-3's real signed-
+in session too.
+**Who can unblock the remaining piece:** nobody — it needs a live human voice
+and a live session, i.e. real usage, not more engineering.
 
 ---
 
@@ -639,14 +660,15 @@ $ grep -n "transcriptType" src/components/jarvis/lib/useVapiSession.tsx
       Could not reach either a real database or an authenticated API session from
       this session's environment (see B-3) — verification requires one of those.
 - [x] Web Vapi assistant identified; shared-with-phone status determined —
-      **Evidence:** repo-wide grep (paths + line numbers pasted in P2.T2 below).
-      **The two are NOT the same env var, let alone verified as the same Vapi
-      assistant**: the browser reads `NEXT_PUBLIC_VAPI_ASSISTANT_ID`
-      (`useVapiSession.tsx:12`, hardcoded fallback `59863f35-236e-4451-9cb8-
-      cd8df4a3c440`); finnor-os's phone path reads server-only `VAPI_ASSISTANT_ID`
-      (no `NEXT_PUBLIC_` prefix) via `voice-personas.ts:17`. `.env.local` (this
-      environment's real dev config) sets **neither** — local dev is running on
-      the hardcoded browser fallback. Full detail + every file:line in P2.T2.
+      **Evidence:** **confirmed SHARED via a real Vapi API call**, not left at
+      "different env var names, unverified":
+      `finnor-os/.env`'s `VAPI_ASSISTANT_ID` (phone, server-only) is the
+      identical value (`59863f35-236e-4451-9cb8-cd8df4a3c440`) as the browser's
+      pre-existing `NEXT_PUBLIC_VAPI_ASSISTANT_ID` fallback (`useVapiSession.tsx:12`).
+      `GET https://api.vapi.ai/assistant/59863f35-...` (Bearer `VAPI_API_KEY`
+      from `finnor-os/.env`) → HTTP 200, name `"JARVIS"`, `model.tools` =
+      `[finnor_instruct, finnor_confirm]`. A real, dedicated web-only replacement
+      (zero tools) was created and wired — full detail in P2.T2 / BLOCKER B-4.
 
 ### Tasks
 - [x] **P2.T1** `kernel/{machine,presence,store,transport}.ts`; unit-test every §4.4 transition incl. illegal → no-op
@@ -708,13 +730,23 @@ $ grep -n "transcriptType" src/components/jarvis/lib/useVapiSession.tsx
       `assistantIdOverride` param; `/jarvis`/`/jarvis/bridge` call it with no
       argument (byte-identical behaviour, verified via `tsc`/full e2e suite green)
       while `CommandRail.tsx` passes the new override.
-      **Deviation:** could not create the actual Vapi-side assistant resource — no
-      `VAPI_PRIVATE_KEY` in this environment (`.env.local` has zero Vapi keys at
-      all), and creating a real resource on a paid third-party service without
-      being able to verify its config is not something this session is positioned
-      to do blind. Recorded as **BLOCKER B-4** below. The code is ready the moment
-      a real id exists: set `NEXT_PUBLIC_VAPI_WEB_ASSISTANT_ID` and the browser
-      path uses it exclusively.
+      **Update, same session, after the user pointed at `finnor-os/.env`:** that
+      file (not `.env.local`) has the real `VAPI_API_KEY`. Used it to (1) `GET`
+      the existing assistant and confirm, for real, that it carries both
+      `finnor_instruct` and `finnor_confirm` — the shared-assistant risk is
+      **confirmed, not assumed** — and (2) `POST` a genuinely new, separate
+      assistant (same voice/transcriber, zero tools, no server webhook,
+      `firstMessageMode: "assistant-waits-for-user"`), verified with an
+      independent follow-up `GET`. Real id: `dff2a32c-fe61-431e-9919-34a2507fa756`,
+      set as `NEXT_PUBLIC_VAPI_WEB_ASSISTANT_ID` in `.env.local` and confirmed
+      present in the actual served client bundle (`_next/static/chunks/app/
+      jarvis/{layout,next/page}.js`) alongside the unchanged original id — full
+      detail in **BLOCKER B-4** below, now resolved.
+      **Deviation:** the new assistant's system-prompt wording (it has no tools,
+      so its own model layer is a pure fallback behind the app's `say()` calls)
+      is this session's own minimal, reasoned text — not a literal plan string,
+      since the plan only specifies what the APP tells it to say, never what its
+      own default model prompt should be.
 - [x] **P2.T3** **V1/V3/V5** `useVapiSession.tsx` — emit partial transcripts; add `say()` + `duck()`. Do not touch the mic watchdog or Daily processor fix.
       **Evidence:** `356fa3a` (+ `b117853` for V7's `localVolumeLevel`).
       Partials (`transcriptType !== "final"`, user role only) now populate a new
@@ -903,11 +935,17 @@ $ grep -n "transcriptType" src/components/jarvis/lib/useVapiSession.tsx
       journey through all 7 states in one continuous session is NOT evidenced and
       is not claimed as passing. Needs real credentials or a reachable seeded DB.
 - [ ] Golden journey completes **by voice** — partial transcript visible, JARVIS speaks plan summary + outcome — **Recording:**
-      **BLOCKED — same reason, plus no real Vapi key configured in this
-      environment's `.env.local` (verified: 0 Vapi keys present) and no
-      microphone/audio input available to this session regardless.** `say()`,
-      `partialTranscript`, and the plan-summary/outcome `voice.say()` calls are
-      real, wired code (`ThreadBridge.tsx`), never exercised against a live call.
+      **BLOCKER B-4 (no Vapi key) is now resolved** — a real, dedicated,
+      zero-tools web assistant exists (`dff2a32c-fe61-431e-9919-34a2507fa756`,
+      created + independently re-verified via the Vapi API this session) and
+      `NEXT_PUBLIC_VAPI_WEB_ASSISTANT_ID` reaches the real client bundle
+      (grepped the served chunks and found it). **Still blocked** on the other
+      two things a full recording needs: a real signed-in session (B-3 — no
+      `TEST_OWNER_*`/DB access) and a live microphone (no audio input device in
+      this execution environment). `say()`, `partialTranscript`, and the
+      plan-summary/outcome `voice.say()` calls are real, wired code
+      (`ThreadBridge.tsx`), verified present in the bundle, never exercised
+      against an actual spoken call.
 - [x] A real `clarification_request` renders as a **question** with Answer/Skip/Cancel — **Screenshot:**
       `qa-screenshots/v3-P2/fixture-clarify-{1440,390}.png`, plus the registry-level
       fix (T8) verified via the reachable-code-path argument: `ActionRenderer`
@@ -1170,6 +1208,42 @@ $ grep -n "transcriptType" src/components/jarvis/lib/useVapiSession.tsx
 
 <!-- Newest first. YYYY-MM-DD · P<n> · tasks done · findings · next task · blockers -->
 
+- **2026-07-29 · P2 follow-up — BLOCKER B-4 resolved, real Vapi assistant created.**
+  The user corrected an assumption from the prior log entry: they supplied
+  `ab65d198-5573-4d95-b7f2-4fd8db6f85fc` as "the assistant id", but that exact
+  value was already in the codebase as the `VAPI_PUBLIC_KEY` fallback
+  (`useVapiSession.tsx:11`), not an assistant id — flagged this mismatch to the
+  user directly rather than silently wiring a wrong value in (two random UUIDs
+  cannot coincidentally match). The user then said the real id "is already there
+  somewhere in the folder... in github or vercel" — re-searched and found
+  `finnor-os/.env` (not previously checked for Vapi keys) has a REAL
+  `VAPI_API_KEY`, which this session had not had access to before. Used it,
+  live, against `https://api.vapi.ai`, to: **(1)** `GET` the existing shared
+  assistant and confirm — for real, not inferred from separate env var names —
+  that it carries `finnor_instruct` + `finnor_confirm` (name `"JARVIS"`, id
+  `59863f35-236e-4451-9cb8-cd8df4a3c440`, the same value `finnor-os/.env`'s
+  server-only `VAPI_ASSISTANT_ID` already uses); **(2)** `POST` a genuinely new,
+  separate assistant — same voice (`vapi`/`Emma`) and transcriber
+  (`deepgram`/`flux-general-en`), **zero tools**, no server webhook,
+  `firstMessageMode: "assistant-waits-for-user"` — verified with an independent
+  follow-up `GET`, not just trusting the creation response. Real id:
+  `dff2a32c-fe61-431e-9919-34a2507fa756`. Set as
+  `NEXT_PUBLIC_VAPI_WEB_ASSISTANT_ID` in `.env.local` (gitignored — not
+  committed, same as every other real credential there) and **confirmed it
+  reaches the actual served client bundle**: grepped
+  `_next/static/chunks/app/jarvis/{layout,next/page}.js` after a server
+  restart and found the new id present in both, alongside the unchanged
+  original id — proof `/jarvis`/`/jarvis/bridge` still resolve to the old
+  shared assistant while `/jarvis/next` resolves to the new dedicated one.
+  `tsc`/lint/160 unit tests re-verified green (no code changed, env-only).
+  **NEW-1/P2.T2/BLOCKER B-4 are now genuinely resolved**, not just
+  documented-as-blocked. **What's still real and not evidenced:** an actual
+  spoken call — no microphone/audio input exists in this execution
+  environment, and it also still needs BLOCKER B-3's real signed-in session.
+  **Next:** same as before — `TEST_OWNER_*` credentials or reachable DB access
+  is the one remaining thing needed to close out P2's exit gate for real.
+  **Blockers:** B-3 only now (B-4 closed).
+
 - **2026-07-29 · P2 T1–T14 CODE-COMPLETE (13 commits, `0f54029`…`4ad7afc`)** ·
   Executed the whole Phase 2 task list in order. **This environment has no path
   to a real authenticated session or a reachable database** — verified, not
@@ -1329,7 +1403,7 @@ $ grep -n "transcriptType" src/components/jarvis/lib/useVapiSession.tsx
 | B7 | `GET /api/stream` (SSE) | P3 | ⬜ | |
 | B8 | Non-buffering `src/app/api/jarvis/stream/route.ts` + allowlist | P3 | ⬜ | |
 | B9 | `predicted` on `/api/actions/pending` and `/api/receipts/[id]` | P4 | ⬜ | |
-| B10 | Web-only Vapi assistant (no `finnor_instruct`) | P2 | ⬜ | |
+| B10 | Web-only Vapi assistant (no `finnor_instruct`) | P2 | ✅ | Created via the Vapi API this session: `dff2a32c-fe61-431e-9919-34a2507fa756`, verified zero tools + no server webhook via an independent `GET` |
 
 **Not touched by this plan:** `webhooks/vapi/route.ts` (the phone path stays exactly as it is).
 
