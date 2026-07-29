@@ -18,6 +18,7 @@ import { getCheckpointer } from "./graph/checkpointer";
 import { ensureSecretsLoaded, redactStructured, redactText } from "@finnor/security";
 import { isPlanActionReady, planIdForAction, readyPlanActions, recordPredictionDiff } from "./plan-dag";
 import { plannerMemoryEnabled } from "./planner-memory";
+import { ensureInstructionSession, emitInstructionEvent } from "./instruction-trace";
 
 export * from "./llm";
 export * from "./planner";
@@ -38,12 +39,13 @@ export * from "./plan-dag";
 export * from "./planning-health";
 export * from "./planner-memory";
 export * from "./policy-simulation";
+export * from "./instruction-trace";
 
 export interface Orchestrator {
   handleInstruction(
     instruction: string,
     ctx: TenantContext,
-    opts?: { sessionId?: string; householdId?: string },
+    opts?: { sessionId?: string; householdId?: string; instructionId?: string },
   ): Promise<DomainAction[]>;
   runAction(actionId: string, tenantId: string): Promise<ExecutionResult>;
   repairPlanAfterTerminalFailure(tenantId: string, domainActionId: string, workflowStepId: string): Promise<void>;
@@ -93,20 +95,77 @@ export class FinnorOrchestrator implements Orchestrator {
     }
   }
 
-  /** Instruction (voice transcript or text) → plan → gate-or-execute each action. */
+  /** Instruction (voice transcript or text) → plan → gate-or-execute each action.
+   *  jarvis-v3 P3.T3: when the caller supplies a client-minted `instructionId`
+   *  (`POST /api/actions`'s new optional field, P3.T4), this method's own real
+   *  phases are traced into `instruction_events` (migration 0062) — the frontend's
+   *  400ms poll is what makes the UNDERSTOOD/PLAN blocks stream in as this actually
+   *  happens, instead of waiting for the whole POST to resolve. Absent an
+   *  instructionId (the phone/worker paths, untouched), every emit call below is a
+   *  real no-op (see instruction-trace.ts) — this method's own control flow and
+   *  return value are unchanged either way. */
   async handleInstruction(
     instruction: string,
     ctx: TenantContext,
-    opts: { sessionId?: string; householdId?: string } = {},
+    opts: { sessionId?: string; householdId?: string; instructionId?: string; channel?: "voice" | "text" | "console" } = {},
   ): Promise<DomainAction[]> {
     await ensureSecretsLoaded();
+    const instructionId = opts.instructionId;
+    if (instructionId) {
+      await ensureInstructionSession(ctx.tenantId, instructionId, instruction, {
+        sessionId: opts.sessionId,
+        userId: ctx.userId,
+        source: opts.channel === "voice" ? "voice" : "typed",
+      });
+      await emitInstructionEvent(ctx.tenantId, instructionId, "received");
+    }
     const memory = await buildMemorySnapshot({
       tenantId: ctx.tenantId,
       sessionId: opts.sessionId,
       householdId: opts.householdId,
       semanticQuery: plannerMemoryEnabled() ? instruction : undefined,
     });
-    const actions = await this.planner.plan(instruction, ctx, memory);
+    if (instructionId) {
+      // Real counts from what handleInstruction actually retrieved before planning —
+      // never the memory CONTENTS (this session's own binding rule). shortTerm/
+      // longTerm are single facts (present or not, hence count 0|1); episodic/
+      // semantic/patterns are real arrays already built above.
+      const contextChips = [
+        { label: "prior turns this session", count: memory.shortTerm ? 1 : 0, source: "memory:short-term" },
+        { label: "household history", count: memory.longTerm ? 1 : 0, source: "memory:long-term" },
+        { label: "related past instructions", count: memory.semantic.length, source: "memory:semantic" },
+        { label: "recent business activity", count: memory.episodic.length, source: "memory:episodic" },
+      ].filter((c) => c.count > 0);
+      await emitInstructionEvent(ctx.tenantId, instructionId, "context_retrieved", { chips: contextChips });
+      await emitInstructionEvent(ctx.tenantId, instructionId, "planning");
+    }
+    let actions: DomainAction[];
+    try {
+      actions = await this.planner.plan(instruction, ctx, memory);
+    } catch (err) {
+      if (instructionId) {
+        await emitInstructionEvent(ctx.tenantId, instructionId, "failed", { error: err instanceof Error ? err.message : "Planning failed" });
+      }
+      throw err;
+    }
+    if (instructionId) {
+      await emitInstructionEvent(ctx.tenantId, instructionId, "plan_ready", { count: actions.length });
+      for (const action of actions) {
+        await emitInstructionEvent(ctx.tenantId, instructionId, "action_created", {
+          actionId: action.id,
+          actionType: action.actionType,
+        });
+        if (action.actionType === "clarification_request") {
+          const payload = action.payload as { question?: string; missingFields?: string[]; context?: string };
+          await emitInstructionEvent(ctx.tenantId, instructionId, "clarification_required", {
+            actionId: action.id,
+            question: payload.question ?? null,
+            missingFields: payload.missingFields ?? [],
+            context: payload.context ?? null,
+          });
+        }
+      }
+    }
     // Record every planned node before dispatching anything. Dependent nodes stay as
     // durable drafts until their prerequisite actions genuinely complete.
     const turnResults: Array<{
@@ -136,6 +195,23 @@ export class FinnorOrchestrator implements Orchestrator {
         // a follow-up turn treat a pending draft's own id as if it were the id of the
         // thing it would eventually create.
         const awaitingApproval = Boolean(result.output?.gated || result.output?.pendingConfirmation);
+        if (instructionId) {
+          if (awaitingApproval) {
+            await emitInstructionEvent(ctx.tenantId, instructionId, "action_gated", { actionId: action.id });
+          } else {
+            // Ungated: this action's real execution already happened above, inside
+            // this same synchronous call — genuinely reachable from handleInstruction
+            // itself (unlike a GATED action's later approve/execute, which happens in
+            // a separate request via decide()/runAction(), untouched this phase).
+            await emitInstructionEvent(ctx.tenantId, instructionId, "executing", { actionId: action.id });
+            await emitInstructionEvent(
+              ctx.tenantId,
+              instructionId,
+              result.status === "success" ? "completed" : "failed",
+              { actionId: action.id, ...(result.status !== "success" ? { error: result.error ?? null, errorKind: result.errorKind ?? null } : {}) },
+            );
+          }
+        }
         if (awaitingApproval) {
           // Fire-and-forget async second pass — reviews the action while it already
           // sits in the confirmation gate awaiting a human, so this adds zero latency
