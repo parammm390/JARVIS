@@ -124,4 +124,38 @@ test.describe("P4.T3/T6 — ThreadVerification + sandbox honesty, FIXTURE harnes
     await expect(page.getByText("No prediction was recorded for this action.")).toBeVisible({ timeout: 10_000 })
     await page.screenshot({ path: `${OUT_DIR}/verification-no-prediction-1440.png`, fullPage: true })
   })
+
+  test("P4.T7 — ⌘K opens the real Ops destination with the 4 real counts, never a route", async ({ page }) => {
+    mkdirSync(OUT_DIR, { recursive: true })
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await page.goto("/jarvis/login", { waitUntil: "domcontentloaded" })
+    await page.getByPlaceholder(/you@example.com/i).click()
+    await page.getByPlaceholder(/you@example.com/i).pressSequentially(email!, { delay: 15 })
+    await page.getByPlaceholder(/•+/i).click()
+    await page.getByPlaceholder(/•+/i).pressSequentially(password!, { delay: 15 })
+    await expect(page.getByRole("button", { name: /sign in/i })).toBeEnabled({ timeout: 5_000 })
+    await page.getByRole("button", { name: /sign in/i }).click()
+    await page.waitForURL("**/jarvis", { timeout: 20_000 })
+
+    await page.goto("/jarvis/next", { waitUntil: "domcontentloaded" })
+    await page.waitForTimeout(1000)
+
+    const urlBefore = page.url()
+    await page.keyboard.press("Meta+k")
+    await expect(page.getByRole("dialog", { name: "Command palette" })).toBeVisible({ timeout: 5_000 })
+    await page.getByRole("button", { name: /^Ops$/ }).click()
+
+    // Never a route — the same /jarvis/next URL, just an overlay on top of it.
+    expect(page.url()).toBe(urlBefore)
+    await expect(page.getByRole("dialog", { name: "Ops" })).toBeVisible({ timeout: 5_000 })
+    await expect(page.getByText("Overdue invoices")).toBeVisible()
+    await expect(page.getByText("Collected")).toBeVisible()
+    await expect(page.getByText("Pending approvals")).toBeVisible()
+    await expect(page.getByText("Runs in flight")).toBeVisible()
+    await page.waitForTimeout(2000) // let the fast/slow lanes land a real value instead of a loading skeleton
+    await page.screenshot({ path: `${OUT_DIR}/ops-panel-1440.png` })
+
+    await page.keyboard.press("Escape")
+    await expect(page.getByRole("dialog", { name: "Ops" })).toBeHidden({ timeout: 5_000 })
+  })
 })
