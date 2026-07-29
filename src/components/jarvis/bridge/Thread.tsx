@@ -119,7 +119,7 @@ export function Thread({ thread, onCancel, onAnswer, onSkip }: { thread: ThreadD
         {understoodExists && (
           <motion.div key="understood" {...threadBirthVariants(reducedMotion)}>
             <BlockShell title="Understood" collapsedSummary={understoodSummary} collapsed={understoodCollapsed} onToggle={() => toggle("understood")}>
-              <ThreadUnderstood thread={thread} />
+              <ThreadUnderstood thread={thread} reducedMotion={reducedMotion} />
             </BlockShell>
           </motion.div>
         )}

@@ -56,6 +56,13 @@ export const MOTION_SPECS: Record<MotionId, MotionSpec> = {
  *  own phase — never promoted here, never silently dropped. */
 export const P2_PROMOTED_MOTIONS: MotionId[] = ["M1", "M2", "M3", "M5", "M6", "M7", "M9", "M10", "M11", "M12", "M15"]
 
+/** jarvis-v3 P3.T7: M4 needed real per-event context arrival (P2's own note above)
+ *  — now real, via `instruction_events.context_retrieved` + the 400ms trace poll.
+ *  M5 PlanDraw is ALSO now driven by real per-event `action_created` arrival
+ *  (previously all-at-once from the POST response) — same motion, not newly
+ *  promoted, so it stays in `P2_PROMOTED_MOTIONS` rather than duplicated here. */
+export const P3_PROMOTED_MOTIONS: MotionId[] = ["M4"]
+
 const STAGGER_MS = {
   contextGather: 60,
   planDraw: 80,
@@ -83,6 +90,20 @@ export function threadBirthVariants(reduced: boolean) {
     animate: { opacity: 1, y: 0, scaleY: 1 },
     transition: reduced ? { duration: 0.12 } : { duration: spec.durationMs / 1000, ease: spec.easing as number[] },
     style: { transformOrigin: "top" },
+  }
+}
+
+/** M4 ContextGather (§5.3, wired P3.T7): each real context chip flies in,
+ *  staggered 60ms — reduced motion fades in at the same stagger, no fly-from-field
+ *  transform (§5.3's own reduced-motion equivalent: "chips fade in, staggered 60 ms"). */
+export function contextGatherChipVariants(index: number, reduced: boolean) {
+  const spec = MOTION_SPECS.M4
+  return {
+    initial: reduced ? { opacity: 0 } : { opacity: 0, scale: 0.8 },
+    animate: { opacity: 1, scale: 1 },
+    transition: reduced
+      ? { duration: 0.12, delay: (index * STAGGER_MS.contextGather) / 1000 }
+      : { duration: spec.durationMs / 1000, ease: spec.easing as number[], delay: (index * STAGGER_MS.contextGather) / 1000 },
   }
 }
 

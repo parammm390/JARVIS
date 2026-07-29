@@ -9,7 +9,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { motion } from "framer-motion"
 import type { Thread, ThreadNode } from "../kernel/store"
-import { cockpitRiseVariants, planDrawNodeVariants, receiptSealVariants } from "../kernel/choreography"
+import { cockpitRiseVariants, contextGatherChipVariants, planDrawNodeVariants, receiptSealVariants } from "../kernel/choreography"
 import { sfx, stepCueThrottled } from "../sound"
 import { ApprovalCockpit } from "./ApprovalCockpit"
 import { WorkflowTheater } from "../panels/WorkflowTheater"
@@ -73,8 +73,13 @@ export function ThreadHeard({ thread, onCancel }: { thread: Thread; onCancel: ()
 // (groundedPayload), not real streamed per-event chips (that is P3's job — see
 // PHASE 2's own "Exact user-visible result" carve-out in the plan).
 // ---------------------------------------------------------------------------
-export function ThreadUnderstood({ thread }: { thread: Thread }) {
-  const chips = useMemo(() => {
+export function ThreadUnderstood({ thread, reducedMotion }: { thread: Thread; reducedMotion: boolean }) {
+  // jarvis-v3 P3.T7: real chips streamed in from `context_retrieved` trace events
+  // (kernel/store.tsx's `applyTraceEvents`) lead the grid — M4 ContextGather fires
+  // per chip as it actually arrives. The groundedPayload-derived chips (P2, from
+  // the plan response) follow, additive — both are real, from different real
+  // sources, never fabricated.
+  const groundedChips = useMemo(() => {
     const out: { label: string; source: string }[] = []
     for (const node of thread.nodes) {
       for (const g of node.groundedPayload) {
@@ -83,6 +88,7 @@ export function ThreadUnderstood({ thread }: { thread: Thread }) {
     }
     return out
   }, [thread.nodes])
+  const chips = useMemo(() => [...thread.contextChips, ...groundedChips], [thread.contextChips, groundedChips])
 
   // §5.4: "think | `understanding` begins | a single low tick, then silence."
   useEffect(() => {
@@ -100,9 +106,14 @@ export function ThreadUnderstood({ thread }: { thread: Thread }) {
       ) : (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {chips.map((c, i) => (
-            <div key={i} className="j-chip justify-start border border-white/10 bg-white/[.035] text-[color:var(--j-text-dim)]" title={c.source}>
+            <motion.div
+              key={`${c.label}·${c.source}`}
+              {...contextGatherChipVariants(i, reducedMotion)}
+              className="j-chip justify-start border border-white/10 bg-white/[.035] text-[color:var(--j-text-dim)]"
+              title={c.source}
+            >
               {c.label}
-            </div>
+            </motion.div>
           ))}
         </div>
       )}

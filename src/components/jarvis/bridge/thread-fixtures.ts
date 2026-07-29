@@ -11,7 +11,7 @@
 // gated on `process.env.NODE_ENV !== "production"` — this can never appear in a
 // production build regardless of the query string.
 
-import type { Thread } from "../kernel/store"
+import type { ContextChip, Thread } from "../kernel/store"
 import { initialMachineState, transition } from "../kernel/machine"
 import type { InstructionState } from "../kernel/types"
 
@@ -64,11 +64,14 @@ function baseThread(overrides: Partial<Thread>): Thread {
   return {
     id: "fixture-thread",
     sessionId: "fixture-session",
+    instructionId: "fixture-instruction",
     source: "typed",
     instructionText: INSTRUCTION_TEXT,
     createdAtMs: 0,
     machine: initialMachineState,
     nodes: [],
+    contextChips: [],
+    traceGating: { expectedCount: null, resolvedActionIds: [], gatedActionIds: [] },
     clarification: null,
     submitError: null,
     approvalWatch: null,
@@ -79,10 +82,29 @@ function baseThread(overrides: Partial<Thread>): Thread {
   }
 }
 
+// jarvis-v3 P3.T7 evidence: the plan's own §6② illustrative chip examples,
+// verbatim — legitimate HERE (a labelled FIXTURE, §0.2 rule 3) even though the
+// REAL `context_retrieved` trace event (orchestration/src/index.ts) honestly
+// carries different, thinner content (real memory-snapshot counts only — see
+// that file's own P3.T3 comment on why "6 overdue invoices" isn't something
+// `handleInstruction` actually has at that point). Two states satisfy the
+// session's own screenshot requirement: mid-fill (2 of 4 chips have "arrived")
+// and complete (all 4) — a real stand-in for M4 ContextGather's own streaming
+// arrival, since a live timing-dependent mid-poll screenshot cannot be staged
+// on demand.
+const GOLDEN_CONTEXT_CHIPS: ContextChip[] = [
+  { label: "6 overdue invoices", source: "cash-collections" },
+  { label: "$4,200 outstanding", source: "invoices" },
+  { label: "6 households", source: "households" },
+  { label: "payment links: Stripe sandbox", source: "integrations" },
+]
+
 export const THREAD_FIXTURES: Record<string, Thread> = {
   heard: baseThread({ machine: stateFor("captured") }),
-  understood: baseThread({ machine: stateFor("understanding"), nodes: goldenNodes() }),
-  plan: baseThread({ machine: stateFor("planning"), nodes: goldenNodes() }),
+  understood: baseThread({ machine: stateFor("understanding"), nodes: goldenNodes(), contextChips: GOLDEN_CONTEXT_CHIPS }),
+  "understood-midfill": baseThread({ machine: stateFor("understanding"), contextChips: GOLDEN_CONTEXT_CHIPS.slice(0, 2) }),
+  "understood-complete": baseThread({ machine: stateFor("understanding"), nodes: goldenNodes(), contextChips: GOLDEN_CONTEXT_CHIPS }),
+  plan: baseThread({ machine: stateFor("planning"), nodes: goldenNodes(), contextChips: GOLDEN_CONTEXT_CHIPS }),
   clarify: baseThread({
     machine: (() => {
       let m = transition(initialMachineState, { type: "SUBMITTED" })

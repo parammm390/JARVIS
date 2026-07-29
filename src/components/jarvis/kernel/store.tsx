@@ -35,9 +35,13 @@ import { derivePresence } from "./presence"
 import { deriveTransportHealth, type TransportHealth } from "./transport"
 import {
   getOrCreateSessionId,
+  mintInstructionId,
+  startTracePoll,
   submitInstruction,
   type InstructionSource,
   type PlannedActionResponse,
+  type TraceEvent,
+  type TracePollHandle,
 } from "./instruction"
 import type { InstructionState, Presence, Truth } from "./types"
 
@@ -61,6 +65,14 @@ export interface ClarificationData {
   question: string
   missingFields: string[]
   context?: string
+}
+
+/** jarvis-v3 P3.T7: one real chip from a `context_retrieved` trace event's own
+ *  `{label, count, source}` — never memory contents (this session's own binding
+ *  rule; `label`/`source` are the ONLY strings this ever carries). */
+export interface ContextChip {
+  label: string
+  source: string
 }
 
 /** P2-scope correlation bookkeeping (see file header). Superseded by P3's real
@@ -95,11 +107,30 @@ interface RunWatch {
 export interface Thread {
   id: string
   sessionId: string
+  /** jarvis-v3 P3.T6: this submission's own client-minted trace id — the SAME id
+   *  sent in POST /api/actions's body and polled via GET /api/instructions/:id/events.
+   *  Null only for a thread this file's own unit tests construct without it. */
+  instructionId: string | null
   source: InstructionSource
   instructionText: string
   createdAtMs: number
   machine: MachineState
   nodes: ThreadNode[]
+  /** jarvis-v3 P3.T7: real chips from `context_retrieved` trace events, streamed in
+   *  as they arrive (M4 ContextGather) — additive to (never replacing) the
+   *  groundedPayload-derived chips `ThreadUnderstood` already rendered in P2. */
+  contextChips: ContextChip[]
+  /** jarvis-v3 P3.T7/T8: real per-action gating bookkeeping derived ENTIRELY from
+   *  `instruction_events` (`plan_ready`'s count, `action_gated`/`executing`/
+   *  `completed`/`failed`'s own actionId) — not rendered by any block directly.
+   *  Exists so the aggregate awaiting_approval/executing transition can be derived
+   *  from the trace ALONE, which is what makes T8's restore-after-refresh able to
+   *  reach `awaiting_approval` with no POST response to fall back on (a fresh page
+   *  load never has one). The live path's own POST-completion handler
+   *  (`runSubmission`) remains the primary, redundant driver of this same
+   *  transition — `transition()`'s own idempotency makes firing it from both
+   *  places safe. */
+  traceGating: { expectedCount: number | null; resolvedActionIds: string[]; gatedActionIds: string[] }
   clarification: ClarificationData | null
   submitError: string | null
   approvalWatch: ApprovalWatch | null
@@ -158,8 +189,199 @@ function nodeFromPlanned(p: PlannedActionResponse): ThreadNode {
   }
 }
 
+/** jarvis-v3 P3.T7: a THIN node from a real `action_created` trace event — only
+ *  `id`/`actionType` are known this early (amountUsd/targetLabel/policy/
+ *  groundedPayload arrive later, from the POST response's own richer
+ *  PlannedActionResponse). `ThreadPlan` already renders amountUsd/targetLabel
+ *  conditionally (§6③), so a thin node just shows its action type until
+ *  `enrichNodesFromPlanned` (below) fills the rest in — a real, honest interim
+ *  state, never a fabricated placeholder value. */
+function thinNodeFromTraceEvent(payload: Record<string, unknown>): ThreadNode | null {
+  const id = typeof payload.actionId === "string" ? payload.actionId : null
+  const actionType = typeof payload.actionType === "string" ? payload.actionType : null
+  if (!id || !actionType) return null
+  return {
+    id,
+    actionType,
+    amountUsd: null,
+    targetLabel: null,
+    policyId: null,
+    policyVersion: null,
+    groundedPayload: [],
+    payload: {},
+  }
+}
+
+/** Upgrades any thin (trace-created) nodes in place with the POST response's fuller
+ *  data, matched by id; appends any node the POST response has that the trace never
+ *  delivered (the trace poll's own safety net — see kernel/instruction.ts's header
+ *  on why a GATED plan's trace can legitimately stop early). Never drops a node,
+ *  never reorders one the user has already seen. */
+function enrichNodesFromPlanned(existing: ThreadNode[], planned: PlannedActionResponse[]): ThreadNode[] {
+  const byId = new Map(planned.map((p) => [p.id, p]))
+  const seen = new Set<string>()
+  const upgraded = existing.map((node) => {
+    seen.add(node.id)
+    const full = byId.get(node.id)
+    return full ? nodeFromPlanned(full) : node
+  })
+  const appended = planned.filter((p) => !seen.has(p.id)).map(nodeFromPlanned)
+  return [...upgraded, ...appended]
+}
+
 function isTerminal(state: InstructionState): boolean {
   return state === "completed" || state === "partial" || state === "failed" || state === "cancelled"
+}
+
+/** jarvis-v3 P3.T7/T8: the two live counters `ApprovalWatch` needs to tell "this
+ *  many decisions happened since we started watching" apart from history — supplied
+ *  by the caller (real `data.approvalsThisSession`/`rejectionsThisSession`) rather
+ *  than closed over, so this whole file stays a pure function over an explicit
+ *  input (BLOCKER B-1's own established pattern). */
+export interface TraceApprovalContext {
+  approvalsThisSession: number
+  rejectionsThisSession: number
+}
+
+/** jarvis-v3 P3.T7/T8: folds a batch of real `instruction_events` rows into a
+ *  Thread — what makes ② UNDERSTOOD's chips and ③ PLAN's nodes stream in as
+ *  `handleInstruction` actually does the work (M4/M5), instead of waiting for the
+ *  whole POST to resolve. ALSO derives the aggregate awaiting_approval/executing
+ *  transition (and its approvalWatch/runWatch side-registration) from the trace
+ *  alone, once `plan_ready`'s count and every action's own `action_gated` or
+ *  terminal (`completed`/`failed`) outcome have arrived — the live path's POST
+ *  response remains a redundant second driver of the SAME transition
+ *  (`runSubmission`'s completion handler); `transition()`'s own idempotency makes
+ *  firing it from both places safe. This second driver is NOT redundant for T8's
+ *  restore-after-refresh, which has no POST response to fall back on at all. */
+export function applyTraceEvents(thread: Thread, events: TraceEvent[], approval: TraceApprovalContext): Thread {
+  let next = thread
+
+  function resolveAction(t: Thread, actionId: string | undefined, gated: boolean): Thread {
+    if (!actionId || t.traceGating.resolvedActionIds.includes(actionId)) return t
+    const resolvedActionIds = [...t.traceGating.resolvedActionIds, actionId]
+    const gatedActionIds = gated ? [...t.traceGating.gatedActionIds, actionId] : t.traceGating.gatedActionIds
+    let updated: Thread = { ...t, traceGating: { ...t.traceGating, resolvedActionIds, gatedActionIds } }
+    const { expectedCount } = updated.traceGating
+    if (
+      !updated.clarification &&
+      expectedCount !== null &&
+      expectedCount > 0 &&
+      resolvedActionIds.length >= expectedCount &&
+      updated.machine.instructionState === "planning"
+    ) {
+      const gatedCount = gatedActionIds.length
+      const m =
+        gatedCount > 0
+          ? transition(updated.machine, { type: "ACTION_pending", count: gatedCount })
+          : transition(updated.machine, { type: "ACTION_executing", gatedCount: 0 })
+      updated = {
+        ...updated,
+        machine: m,
+        approvalWatch:
+          m.instructionState === "awaiting_approval"
+            ? {
+                pendingNodeIds: new Set(gatedActionIds),
+                approvalsAtStart: approval.approvalsThisSession,
+                rejectionsAtStart: approval.rejectionsThisSession,
+                enteredAtMs: Date.now(),
+                everPendingIds: new Set(),
+              }
+            : updated.approvalWatch,
+        runWatch: m.instructionState === "executing" ? { priorRunIds: new Set(), correlatedRunIds: new Set() } : updated.runWatch,
+        // A fully-ungated plan moves straight to "executing" from here (never
+        // visits awaiting_approval at all) — `everExecuted` gates whether
+        // Thread.tsx's Execution block exists (§6⑦'s own truth rule: never claim
+        // "Executed" for a thread that never did), so it must flip here too, not
+        // only in the approval-watch effect's own APPROVAL_DECIDED path below.
+        everExecuted: updated.everExecuted || m.instructionState === "executing",
+      }
+    }
+    return updated
+  }
+
+  for (const event of events) {
+    switch (event.phase) {
+      case "received": {
+        if (next.machine.instructionState !== "captured") break
+        next = { ...next, machine: transition(next.machine, { type: "ACK" }) }
+        break
+      }
+      case "context_retrieved": {
+        const raw = Array.isArray(event.payload.chips) ? (event.payload.chips as unknown[]) : []
+        const real = raw
+          .map((c) => (c && typeof c === "object" ? (c as { label?: unknown; source?: unknown }) : {}))
+          .filter((c): c is { label: string; source: string } => typeof c.label === "string" && typeof c.source === "string")
+        const existingKeys = new Set(next.contextChips.map((c) => `${c.label}·${c.source}`))
+        const fresh = real.filter((c) => !existingKeys.has(`${c.label}·${c.source}`))
+        if (fresh.length > 0) next = { ...next, contextChips: [...next.contextChips, ...fresh] }
+        break
+      }
+      case "planning": {
+        if (next.machine.instructionState !== "understanding") break
+        next = { ...next, machine: transition(next.machine, { type: "TRACE_planning" }) }
+        break
+      }
+      case "plan_ready": {
+        const count = typeof event.payload.count === "number" ? event.payload.count : null
+        next = { ...next, traceGating: { ...next.traceGating, expectedCount: count } }
+        if (count === 0 && next.machine.instructionState === "planning") {
+          next = { ...next, machine: transition(next.machine, { type: "PLAN_EMPTY" }), terminalAtMs: Date.now() }
+        }
+        break
+      }
+      case "clarification_required": {
+        if (next.clarification || next.machine.instructionState !== "planning") break
+        const payload = event.payload as { question?: unknown; missingFields?: unknown; context?: unknown }
+        next = {
+          ...next,
+          machine: transition(next.machine, { type: "TRACE_clarification" }),
+          clarification: {
+            question: typeof payload.question === "string" ? payload.question : "I need one more thing to continue.",
+            missingFields: Array.isArray(payload.missingFields) ? payload.missingFields.filter((f): f is string => typeof f === "string") : [],
+            context: typeof payload.context === "string" ? payload.context : undefined,
+          },
+        }
+        break
+      }
+      case "action_created": {
+        const thin = thinNodeFromTraceEvent(event.payload)
+        if (thin && !next.nodes.some((n) => n.id === thin.id)) {
+          next = { ...next, nodes: [...next.nodes, thin] }
+        }
+        break
+      }
+      case "action_gated": {
+        const actionId = typeof event.payload.actionId === "string" ? event.payload.actionId : undefined
+        next = resolveAction(next, actionId, true)
+        break
+      }
+      case "completed":
+      case "failed": {
+        const actionId = typeof event.payload.actionId === "string" ? event.payload.actionId : undefined
+        if (actionId) {
+          // A per-action terminal outcome (this action ran synchronously and
+          // ungated, inside the same handleInstruction call) — resolves gating,
+          // does not by itself end the WHOLE instruction.
+          next = resolveAction(next, actionId, false)
+        } else if (event.phase === "failed") {
+          // No actionId: the whole instruction failed before any action existed
+          // (a real planner exception — orchestration/src/index.ts's own P3.T3
+          // try/catch around this.planner.plan()).
+          next = { ...next, machine: transition(next.machine, { type: "TRACE_failed" }), terminalAtMs: Date.now() }
+        }
+        break
+      }
+      // dispatched/executing/step_progress/verifying/verified/cancelled are real,
+      // traced, and visible via GET /api/instructions/:id/events — not yet
+      // individually consumed here (per-action `executing` doesn't change gating
+      // resolution; the run-level lanes already come from WorkflowTheater's own
+      // real polling once the machine reaches "executing").
+      default:
+        break
+    }
+  }
+  return next
 }
 
 // ---------------------------------------------------------------------------
@@ -203,6 +425,11 @@ function KernelInner({ children }: { children: React.ReactNode }) {
   const [voiceSpeaking, setVoiceSpeaking] = useState(false)
   const [terminalDecayActive, setTerminalDecayActive] = useState(false)
   const decayTimerRef = useRef<number | null>(null)
+  // jarvis-v3 P3.T6: the CURRENT submission's own trace-poll handle. A ref, not
+  // state — starting/stopping it is not itself a displayed fact (§4.7 only governs
+  // facts a selector produces).
+  const traceHandleRef = useRef<TracePollHandle | null>(null)
+  useEffect(() => () => traceHandleRef.current?.stop(), [])
 
   const setVoiceIndicators = useCallback((next: { micOpen?: boolean; speaking?: boolean }) => {
     if (next.micOpen !== undefined) setMicOpen(next.micOpen)
@@ -325,17 +552,27 @@ function KernelInner({ children }: { children: React.ReactNode }) {
     async (text: string, source: InstructionSource, existing: Thread | null) => {
       const sessionId = existing?.sessionId ?? getOrCreateSessionId(source)
       const id = existing?.id ?? newId()
+      // jarvis-v3 P3.T6: always freshly minted, never reused across turns — this
+      // exact submission's own instruction_events trace, distinct from sessionId
+      // (which persists for follow-up-reference continuity, kernel/instruction.ts).
+      const instructionId = mintInstructionId()
       const nowMs = Date.now()
+
+      traceHandleRef.current?.stop()
+      traceHandleRef.current = null
 
       // ① HEARD — captured, immediately, with the verbatim text (§6①).
       setThread({
         id,
         sessionId,
+        instructionId,
         source,
         instructionText: text,
         createdAtMs: nowMs,
         machine: transition(initialMachineState, { type: "SUBMITTED" }),
         nodes: [],
+        contextChips: [],
+        traceGating: { expectedCount: null, resolvedActionIds: [], gatedActionIds: [] },
         clarification: null,
         submitError: null,
         approvalWatch: null,
@@ -344,10 +581,26 @@ function KernelInner({ children }: { children: React.ReactNode }) {
         everExecuted: existing?.everExecuted ?? false,
       })
 
+      // jarvis-v3 P3.T6/T7: the trace poll starts THE SAME INSTANT as the POST
+      // below — both race the real backend from the same starting line
+      // (kernel/instruction.ts's own header) — so HEARD->UNDERSTOOD->PLAN can
+      // render as `handleInstruction` actually does the work (context chips, plan
+      // nodes appearing one at a time), not after its whole response resolves.
+      // Guarded on `prev.id === id`, same convention every setThread callback in
+      // this file already uses.
+      traceHandleRef.current = startTracePoll(instructionId, (events) => {
+        setThread((prev) =>
+          prev && prev.id === id
+            ? applyTraceEvents(prev, events, { approvalsThisSession: data.approvalsThisSession, rejectionsThisSession: data.rejectionsThisSession })
+            : prev,
+        )
+      })
+
       let result: Awaited<ReturnType<typeof submitInstruction>>
       try {
-        result = await submitInstruction(text, { source, sessionId })
+        result = await submitInstruction(text, { source, sessionId, instructionId })
       } catch (err) {
+        traceHandleRef.current?.stop()
         setThread((prev) =>
           prev && prev.id === id
             ? { ...prev, machine: transition(prev.machine, { type: "SUBMIT_FAILED" }), submitError: err instanceof Error ? err.message : "I couldn't send that." }
@@ -356,37 +609,47 @@ function KernelInner({ children }: { children: React.ReactNode }) {
         return
       }
 
-      // ② UNDERSTOOD — ACK, then the plan response IS the (unstreamed) context this
-      // phase honestly has (§8 Phase 2's own carve-out: real event chips are P3).
-      // The real grounded-payload chips populate NOW, not at the planning step —
-      // otherwise "understanding" and "planning" would both update in the same
-      // tick (one POST response resolves everything at once, with nothing to
-      // await between them) and block ② would never actually paint with content,
-      // defeating its own purpose. A short, deliberate pause below gives it a
-      // real, legible moment on screen before the plan appears — no spinner, no
-      // fabricated latency claim, just enough time to read what was found.
+      // ② UNDERSTOOD / ③ PLAN — the trace poll above may already have driven ACK,
+      // TRACE_planning, TRACE_clarification and every action_created node by the
+      // time this resolves (P3's own real improvement: event->pixel is now
+      // typically far under the ~4s the whole POST round trip used to take). What
+      // follows is now a SAFETY NET, not the primary driver: it (a) enriches any
+      // thin trace-created nodes with this response's fuller amount/target/
+      // policy/groundedPayload data, (b) fills in anything the trace poll missed
+      // (a slow first tick, a dropped event), and (c) is still the sole driver of
+      // the AGGREGATE awaiting_approval/executing transition and its
+      // approvalWatch/runWatch side-registration — this phase's own deliberate
+      // scope decision (see `applyTraceEvents`'s own header) to keep that
+      // coordination in one place rather than duplicating it.
       const planned = result.planned
       const clarificationRow = planned.find((p) => p.actionType === "clarification_request")
-      const nodesForUnderstanding = planned.map(nodeFromPlanned)
-      setThread((prev) =>
-        prev && prev.id === id ? { ...prev, machine: transition(prev.machine, { type: "ACK" }), nodes: nodesForUnderstanding } : prev,
-      )
-      await new Promise((resolve) => setTimeout(resolve, 550))
 
       setThread((prev) => {
         if (!prev || prev.id !== id) return prev
-        let m = transition(prev.machine, { type: "TRACE_planning" })
+        const enrichedNodes = enrichNodesFromPlanned(prev.nodes, planned)
+        const m = prev.machine.instructionState === "captured" ? transition(prev.machine, { type: "ACK" }) : prev.machine
+        return { ...prev, machine: m, nodes: enrichedNodes }
+      })
+      // A short, deliberate pause — legibility buffer only now (the trace poll is
+      // the primary pacing mechanism), covering the cold case where no trace event
+      // arrived in time (e.g. a slow first poll tick). No spinner, no fabricated
+      // latency claim.
+      await new Promise((resolve) => setTimeout(resolve, 200))
+
+      setThread((prev) => {
+        if (!prev || prev.id !== id) return prev
+        let m = prev.machine.instructionState === "understanding" ? transition(prev.machine, { type: "TRACE_planning" }) : prev.machine
         if (planned.length === 0) {
           m = transition(m, { type: "PLAN_EMPTY" })
           return { ...prev, machine: m, nodes: [], clarification: null, terminalAtMs: Date.now() }
         }
         if (clarificationRow) {
+          if (prev.clarification) return { ...prev, machine: m } // the trace already delivered it
           const payload = clarificationRow.payload as { question?: string; missingFields?: string[]; context?: string }
-          m = transition(m, { type: "TRACE_clarification" })
+          m = m.instructionState === "planning" ? transition(m, { type: "TRACE_clarification" }) : m
           return {
             ...prev,
             machine: m,
-            nodes: nodesForUnderstanding,
             clarification: {
               question: typeof payload.question === "string" ? payload.question : "I need one more thing to continue.",
               missingFields: Array.isArray(payload.missingFields) ? payload.missingFields.filter((f): f is string => typeof f === "string") : [],
@@ -405,17 +668,16 @@ function KernelInner({ children }: { children: React.ReactNode }) {
         // instant the next poll lands, the same bridge `CommandBar.tsx`'s existing
         // `injectOptimisticPending` already relies on. A plan that turns out to be
         // fully ungated self-corrects there rather than getting stuck.
+        if (m.instructionState !== "planning") return { ...prev, machine: m } // already moved past this
         m = transition(m, { type: "ACTION_pending", count: planned.length })
-        const nodes = nodesForUnderstanding
         return {
           ...prev,
           machine: m,
-          nodes,
           clarification: null,
           approvalWatch:
             m.instructionState === "awaiting_approval"
               ? {
-                  pendingNodeIds: new Set(nodes.map((n) => n.id)),
+                  pendingNodeIds: new Set(prev.nodes.map((n) => n.id)),
                   approvalsAtStart: data.approvalsThisSession,
                   rejectionsAtStart: data.rejectionsThisSession,
                   enteredAtMs: Date.now(),
@@ -424,6 +686,10 @@ function KernelInner({ children }: { children: React.ReactNode }) {
               : null,
         }
       })
+      // Nothing more will ever change this turn's own trace (a gated plan's real
+      // backend trace stops at action_gated; the aggregate decision above is now
+      // made) — stop polling rather than waiting out the full 120s ceiling.
+      traceHandleRef.current?.stop()
 
       data.injectOptimisticPending(
         planned
