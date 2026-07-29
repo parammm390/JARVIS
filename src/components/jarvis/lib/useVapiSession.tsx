@@ -101,6 +101,14 @@ const MIC_ACTIVITY_THRESHOLD = 0.02
 function useVapiSessionInternal() {
   const [voiceState, setVoiceState] = useState<VoiceState>("idle")
   const [volumeLevel, setVolumeLevel] = useState(0)
+  // P2.T12 — V7: the mic watchdog above already reads this (via a ref, not
+  // reactive state — it only needed a threshold check). Exposed as real state
+  // too now so the Orb's `hearing` presence (kernel/presence.ts §4.5 rule 3) can
+  // scale its energy off the ACTUAL local mic level rather than `volumeLevel`
+  // (the assistant's own remote output — a different signal; using it for
+  // "hearing" would be exactly the borrowed-data mistake the plan warns
+  // against).
+  const [localVolumeLevel, setLocalVolumeLevel] = useState(0)
   const [transcript, setTranscript] = useState<TranscriptLine[]>([])
   // P2.T3 — V1: partial (non-final) transcripts were previously read and
   // immediately discarded (`transcriptType !== "final"` never matched the old
@@ -192,6 +200,7 @@ function useVapiSessionInternal() {
           sfx.voiceOff()
           setVoiceLive(false) // F11.T1 — real call-end signal, restores master gain
           setPartialTranscript(null)
+          setLocalVolumeLevel(0)
         })
         vapi.on("error", (err?: unknown) => {
           const message =
@@ -215,6 +224,7 @@ function useVapiSessionInternal() {
         })
         vapi.on("local-volume-level", (m?: unknown) => {
           const level = typeof m === "number" ? m : 0
+          setLocalVolumeLevel(level)
           if (level > MIC_ACTIVITY_THRESHOLD) {
             lastAudioAtRef.current = Date.now()
             setMicSilenceWarning(false)
@@ -360,6 +370,7 @@ function useVapiSessionInternal() {
   return {
     voiceState,
     volumeLevel,
+    localVolumeLevel,
     transcript,
     partialTranscript,
     callDurationSec,

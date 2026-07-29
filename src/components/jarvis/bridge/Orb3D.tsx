@@ -36,21 +36,71 @@ import { useEffect, useRef, useState } from "react"
 import * as THREE from "three"
 import { useReducedMotion } from "framer-motion"
 import { registerAnchor } from "../lib/pulse-bus"
+import type { Presence } from "../kernel/types"
 
-export type OrbState = "idle" | "planning" | "executing" | "blocked" | "error"
+// P2.T12 (C-13): the Orb now takes the kernel's real 12-value `Presence`
+// (`kernel/types.ts` §4.5) instead of this component's own 5-value `OrbState`.
+// `OrbState` is kept ONLY as a legacy alias so any stale import still resolves
+// to a real type rather than breaking a build; nothing in this file computes
+// presence anymore — `kernel/presence.ts`'s `derivePresence()` is the sole
+// source, exactly as §4.5 requires.
+export type OrbState = Presence
 
-// Real hex values from jarvis-theme.css's own token block (--j-cyan/violet/teal/
-// amber/red), normalized to 0-1 for the fragment shader uniform — not re-invented
-// colors, the same ones FlowCatalogAmbient's OrbStates placeholder already uses.
-const STATE_COLOR: Record<OrbState, [number, number, number]> = {
-  idle: [0.133, 0.827, 0.933],
-  planning: [0.545, 0.361, 0.965],
-  executing: [0.176, 0.831, 0.749],
-  blocked: [0.984, 0.749, 0.141],
-  error: [0.973, 0.443, 0.443],
+// Real hex values from jarvis-theme.css's own token block (--j-cyan/violet/
+// amber/red/green/blue), normalized to 0-1 for the fragment shader uniform.
+// §6 gives exact energy/spin numbers for 6 of the 12 states (dormant, thinking,
+// working, verifying, plus the pitch of asking/proposing); the remaining 6
+// (listening, hearing's own BASE before real mic amplitude blends up, resolved,
+// wounded, obstructed, severed) are not numerically specified anywhere in the
+// plan. Filled in here by interpolating within each state's own §5.2 colour
+// family and its place in the derivation order (listening sits between dormant
+// and hearing; obstructed/wounded/severed are all low-energy "something needs
+// attention, nothing is actively happening" tones) — recorded as a deviation in
+// the state file, not silently invented as fact.
+const STATE_COLOR: Record<Presence, [number, number, number]> = {
+  dormant: [0.133, 0.827, 0.933], // cyan
+  listening: [0.133, 0.827, 0.933], // cyan
+  hearing: [0.133, 0.827, 0.933], // cyan
+  thinking: [0.545, 0.361, 0.965], // violet
+  asking: [0.984, 0.749, 0.141], // amber
+  proposing: [0.133, 0.827, 0.933], // cyan
+  working: [0.231, 0.51, 0.965], // blue
+  verifying: [0.204, 0.827, 0.6], // green
+  resolved: [0.204, 0.827, 0.6], // green
+  wounded: [0.973, 0.443, 0.443], // red
+  obstructed: [0.984, 0.749, 0.141], // amber
+  severed: [0.973, 0.443, 0.443], // red
 }
-const STATE_ENERGY: Record<OrbState, number> = { idle: 0.22, planning: 0.8, executing: 1, blocked: 0.08, error: 0.55 }
-const STATE_SPIN: Record<OrbState, number> = { idle: 0.05, planning: 0.55, executing: 0.35, blocked: 0.01, error: 0.15 }
+const STATE_ENERGY: Record<Presence, number> = {
+  dormant: 0.22, // §6⓪ exact
+  listening: 0.3,
+  hearing: 0.35, // base only — real local-volume-level blends this UP, never down (§6①)
+  thinking: 0.8, // §6② exact
+  asking: 0.45, // §6④ exact
+  proposing: 0.6, // §6③/⑤ exact
+  working: 1, // §6⑥ exact
+  verifying: 0.5, // §6⑦ exact
+  resolved: 0.7, // one-shot bloom approximation, not a literal particle burst
+  wounded: 0.5,
+  obstructed: 0.3,
+  severed: 0.15,
+}
+const STATE_SPIN: Record<Presence, number> = {
+  dormant: 0.05, // §6⓪ exact
+  listening: 0.15,
+  hearing: 0.2,
+  thinking: 0.55, // §6② exact
+  asking: 0.1, // "a slow single pulse" — the 0.5Hz opacity pulse itself is not
+  // separately implemented (no shader uniform for it); spin alone conveys
+  // "distinct from every other state" per §6④'s own requirement.
+  proposing: 0.2, // "slow deliberate spin"
+  working: 0.35, // §6⑥ exact
+  verifying: 0.7, // "tight fast spin"
+  resolved: 0.3,
+  wounded: 0.1,
+  obstructed: 0.05,
+  severed: 0.03,
+}
 
 // Deterministic hash — this repo's own eslint rule bans Math.random() anywhere under
 // src/components/jarvis/**/src/app/jarvis/** (.eslintrc.cjs, Phase 7 §7.8: "nothing
@@ -121,14 +171,14 @@ function buildGeometry(): THREE.BufferGeometry {
 export interface OrbLiveState {
   state: OrbState
   activeRunCount: number
-  /** F2.T2 — FLOW-46 OrbSpeechSync: the REAL assistant output level from
-   *  useVapiSession().volumeLevel (Vapi's own `volume-level` event, 0-1, confirmed
-   *  live in this SDK — see useVapiSession.tsx's own header). Only ever non-zero
-   *  while state is "executing" (Bridge's useOrbLiveState() only reaches executing
-   *  from a real running workflow OR voiceState speaking); Orb3D ignores it
-   *  otherwise, so a stale value from a just-ended call can never leak into an
-   *  unrelated state's energy. Omitted entirely is a valid "no voice session" state,
-   *  never coerced to a fabricated 0-implies-something reading. */
+  /** P2.T12 — the REAL local mic level from `useVapiSession().localVolumeLevel`
+   *  (Vapi's own `local-volume-level` event, 0-1 — the user's own mic, NOT
+   *  `volumeLevel`, which is the assistant's remote output and would be the
+   *  wrong signal here). Only read while `state === "hearing"` (§4.5 rule 3:
+   *  the presence that means "the user is speaking right now"); Orb3D ignores
+   *  it otherwise, so a stale value from a just-ended call can never leak into
+   *  an unrelated state's energy. Omitted entirely is a valid "no voice
+   *  session" state, never coerced to a fabricated 0-implies-something reading. */
   voiceAmplitude?: number
 }
 
@@ -218,23 +268,25 @@ export function Orb3D({ live, forceLowPower = false }: { live: OrbLiveState; for
       blending: THREE.AdditiveBlending,
       uniforms: {
         uTime: { value: 0 },
-        uEnergy: { value: STATE_ENERGY.idle },
-        uColor: { value: new THREE.Color(...STATE_COLOR.idle) },
+        uEnergy: { value: STATE_ENERGY.dormant },
+        uColor: { value: new THREE.Color(...STATE_COLOR.dormant) },
         uFracture: { value: 0 },
       },
     })
     const points = new THREE.Points(geometry, material)
     scene.add(points)
 
-    // Orbital ring pulses — FLOW-14 "executing": one small emissive dot per active
-    // workflow run (capped at MAX_RINGS so the scene stays legible under load), each
-    // orbiting at its own radius/speed keyed off its index — real data.runs.length
-    // drives how many actually render, not a fixed decorative count.
+    // Orbital ring pulses / lane-arc subdivision — one small emissive dot per
+    // active workflow run (capped at MAX_RINGS so the scene stays legible under
+    // load), each orbiting at its own radius/speed keyed off its index — real
+    // `data.runs.length` (surfaced as `activeRunCount`) drives how many actually
+    // render, not a fixed decorative count. §6⑥: "its ring subdivides into as
+    // many arcs as there are active lanes."
     const ringGroup = new THREE.Group()
     const ringDots: THREE.Mesh[] = []
     for (let i = 0; i < MAX_RINGS; i++) {
       const dotGeo = new THREE.SphereGeometry(0.045, 10, 10)
-      const dotMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(...STATE_COLOR.executing), transparent: true, opacity: 0 })
+      const dotMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(...STATE_COLOR.working), transparent: true, opacity: 0 })
       const dot = new THREE.Mesh(dotGeo, dotMat)
       dot.visible = false
       ringDots.push(dot)
@@ -245,7 +297,7 @@ export function Orb3D({ live, forceLowPower = false }: { live: OrbLiveState; for
     let raf = 0
     let stopped = false
     let fractureUntil = 0
-    let lastState: OrbState = "idle"
+    let lastState: Presence = "dormant"
     const clock = new THREE.Clock()
 
     function frame(): void {
@@ -253,16 +305,22 @@ export function Orb3D({ live, forceLowPower = false }: { live: OrbLiveState; for
       const t = clock.getElapsedTime()
       const { state, activeRunCount } = liveRef.current
 
-      if (state === "error" && lastState !== "error") fractureUntil = t + 0.6
+      // "severed" (P2.T1/§4.5 rule 1: transport trouble) is this component's
+      // successor to the old 5-state model's "error" — the fracture burst is a
+      // "something is genuinely wrong" cue, not a business-outcome cue.
+      if (state === "severed" && lastState !== "severed") fractureUntil = t + 0.6
       lastState = state
 
       const [r, g, b] = STATE_COLOR[state]
       const mat = material as THREE.ShaderMaterial
       mat.uniforms.uTime.value = t
-      // FLOW-46 OrbSpeechSync: real Vapi output level, only while genuinely
-      // speaking — never a synthesized amplitude. Blends UP from the state's base
-      // energy (never down, so a quiet moment mid-call doesn't read as "idle").
-      const amp = state === "executing" ? (liveRef.current.voiceAmplitude ?? 0) : 0
+      // FLOW-46 OrbSpeechSync, extended for the 12-value Presence: real Vapi
+      // output level, only while genuinely `hearing` (§4.5 rule 3 — the state
+      // that means "the user is speaking right now") — never a synthesized
+      // amplitude, never blended into any other state. Blends UP from the
+      // state's base energy (never down), so a quiet moment mid-utterance
+      // doesn't read as dormant.
+      const amp = state === "hearing" ? (liveRef.current.voiceAmplitude ?? 0) : 0
       mat.uniforms.uEnergy.value = Math.min(1, Math.max(STATE_ENERGY[state], amp))
       ;(mat.uniforms.uColor.value as THREE.Color).setRGB(r, g, b)
       mat.uniforms.uFracture.value = Math.max(0, fractureUntil - t) * 0.9
@@ -273,7 +331,7 @@ export function Orb3D({ live, forceLowPower = false }: { live: OrbLiveState; for
       const shown = Math.min(activeRunCount, MAX_RINGS)
       for (let i = 0; i < MAX_RINGS; i++) {
         const dot = ringDots[i]!
-        const active = state === "executing" && i < shown
+        const active = state === "working" && i < shown
         dot.visible = active
         if (active) {
           const radius = 2.1 + (i % 3) * 0.22

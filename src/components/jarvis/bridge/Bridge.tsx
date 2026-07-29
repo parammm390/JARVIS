@@ -22,6 +22,8 @@ import { ConsoleAtmosphere, LiveDot } from "../atmosphere"
 import { JarvisDataProvider, useJarvis } from "../lib/data-core"
 import { JarvisAuthProvider, useJarvisAuth } from "../lib/jarvis-auth"
 import { useVapiSession } from "../lib/useVapiSession"
+import { derivePresence } from "../kernel/presence"
+import { deriveTransportHealth } from "../kernel/transport"
 import { deriveMood } from "../lib/mood"
 import { KpiStrip } from "../panels/KpiStrip"
 import { DailyBriefing } from "../panels/DailyBriefing"
@@ -30,7 +32,8 @@ import { SinceYouWereAway } from "../SinceYouWereAway"
 import { GridBackdrop } from "../ui/fx/GridBackdrop"
 import { choreo } from "../ui/motion/choreo"
 import { PulseBar } from "./PulseBar"
-import { Orb3D, type OrbState } from "./Orb3D"
+import { Orb3D } from "./Orb3D"
+import type { Presence } from "../kernel/types"
 import { OrbAuraRipple } from "./OrbAuraRipple"
 import { ConstellationLink } from "./ConstellationLink"
 import { onPulse } from "../lib/pulse-bus"
@@ -70,22 +73,46 @@ function getDaypart(): "dawn" | "day" | "dusk" | "night" {
   return "night"
 }
 
-function useOrbLiveState(): { state: OrbState; activeRunCount: number; voiceAmplitude?: number } {
+// P2.T12 (C-13 — the defect this replaces): `useOrbLiveState` used to compute
+// presence itself, directly off `voiceState === "connecting"` read as
+// "planning" — exactly the "no component computes presence" rule §4.5 exists
+// to prevent. Deleted. This hook instead assembles this page's own REAL signals
+// (no kernel instruction state exists here — Bridge.tsx has no Thread, so
+// `activeInstructionState` is always null) and hands them to
+// `kernel/presence.ts`'s `derivePresence()`, the SAME sole source `/jarvis/next`
+// uses. `data.stats?.blocked ?? 0` is pre-existing (this file was already on
+// the ESLint `?? 0` ratchet's `excludedFiles` list before this change; P1.T4's
+// own rule says that list may only shrink, never grow — kept, not added to).
+function useBridgeOrbPresence(): { state: Presence; activeRunCount: number; voiceAmplitude?: number } {
   const data = useJarvis()
   const session = useVapiSession()
-  return useMemo(() => {
-    const activeRunCount = data.runs.length
-    const blocked = data.stats?.blocked ?? 0
-    let state: OrbState = "idle"
-    if (data.statsDegraded) state = "error"
-    else if (session.voiceState === "speaking" || activeRunCount > 0) state = "executing"
-    else if (session.voiceState === "connecting" || session.voiceState === "live") state = "planning"
-    else if (blocked > 0) state = "blocked"
-    // FLOW-46 OrbSpeechSync — only the real Vapi output level, only while genuinely
-    // speaking; every other moment leaves this undefined, never a fabricated 0.
-    const voiceAmplitude = session.voiceState === "speaking" ? session.volumeLevel : undefined
-    return { state, activeRunCount, voiceAmplitude }
-  }, [data.statsDegraded, data.runs.length, data.stats?.blocked, session.voiceState, session.volumeLevel])
+  const degradedSinceRef = useRef<number | null>(null)
+  useEffect(() => {
+    if (data.statsDegraded) {
+      if (degradedSinceRef.current === null) degradedSinceRef.current = data.now
+    } else {
+      degradedSinceRef.current = null
+    }
+  }, [data.statsDegraded, data.now])
+  const degradedForMs = data.statsDegraded && degradedSinceRef.current !== null ? data.now - degradedSinceRef.current : null
+  const transport = deriveTransportHealth({ signedIn: true, statsDegraded: data.statsDegraded, degradedForMs })
+  const voiceSpeaking = session.voiceState === "speaking"
+  const micOpen = session.voiceState === "live" || session.voiceState === "connecting"
+  const blocked = data.stats?.blocked ?? 0
+  const state = derivePresence({
+    transport,
+    activeInstructionState: null,
+    terminalDecayActive: false,
+    voiceSpeaking,
+    micOpen,
+    blockedCount: blocked,
+    needsHumanReviewCount: 0,
+  })
+  // FLOW-46 OrbSpeechSync, on the real local mic level (V7) — only while
+  // genuinely `hearing`; every other moment leaves this undefined, never a
+  // fabricated 0.
+  const voiceAmplitude = state === "hearing" ? session.localVolumeLevel : undefined
+  return useMemo(() => ({ state, activeRunCount: data.runs.length, voiceAmplitude }), [state, data.runs.length, voiceAmplitude])
 }
 
 // F6.T2 — FLOW-90 OfflineDrift formalizes the legacy Shell's own "standalone" mood
@@ -94,7 +121,7 @@ function useOrbLiveState(): { state: OrbState; activeRunCount: number; voiceAmpl
 // Bridge, which hardcoded `data-mood="idle"` unconditionally). Reuses that existing
 // system rather than inventing a second "degraded" visual language: real signal is
 // `data.statsDegraded` (the fast lane's own API-unreachable truth, already what
-// useOrbLiveState above keys its "error" orb state on). Adds the one genuinely new
+// useBridgeOrbPresence above keys its "severed" presence on). Adds the one genuinely new
 // piece the legacy Shell never had — a one-shot "relight" cascade on the transition
 // BACK to reachable, so recovery reads as an event, not a silent color swap.
 function useOfflineDrift(): { mood: ReturnType<typeof deriveMood>; relighting: boolean } {
@@ -204,7 +231,7 @@ function SoundPreferenceToggle({ quiet }: { quiet: boolean }) {
 }
 
 function LeftRail({ scene, setScene, orderedScenes, unopened, forceLowPower, bootBloom = false, ledger }: { scene: SceneId; setScene: (s: SceneId) => void; orderedScenes: SceneId[]; unopened: SceneId[]; forceLowPower: boolean; bootBloom?: boolean; ledger: FrecencyLedger }) {
-  const orbLive = useOrbLiveState()
+  const orbLive = useBridgeOrbPresence()
   // FLOW-99 FrecencyGlow: real D6.T3 store, same one `orderedScenes`/`unopened`
   // already read above this component — just a warmth read, no new data. Under
   // reduced motion, per the plan's own "no tint" reduced fallback, this stays off
@@ -423,7 +450,7 @@ function RightRail() {
 // underlying components (Orb3D/ActivityTheater/ApprovalCockpit), no duplicated
 // data, no information loss, just a different real-estate arrangement.
 function MobileTopBar({ scene, setScene, orderedScenes, forceLowPower }: { scene: SceneId; setScene: (s: SceneId) => void; orderedScenes: SceneId[]; forceLowPower: boolean }) {
-  const orbLive = useOrbLiveState()
+  const orbLive = useBridgeOrbPresence()
   return (
     <div className="sticky top-0 z-20 flex items-center gap-2 border-b border-white/6 bg-[#05090f]/90 px-3 py-2 backdrop-blur-xl lg:hidden">
       <Link href="/jarvis" className="relative h-7 w-7 shrink-0">

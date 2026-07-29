@@ -26,11 +26,14 @@ const SCENARIOS: Array<{ value: DealerZeroScenario; label: string }> = [
 
 function today() { return new Date().toISOString().slice(0, 10) }
 
+// P2.T12: `OrbState` is now an alias for the kernel's 12-value `Presence`
+// (Orb3D.tsx). Mapped from the old 5-value equivalents this file used before:
+// idle->dormant, planning->thinking, executing->working, blocked->obstructed.
 function frameState(frame: ShowtimeFrame | undefined): OrbState {
-  if (!frame || frame.kind === "day_start" || frame.kind === "day_end") return "idle"
-  if (frame.kind === "intake") return "planning"
-  if (frame.kind === "workflow") return "executing"
-  return "blocked"
+  if (!frame || frame.kind === "day_start" || frame.kind === "day_end") return "dormant"
+  if (frame.kind === "intake") return "thinking"
+  if (frame.kind === "workflow") return "working"
+  return "obstructed"
 }
 
 function ShowtimeShell() {
