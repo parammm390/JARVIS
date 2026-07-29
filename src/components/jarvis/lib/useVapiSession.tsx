@@ -10,6 +10,17 @@ import { sfx, setVoiceLive } from "../sound"
 
 const VAPI_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPI_PUBLIC_KEY ?? "ab65d198-5573-4d95-b7f2-4fd8db6f85fc"
 const VAPI_ASSISTANT_ID = process.env.NEXT_PUBLIC_VAPI_ASSISTANT_ID ?? "59863f35-236e-4451-9cb8-cd8df4a3c440"
+// P2.T2 (NEW-1 fix): a dedicated, transcription+TTS-only assistant for the new
+// Thread's browser voice (§3.2 binding decision — browser voice never authorizes
+// or executes). Deliberately undefined with NO fallback to `VAPI_ASSISTANT_ID`
+// when unset — see this session's state-file BLOCKERS (B-4): creating the actual
+// Vapi-side assistant resource needs a `VAPI_PRIVATE_KEY` this environment does
+// not have, and is a real external-service resource creation this session is not
+// positioned to perform blind. `toggleVoice`'s own `assistantIdOverride` param
+// (below) falls back to `VAPI_ASSISTANT_ID` when this is unset, so existing
+// `/jarvis` and `/jarvis/bridge` callers — which never pass an override — are
+// completely unaffected either way.
+export const VAPI_WEB_ASSISTANT_ID = process.env.NEXT_PUBLIC_VAPI_WEB_ASSISTANT_ID
 
 export type VoiceState = "idle" | "connecting" | "live" | "speaking" | "error"
 export interface TranscriptLine {
@@ -23,11 +34,19 @@ interface DailyCallLike {
   updateInputSettings?: (settings: { audio: { processor: { type: "none" } } }) => Promise<void>
 }
 
+// P2.T3 — V3 (`say`) and V5 (`control`), both verified present in
+// `@vapi-ai/web@2.6.1`'s own `vapi.d.ts` (plan v3 §3.1) and, until now, unused.
+type VapiSendMessage =
+  | { type: "end-call" }
+  | { type: "say"; message: string; interruptionsEnabled?: boolean; interruptAssistantEnabled?: boolean }
+  | { type: "control"; control: "mute-assistant" | "unmute-assistant" }
+  | { type: "add-message"; message: { role: "system" | "user"; content: string }; triggerResponseEnabled?: boolean }
+
 interface VapiInstance {
   start: (id: string) => Promise<unknown>
   stop: () => Promise<void>
   end: () => void
-  send: (message: { type: "end-call" }) => void
+  send: (message: VapiSendMessage) => void
   setMuted: (m: boolean) => void
   on: (e: string, cb: (m?: unknown) => void) => void
   getDailyCallObject: () => DailyCallLike | null
@@ -83,6 +102,12 @@ function useVapiSessionInternal() {
   const [voiceState, setVoiceState] = useState<VoiceState>("idle")
   const [volumeLevel, setVolumeLevel] = useState(0)
   const [transcript, setTranscript] = useState<TranscriptLine[]>([])
+  // P2.T3 — V1: partial (non-final) transcripts were previously read and
+  // immediately discarded (`transcriptType !== "final"` never matched the old
+  // handler's condition). Only the user's own partial is meaningful to stream
+  // into the rail input (§3.4 point 2) — `say()` already tells the Thread
+  // verbatim what JARVIS is saying, so there is nothing to stream for its turn.
+  const [partialTranscript, setPartialTranscript] = useState<string | null>(null)
   const [callDurationSec, setCallDurationSec] = useState(0)
   const [muted, setMutedState] = useState(false)
   const [configured, setConfigured] = useState(true)
@@ -166,6 +191,7 @@ function useVapiSessionInternal() {
           sessionTransitionRef.current = false
           sfx.voiceOff()
           setVoiceLive(false) // F11.T1 — real call-end signal, restores master gain
+          setPartialTranscript(null)
         })
         vapi.on("error", (err?: unknown) => {
           const message =
@@ -198,9 +224,15 @@ function useVapiSessionInternal() {
         vapi.on("speech-end", () => setVoiceState((s) => (s === "speaking" ? "live" : s)))
         vapi.on("message", (m: unknown) => {
           const msg = m as { type?: string; transcript?: string; role?: string; transcriptType?: string }
-          if (msg.type === "transcript" && msg.transcript && msg.transcriptType === "final") {
+          if (msg.type !== "transcript" || !msg.transcript) return
+          if (msg.transcriptType === "final") {
             setTranscript((f) => [...f.slice(-40), { role: msg.role === "assistant" ? "jarvis" : "you", text: msg.transcript! }])
+            setPartialTranscript(null)
+            return
           }
+          // P2.T3 — V1: stream the user's own in-progress utterance; replaces on
+          // every update, per §3.4 point 2 ("replacing on each update").
+          if (msg.role !== "assistant") setPartialTranscript(msg.transcript)
         })
         vapiRef.current = vapi
         return vapi
@@ -243,53 +275,60 @@ function useVapiSessionInternal() {
   // `getUserMedia` — restoring that single-request path. Vapi's own `error`/
   // `call-start-failed` events (already wired below) still surface a real denial;
   // we just no longer duplicate the request ourselves first.
-  const toggleVoice = useCallback(async () => {
-    if (voiceState === "live" || voiceState === "speaking") {
-      if (sessionTransitionRef.current) return
-      sessionTransitionRef.current = true
-      // Don't wait solely on Vapi's own async `call-end` event to update state or
-      // release the mic — if that event is ever slow/unreliable, the UI would be
-      // stuck showing "live" and the hardware track would stay open. Release and
-      // reset immediately; `call-end`, when it does fire, just confirms the same
-      // state (both stopMicWatchdog/forceReleaseMic are safe to call twice).
-      stopMicWatchdog()
-      forceReleaseMic(vapiRef.current)
-      setVoiceState("idle")
-      callStartRef.current = null
-      sfx.voiceOff()
-      setVoiceLive(false) // F11.T1 — manual-stop path, same real restore
-      // Notify Vapi first, then await Daily destruction. `end()` calls `stop()`
-      // without awaiting it; waiting here ensures the browser-owned track has
-      // actually been torn down before this handler completes.
-      try {
-        vapiRef.current?.send({ type: "end-call" })
-        await vapiRef.current?.stop()
-      } finally {
+  const toggleVoice = useCallback(
+    // P2.T2 — `assistantIdOverride` lets `/jarvis/next` request the dedicated
+    // web-only assistant (`NEXT_PUBLIC_VAPI_WEB_ASSISTANT_ID`) without touching
+    // `/jarvis`/`/jarvis/bridge`, which call this with no argument and get the
+    // EXACT same `VAPI_ASSISTANT_ID` behaviour as before this session.
+    async (assistantIdOverride?: string) => {
+      if (voiceState === "live" || voiceState === "speaking") {
+        if (sessionTransitionRef.current) return
+        sessionTransitionRef.current = true
+        // Don't wait solely on Vapi's own async `call-end` event to update state or
+        // release the mic — if that event is ever slow/unreliable, the UI would be
+        // stuck showing "live" and the hardware track would stay open. Release and
+        // reset immediately; `call-end`, when it does fire, just confirms the same
+        // state (both stopMicWatchdog/forceReleaseMic are safe to call twice).
+        stopMicWatchdog()
         forceReleaseMic(vapiRef.current)
+        setVoiceState("idle")
+        callStartRef.current = null
+        sfx.voiceOff()
+        setVoiceLive(false) // F11.T1 — manual-stop path, same real restore
+        // Notify Vapi first, then await Daily destruction. `end()` calls `stop()`
+        // without awaiting it; waiting here ensures the browser-owned track has
+        // actually been torn down before this handler completes.
+        try {
+          vapiRef.current?.send({ type: "end-call" })
+          await vapiRef.current?.stop()
+        } finally {
+          forceReleaseMic(vapiRef.current)
+          sessionTransitionRef.current = false
+        }
+        return
+      }
+      // A second click while the first async start is in flight used to create an
+      // overlapping Daily session. Never start again until that promise settles.
+      if (voiceState === "connecting" || sessionTransitionRef.current) return
+      sessionTransitionRef.current = true
+      setLastError(null)
+      setVoiceState("connecting")
+      setCallDurationSec(0)
+      try {
+        const vapi = await ensureVapi()
+        if (!vapi) throw new Error("Voice session is unavailable")
+        await vapi.start(assistantIdOverride ?? VAPI_ASSISTANT_ID)
+      } catch (error) {
+        console.error("[JARVIS] unable to start voice session", error)
+        setLastError("The microphone session could not start. Please try again.")
+        setVoiceState("error")
+        forceReleaseMic(vapiRef.current)
+      } finally {
         sessionTransitionRef.current = false
       }
-      return
-    }
-    // A second click while the first async start is in flight used to create an
-    // overlapping Daily session. Never start again until that promise settles.
-    if (voiceState === "connecting" || sessionTransitionRef.current) return
-    sessionTransitionRef.current = true
-    setLastError(null)
-    setVoiceState("connecting")
-    setCallDurationSec(0)
-    try {
-      const vapi = await ensureVapi()
-      if (!vapi) throw new Error("Voice session is unavailable")
-      await vapi.start(VAPI_ASSISTANT_ID)
-    } catch (error) {
-      console.error("[JARVIS] unable to start voice session", error)
-      setLastError("The microphone session could not start. Please try again.")
-      setVoiceState("error")
-      forceReleaseMic(vapiRef.current)
-    } finally {
-      sessionTransitionRef.current = false
-    }
-  }, [voiceState, stopMicWatchdog, ensureVapi])
+    },
+    [voiceState, stopMicWatchdog, ensureVapi],
+  )
 
   const toggleMute = useCallback(() => {
     setMutedState((m) => {
@@ -298,14 +337,38 @@ function useVapiSessionInternal() {
     })
   }, [])
 
+  // P2.T3 — V3: "JARVIS speaks arbitrary text mid-session." §3.4 point 4/6: the
+  // Thread's plan summary and outcome, and the literal "approve on screen"
+  // refusal string — always with `interruptionsEnabled: true` (§3.4 point 5,
+  // barge-in cancels any queued `say`).
+  const say = useCallback((text: string) => {
+    vapiRef.current?.send({ type: "say", message: text, interruptionsEnabled: true })
+  }, [])
+
+  // P2.T3 — V5: mute/unmute the ASSISTANT's own output (distinct from
+  // `toggleMute` above, which mutes the user's mic). Named `duck`/`unduck` per
+  // this task's own wording; not yet called by anything in P2 (P3/P5 wire real
+  // ducking moments) — added now because both live on the same `control`
+  // message surface `say` already needed.
+  const duck = useCallback(() => {
+    vapiRef.current?.send({ type: "control", control: "mute-assistant" })
+  }, [])
+  const unduck = useCallback(() => {
+    vapiRef.current?.send({ type: "control", control: "unmute-assistant" })
+  }, [])
+
   return {
     voiceState,
     volumeLevel,
     transcript,
+    partialTranscript,
     callDurationSec,
     muted,
     toggleVoice,
     toggleMute,
+    say,
+    duck,
+    unduck,
     configured,
     lastError,
     micSilenceWarning,

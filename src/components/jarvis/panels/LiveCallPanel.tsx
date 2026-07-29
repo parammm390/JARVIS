@@ -340,7 +340,7 @@ export function LiveCallPanel({ session }: { session: ReturnType<typeof useVapiS
             </button>
           )}
           <motion.button
-            onClick={toggleVoice}
+            onClick={() => toggleVoice()}
             // Starting is asynchronous. Keep the control inert while it joins so
             // a second tap cannot open a competing Daily microphone session. A
             // signed-out visitor can still END a call already in progress (can't
