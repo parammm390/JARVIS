@@ -18,6 +18,7 @@ import { withTenant, domainActions, decisionReceipts, actionLog, priceBookItems 
 import { inArray, desc, eq, and } from "drizzle-orm";
 import { requireContext, errorResponse } from "../../../../lib/auth";
 import { extractPriceCandidates, buildPriceBookProvenance } from "../../../../lib/price-book-provenance";
+import { extractPredicted } from "../../../../lib/predicted-outcome";
 
 type ReceiptSummary = {
   id: string;
@@ -120,6 +121,12 @@ export async function GET(req: Request): Promise<Response> {
       receipt: receiptByActionId.get(r.id) ?? null,
       critic: criticByActionId.get(r.id) ?? null,
       priceBookProvenance: buildPriceBookProvenance(candidatesByActionId.get(r.id) ?? [], priceBookRows),
+      // jarvis-v3 P4.T1: the plugin's own simulate() prediction, normalized out of
+      // the raw predictedReceipt column (already present on `r` via the `...r`
+      // spread above) so the Approval Cockpit reads one clean field instead of
+      // reaching into simulation.predicted itself. null when no real simulate()
+      // ran for this action type — never a fabricated prediction.
+      predicted: extractPredicted(r.predictedReceipt),
     }));
     return Response.json({ actions });
   } catch (err) {
