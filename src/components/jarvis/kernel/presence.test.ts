@@ -1,7 +1,8 @@
 // Plan v3 P2.T1 evidence: presence derivation order (§4.5), all 12 values reached,
 // and the C-13 regression guard (voiceState "connecting" must never read as
-// "planning" directly — Bridge.tsx:73-88's `useOrbLiveState` is deleted in P2.T12
-// precisely because it computed presence itself; this is the one place that may).
+// "planning" directly — the old orb-live-state hook that used to live at
+// Bridge.tsx:73-88 is fully removed in P2.T12 precisely because it computed
+// presence itself; this is the one place that may).
 
 import { describe, expect, it } from "vitest"
 import { derivePresence, type PresenceInput } from "./presence"

@@ -73,10 +73,12 @@ function getDaypart(): "dawn" | "day" | "dusk" | "night" {
   return "night"
 }
 
-// P2.T12 (C-13 — the defect this replaces): `useOrbLiveState` used to compute
-// presence itself, directly off `voiceState === "connecting"` read as
-// "planning" — exactly the "no component computes presence" rule §4.5 exists
-// to prevent. Deleted. This hook instead assembles this page's own REAL signals
+// P2.T12 (C-13 — the defect this replaces): the old orb-live-state hook (see
+// this file's own history at commit b117853's parent for its exact former
+// name) used to compute presence itself, directly off `voiceState ===
+// "connecting"` read as "planning" — exactly the "no component computes
+// presence" rule §4.5 exists to prevent. That hook is fully removed from this
+// tree. This hook instead assembles this page's own REAL signals
 // (no kernel instruction state exists here — Bridge.tsx has no Thread, so
 // `activeInstructionState` is always null) and hands them to
 // `kernel/presence.ts`'s `derivePresence()`, the SAME sole source `/jarvis/next`
