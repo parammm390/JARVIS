@@ -71,6 +71,11 @@ export interface PendingAction {
   receipt?: ReceiptSummary | null
   critic?: CriticVerdict | null
   priceBookProvenance?: PriceBookProvenanceEntry[]
+  /** jarvis-v3 P4.T1/T2: the plugin's own simulate() prediction (§6⑤'s "predicted
+   *  outcome from simulate()"), normalized server-side from predictedReceipt.
+   *  Optional/null when no real simulate() ran for this action type — never a
+   *  fabricated prediction; the card renders nothing in that case (§0.2 rule 3). */
+  predicted?: Record<string, unknown> | null
 }
 export interface WorkflowStep {
   id: string

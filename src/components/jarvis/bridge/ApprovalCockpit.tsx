@@ -54,6 +54,7 @@ import { Flight, Ticker } from "../ui/motion/primitives"
 import { choreo } from "../ui/motion/choreo"
 import { EASE } from "../ui/motion/tokens"
 import { ActionRenderer } from "../ui/renderers/ActionRenderer"
+import { FieldList } from "../lib/field-format"
 import { BorderBeam } from "../ui/fx/BorderBeam"
 import { registerAnchor, getAnchorRect } from "../lib/pulse-bus"
 import { KeymapHUD } from "./KeymapHUD"
@@ -201,6 +202,7 @@ function ApprovalCard({
   reduced: boolean
 }) {
   const [expanded, setExpanded] = useState(false)
+  const [predictedExpanded, setPredictedExpanded] = useState(false)
   const [hovered, setHovered] = useState(false)
   const [diffOpenSku, setDiffOpenSku] = useState<string | null>(null)
   const tilt = useTilt(reduced)
@@ -300,9 +302,20 @@ function ApprovalCard({
           {(action as { policyDrift?: { fromVersion: number; toVersion: number } }).policyDrift && (
             <span className="rounded-full bg-violet-400/14 px-2 py-0.5 text-[9px] font-black text-violet-300">policy drift</span>
           )}
-          {/* B2 predicted receipt — same honest absence. */}
-          {(action.receipt as { predicted?: unknown } | undefined)?.predicted != null && (
-            <span className="rounded-full bg-cyan-300/12 px-2 py-0.5 text-[9px] font-black text-cyan-200">predicted totals</span>
+          {/* jarvis-v3 P4.T2 (§6⑤ "predicted outcome from simulate()") — real,
+              server-computed prediction, honestly absent for the ~36 action types
+              with no flagship simulate(). Expands the same way the critic chip
+              already does, not a second new interaction pattern. */}
+          {action.predicted != null && (
+            <button
+              type="button"
+              onClick={() => setPredictedExpanded((e) => !e)}
+              className="inline-flex items-center gap-1 rounded-full bg-cyan-300/12 px-2 py-0.5 text-[9px] font-black text-cyan-200"
+              aria-expanded={predictedExpanded}
+            >
+              predicted outcome
+              <ChevronDown className={`h-2.5 w-2.5 transition-transform ${predictedExpanded ? "rotate-180" : ""}`} />
+            </button>
           )}
           {action.receipt && (
             <button
@@ -371,6 +384,16 @@ function ApprovalCard({
             <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
               <div className="mt-2 rounded-lg border border-white/8 bg-white/[0.02] p-2 text-[10px] leading-relaxed text-[color:var(--j-text-dim)]">
                 {action.critic.reason}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence initial={false}>
+          {predictedExpanded && action.predicted != null && (
+            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+              <div className="mt-2 rounded-lg border border-cyan-300/20 bg-cyan-300/[0.03] p-2">
+                <FieldList value={action.predicted} />
               </div>
             </motion.div>
           )}
