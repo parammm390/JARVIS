@@ -158,4 +158,45 @@ test.describe("P4.T3/T6 — ThreadVerification + sandbox honesty, FIXTURE harnes
     await page.keyboard.press("Escape")
     await expect(page.getByRole("dialog", { name: "Ops" })).toBeHidden({ timeout: 5_000 })
   })
+
+  test("P4.T2 — the approval card expands a real predicted outcome", async ({ page }) => {
+    mkdirSync(OUT_DIR, { recursive: true })
+    const fixtureAction = {
+      id: "fixture-action-0",
+      actionType: "start_invoice_to_cash_workflow",
+      summary: "Create a payment link for invoice fixture-, text/email it to the customer, and sync to QuickBooks.",
+      payload: { invoiceId: "fixture-invoice-0", channel: "sms" },
+      status: "pending",
+      createdAt: new Date().toISOString(),
+      receipt: null,
+      critic: null,
+      priceBookProvenance: [],
+      predicted: { invoiceId: "fixture-invoice-0", invoiceFound: true, amountUsd: 890, steps: ["create_payment_link", "send_message", "sync_invoice"] },
+    }
+    await page.route("**/api/jarvis/actions/pending?filter=pending", (route) => route.fulfill({ json: { actions: [fixtureAction] } }))
+    await page.route("**/api/jarvis/actions/pending?filter=blocked", (route) => route.fulfill({ json: { actions: [] } }))
+
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await page.goto("/jarvis/login", { waitUntil: "domcontentloaded" })
+    await page.getByPlaceholder(/you@example.com/i).click()
+    await page.getByPlaceholder(/you@example.com/i).pressSequentially(email!, { delay: 15 })
+    await page.getByPlaceholder(/•+/i).click()
+    await page.getByPlaceholder(/•+/i).pressSequentially(password!, { delay: 15 })
+    await expect(page.getByRole("button", { name: /sign in/i })).toBeEnabled({ timeout: 5_000 })
+    await page.getByRole("button", { name: /sign in/i }).click()
+    await page.waitForURL("**/jarvis", { timeout: 20_000 })
+
+    await page.goto("/jarvis/next?fixture=approval", { waitUntil: "domcontentloaded" })
+    await page.waitForTimeout(5_000) // let the fast lane's real actions/pending poll (intercepted above) land
+
+    const predictedChip = page.getByRole("button", { name: "predicted outcome" })
+    await expect(predictedChip).toBeVisible({ timeout: 10_000 })
+    await predictedChip.click()
+    await expect(page.getByText("amountUsd")).toBeVisible()
+    // "890" appears twice, honestly: ActionRenderer's own real payload chip
+    // ("$890") and the predicted-outcome FieldList this task adds ("890").
+    await expect(page.getByText("890", { exact: true })).toBeVisible()
+    await page.waitForTimeout(500) // let the AnimatePresence expand settle before the screenshot
+    await page.screenshot({ path: `${OUT_DIR}/approval-card-predicted-1440.png`, fullPage: true })
+  })
 })
