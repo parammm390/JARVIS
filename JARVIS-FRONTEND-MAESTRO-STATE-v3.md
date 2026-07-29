@@ -31,7 +31,7 @@
 | | |
 |---|---|
 | **ACTIVE PHASE** | **P2 — The Golden Vertical Slice on the Bridge** |
-| **Latest verified commit** | `9e42412` |
+| **Latest verified commit** | `e649548` |
 | **Phases complete** | 1 / 7 |
 | **Sessions logged** | 1 |
 | **Product exists at** | end of P2 (session ~4) |
@@ -430,7 +430,38 @@ $ ls e2e/jarvis-visual-snapshots.spec.ts-snapshots | wc -l
       ```
       Committed snapshots: `e2e/jarvis-golden-baseline.spec.ts-snapshots/golden-baseline-signed-out-{1440,390}-desktop-chromium-darwin.png`
       Human-readable PNGs: `qa-screenshots/v3-P1/jarvis-signed-out-{1440,390}.png`
-      **Deviation:** none.
+      **Deviation:** the spec sets its own viewport per case, so running it under both
+      Playwright projects duplicated it under two snapshot names. Pinned to
+      `desktop-chromium`; the widths come from the spec, not the project.
+- [x] **P1.T13 (not in the plan — required to close the phase honestly)** Repair the
+      **pre-existing** regression net, which the P1 fixes had invalidated.
+      **Evidence:** `e649548`. Running the **full** suite rather than only the two new specs
+      found three real problems:
+
+      **(a) A pre-existing test was pinning defect C-05 in place.**
+      `jarvis-public.spec.ts:102` asserted `getByText("LIVE OPS")` is visible on a
+      **signed-out** page — where every ticker row is sample content. The suite was enforcing
+      the exact false claim C-05 describes. Rewritten to assert the ticker exists **and** that
+      signed-out shows the honest `SAMPLE OPS`.
+
+      **(b) All 26 committed visual snapshots still depicted the defective pre-P1 surface —
+      and passed anyway.** The `view-command-center` baseline dates from `5c40401`, long before
+      this session, and still shows `$0` from 401s, the hardcoded name and `LIVE OPS`. Measured
+      rather than assumed: the real diff is **32,413 pixels, ratio 0.04**, against the spec's
+      `maxDiffPixelRatio: 0.05`. It passed by a **0.01 margin**. The net cannot see five KPI
+      numbers becoming permission veils. All 26 regenerated with `--update-snapshots=all`
+      (plain `--update-snapshots` rewrites only on failure, so it changed nothing).
+
+      **(c)** The new golden-baseline spec ran under both projects, duplicating itself.
+
+      **Finding to carry forward:** a 5 % full-page tolerance is too loose for this page to
+      function as a regression net — a change this large hid inside it. **P6.T5 (type/spacing
+      sweep) and P7.T7 rely on these snapshots.** Recommend tightening the per-view tolerance,
+      or snapshotting the KPI strip and header as their own elements, before P6.
+      **Deviation:** this task is not in the plan. The plan's §8 P1 task list and exit gate
+      never mention the existing suite, but P1 changed four files it covers, and "`/jarvis`
+      still works" is hard rule 9. Leaving it red — or worse, leaving baselines that are
+      pictures of the bugs — would have made the phase's green misleading.
 
 ### Exit gate
 - [x] `grep -rn "?? 0" src/components/jarvis/panels` → 0 for network values — **Evidence:**
@@ -484,9 +515,11 @@ $ ls e2e/jarvis-visual-snapshots.spec.ts-snapshots | wc -l
             Tests  81 passed (81)
       $ npx tsc --noEmit
       exit 0
-      $ npx playwright test e2e/jarvis-golden-baseline.spec.ts e2e/jarvis-network-hygiene.spec.ts
-        4 passed
+      $ npx playwright test --workers=2        # FULL suite, both projects
+        52 passed, 0 failed   (14 skipped — all credential-gated, see BLOCKERS)
       ```
+      The full suite was run, not just the two new specs — see the P1.T13 row below for
+      what that caught.
 - [x] Cold Lighthouse baseline, 5 runs, median + worst — **Evidence:**
       **Headline cold number: performance 98.** Lighthouse 13.4.1, `--preset=desktop`,
       `--only-categories=performance,accessibility`, `next build` + `next start -p 3300`
@@ -802,6 +835,18 @@ $ ls e2e/jarvis-visual-snapshots.spec.ts-snapshots | wc -l
   `?? 0` at all. All visual and perf evidence was then **regenerated against final HEAD** rather
   than left pointing at the pre-fix commit — 81 unit tests, 4 Playwright tests, and a fresh set
   of 5 cold Lighthouse runs (again 98 × 5, TBT 0 ms × 5).
+  **Then I ran the FULL e2e suite rather than only my own two specs, and it was not clean.**
+  Three real problems, all fixed in `e649548`. (1) `jarvis-public.spec.ts` asserted
+  `"LIVE OPS"` is visible on a **signed-out** page — the suite was actively pinning defect
+  C-05 in place. (2) **All 26 committed visual snapshots still depicted the pre-P1 defective
+  surface and passed anyway**: the Command Center diff measured **32,413 px, ratio 0.04**
+  against a `0.05` tolerance — it passed by a 0.01 margin, so the net could not see five KPI
+  numbers becoming permission veils. Regenerated all 26 (plain `--update-snapshots` rewrites
+  only on failure and changed nothing; `--update-snapshots=all` was needed). (3) My golden
+  baseline spec ran under both projects. **Full suite now 52 passed / 0 failed, both
+  projects.** Carry forward: a 5 % full-page tolerance is too loose to be a regression net,
+  and **P6.T5 and P7.T7 depend on these snapshots** — tighten it, or snapshot the KPI strip
+  and header as their own elements, before P6.
   **Next:** resolve B-1 and the `TEST_OWNER_*` credentials, then P2.T1 · **Blockers:** B-1
   (DOM test env), B-2 (§5.5 has no `unavailable:"server"` row), and `TEST_OWNER_*` still
   absent — every P2 exit-gate line is an authenticated journey.
@@ -850,6 +895,7 @@ $ ls e2e/jarvis-visual-snapshots.spec.ts-snapshots | wc -l
 | D-13 | T8 | "use the signed-in first name" | Unspecified what to do when a Supabase user has no profile name. | `selectFirstName` → profile name, else email local part (the user's own real identifier), else `null` → greeting renders no name. |
 | D-14 | T9 | "stop a lane on 401 → denied; backoff on 5xx/network" | Fixed `setInterval` cannot express a delay that depends on the last outcome; `pollSanity` used `.catch(() => null)`, discarding the status code needed to tell "refused" from "broke"; the visibility-change handler was a second way the storm restarted. | Self-rescheduling `setTimeout` per lane; `pollSanity` → `allSettled`; visibility refetch gated on session + not-denied; a 1 s watcher restarts lanes the moment a session appears. |
 | D-15 | T10 | Header → `"SAMPLE OPS"` | A pulsing teal "live" dot sits beside the label and would restate the exact claim C-05 is about. | Label changed as specified; `sim` tracked as a row property rather than sniffed from text; dot goes static amber (§5.2 binds amber to "degraded, partial"). |
+| D-18 | T13 (new) | The plan's P1 task list and exit gate never mention the **pre-existing** e2e suite | P1 changed four files it covers. Full-suite run: `jarvis-public.spec.ts` asserted `"LIVE OPS"` on a signed-out page (pinning C-05 in place), and all 26 visual baselines still depicted the defective surface yet passed — measured diff **32,413 px / ratio 0.04** vs a `0.05` tolerance. | Added an unplanned T13: rewrote the C-05 assertion, regenerated all 26 baselines with `--update-snapshots=all`, pinned the new spec to one project. Full suite 52/0. Hard rule 9 ("every phase leaves `/jarvis` working") made this non-optional. |
 | D-17 | Exit gate | `grep "?? 0" panels/` → 0 for network values | First pass returned **14**, not 11 — `HeaderBand` still coerced two network counts into `statusSentence()`, so signed out it asserted **"Systems idle."** from four 401s: C-01 in prose. | Fixed rather than caveated (`9e42412`): counts come from selectors, a clause appears only when its fact is known, the sentence is omitted when nothing is known. Added `selectEventsToday` + 4 tests; `HeaderBand` off both debt lists. |
 | D-16 | T11 | "assert < 5 requests" | Counting *all* requests including page assets makes "< 5" meaningless. | Budget counts `/api/jarvis/*` — the traffic that actually stormed. Non-vacuity proven: baseline makes 84 in the same window. |
 
