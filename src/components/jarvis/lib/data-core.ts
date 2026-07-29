@@ -178,21 +178,35 @@ export interface PhoneRoutingNumber {
   vapiPhoneNumberId: string | null
   label: string | null
 }
+/** jarvis-v3 P4.T6: real, verified shape — `resolveCapabilityBindingsForTenant()`
+ *  (finnor-os/packages/tools/src/binding-resolution.ts) returns `{mode, source}`
+ *  per capability, not a bare string, and GET /api/setup/status's own `environment.
+ *  bindings = bindings` assigns that report through unchanged. The previous
+ *  `Record<capability, string>` type here was wrong — a real, live defect: it made
+ *  `views.tsx`'s SystemHealthPanel/BindingChip compare an object to the string
+ *  `"emulator"` (always false) and try to render that object as a JSX child
+ *  directly, which crashes ("Objects are not valid as a React child"). Fixed
+ *  alongside this task since it needs the exact same field, correctly typed, to
+ *  tell a real provider from a sandboxed one. */
+export interface BindingResolution {
+  mode: string
+  source: "tenant" | "env" | "default"
+}
 /** Phase 16(c): a deploy's config posture, verifiable from this one endpoint instead
  *  of grepping platform env-var UIs. Optional: older API deploys won't carry it yet. */
 export interface EnvironmentStatus {
   nodeEnv: string
   secretProvider: { provider: "env" | "aws-secrets-manager"; loaded: boolean; loadedAt: string | null }
   bindings: {
-    scheduling: string
-    communications: string
-    documents: string
-    esign: string
-    inventory: string
-    accounting: string
-    payments: string
-    crm: string
-    marketing: string
+    scheduling: BindingResolution
+    communications: BindingResolution
+    documents: BindingResolution
+    esign: BindingResolution
+    inventory: BindingResolution
+    accounting: BindingResolution
+    payments: BindingResolution
+    crm: BindingResolution
+    marketing: BindingResolution
   }
 }
 export interface SetupStatus {

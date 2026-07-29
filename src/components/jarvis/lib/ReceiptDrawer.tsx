@@ -9,12 +9,14 @@ import { useEffect, useState, type CSSProperties, type ReactNode } from "react"
 import { useReducedMotion, motion } from "framer-motion"
 import { Tag, User, Calendar, MessageSquare, Wrench, FileText, Package, DollarSign } from "lucide-react"
 import { jarvisGet } from "./api"
+import { useLanePresentation } from "../kernel/useSelectorInput"
 import { Drawer } from "../ui/primitives/Drawer"
 import { ActionRenderer } from "../ui/renderers/ActionRenderer"
 import { getRendererEntry } from "../ui/renderers/registry"
 import { RiskBadge, type RiskTier } from "../ui/primitives/RiskBadge"
 import { Stagger } from "../ui/motion/primitives"
 import { FieldList, ThreadVerification, type PredictedOutcome, type PredictionDiff } from "../bridge/ThreadVerification"
+import { isSandboxStep, SANDBOX_LITERAL } from "./sandbox-detection"
 
 // F3.T3 — FLOW-58's sibling receipt-depth task: evidence source iconography. A
 // keyword lookup against the REAL `source` string every evidence row already
@@ -65,9 +67,19 @@ export interface FullReceipt {
 // StepIcon.tsx's own taxonomy, not one of the 41 registered types). Registered
 // stepTypes get the SAME ActionRenderer approvals/feed use; an unregistered one
 // (a real sub-step, not a bug) gets a designed one-liner, never raw JSON.
+/** `proposedAction` is always `{stepType, payload}` (see this section's own
+ *  header comment) — shared by the sandbox-honesty banner above and the
+ *  section below, rather than each re-deriving it. Returns "" (never null)
+ *  so `isSandboxStep`'s own lookup table simply finds no entry — no separate
+ *  null-handling branch needed at either call site. */
+function stepTypeOf(proposedAction: unknown): string {
+  const obj = proposedAction && typeof proposedAction === "object" ? (proposedAction as Record<string, unknown>) : null
+  return obj && typeof obj.stepType === "string" ? obj.stepType : ""
+}
+
 function ProposedActionSection({ proposedAction }: { proposedAction: unknown }) {
   const obj = proposedAction && typeof proposedAction === "object" ? (proposedAction as Record<string, unknown>) : null
-  const stepType = obj && typeof obj.stepType === "string" ? obj.stepType : null
+  const stepType = stepTypeOf(proposedAction) || null
   if (!stepType) return <span className="text-[color:var(--j-text-faint)]">none yet</span>
   if (!getRendererEntry(stepType)) {
     return (
@@ -110,6 +122,7 @@ export function ReceiptContent({
   const [receipt, setReceipt] = useState<FullReceipt | null>(null)
   const [error, setError] = useState<string | null>(null)
   const reducedMotion = useReducedMotion() ?? false
+  const { setupStatus } = useLanePresentation()
 
   useEffect(() => {
     let cancelled = false
@@ -196,6 +209,14 @@ export function ReceiptContent({
                   {receipt.finalizedAt ? "finalized" : "in progress"}
                 </span>
               </div>
+              {/* jarvis-v3 P4.T6 (§8 PHASE 4) — sandbox honesty: this receipt's
+                  own step (create_payment_link/send_message) resolved to a
+                  non-real provider. Literal string, never disguised as a real
+                  send. `stepTypeOf` mirrors ProposedActionSection's own
+                  extraction below — proposedAction is always {stepType, payload}. */}
+              {isSandboxStep(stepTypeOf(receipt.proposedAction), setupStatus?.environment?.bindings) && (
+                <p className="mt-2 text-[10.5px] font-bold text-amber-200/90">{SANDBOX_LITERAL}</p>
+              )}
             </motion.div>
 
             {/* jarvis-v3 P4.T3 — predicted <-> actual (§6⑦), the moat moment: this

@@ -19,6 +19,7 @@ import { burstAt } from "../lib/EventFX"
 import { ReceiptDrawer } from "../lib/ReceiptDrawer"
 import { useJarvisAuth } from "../lib/jarvis-auth"
 import { onPulse } from "../lib/pulse-bus"
+import { isSandboxStep, SANDBOX_LITERAL } from "../lib/sandbox-detection"
 import { choreo } from "../ui/motion/choreo"
 
 // F8.T1 — FLOW-60 FlowParticulate: real steps/min from pulse-bus's "step" kind
@@ -256,6 +257,14 @@ export function GraphNodeCard({ node, now, blueprint, onSelect }: { node: GraphN
   const tone = NODE_TONE[node.status] ?? NODE_TONE.pending!
   const isLeased = node.status === "leased"
   const isDone = node.status === "completed"
+  // jarvis-v3 P4.T6 (§8 PHASE 4) — sandbox honesty for "the step": a blueprint
+  // tile is a reference catalog entry, not a real execution, so it's never
+  // eligible. A real (non-blueprint) create_payment_link/send_message step
+  // that resolved to a non-real provider gets the literal string as an
+  // accessible title (a real DOM string, not a tooltip-only decoration) —
+  // this tile's own layout has no room for a second inline banner.
+  const { setupStatus } = useJarvis()
+  const sandboxed = !blueprint && isSandboxStep(node.stepType, setupStatus?.environment?.bindings)
   // FLOW-59 ChamberPressure: only a genuinely leased node with a REAL retry
   // (attempts > 1, straight from workflow_steps.attempts) gets the pressure glow —
   // a first-attempt leased node keeps today's plain cyan pulse-ring unchanged.
@@ -289,6 +298,7 @@ export function GraphNodeCard({ node, now, blueprint, onSelect }: { node: GraphN
       role={interactive ? "button" : undefined}
       tabIndex={interactive ? 0 : undefined}
       aria-label={interactive ? `Open receipt for ${humanizeStepType(node.stepType)}` : undefined}
+      title={sandboxed ? SANDBOX_LITERAL : undefined}
       onClick={interactive ? () => onSelect?.(node) : undefined}
       onKeyDown={interactive ? (event) => {
         if (event.key === "Enter" || event.key === " ") {
@@ -362,6 +372,11 @@ export function GraphNodeCard({ node, now, blueprint, onSelect }: { node: GraphN
         >
           <Check className="h-3 w-3" strokeWidth={3.5} />
         </motion.div>
+      )}
+      {sandboxed && (
+        <span className="absolute -bottom-1.5 -left-1.5 rounded-full bg-amber-300/90 px-1.5 py-0.5 text-[7.5px] font-black uppercase tracking-wide text-slate-950 shadow-[0_0_8px_rgba(245,185,66,0.5)]">
+          sandbox
+        </span>
       )}
       {node.status === "failed" && node.terminalReason && (
         <div className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 w-44 -translate-x-1/2 rounded-lg border border-red-400/30 bg-slate-950 p-2 text-[10px] text-red-300 opacity-0 shadow-xl transition group-hover:opacity-100">

@@ -11,7 +11,7 @@ import { Check, CreditCard, FileSignature, KeyRound, Loader2, Phone, PhoneOff, P
 import { Glass } from "./atmosphere"
 import { sfx } from "./sound"
 import { jarvisGet, jarvisPost, JarvisApiError } from "./lib/api"
-import { useJarvis, ageLabel } from "./lib/data-core"
+import { useJarvis, ageLabel, type BindingResolution } from "./lib/data-core"
 
 type Row = Record<string, unknown>
 
@@ -884,12 +884,18 @@ const BINDING_LABELS: Record<string, string> = {
   marketing: "Marketing",
 }
 
-function BindingChip({ capability, value }: { capability: string; value: string }) {
-  const real = value !== "emulator"
+// jarvis-v3 P4.T6: `value` is really `{mode, source}` (see data-core.ts's
+// `BindingResolution` — this file's own prop type was wrong, a real, live
+// defect: comparing an object to the string "emulator" is always false, and
+// rendering that object directly as a JSX child crashes React. Fixed here
+// since P4.T6 needs this exact field, correctly read, to tell a real provider
+// from a sandboxed one.
+function BindingChip({ capability, value }: { capability: string; value: BindingResolution }) {
+  const real = value.mode !== "emulator"
   return (
     <div className={`rounded-xl border px-3 py-2.5 ${real ? "border-teal-300/25 bg-teal-300/8" : "border-white/8 bg-slate-950/50"}`}>
       <div className="text-[9.5px] font-black uppercase tracking-[0.14em] text-white/40">{BINDING_LABELS[capability] ?? capability}</div>
-      <div className={`text-[12.5px] font-black ${real ? "text-teal-200" : "text-white/55"}`}>{real ? value : "emulator"}</div>
+      <div className={`text-[12.5px] font-black ${real ? "text-teal-200" : "text-white/55"}`}>{value.mode}</div>
     </div>
   )
 }
