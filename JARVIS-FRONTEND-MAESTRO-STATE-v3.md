@@ -31,7 +31,7 @@
 | | |
 |---|---|
 | **ACTIVE PHASE** | **P3 — Instruction Lifecycle & Realtime** |
-| **Latest verified commit** | `8e74d5d` |
+| **Latest verified commit** | `6efed15` |
 | **Phases complete** | 1 / 7 (P2 code-complete, exit gate 7/10 green, B-5 still open; **P3 code-complete, exit gate 3/6 green — BLOCKER B-6** (migration deliberately unapplied, see pre-flight decision) blocks the 3 live event-timing lines; 2 real bugs found+fixed via live testing this phase, on top of P2's own 2) |
 | **Sessions logged** | 4 |
 | **Product exists at** | end of P2 (session ~4); cognition (streamed context+plan, real SSE-with-fallback) visible end of P3 (session ~5) |
