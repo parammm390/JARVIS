@@ -222,6 +222,10 @@ export const domainActions = pgTable(
     predictedReceipt: jsonb("predicted_receipt"),
     predictionDiff: jsonb("prediction_diff"),
     repairedFromPlanId: uuid("repaired_from_plan_id"),
+    // jarvis-v3 P3.T1 (migration 0062): the client-minted instruction id that produced
+    // this action, when the caller supplied one — nullable (draftKnownAction and every
+    // pre-P3 row have none).
+    instructionId: uuid("instruction_id"),
   },
   (t) => [
     index("domain_actions_tenant_status_idx").on(t.tenantId, t.status),
@@ -1429,4 +1433,49 @@ export const intakeIdempotency = pgTable(
     completedAt: timestamp("completed_at", { withTimezone: true }),
   },
   (t) => [unique("intake_idempotency_tenant_key_idx").on(t.tenantId, t.idempotencyKey), index("intake_idempotency_tenant_idx").on(t.tenantId)],
+);
+
+// jarvis-v3 P3.T1 (migration 0062): the instruction lifecycle trace (plan v3 §7.1).
+// `id` is the CLIENT-minted instructionId (kernel/instruction.ts mints it and sends it
+// in POST /api/actions) — no defaultRandom(), the row is created the moment
+// handleInstruction first sees one, before the first instruction_events row.
+export const instructionSessions = pgTable(
+  "instruction_sessions",
+  {
+    id: uuid("id").primaryKey(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    sessionId: text("session_id"),
+    userId: uuid("user_id").references(() => users.id),
+    instructionText: text("instruction_text").notNull(),
+    source: text("source", { enum: ["typed", "voice"] }).notNull().default("typed"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("instruction_sessions_tenant_idx").on(t.tenantId)],
+);
+
+// Append-only (never updated or deleted, same convention as action_log). `seq` is
+// strictly increasing per instructionId — the UNIQUE constraint is what makes
+// emitInstructionEvent()'s INSERT...SELECT MAX(seq)+1 pattern safe against a
+// duplicate rather than a silent race.
+export const instructionEvents = pgTable(
+  "instruction_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    instructionId: uuid("instruction_id").notNull().references(() => instructionSessions.id),
+    seq: integer("seq").notNull(),
+    // 15 values verbatim from the session's own binding list — see migration 0062's
+    // own note on the "14 vs 15" discrepancy in how that list was described.
+    phase: text("phase", {
+      enum: [
+        "received", "context_retrieved", "planning", "plan_ready", "clarification_required",
+        "action_created", "action_gated", "dispatched", "executing", "step_progress",
+        "verifying", "verified", "completed", "failed", "cancelled",
+      ],
+    }).notNull(),
+    payload: jsonb("payload").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique("instruction_events_instruction_seq_idx").on(t.instructionId, t.seq), index("instruction_events_tenant_idx").on(t.tenantId)],
 );
