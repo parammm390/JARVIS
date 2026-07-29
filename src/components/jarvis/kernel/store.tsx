@@ -503,12 +503,36 @@ function KernelInner({ children }: { children: React.ReactNode }) {
   // in place and the rest state shows instead — never a crash, never a
   // fabricated thread.
   const restoreAttemptedRef = useRef(false)
+  // Real bug found via live testing (P3.T8): this effect's own deps include
+  // `auth.session`, and Supabase's client can hand out a NEW session object
+  // reference shortly after sign-in (e.g. a follow-up auth-state event) even
+  // when nothing meaningful changed — which re-runs this effect and, with a
+  // PER-INVOCATION `cancelled` flag, ran this exact cleanup and cancelled the
+  // already-in-flight restore fetch a moment before it could call setThread.
+  // Both real GET calls completed, but the thread never appeared. A MOUNT-
+  // scoped ref (only ever flipped by true unmount, below) fixes it — cancelling
+  // an in-flight fetch on a same-mount effect re-run was never the intent;
+  // `restoreAttemptedRef` already prevents starting a second attempt.
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    // Real second bug found via the SAME live test: React's dev-mode
+    // StrictMode double-invokes an effect (mount -> cleanup -> mount again)
+    // against the SAME ref. Setting `mountedRef.current = true` only via
+    // `useRef`'s initial value meant the interim cleanup call flipped it to
+    // false and nothing ever set it back — so the restore's own async
+    // continuation always read "unmounted" and bailed right before
+    // `setThread`, even though the component was genuinely still mounted.
+    // Resetting it here, on every real (re)mount, is the standard fix.
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
   useEffect(() => {
     if (restoreAttemptedRef.current || auth.loading || !auth.session || thread) return
     const pointer = readActiveThreadPointer()
     if (!pointer) return
     restoreAttemptedRef.current = true
-    let cancelled = false
     void (async () => {
       try {
         const sessionRes = await jarvisGet<{ instruction?: { id: string } }>(`instructions/${pointer.instructionId}`)
@@ -518,7 +542,7 @@ function KernelInner({ children }: { children: React.ReactNode }) {
         }
         const eventsRes = await jarvisGet<{ events?: TraceEvent[] }>(`instructions/${pointer.instructionId}/events`, { after: "0" })
         const events = eventsRes.events ?? []
-        if (cancelled) return
+        if (!mountedRef.current) return
         const base: Thread = {
           id: pointer.id,
           sessionId: pointer.sessionId,
@@ -563,9 +587,6 @@ function KernelInner({ children }: { children: React.ReactNode }) {
         // Best-effort — see this effect's own header.
       }
     })()
-    return () => {
-      cancelled = true
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auth.loading, auth.session, thread])
 

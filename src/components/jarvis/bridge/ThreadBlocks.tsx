@@ -106,8 +106,16 @@ export function ThreadUnderstood({ thread, reducedMotion }: { thread: Thread; re
       ) : (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {chips.map((c, i) => (
+            // Real finding via live testing (P3): the groundedPayload-derived
+            // chips are genuinely NOT unique by label+source alone — every node
+            // sharing the same grounded field name/status (e.g. 6 invoice
+            // actions each grounding "invoiceId · verified") produces identical
+            // content. The index suffix is safe here because chips only ever
+            // APPEND (never reorder or remove mid-list, per applyTraceEvents /
+            // this array's own construction), so index+content stays a stable
+            // enough identity across renders.
             <motion.div
-              key={`${c.label}·${c.source}`}
+              key={`${c.label}·${c.source}·${i}`}
               {...contextGatherChipVariants(i, reducedMotion)}
               className="j-chip justify-start border border-white/10 bg-white/[.035] text-[color:var(--j-text-dim)]"
               title={c.source}
