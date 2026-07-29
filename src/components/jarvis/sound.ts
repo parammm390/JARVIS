@@ -126,6 +126,37 @@ export const sfx = {
     tone(110, 1.2, 0, "ambient", 0.08)
     tone(165, 1.2, 0.1, "ambient", 0.05)
   },
+  // ---------------------------------------------------------------------
+  // P2.T14 — the Instruction Thread's own cue set (plan v3 §5.4). `approve`/
+  // `reject` above already match this table exactly and are reused unchanged.
+  // ---------------------------------------------------------------------
+  /** M1 RailCommit — "one soft rising two-note". */
+  commit: () => {
+    tone(660, 0.06, 0, "flow", 0.4)
+    tone(880, 0.09, 0.05, "flow", 0.4)
+  },
+  /** `understanding` begins — "a single low tick, then silence". */
+  think: () => {
+    tone(220, 0.05, 0, "flow", 0.3)
+  },
+  /** Cockpit rises (§6⑤) — "two-note rising, brighter". Clarify (§6④) fires the
+   *  SAME shape "at lower pitch" rather than a second, unrelated cue. */
+  propose: (opts?: { lower?: boolean }) => {
+    const base = opts?.lower ? 440 : 587
+    tone(base, 0.09, 0, "decision", 0.5)
+    tone(base * 1.335, 0.14, 0.06, "decision", 0.5)
+  },
+  /** M12 StepSpark — "short high tick, ≤1 per 400ms" (throttled by the caller,
+   *  same shape `stepTick` already used; named to match §5.4's table). */
+  step: () => {
+    tone(1568, 0.06, 0, "flow", 0.3)
+  },
+  /** M15 ReceiptSeal, terminal success — "low resolved chord, 600ms". */
+  seal: () => {
+    tone(261.6, 0.6, 0, "ambient", 0.5)
+    tone(329.6, 0.6, 0, "ambient", 0.4)
+    tone(392.0, 0.6, 0, "ambient", 0.4)
+  },
 }
 
 let lastEventPing = 0
@@ -135,4 +166,14 @@ export function eventPingThrottled(): void {
   if (now - lastEventPing < 3000) return
   lastEventPing = now
   sfx.eventPing()
+}
+
+let lastStep = 0
+/** P2.T14 — §5.4's own rule: "max one cue per 400 ms, throttle and drop, never
+ *  queue", regardless of how many execution lanes complete a step at once. */
+export function stepCueThrottled(): void {
+  const now = Date.now()
+  if (now - lastStep < 400) return
+  lastStep = now
+  sfx.step()
 }

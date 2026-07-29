@@ -9,7 +9,8 @@
 
 import { useEffect, useState } from "react"
 import { useReducedMotion } from "framer-motion"
-import { KernelProvider, useKernel } from "../kernel/store"
+import "../jarvis-theme.css"
+import { KernelProvider, useKernel, type Thread as ThreadData } from "../kernel/store"
 import { useJarvisAuth } from "../lib/jarvis-auth"
 import { useVapiSession } from "../lib/useVapiSession"
 import { Orb3D } from "./Orb3D"
@@ -18,6 +19,9 @@ import { Thread } from "./Thread"
 import { ThreadApprovalCockpit } from "./ThreadBlocks"
 import { CommandRail } from "./CommandRail"
 import { ReceiptContent } from "../lib/ReceiptDrawer"
+import { derivePresence } from "../kernel/presence"
+import { THREAD_FIXTURES, FIXTURE_STATE_KEYS } from "./thread-fixtures"
+import type { Truth } from "../kernel/types"
 
 function LoadingGate() {
   return (
@@ -96,6 +100,68 @@ function RestPrompt() {
   )
 }
 
+/** Shared visual body — Field + Orb + Thread + (approval) Cockpit + Rail. Both
+ *  the real, live page and the dev-only fixture harness below render through
+ *  this SAME function, so a fixture screenshot is evidence about the real
+ *  component tree, not a separate mock of it. `showRail` is false in fixture
+ *  mode — the rail submits real instructions via the real kernel, which a
+ *  fixture thread has no backing kernel state for. */
+function ThreadBody({
+  thread,
+  presence,
+  overdueInvoices,
+  activeRunCount,
+  reducedMotion,
+  onCancel,
+  onAnswer,
+  onSkip,
+  showRail,
+  fixtureLabel,
+}: {
+  thread: ThreadData | null
+  presence: ReturnType<typeof derivePresence>
+  overdueInvoices: Truth<{ count: number; totalUsd: number }>
+  activeRunCount: number
+  reducedMotion: boolean
+  onCancel: () => void
+  onAnswer: (text: string) => void
+  onSkip: () => void
+  showRail: boolean
+  fixtureLabel?: string
+}) {
+  const isApproving = thread?.machine.instructionState === "awaiting_approval"
+  return (
+    <div className="jarvis-root relative min-h-screen bg-[#04070f] text-[color:var(--j-text)]" data-jarvis-thread>
+      {fixtureLabel && (
+        <div className="fixed left-1/2 top-2 z-50 -translate-x-1/2">
+          <span className="j-chip border border-violet-300/40 bg-violet-400/15 text-violet-200">FIXTURE · {fixtureLabel}</span>
+        </div>
+      )}
+      <ThreadField overdueInvoices={overdueInvoices} />
+      {/* §6⓪: desktop docks the Orb top-left of the thread (64px); mobile docks
+          it 44px, above the rail, so it never overlaps the (here, full-width)
+          thread column the way a top-left fixed position would at narrow
+          widths. `isApproving`'s reposition-to-the-cockpit-corner (§6⑤: "it
+          moves... docks to the cockpit's top-left") is desktop-only — the
+          cockpit is a full-width bottom sheet on mobile (§6⑤ Mobile), so
+          there's no "corner" to dock to there. */}
+      <div
+        className={`fixed z-10 h-11 w-11 bottom-24 left-1/2 -translate-x-1/2 lg:h-16 lg:w-16 lg:bottom-auto lg:translate-x-0 ${
+          isApproving ? "lg:left-auto lg:top-24 lg:right-[calc(50%+380px)]" : "lg:left-6 lg:top-24"
+        }`}
+      >
+        <Orb3D live={{ state: presence, activeRunCount, voiceAmplitude: undefined }} />
+      </div>
+      <div className="relative z-[1]">
+        {!thread && <RestPrompt />}
+        {thread && <Thread thread={thread} onCancel={onCancel} onAnswer={onAnswer} onSkip={onSkip} />}
+      </div>
+      {isApproving && thread && <ThreadApprovalCockpit thread={thread} onClose={() => {}} reducedMotion={reducedMotion} />}
+      {showRail && <CommandRail />}
+    </div>
+  )
+}
+
 function ThreadPage() {
   const kernel = useKernel()
   const voice = useVapiSession()
@@ -136,34 +202,78 @@ function ThreadPage() {
     )
   }
 
-  const thread = kernel.thread
-  const isApproving = thread?.machine.instructionState === "awaiting_approval"
-
   return (
-    <div className="jarvis-root relative min-h-screen bg-[#04070f] text-[color:var(--j-text)]" data-jarvis-thread>
-      <ThreadField overdueInvoices={kernel.overdueInvoices} />
-      <div className="fixed left-6 top-24 z-10 h-16 w-16" style={isApproving ? { left: "auto", right: "calc(50% + 380px)" } : undefined}>
-        <Orb3D live={{ state: kernel.presence, activeRunCount: kernel.selectorInput.runs.length, voiceAmplitude: undefined }} />
+    <ThreadBody
+      thread={kernel.thread}
+      presence={kernel.presence}
+      overdueInvoices={kernel.overdueInvoices}
+      activeRunCount={kernel.selectorInput.runs.length}
+      reducedMotion={reducedMotion}
+      onCancel={kernel.cancelThread}
+      onAnswer={kernel.answerClarification}
+      onSkip={kernel.cancelThread}
+      showRail
+    />
+  )
+}
+
+// ---------------------------------------------------------------------------
+// P2 exit-gate evidence harness — see thread-fixtures.ts's own header for why
+// this exists and what it can and cannot prove. `NODE_ENV !== "production"` is
+// the ONLY gate (no owner/session check), by design: the whole point is to be
+// reachable without the credentials this environment does not have. This can
+// never reach a production build regardless of query string.
+// ---------------------------------------------------------------------------
+function ThreadFixtureHarness({ fixtureKey }: { fixtureKey: string }) {
+  const reducedMotion = useReducedMotion() ?? false
+  const thread = THREAD_FIXTURES[fixtureKey]
+  if (!thread) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#04070f] text-center text-white">
+        Unknown fixture &ldquo;{fixtureKey}&rdquo;. Known: {FIXTURE_STATE_KEYS.join(", ")}
       </div>
-      <div className="relative z-[1]">
-        {!thread && <RestPrompt />}
-        {thread && (
-          <Thread
-            thread={thread}
-            onCancel={kernel.cancelThread}
-            onAnswer={kernel.answerClarification}
-            onSkip={kernel.cancelThread}
-          />
-        )}
-      </div>
-      {isApproving && thread && <ThreadApprovalCockpit thread={thread} onClose={() => {}} reducedMotion={reducedMotion} />}
-      <CommandRail />
-    </div>
+    )
+  }
+  const presence = derivePresence({
+    transport: "polling",
+    activeInstructionState: thread.machine.instructionState,
+    terminalDecayActive: true,
+    voiceSpeaking: false,
+    micOpen: false,
+    blockedCount: 0,
+    needsHumanReviewCount: 0,
+  })
+  return (
+    <ThreadBody
+      thread={thread}
+      presence={presence}
+      overdueInvoices={{ status: "known", value: { count: 6, totalUsd: 4200 }, source: "fixture", atMs: 0 }}
+      activeRunCount={thread.machine.instructionState === "executing" ? thread.nodes.length : 0}
+      reducedMotion={reducedMotion}
+      onCancel={() => {}}
+      onAnswer={() => {}}
+      onSkip={() => {}}
+      showRail={false}
+      fixtureLabel={fixtureKey}
+    />
   )
 }
 
 function ThreadGate() {
   const auth = useJarvisAuth()
+  const [fixtureKey, setFixtureKey] = useState<string | null | undefined>(undefined)
+
+  useEffect(() => {
+    if (process.env.NODE_ENV === "production") {
+      setFixtureKey(null)
+      return
+    }
+    setFixtureKey(new URLSearchParams(window.location.search).get("fixture"))
+  }, [])
+
+  if (fixtureKey === undefined) return null // avoid a hydration flash either way
+  if (fixtureKey) return <ThreadFixtureHarness fixtureKey={fixtureKey} />
+
   if (auth.loading) return <LoadingGate />
   if (!auth.session) return <SignInGate />
   if (auth.role !== null && auth.role !== "owner") return <NotOwnerGate />

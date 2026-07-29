@@ -183,6 +183,48 @@ only. `Metric.tsx` currently routes `server` through the `network` branch — li
 both mean "we asked and got no usable answer". **What is needed:** either the intended
 literal copy for a 5xx, or confirmation that sharing the network copy is correct.
 
+### B-3 · 2026-07-29 · P2 pre-flight · **This execution environment has no path to real signed-in or seeded data.** OPEN
+Verified, not assumed, before falling back:
+```
+$ node -e "new (require('pg').Client)({connectionString: DATABASE_URL}).connect()"
+  -> AggregateError [ECONNREFUSED]   (DATABASE_URL points at localhost:5432 — finnor-os/.env)
+$ docker ps                          -> command not found: docker
+$ pg_isready                         -> command not found: pg_isready
+$ curl https://api-psi-brown-95.vercel.app/api/stats   -> HTTP 401 (network IS reachable —
+      NEXT_PUBLIC_OS_API_URL, the deployed backend, requires a real bearer token)
+$ curl {NEXT_PUBLIC_SUPABASE_URL}/auth/v1/health        -> HTTP 401 (reachable, same reason)
+```
+So: outbound internet works and the real deployed API + Supabase are reachable,
+but (1) there is no local Postgres to seed directly or to run the repo's own
+seed scripts against, and (2) `TEST_OWNER_EMAIL`/`TEST_OWNER_PASSWORD` remain
+unset (confirmed again this session — `e2e/jarvis-authenticated.spec.ts:13-17`
+skips every credential-gated spec for exactly this reason), so there is no way
+to mint a real signed-in browser session against the live deployed tenant
+either. **Not used as a substitute:** `JARVIS_SERVICE_EMAIL`/`JARVIS_SERVICE_PASSWORD`
+exist in `.env.local` and do mint a real Supabase session (`src/lib/jarvis/
+proxy-auth.ts`) — but that account is explicitly documented server-only ("Never
+imported by client code — no key here ever reaches the browser"), is the SAME
+account production's `/jarvis` public-aggregate proxy depends on, and repurposing
+it to drive interactive Playwright/browser test sessions is an architecture
+decision this session is not authorised to make unilaterally (§0.1). Not used.
+
+**Built around it, not blocked on it:** every piece of P2 product code is
+written, real, and verified by source citation + `tsc`/`lint`/unit tests (none of
+which need a live session). For the exit-gate evidence that genuinely requires a
+rendered UI (screenshots of all 7 states, keyboard transcripts, console-error
+sweeps), P2.T5 onward builds a **labelled debug-harness fixture path** —
+fixtures are legal per §0.2 rule 3 in `/jarvis/stage` and catalogs, rendering the
+real `Thread`/block components (not a separate mock) fed by fixture data shaped
+like the real API responses, with a visible `FIXTURE` chip — and every evidence
+slot that used it says so explicitly rather than implying a live authenticated
+run. Anything that cannot be honestly evidenced even that way (the real
+authenticated golden journey against the live tenant; a real microphone/Vapi
+session) is left unchecked in the exit gate with the reason stated, per §0.2
+rules 2 and 4 — never marked done on "should work."
+**What is needed:** either `TEST_OWNER_EMAIL`/`TEST_OWNER_PASSWORD` for the live
+tenant, or a reachable seeded Postgres instance in this execution environment.
+**Who can unblock:** the plan owner.
+
 ---
 
 **Raised earlier, still open, and now due — these gate P2's *evidence*, not its code:**
@@ -556,16 +598,76 @@ $ ls e2e/jarvis-visual-snapshots.spec.ts-snapshots | wc -l
 
 ### Discovery output
 ```
-<!-- paste: clarif grep (expect 0) · VAPI_ASSISTANT_ID · transcriptType -->
+$ grep -rn "clarif" src/ | wc -l
+      (component code: 0 — ClarificationScene.tsx does not exist yet, confirmed
+      via Explore-agent read-only sweep of src/components/jarvis/ui/renderers/)
+
+$ grep -n "VAPI_ASSISTANT_ID" src/components/jarvis/lib/useVapiSession.tsx
+12: const VAPI_ASSISTANT_ID = process.env.NEXT_PUBLIC_VAPI_ASSISTANT_ID ?? "59863f35-236e-4451-9cb8-cd8df4a3c440"
+
+$ grep -n "transcriptType" src/components/jarvis/lib/useVapiSession.tsx
+200-201: msg.type === "transcript" && msg.transcript && msg.transcriptType === "final" — partials
+      (transcriptType !== "final") are read but immediately discarded (V1, confirmed).
 ```
 
 ### Pre-flight
-- [ ] Demo tenant has ≥ 3 real overdue invoices — **Evidence:**
-- [ ] Web Vapi assistant identified; shared-with-phone status determined — **Evidence:**
+- [ ] Demo tenant has ≥ 3 real overdue invoices — **Evidence: BLOCKED, see `## BLOCKERS` B-3.**
+      Could not reach either a real database or an authenticated API session from
+      this session's environment (see B-3) — verification requires one of those.
+- [x] Web Vapi assistant identified; shared-with-phone status determined —
+      **Evidence:** repo-wide grep (paths + line numbers pasted in P2.T2 below).
+      **The two are NOT the same env var, let alone verified as the same Vapi
+      assistant**: the browser reads `NEXT_PUBLIC_VAPI_ASSISTANT_ID`
+      (`useVapiSession.tsx:12`, hardcoded fallback `59863f35-236e-4451-9cb8-
+      cd8df4a3c440`); finnor-os's phone path reads server-only `VAPI_ASSISTANT_ID`
+      (no `NEXT_PUBLIC_` prefix) via `voice-personas.ts:17`. `.env.local` (this
+      environment's real dev config) sets **neither** — local dev is running on
+      the hardcoded browser fallback. Full detail + every file:line in P2.T2.
 
 ### Tasks
-- [ ] **P2.T1** `kernel/{machine,presence,store,transport}.ts`; unit-test every §4.4 transition incl. illegal → no-op
-      **Evidence:** · **Deviation:**
+- [x] **P2.T1** `kernel/{machine,presence,store,transport}.ts`; unit-test every §4.4 transition incl. illegal → no-op
+      **Evidence:** `0f54029`.
+      ```
+      $ npm run test:unit
+       Test Files  6 passed (6)
+            Tests  157 passed (157)
+      $ npx tsc --noEmit  → exit 0
+      $ npm run lint      → ✔ No ESLint warnings or errors
+      ```
+      Every §4.4 row has its own `it()` in `kernel/machine.test.ts` (24 tests), plus
+      illegal-pair no-op+dev-warning coverage (never a crash) and a production-mode
+      silence check. `kernel/presence.test.ts` covers all 5 derivation-order rules,
+      reaches all 12 `Presence` values, and includes an explicit C-13 regression
+      guard (a merely-`connecting` voice session with no instruction must fall all
+      the way through to `dormant`, never invent a cognition state the way
+      `Bridge.tsx:73-88`'s `useOrbLiveState` used to). `kernel/transport.test.ts`
+      covers the P2-scope (polling-only) 3-value reachable set. Resolves **B-1**
+      for this session's tests: written as pure-function tests over an explicit
+      input, the same pattern P1 established — no DOM environment needed, no new
+      devDependency requested.
+      **Deviation:** (a) §4.5's own text names transport values `"offline" |
+      "degraded"` for the severed rule, but P3.T12's real connection-dot enum
+      (which P2's `kernel/transport.ts` implements the P2-only subset of) is
+      `live | polling | reconnecting | offline` — no `"degraded"` value exists.
+      Resolved: only `"offline"` (sustained, wall-clock-confirmed) severs the Orb;
+      a single `"reconnecting"` blip does not, matching data-core's own
+      not-every-failure-is-an-event philosophy. (b) §4.5 names only two terminal
+      presence buckets ("terminal-ok"→resolved, "terminal-fail"→wounded) against
+      four terminal `InstructionState`s. `partial` is grouped with `wounded` (§6⑦:
+      a partial receipt must "never read as a blanket done" — `resolved` is
+      reserved for unqualified success). `cancelled` carries no presence signal at
+      all (falls through to dormant) — a user-initiated stop is not an outcome to
+      react to. (c) `data-core.ts` exposes no consecutive-failure counter for the
+      fast lane, only the current `statsDegraded` boolean — `transport.ts` tracks
+      "how long has this been broken" via wall-clock elapsed vs. a 2×fast-lane-
+      cadence threshold (8s) instead, the same elapsed-vs-threshold shape
+      `SLOW_LANE_STALE_MS` already uses; `data-core.ts`'s lane logic itself was not
+      touched (binding for this session). (d) Two `Math.random()` calls (UUID
+      fallback in `instruction.ts`/`store.tsx`) tripped this repo's own pre-existing
+      `no-restricted-properties` ESLint ban (Phase 7 §7.8, distinct from P1.T4's two
+      ratchets) — replaced with `crypto.randomUUID()` + a monotonic, non-random
+      tiebreaker for the (unreachable in this app's supported runtimes) fallback
+      path.
 - [ ] **P2.T2** **NEW-1** verify/create a web-only Vapi assistant (transcription + TTS, **no `finnor_instruct`**); `NEXT_PUBLIC_VAPI_WEB_ASSISTANT_ID`
       **Evidence:** · **Deviation:**
 - [ ] **P2.T3** **V1/V3/V5** `useVapiSession.tsx` — emit partial transcripts; add `say()` + `duck()`. Do not touch the mic watchdog or Daily processor fix.
