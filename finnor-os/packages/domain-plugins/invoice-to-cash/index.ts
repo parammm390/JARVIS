@@ -8,10 +8,10 @@
 import type { DomainEnginePlugin } from "../shared/plugin-interface";
 import type { DraftAction, ExecutionResult, ValidationResult, DomainPolicy } from "@finnor/shared-types";
 import type { ToolRegistry } from "@finnor/tools";
-import { withTenant, invoices, households } from "@finnor/db";
-import { submitCommand, enqueueStep, receiveInboxEvent } from "@finnor/workflow-runtime";
+import { withTenant, invoices, households, domainActions, decisionReceipts } from "@finnor/db";
+import { submitCommand, enqueueStep, receiveInboxEvent, finalizeReceipt } from "@finnor/workflow-runtime";
 import { recordPayment } from "@finnor/data-platform";
-import { eq } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { z } from "zod";
 
 const opt = <T extends z.ZodTypeAny>(t: T) => t.nullish().transform((v: unknown) => v ?? undefined);
@@ -169,6 +169,71 @@ export default invoiceToCashPlugin;
 
 export type PaymentWebhookStatus = "succeeded" | "failed";
 
+/** Same extraction rule as apps/api/lib/predicted-outcome.ts's extractPredicted
+ *  — duplicated rather than imported (that file lives in apps/api, which
+ *  depends on this package, never the reverse). */
+function extractPredictedAmount(predictedReceipt: unknown): number | null {
+  if (!predictedReceipt || typeof predictedReceipt !== "object") return null;
+  const simulation = (predictedReceipt as { simulation?: unknown }).simulation;
+  if (!simulation || typeof simulation !== "object") return null;
+  const predicted = (simulation as { predicted?: unknown }).predicted;
+  if (!predicted || typeof predicted !== "object") return null;
+  const amountUsd = (predicted as { amountUsd?: unknown }).amountUsd;
+  return typeof amountUsd === "number" ? amountUsd : null;
+}
+
+interface InvoiceWorkflowRow {
+  actionId: string;
+  predictedAmountUsd: number | null;
+  predictionDiff: unknown;
+  receiptId: string | null;
+  receiptActualResult: unknown;
+}
+
+/**
+ * jarvis-v3 P4.T4: the domain_action + receipt this invoice's own
+ * invoice-to-cash workflow left behind — the SAME row the Thread's ⑦ block
+ * already shows (§6⑦: "the payment webhook lands minutes or hours later. The
+ * receipt updates in place"). A domain_action can only ever have one *current*
+ * start_invoice_to_cash_workflow run per invoice (submitCommand's own
+ * idempotencyKey is `invoice-to-cash:{invoiceId}` — startInvoiceToCash above),
+ * so the most recent one really is "the" run; its most recent receipt (same
+ * "order desc, keep first seen" pattern GET /api/actions/pending already uses
+ * for the identical ambiguity) is the one the webhook updates. Returns null
+ * rather than guessing when no matching action exists yet — a payment for an
+ * invoice this plugin never touched is real, honest, and out of scope here.
+ */
+async function findInvoiceWorkflowRow(tenantId: string, invoiceId: string): Promise<InvoiceWorkflowRow | null> {
+  return withTenant(tenantId, async (db) => {
+    const [action] = await db
+      .select({ id: domainActions.id, predictedReceipt: domainActions.predictedReceipt, predictionDiff: domainActions.predictionDiff })
+      .from(domainActions)
+      .where(
+        and(
+          eq(domainActions.tenantId, tenantId),
+          eq(domainActions.actionType, "start_invoice_to_cash_workflow"),
+          sql`${domainActions.payload} ->> 'invoiceId' = ${invoiceId}`,
+        ),
+      )
+      .orderBy(desc(domainActions.createdAt))
+      .limit(1);
+    if (!action) return null;
+    const [receipt] = await db
+      .select({ id: decisionReceipts.id, actualResult: decisionReceipts.actualResult })
+      .from(decisionReceipts)
+      .where(and(eq(decisionReceipts.tenantId, tenantId), eq(decisionReceipts.domainActionId, action.id)))
+      .orderBy(desc(decisionReceipts.createdAt))
+      .limit(1);
+    return {
+      actionId: action.id,
+      predictedAmountUsd: extractPredictedAmount(action.predictedReceipt),
+      predictionDiff: action.predictionDiff,
+      receiptId: receipt?.id ?? null,
+      receiptActualResult: receipt?.actualResult ?? null,
+    };
+  });
+}
+
 /**
  * The "payment webhook" + "reconciliation" steps: called from
  * apps/api/app/api/webhooks/payment/route.ts when the payment provider notifies us.
@@ -178,6 +243,21 @@ export type PaymentWebhookStatus = "succeeded" | "failed";
  * phase), so this is invoked with synthetic provider event ids in tests/dev rather
  * than a live signed webhook — the dedup/reconciliation mechanism is identical either
  * way and is what's actually being proven.
+ *
+ * jarvis-v3 P4.T4: on success, ALSO updates (never duplicates) that invoice's
+ * own workflow record in place, two ways:
+ *  1. `decision_receipts.actualResult` gets the payment fact merged in via
+ *     `finalizeReceipt` — the same function every workflow step's receipt is
+ *     closed with, called a second time on the SAME id (its own doc comment
+ *     already documents this as safe/idempotent), never a second receipt row.
+ *  2. `domain_actions.predictionDiff` gains one more real field comparison —
+ *     `amountPaidUsd`: predicted (from the plugin's own `simulate()`, computed
+ *     at plan time) vs. actual (this real payment) — genuinely the "predicted
+ *     $890, actually paid $890" moat moment, not fabricated: both sides are
+ *     real numbers this function already has in hand. Appended to the
+ *     existing diff's fields (never replacing the execution-time invoiceId
+ *     comparison) and the aggregate compared/matched/accuracy recomputed to
+ *     match. Skipped, honestly, when this action never had a real prediction.
  */
 export async function applyPaymentWebhookEvent(params: {
   tenantId: string;
@@ -206,6 +286,32 @@ export async function applyPaymentWebhookEvent(params: {
         provenance: { sourceSystem: "payment_provider", externalId: params.providerEventId },
       }),
     );
+
+    const workflow = await findInvoiceWorkflowRow(params.tenantId, params.invoiceId);
+    if (workflow?.receiptId) {
+      const priorActual =
+        workflow.receiptActualResult && typeof workflow.receiptActualResult === "object" ? (workflow.receiptActualResult as Record<string, unknown>) : {};
+      await finalizeReceipt(params.tenantId, workflow.receiptId, {
+        actualResult: { ...priorActual, paymentReceived: true, amountPaidUsd: params.amountUsd, paidAt: new Date().toISOString() },
+      });
+    }
+    if (workflow && workflow.predictedAmountUsd !== null) {
+      const priorDiff =
+        workflow.predictionDiff && typeof workflow.predictionDiff === "object"
+          ? (workflow.predictionDiff as { compared?: number; matched?: number; fields?: unknown[] })
+          : { compared: 0, matched: 0, fields: [] };
+      const priorFields = Array.isArray(priorDiff.fields) ? priorDiff.fields : [];
+      const paymentMatched = workflow.predictedAmountUsd === params.amountUsd;
+      const fields = [...priorFields, { path: "amountPaidUsd", predicted: workflow.predictedAmountUsd, actual: params.amountUsd, matched: paymentMatched }];
+      const matched = (priorDiff.matched ?? 0) + (paymentMatched ? 1 : 0);
+      const compared = (priorDiff.compared ?? 0) + 1;
+      await withTenant(params.tenantId, (db) =>
+        db
+          .update(domainActions)
+          .set({ predictionDiff: { compared, matched, accuracy: compared > 0 ? matched / compared : null, fields } })
+          .where(and(eq(domainActions.tenantId, params.tenantId), eq(domainActions.id, workflow.actionId))),
+      );
+    }
   }
 
   return { applied: true };
