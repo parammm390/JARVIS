@@ -58,6 +58,10 @@ export const SubmitInstructionSchema = z.object({
   // timeout, etc.) supplies its own key; one that doesn't gets today's unchanged
   // behavior (every submission plans for real).
   idempotencyKey: z.string().min(1).max(200).optional(),
+  // jarvis-v3 P3.T4: client-minted (kernel/instruction.ts), sent so a concurrent
+  // GET /api/instructions/:id/events poll can trace this exact call's real phases
+  // while it's still in flight — additive, optional, response shape unchanged.
+  instructionId: z.string().uuid().optional(),
 });
 export type SubmitInstruction = z.infer<typeof SubmitInstructionSchema>;
 
