@@ -183,5 +183,18 @@ export function truthRevealRowPulse(matched: boolean, reduced: boolean) {
   return { initial: { backgroundColor: peak }, animate: { backgroundColor: settled }, transition: { duration: 0.14, ease: "easeOut" as const } }
 }
 
-/** Wired P4.T3. */
-export const P4_PROMOTED_MOTIONS: MotionId[] = ["M16"]
+/** M17 FieldWarm (§5.3, wired P4.T5): "field points re-target over 900 ms
+ *  EASE_IO" — the Field's own reactivity (bridge/ThreadField.tsx renders
+ *  `overdueInvoices.value.count` points, already re-rendering the instant a
+ *  payment lands and the count drops via P4.T5's cross-surface invalidation)
+ *  needed one real thing added: a point that disappears fades out over M17's
+ *  own duration instead of vanishing on the next paint. Reduced motion: "points
+ *  re-render at new positions" — no fade, which is already this array's default
+ *  behavior with no exit animation at all. */
+export function fieldWarmExitVariants(reduced: boolean) {
+  const spec = MOTION_SPECS.M17
+  return { exit: reduced ? { opacity: 0, transition: { duration: 0 } } : { opacity: 0, transition: { duration: spec.durationMs / 1000, ease: spec.easing as number[] } } }
+}
+
+/** Wired P4.T3/T5. */
+export const P4_PROMOTED_MOTIONS: MotionId[] = ["M16", "M17"]

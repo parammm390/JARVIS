@@ -31,6 +31,7 @@ function baseThread(overrides: Partial<Thread> = {}): Thread {
     runWatch: null,
     terminalAtMs: null,
     everExecuted: false,
+    receiptRefreshTick: 0,
     ...overrides,
   }
 }

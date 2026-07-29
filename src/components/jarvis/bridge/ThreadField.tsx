@@ -12,8 +12,9 @@
 // ≤2-ambient-loop budget's first slot, §5.3). It never carries a number —
 // the count drives HOW MANY points exist, never a label reading the count back.
 
-import { useReducedMotion } from "framer-motion"
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
 import type { Truth } from "../kernel/types"
+import { fieldWarmExitVariants } from "../kernel/choreography"
 
 const MAX_POINTS = 60
 
@@ -36,22 +37,33 @@ export function ThreadField({ overdueInvoices }: { overdueInvoices: Truth<{ coun
   const shown = Math.min(count, MAX_POINTS)
   const points = Array.from({ length: shown }, (_, i) => deterministicOffset(i + 1))
 
+  // M17 FieldWarm (§5.3, wired P4.T5): a point that disappears (the overdue
+  // count dropped — a real payment landed) fades out over 900ms EASE_IO
+  // instead of vanishing on the next paint. AnimatePresence needs a stable
+  // key per point to detect removal — index is stable here since points are
+  // always a deterministic prefix (index 0..shown-1), so a count decrease
+  // only ever removes the trailing points, never reshuffles the rest.
+  const exitVariants = fieldWarmExitVariants(reducedMotion ?? false)
+
   return (
     <div aria-hidden className="pointer-events-none fixed inset-0 z-0 overflow-hidden" data-jarvis-field>
-      {points.map((p, i) => (
-        <span
-          key={i}
-          className="absolute rounded-full bg-[color:var(--j-amber)]"
-          style={{
-            left: `${p.x}%`,
-            top: `${p.y}%`,
-            width: p.sizePx,
-            height: p.sizePx,
-            opacity: 0.1 + (i % 5) * 0.024, // 0.10–0.22 band, §2.3
-            animation: reducedMotion ? undefined : `jarvis-field-drift 22s ease-in-out ${p.delayS}s infinite`,
-          }}
-        />
-      ))}
+      <AnimatePresence>
+        {points.map((p, i) => (
+          <motion.span
+            key={i}
+            exit={exitVariants.exit}
+            className="absolute rounded-full bg-[color:var(--j-amber)]"
+            style={{
+              left: `${p.x}%`,
+              top: `${p.y}%`,
+              width: p.sizePx,
+              height: p.sizePx,
+              opacity: 0.1 + (i % 5) * 0.024, // 0.10–0.22 band, §2.3
+              animation: reducedMotion ? undefined : `jarvis-field-drift 22s ease-in-out ${p.delayS}s infinite`,
+            }}
+          />
+        ))}
+      </AnimatePresence>
       <style jsx>{`
         @keyframes jarvis-field-drift {
           0% { transform: translate(0, 0); }

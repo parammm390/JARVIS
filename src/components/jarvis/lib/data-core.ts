@@ -331,6 +331,14 @@ interface JarvisDataState {
    *  which always replaces this list with the server's actual truth. Never a
    *  lasting inconsistency, just a brief optimistic guess. */
   injectOptimisticPending: (actions: PendingAction[]) => void
+  /** jarvis-v3 P4.T5 — cross-surface invalidation: `cashCollections` (feeding
+   *  `selectOverdueInvoices`/`selectCollectedUsd`, §6⑦'s "the Field cools")
+   *  lives on the 30s slow lane by default. The kernel calls this the instant
+   *  it notices a real `payment_recorded` business event relevant to the
+   *  active thread, so the consequence is visible in seconds, not up to 30s
+   *  later — an extra out-of-band fetch, not a second poller: the lane's own
+   *  scheduled timer is untouched and still fires on its normal cadence. */
+  refetchSlowLaneNow: () => void
 }
 
 const EMPTY_STATE: JarvisDataState = {
@@ -374,6 +382,7 @@ const EMPTY_STATE: JarvisDataState = {
   rejectionsThisSession: 0,
   recordDecision: () => {},
   injectOptimisticPending: () => {},
+  refetchSlowLaneNow: () => {},
 }
 
 const JarvisDataContext = createContext<JarvisDataState>(EMPTY_STATE)
@@ -686,6 +695,13 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
     }))
   }, [noteLaneOutcome])
 
+  // jarvis-v3 P4.T5 — an out-of-band slow-lane fetch, never a second poller:
+  // the scheduled `runLane("slow", pollSlow)` timer below is completely
+  // unaffected by calling `pollSlow()` directly here.
+  const refetchSlowLaneNow = useCallback(() => {
+    void pollSlow()
+  }, [pollSlow])
+
   // ---- sanity lane ----
   const pollSanity = useCallback(async () => {
     if (!visibleRef.current) return
@@ -709,7 +725,7 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
   }, [noteLaneOutcome])
 
   useEffect(() => {
-    setState((prev) => ({ ...prev, mountedAt: Date.now(), now: Date.now(), recordDecision, injectOptimisticPending }))
+    setState((prev) => ({ ...prev, mountedAt: Date.now(), now: Date.now(), recordDecision, injectOptimisticPending, refetchSlowLaneNow }))
     const onVisibility = () => {
       const wasHidden = !visibleRef.current
       visibleRef.current = document.visibilityState !== "hidden"
@@ -794,7 +810,7 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
       window.clearInterval(tSession)
       clearInterval(tTick)
     }
-  }, [pollFast, pollMedium, pollSlow, pollSanity, recordDecision, injectOptimisticPending])
+  }, [pollFast, pollMedium, pollSlow, pollSanity, recordDecision, injectOptimisticPending, refetchSlowLaneNow])
 
   return React.createElement(JarvisDataContext.Provider, { value: state }, children)
 }

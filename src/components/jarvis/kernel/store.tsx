@@ -21,7 +21,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react"
 import { JarvisAuthProvider, useJarvisAuth } from "../lib/jarvis-auth"
-import { JarvisDataProvider, useJarvis } from "../lib/data-core"
+import { JarvisDataProvider, useJarvis, type EventRow } from "../lib/data-core"
 import { useSelectorInput, useLanePresentation, type LanePresentation } from "./useSelectorInput"
 import type { SelectorInput } from "./selectors"
 import {
@@ -145,6 +145,12 @@ export interface Thread {
    *  block exists in Thread.tsx at all, instead of inferring it from "reached
    *  any terminal state." */
   everExecuted: boolean
+  /** jarvis-v3 P4.T5: bumped whenever the payment-watch effect below sees a
+   *  real `payment_recorded` business event for one of this thread's own
+   *  invoices — `ThreadReceipt` passes it straight through as
+   *  `ReceiptContent`'s `refreshKey`, so the SAME already-shown receipt
+   *  re-fetches and "gets truer over time" (§6⑦) without a fresh page load. */
+  receiptRefreshTick: number
 }
 
 const TERMINAL_DECAY_MS = 4000
@@ -230,6 +236,22 @@ function enrichNodesFromPlanned(existing: ThreadNode[], planned: PlannedActionRe
 
 function isTerminal(state: InstructionState): boolean {
   return state === "completed" || state === "partial" || state === "failed" || state === "cancelled"
+}
+
+/** jarvis-v3 P4.T5 — the pure part of the payment-watch effect below, so the
+ *  "which invoiceIds does this thread care about, which real events actually
+ *  match one of them" logic is unit-testable without a DOM (BLOCKER B-1). */
+export function invoiceIdsForThread(nodes: ThreadNode[]): Set<string> {
+  return new Set(nodes.map((n) => (typeof n.payload.invoiceId === "string" ? n.payload.invoiceId : null)).filter((v): v is string => v !== null))
+}
+
+export function findRelevantPaymentEvents(events: EventRow[], invoiceIds: Set<string>, seenEventIds: Set<string>): EventRow[] {
+  if (invoiceIds.size === 0) return []
+  return events.filter((e) => {
+    if (e.entityType !== "payment" || seenEventIds.has(e.id)) return false
+    const payload = e.payload && typeof e.payload === "object" ? (e.payload as { invoiceId?: unknown }) : {}
+    return typeof payload.invoiceId === "string" && invoiceIds.has(payload.invoiceId)
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -560,6 +582,7 @@ function KernelInner({ children }: { children: React.ReactNode }) {
           runWatch: null,
           terminalAtMs: null,
           everExecuted: false,
+          receiptRefreshTick: 0,
         }
         const restored = applyTraceEvents(base, events, {
           approvalsThisSession: data.approvalsThisSession,
@@ -715,6 +738,30 @@ function KernelInner({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [thread?.id, thread?.machine.instructionState, data.runs, data.terminalRuns])
 
+  // ---- payment-watch: the payment-webhook consequence (P4.T5, §6⑦'s "the
+  // payment webhook lands minutes or hours later... the receipt updates in
+  // place"). Reconciles against `data.events` exactly like approval-watch/
+  // run-watch reconcile against `data.pendingActions`/`data.runs` above — one
+  // reconciliation shape, not a second mechanism alongside P3's own
+  // applyTraceEvents. A real `payment_recorded` business event
+  // (packages/data-platform/src/payments.ts's recordBusinessEvent, fired by
+  // the payment webhook) whose payload.invoiceId matches one of THIS thread's
+  // own node payloads triggers an immediate slow-lane refetch (cashCollections
+  // otherwise waits up to its own 30s cadence) and bumps receiptRefreshTick so
+  // the already-shown receipt re-fetches in place. seenPaymentEventIdsRef
+  // persists for the component's life (not per-thread) — a real event is only
+  // ever actioned once, harmlessly, even across thread boundaries.
+  const seenPaymentEventIdsRef = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    if (!thread) return
+    const relevant = findRelevantPaymentEvents(data.events, invoiceIdsForThread(thread.nodes), seenPaymentEventIdsRef.current)
+    if (relevant.length === 0) return
+    for (const e of relevant) seenPaymentEventIdsRef.current.add(e.id)
+    data.refetchSlowLaneNow()
+    setThread((prev) => (prev && prev.id === thread.id ? { ...prev, receiptRefreshTick: prev.receiptRefreshTick + 1 } : prev))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [thread?.id, thread?.nodes, data.events])
+
   const runSubmission = useCallback(
     async (text: string, source: InstructionSource, existing: Thread | null) => {
       const sessionId = existing?.sessionId ?? getOrCreateSessionId(source)
@@ -747,6 +794,7 @@ function KernelInner({ children }: { children: React.ReactNode }) {
         runWatch: null,
         terminalAtMs: null,
         everExecuted: existing?.everExecuted ?? false,
+        receiptRefreshTick: existing ? existing.receiptRefreshTick : 0,
       })
       // jarvis-v3 P3.T8: survive a refresh mid-flight — cleared the instant this
       // thread reaches a terminal state (effect below) or is cancelled.

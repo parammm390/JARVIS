@@ -94,7 +94,19 @@ function Section({ label, children }: { label: string; children: React.ReactNode
 // `ReceiptDrawer` below is now a thin `<Drawer>` wrapper around this, byte-identical
 // output for every existing call site (DailyBriefing/ApprovalDock/WorkflowTheater/
 // ApprovalCockpit's own drawer-only consumers, none of which change in this phase).
-export function ReceiptContent({ receiptId, headerLayoutId }: { receiptId: string; headerLayoutId?: string }) {
+export function ReceiptContent({
+  receiptId,
+  headerLayoutId,
+  refreshKey,
+}: {
+  receiptId: string
+  headerLayoutId?: string
+  /** jarvis-v3 P4.T5: bump this (e.g. on a real `payment_recorded` business
+   *  event matching this thread's own invoice) to re-fetch the SAME receipt
+   *  id — "the receipt updates in place" (§6⑦), never a second receipt view
+   *  and never a flash back to the loading skeleton for an already-shown one. */
+  refreshKey?: number
+}) {
   const [receipt, setReceipt] = useState<FullReceipt | null>(null)
   const [error, setError] = useState<string | null>(null)
   const reducedMotion = useReducedMotion() ?? false
@@ -114,6 +126,24 @@ export function ReceiptContent({ receiptId, headerLayoutId }: { receiptId: strin
       cancelled = true
     }
   }, [receiptId])
+
+  // A silent re-fetch of the SAME receipt — no skeleton flash, no clearing the
+  // currently-shown data first. A failed silent refresh is swallowed (the
+  // already-displayed receipt just stays as it was; the next real poll tries
+  // again) rather than replacing good data with an error banner.
+  useEffect(() => {
+    if (!refreshKey) return
+    let cancelled = false
+    jarvisGet<{ receipt: FullReceipt }>(`receipts/${receiptId}`)
+      .then((r) => {
+        if (!cancelled) setReceipt(r.receipt)
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey])
 
   return (
     <>

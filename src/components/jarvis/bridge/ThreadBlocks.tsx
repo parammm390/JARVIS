@@ -429,7 +429,11 @@ export function ThreadReceipt({ thread, reducedMotion }: { thread: Thread; reduc
       </ul>
       {thread.nodes[0] && receiptIds[thread.nodes[0].id] && (
         <div className="j-panel mt-3 rounded-xl border border-white/8 p-3">
-          <ReceiptContent receiptId={receiptIds[thread.nodes[0].id]!} />
+          {/* jarvis-v3 P4.T5: receiptRefreshTick bumps when the kernel's own
+              payment-watch effect sees a real payment_recorded event for one
+              of this thread's invoices — the SAME receipt re-fetches in
+              place, no new view, no fresh page load required. */}
+          <ReceiptContent receiptId={receiptIds[thread.nodes[0].id]!} refreshKey={thread.receiptRefreshTick} />
         </div>
       )}
     </motion.div>

@@ -3,7 +3,7 @@
 // B-1: no jsdom/@testing-library/dom authorized, so nothing here renders).
 
 import { describe, it, expect } from "vitest"
-import { truthRevealActualVariants, truthRevealRowPulse, P4_PROMOTED_MOTIONS, MOTION_SPECS } from "./choreography"
+import { truthRevealActualVariants, truthRevealRowPulse, fieldWarmExitVariants, P4_PROMOTED_MOTIONS, MOTION_SPECS } from "./choreography"
 
 describe("truthRevealActualVariants", () => {
   it("slides in from x:12px over M16's own 320ms/EASE_OUT spec", () => {
@@ -45,7 +45,17 @@ describe("truthRevealRowPulse", () => {
 })
 
 describe("P4_PROMOTED_MOTIONS", () => {
-  it("promotes exactly M16, per plan v3 §8 PHASE 4's own scope (M17 field-cool reuses ThreadField's existing reactivity, not a new promoted motion table entry)", () => {
-    expect(P4_PROMOTED_MOTIONS).toEqual(["M16"])
+  it("promotes M16 (ThreadVerification) and M17 (Field cools on a real payment), per plan v3 §8 PHASE 4's own consequence graph", () => {
+    expect(P4_PROMOTED_MOTIONS).toEqual(["M16", "M17"])
+  })
+})
+
+describe("fieldWarmExitVariants", () => {
+  it("fades a departing Field point over M17's own 900ms/EASE_IO spec", () => {
+    const v = fieldWarmExitVariants(false)
+    expect(v.exit).toEqual({ opacity: 0, transition: { duration: MOTION_SPECS.M17.durationMs / 1000, ease: MOTION_SPECS.M17.easing } })
+  })
+  it("reduced motion: no fade — points simply re-render at their new positions", () => {
+    expect(fieldWarmExitVariants(true).exit).toEqual({ opacity: 0, transition: { duration: 0 } })
   })
 })
