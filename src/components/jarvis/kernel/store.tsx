@@ -305,10 +305,20 @@ function KernelInner({ children }: { children: React.ReactNode }) {
 
       // ② UNDERSTOOD — ACK, then the plan response IS the (unstreamed) context this
       // phase honestly has (§8 Phase 2's own carve-out: real event chips are P3).
-      setThread((prev) => (prev && prev.id === id ? { ...prev, machine: transition(prev.machine, { type: "ACK" }) } : prev))
-
+      // The real grounded-payload chips populate NOW, not at the planning step —
+      // otherwise "understanding" and "planning" would both update in the same
+      // tick (one POST response resolves everything at once, with nothing to
+      // await between them) and block ② would never actually paint with content,
+      // defeating its own purpose. A short, deliberate pause below gives it a
+      // real, legible moment on screen before the plan appears — no spinner, no
+      // fabricated latency claim, just enough time to read what was found.
       const planned = result.planned
       const clarificationRow = planned.find((p) => p.actionType === "clarification_request")
+      const nodesForUnderstanding = planned.map(nodeFromPlanned)
+      setThread((prev) =>
+        prev && prev.id === id ? { ...prev, machine: transition(prev.machine, { type: "ACK" }), nodes: nodesForUnderstanding } : prev,
+      )
+      await new Promise((resolve) => setTimeout(resolve, 550))
 
       setThread((prev) => {
         if (!prev || prev.id !== id) return prev
@@ -323,7 +333,7 @@ function KernelInner({ children }: { children: React.ReactNode }) {
           return {
             ...prev,
             machine: m,
-            nodes: planned.map(nodeFromPlanned),
+            nodes: nodesForUnderstanding,
             clarification: {
               question: typeof payload.question === "string" ? payload.question : "I need one more thing to continue.",
               missingFields: Array.isArray(payload.missingFields) ? payload.missingFields.filter((f): f is string => typeof f === "string") : [],
@@ -343,7 +353,7 @@ function KernelInner({ children }: { children: React.ReactNode }) {
         // `injectOptimisticPending` already relies on. A plan that turns out to be
         // fully ungated self-corrects there rather than getting stuck.
         m = transition(m, { type: "ACTION_pending", count: planned.length })
-        const nodes = planned.map(nodeFromPlanned)
+        const nodes = nodesForUnderstanding
         return {
           ...prev,
           machine: m,
