@@ -33,6 +33,7 @@ import {
 import { initialMachineState, transition, type MachineState } from "./machine"
 import { derivePresence } from "./presence"
 import { deriveTransportHealth, type TransportHealth } from "./transport"
+import { jarvisGet } from "../lib/api"
 import {
   getOrCreateSessionId,
   mintInstructionId,
@@ -233,6 +234,66 @@ function isTerminal(state: InstructionState): boolean {
   return state === "completed" || state === "partial" || state === "failed" || state === "cancelled"
 }
 
+// ---------------------------------------------------------------------------
+// P3.T8 — restore-after-refresh (§7.1/§8 PHASE 3: "non-terminal instructionId in
+// sessionStorage -> refetch -> resume the thread mid-flight").
+// ---------------------------------------------------------------------------
+
+const ACTIVE_THREAD_STORAGE_KEY = "jarvis.thread.active"
+
+export interface ActiveThreadPointer {
+  id: string
+  sessionId: string
+  instructionId: string
+  source: InstructionSource
+  instructionText: string
+  createdAtMs: number
+}
+
+/** Persisted the instant a thread is born (① HEARD) — sessionStorage, not
+ *  localStorage, matching kernel/instruction.ts's own session-id convention (a
+ *  genuinely new browser tab starts fresh, a refresh of THIS tab does not). */
+export function persistActiveThreadPointer(p: ActiveThreadPointer): void {
+  if (typeof window === "undefined") return
+  try {
+    window.sessionStorage.setItem(ACTIVE_THREAD_STORAGE_KEY, JSON.stringify(p))
+  } catch {
+    // Private-mode storage denial: the thread still works this tab session, it
+    // just will not survive a refresh — never a crash.
+  }
+}
+
+export function readActiveThreadPointer(): ActiveThreadPointer | null {
+  if (typeof window === "undefined") return null
+  try {
+    const raw = window.sessionStorage.getItem(ACTIVE_THREAD_STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<ActiveThreadPointer>
+    if (
+      typeof parsed.id === "string" &&
+      typeof parsed.sessionId === "string" &&
+      typeof parsed.instructionId === "string" &&
+      (parsed.source === "voice" || parsed.source === "typed") &&
+      typeof parsed.instructionText === "string" &&
+      typeof parsed.createdAtMs === "number"
+    ) {
+      return parsed as ActiveThreadPointer
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
+export function clearActiveThreadPointer(): void {
+  if (typeof window === "undefined") return
+  try {
+    window.sessionStorage.removeItem(ACTIVE_THREAD_STORAGE_KEY)
+  } catch {
+    // see persistActiveThreadPointer
+  }
+}
+
 /** jarvis-v3 P3.T7/T8: the two live counters `ApprovalWatch` needs to tell "this
  *  many decisions happened since we started watching" apart from history — supplied
  *  by the caller (real `data.approvalsThisSession`/`rejectionsThisSession`) rather
@@ -431,6 +492,79 @@ function KernelInner({ children }: { children: React.ReactNode }) {
   const traceHandleRef = useRef<TracePollHandle | null>(null)
   useEffect(() => () => traceHandleRef.current?.stop(), [])
 
+  // jarvis-v3 P3.T8: restore a non-terminal thread after a refresh. Runs its
+  // real attempt exactly once, the first time auth actually resolves to a real
+  // session (never for a signed-out visitor — nothing of theirs to restore, and
+  // the fetch would just 401). Best-effort: any failure (network, a 404 because
+  // the row somehow never made it to the DB, auth not ready) leaves the pointer
+  // in place and the rest state shows instead — never a crash, never a
+  // fabricated thread.
+  const restoreAttemptedRef = useRef(false)
+  useEffect(() => {
+    if (restoreAttemptedRef.current || auth.loading || !auth.session || thread) return
+    const pointer = readActiveThreadPointer()
+    if (!pointer) return
+    restoreAttemptedRef.current = true
+    let cancelled = false
+    void (async () => {
+      try {
+        const sessionRes = await jarvisGet<{ instruction?: { id: string } }>(`instructions/${pointer.instructionId}`)
+        if (!sessionRes.instruction) {
+          clearActiveThreadPointer()
+          return
+        }
+        const eventsRes = await jarvisGet<{ events?: TraceEvent[] }>(`instructions/${pointer.instructionId}/events`, { after: "0" })
+        const events = eventsRes.events ?? []
+        if (cancelled) return
+        const base: Thread = {
+          id: pointer.id,
+          sessionId: pointer.sessionId,
+          instructionId: pointer.instructionId,
+          source: pointer.source,
+          instructionText: pointer.instructionText,
+          createdAtMs: pointer.createdAtMs,
+          machine: transition(initialMachineState, { type: "SUBMITTED" }),
+          nodes: [],
+          contextChips: [],
+          traceGating: { expectedCount: null, resolvedActionIds: [], gatedActionIds: [] },
+          clarification: null,
+          submitError: null,
+          approvalWatch: null,
+          runWatch: null,
+          terminalAtMs: null,
+          everExecuted: false,
+        }
+        const restored = applyTraceEvents(base, events, {
+          approvalsThisSession: data.approvalsThisSession,
+          rejectionsThisSession: data.rejectionsThisSession,
+        })
+        setThread(restored)
+        if (isTerminal(restored.machine.instructionState)) {
+          clearActiveThreadPointer()
+        } else {
+          const lastSeq = events.length > 0 ? events[events.length - 1]!.seq : 0
+          traceHandleRef.current = startTracePoll(
+            pointer.instructionId,
+            (newEvents) => {
+              setThread((prev) =>
+                prev && prev.id === pointer.id
+                  ? applyTraceEvents(prev, newEvents, { approvalsThisSession: data.approvalsThisSession, rejectionsThisSession: data.rejectionsThisSession })
+                  : prev,
+              )
+            },
+            lastSeq,
+          )
+        }
+      } catch {
+        // Best-effort — see this effect's own header.
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auth.loading, auth.session, thread])
+
   const setVoiceIndicators = useCallback((next: { micOpen?: boolean; speaking?: boolean }) => {
     if (next.micOpen !== undefined) setMicOpen(next.micOpen)
     if (next.speaking !== undefined) setVoiceSpeaking(next.speaking)
@@ -461,6 +595,14 @@ function KernelInner({ children }: { children: React.ReactNode }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [thread?.id, thread?.machine.instructionState, thread?.terminalAtMs])
+
+  // jarvis-v3 P3.T8: nothing left to resume once a thread reaches a terminal
+  // state — clear the restore pointer so a later refresh shows the real rest
+  // state, not a stale finished thread.
+  useEffect(() => {
+    if (thread && isTerminal(thread.machine.instructionState)) clearActiveThreadPointer()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [thread?.machine.instructionState])
 
   const presence = derivePresence({
     transport,
@@ -580,6 +722,9 @@ function KernelInner({ children }: { children: React.ReactNode }) {
         terminalAtMs: null,
         everExecuted: existing?.everExecuted ?? false,
       })
+      // jarvis-v3 P3.T8: survive a refresh mid-flight — cleared the instant this
+      // thread reaches a terminal state (effect below) or is cancelled.
+      persistActiveThreadPointer({ id, sessionId, instructionId, source, instructionText: text, createdAtMs: nowMs })
 
       // jarvis-v3 P3.T6/T7: the trace poll starts THE SAME INSTANT as the POST
       // below — both race the real backend from the same starting line
@@ -729,6 +874,8 @@ function KernelInner({ children }: { children: React.ReactNode }) {
   )
 
   const cancelThread = useCallback(() => {
+    traceHandleRef.current?.stop()
+    clearActiveThreadPointer()
     setThread((prev) => (prev ? { ...prev, machine: transition(prev.machine, { type: "USER_CANCELLED" }), terminalAtMs: Date.now() } : prev))
   }, [])
 

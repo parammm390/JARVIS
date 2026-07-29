@@ -174,8 +174,15 @@ export interface TracePollHandle {
  *  the same "try again next tick, never fabricate" honesty as data-core.ts's own
  *  lanes; it does not count toward the ceiling differently and does not stop the
  *  poll on its own. */
-export function startTracePoll(instructionId: string, onEvents: (events: TraceEvent[]) => void): TracePollHandle {
-  let lastSeq = 0
+export function startTracePoll(
+  instructionId: string,
+  onEvents: (events: TraceEvent[]) => void,
+  /** jarvis-v3 P3.T8: resume from a seq already seen (a restored thread's own last
+   *  event) instead of re-delivering everything from 0 — the restore effect
+   *  already replayed history up to this point via a direct events fetch. */
+  sinceSeq = 0,
+): TracePollHandle {
+  let lastSeq = sinceSeq
   let stopped = false
   let timer: ReturnType<typeof setTimeout> | null = null
   const startedAtMs = Date.now()
