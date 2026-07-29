@@ -14,7 +14,7 @@ import type { ActionRendererProps } from "./types"
 export function ActionRenderer({ actionType, payload, compact }: ActionRendererProps) {
   const entry = getRendererEntry(actionType)
   if (!entry) return <FallbackRenderer actionType={actionType} payload={payload} compact={compact} />
-  if (entry.tier === "flagship" && entry.Component) {
+  if ((entry.tier === "flagship" || entry.tier === "interactive") && entry.Component) {
     const Component = entry.Component
     return <Component actionType={actionType} payload={payload} compact={compact} />
   }

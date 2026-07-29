@@ -7,7 +7,11 @@
 
 import type { ComponentType } from "react"
 
-export type RendererTier = "flagship" | "standard" | "fallback"
+// P2.T8 (§7.2): "interactive" is `clarification_request`'s own tier — highest
+// priority in the product per §7.2's own renderer table, and deliberately
+// distinct from "flagship" (a designed business-action scene) since a
+// clarification is a question, not a gated action.
+export type RendererTier = "flagship" | "standard" | "interactive" | "fallback"
 
 /** How a StandardRenderer field should format its value. Never "raw" — every kind
  *  renders through a real formatter (see fields.ts), so an unmapped field kind is a

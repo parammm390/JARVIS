@@ -118,6 +118,13 @@ export const ACTION_FIXTURES: Record<string, unknown> = {
   },
   // invoice-to-cash (flagship)
   start_invoice_to_cash_workflow: { invoiceId: "1a2b3c4d-5e6f-4708-9091-a2b3c4d5e6f7", channel: "sms" },
+  // clarification (P2.T8) — shape matches ClarificationRequestSchema exactly
+  // (packages/domain-plugins/clarification/index.ts).
+  clarification_request: {
+    question: "Which Henderson household do you mean — the one on Cedar Creek Rd, or the one on Birchwood Ln?",
+    missingFields: ["householdId"],
+    context: "Two households share the last name \"Henderson\" in this tenant.",
+  },
 }
 
 /** Not an action type (see VoiceCallScene.tsx's header) — a `calls` table row

@@ -19,6 +19,7 @@ import { InvoiceToCashScene } from "./flagships/InvoiceToCashScene"
 import { BulkNotifyScene } from "./flagships/BulkNotifyScene"
 import { LeadToWaterTestScene } from "./flagships/LeadToWaterTestScene"
 import { WaveTwoScene } from "./flagships/WaveTwoScenes"
+import { ClarificationScene } from "./ClarificationScene"
 import { ACTION_FIXTURES } from "./fixtures"
 import type { ActionRendererProps, FieldSpec, RegistryEntry } from "./types"
 
@@ -213,6 +214,17 @@ const FLAGSHIP_PLUGIN: Record<string, string> = {
 
 function buildRegistry(): Record<string, RegistryEntry> {
   const registry: Record<string, RegistryEntry> = {}
+  // P2.T8 (C-07): registered FIRST and explicitly, not folded into the
+  // flagship loop below — clarification_request is "highest priority in the
+  // product" per §7.2's own renderer table, and its own "interactive" tier
+  // (never "flagship": a clarification is a question, not a business action).
+  registry.clarification_request = {
+    tier: "interactive",
+    plugin: "clarification",
+    label: "Clarification",
+    Component: ClarificationScene,
+    fixture: ACTION_FIXTURES.clarification_request,
+  }
   for (const [actionType, Component] of Object.entries(FLAGSHIP_COMPONENT)) {
     registry[actionType] = {
       tier: "flagship",
@@ -244,7 +256,7 @@ export function getRendererEntry(actionType: string): RegistryEntry | undefined 
   return ACTION_RENDERERS[actionType]
 }
 
-/** All 41 real action types this registry covers — used by the Stage catalog and by
- *  tests/verification, never re-derived from a different source (single source of
- *  truth, matches §1's "41 action types" count exactly). */
+/** The 41 real business action types (§1) PLUS `clarification_request` (P2.T8) —
+ *  used by the Stage catalog and by tests/verification, never re-derived from a
+ *  different source. */
 export const REGISTERED_ACTION_TYPES: string[] = Object.keys(ACTION_RENDERERS)

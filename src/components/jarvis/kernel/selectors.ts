@@ -145,6 +145,13 @@ export function selectCollectedUsd(input: SelectorInput): Truth<number> {
   return fresh(input.cashCollections!.totalCollected, "api:read-model", input, input.slowLastSuccessMs)
 }
 
+/** P2.T8 (C-07): a `clarification_request` is a question, not a gated business
+ *  action — it must never count toward approvals (§6④: "a clarification must
+ *  never count toward `selectPendingApprovals`"). */
+function isClarification(action: { actionType: string }): boolean {
+  return action.actionType === "clarification_request"
+}
+
 /**
  * Pending approvals — and the resolution of defect C-03.
  *
@@ -156,6 +163,13 @@ export function selectCollectedUsd(input: SelectorInput): Truth<number> {
  *   - counts agree           -> `known`
  *   - disagree below the cap -> `known` from `/api/stats` (the authority), plus a
  *                               dev warning naming both numbers
+ *
+ * `/api/stats`'s own `pending` count makes no clarification/business-action
+ * distinction (it counts every `pending`-status row) — this selector subtracts
+ * the clarifications actually visible in `pendingActions` from that total, so
+ * the rendered number matches what §6④ requires. Below the row cap this is
+ * exact; AT the cap, clarifications beyond the cap cannot be counted (the rows
+ * aren't in hand) — a documented, narrow imprecision, not a silent one.
  */
 export function selectPendingApprovals(input: SelectorInput): Truth<number> {
   const degraded = input.statsDegraded || input.pendingDegraded
@@ -163,9 +177,11 @@ export function selectPendingApprovals(input: SelectorInput): Truth<number> {
   if (blocked) return blocked
 
   const authoritative = input.stats!.pending
-  const held = input.pendingActions.length
+  const rawHeld = input.pendingActions.length
+  const clarificationsHeld = input.pendingActions.filter(isClarification).length
+  const held = rawHeld - clarificationsHeld
 
-  if (held >= PENDING_LIST_CAP) {
+  if (rawHeld >= PENDING_LIST_CAP) {
     return {
       status: "partial",
       value: authoritative,
@@ -175,15 +191,18 @@ export function selectPendingApprovals(input: SelectorInput): Truth<number> {
     }
   }
 
-  if (held !== authoritative && process.env.NODE_ENV !== "production") {
+  const adjustedAuthoritative = Math.max(0, authoritative - clarificationsHeld)
+
+  if (held !== adjustedAuthoritative && process.env.NODE_ENV !== "production") {
     console.warn(
       `[jarvis/selectors] selectPendingApprovals disagreement below the cap: ` +
-        `/api/stats reports pending=${authoritative}, /api/actions/pending returned ${held} rows. ` +
-        `Rendering ${authoritative} (/api/stats is the authority per plan v3 §4.7).`,
+        `/api/stats reports pending=${authoritative} (adjusted ${adjustedAuthoritative} for ${clarificationsHeld} clarification(s)), ` +
+        `/api/actions/pending returned ${held} non-clarification rows. ` +
+        `Rendering ${adjustedAuthoritative} (/api/stats is the authority per plan v3 §4.7).`,
     )
   }
 
-  return fresh(authoritative, "api:stats", input, input.now)
+  return fresh(adjustedAuthoritative, "api:stats", input, input.now)
 }
 
 /** Workflow runs currently in flight. */

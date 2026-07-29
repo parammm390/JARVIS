@@ -74,6 +74,18 @@ function rows(n: number) {
   }))
 }
 
+/** P2.T8 (C-07): a `clarification_request` row, same shape as `rows()`'s. */
+function clarificationRow(id: string) {
+  return {
+    id,
+    actionType: "clarification_request",
+    summary: null,
+    payload: { question: "Which one?", missingFields: ["householdId"] },
+    status: "pending",
+    createdAt: "2026-07-29T00:00:00Z",
+  }
+}
+
 // ---------------------------------------------------------------------------
 // C-01 — the gate. No private number renders without a signed-in, healthy read.
 // ---------------------------------------------------------------------------
@@ -234,6 +246,31 @@ describe("selectPendingApprovals (defect C-03)", () => {
   it("a degraded stats lane alone is enough to withhold the number", () => {
     const t = selectPendingApprovals(input({ statsDegraded: true }))
     expect(t.status).toBe("unavailable")
+  })
+
+  it("P2.T8 (C-07): a clarification_request never counts toward approvals", () => {
+    const t = selectPendingApprovals(
+      input({ stats: { pending: 4, blocked: 0, recentActions: [] }, pendingActions: [...rows(3), clarificationRow("clar-1")] }),
+    )
+    expect(t.status).toBe("known")
+    // 4 raw pending rows (3 real + 1 clarification); the clarification is
+    // subtracted from BOTH the list-derived count and the server's own total.
+    expect(t).toMatchObject({ value: 3, source: "api:stats" })
+  })
+
+  it("P2.T8: multiple clarifications are all excluded, not just the first", () => {
+    const t = selectPendingApprovals(
+      input({ stats: { pending: 5, blocked: 0, recentActions: [] }, pendingActions: [...rows(3), clarificationRow("clar-1"), clarificationRow("clar-2")] }),
+    )
+    expect(t).toMatchObject({ value: 3 })
+  })
+
+  it("P2.T8: an all-clarification plan renders 0 pending approvals, not a warning-worthy disagreement", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const t = selectPendingApprovals(input({ stats: { pending: 1, blocked: 0, recentActions: [] }, pendingActions: [clarificationRow("clar-1")] }))
+    expect(t).toMatchObject({ status: "known", value: 0 })
+    expect(warn).not.toHaveBeenCalled()
+    warn.mockRestore()
   })
 })
 

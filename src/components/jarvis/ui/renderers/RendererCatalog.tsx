@@ -45,12 +45,13 @@ export function RendererCatalogSection() {
     <section className="j-panel space-y-4 p-5">
       <div className="mb-1 flex items-center justify-between">
         <h2 className="j-label">D3 — Action Renderer Registry</h2>
-        <span className="j-chip bg-cyan-400/12 text-cyan-300">{REGISTERED_ACTION_TYPES.length} / 41 registered</span>
+        <span className="j-chip bg-cyan-400/12 text-cyan-300">{REGISTERED_ACTION_TYPES.length} / 42 registered</span>
       </div>
       <p className="text-[11px] text-[color:var(--j-text-dim)]">
-        Every one of the 41 real action types (packages/orchestration/src/plugin-registry.ts) resolves to a flagship scene or a
-        schema-driven standard card — zero raw-JSON default surfaces. 8 flagships below get the full, non-compact treatment; the
-        remaining 33 render compact in the grid beneath.
+        Every one of the 41 real business action types (packages/orchestration/src/plugin-registry.ts) resolves to a flagship
+        scene or a schema-driven standard card — plus `clarification_request` (P2.T8, its own &ldquo;interactive&rdquo; tier,
+        never flagship/standard: a question, not a business action) — zero raw-JSON default surfaces. 8 flagships below get the
+        full, non-compact treatment; the remaining 34 render compact in the grid beneath.
       </p>
 
       <div>
