@@ -24,7 +24,7 @@ export function CompensationReceipt({ actualResult }: { actualResult: unknown })
   if (!compensation) return null
   const rolledBack = compensation.status === "compensated"
   return (
-    <section className={`rounded-xl border p-3 ${rolledBack ? "border-amber-300/30 bg-amber-300/5" : "border-red-400/30 bg-red-400/5"}`}>
+    <section id={`compensation-${compensation.caseId}`} className={`rounded-xl border p-3 ${rolledBack ? "border-amber-300/30 bg-amber-300/5" : "border-red-400/30 bg-red-400/5"}`}>
       <p className={`j-fs-micro font-black uppercase tracking-widest ${rolledBack ? "text-amber-200" : "text-red-300"}`}>{rolledBack ? "Rolled back" : "Rollback failed"}</p>
       <p className="mt-1 j-fs-sm text-[color:var(--j-text-dim)]">{compensation.reason}</p>
       <div className="mt-2"><FieldList value={{ compensationCaseId: compensation.caseId, ...(compensation.error ? { error: compensation.error } : {}) }} /></div>

@@ -599,7 +599,7 @@ claim browser-local credential configuration exists. The checklist is an
 existing public JARVIS setup route, while `setup/status` and
 `integrations/status` remain read-only posture sources.
 
-### B-13 · 2026-07-30 · P7.T5 · **Receipt recovery still lacks complete contracts for Correct, View rollback, and Assign.** OPEN.
+### B-13 · 2026-07-30 · P7.T5 · **Receipt recovery still lacks complete contracts for Correct and Assign.** OPEN.
 
 Source re-verification found that `GET /api/receipts/:id` returns the raw
 receipt row, including its durable `workflowRunId`, and `GET /api/workflows/runs`
@@ -609,12 +609,13 @@ is legal, and the signed-in role is owner; the existing backend remains the
 actual authorizer. Pure tests prove that mapping and legal-status gate.
 
 Correct still requires an inline fact-entry interaction not specified by the
-plan; the compensation receipt explains an actual rollback but has no
-receipt-level view target; and assignment has no receipt-bound assignee target.
-Connect remains public navigation to the source-backed setup destination
-resolved in B-12. The intercepted owner-browser test passes 1/1 against a
-local production server and verifies the Retry request body uses the current
-`expectedVersion`; it never reaches a real mutation.
+plan, and assignment has no receipt-bound assignee target. A compensated
+receipt's View rollback scrolls to the already-rendered compensation-case
+record, keyed by the backend case ID. Connect remains public navigation to the source-backed setup destination
+resolved in B-12. The dev-only fixture browser spec now requires the visible
+fixture marker and awaits the exact retry request, so it cannot mistake the
+at-rest prompt's unrelated Retry for a recovery control. It remains unexecuted
+because local `next dev` has not reached readiness; no browser pass is claimed.
 
 Rendering buttons without a real operation would violate the plan's own
 backend-authority and anti-fabrication rules. What is needed: an approved
@@ -2684,11 +2685,13 @@ test; none is a live before/after measurement.
   Receipt Retry/Escalate now resolve the durable receipt `workflowRunId` through
   the existing run read-model before using its current optimistic-lock version;
   controls render only for a legal owner transition. Pure recovery tests passed
-  **4/4**, and TypeScript/lint passed. After `npm run build`, a local `next
-  start` server was ready at port 3000; the intercepted owner-browser test
-  passed **1/1** in 15.8s, proving the exact run-id/version request without a
-  tenant mutation. **Next:** retain B-13 for Correct/View rollback/Assign, and
-  retain all P7 certification gates until their full evidence is available.
+  **4/4**, and TypeScript/lint passed. An initial local-production browser run
+  was invalid because production deliberately disables `?fixture=` and the
+  test clicked the at-rest prompt's unrelated Retry; the test now requires the
+  visible fixture marker and exact retry request. It remains unexecuted because
+  local `next dev` does not reach port-3000 readiness within Playwright's
+  120-second timeout. **Next:** retain B-13 for Correct/Assign and all P7
+  certification gates until their full evidence is available.
 
 - **2026-07-30 · P7.T7 fresh production re-measurement, budget still failing.**
   `npm run build` completed; the `/jarvis/page` app-build-manifest files sum to

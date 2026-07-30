@@ -19,7 +19,7 @@ import { FieldList, ThreadVerification, type PredictedOutcome, type PredictionDi
 import { isSandboxStep, SANDBOX_LITERAL } from "./sandbox-detection"
 import { RecoveryPanel } from "../bridge/RecoveryPanel"
 import { recoveryKindFromErrorKind } from "../kernel/recovery"
-import { CompensationReceipt } from "../bridge/CompensationReceipt"
+import { CompensationReceipt, compensationReceiptFromActual } from "../bridge/CompensationReceipt"
 import { useJarvisAuth } from "./jarvis-auth"
 import { isLegalReceiptRecovery, receiptRecoveryVerb } from "./receipt-recovery"
 
@@ -123,15 +123,18 @@ function ReceiptRecoveryPanel({
 }) {
   const kind = receipt.failure ? recoveryKindFromErrorKind(receipt.failure.errorKind) : null
   const verb = receiptRecoveryVerb(receipt)
+  const compensation = compensationReceiptFromActual(receipt.actualResult)
   const onRecover = kind && verb && run && role === "owner" && isLegalReceiptRecovery(verb, run.status)
     ? async () => { await jarvisPost(`workflows/runs/${run.id}/${verb}`, { expectedVersion: run.version }) }
-    : undefined
+    : kind === "compensated" && compensation
+      ? async () => { document.getElementById(`compensation-${compensation.caseId}`)?.scrollIntoView({ block: "center" }) }
+      : undefined
 
   // The taxonomy decides the visible label/copy. A callback exists only when the
   // receipt's actual run, current version, legal transition, and owner gate all
-  // agree; RecoveryPanel otherwise remains honest and does not render an inert
-  // control. Other taxonomy operations still require their own authoritative
-  // receipt contracts.
+  // agree. A compensated receipt can target its already-rendered, backend case
+  // record. RecoveryPanel otherwise remains honest and does not render an inert
+  // control; the other taxonomy operations need their own contracts.
   return kind ? <RecoveryPanel kind={kind} onRecover={onRecover} errorDetail={receipt.failure!.message} /> : null
 }
 
