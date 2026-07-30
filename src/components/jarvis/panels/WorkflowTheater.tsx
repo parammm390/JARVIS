@@ -21,6 +21,8 @@ import { useJarvisAuth } from "../lib/jarvis-auth"
 import { onPulse } from "../lib/pulse-bus"
 import { isSandboxStep, SANDBOX_LITERAL } from "../lib/sandbox-detection"
 import { choreo } from "../ui/motion/choreo"
+import { runStatusPresentation, stepStatusPresentation } from "../kernel/workflow-presentation"
+import type { StepState } from "../kernel/types"
 
 // F8.T1 — FLOW-60 FlowParticulate: real steps/min from pulse-bus's "step" kind
 // (the same real step-completed diffs data-core.ts's fast-lane poll already emits,
@@ -242,7 +244,7 @@ function GraphEdges({ nodes, edges, edgeState, particulate = 1 }: { nodes: Graph
   )
 }
 
-export const NODE_TONE: Record<string, { border: string; iconBg: string; icon: string; shadow?: string }> = {
+export const NODE_TONE: Record<string, { border: string; iconBg: string; icon: string; shadow?: string }> & Record<StepState | "blueprint", { border: string; iconBg: string; icon: string; shadow?: string }> = {
   pending: { border: "rgba(100,128,159,0.18)", iconBg: "rgba(100,128,159,0.1)", icon: "var(--j-text-dim)" },
   leased: { border: "var(--j-border-hot)", iconBg: "rgba(34,211,238,0.14)", icon: "var(--j-cyan)", shadow: "0 0 22px rgba(34,211,238,0.28)" },
   completed: { border: "rgba(52,211,153,0.45)", iconBg: "rgba(52,211,153,0.12)", icon: "var(--j-green)" },
@@ -254,7 +256,7 @@ export const NODE_TONE: Record<string, { border: string; iconBg: string; icon: s
 
 export function GraphNodeCard({ node, now, blueprint, onSelect }: { node: GraphNode; now: number; blueprint?: boolean; onSelect?: (node: GraphNode) => void }) {
   const reduced = useHydratedReducedMotion()
-  const tone = NODE_TONE[node.status] ?? NODE_TONE.pending!
+  const tone = NODE_TONE[node.status as StepState | "blueprint"] ?? NODE_TONE.pending!
   const isLeased = node.status === "leased"
   const isDone = node.status === "completed"
   // jarvis-v3 P4.T6 (§8 PHASE 4) — sandbox honesty for "the step": a blueprint
@@ -360,7 +362,7 @@ export function GraphNodeCard({ node, now, blueprint, onSelect }: { node: GraphN
               : " "
             : node.status === "leased" && node.updatedAt
               ? `running · ${ageSeconds(node.updatedAt, now)}s`
-              : node.status + ((node.attempts ?? 0) > 1 ? ` · retry ${node.attempts}` : "")}
+              : stepStatusPresentation(node.status as StepState).label + ((node.attempts ?? 0) > 1 ? ` · retry ${node.attempts}` : "")}
         </div>
       </div>
       {isDone && (
@@ -421,6 +423,7 @@ function LiveRunRow({ run, now, onOpen, onSelectStep }: { run: WorkflowRun; now:
   // dot; 1-2 = two dots; 3+ = three dots (today's original always-3 look, now
   // genuinely earned by real throughput instead of hardcoded).
   const particulate = stepsPerMin >= 3 ? 3 : stepsPerMin >= 1 ? 2 : 1
+  const runPresentation = runStatusPresentation(run.status as import("../kernel/types").RunState)
 
   const edgeState = (e: GraphEdge): EdgeState => {
     const toStep = run.steps.find((s) => s.id === e.to)
@@ -453,11 +456,15 @@ function LiveRunRow({ run, now, onOpen, onSelectStep }: { run: WorkflowRun; now:
         <div className="flex min-w-0 items-center gap-2.5">
           <span className="truncate j-fs-base font-black text-[color:var(--j-text)]">{humanizeWorkflowType(run.workflowType)}</span>
           <span className="j-chip bg-white/6 font-mono text-[color:var(--j-text-dim)]">{ageLabel(run.createdAt, now)}</span>
-          {run.status === "running" && (
-            <span className="j-chip bg-cyan-400/10 text-cyan-300">
-              <LiveDot /> running
-            </span>
-          )}
+          <span className={`j-chip ${
+            runPresentation.tone === "live" ? "bg-cyan-400/10 text-cyan-300" :
+            runPresentation.tone === "success" ? "bg-emerald-400/10 text-emerald-300" :
+            runPresentation.tone === "failure" ? "bg-red-400/10 text-red-300" :
+            runPresentation.tone === "recovery" ? "bg-amber-400/10 text-amber-200" :
+            runPresentation.tone === "escalated" ? "bg-violet-400/10 text-violet-200" :
+            runPresentation.tone === "cancelled" ? "bg-white/8 text-white/60" :
+            "bg-white/8 text-white/70"
+          }`}>{runPresentation.tone === "live" && <LiveDot />}{runPresentation.label}</span>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <span className="font-mono j-fs-micro tabular-nums text-[color:var(--j-text-dim)]">{pct}%</span>
@@ -766,7 +773,7 @@ function RunBrowser({ runs, now, onOpen, onSelectStep }: { runs: WorkflowRun[]; 
               <span
                 key={s.id}
                 className="h-1.5 w-1.5 rounded-full"
-                style={{ background: NODE_TONE[s.status]?.icon ?? NODE_TONE.pending!.icon, opacity: s.status === "pending" ? 0.35 : 1 }}
+                style={{ background: NODE_TONE[s.status].icon, opacity: s.status === "pending" ? 0.35 : 1 }}
               />
             ))}
           </span>
@@ -779,7 +786,7 @@ function RunBrowser({ runs, now, onOpen, onSelectStep }: { runs: WorkflowRun[]; 
               watchdog stuck
             </span>
           )}
-          <span>{run.status}</span><span>·</span><span>{ageLabel(run.updatedAt, now)}</span>
+          <span>{runStatusPresentation(run.status as import("../kernel/types").RunState).label}</span><span>·</span><span>{ageLabel(run.updatedAt, now)}</span>
         </span>
       </button>
       {expandedRunId === run.id && <div className="mt-3"><LiveRunRow run={run} now={now} onOpen={() => onOpen(run.id)} onSelectStep={onSelectStep} /></div>}
