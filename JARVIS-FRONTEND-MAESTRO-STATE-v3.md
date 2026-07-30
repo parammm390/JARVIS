@@ -560,6 +560,14 @@ The existing `MyDay` surface exposes the real completion action only. Adding loc
 
 ---
 
+### B-9 · 2026-07-30 · P6.T4 · **The available setup status sources do not prescribe an exact next action or setup destination.** OPEN.
+
+`GET /api/setup/status` exposes action-type readiness (`configured`/`unconfigured`) and integration health; `GET /api/integrations/status` exposes provider health and summary counts. Neither response carries a setup URL, a remediation operation, or a priority order. The existing client has no mapping from an unconfigured action type/provider to an authoritative setup surface. P6.T4 requires FirstRunScene to name the **exact next action**, while the plan supplies neither that mapping nor literal copy. Rendering a generic “configure X” or “all set” state would invent product copy and an action target.
+
+What is needed: the plan owner must provide the authoritative setup-action mapping (and destination) for the exposed statuses, or approve a source-backed mapping. P6.T4 remains unchecked; no fabricated onboarding surface shipped.
+
+---
+
 **Raised earlier, now resolved — kept for history:**
 - ~~No `TEST_OWNER_EMAIL` / `TEST_OWNER_PASSWORD`.~~ **Resolved — see B-3.**
 - ~~Demo-tenant data, ≥ 3 real overdue invoices.~~ **Resolved — 7 real invoices,
@@ -2509,7 +2517,7 @@ test; none is a live before/after measurement.
 - [ ] **P6.T3** Dispatcher journey: map → assign → escalate
       **Evidence:** · **Deviation:**
 - [ ] **P6.T4** `FirstRunScene.tsx` from real `setup/status` + `integrations/status`, names the exact next action
-      **Evidence:** · **Deviation:**
+      **Evidence:** Source check: both status endpoints expose readiness/health only. **Deviation:** BLOCKER B-9 — no authoritative action, destination, priority, or prescribed copy exists; no generic onboarding state shipped.
 - [ ] **P6.T5** Type/spacing sweep — every `text-[Npx]` → token; **nothing < 11 px**; contrast audit
       **Evidence (before/after grep + contrast table):** · **Deviation:**
 - [ ] **P6.T6** Modes + non-dismissible chip; preview shows veils not zeros; `"SAMPLE OPS"`
