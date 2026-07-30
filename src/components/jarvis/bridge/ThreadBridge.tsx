@@ -18,6 +18,7 @@ import { ThreadField } from "./ThreadField"
 import { ThreadStack } from "./ThreadStack"
 import { ThreadApprovalCockpit } from "./ThreadBlocks"
 import { CommandRail } from "./CommandRail"
+import { FirstRunScene } from "./FirstRunScene"
 import { ReceiptContent } from "../lib/ReceiptDrawer"
 import { DispatchMap } from "../panels/DispatchMap"
 import { MyDay } from "../panels/MyDay"
@@ -161,6 +162,7 @@ function ThreadBody({
         <Orb3D live={{ state: presence, activeRunCount, voiceAmplitude: undefined }} />
       </div>
       <div className="relative z-[1]">
+        {role === "owner" && <FirstRunScene />}
         {role === "technician" ? (
           <main className="mx-auto max-w-lg px-4 pb-32 pt-8"><MyDay /></main>
         ) : (

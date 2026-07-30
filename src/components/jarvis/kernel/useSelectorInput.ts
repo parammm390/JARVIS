@@ -10,6 +10,7 @@
 
 import { useJarvis, SLOW_LANE_STALE_MS } from "../lib/data-core"
 import type { SetupStatus } from "../lib/data-core"
+import type { IntegrationsStatus } from "../lib/data-core"
 import { useJarvisAuth } from "../lib/jarvis-auth"
 import type { SelectorInput } from "./selectors"
 
@@ -71,6 +72,8 @@ export interface LanePresentation {
    *  honest "Standalone" label rather than a fabricated "Optimal". */
   setupStatus: SetupStatus | null
   setupDegraded: boolean
+  integrationsStatus: IntegrationsStatus | null
+  integrationsDegraded: boolean
 }
 
 export function useLanePresentation(): LanePresentation {
@@ -84,5 +87,7 @@ export function useLanePresentation(): LanePresentation {
     apiLatencyMs: data.apiLatencyMs,
     setupStatus: data.setupStatus,
     setupDegraded: data.setupDegraded,
+    integrationsStatus: data.integrationsStatus,
+    integrationsDegraded: data.integrationsDegraded,
   }
 }
