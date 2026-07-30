@@ -29,8 +29,8 @@ test.describe("P5.T8 — thread stacking, FIXTURE harness (real component tree)"
 
     await page.setViewportSize({ width: 1440, height: 1400 })
     await page.goto("/jarvis/login", { waitUntil: "domcontentloaded" })
-    await page.getByPlaceholder(/you@example.com/i).click()
-    await page.getByPlaceholder(/you@example.com/i).pressSequentially(email!, { delay: 15 })
+    await page.waitForTimeout(750) // wait for the client login form to hydrate before filling controlled inputs
+    await page.getByPlaceholder(/you@example.com/i).fill(email!)
     await page.getByPlaceholder(/•+/i).click()
     await page.getByPlaceholder(/•+/i).pressSequentially(password!, { delay: 15 })
     await expect(page.getByRole("button", { name: /sign in/i })).toBeEnabled({ timeout: 5_000 })
@@ -88,8 +88,8 @@ test.describe("P5.T8 — thread stacking, FIXTURE harness (real component tree)"
 
     await page.setViewportSize({ width: 1440, height: 1400 })
     await page.goto("/jarvis/login", { waitUntil: "domcontentloaded" })
-    await page.getByPlaceholder(/you@example.com/i).click()
-    await page.getByPlaceholder(/you@example.com/i).pressSequentially(email!, { delay: 15 })
+    await page.waitForTimeout(750) // wait for the client login form to hydrate before filling controlled inputs
+    await page.getByPlaceholder(/you@example.com/i).fill(email!)
     await page.getByPlaceholder(/•+/i).click()
     await page.getByPlaceholder(/•+/i).pressSequentially(password!, { delay: 15 })
     await expect(page.getByRole("button", { name: /sign in/i })).toBeEnabled({ timeout: 5_000 })

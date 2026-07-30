@@ -30,100 +30,31 @@
 
 | | |
 |---|---|
-| **ACTIVE PHASE** | **P4 — Complete Consequence Graph** |
-| **Latest verified commit** | `8549870` |
-| **Phases complete** | 1 / 7 (P2 code-complete, exit gate 7/10 green, B-5 still open; P3 code-complete, exit gate 3/6 green, BLOCKER B-6 open; **P4 code-complete, exit gate 2/5 green — BLOCKER B-5** (live planner routed away from the safe action type 4/4 real attempts this session, despite an explicit conditional go-ahead) blocks the live predicted↔actual/webhook/consequence-checklist lines; 1 real raw-JSON gap + 1 real live-crash bug found+fixed this phase, on top of P2's 2 and P3's 2) |
-| **Sessions logged** | 5 |
-| **Product exists at** | end of P2 (session ~4); cognition visible end of P3 (session ~5); the consequence graph + predicted↔actual is built and fixture-verified end of P4 (session ~6), live proof still blocked on B-5 |
+| **ACTIVE PHASE** | **P5 — Flagships B & C + Voice Continuity (code-complete)** |
+| **Latest verified commit** | `04ab19b` |
+| **Phases complete** | 1 / 7 (P2 code-complete, exit gate 7/10 green; P3 code-complete, exit gate 3/6 green; P4 code-complete, exit gate 2/5 green; **P5 code-complete, exit gate 3/6 green** — live Flagship B/C plans remain blocked by B-7 and a live barge-in measurement requires an audio input device) |
+| **Sessions logged** | 6 |
+| **Product exists at** | end of P2; cognition visible end of P3; predicted↔actual built end of P4; Flagships B/C, reference clarification, barge-in signal, D3 narration, and thread stacking built and fixture-verified end of P5 |
 
 ## NEXT EXACT TASK
 
-> **P4's code is done — all 8 tasks committed with evidence
-> (`c38c253`..`3dc63ed`), plus a raw-JSON-gap fix (`b1b8aee`), three
-> screenshot-evidence commits (`90d6387`, `de8086c`, and the T8 commit
-> itself), and a full-e2e-suite robustness pass (`dd3dd65`).** Exit gate is
-> **2/5 green** — see PHASE 4 below for the line-by-line breakdown.
+> **P5 is code-complete.** All eight tasks are committed
+> (`b020e35`..`04ab19b`), and the final serialized Phase 5 fixture suite
+> is green: **12/12 passed**. The last robustness fix replaces hydration-racy
+> email keystrokes with a post-hydration `fill()` in the seven P5 fixture
+> specs.
 >
-> **Pre-flight found no new migration was needed.** Verified from source before
-> writing any code: `domain_actions.predictedReceipt`/`predictionDiff` and
-> `decision_receipts.expectedResult`/`actualResult`/`finalizedAt` all predate
-> this phase (an earlier "B2.T2" phase this repo already shipped) and are
-> already populated by `orchestration/src/planner.ts` and
-> `orchestration/src/plan-dag.ts`. P4 is genuinely additive API + frontend
-> work on top of existing schema — confirmed, not assumed, and reported before
-> touching any code.
+> **Exit gate: 3/6 green.** `SchemaCard` is verified for five unregistered
+> types without automatic raw JSON; the real follow-up journey honestly
+> clarified; and the D3 pilot shipped. Flagship B/C live end-to-end proof is
+> blocked by B-7 (the deployed planner produced no actionable plans); the
+> Flagship C count is fixture-only, not a backend recipient count; and the
+> live barge-in <=200 ms measurement requires an audio input device.
 >
-> **BLOCKER B-5 was surfaced explicitly and early, per this session's own
-> binding, and the plan owner said go — conditionally: approve one real
-> action ONLY if its actionType is confirmed `start_invoice_to_cash_workflow`
-> first.** `e2e/golden-consequence.spec.ts` implements exactly that gate and
-> was run live against the real deployed backend **4 times** this session.
-> Every one of the 4 real attempts was honestly unsafe to approve — 3 real
-> attempts routed to `call_overdue_invoices` (the forbidden type,
-> screenshotted: `qa-screenshots/v3-P4/consequence-00-plan-1440.png`), 1
-> produced a genuine 0-action plan. The safety gate correctly rejected every
-> one and approved nothing. This is a stronger, more consistent finding than
-> P2/P3's own "sometimes" — 4/4 this session never produced the authorized
-> action type. **A second, independent finding, also live and also new:** the
-> real deployed backend's own `GET /api/setup/status` reports
-> `environment.nodeEnv: "production"`, so even a successful approval this
-> session could not have exercised the payment-webhook long tail live — no
-> `STRIPE_WEBHOOK_SECRET` there means the A3.T6 fail-closed fix 401s the
-> dev-shape webhook body unconditionally in that environment.
->
-> **Built around it, not blocked on it**, same posture as every prior phase:
-> every mechanism (predicted exposure, the two-column diff, the payment-webhook
-> receipt-merge, cross-surface invalidation, sandbox honesty) is real code,
-> unit/integration-tested, and additionally verified against the REAL rendered
-> component tree via a real signed-in session with only the 2-3 backend GET
-> responses intercepted (`e2e/jarvis-p4-verification-fixtures.spec.ts`, 4
-> passing tests, 4 real screenshots) — never a separate mock, never faked as
-> a live end-to-end proof.
->
-> **Two real, live defects found and fixed this phase**, on top of P2's 2 and
-> P3's 2:
-> 1. `lib/ReceiptDrawer.tsx`'s `JsonBlock` dumped raw `JSON.stringify()` for
->    every receipt's Expected/Actual result — a live hard-rule-8 violation on
->    every surface that reuses `ReceiptContent` (ApprovalCockpit's drawer,
->    WorkflowTheater, DailyBriefing, `/jarvis` and `/jarvis/next` alike).
->    Fixed with a shared, designed `FieldList` — then the required grep sweep
->    caught a SECOND instance of the same class of bug in my own new code
->    (`formatFieldValue`'s array handling fell back to `JSON.stringify()` for
->    array-of-objects, a genuinely reachable shape via `simulate()`'s own
->    `fieldChanges`) — fixed too, not just noted.
-> 2. `views.tsx`'s `SystemHealthPanel`/`BindingChip` compared the real
->    `environment.bindings` API response (`{mode, source}` objects) to the
->    string `"emulator"` and rendered the object directly as a JSX child — a
->    live crash ("Objects are not valid as a React child") on `/jarvis`'s own
->    "Production Readiness" view. Found while wiring P4.T6's own sandbox
->    detection (same field); fixed the type and the comparison.
->
-> **Also found, out of scope, documented not fixed:** `ui/renderers/
-> FallbackRenderer.tsx` still renders raw JSON for any of the ~37 unregistered
-> action types — a real, live hard-rule-8 gap, but its fix is explicitly
-> already scheduled at §7.2/P5.T4 ("FallbackRenderer → owner-debug only"), not
-> invented as new P4 scope.
->
-> **What is still honestly unproven, and why:** all 3 of the exit gate's own
-> "live proof" lines (predicted↔actual from a real outcome, the webhook
-> updating a real receipt, the full consequence checklist) — see BLOCKER B-5's
-> updated entry for the complete reasoning. Nothing here was forced or faked
-> to make the gate look greener than it is.
->
-> **Next:** get the plan owner's explicit direction on B-5 — either accept it
-> stays open (same posture as B-6) and move to P5 regardless (nothing in P5
-> structurally depends on P4's own live consequence proof), or, if the plan
-> owner wants to keep trying, decide how many more live attempts against the
-> shared production tenant are worth it given 4/4 this session already missed.
-> Do not keep re-submitting the golden phrase indefinitely hoping for a lucky
-> planner outcome — that drifts from "authorized, verified action" into
-> "fishing for permission the planner itself keeps declining."
->
-> Before resuming, read this session's full P4 task list + Exit gate section
-> below (every task's Evidence/Deviation) and `## BLOCKERS` B-5 in full — do
-> not re-derive what is already recorded there.
-
----
+> **Next: P6 pre-flight.** Read P6 in the plan, the P5 section and B-7 in
+> full, then verify the role sources and cutover routing before changing
+> product code. Do not retry the live flagship phrases merely to seek a
+> different planner outcome.
 
 ## COMPLETION LEDGER
 
@@ -133,7 +64,7 @@
 | **P2** | **Golden Vertical Slice on the Bridge** | **3** | 🟡 | 🟡 7/10 | **the product exists — full golden journey at `/jarvis/next`, typed and by voice**, proven live through Heard→Understood→Plan→Approval Cockpit against a real tenant with real overdue invoices (B-3 resolved); 2 real bugs found+fixed via that live test; real Execution/Receipt/fps evidence needs explicit sign-off to approve a real action for real (B-5) |
 | **P3** | **Instruction Lifecycle & Realtime** | **1** | 🟡 | 🟡 3/6 | **cognition streams in for real** — context chips (M4) and plan nodes (M5) arrive per real `instruction_events` row via a 400ms poll or real SSE-with-fallback, not after the whole POST resolves; mid-flight refresh genuinely resumes the thread (real e2e, intercepted backend responses); 2 more real bugs found+fixed via live testing. Real event-timing evidence (≥5 events, first-event/event→pixel timing) needs migration 0062 applied to a real DB — deliberately unapplied this session (**BLOCKER B-6**), same posture as B-5 |
 | **P4** | **Complete Consequence Graph** | **1** | 🟡 | 🟡 2/5 | **predicted↔actual is real and wired** — the two-column diff (M16), the approval card's predicted-outcome expand, the payment-webhook receipt-merge, cross-surface invalidation, and sandbox honesty all real code, unit/integration-tested, and verified against the real component tree (real session + fixture data, real screenshots); live end-to-end proof needs a real approved `start_invoice_to_cash_workflow` action, which the live planner declined to produce in 4/4 real attempts this session despite an explicit conditional go-ahead (**BLOCKER B-5**, updated) |
-| P5 | Flagships B & C + Voice Continuity | 2–3 | ⬜ | ⬜ | two more workflows; follow-up references; barge-in |
+| P5 | Flagships B & C + Voice Continuity | 2 | 🟡 | 🟡 3/6 | two more workflows; honest follow-up clarification; barge-in signal; D3 pilot; thread stacking |
 | P6 | Roles, Mobile, Onboarding, Demo, Cutover | 2 | ⬜ | ⬜ | `/jarvis` **is** the product |
 | P7 | Truth, Recovery, Performance, Certification | 2 | ⬜ | ⬜ | signed off |
 
@@ -2087,7 +2018,7 @@ test; none is a live before/after measurement.
 ---
 
 # PHASE 5 — Flagships B & C + Voice Continuity
-**Status:** 🟡 · **Sessions:** 1 (in progress) · **Depends on:** P4 · **Plan:** §8 → PHASE 5
+**Status:** 🟡 · **Sessions:** 2 (code-complete; live-proof blockers remain) · **Depends on:** P4 · **Plan:** §8 → PHASE 5
 
 ### Pre-flight
 - [x] Verify from source which capability bindings Flagship B/C's steps
@@ -2558,12 +2489,12 @@ test; none is a live before/after measurement.
       `force:true` Playwright click to the modal's own topmost backdrop.
 
 ### Exit gate
-- [ ] Flagship B end-to-end, map updates — **Screenshots:**
-- [ ] Flagship C shows a real recipient count + typed confirm — **Screenshot:**
-- [ ] `SchemaCard` renders ≥ 5 unregistered types, no raw JSON — **Screenshots:**
-- [ ] Follow-up reference resolves or clarifies — **Recording:**
-- [ ] Barge-in ≤ 200 ms — **Measurement:**
-- [ ] D3 shipped or cut with reason — **Evidence:**
+- [ ] Flagship B end-to-end, map updates — **Blocked:** B-7; fixture evidence at `qa-screenshots/v3-P5/flagship-b-fixture-approval-{1440,390}.png` and `route-scene-fixture-approval-{1440,390}.png`.
+- [ ] Flagship C shows a real recipient count + typed confirm — **Blocked:** B-7; fixture evidence at `qa-screenshots/v3-P5/flagship-c-fixture-known-count-{1440,390}.png` and `flagship-c-fixture-unknown-count-1440.png`.
+- [x] `SchemaCard` renders ≥ 5 unregistered types, no raw JSON — **Screenshots:** `qa-screenshots/v3-P5/schema-card-fixture-unregistered-{1440,390}.png`; `e2e/jarvis-p5-schema-card-fixtures.spec.ts` passes.
+- [x] Follow-up reference resolves or clarifies — **Recording:** real same-session follow-up clarified (NEW-12); fixture evidence `qa-screenshots/v3-P5/followup-fixture-unresolved-{1440,390}.png`.
+- [ ] Barge-in ≤ 200 ms — **Blocked:** no audio input device for the required live wall-clock measurement; synchronous local-mic signal and `interruptionsEnabled: true` are source/unit verified.
+- [x] D3 shipped or cut with reason — **Evidence:** shipped as one content-free check-in after 8000ms; `e2e/jarvis-p5-d3-narration-fixtures.spec.ts` passes.
 
 ---
 
@@ -2649,6 +2580,8 @@ test; none is a live before/after measurement.
 ## SESSION LOG
 
 <!-- Newest first. YYYY-MM-DD · P<n> · tasks done · findings · next task · blockers -->
+
+- **2026-07-30 · P5 T1–T8 CODE-COMPLETE (`b020e35`..`04ab19b`), final fixture suite 12/12 green, exit gate 3/6.** All planned P5 product work was already committed: Flagship B renderers and RouteScene reuse DispatchMap; Flagship C’s M8 blast radius and unknown-count typed confirmation; SchemaCard as the automatic no-raw-JSON fallback; honest unresolved-reference clarification; real local-mic barge-in signal; the one-shot D3 narration pilot; and stacked recent threads. A final verification run found one test-only hydration race: Playwright could type the controlled email field before React hydrated, then lose the value. Replaced that racy keystroke path with a 750ms post-hydration wait plus `fill()` in the seven P5 fixture specs; serialized rerun passed **12/12** (`test-results/.last-run.json`). Final checks: `npx tsc --noEmit` exit 0; `npm run lint` clean; `npx vitest run` **19 files / 272 tests passed**. P5’s live Flagship B/C exit lines remain honestly blocked by B-7 (planner produced no actionable plans), and the live <=200ms barge-in measurement remains blocked by the no-audio-input environment. **Next:** P6 pre-flight; do not resubmit live flagship phrases to fish for a planner outcome.
 
 - **2026-07-30 · P4 T1–T8 CODE-COMPLETE (12 commits, `c38c253`..`dd3dd65`),
   exit gate 2/5, BLOCKER B-5 exercised live 4x (0 safe outcomes), 2 more real

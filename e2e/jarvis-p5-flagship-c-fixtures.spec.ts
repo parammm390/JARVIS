@@ -22,8 +22,8 @@ const REAL_TARGETS = Array.from({ length: 12 }, (_, i) => ({
 
 async function signIn(page: import("@playwright/test").Page) {
   await page.goto("/jarvis/login", { waitUntil: "domcontentloaded" })
-  await page.getByPlaceholder(/you@example.com/i).click()
-  await page.getByPlaceholder(/you@example.com/i).pressSequentially(email!, { delay: 15 })
+  await page.waitForTimeout(750) // wait for the client login form to hydrate before filling controlled inputs
+  await page.getByPlaceholder(/you@example.com/i).fill(email!)
   await page.getByPlaceholder(/•+/i).click()
   await page.getByPlaceholder(/•+/i).pressSequentially(password!, { delay: 15 })
   await expect(page.getByRole("button", { name: /sign in/i })).toBeEnabled({ timeout: 5_000 })
