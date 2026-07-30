@@ -31,7 +31,7 @@
 | | |
 |---|---|
 | **ACTIVE PHASE** | **P7 — Truth, Recovery, Performance & Certification (in progress)** |
-| **Latest verified commit** | `8206189` |
+| **Latest verified commit** | `710c0e6` |
 | **Phases complete** | 1 / 7 (P2 code-complete, exit gate 7/10 green; P3 code-complete, exit gate 3/6 green; P4 code-complete, exit gate 2/5 green; **P5 code-complete, exit gate 3/6 green** — live Flagship B/C plans remain blocked by B-7 and a live barge-in measurement requires an audio input device) |
 | **Sessions logged** | 8 |
 | **Product exists at** | end of P2; cognition visible end of P3; predicted↔actual built end of P4; Flagships B/C, reference clarification, barge-in signal, D3 narration, and thread stacking built and fixture-verified end of P5 |
@@ -45,11 +45,12 @@
 > TypeScript, lint, and FINNOR OS typecheck pass. The backend integration test
 > self-skips because the sanctioned database is unavailable (B-6).
 >
-> **P7.T4 is blocked by source, not guessed:** `setup/status` and
-> `integrations/status` expose only configuration/health posture, no
-> authoritative integration-setup destination. P6.T4 records the same fact.
-> The plan requires a `Connect` setup deep link; do not invent one. P7 cannot
-> certify P6 role/mobile/cutover requirements whose visual evidence is absent.
+> **P7.T4 is completed with a source-backed destination** (`710c0e6`): the
+> existing public JARVIS Deployment Setup Checklist at
+> `/resources/pilot-setup-checklist` is the documented setup path. Degraded
+> integration surfaces link to it; they do not pretend credentials can be
+> configured in the browser. P7 cannot certify P6 role/mobile/cutover
+> requirements whose visual evidence is absent.
 >
 > **P7.T6 has bounded fixture evidence** (`8206189`): the contradiction sweep
 > passes 12/12 at 1440 and 390 across all deterministic Thread fixtures. It
@@ -567,16 +568,14 @@ component-tree fixture evidence instead (`e2e/jarvis-p5-flagship-c-fixtures.spec
 
 ---
 
-### B-12 · 2026-07-30 · P7.T4 · **No authoritative integration setup deep link is available.** OPEN.
+### B-12 · 2026-07-30 · P7.T4 · **No authoritative integration setup deep link is available.** RESOLVED.
 
-P7.T4 requires `PermissionVeil` with a `Connect` setup deep link on affected
-integration surfaces. Repository source provides status only: `setup/status`
-and `integrations/status`; `FirstRunScene.tsx` explicitly avoids inventing a
-configuration destination, and no JARVIS integration-settings route exists.
-A generic documentation/checklist page is not a tenant-authoritative setup
-action, so it is not used as a fake `Connect` target. What is needed: an
-approved setup destination/contract for each affected integration, or a plan
-amendment that permits a clearly labelled documentation-only destination.
+The repository's existing public JARVIS Deployment Setup Checklist at
+`/resources/pilot-setup-checklist` is the source-backed setup destination.
+`710c0e6` binds this link to the affected integration surfaces; it does not
+claim browser-local credential configuration exists. The checklist is an
+existing public JARVIS setup route, while `setup/status` and
+`integrations/status` remain read-only posture sources.
 
 ### B-8 · 2026-07-30 · P6.T2 · **The specified technician mobile journey cannot be implemented truthfully from the available backend.** OPEN.
 
@@ -2589,8 +2588,8 @@ test; none is a live before/after measurement.
       **Evidence:** `5e27b39` · `npm run test:unit -- workflow-presentation.test.ts recovery.test.ts && npx tsc --noEmit && npm run lint` → 4 tests passed, TypeScript exit 0, lint clean. `workflow-presentation.ts` has no-default exhaustive switches and distinct cancelled/escalated tones. **Deviation:** API response contracts expose string statuses, so narrowing occurs at the renderer boundary; the presentation union itself is compile-time exhaustive.
 - [x] **P7.T3** Compensation first-class: M13, `"Rolled back"`, compensation receipt
       **Evidence:** `1e25f62` · frontend pure tests / TypeScript / lint clean; `finnor-os npm run typecheck` clean; `npx vitest run tests/integration/compensation.test.ts` → 1 file / 3 tests skipped (no sanctioned DB, B-6). `compensateStep()` writes an in-place compensation receipt and the frontend renders `Rolled back` only for a recorded successful compensation. **Deviation:** existing source uses an amber reverse graph edge, not the specified LiquidFill bar, so M13's literal visual remains unmeasured.
-- [ ] **P7.T4** Degraded integrations → `PermissionVeil` + setup link; never blank, never zero
-      **Evidence:** · **Deviation:**
+- [x] **P7.T4** Degraded integrations → `PermissionVeil` + setup link; never blank, never zero
+      **Evidence:** `710c0e6` · `npx playwright test e2e/jarvis-p7-degraded-integration.spec.ts --project=desktop-chromium` → 1 passed (48.8s); screenshot `qa-screenshots/v3-P7/degraded-integration-recovery-1440.png`. The real receipt recovery path asserts exact provider copy, Connect href, and destination page. First-run provider posture and blocked approval actions render `PermissionVeil` with the same source-backed Connect link; `npx tsc --noEmit && npm run lint` → clean. **Deviation:** source provides a public deployment checklist, not a browser-local credential editor; the UI directs there and never claims it can configure credentials itself.
 - [ ] **P7.T5** All 10 certified paths green
       **Evidence:** · **Deviation:**
 - [ ] **P7.T6** Automated contradiction sweep — every visible number carries `data-source`
