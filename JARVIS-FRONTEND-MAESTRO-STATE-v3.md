@@ -59,11 +59,11 @@
 > Static copy, addresses, and fixture chrome are not business facts. This is not
 > a whole-product sweep, so it does not complete the plan's universal requirement.
 >
-> **P7.T5 cannot yet certify failure recovery**: source verification shows
-> `ReceiptContent` renders `RecoveryPanel` without an authoritative
-> `onRecover` handler. Consequently, only `Connect` is actionable; the other
-> prescribed affordances are copy-only. This is recorded as B-13 rather than
-> adding inert controls.
+> **P7.T5 cannot yet certify failure recovery**: receipt-linked `Retry` and
+> `Escalate` now resolve the real run and its optimistic-lock version before
+> rendering an owner control. Correct, View rollback, and Assign still lack a
+> complete interactive receipt contract, so B-13 remains open and no inert
+> controls are added.
 >
 > **P7.T5 has one certified-path result**: `npx playwright test
 > e2e/jarvis-network-hygiene.spec.ts --project=desktop-chromium` passed 2/2
@@ -599,19 +599,22 @@ claim browser-local credential configuration exists. The checklist is an
 existing public JARVIS setup route, while `setup/status` and
 `integrations/status` remain read-only posture sources.
 
-### B-13 · 2026-07-30 · P7.T5 · **Receipt recovery cannot offer seven prescribed actions truthfully.** OPEN.
+### B-13 · 2026-07-30 · P7.T5 · **Receipt recovery still lacks complete contracts for Correct, View rollback, and Assign.** OPEN.
 
-P7 source verification found that `RecoveryPanel` correctly maps all eight
-§6.8 kinds, but `ReceiptContent` mounts it only as
-`<RecoveryPanel kind=... errorDetail=... />`
-(`src/components/jarvis/lib/ReceiptDrawer.tsx:276`). It does not pass an
-authoritative recovery operation. `RecoveryPanel` deliberately renders
-`Retry`, `Escalate`, `Correct`, `View rollback`, and `Assign` only when such an
-`onRecover` is supplied (`src/components/jarvis/bridge/RecoveryPanel.tsx:23-29`).
-The receipt data contract exposes no workflow-run id, retry operation, assignee
-target, correction target, or rollback record link from which this surface
-could derive one. `Connect` is the sole exception because the repository has
-the source-backed, public setup destination resolved in B-12.
+Source re-verification found that `GET /api/receipts/:id` returns the raw
+receipt row, including its durable `workflowRunId`, and `GET /api/workflows/runs`
+returns the matching run's current optimistic-lock version. `ReceiptContent`
+now binds `Retry` and `Escalate` only when that run is present, the transition
+is legal, and the signed-in role is owner; the existing backend remains the
+actual authorizer. Pure tests prove that mapping and legal-status gate.
+
+Correct still requires an inline fact-entry interaction not specified by the
+plan; the compensation receipt explains an actual rollback but has no
+receipt-level view target; and assignment has no receipt-bound assignee target.
+Connect remains public navigation to the source-backed setup destination
+resolved in B-12. The intercepted browser spec is present but has not executed:
+the local `next dev` server never became ready within Playwright's 120-second
+web-server timeout.
 
 Rendering buttons without a real operation would violate the plan's own
 backend-authority and anti-fabrication rules. What is needed: an approved
@@ -2676,6 +2679,16 @@ test; none is a live before/after measurement.
 ## SESSION LOG
 
 <!-- Newest first. YYYY-MM-DD · P<n> · tasks done · findings · next task · blockers -->
+
+- **2026-07-30 · P7.T5 receipt run-control binding, certification still open.**
+  Receipt Retry/Escalate now resolve the durable receipt `workflowRunId` through
+  the existing run read-model before using its current optimistic-lock version;
+  controls render only for a legal owner transition. Pure recovery tests passed
+  **4/4**, and TypeScript/lint passed. The intercepted owner-browser test did
+  not execute because `next dev` never reached port-3000 readiness within
+  Playwright's 120-second server timeout; no real recovery was called. **Next:**
+  retain B-13 for Correct/View rollback/Assign, and retain all P7 certification
+  gates until their full evidence is available.
 
 - **2026-07-30 · P7.T7 fresh production re-measurement, budget still failing.**
   `npm run build` completed; the `/jarvis/page` app-build-manifest files sum to

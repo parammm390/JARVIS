@@ -8,7 +8,7 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react"
 import { useReducedMotion, motion } from "framer-motion"
 import { Tag, User, Calendar, MessageSquare, Wrench, FileText, Package, DollarSign } from "lucide-react"
-import { jarvisGet } from "./api"
+import { jarvisGet, jarvisPost } from "./api"
 import { useLanePresentation } from "../kernel/useSelectorInput"
 import { Drawer } from "../ui/primitives/Drawer"
 import { ActionRenderer } from "../ui/renderers/ActionRenderer"
@@ -20,6 +20,8 @@ import { isSandboxStep, SANDBOX_LITERAL } from "./sandbox-detection"
 import { RecoveryPanel } from "../bridge/RecoveryPanel"
 import { recoveryKindFromErrorKind } from "../kernel/recovery"
 import { CompensationReceipt } from "../bridge/CompensationReceipt"
+import { useJarvisAuth } from "./jarvis-auth"
+import { isLegalReceiptRecovery, receiptRecoveryVerb } from "./receipt-recovery"
 
 // F3.T3 — FLOW-58's sibling receipt-depth task: evidence source iconography. A
 // keyword lookup against the REAL `source` string every evidence row already
@@ -41,6 +43,11 @@ function sourceIcon(source: string) {
 
 export interface FullReceipt {
   id: string
+  /** Durable receipt→run foreign key returned by the receipt endpoint. A run
+   * control also requires the run's current optimistic-lock version, so this is
+   * resolved through the existing read-only workflow-runs endpoint before a
+   * Retry/Escalate control is exposed. */
+  workflowRunId: string | null
   objective: string
   evidence: Array<{ source: string; ref: string; timestamp: string }>
   policyApplied: { id: string; version: number } | null
@@ -60,6 +67,8 @@ export interface FullReceipt {
   predicted?: PredictedOutcome | null
   predictionDiff?: PredictionDiff | null
 }
+
+type ReceiptRun = { id: string; status: string; version: number }
 
 // D3.T1 — `proposedAction` (declared on FullReceipt but never rendered before this
 // session, grepped/confirmed) is always shaped `{stepType, payload}` — every receipt,
@@ -103,6 +112,29 @@ function Section({ label, children }: { label: string; children: React.ReactNode
   )
 }
 
+function ReceiptRecoveryPanel({
+  receipt,
+  run,
+  role,
+}: {
+  receipt: FullReceipt
+  run: ReceiptRun | null
+  role: ReturnType<typeof useJarvisAuth>["role"]
+}) {
+  const kind = receipt.failure ? recoveryKindFromErrorKind(receipt.failure.errorKind) : null
+  const verb = receiptRecoveryVerb(receipt)
+  const onRecover = kind && verb && run && role === "owner" && isLegalReceiptRecovery(verb, run.status)
+    ? async () => { await jarvisPost(`workflows/runs/${run.id}/${verb}`, { expectedVersion: run.version }) }
+    : undefined
+
+  // The taxonomy decides the visible label/copy. A callback exists only when the
+  // receipt's actual run, current version, legal transition, and owner gate all
+  // agree; RecoveryPanel otherwise remains honest and does not render an inert
+  // control. Other taxonomy operations still require their own authoritative
+  // receipt contracts.
+  return kind ? <RecoveryPanel kind={kind} onRecover={onRecover} errorDetail={receipt.failure!.message} /> : null
+}
+
 // F7.T2 — DrawerToPage (FLOW-95) extracted this fetch+render body out of the Drawer
 // shell so a second real consumer (bridge/Bridge.tsx's center-stage ReceiptScene)
 // can reuse the SAME data path and sections instead of re-implementing them —
@@ -124,8 +156,10 @@ export function ReceiptContent({
 }) {
   const [receipt, setReceipt] = useState<FullReceipt | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [receiptRun, setReceiptRun] = useState<ReceiptRun | null>(null)
   const reducedMotion = useReducedMotion() ?? false
   const { setupStatus } = useLanePresentation()
+  const { role } = useJarvisAuth()
 
   useEffect(() => {
     let cancelled = false
@@ -142,6 +176,26 @@ export function ReceiptContent({
       cancelled = true
     }
   }, [receiptId])
+
+  // A receipt exposes its durable run id, while the version belongs to the
+  // live-run read model. Resolve the two source-backed facts before rendering
+  // a mutation control; do not guess a version from the receipt timestamp.
+  useEffect(() => {
+    const runId = receipt?.workflowRunId
+    if (!runId) {
+      setReceiptRun(null)
+      return
+    }
+    let cancelled = false
+    void jarvisGet<{ runs: ReceiptRun[] }>("workflows/runs")
+      .then(({ runs }) => {
+        if (!cancelled) setReceiptRun(runs.find((run) => run.id === runId) ?? null)
+      })
+      .catch(() => {
+        if (!cancelled) setReceiptRun(null)
+      })
+    return () => { cancelled = true }
+  }, [receipt?.workflowRunId])
 
   // A silent re-fetch of the SAME receipt — no skeleton flash, no clearing the
   // currently-shown data first. A failed silent refresh is swallowed (the
@@ -273,7 +327,7 @@ export function ReceiptContent({
                     <Section key="failure" label="Failure + recovery path">
                       <div className="space-y-2">
                         <div className="j-fs-micro text-red-200/80">backend kind: {receipt.failure.errorKind} · {receipt.failure.recoveryPath}</div>
-                        <RecoveryPanel kind={recoveryKindFromErrorKind(receipt.failure.errorKind)} errorDetail={receipt.failure.message} />
+                        <ReceiptRecoveryPanel receipt={receipt} run={receiptRun} role={role} />
                       </div>
                     </Section>
                   ) : null,
