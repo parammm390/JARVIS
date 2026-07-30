@@ -40,6 +40,24 @@ export type JobState =      // schema.ts:345
   | "queued" | "running" | "completed" | "failed" | "dead_letter"
 
 // ---------------------------------------------------------------------------
+// P7.T1 — failure presentation taxonomy (plan v3 §6.8).
+//
+// This is intentionally a UI recovery taxonomy rather than a copy of the
+// backend ErrorKind union. The backend retains its own error kind on the receipt;
+// `recovery.ts` maps that value to one of these eight prescribed affordances.
+// ---------------------------------------------------------------------------
+
+export type RecoveryKind =
+  | "transient"
+  | "policy_denied"
+  | "integration_unavailable"
+  | "invalid_input"
+  | "tool_error"
+  | "timeout"
+  | "compensated"
+  | "needs_human"
+
+// ---------------------------------------------------------------------------
 // P2.T1 — InstructionState, 12 values (plan v3 §4.4). Do not rename anything here.
 // ---------------------------------------------------------------------------
 

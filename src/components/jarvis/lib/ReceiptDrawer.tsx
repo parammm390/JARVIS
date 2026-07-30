@@ -17,6 +17,8 @@ import { RiskBadge, type RiskTier } from "../ui/primitives/RiskBadge"
 import { Stagger } from "../ui/motion/primitives"
 import { FieldList, ThreadVerification, type PredictedOutcome, type PredictionDiff } from "../bridge/ThreadVerification"
 import { isSandboxStep, SANDBOX_LITERAL } from "./sandbox-detection"
+import { RecoveryPanel } from "../bridge/RecoveryPanel"
+import { recoveryKindFromErrorKind } from "../kernel/recovery"
 
 // F3.T3 — FLOW-58's sibling receipt-depth task: evidence source iconography. A
 // keyword lookup against the REAL `source` string every evidence row already
@@ -267,10 +269,9 @@ export function ReceiptContent({
                   </Section>,
                   receipt.failure ? (
                     <Section key="failure" label="Failure + recovery path">
-                      <div className="rounded-lg border border-red-400/25 bg-red-400/5 p-2 j-fs-micro text-red-300">
-                        <div className="font-bold">{receipt.failure.errorKind}</div>
-                        <div className="mt-1">{receipt.failure.message}</div>
-                        <div className="mt-1 text-red-200/80">recovery: {receipt.failure.recoveryPath}</div>
+                      <div className="space-y-2">
+                        <div className="j-fs-micro text-red-200/80">backend kind: {receipt.failure.errorKind} · {receipt.failure.recoveryPath}</div>
+                        <RecoveryPanel kind={recoveryKindFromErrorKind(receipt.failure.errorKind)} errorDetail={receipt.failure.message} />
                       </div>
                     </Section>
                   ) : null,
