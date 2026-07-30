@@ -19,6 +19,9 @@ import { ThreadStack } from "./ThreadStack"
 import { ThreadApprovalCockpit } from "./ThreadBlocks"
 import { CommandRail } from "./CommandRail"
 import { ReceiptContent } from "../lib/ReceiptDrawer"
+import { DispatchMap } from "../panels/DispatchMap"
+import { MyDay } from "../panels/MyDay"
+import type { JarvisRole } from "../lib/jarvis-auth"
 import { derivePresence } from "../kernel/presence"
 import { THREAD_FIXTURES, THREAD_HISTORY_FIXTURES, FIXTURE_STATE_KEYS } from "./thread-fixtures"
 import { D3_LONG_EXECUTION_MS, D3_NARRATION_TEXT, shouldFireD3Narration } from "../lib/d3-narration"
@@ -119,6 +122,7 @@ function ThreadBody({
   onSkip,
   showRail,
   fixtureLabel,
+  role = "owner",
 }: {
   thread: ThreadData | null
   threadHistory: ThreadData[]
@@ -131,8 +135,9 @@ function ThreadBody({
   onSkip: () => void
   showRail: boolean
   fixtureLabel?: string
+  role?: JarvisRole
 }) {
-  const isApproving = thread?.machine.instructionState === "awaiting_approval"
+  const isApproving = role !== "technician" && thread?.machine.instructionState === "awaiting_approval"
   return (
     <div className="jarvis-root relative min-h-screen bg-[#04070f] text-[color:var(--j-text)]" data-jarvis-thread>
       {fixtureLabel && (
@@ -156,10 +161,17 @@ function ThreadBody({
         <Orb3D live={{ state: presence, activeRunCount, voiceAmplitude: undefined }} />
       </div>
       <div className="relative z-[1]">
-        {!thread && <RestPrompt />}
-        {thread && <ThreadStack thread={thread} threadHistory={threadHistory} onCancel={onCancel} onAnswer={onAnswer} onSkip={onSkip} />}
+        {role === "technician" ? (
+          <main className="mx-auto max-w-lg px-4 pb-32 pt-8"><MyDay /></main>
+        ) : (
+          <>
+            {!thread && <RestPrompt />}
+            {thread && <ThreadStack thread={thread} threadHistory={threadHistory} onCancel={onCancel} onAnswer={onAnswer} onSkip={onSkip} />}
+            {role === "dispatcher" && <aside className="mx-auto max-w-[720px] px-4 pb-32"><DispatchMap /></aside>}
+          </>
+        )}
       </div>
-      {isApproving && thread && <ThreadApprovalCockpit thread={thread} onClose={() => {}} reducedMotion={reducedMotion} />}
+      {isApproving && thread && <ThreadApprovalCockpit thread={thread} onClose={() => {}} reducedMotion={reducedMotion} escalateOnly={role === "dispatcher"} />}
       {showRail && <CommandRail />}
     </div>
   )
@@ -170,7 +182,7 @@ function ThreadBody({
 // narrate STEPS" forbids per-step chatter, not a single, content-free
 // check-in — the decision/content details live in `lib/d3-narration.ts`
 // (pure, unit-tested; BLOCKER B-1 means this effect itself cannot be).
-function ThreadPage() {
+function ThreadPage({ role }: { role: JarvisRole }) {
   const kernel = useKernel()
   const voice = useVapiSession()
   const reducedMotion = useReducedMotion() ?? false
@@ -238,6 +250,7 @@ function ThreadPage() {
       onAnswer={kernel.answerClarification}
       onSkip={kernel.cancelThread}
       showRail
+      role={role}
     />
   )
 }
@@ -302,8 +315,8 @@ function ThreadGate() {
 
   if (auth.loading) return <LoadingGate />
   if (!auth.session) return <SignInGate />
-  if (auth.role !== null && auth.role !== "owner") return <NotOwnerGate />
-  return <ThreadPage />
+  if (auth.role === null) return <LoadingGate />
+  return <ThreadPage role={auth.role} />
 }
 
 export function Bridge() {

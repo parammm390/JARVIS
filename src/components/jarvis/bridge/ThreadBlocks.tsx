@@ -321,7 +321,7 @@ function BlastRadiusHeader({ count, reducedMotion }: { count: number | null; red
 // wide, unscoped) reused component per this session's binding: reuse, don't
 // rebuild `ApprovalCockpit`.
 // ---------------------------------------------------------------------------
-export function ThreadApprovalCockpit({ thread, onClose, reducedMotion }: { thread: Thread; onClose: () => void; reducedMotion: boolean }) {
+export function ThreadApprovalCockpit({ thread, onClose, reducedMotion, escalateOnly = false }: { thread: Thread; onClose: () => void; reducedMotion: boolean; escalateOnly?: boolean }) {
   const total = thread.nodes.reduce((sum, n) => (n.amountUsd !== null ? sum + n.amountUsd : sum), 0)
   const rise = cockpitRiseVariants(reducedMotion)
   // A "blast" thread is exactly one node whose action type carries a real
@@ -361,7 +361,7 @@ export function ThreadApprovalCockpit({ thread, onClose, reducedMotion }: { thre
             </p>
           )}
         </div>
-        <ApprovalCockpit />
+        <ApprovalCockpit escalateOnly={escalateOnly} />
       </motion.div>
     </motion.div>
   )

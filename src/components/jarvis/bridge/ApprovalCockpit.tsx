@@ -187,6 +187,7 @@ function ApprovalCard({
   onActivateMobile,
   cardRef,
   reduced,
+  escalateOnly,
 }: {
   action: CockpitAction
   index: number
@@ -201,6 +202,7 @@ function ApprovalCard({
   onActivateMobile: (id: string) => void
   cardRef: (el: HTMLDivElement | null) => void
   reduced: boolean
+  escalateOnly: boolean
 }) {
   const [expanded, setExpanded] = useState(false)
   const [predictedExpanded, setPredictedExpanded] = useState(false)
@@ -408,6 +410,7 @@ function ApprovalCard({
           <>
             {/* Desktop: the original 3-pill row, unchanged, precision pointer input. */}
             <div className="mt-2 hidden gap-2 lg:flex">
+              {!escalateOnly && <>
               <motion.button
                 onClick={() => onDecide(action, "confirm")}
                 whileTap={{ scale: 0.96 }}
@@ -426,6 +429,7 @@ function ApprovalCard({
               >
                 <X className="h-3 w-3" /> Reject
               </motion.button>
+              </>}
               <motion.button
                 onClick={() => onDecide(action, "escalate")}
                 whileTap={{ scale: 0.96 }}
@@ -440,14 +444,22 @@ function ApprovalCard({
                 sheet (rendered once in ApprovalCockpit) with the SAME `onDecide`
                 calls and the SAME high-risk typed-confirm rule the batch bar already
                 enforces — never a second, looser decision path. */}
-            <button
+            {escalateOnly ? (
+              <button
+                type="button"
+                onClick={() => onDecide(action, "escalate")}
+                className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-amber-300/30 bg-amber-300/[0.04] py-2.5 text-[11px] font-black text-amber-100 lg:hidden"
+              >
+                <AlertTriangle className="h-3 w-3" /> Escalate
+              </button>
+            ) : <button
               type="button"
               onClick={() => onActivateMobile(action.id)}
               disabled={isUnavailable}
               className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-white/15 bg-white/[0.03] py-2.5 text-[11px] font-black text-white/80 disabled:opacity-40 lg:hidden"
             >
               Decide <ChevronDown className="h-3 w-3" />
-            </button>
+            </button>}
           </>
         )}
       </motion.div>
@@ -625,7 +637,7 @@ function UndoToast({
 // ---------------------------------------------------------------------------
 const UNDO_WINDOW_MS = 5000
 
-export function ApprovalCockpit() {
+export function ApprovalCockpit({ escalateOnly = false }: { escalateOnly?: boolean }) {
   const data = useJarvis()
   const reducedRaw = useReducedMotion()
   const reduced = reducedRaw ?? false
@@ -876,15 +888,18 @@ export function ApprovalCockpit() {
     } else if (e.key === "Enter") {
       e.preventDefault()
       if (current?.receipt) setOpenReceiptId(current.receipt.id)
-    } else if (e.key === "a" && current) {
+    } else if (!escalateOnly && e.key === "a" && current) {
       e.preventDefault()
       void decide(current, "confirm")
-    } else if (e.key === "r" && current) {
+    } else if (!escalateOnly && e.key === "r" && current) {
       e.preventDefault()
       void decide(current, "reject")
     } else if (e.key === "u") {
       e.preventDefault()
       void undoNow()
+    } else if (e.key === "e" && current) {
+      e.preventDefault()
+      void decide(current, "escalate")
     }
   }
 
@@ -895,7 +910,7 @@ export function ApprovalCockpit() {
       <div className="flex items-center justify-between border-b border-white/6 px-4 py-2.5">
         <span className="j-label">Awaiting Your Approval</span>
         <div className="flex items-center gap-2">
-          {items.length > 0 && (
+          {items.length > 0 && !escalateOnly && (
             <span className="rounded-full bg-cyan-300/15 px-2 py-0.5 text-[10px] font-black text-cyan-200">
               {/* FLOW-55 ConsequenceTrail: the pending-count odometer, real refetch-driven */}
               <Ticker value={items.length} />
@@ -952,12 +967,13 @@ export function ApprovalCockpit() {
                   cardRefs.current[i] = el
                 }}
                 reduced={reduced}
+                escalateOnly={escalateOnly}
               />
             ))}
           </AnimatePresence>
         </div>
 
-        {batchMode && selectedItems.length > 0 && (
+        {!escalateOnly && batchMode && selectedItems.length > 0 && (
           <div className="mt-3 rounded-xl border border-cyan-300/25 bg-cyan-300/[0.04] p-3">
             <div className="mb-2 flex items-center gap-1">
               {selectedItems.slice(0, 5).map((a, i) => (
@@ -1005,7 +1021,7 @@ export function ApprovalCockpit() {
           only, same `decide()` as every other entry point (keyboard j/k/Enter/
           a/r/u, mouse pills, batch bar). */}
       <AnimatePresence>
-        {mobileActiveAction && (
+        {!escalateOnly && mobileActiveAction && (
           <motion.div
             role="dialog"
             aria-modal="true"
