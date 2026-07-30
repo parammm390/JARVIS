@@ -33,11 +33,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import { CalendarDays, MapPinned, Route, X } from "lucide-react"
-import { jarvisGet } from "../lib/api"
+import { jarvisGet, jarvisPost } from "../lib/api"
 import { Drawer } from "../ui/primitives/Drawer"
 
 type Stop = { visitId: string; technicianId: string; technicianName: string; householdId: string; address: string; latitude: number | null; longitude: number | null; type: string; scheduledAt: string | null; notes: string | null; optimized: { sequence: number } | null }
-type MapData = { date: string; synthetic: boolean; stops: Stop[]; unplacedStops: number; route: { naiveKm: number | null; optimizedKm: number | null; kmSaved: number | null } | null }
+type MapData = { date: string; synthetic: boolean; stops: Stop[]; technicians?: Array<{ id: string; name: string }>; unplacedStops: number; route: { naiveKm: number | null; optimizedKm: number | null; kmSaved: number | null } | null }
 type Household = { household: { address: string }; contacts: Array<{ name: string }>; equipment: Array<{ type: string; model: string | null }>; serviceVisits: unknown[] }
 
 function isoToday() { return new Date().toISOString().slice(0, 10) }
@@ -127,6 +127,7 @@ export function DispatchMapCore({ data, error }: { data: MapData | null; error: 
   const [household, setHousehold] = useState<Household | null>(null)
   const [scrub, setScrub] = useState(0)
   const [scrubbing, setScrubbing] = useState(false)
+  const [assignee, setAssignee] = useState("")
 
   const ordered = useMemo(() => orderedPlaced(data), [data])
 
@@ -323,6 +324,13 @@ export function DispatchMapCore({ data, error }: { data: MapData | null; error: 
               <div className="j-label">Stop</div>
               <div className="mt-1 font-bold">{selected.type.replaceAll("_", " ")}</div>
               <div className="text-white/60">{selected.address}</div>
+            </div>
+            <div className="rounded-xl border border-white/8 bg-white/[.025] p-3">
+              <div className="j-label">Assign</div>
+              <select aria-label="Assign technician" value={assignee} onChange={(event) => setAssignee(event.target.value)} className="mt-2 w-full rounded-lg border border-white/12 bg-[#0b1423] p-2 j-fs-sm text-white">
+                <option value="">Choose technician</option>{data?.technicians?.map((technician) => <option key={technician.id} value={technician.id}>{technician.name}</option>)}
+              </select>
+              <button type="button" disabled={!assignee} onClick={() => void jarvisPost("dispatch/map", { visitId: selected.visitId, technicianId: assignee }).then(() => { setSelected(null); window.location.reload() })} className="mt-2 min-h-11 w-full rounded-lg bg-cyan-300 px-3 j-fs-sm font-black text-slate-950 disabled:opacity-50">Assign visit</button>
             </div>
             {household ? (
               <>
