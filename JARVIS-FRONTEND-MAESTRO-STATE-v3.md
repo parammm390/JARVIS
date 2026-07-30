@@ -48,6 +48,14 @@
 > technician API directly completes a visit and exposes no authoritative work
 > order, arrive, report, or flag operation. Continue with P6.T3 around this
 > blocker; do not represent the required ≤2-tap journey as complete.
+>
+> **P6 close-out is not yet possible.** B-8 through B-11 leave T2, T4, T6,
+> and T8 honestly unchecked. The required full-suite run was started at P6
+> HEAD and first failed in `jarvis-golden-baseline` 1440px after the deliberate
+> T5 type sweep: expected 1440×1841, received 1440×1852, 99,529 pixels / 4%.
+> Artifact: `test-results/jarvis-golden-baseline-gol-f946b-signed-out-jarvis-at-1440px-desktop-chromium/error-context.md`.
+> Do not update that snapshot while the worktree contains the pre-existing
+> unrelated screenshot changes; P6 requires a measured, intentional capture.
 
 ## COMPLETION LEDGER
 
@@ -2620,6 +2628,8 @@ test; none is a live before/after measurement.
 ## SESSION LOG
 
 <!-- Newest first. YYYY-MM-DD · P<n> · tasks done · findings · next task · blockers -->
+
+- **2026-07-30 · P6 partial execution (`07d354e`…`5743475`), not closable.** P6.T1 scoped owner/dispatcher/technician surfaces; P6.T5 completed the global type-token sweep and contrast correction; P6.T7 preserved `/jarvis/classic` then made the isolated one-line owner cutover (`4055b6c`). Source checks found four real plan/source gaps, each documented rather than fabricated: B-8 (no technician work-order/arrive/log/flag APIs), B-9 (status APIs carry no exact onboarding action/destination), B-10 (no authoritative production/showcase/preview mode source), B-11 (the four P6.T8 deletion targets are still needed by the new classic route). Full E2E was started as required but first failed at the legacy 1440 baseline after the intentional type sweep (99,529 pixels / 4%, 11px page-height change); no snapshot was regenerated because the worktree already has unrelated prior-phase screenshot modifications. `npx tsc --noEmit` and `npm run lint` are green at `5743475`. **Next:** resolve the B-8/B-9/B-10/B-11 product contracts, then capture the required P6 role/mode/route evidence and rerun the full suite from a clean snapshot state.
 
 - **2026-07-30 · P6 T1 committed, T2 source-blocked (`07d354e`, `bae364b`).** Pre-flight read the Phase 6 plan/state and verified source before product changes. The prior state’s latest-commit field was stale (`04ab19b`); repository HEAD was `410eb65`, so source won and the discrepancy is recorded. P6.T1 scopes the real Thread by authenticated role: owners retain it; dispatchers receive it with the real DispatchMap and an escalation-only cockpit (no UI approval/rejection path); technicians receive My Day plus the voice-first rail and no approval cockpit. Backend authorization remains unchanged. `npx tsc --noEmit` and `npm run lint` passed. P6.T2 cannot be truthfully implemented: the only technician mutation immediately completes a visit, while the required work-order/arrive/log/flag operations do not exist as authoritative APIs. Recorded as BLOCKER B-8 rather than adding fabricated controls. **Next:** P6.T3 around B-8; do not claim the ≤2-tap technician journey.
 
