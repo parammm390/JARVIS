@@ -576,6 +576,14 @@ What is needed: an authoritative mode contract (server field, route contract, or
 
 ---
 
+### B-11 · 2026-07-30 · P6.T8 · **The four authorized deletion targets are required by the legacy surface that P6.T7 must retain at `/jarvis/classic`.** OPEN.
+
+The P6.T8 targets are all imported directly by `src/components/jarvis/JarvisCommandCenter.tsx`: `CommandBar` (line 40/136), `ApprovalDock` (29/124), `ActivityRail` (38/126/396), and `CommandPalette` (22/276/326). `/jarvis/classic` now intentionally renders `PersonalizedHome`, which renders that command center for a signed-out visitor and other legacy flows. Deleting any target therefore breaks the required legacy access before any replacement snapshot could be a valid proof.
+
+Source and plan conflict: P6.T7 requires legacy access at `/jarvis/classic`; P6.T8 requires deletion of the modules that implement that legacy surface. What is needed: an explicit decision to either retain these dependencies for `/jarvis/classic`, or replace/refactor the classic surface so it no longer imports them. P6.T8 remains unchecked and no unauthorized deletion was made.
+
+---
+
 **Raised earlier, now resolved — kept for history:**
 - ~~No `TEST_OWNER_EMAIL` / `TEST_OWNER_PASSWORD`.~~ **Resolved — see B-3.**
 - ~~Demo-tenant data, ≥ 3 real overdue invoices.~~ **Resolved — 7 real invoices,
@@ -2545,10 +2553,10 @@ test; none is a live before/after measurement.
       **Deviation:** the source's `--j-text-faint: #3d5573` measured 2.45:1, so it was corrected to the measured passing `#64809f`. Every legacy arbitrary size maps to the plan token floor: ≤11px → micro (11px); 11.5–13px → small (12.5px); 13.5–15px → base (14px).
 - [ ] **P6.T6** Modes + non-dismissible chip; preview shows veils not zeros; `"SAMPLE OPS"`
       **Evidence:** `OpsTicker.tsx:83` already renders the literal `SAMPLE OPS` for existing simulated rows. **Deviation:** BLOCKER B-10 — no authoritative mode source, route contract, or prescribed primary-chip copy exists; no client-only mode system shipped.
-- [ ] **P6.T7** **C-17 CUTOVER** — `/jarvis` owners → Thread. **Own commit, one line.**
-      **Evidence (commit SHA):** · **Deviation:**
+- [x] **P6.T7** **C-17 CUTOVER** — `/jarvis` owners → Thread. **Own commit, one line.**
+      **Evidence (commit SHA):** `4055b6c` — exactly one deletion/one insertion in `PersonalizedHome.tsx`, replacing the owner legacy home with `InstructionThreadBridge`. `/jarvis/classic` was prepared first in `45a405a`; `npx tsc --noEmit` and `npm run lint` passed. **Deviation:** the plan says the classic route has a sunset banner but gives no literal banner copy; none was invented.
 - [ ] **P6.T8** Delete `CommandBar` `ApprovalDock` `ActivityRail` `CommandPalette` — each only after a passing replacement snapshot
-      **Evidence (`git rm` list):** · **Deviation:**
+      **Evidence (`git rm` list):** none — deletion would break `/jarvis/classic`. **Deviation:** BLOCKER B-11; `JarvisCommandCenter.tsx` directly imports all four targets and is required by the classic route.
 
 ### Exit gate
 - [ ] Owner `/jarvis` renders the Thread — **Screenshot:**
