@@ -31,7 +31,7 @@
 | | |
 |---|---|
 | **ACTIVE PHASE** | **P7 — Truth, Recovery, Performance & Certification (in progress)** |
-| **Latest verified commit** | `d5d124c` |
+| **Latest verified commit** | `b557432` |
 | **Phases complete** | 1 / 7 (P2 code-complete, exit gate 7/10 green; P3 code-complete, exit gate 3/6 green; P4 code-complete, exit gate 2/5 green; **P5 code-complete, exit gate 3/6 green** — live Flagship B/C plans remain blocked by B-7 and a live barge-in measurement requires an audio input device) |
 | **Sessions logged** | 8 |
 | **Product exists at** | end of P2; cognition visible end of P3; predicted↔actual built end of P4; Flagships B/C, reference clarification, barge-in signal, D3 narration, and thread stacking built and fixture-verified end of P5 |
@@ -69,6 +69,15 @@
 > e2e/jarvis-network-hygiene.spec.ts --project=desktop-chromium` passed 2/2
 > (45.3s), proving the signed-out hygiene path. The remaining nine paths must
 > retain their individually scoped evidence; this does not make T5 green.
+
+> **P7 bounded browser regression evidence is green**: with local test
+> credentials sourced, `e2e/jarvis-p3-restore-after-refresh.spec.ts` plus
+> `e2e/jarvis-d9-a11y.spec.ts` passed 5/5 under desktop Chromium. The four
+> public checks cover sign-in availability, no private facts, reduced motion
+> with no unexpected console errors, and zero CLS; the authenticated refresh
+> test exercises the real browser restore path after intercepting only the
+> unavailable instruction/event responses. It does not certify a live migrated
+> backend reconnect or change P7's unchecked exit-gate line.
 >
 > **P7.T7/T8 evidence is committed** (`59fe48b`, `be8f277`): desktop cold
 > Lighthouse median is 95 perf / 100 a11y, but the first run is 60 perf;
@@ -2626,7 +2635,7 @@ test; none is a live before/after measurement.
 - [x] **P7.T4** Degraded integrations → `PermissionVeil` + setup link; never blank, never zero
       **Evidence:** `710c0e6` · `npx playwright test e2e/jarvis-p7-degraded-integration.spec.ts --project=desktop-chromium` → 1 passed (48.8s); screenshot `qa-screenshots/v3-P7/degraded-integration-recovery-1440.png`. The real receipt recovery path asserts exact provider copy, Connect href, and destination page. First-run provider posture and blocked approval actions render `PermissionVeil` with the same source-backed Connect link; `npx tsc --noEmit && npm run lint` → clean. **Deviation:** source provides a public deployment checklist, not a browser-local credential editor; the UI directs there and never claims it can configure credentials itself.
 - [ ] **P7.T5** All 10 certified paths green
-      **Evidence:** `npx playwright test e2e/jarvis-network-hygiene.spec.ts --project=desktop-chromium` → 2 passed (45.3s): signed-out `/jarvis` made fewer than 5 private requests in 30 seconds and rendered no known API-backed metric. `npx playwright test e2e/jarvis-public.spec.ts --project=desktop-chromium` → 5 passed (16.4s): public preview, setup-unavailable copy, sign-in path, login, and mobile no-overflow. `npx playwright test e2e/jarvis-p7-thread-fixtures.spec.ts --project=desktop-chromium` → 14 passed (23.9s): golden Thread lifecycle + clarification at 1440 and 390. Live re-run: sourced local test credentials and ran `JARVIS_E2E_OUT_DIR=qa-screenshots/v3-P7 npx playwright test e2e/golden-consequence.spec.ts --project=desktop-chromium --workers=1` → 1 passed (32.7s), screenshot `qa-screenshots/v3-P7/consequence-00-plan-1440.png`; its new pre-approval gate verified payments emulator, CRM not-GHL (native is DB-only outbox), and accounting not-QuickBooks, then the live planner returned zero business actions. Live Flagships: `e2e/jarvis-p5-flagship-b-real.spec.ts` → 1 passed (30.1s), and `e2e/jarvis-p5-flagship-c-real.spec.ts` → 1 passed (29.2s); current screenshots `qa-screenshots/v3-P7/flagship-{b,c}-00-plan-1440.png`; both live planners returned zero business actions, so their safety gates approved nothing. Source check for failure+recovery: `ReceiptContent` provides no recovery operation to `RecoveryPanel`, so only Connect is actionable; B-13 records the remaining seven absent affordances. Full `npx playwright test --workers=1` ended failed with 26 snapshot comparisons: two signed-out `/jarvis` baselines, two signed-out `/jarvis/next` baselines, and 22 legacy catalog views (Customers, Inventory, Invoices, Water Compliance, Leads/CRM, Web Research, Activity, Workflows, Voice Console, Command Center, and Production Readiness at desktop/mobile). **Deviation:** the lifecycle/clarification run is visibly labelled fixture evidence; the public run covers signed-out/unconfigured posture. The live reruns did not reach approval because there was no business action; none was approved. The full-suite failures were not accepted or regenerated. These do not substitute for live voice or API-kill paths, so the task remains unchecked.
+      **Evidence:** `npx playwright test e2e/jarvis-network-hygiene.spec.ts --project=desktop-chromium` → 2 passed (45.3s): signed-out `/jarvis` made fewer than 5 private requests in 30 seconds and rendered no known API-backed metric. `npx playwright test e2e/jarvis-public.spec.ts --project=desktop-chromium` → 5 passed (16.4s): public preview, setup-unavailable copy, sign-in path, login, and mobile no-overflow. `npx playwright test e2e/jarvis-p7-thread-fixtures.spec.ts --project=desktop-chromium` → 14 passed (23.9s): golden Thread lifecycle + clarification at 1440 and 390. Live re-run: sourced local test credentials and ran `JARVIS_E2E_OUT_DIR=qa-screenshots/v3-P7 npx playwright test e2e/golden-consequence.spec.ts --project=desktop-chromium --workers=1` → 1 passed (32.7s), screenshot `qa-screenshots/v3-P7/consequence-00-plan-1440.png`; its new pre-approval gate verified payments emulator, CRM not-GHL (native is DB-only outbox), and accounting not-QuickBooks, then the live planner returned zero business actions. Live Flagships: `e2e/jarvis-p5-flagship-b-real.spec.ts` → 1 passed (30.1s), and `e2e/jarvis-p5-flagship-c-real.spec.ts` → 1 passed (29.2s); current screenshots `qa-screenshots/v3-P7/flagship-{b,c}-00-plan-1440.png`; both live planners returned zero business actions, so their safety gates approved nothing. `set -a; source .env.local; set +a; npx playwright test e2e/jarvis-p3-restore-after-refresh.spec.ts e2e/jarvis-d9-a11y.spec.ts --project=desktop-chromium --workers=1` → 5 passed: four public console/a11y-stability checks plus a real-browser refresh/restore test. The restore test intercepts only absent instruction/event endpoint responses, so it is bounded regression coverage, not a live reconnect certification. Source check for failure+recovery: `ReceiptContent` provides no recovery operation to `RecoveryPanel`, so only Connect is actionable; B-13 records the remaining seven absent affordances. Full `npx playwright test --workers=1` ended failed with 26 snapshot comparisons: two signed-out `/jarvis` baselines, two signed-out `/jarvis/next` baselines, and 22 legacy catalog views (Customers, Inventory, Invoices, Water Compliance, Leads/CRM, Web Research, Activity, Workflows, Voice Console, Command Center, and Production Readiness at desktop/mobile). **Deviation:** the lifecycle/clarification run is visibly labelled fixture evidence; the public run covers signed-out/unconfigured posture. The live reruns did not reach approval because there was no business action; none was approved. The full-suite failures were not accepted or regenerated. These do not substitute for live voice or API-kill paths, so the task remains unchecked.
 - [ ] **P7.T6** Automated contradiction sweep — every visible number carries `data-source`
       **Evidence:** `0b8a072` · `npx playwright test e2e/jarvis-contradiction-sweep.spec.ts --project=desktop-chromium --workers=1` → 12 passed (28.5s); targeted lint and `npx tsc --noEmit` → clean. The sweep walks visible, number-bearing `[data-jarvis-fact]` business facts across understood/plan/clarify/approval/execution/receipt fixtures at 1440 and 390, and rejects absent, generic-fixture, or non-selector-named provenance. Thread context, plan, policy, approval, receipt, and workflow-run facts now carry explicit markers and sources. **Deviation:** static copy, addresses, and fixture chrome are not business facts; production role/operational surfaces remain outside this deterministic Thread scope. The universal task remains unchecked.
 - [ ] **P7.T7** Perf: 5 cold Lighthouse desktop + mobile; bundle ≤ 250 KB gz; ≥ 55 fps; event→pixel median + p95
@@ -2685,6 +2694,16 @@ test; none is a live before/after measurement.
   do not render. No inert controls were added. **Next:** continue only with
   source-backed, non-side-effecting certification evidence; do not claim the
   failure+recovery path is green without an authoritative recovery contract.
+
+- **2026-07-30 · P7 bounded browser regression re-verification.**
+  Sourced local test credentials and ran the authenticated refresh/restore spec
+  with the public preview accessibility/stability suite: **5 passed** under
+  desktop Chromium. The restore test uses real authentication, sessionStorage,
+  reload, restore effect, and trace reducer, but intercepts the unavailable
+  instruction/event endpoints; this is recorded as bounded evidence rather
+  than a live backend reconnect. **Next:** retain the open P7.T5/T6/T7 gates
+  unless a source-backed recovery contract, universal provenance coverage, and
+  the failing performance measurements are actually resolved.
 
 - **2026-07-30 · P7.T6 strengthened (`0b8a072`), still not universal certification.**
   The original fixture-root boundary could mask missing per-fact provenance.

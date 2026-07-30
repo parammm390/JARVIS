@@ -2,7 +2,7 @@
 
 Status: **not certified**. This is the required certification record, not a claim
 that every exit gate is green. Evidence below reflects repository state through
-commit `0b8a072`.
+commit `b557432`.
 
 ## Implemented P7 work
 
@@ -12,6 +12,7 @@ commit `0b8a072`.
 | P7.T2 run and step coverage | `5e27b39`; `workflow-presentation.test.ts` covers 8 `RunState` and 6 `StepState` values | implemented |
 | P7.T3 compensation receipt | `1e25f62`; web tests/typecheck/lint clean; FINNOR OS typecheck clean | implemented; DB integration is skipped under B-6 |
 | P7.T4 degraded integration recovery | `710c0e6`, `3e32d91`; targeted Playwright receipt recovery → public setup route | implemented; API-kill path remains unmeasured |
+| P7.T5 receipt recovery audit | `b557432`; receipt data has no authoritative retry/escalate/correct/rollback/assign target, so only source-backed Connect is actionable | failure-and-recovery path remains unchecked (B-13) |
 | P7.T6 contradiction sweep | `0b8a072`; 12/12 desktop/mobile deterministic Thread fixtures pass; generic fixture-root provenance is rejected | bounded fixture coverage; not universal certification |
 
 ## Certified-path ledger
@@ -24,10 +25,22 @@ commit `0b8a072`.
 | Clarification | P7 labelled fixture suite verifies controls at 1440px and 390px; no live tenant path | unchecked |
 | Flagship B | Current guarded live rerun returned zero business actions; no call or approval | unchecked |
 | Flagship C | Current guarded live rerun returned zero business actions; no call or approval | unchecked |
-| Failure and recovery | P7 pure frontend tests; DB test unavailable under B-6 | unchecked |
+| Failure and recovery | P7 pure frontend tests; the receipt recovery audit found no authoritative operation for seven prescribed affordances (B-13) | unchecked |
 | Degraded API mid-run | Recovery → setup route is verified with a labelled receipt fixture; no API-kill/recovery run | unchecked |
 | Signed-out hygiene | `e2e/jarvis-network-hygiene.spec.ts` → 2 passed (45.3s): <5 private requests/30s and zero known private metric | certified |
 | First run | Status-backed scene exists; not recertified in P7 | unchecked |
+
+## Additional bounded browser evidence
+
+`set -a; source .env.local; set +a; npx playwright test
+e2e/jarvis-p3-restore-after-refresh.spec.ts e2e/jarvis-d9-a11y.spec.ts
+--project=desktop-chromium --workers=1` → **5 passed**. This includes four
+public preview checks (sign-in route, no private API facts, reduced-motion
+console-error check, and CLS=0) plus an authenticated refresh/restore browser
+test. The restore test intercepts only the unavailable instruction and event
+responses, then exercises the real sessionStorage pointer, reload, restore
+effect, and trace reducer. It is useful bounded regression evidence, not proof
+of a live migrated-backend reconnect path.
 
 The complete `npx playwright test --workers=1` verification run is red: 26
 snapshot comparisons fail (two `/jarvis`, two `/jarvis/next`, and 22 legacy
@@ -62,6 +75,8 @@ migrated database (B-6).
 - B-5: no approved safe live execution path.
 - B-6: no sanctioned migrated database for integration timing/compensation evidence.
 - B-7: flagship plans cannot be exercised safely/live.
+- B-13: receipt recovery has no authoritative operation contract for seven of
+  the prescribed affordances.
 - A real browser voice call and its microphone-permission path were not exercised for certification.
 - P6 role/mobile/cutover visual evidence remains incomplete and is not certified by P7.
 
