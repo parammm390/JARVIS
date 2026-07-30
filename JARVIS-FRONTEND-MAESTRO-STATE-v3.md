@@ -31,7 +31,7 @@
 | | |
 |---|---|
 | **ACTIVE PHASE** | **P7 — Truth, Recovery, Performance & Certification (in progress)** |
-| **Latest verified commit** | `2216f26` |
+| **Latest verified commit** | `f7c3286` |
 | **Phases complete** | 1 / 7 (P2 code-complete, exit gate 7/10 green; P3 code-complete, exit gate 3/6 green; P4 code-complete, exit gate 2/5 green; **P5 code-complete, exit gate 3/6 green** — live Flagship B/C plans remain blocked by B-7 and a live barge-in measurement requires an audio input device) |
 | **Sessions logged** | 8 |
 | **Product exists at** | end of P2; cognition visible end of P3; predicted↔actual built end of P4; Flagships B/C, reference clarification, barge-in signal, D3 narration, and thread stacking built and fixture-verified end of P5 |
@@ -612,9 +612,9 @@ Correct still requires an inline fact-entry interaction not specified by the
 plan; the compensation receipt explains an actual rollback but has no
 receipt-level view target; and assignment has no receipt-bound assignee target.
 Connect remains public navigation to the source-backed setup destination
-resolved in B-12. The intercepted browser spec is present but has not executed:
-the local `next dev` server never became ready within Playwright's 120-second
-web-server timeout.
+resolved in B-12. The intercepted owner-browser test passes 1/1 against a
+local production server and verifies the Retry request body uses the current
+`expectedVersion`; it never reaches a real mutation.
 
 Rendering buttons without a real operation would violate the plan's own
 backend-authority and anti-fabrication rules. What is needed: an approved
@@ -2684,11 +2684,11 @@ test; none is a live before/after measurement.
   Receipt Retry/Escalate now resolve the durable receipt `workflowRunId` through
   the existing run read-model before using its current optimistic-lock version;
   controls render only for a legal owner transition. Pure recovery tests passed
-  **4/4**, and TypeScript/lint passed. The intercepted owner-browser test did
-  not execute because `next dev` never reached port-3000 readiness within
-  Playwright's 120-second server timeout; no real recovery was called. **Next:**
-  retain B-13 for Correct/View rollback/Assign, and retain all P7 certification
-  gates until their full evidence is available.
+  **4/4**, and TypeScript/lint passed. After `npm run build`, a local `next
+  start` server was ready at port 3000; the intercepted owner-browser test
+  passed **1/1** in 15.8s, proving the exact run-id/version request without a
+  tenant mutation. **Next:** retain B-13 for Correct/View rollback/Assign, and
+  retain all P7 certification gates until their full evidence is available.
 
 - **2026-07-30 · P7.T7 fresh production re-measurement, budget still failing.**
   `npm run build` completed; the `/jarvis/page` app-build-manifest files sum to
