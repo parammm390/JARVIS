@@ -1,8 +1,8 @@
 # JARVIS v3 certification — 2026-07-30
 
 Status: **not certified**. This is the required certification record, not a claim
-that every exit gate is green. Evidence below reflects repository state at commit
-`497c805`.
+that every exit gate is green. Evidence below reflects repository state through
+commit `26185d0`.
 
 ## Implemented P7 work
 
@@ -11,6 +11,7 @@ that every exit gate is green. Evidence below reflects repository state at commi
 | P7.T1 recovery taxonomy | `d85baee`; `npm run test:unit -- recovery.test.ts` → 2 passed; `npx tsc --noEmit`; `npm run lint` | implemented |
 | P7.T2 run and step coverage | `5e27b39`; `workflow-presentation.test.ts` covers 8 `RunState` and 6 `StepState` values | implemented |
 | P7.T3 compensation receipt | `1e25f62`; web tests/typecheck/lint clean; FINNOR OS typecheck clean | implemented; DB integration is skipped under B-6 |
+| P7.T4 degraded integration recovery | `710c0e6`, `3e32d91`; targeted Playwright receipt recovery → public setup route | implemented; API-kill path remains unmeasured |
 
 ## Certified-path ledger
 
@@ -23,8 +24,8 @@ that every exit gate is green. Evidence below reflects repository state at commi
 | Flagship B | B-7: live planner produced no actionable plan | unchecked |
 | Flagship C | B-7: no safe actionable plan approved | unchecked |
 | Failure and recovery | P7 pure frontend tests; DB test unavailable under B-6 | unchecked |
-| Degraded API mid-run | P7.T4 blocked by B-12 (no authoritative setup deep link) | unchecked |
-| Signed-out hygiene | P6 preview evidence exists; not recertified in P7 | unchecked |
+| Degraded API mid-run | Recovery → setup route is verified with a labelled receipt fixture; no API-kill/recovery run | unchecked |
+| Signed-out hygiene | `e2e/jarvis-network-hygiene.spec.ts` → 2 passed (45.3s): <5 private requests/30s and zero known private metric | certified |
 | First run | Status-backed scene exists; not recertified in P7 | unchecked |
 
 ## Measurements
@@ -55,7 +56,6 @@ migrated database (B-6).
 - B-5: no approved safe live execution path.
 - B-6: no sanctioned migrated database for integration timing/compensation evidence.
 - B-7: flagship plans cannot be exercised safely/live.
-- B-12: no authoritative integration setup deep link for P7.T4.
 - A real microphone is unavailable for browser-voice certification.
 - P6 role/mobile/cutover visual evidence remains incomplete and is not certified by P7.
 
