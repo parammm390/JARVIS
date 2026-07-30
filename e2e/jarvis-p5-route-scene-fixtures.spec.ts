@@ -84,6 +84,11 @@ test.describe("P5.T2 — RouteScene, FIXTURE harness (real component tree)", () 
   })
 
   test("a technician/date with zero real stops renders an honest empty state, not a blank map", async ({ page }) => {
+    // Real finding from this phase's own full-suite run: a real sign-in
+    // races against another project's own real sign-in under full
+    // parallelism — single real-session run only, matching this file's own
+    // first test and every other real-session spec's convention.
+    test.skip(test.info().project.name !== "desktop-chromium", "single real-session run")
     mkdirSync(OUT_DIR, { recursive: true })
     const routeAction = {
       id: "fixture-action-route-empty",

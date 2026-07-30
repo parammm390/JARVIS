@@ -17,6 +17,12 @@ test.describe("P5.T5 — unresolved follow-up reference, FIXTURE harness (real c
   test.skip(!email || !password, "TEST_OWNER_EMAIL/TEST_OWNER_PASSWORD not set")
 
   test("renders the literal message and falls through to a real, answerable clarification — never a fake match", async ({ page }) => {
+    // Real finding from this phase's own full-suite run: a real sign-in
+    // races against another project's own real sign-in under full
+    // parallelism (the SAME cause P4's own dd3dd65 commit already
+    // documented) — single real-session run only, matching every other
+    // real-session spec's own established convention.
+    test.skip(test.info().project.name !== "desktop-chromium", "single real-session run")
     mkdirSync(OUT_DIR, { recursive: true })
 
     await page.setViewportSize({ width: 1440, height: 900 })

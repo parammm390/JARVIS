@@ -147,8 +147,14 @@ test.describe("P5.T4 — SchemaCard, FIXTURE harness (real component tree)", () 
     // be present. Raw JSON must NOT be in the DOM until explicitly opened.
     const bodyBefore = await page.locator("body").innerText()
     expect(bodyBefore).not.toMatch(/[{[]\s*"[a-zA-Z]+"\s*:/)
+    // Real robustness finding from this phase's own full-suite run: the
+    // toggle is gated on useJarvisAuth()'s real `role`, which re-fetches
+    // GET /api/me fresh after this navigation (JarvisAuthProvider remounts
+    // on a full page.goto) — under real backend load that can occasionally
+    // take longer than 10s. A generous 20s timeout, not a fixed extra sleep,
+    // since Playwright's own expect() already polls.
     const debugToggle = page.getByRole("button", { name: "Owner debug: view raw payload" })
-    await expect(debugToggle).toBeVisible({ timeout: 10_000 })
+    await expect(debugToggle).toBeVisible({ timeout: 20_000 })
     await debugToggle.click()
     // SchemaCard's own toggle just MOUNTS FallbackRenderer (owner-gated) —
     // FallbackRenderer keeps its own separate, still-collapsed internal

@@ -14,6 +14,12 @@ const OUT_DIR = "qa-screenshots/v3-P5"
 const email = process.env.TEST_OWNER_EMAIL
 const password = process.env.TEST_OWNER_PASSWORD
 
+// Real finding from this phase's own full-suite run: two real sign-ins in
+// the same file race each other under full parallelism (the same cause
+// P4's own dd3dd65 commit already documented) — serial mode, matching every
+// other multi-test real-session spec's own established convention.
+test.describe.configure({ mode: "serial" })
+
 test.describe("P5.T8 — thread stacking, FIXTURE harness (real component tree)", () => {
   test.skip(!email || !password, "TEST_OWNER_EMAIL/TEST_OWNER_PASSWORD not set")
 
@@ -77,6 +83,7 @@ test.describe("P5.T8 — thread stacking, FIXTURE harness (real component tree)"
   })
 
   test("⌘K → Recent threads lists all real threads and jumps to the selected one", async ({ page }) => {
+    test.skip(test.info().project.name !== "desktop-chromium", "single real-session run")
     mkdirSync(OUT_DIR, { recursive: true })
 
     await page.setViewportSize({ width: 1440, height: 1400 })
