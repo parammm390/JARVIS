@@ -7,7 +7,7 @@
 // `VapiSessionProvider` is already mounted once at `src/app/jarvis/layout.tsx`
 // for the whole /jarvis section — this page does not remount it.
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useReducedMotion } from "framer-motion"
 import "../jarvis-theme.css"
 import { KernelProvider, useKernel, type Thread as ThreadData } from "../kernel/store"
@@ -21,6 +21,7 @@ import { CommandRail } from "./CommandRail"
 import { ReceiptContent } from "../lib/ReceiptDrawer"
 import { derivePresence } from "../kernel/presence"
 import { THREAD_FIXTURES, FIXTURE_STATE_KEYS } from "./thread-fixtures"
+import { D3_LONG_EXECUTION_MS, D3_NARRATION_TEXT, shouldFireD3Narration } from "../lib/d3-narration"
 import type { Truth } from "../kernel/types"
 
 function LoadingGate() {
@@ -162,11 +163,17 @@ function ThreadBody({
   )
 }
 
+// jarvis-v3 P5.T7 — D3 pilot: "while a long action runs, JARVIS may narrate
+// once via say. Best-effort." §6⑥'s own "silent during execution — do not
+// narrate STEPS" forbids per-step chatter, not a single, content-free
+// check-in — the decision/content details live in `lib/d3-narration.ts`
+// (pure, unit-tested; BLOCKER B-1 means this effect itself cannot be).
 function ThreadPage() {
   const kernel = useKernel()
   const voice = useVapiSession()
   const reducedMotion = useReducedMotion() ?? false
   const [standaloneReceiptId, setStandaloneReceiptId] = useState<string | null>(null)
+  const executingNarratedThreadIdRef = useRef<string | null>(null)
 
   useEffect(() => {
     const match = window.location.hash.match(/^#receipt-([0-9a-fA-F-]{36})$/)
@@ -189,6 +196,21 @@ function ThreadPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kernel.thread?.machine.instructionState])
+
+  // jarvis-v3 P5.T7 — D3 pilot (see D3_LONG_EXECUTION_MS's own header
+  // comment for why this is content-free and one-shot). Separate effect from
+  // the plan/outcome narration above: this one needs a real elapsed-time
+  // trigger, not a state-transition edge.
+  useEffect(() => {
+    const thread = kernel.thread
+    if (!shouldFireD3Narration(thread?.id, thread?.machine.instructionState, executingNarratedThreadIdRef.current)) return
+    const timer = window.setTimeout(() => {
+      executingNarratedThreadIdRef.current = thread!.id
+      voice.say(D3_NARRATION_TEXT)
+    }, D3_LONG_EXECUTION_MS)
+    return () => window.clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kernel.thread?.id, kernel.thread?.machine.instructionState])
 
   if (standaloneReceiptId) {
     return (

@@ -2445,8 +2445,54 @@ test; none is a live before/after measurement.
       input device (established P2/P3); per this session's own binding,
       left unchecked rather than simulated, not worked around with a fake
       media device.
-- [ ] **P5.T7** **D3 pilot** — narration during long actions, best-effort, **or cut with the reason recorded**
-      **Evidence:** · **Deviation:**
+- [x] **P5.T7** **D3 pilot** — narration during long actions, best-effort, **or cut with the reason recorded**
+      **Evidence:** Shipped as a pilot, not cut — reasoned in full below. New
+      `lib/d3-narration.ts` (`shouldFireD3Narration`, pure, 5 unit tests) +
+      a new effect in `bridge/ThreadBridge.tsx`: fires `voice.say()` **once**
+      per thread, only after `D3_LONG_EXECUTION_MS` (8000ms) of continuous
+      `executing` state (a fast action finishes before the timer and gets no
+      narration at all — never a running commentary). Content is
+      deliberately fixed and generic — *"Still working on this — I'll let
+      you know when it's done."* — never a specific step name or count,
+      which is the one design choice that makes "best-effort, never a
+      guarantee" honest given §3.3-D3's own verified-absent ordering
+      guarantee: a claim about a SPECIFIC step could be stale by the time it
+      plays; a content-free check-in cannot lie regardless of timing.
+      Reconciled against §6⑥'s own "silent during execution — do not
+      narrate STEPS": read literally, "steps" (plural, per-step chatter) is
+      what's forbidden, not a single check-in — recorded as a deviation
+      below, not silently assumed. Real runtime evidence:
+      `e2e/jarvis-p5-d3-narration-fixtures.spec.ts` — the real effect,
+      mounted through the real Thread/fixture tree, waits past its own real
+      8000ms delay with zero (unfiltered-noise) console/page errors.
+      ```
+      $ npx tsc --noEmit
+      TSC_EXIT=0
+      $ npm run lint
+      ✔ No ESLint warnings or errors
+      $ npx vitest run
+      Test Files  18 passed (18) · Tests  270 passed (270)
+      $ npx playwright test e2e/jarvis-p5-d3-narration-fixtures.spec.ts --project=desktop-chromium
+      1 passed (29.2s)
+      ```
+      **Deviation:** (a) §6⑥'s "do not narrate steps" vs. §8 P5.T7's own
+      ask to pilot narration during execution — reconciled as described
+      above (steps=plural per-step chatter forbidden; one generic check-in
+      is what's being piloted), per §0.2 rule 1 (source/plan text governs,
+      recorded not silently picked). (b) The 8000ms threshold is this
+      session's own reasoned choice (the plan names no specific number for
+      "long action") — chosen as a round, defensible "this is taking a
+      while" duration, not measured against any real execution-time data
+      (this session's own live attempts never reached a real approved
+      execution — BLOCKER B-5/B-7). (c) **Honestly unchecked, per this
+      session's own explicit instruction:** whether the narration's real
+      audio timing is ever actually "wrong" relative to real step progress
+      — this environment has no live microphone/voice call (established
+      P2/P3) to observe it with, so the plan's own "cut it if testing shows
+      it's wrong" trigger was never something this session could evaluate
+      either way. Shipped as designed specifically to be safe regardless
+      (content-free), not cut, with this reasoning recorded rather than
+      guessed.
 - [ ] **P5.T8** Thread stacking; `⌘K → recent threads`
       **Evidence:** · **Deviation:**
 
