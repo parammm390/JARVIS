@@ -31,7 +31,7 @@
 | | |
 |---|---|
 | **ACTIVE PHASE** | **P7 — Truth, Recovery, Performance & Certification (in progress)** |
-| **Latest verified commit** | `8e7de50` |
+| **Latest verified commit** | `34bdee1` |
 | **Phases complete** | 1 / 7 (P2 code-complete, exit gate 7/10 green; P3 code-complete, exit gate 3/6 green; P4 code-complete, exit gate 2/5 green; **P5 code-complete, exit gate 3/6 green** — live Flagship B/C plans remain blocked by B-7 and a live barge-in measurement requires an audio input device) |
 | **Sessions logged** | 8 |
 | **Product exists at** | end of P2; cognition visible end of P3; predicted↔actual built end of P4; Flagships B/C, reference clarification, barge-in signal, D3 narration, and thread stacking built and fixture-verified end of P5 |
@@ -53,7 +53,7 @@
 > requirements whose visual evidence is absent.
 >
 > **P7.T6 has strengthened bounded fixture evidence** (`0b8a072`): the
-> contradiction sweep passes 12/12 at 1440 and 390 across all deterministic
+> contradiction sweep passes 14/14 at 1440 and 390 across all deterministic
 > Thread fixtures. It checks each marked, number-bearing business fact for a
 > selector-named `data-source`; the generic fixture root is expressly rejected.
 > Static copy, addresses, and fixture chrome are not business facts. This is not
@@ -2638,7 +2638,7 @@ test; none is a live before/after measurement.
 - [ ] **P7.T5** All 10 certified paths green
       **Evidence:** `npx playwright test e2e/jarvis-network-hygiene.spec.ts --project=desktop-chromium` → 2 passed (45.3s): signed-out `/jarvis` made fewer than 5 private requests in 30 seconds and rendered no known API-backed metric. `npx playwright test e2e/jarvis-public.spec.ts --project=desktop-chromium` → 5 passed (16.4s): public preview, setup-unavailable copy, sign-in path, login, and mobile no-overflow. `npx playwright test e2e/jarvis-p7-thread-fixtures.spec.ts --project=desktop-chromium` → 14 passed (23.9s): golden Thread lifecycle + clarification at 1440 and 390. Live re-run: sourced local test credentials and ran `JARVIS_E2E_OUT_DIR=qa-screenshots/v3-P7 npx playwright test e2e/golden-consequence.spec.ts --project=desktop-chromium --workers=1` → 1 passed (32.7s), screenshot `qa-screenshots/v3-P7/consequence-00-plan-1440.png`; its new pre-approval gate verified payments emulator, CRM not-GHL (native is DB-only outbox), and accounting not-QuickBooks, then the live planner returned zero business actions. Live Flagships: `e2e/jarvis-p5-flagship-b-real.spec.ts` → 1 passed (30.1s), and `e2e/jarvis-p5-flagship-c-real.spec.ts` → 1 passed (29.2s); current screenshots `qa-screenshots/v3-P7/flagship-{b,c}-00-plan-1440.png`; both live planners returned zero business actions, so their safety gates approved nothing. `set -a; source .env.local; set +a; npx playwright test e2e/jarvis-p3-restore-after-refresh.spec.ts e2e/jarvis-d9-a11y.spec.ts --project=desktop-chromium --workers=1` → 5 passed: four public console/a11y-stability checks plus a real-browser refresh/restore test. The restore test intercepts only absent instruction/event endpoint responses, so it is bounded regression coverage, not a live reconnect certification. Source check for failure+recovery: `ReceiptContent` provides no recovery operation to `RecoveryPanel`, so only Connect is actionable; B-13 records the remaining seven absent affordances. Full `npx playwright test --workers=1` ended failed with 26 snapshot comparisons: two signed-out `/jarvis` baselines, two signed-out `/jarvis/next` baselines, and 22 legacy catalog views (Customers, Inventory, Invoices, Water Compliance, Leads/CRM, Web Research, Activity, Workflows, Voice Console, Command Center, and Production Readiness at desktop/mobile). **Deviation:** the lifecycle/clarification run is visibly labelled fixture evidence; the public run covers signed-out/unconfigured posture. The live reruns did not reach approval because there was no business action; none was approved. The full-suite failures were not accepted or regenerated. These do not substitute for live voice or API-kill paths, so the task remains unchecked.
 - [ ] **P7.T6** Automated contradiction sweep — every visible number carries `data-source`
-      **Evidence:** `0b8a072` · `npx playwright test e2e/jarvis-contradiction-sweep.spec.ts --project=desktop-chromium --workers=1` → 12 passed (28.5s); targeted lint and `npx tsc --noEmit` → clean. The sweep walks visible, number-bearing `[data-jarvis-fact]` business facts across understood/plan/clarify/approval/execution/receipt fixtures at 1440 and 390, and rejects absent, generic-fixture, or non-selector-named provenance. Thread context, plan, policy, approval, receipt, and workflow-run facts now carry explicit markers and sources. **Deviation:** static copy, addresses, and fixture chrome are not business facts; production role/operational surfaces remain outside this deterministic Thread scope. The universal task remains unchecked.
+      **Evidence:** `0b8a072` + current uncommitted P7.T6 extension · `npx tsc --noEmit && npx playwright test e2e/jarvis-contradiction-sweep.spec.ts --project=desktop-chromium --workers=1` → 14 passed. The sweep walks visible, number-bearing `[data-jarvis-fact]` business facts across rest/understood/plan/clarify/approval/execution/receipt fixtures at 1440 and 390, and rejects absent, generic-fixture, or non-selector-named provenance. The at-rest overdue and pending values now declare their real selector origins, `selectOverdueInvoices` and `selectPendingApprovals`; Thread context, plan, policy, approval, receipt, and workflow-run facts retain explicit markers and sources. **Deviation:** static copy, addresses, and fixture chrome are not business facts; production role/operational surfaces remain outside this deterministic Thread scope. The universal task remains unchecked.
 - [ ] **P7.T7** Perf: 5 cold Lighthouse desktop + mobile; bundle ≤ 250 KB gz; ≥ 55 fps; event→pixel median + p95
       **Evidence:** `59fe48b` · five cold production-build desktop runs: perf `60,95,95,94,95`, a11y `100×5`; five mobile runs: perf `72×5`, a11y `100×5`. P7 follow-up: `npm run build` then a Node gzip sum of `.next/app-build-manifest.json`'s `/jarvis/page` JS files measured **303,715 bytes** after deferring non-owner role scenes, the Supabase browser SDK, the Orb renderer, execution/receipt surfaces, and development-only fixture data from the initial graph—down from the fresh pre-change **526,085 bytes** (−222,370 bytes / 42.3%). `npx tsc --noEmit && npm run lint` passed; `e2e/jarvis-p7-thread-fixtures.spec.ts` → 14 passed and `e2e/jarvis-public.spec.ts` → 5 passed under desktop Chromium. Full per-run metrics are in `docs/jarvis-v3-certification-2026-07-30.md`. **Deviation:** mobile perf still fails ≥85 and initial JS is still >250 KB; six-lane fps and event-to-pixel cannot be measured without B-5/B-6 evidence, so this task remains unchecked.
 - [x] **P7.T8** `docs/jarvis-v3-certification-<date>.md` + `docs/motion-promoted.md` + the shipped voice table
@@ -2734,6 +2734,14 @@ test; none is a live before/after measurement.
   Targeted lint and TypeScript pass. Static copy, addresses, fixture chrome, and
   unscanned production role/operations surfaces remain out of this bounded test;
   P7.T6 and the universal exit gate stay open.
+
+- **2026-07-30 · P7.T6 at-rest selector coverage extended, still not universal certification.**
+  The same real ThreadBody now renders the at-rest prompt through explicit
+  `selectOverdueInvoices` and `selectPendingApprovals` fact boundaries. The
+  dev-only, visibly labelled `rest` fixture exercises that branch with the
+  plan's existing fixture values; the contradiction sweep passes **14/14** at
+  desktop and mobile, and TypeScript passes. This adds a source-backed path but
+  does not turn the bounded Thread sweep into the plan's whole-product proof.
 
 - **2026-07-30 · full Playwright verification run, not green.**
   `npx playwright test --workers=1` completed with 26 failures, all snapshot

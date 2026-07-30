@@ -100,16 +100,25 @@ function StandaloneReceiptView({ receiptId, onBack }: { receiptId: string; onBac
   )
 }
 
-function RestPrompt() {
-  const kernel = useKernel()
-  const overdue = kernel.overdueInvoices
-  const pending = kernel.pendingApprovals
-  const segments: string[] = []
+function RestPrompt({
+  overdue,
+  pending,
+}: {
+  overdue: Truth<{ count: number; totalUsd: number }>
+  pending: Truth<number>
+}) {
+  const segments: Array<{ source: "selectOverdueInvoices" | "selectPendingApprovals"; text: string }> = []
   if (overdue.status === "known" || overdue.status === "stale") {
-    segments.push(`${overdue.value.count} invoice${overdue.value.count === 1 ? "" : "s"} overdue · $${overdue.value.totalUsd.toLocaleString("en-US")}`)
+    segments.push({
+      source: "selectOverdueInvoices",
+      text: `${overdue.value.count} invoice${overdue.value.count === 1 ? "" : "s"} overdue · $${overdue.value.totalUsd.toLocaleString("en-US")}`,
+    })
   }
   if (pending.status === "known" || pending.status === "stale" || pending.status === "partial") {
-    segments.push(`${pending.value} approval${pending.value === 1 ? "" : "s"} waiting`)
+    segments.push({
+      source: "selectPendingApprovals",
+      text: `${pending.value} approval${pending.value === 1 ? "" : "s"} waiting`,
+    })
   }
   const errored = overdue.status === "unavailable"
   return (
@@ -118,7 +127,16 @@ function RestPrompt() {
       {errored ? (
         <p className="j-fs-sm mt-2 text-[color:var(--j-red)]">Can&rsquo;t reach JARVIS. <button type="button" className="underline">Retry</button></p>
       ) : (
-        segments.length > 0 && <p className="j-fs-sm mt-2 text-[color:var(--j-text-dim)]">{segments.join(" · ")}</p>
+        segments.length > 0 && (
+          <p className="j-fs-sm mt-2 text-[color:var(--j-text-dim)]">
+            {segments.map((segment, index) => (
+              <span key={segment.source}>
+                {index > 0 && " · "}
+                <span data-jarvis-fact data-source={segment.source}>{segment.text}</span>
+              </span>
+            ))}
+          </p>
+        )
       )}
     </div>
   )
@@ -135,6 +153,7 @@ function ThreadBody({
   threadHistory,
   presence,
   overdueInvoices,
+  pendingApprovals,
   activeRunCount,
   reducedMotion,
   onCancel,
@@ -149,6 +168,7 @@ function ThreadBody({
   threadHistory: ThreadData[]
   presence: ReturnType<typeof derivePresence>
   overdueInvoices: Truth<{ count: number; totalUsd: number }>
+  pendingApprovals: Truth<number>
   activeRunCount: number
   reducedMotion: boolean
   onCancel: () => void
@@ -189,7 +209,7 @@ function ThreadBody({
           <main className="mx-auto max-w-lg px-4 pb-32 pt-8"><MyDay /></main>
         ) : (
           <>
-            {!thread && <RestPrompt />}
+            {!thread && <RestPrompt overdue={overdueInvoices} pending={pendingApprovals} />}
             {thread && <ThreadStack thread={thread} threadHistory={threadHistory} onCancel={onCancel} onAnswer={onAnswer} onSkip={onSkip} />}
             {role === "dispatcher" && <aside className="mx-auto max-w-[720px] px-4 pb-32"><DispatchMap /></aside>}
           </>
@@ -268,6 +288,7 @@ function ThreadPage({ role }: { role: JarvisRole }) {
       threadHistory={kernel.threadHistory}
       presence={kernel.presence}
       overdueInvoices={kernel.overdueInvoices}
+      pendingApprovals={kernel.pendingApprovals}
       activeRunCount={kernel.selectorInput.runs.length}
       reducedMotion={reducedMotion}
       onCancel={kernel.cancelThread}
@@ -283,7 +304,7 @@ function ThreadPage({ role }: { role: JarvisRole }) {
 function PreviewThread() {
   const kernel = useKernel()
   const reducedMotion = useReducedMotion() ?? false
-  return <><ThreadBody thread={null} threadHistory={[]} presence={kernel.presence} overdueInvoices={kernel.overdueInvoices} activeRunCount={0} reducedMotion={reducedMotion} onCancel={() => {}} onAnswer={() => {}} onSkip={() => {}} showRail={false} mode={kernel.mode} /><a href="/jarvis/login" className="fixed bottom-6 left-1/2 z-30 -translate-x-1/2 rounded-full bg-teal-300 px-4 py-2 j-fs-sm font-black text-slate-950">Sign in</a></>
+  return <><ThreadBody thread={null} threadHistory={[]} presence={kernel.presence} overdueInvoices={kernel.overdueInvoices} pendingApprovals={kernel.pendingApprovals} activeRunCount={0} reducedMotion={reducedMotion} onCancel={() => {}} onAnswer={() => {}} onSkip={() => {}} showRail={false} mode={kernel.mode} /><a href="/jarvis/login" className="fixed bottom-6 left-1/2 z-30 -translate-x-1/2 rounded-full bg-teal-300 px-4 py-2 j-fs-sm font-black text-slate-950">Sign in</a></>
 }
 
 // ---------------------------------------------------------------------------
@@ -312,16 +333,17 @@ function ThreadFixtureHarness({ fixtureKey }: { fixtureKey: string }) {
 
   if (!fixture) return null
   const { thread } = fixture
-  if (!thread) {
+  if (!thread && fixtureKey !== "rest") {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#04070f] text-center text-white">
         Unknown fixture &ldquo;{fixtureKey}&rdquo;. Known: {fixture.keys.join(", ")}
       </div>
     )
   }
+  const fixtureThread = thread ?? null
   const presence = derivePresence({
     transport: "polling",
-    activeInstructionState: thread.machine.instructionState,
+    activeInstructionState: fixtureThread?.machine.instructionState ?? null,
     terminalDecayActive: true,
     voiceSpeaking: false,
     micOpen: false,
@@ -330,11 +352,12 @@ function ThreadFixtureHarness({ fixtureKey }: { fixtureKey: string }) {
   })
   return (
     <ThreadBody
-      thread={thread}
+      thread={fixtureThread}
       threadHistory={fixture.history}
       presence={presence}
       overdueInvoices={{ status: "known", value: { count: 6, totalUsd: 4200 }, source: "fixture", atMs: 0 }}
-      activeRunCount={thread.machine.instructionState === "executing" ? thread.nodes.length : 0}
+      pendingApprovals={{ status: "known", value: 2, source: "fixture", atMs: 0 }}
+      activeRunCount={fixtureThread?.machine.instructionState === "executing" ? fixtureThread.nodes.length : 0}
       reducedMotion={reducedMotion}
       onCancel={() => {}}
       onAnswer={() => {}}

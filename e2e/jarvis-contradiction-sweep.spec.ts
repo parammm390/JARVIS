@@ -6,7 +6,7 @@ import { test, expect } from "@playwright/test"
 // addresses, and fixture chrome are deliberately out of scope: they are not
 // business facts. The labelled fixture root establishes fixture mode, not fact
 // provenance, so it is expressly insufficient for this check.
-const FIXTURES = ["understood", "plan", "clarify", "approval", "execution", "receipt"] as const
+const FIXTURES = ["rest", "understood", "plan", "clarify", "approval", "execution", "receipt"] as const
 const WIDTHS = [
   { width: 1440, height: 900 },
   { width: 390, height: 844 },

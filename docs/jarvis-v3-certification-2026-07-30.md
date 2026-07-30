@@ -2,7 +2,7 @@
 
 Status: **not certified**. This is the required certification record, not a claim
 that every exit gate is green. Evidence below reflects repository state through
-commit `b557432`.
+commit `34bdee1` and the P7.T6 evidence recorded in the state file.
 
 ## Implemented P7 work
 
@@ -13,7 +13,7 @@ commit `b557432`.
 | P7.T3 compensation receipt | `1e25f62`; web tests/typecheck/lint clean; FINNOR OS typecheck clean | implemented; DB integration is skipped under B-6 |
 | P7.T4 degraded integration recovery | `710c0e6`, `3e32d91`; targeted Playwright receipt recovery → public setup route | implemented; API-kill path remains unmeasured |
 | P7.T5 receipt recovery audit | `b557432`; receipt data has no authoritative retry/escalate/correct/rollback/assign target, so only source-backed Connect is actionable | failure-and-recovery path remains unchecked (B-13) |
-| P7.T6 contradiction sweep | `0b8a072`; 12/12 desktop/mobile deterministic Thread fixtures pass; generic fixture-root provenance is rejected | bounded fixture coverage; not universal certification |
+| P7.T6 contradiction sweep | `0b8a072` plus current extension; 14/14 desktop/mobile deterministic Thread fixtures pass, including the at-rest selector facts; generic fixture-root provenance is rejected | bounded fixture coverage; not universal certification |
 
 ## Certified-path ledger
 

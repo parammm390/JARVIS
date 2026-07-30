@@ -252,7 +252,10 @@ export const THREAD_FIXTURES: Record<string, Thread> = {
   }),
 }
 
-export const FIXTURE_STATE_KEYS = Object.keys(THREAD_FIXTURES)
+// `rest` intentionally has no Thread object: it exercises the same at-rest
+// ThreadBody branch used before an instruction exists, with the harness's
+// visibly labelled selector fixture values.
+export const FIXTURE_STATE_KEYS = ["rest", ...Object.keys(THREAD_FIXTURES)]
 
 // jarvis-v3 P5.T8 — thread stacking. A parallel, opt-in map (most fixture
 // keys have no history — an empty array, the honest default for a session
