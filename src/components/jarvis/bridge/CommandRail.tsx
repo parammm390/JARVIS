@@ -114,8 +114,17 @@ export function CommandRail() {
   }, [voice.transcript])
 
   useEffect(() => {
-    kernel.setVoiceIndicators({ micOpen: voice.voiceState === "live" || voice.voiceState === "connecting", speaking: voice.voiceState === "speaking" })
-  }, [voice.voiceState, kernel])
+    // jarvis-v3 P5.T6 (V4 barge-in) — real, live fix: §4.5's own rule is
+    // "user speaking -> hearing"; `voice.voiceState === "speaking"` is the
+    // ASSISTANT's own speaking turn (verified against the Vapi SDK's real
+    // event semantics — see useVapiSession.tsx's own header note), not the
+    // user's. `voice.userSpeaking` (real local-mic amplitude crossing the
+    // same threshold the mic watchdog already trusts) is the correct signal
+    // — this is also what makes a real barge-in show `hearing` promptly
+    // instead of staying stuck on whatever the assistant's own turn state
+    // was a moment ago.
+    kernel.setVoiceIndicators({ micOpen: voice.voiceState === "live" || voice.voiceState === "connecting", speaking: voice.userSpeaking })
+  }, [voice.voiceState, voice.userSpeaking, kernel])
 
   const showingPartial = Boolean(voice.partialTranscript)
   const commitVariants = railCommitVariants(false)

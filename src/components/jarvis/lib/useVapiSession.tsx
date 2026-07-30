@@ -7,6 +7,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react"
 import { sfx, setVoiceLive } from "../sound"
+import { isRealMicActivity } from "./barge-in"
 
 const VAPI_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPI_PUBLIC_KEY ?? "ab65d198-5573-4d95-b7f2-4fd8db6f85fc"
 const VAPI_ASSISTANT_ID = process.env.NEXT_PUBLIC_VAPI_ASSISTANT_ID ?? "59863f35-236e-4451-9cb8-cd8df4a3c440"
@@ -82,8 +83,10 @@ const MIC_SILENCE_WARNING_MS = 8000
 // handleLocalAudioLevel) reports the REAL local microphone level — confirmed by
 // reading the SDK source. `volume-level` (handleRemoteParticipantsAudioLevel) is
 // the assistant's own output level and says nothing about whether the user's mic
-// is working; an earlier pass here mistakenly watched that one instead.
-const MIC_ACTIVITY_THRESHOLD = 0.02
+// is working; an earlier pass here mistakenly watched that one instead. The
+// activity threshold itself lives in `lib/barge-in.ts` (jarvis-v3 P5.T6 — a
+// pure, unit-tested module, BLOCKER B-1), shared with the barge-in decision
+// below rather than a second copy of the same number.
 
 // Real structural bug, found on top of the mic-release fix above: this hook used
 // to be called independently in BOTH JarvisCommandCenter.tsx and bridge/Bridge.tsx
@@ -110,6 +113,21 @@ function useVapiSessionInternal() {
   // against).
   const [localVolumeLevel, setLocalVolumeLevel] = useState(0)
   const [transcript, setTranscript] = useState<TranscriptLine[]>([])
+  // jarvis-v3 P5.T6 — V4 barge-in. Real finding, verified against the SDK's
+  // own type declarations (node_modules/@vapi-ai/web/dist/vapi.d.ts): Vapi's
+  // `speech-start`/`speech-end` events are the ASSISTANT's own speaking turn
+  // (confirmed by this file's own pre-existing mic-watchdog comment, "'live',
+  // not 'speaking' — that's Finnor's turn") — there is no separate "user
+  // speech" event. The only real, live signal for "is the user's own mic
+  // currently active" is `local-volume-level` crossing a real amplitude
+  // threshold — the SAME constant the mic watchdog already treats as real
+  // activity, not a second invented threshold. `userSpeaking` is that signal,
+  // and is what §4.5's own "hearing" presence rule actually means ("user
+  // speaking -> hearing") — CommandRail.tsx previously wired `speaking` off
+  // `voiceState === "speaking"` (the assistant), a real, live semantic bug
+  // this task also fixes at its one call site.
+  const [userSpeaking, setUserSpeaking] = useState(false)
+  const userSpeakingRef = useRef(false)
   // P2.T3 — V1: partial (non-final) transcripts were previously read and
   // immediately discarded (`transcriptType !== "final"` never matched the old
   // handler's condition). Only the user's own partial is meaningful to stream
@@ -201,6 +219,8 @@ function useVapiSessionInternal() {
           setVoiceLive(false) // F11.T1 — real call-end signal, restores master gain
           setPartialTranscript(null)
           setLocalVolumeLevel(0)
+          userSpeakingRef.current = false
+          setUserSpeaking(false)
         })
         vapi.on("error", (err?: unknown) => {
           const message =
@@ -225,9 +245,25 @@ function useVapiSessionInternal() {
         vapi.on("local-volume-level", (m?: unknown) => {
           const level = typeof m === "number" ? m : 0
           setLocalVolumeLevel(level)
-          if (level > MIC_ACTIVITY_THRESHOLD) {
+          if (isRealMicActivity(level)) {
             lastAudioAtRef.current = Date.now()
             setMicSilenceWarning(false)
+          }
+          // jarvis-v3 P5.T6 (V4 barge-in): real, live amplitude crossing the
+          // SAME activity threshold the mic watchdog already trusts — this is
+          // the only real "the user is talking right now" signal this SDK
+          // exposes (see this file's own header note above `userSpeaking`).
+          // Updated synchronously with every local-volume-level tick (Vapi's
+          // own real-time cadence, not a poll this app controls), so the
+          // Orb's presence reacts as fast as the browser receives that data —
+          // no artificial delay added here. Server-side VAD +
+          // `interruptionsEnabled: true` (already set on every `say()` call,
+          // §3.2) is the actual cancellation mechanism; this is the app's own
+          // reactive read of the same real signal, not a duplicate command.
+          const speakingNow = isRealMicActivity(level)
+          if (speakingNow !== userSpeakingRef.current) {
+            userSpeakingRef.current = speakingNow
+            setUserSpeaking(speakingNow)
           }
         })
         vapi.on("speech-start", () => setVoiceState("speaking"))
@@ -371,6 +407,7 @@ function useVapiSessionInternal() {
     voiceState,
     volumeLevel,
     localVolumeLevel,
+    userSpeaking,
     transcript,
     partialTranscript,
     callDurationSec,

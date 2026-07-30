@@ -217,6 +217,7 @@ Legend ⬜ not started · 🟡 in progress · ✅ complete · 🔴 blocked
 | **NEW-10** | LOW | `bridge/ThreadBlocks.tsx`'s `ThreadApprovalCockpit` header is a golden-journey-specific literal ("N actions · $X · N customers will be texted", §6⑤) applied to every thread regardless of action type — inaccurate for Flagship B (no texting involved at all) and for any non-monetary action (renders "$0") | P5.T3 | ✅ | Found while building P5.T1's fixture screenshot. Fixed in P5.T3: a single-node `bulk_notify_existing_customers` thread now renders a dedicated `BlastRadiusHeader` (real count or the literal "An unknown number of customers will be texted."); every other thread shape (golden journey, Flagship B) keeps the original literal unchanged — bounded fix, not a full generalization to all 41 action types (that remains out of scope). |
 | **NEW-11** | MED | Real backend behaviour: the live LLM planner produces a genuine 0-action plan for the plan's own exact Flagship C phrase ("Tell every customer on a softener plan that we're doing free hardness checks next month") in 3 of 4 real attempts this session; the 4th (screenshotted) was a real, working `clarification_request` asking for explicit household IDs/phone numbers | — | 🔴 | Found via `e2e/jarvis-p5-flagship-c-real.spec.ts`, run live 4 times this session. All 4 network captures showed zero non-clarification business actions, consistent with (but for attempts 1-3, whose screenshots were overwritten by later runs, not individually distinguishable from) the same clarification behaviour attempt 4 showed clearly. Out of scope (planner/model behaviour) — documented, not fixed. See **BLOCKER B-7**'s updated entry. |
 | **NEW-12** | MED | Real backend behaviour: the live LLM planner, given a genuine follow-up instruction in the same session ("Actually, make that Thursday instead" after "Book a water test for the Hendersons this week"), re-asked the EXACT SAME clarifying question it asked for the first turn ("What is the phone number or household ID of the Hendersons?") — no visible sign of reference resolution against session memory | — | 🔴 | Found via `e2e/jarvis-p5-followup-real.spec.ts`, 2 real submissions, same session, same tenant. Screenshotted both turns (`qa-screenshots/v3-P5/followup-{00-first-turn,01-second-turn}-1440.png`) — visually identical clarifications. Out of scope to fix directly (planner/memory behaviour, not frontend code) — but it is exactly the finding P5.T5 asked this session to verify, and it directly motivated building the new `kernel/followup-reference.ts` fallback (P5.T5's own real deliverable) for the case the backend gives NOTHING (not even a clarification) to a reference-shaped instruction. |
+| **NEW-13** | MED | `bridge/CommandRail.tsx`'s `setVoiceIndicators({..., speaking: voice.voiceState === "speaking"})` fed the ASSISTANT's own speaking turn into the kernel's `voiceSpeaking` flag, which `kernel/presence.ts` maps to Orb presence `"hearing"` — but §4.5's own binding rule is "**user** speaking → hearing." Verified against `@vapi-ai/web`'s own type declarations: `speech-start`/`speech-end` are the assistant's turn (matches this file's own pre-existing mic-watchdog comment, "'live', not 'speaking' — that's Finnor's turn"); there is no separate SDK event for user speech. Real, live consequence: the Orb could show "hearing" (implying it perceives the user) precisely when JARVIS itself was the one talking. | P5.T6 | ✅ | Fixed in P5.T6, needed to build barge-in correctly in the first place (distinguishing "user talking" from "assistant talking" is foundational to reacting to a real barge-in). New `lib/barge-in.ts`'s `isRealMicActivity()` (real local-mic amplitude vs. the pre-existing threshold) drives a new `userSpeaking` state in `useVapiSession.tsx`; `CommandRail.tsx` now wires `speaking: voice.userSpeaking` instead. `presence.test.ts`'s own existing pure tests already prove the derivation is correct once given the right input — this fixes the input. |
 
 Deliberately **not** fixed in v3 (out of scope, recorded honestly): C-04 partial, C-12, C-16, C-18, C-19, C-20 — these concern legacy surfaces that §7.4 leaves at `/jarvis/classic`.
 
@@ -2407,8 +2408,43 @@ test; none is a live before/after measurement.
       exactly one case (genuinely empty plan, no clarification at all) so
       it can only ever ADD a more honest message, never intercept or alter
       a real backend clarification.
-- [ ] **P5.T6** **V4** barge-in cancels queued TTS ≤ 200 ms
-      **Evidence:** · **Deviation:**
+- [x] **P5.T6** **V4** barge-in cancels queued TTS ≤ 200 ms
+      **Evidence:** Verified from source first (§0.2 rule 2): `say()`
+      (`lib/useVapiSession.tsx:391`, the ONLY call site) already sends
+      `interruptionsEnabled: true` on every call — real, pre-existing (P2.T3)
+      cancellation machinery, server-VAD-driven, nothing new needed there.
+      Grepped `node_modules/@vapi-ai/web/dist/vapi.d.ts`'s own
+      `VapiEventNames`: no separate "user speech" event exists —
+      `speech-start`/`speech-end` are the ASSISTANT's own turn (confirmed
+      against this file's own pre-existing mic-watchdog comment). The real,
+      missing piece was the APP's own reactive signal: new
+      `lib/barge-in.ts` (`isRealMicActivity`, pure, 4 unit tests) drives a
+      new `userSpeaking` state in `useVapiSession.tsx`, updated
+      **synchronously** inside the existing real `local-volume-level`
+      handler (verified: `grep -n "setTimeout\|debounce\|throttle"` → 0
+      hits in that file — no artificial delay added by this task's own
+      code). Building this correctly surfaced and fixed a real, live,
+      pre-existing semantic bug (**DEFECT LEDGER NEW-13**):
+      `CommandRail.tsx` was feeding the ASSISTANT's own speaking state into
+      the Orb's "hearing" (= user speaking) presence signal — fixed to use
+      the new, correct `userSpeaking`.
+      ```
+      $ npx tsc --noEmit
+      TSC_EXIT=0
+      $ npm run lint
+      ✔ No ESLint warnings or errors
+      $ npx vitest run
+      Test Files  17 passed (17) · Tests  265 passed (265)
+      $ grep -n "interruptionsEnabled: true" src/components/jarvis/lib/useVapiSession.tsx
+      391:    vapiRef.current?.send({ type: "say", message: text, interruptionsEnabled: true })
+      ```
+      **Deviation:** none from the plan's own task text. **Honestly
+      unchecked, per this session's own explicit instruction:** the literal
+      live ≤ 200 ms measurement (real human speech, real microphone,
+      wall-clock to Orb repaint) — this execution environment has no audio
+      input device (established P2/P3); per this session's own binding,
+      left unchecked rather than simulated, not worked around with a fake
+      media device.
 - [ ] **P5.T7** **D3 pilot** — narration during long actions, best-effort, **or cut with the reason recorded**
       **Evidence:** · **Deviation:**
 - [ ] **P5.T8** Thread stacking; `⌘K → recent threads`
