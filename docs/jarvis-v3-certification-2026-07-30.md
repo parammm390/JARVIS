@@ -2,7 +2,7 @@
 
 Status: **not certified**. This is the required certification record, not a claim
 that every exit gate is green. Evidence below reflects repository state through
-commit `14ac848`.
+commit `0b8a072`.
 
 ## Implemented P7 work
 
@@ -12,6 +12,7 @@ commit `14ac848`.
 | P7.T2 run and step coverage | `5e27b39`; `workflow-presentation.test.ts` covers 8 `RunState` and 6 `StepState` values | implemented |
 | P7.T3 compensation receipt | `1e25f62`; web tests/typecheck/lint clean; FINNOR OS typecheck clean | implemented; DB integration is skipped under B-6 |
 | P7.T4 degraded integration recovery | `710c0e6`, `3e32d91`; targeted Playwright receipt recovery → public setup route | implemented; API-kill path remains unmeasured |
+| P7.T6 contradiction sweep | `0b8a072`; 12/12 desktop/mobile deterministic Thread fixtures pass; generic fixture-root provenance is rejected | bounded fixture coverage; not universal certification |
 
 ## Certified-path ledger
 
@@ -19,7 +20,7 @@ commit `14ac848`.
 | --- | --- | --- |
 | Golden desktop | Labelled fixture lifecycle suite passes at 1440px; live re-run passed its binding gate but planner returned zero business actions | unchecked |
 | Golden mobile | Labelled fixture lifecycle suite passes at 390px; no approved safe live action (B-5) | unchecked |
-| Golden by voice | No audio input device for a real browser call | unchecked |
+| Golden by voice | Browser voice code exists, but no real browser voice call was exercised in this certification run | unchecked |
 | Clarification | P7 labelled fixture suite verifies controls at 1440px and 390px; no live tenant path | unchecked |
 | Flagship B | Current guarded live rerun returned zero business actions; no call or approval | unchecked |
 | Flagship C | Current guarded live rerun returned zero business actions; no call or approval | unchecked |
@@ -56,7 +57,7 @@ migrated database (B-6).
 - B-5: no approved safe live execution path.
 - B-6: no sanctioned migrated database for integration timing/compensation evidence.
 - B-7: flagship plans cannot be exercised safely/live.
-- A real microphone is unavailable for browser-voice certification.
+- A real browser voice call and its microphone-permission path were not exercised for certification.
 - P6 role/mobile/cutover visual evidence remains incomplete and is not certified by P7.
 
 ## Shipped browser-voice capability table

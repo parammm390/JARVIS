@@ -31,7 +31,7 @@
 | | |
 |---|---|
 | **ACTIVE PHASE** | **P7 — Truth, Recovery, Performance & Certification (in progress)** |
-| **Latest verified commit** | `3c8c5f0` |
+| **Latest verified commit** | `0b8a072` |
 | **Phases complete** | 1 / 7 (P2 code-complete, exit gate 7/10 green; P3 code-complete, exit gate 3/6 green; P4 code-complete, exit gate 2/5 green; **P5 code-complete, exit gate 3/6 green** — live Flagship B/C plans remain blocked by B-7 and a live barge-in measurement requires an audio input device) |
 | **Sessions logged** | 8 |
 | **Product exists at** | end of P2; cognition visible end of P3; predicted↔actual built end of P4; Flagships B/C, reference clarification, barge-in signal, D3 narration, and thread stacking built and fixture-verified end of P5 |
@@ -52,11 +52,12 @@
 > configured in the browser. P7 cannot certify P6 role/mobile/cutover
 > requirements whose visual evidence is absent.
 >
-> **P7.T6 has bounded fixture evidence** (`8206189`): the contradiction sweep
-> passes 12/12 at 1440 and 390 across all deterministic Thread fixtures. It
-> asserts that visible numeric leaf text sits under a `data-source` boundary;
-> fixture roots are explicitly labelled `data-source="fixture"`. This is not a
-> whole-product sweep, so it does not complete the plan's universal requirement.
+> **P7.T6 has strengthened bounded fixture evidence** (`0b8a072`): the
+> contradiction sweep passes 12/12 at 1440 and 390 across all deterministic
+> Thread fixtures. It checks each marked, number-bearing business fact for a
+> selector-named `data-source`; the generic fixture root is expressly rejected.
+> Static copy, addresses, and fixture chrome are not business facts. This is not
+> a whole-product sweep, so it does not complete the plan's universal requirement.
 >
 > **P7.T5 has one certified-path result**: `npx playwright test
 > e2e/jarvis-network-hygiene.spec.ts --project=desktop-chromium` passed 2/2
@@ -2598,7 +2599,7 @@ test; none is a live before/after measurement.
 - [ ] **P7.T5** All 10 certified paths green
       **Evidence:** `npx playwright test e2e/jarvis-network-hygiene.spec.ts --project=desktop-chromium` → 2 passed (45.3s): signed-out `/jarvis` made fewer than 5 private requests in 30 seconds and rendered no known API-backed metric. `npx playwright test e2e/jarvis-public.spec.ts --project=desktop-chromium` → 5 passed (16.4s): public preview, setup-unavailable copy, sign-in path, login, and mobile no-overflow. `npx playwright test e2e/jarvis-p7-thread-fixtures.spec.ts --project=desktop-chromium` → 14 passed (23.9s): golden Thread lifecycle + clarification at 1440 and 390. Live re-run: sourced local test credentials and ran `JARVIS_E2E_OUT_DIR=qa-screenshots/v3-P7 npx playwright test e2e/golden-consequence.spec.ts --project=desktop-chromium --workers=1` → 1 passed (32.7s), screenshot `qa-screenshots/v3-P7/consequence-00-plan-1440.png`; its new pre-approval gate verified payments emulator, CRM not-GHL (native is DB-only outbox), and accounting not-QuickBooks, then the live planner returned zero business actions. Live Flagships: `e2e/jarvis-p5-flagship-b-real.spec.ts` → 1 passed (30.1s), and `e2e/jarvis-p5-flagship-c-real.spec.ts` → 1 passed (29.2s); current screenshots `qa-screenshots/v3-P7/flagship-{b,c}-00-plan-1440.png`; both live planners returned zero business actions, so their safety gates approved nothing. **Deviation:** the lifecycle/clarification run is visibly labelled fixture evidence; the public run covers signed-out/unconfigured posture. The live reruns did not reach approval because there was no business action; none was approved. These do not substitute for live voice or API-kill paths, so the task remains unchecked.
 - [ ] **P7.T6** Automated contradiction sweep — every visible number carries `data-source`
-      **Evidence:** `8206189` · `npx playwright test e2e/jarvis-contradiction-sweep.spec.ts --project=desktop-chromium` → 12 passed (25.4s); `npx tsc --noEmit && npm run lint` → TypeScript exit 0, lint clean. The sweep inspects visible numeric leaf text across understood/plan/clarify/approval/execution/receipt fixtures at 1440 and 390 and fails when no `data-source` ancestor exists. **Deviation:** this covers deterministic Thread fixture surfaces only; the fixture harness root is labelled `data-source="fixture"`, while production role/operational surfaces remain outside its scope. The universal task remains unchecked.
+      **Evidence:** `0b8a072` · `npx playwright test e2e/jarvis-contradiction-sweep.spec.ts --project=desktop-chromium --workers=1` → 12 passed (28.5s); targeted lint and `npx tsc --noEmit` → clean. The sweep walks visible, number-bearing `[data-jarvis-fact]` business facts across understood/plan/clarify/approval/execution/receipt fixtures at 1440 and 390, and rejects absent, generic-fixture, or non-selector-named provenance. Thread context, plan, policy, approval, receipt, and workflow-run facts now carry explicit markers and sources. **Deviation:** static copy, addresses, and fixture chrome are not business facts; production role/operational surfaces remain outside this deterministic Thread scope. The universal task remains unchecked.
 - [ ] **P7.T7** Perf: 5 cold Lighthouse desktop + mobile; bundle ≤ 250 KB gz; ≥ 55 fps; event→pixel median + p95
       **Evidence:** `59fe48b` · five cold production-build desktop runs: perf `60,95,95,94,95`, a11y `100×5`; five mobile runs: perf `72×5`, a11y `100×5`; `/jarvis/page` app-manifest JS gzip sum `525,824` bytes. Full per-run metrics are in `docs/jarvis-v3-certification-2026-07-30.md`. **Deviation:** mobile perf fails ≥85 and initial JS fails ≤250 KB; six-lane fps and event-to-pixel cannot be measured without B-5/B-6 evidence, so this task remains unchecked.
 - [x] **P7.T8** `docs/jarvis-v3-certification-<date>.md` + `docs/motion-promoted.md` + the shipped voice table
@@ -2647,6 +2648,16 @@ test; none is a live before/after measurement.
   hygiene passed 2/2. **Next:** execute the remaining P7.T5 paths with their
   required scope; do not upgrade fixture or signed-out proof into live voice,
   approved-action, or performance certification.
+
+- **2026-07-30 · P7.T6 strengthened (`0b8a072`), still not universal certification.**
+  The original fixture-root boundary could mask missing per-fact provenance.
+  The replacement Playwright check explicitly rejects that generic source and
+  validates visible numeric business facts marked by their components across all
+  six fixtures at both widths: 12/12 passed in 28.5s. Added precise provenance
+  to Thread context/plan/policy/approval/receipt facts and workflow-run counts.
+  Targeted lint and TypeScript pass. Static copy, addresses, fixture chrome, and
+  unscanned production role/operations surfaces remain out of this bounded test;
+  P7.T6 and the universal exit gate stay open.
 
 - **2026-07-30 · P7.T6 bounded evidence (`8206189`), not universal certification.**
   Added a Playwright contradiction sweep spanning all six deterministic Thread
