@@ -25,8 +25,8 @@ import leadToWaterTestPlugin from "../../domain-plugins/lead-to-water-test/index
 import proposalSignaturePlugin from "../../domain-plugins/proposal-signature/index";
 import proposalToInstallationPlugin from "../../domain-plugins/proposal-to-installation/index";
 import invoiceToCashPlugin from "../../domain-plugins/invoice-to-cash/index";
-import clarificationPlugin from "../../domain-plugins/clarification/index";
-import manualStepPlugin from "../../domain-plugins/manual-step/index";
+import { clarificationPlugin } from "../../domain-plugins/clarification/index";
+import { manualStepPlugin } from "../../domain-plugins/manual-step/index";
 import routeOptimizationPlugin from "../../domain-plugins/route-optimization/index";
 
 export class PluginRegistry {
