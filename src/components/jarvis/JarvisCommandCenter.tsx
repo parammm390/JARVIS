@@ -19,14 +19,12 @@ import { JarvisAuthProvider, useJarvisAuth } from "./lib/jarvis-auth"
 import { useVapiSession } from "./lib/useVapiSession"
 import { deriveMood } from "./lib/mood"
 import { EventFXLayer } from "./lib/EventFX"
-import { useCommandPalette, CommandPalette } from "./lib/CommandPalette"
 import { BootSequence, shouldShowBoot } from "./lib/BootSequence"
 import { AreaSparkline } from "./lib/charts"
 import { HeaderBand } from "./panels/HeaderBand"
 import { KpiStrip } from "./panels/KpiStrip"
 import { OpsTicker } from "./panels/OpsTicker"
 import { WorkflowTheater } from "./panels/WorkflowTheater"
-import { ApprovalDock } from "./panels/ApprovalDock"
 import { DailyBriefing } from "./panels/DailyBriefing"
 import { DegradedBanner } from "./panels/DegradedBanner"
 import { DataQualityQueue } from "./panels/DataQualityQueue"
@@ -35,9 +33,7 @@ import { CertificationStatus } from "./panels/CertificationStatus"
 import { DispatcherBoard } from "./panels/DispatcherBoard"
 import { TechnicianBoard } from "./panels/TechnicianBoard"
 import { CommsFeed } from "./panels/CommsFeed"
-import { ActivityRail } from "./panels/ActivityRail"
 import { PipelinePulse } from "./panels/PipelinePulse"
-import { CommandBar } from "./panels/CommandBar"
 import { ChannelDonut, ActionMixBars, AiPerformance } from "./panels/AnalyticsRow"
 import { SystemConsole } from "./panels/SystemConsole"
 import { JarvisOrb } from "./panels/JarvisOrb"
@@ -79,12 +75,10 @@ const SIDEBAR = [
 
 function CommandCenterHome({
   session,
-  prefill,
   onNavigate,
   igniteKey,
 }: {
   session: ReturnType<typeof useVapiSession>
-  prefill?: string
   onNavigate: (v: string) => void
   igniteKey: number
 }) {
@@ -121,9 +115,7 @@ function CommandCenterHome({
       </div>
       <div key={`${igniteKey}-4`} className="jarvis-rise grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4" style={delay(4)}>
         <PipelinePulse />
-        <ApprovalDock />
         <CommsFeed />
-        <ActivityRail />
       </div>
       <div key={`${igniteKey}-4b`} className="jarvis-rise grid grid-cols-1 gap-4 xl:grid-cols-2" style={delay(4)}>
         <DataQualityQueue />
@@ -131,9 +123,6 @@ function CommandCenterHome({
       </div>
       <div key={`${igniteKey}-4c`} className="jarvis-rise" style={delay(4)}>
         <CertificationStatus />
-      </div>
-      <div key={`${igniteKey}-5`} className="jarvis-rise" style={delay(5)}>
-        <CommandBar session={session} prefill={prefill} />
       </div>
     </div>
   )
@@ -269,11 +258,9 @@ function Shell() {
   const [soundOn, setSoundOn] = useState(false)
   const [lowPower, setLowPower] = useState(false)
   const [booting, setBooting] = useState(false)
-  const [prefill, setPrefill] = useState<string | undefined>(undefined)
   const [igniteKey, setIgniteKey] = useState(0)
   const wasDegradedRef = useRef(false)
   const session = useVapiSession()
-  const palette = useCommandPalette()
 
   useEffect(() => {
     setMounted(true)
@@ -322,16 +309,6 @@ function Shell() {
           }}
         />
       )}
-      {palette.open && (
-        <CommandPalette
-          onClose={() => palette.setOpen(false)}
-          onSelectView={(v) => setView(v)}
-          onPrefillInstruction={(text) => {
-            setView("Command Center")
-            setPrefill(text)
-          }}
-        />
-      )}
 
       <div className="relative flex">
         <Sidebar view={view} setView={setView} />
@@ -372,7 +349,7 @@ function Shell() {
           </div>
 
           <div className="p-4 md:p-6">
-            {view === "Command Center" && <CommandCenterHome session={session} prefill={prefill} onNavigate={setView} igniteKey={igniteKey} />}
+            {view === "Command Center" && <CommandCenterHome session={session} onNavigate={setView} igniteKey={igniteKey} />}
             {view === "Voice Console" && (
               <VoiceConsoleView
                 voiceState={
@@ -393,7 +370,7 @@ function Shell() {
             {view === "Invoices" && <InvoicesView />}
             {view === "Water Compliance" && <ComplianceView />}
             {view === "Web Research" && <ResearchView />}
-            {view === "Activity" && <ActivityRail />}
+            {view === "Activity" && <div className="j-panel p-5 j-fs-sm text-[color:var(--j-text-dim)]">Activity now lives in the Instruction Thread.</div>}
             {view === "Dispatch Map" && <DispatchMap />}
             {view === "My Day" && <MyDay />}
             {view === "Production Readiness" && <SystemHealthView />}
