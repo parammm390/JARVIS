@@ -140,6 +140,30 @@ describe("kernel/store — applyTraceEvents (P3.T7)", () => {
     expect(t.terminalAtMs).not.toBeNull()
   })
 
+  // jarvis-v3 P5.T5 (V8) — a real live test this session
+  // (e2e/jarvis-p5-followup-real.spec.ts) found the backend re-asking the
+  // exact same clarifying question for a real follow-up instruction, never
+  // demonstrably resolving it. For the genuinely-unhandled case (0 actions,
+  // no clarification at all) this is the honest fallback: never the
+  // misleading generic "failed" copy for what specifically looked like an
+  // unresolved reference.
+  it("'plan_ready' with count 0 for a follow-up-shaped instruction falls through to a real clarification with the literal message, not PLAN_EMPTY", () => {
+    const t = applyTraceEvents(planningThread({ instructionText: "Actually, make that Thursday instead" }), [ev(1, "plan_ready", { count: 0 })], NO_DECISIONS)
+    expect(t.machine.instructionState).toBe("clarifying")
+    expect(t.clarification?.question).toBe("I'm not sure which one you mean.")
+    expect(t.terminalAtMs).toBeNull() // clarifying is not terminal
+  })
+
+  it("'plan_ready' with count 0 for an ORDINARY instruction still goes to PLAN_EMPTY — the reference heuristic never widens beyond real reference phrasing", () => {
+    const t = applyTraceEvents(
+      planningThread({ instructionText: "Book a water test for the Hendersons this week and give it to whoever's closest" }),
+      [ev(1, "plan_ready", { count: 0 })],
+      NO_DECISIONS,
+    )
+    expect(t.machine.instructionState).toBe("failed")
+    expect(t.clarification).toBeNull()
+  })
+
   it("a whole-plan failure (TRACE-level 'failed' with no actionId) moves planning -> failed", () => {
     const t = applyTraceEvents(planningThread(), [ev(1, "failed", { error: "Planner LLM call failed" })], NO_DECISIONS)
     expect(t.machine.instructionState).toBe("failed")

@@ -216,6 +216,7 @@ Legend ⬜ not started · 🟡 in progress · ✅ complete · 🔴 blocked
 | **NEW-9** | MED | Real backend behaviour: the live LLM planner produces a genuine 0-action plan for the plan's own exact Flagship B phrase ("Book a water test for the Hendersons this week and give it to whoever's closest") — 4/4 real attempts this session, not a mix | — | 🔴 | Found via `e2e/jarvis-p5-flagship-b-real.spec.ts`, run live 4 times this session. Out of scope (planner/model behaviour, not frontend code) — documented, not fixed. Directly why P5.T1's live Execution/Receipt/DispatchMap evidence stays fixture-based — see **BLOCKER B-7**. |
 | **NEW-10** | LOW | `bridge/ThreadBlocks.tsx`'s `ThreadApprovalCockpit` header is a golden-journey-specific literal ("N actions · $X · N customers will be texted", §6⑤) applied to every thread regardless of action type — inaccurate for Flagship B (no texting involved at all) and for any non-monetary action (renders "$0") | P5.T3 | ✅ | Found while building P5.T1's fixture screenshot. Fixed in P5.T3: a single-node `bulk_notify_existing_customers` thread now renders a dedicated `BlastRadiusHeader` (real count or the literal "An unknown number of customers will be texted."); every other thread shape (golden journey, Flagship B) keeps the original literal unchanged — bounded fix, not a full generalization to all 41 action types (that remains out of scope). |
 | **NEW-11** | MED | Real backend behaviour: the live LLM planner produces a genuine 0-action plan for the plan's own exact Flagship C phrase ("Tell every customer on a softener plan that we're doing free hardness checks next month") in 3 of 4 real attempts this session; the 4th (screenshotted) was a real, working `clarification_request` asking for explicit household IDs/phone numbers | — | 🔴 | Found via `e2e/jarvis-p5-flagship-c-real.spec.ts`, run live 4 times this session. All 4 network captures showed zero non-clarification business actions, consistent with (but for attempts 1-3, whose screenshots were overwritten by later runs, not individually distinguishable from) the same clarification behaviour attempt 4 showed clearly. Out of scope (planner/model behaviour) — documented, not fixed. See **BLOCKER B-7**'s updated entry. |
+| **NEW-12** | MED | Real backend behaviour: the live LLM planner, given a genuine follow-up instruction in the same session ("Actually, make that Thursday instead" after "Book a water test for the Hendersons this week"), re-asked the EXACT SAME clarifying question it asked for the first turn ("What is the phone number or household ID of the Hendersons?") — no visible sign of reference resolution against session memory | — | 🔴 | Found via `e2e/jarvis-p5-followup-real.spec.ts`, 2 real submissions, same session, same tenant. Screenshotted both turns (`qa-screenshots/v3-P5/followup-{00-first-turn,01-second-turn}-1440.png`) — visually identical clarifications. Out of scope to fix directly (planner/memory behaviour, not frontend code) — but it is exactly the finding P5.T5 asked this session to verify, and it directly motivated building the new `kernel/followup-reference.ts` fallback (P5.T5's own real deliverable) for the case the backend gives NOTHING (not even a clarification) to a reference-shaped instruction. |
 
 Deliberately **not** fixed in v3 (out of scope, recorded honestly): C-04 partial, C-12, C-16, C-18, C-19, C-20 — these concern legacy surfaces that §7.4 leaves at `/jarvis/classic`.
 
@@ -2344,8 +2345,68 @@ test; none is a live before/after measurement.
       unregistered type, which is what NEW-8 needed fixed. (b) No unit
       tests — same B-1 reasoning as every other renderer this phase; the
       Playwright fixture spec is the only honest render-proof surface.
-- [ ] **P5.T5** **V8** follow-up reference resolves, **or** honestly falls through to a clarification
-      **Evidence:** · **Deviation:**
+- [x] **P5.T5** **V8** follow-up reference resolves, **or** honestly falls through to a clarification
+      **Evidence:** Verified LIVE first, per this session's own "verify
+      before building" discipline: `e2e/jarvis-p5-followup-real.spec.ts`
+      submitted two real instructions in the same real session (confirmed
+      real: `sessionStorage`'s `jarvis.session.typed` key held the SAME
+      minted id across both submissions) — *"Book a water test for the
+      Hendersons this week"* then, after cancelling its own real
+      clarification, *"Actually, make that Thursday instead."* **Real
+      finding (DEFECT LEDGER NEW-12):** the second turn re-asked the exact
+      same clarifying question as the first — no visible sign of reference
+      resolution.
+      Built the honest fallback this real finding calls for: new
+      `kernel/followup-reference.ts`
+      (`looksLikeFollowUpReference`/`UNRESOLVED_REFERENCE_MESSAGE`, pure,
+      5 unit tests) plus a shared `emptyPlanOutcome()` helper in
+      `kernel/store.tsx`, wired into BOTH places a genuinely empty plan (0
+      actions, no clarification at all) is handled — the real-time trace
+      path (`applyTraceEvents`'s `plan_ready` case) and the POST-response
+      safety net (`runSubmission`) — so the two can never disagree. When
+      the instruction reads like a reference AND the backend returns
+      nothing at all to work with, the Thread now shows the literal
+      **"I'm not sure which one you mean."** and falls through to a real,
+      answerable clarification (Answer/Skip/Cancel — never a fabricated
+      Approve/Reject as if something had resolved). Every OTHER
+      empty-plan case (the existing, pre-this-phase behavior for an
+      ordinary instruction) is byte-identical to before — 2 new tests in
+      `kernel/apply-trace-events.test.ts` prove both the new branch AND
+      that the old one is unchanged.
+      Real component-tree fixture evidence:
+      `e2e/jarvis-p5-followup-fixtures.spec.ts` — new
+      `THREAD_FIXTURES["unresolved-reference"]` renders the REAL
+      `Thread`/`ThreadClarify` tree in exactly the shape
+      `emptyPlanOutcome()` produces (same code, not a mock); the literal
+      message, the real "Why I'm asking" context, and Answer/Skip/Cancel
+      (never Approve) all verified.
+      `qa-screenshots/v3-P5/followup-fixture-unresolved-{1440,390}.png`.
+      ```
+      $ npx tsc --noEmit
+      TSC_EXIT=0
+      $ npm run lint
+      ✔ No ESLint warnings or errors
+      $ npx vitest run
+      Test Files  16 passed (16) · Tests  261 passed (261)
+      $ npx playwright test e2e/jarvis-p5-followup-fixtures.spec.ts --project=desktop-chromium
+      1 passed (21.1s)
+      ```
+      **Deviation:** (a) The plan's own task text implies testing
+      whether resolution WORKS; the real, live result this session got was
+      the OTHER honest branch (never resolved, always fell through to a
+      real clarification) — recorded per §0.2 rule 1, not forced toward
+      the untested branch. (b) The detection mechanism is a real-word
+      regex heuristic over the INSTRUCTION's own text (never the backend's
+      response — there is no reliable backend signal to key off, since a
+      real, resolvable clarification and an unresolved-reference
+      clarification are structurally identical from the frontend's own
+      vantage point). This is a genuinely new, additive frontend decision
+      the plan didn't specify the mechanics of; kept deliberately narrow
+      (a fixed pattern list, unit-tested against both the golden and both
+      flagship phrases to confirm zero false positives) and scoped to
+      exactly one case (genuinely empty plan, no clarification at all) so
+      it can only ever ADD a more honest message, never intercept or alter
+      a real backend clarification.
 - [ ] **P5.T6** **V4** barge-in cancels queued TTS ≤ 200 ms
       **Evidence:** · **Deviation:**
 - [ ] **P5.T7** **D3 pilot** — narration during long actions, best-effort, **or cut with the reason recorded**

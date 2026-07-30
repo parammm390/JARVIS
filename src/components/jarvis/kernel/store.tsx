@@ -43,6 +43,7 @@ import {
   type TraceEvent,
 } from "./instruction"
 import type { InstructionState, Presence, Truth } from "./types"
+import { looksLikeFollowUpReference, UNRESOLVED_REFERENCE_MESSAGE, UNRESOLVED_REFERENCE_CONTEXT } from "./followup-reference"
 
 // ---------------------------------------------------------------------------
 // Thread shape
@@ -335,6 +336,24 @@ export interface TraceApprovalContext {
  *  (`runSubmission`'s completion handler); `transition()`'s own idempotency makes
  *  firing it from both places safe. This second driver is NOT redundant for T8's
  *  restore-after-refresh, which has no POST response to fall back on at all. */
+/** jarvis-v3 P5.T5 (V8) — a genuinely empty plan (0 actions, no clarification)
+ *  for an instruction that reads like a follow-up reference gets an honest,
+ *  narrower message than the generic empty-plan copy — never a fabricated
+ *  resolution, and never the misleading "I couldn't turn that into anything I
+ *  can do" for what was specifically an unresolved reference (real live
+ *  finding this session: e2e/jarvis-p5-followup-real.spec.ts). Shared by both
+ *  the trace-poll path (applyTraceEvents) and runSubmission's own POST-
+ *  response safety net below, so the two never disagree. */
+function emptyPlanOutcome(machine: MachineState, instructionText: string): { machine: MachineState; clarification: ClarificationData | null } {
+  if (looksLikeFollowUpReference(instructionText)) {
+    return {
+      machine: transition(machine, { type: "TRACE_clarification" }),
+      clarification: { question: UNRESOLVED_REFERENCE_MESSAGE, missingFields: ["instruction"], context: UNRESOLVED_REFERENCE_CONTEXT },
+    }
+  }
+  return { machine: transition(machine, { type: "PLAN_EMPTY" }), clarification: null }
+}
+
 export function applyTraceEvents(thread: Thread, events: TraceEvent[], approval: TraceApprovalContext): Thread {
   let next = thread
 
@@ -407,7 +426,10 @@ export function applyTraceEvents(thread: Thread, events: TraceEvent[], approval:
         const count = typeof event.payload.count === "number" ? event.payload.count : null
         next = { ...next, traceGating: { ...next.traceGating, expectedCount: count } }
         if (count === 0 && next.machine.instructionState === "planning") {
-          next = { ...next, machine: transition(next.machine, { type: "PLAN_EMPTY" }), terminalAtMs: Date.now() }
+          const outcome = emptyPlanOutcome(next.machine, next.instructionText)
+          next = outcome.clarification
+            ? { ...next, machine: outcome.machine, clarification: outcome.clarification }
+            : { ...next, machine: outcome.machine, terminalAtMs: Date.now() }
         }
         break
       }
@@ -864,8 +886,10 @@ function KernelInner({ children }: { children: React.ReactNode }) {
         if (!prev || prev.id !== id) return prev
         let m = prev.machine.instructionState === "understanding" ? transition(prev.machine, { type: "TRACE_planning" }) : prev.machine
         if (planned.length === 0) {
-          m = transition(m, { type: "PLAN_EMPTY" })
-          return { ...prev, machine: m, nodes: [], clarification: null, terminalAtMs: Date.now() }
+          const outcome = emptyPlanOutcome(m, prev.instructionText)
+          return outcome.clarification
+            ? { ...prev, machine: outcome.machine, nodes: [], clarification: outcome.clarification }
+            : { ...prev, machine: outcome.machine, nodes: [], clarification: null, terminalAtMs: Date.now() }
         }
         if (clarificationRow) {
           if (prev.clarification) return { ...prev, machine: m } // the trace already delivered it

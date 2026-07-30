@@ -14,6 +14,7 @@
 import type { ContextChip, Thread } from "../kernel/store"
 import { initialMachineState, transition } from "../kernel/machine"
 import type { InstructionState } from "../kernel/types"
+import { UNRESOLVED_REFERENCE_MESSAGE, UNRESOLVED_REFERENCE_CONTEXT } from "../kernel/followup-reference"
 
 const INSTRUCTION_TEXT = "Chase everyone more than thirty days overdue"
 
@@ -172,6 +173,24 @@ export const THREAD_FIXTURES: Record<string, Thread> = {
   // to reach the right MACHINE state — it's independent of this thread's own
   // (here, empty) `nodes` array.
   "empty-approval": baseThread({ machine: stateFor("awaiting_approval"), nodes: [] }),
+  // jarvis-v3 P5.T5 (V8) — the real, live outcome this session's own
+  // e2e/jarvis-p5-followup-real.spec.ts found: a follow-up-shaped instruction
+  // ("Actually, make that Thursday instead") with nothing in the real
+  // response to resolve it against. Shaped exactly like what
+  // kernel/store.tsx's own emptyPlanOutcome() produces (unit-tested directly
+  // in kernel/apply-trace-events.test.ts) — this fixture renders the SAME
+  // Thread/ThreadClarify component tree, not a separate mock.
+  "unresolved-reference": baseThread({
+    machine: (() => {
+      let m = transition(initialMachineState, { type: "SUBMITTED" })
+      m = transition(m, { type: "ACK" })
+      m = transition(m, { type: "TRACE_planning" })
+      m = transition(m, { type: "TRACE_clarification" })
+      return m
+    })(),
+    instructionText: "Actually, make that Thursday instead",
+    clarification: { question: UNRESOLVED_REFERENCE_MESSAGE, missingFields: ["instruction"], context: UNRESOLVED_REFERENCE_CONTEXT },
+  }),
   execution: baseThread({ machine: stateFor("executing"), nodes: goldenNodes(), everExecuted: true }),
   receipt: baseThread({ machine: stateFor("completed"), nodes: goldenNodes(), terminalAtMs: Date.now(), everExecuted: true }),
   "flagship-b-approval": baseThread({
