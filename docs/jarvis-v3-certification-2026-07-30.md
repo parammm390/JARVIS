@@ -61,8 +61,11 @@ in `/tmp/jarvis-p7-{desktop,mobile}-N.json` on the measurement host.
 | Mobile preset | 72, 72, 72, 72, 72 | 100, 100, 100, 100, 100 | perf median/worst 72; FCP median 1560.330ms; LCP median 6072.904ms; TBT median 27.601ms, worst 63.476ms; CLS 0 all runs | **fails** required mobile perf ≥85 |
 
 Initial JavaScript was measured from `.next/app-build-manifest.json`'s complete
-`/jarvis/page` client-file list after the same production build. Gzip sum:
-**525,824 bytes** (513.5 KiB), which **fails** the ≤250 KiB gate. This is a
+`/jarvis/page` client-file list after the same production build. The original
+fresh build measured **526,085 bytes**. After deferring existing non-owner role
+scenes and the Thread Orb renderer from the owner/public initial graph, a fresh
+rebuild measured **366,811 bytes** (358.2 KiB): a **159,274-byte / 30.3%**
+reduction. It still **fails** the ≤250 KiB gate by 116,811 bytes. This is a
 measurement, not an estimate.
 
 Six-lane execution fps and event-to-pixel median/p95 remain unmeasured. A live

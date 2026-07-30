@@ -7,19 +7,22 @@
 // authorization leak.
 
 import { useEffect, useState } from "react"
+import dynamic from "next/dynamic"
 import { Map, Wrench } from "lucide-react"
-import JarvisCommandCenter from "./JarvisCommandCenter"
 import { Bridge as InstructionThreadBridge } from "./bridge/ThreadBridge"
-import { Bridge } from "./bridge/Bridge"
-import { ApprovalCockpit } from "./bridge/ApprovalCockpit"
-import { DispatchMap } from "./panels/DispatchMap"
-import { MyDay } from "./panels/MyDay"
 import { JarvisAuthProvider, useJarvisAuth, type JarvisRole } from "./lib/jarvis-auth"
 import { JarvisDataProvider } from "./lib/data-core"
 import { jarvisGet } from "./lib/api"
 import { SinceYouWereAway } from "./SinceYouWereAway"
 import { PushOptIn } from "./PushOptIn"
 import "./jarvis-theme.css"
+
+// Dispatcher and technician-only scenes keep their existing components, but do
+// not belong in the owner/public Thread's initial route graph.
+const Bridge = dynamic(() => import("./bridge/Bridge").then((m) => m.Bridge), { ssr: false })
+const ApprovalCockpit = dynamic(() => import("./bridge/ApprovalCockpit").then((m) => m.ApprovalCockpit), { ssr: false })
+const DispatchMap = dynamic(() => import("./panels/DispatchMap").then((m) => m.DispatchMap), { ssr: false })
+const MyDay = dynamic(() => import("./panels/MyDay").then((m) => m.MyDay), { ssr: false })
 
 type Homepage = "bridge" | "map" | "my-day" | null
 type Prefs = { homepage: Homepage; accent: string | null }

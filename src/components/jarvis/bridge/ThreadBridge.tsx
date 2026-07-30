@@ -13,7 +13,6 @@ import "../jarvis-theme.css"
 import { KernelProvider, useKernel, type Thread as ThreadData } from "../kernel/store"
 import { useJarvisAuth } from "../lib/jarvis-auth"
 import { useVapiSession } from "../lib/useVapiSession"
-import { Orb3D } from "./Orb3D"
 import { ThreadField } from "./ThreadField"
 import { ThreadStack } from "./ThreadStack"
 import { ThreadApprovalCockpit } from "./ThreadBlocks"
@@ -28,6 +27,24 @@ import { derivePresence } from "../kernel/presence"
 import { THREAD_FIXTURES, THREAD_HISTORY_FIXTURES, FIXTURE_STATE_KEYS } from "./thread-fixtures"
 import { D3_LONG_EXECUTION_MS, D3_NARRATION_TEXT, shouldFireD3Narration } from "../lib/d3-narration"
 import type { Truth } from "../kernel/types"
+import type { OrbLiveState } from "./Orb3D"
+
+type OrbComponent = (props: { live: OrbLiveState; forceLowPower?: boolean }) => JSX.Element
+
+// Three.js is only needed after the Thread has mounted. A native import here,
+// rather than next/dynamic, intentionally avoids preloading the renderer as an
+// initial-route dependency; the original Orb also initialized only after mount.
+function DeferredOrb({ live }: { live: OrbLiveState }) {
+  const [Orb, setOrb] = useState<OrbComponent | null>(null)
+  useEffect(() => {
+    let active = true
+    void import("./Orb3D").then(({ Orb3D }) => {
+      if (active) setOrb(() => Orb3D)
+    })
+    return () => { active = false }
+  }, [])
+  return Orb ? <Orb live={live} /> : null
+}
 
 function LoadingGate() {
   return (
@@ -163,7 +180,7 @@ function ThreadBody({
           isApproving ? "lg:left-auto lg:top-24 lg:right-[calc(50%+380px)]" : "lg:left-6 lg:top-24"
         }`}
       >
-        <Orb3D live={{ state: presence, activeRunCount, voiceAmplitude: undefined }} />
+        <DeferredOrb live={{ state: presence, activeRunCount, voiceAmplitude: undefined }} />
       </div>
       <div className="relative z-[1]">
         {role === "owner" && <FirstRunScene />}
