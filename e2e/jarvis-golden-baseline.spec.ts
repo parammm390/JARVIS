@@ -3,10 +3,10 @@ import { mkdirSync } from "node:fs"
 
 // Plan v3 P1.T12 — the "before" baseline for the whole v3 programme.
 //
-// This captures signed-out `/jarvis` at 1440 and 390 as it stands at the end of
-// Phase 1: the surface that will be replaced by the Instruction Thread at
-// `/jarvis/next` in P2 and cut over in P6.T7. Every later phase compares against
-// these, and the P6 exit gate requires `/jarvis/classic` to still match.
+// This captures the current signed-out `/jarvis` public-preview contract at
+// 1440 and 390. Source inspection established that `/jarvis/classic` currently
+// renders the same component, so it cannot truthfully serve as a preserved
+// pre-cutover baseline.
 //
 // Two artefacts, deliberately:
 //   1. Plain PNGs into `qa-screenshots/v3-P1/`, which is what the plan's evidence
@@ -23,7 +23,7 @@ const WIDTHS = [
   { label: "390", width: 390, height: 844 },
 ] as const
 
-test.describe("golden baseline — signed-out /jarvis (P1 'before')", () => {
+test.describe("golden baseline — signed-out /jarvis public preview", () => {
   test.setTimeout(120_000)
 
   for (const { label, width, height } of WIDTHS) {
@@ -38,6 +38,7 @@ test.describe("golden baseline — signed-out /jarvis (P1 'before')", () => {
 
       await page.goto("/jarvis", { waitUntil: "domcontentloaded" })
       await expect(page.locator("body")).toBeVisible()
+      await expect(page.getByText("PUBLIC PREVIEW", { exact: true })).toBeVisible()
 
       // Let the ambient layers settle so the capture is a steady state rather than
       // a mid-transition frame. Nothing is polling — P1.T9 stopped that — so this

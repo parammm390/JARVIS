@@ -47,8 +47,17 @@ async function waitForAppReady(page: Page): Promise<void> {
   await page.waitForTimeout(500)
 }
 
-test.describe("visual snapshots — sidebar views (logged out, sample-data mode)", () => {
+test.describe("visual snapshots — sidebar views (authenticated console)", () => {
+  const email = process.env.TEST_OWNER_EMAIL
+  const password = process.env.TEST_OWNER_PASSWORD
+
   test.beforeEach(async ({ page }) => {
+    test.skip(!email || !password, "TEST_OWNER_EMAIL/TEST_OWNER_PASSWORD not set — the current signed-out source contract is PUBLIC PREVIEW, not a sample-data console")
+    await page.goto("/jarvis/login")
+    await page.getByPlaceholder(/you@example.com/i).fill(email!)
+    await page.getByPlaceholder(/•+/i).fill(password!)
+    await page.getByRole("button", { name: /sign in/i }).click()
+    await page.waitForURL("**/jarvis")
     await page.goto("/jarvis")
     await waitForAppReady(page)
   })

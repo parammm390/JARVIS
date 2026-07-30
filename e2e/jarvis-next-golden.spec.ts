@@ -9,8 +9,8 @@ import { mkdirSync } from "node:fs"
 // repurposed for interactive testing (see the state file's BLOCKERS B-3/B-4).
 // Two things ARE real and assertable without a credential:
 //
-//   1. The signed-out `/jarvis/next` gate — real route, real flag, real
-//      session-check, zero fixtures involved.
+//   1. The signed-out `/jarvis/next` route — observed source/runtime behavior
+//      currently resolves to the public-preview contract, zero fixtures involved.
 //   2. The `?fixture=<state>` debug harness (`bridge/thread-fixtures.ts`),
 //      gated on `NODE_ENV !== "production"` — renders the REAL Thread/
 //      ThreadBlocks component tree fed by fixture data matching the plan's own
@@ -30,7 +30,7 @@ const WIDTHS = [
 
 const FIXTURE_STATES = ["heard", "understood", "plan", "clarify", "approval", "execution", "receipt"] as const
 
-test.describe("P2 — signed-out /jarvis/next gate (real, no fixture)", () => {
+test.describe("P2 — signed-out /jarvis/next route (real, no fixture)", () => {
   test.setTimeout(60_000)
   for (const { label, width, height } of WIDTHS) {
     test(`signed-out /jarvis/next at ${label}px`, async ({ page, context }) => {
@@ -45,7 +45,8 @@ test.describe("P2 — signed-out /jarvis/next gate (real, no fixture)", () => {
       })
 
       await page.goto("/jarvis/next", { waitUntil: "domcontentloaded" })
-      await expect(page.getByText("Sign in required")).toBeVisible()
+      await expect(page.getByText("PUBLIC PREVIEW", { exact: true })).toBeVisible()
+      await expect(page.getByRole("link", { name: "Sign in" })).toBeVisible()
       await page.waitForTimeout(500)
 
       await page.screenshot({ path: `${OUT_DIR}/next-signed-out-${label}.png`, fullPage: true, animations: "disabled" })
