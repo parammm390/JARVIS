@@ -29,6 +29,11 @@ commit `0b8a072`.
 | Signed-out hygiene | `e2e/jarvis-network-hygiene.spec.ts` → 2 passed (45.3s): <5 private requests/30s and zero known private metric | certified |
 | First run | Status-backed scene exists; not recertified in P7 | unchecked |
 
+The complete `npx playwright test --workers=1` verification run is red: 26
+snapshot comparisons fail (two `/jarvis`, two `/jarvis/next`, and 22 legacy
+catalog views). The snapshots were neither regenerated nor accepted; this is
+not certification evidence.
+
 ## Measurements
 
 All Lighthouse runs used the production build (`next build` then `next start -p
