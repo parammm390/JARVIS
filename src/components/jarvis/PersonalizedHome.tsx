@@ -9,6 +9,7 @@
 import { useEffect, useState } from "react"
 import { Map, Wrench } from "lucide-react"
 import JarvisCommandCenter from "./JarvisCommandCenter"
+import { Bridge as InstructionThreadBridge } from "./bridge/ThreadBridge"
 import { Bridge } from "./bridge/Bridge"
 import { ApprovalCockpit } from "./bridge/ApprovalCockpit"
 import { DispatchMap } from "./panels/DispatchMap"
