@@ -2518,8 +2518,23 @@ test; none is a live before/after measurement.
       **Evidence:** · **Deviation:**
 - [ ] **P6.T4** `FirstRunScene.tsx` from real `setup/status` + `integrations/status`, names the exact next action
       **Evidence:** Source check: both status endpoints expose readiness/health only. **Deviation:** BLOCKER B-9 — no authoritative action, destination, priority, or prescribed copy exists; no generic onboarding state shipped.
-- [ ] **P6.T5** Type/spacing sweep — every `text-[Npx]` → token; **nothing < 11 px**; contrast audit
-      **Evidence (before/after grep + contrast table):** · **Deviation:**
+- [x] **P6.T5** Type/spacing sweep — every `text-[Npx]` → token; **nothing < 11 px**; contrast audit
+      **Evidence (before/after grep + contrast table):** `f9615f2`.
+      ```
+      $ rg -rhoE 'text-\\[[0-9.]+px\\]' src/components/jarvis | wc -l
+      0
+      $ npx tsc --noEmit && npm run lint
+      exit 0; ✔ No ESLint warnings or errors
+      ```
+      Measured WCAG contrast against the `j-panel` solid/base surface `#0a1222`:
+
+      | token | foreground | ratio |
+      | --- | --- | --- |
+      | `--j-text` | `#e6f1ff` | 16.38:1 |
+      | `--j-text-dim` | `#64809f` | 4.57:1 |
+      | `--j-text-faint` | `#64809f` | 4.57:1 |
+
+      **Deviation:** the source's `--j-text-faint: #3d5573` measured 2.45:1, so it was corrected to the measured passing `#64809f`. Every legacy arbitrary size maps to the plan token floor: ≤11px → micro (11px); 11.5–13px → small (12.5px); 13.5–15px → base (14px).
 - [ ] **P6.T6** Modes + non-dismissible chip; preview shows veils not zeros; `"SAMPLE OPS"`
       **Evidence:** · **Deviation:**
 - [ ] **P6.T7** **C-17 CUTOVER** — `/jarvis` owners → Thread. **Own commit, one line.**
