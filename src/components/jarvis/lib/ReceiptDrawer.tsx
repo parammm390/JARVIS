@@ -5,7 +5,7 @@
 // Approval Inbox (ApprovalDock) and the live run timeline (WorkflowTheater) so the
 // same honest, complete view backs both entry points.
 
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react"
+import { useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from "react"
 import { useReducedMotion, motion } from "framer-motion"
 import { Tag, User, Calendar, MessageSquare, Wrench, FileText, Package, DollarSign } from "lucide-react"
 import { jarvisGet, jarvisPost } from "./api"
@@ -121,6 +121,9 @@ function ReceiptRecoveryPanel({
   run: ReceiptRun | null
   role: ReturnType<typeof useJarvisAuth>["role"]
 }) {
+  const [correcting, setCorrecting] = useState(false)
+  const [correctedFact, setCorrectedFact] = useState("")
+  const [correctionError, setCorrectionError] = useState<string | null>(null)
   const kind = receipt.failure ? recoveryKindFromErrorKind(receipt.failure.errorKind) : null
   const verb = receiptRecoveryVerb(receipt)
   const compensation = compensationReceiptFromActual(receipt.actualResult)
@@ -128,14 +131,50 @@ function ReceiptRecoveryPanel({
     ? async () => { await jarvisPost(`workflows/runs/${run.id}/${verb}`, { expectedVersion: run.version }) }
     : kind === "compensated" && compensation
       ? async () => { document.getElementById(`compensation-${compensation.caseId}`)?.scrollIntoView({ block: "center" }) }
+      : kind === "invalid_input" && role === "owner"
+        ? async () => { setCorrecting(true) }
       : undefined
+
+  async function submitCorrection(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const value = correctedFact.trim()
+    if (!value) return
+    setCorrectionError(null)
+    try {
+      await jarvisPost("corrections", { receiptId: receipt.id, correctedFact: value })
+      setCorrectedFact("")
+      setCorrecting(false)
+    } catch (error) {
+      setCorrectionError(error instanceof Error ? error.message : "Correction request failed")
+    }
+  }
 
   // The taxonomy decides the visible label/copy. A callback exists only when the
   // receipt's actual run, current version, legal transition, and owner gate all
   // agree. A compensated receipt can target its already-rendered, backend case
   // record. RecoveryPanel otherwise remains honest and does not render an inert
   // control; the other taxonomy operations need their own contracts.
-  return kind ? <RecoveryPanel kind={kind} onRecover={onRecover} errorDetail={receipt.failure!.message} /> : null
+  if (!kind) return null
+  return (
+    <div className="space-y-2">
+      <RecoveryPanel kind={kind} onRecover={onRecover} errorDetail={receipt.failure!.message} />
+      {correcting && (
+        <form onSubmit={submitCorrection} className="rounded-xl border border-red-400/25 bg-red-400/5 p-3">
+          <textarea
+            aria-label="Corrected fact"
+            required
+            value={correctedFact}
+            onChange={(event) => setCorrectedFact(event.target.value)}
+            className="min-h-20 w-full rounded-lg border border-white/15 bg-black/20 p-2 j-fs-sm text-white outline-none focus:border-cyan-300/60"
+          />
+          <div className="mt-2 flex justify-end">
+            <button type="submit" className="rounded-full border border-red-300/30 px-3 py-1.5 j-fs-micro font-bold text-red-100 hover:border-red-300/60 hover:bg-red-300/10">Correct</button>
+          </div>
+          {correctionError && <p role="alert" className="mt-2 j-fs-micro text-red-100/80">{correctionError}</p>}
+        </form>
+      )}
+    </div>
+  )
 }
 
 // F7.T2 — DrawerToPage (FLOW-95) extracted this fetch+render body out of the Drawer

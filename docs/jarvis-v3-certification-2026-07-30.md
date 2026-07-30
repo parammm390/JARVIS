@@ -12,7 +12,7 @@ commit `34bdee1` and the P7.T6 evidence recorded in the state file.
 | P7.T2 run and step coverage | `5e27b39`; `workflow-presentation.test.ts` covers 8 `RunState` and 6 `StepState` values | implemented |
 | P7.T3 compensation receipt | `1e25f62`; web tests/typecheck/lint clean; FINNOR OS typecheck clean | implemented; DB integration is skipped under B-6 |
 | P7.T4 degraded integration recovery | `710c0e6`, `3e32d91`; targeted Playwright receipt recovery → public setup route | implemented; API-kill path remains unmeasured |
-| P7.T5 receipt recovery audit | `f7c3286`; pure tests prove receipt-linked Retry/Escalate eligibility and View rollback targets the recorded compensation case; the dev-fixture browser assertion is not yet executable because local Next dev readiness fails | failure-and-recovery path remains unchecked (B-13) |
+| P7.T5 receipt recovery audit | receipt-linked Retry/Escalate, View rollback, and inline Correct are source-bound; their dev-fixture browser assertions await local Next dev readiness; Assign remains unbound | failure-and-recovery path remains unchecked (B-13) |
 | P7.T6 contradiction sweep | `0b8a072` plus current extension; 14/14 desktop/mobile deterministic Thread fixtures pass, including the at-rest selector facts; generic fixture-root provenance is rejected | bounded fixture coverage; not universal certification |
 
 ## Certified-path ledger
@@ -25,7 +25,7 @@ commit `34bdee1` and the P7.T6 evidence recorded in the state file.
 | Clarification | P7 labelled fixture suite verifies controls at 1440px and 390px; no live tenant path | unchecked |
 | Flagship B | Current guarded live rerun returned zero business actions; no call or approval | unchecked |
 | Flagship C | Current guarded live rerun returned zero business actions; no call or approval | unchecked |
-| Failure and recovery | P7 pure tests prove source-backed Retry/Escalate eligibility and View rollback target; Correct/Assign remain unbound and the dev-fixture browser assertion is unexecuted (B-13) | unchecked |
+| Failure and recovery | P7 pure tests prove source-backed Retry/Escalate eligibility; Correct and View rollback are source-bound; Assign remains unbound and dev-fixture browser assertions are unexecuted (B-13) | unchecked |
 | Degraded API mid-run | Recovery → setup route is verified with a labelled receipt fixture; no API-kill/recovery run | unchecked |
 | Signed-out hygiene | `e2e/jarvis-network-hygiene.spec.ts` → 2 passed (45.3s): <5 private requests/30s and zero known private metric | certified |
 | First run | Status-backed scene exists; not recertified in P7 | unchecked |
@@ -84,7 +84,7 @@ migrated database (B-6).
 - B-5: no approved safe live execution path.
 - B-6: no sanctioned migrated database for integration timing/compensation evidence.
 - B-7: flagship plans cannot be exercised safely/live.
-- B-13: Correct and Assign lack complete receipt interaction contracts.
+- B-13: Assign lacks a complete receipt interaction contract.
 - A real browser voice call and its microphone-permission path were not exercised for certification.
 - P6 role/mobile/cutover visual evidence remains incomplete and is not certified by P7.
 

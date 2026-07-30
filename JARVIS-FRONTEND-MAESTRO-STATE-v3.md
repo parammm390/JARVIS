@@ -61,8 +61,9 @@
 >
 > **P7.T5 cannot yet certify failure recovery**: receipt-linked `Retry` and
 > `Escalate` now resolve the real run and its optimistic-lock version before
-> rendering an owner control. Correct, View rollback, and Assign still lack a
-> complete interactive receipt contract, so B-13 remains open and no inert
+> rendering an owner control. Correct and View rollback now have source-backed
+> receipt interactions; Assign still lacks a complete target contract, so B-13
+> remains open and no inert
 > controls are added.
 >
 > **P7.T5 has one certified-path result**: `npx playwright test
@@ -599,7 +600,7 @@ claim browser-local credential configuration exists. The checklist is an
 existing public JARVIS setup route, while `setup/status` and
 `integrations/status` remain read-only posture sources.
 
-### B-13 · 2026-07-30 · P7.T5 · **Receipt recovery still lacks complete contracts for Correct and Assign.** OPEN.
+### B-13 · 2026-07-30 · P7.T5 · **Receipt recovery still lacks a complete Assign contract.** OPEN.
 
 Source re-verification found that `GET /api/receipts/:id` returns the raw
 receipt row, including its durable `workflowRunId`, and `GET /api/workflows/runs`
@@ -608,10 +609,11 @@ now binds `Retry` and `Escalate` only when that run is present, the transition
 is legal, and the signed-in role is owner; the existing backend remains the
 actual authorizer. Pure tests prove that mapping and legal-status gate.
 
-Correct still requires an inline fact-entry interaction not specified by the
-plan, and assignment has no receipt-bound assignee target. A compensated
-receipt's View rollback scrolls to the already-rendered compensation-case
-record, keyed by the backend case ID. Connect remains public navigation to the source-backed setup destination
+Correct opens the plan-specified inline edit and submits only `{receiptId,
+correctedFact}` to the existing authorized correction endpoint. Assignment has
+no receipt-bound assignee target. A compensated receipt's View rollback scrolls
+to the already-rendered compensation-case record, keyed by the backend case ID.
+Connect remains public navigation to the source-backed setup destination
 resolved in B-12. The dev-only fixture browser spec now requires the visible
 fixture marker and awaits the exact retry request, so it cannot mistake the
 at-rest prompt's unrelated Retry for a recovery control. It remains unexecuted
@@ -2690,8 +2692,16 @@ test; none is a live before/after measurement.
   test clicked the at-rest prompt's unrelated Retry; the test now requires the
   visible fixture marker and exact retry request. It remains unexecuted because
   local `next dev` does not reach port-3000 readiness within Playwright's
-  120-second timeout. **Next:** retain B-13 for Correct/Assign and all P7
+  120-second timeout. **Next:** retain B-13 for Assign and all P7
   certification gates until their full evidence is available.
+
+- **2026-07-30 · P7.T5 inline correction contract bound, certification still open.**
+  `invalid_input` now opens the plan-specified inline fact editor and submits
+  the receipt's own id plus the user-entered correction through the existing
+  authorized endpoint. The dev-fixture browser spec intercepts and asserts the
+  exact POST but remains unexecuted until local `next dev` starts reliably.
+  TypeScript, lint, and pure recovery tests pass. **Next:** Assign remains the
+  sole unbound §6.8 affordance; do not invent an assignee target.
 
 - **2026-07-30 · P7.T7 fresh production re-measurement, budget still failing.**
   `npm run build` completed; the `/jarvis/page` app-build-manifest files sum to
