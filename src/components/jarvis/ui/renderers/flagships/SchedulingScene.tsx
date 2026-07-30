@@ -47,7 +47,7 @@ export function SchedulingScene({ payload, compact }: ActionRendererProps) {
 
   if (compact) {
     return (
-      <span className="inline-flex items-center gap-1.5 text-[11px]">
+      <span className="inline-flex items-center gap-1.5 j-fs-micro">
         <CalendarClock className="h-3 w-3 shrink-0 text-cyan-300" />
         <span className="truncate text-[color:var(--j-text)]">
           {isReschedule
@@ -64,7 +64,7 @@ export function SchedulingScene({ payload, compact }: ActionRendererProps) {
     <Panel className="border border-cyan-400/25 p-3">
       <div className="mb-2 flex items-center gap-1.5">
         <CalendarClock className="h-3.5 w-3.5 text-cyan-300" />
-        <span className="text-[9px] font-black uppercase tracking-widest text-cyan-300">
+        <span className="j-fs-micro font-black uppercase tracking-widest text-cyan-300">
           {isReschedule ? "Reschedule Visit" : isAssign ? "Assign Technician to Visit" : "Technician Availability"}
         </span>
       </div>
@@ -73,44 +73,44 @@ export function SchedulingScene({ payload, compact }: ActionRendererProps) {
         <div className="flex items-center gap-2 rounded-lg border border-cyan-400/30 bg-cyan-400/[0.06] px-3 py-2">
           <CalendarClock className="h-3.5 w-3.5 shrink-0 text-cyan-200" />
           <div className="min-w-0">
-            <div className="text-[11px] font-black text-cyan-100">{p.technicianName ?? "technician"}</div>
-            <div className="truncate text-[10px] text-[color:var(--j-text-faint)]">visit {p.visitId!.slice(0, 8)}…</div>
+            <div className="j-fs-micro font-black text-cyan-100">{p.technicianName ?? "technician"}</div>
+            <div className="truncate j-fs-micro text-[color:var(--j-text-faint)]">visit {p.visitId!.slice(0, 8)}…</div>
           </div>
         </div>
       ) : isReschedule ? (
         <div className="flex items-center gap-2 rounded-lg border border-cyan-400/30 bg-cyan-400/[0.06] px-3 py-2">
           <Lock className="h-3.5 w-3.5 shrink-0 text-cyan-200" />
           <div className="min-w-0">
-            <div className="text-[11px] font-black text-cyan-100">{formatDateTime(p.newTime!)}</div>
-            {p.reason && <div className="truncate text-[10px] text-[color:var(--j-text-faint)]">{p.reason}</div>}
+            <div className="j-fs-micro font-black text-cyan-100">{formatDateTime(p.newTime!)}</div>
+            {p.reason && <div className="truncate j-fs-micro text-[color:var(--j-text-faint)]">{p.reason}</div>}
           </div>
         </div>
       ) : hasAvailability ? (
         <>
           {p.workingHours && (
-            <div className="mb-1.5 text-[10.5px] text-[color:var(--j-text-dim)]">
+            <div className="mb-1.5 j-fs-micro text-[color:var(--j-text-dim)]">
               working hours: <span className="font-black text-[color:var(--j-text)]">{p.workingHours.start}–{p.workingHours.end}</span>
             </div>
           )}
           <Stagger staggerMs={25} className="space-y-1">
             {(p.bookedThatDay ?? []).map((slot, i) => (
-              <div key={i} className="flex items-center justify-between rounded-lg bg-white/[0.03] px-2 py-1 text-[10.5px]">
+              <div key={i} className="flex items-center justify-between rounded-lg bg-white/[0.03] px-2 py-1 j-fs-micro">
                 <span className="text-[color:var(--j-text-dim)]">{formatTimeOnly(slot.at)}</span>
                 <span className="truncate text-[color:var(--j-text)]">{slot.type}</span>
               </div>
             ))}
           </Stagger>
-          {(p.bookedThatDay ?? []).length === 0 && <div className="text-[10.5px] text-[color:var(--j-text-faint)]">No bookings that day</div>}
+          {(p.bookedThatDay ?? []).length === 0 && <div className="j-fs-micro text-[color:var(--j-text-faint)]">No bookings that day</div>}
           <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/8">
             <div
               className={`h-full rounded-full ${p.openForBooking === false ? "bg-red-400/60" : "bg-teal-300/60"}`}
               style={{ width: `${Math.min(100, ((p.bookedThatDay?.length ?? 0) / 8) * 100)}%` }}
             />
           </div>
-          <div className="mt-1 text-[9.5px] text-[color:var(--j-text-faint)]">{p.openForBooking === false ? "fully booked" : "open for booking"}</div>
+          <div className="mt-1 j-fs-micro text-[color:var(--j-text-faint)]">{p.openForBooking === false ? "fully booked" : "open for booking"}</div>
         </>
       ) : (
-        <div className="text-[10.5px] text-[color:var(--j-text-faint)]">{p.technicianName ?? "technician"} · {p.date ?? "date pending"}</div>
+        <div className="j-fs-micro text-[color:var(--j-text-faint)]">{p.technicianName ?? "technician"} · {p.date ?? "date pending"}</div>
       )}
     </Panel>
   )

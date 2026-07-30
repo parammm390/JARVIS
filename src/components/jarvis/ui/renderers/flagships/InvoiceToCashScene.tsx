@@ -36,7 +36,7 @@ export function InvoiceToCashScene({ payload, compact }: ActionRendererProps) {
 
   if (compact) {
     return (
-      <span className="inline-flex items-center gap-1.5 text-[11px]">
+      <span className="inline-flex items-center gap-1.5 j-fs-micro">
         <Landmark className="h-3 w-3 shrink-0 text-cyan-300" />
         <span className="truncate text-[color:var(--j-text)]">
           invoice {p.invoiceId ? p.invoiceId.slice(0, 8) : ""}… → cash via {p.channel ?? "sms"}
@@ -49,7 +49,7 @@ export function InvoiceToCashScene({ payload, compact }: ActionRendererProps) {
     <Panel className="border border-cyan-400/25 p-3">
       <div className="mb-2 flex items-center gap-1.5">
         <Landmark className="h-3.5 w-3.5 text-cyan-300" />
-        <span className="text-[9px] font-black uppercase tracking-widest text-cyan-300">Invoice → Cash</span>
+        <span className="j-fs-micro font-black uppercase tracking-widest text-cyan-300">Invoice → Cash</span>
         {typeof p.amountUsd === "number" && <span className="ml-auto font-black text-[color:var(--j-text)]">${p.amountUsd.toFixed(2)}</span>}
       </div>
 
@@ -65,16 +65,16 @@ export function InvoiceToCashScene({ payload, compact }: ActionRendererProps) {
         {STAGES.map((s, i) => (
           <div key={s} className="relative z-10 flex flex-col items-center gap-1">
             <div className="h-2.5 w-2.5 rounded-full border border-cyan-300/50 bg-[#0a1220]" />
-            <span className="max-w-[70px] text-center text-[8.5px] leading-tight text-[color:var(--j-text-faint)]">{s}</span>
+            <span className="max-w-[70px] text-center j-fs-micro leading-tight text-[color:var(--j-text-faint)]">{s}</span>
           </div>
         ))}
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-1 text-[10px] text-[color:var(--j-text-dim)]">
+      <div className="mt-3 flex flex-wrap gap-1 j-fs-micro text-[color:var(--j-text-dim)]">
         {p.invoiceId && <span className="rounded-full bg-white/6 px-2 py-0.5 font-mono">invoice {p.invoiceId.slice(0, 8)}…</span>}
         <span className="rounded-full bg-white/6 px-2 py-0.5">via {p.channel ?? "sms"}</span>
       </div>
-      {p.memo && <div className="mt-1.5 text-[10px] italic text-[color:var(--j-text-faint)]">{p.memo}</div>}
+      {p.memo && <div className="mt-1.5 j-fs-micro italic text-[color:var(--j-text-faint)]">{p.memo}</div>}
     </Panel>
   )
 }

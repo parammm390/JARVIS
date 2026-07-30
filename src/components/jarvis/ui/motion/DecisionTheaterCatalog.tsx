@@ -36,7 +36,7 @@ function InkBleedDemo() {
   return (
     <FlowCard id="FLOW-51" title="InkBleed" reducedFallback="border flash only, no 400ms bleed">
       <div className="relative flex items-center gap-3">
-        <div className="relative flex h-8 w-28 items-center justify-center rounded-lg bg-teal-300/15 text-[9px] font-black text-teal-200">
+        <div className="relative flex h-8 w-28 items-center justify-center rounded-lg bg-teal-300/15 j-fs-micro font-black text-teal-200">
           <motion.span key={key} className="absolute inset-0 rounded-lg border-2 border-teal-300/60" variants={v} initial="initial" animate="animate" />
           APPROVED
         </div>
@@ -74,12 +74,12 @@ function DiffWipeDemo() {
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
-          className="rounded-full bg-amber-300/12 px-2 py-0.5 text-[9px] font-black text-amber-200"
+          className="rounded-full bg-amber-300/12 px-2 py-0.5 j-fs-micro font-black text-amber-200"
         >
           override · fixture-sku {open ? "▲" : "▼"}
         </button>
         {open && (
-          <div className="relative mt-2 flex items-center gap-2 overflow-hidden rounded-lg border border-amber-300/25 bg-amber-300/[0.04] p-2 text-[10px]">
+          <div className="relative mt-2 flex items-center gap-2 overflow-hidden rounded-lg border border-amber-300/25 bg-amber-300/[0.04] p-2 j-fs-micro">
             <motion.div
               aria-hidden
               initial={{ x: "-100%" }}
@@ -128,7 +128,7 @@ function ConsequenceTrailDemo() {
   return (
     <FlowCard id="FLOW-55" title="ConsequenceTrail" reducedFallback="counts update, no flight">
       <div className="flex items-center gap-3">
-        <div ref={cardRef} className="rounded-md border border-white/10 bg-white/[0.02] px-3 py-1.5 text-[10px] text-white/70">
+        <div ref={cardRef} className="rounded-md border border-white/10 bg-white/[0.02] px-3 py-1.5 j-fs-micro text-white/70">
           fixture card
         </div>
         <ReplayButton
@@ -139,7 +139,7 @@ function ConsequenceTrailDemo() {
           }}
         />
       </div>
-      <p className="mt-1 text-[9px] text-white/30">
+      <p className="mt-1 j-fs-micro text-white/30">
         No real activity-feed anchor is mounted on Stage — the chip fades in place instead of flying nowhere (honest-absent, same rule the real Bridge uses).
       </p>
       {chips.map((c) => (
@@ -161,10 +161,10 @@ function UndoRingDemo() {
     <FlowCard id="FLOW-56" title="UndoRing" reducedFallback="numeric countdown only, no draining ring">
       <div className="flex items-center gap-3">
         <CountdownRing msLeft={msLeft} durationMs={DURATION_MS} />
-        <span className="text-[10px] text-white/60">{Math.ceil(msLeft / 1000)}s</span>
+        <span className="j-fs-micro text-white/60">{Math.ceil(msLeft / 1000)}s</span>
         <ReplayButton onClick={() => setMsLeft(DURATION_MS)} />
       </div>
-      <p className="mt-1 text-[9px] text-white/30">Shipped early in F1.T2 inside ApprovalCockpit&apos;s UndoToast — this card demos the same real CountdownRing.</p>
+      <p className="mt-1 j-fs-micro text-white/30">Shipped early in F1.T2 inside ApprovalCockpit&apos;s UndoToast — this card demos the same real CountdownRing.</p>
     </FlowCard>
   )
 }
@@ -176,7 +176,7 @@ function EscalateBeaconDemo() {
   return (
     <FlowCard id="FLOW-57" title="EscalateBeacon" reducedFallback="static chip, no upward travel">
       <div className="flex items-center gap-3">
-        <div ref={cardRef} className="rounded-md border border-white/10 bg-white/[0.02] px-3 py-1.5 text-[10px] text-white/70">
+        <div ref={cardRef} className="rounded-md border border-white/10 bg-white/[0.02] px-3 py-1.5 j-fs-micro text-white/70">
           fixture card
         </div>
         <ReplayButton
@@ -200,7 +200,7 @@ function KeymapHUDDemo() {
     <FlowCard id="FLOW-58" title="KeymapHUD" reducedFallback="same overlay, no spring entrance">
       <div className="flex items-center gap-3">
         <ReplayButton onClick={() => setOpen(true)} />
-        <span className="text-[9px] text-white/40">or press &quot;?&quot; on the real /jarvis/bridge cockpit</span>
+        <span className="j-fs-micro text-white/40">or press &quot;?&quot; on the real /jarvis/bridge cockpit</span>
       </div>
       <KeymapHUD open={open} onClose={() => setOpen(false)} />
     </FlowCard>
@@ -214,7 +214,7 @@ export function DecisionTheaterCatalogSection() {
         <h2 className="j-label">F3 — Decision Theater (FLOW-50..58)</h2>
         <span className="j-chip bg-cyan-400/12 text-cyan-300">9 entries</span>
       </div>
-      <p className="text-[11px] text-[color:var(--j-text-dim)]">
+      <p className="j-fs-micro text-[color:var(--j-text-dim)]">
         Every demo below reuses the same real component the Bridge&apos;s ApprovalCockpit mounts — no Stage-only lookalikes. ConsequenceTrail is honest-absent
         here (no real activity-feed anchor on Stage); see the real chain on <code>/jarvis/bridge</code>.
       </p>

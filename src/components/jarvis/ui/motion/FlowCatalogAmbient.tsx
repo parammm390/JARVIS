@@ -43,7 +43,7 @@ function OrbStatesDemo() {
             className="h-9 w-9 rounded-full"
             style={{ background: ORB_COLOR[state], boxShadow: `0 0 24px ${ORB_COLOR[state]}` }}
           />
-          <span className="text-[10px] font-bold uppercase tracking-wider text-[color:var(--j-text-dim)]">{state}</span>
+          <span className="j-fs-micro font-bold uppercase tracking-wider text-[color:var(--j-text-dim)]">{state}</span>
         </div>
         <ReplayButton onClick={() => setStateIdx((i) => (i + 1) % ORB_STATES.length)} />
       </div>
@@ -58,7 +58,7 @@ function CameraPanDemo() {
   return (
     <FlowCard id="FLOW-15" title="CameraPan" reducedFallback="plain crossfade, no scale/slide">
       <div className="flex w-full items-center justify-between">
-        <motion.div key={key} variants={v} initial="initial" animate="animate" className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-[11px] text-[color:var(--j-text)]">
+        <motion.div key={key} variants={v} initial="initial" animate="animate" className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 j-fs-micro text-[color:var(--j-text)]">
           scene B
         </motion.div>
         <ReplayButton onClick={() => setKey((k) => k + 1)} />
@@ -100,12 +100,12 @@ function TypeSpeechDemo() {
   return (
     <FlowCard id="FLOW-16" title="TypeSpeech" reducedFallback="full text shown immediately, no 20ms/char reveal">
       <div className="flex w-full items-center justify-between">
-        <span className="font-mono text-[11px] text-[color:var(--j-text)]">
+        <span className="font-mono j-fs-micro text-[color:var(--j-text)]">
           {TYPE_SPEECH_TEXT.slice(0, chars)}
           {chars < TYPE_SPEECH_TEXT.length && <span className="jarvis-cursor">▍</span>}
         </span>
         <div className="flex gap-1.5">
-          <button onClick={() => setChars(TYPE_SPEECH_TEXT.length)} className="rounded-full border border-white/12 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-white/60 hover:border-cyan-400/40 hover:text-cyan-200">
+          <button onClick={() => setChars(TYPE_SPEECH_TEXT.length)} className="rounded-full border border-white/12 px-2.5 py-1 j-fs-micro font-bold uppercase tracking-wider text-white/60 hover:border-cyan-400/40 hover:text-cyan-200">
             Skip
           </button>
           <ReplayButton onClick={() => setKey((k) => k + 1)} />
@@ -118,7 +118,7 @@ function TypeSpeechDemo() {
 function BorderBeamDemo() {
   return (
     <FlowCard id="FLOW-17" title="BorderBeam" reducedFallback="static border, no 3s conic-gradient loop">
-      <div className="jarvis-border-beam w-full rounded-lg border border-white/10 bg-black/20 px-4 py-2 text-center text-[11px] text-[color:var(--j-text)]">
+      <div className="jarvis-border-beam w-full rounded-lg border border-white/10 bg-black/20 px-4 py-2 text-center j-fs-micro text-[color:var(--j-text)]">
         executing…
       </div>
     </FlowCard>
@@ -161,7 +161,7 @@ function RadarSweepDemo() {
             className="absolute h-10 w-10 rounded-full border border-cyan-400/50"
           />
         ))}
-        <span className="z-10 font-mono text-[13px] font-black text-[color:var(--j-text)]">7</span>
+        <span className="z-10 font-mono j-fs-sm font-black text-[color:var(--j-text)]">7</span>
       </div>
     </FlowCard>
   )
@@ -228,11 +228,11 @@ function DigestCinematicDemo() {
     <FlowCard id="FLOW-23" title="DigestCinematic" reducedFallback="text shown immediately, no 3–5s cinematic reveal">
       <div className="flex w-full items-center justify-between">
         {playing ? (
-          <motion.span initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 3 }} onAnimationComplete={() => setPlaying(false)} className="text-[11px] text-[color:var(--j-text)]">
+          <motion.span initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 3 }} onAnimationComplete={() => setPlaying(false)} className="j-fs-micro text-[color:var(--j-text)]">
             {DIGEST_TEXT}
           </motion.span>
         ) : (
-          <span className="text-[11px] text-[color:var(--j-text)]">{DIGEST_TEXT}</span>
+          <span className="j-fs-micro text-[color:var(--j-text)]">{DIGEST_TEXT}</span>
         )}
         <ReplayButton onClick={() => setPlaying(true)} />
       </div>
@@ -252,7 +252,7 @@ function ThemeTideDemo() {
   return (
     <FlowCard id="FLOW-24" title="ThemeTide" reducedFallback="instant step change, no 2s crossfade">
       <div className="flex w-full items-center justify-between">
-        <motion.div key={idx} variants={v} initial="initial" animate="animate" className="rounded-lg border border-white/10 px-4 py-2 text-[11px] text-[color:var(--j-text)]" style={{ background: palette.bg }}>
+        <motion.div key={idx} variants={v} initial="initial" animate="animate" className="rounded-lg border border-white/10 px-4 py-2 j-fs-micro text-[color:var(--j-text)]" style={{ background: palette.bg }}>
           {palette.name}
         </motion.div>
         <ReplayButton onClick={() => setIdx((i) => i + 1)} />
@@ -274,7 +274,7 @@ function ShakeDenyDemo() {
           initial="initial"
           animate="animate"
           onAnimationComplete={() => {}}
-          className="jarvis-flash rounded-md border border-red-400/40 bg-red-400/10 px-3 py-1 text-[11px] font-black text-red-300"
+          className="jarvis-flash rounded-md border border-red-400/40 bg-red-400/10 px-3 py-1 j-fs-micro font-black text-red-300"
         >
           DENIED
         </motion.button>

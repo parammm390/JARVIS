@@ -73,7 +73,7 @@ export function RecentThreadsPanel({
             </div>
             <div className="max-h-[55vh] space-y-1 overflow-y-auto p-3">
               {all.length === 0 ? (
-                <div className="px-2 py-3 text-[11px] text-white/45">No threads yet this session.</div>
+                <div className="px-2 py-3 j-fs-micro text-white/45">No threads yet this session.</div>
               ) : (
                 all.map((t) => (
                   <button
@@ -85,15 +85,15 @@ export function RecentThreadsPanel({
                     }}
                     className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-cyan-300/10"
                   >
-                    <span className="truncate text-[12px] text-white">{t.instructionText}</span>
-                    <span className="shrink-0 text-[10px] font-black uppercase tracking-wide text-white/40">
+                    <span className="truncate j-fs-sm text-white">{t.instructionText}</span>
+                    <span className="shrink-0 j-fs-micro font-black uppercase tracking-wide text-white/40">
                       {(t as ThreadData & { __active?: boolean }).__active ? "Active" : summarizeThreadOutcome(t.machine.instructionState)}
                     </span>
                   </button>
                 ))
               )}
             </div>
-            <div className="border-t border-white/10 px-4 py-2 text-[9px] uppercase tracking-widest text-white/35">esc close · select to jump</div>
+            <div className="border-t border-white/10 px-4 py-2 j-fs-micro uppercase tracking-widest text-white/35">esc close · select to jump</div>
           </motion.section>
         </motion.div>
       )}

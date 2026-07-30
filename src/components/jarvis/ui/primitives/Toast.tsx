@@ -24,7 +24,7 @@ export function ToastShell({
       animate={{ opacity: 1, y: index * -6, scale: 1 - index * 0.03 }}
       exit={{ opacity: 0, y: 12 }}
       transition={{ type: "spring", stiffness: 380, damping: 34 }}
-      className="fixed bottom-5 left-1/2 z-[70] flex -translate-x-1/2 items-center gap-3 rounded-full border border-white/15 bg-[#0a1220] px-4 py-2 text-[11px] font-bold text-white shadow-2xl"
+      className="fixed bottom-5 left-1/2 z-[70] flex -translate-x-1/2 items-center gap-3 rounded-full border border-white/15 bg-[#0a1220] px-4 py-2 j-fs-micro font-bold text-white shadow-2xl"
       style={{ zIndex: 70 - index }}
     >
       {children}

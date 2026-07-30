@@ -38,7 +38,7 @@ export function InventoryScene({ payload, compact }: ActionRendererProps) {
 
   if (compact) {
     return (
-      <span className="inline-flex items-center gap-1.5 text-[11px]">
+      <span className="inline-flex items-center gap-1.5 j-fs-micro">
         <Boxes className="h-3 w-3 shrink-0 text-amber-300" />
         <span className="truncate text-[color:var(--j-text)]">
           {label}
@@ -53,9 +53,9 @@ export function InventoryScene({ payload, compact }: ActionRendererProps) {
     <Panel className="border border-amber-300/25 p-3">
       <div className="mb-2 flex items-center gap-1.5">
         <Boxes className="h-3.5 w-3.5 text-amber-300" />
-        <span className="text-[9px] font-black uppercase tracking-widest text-amber-200">{label}</span>
+        <span className="j-fs-micro font-black uppercase tracking-widest text-amber-200">{label}</span>
         {p.reorderNeeded && (
-          <span className="ml-auto rounded-full bg-red-400/14 px-2 py-0.5 text-[8.5px] font-black text-red-300">reorder needed</span>
+          <span className="ml-auto rounded-full bg-red-400/14 px-2 py-0.5 j-fs-micro font-black text-red-300">reorder needed</span>
         )}
       </div>
 
@@ -80,17 +80,17 @@ export function InventoryScene({ payload, compact }: ActionRendererProps) {
         </svg>
         <div className="min-w-0 flex-1 space-y-0.5">
           {typeof p.quantity === "number" && (
-            <div className="text-[11px] text-[color:var(--j-text-dim)]">
+            <div className="j-fs-micro text-[color:var(--j-text-dim)]">
               quantity: <span className="font-black text-[color:var(--j-text)]">{p.quantity}</span>
             </div>
           )}
           {typeof p.reorderThreshold === "number" && (
-            <div className="text-[11px] text-[color:var(--j-text-dim)]">
+            <div className="j-fs-micro text-[color:var(--j-text-dim)]">
               reorder threshold: <span className="font-black text-[color:var(--j-text)]">{p.reorderThreshold}</span>
             </div>
           )}
-          {p.visitId && <div className="truncate text-[10px] text-[color:var(--j-text-faint)]">visit {p.visitId.slice(0, 8)}…</div>}
-          {!hasThresholdData && <div className="text-[10px] text-[color:var(--j-text-faint)]">No stock numbers on this draft yet</div>}
+          {p.visitId && <div className="truncate j-fs-micro text-[color:var(--j-text-faint)]">visit {p.visitId.slice(0, 8)}…</div>}
+          {!hasThresholdData && <div className="j-fs-micro text-[color:var(--j-text-faint)]">No stock numbers on this draft yet</div>}
         </div>
       </div>
     </Panel>

@@ -36,7 +36,7 @@ export function ErrorState({
   }
 
   return (
-    <div className="relative overflow-hidden rounded-lg border border-red-400/30 bg-red-400/5 px-3 py-2 text-[11px] text-red-300">
+    <div className="relative overflow-hidden rounded-lg border border-red-400/30 bg-red-400/5 px-3 py-2 j-fs-micro text-red-300">
       <motion.svg
         aria-hidden
         className="pointer-events-none absolute -left-1 -top-1 h-4 w-4"
@@ -50,7 +50,7 @@ export function ErrorState({
       <div className="flex items-center justify-between gap-3">
         <span>{message}</span>
         {onRetry && (
-          <button onClick={handleRetry} className="shrink-0 rounded-full border border-red-400/40 px-2.5 py-1 text-[9.5px] font-bold text-red-200 hover:bg-red-400/10">
+          <button onClick={handleRetry} className="shrink-0 rounded-full border border-red-400/40 px-2.5 py-1 j-fs-micro font-bold text-red-200 hover:bg-red-400/10">
             Retry
           </button>
         )}

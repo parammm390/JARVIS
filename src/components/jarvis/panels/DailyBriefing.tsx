@@ -57,7 +57,7 @@ function WhyBriefingButton({ domainActionId }: { domainActionId: string }) {
         type="button"
         onClick={open}
         disabled={state === "loading"}
-        className="text-[10px] font-black uppercase tracking-wide text-cyan-300/80 hover:text-cyan-200 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60"
+        className="j-fs-micro font-black uppercase tracking-wide text-cyan-300/80 hover:text-cyan-200 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60"
       >
         {state === "loading" ? "Loading…" : state === "none" ? "No receipt yet" : "Why? →"}
       </button>
@@ -100,44 +100,44 @@ export function DailyBriefing() {
           type="button"
           onClick={() => void load(true)}
           disabled={loading}
-          className="inline-flex items-center gap-1 rounded-full border border-white/12 px-2.5 py-1 text-[9.5px] font-black uppercase tracking-wide text-white/50 transition hover:text-cyan-200 disabled:opacity-40"
+          className="inline-flex items-center gap-1 rounded-full border border-white/12 px-2.5 py-1 j-fs-micro font-black uppercase tracking-wide text-white/50 transition hover:text-cyan-200 disabled:opacity-40"
         >
           <RefreshCw className={`h-3 w-3 ${loading ? "animate-spin" : ""}`} /> Refresh
         </button>
       </div>
       <div className="px-4 py-3">
-        {error && <div className="mb-2 rounded-lg border border-red-400/30 bg-red-400/5 px-3 py-2 text-[11px] text-red-300">{error}</div>}
+        {error && <div className="mb-2 rounded-lg border border-red-400/30 bg-red-400/5 px-3 py-2 j-fs-micro text-red-300">{error}</div>}
         {!data && !error && <div className="jarvis-skeleton-tide h-20 rounded-lg bg-white/5" />}
         {data && (
           <>
-            <p className="text-[12px] leading-relaxed text-[color:var(--j-text)]">{data.spokenSummary}</p>
+            <p className="j-fs-sm leading-relaxed text-[color:var(--j-text)]">{data.spokenSummary}</p>
             <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
               <a href="#approval-dock" className="rounded-lg border border-white/8 bg-white/[0.02] p-2 text-center transition hover:border-cyan-300/30">
                 <div className="text-lg font-black text-[color:var(--j-text)]">{data.pending.total}</div>
-                <div className="text-[9px] uppercase tracking-wide text-[color:var(--j-text-faint)]">pending</div>
+                <div className="j-fs-micro uppercase tracking-wide text-[color:var(--j-text-faint)]">pending</div>
               </a>
               <div className="rounded-lg border border-white/8 bg-white/[0.02] p-2 text-center">
                 <div className="text-lg font-black text-[color:var(--j-text)]">{data.leads.total}</div>
-                <div className="text-[9px] uppercase tracking-wide text-[color:var(--j-text-faint)]">leads</div>
+                <div className="j-fs-micro uppercase tracking-wide text-[color:var(--j-text-faint)]">leads</div>
               </div>
               <div className="rounded-lg border border-white/8 bg-white/[0.02] p-2 text-center">
                 <div className={`text-lg font-black ${data.invoices.overdueCount > 0 ? "text-red-300" : "text-[color:var(--j-text)]"}`}>${data.invoices.overdueTotalUsd.toFixed(0)}</div>
-                <div className="text-[9px] uppercase tracking-wide text-[color:var(--j-text-faint)]">overdue</div>
+                <div className="j-fs-micro uppercase tracking-wide text-[color:var(--j-text-faint)]">overdue</div>
               </div>
               <div className="rounded-lg border border-white/8 bg-white/[0.02] p-2 text-center">
                 <div className="text-lg font-black text-[color:var(--j-text)]">{data.visits.upcomingCount}</div>
-                <div className="text-[9px] uppercase tracking-wide text-[color:var(--j-text-faint)]">upcoming visits</div>
+                <div className="j-fs-micro uppercase tracking-wide text-[color:var(--j-text-faint)]">upcoming visits</div>
               </div>
             </div>
             {data.inventory.lowStockCount > 0 && (
-              <div className="mt-2 flex items-center gap-1.5 text-[11px] text-amber-200">
+              <div className="mt-2 flex items-center gap-1.5 j-fs-micro text-amber-200">
                 <AlertTriangle className="h-3 w-3" /> {data.inventory.lowStockItems.join(", ")}
               </div>
             )}
             <div className="mt-3 flex items-center justify-between">
               <div className="flex flex-wrap gap-1">
                 {data.citations?.map((c, i) => (
-                  <span key={i} title={new Date(c.timestamp).toLocaleString()} className="rounded-full bg-white/6 px-2 py-0.5 text-[9px] text-white/50">
+                  <span key={i} title={new Date(c.timestamp).toLocaleString()} className="rounded-full bg-white/6 px-2 py-0.5 j-fs-micro text-white/50">
                     {c.source}
                   </span>
                 ))}

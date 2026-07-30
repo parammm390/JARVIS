@@ -98,15 +98,15 @@ export function EmptyState({
   return (
     <div className={`flex flex-col items-center gap-2 rounded-xl border border-dashed px-6 py-10 text-center ${shell}`}>
       {family && <Diorama family={family} />}
-      <div className={`text-[12px] font-bold ${amber ? "text-amber-200" : "text-[color:var(--j-text-dim)]"}`}>{title}</div>
-      {description && <p className="max-w-xs text-[10.5px] leading-relaxed text-[color:var(--j-text-faint)]">{description}</p>}
+      <div className={`j-fs-sm font-bold ${amber ? "text-amber-200" : "text-[color:var(--j-text-dim)]"}`}>{title}</div>
+      {description && <p className="max-w-xs j-fs-micro leading-relaxed text-[color:var(--j-text-faint)]">{description}</p>}
       {actionLabel && actionHref && (
-        <Link href={actionHref} className={`mt-2 rounded-full border px-3 py-1.5 text-[10px] font-bold ${action}`}>
+        <Link href={actionHref} className={`mt-2 rounded-full border px-3 py-1.5 j-fs-micro font-bold ${action}`}>
           {actionLabel}
         </Link>
       )}
       {actionLabel && !actionHref && onAction && (
-        <button onClick={onAction} className={`mt-2 rounded-full border px-3 py-1.5 text-[10px] font-bold ${action}`}>
+        <button onClick={onAction} className={`mt-2 rounded-full border px-3 py-1.5 j-fs-micro font-bold ${action}`}>
           {actionLabel}
         </button>
       )}

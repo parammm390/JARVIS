@@ -55,7 +55,7 @@ export function BulkNotifyScene({ payload, compact }: ActionRendererProps) {
 
   if (compact) {
     return (
-      <span className="inline-flex items-center gap-1.5 text-[11px]">
+      <span className="inline-flex items-center gap-1.5 j-fs-micro">
         <Radio className="h-3 w-3 shrink-0 text-amber-300" />
         <span className="truncate text-[color:var(--j-text)]">
           bulk notify · {p.channel ?? "sms"} {count > 0 ? `· ${count} targets` : ""}
@@ -90,18 +90,18 @@ export function BulkNotifyScene({ payload, compact }: ActionRendererProps) {
             />
           ))}
         </div>
-        <span className="text-[9px] font-black uppercase tracking-widest text-amber-200">Bulk Notify — {p.channel ?? "sms"}</span>
+        <span className="j-fs-micro font-black uppercase tracking-widest text-amber-200">Bulk Notify — {p.channel ?? "sms"}</span>
       </div>
 
-      {p.offerScript && <div className="mb-2 rounded-lg bg-white/[0.03] p-2 text-[10.5px] text-[color:var(--j-text-dim)]">{p.offerScript}</div>}
+      {p.offerScript && <div className="mb-2 rounded-lg bg-white/[0.03] p-2 j-fs-micro text-[color:var(--j-text-dim)]">{p.offerScript}</div>}
       {typeof p.discountPercent === "number" && (
-        <div className="mb-1 text-[10.5px] text-[color:var(--j-text-dim)]">
+        <div className="mb-1 j-fs-micro text-[color:var(--j-text-dim)]">
           discount: <span className="font-black text-[color:var(--j-text)]">{p.discountPercent}%</span>
         </div>
       )}
 
       <div className="mt-1">
-        <div className="mb-1 flex items-center justify-between text-[9.5px] font-black uppercase tracking-wide text-[color:var(--j-text-faint)]">
+        <div className="mb-1 flex items-center justify-between j-fs-micro font-black uppercase tracking-wide text-[color:var(--j-text-faint)]">
           <span>volume safety</span>
           <span className={overCap ? "text-red-300" : "text-teal-300"}>
             {count} {Number.isFinite(cap) ? `/ ${cap}` : ""}
@@ -116,13 +116,13 @@ export function BulkNotifyScene({ payload, compact }: ActionRendererProps) {
       </div>
 
       {(typeof p.minMonthsInactive === "number" || typeof p.maxMonthsInactive === "number") && (
-        <div className="mt-2 text-[9.5px] text-[color:var(--j-text-faint)]">
+        <div className="mt-2 j-fs-micro text-[color:var(--j-text-faint)]">
           send window: {p.minMonthsInactive ?? 0}–{p.maxMonthsInactive ?? "∞"} months inactive
         </div>
       )}
 
       {quiet && (
-        <div className="mt-2 flex items-start gap-1.5 rounded-lg border border-amber-300/25 bg-amber-300/[0.06] p-2 text-[10px] leading-relaxed text-amber-100">
+        <div className="mt-2 flex items-start gap-1.5 rounded-lg border border-amber-300/25 bg-amber-300/[0.06] p-2 j-fs-micro leading-relaxed text-amber-100">
           <Moon className="mt-0.5 h-3 w-3 shrink-0" />
           <span>
             Your own quiet hours are active ({quietHoursStart}–{quietHoursEnd}) — this mutes notifications for you. It does not delay sending to customers.

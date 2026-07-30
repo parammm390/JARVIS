@@ -134,7 +134,7 @@ function IntentSparkChip({ from, to, label, reduced, onDone }: { from: DOMRect; 
       transition={{ duration: reduced ? 0.2 : 0.5, ease: EASE.accelerate }}
       onAnimationComplete={onDone}
       style={{ position: "fixed", top: from.top, left: from.left, zIndex: 60 }}
-      className="pointer-events-none whitespace-nowrap rounded-full bg-violet-300/85 px-2 py-0.5 text-[8.5px] font-black text-slate-950"
+      className="pointer-events-none whitespace-nowrap rounded-full bg-violet-300/85 px-2 py-0.5 j-fs-micro font-black text-slate-950"
     >
       {label}
     </motion.div>
@@ -186,21 +186,21 @@ export function IntentSparkTray({
 
   return (
     <div ref={trayRef} className="relative mt-2 w-full rounded-lg border border-violet-400/20 bg-violet-400/5 p-2">
-      <div className="mb-1 text-[9px] font-black uppercase tracking-widest text-violet-300">
+      <div className="mb-1 j-fs-micro font-black uppercase tracking-widest text-violet-300">
         Actions from this call{items.length > 0 ? ` (${items.length})` : ""}
       </div>
       {items.length === 0 ? (
-        <div className="text-[10px] text-[color:var(--j-text-faint)]">Nothing created yet.</div>
+        <div className="j-fs-micro text-[color:var(--j-text-faint)]">Nothing created yet.</div>
       ) : (
         <div className="space-y-1">
           {items.map((a) => (
-            <motion.div key={a.id} layout initial={{ opacity: 0, scale: 0.85 }} animate={{ opacity: 1, scale: 1 }} className="text-[10.5px] text-white/75">
+            <motion.div key={a.id} layout initial={{ opacity: 0, scale: 0.85 }} animate={{ opacity: 1, scale: 1 }} className="j-fs-micro text-white/75">
               {a.actionType.replaceAll("_", " ")} <span className="text-white/35">· {a.status}</span>
             </motion.div>
           ))}
         </div>
       )}
-      <p className="mt-1 text-[8.5px] text-white/25">matched by time window since call start, not a stored call id</p>
+      <p className="mt-1 j-fs-micro text-white/25">matched by time window since call start, not a stored call id</p>
       {chips.map((c) => (
         <IntentSparkChip key={c.id} from={c.from} to={c.to} label={c.label} reduced={!!reduced} onDone={() => setChips((cur) => cur.filter((x) => x.id !== c.id))} />
       ))}
@@ -279,16 +279,16 @@ export function LiveCallPanel({ session }: { session: ReturnType<typeof useVapiS
             <div className="text-sm font-black uppercase tracking-widest text-[color:var(--j-text)]">
               {voiceState === "connecting" ? "Connecting…" : "Speak to Finnor"}
             </div>
-            <p className="mt-1.5 max-w-[240px] text-center text-[11px] leading-relaxed text-[color:var(--j-text-dim)]">
+            <p className="mt-1.5 max-w-[240px] text-center j-fs-micro leading-relaxed text-[color:var(--j-text-dim)]">
               Book work, draft invoices, check stock — it plans, you approve.
             </p>
             {!configured && (
-              <div className="mt-3 rounded-lg border border-amber-400/25 bg-amber-400/5 px-3 py-2 text-center text-[11px] text-amber-200">
+              <div className="mt-3 rounded-lg border border-amber-400/25 bg-amber-400/5 px-3 py-2 text-center j-fs-micro text-amber-200">
                 Voice keys not configured on this deployment.
               </div>
             )}
             {lastError && (
-              <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-400/25 bg-amber-400/5 px-3 py-2 text-left text-[11px] text-amber-200">
+              <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-400/25 bg-amber-400/5 px-3 py-2 text-left j-fs-micro text-amber-200">
                 <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 <span>{lastError}</span>
               </div>
@@ -304,8 +304,8 @@ export function LiveCallPanel({ session }: { session: ReturnType<typeof useVapiS
                 <JarvisOrb size={52} voiceState={voiceState} volumeLevel={volumeLevel} />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="text-[13px] font-black text-[color:var(--j-text)]">Browser voice session</div>
-                <div className="text-[10.5px] text-[color:var(--j-text-dim)]">{voiceState === "speaking" ? "Finnor is speaking…" : "listening to you"}</div>
+                <div className="j-fs-sm font-black text-[color:var(--j-text)]">Browser voice session</div>
+                <div className="j-fs-micro text-[color:var(--j-text-dim)]">{voiceState === "speaking" ? "Finnor is speaking…" : "listening to you"}</div>
               </div>
               <div className="font-mono text-xl font-bold tabular-nums text-emerald-300 [text-shadow:0_0_14px_rgba(52,211,153,0.5)]">
                 {mm}:{ss}
@@ -315,7 +315,7 @@ export function LiveCallPanel({ session }: { session: ReturnType<typeof useVapiS
               <WaveformStrip volumeLevel={volumeLevel} active={live} color={voiceState === "speaking" ? "rgba(34,211,238," : "rgba(45,212,191,"} />
             </div>
             {micSilenceWarning && (
-              <div className="mt-2 flex w-full items-start gap-2 rounded-lg border border-amber-400/25 bg-amber-400/5 px-3 py-2 text-left text-[11px] text-amber-200">
+              <div className="mt-2 flex w-full items-start gap-2 rounded-lg border border-amber-400/25 bg-amber-400/5 px-3 py-2 text-left j-fs-micro text-amber-200">
                 <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 <span>Not picking up your mic — check it isn&apos;t muted or blocked, then try speaking again.</span>
               </div>
@@ -349,7 +349,7 @@ export function LiveCallPanel({ session }: { session: ReturnType<typeof useVapiS
             disabled={!configured || voiceState === "connecting" || (!live && (!signedIn || authLoading))}
             whileHover={reduced ? {} : { scale: 1.04 }}
             whileTap={reduced ? {} : { scale: 0.97 }}
-            className={`inline-flex h-10 items-center gap-2 rounded-full px-6 text-[11px] font-black transition disabled:opacity-40 ${
+            className={`inline-flex h-10 items-center gap-2 rounded-full px-6 j-fs-micro font-black transition disabled:opacity-40 ${
               live
                 ? "bg-red-400 text-slate-950 shadow-[0_0_20px_rgba(248,113,113,0.35)]"
                 : "bg-gradient-to-r from-teal-300 to-cyan-300 text-slate-950 shadow-[0_0_22px_rgba(34,211,238,0.3)]"
@@ -371,7 +371,7 @@ export function LiveCallPanel({ session }: { session: ReturnType<typeof useVapiS
           </motion.button>
         </div>
         {!live && !signedIn && !authLoading && (
-          <p className="mt-2 text-center text-[10.5px] leading-relaxed text-[color:var(--j-text-faint)]">
+          <p className="mt-2 text-center j-fs-micro leading-relaxed text-[color:var(--j-text-faint)]">
             <Link href="/jarvis/login" className="text-cyan-300/80 hover:text-cyan-200">
               Sign in
             </Link>{" "}
@@ -384,13 +384,13 @@ export function LiveCallPanel({ session }: { session: ReturnType<typeof useVapiS
           <div className="flex gap-4 border-b border-white/6 pb-1.5">
             <button
               onClick={() => setTab("transcript")}
-              className={`text-[10.5px] font-bold uppercase tracking-widest ${tab === "transcript" ? "text-cyan-300" : "text-[color:var(--j-text-faint)]"}`}
+              className={`j-fs-micro font-bold uppercase tracking-widest ${tab === "transcript" ? "text-cyan-300" : "text-[color:var(--j-text-faint)]"}`}
             >
               Live Transcript
             </button>
             <button
               onClick={() => setTab("details")}
-              className={`text-[10.5px] font-bold uppercase tracking-widest ${tab === "details" ? "text-cyan-300" : "text-[color:var(--j-text-faint)]"}`}
+              className={`j-fs-micro font-bold uppercase tracking-widest ${tab === "details" ? "text-cyan-300" : "text-[color:var(--j-text-faint)]"}`}
             >
               Session
             </button>
@@ -399,18 +399,18 @@ export function LiveCallPanel({ session }: { session: ReturnType<typeof useVapiS
             {tab === "transcript" ? (
               <>
                 {transcript.length === 0 && (
-                  <div className="pt-4 text-center text-[11px] text-[color:var(--j-text-faint)]">
+                  <div className="pt-4 text-center j-fs-micro text-[color:var(--j-text-faint)]">
                     {live ? "Say something — the transcript streams here." : "Start a session and the conversation streams here, word for word."}
                   </div>
                 )}
                 {transcript.slice(-10).map((m, i) => (
-                  <motion.div key={i} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className="flex gap-2 text-[11.5px] leading-snug">
+                  <motion.div key={i} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className="flex gap-2 j-fs-sm leading-snug">
                     <span className={`shrink-0 font-black ${m.role === "jarvis" ? "text-cyan-300" : "text-white/60"}`}>{m.role === "jarvis" ? "FINNOR" : "YOU"}</span>
                     <span className="text-white/80">{m.text}</span>
                   </motion.div>
                 ))}
                 {live && voiceState !== "speaking" && (
-                  <div className="flex items-center gap-1.5 pt-1 text-[10.5px] text-cyan-300/80">
+                  <div className="flex items-center gap-1.5 pt-1 j-fs-micro text-cyan-300/80">
                     <JarvisOrb size={14} voiceState="live" volumeLevel={volumeLevel} />
                     Finnor is listening
                     {[0, 1, 2].map((i) => (
@@ -420,7 +420,7 @@ export function LiveCallPanel({ session }: { session: ReturnType<typeof useVapiS
                 )}
               </>
             ) : (
-              <div className="space-y-1.5 pt-1 text-[11px] text-[color:var(--j-text-dim)]">
+              <div className="space-y-1.5 pt-1 j-fs-micro text-[color:var(--j-text-dim)]">
                 <div className="flex justify-between"><span>State</span><span className="font-mono text-[color:var(--j-text)]">{voiceState}</span></div>
                 <div className="flex justify-between"><span>Duration</span><span className="font-mono text-[color:var(--j-text)]">{mm}:{ss}</span></div>
                 <div className="flex justify-between"><span>Lines captured</span><span className="font-mono text-[color:var(--j-text)]">{transcript.length}</span></div>
@@ -431,7 +431,7 @@ export function LiveCallPanel({ session }: { session: ReturnType<typeof useVapiS
         </div>
 
         {!live && (
-          <p className="mt-3 text-center text-[9.5px] text-[color:var(--j-text-faint)]">Browser session. Customer phone calls run server-side.</p>
+          <p className="mt-3 text-center j-fs-micro text-[color:var(--j-text-faint)]">Browser session. Customer phone calls run server-side.</p>
         )}
       </div>
     </div>

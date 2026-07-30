@@ -22,9 +22,9 @@ export function PermissionVeil({
   return (
     <div className="flex flex-col items-center gap-2 rounded-xl border border-white/10 bg-white/[0.02] px-6 py-8 text-center backdrop-blur-sm">
       <Lock className="h-4 w-4 text-[color:var(--j-text-faint)]" aria-hidden />
-      <p className="max-w-xs text-[11px] leading-relaxed text-[color:var(--j-text-dim)]">{reason}</p>
+      <p className="max-w-xs j-fs-micro leading-relaxed text-[color:var(--j-text-dim)]">{reason}</p>
       {actionLabel && actionHref && (
-        <Link href={actionHref} className="mt-1 rounded-full border border-cyan-400/30 px-3 py-1.5 text-[10px] font-bold text-cyan-200 hover:border-cyan-400/60 hover:bg-cyan-400/10">
+        <Link href={actionHref} className="mt-1 rounded-full border border-cyan-400/30 px-3 py-1.5 j-fs-micro font-bold text-cyan-200 hover:border-cyan-400/60 hover:bg-cyan-400/10">
           {actionLabel}
         </Link>
       )}

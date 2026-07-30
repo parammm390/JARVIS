@@ -74,7 +74,7 @@ export function CertificationStatus() {
       <div className="flex items-center justify-between border-b border-white/6 px-4 py-2.5">
         <span className="j-label">30-Day Certification (Phase 8)</span>
         <div className="flex items-center gap-2">
-          <span className="rounded-full bg-white/8 px-2 py-0.5 text-[10px] font-black text-white/60">{streak}/30 days logged</span>
+          <span className="rounded-full bg-white/8 px-2 py-0.5 j-fs-micro font-black text-white/60">{streak}/30 days logged</span>
           <button
             type="button"
             onClick={() => void load()}
@@ -85,22 +85,22 @@ export function CertificationStatus() {
         </div>
       </div>
       <div className="px-4 py-3">
-        {error && <div className="mb-2 rounded-lg border border-red-400/30 bg-red-400/5 px-3 py-2 text-[11px] text-red-300">{error}</div>}
+        {error && <div className="mb-2 rounded-lg border border-red-400/30 bg-red-400/5 px-3 py-2 j-fs-micro text-red-300">{error}</div>}
         {!days && !error && <div className="jarvis-skeleton-tide h-16 rounded-lg bg-white/5" />}
 
         {days && (
           <>
-            <div className="mb-1 flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-[color:var(--j-text-faint)]">
+            <div className="mb-1 flex items-center gap-1.5 j-fs-micro font-black uppercase tracking-widest text-[color:var(--j-text-faint)]">
               <TrendingUp className="h-3 w-3" /> Daily scorecard
             </div>
             {days.length === 0 ? (
-              <div className="mb-3 rounded-xl border border-white/8 bg-white/[0.02] px-4 py-4 text-center text-[11px] text-[color:var(--j-text-dim)]">
+              <div className="mb-3 rounded-xl border border-white/8 bg-white/[0.02] px-4 py-4 text-center j-fs-micro text-[color:var(--j-text-dim)]">
                 No days logged yet — the daily_scorecard job writes one real row per calendar day.
               </div>
             ) : (
               <div className="mb-3 space-y-1">
                 {days.slice(0, 7).map((d) => (
-                  <div key={d.logDate} className="flex items-center justify-between rounded-lg border border-white/8 bg-white/[0.02] px-2.5 py-1.5 text-[10px]">
+                  <div key={d.logDate} className="flex items-center justify-between rounded-lg border border-white/8 bg-white/[0.02] px-2.5 py-1.5 j-fs-micro">
                     <span className="text-white/50">{d.logDate}</span>
                     <span className="text-white/70">success {pct(d.workflowSuccessRate)}</span>
                     <span className="text-white/70">recon {d.reconciliationBacklog}</span>
@@ -110,17 +110,17 @@ export function CertificationStatus() {
               </div>
             )}
 
-            <div className="mb-1 flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-[color:var(--j-text-faint)]">
+            <div className="mb-1 flex items-center gap-1.5 j-fs-micro font-black uppercase tracking-widest text-[color:var(--j-text-faint)]">
               <Zap className="h-3 w-3" /> Failure-injection calendar ({passCount} pass{passCount === 1 ? "" : "es"} logged)
             </div>
             {!injections || injections.length === 0 ? (
-              <div className="rounded-xl border border-white/8 bg-white/[0.02] px-4 py-4 text-center text-[11px] text-[color:var(--j-text-dim)]">
+              <div className="rounded-xl border border-white/8 bg-white/[0.02] px-4 py-4 text-center j-fs-micro text-[color:var(--j-text-dim)]">
                 No injections logged yet.
               </div>
             ) : (
               <div className="space-y-1.5">
                 {injections.slice(0, 6).map((i) => (
-                  <div key={i.id} className="rounded-lg border border-white/8 bg-white/[0.02] px-2.5 py-1.5 text-[10px]">
+                  <div key={i.id} className="rounded-lg border border-white/8 bg-white/[0.02] px-2.5 py-1.5 j-fs-micro">
                     <div className="flex items-center justify-between">
                       <span className="font-black text-white/70">{i.kind.replaceAll("_", " ")}</span>
                       <span className={i.outcome === "pass" ? "text-emerald-300" : i.outcome === "fail" ? "text-red-300" : "text-white/40"}>

@@ -53,7 +53,7 @@ export function VoiceCallScene({ call, compact }: { call: CallSceneData; compact
   if (compact) {
     const DirIcon = call.direction === "inbound" ? PhoneIncoming : PhoneOutgoing
     return (
-      <span className="inline-flex items-center gap-1.5 text-[11px]">
+      <span className="inline-flex items-center gap-1.5 j-fs-micro">
         <DirIcon className="h-3 w-3 shrink-0 text-violet-300" />
         <span className="truncate text-[color:var(--j-text)]">
           {call.direction} call {call.fromNumber ?? call.toNumber ?? ""} {call.endedReason ? `· ${call.endedReason.replaceAll("_", " ")}` : ""}
@@ -67,10 +67,10 @@ export function VoiceCallScene({ call, compact }: { call: CallSceneData; compact
       <Panel className="border border-violet-400/25 p-3">
         <div className="mb-2 flex items-center gap-1.5">
           <Phone className="h-3.5 w-3.5 text-violet-300" />
-          <span className="text-[9px] font-black uppercase tracking-widest text-violet-300">
+          <span className="j-fs-micro font-black uppercase tracking-widest text-violet-300">
             {call.direction} call · {call.fromNumber ?? "—"} → {call.toNumber ?? "—"}
           </span>
-          {durationSec !== null && <span className="ml-auto font-mono text-[10px] text-white/40">{durationSec}s</span>}
+          {durationSec !== null && <span className="ml-auto font-mono j-fs-micro text-white/40">{durationSec}s</span>}
         </div>
 
         {call.recordingUrl ? (
@@ -91,7 +91,7 @@ export function VoiceCallScene({ call, compact }: { call: CallSceneData; compact
             </svg>
           </div>
         ) : (
-          <div className="rounded-lg border border-dashed border-white/10 px-2 py-1.5 text-[10px] text-[color:var(--j-text-faint)]">
+          <div className="rounded-lg border border-dashed border-white/10 px-2 py-1.5 j-fs-micro text-[color:var(--j-text-faint)]">
             No recording available for this call — transcript only.
           </div>
         )}
@@ -99,17 +99,17 @@ export function VoiceCallScene({ call, compact }: { call: CallSceneData; compact
         {turns.length > 0 ? (
           <div className="mt-2 max-h-40 space-y-1 overflow-y-auto">
             {turns.map((t, i) => (
-              <div key={i} className="text-[10.5px] leading-relaxed">
+              <div key={i} className="j-fs-micro leading-relaxed">
                 {t.speaker && <span className="mr-1 font-black text-violet-300">{t.speaker}:</span>}
                 <span className="text-[color:var(--j-text-dim)]">{t.text}</span>
               </div>
             ))}
           </div>
         ) : (
-          <div className="mt-2 text-[10.5px] text-[color:var(--j-text-faint)]">No transcript recorded.</div>
+          <div className="mt-2 j-fs-micro text-[color:var(--j-text-faint)]">No transcript recorded.</div>
         )}
 
-        {call.endedReason && <div className="mt-2 text-[9.5px] uppercase tracking-wide text-white/30">ended: {call.endedReason.replaceAll("_", " ")}</div>}
+        {call.endedReason && <div className="mt-2 j-fs-micro uppercase tracking-wide text-white/30">ended: {call.endedReason.replaceAll("_", " ")}</div>}
       </Panel>
     </Enter>
   )

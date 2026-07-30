@@ -45,7 +45,7 @@ export function GeoCinemaCatalogSection() {
         <h2 className="j-label">F9 — Geo Cinema (FLOW-74..80)</h2>
         <span className="j-chip bg-cyan-400/12 text-cyan-300">7 entries</span>
       </div>
-      <p className="text-[11px] text-[color:var(--j-text-dim)]">
+      <p className="j-fs-micro text-[color:var(--j-text-dim)]">
         One real, live <code>DispatchMapCore</code> mount below (FIXTURE Houston-metro data, same shape as a real Dealer Zero
         seeded day) — every FLOW-74..80 behavior fires from real map/marker code, not a lookalike demo. Drag the Day scrub
         slider to see TechComet + the sun-angle gradient move together; click any pin for MapFocusDive.
@@ -56,7 +56,7 @@ export function GeoCinemaCatalogSection() {
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {FIXTURE_ROWS.map((row) => (
           <FlowCard key={row.id} id={`FLOW-${row.id}`} title={row.title} reducedFallback={row.fallback}>
-            <p className="text-[9.5px] leading-relaxed text-white/55">{row.note}</p>
+            <p className="j-fs-micro leading-relaxed text-white/55">{row.note}</p>
           </FlowCard>
         ))}
       </div>

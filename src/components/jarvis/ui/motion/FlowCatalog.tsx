@@ -31,7 +31,7 @@ function PanelSurfaceDemo() {
   return (
     <FlowCard id="FLOW-01" title="PanelSurface" reducedFallback="fade only, no translateY">
       <div className="flex w-full items-center justify-between">
-        <Enter key={key} className="j-panel px-4 py-2 text-[11px] text-[color:var(--j-text)]">
+        <Enter key={key} className="j-panel px-4 py-2 j-fs-micro text-[color:var(--j-text)]">
           Panel content
         </Enter>
         <ReplayButton onClick={() => setKey((k) => k + 1)} />
@@ -47,7 +47,7 @@ function CascadeStaggerDemo() {
       <div className="flex w-full items-center justify-between gap-2">
         <Stagger key={key} staggerMs={30} className="flex gap-1.5">
           {[1, 2, 3, 4].map((n) => (
-            <div key={n} className="h-6 w-6 rounded-md border border-cyan-400/30 bg-cyan-400/10 text-center text-[10px] leading-6 text-cyan-200">
+            <div key={n} className="h-6 w-6 rounded-md border border-cyan-400/30 bg-cyan-400/10 text-center j-fs-micro leading-6 text-cyan-200">
               {n}
             </div>
           ))}
@@ -83,7 +83,7 @@ function OdometerTickerDemo() {
 function RipplePressDemo() {
   return (
     <FlowCard id="FLOW-04" title="RipplePress" reducedFallback="no ripple, caller's own :active state only">
-      <Press className="w-full cursor-pointer rounded-lg border border-violet-400/30 bg-violet-400/10 px-4 py-2 text-center text-[11px] text-violet-200">
+      <Press className="w-full cursor-pointer rounded-lg border border-violet-400/30 bg-violet-400/10 px-4 py-2 text-center j-fs-micro text-violet-200">
         Click / tap anywhere
       </Press>
     </FlowCard>
@@ -196,7 +196,7 @@ function StampApproveDemo() {
   return (
     <FlowCard id="FLOW-10" title="StampApprove" reducedFallback="fade to color, no scale-overshoot/shake">
       <div className="flex w-full items-center justify-between">
-        <motion.div key={key} variants={v} initial="initial" animate="animate" className="rounded-md border border-green-400/40 bg-green-400/15 px-3 py-1 text-[11px] font-black text-green-300">
+        <motion.div key={key} variants={v} initial="initial" animate="animate" className="rounded-md border border-green-400/40 bg-green-400/15 px-3 py-1 j-fs-micro font-black text-green-300">
           APPROVED
         </motion.div>
         <ReplayButton onClick={() => setKey((k) => k + 1)} />
@@ -214,11 +214,11 @@ function ShatterRejectDemo() {
       <div className="flex w-full items-center justify-between">
         <AnimatePresence mode="wait">
           {visible ? (
-            <motion.div key="card" exit="animate" variants={v} initial="initial" animate="initial" className="rounded-md border border-red-400/40 bg-red-400/10 px-3 py-1 text-[11px] font-black text-red-300">
+            <motion.div key="card" exit="animate" variants={v} initial="initial" animate="initial" className="rounded-md border border-red-400/40 bg-red-400/10 px-3 py-1 j-fs-micro font-black text-red-300">
               REJECTED
             </motion.div>
           ) : (
-            <div className="text-[10px] text-[color:var(--j-text-faint)]">gone</div>
+            <div className="j-fs-micro text-[color:var(--j-text-faint)]">gone</div>
           )}
         </AnimatePresence>
         <ReplayButton onClick={() => setVisible((v2) => !v2)} />
@@ -256,7 +256,7 @@ function FlyToDockDemo() {
     <FlowCard id="FLOW-13" title="FlyToDock" reducedFallback="reposition with plain fade, no shared-layout tween">
       <div className="flex w-full items-center justify-between gap-4">
         <div className="flex h-12 w-full items-center rounded-lg border border-white/8 bg-black/20 px-3" style={{ justifyContent: docked ? "flex-end" : "flex-start" }}>
-          <Flight layoutId="flow-13-demo-chip" className="rounded-full bg-cyan-400/20 px-2.5 py-1 text-[10px] font-bold text-cyan-200">
+          <Flight layoutId="flow-13-demo-chip" className="rounded-full bg-cyan-400/20 px-2.5 py-1 j-fs-micro font-bold text-cyan-200">
             item
           </Flight>
         </div>

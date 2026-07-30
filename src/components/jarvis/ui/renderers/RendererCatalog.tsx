@@ -26,9 +26,9 @@ function RegistryGridEntry({ actionType }: { actionType: string }) {
   return (
     <div className="rounded-lg border border-white/8 bg-black/15 p-2">
       <div className="mb-1.5 flex items-center justify-between">
-        <span className="truncate font-mono text-[9px] text-white/40">{actionType}</span>
+        <span className="truncate font-mono j-fs-micro text-white/40">{actionType}</span>
         <span
-          className={`shrink-0 rounded-full px-1.5 py-0.5 text-[8px] font-black uppercase ${
+          className={`shrink-0 rounded-full px-1.5 py-0.5 j-fs-micro font-black uppercase ${
             entry.tier === "flagship" ? "bg-cyan-400/15 text-cyan-300" : "bg-white/8 text-white/50"
           }`}
         >
@@ -47,7 +47,7 @@ export function RendererCatalogSection() {
         <h2 className="j-label">D3 — Action Renderer Registry</h2>
         <span className="j-chip bg-cyan-400/12 text-cyan-300">{REGISTERED_ACTION_TYPES.length} / 42 registered</span>
       </div>
-      <p className="text-[11px] text-[color:var(--j-text-dim)]">
+      <p className="j-fs-micro text-[color:var(--j-text-dim)]">
         Every one of the 41 real business action types (packages/orchestration/src/plugin-registry.ts) resolves to a flagship
         scene or a schema-driven standard card — plus `clarification_request` (P2.T8, its own &ldquo;interactive&rdquo; tier,
         never flagship/standard: a question, not a business action) — zero raw-JSON default surfaces. 8 flagships below get the
@@ -55,7 +55,7 @@ export function RendererCatalogSection() {
       </p>
 
       <div>
-        <h3 className="mb-2 text-[10px] font-black uppercase tracking-widest text-cyan-300">8 Flagship Scenes</h3>
+        <h3 className="mb-2 j-fs-micro font-black uppercase tracking-widest text-cyan-300">8 Flagship Scenes</h3>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {FLAGSHIP_DEMOS.map((d) => (
             <FlowCard key={d.id} id={d.id} title={d.title} reducedFallback={d.reducedFallback}>
@@ -69,7 +69,7 @@ export function RendererCatalogSection() {
       </div>
 
       <div>
-        <h3 className="mb-2 text-[10px] font-black uppercase tracking-widest text-white/50">All 41 registered types (compact)</h3>
+        <h3 className="mb-2 j-fs-micro font-black uppercase tracking-widest text-white/50">All 41 registered types (compact)</h3>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {REGISTERED_ACTION_TYPES.map((actionType) => (
             <RegistryGridEntry key={actionType} actionType={actionType} />

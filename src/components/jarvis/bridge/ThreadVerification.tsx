@@ -55,18 +55,18 @@ export function ThreadVerification({
 
   return (
     <div className="mb-4">
-      <div className="mb-1 flex items-center justify-between text-[9px] font-black uppercase tracking-widest text-[color:var(--j-text-faint)]">
+      <div className="mb-1 flex items-center justify-between j-fs-micro font-black uppercase tracking-widest text-[color:var(--j-text-faint)]">
         <span>Predicted vs actual</span>
         {hasDiff && predictionDiff!.accuracy !== null && (
           <span className="text-[color:var(--j-text-dim)]">{Math.round(predictionDiff!.accuracy * 100)}% matched</span>
         )}
       </div>
 
-      {!hasDiff && !hasPredictedOnly && <p className="text-[11px] text-[color:var(--j-text-dim)]">No prediction was recorded for this action.</p>}
+      {!hasDiff && !hasPredictedOnly && <p className="j-fs-micro text-[color:var(--j-text-dim)]">No prediction was recorded for this action.</p>}
 
       {hasDiff && (
         <div className="space-y-1 rounded-lg border border-white/8 bg-white/[0.02] p-2">
-          <div className="grid grid-cols-[1fr_1fr_1fr] gap-2 text-[9px] font-black uppercase tracking-wide text-[color:var(--j-text-faint)]">
+          <div className="grid grid-cols-[1fr_1fr_1fr] gap-2 j-fs-micro font-black uppercase tracking-wide text-[color:var(--j-text-faint)]">
             <span>Field</span>
             <span>Predicted</span>
             <span>Actual</span>
@@ -77,7 +77,7 @@ export function ThreadVerification({
             return (
               <motion.div
                 key={f.path}
-                className={`grid grid-cols-[1fr_1fr_1fr] items-baseline gap-2 rounded-md px-1.5 py-1 text-[11px] ${f.matched ? "" : "border border-amber-300/30"}`}
+                className={`grid grid-cols-[1fr_1fr_1fr] items-baseline gap-2 rounded-md px-1.5 py-1 j-fs-micro ${f.matched ? "" : "border border-amber-300/30"}`}
                 initial={pulse.initial}
                 animate={pulse.animate}
                 transition={pulse.transition}
@@ -101,7 +101,7 @@ export function ThreadVerification({
       {!hasDiff && hasPredictedOnly && (
         <div className="rounded-lg border border-white/8 bg-white/[0.02] p-2">
           <FieldList value={predicted} />
-          <p className="mt-2 text-[10px] text-[color:var(--j-text-faint)]">Actual outcome not recorded yet.</p>
+          <p className="mt-2 j-fs-micro text-[color:var(--j-text-faint)]">Actual outcome not recorded yet.</p>
         </div>
       )}
     </div>

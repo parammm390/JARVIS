@@ -73,7 +73,7 @@ export function OpsTicker({ soundOn, onToggleSound }: { soundOn: boolean; onTogg
       onMouseLeave={() => setPaused(false)}
     >
       <span
-        className={`flex shrink-0 items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.18em] ${
+        className={`flex shrink-0 items-center gap-1.5 j-fs-micro font-black uppercase tracking-[0.18em] ${
           anySample ? "text-amber-200/90" : "text-teal-200/90"
         }`}
       >
@@ -90,7 +90,7 @@ export function OpsTicker({ soundOn, onToggleSound }: { soundOn: boolean; onTogg
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: -16, opacity: 0 }}
             transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-            className="absolute inset-0 truncate text-[12px] font-bold text-white/75"
+            className="absolute inset-0 truncate j-fs-sm font-bold text-white/75"
           >
             <span className="mr-2">{item.icon}</span>
             {item.text}

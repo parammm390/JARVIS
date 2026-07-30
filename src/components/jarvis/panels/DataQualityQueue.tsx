@@ -72,7 +72,7 @@ export function DataQualityQueue() {
       <div className="flex items-center justify-between border-b border-white/6 px-4 py-2.5">
         <span className="j-label">Data Quality</span>
         <div className="flex items-center gap-2">
-          {rows && rows.length > 0 && <span className="rounded-full bg-amber-300/12 px-2 py-0.5 text-[10px] font-black text-amber-200">{rows.length}</span>}
+          {rows && rows.length > 0 && <span className="rounded-full bg-amber-300/12 px-2 py-0.5 j-fs-micro font-black text-amber-200">{rows.length}</span>}
           <button
             type="button"
             onClick={() => void load()}
@@ -83,27 +83,27 @@ export function DataQualityQueue() {
         </div>
       </div>
       <div className="px-4 py-3">
-        {error && <div className="mb-2 rounded-lg border border-red-400/30 bg-red-400/5 px-3 py-2 text-[11px] text-red-300">{error}</div>}
+        {error && <div className="mb-2 rounded-lg border border-red-400/30 bg-red-400/5 px-3 py-2 j-fs-micro text-red-300">{error}</div>}
         {!rows && !error && <div className="jarvis-skeleton-tide h-16 rounded-lg bg-white/5" />}
-        {rows && rows.length === 0 && <div className="rounded-xl border border-white/8 bg-white/[0.02] px-4 py-6 text-center text-[12px] text-[color:var(--j-text-dim)]">No open findings.</div>}
+        {rows && rows.length === 0 && <div className="rounded-xl border border-white/8 bg-white/[0.02] px-4 py-6 text-center j-fs-sm text-[color:var(--j-text-dim)]">No open findings.</div>}
         <div className="space-y-2">
           {rows?.slice(0, 8).map((f) => (
             <div key={f.id} className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
-              <div className="mb-1 flex items-center justify-between text-[9px] font-black uppercase tracking-widest text-[color:var(--j-text-faint)]">
+              <div className="mb-1 flex items-center justify-between j-fs-micro font-black uppercase tracking-widest text-[color:var(--j-text-faint)]">
                 <span>{f.findingType.replaceAll("_", " ")} · {f.entityType}</span>
                 <span>{ageLabel(f.createdAt, now)}</span>
               </div>
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-1.5">
-                  <span className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase ${SEVERITY_STYLE[f.severity]}`}>{f.severity}</span>
-                  {typeof f.details?.note === "string" && <span className="text-[10px] text-[color:var(--j-text-dim)]">{f.details.note}</span>}
+                  <span className={`rounded-full px-2 py-0.5 j-fs-micro font-black uppercase ${SEVERITY_STYLE[f.severity]}`}>{f.severity}</span>
+                  {typeof f.details?.note === "string" && <span className="j-fs-micro text-[color:var(--j-text-dim)]">{f.details.note}</span>}
                 </div>
                 {role === "owner" && (
                   <button
                     type="button"
                     disabled={inflight === f.id}
                     onClick={() => resolve(f.id)}
-                    className="inline-flex shrink-0 items-center gap-1 rounded-full border border-white/15 px-2.5 py-1 text-[9.5px] font-black text-white/70 hover:text-teal-200 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60"
+                    className="inline-flex shrink-0 items-center gap-1 rounded-full border border-white/15 px-2.5 py-1 j-fs-micro font-black text-white/70 hover:text-teal-200 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60"
                   >
                     <Check className="h-3 w-3" /> Mark resolved
                   </button>

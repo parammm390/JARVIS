@@ -103,15 +103,15 @@ function LiveQueryFixtureSection() {
           <ConnectionBadge connection={connection} />
         </div>
       </div>
-      <p className="mb-3 text-[11px] text-[color:var(--j-text-dim)]">
+      <p className="mb-3 j-fs-micro text-[color:var(--j-text-dim)]">
         Polling a fake feed every 2.5s (no sseUrl passed — B1&apos;s real SSE gateway doesn&apos;t exist yet, so this is the honest
         polling-only behavior every consumer of this hook gets today). {lastUpdatedAt ? `Last update ${new Date(lastUpdatedAt).toLocaleTimeString()}.` : "Waiting for first poll…"}
       </p>
-      {error && <div className="mb-2 rounded-lg border border-red-400/30 bg-red-400/5 px-2 py-1.5 text-[10px] text-red-300">{error}</div>}
+      {error && <div className="mb-2 rounded-lg border border-red-400/30 bg-red-400/5 px-2 py-1.5 j-fs-micro text-red-300">{error}</div>}
       <div className="space-y-1.5">
-        {(data?.items ?? []).length === 0 && <div className="text-[11px] text-[color:var(--j-text-faint)]">No events yet…</div>}
+        {(data?.items ?? []).length === 0 && <div className="j-fs-micro text-[color:var(--j-text-faint)]">No events yet…</div>}
         {(data?.items ?? []).map((item) => (
-          <div key={item.id} className="flex items-center justify-between rounded-lg border border-white/8 bg-white/[0.015] px-3 py-1.5 text-[10.5px]">
+          <div key={item.id} className="flex items-center justify-between rounded-lg border border-white/8 bg-white/[0.015] px-3 py-1.5 j-fs-micro">
             <span className="font-mono text-[color:var(--j-text-dim)]">{item.source}</span>
             <span className="text-[color:var(--j-text-faint)]">{item.id}</span>
           </div>
@@ -136,10 +136,10 @@ function StageContent() {
     return (
       <div className="jarvis-root flex min-h-screen flex-col items-center justify-center gap-4 bg-[color:var(--j-bg)] px-6 text-center">
         <h1 className="text-lg font-black text-[color:var(--j-text)]">Owner access required</h1>
-        <p className="max-w-sm text-[12px] text-[color:var(--j-text-dim)]">
+        <p className="max-w-sm j-fs-sm text-[color:var(--j-text-dim)]">
           The Stage is an internal dev harness for visual QA of JARVIS primitives — not a customer surface.
         </p>
-        <Link href="/jarvis/login" className="rounded-full bg-teal-300 px-4 py-1.5 text-[11px] font-black text-slate-950 hover:bg-teal-200">
+        <Link href="/jarvis/login" className="rounded-full bg-teal-300 px-4 py-1.5 j-fs-micro font-black text-slate-950 hover:bg-teal-200">
           Sign in
         </Link>
       </div>
@@ -151,12 +151,12 @@ function StageContent() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-lg font-black text-[color:var(--j-text)]">JARVIS Stage</h1>
-          <p className="text-[11px] text-[color:var(--j-text-dim)]">
+          <p className="j-fs-micro text-[color:var(--j-text-dim)]">
             Dev harness — every primitive/choreography/renderer mounts here from fixtures (C1.T3). C2&apos;s FLOW motion catalog and C3&apos;s
             effects/primitive kit are both below. D-track renderers add their own sections next.
           </p>
         </div>
-        <button onClick={() => void signOut()} className="rounded-full border border-white/12 px-3 py-1 text-[10px] font-bold text-white/60 hover:text-white">
+        <button onClick={() => void signOut()} className="rounded-full border border-white/12 px-3 py-1 j-fs-micro font-bold text-white/60 hover:text-white">
           Sign out
         </button>
       </div>

@@ -31,10 +31,10 @@ function GlassDemo() {
     <FlowCard id="FX-02" title="Glass + noise" reducedFallback="n/a — static material, no animation to reduce">
       <div className="flex gap-3">
         <Glass className="h-14 w-24" glow="cyan">
-          <div className="flex h-full items-center justify-center text-[9px] text-[color:var(--j-text-dim)]">plain</div>
+          <div className="flex h-full items-center justify-center j-fs-micro text-[color:var(--j-text-dim)]">plain</div>
         </Glass>
         <Glass className="h-14 w-24" glow="teal" noise>
-          <div className="flex h-full items-center justify-center text-[9px] text-[color:var(--j-text-dim)]">+noise</div>
+          <div className="flex h-full items-center justify-center j-fs-micro text-[color:var(--j-text-dim)]">+noise</div>
         </Glass>
       </div>
     </FlowCard>
@@ -56,7 +56,7 @@ function DecryptTextDemo() {
   return (
     <FlowCard id="FX-04" title="DecryptText" reducedFallback="final text shown immediately, no scramble/typewriter reveal">
       <div className="flex w-full items-center justify-between gap-3">
-        <DecryptText key={key} text="binding=native" mode="decrypt" cursor className="font-mono text-[11px] text-[color:var(--j-text)]" />
+        <DecryptText key={key} text="binding=native" mode="decrypt" cursor className="font-mono j-fs-micro text-[color:var(--j-text)]" />
         <ReplayButton onClick={() => setKey((k) => k + 1)} />
       </div>
     </FlowCard>
@@ -66,7 +66,7 @@ function DecryptTextDemo() {
 function BorderBeamFxDemo() {
   return (
     <FlowCard id="FX-05" title="BorderBeam (component)" reducedFallback="static border, no 3s conic-gradient loop (same CSS as FLOW-17)">
-      <BorderBeam className="w-full rounded-lg border border-white/10 bg-black/20 px-4 py-2 text-center text-[11px] text-[color:var(--j-text)]">
+      <BorderBeam className="w-full rounded-lg border border-white/10 bg-black/20 px-4 py-2 text-center j-fs-micro text-[color:var(--j-text)]">
         wrapped via &lt;BorderBeam&gt;
       </BorderBeam>
     </FlowCard>
@@ -80,7 +80,7 @@ export function EffectsCatalogSection() {
         <h2 className="j-label">C3.T1 — ui/fx/ toolkit</h2>
         <span className="j-chip bg-cyan-400/12 text-cyan-300">5 entries</span>
       </div>
-      <p className="text-[11px] text-[color:var(--j-text-dim)]">
+      <p className="j-fs-micro text-[color:var(--j-text-dim)]">
         Glow/Glass/GridBackdrop/DecryptText/BorderBeam. The particle micro-burst engine (also part of this task) already existed as{" "}
         <code>panels/ParticleField.tsx</code> — see FLOW-08&apos;s Replay button above, which now triggers it for real.
       </p>

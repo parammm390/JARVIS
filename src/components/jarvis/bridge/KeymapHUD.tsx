@@ -92,7 +92,7 @@ export function KeymapHUD({ open, onClose }: { open: boolean; onClose: () => voi
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-full border border-white/12 px-2.5 py-1 text-[9px] font-bold text-white/60 hover:text-white"
+                className="rounded-full border border-white/12 px-2.5 py-1 j-fs-micro font-bold text-white/60 hover:text-white"
               >
                 Close
               </button>
@@ -101,16 +101,16 @@ export function KeymapHUD({ open, onClose }: { open: boolean; onClose: () => voi
               {BINDINGS.map((b) => (
                 <div
                   key={b.key}
-                  className={`flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-[11px] transition-colors ${
+                  className={`flex items-center gap-2 rounded-lg border px-2.5 py-1.5 j-fs-micro transition-colors ${
                     lit === b.key ? "border-cyan-300/60 bg-cyan-300/10 text-cyan-200" : "border-white/8 bg-white/[0.02] text-[color:var(--j-text-dim)]"
                   }`}
                 >
-                  <kbd className="rounded border border-white/15 bg-black/30 px-1.5 py-0.5 font-mono text-[10px] font-bold text-white/80">{b.key}</kbd>
+                  <kbd className="rounded border border-white/15 bg-black/30 px-1.5 py-0.5 font-mono j-fs-micro font-bold text-white/80">{b.key}</kbd>
                   <span>{b.label}</span>
                 </div>
               ))}
             </div>
-            <p className="mt-3 text-[9px] text-[color:var(--j-text-faint)]">Press any bound key now — its row lights up on the real keydown.</p>
+            <p className="mt-3 j-fs-micro text-[color:var(--j-text-faint)]">Press any bound key now — its row lights up on the real keydown.</p>
           </motion.div>
         </motion.div>
       )}

@@ -55,7 +55,7 @@ function PanelHeader({ title, sub, live }: { title: string; sub: string; live: b
         <h2 className="bg-gradient-to-r from-white via-teal-100 to-sky-200 bg-clip-text text-lg font-black tracking-tight text-transparent md:text-xl">{title}</h2>
         <p className="text-xs text-white/45">{sub}</p>
       </div>
-      <span className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest ${live ? "bg-teal-300/15 text-teal-200" : "bg-amber-300/15 text-amber-200"}`}>
+      <span className={`rounded-full px-3 py-1 j-fs-micro font-black uppercase tracking-widest ${live ? "bg-teal-300/15 text-teal-200" : "bg-amber-300/15 text-amber-200"}`}>
         {live ? "live data" : "sample data"}
       </span>
     </div>
@@ -65,10 +65,10 @@ function PanelHeader({ title, sub, live }: { title: string; sub: string; live: b
 function Field({ label, ...props }: { label: string } & React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <label className="block">
-      <span className="mb-1 block text-[10px] font-black uppercase tracking-[0.16em] text-white/40">{label}</span>
+      <span className="mb-1 block j-fs-micro font-black uppercase tracking-[0.16em] text-white/40">{label}</span>
       <input
         {...props}
-        className="h-10 w-full rounded-xl border border-white/12 bg-slate-950/70 px-3 text-[13px] text-white placeholder:text-white/25 focus:border-teal-300/50 focus:outline-none"
+        className="h-10 w-full rounded-xl border border-white/12 bg-slate-950/70 px-3 j-fs-sm text-white placeholder:text-white/25 focus:border-teal-300/50 focus:outline-none"
       />
     </label>
   )
@@ -79,7 +79,7 @@ function ActionButton({ children, onClick, busy }: { children: React.ReactNode; 
     <button
       onClick={onClick}
       disabled={busy}
-      className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-teal-300 px-5 text-[11px] font-black text-slate-950 transition hover:-translate-y-0.5 hover:bg-teal-200 disabled:opacity-40"
+      className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-teal-300 px-5 j-fs-micro font-black text-slate-950 transition hover:-translate-y-0.5 hover:bg-teal-200 disabled:opacity-40"
     >
       {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
       {children}
@@ -89,7 +89,7 @@ function ActionButton({ children, onClick, busy }: { children: React.ReactNode; 
 
 function Note({ text }: { text: string | null }) {
   if (!text) return null
-  return <div className="mt-3 rounded-xl border border-teal-300/20 bg-teal-300/5 px-4 py-2.5 text-[12px] text-teal-100">{text}</div>
+  return <div className="mt-3 rounded-xl border border-teal-300/20 bg-teal-300/5 px-4 py-2.5 j-fs-sm text-teal-100">{text}</div>
 }
 
 // ---------- Leads & CRM ----------
@@ -140,12 +140,12 @@ export function LeadsView() {
             <motion.div key={i} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
               className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/8 bg-slate-900/50 px-4 py-3">
               <div>
-                <div className="text-[13px] font-black">{String(c.name ?? "Unnamed")} <span className="font-normal text-white/40">· {String(c.phone ?? "no phone")}</span></div>
-                <div className="text-[11px] text-white/45">{String(r.address ?? "")}</div>
+                <div className="j-fs-sm font-black">{String(c.name ?? "Unnamed")} <span className="font-normal text-white/40">· {String(c.phone ?? "no phone")}</span></div>
+                <div className="j-fs-micro text-white/45">{String(r.address ?? "")}</div>
               </div>
               <div className="flex items-center gap-2">
-                {w.hardness_gpg != null && <span className="rounded-full bg-sky-300/12 px-2.5 py-1 text-[10px] font-black text-sky-200">{String(w.hardness_gpg)} gpg</span>}
-                <span className={`rounded-full px-2.5 py-1 text-[10px] font-black ${r.marketingConsent ? "bg-teal-300/12 text-teal-200" : "bg-white/8 text-white/40"}`}>
+                {w.hardness_gpg != null && <span className="rounded-full bg-sky-300/12 px-2.5 py-1 j-fs-micro font-black text-sky-200">{String(w.hardness_gpg)} gpg</span>}
+                <span className={`rounded-full px-2.5 py-1 j-fs-micro font-black ${r.marketingConsent ? "bg-teal-300/12 text-teal-200" : "bg-white/8 text-white/40"}`}>
                   {r.marketingConsent ? "consented" : "no consent"}
                 </span>
               </div>
@@ -237,10 +237,10 @@ export function CustomersView() {
                   active ? "border-teal-300/50 bg-teal-300/[0.06]" : "border-white/8 bg-slate-900/50 hover:border-white/20"
                 } disabled:cursor-not-allowed disabled:opacity-40`}
               >
-                <div className="truncate text-[13px] font-black">{String(r.address ?? "(address pending)")}</div>
+                <div className="truncate j-fs-sm font-black">{String(r.address ?? "(address pending)")}</div>
                 <div className="mt-1 flex items-center gap-2">
-                  {Boolean(c.name) && <span className="text-[11px] text-white/45">{String(c.name)}</span>}
-                  <span className={`rounded-full px-2 py-0.5 text-[9px] font-black ${r.marketingConsent ? "bg-teal-300/12 text-teal-200" : "bg-white/8 text-white/40"}`}>
+                  {Boolean(c.name) && <span className="j-fs-micro text-white/45">{String(c.name)}</span>}
+                  <span className={`rounded-full px-2 py-0.5 j-fs-micro font-black ${r.marketingConsent ? "bg-teal-300/12 text-teal-200" : "bg-white/8 text-white/40"}`}>
                     {r.marketingConsent ? "consent" : "no consent"}
                   </span>
                 </div>
@@ -262,24 +262,24 @@ export function CustomersView() {
             </div>
           )}
           {selectedId && detailError && !loadingDetail && (
-            <div className="rounded-xl border border-amber-300/20 bg-amber-300/5 px-4 py-3 text-[12px] text-amber-100">{detailError}</div>
+            <div className="rounded-xl border border-amber-300/20 bg-amber-300/5 px-4 py-3 j-fs-sm text-amber-100">{detailError}</div>
           )}
           {detail && !loadingDetail && (
             <div>
               <div className="rounded-xl border border-white/8 bg-slate-900/50 p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <div className="text-[15px] font-black">{detail.household.address}</div>
-                    <span className={`mt-1.5 inline-block rounded-full px-2.5 py-1 text-[10px] font-black ${detail.household.marketingConsent ? "bg-teal-300/12 text-teal-200" : "bg-rose-300/12 text-rose-200"}`}>
+                    <div className="j-fs-base font-black">{detail.household.address}</div>
+                    <span className={`mt-1.5 inline-block rounded-full px-2.5 py-1 j-fs-micro font-black ${detail.household.marketingConsent ? "bg-teal-300/12 text-teal-200" : "bg-rose-300/12 text-rose-200"}`}>
                       {detail.household.marketingConsent ? "marketing consent" : "no marketing consent"}
                     </span>
                   </div>
-                  <span className="shrink-0 text-[10px] text-white/30">{detail.queryMs.toFixed(1)}ms</span>
+                  <span className="shrink-0 j-fs-micro text-white/30">{detail.queryMs.toFixed(1)}ms</span>
                 </div>
                 {detail.contacts.length > 0 && (
                   <div className="mt-3 space-y-1.5 border-t border-white/8 pt-3">
                     {detail.contacts.map((c) => (
-                      <div key={c.id} className="text-[12px] text-white/70">
+                      <div key={c.id} className="j-fs-sm text-white/70">
                         <span className="font-black text-white/90">{c.name}</span>
                         {c.role && <span className="text-white/40"> · {c.role}</span>}
                         {c.methods.map((m, j) => (
@@ -300,19 +300,19 @@ export function CustomersView() {
                 ].map((s) => (
                   <div key={s.label} className="rounded-xl border border-white/8 bg-slate-900/50 px-3 py-3 text-center">
                     <div className="text-xl font-black tabular-nums text-teal-200">{s.value}</div>
-                    <div className="mt-0.5 text-[9.5px] font-bold uppercase tracking-wide text-white/40">{s.label}</div>
+                    <div className="mt-0.5 j-fs-micro font-bold uppercase tracking-wide text-white/40">{s.label}</div>
                   </div>
                 ))}
               </div>
 
               <div className="mt-4 max-h-64 space-y-1.5 overflow-y-auto">
-                {detail.timeline.length === 0 && <div className="rounded-xl border border-white/8 px-4 py-4 text-center text-[12px] text-white/40">No recorded activity yet.</div>}
+                {detail.timeline.length === 0 && <div className="rounded-xl border border-white/8 px-4 py-4 text-center j-fs-sm text-white/40">No recorded activity yet.</div>}
                 {detail.timeline.map((e, i) => (
                   <div key={i} className="flex items-center justify-between rounded-xl border border-white/8 bg-slate-900/40 px-3.5 py-2.5">
-                    <span className="text-[12.5px]">
+                    <span className="j-fs-sm">
                       {timelineIcon(e.eventType)} <span className="font-black text-teal-200">{e.eventType.replaceAll("_", " ")}</span>
                     </span>
-                    <span className="text-[10px] text-white/35">{relTime(e.occurredAt)}</span>
+                    <span className="j-fs-micro text-white/35">{relTime(e.occurredAt)}</span>
                   </div>
                 ))}
               </div>
@@ -350,7 +350,7 @@ function StatTile({
   const valueTone = tone === "amber" ? "text-amber-300" : tone === "rose" ? "text-rose-300" : tone === "teal" ? "text-teal-200" : "text-white/85"
   return (
     <div className="rounded-xl border border-white/8 bg-slate-900/50 px-4 py-3">
-      <div className="text-[10px] font-black uppercase tracking-[0.16em] text-white/40">{label}</div>
+      <div className="j-fs-micro font-black uppercase tracking-[0.16em] text-white/40">{label}</div>
       <div className={`mt-1 text-xl font-black tabular-nums ${valueTone}`}>{value}</div>
     </div>
   )
@@ -381,7 +381,7 @@ function ReliabilityOpsPanel() {
         <StatTile label="Reconciliation backlog" value={String(backlog)} tone={backlog > 20 ? "amber" : "white"} />
         <StatTile label="DLQ depth" value={String(dlq)} tone={dlq > 10 ? "rose" : "white"} />
       </div>
-      <p className="mt-3 text-[10.5px] text-white/35">
+      <p className="mt-3 j-fs-micro text-white/35">
         {reliability ? `${reliability.stepLatencyMs.sampleSize} steps sampled over the last ${reliability.windowDays}-day window · as of ${new Date(reliability.asOf).toLocaleTimeString()}.` : "Waiting for live data."}
       </p>
     </div></Glass>
@@ -400,7 +400,7 @@ export function WorkflowsView() {
           const cur = stages.indexOf(String(r.state))
           return (
             <div key={i} className="rounded-xl border border-white/8 bg-slate-900/50 p-4">
-              <div className="mb-3 flex items-center justify-between text-[11px]">
+              <div className="mb-3 flex items-center justify-between j-fs-micro">
                 <span className="font-black uppercase tracking-wider text-white/70">{String(r.workflow).replaceAll("_", " ")}</span>
                 <span className="text-white/35">{String(r.subjectType).replaceAll("_", " ")}</span>
               </div>
@@ -408,7 +408,7 @@ export function WorkflowsView() {
                 {stages.map((st, j) => (
                   <div key={st} className="flex flex-1 flex-col items-center gap-1">
                     <div className={`h-2 w-full rounded-full ${j < cur ? "bg-teal-400/70" : j === cur ? "bg-gradient-to-r from-teal-300 to-sky-400" : "bg-white/8"}`} />
-                    <span className={`hidden text-[9px] font-bold uppercase tracking-wide md:block ${j === cur ? "text-teal-200" : "text-white/30"}`}>{st.replaceAll("_", " ")}</span>
+                    <span className={`hidden j-fs-micro font-bold uppercase tracking-wide md:block ${j === cur ? "text-teal-200" : "text-white/30"}`}>{st.replaceAll("_", " ")}</span>
                   </div>
                 ))}
               </div>
@@ -462,10 +462,10 @@ export function InventoryView() {
           return (
             <div key={i} className="rounded-xl border border-white/8 bg-slate-900/50 p-4">
               <div className="flex items-center justify-between">
-                <div className="text-[13px] font-black">{String(r.name)}</div>
+                <div className="j-fs-sm font-black">{String(r.name)}</div>
                 <span className={`text-lg font-black tabular-nums ${low ? "text-amber-300" : "text-teal-200"}`}>{qty}</span>
               </div>
-              <div className="mt-1 flex items-center justify-between text-[11px] text-white/40">
+              <div className="mt-1 flex items-center justify-between j-fs-micro text-white/40">
                 <span>{String(r.sku)} · reorder at {thr}</span>
                 {low && <span className="font-black text-amber-300">REORDER</span>}
               </div>
@@ -474,7 +474,7 @@ export function InventoryView() {
                   initial={{ width: 0 }} animate={{ width: `${Math.min(100, (qty / Math.max(1, thr * 3)) * 100)}%` }} transition={{ duration: 0.8 }} />
               </div>
               <button onClick={() => logUse(String(r.sku))} disabled={busySku === String(r.sku)}
-                className="mt-3 rounded-full border border-white/15 px-4 py-1.5 text-[10px] font-black uppercase tracking-wider text-white/70 transition hover:border-teal-300/40 hover:text-white disabled:opacity-40">
+                className="mt-3 rounded-full border border-white/15 px-4 py-1.5 j-fs-micro font-black uppercase tracking-wider text-white/70 transition hover:border-teal-300/40 hover:text-white disabled:opacity-40">
                 {busySku === String(r.sku) ? "logging…" : "Log 1 used on visit"}
               </button>
             </div>
@@ -522,11 +522,11 @@ function ProviderChip({
     <div className={`flex items-center gap-3 rounded-xl border px-4 py-3 ${toneClasses}`}>
       <Icon className={`h-4 w-4 shrink-0 ${iconTone}`} />
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2 text-[12.5px] font-black text-white/85">
+        <div className="flex items-center gap-2 j-fs-sm font-black text-white/85">
           {label}
-          {live && <span className="rounded-full bg-teal-300/15 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-teal-200">active binding</span>}
+          {live && <span className="rounded-full bg-teal-300/15 px-2 py-0.5 j-fs-micro font-black uppercase tracking-wider text-teal-200">active binding</span>}
         </div>
-        <div className="truncate text-[11px] text-white/45">
+        <div className="truncate j-fs-micro text-white/45">
           {!health?.configured
             ? "Not connected — add credentials to activate"
             : health.healthy === false
@@ -565,7 +565,7 @@ function PaymentsEsignOpsPanel() {
           icon={FileSignature}
         />
       </div>
-      <p className="mt-3 text-[10.5px] text-white/35">
+      <p className="mt-3 j-fs-micro text-white/35">
         Both capabilities run on a safe, fully-functional emulator until real credentials are set — <code className="text-teal-200/80">STRIPE_SECRET_KEY</code> +{" "}
         <code className="text-teal-200/80">PAYMENTS_BINDING=stripe</code>, or <code className="text-teal-200/80">DOCUSIGN_INTEGRATION_KEY</code>/
         <code className="text-teal-200/80">USER_ID</code>/<code className="text-teal-200/80">ACCOUNT_ID</code>/<code className="text-teal-200/80">PRIVATE_KEY</code> +{" "}
@@ -605,7 +605,7 @@ export function InvoicesView() {
       <PanelHeader title="Invoices" sub="Native ledger — create, remind, record payment. No accounting SaaS required." live={live} />
       <div className="mb-4 flex items-center gap-3">
         <span className="rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-3 text-2xl font-black tabular-nums text-teal-200">${total.toLocaleString()}</span>
-        <span className="text-[11px] text-white/40">total invoiced<br />({rows.length} invoice{rows.length === 1 ? "" : "s"})</span>
+        <span className="j-fs-micro text-white/40">total invoiced<br />({rows.length} invoice{rows.length === 1 ? "" : "s"})</span>
       </div>
       <div className="mb-4 grid gap-3 md:grid-cols-4">
         <Field label="Customer phone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+1 319 555 0142" />
@@ -616,10 +616,10 @@ export function InvoicesView() {
       <Note text={note} />
       <div className="mt-3 space-y-2">
         {rows.slice(0, 8).map((r, i) => (
-          <div key={i} className="flex items-center justify-between rounded-xl border border-white/8 bg-slate-900/50 px-4 py-3 text-[13px]">
+          <div key={i} className="flex items-center justify-between rounded-xl border border-white/8 bg-slate-900/50 px-4 py-3 j-fs-sm">
             <span className="font-black tabular-nums">${String(r.amountUsd)}</span>
             <span className="min-w-0 flex-1 truncate px-4 text-white/50">{String(r.memo ?? "")}</span>
-            <span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase ${r.status === "paid" ? "bg-teal-300/12 text-teal-200" : r.status === "overdue" ? "bg-amber-300/12 text-amber-200" : "bg-white/8 text-white/50"}`}>
+            <span className={`rounded-full px-2.5 py-1 j-fs-micro font-black uppercase ${r.status === "paid" ? "bg-teal-300/12 text-teal-200" : r.status === "overdue" ? "bg-amber-300/12 text-amber-200" : "bg-white/8 text-white/50"}`}>
               {String(r.status)}
             </span>
           </div>
@@ -679,13 +679,13 @@ export function ComplianceView() {
           <div key={k} className="flex items-center gap-3 rounded-xl border border-white/8 bg-slate-900/50 px-4 py-3">
             <Icon className="h-4 w-4 shrink-0 text-teal-300" />
             <div>
-              <div className="text-[12px] font-black">{k}</div>
-              <div className="text-[11px] text-white/45">{v}</div>
+              <div className="j-fs-sm font-black">{k}</div>
+              <div className="j-fs-micro text-white/45">{v}</div>
             </div>
           </div>
         ))}
       </div>
-      <p className="mt-3 text-[10px] text-white/30">Source: EPA National Primary/Secondary Drinking Water Regulations — stored as tenant policy, editable, never hardcoded.</p>
+      <p className="mt-3 j-fs-micro text-white/30">Source: EPA National Primary/Secondary Drinking Water Regulations — stored as tenant policy, editable, never hardcoded.</p>
     </div></Glass>
   )
 }
@@ -742,21 +742,21 @@ export function ResearchView() {
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && run("search")}
             placeholder='"Cedar Falls Iowa" or a business name or any question'
-            className="h-11 w-full rounded-full border border-white/12 bg-slate-950/70 pl-10 pr-4 text-[13px] text-white placeholder:text-white/25 focus:border-teal-300/50 focus:outline-none"
+            className="h-11 w-full rounded-full border border-white/12 bg-slate-950/70 pl-10 pr-4 j-fs-sm text-white placeholder:text-white/25 focus:border-teal-300/50 focus:outline-none"
           />
         </div>
         <ActionButton onClick={() => run("search")} busy={busy}>Search</ActionButton>
-        <button onClick={() => run("competitors")} disabled={busy} className="rounded-full border border-white/15 px-4 py-2 text-[10px] font-black uppercase tracking-wider text-white/70 transition hover:border-teal-300/40 hover:text-white disabled:opacity-40">Competitor scan</button>
-        <button onClick={() => run("reviews")} disabled={busy} className="rounded-full border border-white/15 px-4 py-2 text-[10px] font-black uppercase tracking-wider text-white/70 transition hover:border-teal-300/40 hover:text-white disabled:opacity-40">Review scan</button>
+        <button onClick={() => run("competitors")} disabled={busy} className="rounded-full border border-white/15 px-4 py-2 j-fs-micro font-black uppercase tracking-wider text-white/70 transition hover:border-teal-300/40 hover:text-white disabled:opacity-40">Competitor scan</button>
+        <button onClick={() => run("reviews")} disabled={busy} className="rounded-full border border-white/15 px-4 py-2 j-fs-micro font-black uppercase tracking-wider text-white/70 transition hover:border-teal-300/40 hover:text-white disabled:opacity-40">Review scan</button>
       </div>
       <Note text={note} />
       <div className="mt-4 space-y-2">
         {results.map((r, i) => (
           <motion.a key={i} href={r.url} target="_blank" rel="noreferrer" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.07 }}
             className="block rounded-xl border border-white/8 bg-slate-900/50 px-4 py-3 transition hover:border-teal-300/30">
-            <div className="text-[13px] font-black text-teal-100">{r.title}</div>
-            <div className="truncate text-[10px] text-sky-300/70">{r.url}</div>
-            <div className="mt-1 line-clamp-2 text-[12px] text-white/55">{r.snippet}</div>
+            <div className="j-fs-sm font-black text-teal-100">{r.title}</div>
+            <div className="truncate j-fs-micro text-sky-300/70">{r.url}</div>
+            <div className="mt-1 line-clamp-2 j-fs-sm text-white/55">{r.snippet}</div>
           </motion.a>
         ))}
       </div>
@@ -783,40 +783,40 @@ function VoiceOpsPanel() {
           <>
             <Phone className="h-4 w-4 shrink-0 text-teal-300" />
             <div className="min-w-0">
-              <div className="text-[12.5px] font-black text-white/85">
+              <div className="j-fs-sm font-black text-white/85">
                 {phoneRouting.numbers.length} line{phoneRouting.numbers.length === 1 ? "" : "s"} registered for tenant routing
               </div>
-              <div className="truncate text-[11px] text-white/45">{phoneRouting.numbers.map((n) => n.label || n.phoneNumber).join(", ")}</div>
+              <div className="truncate j-fs-micro text-white/45">{phoneRouting.numbers.map((n) => n.label || n.phoneNumber).join(", ")}</div>
             </div>
           </>
         ) : (
           <>
             <PhoneOff className="h-4 w-4 shrink-0 text-amber-300" />
             <div className="min-w-0">
-              <div className="text-[12.5px] font-black text-amber-200">No phone line registered yet</div>
-              <div className="text-[11px] text-white/45">Calls fall back to the single default tenant — fine for one dealer, not for multi-line.</div>
+              <div className="j-fs-sm font-black text-amber-200">No phone line registered yet</div>
+              <div className="j-fs-micro text-white/45">Calls fall back to the single default tenant — fine for one dealer, not for multi-line.</div>
             </div>
           </>
         )}
       </div>
 
-      <div className="mb-2 text-[10px] font-black uppercase tracking-[0.16em] text-white/40">Unclear confirmation phrasings</div>
+      <div className="mb-2 j-fs-micro font-black uppercase tracking-[0.16em] text-white/40">Unclear confirmation phrasings</div>
       <div className="max-h-56 space-y-2 overflow-y-auto rounded-xl border border-white/8 bg-slate-950/50 p-4">
         {unclear.length === 0 ? (
-          <div className="py-3 text-center text-[11.5px] text-white/35">
+          <div className="py-3 text-center j-fs-sm text-white/35">
             {live ? "No unclear phrasings recorded yet — every yes/no has parsed cleanly." : "Awaiting connection to the live API."}
           </div>
         ) : (
           unclear.map((u, i) => (
-            <div key={i} className="flex items-baseline justify-between gap-3 text-[12px] leading-relaxed">
+            <div key={i} className="flex items-baseline justify-between gap-3 j-fs-sm leading-relaxed">
               <span className="text-white/75">&ldquo;{u.transcript}&rdquo;</span>
-              <span className="shrink-0 font-mono text-[10px] text-white/35">{ageLabel(u.at, now || Date.now())} ago</span>
+              <span className="shrink-0 font-mono j-fs-micro text-white/35">{ageLabel(u.at, now || Date.now())} ago</span>
             </div>
           ))
         )}
       </div>
       {unclear.length > 0 && (
-        <p className="mt-2 text-[10.5px] text-white/35">
+        <p className="mt-2 j-fs-micro text-white/35">
           Add a phrasing above to <code className="text-teal-200/80">policy.approvePhrases</code>/<code className="text-teal-200/80">rejectPhrases</code> for
           &ldquo;voice_confirmation&rdquo; and it stops showing up here once it starts matching.
         </p>
@@ -852,13 +852,13 @@ export function VoiceConsoleView({
         <div className="mt-4 text-sm font-black uppercase tracking-widest text-white/60">
           {voiceState === "live" ? "Listening — speak naturally" : voiceState === "connecting" ? "Connecting…" : "Tap to start a voice session"}
         </div>
-        <div className="mt-1 max-w-md text-center text-[11px] text-white/35">
+        <div className="mt-1 max-w-md text-center j-fs-micro text-white/35">
           &ldquo;Create a lead for Sarah Kim…&rdquo; · &ldquo;Book a water test Tuesday…&rdquo; · &ldquo;Check RO membrane stock&rdquo; · &ldquo;Scan competitors near Cedar Falls&rdquo;
         </div>
       </div>
       <div className="max-h-64 space-y-2 overflow-y-auto rounded-xl border border-white/8 bg-slate-950/50 p-4">
         {feed.slice(-12).map((m, i) => (
-          <div key={i} className="text-[13px] leading-relaxed">
+          <div key={i} className="j-fs-sm leading-relaxed">
             <span className={m.role === "jarvis" ? "font-black text-teal-200" : "font-black text-white/70"}>{m.role === "jarvis" ? "JARVIS" : "YOU"}</span>{" "}
             <span className={m.role === "jarvis" ? "text-white/80" : "text-white/60"}>{m.text}</span>
           </div>
@@ -894,8 +894,8 @@ function BindingChip({ capability, value }: { capability: string; value: Binding
   const real = value.mode !== "emulator"
   return (
     <div className={`rounded-xl border px-3 py-2.5 ${real ? "border-teal-300/25 bg-teal-300/8" : "border-white/8 bg-slate-950/50"}`}>
-      <div className="text-[9.5px] font-black uppercase tracking-[0.14em] text-white/40">{BINDING_LABELS[capability] ?? capability}</div>
-      <div className={`text-[12.5px] font-black ${real ? "text-teal-200" : "text-white/55"}`}>{value.mode}</div>
+      <div className="j-fs-micro font-black uppercase tracking-[0.14em] text-white/40">{BINDING_LABELS[capability] ?? capability}</div>
+      <div className={`j-fs-sm font-black ${real ? "text-teal-200" : "text-white/55"}`}>{value.mode}</div>
     </div>
   )
 }
@@ -918,36 +918,36 @@ function SystemHealthPanel() {
         <div className="flex items-center gap-3 rounded-xl border border-white/8 bg-slate-950/50 px-4 py-3">
           <Server className="h-4 w-4 shrink-0 text-teal-300" />
           <div>
-            <div className="text-[9.5px] font-black uppercase tracking-[0.14em] text-white/40">Environment</div>
-            <div className="text-[13px] font-black text-white/85">{env?.nodeEnv ?? "—"}</div>
+            <div className="j-fs-micro font-black uppercase tracking-[0.14em] text-white/40">Environment</div>
+            <div className="j-fs-sm font-black text-white/85">{env?.nodeEnv ?? "—"}</div>
           </div>
         </div>
         <div className="flex items-center gap-3 rounded-xl border border-white/8 bg-slate-950/50 px-4 py-3">
           <KeyRound className="h-4 w-4 shrink-0 text-teal-300" />
           <div>
-            <div className="text-[9.5px] font-black uppercase tracking-[0.14em] text-white/40">Secrets provider</div>
-            <div className="text-[13px] font-black text-white/85">
+            <div className="j-fs-micro font-black uppercase tracking-[0.14em] text-white/40">Secrets provider</div>
+            <div className="j-fs-sm font-black text-white/85">
               {!env ? "—" : env.secretProvider.provider === "aws-secrets-manager" ? "AWS Secrets Manager" : "Plain env vars"}
-              {env?.secretProvider.loaded && <span className="ml-2 text-[10px] font-bold text-teal-300">loaded</span>}
+              {env?.secretProvider.loaded && <span className="ml-2 j-fs-micro font-bold text-teal-300">loaded</span>}
             </div>
           </div>
         </div>
       </div>
 
-      <div className="mb-2 text-[10px] font-black uppercase tracking-[0.16em] text-white/40">Capability bindings</div>
+      <div className="mb-2 j-fs-micro font-black uppercase tracking-[0.16em] text-white/40">Capability bindings</div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         {env ? (
           Object.entries(env.bindings).map(([capability, value]) => <BindingChip key={capability} capability={capability} value={value} />)
         ) : (
-          <div className="col-span-3 py-3 text-center text-[11.5px] text-white/35">Awaiting connection to the live API.</div>
+          <div className="col-span-3 py-3 text-center j-fs-sm text-white/35">Awaiting connection to the live API.</div>
         )}
       </div>
-      <p className="mt-3 text-[10.5px] text-white/35">
+      <p className="mt-3 j-fs-micro text-white/35">
         Every binding defaults to <code className="text-teal-200/80">emulator</code> — fully functional, zero real credentials required — until a dealer&rsquo;s
         real provider keys are set and its <code className="text-teal-200/80">*_BINDING</code> env var is flipped. Same opt-in-only posture as{" "}
         {integrationsStatus ? "the Payments & E-Sign providers above" : "every capability on this page"}.
       </p>
-      <p className="mt-2 text-[10.5px] text-white/30">
+      <p className="mt-2 j-fs-micro text-white/30">
         RBAC (dispatcher/technician approval scopes) and per-request correlation-id tracing are enforced and logged server-side — verified by
         <code className="ml-1 text-teal-200/80">tests/integration/rbac-approval.test.ts</code> and{" "}
         <code className="text-teal-200/80">correlation-id.test.ts</code> in finnor-os, not surfaced here as a live feed to avoid faking data this page can&rsquo;t

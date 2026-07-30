@@ -39,7 +39,7 @@ function AxisEtchDemo() {
           <AreaSparkline key={key} values={FIXTURE_SPARK} width={140} height={44} color="var(--j-cyan)" axisEtch />
           <ReplayButton onClick={() => setKey((k) => k + 1)} />
         </div>
-        <p className="text-[9px] text-white/30">FIXTURE spark — the real one lives on AnalyticsRow&apos;s System Performance panel.</p>
+        <p className="j-fs-micro text-white/30">FIXTURE spark — the real one lives on AnalyticsRow&apos;s System Performance panel.</p>
       </DemoStack>
     </FlowCard>
   )
@@ -58,13 +58,13 @@ function BarSettleDemo() {
         <div className="w-full space-y-2">
           {rows.map((r, i) => (
             <div key={r.label}>
-              <div className="mb-0.5 text-[9px] text-white/40">{r.label}</div>
+              <div className="mb-0.5 j-fs-micro text-white/40">{r.label}</div>
               <GradientBar pct={Math.max(4, Math.min(100, r.pct))} from="#22d3ee" to="#3b82f6" index={i} />
             </div>
           ))}
         </div>
         <ReplayButton onClick={() => setSeed((s) => s + 1)} />
-        <p className="text-[9px] text-white/30">FIXTURE rows — the real one is AnalyticsRow&apos;s ActionMixBars, sorted by real planner counts.</p>
+        <p className="j-fs-micro text-white/30">FIXTURE rows — the real one is AnalyticsRow&apos;s ActionMixBars, sorted by real planner counts.</p>
       </DemoStack>
     </FlowCard>
   )
@@ -85,7 +85,7 @@ function DonutCarveDemo() {
                 onMouseLeave={() => setActive(null)}
                 onFocus={() => setActive(s.label)}
                 onBlur={() => setActive(null)}
-                className="flex items-center gap-1.5 text-[9px] text-white/50"
+                className="flex items-center gap-1.5 j-fs-micro text-white/50"
               >
                 <span className="h-1.5 w-1.5 rounded-full" style={{ background: s.color }} />
                 {s.label}
@@ -93,7 +93,7 @@ function DonutCarveDemo() {
             ))}
           </div>
         </div>
-        <p className="text-[9px] text-white/30">FIXTURE segments — the real one is AnalyticsRow&apos;s ChannelDonut, hover a legend row to lift its arc.</p>
+        <p className="j-fs-micro text-white/30">FIXTURE segments — the real one is AnalyticsRow&apos;s ChannelDonut, hover a legend row to lift its arc.</p>
       </DemoStack>
     </FlowCard>
   )
@@ -104,7 +104,7 @@ function SparkPulseDemo() {
     <FlowCard id="FLOW-84" title="SparkPulse" reducedFallback="static latest point, no blink">
       <DemoStack>
         <AreaSparkline values={FIXTURE_SPARK} width={140} height={44} color="var(--j-green)" />
-        <p className="text-[9px] text-white/30">Always-on inside AreaSparkline — watch the trailing dot blink (LiveDot lineage).</p>
+        <p className="j-fs-micro text-white/30">Always-on inside AreaSparkline — watch the trailing dot blink (LiveDot lineage).</p>
       </DemoStack>
     </FlowCard>
   )
@@ -119,7 +119,7 @@ function DeltaShimmerDemo() {
           <DeltaChip label={`+${n} this session`} tone="up" />
           <ReplayButton onClick={() => setN((v) => v + 1)} />
         </div>
-        <p className="text-[9px] text-white/30">The real one is KpiStrip&apos;s delta chip, shimmers when the real underlying count changes.</p>
+        <p className="j-fs-micro text-white/30">The real one is KpiStrip&apos;s delta chip, shimmers when the real underlying count changes.</p>
       </DemoStack>
     </FlowCard>
   )
@@ -133,7 +133,7 @@ function BandBreathDemo() {
           <ForecastBand band={FIXTURE_BAND} width={140} height={44} />
           <AreaSparkline values={FIXTURE_SPARK} width={140} height={44} color="var(--j-violet)" />
         </div>
-        <p className="text-[9px] text-white/30">
+        <p className="j-fs-micro text-white/30">
           FIXTURE band — real production wiring (AnalyticsRow) is graceful-absent against Insights.forecastBand until B3 ships it.
         </p>
       </DemoStack>
@@ -149,7 +149,7 @@ function AnomalyFlareDemo() {
           <AreaSparkline values={FIXTURE_SPARK} width={140} height={44} color="var(--j-cyan)" />
           <AnomalyFlare point={{ x: 108, y: 14 }} label="FIXTURE spike" />
         </div>
-        <p className="text-[9px] text-white/30">
+        <p className="j-fs-micro text-white/30">
           FIXTURE point — real production wiring (AnalyticsRow) is graceful-absent against Insights.anomalies until B3 ships it.
         </p>
       </DemoStack>
@@ -164,7 +164,7 @@ export function DataVizCatalogSection() {
         <h2 className="j-label">F5 — Data-Viz Language (FLOW-81..87)</h2>
         <span className="j-chip bg-cyan-400/12 text-cyan-300">7 entries</span>
       </div>
-      <p className="text-[11px] text-[color:var(--j-text-dim)]">
+      <p className="j-fs-micro text-[color:var(--j-text-dim)]">
         Every demo below reuses the same real chart primitive AnalyticsRow/KpiStrip/PulseBar mount — no Stage-only lookalikes. BandBreath and
         AnomalyFlare are FIXTURE-labeled (no B3 forecast/anomaly data exists yet); every other card is the exact component shipping in
         production today.

@@ -262,8 +262,8 @@ function LeftRail({ scene, setScene, orderedScenes, unopened, forceLowPower, boo
           )}
         </div>
         <div>
-          <div className="text-[15px] font-black tracking-tight text-[color:var(--j-text)]">JARVIS</div>
-          <div className="text-[8.5px] font-bold uppercase tracking-[0.28em] text-[color:var(--j-text-faint)]">Command Bridge</div>
+          <div className="j-fs-base font-black tracking-tight text-[color:var(--j-text)]">JARVIS</div>
+          <div className="j-fs-micro font-bold uppercase tracking-[0.28em] text-[color:var(--j-text-faint)]">Command Bridge</div>
         </div>
       </Link>
 
@@ -280,7 +280,7 @@ function LeftRail({ scene, setScene, orderedScenes, unopened, forceLowPower, boo
               onMouseLeave={() => setHoveredNav((h) => (h === id ? null : h))}
               aria-current={active ? "page" : undefined}
               style={active ? undefined : frecencyGlowStyle(warmth)}
-              className={`relative flex w-full items-center gap-3 rounded-xl border border-transparent px-3 py-2.5 text-left text-[12.5px] font-bold transition ${
+              className={`relative flex w-full items-center gap-3 rounded-xl border border-transparent px-3 py-2.5 text-left j-fs-sm font-bold transition ${
                 active ? "bg-cyan-400/[0.08] text-[color:var(--j-text)]" : "text-[color:var(--j-text-dim)] hover:bg-white/[0.04] hover:text-[color:var(--j-text)]"
               }`}
             >
@@ -382,7 +382,7 @@ function CenterStage({
         <div className="relative flex items-center justify-between">
           <div>
             <h1 className="text-base font-black text-[color:var(--j-text)]">Command Bridge</h1>
-            <p className="text-[11px] text-[color:var(--j-text-dim)]">D1 — real vitals, real activity, one continuous space</p>
+            <p className="j-fs-micro text-[color:var(--j-text-dim)]">D1 — real vitals, real activity, one continuous space</p>
           </div>
           <div className="flex items-center gap-2">
             <SoundPreferenceToggle quiet={quiet} />
@@ -467,7 +467,7 @@ function MobileTopBar({ scene, setScene, orderedScenes, forceLowPower }: { scene
               key={id}
               onClick={() => setScene(id)}
               aria-current={active ? "page" : undefined}
-              className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-bold transition ${
+              className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 j-fs-micro font-bold transition ${
                 active ? "bg-cyan-400/[0.12] text-cyan-200" : "text-[color:var(--j-text-dim)]"
               }`}
             >
@@ -488,7 +488,7 @@ function MobileDockTrigger({ onOpen }: { onOpen: () => void }) {
     <button
       type="button"
       onClick={onOpen}
-      className="fixed inset-x-3 bottom-3 z-20 flex items-center justify-between rounded-full border border-white/10 bg-[#05090f]/95 px-4 py-3 text-[11px] font-bold text-[color:var(--j-text)] shadow-[0_10px_40px_rgba(0,0,0,0.5)] backdrop-blur-xl lg:hidden"
+      className="fixed inset-x-3 bottom-3 z-20 flex items-center justify-between rounded-full border border-white/10 bg-[#05090f]/95 px-4 py-3 j-fs-micro font-bold text-[color:var(--j-text)] shadow-[0_10px_40px_rgba(0,0,0,0.5)] backdrop-blur-xl lg:hidden"
     >
       <span className="flex items-center gap-2"><LiveDot /> Activity &amp; Approvals</span>
       {pending > 0 && <span className="j-chip bg-cyan-400/12 text-cyan-200">{pending} pending</span>}
@@ -641,8 +641,8 @@ function BridgeShell() {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-[#04070f] px-6 text-center">
         <h1 className="text-lg font-black text-white">Sign in required</h1>
-        <p className="max-w-sm text-[12px] text-[color:var(--j-text-dim)]">The Command Bridge shows real vitals, activity, and approvals for your own tenant.</p>
-        <Link href="/jarvis/login" className="rounded-full bg-teal-300 px-4 py-1.5 text-[11px] font-black text-slate-950 hover:bg-teal-200">
+        <p className="max-w-sm j-fs-sm text-[color:var(--j-text-dim)]">The Command Bridge shows real vitals, activity, and approvals for your own tenant.</p>
+        <Link href="/jarvis/login" className="rounded-full bg-teal-300 px-4 py-1.5 j-fs-micro font-black text-slate-950 hover:bg-teal-200">
           Sign in
         </Link>
       </div>

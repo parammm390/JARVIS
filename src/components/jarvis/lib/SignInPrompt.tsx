@@ -23,16 +23,16 @@ export function SignInPrompt({ onClose }: { onClose: () => void }) {
           <div className="mb-3 flex items-center gap-2 text-sm font-black text-[color:var(--j-text)]">
             <Lock className="h-4 w-4 text-[color:var(--j-cyan)]" /> Sign in required
           </div>
-          <p className="mb-4 text-[12px] text-[color:var(--j-text-dim)]">
+          <p className="mb-4 j-fs-sm text-[color:var(--j-text-dim)]">
             This action writes to the real system — sign in to approve, reject, or instruct. The page stays fully readable without it.
           </p>
           <div className="flex justify-end gap-2">
-            <button onClick={onClose} className="rounded-full border border-white/12 px-4 py-1.5 text-[11px] font-bold text-white/60 hover:text-white">
+            <button onClick={onClose} className="rounded-full border border-white/12 px-4 py-1.5 j-fs-micro font-bold text-white/60 hover:text-white">
               Cancel
             </button>
             <Link
               href="/jarvis/login"
-              className="rounded-full bg-teal-300 px-4 py-1.5 text-[11px] font-black text-slate-950 hover:bg-teal-200"
+              className="rounded-full bg-teal-300 px-4 py-1.5 j-fs-micro font-black text-slate-950 hover:bg-teal-200"
             >
               Sign in
             </Link>

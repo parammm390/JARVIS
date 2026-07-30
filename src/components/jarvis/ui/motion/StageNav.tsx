@@ -59,12 +59,12 @@ export function MountToggle({ id, label, children }: { id: string; label: string
   return (
     <div data-stage-section={id}>
       <div className="mb-1 flex items-center justify-end">
-        <label className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider text-[color:var(--j-text-faint)]">
+        <label className="flex items-center gap-1.5 j-fs-micro font-bold uppercase tracking-wider text-[color:var(--j-text-faint)]">
           <input type="checkbox" checked={mounted} onChange={(e) => setMounted(e.target.checked)} />
           mount {label}
         </label>
       </div>
-      {mounted ? children : <div className="rounded-xl border border-dashed border-white/10 p-4 text-center text-[10px] text-[color:var(--j-text-faint)]">unmounted — isolate FPS to other sections</div>}
+      {mounted ? children : <div className="rounded-xl border border-dashed border-white/10 p-4 text-center j-fs-micro text-[color:var(--j-text-faint)]">unmounted — isolate FPS to other sections</div>}
     </div>
   )
 }
@@ -97,20 +97,20 @@ export function StageStateSwitcher() {
           ))}
         </div>
       </div>
-      <p className="text-[10.5px] text-[color:var(--j-text-dim)]">
+      <p className="j-fs-micro text-[color:var(--j-text-dim)]">
         Drives a representative panel through the states every real panel can be in, using the SAME real FLOW-88..93 components production
         panels mount (ActivityTheater/PulseBar/ApprovalCockpit/KpiStrip) — not fixture look-alikes.
       </p>
       <div className="min-h-[110px]">
         {state === "normal" && (
-          <div className="j-panel p-4 text-[11px] text-[color:var(--j-text)]">Representative panel content — 3 fixture rows loaded fine.</div>
+          <div className="j-panel p-4 j-fs-micro text-[color:var(--j-text)]">Representative panel content — 3 fixture rows loaded fine.</div>
         )}
         {state === "loading" && <SkeletonCard />}
         {state === "error" && <ErrorState message="Couldn't load (FIXTURE)" onRetry={() => setState("normal")} />}
         {state === "empty" && <EmptyState family="activity" title="No rows yet (FIXTURE)" description="Nothing to show for this fixture panel." actionLabel="Reset" onAction={() => setState("normal")} />}
         {state === "stale" && (
           <StaleFog ageMs={120_000} staleAfterMs={90_000}>
-            <div className="j-panel p-4 text-[11px] text-[color:var(--j-text)]">Representative panel content — real data, just not refreshed recently (FIXTURE age).</div>
+            <div className="j-panel p-4 j-fs-micro text-[color:var(--j-text)]">Representative panel content — real data, just not refreshed recently (FIXTURE age).</div>
           </StaleFog>
         )}
         {state === "veil" && <PermissionVeil reason="Sign in to see this panel's real data (FIXTURE)." actionLabel="Sign in" actionHref="/jarvis/login" />}

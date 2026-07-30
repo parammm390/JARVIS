@@ -136,7 +136,7 @@ export function BootSequence({ onDone }: { onDone: () => void }) {
           {lines.map((l, i) => (
             <div
               key={l.id}
-              className="jarvis-boot-line flex items-center gap-2 overflow-hidden text-[12px]"
+              className="jarvis-boot-line flex items-center gap-2 overflow-hidden j-fs-sm"
               style={{ animationDelay: `${i * 0.12}s` }}
             >
               <span className={l.state === "online" ? "text-teal-300" : l.state === "standalone" ? "text-amber-300" : "text-white/30"}>
@@ -146,7 +146,7 @@ export function BootSequence({ onDone }: { onDone: () => void }) {
             </div>
           ))}
         </div>
-        <div className="mt-6 text-[10px] uppercase tracking-widest text-white/20">Click to skip</div>
+        <div className="mt-6 j-fs-micro uppercase tracking-widest text-white/20">Click to skip</div>
       </motion.div>
     </AnimatePresence>
   )

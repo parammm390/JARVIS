@@ -56,7 +56,7 @@ export function useCopyFlash() {
   const Overlay = flashAt ? (
     <span
       key={flashAt.id}
-      className="jarvis-rise pointer-events-none fixed z-[70] -translate-x-1/2 -translate-y-full rounded-full border border-cyan-300/40 bg-cyan-400/15 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-cyan-200"
+      className="jarvis-rise pointer-events-none fixed z-[70] -translate-x-1/2 -translate-y-full rounded-full border border-cyan-300/40 bg-cyan-400/15 px-2 py-0.5 j-fs-micro font-bold uppercase tracking-wider text-cyan-200"
       style={{ left: flashAt.x, top: flashAt.y - 8 }}
     >
       copied

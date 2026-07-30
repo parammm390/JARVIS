@@ -42,9 +42,9 @@ export function SinceYouWereAwayView({
           <div className="j-label">Since you were away</div>
           <p className="mt-1 text-sm text-cyan-50">{skipped ? digest.greeting : <DecryptText text={digest.greeting} cursor />}</p>
         </div>
-        <button onClick={onSkip} className="text-[10px] font-bold text-[color:var(--j-text-dim)] hover:text-white">Skip</button>
+        <button onClick={onSkip} className="j-fs-micro font-bold text-[color:var(--j-text-dim)] hover:text-white">Skip</button>
       </div>
-      <div className="mt-3 flex gap-3 text-[11px] text-[color:var(--j-text-dim)]">
+      <div className="mt-3 flex gap-3 j-fs-micro text-[color:var(--j-text-dim)]">
         <span><b className="text-white">{digest.newActions}</b> new actions</span>
         <span><b className="text-white">{digest.pendingActions}</b> awaiting approval</span>
       </div>

@@ -16,8 +16,8 @@ import type { ActionRendererProps, FieldSpec } from "./types"
 function FieldRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-baseline justify-between gap-3 border-b border-white/[0.04] py-1 last:border-0">
-      <span className="shrink-0 text-[9.5px] font-bold uppercase tracking-wide text-[color:var(--j-text-faint)]">{label}</span>
-      <span className="truncate text-right text-[11px] text-[color:var(--j-text)]">{value}</span>
+      <span className="shrink-0 j-fs-micro font-bold uppercase tracking-wide text-[color:var(--j-text-faint)]">{label}</span>
+      <span className="truncate text-right j-fs-micro text-[color:var(--j-text)]">{value}</span>
     </div>
   )
 }
@@ -41,7 +41,7 @@ export function StandardRenderer({
     const first = fields.find((f) => obj[f.key] !== undefined && obj[f.key] !== null)
     const preview = first ? formatFieldValue(first.kind, obj[first.key]) : label
     return (
-      <span className="inline-flex min-w-0 items-center gap-1.5 text-[11px]">
+      <span className="inline-flex min-w-0 items-center gap-1.5 j-fs-micro">
         {Icon && <Icon className={`h-3 w-3 shrink-0 ${accent.text}`} />}
         <span className="truncate text-[color:var(--j-text)]">{preview}</span>
       </span>
@@ -53,8 +53,8 @@ export function StandardRenderer({
       <Panel className={`border p-3 ${accent.border}`}>
         <div className="mb-2 flex items-center gap-1.5">
           {Icon && <Icon className={`h-3.5 w-3.5 ${accent.text}`} />}
-          <span className={`text-[9px] font-black uppercase tracking-widest ${accent.text}`}>{meta?.label ?? label}</span>
-          <span className="ml-auto rounded-full bg-white/6 px-2 py-0.5 text-[8.5px] font-black uppercase text-white/40">
+          <span className={`j-fs-micro font-black uppercase tracking-widest ${accent.text}`}>{meta?.label ?? label}</span>
+          <span className="ml-auto rounded-full bg-white/6 px-2 py-0.5 j-fs-micro font-black uppercase text-white/40">
             {actionType.replaceAll("_", " ")}
           </span>
         </div>
@@ -67,7 +67,7 @@ export function StandardRenderer({
           ]}
         </Stagger>
         {fields.every((f) => obj[f.key] === undefined) && extraKeys.length === 0 && (
-          <div className="py-2 text-center text-[10px] text-[color:var(--j-text-faint)]">No payload fields set yet</div>
+          <div className="py-2 text-center j-fs-micro text-[color:var(--j-text-faint)]">No payload fields set yet</div>
         )}
       </Panel>
     </Enter>

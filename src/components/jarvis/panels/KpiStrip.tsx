@@ -38,7 +38,7 @@ const usd = (n: number) => `$${Math.round(n).toLocaleString()}`
  *  Rendering "0 payment links open" off a 401 is the same lie in smaller type. */
 function SubLine({ truth, render }: { truth: Truth<number>; render: (n: number) => string }) {
   if (truth.status !== "known" && truth.status !== "stale" && truth.status !== "partial") return null
-  return <div className="mt-1.5 truncate text-[11px] text-[color:var(--j-text-dim)]">{render(truth.value)}</div>
+  return <div className="mt-1.5 truncate j-fs-micro text-[color:var(--j-text-dim)]">{render(truth.value)}</div>
 }
 
 interface Card {

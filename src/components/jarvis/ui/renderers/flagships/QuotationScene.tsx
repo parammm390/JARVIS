@@ -37,7 +37,7 @@ export function QuotationScene({ payload, compact }: ActionRendererProps) {
 
   if (compact) {
     return (
-      <span className="inline-flex items-center gap-1.5 text-[11px]">
+      <span className="inline-flex items-center gap-1.5 j-fs-micro">
         <FileText className="h-3 w-3 shrink-0 text-teal-300" />
         <span className="truncate text-[color:var(--j-text)]">
           quote for {p.householdLabel ?? "household"} · {itemCount} item{itemCount === 1 ? "" : "s"}
@@ -50,7 +50,7 @@ export function QuotationScene({ payload, compact }: ActionRendererProps) {
     <Panel className="border border-teal-300/25 p-3">
       <div className="mb-2 flex items-center gap-1.5">
         <FileText className="h-3.5 w-3.5 text-teal-300" />
-        <span className="text-[9px] font-black uppercase tracking-widest text-teal-300">Quotation — {p.householdLabel ?? "household"}</span>
+        <span className="j-fs-micro font-black uppercase tracking-widest text-teal-300">Quotation — {p.householdLabel ?? "household"}</span>
       </div>
 
       {/* the "document" sheet */}
@@ -58,7 +58,7 @@ export function QuotationScene({ payload, compact }: ActionRendererProps) {
         {hasComputedLines ? (
           <Stagger staggerMs={40} className="space-y-1">
             {p.lines!.map((l, i) => (
-              <div key={i} className="flex items-center justify-between text-[11px]">
+              <div key={i} className="flex items-center justify-between j-fs-micro">
                 <span className="truncate text-[color:var(--j-text-dim)]">{l.item}</span>
                 <span className="shrink-0 font-mono tabular-nums text-[color:var(--j-text)]">${l.priceUsd.toFixed(2)}</span>
               </div>
@@ -67,18 +67,18 @@ export function QuotationScene({ payload, compact }: ActionRendererProps) {
         ) : p.items && p.items.length > 0 ? (
           <Stagger staggerMs={40} className="space-y-1">
             {p.items.map((item, i) => (
-              <div key={i} className="text-[11px] text-[color:var(--j-text-dim)]">
+              <div key={i} className="j-fs-micro text-[color:var(--j-text-dim)]">
                 {item}
               </div>
             ))}
           </Stagger>
         ) : (
-          <div className="text-[10.5px] text-[color:var(--j-text-faint)]">No line items drafted yet</div>
+          <div className="j-fs-micro text-[color:var(--j-text-faint)]">No line items drafted yet</div>
         )}
 
         {typeof p.totalUsd === "number" && (
           <div className="mt-2 flex items-center justify-between border-t border-white/8 pt-2">
-            <span className="text-[9.5px] font-black uppercase tracking-wide text-[color:var(--j-text-faint)]">Total</span>
+            <span className="j-fs-micro font-black uppercase tracking-wide text-[color:var(--j-text-faint)]">Total</span>
             <span className="font-black tabular-nums text-[color:var(--j-text)]">
               $<Ticker value={p.totalUsd} format={(v) => v.toFixed(2)} />
             </span>
@@ -86,8 +86,8 @@ export function QuotationScene({ payload, compact }: ActionRendererProps) {
         )}
       </div>
 
-      {p.pricingNote && <div className="mt-1.5 text-[10px] italic text-[color:var(--j-text-faint)]">{p.pricingNote}</div>}
-      {p.notes && !p.pricingNote && <div className="mt-1.5 text-[10px] text-[color:var(--j-text-faint)]">{p.notes}</div>}
+      {p.pricingNote && <div className="mt-1.5 j-fs-micro italic text-[color:var(--j-text-faint)]">{p.pricingNote}</div>}
+      {p.notes && !p.pricingNote && <div className="mt-1.5 j-fs-micro text-[color:var(--j-text-faint)]">{p.notes}</div>}
     </Panel>
   )
 }

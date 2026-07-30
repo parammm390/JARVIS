@@ -22,7 +22,7 @@ export function FlowIndexMeterSection() {
       <div className="h-2 w-full overflow-hidden rounded-full bg-white/6">
         <div className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-teal-300" style={{ width: `${pct}%` }} />
       </div>
-      <p className="text-[10.5px] text-[color:var(--j-text-dim)]">
+      <p className="j-fs-micro text-[color:var(--j-text-dim)]">
         {shipped} shipped · {planned} planned · {cut} cut — {pct}% of the full 100-entry catalog. Counts read live from flow-index.ts;
         this file is the runtime source of truth (F-STATE tracks phase/task/evidence separately).
       </p>

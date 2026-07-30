@@ -48,7 +48,7 @@ export function RiskBadge({ tier, children }: { tier: RiskTier; children?: React
   const m = MATERIAL[tier]
   return (
     <span
-      className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wide"
+      className="inline-flex items-center rounded-full px-2.5 py-0.5 j-fs-micro font-black uppercase tracking-wide"
       style={{ ...m.style, color: m.text }}
     >
       {children ?? m.label}

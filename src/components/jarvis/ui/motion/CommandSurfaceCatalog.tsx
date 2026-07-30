@@ -73,10 +73,10 @@ function EventMeteorDemo() {
   return (
     <FlowCard id="FLOW-39" title="EventMeteor" reducedFallback="row glow only, no flight/trail">
       <div ref={feedRef} className="w-full space-y-1">
-        <div ref={rowRef} className="rounded-md border border-white/8 bg-white/[0.02] px-2.5 py-1.5 text-[10px] text-white/70">
+        <div ref={rowRef} className="rounded-md border border-white/8 bg-white/[0.02] px-2.5 py-1.5 j-fs-micro text-white/70">
           fixture activity row — fire FLOW-38 above
         </div>
-        <div className="text-[9px] text-white/30">arrivals: <Ticker value={arrivals} /></div>
+        <div className="j-fs-micro text-white/30">arrivals: <Ticker value={arrivals} /></div>
       </div>
     </FlowCard>
   )
@@ -97,7 +97,7 @@ function PulseLiquidGaugesDemo() {
             style={{ height: "100%", background: "var(--j-cyan)" }}
           />
         </span>
-        <span className="text-[11px] text-white/70">queue depth {depth}</span>
+        <span className="j-fs-micro text-white/70">queue depth {depth}</span>
         <ReplayButton onClick={() => setDepth((d) => (d >= 18 ? 2 : d + 4))} />
       </div>
     </FlowCard>
@@ -108,7 +108,7 @@ function NavCurrentDemo() {
   const [hovered, setHovered] = useState(false)
   return (
     <FlowCard id="FLOW-41" title="NavCurrent" reducedFallback="static bar, no flowing dash current">
-      <div onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)} className="relative w-32 rounded-lg bg-cyan-400/[0.08] py-2 pl-4 text-[10px] font-bold text-white">
+      <div onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)} className="relative w-32 rounded-lg bg-cyan-400/[0.08] py-2 pl-4 j-fs-micro font-bold text-white">
         <span className={`absolute inset-y-1 left-0 w-[3px] rounded-full bg-cyan-300 ${hovered ? "" : "j-selection-current"}`} />
         active scene
       </div>
@@ -127,7 +127,7 @@ function SceneDockDemo() {
           initial={{ opacity: 0, scale: 0.98, x: 16 }}
           animate={{ opacity: 1, scale: 1, x: 0 }}
           exit={(reduced ? choreo.sceneDockExit.reducedVariants : choreo.sceneDockExit.variants).animate as TargetAndTransition}
-          className="absolute inset-0 rounded-md bg-white/5 p-2 text-[10px] text-white/70"
+          className="absolute inset-0 rounded-md bg-white/5 p-2 j-fs-micro text-white/70"
         >
           scene {key}
         </motion.div>
@@ -140,7 +140,7 @@ function SceneDockDemo() {
 function HeaderTideDemo() {
   return (
     <FlowCard id="FLOW-43" title="HeaderTide" reducedFallback="static caustic opacity, no event-rate coupling">
-      <p className="text-[10px] text-white/50">
+      <p className="j-fs-micro text-white/50">
         Live only on the real Bridge (needs a genuine pulse-bus event rate over a trailing 60s window) — see the header caustic layer on <code>/jarvis/bridge</code>.
       </p>
     </FlowCard>
@@ -159,7 +159,7 @@ function BridgeBootDemo() {
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.6 }}
               onAnimationComplete={() => setPlaying(false)}
-              className="absolute inset-0 flex items-center justify-center text-[9px] text-cyan-200"
+              className="absolute inset-0 flex items-center justify-center j-fs-micro text-cyan-200"
             >
               rails + orb bloom
             </motion.div>
@@ -195,7 +195,7 @@ function VitalsBreathDemo() {
 function OrbSpeechSyncDemo() {
   return (
     <FlowCard id="FLOW-46" title="OrbSpeechSync" reducedFallback="state color only, no amplitude-driven energy">
-      <p className="text-[10px] text-white/50">
+      <p className="j-fs-micro text-white/50">
         Real Vapi <code>volume-level</code> (via <code>useVapiSession().volumeLevel</code>) blends into the Orb&apos;s shader energy while speaking — see the amplitude slider on the real <code>/jarvis/bridge</code> orb.
       </p>
     </FlowCard>
@@ -212,7 +212,7 @@ function TickerGlideDemo() {
   }, [paused])
   return (
     <FlowCard id="FLOW-47" title="TickerGlide" reducedFallback="hard step, no glide">
-      <div onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)} className="w-40 overflow-hidden rounded-md border border-white/8 bg-white/[0.02] px-2 py-1.5 text-[10px] text-white/70">
+      <div onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)} className="w-40 overflow-hidden rounded-md border border-white/8 bg-white/[0.02] px-2 py-1.5 j-fs-micro text-white/70">
         item {i % 5}
       </div>
     </FlowCard>
@@ -223,7 +223,7 @@ function CommandGravityDemo() {
   return (
     <FlowCard id="FLOW-48" title="CommandGravity" reducedFallback="no lift/glow on focus">
       <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 transition-[box-shadow,transform] duration-200 focus-within:-translate-y-px focus-within:shadow-[0_0_0_1px_rgba(34,211,238,0.5),0_0_28px_-6px_rgba(34,211,238,0.35)]">
-        <input placeholder="focus me" className="bg-transparent text-[11px] text-white outline-none placeholder:text-white/35" />
+        <input placeholder="focus me" className="bg-transparent j-fs-micro text-white outline-none placeholder:text-white/35" />
       </div>
     </FlowCard>
   )
@@ -236,11 +236,11 @@ function ConstellationLinkDemo() {
       <button
         onMouseEnter={() => { setHover(true); setLineageHover("stage-fixture") }}
         onMouseLeave={() => { setHover(false); setLineageHover(null) }}
-        className={`rounded-lg border px-3 py-1.5 text-[10px] font-bold ${hover ? "border-cyan-300/50 text-cyan-200" : "border-white/10 text-white/60"}`}
+        className={`rounded-lg border px-3 py-1.5 j-fs-micro font-bold ${hover ? "border-cyan-300/50 text-cyan-200" : "border-white/10 text-white/60"}`}
       >
         hover this KPI
       </button>
-      <p className="mt-1 text-[9px] text-white/30">Live version draws real lines to the KPI&apos;s hand-authored source panel(s) on <code>/jarvis/bridge</code> — see KPI_LINEAGE in ConstellationLink.tsx.</p>
+      <p className="mt-1 j-fs-micro text-white/30">Live version draws real lines to the KPI&apos;s hand-authored source panel(s) on <code>/jarvis/bridge</code> — see KPI_LINEAGE in ConstellationLink.tsx.</p>
     </FlowCard>
   )
 }
@@ -252,7 +252,7 @@ export function CommandSurfaceCatalogSection() {
         <h2 className="j-label">F2 — Command Surface (FLOW-38..49)</h2>
         <span className="j-chip bg-cyan-400/12 text-cyan-300">12 entries</span>
       </div>
-      <p className="text-[11px] text-[color:var(--j-text-dim)]">
+      <p className="j-fs-micro text-[color:var(--j-text-dim)]">
         pulse-bus-driven orb/feed causality (FLOW-38/39 share one real anchor pair below — fire FLOW-38 to see FLOW-39&apos;s row flash), real vitals gauges, and real focus/hover state. HeaderTide/OrbSpeechSync are Bridge-only (need a real event-rate window / real Vapi session) — linked instead of faked here.
       </p>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">

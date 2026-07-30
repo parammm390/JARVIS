@@ -27,7 +27,7 @@ function RouteHandoffDemo() {
     <FlowCard id="FLOW-94" title="RouteHandoff" reducedFallback="instant fade, no wipe">
       <DemoStack>
         <div className="relative h-16 w-full overflow-hidden rounded-lg border border-white/10 bg-[#070d1a]">
-          <div className="flex h-full items-center justify-center text-[10px] text-white/40">/jarvis/* route</div>
+          <div className="flex h-full items-center justify-center j-fs-micro text-white/40">/jarvis/* route</div>
           <AnimatePresence>
             {playing && (
               <motion.div
@@ -44,7 +44,7 @@ function RouteHandoffDemo() {
           </AnimatePresence>
         </div>
         <ReplayButton onClick={() => setPlaying(true)} />
-        <p className="text-[9px] text-white/30">The real one is src/app/jarvis/template.tsx&apos;s veil, replaying this exact choreo.routeHandoff preset on every genuine /jarvis/* client-side navigation (skipped on cold load — that&apos;s FLOW-44 BridgeBoot&apos;s moment instead).</p>
+        <p className="j-fs-micro text-white/30">The real one is src/app/jarvis/template.tsx&apos;s veil, replaying this exact choreo.routeHandoff preset on every genuine /jarvis/* client-side navigation (skipped on cold load — that&apos;s FLOW-44 BridgeBoot&apos;s moment instead).</p>
       </DemoStack>
     </FlowCard>
   )
@@ -93,7 +93,7 @@ function ContinuityFlowDemo() {
                       key={row.id}
                       type="button"
                       onClick={() => open(row.id)}
-                      className="flex w-full items-center gap-2 rounded-md border border-white/6 bg-white/[0.02] px-2 py-1 text-left text-[10px] text-white/70 hover:bg-white/[0.05]"
+                      className="flex w-full items-center gap-2 rounded-md border border-white/6 bg-white/[0.02] px-2 py-1 text-left j-fs-micro text-white/70 hover:bg-white/[0.05]"
                     >
                       <motion.span layoutId={`stage-receipt-dot-${row.id}`} className="h-1.5 w-1.5 shrink-0 rounded-full bg-cyan-400" />
                       {row.label}
@@ -101,29 +101,29 @@ function ContinuityFlowDemo() {
                   ))}
                 {openId && (
                   <div className="space-y-1.5">
-                    <button type="button" onClick={back} className="text-[10px] font-bold text-cyan-300">
+                    <button type="button" onClick={back} className="j-fs-micro font-bold text-cyan-300">
                       ← Back
                     </button>
                     <motion.div layoutId={`stage-receipt-dot-${openId}`} className="flex items-center gap-2 rounded-md border border-cyan-300/30 bg-cyan-300/[0.06] px-2 py-1.5">
                       <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-cyan-400" />
-                      <span className="text-[10px] font-bold text-white/85">{FIXTURE_ROWS.find((r) => r.id === openId)?.label} — receipt scene</span>
+                      <span className="j-fs-micro font-bold text-white/85">{FIXTURE_ROWS.find((r) => r.id === openId)?.label} — receipt scene</span>
                     </motion.div>
                   </div>
                 )}
               </motion.div>
             </AnimatePresence>
           </div>
-          <p className="text-[9px] text-white/30">FIXTURE list — the real one is ActivityTheater&apos;s row dot flying into Bridge.tsx&apos;s ReceiptScene header via the same shared layoutId mechanism.</p>
+          <p className="j-fs-micro text-white/30">FIXTURE list — the real one is ActivityTheater&apos;s row dot flying into Bridge.tsx&apos;s ReceiptScene header via the same shared layoutId mechanism.</p>
         </DemoStack>
       </FlowCard>
       <FlowCard id="FLOW-95" title="DrawerToPage" reducedFallback="plain navigate, no morph">
         <DemoStack>
-          <p className="text-[10px] text-white/50">Same demo card above — opening a row swaps this panel&apos;s content in place (center-stage, not a side drawer), same mechanism Bridge.tsx&apos;s CenterStage uses for the real receipt scene.</p>
+          <p className="j-fs-micro text-white/50">Same demo card above — opening a row swaps this panel&apos;s content in place (center-stage, not a side drawer), same mechanism Bridge.tsx&apos;s CenterStage uses for the real receipt scene.</p>
         </DemoStack>
       </FlowCard>
       <FlowCard id="FLOW-97" title="BackTrace" reducedFallback="plain navigate back, no mirrored transform">
         <DemoStack>
-          <p className="text-[10px] text-white/50">Click ← Back above — the return trip uses choreo.backTrace (CameraPan&apos;s own forward transform, mirrored), tracked by a real previous-key ref, not a hardcoded guess.</p>
+          <p className="j-fs-micro text-white/50">Click ← Back above — the return trip uses choreo.backTrace (CameraPan&apos;s own forward transform, mirrored), tracked by a real previous-key ref, not a hardcoded guess.</p>
         </DemoStack>
       </FlowCard>
     </>
@@ -137,7 +137,7 @@ export function ContinuityCatalogSection() {
         <h2 className="j-label">F7 — Continuity (FLOW-94..97)</h2>
         <span className="j-chip bg-cyan-400/12 text-cyan-300">4 entries</span>
       </div>
-      <p className="text-[11px] text-[color:var(--j-text-dim)]">
+      <p className="j-fs-micro text-[color:var(--j-text-dim)]">
         RouteHandoff replays the real navigation veil&apos;s exact choreo preset (honest replay, not a live route change). ListToDetail/
         DrawerToPage/BackTrace share one fixture demo below driving the same shared-layoutId + mirrored-transform mechanism
         bridge/Bridge.tsx&apos;s real ReceiptScene uses for ActivityTheater&apos;s rows.

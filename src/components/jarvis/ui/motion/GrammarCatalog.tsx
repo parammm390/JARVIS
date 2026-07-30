@@ -19,7 +19,7 @@ import { Drawer } from "../primitives/Drawer"
 function HoverLiftDemo() {
   return (
     <FlowCard id="FLOW-26" title="HoverLift" reducedFallback="border color only, no translateY">
-      <div className="j-lift j-panel w-40 p-3 text-center text-[10px] text-[color:var(--j-text-dim)]">hover me</div>
+      <div className="j-lift j-panel w-40 p-3 text-center j-fs-micro text-[color:var(--j-text-dim)]">hover me</div>
     </FlowCard>
   )
 }
@@ -27,7 +27,7 @@ function HoverLiftDemo() {
 function FocusHaloDemo() {
   return (
     <FlowCard id="FLOW-27" title="FocusHalo" reducedFallback="plain ring, no glow bloom">
-      <button className="rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-[10px] font-bold text-white">tab to me</button>
+      <button className="rounded-full border border-white/15 bg-white/5 px-4 py-1.5 j-fs-micro font-bold text-white">tab to me</button>
     </FlowCard>
   )
 }
@@ -35,7 +35,7 @@ function FocusHaloDemo() {
 function PressSinkDemo() {
   return (
     <FlowCard id="FLOW-28" title="PressSink" reducedFallback="no scale change">
-      <button className="j-sink rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-[10px] font-bold text-white">click and hold</button>
+      <button className="j-sink rounded-full border border-white/15 bg-white/5 px-4 py-1.5 j-fs-micro font-bold text-white">click and hold</button>
     </FlowCard>
   )
 }
@@ -68,7 +68,7 @@ function CopyFlashDemo() {
     <FlowCard id="FLOW-31" title="CopyFlash" reducedFallback="chip appears/disappears without rise animation">
       <button
         onClick={(e) => void copy("flow-31-fixture-value", e)}
-        className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[10px] font-bold text-white"
+        className="rounded-full border border-white/15 bg-white/5 px-3 py-1 j-fs-micro font-bold text-white"
       >
         copy value
       </button>
@@ -81,7 +81,7 @@ function TooltipBloomDemo() {
   return (
     <FlowCard id="FLOW-32" title="TooltipBloom" reducedFallback="n/a — tooltip is instant show/hide either way, only the bloom scale is reduced">
       <Tooltip label="hand-rolled tooltip, 400ms delay">
-        <span className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[10px] font-bold text-white">hover/focus me</span>
+        <span className="rounded-full border border-white/15 bg-white/5 px-3 py-1 j-fs-micro font-bold text-white">hover/focus me</span>
       </Tooltip>
     </FlowCard>
   )
@@ -94,7 +94,7 @@ function DrawerBreathDemo() {
       <ReplayButton onClick={() => setOpen(true)} />
       {open && (
         <Drawer title="FLOW-33 fixture drawer" onClose={() => setOpen(false)}>
-          <p className="text-[11px] text-[color:var(--j-text-dim)]">Backdrop caustic dim + overshoot-settle panel entrance.</p>
+          <p className="j-fs-micro text-[color:var(--j-text-dim)]">Backdrop caustic dim + overshoot-settle panel entrance.</p>
         </Drawer>
       )}
     </FlowCard>
@@ -107,7 +107,7 @@ function ScrollGlowDemo() {
       <ScrollGlow className="h-16 w-full rounded-lg border border-white/8">
         <div className="space-y-1 p-2">
           {Array.from({ length: 8 }, (_, i) => (
-            <div key={i} className="rounded bg-white/5 px-2 py-1 text-[9px] text-[color:var(--j-text-faint)]">
+            <div key={i} className="rounded bg-white/5 px-2 py-1 j-fs-micro text-[color:var(--j-text-faint)]">
               scrollable row {i + 1}
             </div>
           ))}
@@ -126,7 +126,7 @@ function SelectionCurrentDemo() {
           <button
             key={label}
             onClick={() => setSelected(i)}
-            className={`w-full rounded-md px-3 py-1.5 pl-4 text-left text-[10px] text-white ${i === selected ? "j-selection-current bg-white/8" : "bg-white/[0.02]"}`}
+            className={`w-full rounded-md px-3 py-1.5 pl-4 text-left j-fs-micro text-white ${i === selected ? "j-selection-current bg-white/8" : "bg-white/[0.02]"}`}
           >
             {label}
           </button>
@@ -146,7 +146,7 @@ function CountBadgePopDemo() {
           count={count}
           event="new-pending-action"
           fixturePulse={pulse}
-          className="rounded-full bg-cyan-400/15 px-2.5 py-1 text-[11px] font-black text-cyan-200"
+          className="rounded-full bg-cyan-400/15 px-2.5 py-1 j-fs-micro font-black text-cyan-200"
         />
         <ReplayButton
           onClick={() => {
@@ -164,7 +164,7 @@ function InlineEditRippleDemo() {
   return (
     <FlowCard id="FLOW-37" title="InlineEditRipple" reducedFallback="underline color only, no ripple sweep">
       <div className="flex items-center gap-3">
-        <div ref={ref} className="border-b border-white/20 px-1 pb-1 text-[11px] text-white">
+        <div ref={ref} className="border-b border-white/20 px-1 pb-1 j-fs-micro text-white">
           fixture field value
         </div>
         <ReplayButton onClick={trigger} />
@@ -180,7 +180,7 @@ export function GrammarCatalogSection() {
         <h2 className="j-label">F1 — Interaction Grammar (FLOW-26..37)</h2>
         <span className="j-chip bg-cyan-400/12 text-cyan-300">12 entries</span>
       </div>
-      <p className="text-[11px] text-[color:var(--j-text-dim)]">
+      <p className="j-fs-micro text-[color:var(--j-text-dim)]">
         Real UI interaction state throughout (hover/focus/scroll/selection/clipboard/form-save) — nothing here fabricates a metric.
       </p>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">

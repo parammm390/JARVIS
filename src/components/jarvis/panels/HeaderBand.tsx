@@ -117,7 +117,7 @@ export function HeaderBand({ session }: { session?: ReturnType<typeof useVapiSes
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.7, delay: 0.15 }}
-            className="mt-0.5 text-[12.5px] text-[color:var(--j-text-dim)]"
+            className="mt-0.5 j-fs-sm text-[color:var(--j-text-dim)]"
           >
             {sentence}
           </motion.p>
@@ -129,7 +129,7 @@ export function HeaderBand({ session }: { session?: ReturnType<typeof useVapiSes
             voiceLive ? "j-panel-hot border-cyan-400/40 bg-cyan-400/8 text-cyan-200" : "border-white/10 bg-white/[0.03] text-[color:var(--j-text-dim)]"
           }`}
         >
-          <span className="text-[10.5px] font-bold">
+          <span className="j-fs-micro font-bold">
             {session?.voiceState === "connecting" ? (
               <span className="inline-flex items-center gap-1">
                 Connecting
@@ -164,14 +164,14 @@ export function HeaderBand({ session }: { session?: ReturnType<typeof useVapiSes
         <div className="group relative">
           <span className={`j-chip min-w-[7.75rem] justify-center cursor-default uppercase tracking-widest ${TONE_CLASS[status.tone]}`}>{status.label}</span>
           {status.unconfigured.length > 0 && (
-            <div className="pointer-events-none absolute right-0 top-full z-20 mt-2 w-64 rounded-xl border border-[color:var(--j-border)] bg-[#070d1a] p-3 text-[10.5px] leading-relaxed text-[color:var(--j-text-dim)] opacity-0 shadow-2xl transition group-hover:opacity-100">
+            <div className="pointer-events-none absolute right-0 top-full z-20 mt-2 w-64 rounded-xl border border-[color:var(--j-border)] bg-[#070d1a] p-3 j-fs-micro leading-relaxed text-[color:var(--j-text-dim)] opacity-0 shadow-2xl transition group-hover:opacity-100">
             {status.unconfigured.length} action types not yet configured: {status.unconfigured.slice(0, 6).map((a) => a.replaceAll("_", " ")).join(", ")}
             {status.unconfigured.length > 6 ? "…" : ""}
             </div>
           )}
         </div>
         <span className="hidden w-[5.5rem] font-mono text-xs font-bold tabular-nums tracking-wider text-[color:var(--j-text-dim)] md:inline">{clock}</span>
-        <span className={`hidden w-[12rem] items-center gap-1.5 font-mono text-[10.5px] font-bold tabular-nums text-[color:var(--j-text-faint)] md:flex ${lane.lastPollAtMs == null ? "invisible" : ""}`}>
+        <span className={`hidden w-[12rem] items-center gap-1.5 font-mono j-fs-micro font-bold tabular-nums text-[color:var(--j-text-faint)] md:flex ${lane.lastPollAtMs == null ? "invisible" : ""}`}>
           {lane.lastPollAtMs != null && (
             <>
             <span className="relative flex h-1.5 w-1.5">

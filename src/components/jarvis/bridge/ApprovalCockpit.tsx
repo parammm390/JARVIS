@@ -72,7 +72,7 @@ function GroundedBadge({ field, status }: { field: string; status: string }) {
   const cls = status === "verified" ? "bg-teal-300/12 text-teal-200" : status === "not_found" ? "bg-red-400/12 text-red-300" : "bg-white/8 text-white/50"
   const mark = status === "verified" ? "✓" : status === "not_found" ? "✗" : "?"
   return (
-    <span className={`rounded-full px-2 py-0.5 text-[9px] font-black ${cls}`}>
+    <span className={`rounded-full px-2 py-0.5 j-fs-micro font-black ${cls}`}>
       {mark} {field}
     </span>
   )
@@ -250,7 +250,7 @@ function ApprovalCard({
         initial="initial"
         animate={shaking ? "animate" : "initial"}
       >
-        <div className="mb-1 flex items-center justify-between gap-2 text-[9px] font-black uppercase tracking-widest text-[color:var(--j-text-faint)]">
+        <div className="mb-1 flex items-center justify-between gap-2 j-fs-micro font-black uppercase tracking-widest text-[color:var(--j-text-faint)]">
           <span className="flex items-center gap-1.5">
             {batchMode && !isUnavailable && (
               <input
@@ -266,7 +266,7 @@ function ApprovalCard({
           <span>{ageLabel(action.createdAt, Date.now())}</span>
         </div>
 
-        <div className="text-[12px] leading-relaxed text-[color:var(--j-text)]">{action.summary ?? "Drafted action awaiting approval."}</div>
+        <div className="j-fs-sm leading-relaxed text-[color:var(--j-text)]">{action.summary ?? "Drafted action awaiting approval."}</div>
 
         {/* D3.T1 — the renderer registry's real scene for this action's payload,
             same ActionRenderer component the Activity Theater (feed) and
@@ -279,23 +279,23 @@ function ApprovalCard({
         <div className="mt-2 flex flex-wrap items-center gap-1">
           <RiskBadge tier={tier} />
           {isNeedsReview && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-amber-300/12 px-2 py-0.5 text-[9px] font-black text-amber-200">
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-300/12 px-2 py-0.5 j-fs-micro font-black text-amber-200">
               <ShieldAlert className="h-2.5 w-2.5" /> needs human review
             </span>
           )}
           {isUnavailable && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-red-400/14 px-2 py-0.5 text-[9px] font-black text-red-300">
+            <span className="inline-flex items-center gap-1 rounded-full bg-red-400/14 px-2 py-0.5 j-fs-micro font-black text-red-300">
               <Ban className="h-2.5 w-2.5" /> integration unavailable
             </span>
           )}
           {action.receipt?.policyApplied && (
-            <span className="rounded-full bg-white/8 px-2 py-0.5 text-[9px] font-black text-white/50">policy v{action.receipt.policyApplied.version}</span>
+            <span className="rounded-full bg-white/8 px-2 py-0.5 j-fs-micro font-black text-white/50">policy v{action.receipt.policyApplied.version}</span>
           )}
           {action.critic && (
             <button
               type="button"
               onClick={() => setExpanded((e) => !e)}
-              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-black ${
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 j-fs-micro font-black ${
                 action.critic.flagged ? "bg-red-400/14 text-red-300" : "bg-teal-300/12 text-teal-200"
               }`}
               aria-expanded={expanded}
@@ -307,7 +307,7 @@ function ApprovalCard({
           {/* B6 policy drift — doesn't exist anywhere in this codebase yet (grepped,
               confirmed); renders the moment that phase adds the field. */}
           {(action as { policyDrift?: { fromVersion: number; toVersion: number } }).policyDrift && (
-            <span className="rounded-full bg-violet-400/14 px-2 py-0.5 text-[9px] font-black text-violet-300">policy drift</span>
+            <span className="rounded-full bg-violet-400/14 px-2 py-0.5 j-fs-micro font-black text-violet-300">policy drift</span>
           )}
           {/* jarvis-v3 P4.T2 (§6⑤ "predicted outcome from simulate()") — real,
               server-computed prediction, honestly absent for the ~36 action types
@@ -317,7 +317,7 @@ function ApprovalCard({
             <button
               type="button"
               onClick={() => setPredictedExpanded((e) => !e)}
-              className="inline-flex items-center gap-1 rounded-full bg-cyan-300/12 px-2 py-0.5 text-[9px] font-black text-cyan-200"
+              className="inline-flex items-center gap-1 rounded-full bg-cyan-300/12 px-2 py-0.5 j-fs-micro font-black text-cyan-200"
               aria-expanded={predictedExpanded}
             >
               predicted outcome
@@ -328,7 +328,7 @@ function ApprovalCard({
             <button
               type="button"
               onClick={() => onOpenReceipt(action.receipt!.id)}
-              className="ml-auto rounded-full px-2 py-0.5 text-[9px] font-black text-white/40 hover:text-cyan-200"
+              className="ml-auto rounded-full px-2 py-0.5 j-fs-micro font-black text-white/40 hover:text-cyan-200"
             >
               Why?
             </button>
@@ -348,13 +348,13 @@ function ApprovalCard({
                   key={p.sku}
                   type="button"
                   onClick={() => setDiffOpenSku((cur) => (cur === p.sku ? null : p.sku))}
-                  className="rounded-full bg-amber-300/12 px-2 py-0.5 text-[9px] font-black text-amber-200"
+                  className="rounded-full bg-amber-300/12 px-2 py-0.5 j-fs-micro font-black text-amber-200"
                   aria-expanded={diffOpenSku === p.sku}
                 >
                   override · {p.sku} {diffOpenSku === p.sku ? "▲" : "▼"}
                 </button>
               ) : (
-                <span key={p.sku} title={`price book: $${p.priceBookPriceUsd.toFixed(2)}`} className="rounded-full bg-white/8 px-2 py-0.5 text-[9px] font-black text-white/50">
+                <span key={p.sku} title={`price book: $${p.priceBookPriceUsd.toFixed(2)}`} className="rounded-full bg-white/8 px-2 py-0.5 j-fs-micro font-black text-white/50">
                   matches price book · {p.sku}
                 </span>
               ),
@@ -368,7 +368,7 @@ function ApprovalCard({
               ?.filter((p) => p.sku === diffOpenSku)
               .map((p) => (
                 <motion.div key={p.sku} initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
-                  <div className="relative mt-2 flex items-center gap-3 overflow-hidden rounded-lg border border-amber-300/25 bg-amber-300/[0.04] p-2 text-[11px]">
+                  <div className="relative mt-2 flex items-center gap-3 overflow-hidden rounded-lg border border-amber-300/25 bg-amber-300/[0.04] p-2 j-fs-micro">
                     <motion.div
                       aria-hidden
                       initial={{ x: "-100%" }}
@@ -389,7 +389,7 @@ function ApprovalCard({
         <AnimatePresence initial={false}>
           {expanded && action.critic && (
             <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
-              <div className="mt-2 rounded-lg border border-white/8 bg-white/[0.02] p-2 text-[10px] leading-relaxed text-[color:var(--j-text-dim)]">
+              <div className="mt-2 rounded-lg border border-white/8 bg-white/[0.02] p-2 j-fs-micro leading-relaxed text-[color:var(--j-text-dim)]">
                 {action.critic.reason}
               </div>
             </motion.div>
@@ -416,7 +416,7 @@ function ApprovalCard({
                 whileTap={{ scale: 0.96 }}
                 aria-disabled={isUnavailable}
                 title={isUnavailable ? "Integration unavailable — can't execute yet" : undefined}
-                className={`inline-flex items-center gap-1 rounded-full bg-teal-300 px-3 py-1 text-[10px] font-black text-slate-950 shadow-[var(--j-glow-teal)] transition hover:-translate-y-0.5 focus-visible:outline-none ${
+                className={`inline-flex items-center gap-1 rounded-full bg-teal-300 px-3 py-1 j-fs-micro font-black text-slate-950 shadow-[var(--j-glow-teal)] transition hover:-translate-y-0.5 focus-visible:outline-none ${
                   isUnavailable ? "opacity-40 hover:translate-y-0" : ""
                 }`}
               >
@@ -425,7 +425,7 @@ function ApprovalCard({
               <motion.button
                 onClick={() => onDecide(action, "reject")}
                 whileTap={{ scale: 0.96 }}
-                className="inline-flex items-center gap-1 rounded-full border border-white/15 px-3 py-1 text-[10px] font-black text-white/70 transition hover:-translate-y-0.5 hover:text-red-300 focus-visible:outline-none"
+                className="inline-flex items-center gap-1 rounded-full border border-white/15 px-3 py-1 j-fs-micro font-black text-white/70 transition hover:-translate-y-0.5 hover:text-red-300 focus-visible:outline-none"
               >
                 <X className="h-3 w-3" /> Reject
               </motion.button>
@@ -433,7 +433,7 @@ function ApprovalCard({
               <motion.button
                 onClick={() => onDecide(action, "escalate")}
                 whileTap={{ scale: 0.96 }}
-                className="inline-flex items-center gap-1 rounded-full border border-white/15 px-3 py-1 text-[10px] font-black text-white/50 transition hover:-translate-y-0.5 hover:text-amber-200 focus-visible:outline-none"
+                className="inline-flex items-center gap-1 rounded-full border border-white/15 px-3 py-1 j-fs-micro font-black text-white/50 transition hover:-translate-y-0.5 hover:text-amber-200 focus-visible:outline-none"
               >
                 <AlertTriangle className="h-3 w-3" /> Escalate
               </motion.button>
@@ -448,7 +448,7 @@ function ApprovalCard({
               <button
                 type="button"
                 onClick={() => onDecide(action, "escalate")}
-                className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-amber-300/30 bg-amber-300/[0.04] py-2.5 text-[11px] font-black text-amber-100 lg:hidden"
+                className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-amber-300/30 bg-amber-300/[0.04] py-2.5 j-fs-micro font-black text-amber-100 lg:hidden"
               >
                 <AlertTriangle className="h-3 w-3" /> Escalate
               </button>
@@ -456,7 +456,7 @@ function ApprovalCard({
               type="button"
               onClick={() => onActivateMobile(action.id)}
               disabled={isUnavailable}
-              className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-white/15 bg-white/[0.03] py-2.5 text-[11px] font-black text-white/80 disabled:opacity-40 lg:hidden"
+              className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-white/15 bg-white/[0.03] py-2.5 j-fs-micro font-black text-white/80 disabled:opacity-40 lg:hidden"
             >
               Decide <ChevronDown className="h-3 w-3" />
             </button>}
@@ -477,9 +477,9 @@ function ExecutingDock({ flights }: { flights: Array<{ id: string; actionType: s
   if (flights.length === 0) return null
   return (
     <BorderBeam className="mb-2 rounded-lg"><div className="flex flex-wrap gap-1.5 rounded-lg border border-teal-300/20 bg-teal-300/[0.04] p-2">
-      <span className="w-full text-[8.5px] font-black uppercase tracking-widest text-teal-300/70">Executing</span>
+      <span className="w-full j-fs-micro font-black uppercase tracking-widest text-teal-300/70">Executing</span>
       {flights.map((f) => (
-        <Flight key={f.id} layoutId={`approval-card-${f.id}`} className="rounded-full bg-teal-300/15 px-2.5 py-1 text-[9.5px] font-bold text-teal-200">
+        <Flight key={f.id} layoutId={`approval-card-${f.id}`} className="rounded-full bg-teal-300/15 px-2.5 py-1 j-fs-micro font-bold text-teal-200">
           {f.actionType.replaceAll("_", " ")}
         </Flight>
       ))}
@@ -504,7 +504,7 @@ function RejectGhost({ rect, label, reduced }: { rect: DOMRect; label: string; r
       initial="initial"
       animate="animate"
       style={{ position: "fixed", top: rect.top, left: rect.left, width: rect.width, height: rect.height, zIndex: 55 }}
-      className="pointer-events-none flex items-center justify-center gap-1.5 rounded-xl border border-red-400/40 bg-red-400/10 text-[11px] font-black text-red-300"
+      className="pointer-events-none flex items-center justify-center gap-1.5 rounded-xl border border-red-400/40 bg-red-400/10 j-fs-micro font-black text-red-300"
     >
       <GateValveGlyph variant="seal" reduced={reduced} />
       REJECTED — {label.replaceAll("_", " ")}
@@ -527,7 +527,7 @@ function ApproveStamp({ rect, label, reduced }: { rect: DOMRect; label: string; 
       initial="initial"
       animate="animate"
       style={{ position: "fixed", top: rect.top, left: rect.left, width: rect.width, height: rect.height, zIndex: 55 }}
-      className="pointer-events-none flex items-center justify-center gap-1.5 rounded-xl bg-teal-300/15 text-[11px] font-black text-teal-200"
+      className="pointer-events-none flex items-center justify-center gap-1.5 rounded-xl bg-teal-300/15 j-fs-micro font-black text-teal-200"
     >
       {/* FLOW-51 InkBleed: the stamp's border bleeds in after the punch settles, then
           crystallizes (holds, no further motion) — a separate layered border so the
@@ -583,7 +583,7 @@ export function ConsequenceChip({ rect, label, reduced }: { rect: DOMRect; label
       animate={reduced ? { opacity: 0 } : { opacity: [1, 1, 0], x: dx, y: dy, scale: 0.5 }}
       transition={{ duration: reduced ? 0.2 : 0.55, ease: EASE.accelerate }}
       style={{ position: "fixed", top: rect.top + rect.height / 2 - 8, left: rect.left + rect.width / 2 - 8, zIndex: 56 }}
-      className="pointer-events-none flex h-4 w-4 items-center justify-center rounded-full bg-cyan-300/80 text-[7px] font-black text-slate-950"
+      className="pointer-events-none flex h-4 w-4 items-center justify-center rounded-full bg-cyan-300/80 j-fs-micro font-black text-slate-950"
       title={label}
     >
       ✓
@@ -911,7 +911,7 @@ export function ApprovalCockpit({ escalateOnly = false }: { escalateOnly?: boole
         <span className="j-label">Awaiting Your Approval</span>
         <div className="flex items-center gap-2">
           {items.length > 0 && !escalateOnly && (
-            <span className="rounded-full bg-cyan-300/15 px-2 py-0.5 text-[10px] font-black text-cyan-200">
+            <span className="rounded-full bg-cyan-300/15 px-2 py-0.5 j-fs-micro font-black text-cyan-200">
               {/* FLOW-55 ConsequenceTrail: the pending-count odometer, real refetch-driven */}
               <Ticker value={items.length} />
             </span>
@@ -922,7 +922,7 @@ export function ApprovalCockpit({ escalateOnly = false }: { escalateOnly?: boole
               setBatchMode((b) => !b)
               setSelected(new Set())
             }}
-            className={`rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-wide ${
+            className={`rounded-full border px-2 py-0.5 j-fs-micro font-black uppercase tracking-wide ${
               batchMode ? "border-cyan-300/50 bg-cyan-300/10 text-cyan-200" : "border-white/15 text-white/50 hover:text-white/80"
             }`}
           >
@@ -992,7 +992,7 @@ export function ApprovalCockpit({ escalateOnly = false }: { escalateOnly?: boole
                   className="h-8 w-12 rounded-md border border-white/15 bg-white/8"
                 />
               ))}
-              <span className="ml-3 text-[11px] font-bold text-white/70">
+              <span className="ml-3 j-fs-micro font-bold text-white/70">
                 {selectedItems.length} selected · <RiskBadge tier={RANK_TO_TIER[batchHighestTier]} />
               </span>
             </div>
@@ -1001,14 +1001,14 @@ export function ApprovalCockpit({ escalateOnly = false }: { escalateOnly?: boole
                 value={batchConfirmText}
                 onChange={(e) => setBatchConfirmText(e.target.value)}
                 placeholder='High risk in this batch — type "APPROVE" to continue'
-                className="mb-2 w-full rounded-lg border border-amber-300/30 bg-black/30 px-2.5 py-1.5 text-[11px] text-white outline-none placeholder:text-white/30 focus:border-amber-300/60"
+                className="mb-2 w-full rounded-lg border border-amber-300/30 bg-black/30 px-2.5 py-1.5 j-fs-micro text-white outline-none placeholder:text-white/30 focus:border-amber-300/60"
               />
             )}
             <button
               type="button"
               onClick={submitBatch}
               disabled={!batchCanSubmit}
-              className="rounded-full bg-teal-300 px-4 py-1.5 text-[10px] font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-full bg-teal-300 px-4 py-1.5 j-fs-micro font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-40"
             >
               Approve {selectedItems.length}
             </button>
@@ -1034,8 +1034,8 @@ export function ApprovalCockpit({ escalateOnly = false }: { escalateOnly?: boole
           >
             <div className="mb-2 flex items-start justify-between gap-3">
               <div>
-                <div className="text-[9px] font-black uppercase tracking-widest text-[color:var(--j-text-faint)]">{mobileActiveAction.actionType.replaceAll("_", " ")}</div>
-                <div className="mt-0.5 text-[12px] text-[color:var(--j-text)]">{mobileActiveAction.summary ?? "Drafted action awaiting approval."}</div>
+                <div className="j-fs-micro font-black uppercase tracking-widest text-[color:var(--j-text-faint)]">{mobileActiveAction.actionType.replaceAll("_", " ")}</div>
+                <div className="mt-0.5 j-fs-sm text-[color:var(--j-text)]">{mobileActiveAction.summary ?? "Drafted action awaiting approval."}</div>
               </div>
               <button type="button" onClick={() => setMobileActiveId(null)} aria-label="Close" className="shrink-0 rounded-full border border-white/15 p-1 text-white/50">
                 <X className="h-3.5 w-3.5" />
@@ -1047,7 +1047,7 @@ export function ApprovalCockpit({ escalateOnly = false }: { escalateOnly?: boole
                 value={mobileConfirmText}
                 onChange={(e) => setMobileConfirmText(e.target.value)}
                 placeholder='High risk — type "APPROVE" to continue'
-                className="mb-2 w-full rounded-lg border border-amber-300/30 bg-black/30 px-2.5 py-2 text-[12px] text-white outline-none placeholder:text-white/30 focus:border-amber-300/60"
+                className="mb-2 w-full rounded-lg border border-amber-300/30 bg-black/30 px-2.5 py-2 j-fs-sm text-white outline-none placeholder:text-white/30 focus:border-amber-300/60"
               />
             )}
             <div className="grid grid-cols-3 gap-2">
@@ -1055,21 +1055,21 @@ export function ApprovalCockpit({ escalateOnly = false }: { escalateOnly?: boole
                 type="button"
                 onClick={() => decideMobile("confirm")}
                 disabled={!mobileCanApprove}
-                className="flex items-center justify-center gap-1 rounded-xl bg-teal-300 py-3 text-[12px] font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex items-center justify-center gap-1 rounded-xl bg-teal-300 py-3 j-fs-sm font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <Check className="h-4 w-4" /> Approve
               </button>
               <button
                 type="button"
                 onClick={() => decideMobile("reject")}
-                className="flex items-center justify-center gap-1 rounded-xl border border-white/15 py-3 text-[12px] font-black text-white/80"
+                className="flex items-center justify-center gap-1 rounded-xl border border-white/15 py-3 j-fs-sm font-black text-white/80"
               >
                 <X className="h-4 w-4" /> Reject
               </button>
               <button
                 type="button"
                 onClick={() => decideMobile("escalate")}
-                className="flex items-center justify-center gap-1 rounded-xl border border-white/15 py-3 text-[12px] font-black text-white/60"
+                className="flex items-center justify-center gap-1 rounded-xl border border-white/15 py-3 j-fs-sm font-black text-white/60"
               >
                 <AlertTriangle className="h-4 w-4" /> Escalate
               </button>

@@ -102,7 +102,7 @@ export function DlqBrowser() {
       <div className="flex items-center justify-between border-b border-white/6 px-4 py-2.5">
         <span className="j-label">Dead-Letter Queue</span>
         <div className="flex items-center gap-2">
-          {rows && rows.length > 0 && <span className="rounded-full bg-red-400/12 px-2 py-0.5 text-[10px] font-black text-red-300">{rows.length}</span>}
+          {rows && rows.length > 0 && <span className="rounded-full bg-red-400/12 px-2 py-0.5 j-fs-micro font-black text-red-300">{rows.length}</span>}
           <button
             type="button"
             onClick={() => void load()}
@@ -113,9 +113,9 @@ export function DlqBrowser() {
         </div>
       </div>
       <div className="px-4 py-3">
-        {error && <div className="mb-2 rounded-lg border border-red-400/30 bg-red-400/5 px-3 py-2 text-[11px] text-red-300">{error}</div>}
+        {error && <div className="mb-2 rounded-lg border border-red-400/30 bg-red-400/5 px-3 py-2 j-fs-micro text-red-300">{error}</div>}
         {!rows && !error && <div className="jarvis-skeleton-tide h-16 rounded-lg bg-white/5" />}
-        {rows && rows.length === 0 && <div className="rounded-xl border border-white/8 bg-white/[0.02] px-4 py-6 text-center text-[12px] text-[color:var(--j-text-dim)]">Nothing dead-lettered. Clean.</div>}
+        {rows && rows.length === 0 && <div className="rounded-xl border border-white/8 bg-white/[0.02] px-4 py-6 text-center j-fs-sm text-[color:var(--j-text-dim)]">Nothing dead-lettered. Clean.</div>}
         <div className="space-y-2">
           <AnimatePresence initial={false}>
             {rows?.slice(0, 10).map((r) => {
@@ -133,7 +133,7 @@ export function DlqBrowser() {
                     type="button"
                     onClick={() => hasReason && toggleExpand(r.id)}
                     aria-expanded={hasReason ? expanded : undefined}
-                    className={`mb-1 flex w-full items-center justify-between gap-2 text-left text-[9px] font-black uppercase tracking-widest text-[color:var(--j-text-faint)] ${hasReason ? "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60" : "cursor-default"}`}
+                    className={`mb-1 flex w-full items-center justify-between gap-2 text-left j-fs-micro font-black uppercase tracking-widest text-[color:var(--j-text-faint)] ${hasReason ? "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60" : "cursor-default"}`}
                   >
                     <span className="flex items-center gap-1">
                       {hasReason && <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`} />}
@@ -141,12 +141,12 @@ export function DlqBrowser() {
                     </span>
                     <span>{ageLabel(r.firstSeenAt, now)}</span>
                   </button>
-                  <div className="text-[11px] text-[color:var(--j-text)]">{r.lastError}</div>
+                  <div className="j-fs-micro text-[color:var(--j-text)]">{r.lastError}</div>
                   <div className="mt-1 flex flex-wrap gap-1">
-                    <span className="rounded-full bg-white/8 px-2 py-0.5 text-[9px] text-white/50">{r.errorKind}</span>
-                    <span className="rounded-full bg-white/8 px-2 py-0.5 text-[9px] text-white/50">{r.attempts} attempt{r.attempts === 1 ? "" : "s"}</span>
+                    <span className="rounded-full bg-white/8 px-2 py-0.5 j-fs-micro text-white/50">{r.errorKind}</span>
+                    <span className="rounded-full bg-white/8 px-2 py-0.5 j-fs-micro text-white/50">{r.attempts} attempt{r.attempts === 1 ? "" : "s"}</span>
                     {r.suggestedDisposition && (
-                      <span className={`rounded-full px-2 py-0.5 text-[9px] font-black ${r.suggestedDisposition === "replay" ? "bg-cyan-400/10 text-cyan-200" : r.suggestedDisposition === "discard" ? "bg-slate-400/10 text-slate-300" : "bg-amber-400/10 text-amber-200"}`}>
+                      <span className={`rounded-full px-2 py-0.5 j-fs-micro font-black ${r.suggestedDisposition === "replay" ? "bg-cyan-400/10 text-cyan-200" : r.suggestedDisposition === "discard" ? "bg-slate-400/10 text-slate-300" : "bg-amber-400/10 text-amber-200"}`}>
                         suggest {r.suggestedDisposition}
                       </span>
                     )}
@@ -156,7 +156,7 @@ export function DlqBrowser() {
                       expanded → instant text, no scramble (reduced, DecryptText's
                       own built-in reduced-motion branch). */}
                   {expanded && r.suggestionReason && (
-                    <DecryptText text={r.suggestionReason} mode="decrypt" charMs={14} className="mt-2 block text-[10px] leading-relaxed text-[color:var(--j-text-dim)]" />
+                    <DecryptText text={r.suggestionReason} mode="decrypt" charMs={14} className="mt-2 block j-fs-micro leading-relaxed text-[color:var(--j-text-dim)]" />
                   )}
                   <div className="mt-2 flex gap-2">
                     {r.replayable && (
@@ -164,7 +164,7 @@ export function DlqBrowser() {
                         type="button"
                         disabled={inflight === r.id}
                         onClick={() => act(r.id, "replay")}
-                        className="inline-flex items-center gap-1 rounded-full border border-white/15 px-3 py-1 text-[10px] font-black text-white/70 hover:text-cyan-200 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60"
+                        className="inline-flex items-center gap-1 rounded-full border border-white/15 px-3 py-1 j-fs-micro font-black text-white/70 hover:text-cyan-200 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60"
                       >
                         <RotateCcw className="h-3 w-3" /> Replay
                       </button>
@@ -173,7 +173,7 @@ export function DlqBrowser() {
                       type="button"
                       disabled={inflight === r.id}
                       onClick={() => act(r.id, "discard")}
-                      className="inline-flex items-center gap-1 rounded-full border border-white/15 px-3 py-1 text-[10px] font-black text-white/50 hover:text-red-300 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60"
+                      className="inline-flex items-center gap-1 rounded-full border border-white/15 px-3 py-1 j-fs-micro font-black text-white/50 hover:text-red-300 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60"
                     >
                       <Trash2 className="h-3 w-3" /> Discard
                     </button>
@@ -181,7 +181,7 @@ export function DlqBrowser() {
                   {r.relatedWorkflowRunId && (
                     <a
                       href={`/jarvis?workflowRunId=${encodeURIComponent(r.relatedWorkflowRunId)}#workflow-theater`}
-                      className="mt-2 inline-flex items-center gap-1 text-[10px] font-black text-cyan-300/80 hover:text-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60"
+                      className="mt-2 inline-flex items-center gap-1 j-fs-micro font-black text-cyan-300/80 hover:text-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60"
                     >
                       View linked workflow <ArrowUpRight className="h-3 w-3" />
                     </a>
@@ -193,7 +193,7 @@ export function DlqBrowser() {
           {replayedRunId && (
             <a
               href={`/jarvis?workflowRunId=${encodeURIComponent(replayedRunId)}#workflow-theater`}
-              className="inline-flex items-center gap-1 rounded-lg border border-cyan-300/20 bg-cyan-300/5 px-3 py-2 text-[10px] font-black text-cyan-100 hover:text-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60"
+              className="inline-flex items-center gap-1 rounded-lg border border-cyan-300/20 bg-cyan-300/5 px-3 py-2 j-fs-micro font-black text-cyan-100 hover:text-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60"
             >
               Replay queued. View the linked workflow <ArrowUpRight className="h-3 w-3" />
             </a>

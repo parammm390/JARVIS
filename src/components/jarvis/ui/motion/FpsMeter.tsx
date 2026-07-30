@@ -46,11 +46,11 @@ export function FpsMeterHud({ placement = "bottom-4 right-4" }: { placement?: st
   return (
     <div className={`j-panel fixed z-50 flex items-center gap-3 px-3 py-1.5 ${placement}`} data-testid="fps-meter">
       <span className="j-label">FPS</span>
-      <span className={`font-mono text-[13px] font-black ${tone}`}>{fps ?? "…"}</span>
-      <span className="text-[9px] text-[color:var(--j-text-faint)]">
+      <span className={`font-mono j-fs-sm font-black ${tone}`}>{fps ?? "…"}</span>
+      <span className="j-fs-micro text-[color:var(--j-text-faint)]">
         min <span className={tone}>{minFps ?? "…"}</span>
       </span>
-      <button onClick={reset} className="rounded-full border border-white/12 px-2 py-0.5 text-[9px] font-bold text-white/50 hover:text-white">
+      <button onClick={reset} className="rounded-full border border-white/12 px-2 py-0.5 j-fs-micro font-bold text-white/50 hover:text-white">
         reset
       </button>
     </div>

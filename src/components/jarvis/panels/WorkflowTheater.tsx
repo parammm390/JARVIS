@@ -352,8 +352,8 @@ export function GraphNodeCard({ node, now, blueprint, onSelect }: { node: GraphN
         )}
       </div>
       <div className="min-w-0">
-        <div className="truncate text-[11.5px] font-bold capitalize leading-tight text-[color:var(--j-text)]">{humanizeStepType(node.stepType)}</div>
-        <div className="text-[9.5px] text-[color:var(--j-text-dim)]">
+        <div className="truncate j-fs-sm font-bold capitalize leading-tight text-[color:var(--j-text)]">{humanizeStepType(node.stepType)}</div>
+        <div className="j-fs-micro text-[color:var(--j-text-dim)]">
           {blueprint
             ? node.optional
               ? "optional"
@@ -374,12 +374,12 @@ export function GraphNodeCard({ node, now, blueprint, onSelect }: { node: GraphN
         </motion.div>
       )}
       {sandboxed && (
-        <span className="absolute -bottom-1.5 -left-1.5 rounded-full bg-amber-300/90 px-1.5 py-0.5 text-[7.5px] font-black uppercase tracking-wide text-slate-950 shadow-[0_0_8px_rgba(245,185,66,0.5)]">
+        <span className="absolute -bottom-1.5 -left-1.5 rounded-full bg-amber-300/90 px-1.5 py-0.5 j-fs-micro font-black uppercase tracking-wide text-slate-950 shadow-[0_0_8px_rgba(245,185,66,0.5)]">
           sandbox
         </span>
       )}
       {node.status === "failed" && node.terminalReason && (
-        <div className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 w-44 -translate-x-1/2 rounded-lg border border-red-400/30 bg-slate-950 p-2 text-[10px] text-red-300 opacity-0 shadow-xl transition group-hover:opacity-100">
+        <div className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 w-44 -translate-x-1/2 rounded-lg border border-red-400/30 bg-slate-950 p-2 j-fs-micro text-red-300 opacity-0 shadow-xl transition group-hover:opacity-100">
           {node.terminalReason}
         </div>
       )}
@@ -451,7 +451,7 @@ function LiveRunRow({ run, now, onOpen, onSelectStep }: { run: WorkflowRun; now:
     >
       <button onClick={onOpen} className="mb-3 flex w-full items-center justify-between gap-3 text-left">
         <div className="flex min-w-0 items-center gap-2.5">
-          <span className="truncate text-[13.5px] font-black text-[color:var(--j-text)]">{humanizeWorkflowType(run.workflowType)}</span>
+          <span className="truncate j-fs-base font-black text-[color:var(--j-text)]">{humanizeWorkflowType(run.workflowType)}</span>
           <span className="j-chip bg-white/6 font-mono text-[color:var(--j-text-dim)]">{ageLabel(run.createdAt, now)}</span>
           {run.status === "running" && (
             <span className="j-chip bg-cyan-400/10 text-cyan-300">
@@ -460,7 +460,7 @@ function LiveRunRow({ run, now, onOpen, onSelectStep }: { run: WorkflowRun; now:
           )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <span className="font-mono text-[10px] tabular-nums text-[color:var(--j-text-dim)]">{pct}%</span>
+          <span className="font-mono j-fs-micro tabular-nums text-[color:var(--j-text-dim)]">{pct}%</span>
           <div className="h-1.5 w-24 overflow-hidden rounded-full bg-white/8">
             <div className="h-full rounded-full bg-gradient-to-r from-teal-400 to-cyan-400 transition-[width] duration-500 ease-out" style={{ width: `${pct}%` }} />
           </div>
@@ -513,21 +513,21 @@ function ReplayRow({ run, now }: { run: WorkflowRun; now: number }) {
     >
       <div className="mb-3 flex w-full flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2.5">
-          <span className="truncate text-[13.5px] font-black text-[color:var(--j-text)]">{humanizeWorkflowType(run.workflowType)}</span>
+          <span className="truncate j-fs-base font-black text-[color:var(--j-text)]">{humanizeWorkflowType(run.workflowType)}</span>
           <span className="j-chip bg-violet-400/12 text-violet-300">REPLAY</span>
           <span className="j-chip bg-white/6 font-mono text-[color:var(--j-text-dim)]">
             {run.status} {ageLabel(run.updatedAt, now)} ago
           </span>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <span className="font-mono text-[10px] tabular-nums text-[color:var(--j-text-dim)]">{pct}%</span>
+          <span className="font-mono j-fs-micro tabular-nums text-[color:var(--j-text-dim)]">{pct}%</span>
           <div className="h-1.5 w-24 overflow-hidden rounded-full bg-white/8">
             <div className={`h-full rounded-full bg-gradient-to-r transition-[width] duration-500 ease-out ${done ? "from-emerald-400 to-teal-300" : "from-teal-400 to-cyan-400"}`} style={{ width: `${pct}%` }} />
           </div>
         </div>
       </div>
       <Graph nodes={nodes} edges={edges} edgeState={edgeState} now={now} />
-      <div className="mt-2 text-[9.5px] text-[color:var(--j-text-faint)]">Re-enactment of a real run from the ledger · step timing compressed for display.</div>
+      <div className="mt-2 j-fs-micro text-[color:var(--j-text-faint)]">Re-enactment of a real run from the ledger · step timing compressed for display.</div>
     </div>
   )
 }
@@ -595,10 +595,10 @@ function RunControls({ run }: { run: WorkflowRun }) {
 
   return (
     <div className="mb-4 rounded-xl border border-white/8 bg-white/[0.015] p-3">
-      <div className="mb-2 text-[9px] font-black uppercase tracking-widest text-[color:var(--j-text-faint)]">Run controls</div>
-      {error && <div className="mb-2 rounded-lg border border-red-400/30 bg-red-400/5 px-2 py-1.5 text-[10px] text-red-300">{error}</div>}
+      <div className="mb-2 j-fs-micro font-black uppercase tracking-widest text-[color:var(--j-text-faint)]">Run controls</div>
+      {error && <div className="mb-2 rounded-lg border border-red-400/30 bg-red-400/5 px-2 py-1.5 j-fs-micro text-red-300">{error}</div>}
       {appliedVerb && !error && (
-        <div className="mb-2 rounded-lg border border-cyan-300/20 bg-cyan-300/5 px-2 py-1.5 text-[10px] text-cyan-200">
+        <div className="mb-2 rounded-lg border border-cyan-300/20 bg-cyan-300/5 px-2 py-1.5 j-fs-micro text-cyan-200">
           {appliedVerb} sent — updating…
         </div>
       )}
@@ -609,7 +609,7 @@ function RunControls({ run }: { run: WorkflowRun }) {
             type="button"
             disabled={inflight !== null}
             onClick={() => act(verb)}
-            className="inline-flex items-center gap-1.5 rounded-full border border-white/15 px-3 py-1 text-[10px] font-black text-white/70 transition hover:-translate-y-0.5 hover:text-cyan-200 disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60"
+            className="inline-flex items-center gap-1.5 rounded-full border border-white/15 px-3 py-1 j-fs-micro font-black text-white/70 transition hover:-translate-y-0.5 hover:text-cyan-200 disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60"
           >
             <Icon className="h-3 w-3" /> {inflight === verb ? "Sending…" : label}
           </button>
@@ -648,7 +648,7 @@ function WhyStepButton({ stepId }: { stepId: string }) {
         type="button"
         onClick={open}
         disabled={state === "loading"}
-        className="text-[9px] font-black uppercase tracking-wide text-cyan-300/70 hover:text-cyan-200 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60"
+        className="j-fs-micro font-black uppercase tracking-wide text-cyan-300/70 hover:text-cyan-200 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60"
       >
         {state === "loading" ? "Loading…" : state === "none" ? "No receipt yet" : "Why?"}
       </button>
@@ -701,13 +701,13 @@ function RunDrawer({ run, onClose }: { run: WorkflowRun; onClose: () => void }) 
         <div className="space-y-3">
           {run.steps.map((s) => (
             <div key={s.id} className="j-panel !rounded-xl p-3">
-              <div className="flex items-center justify-between text-[11px] font-bold text-[color:var(--j-text)]">
+              <div className="flex items-center justify-between j-fs-micro font-bold text-[color:var(--j-text)]">
                 <span className="flex items-center gap-2 capitalize">
                   <StepIcon stepType={s.stepType} className="h-3.5 w-3.5" /> {humanizeStepType(s.stepType)}
                 </span>
                 <span className="text-[color:var(--j-text-dim)]">{s.status}</span>
               </div>
-              <div className="mt-1 flex items-center justify-between font-mono text-[10px] text-[color:var(--j-text-faint)]">
+              <div className="mt-1 flex items-center justify-between font-mono j-fs-micro text-[color:var(--j-text-faint)]">
                 <span>
                   updated {new Date(s.updatedAt).toLocaleString()} · attempts {s.attempts}
                   {s.terminalReason ? ` · ${s.terminalReason}` : ""}
@@ -757,7 +757,7 @@ function RunBrowser({ runs, now, onOpen, onSelectStep }: { runs: WorkflowRun[]; 
     <div key={run.id} className="rounded-xl border border-white/8 bg-black/10 p-2.5">
       <button type="button" onClick={() => setExpandedRunId((current) => current === run.id ? null : run.id)} className="flex w-full items-center justify-between gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60">
         <span className="flex min-w-0 items-center gap-2">
-          <span className="min-w-0 truncate text-[11px] font-bold text-[color:var(--j-text)]">{humanizeWorkflowType(run.workflowType)}</span>
+          <span className="min-w-0 truncate j-fs-micro font-bold text-[color:var(--j-text)]">{humanizeWorkflowType(run.workflowType)}</span>
           {/* FLOW-64 RunConstellation: a mini dot per REAL step, colored by that
               step's real status — always-on status dots, identical in both motion
               modes (the plan's own reduced fallback for this id IS "status dots"). */}
@@ -771,7 +771,7 @@ function RunBrowser({ runs, now, onOpen, onSelectStep }: { runs: WorkflowRun[]; 
             ))}
           </span>
         </span>
-        <span className="flex shrink-0 items-center gap-1.5 text-[9px] text-[color:var(--j-text-dim)]">
+        <span className="flex shrink-0 items-center gap-1.5 j-fs-micro text-[color:var(--j-text-dim)]">
           {run.watchdogFlagged && (
             <span
               className={`rounded-full bg-red-400/10 px-1.5 py-0.5 font-black text-red-300 ${run.id === firstFlaggedId ? "jarvis-watchdog-flare" : ""}`}
@@ -790,19 +790,19 @@ function RunBrowser({ runs, now, onOpen, onSelectStep }: { runs: WorkflowRun[]; 
     <div className="mt-4 rounded-2xl border border-white/8 bg-white/[0.012] p-3">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div>
-          <div className="text-[10px] font-black uppercase tracking-[0.16em] text-[color:var(--j-text-faint)]">Run browser</div>
-          <p className="text-[10px] text-[color:var(--j-text-dim)]">{filtered.length} of {runs.length} real runs</p>
+          <div className="j-fs-micro font-black uppercase tracking-[0.16em] text-[color:var(--j-text-faint)]">Run browser</div>
+          <p className="j-fs-micro text-[color:var(--j-text-dim)]">{filtered.length} of {runs.length} real runs</p>
         </div>
         <div className="flex flex-wrap gap-1.5">
-          <select value={kind} onChange={(event) => setKind(event.target.value)} aria-label="Filter workflow kind" className="rounded-lg border border-white/10 bg-[#0a1324] px-2 py-1 text-[10px] text-white/70">
+          <select value={kind} onChange={(event) => setKind(event.target.value)} aria-label="Filter workflow kind" className="rounded-lg border border-white/10 bg-[#0a1324] px-2 py-1 j-fs-micro text-white/70">
             <option value="all">all kinds</option>
             {kinds.map((value) => <option key={value} value={value}>{humanizeWorkflowType(value)}</option>)}
           </select>
-          <select value={status} onChange={(event) => setStatus(event.target.value)} aria-label="Filter workflow status" className="rounded-lg border border-white/10 bg-[#0a1324] px-2 py-1 text-[10px] text-white/70">
+          <select value={status} onChange={(event) => setStatus(event.target.value)} aria-label="Filter workflow status" className="rounded-lg border border-white/10 bg-[#0a1324] px-2 py-1 j-fs-micro text-white/70">
             <option value="all">all status</option>
             {statuses.map((value) => <option key={value} value={value}>{value}</option>)}
           </select>
-          <select value={age} onChange={(event) => setAge(event.target.value)} aria-label="Filter workflow age" className="rounded-lg border border-white/10 bg-[#0a1324] px-2 py-1 text-[10px] text-white/70">
+          <select value={age} onChange={(event) => setAge(event.target.value)} aria-label="Filter workflow age" className="rounded-lg border border-white/10 bg-[#0a1324] px-2 py-1 j-fs-micro text-white/70">
             <option value="all">any age</option>
             <option value="1h">last hour</option>
             <option value="24h">last day</option>
@@ -823,7 +823,7 @@ function RunBrowser({ runs, now, onOpen, onSelectStep }: { runs: WorkflowRun[]; 
             </div>
           </div>
         ) : renderedRuns.map(runRow)}
-        {filtered.length === 0 && <p className="rounded-lg border border-dashed border-white/10 p-3 text-center text-[10px] text-[color:var(--j-text-dim)]">No real runs match these filters.</p>}
+        {filtered.length === 0 && <p className="rounded-lg border border-dashed border-white/10 p-3 text-center j-fs-micro text-[color:var(--j-text-dim)]">No real runs match these filters.</p>}
       </div>
     </div>
   )
@@ -890,7 +890,7 @@ export function WorkflowTheater() {
                 <LiveRunRow key={run.id} run={run} now={data.now} onOpen={() => setOpenRunId(run.id)} onSelectStep={setOpenReceiptStepId} />
               ))}
             </AnimatePresence>
-            {extra > 0 && <div className="text-center text-[11px] text-[color:var(--j-text-dim)]">+{extra} more in flight</div>}
+            {extra > 0 && <div className="text-center j-fs-micro text-[color:var(--j-text-dim)]">+{extra} more in flight</div>}
           </div>
         )}
 
@@ -898,7 +898,7 @@ export function WorkflowTheater() {
           <div className="space-y-4">
             <ReplayTheater pool={replayPool} now={data.now} />
             <div className="rounded-2xl border border-white/5 bg-white/[0.008] p-4">
-              <div className="mb-2.5 text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--j-text-faint)]">
+              <div className="mb-2.5 j-fs-micro font-bold uppercase tracking-[0.14em] text-[color:var(--j-text-faint)]">
                 {BLUEPRINTS[2]!.title} · circuit map
               </div>
               <Graph nodes={BLUEPRINTS[2]!.nodes} edges={BLUEPRINTS[2]!.edges} edgeState={() => "blueprint"} now={data.now} blueprint />
@@ -910,11 +910,11 @@ export function WorkflowTheater() {
           <div className="space-y-4">
             {BLUEPRINTS.map((bp) => (
               <div key={bp.title} className="rounded-2xl border border-white/5 bg-white/[0.008] p-4">
-                <div className="mb-2.5 text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--j-text-faint)]">{bp.title}</div>
+                <div className="mb-2.5 j-fs-micro font-bold uppercase tracking-[0.14em] text-[color:var(--j-text-faint)]">{bp.title}</div>
                 <Graph nodes={bp.nodes} edges={bp.edges} edgeState={() => "blueprint"} now={data.now} blueprint />
               </div>
             ))}
-            <p className="text-center text-[12px] text-[color:var(--j-text-dim)]">
+            <p className="text-center j-fs-sm text-[color:var(--j-text-dim)]">
               Say &ldquo;start the invoice to cash workflow&rdquo; and watch a circuit light up live.
             </p>
           </div>

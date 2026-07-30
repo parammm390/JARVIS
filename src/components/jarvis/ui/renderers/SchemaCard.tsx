@@ -80,7 +80,7 @@ export function SchemaCard({ actionType, payload, compact, plugin, label, fields
   if (compact) {
     const first = rows[0]
     return (
-      <span className="inline-flex min-w-0 items-center gap-1.5 text-[11px]">
+      <span className="inline-flex min-w-0 items-center gap-1.5 j-fs-micro">
         {Icon && <Icon className={`h-3 w-3 shrink-0 ${accent.text}`} />}
         <span className="truncate text-[color:var(--j-text)]">{first ? `${first.label}: ${first.value}` : title}</span>
       </span>
@@ -92,17 +92,17 @@ export function SchemaCard({ actionType, payload, compact, plugin, label, fields
       <span className={`absolute inset-y-0 left-0 w-[3px] ${stripe}`} aria-hidden />
       <div className="mb-2 flex items-center gap-1.5">
         {Icon && <Icon className={`h-3.5 w-3.5 ${accent.text}`} />}
-        <span className={`text-[9px] font-black uppercase tracking-widest ${accent.text}`}>{title}</span>
+        <span className={`j-fs-micro font-black uppercase tracking-widest ${accent.text}`}>{title}</span>
       </div>
 
       {rows.length === 0 ? (
-        <div className="py-2 text-center text-[10px] text-[color:var(--j-text-faint)]">No payload fields set yet</div>
+        <div className="py-2 text-center j-fs-micro text-[color:var(--j-text-faint)]">No payload fields set yet</div>
       ) : (
         <div className="space-y-0">
           {visibleRows.map((r) => (
             <div key={r.key} className="flex items-baseline justify-between gap-3 border-b border-white/[0.04] py-1 last:border-0">
-              <span className="shrink-0 text-[9.5px] font-bold uppercase tracking-wide text-[color:var(--j-text-faint)]">{r.label}</span>
-              <span className="truncate text-right text-[11px] text-[color:var(--j-text)]">{r.value}</span>
+              <span className="shrink-0 j-fs-micro font-bold uppercase tracking-wide text-[color:var(--j-text-faint)]">{r.label}</span>
+              <span className="truncate text-right j-fs-micro text-[color:var(--j-text)]">{r.value}</span>
             </div>
           ))}
         </div>
@@ -112,7 +112,7 @@ export function SchemaCard({ actionType, payload, compact, plugin, label, fields
         <button
           type="button"
           onClick={() => setExpanded((e) => !e)}
-          className="mt-2 inline-flex items-center gap-1 text-[9.5px] font-black uppercase tracking-wide text-cyan-300"
+          className="mt-2 inline-flex items-center gap-1 j-fs-micro font-black uppercase tracking-wide text-cyan-300"
           aria-expanded={expanded}
         >
           <ChevronDown className={`h-2.5 w-2.5 transition-transform ${expanded ? "rotate-180" : ""}`} />
@@ -120,7 +120,7 @@ export function SchemaCard({ actionType, payload, compact, plugin, label, fields
         </button>
       )}
 
-      <div className="mt-2 border-t border-white/[0.06] pt-2 text-[9px] text-[color:var(--j-text-faint)]">
+      <div className="mt-2 border-t border-white/[0.06] pt-2 j-fs-micro text-[color:var(--j-text-faint)]">
         Rendered from the real action payload — no dedicated card exists yet for <span className="font-mono">{actionType}</span>.
       </div>
 
@@ -129,7 +129,7 @@ export function SchemaCard({ actionType, payload, compact, plugin, label, fields
           <button
             type="button"
             onClick={() => setShowRawDebug((s) => !s)}
-            className="text-[9px] font-black uppercase tracking-wide text-white/25 hover:text-white/50"
+            className="j-fs-micro font-black uppercase tracking-wide text-white/25 hover:text-white/50"
           >
             {showRawDebug ? "Hide owner debug view" : "Owner debug: view raw payload"}
           </button>

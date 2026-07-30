@@ -35,7 +35,7 @@ export function LeadToWaterTestScene({ payload, compact }: ActionRendererProps) 
 
   if (compact) {
     return (
-      <span className="inline-flex items-center gap-1.5 text-[11px]">
+      <span className="inline-flex items-center gap-1.5 j-fs-micro">
         <Waves className="h-3 w-3 shrink-0 text-teal-300" />
         <span className="truncate text-[color:var(--j-text)]">
           lead → water test · {p.scheduledAt ? formatDateOnly(p.scheduledAt) : "unscheduled"}
@@ -48,14 +48,14 @@ export function LeadToWaterTestScene({ payload, compact }: ActionRendererProps) 
     <Panel className="border border-teal-300/25 p-3">
       <div className="mb-2 flex items-center gap-1.5">
         <Waves className="h-3.5 w-3.5 text-teal-300" />
-        <span className="text-[9px] font-black uppercase tracking-widest text-teal-300">Lead → Water Test</span>
+        <span className="j-fs-micro font-black uppercase tracking-widest text-teal-300">Lead → Water Test</span>
       </div>
 
       <div className="mx-auto flex max-w-[220px] flex-col items-center gap-1.5">
         {STAGES.map((s, i) => (
           <motion.div
             key={s.label}
-            className="flex h-6 items-center justify-center rounded-md bg-gradient-to-b from-teal-300/25 to-cyan-400/15 text-[9px] font-bold text-teal-100"
+            className="flex h-6 items-center justify-center rounded-md bg-gradient-to-b from-teal-300/25 to-cyan-400/15 j-fs-micro font-bold text-teal-100"
             style={{ width: `${s.width}%` }}
             initial={{ opacity: 0, scaleX: 0.8 }}
             animate={{ opacity: 1, scaleX: 1, transition: reduced ? { duration: 0 } : { duration: 0.4, delay: i * 0.12, ease: EASE.decelerate } }}
@@ -65,7 +65,7 @@ export function LeadToWaterTestScene({ payload, compact }: ActionRendererProps) 
         ))}
       </div>
 
-      <div className="mt-3 space-y-1 text-[10.5px] text-[color:var(--j-text-dim)]">
+      <div className="mt-3 space-y-1 j-fs-micro text-[color:var(--j-text-dim)]">
         {p.scheduledAt && (
           <div>
             scheduled: <span className="font-black text-[color:var(--j-text)]">{formatDateTime(p.scheduledAt)}</span>
@@ -74,7 +74,7 @@ export function LeadToWaterTestScene({ payload, compact }: ActionRendererProps) 
         {p.phoneNumber && <div>phone: {p.phoneNumber}</div>}
       </div>
       {p.confirmationMessage && (
-        <div className="mt-2 rounded-lg bg-white/[0.03] p-2 text-[10px] leading-relaxed text-[color:var(--j-text-faint)]">{p.confirmationMessage}</div>
+        <div className="mt-2 rounded-lg bg-white/[0.03] p-2 j-fs-micro leading-relaxed text-[color:var(--j-text-faint)]">{p.confirmationMessage}</div>
       )}
     </Panel>
   )

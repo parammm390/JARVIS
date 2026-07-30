@@ -141,15 +141,15 @@ export function CommandPalette({
               <button
                 key={item.id}
                 onClick={() => select(item)}
-                className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[13px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60 ${i === index ? "bg-cyan-300/12 text-teal-100" : "text-white/70 hover:bg-cyan-300/12"}`}
+                className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left j-fs-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60 ${i === index ? "bg-cyan-300/12 text-teal-100" : "text-white/70 hover:bg-cyan-300/12"}`}
               >
                 {item.label}
-                <span className="text-[9px] uppercase tracking-widest text-white/30">{item.kind}</span>
+                <span className="j-fs-micro uppercase tracking-widest text-white/30">{item.kind}</span>
               </button>
             ))}
-            {items.length === 0 && <div className="px-3 py-6 text-center text-[12px] text-white/30">No matches.</div>}
+            {items.length === 0 && <div className="px-3 py-6 text-center j-fs-sm text-white/30">No matches.</div>}
           </div>
-          <div className="border-t border-white/8 px-4 py-2 text-[9.5px] uppercase tracking-widest text-white/25">enter select · esc close</div>
+          <div className="border-t border-white/8 px-4 py-2 j-fs-micro uppercase tracking-widest text-white/25">enter select · esc close</div>
         </motion.div>
       </motion.div>
     </AnimatePresence>

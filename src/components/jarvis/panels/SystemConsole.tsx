@@ -52,7 +52,7 @@ export function SystemConsole() {
         </span>
         <span className="j-chip bg-emerald-400/10 text-emerald-300">real requests</span>
       </div>
-      <div ref={scrollRef} className="h-[196px] overflow-y-auto px-4 py-2 font-mono text-[10.5px] leading-[1.75]">
+      <div ref={scrollRef} className="h-[196px] overflow-y-auto px-4 py-2 font-mono j-fs-micro leading-[1.75]">
         {lines.length === 0 && <div className="text-[color:var(--j-text-faint)]">awaiting first poll…</div>}
         <AnimatePresence initial={false}>
           {lines.map((l, index) => (

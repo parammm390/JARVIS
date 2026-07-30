@@ -165,7 +165,7 @@ export function ActivityTheater() {
                   type="button"
                   onClick={() => void openReceiptFor(item)}
                   disabled={item.source === "call"}
-                  className="flex w-full items-center gap-2 rounded-lg border border-white/6 bg-white/[0.015] px-2.5 py-1.5 text-left text-[11px] hover:bg-white/[0.04] disabled:cursor-default disabled:hover:bg-white/[0.015]"
+                  className="flex w-full items-center gap-2 rounded-lg border border-white/6 bg-white/[0.015] px-2.5 py-1.5 text-left j-fs-micro hover:bg-white/[0.04] disabled:cursor-default disabled:hover:bg-white/[0.015]"
                 >
                   {/* F7.T2 — FLOW-96 ListToDetail: this dot shares a layoutId with the
                       receipt scene's header dot (Bridge.tsx's ReceiptScene) — the
@@ -175,7 +175,7 @@ export function ActivityTheater() {
                   <span className="min-w-0 flex-1 truncate text-[color:var(--j-text)]">
                     {actionType ? <ActionRenderer actionType={actionType} payload={item.detail.payload} compact /> : summarize(item)}
                   </span>
-                  <span className="shrink-0 text-[9px] text-[color:var(--j-text-faint)]">{ageLabel(item.occurredAt)}</span>
+                  <span className="shrink-0 j-fs-micro text-[color:var(--j-text-faint)]">{ageLabel(item.occurredAt)}</span>
                 </button>
               </Enter>
             )

@@ -42,8 +42,8 @@ function SignInGate() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-[#04070f] px-6 text-center">
       <h1 className="text-lg font-black text-white">Sign in required</h1>
-      <p className="max-w-sm text-[12px] text-[color:var(--j-text-dim)]">The Instruction Thread works with real vitals, real approvals, and real execution for your own tenant.</p>
-      <a href="/jarvis/login" className="rounded-full bg-teal-300 px-4 py-1.5 text-[11px] font-black text-slate-950 hover:bg-teal-200">
+      <p className="max-w-sm j-fs-sm text-[color:var(--j-text-dim)]">The Instruction Thread works with real vitals, real approvals, and real execution for your own tenant.</p>
+      <a href="/jarvis/login" className="rounded-full bg-teal-300 px-4 py-1.5 j-fs-micro font-black text-slate-950 hover:bg-teal-200">
         Sign in
       </a>
     </div>

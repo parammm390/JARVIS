@@ -48,7 +48,7 @@ export function ChannelDonut() {
       </div>
       <div className="px-4 py-3">
       {total === 0 ? (
-        <div className="py-8 text-center text-[12px] text-[color:var(--j-text-faint)]">No communications yet.</div>
+        <div className="py-8 text-center j-fs-sm text-[color:var(--j-text-faint)]">No communications yet.</div>
       ) : (
         <div className="flex items-center gap-5">
           <Donut segments={segments} size={124} thickness={13} centerLabel={String(total)} centerSub="total" active={active} />
@@ -61,7 +61,7 @@ export function ChannelDonut() {
                 onFocus={() => setActive(s.label)}
                 onBlur={() => setActive(null)}
                 tabIndex={0}
-                className="flex items-center gap-2 text-[11.5px] focus-visible:outline-none"
+                className="flex items-center gap-2 j-fs-sm focus-visible:outline-none"
               >
                 <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: s.color }} />
                 <span className="flex-1 capitalize text-[color:var(--j-text-dim)]">{s.label}</span>
@@ -71,7 +71,7 @@ export function ChannelDonut() {
           </div>
         </div>
       )}
-      <p className="mt-3 text-[9.5px] text-[color:var(--j-text-faint)]">From the real communications log, newest 100.</p>
+      <p className="mt-3 j-fs-micro text-[color:var(--j-text-faint)]">From the real communications log, newest 100.</p>
       </div>
     </div>
   )
@@ -97,12 +97,12 @@ export function ActionMixBars() {
       </div>
       <div className="px-4 py-3">
       {rows.length === 0 ? (
-        <div className="py-8 text-center text-[12px] text-[color:var(--j-text-faint)]">No planned actions yet.</div>
+        <div className="py-8 text-center j-fs-sm text-[color:var(--j-text-faint)]">No planned actions yet.</div>
       ) : (
         <div className="space-y-3">
           {rows.map((r, i) => (
             <div key={r.actionType}>
-              <div className="mb-1 flex items-center justify-between text-[11.5px]">
+              <div className="mb-1 flex items-center justify-between j-fs-sm">
                 <span className="capitalize text-[color:var(--j-text-dim)]">{r.actionType.replaceAll("_", " ")}</span>
                 <span className="j-num font-mono font-bold text-[color:var(--j-text)]">{r.total}</span>
               </div>
@@ -111,7 +111,7 @@ export function ActionMixBars() {
           ))}
         </div>
       )}
-      <p className="mt-3 text-[9.5px] text-[color:var(--j-text-faint)]">Planner action counts, last 90 days.</p>
+      <p className="mt-3 j-fs-micro text-[color:var(--j-text-faint)]">Planner action counts, last 90 days.</p>
       </div>
     </div>
   )
@@ -154,7 +154,7 @@ export function AiPerformance() {
       <div className="px-4 py-3">
       <div className="space-y-2.5">
         <div className="flex items-baseline justify-between">
-          <span className="text-[11.5px] text-[color:var(--j-text-dim)]">API round-trip</span>
+          <span className="j-fs-sm text-[color:var(--j-text-dim)]">API round-trip</span>
           <span className="j-num font-mono text-lg font-bold text-cyan-300">
             {data.apiLatencyMs != null ? <CountUp value={data.apiLatencyMs} format={(n) => `${Math.round(n)}ms`} /> : "—"}
           </span>
@@ -164,23 +164,23 @@ export function AiPerformance() {
             <ForecastBand band={data.insights?.forecastBand} width={260} height={44} />
             <AreaSparkline values={data.latencyHistory} width={260} height={44} color="var(--j-cyan)" className="w-full" axisEtch />
             <AnomalyFlare point={anomalyPoint} label={anomaly?.label} />
-            <div className="mt-0.5 flex justify-between text-[8.5px] font-bold uppercase tracking-widest text-[color:var(--j-text-faint)]">
+            <div className="mt-0.5 flex justify-between j-fs-micro font-bold uppercase tracking-widest text-[color:var(--j-text-faint)]">
               <span>measured live · one point per poll</span>
               <span>{data.latencyHistory.length} samples</span>
             </div>
           </div>
         )}
         <div className="flex items-baseline justify-between">
-          <span className="text-[11.5px] text-[color:var(--j-text-dim)]">Owner approval rate</span>
+          <span className="j-fs-sm text-[color:var(--j-text-dim)]">Owner approval rate</span>
           <span className="j-num font-mono text-lg font-bold text-emerald-300">{approvalRate != null ? `${approvalRate}%` : "—"}</span>
         </div>
         <div className="flex items-baseline justify-between">
-          <span className="text-[11.5px] text-[color:var(--j-text-dim)]">Decisions made</span>
+          <span className="j-fs-sm text-[color:var(--j-text-dim)]">Decisions made</span>
           <span className="j-num font-mono text-lg font-bold text-[color:var(--j-text)]">{decided}</span>
         </div>
         {data.approvalsThisSession + data.rejectionsThisSession > 0 && (
           <div className="flex items-baseline justify-between">
-            <span className="text-[11.5px] text-[color:var(--j-text-dim)]">This session</span>
+            <span className="j-fs-sm text-[color:var(--j-text-dim)]">This session</span>
             <span className="j-chip bg-teal-400/10 text-teal-300">
               {data.approvalsThisSession} approved · {data.rejectionsThisSession} rejected
             </span>

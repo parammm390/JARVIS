@@ -18,8 +18,8 @@ function PanelDemo() {
   return (
     <FlowCard id="PRIM-01" title="Panel" reducedFallback="n/a — static shell, no animation to reduce">
       <div className="flex gap-2">
-        <Panel className="p-3 text-[10px] text-[color:var(--j-text-dim)]">plain</Panel>
-        <Panel hot className="p-3 text-[10px] text-[color:var(--j-text-dim)]">hot</Panel>
+        <Panel className="p-3 j-fs-micro text-[color:var(--j-text-dim)]">plain</Panel>
+        <Panel hot className="p-3 j-fs-micro text-[color:var(--j-text-dim)]">hot</Panel>
       </div>
     </FlowCard>
   )
@@ -56,7 +56,7 @@ function StatusDotDemo() {
     <FlowCard id="PRIM-04" title="StatusDot" reducedFallback="ok state stops pulsing, dot stays solid">
       <div className="flex items-center gap-4">
         {(["ok", "degraded", "down", "unknown"] as Status[]).map((s) => (
-          <div key={s} className="flex items-center gap-1.5 text-[9.5px] text-[color:var(--j-text-dim)]">
+          <div key={s} className="flex items-center gap-1.5 j-fs-micro text-[color:var(--j-text-dim)]">
             <StatusDot status={s} /> {s}
           </div>
         ))}
@@ -96,7 +96,7 @@ function DrawerSparklineDemo() {
   return (
     <FlowCard id="PRIM-07" title="Drawer + Sparkline" reducedFallback="drawer slide-in still runs on a spring (matches ReceiptDrawer's existing behavior, unchanged by this extraction)">
       <div className="flex w-full items-center justify-between">
-        <span className="text-[10px] text-[color:var(--j-text-dim)]">Drawer: extracted into ReceiptDrawer above (see any receipt click). Sparkline:</span>
+        <span className="j-fs-micro text-[color:var(--j-text-dim)]">Drawer: extracted into ReceiptDrawer above (see any receipt click). Sparkline:</span>
         <Sparkline values={[2, 4, 3, 6, 5, 8, 6]} />
       </div>
     </FlowCard>
@@ -110,7 +110,7 @@ export function PrimitivesCatalogSection() {
         <h2 className="j-label">C3.T2 — ui/primitives/ kit</h2>
         <span className="j-chip bg-teal-400/12 text-teal-300">9 entries</span>
       </div>
-      <p className="text-[11px] text-[color:var(--j-text-dim)]">
+      <p className="j-fs-micro text-[color:var(--j-text-dim)]">
         Panel/StatCard/RiskBadge/StatusDot/Skeletons/EmptyState/ErrorState/Drawer/Sparkline. Drawer and Sparkline are real extractions —
         ReceiptDrawer and Metric now compose these instead of owning their own copies.
       </p>

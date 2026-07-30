@@ -67,7 +67,7 @@ export function Metric({
   const valueSize = size === "lg" ? "text-4xl" : size === "sm" ? "text-lg" : "text-2xl"
 
   const header = (
-    <div className="mb-1 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-[color:var(--j-text-dim)]">
+    <div className="mb-1 flex items-center gap-1.5 j-fs-micro font-bold uppercase tracking-[0.18em] text-[color:var(--j-text-dim)]">
       {value.status === "known" && value.source.startsWith("api:") && <LiveDot />}
       {label}
     </div>
@@ -118,7 +118,7 @@ export function Metric({
       <div data-truth={value.status}>
         {header}
         <ErrorState message="Can't reach JARVIS." onRetry={onRetry} />
-        <div className="mt-1 text-[10px] text-[color:var(--j-text-faint)]">
+        <div className="mt-1 j-fs-micro text-[color:var(--j-text-faint)]">
           Last confirmed {ageLabel(Date.now() - value.sinceMs)}
         </div>
       </div>
@@ -135,7 +135,7 @@ export function Metric({
           className={`font-black tabular-nums text-[color:var(--j-text)] ${valueSize}`}
         />
         {unit && <span className="text-xs font-bold text-[color:var(--j-text-dim)]">{unit}</span>}
-        {delta && <span className="ml-1 rounded-full bg-teal-400/10 px-2 py-0.5 text-[10px] font-black text-teal-300">{delta}</span>}
+        {delta && <span className="ml-1 rounded-full bg-teal-400/10 px-2 py-0.5 j-fs-micro font-black text-teal-300">{delta}</span>}
       </div>
       {value.status === "partial" && (
         <span className="j-chip mt-1 inline-block bg-amber-400/10 text-amber-200">

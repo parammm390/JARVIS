@@ -52,8 +52,8 @@ function FrecencyGlowDemo() {
       {(Object.keys(FIXTURE_LEDGER) as Array<keyof typeof FIXTURE_LEDGER>).map((id) => {
         const warmth = frecencyWarmth(id, FIXTURE_LEDGER, now)
         return (
-          <div key={id} style={frecencyGlowStyle(warmth)} className="rounded-xl border border-transparent px-3 py-2 text-[11px] font-bold text-[color:var(--j-text-dim)]">
-            {id} <span className="text-[9px] font-normal text-white/40">warmth {warmth.toFixed(2)}</span>
+          <div key={id} style={frecencyGlowStyle(warmth)} className="rounded-xl border border-transparent px-3 py-2 j-fs-micro font-bold text-[color:var(--j-text-dim)]">
+            {id} <span className="j-fs-micro font-normal text-white/40">warmth {warmth.toFixed(2)}</span>
           </div>
         )
       })}
@@ -78,7 +78,7 @@ function QuietHoursDemo() {
       >
         {quiet ? "Quiet hours: on (ambient slowed 1.6×)" : "Quiet hours: off"}
       </button>
-      <p className="text-[9px] text-white/40">isQuietNow(&quot;22:00&quot;,&quot;06:00&quot;, 23:00) = {String(proof)} (real overnight-wrap math)</p>
+      <p className="j-fs-micro text-white/40">isQuietNow(&quot;22:00&quot;,&quot;06:00&quot;, 23:00) = {String(proof)} (real overnight-wrap math)</p>
     </div>
   )
 }
@@ -91,7 +91,7 @@ export function AmbientIntelligenceCatalogSection() {
         <h2 className="j-label">F10 — Ambient Intelligence (FLOW-98..100)</h2>
         <span className="j-chip bg-cyan-400/12 text-cyan-300">3 entries</span>
       </div>
-      <p className="text-[11px] text-[color:var(--j-text-dim)]">
+      <p className="j-fs-micro text-[color:var(--j-text-dim)]">
         Built against main D6&apos;s real shipped prefs/frecency/digest surfaces with D6&apos;s own exit-gate physical-push proof
         still open — a disclosed deviation (Param waived the gate; see F-STATE). Every demo below is the real production
         component/function, FIXTURE-driven only because Stage has no signed-in session.

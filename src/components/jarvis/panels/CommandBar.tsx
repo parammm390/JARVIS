@@ -95,7 +95,7 @@ export function CommandBar({
             onChange={(e) => setCommand(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && run()}
             placeholder="What would you like me to do?"
-            className="h-11 min-w-0 flex-1 bg-transparent text-[14px] text-[color:var(--j-text)] placeholder:text-[color:var(--j-text-faint)] focus:outline-none"
+            className="h-11 min-w-0 flex-1 bg-transparent j-fs-base text-[color:var(--j-text)] placeholder:text-[color:var(--j-text-faint)] focus:outline-none"
           />
           <motion.button
             onClick={run}
@@ -113,7 +113,7 @@ export function CommandBar({
           </motion.button>
         </div>
       </motion.div>
-      <div className="mt-1.5 flex items-center justify-center gap-3 text-[10px] text-[color:var(--j-text-faint)]">
+      <div className="mt-1.5 flex items-center justify-center gap-3 j-fs-micro text-[color:var(--j-text-faint)]">
         {note ? <span className="text-[color:var(--j-text-dim)]">{note}</span> : <span>Enter to run · ⌘K for the palette · consequential actions wait for your approval</span>}
       </div>
       {showKeyPrompt && <SignInPrompt onClose={() => setShowKeyPrompt(false)} />}

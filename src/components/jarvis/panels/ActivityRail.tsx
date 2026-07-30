@@ -63,12 +63,12 @@ export function ActivityRail() {
       </div>
       <div className="px-4 py-3">
         <div className="max-h-64 space-y-2 overflow-y-auto pr-1" aria-live="polite" aria-relevant="additions text">
-          {items.length === 0 && <div className="text-[12px] text-[color:var(--j-text-faint)]">No events yet — the timeline fills as Finnor works.</div>}
+          {items.length === 0 && <div className="j-fs-sm text-[color:var(--j-text-faint)]">No events yet — the timeline fills as Finnor works.</div>}
           {items.map((e) => (
-            <motion.div key={e.id} initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-2 text-[11px]">
+            <motion.div key={e.id} initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-2 j-fs-micro">
               <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${familyColor(e.eventType)}`} />
               <span className="min-w-0 flex-1 truncate text-[color:var(--j-text)]">{e.eventType.replaceAll("_", " ")}</span>
-              <span className="shrink-0 rounded-full bg-white/6 px-1.5 py-0.5 text-[9px] font-bold text-[color:var(--j-text-faint)]">{e.entityType}</span>
+              <span className="shrink-0 rounded-full bg-white/6 px-1.5 py-0.5 j-fs-micro font-bold text-[color:var(--j-text-faint)]">{e.entityType}</span>
               <span className="shrink-0 text-[color:var(--j-text-faint)]">{ageLabel(e.occurredAt, data.now)}</span>
             </motion.div>
           ))}

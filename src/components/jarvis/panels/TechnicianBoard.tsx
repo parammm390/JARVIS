@@ -56,23 +56,23 @@ export function TechnicianBoard() {
         </button>
       </div>
       <div className="px-4 py-3">
-        <div className="mb-2 flex items-center gap-1.5 rounded-lg border border-amber-300/20 bg-amber-300/5 px-2.5 py-1.5 text-[10px] text-amber-200">
+        <div className="mb-2 flex items-center gap-1.5 rounded-lg border border-amber-300/20 bg-amber-300/5 px-2.5 py-1.5 j-fs-micro text-amber-200">
           <AlertTriangle className="h-3 w-3 shrink-0" />
           Showing every upcoming visit tenant-wide — there&rsquo;s no link yet between your
           sign-in and a specific technician record, so this can&rsquo;t filter to &ldquo;yours&rdquo; alone.
         </div>
-        {error && <div className="mb-2 rounded-lg border border-red-400/30 bg-red-400/5 px-3 py-2 text-[11px] text-red-300">{error}</div>}
+        {error && <div className="mb-2 rounded-lg border border-red-400/30 bg-red-400/5 px-3 py-2 j-fs-micro text-red-300">{error}</div>}
         {!visits && !error && <div className="jarvis-skeleton-tide h-16 rounded-lg bg-white/5" />}
-        {visits && upcoming.length === 0 && <div className="rounded-xl border border-white/8 bg-white/[0.02] px-4 py-6 text-center text-[12px] text-[color:var(--j-text-dim)]">Nothing upcoming.</div>}
+        {visits && upcoming.length === 0 && <div className="rounded-xl border border-white/8 bg-white/[0.02] px-4 py-6 text-center j-fs-sm text-[color:var(--j-text-dim)]">Nothing upcoming.</div>}
         <div className="space-y-2">
           {upcoming.slice(0, 10).map((v) => (
             <div key={v.id} className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
-              <div className="flex items-center justify-between text-[11px] font-bold text-[color:var(--j-text)]">
+              <div className="flex items-center justify-between j-fs-micro font-bold text-[color:var(--j-text)]">
                 <span className="capitalize">{v.type.replaceAll("_", " ")}</span>
                 <span className="text-[color:var(--j-text-dim)]">{new Date(v.scheduledAt!).toLocaleString()}</span>
               </div>
-              <div className="mt-1 text-[10px] text-[color:var(--j-text-faint)]">{v.address}</div>
-              {v.notes && <div className="mt-1 text-[10px] text-[color:var(--j-text-dim)]">{v.notes}</div>}
+              <div className="mt-1 j-fs-micro text-[color:var(--j-text-faint)]">{v.address}</div>
+              {v.notes && <div className="mt-1 j-fs-micro text-[color:var(--j-text-dim)]">{v.notes}</div>}
             </div>
           ))}
         </div>

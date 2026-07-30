@@ -69,7 +69,7 @@ export function OpsPanel({ open, onClose }: { open: boolean; onClose: () => void
               <Metric label="Pending approvals" value={kernel.pendingApprovals} size="sm" />
               <Metric label="Runs in flight" value={kernel.runsInFlight} size="sm" />
             </div>
-            <div className="border-t border-white/10 px-4 py-2 text-[9px] uppercase tracking-widest text-white/35">esc close</div>
+            <div className="border-t border-white/10 px-4 py-2 j-fs-micro uppercase tracking-widest text-white/35">esc close</div>
           </motion.section>
         </motion.div>
       )}

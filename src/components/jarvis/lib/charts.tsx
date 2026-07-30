@@ -186,7 +186,7 @@ export function Donut({
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         {centerLabel && <div className="text-xl font-black tabular-nums text-[color:var(--j-text)]">{centerLabel}</div>}
-        {centerSub && <div className="text-[9px] font-bold uppercase tracking-widest text-[color:var(--j-text-dim)]">{centerSub}</div>}
+        {centerSub && <div className="j-fs-micro font-bold uppercase tracking-widest text-[color:var(--j-text-dim)]">{centerSub}</div>}
       </div>
     </div>
   )
@@ -294,7 +294,7 @@ export function AnomalyFlare({ point, label }: { point?: { x: number; y: number 
         animate={reduced ? { scale: 1, opacity: 0.7 } : { scale: [0.6, 1.6], opacity: [0, 0.7, 0] }}
         transition={reduced ? { duration: 0 } : { duration: 1.6, repeat: Infinity, ease: EASE.decelerate }}
       />
-      <span className="absolute left-2 top-2 whitespace-nowrap rounded-md border border-red-400/40 bg-red-950/80 px-1.5 py-0.5 text-[9px] font-bold text-red-200">
+      <span className="absolute left-2 top-2 whitespace-nowrap rounded-md border border-red-400/40 bg-red-950/80 px-1.5 py-0.5 j-fs-micro font-bold text-red-200">
         {label}
       </span>
     </div>

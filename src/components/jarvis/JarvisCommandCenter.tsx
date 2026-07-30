@@ -144,8 +144,8 @@ function SidebarProfile() {
   if (loading) return null
   if (!session) {
     return (
-      <Link href="/jarvis/login" className="flex items-center gap-2.5 rounded-xl px-1 py-1.5 text-[12px] font-bold text-[color:var(--j-text-dim)] hover:text-white">
-        <div className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 text-[11px] font-black">?</div>
+      <Link href="/jarvis/login" className="flex items-center gap-2.5 rounded-xl px-1 py-1.5 j-fs-sm font-bold text-[color:var(--j-text-dim)] hover:text-white">
+        <div className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 j-fs-micro font-black">?</div>
         Sign in
       </Link>
     )
@@ -154,10 +154,10 @@ function SidebarProfile() {
   const initials = email.slice(0, 2).toUpperCase()
   return (
     <div className="flex items-center gap-2.5 px-1">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-cyan-400 to-blue-500 text-[11px] font-black text-slate-950">{initials}</div>
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-cyan-400 to-blue-500 j-fs-micro font-black text-slate-950">{initials}</div>
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[12px] font-bold text-[color:var(--j-text)]">{email}</div>
-        <button onClick={() => void signOut()} className="text-[9.5px] text-[color:var(--j-text-faint)] hover:text-white">
+        <div className="truncate j-fs-sm font-bold text-[color:var(--j-text)]">{email}</div>
+        <button onClick={() => void signOut()} className="j-fs-micro text-[color:var(--j-text-faint)] hover:text-white">
           Sign out
         </button>
       </div>
@@ -202,8 +202,8 @@ function Sidebar({ view, setView }: { view: string; setView: (v: string) => void
       <Link href="/" className="flex items-center gap-3 px-5 pb-5 pt-6">
         <JarvisOrb size={34} voiceState="idle" degraded={!live} />
         <div>
-          <div className="text-[15px] font-black tracking-tight text-[color:var(--j-text)]">JARVIS</div>
-          <div className="text-[8.5px] font-bold uppercase tracking-[0.28em] text-[color:var(--j-text-faint)]">Finnor Voice AI OS</div>
+          <div className="j-fs-base font-black tracking-tight text-[color:var(--j-text)]">JARVIS</div>
+          <div className="j-fs-micro font-bold uppercase tracking-[0.28em] text-[color:var(--j-text-faint)]">Finnor Voice AI OS</div>
         </div>
       </Link>
       <nav className="flex-1 space-y-0.5 overflow-y-auto px-3">
@@ -217,7 +217,7 @@ function Sidebar({ view, setView }: { view: string; setView: (v: string) => void
                 sfx.tick()
               }}
               aria-current={active ? "page" : undefined}
-              className={`relative flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[12.5px] font-bold transition ${
+              className={`relative flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left j-fs-sm font-bold transition ${
                 active ? "bg-cyan-400/[0.08] text-[color:var(--j-text)]" : "text-[color:var(--j-text-dim)] hover:bg-white/[0.04] hover:text-[color:var(--j-text)]"
               }`}
             >
@@ -225,7 +225,7 @@ function Sidebar({ view, setView }: { view: string; setView: (v: string) => void
               <Icon className={`h-4 w-4 transition-colors duration-200 ${active ? "text-cyan-300" : ""}`} />
               {label}
               {label === "Command Center" && (data.stats?.pending ?? 0) > 0 && (
-                <span key={data.stats?.pending} className="jarvis-pop ml-auto rounded-full bg-cyan-300 px-2 py-0.5 text-[10px] font-black text-slate-950">
+                <span key={data.stats?.pending} className="jarvis-pop ml-auto rounded-full bg-cyan-300 px-2 py-0.5 j-fs-micro font-black text-slate-950">
                   {data.stats?.pending}
                 </span>
               )}
@@ -241,14 +241,14 @@ function Sidebar({ view, setView }: { view: string; setView: (v: string) => void
               <span className={`relative h-2 w-2 rounded-full ${live ? "bg-emerald-300" : "bg-amber-300"}`} />
             </span>
             <div>
-              <div className="text-[10px] font-bold uppercase tracking-widest text-[color:var(--j-text-dim)]">System Status</div>
-              <div className={`text-[11px] font-black ${live ? "text-emerald-300" : "text-amber-300"}`}>{live ? "Connected · Live" : "Standalone"}</div>
+              <div className="j-fs-micro font-bold uppercase tracking-widest text-[color:var(--j-text-dim)]">System Status</div>
+              <div className={`j-fs-micro font-black ${live ? "text-emerald-300" : "text-amber-300"}`}>{live ? "Connected · Live" : "Standalone"}</div>
             </div>
           </div>
           {data.latencyHistory.length > 1 && (
             <div className="mt-2">
               <AreaSparkline values={data.latencyHistory} width={186} height={30} color={live ? "var(--j-green)" : "var(--j-amber)"} className="w-full" />
-              <div className="mt-0.5 text-[8px] font-bold uppercase tracking-widest text-[color:var(--j-text-faint)]">api latency · measured live</div>
+              <div className="mt-0.5 j-fs-micro font-bold uppercase tracking-widest text-[color:var(--j-text-faint)]">api latency · measured live</div>
             </div>
           )}
         </div>
@@ -362,7 +362,7 @@ function Shell() {
                 key={label}
                 onClick={() => setView(label)}
                 aria-current={view === label ? "page" : undefined}
-                className={`shrink-0 rounded-full px-3.5 py-1.5 text-[10px] font-black uppercase tracking-wider transition ${
+                className={`shrink-0 rounded-full px-3.5 py-1.5 j-fs-micro font-black uppercase tracking-wider transition ${
                   view === label ? "bg-cyan-300 text-slate-950" : "border border-white/12 text-white/55"
                 }`}
               >
@@ -399,7 +399,7 @@ function Shell() {
             {view === "Production Readiness" && <SystemHealthView />}
           </div>
 
-          <p className="px-4 pb-6 text-center text-[10.5px] text-[color:var(--j-text-faint)]">
+          <p className="px-4 pb-6 text-center j-fs-micro text-[color:var(--j-text-faint)]">
             Every consequential action stops at the approval gate — enforced in the executor and the database, logged immutably.{" "}
             <Link href="/" className="font-black text-[color:var(--j-text-dim)] underline-offset-2 hover:underline">← finnorai.com</Link>
           </p>

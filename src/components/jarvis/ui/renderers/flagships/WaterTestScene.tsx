@@ -82,7 +82,7 @@ export function WaterTestScene({ payload, compact }: ActionRendererProps) {
 
   if (compact) {
     return (
-      <span className="inline-flex items-center gap-1.5 text-[11px]">
+      <span className="inline-flex items-center gap-1.5 j-fs-micro">
         <Droplets className="h-3 w-3 shrink-0 text-cyan-300" />
         <span className="truncate text-[color:var(--j-text)]">
           water test · {p.address ?? "address pending"} · {BAND_LABEL[band]}
@@ -96,7 +96,7 @@ export function WaterTestScene({ payload, compact }: ActionRendererProps) {
       <Panel className="border border-cyan-400/25 p-3">
         <div className="mb-2 flex items-center gap-1.5">
           <Droplets className="h-3.5 w-3.5 text-cyan-300" />
-          <span className="text-[9px] font-black uppercase tracking-widest text-cyan-300">Water Test Scheduled</span>
+          <span className="j-fs-micro font-black uppercase tracking-widest text-cyan-300">Water Test Scheduled</span>
         </div>
 
         <div className="flex items-center gap-4">
@@ -119,19 +119,19 @@ export function WaterTestScene({ payload, compact }: ActionRendererProps) {
             <circle cx={50} cy={55} r={3.5} fill={BAND_COLOR[band]} />
           </svg>
           <div className="min-w-0 flex-1">
-            <div className="text-[11px] font-black" style={{ color: BAND_COLOR[band] }}>
+            <div className="j-fs-micro font-black" style={{ color: BAND_COLOR[band] }}>
               {BAND_LABEL[band]}
             </div>
-            <div className="mt-1 flex items-center gap-1 text-[10.5px] text-[color:var(--j-text-dim)]">
+            <div className="mt-1 flex items-center gap-1 j-fs-micro text-[color:var(--j-text-dim)]">
               <MapPin className="h-2.5 w-2.5 shrink-0" /> <span className="truncate">{p.address ?? "—"}</span>
             </div>
             {p.contactName && (
-              <div className="mt-0.5 flex items-center gap-1 text-[10.5px] text-[color:var(--j-text-dim)]">
+              <div className="mt-0.5 flex items-center gap-1 j-fs-micro text-[color:var(--j-text-dim)]">
                 <User className="h-2.5 w-2.5 shrink-0" /> {p.contactName}
               </div>
             )}
             {p.contactPhone && (
-              <div className="mt-0.5 flex items-center gap-1 text-[10.5px] text-[color:var(--j-text-dim)]">
+              <div className="mt-0.5 flex items-center gap-1 j-fs-micro text-[color:var(--j-text-dim)]">
                 <Phone className="h-2.5 w-2.5 shrink-0" /> {p.contactPhone}
               </div>
             )}
@@ -139,7 +139,7 @@ export function WaterTestScene({ payload, compact }: ActionRendererProps) {
         </div>
 
         {p.notes && (
-          <div className="mt-2 rounded-lg border border-white/8 bg-white/[0.02] p-2 text-[10.5px] leading-relaxed text-[color:var(--j-text-dim)]">
+          <div className="mt-2 rounded-lg border border-white/8 bg-white/[0.02] p-2 j-fs-micro leading-relaxed text-[color:var(--j-text-dim)]">
             {p.notes}
           </div>
         )}

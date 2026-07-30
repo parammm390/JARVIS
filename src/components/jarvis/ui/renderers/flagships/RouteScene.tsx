@@ -71,7 +71,7 @@ export function RouteScene({ payload, compact }: ActionRendererProps) {
 
   if (compact) {
     return (
-      <span className="inline-flex items-center gap-1.5 text-[11px]">
+      <span className="inline-flex items-center gap-1.5 j-fs-micro">
         <Route className="h-3 w-3 shrink-0 text-cyan-300" />
         <span className="truncate text-[color:var(--j-text)]">
           route · {technicianName ?? p.technicianId?.slice(0, 8) ?? "technician"} · {p.date ?? "date pending"}
@@ -84,19 +84,19 @@ export function RouteScene({ payload, compact }: ActionRendererProps) {
     <Panel className="border border-cyan-400/25 p-3">
       <div className="mb-2 flex items-center gap-1.5">
         <Route className="h-3.5 w-3.5 text-cyan-300" />
-        <span className="text-[9px] font-black uppercase tracking-widest text-cyan-300">Route Suggestion</span>
+        <span className="j-fs-micro font-black uppercase tracking-widest text-cyan-300">Route Suggestion</span>
       </div>
-      <div className="mb-2 text-[10.5px] text-[color:var(--j-text-dim)]">
+      <div className="mb-2 j-fs-micro text-[color:var(--j-text-dim)]">
         <span className="font-black text-[color:var(--j-text)]">{technicianName ?? p.technicianId?.slice(0, 8) ?? "technician"}</span>
         {" · "}
         {p.date ?? "date pending"}
         {stopCount !== null && <span> · {stopCount} stop{stopCount === 1 ? "" : "s"}</span>}
       </div>
 
-      {loading && <div className="text-[10.5px] text-[color:var(--j-text-faint)]">Loading the real dispatch map…</div>}
-      {error && <div className="text-[10.5px] text-red-300">{error}</div>}
+      {loading && <div className="j-fs-micro text-[color:var(--j-text-faint)]">Loading the real dispatch map…</div>}
+      {error && <div className="j-fs-micro text-red-300">{error}</div>}
       {!loading && !error && stopCount === 0 && (
-        <div className="text-[10.5px] text-[color:var(--j-text-faint)]">No scheduled stops for this technician on this date yet.</div>
+        <div className="j-fs-micro text-[color:var(--j-text-faint)]">No scheduled stops for this technician on this date yet.</div>
       )}
       {!loading && !error && data && stopCount !== null && stopCount > 0 && (
         <div className="max-h-[280px] overflow-hidden rounded-xl">

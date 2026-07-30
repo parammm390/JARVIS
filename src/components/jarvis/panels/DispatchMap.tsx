@@ -191,7 +191,7 @@ export function DispatchMapCore({ data, error }: { data: MapData | null; error: 
             wrap.appendChild(ring)
           }
           const marker = document.createElement("button")
-          marker.className = `flex h-8 w-8 items-center justify-center rounded-full border border-cyan-100/80 bg-cyan-300 text-[11px] font-black text-slate-950 shadow-[0_0_18px_rgba(103,232,249,.8)] ${reduced ? "" : "jarvis-pin-drop"}`
+          marker.className = `flex h-8 w-8 items-center justify-center rounded-full border border-cyan-100/80 bg-cyan-300 j-fs-micro font-black text-slate-950 shadow-[0_0_18px_rgba(103,232,249,.8)] ${reduced ? "" : "jarvis-pin-drop"}`
           marker.textContent = String(stop.optimized?.sequence ?? "•")
           marker.title = `${stop.technicianName}: ${stop.address}`
           marker.onclick = () => {
@@ -264,7 +264,7 @@ export function DispatchMapCore({ data, error }: { data: MapData | null; error: 
 
   return (
     <div className="space-y-4">
-      {data?.synthetic && <div className="rounded-xl border border-amber-300/25 bg-amber-300/5 px-3 py-2 text-[11px] text-amber-100">Dealer Zero — synthetic Houston-metro fixture data.</div>}
+      {data?.synthetic && <div className="rounded-xl border border-amber-300/25 bg-amber-300/5 px-3 py-2 j-fs-micro text-amber-100">Dealer Zero — synthetic Houston-metro fixture data.</div>}
       {error && <div className="rounded-xl border border-red-400/30 p-3 text-sm text-red-300">{error}</div>}
       <div className="grid gap-4 xl:grid-cols-[1fr_280px]">
         <div className="space-y-2">
@@ -286,7 +286,7 @@ export function DispatchMapCore({ data, error }: { data: MapData | null; error: 
                 onPointerUp={() => setScrubbing(false)}
                 className="h-1.5 w-full flex-1 accent-cyan-300"
               />
-              <span className="w-10 shrink-0 text-right text-[10px] text-white/45">{scrub}%</span>
+              <span className="w-10 shrink-0 text-right j-fs-micro text-white/45">{scrub}%</span>
             </div>
           )}
         </div>
@@ -296,7 +296,7 @@ export function DispatchMapCore({ data, error }: { data: MapData | null; error: 
             {data?.stops.length ?? "—"}
             <span className="ml-1 text-xs text-white/45">stops</span>
           </div>
-          <div className="rounded-xl bg-white/[0.035] p-3 text-[11px] text-white/65">
+          <div className="rounded-xl bg-white/[0.035] p-3 j-fs-micro text-white/65">
             <Route className="mb-2 h-4 w-4 text-cyan-200" />
             {data?.route ? (
               <>
@@ -313,7 +313,7 @@ export function DispatchMapCore({ data, error }: { data: MapData | null; error: 
               "No completed B3 route receipt for this day yet."
             )}
           </div>
-          <div className="text-[11px] text-white/45">{data?.unplacedStops ?? 0} stop(s) have no stored coordinate and remain unplaced.</div>
+          <div className="j-fs-micro text-white/45">{data?.unplacedStops ?? 0} stop(s) have no stored coordinate and remain unplaced.</div>
         </aside>
       </div>
       {selected && (
@@ -336,8 +336,8 @@ export function DispatchMapCore({ data, error }: { data: MapData | null; error: 
                 </div>
                 <div className="rounded-xl border border-white/8 bg-white/[.025] p-3">
                   <div className="j-label">Service history</div>
-                  <div className="mt-1 text-[11px] text-white/65">{household.serviceVisits.length ? `${household.serviceVisits.length} recorded visit${household.serviceVisits.length === 1 ? "" : "s"}` : "No recorded service visits"}</div>
-                  <div className="mt-1 text-[10px] text-white/40">Count from the tenant household-360 read model.</div>
+                  <div className="mt-1 j-fs-micro text-white/65">{household.serviceVisits.length ? `${household.serviceVisits.length} recorded visit${household.serviceVisits.length === 1 ? "" : "s"}` : "No recorded service visits"}</div>
+                  <div className="mt-1 j-fs-micro text-white/40">Count from the tenant household-360 read model.</div>
                 </div>
               </>
             ) : (
@@ -368,9 +368,9 @@ export function DispatchMap() {
           <div className="j-label flex items-center gap-2">
             <MapPinned className="h-4 w-4" /> Dispatch map
           </div>
-          <p className="mt-1 text-[11px] text-[color:var(--j-text-dim)]">Stored locations only. Dashed line shows B3&apos;s optimized stop order, not road geometry.</p>
+          <p className="mt-1 j-fs-micro text-[color:var(--j-text-dim)]">Stored locations only. Dashed line shows B3&apos;s optimized stop order, not road geometry.</p>
         </div>
-        <label className="flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-[11px]">
+        <label className="flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 j-fs-micro">
           <CalendarDays className="h-4 w-4" />
           <input aria-label="Dispatch day" className="bg-transparent text-white" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
         </label>

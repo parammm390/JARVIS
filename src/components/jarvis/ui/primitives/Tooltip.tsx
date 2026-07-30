@@ -57,7 +57,7 @@ export function Tooltip({
           <motion.span
             id={id}
             role="tooltip"
-            className={`pointer-events-none absolute z-[30] whitespace-nowrap rounded-lg border border-white/12 bg-[#0a1220] px-2 py-1 text-[10px] font-bold text-white shadow-xl ${position}`}
+            className={`pointer-events-none absolute z-[30] whitespace-nowrap rounded-lg border border-white/12 bg-[#0a1220] px-2 py-1 j-fs-micro font-bold text-white shadow-xl ${position}`}
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}

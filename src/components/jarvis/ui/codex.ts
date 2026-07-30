@@ -6,9 +6,9 @@
 // code after this file exists without a reason to deviate noted inline.
 
 // ---- TYPE — extracted stops (grep counts as of 2026-07-27) ----
-// text-[11px] (131), text-[10px] (122), text-[9px] (84), text-[12px] (41),
-// text-[10.5px] (30), text-[9.5px] (24), text-[13px] (18), text-[11.5px] (11),
-// text-[12.5px] (8), text-[8.5px] (7), text-[8px] (5), text-[15px] (5, headers),
+// j-fs-micro (131), j-fs-micro (122), j-fs-micro (84), j-fs-sm (41),
+// j-fs-micro (30), j-fs-micro (24), j-fs-sm (18), j-fs-sm (11),
+// j-fs-sm (8), j-fs-micro (7), j-fs-micro (5), j-fs-base (5, headers),
 // text-xl/2xl/3xl (14, hero metrics via Tailwind scale not px literals).
 export const TYPE = {
   display: { size: "15px", weight: 900, tracking: "-0.01em" },

@@ -33,7 +33,7 @@ export function DegradedBanner() {
   if (impaired.length === 0) return null
 
   return (
-    <div className="flex items-center gap-2 rounded-xl border border-amber-300/25 bg-amber-300/8 px-3.5 py-2 text-[11.5px] text-amber-200">
+    <div className="flex items-center gap-2 rounded-xl border border-amber-300/25 bg-amber-300/8 px-3.5 py-2 j-fs-sm text-amber-200">
       <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
       <span>
         {impaired.map((k) => LABELS[k]).join(", ")} {impaired.length === 1 ? "isn't" : "aren't"} responding right now — affected actions queue instead of failing silently.

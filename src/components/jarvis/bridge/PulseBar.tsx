@@ -166,7 +166,7 @@ export function PulseBar({ compact = false }: { compact?: boolean }) {
         </div>
       )
     }
-    return <div className="rounded-xl border border-white/8 bg-white/[0.02] p-3 text-[10px] text-[color:var(--j-text-faint)]">Reading pulse…</div>
+    return <div className="rounded-xl border border-white/8 bg-white/[0.02] p-3 j-fs-micro text-[color:var(--j-text-faint)]">Reading pulse…</div>
   }
 
   const scanAge = oldestScanAgeSeconds(data.scans)
@@ -177,27 +177,27 @@ export function PulseBar({ compact = false }: { compact?: boolean }) {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <HeartbeatPulse healthy={data.heartbeat.healthy} ageSeconds={data.heartbeat.ageSeconds} />
-          <span className="text-[10px] font-bold uppercase tracking-widest text-[color:var(--j-text-dim)]">Worker</span>
+          <span className="j-fs-micro font-bold uppercase tracking-widest text-[color:var(--j-text-dim)]">Worker</span>
         </div>
-        <span className="j-num font-mono text-[10px] font-bold text-[color:var(--j-text)]">{ageLabel(data.heartbeat.ageSeconds)}</span>
+        <span className="j-num font-mono j-fs-micro font-bold text-[color:var(--j-text)]">{ageLabel(data.heartbeat.ageSeconds)}</span>
       </div>
 
       <div>
         <div className="flex items-center justify-between gap-2">
-          <span className="text-[10px] font-bold uppercase tracking-widest text-[color:var(--j-text-dim)]">Queue</span>
+          <span className="j-fs-micro font-bold uppercase tracking-widest text-[color:var(--j-text-dim)]">Queue</span>
           <span className="flex items-center gap-1.5">
             <LiquidVessel value={data.queue.depth} capacity={20} color="var(--j-cyan)" />
-            <Ticker value={data.queue.depth} className="j-num font-mono text-[11px] font-black text-[color:var(--j-text)]" />
+            <Ticker value={data.queue.depth} className="j-num font-mono j-fs-micro font-black text-[color:var(--j-text)]" />
           </span>
         </div>
         {!compact && <QueueSparkline values={history} />}
         {data.queue.oldestPendingAgeSeconds !== null && (
-          <p className="j-num text-[9px] text-[color:var(--j-text-faint)]">oldest pending {ageLabel(data.queue.oldestPendingAgeSeconds)}</p>
+          <p className="j-num j-fs-micro text-[color:var(--j-text-faint)]">oldest pending {ageLabel(data.queue.oldestPendingAgeSeconds)}</p>
         )}
       </div>
 
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[10px] font-bold uppercase tracking-widest text-[color:var(--j-text-dim)]">DLQ</span>
+        <span className="j-fs-micro font-bold uppercase tracking-widest text-[color:var(--j-text-dim)]">DLQ</span>
         <span className="flex items-center gap-1.5">
           <LiquidVessel value={data.dlq.openCount} capacity={5} color="var(--j-red)" />
           <span className={`j-chip ${data.dlq.openCount > 0 ? "bg-red-400/12 text-red-300" : "bg-white/5 text-[color:var(--j-text-faint)]"}`}>
@@ -208,13 +208,13 @@ export function PulseBar({ compact = false }: { compact?: boolean }) {
 
       {!compact && (
         <div className="space-y-1">
-          <span className="text-[10px] font-bold uppercase tracking-widest text-[color:var(--j-text-dim)]">Bindings</span>
+          <span className="j-fs-micro font-bold uppercase tracking-widest text-[color:var(--j-text-dim)]">Bindings</span>
           <div className="flex flex-wrap gap-1.5">
             {bindingEntries.map(([cap, mode]) => (
-              <span key={cap} className="inline-flex items-center gap-1 rounded-full border border-white/8 bg-white/[0.015] px-2 py-0.5 text-[9px] font-semibold text-[color:var(--j-text-dim)]">
+              <span key={cap} className="inline-flex items-center gap-1 rounded-full border border-white/8 bg-white/[0.015] px-2 py-0.5 j-fs-micro font-semibold text-[color:var(--j-text-dim)]">
                 <StatusDot status={bindingStatus(mode)} />
                 {cap}
-                {mode === "emulator" && <span className="rounded-sm bg-amber-400/15 px-1 text-[8px] font-black text-amber-300">EMU</span>}
+                {mode === "emulator" && <span className="rounded-sm bg-amber-400/15 px-1 j-fs-micro font-black text-amber-300">EMU</span>}
               </span>
             ))}
           </div>
@@ -222,8 +222,8 @@ export function PulseBar({ compact = false }: { compact?: boolean }) {
       )}
 
       <div className="flex items-center justify-between">
-        <span className="text-[10px] font-bold uppercase tracking-widest text-[color:var(--j-text-dim)]">Scans</span>
-        <span className={`j-num font-mono text-[10px] font-bold ${scanAge !== null && scanAge > 3600 ? "text-amber-300" : "text-[color:var(--j-text)]"}`}>
+        <span className="j-fs-micro font-bold uppercase tracking-widest text-[color:var(--j-text-dim)]">Scans</span>
+        <span className={`j-num font-mono j-fs-micro font-bold ${scanAge !== null && scanAge > 3600 ? "text-amber-300" : "text-[color:var(--j-text)]"}`}>
           {scanAge === null ? "none yet" : `${ageLabel(scanAge)} oldest`}
         </span>
       </div>

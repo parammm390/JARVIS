@@ -11,7 +11,7 @@ function SegmentBar({ label, segments }: { label: string; segments: Array<{ stat
   const total = Math.max(1, segments.reduce((s, r) => s + r.count, 0))
   return (
     <div>
-      <div className="mb-1 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-[color:var(--j-text-dim)]">
+      <div className="mb-1 flex items-center justify-between j-fs-micro font-bold uppercase tracking-wider text-[color:var(--j-text-dim)]">
         <span>{label}</span>
         <span>{segments.reduce((s, r) => s + r.count, 0)}</span>
       </div>
@@ -28,7 +28,7 @@ function SegmentBar({ label, segments }: { label: string; segments: Array<{ stat
       </div>
       <div className="mt-1 flex flex-wrap gap-2">
         {segments.map((s) => (
-          <span key={s.status} className="text-[9px] text-[color:var(--j-text-faint)]">
+          <span key={s.status} className="j-fs-micro text-[color:var(--j-text-faint)]">
             {s.status.replaceAll("_", " ")} · {s.count}
           </span>
         ))}
@@ -61,9 +61,9 @@ export function PipelinePulse() {
             <SegmentBar label="Proposals" segments={ph.proposalsByStatus} />
           </div>
         ) : (
-          <div className="text-[12px] text-[color:var(--j-text-faint)]">Loading pipeline…</div>
+          <div className="j-fs-sm text-[color:var(--j-text-faint)]">Loading pipeline…</div>
         )}
-        <div className="mt-3 flex flex-wrap gap-2 border-t border-white/6 pt-3 text-[10px]">
+        <div className="mt-3 flex flex-wrap gap-2 border-t border-white/6 pt-3 j-fs-micro">
           {worstStock && (
             <span className={`rounded-full px-2 py-1 font-bold ${worstStock.quantity === 0 ? "bg-red-400/12 text-red-300" : "bg-amber-300/12 text-amber-200"}`}>
               {worstStock.name}: {worstStock.quantity}/{worstStock.reorderThreshold}

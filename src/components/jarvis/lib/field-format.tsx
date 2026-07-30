@@ -55,7 +55,7 @@ export function FieldList({ value }: { value: unknown }) {
   return (
     <div className="space-y-1">
       {rows.map((r) => (
-        <div key={r.path} className="flex items-baseline justify-between gap-3 text-[11px]">
+        <div key={r.path} className="flex items-baseline justify-between gap-3 j-fs-micro">
           <span className="text-[color:var(--j-text-faint)]">{r.path}</span>
           <span className="text-right font-mono text-[color:var(--j-text)]">{formatFieldValue(r.value)}</span>
         </div>

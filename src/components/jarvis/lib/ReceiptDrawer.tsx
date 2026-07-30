@@ -83,7 +83,7 @@ function ProposedActionSection({ proposedAction }: { proposedAction: unknown }) 
   if (!stepType) return <span className="text-[color:var(--j-text-faint)]">none yet</span>
   if (!getRendererEntry(stepType)) {
     return (
-      <div className="rounded-lg border border-white/8 bg-white/[0.02] p-2 text-[11px] text-[color:var(--j-text-dim)]">
+      <div className="rounded-lg border border-white/8 bg-white/[0.02] p-2 j-fs-micro text-[color:var(--j-text-dim)]">
         {stepType.replaceAll("_", " ")} — workflow sub-step, not a top-level action type
       </div>
     )
@@ -94,7 +94,7 @@ function ProposedActionSection({ proposedAction }: { proposedAction: unknown }) 
 function Section({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="mb-4">
-      <div className="mb-1 text-[9px] font-black uppercase tracking-widest text-[color:var(--j-text-faint)]">{label}</div>
+      <div className="mb-1 j-fs-micro font-black uppercase tracking-widest text-[color:var(--j-text-faint)]">{label}</div>
       {children}
     </div>
   )
@@ -160,7 +160,7 @@ export function ReceiptContent({
 
   return (
     <>
-        {error && <div className="rounded-lg border border-red-400/30 bg-red-400/5 px-3 py-2 text-[11px] text-red-300">{error}</div>}
+        {error && <div className="rounded-lg border border-red-400/30 bg-red-400/5 px-3 py-2 j-fs-micro text-red-300">{error}</div>}
 
         {!receipt && !error && (
           <div className="space-y-3">
@@ -196,16 +196,16 @@ export function ReceiptContent({
               }}
             >
               <Section label="Objective">
-                <div className="text-[12px] leading-relaxed text-[color:var(--j-text)]">{receipt.objective}</div>
+                <div className="j-fs-sm leading-relaxed text-[color:var(--j-text)]">{receipt.objective}</div>
               </Section>
               <div className="flex flex-wrap gap-1">
                 <RiskBadge tier={receipt.riskTier as RiskTier} />
                 {receipt.policyApplied && (
-                  <span className="rounded-full bg-white/8 px-2 py-0.5 text-[9px] font-black text-white/60">
+                  <span className="rounded-full bg-white/8 px-2 py-0.5 j-fs-micro font-black text-white/60">
                     policy {receipt.policyApplied.id.slice(0, 8)} · v{receipt.policyApplied.version}
                   </span>
                 )}
-                <span className={`rounded-full px-2 py-0.5 text-[9px] font-black ${receipt.finalizedAt ? "bg-teal-300/12 text-teal-200" : "bg-amber-300/12 text-amber-200"}`}>
+                <span className={`rounded-full px-2 py-0.5 j-fs-micro font-black ${receipt.finalizedAt ? "bg-teal-300/12 text-teal-200" : "bg-amber-300/12 text-amber-200"}`}>
                   {receipt.finalizedAt ? "finalized" : "in progress"}
                 </span>
               </div>
@@ -215,7 +215,7 @@ export function ReceiptContent({
                   send. `stepTypeOf` mirrors ProposedActionSection's own
                   extraction below — proposedAction is always {stepType, payload}. */}
               {isSandboxStep(stepTypeOf(receipt.proposedAction), setupStatus?.environment?.bindings) && (
-                <p className="mt-2 text-[10.5px] font-bold text-amber-200/90">{SANDBOX_LITERAL}</p>
+                <p className="mt-2 j-fs-micro font-bold text-amber-200/90">{SANDBOX_LITERAL}</p>
               )}
             </motion.div>
 
@@ -240,7 +240,7 @@ export function ReceiptContent({
                             <span
                               key={i}
                               title={new Date(e.timestamp).toLocaleString()}
-                              className="inline-flex items-center gap-1 rounded-full bg-white/6 px-2 py-0.5 text-[10px] text-white/60"
+                              className="inline-flex items-center gap-1 rounded-full bg-white/6 px-2 py-0.5 j-fs-micro text-white/60"
                             >
                               <Icon className="h-2.5 w-2.5 shrink-0" />
                               {e.source}:{e.ref}
@@ -251,7 +251,7 @@ export function ReceiptContent({
                     </Section>
                   ) : null,
                   <Section key="approval" label="Approval">
-                    <div className="text-[11px] text-[color:var(--j-text-dim)]">
+                    <div className="j-fs-micro text-[color:var(--j-text-dim)]">
                       {receipt.approval.required ? (receipt.approval.approvedBy ? `approved by ${receipt.approval.approvedBy}` : "awaiting approval") : "no approval required (ungated read)"}
                       {receipt.approval.at ? ` · ${new Date(receipt.approval.at).toLocaleString()}` : ""}
                     </div>
@@ -267,7 +267,7 @@ export function ReceiptContent({
                   </Section>,
                   receipt.failure ? (
                     <Section key="failure" label="Failure + recovery path">
-                      <div className="rounded-lg border border-red-400/25 bg-red-400/5 p-2 text-[11px] text-red-300">
+                      <div className="rounded-lg border border-red-400/25 bg-red-400/5 p-2 j-fs-micro text-red-300">
                         <div className="font-bold">{receipt.failure.errorKind}</div>
                         <div className="mt-1">{receipt.failure.message}</div>
                         <div className="mt-1 text-red-200/80">recovery: {receipt.failure.recoveryPath}</div>
@@ -278,7 +278,7 @@ export function ReceiptContent({
               ).filter(Boolean)}
             </Stagger>
 
-            <div className="mt-4 font-mono text-[9.5px] text-[color:var(--j-text-faint)]">
+            <div className="mt-4 font-mono j-fs-micro text-[color:var(--j-text-faint)]">
               opened {new Date(receipt.createdAt).toLocaleString()}
               {receipt.finalizedAt ? ` · finalized ${new Date(receipt.finalizedAt).toLocaleString()}` : ""}
             </div>
