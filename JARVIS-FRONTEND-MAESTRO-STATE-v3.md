@@ -30,31 +30,24 @@
 
 | | |
 |---|---|
-| **ACTIVE PHASE** | **P5 — Flagships B & C + Voice Continuity (code-complete)** |
-| **Latest verified commit** | `04ab19b` |
+| **ACTIVE PHASE** | **P6 — Roles, Mobile, Onboarding, Demo & Cutover (in progress)** |
+| **Latest verified commit** | `bae364b` |
 | **Phases complete** | 1 / 7 (P2 code-complete, exit gate 7/10 green; P3 code-complete, exit gate 3/6 green; P4 code-complete, exit gate 2/5 green; **P5 code-complete, exit gate 3/6 green** — live Flagship B/C plans remain blocked by B-7 and a live barge-in measurement requires an audio input device) |
 | **Sessions logged** | 6 |
 | **Product exists at** | end of P2; cognition visible end of P3; predicted↔actual built end of P4; Flagships B/C, reference clarification, barge-in signal, D3 narration, and thread stacking built and fixture-verified end of P5 |
 
 ## NEXT EXACT TASK
 
-> **P5 is code-complete.** All eight tasks are committed
-> (`b020e35`..`04ab19b`), and the final serialized Phase 5 fixture suite
-> is green: **12/12 passed**. The last robustness fix replaces hydration-racy
-> email keystrokes with a post-hydration `fill()` in the seven P5 fixture
-> specs.
+> **P6.T1 is committed** (`07d354e`): owner → Thread; dispatcher → Thread +
+> real DispatchMap with escalation-only decisions; technician → My Day + the
+> voice-first rail, with no approval cockpit. `npx tsc --noEmit` and `npm run
+> lint` passed. The pre-flight also found the prior state’s recorded commit
+> stale (`04ab19b`; repository source was `410eb65` before P6).
 >
-> **Exit gate: 3/6 green.** `SchemaCard` is verified for five unregistered
-> types without automatic raw JSON; the real follow-up journey honestly
-> clarified; and the D3 pilot shipped. Flagship B/C live end-to-end proof is
-> blocked by B-7 (the deployed planner produced no actionable plans); the
-> Flagship C count is fixture-only, not a backend recipient count; and the
-> live barge-in <=200 ms measurement requires an audio input device.
->
-> **Next: P6 pre-flight.** Read P6 in the plan, the P5 section and B-7 in
-> full, then verify the role sources and cutover routing before changing
-> product code. Do not retry the live flagship phrases merely to seek a
-> different planner outcome.
+> **P6.T2 is blocked, not fabricated** (`bae364b`, BLOCKER B-8): the available
+> technician API directly completes a visit and exposes no authoritative work
+> order, arrive, report, or flag operation. Continue with P6.T3 around this
+> blocker; do not represent the required ≤2-tap journey as complete.
 
 ## COMPLETION LEDGER
 
@@ -2588,6 +2581,8 @@ test; none is a live before/after measurement.
 ## SESSION LOG
 
 <!-- Newest first. YYYY-MM-DD · P<n> · tasks done · findings · next task · blockers -->
+
+- **2026-07-30 · P6 T1 committed, T2 source-blocked (`07d354e`, `bae364b`).** Pre-flight read the Phase 6 plan/state and verified source before product changes. The prior state’s latest-commit field was stale (`04ab19b`); repository HEAD was `410eb65`, so source won and the discrepancy is recorded. P6.T1 scopes the real Thread by authenticated role: owners retain it; dispatchers receive it with the real DispatchMap and an escalation-only cockpit (no UI approval/rejection path); technicians receive My Day plus the voice-first rail and no approval cockpit. Backend authorization remains unchanged. `npx tsc --noEmit` and `npm run lint` passed. P6.T2 cannot be truthfully implemented: the only technician mutation immediately completes a visit, while the required work-order/arrive/log/flag operations do not exist as authoritative APIs. Recorded as BLOCKER B-8 rather than adding fabricated controls. **Next:** P6.T3 around B-8; do not claim the ≤2-tap technician journey.
 
 - **2026-07-30 · P5 T1–T8 CODE-COMPLETE (`b020e35`..`04ab19b`), final fixture suite 12/12 green, exit gate 3/6.** All planned P5 product work was already committed: Flagship B renderers and RouteScene reuse DispatchMap; Flagship C’s M8 blast radius and unknown-count typed confirmation; SchemaCard as the automatic no-raw-JSON fallback; honest unresolved-reference clarification; real local-mic barge-in signal; the one-shot D3 narration pilot; and stacked recent threads. A final verification run found one test-only hydration race: Playwright could type the controlled email field before React hydrated, then lose the value. Replaced that racy keystroke path with a 750ms post-hydration wait plus `fill()` in the seven P5 fixture specs; serialized rerun passed **12/12** (`test-results/.last-run.json`). Final checks: `npx tsc --noEmit` exit 0; `npm run lint` clean; `npx vitest run` **19 files / 272 tests passed**. P5’s live Flagship B/C exit lines remain honestly blocked by B-7 (planner produced no actionable plans), and the live <=200ms barge-in measurement remains blocked by the no-audio-input environment. **Next:** P6 pre-flight; do not resubmit live flagship phrases to fish for a planner outcome.
 
