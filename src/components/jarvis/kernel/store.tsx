@@ -493,6 +493,12 @@ export function applyTraceEvents(thread: Thread, events: TraceEvent[], approval:
 
 export interface KernelState {
   thread: Thread | null
+  /** jarvis-v3 P5.T8 — §2.2 "Threads stack newest-first; older threads
+   *  collapse to a single row." Newest-superseded-first. Each entry is a
+   *  real snapshot of a thread that WAS the active one, captured the instant
+   *  a new top-level instruction superseded it (never a live reference —
+   *  mutating the old thread further would be dishonest once it's "history"). */
+  threadHistory: Thread[]
   presence: Presence
   transport: TransportHealth
   selectorInput: SelectorInput
@@ -509,6 +515,12 @@ export interface KernelState {
   cancelThread: () => void
 }
 
+/** jarvis-v3 P5.T8 — a defensive, uncontroversial cap on how many superseded
+ *  threads accumulate in one browser session (not specified by the plan;
+ *  this session's own reasoned choice, recorded as a deviation). Oldest
+ *  history entries drop first — the ACTIVE thread is never capped. */
+const THREAD_HISTORY_CAP = 50
+
 const KernelContext = createContext<KernelState | null>(null)
 
 export function useKernel(): KernelState {
@@ -524,6 +536,19 @@ function KernelInner({ children }: { children: React.ReactNode }) {
   const lane = useLanePresentation()
 
   const [thread, setThread] = useState<Thread | null>(null)
+  const [threadHistory, setThreadHistory] = useState<Thread[]>([])
+  // jarvis-v3 P5.T8 — `runSubmission`'s own `useCallback` deps are
+  // deliberately minimal (`[data.approvalsThisSession, data.rejectionsThisSession]`,
+  // NOT `thread` — see its own eslint-disable comment), so reading `thread`
+  // directly inside it would be stale. A plain ref kept in sync via a normal
+  // effect (never inside a setState updater — this codebase has already been
+  // bitten once by a StrictMode double-invoke bug from exactly that shape,
+  // see P3's own real finding) is the safe way to read "the thread as of
+  // right now" from that stable callback.
+  const threadRef = useRef<Thread | null>(null)
+  useEffect(() => {
+    threadRef.current = thread
+  }, [thread])
   const [micOpen, setMicOpen] = useState(false)
   const [voiceSpeaking, setVoiceSpeaking] = useState(false)
   const [terminalDecayActive, setTerminalDecayActive] = useState(false)
@@ -798,6 +823,15 @@ function KernelInner({ children }: { children: React.ReactNode }) {
       traceHandleRef.current = null
       setSseHealth(null)
 
+      // jarvis-v3 P5.T8 — §2.2 "Threads stack newest-first." A genuinely NEW
+      // top-level instruction (`existing === null` — never a clarification
+      // answer, which continues the SAME thread in place, §4.4) supersedes
+      // whatever was active: snapshot it into history before it's replaced.
+      if (!existing && threadRef.current) {
+        const superseded = threadRef.current
+        setThreadHistory((prev) => [superseded, ...prev].slice(0, THREAD_HISTORY_CAP))
+      }
+
       // ① HEARD — captured, immediately, with the verbatim text (§6①).
       setThread({
         id,
@@ -987,6 +1021,7 @@ function KernelInner({ children }: { children: React.ReactNode }) {
   const value = useMemo<KernelState>(
     () => ({
       thread,
+      threadHistory,
       presence,
       transport,
       selectorInput,
@@ -1002,7 +1037,7 @@ function KernelInner({ children }: { children: React.ReactNode }) {
       answerClarification,
       cancelThread,
     }),
-    [thread, presence, transport, selectorInput, lane, micOpen, voiceSpeaking, setVoiceIndicators, submit, answerClarification, cancelThread],
+    [thread, threadHistory, presence, transport, selectorInput, lane, micOpen, voiceSpeaking, setVoiceIndicators, submit, answerClarification, cancelThread],
   )
 
   return <KernelContext.Provider value={value}>{children}</KernelContext.Provider>

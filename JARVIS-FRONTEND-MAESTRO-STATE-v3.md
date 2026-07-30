@@ -2493,8 +2493,69 @@ test; none is a live before/after measurement.
       either way. Shipped as designed specifically to be safe regardless
       (content-free), not cut, with this reasoning recorded rather than
       guessed.
-- [ ] **P5.T8** Thread stacking; `⌘K → recent threads`
-      **Evidence:** · **Deviation:**
+- [x] **P5.T8** Thread stacking; `⌘K → recent threads`
+      **Evidence:** Additive, low-risk design: `kernel/store.tsx` keeps the
+      existing `thread`/`setThread` machinery completely untouched (every
+      existing call site — approval-watch, run-watch, receipt refresh, trace
+      events — still operates purely on the one active thread, zero
+      regressions) and adds a SEPARATE `threadHistory: Thread[]` (§2.2
+      "newest-first"). `runSubmission` snapshots the current active thread
+      into history the instant a genuinely NEW top-level instruction
+      supersedes it (`existing === null`, never a clarification-answer
+      continuation) — read via a plain ref kept in sync by an ordinary
+      effect, deliberately NOT inside a setState updater (this codebase was
+      already bitten once by a real StrictMode double-invoke bug from
+      exactly that shape, P3's own finding — recorded as the reason, not
+      just style preference).
+      New `bridge/ThreadStack.tsx`: reuses `Thread.tsx`'s own existing
+      40px-collapsed-row visual language (`BlockShell`) at the whole-thread
+      level, and reuses the `Thread` component itself for a re-expanded
+      historical thread — never a second rendering implementation. Its own
+      `summarizeThreadOutcome` (pure, 2 unit tests covering all 4 terminal
+      states + all 7 non-terminal ones) never claims "Done" for a thread
+      abandoned mid-flight.
+      `⌘K → Recent threads`: new `bridge/RecentThreadsPanel.tsx` (same
+      overlay-never-a-route pattern P4.T7's OpsPanel established), wired
+      into `CommandPaletteV2.tsx` via a new optional `onOpenRecentThreads`
+      prop (additive — `/jarvis/bridge` never supplies it, exactly matching
+      `onOpenOps`'s own precedent). Selecting a thread scrolls the real page
+      to that thread's own row.
+      Real component-tree fixture evidence:
+      `e2e/jarvis-p5-thread-stacking-fixtures.spec.ts` (2 passing tests) —
+      3 real, distinct collapsed rows (Done/Failed/Cancelled) render
+      newest-first under the active thread; clicking one re-expands the
+      REAL `Thread` component tree (not a summary); `⌘K → Recent threads`
+      opens against the real live kernel and honestly shows "No threads yet
+      this session" for a fresh sign-in (never a fabricated list).
+      `qa-screenshots/v3-P5/thread-stacking-fixture-{collapsed,expanded,clean}-1440.png`,
+      `thread-stacking-fixture-collapsed-390.png`,
+      `recent-threads-panel-empty-1440.png`.
+      ```
+      $ npx tsc --noEmit
+      TSC_EXIT=0
+      $ npm run lint
+      ✔ No ESLint warnings or errors
+      $ npx vitest run
+      Test Files  19 passed (19) · Tests  272 passed (272)
+      $ npx playwright test e2e/jarvis-p5-thread-stacking-fixtures.spec.ts --project=desktop-chromium
+      2 passed (24.2s)
+      ```
+      **Deviation:** (a) `THREAD_HISTORY_CAP = 50` — this session's own
+      reasoned, defensive choice (unbounded growth across a long browser
+      session is a real memory concern); the plan names no specific number.
+      (b) Building the fixture surfaced a real, honest confirmation of the
+      machine's own correctness, not a product bug: an early fixture
+      attempt at `captured -> USER_CANCELLED` correctly no-op'd (§4.4's own
+      table only allows `USER_CANCELLED` from `clarifying`/`awaiting_approval`)
+      — fixed the FIXTURE to reach `cancelled` via a valid path, not the
+      app. (c) The Approval Cockpit's own real depth-2 modal (§2.3) dims/
+      blocks depth-1 content while open, including collapsed history rows
+      underneath it — correct, pre-existing, unchanged behavior, not
+      something T8 needed to alter; the e2e spec's own click on a
+      cockpit-covered row uses `element.click()` (a real DOM/React
+      synthetic-event dispatch) rather than a coordinate-based mouse click,
+      since real browser hit-testing would otherwise route even a
+      `force:true` Playwright click to the modal's own topmost backdrop.
 
 ### Exit gate
 - [ ] Flagship B end-to-end, map updates — **Screenshots:**

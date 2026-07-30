@@ -224,6 +224,15 @@ export const THREAD_FIXTURES: Record<string, Thread> = {
       },
     ],
   }),
+  // jarvis-v3 P5.T8 — the ACTIVE (newest) thread on top of the stack;
+  // THREAD_HISTORY_FIXTURES["stacked-approval"] (below) supplies the 3
+  // collapsed older ones underneath it.
+  "stacked-approval": baseThread({
+    id: "fixture-history-active",
+    machine: stateFor("awaiting_approval"),
+    instructionText: "Chase everyone more than thirty days overdue",
+    nodes: goldenNodes(),
+  }),
   "flagship-c-approval-unknown": baseThread({
     machine: stateFor("awaiting_approval"),
     instructionText: "Tell every customer on a softener plan that we're doing free hardness checks next month",
@@ -244,3 +253,63 @@ export const THREAD_FIXTURES: Record<string, Thread> = {
 }
 
 export const FIXTURE_STATE_KEYS = Object.keys(THREAD_FIXTURES)
+
+// jarvis-v3 P5.T8 — thread stacking. A parallel, opt-in map (most fixture
+// keys have no history — an empty array, the honest default for a session
+// with only one thread so far) so existing fixture screenshots from prior
+// phases are byte-identical. Three real outcome shapes (done, a genuine
+// empty plan, and a user cancellation) so `summarizeThreadOutcome`'s own
+// real branches are all visible in one screenshot, not just asserted in the
+// unit test.
+function threeHistoryThreads(): Thread[] {
+  return [
+    baseThread({
+      id: "fixture-history-done",
+      instructionText: "Chase the Petersons for their overdue invoice",
+      machine: stateFor("completed"),
+      nodes: [goldenNodes()[2]!],
+      terminalAtMs: 0,
+      everExecuted: true,
+    }),
+    baseThread({
+      id: "fixture-history-empty",
+      instructionText: "Book a water test for the Alvarez household",
+      machine: (() => {
+        let m = transition(initialMachineState, { type: "SUBMITTED" })
+        m = transition(m, { type: "ACK" })
+        m = transition(m, { type: "TRACE_planning" })
+        m = transition(m, { type: "PLAN_EMPTY" })
+        return m
+      })(),
+      terminalAtMs: 0,
+    }),
+    baseThread({
+      id: "fixture-history-cancelled",
+      instructionText: "Send a follow-up message to the Ortiz household",
+      // §4.4's own transition table: USER_CANCELLED is only valid from
+      // `clarifying` | `awaiting_approval` — NOT from `captured` (verified
+      // live while building this: the real machine correctly no-op'd an
+      // earlier, wrong attempt at "captured -> USER_CANCELLED" rather than
+      // silently accepting it, exactly as designed).
+      machine: (() => {
+        let m = transition(initialMachineState, { type: "SUBMITTED" })
+        m = transition(m, { type: "ACK" })
+        m = transition(m, { type: "TRACE_planning" })
+        m = transition(m, { type: "ACTION_pending", count: 1 })
+        m = transition(m, { type: "USER_CANCELLED" })
+        return m
+      })(),
+      terminalAtMs: 0,
+    }),
+  ]
+}
+
+export const THREAD_HISTORY_FIXTURES: Record<string, Thread[]> = {
+  "stacked-approval": threeHistoryThreads(),
+  // Same 3 real outcome shapes, but on top of a TERMINAL active thread
+  // (`receipt`) — no Approval Cockpit modal in the way, so the collapsed
+  // rows are cleanly legible in a screenshot rather than dimmed under
+  // depth-2's own real backdrop (§2.3 — correct behavior, just hard to read
+  // in a static image).
+  receipt: threeHistoryThreads(),
+}

@@ -13,6 +13,7 @@ import { railCommitVariants } from "../kernel/choreography"
 import { sfx } from "../sound"
 import { CommandPaletteV2, useCommandPaletteV2 } from "../lib/CommandPaletteV2"
 import { OpsPanel } from "./OpsPanel"
+import { RecentThreadsPanel } from "./RecentThreadsPanel"
 import type { InstructionState } from "../kernel/types"
 
 const DOT_COLOR: Record<"live" | "polling" | "reconnecting" | "offline", string> = {
@@ -43,6 +44,7 @@ export function CommandRail() {
   const voice = useVapiSession()
   const palette = useCommandPaletteV2()
   const [opsOpen, setOpsOpen] = useState(false)
+  const [recentThreadsOpen, setRecentThreadsOpen] = useState(false)
   const [value, setValue] = useState("")
   const [committing, setCommitting] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -163,9 +165,15 @@ export function CommandRail() {
         // single deliberate overlay, never a route, never a landing page
         // (§2.4/§8 PHASE 4). Navigate's scene switches ("Overview"/"Pipeline
         // theater") are legacy-Bridge-specific and stay a no-op on this page.
-        <CommandPaletteV2 onClose={() => palette.setOpen(false)} onNavigate={() => palette.setOpen(false)} onOpenOps={() => setOpsOpen(true)} />
+        <CommandPaletteV2
+          onClose={() => palette.setOpen(false)}
+          onNavigate={() => palette.setOpen(false)}
+          onOpenOps={() => setOpsOpen(true)}
+          onOpenRecentThreads={() => setRecentThreadsOpen(true)}
+        />
       )}
       <OpsPanel open={opsOpen} onClose={() => setOpsOpen(false)} />
+      <RecentThreadsPanel open={recentThreadsOpen} onClose={() => setRecentThreadsOpen(false)} thread={kernel.thread} threadHistory={kernel.threadHistory} />
     </div>
   )
 }

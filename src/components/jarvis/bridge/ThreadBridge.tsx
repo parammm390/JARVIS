@@ -15,12 +15,12 @@ import { useJarvisAuth } from "../lib/jarvis-auth"
 import { useVapiSession } from "../lib/useVapiSession"
 import { Orb3D } from "./Orb3D"
 import { ThreadField } from "./ThreadField"
-import { Thread } from "./Thread"
+import { ThreadStack } from "./ThreadStack"
 import { ThreadApprovalCockpit } from "./ThreadBlocks"
 import { CommandRail } from "./CommandRail"
 import { ReceiptContent } from "../lib/ReceiptDrawer"
 import { derivePresence } from "../kernel/presence"
-import { THREAD_FIXTURES, FIXTURE_STATE_KEYS } from "./thread-fixtures"
+import { THREAD_FIXTURES, THREAD_HISTORY_FIXTURES, FIXTURE_STATE_KEYS } from "./thread-fixtures"
 import { D3_LONG_EXECUTION_MS, D3_NARRATION_TEXT, shouldFireD3Narration } from "../lib/d3-narration"
 import type { Truth } from "../kernel/types"
 
@@ -109,6 +109,7 @@ function RestPrompt() {
  *  fixture thread has no backing kernel state for. */
 function ThreadBody({
   thread,
+  threadHistory,
   presence,
   overdueInvoices,
   activeRunCount,
@@ -120,6 +121,7 @@ function ThreadBody({
   fixtureLabel,
 }: {
   thread: ThreadData | null
+  threadHistory: ThreadData[]
   presence: ReturnType<typeof derivePresence>
   overdueInvoices: Truth<{ count: number; totalUsd: number }>
   activeRunCount: number
@@ -155,7 +157,7 @@ function ThreadBody({
       </div>
       <div className="relative z-[1]">
         {!thread && <RestPrompt />}
-        {thread && <Thread thread={thread} onCancel={onCancel} onAnswer={onAnswer} onSkip={onSkip} />}
+        {thread && <ThreadStack thread={thread} threadHistory={threadHistory} onCancel={onCancel} onAnswer={onAnswer} onSkip={onSkip} />}
       </div>
       {isApproving && thread && <ThreadApprovalCockpit thread={thread} onClose={() => {}} reducedMotion={reducedMotion} />}
       {showRail && <CommandRail />}
@@ -227,6 +229,7 @@ function ThreadPage() {
   return (
     <ThreadBody
       thread={kernel.thread}
+      threadHistory={kernel.threadHistory}
       presence={kernel.presence}
       overdueInvoices={kernel.overdueInvoices}
       activeRunCount={kernel.selectorInput.runs.length}
@@ -268,6 +271,7 @@ function ThreadFixtureHarness({ fixtureKey }: { fixtureKey: string }) {
   return (
     <ThreadBody
       thread={thread}
+      threadHistory={THREAD_HISTORY_FIXTURES[fixtureKey] ?? []}
       presence={presence}
       overdueInvoices={{ status: "known", value: { count: 6, totalUsd: 4200 }, source: "fixture", atMs: 0 }}
       activeRunCount={thread.machine.instructionState === "executing" ? thread.nodes.length : 0}

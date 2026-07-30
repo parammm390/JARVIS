@@ -5,7 +5,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
-import { Activity, Command, FileText, Home, Search, Send, Workflow } from "lucide-react"
+import { Activity, Clock, Command, FileText, Home, Search, Send, Workflow } from "lucide-react"
 import { jarvisClient, JarvisApiError } from "@/lib/jarvis-client"
 import { ActionRenderer } from "../ui/renderers/ActionRenderer"
 import { ErrorState, EmptyState } from "../ui/primitives"
@@ -25,6 +25,7 @@ export function CommandPaletteV2({
   onClose,
   onNavigate,
   onOpenOps,
+  onOpenRecentThreads,
 }: {
   onClose: () => void
   onNavigate: (scene: "overview" | "pipeline") => void
@@ -34,6 +35,9 @@ export function CommandPaletteV2({
    *  by not supplying this; /jarvis/next's CommandRail supplies it to open the
    *  real OpsPanel overlay instead of navigating anywhere. */
   onOpenOps?: () => void
+  /** jarvis-v3 P5.T8 — "⌘K → recent threads" (§8 P5.T8), same additive
+   *  pattern as `onOpenOps` above: /jarvis/bridge never supplies this. */
+  onOpenRecentThreads?: () => void
 }) {
   const data = useJarvis(); const reduced = useReducedMotion(); const input = useRef<HTMLInputElement>(null); const dialog = useRef<HTMLElement>(null); const priorFocus = useRef<HTMLElement | null>(null)
   const [mode, setMode] = useState<Mode>("navigate"); const [query, setQuery] = useState(""); const [busy, setBusy] = useState(false); const [error, setError] = useState<string | null>(null); const [planned, setPlanned] = useState<Planned[]>([]); const [results, setResults] = useState<string[]>([])
@@ -45,11 +49,13 @@ export function CommandPaletteV2({
         { label: "Overview", scene: "overview" as const, icon: Home },
         { label: "Pipeline theater", scene: "pipeline" as const, icon: Workflow },
         ...(onOpenOps ? [{ label: "Ops", scene: "ops" as const, icon: Activity }] : []),
+        ...(onOpenRecentThreads ? [{ label: "Recent threads", scene: "recent-threads" as const, icon: Clock }] : []),
       ]).filter((item) => item.label.toLowerCase().includes(query.toLowerCase())),
-    [query, onOpenOps],
+    [query, onOpenOps, onOpenRecentThreads],
   )
-  function selectNavigation(scene: "overview" | "pipeline" | "ops") {
+  function selectNavigation(scene: "overview" | "pipeline" | "ops" | "recent-threads") {
     if (scene === "ops") onOpenOps?.()
+    else if (scene === "recent-threads") onOpenRecentThreads?.()
     else onNavigate(scene)
     onClose()
   }
