@@ -2,7 +2,7 @@
 
 Status: **not certified**. This is the required certification record, not a claim
 that every exit gate is green. Evidence below reflects repository state through
-commit `26185d0`.
+commit `14ac848`.
 
 ## Implemented P7 work
 
@@ -17,10 +17,10 @@ commit `26185d0`.
 
 | Path | Evidence | Result |
 | --- | --- | --- |
-| Golden desktop | No approved safe live action; B-5 | unchecked |
-| Golden mobile | No approved safe live action; B-5 | unchecked |
+| Golden desktop | Labelled fixture lifecycle suite passes at 1440px; no approved safe live action (B-5) | unchecked |
+| Golden mobile | Labelled fixture lifecycle suite passes at 390px; no approved safe live action (B-5) | unchecked |
 | Golden by voice | No audio input device for a real browser call | unchecked |
-| Clarification | P2 fixture evidence exists; not recertified in P7 | unchecked |
+| Clarification | P7 labelled fixture suite verifies controls at 1440px and 390px; no live tenant path | unchecked |
 | Flagship B | B-7: live planner produced no actionable plan | unchecked |
 | Flagship C | B-7: no safe actionable plan approved | unchecked |
 | Failure and recovery | P7 pure frontend tests; DB test unavailable under B-6 | unchecked |
