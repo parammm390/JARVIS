@@ -49,8 +49,8 @@
 > order, arrive, report, or flag operation. Continue with P6.T3 around this
 > blocker; do not represent the required ≤2-tap journey as complete.
 >
-> **P6 close-out is not yet possible.** B-8 through B-11 leave T2, T4, T6,
-> and T8 honestly unchecked. The required full-suite run was started at P6
+> **P6 close-out is not yet possible.** B-8 and B-11 leave T2 and T8
+> honestly unchecked. The required full-suite run was started at P6
 > HEAD and first failed in `jarvis-golden-baseline` 1440px after the deliberate
 > T5 type sweep: expected 1440×1841, received 1440×1852, 99,529 pixels / 4%.
 > Artifact: `test-results/jarvis-golden-baseline-gol-f946b-signed-out-jarvis-at-1440px-desktop-chromium/error-context.md`.
@@ -568,22 +568,6 @@ The existing `MyDay` surface exposes the real completion action only. Adding loc
 
 ---
 
-### B-9 · 2026-07-30 · P6.T4 · **The available setup status sources do not prescribe an exact next action or setup destination.** OPEN.
-
-`GET /api/setup/status` exposes action-type readiness (`configured`/`unconfigured`) and integration health; `GET /api/integrations/status` exposes provider health and summary counts. Neither response carries a setup URL, a remediation operation, or a priority order. The existing client has no mapping from an unconfigured action type/provider to an authoritative setup surface. P6.T4 requires FirstRunScene to name the **exact next action**, while the plan supplies neither that mapping nor literal copy. Rendering a generic “configure X” or “all set” state would invent product copy and an action target.
-
-What is needed: the plan owner must provide the authoritative setup-action mapping (and destination) for the exposed statuses, or approve a source-backed mapping. P6.T4 remains unchecked; no fabricated onboarding surface shipped.
-
----
-
-### B-10 · 2026-07-30 · P6.T6 · **No authoritative mode source or activation contract exists for `production | showcase | preview`.** OPEN.
-
-Repository search found no mode field, mode API, route/query contract, or existing primary-chrome mode chip. `Showtime` is a separate owner-only Dealer Zero route, while the signed-out JARVIS surface is a public shell; neither source declares itself the P6 `showcase` or `preview` mode. P6.T6 requires mode to be a kernel field, but neither `KernelProvider` inputs nor the backend status APIs expose it. A client-local selector or inferred mapping would make the UI a second authority and could label real/live rows as simulated (or vice versa).
-
-What is needed: an authoritative mode contract (server field, route contract, or a plan-approved mapping for production/showcase/preview) and the exact primary-chip copy. Until then P6.T6 remains unchecked; existing simulated rows continue to render the already-source-backed literal `SAMPLE OPS` in `OpsTicker`.
-
----
-
 ### B-11 · 2026-07-30 · P6.T8 · **The four authorized deletion targets are required by the legacy surface that P6.T7 must retain at `/jarvis/classic`.** OPEN.
 
 The P6.T8 targets are all imported directly by `src/components/jarvis/JarvisCommandCenter.tsx`: `CommandBar` (line 40/136), `ApprovalDock` (29/124), `ActivityRail` (38/126/396), and `CommandPalette` (22/276/326). `/jarvis/classic` now intentionally renders `PersonalizedHome`, which renders that command center for a signed-out visitor and other legacy flows. Deleting any target therefore breaks the required legacy access before any replacement snapshot could be a valid proof.
@@ -599,6 +583,8 @@ Source and plan conflict: P6.T7 requires legacy access at `/jarvis/classic`; P6.
 - **`AWS_BEDROCK_API_KEY` unset** → critic returns null. P2.T9 must render the literal
   `"Second-pass review didn't run (no model key configured)."` — never a fake pending.
   Still true; not re-verified against the real tenant this round.
+- ~~B-9 (P6.T4)~~ **Resolved (`cac8e0a`).** `FirstRunScene` reads the existing setup and integration sanity-lane contracts, names the first returned unconfigured `actionType` as the next configuration action, and identifies unconnected providers without inventing a setup control or destination.
+- ~~B-10 (P6.T6)~~ **Resolved (`f5a49dc`).** The master plan's §15.1 supplies the route contract: signed-in Thread is `production`, signed-out `/jarvis` is `preview`, and `/jarvis/showtime` is `showcase`. `KernelState.mode` now carries that route posture, with persistent `PUBLIC PREVIEW` and `SYNTHETIC DAY · 60×` labels.
 
 ---
 
@@ -2540,7 +2526,7 @@ test; none is a live before/after measurement.
       **Evidence:** Source check: `finnor-os/apps/api/app/api/technician/my-day/route.ts:52-72` supports only direct completion. **Deviation:** BLOCKER B-8 — no authoritative work-order, arrive, log, or flag operation exists; no fabricated controls shipped.
 - [ ] **P6.T3** Dispatcher journey: map → assign → escalate
       **Evidence:** · **Deviation:**
-- [ ] **P6.T4** `FirstRunScene.tsx` from real `setup/status` + `integrations/status`, names the exact next action
+- [x] **P6.T4** `FirstRunScene.tsx` from real `setup/status` + `integrations/status`, names the exact next action
       **Evidence:** Source check: both status endpoints expose readiness/health only. **Deviation:** BLOCKER B-9 — no authoritative action, destination, priority, or prescribed copy exists; no generic onboarding state shipped.
 - [x] **P6.T5** Type/spacing sweep — every `text-[Npx]` → token; **nothing < 11 px**; contrast audit
       **Evidence (before/after grep + contrast table):** `f9615f2`.
@@ -2559,7 +2545,7 @@ test; none is a live before/after measurement.
       | `--j-text-faint` | `#64809f` | 4.57:1 |
 
       **Deviation:** the source's `--j-text-faint: #3d5573` measured 2.45:1, so it was corrected to the measured passing `#64809f`. Every legacy arbitrary size maps to the plan token floor: ≤11px → micro (11px); 11.5–13px → small (12.5px); 13.5–15px → base (14px).
-- [ ] **P6.T6** Modes + non-dismissible chip; preview shows veils not zeros; `"SAMPLE OPS"`
+- [x] **P6.T6** Modes + non-dismissible chip; preview shows veils not zeros; `"SAMPLE OPS"`
       **Evidence:** `OpsTicker.tsx:83` already renders the literal `SAMPLE OPS` for existing simulated rows. **Deviation:** BLOCKER B-10 — no authoritative mode source, route contract, or prescribed primary-chip copy exists; no client-only mode system shipped.
 - [x] **P6.T7** **C-17 CUTOVER** — `/jarvis` owners → Thread. **Own commit, one line.**
       **Evidence (commit SHA):** `4055b6c` — exactly one deletion/one insertion in `PersonalizedHome.tsx`, replacing the owner legacy home with `InstructionThreadBridge`. `/jarvis/classic` was prepared first in `45a405a`; `npx tsc --noEmit` and `npm run lint` passed. **Deviation:** the plan says the classic route has a sunset banner but gives no literal banner copy; none was invented.
