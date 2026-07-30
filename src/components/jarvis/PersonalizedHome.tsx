@@ -59,7 +59,7 @@ function RoleLanding() {
   // properly auth-gated voice session, so an owner's signed-in home stays there until
   // Bridge actually reaches feature parity. Bridge is still reachable directly at
   // /jarvis/bridge for anyone who wants to see it.
-  if (role === "owner") return <JarvisCommandCenter />
+  if (role === "owner") return <InstructionThreadBridge />
   const selected = role && prefs && ALLOWED_HOME[role].includes(prefs.homepage) ? prefs.homepage! : DEFAULT_HOME[role!]
   if (selected === "bridge") return <SceneFrame accent={prefs?.accent ?? null}><Bridge /></SceneFrame>
   return <SceneFrame accent={prefs?.accent ?? null}><JarvisDataProvider><main className="mx-auto min-h-screen max-w-7xl space-y-5 p-5 md:p-8"><SinceYouWereAway />{selected === "map" ? <><header><div className="j-label flex items-center gap-2"><Map className="h-4 w-4" /> Dispatcher scene</div><h1 className="mt-1 text-2xl font-black">Dispatch and approvals</h1></header><DispatchMap /><ApprovalCockpit /></> : <><header><div className="j-label flex items-center gap-2"><Wrench className="h-4 w-4" /> Technician scene</div><h1 className="mt-1 text-2xl font-black">Your assigned day</h1></header><MyDay /></>}</main></JarvisDataProvider></SceneFrame>
