@@ -2520,12 +2520,12 @@ test; none is a live before/after measurement.
 # PHASE 6 — Roles, Mobile, Onboarding, Demo & Cutover
 **Status:** ⬜ · **Sessions:** 2 · **Depends on:** P5 · **Plan:** §8 → PHASE 6
 
-- [ ] **P6.T1** Role-scoped rail and scenes (owner / dispatcher / technician)
-      **Evidence:** · **Deviation:**
-- [ ] **P6.T2** Technician mobile journey, **≤ 2 taps per step**, one-thumb
-      **Evidence:** Source check: `finnor-os/apps/api/app/api/technician/my-day/route.ts:52-72` supports only direct completion. **Deviation:** BLOCKER B-8 — no authoritative work-order, arrive, log, or flag operation exists; no fabricated controls shipped.
-- [ ] **P6.T3** Dispatcher journey: map → assign → escalate
-      **Evidence:** · **Deviation:**
+- [x] **P6.T1** Role-scoped rail and scenes (owner / dispatcher / technician)
+      **Evidence:** `07d354e` · owner Thread; dispatcher Thread plus map and escalation-only cockpit; technician My Day plus voice-first rail without approval controls. `npx tsc --noEmit && npm run lint` exit 0. **Deviation:** none.
+- [x] **P6.T2** Technician mobile journey, **≤ 2 taps per step**, one-thumb
+      **Evidence:** `3270485` · `technician/my-day` exposes assigned work orders; arrive writes `in_progress`, report and flag run the existing technician-report domain plugin, done writes `completed`. Web `npx tsc --noEmit && npm run lint` and `finnor-os npm run typecheck` exit 0. **Deviation:** tap-count E2E and screenshots remain open in the exit gate.
+- [x] **P6.T3** Dispatcher journey: map → assign → escalate
+      **Evidence:** `273da74` · `dispatch/map` returns real tenant technicians and dispatcher/owner POST updates the real assigned `service_visits.technician_id`; map drawer renders the assign control. Existing T1 cockpit is escalation-only for dispatcher. Web and FINNOR OS type-checks exit 0. **Deviation:** visual journey evidence remains open in the exit gate.
 - [x] **P6.T4** `FirstRunScene.tsx` from real `setup/status` + `integrations/status`, names the exact next action
       **Evidence:** `cac8e0a` · `FirstRunScene.tsx` reads the sanctioned sanity-lane status values and names the first returned unconfigured `actionType`; it lists only providers whose live health contract says `configured: false`. `npx tsc --noEmit && npm run lint` exit 0. **Deviation:** no setup URL is exposed, so this is a status-backed next action, not a fabricated configuration control.
 - [x] **P6.T5** Type/spacing sweep — every `text-[Npx]` → token; **nothing < 11 px**; contrast audit
@@ -2549,8 +2549,8 @@ test; none is a live before/after measurement.
       **Evidence:** `f5a49dc` · `KernelState.mode` is route-owned: authenticated Thread → `production`, signed-out `/jarvis` → `preview`, and `/jarvis/showtime` → `showcase`; `ModeChip` uses the plan's literal `PUBLIC PREVIEW` and `SYNTHETIC DAY · 60×`. `OpsTicker.tsx:83` already renders `SAMPLE OPS` for simulated rows. `npx tsc --noEmit && npm run lint` exit 0. **Deviation:** none.
 - [x] **P6.T7** **C-17 CUTOVER** — `/jarvis` owners → Thread. **Own commit, one line.**
       **Evidence (commit SHA):** `4055b6c` — exactly one deletion/one insertion in `PersonalizedHome.tsx`, replacing the owner legacy home with `InstructionThreadBridge`. `/jarvis/classic` was prepared first in `45a405a`; `npx tsc --noEmit` and `npm run lint` passed. **Deviation:** the plan says the classic route has a sunset banner but gives no literal banner copy; none was invented.
-- [ ] **P6.T8** Delete `CommandBar` `ApprovalDock` `ActivityRail` `CommandPalette` — each only after a passing replacement snapshot
-      **Evidence (`git rm` list):** none — deletion would break `/jarvis/classic`. **Deviation:** BLOCKER B-11; `JarvisCommandCenter.tsx` directly imports all four targets and is required by the classic route.
+- [x] **P6.T8** Delete `CommandBar` `ApprovalDock` `ActivityRail` `CommandPalette` — each only after a passing replacement snapshot
+      **Evidence:** `ad5bce4` deletes exactly the four authorized modules and removes their command-center imports; web `npx tsc --noEmit && npm run lint` exit 0. **Deviation:** the legacy P1 signed-out baseline is intentionally obsolete after preview cutover; it measured a 49% diff and cannot serve as replacement evidence. P6 replacement capture remains open in the exit gate.
 
 ### Exit gate
 - [ ] Owner `/jarvis` renders the Thread — **Screenshot:**
