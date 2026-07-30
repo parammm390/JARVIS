@@ -100,6 +100,47 @@ const GOLDEN_CONTEXT_CHIPS: ContextChip[] = [
   { label: "payment links: Stripe sandbox", source: "integrations" },
 ]
 
+// jarvis-v3 P5.T1 — Flagship B's own two real action types, shaped exactly
+// like the live plugins' real payloads (lead-to-water-test/index.ts's
+// StartWaterTestWorkflowSchema, scheduling/index.ts's AssignTechSchema).
+// ThreadApprovalCockpit's header text (below) is a golden-journey literal
+// ("N customers will be texted", §6⑤) that does not generalize to these two
+// action types — neither texts anyone. Left unchanged here per this
+// session's own strict task ordering (P5.T3 owns generalizing the BlastRadius
+// header); this fixture's own node count/total are still real and correct.
+function flagshipBNodes() {
+  return [
+    {
+      id: "fixture-node-water-test",
+      actionType: "start_water_test_workflow",
+      amountUsd: null,
+      targetLabel: "The Hendersons",
+      policyId: "fixture-policy-lead-to-water-test",
+      policyVersion: 1,
+      groundedPayload: [{ field: "householdId", status: "verified" as const }],
+      payload: {
+        householdId: "fixture-household-henderson",
+        technicianId: "fixture-tech-priya",
+        scheduledAt: "2026-08-05T15:00:00.000Z",
+        phoneNumber: "+13195550142",
+        confirmationMessage: "Your water test is scheduled for 2026-08-05. Reply or call if you need to reschedule.",
+      },
+      reasoning: "Instruction named a household and a time window",
+    },
+    {
+      id: "fixture-node-assign-tech",
+      actionType: "assign_technician_to_visit",
+      amountUsd: null,
+      targetLabel: "Priya Nair",
+      policyId: "fixture-policy-scheduling",
+      policyVersion: 1,
+      groundedPayload: [{ field: "visitId", status: "verified" as const }],
+      payload: { visitId: "48ea2724-a211-4e24-a9ba-aecdad3145f5", technicianName: "Priya Nair" },
+      reasoning: "Nearest technician by drive time",
+    },
+  ]
+}
+
 export const THREAD_FIXTURES: Record<string, Thread> = {
   heard: baseThread({ machine: stateFor("captured") }),
   understood: baseThread({ machine: stateFor("understanding"), nodes: goldenNodes(), contextChips: GOLDEN_CONTEXT_CHIPS }),
@@ -125,6 +166,11 @@ export const THREAD_FIXTURES: Record<string, Thread> = {
   approval: baseThread({ machine: stateFor("awaiting_approval"), nodes: goldenNodes() }),
   execution: baseThread({ machine: stateFor("executing"), nodes: goldenNodes(), everExecuted: true }),
   receipt: baseThread({ machine: stateFor("completed"), nodes: goldenNodes(), terminalAtMs: Date.now(), everExecuted: true }),
+  "flagship-b-approval": baseThread({
+    machine: stateFor("awaiting_approval"),
+    instructionText: "Book a water test for the Hendersons this week and give it to whoever's closest",
+    nodes: flagshipBNodes(),
+  }),
 }
 
 export const FIXTURE_STATE_KEYS = Object.keys(THREAD_FIXTURES)

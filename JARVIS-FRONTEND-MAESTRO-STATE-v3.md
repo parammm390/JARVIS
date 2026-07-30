@@ -213,6 +213,8 @@ Legend ⬜ not started · 🟡 in progress · ✅ complete · 🔴 blocked
 | **NEW-6** | CRIT | `lib/ReceiptDrawer.tsx`'s `JsonBlock` rendered raw `JSON.stringify(expectedResult/actualResult, null, 2)` on every receipt — hard rule 8 violation, live on every surface reusing `ReceiptContent` (ApprovalCockpit drawer, WorkflowTheater, DailyBriefing, both `/jarvis` and `/jarvis/next`) | P4.T3 | ✅ | `de7c351` · replaced with the shared `FieldList` (`lib/field-format.tsx`). The required grep sweep then caught a second instance of the same class in this session's own new code — `formatFieldValue`'s array-of-objects fallback (`b1b8aee`) — fixed too. `grep -rn "JSON.stringify" src/components/jarvis --include="*.tsx"` shows only request-body serialization, storage writes, and search-string matching remaining — verified, not asserted. |
 | **NEW-7** | CRIT | `views.tsx`'s `SystemHealthPanel`/`BindingChip` typed `environment.bindings` as `Record<capability, string>`; the real API returns `Record<capability, {mode, source}>` — comparing an object to `"emulator"` is always false, and rendering the object directly as a JSX child crashes React ("Objects are not valid as a React child") on `/jarvis`'s own "Production Readiness" view | P4.T6 | ✅ | `49295eb` · fixed the type (`BindingResolution` in `data-core.ts`) and the comparison/render in `views.tsx`. Found while wiring the exact same field for sandbox-honesty detection. |
 | **NEW-8** | MED | `ui/renderers/FallbackRenderer.tsx` still renders raw `JSON.stringify(payload, null, 2)` for any of the ~37 unregistered action types — a real, live hard-rule-8 gap | P5.T4 | 🔴 | Found via this phase's own required raw-JSON grep sweep. Not fixed here: §7.2 already schedules this exact fix ("`FallbackRenderer` → owner-debug only") at P5.T4 — fixing it now would be inventing P5 scope inside P4. Documented so it is not silently missed. |
+| **NEW-9** | MED | Real backend behaviour: the live LLM planner produces a genuine 0-action plan for the plan's own exact Flagship B phrase ("Book a water test for the Hendersons this week and give it to whoever's closest") — 4/4 real attempts this session, not a mix | — | 🔴 | Found via `e2e/jarvis-p5-flagship-b-real.spec.ts`, run live 4 times this session. Out of scope (planner/model behaviour, not frontend code) — documented, not fixed. Directly why P5.T1's live Execution/Receipt/DispatchMap evidence stays fixture-based — see **BLOCKER B-7**. |
+| **NEW-10** | LOW | `bridge/ThreadBlocks.tsx`'s `ThreadApprovalCockpit` header is a golden-journey-specific literal ("N actions · $X · N customers will be texted", §6⑤) applied to every thread regardless of action type — inaccurate for Flagship B (no texting involved at all) and for any non-monetary action (renders "$0") | P5.T3 | 🔴 | Found while building P5.T1's fixture screenshot (`flagship-b-fixture-approval-1440.png` reads "2 actions · $0 · 2 customers will be texted" for a water-test+assign-technician plan). Not fixed in T1 — P5.T3 ("M8 BlastRadius with a real recipient count... unknown → forced typed confirm") is the task that generalizes this header; fixing it now would be doing T3's work out of the user's own required strict ordering. Documented so it is not silently missed. |
 
 Deliberately **not** fixed in v3 (out of scope, recorded honestly): C-04 partial, C-12, C-16, C-18, C-19, C-20 — these concern legacy surfaces that §7.4 leaves at `/jarvis/classic`.
 
@@ -522,6 +524,82 @@ safe to run against (a dev/staging instance, NOT the live tenant B-3 found), or
 explicit authorization + a real DSN to run it against the live/shared instance
 knowing the risk. **Who can unblock:** the plan owner — this is the same
 category of decision B-3/B-5 required, not something to resolve unilaterally.
+
+### B-7 · 2026-07-30 · P5 pre-flight · **Flagship B's `start_water_test_workflow` and Flagship C's `bulk_notify_existing_customers` (channel:"call") both resolve to a REAL outbound Vapi call in this environment — verified live, not assumed. Separately: the live planner produced a genuine 0-action plan for the exact Flagship B phrase 4/4 times this session.** Partially OPEN.
+
+**Part 1 — call-risk pre-flight, resolved via explicit go/no-go before any code was written.**
+Verified live against the real deployed backend (`GET /api/setup/status`, real bearer
+token, tenant `00000000-0000-4000-8000-000000000001`):
+`environment.bindings.communications = {mode:"vapi", source:"tenant"}`, a real
+registered phone number (`+13463636975`, `vapiPhoneNumberId:
+2512a4df-6eae-49c0-8964-2e76b398d27e`), Vapi circuit breaker `closed`
+(healthy). Traced from source:
+`start_water_test_workflow`'s 2nd step, `send_confirmation_call`
+(`lead-to-water-test/index.ts:90-98`), resolves through exactly that binding
+(`run-workflow-step.ts:73-76`'s `communicationsBinding`) — approving the
+bundle would place a real outbound call to the household's real phone
+number. `bulk_notify_existing_customers` with `channel:"call"`
+(`bulk-notify/index.ts:262-271`) calls the `vapi_place_call` tool directly,
+which is registered as the REAL implementation
+(`builtin-tools.ts:113-119,121-146`'s `vapiPstnConfigured()` — true here:
+`VAPI_API_KEY` + a real, non-placeholder `VAPI_PHONE_NUMBER_ID` are both
+set) regardless of the separate GHL/comms-mode switch that keeps the
+`channel:"sms"` path sandboxed. By contrast `assign_technician_to_visit`
+(`scheduling/index.ts:184-201`) is a pure DB write — `service_visits.technicianId`
++ a `recordBusinessEvent` row, zero external calls of any kind.
+
+This is exactly the category of action this session's own standing rule
+forbids (no real outbound call — India/cross-border, established before P2).
+Asked the plan owner an explicit, narrow go/no-go via `AskUserQuestion`
+before writing any P5 code, per this session's own binding (mirroring B-5's
+protocol exactly, not a general "is this ok"):
+
+| Question | Answer |
+|---|---|
+| Flagship B: approve `start_water_test_workflow` live? | **No — `assign_technician_to_visit` only** (pure DB write, no call risk). Never approve the full workflow bundle live this phase. |
+| Flagship C: approve `bulk_notify_existing_customers` live? | **Only if the real pending action's `channel` is confirmed `"sms"`** before touching Approve. Reject anything else (including `"call"`) and report the real outcome. |
+
+**Part 2 — real planner behavior for the Flagship B phrase, discovered while
+exercising Part 1's own go-ahead.** `e2e/jarvis-p5-flagship-b-real.spec.ts`
+submitted the plan's own exact phrase — *"Book a water test for the
+Hendersons this week and give it to whoever's closest"* — against the real
+deployed backend **4 times** this session:
+
+| Attempt | Real outcome |
+|---|---|
+| 1 | 0 actions (genuine empty plan) |
+| 2 | 0 actions (genuine empty plan) |
+| 3 | 0 actions (genuine empty plan) |
+| 4 | 0 actions (genuine empty plan) |
+
+Screenshot of attempt 1, undisguised: `qa-screenshots/v3-P5/flagship-b-00-plan-1440.png`
+— renders the Thread's own designed empty-plan terminal state ("0 of 0
+actions couldn't be sent"). 4/4 consistent, not a mix — a real, honest
+finding (see DEFECT LEDGER NEW-9), not fished for further per this
+session's own "never retry indefinitely" rule (same bound P4 applied to
+B-5: 4 attempts, then stop and report). **Real consequence:** neither a real
+`start_water_test_workflow` action (forbidden anyway, per Part 1) nor a real
+`assign_technician_to_visit` action (the one actually authorized) was ever
+observed live this session from the flagship phrase itself — and a separate
+check of the real live tenant's own data confirmed why a standalone
+`assign_technician_to_visit` submission couldn't be manufactured either: all
+50 real `service_visits` rows returned by `GET /api/resources/visits` have
+`scheduledAt: null` / a real `completedAt` (i.e. every one is historical) —
+there is no real upcoming, unassigned visit in this tenant to target.
+
+**Built around it, not blocked on it:** P5.T1's own real component-tree
+fixture evidence (`e2e/jarvis-p5-flagship-b-fixtures.spec.ts`, real sign-in,
+only `actions/pending` intercepted, `LeadToWaterTestScene`/`SchedulingScene`
+both rendering for real, no raw JSON) stands in for the live proof this
+finding blocks, same posture as B-5.
+
+**What is needed:** either explicit authorization to approve
+`start_water_test_workflow` live anyway (Part 1 already declined this), or a
+real upcoming/unassigned `service_visits` row in the seed tenant (a data
+question, not a code one) to make a standalone live
+`assign_technician_to_visit` submission possible. **Who can unblock:** the
+plan owner. **Not recommended:** further resubmission of the exact flagship
+phrase — 4/4 empty this session is a real signal.
 
 ---
 
@@ -1984,10 +2062,71 @@ test; none is a live before/after measurement.
 ---
 
 # PHASE 5 — Flagships B & C + Voice Continuity
-**Status:** ⬜ · **Sessions:** 2–3 · **Depends on:** P4 · **Plan:** §8 → PHASE 5
+**Status:** 🟡 · **Sessions:** 1 (in progress) · **Depends on:** P4 · **Plan:** §8 → PHASE 5
 
-- [ ] **P5.T1** Flagship B end-to-end (`start_water_test_workflow` + `assign_technician_to_visit`)
-      **Evidence:** · **Deviation:**
+### Pre-flight
+- [x] Verify from source which capability bindings Flagship B/C's steps
+      resolve through (sandboxed/emulator vs. real), name the exact tenant
+      and action types, ask for an explicit go/no-go before relying on any
+      live approval — **Evidence:** see **BLOCKER B-7** in full (verified
+      live via `GET /api/setup/status`: `communications` binding is
+      `{mode:"vapi", source:"tenant"}` with a real phone number and a
+      healthy circuit breaker; traced `send_confirmation_call` and
+      `vapi_place_call` to that exact binding from source). Asked via
+      `AskUserQuestion` before writing any P5 code. **Answers:** Flagship B
+      — `assign_technician_to_visit` only, never the full
+      `start_water_test_workflow` bundle. Flagship C — approve live only if
+      `channel` is confirmed `"sms"` before touching Approve.
+
+### Tasks
+- [x] **P5.T1** Flagship B end-to-end (`start_water_test_workflow` + `assign_technician_to_visit`)
+      **Evidence:** Both action types were already registered in
+      `ui/renderers/registry.ts` (`start_water_test_workflow` →
+      `LeadToWaterTestScene`, `assign_technician_to_visit` →
+      `SchedulingScene`, both pre-existing, real, no raw JSON — confirmed by
+      direct read, not assumed) — the plan's own task text names
+      `WaterTestScene` for this, which source corrects: `WaterTestScene`
+      renders the older `schedule_water_test` action type, not this one
+      (recorded per §0.2 rule 1). Real live attempt:
+      `e2e/jarvis-p5-flagship-b-real.spec.ts`, run 4× against the real
+      deployed backend — every attempt a genuine 0-action plan (**BLOCKER
+      B-7 part 2**, **DEFECT LEDGER NEW-9**) — zero real side effects, zero
+      approvals. Real component-tree fixture evidence in its place, same
+      posture as B-5/B-6:
+      `e2e/jarvis-p5-flagship-b-fixtures.spec.ts` (real sign-in, only
+      `actions/pending` intercepted with payloads shaped exactly like each
+      plugin's real zod schema) renders the REAL `ApprovalCockpit` →
+      `ActionRenderer` → `LeadToWaterTestScene`/`SchedulingScene` tree —
+      `qa-screenshots/v3-P5/flagship-b-fixture-approval-{1440,390}.png`,
+      both labelled `FIXTURE · flagship-b-approval`, no raw JSON (asserted
+      via the same body-text regex P4 used). New `THREAD_FIXTURES["flagship-b-approval"]`
+      added to `bridge/thread-fixtures.ts` with correctly-shaped nodes (the
+      generic `approval` fixture carries golden invoice-to-cash nodes,
+      which would have mismatched the header count/total against these two
+      different action types).
+      ```
+      $ npx tsc --noEmit
+      (exit 0)
+      $ npm run lint
+      ✔ No ESLint warnings or errors
+      $ npx playwright test e2e/jarvis-p5-flagship-b-fixtures.spec.ts --project=desktop-chromium
+      1 passed (24.5s)
+      ```
+      **Deviation:** (a) No unit tests were written for `LeadToWaterTestScene`/
+      `SchedulingScene` — both are pure presentational components with no
+      exported pure helper functions, and BLOCKER B-1 (no
+      `@testing-library/dom`/jsdom) forbids rendering them in vitest; the
+      Playwright fixture spec is the only honest test surface, matching
+      every prior phase's own precedent for renderer evidence. (b) Found
+      while building the fixture: `ThreadApprovalCockpit`'s header
+      ("N actions · $X · N customers will be texted") is a golden-journey
+      literal that doesn't generalize — recorded as **DEFECT LEDGER NEW-10**,
+      explicitly left for P5.T3 (not fixed here, out of this task's own
+      strict ordering). (c) `assign_technician_to_visit` could not be
+      exercised live standalone either — the real seed tenant's own 50
+      `service_visits` rows are all historical (`scheduledAt: null`), so
+      there is no real upcoming/unassigned visit to target — a real,
+      verified data-availability finding, not a code gap (see BLOCKER B-7).
 - [ ] **P5.T2** `RouteScene.tsx` wrapping `DispatchMap`; register `route_suggestion`
       **Evidence:** · **Deviation:**
 - [ ] **P5.T3** Flagship C + M8 BlastRadius with a **real** recipient count (unknown → forced typed confirm)
