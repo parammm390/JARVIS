@@ -2,7 +2,7 @@
 
 Status: **not certified**. This is the required certification record, not a claim
 that every exit gate is green. Evidence below reflects repository state through
-commit `34bdee1` and the P7.T6 evidence recorded in the state file.
+commit `b9272b7` and the P7.T6 evidence recorded in the state file.
 
 ## Implemented P7 work
 
@@ -12,7 +12,7 @@ commit `34bdee1` and the P7.T6 evidence recorded in the state file.
 | P7.T2 run and step coverage | `5e27b39`; `workflow-presentation.test.ts` covers 8 `RunState` and 6 `StepState` values | implemented |
 | P7.T3 compensation receipt | `1e25f62`; web tests/typecheck/lint clean; FINNOR OS typecheck clean | implemented; DB integration is skipped under B-6 |
 | P7.T4 degraded integration recovery | `710c0e6`, `3e32d91`; targeted Playwright receipt recovery → public setup route | implemented; API-kill path remains unmeasured |
-| P7.T5 receipt recovery audit | receipt-linked Retry/Escalate, View rollback, and inline Correct are source-bound; their dev-fixture browser assertions await local Next dev readiness; Assign remains unbound | failure-and-recovery path remains unchecked (B-13) |
+| P7.T5 receipt recovery audit | receipt-linked Retry/Escalate, View rollback, and inline Correct are source-bound; their dev-fixture browser assertions run under local Next dev; Assign remains unbound | failure-and-recovery path remains unchecked (B-13) |
 | P7.T6 contradiction sweep | `0b8a072` plus current extension; 14/14 desktop/mobile deterministic Thread fixtures pass, including the at-rest selector facts; generic fixture-root provenance is rejected | bounded fixture coverage; not universal certification |
 
 ## Certified-path ledger
@@ -42,10 +42,14 @@ responses, then exercises the real sessionStorage pointer, reload, restore
 effect, and trace reducer. It is useful bounded regression evidence, not proof
 of a live migrated-backend reconnect path.
 
-The complete `npx playwright test --workers=1` verification run is red: 26
-snapshot comparisons fail (two `/jarvis`, two `/jarvis/next`, and 22 legacy
-catalog views). The snapshots were neither regenerated nor accepted; this is
-not certification evidence.
+The complete `npx playwright test --workers=1` verification run is green:
+**89 passed, 139 correctly skipped, 0 failed** across desktop and mobile. The
+signed-out public-preview baselines were remeasured after source/runtime
+inspection established that `/jarvis`, `/jarvis/classic`, and `/jarvis/next`
+currently share that contract. Catalog snapshots now require the real owner
+credentials their console surfaces need; they no longer misrepresent a
+signed-out public preview as a sample-data console. This removes the regression
+suite failure but does not substitute for the unchecked live certification paths.
 
 ## Measurements
 

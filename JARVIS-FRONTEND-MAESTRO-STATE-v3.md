@@ -31,7 +31,7 @@
 | | |
 |---|---|
 | **ACTIVE PHASE** | **P7 — Truth, Recovery, Performance & Certification (in progress)** |
-| **Latest verified commit** | `f7c3286` |
+| **Latest verified commit** | `b9272b7` |
 | **Phases complete** | 1 / 7 (P2 code-complete, exit gate 7/10 green; P3 code-complete, exit gate 3/6 green; P4 code-complete, exit gate 2/5 green; **P5 code-complete, exit gate 3/6 green** — live Flagship B/C plans remain blocked by B-7 and a live barge-in measurement requires an audio input device) |
 | **Sessions logged** | 8 |
 | **Product exists at** | end of P2; cognition visible end of P3; predicted↔actual built end of P4; Flagships B/C, reference clarification, barge-in signal, D3 narration, and thread stacking built and fixture-verified end of P5 |
@@ -65,6 +65,15 @@
 > receipt interactions; Assign still lacks a complete target contract, so B-13
 > remains open and no inert
 > controls are added.
+>
+> **P7 full-browser regression is green** (`b9272b7`): `npx playwright test
+> --workers=1` → **89 passed, 139 correctly skipped, 0 failed** across desktop
+> and mobile. The stale signed-out console snapshots were not accepted as-is:
+> source/runtime inspection showed `/jarvis`, `/jarvis/classic`, and
+> `/jarvis/next` all resolve to the public-preview contract. The public baseline
+> was remeasured and regenerated; authenticated catalog snapshots are now
+> credential-gated rather than falsely claiming a signed-out sample-data console.
+> This closes the regression-suite failure, not P7's external certification gates.
 >
 > **P7.T5 has one certified-path result**: `npx playwright test
 > e2e/jarvis-network-hygiene.spec.ts --project=desktop-chromium` passed 2/2
@@ -2682,6 +2691,17 @@ test; none is a live before/after measurement.
 ## SESSION LOG
 
 <!-- Newest first. YYYY-MM-DD · P<n> · tasks done · findings · next task · blockers -->
+
+- **2026-07-30 · P7.T5 regression suite reconciled (`b9272b7`), certification still open.**
+  Clean local `next dev` readiness was restored; targeted recovery/contradiction
+  checks passed **14/14** with **3 production-disabled fixture cases skipped**.
+  The complete suite then passed **89**, skipped **139** credential- or
+  production-gated cases, and failed **0** across desktop and mobile. Source and
+  runtime inspection found `/jarvis`, `/jarvis/classic`, and `/jarvis/next` all
+  render the public-preview contract, so only the measured public baseline was
+  regenerated; legacy catalog screenshots now require real owner credentials.
+  This removes stale suite failures. It does not close B-5/B-6/B-7/B-13, the
+  real voice path, universal provenance, or the fixed performance gates.
 
 - **2026-07-30 · P7.T5 receipt run-control binding, certification still open.**
   Receipt Retry/Escalate now resolve the durable receipt `workflowRunId` through
