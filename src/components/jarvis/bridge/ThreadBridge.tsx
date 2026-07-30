@@ -265,7 +265,7 @@ function ThreadPage({ role }: { role: JarvisRole }) {
 function PreviewThread() {
   const kernel = useKernel()
   const reducedMotion = useReducedMotion() ?? false
-  return <ThreadBody thread={null} threadHistory={[]} presence={kernel.presence} overdueInvoices={kernel.overdueInvoices} activeRunCount={0} reducedMotion={reducedMotion} onCancel={() => {}} onAnswer={() => {}} onSkip={() => {}} showRail={false} mode={kernel.mode} />
+  return <><ThreadBody thread={null} threadHistory={[]} presence={kernel.presence} overdueInvoices={kernel.overdueInvoices} activeRunCount={0} reducedMotion={reducedMotion} onCancel={() => {}} onAnswer={() => {}} onSkip={() => {}} showRail={false} mode={kernel.mode} /><a href="/jarvis/login" className="fixed bottom-6 left-1/2 z-30 -translate-x-1/2 rounded-full bg-teal-300 px-4 py-2 j-fs-sm font-black text-slate-950">Sign in</a></>
 }
 
 // ---------------------------------------------------------------------------
