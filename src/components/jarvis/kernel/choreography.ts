@@ -198,3 +198,25 @@ export function fieldWarmExitVariants(reduced: boolean) {
 
 /** Wired P4.T3/T5. */
 export const P4_PROMOTED_MOTIONS: MotionId[] = ["M16", "M17"]
+
+/** M8 BlastRadius (§5.3, wired P5.T3): "N dots bloom outward from it, 24 ms
+ *  stagger, capped at 60 rendered." The count-up itself reuses the existing
+ *  `<Ticker>` primitive (ui/motion/primitives.tsx) — mount at 0, then set the
+ *  real count, and its own spring animates between them; this is the dots-
+ *  only half of the spec. Reduced motion: "number renders final; dots
+ *  static" — dots render at their end state with no stagger, no entrance. */
+export function blastRadiusDotVariants(index: number, reduced: boolean) {
+  const spec = MOTION_SPECS.M8
+  return {
+    initial: reduced ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0 },
+    animate: { opacity: 1, scale: 1 },
+    transition: reduced
+      ? { duration: 0 }
+      : { duration: 0.24, ease: spec.easing as number[], delay: (index * BLAST_RADIUS_DOT_STAGGER_MS) / 1000 },
+  }
+}
+export const BLAST_RADIUS_DOT_STAGGER_MS = 24
+export const BLAST_RADIUS_DOT_CAP = 60
+
+/** Wired P5.T3. */
+export const P5_PROMOTED_MOTIONS: MotionId[] = ["M8"]

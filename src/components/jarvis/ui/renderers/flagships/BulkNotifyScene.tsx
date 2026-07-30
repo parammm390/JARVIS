@@ -11,9 +11,10 @@
 // fabricated cap.
 
 import { motion, useReducedMotion } from "framer-motion"
-import { Radio } from "lucide-react"
+import { Radio, Moon } from "lucide-react"
 import { Panel } from "../../primitives/Panel"
 import { choreo } from "../../motion/choreo"
+import { useQuietHours } from "../../../lib/quiet-hours"
 import type { ActionRendererProps } from "../types"
 
 const DAILY_VAPI_CALL_CAP = 500 // mirrors bulk-notify/index.ts's own real constant
@@ -41,6 +42,16 @@ export function BulkNotifyScene({ payload, compact }: ActionRendererProps) {
   const count = p.targets?.length ?? 0
   const cap = p.channel === "call" ? DAILY_VAPI_CALL_CAP : Infinity
   const overCap = Number.isFinite(cap) && count > cap
+  // jarvis-v3 P5.T3 — quiet hours, surfaced honestly. Verified from source
+  // before wiring this: `quietHoursStart`/`quietHoursEnd` (schema.ts:1395-96)
+  // are a per-USER notification preference (userPrefs table) with zero
+  // backend enforcement anywhere in domain-plugins/orchestration/workflow-
+  // runtime (grepped, confirmed) — muting sound/showing a chip for the
+  // signed-in person (already true in the legacy Bridge), NOT a system that
+  // holds back real sends to customers. A bulk-notify approval is exactly
+  // the moment that distinction matters most (TCPA-adjacent, real people),
+  // so this never implies "customers won't be disturbed right now."
+  const { quiet, quietHoursStart, quietHoursEnd } = useQuietHours()
 
   if (compact) {
     return (
@@ -107,6 +118,15 @@ export function BulkNotifyScene({ payload, compact }: ActionRendererProps) {
       {(typeof p.minMonthsInactive === "number" || typeof p.maxMonthsInactive === "number") && (
         <div className="mt-2 text-[9.5px] text-[color:var(--j-text-faint)]">
           send window: {p.minMonthsInactive ?? 0}–{p.maxMonthsInactive ?? "∞"} months inactive
+        </div>
+      )}
+
+      {quiet && (
+        <div className="mt-2 flex items-start gap-1.5 rounded-lg border border-amber-300/25 bg-amber-300/[0.06] p-2 text-[10px] leading-relaxed text-amber-100">
+          <Moon className="mt-0.5 h-3 w-3 shrink-0" />
+          <span>
+            Your own quiet hours are active ({quietHoursStart}–{quietHoursEnd}) — this mutes notifications for you. It does not delay sending to customers.
+          </span>
         </div>
       )}
     </Panel>

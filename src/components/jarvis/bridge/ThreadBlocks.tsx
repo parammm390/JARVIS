@@ -9,7 +9,14 @@
 import { useEffect, useMemo, useState } from "react"
 import { motion } from "framer-motion"
 import type { Thread, ThreadNode } from "../kernel/store"
-import { cockpitRiseVariants, contextGatherChipVariants, planDrawNodeVariants, receiptSealVariants } from "../kernel/choreography"
+import {
+  cockpitRiseVariants,
+  contextGatherChipVariants,
+  planDrawNodeVariants,
+  receiptSealVariants,
+  blastRadiusDotVariants,
+  BLAST_RADIUS_DOT_CAP,
+} from "../kernel/choreography"
 import { sfx, stepCueThrottled } from "../sound"
 import { ApprovalCockpit } from "./ApprovalCockpit"
 import { WorkflowTheater } from "../panels/WorkflowTheater"
@@ -17,6 +24,8 @@ import { ReceiptContent } from "../lib/ReceiptDrawer"
 import { useKernel } from "../kernel/store"
 import { jarvisGet } from "../lib/api"
 import { DecryptText } from "../ui/fx/DecryptText"
+import { Ticker } from "../ui/motion/primitives"
+import { blastRadiusRecipientCount } from "../lib/risk-tier"
 
 function formatUsd(n: number): string {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n)
@@ -257,6 +266,56 @@ export function ThreadClarify({ thread, onAnswer, onSkip, onCancel }: { thread: 
 }
 
 // ---------------------------------------------------------------------------
+// M8 BlastRadius's count-up half (§5.3: "the count... counts up 0->N over
+// 520 ms"). Reuses the existing `<Ticker>` primitive (ui/motion/primitives.tsx,
+// already used elsewhere in this exact cockpit for a live batch count) rather
+// than a second numeric-spring implementation — mounted at 0 (or straight at
+// the real count under reduced motion) then flipped to the real value one
+// frame later, letting Ticker's own spring carry it the rest of the way.
+function BlastRadiusCount({ count, reduced }: { count: number; reduced: boolean }) {
+  const [value, setValue] = useState(reduced ? count : 0)
+  useEffect(() => {
+    if (reduced) {
+      setValue(count)
+      return
+    }
+    const raf = requestAnimationFrame(() => setValue(count))
+    return () => cancelAnimationFrame(raf)
+  }, [count, reduced])
+  return <Ticker value={value} />
+}
+
+// jarvis-v3 P5.T3 — M8 BlastRadius, real recipient count (§5.3/§8 P5
+// Architecture: "driven by the real recipient count from the action
+// payload... if the backend does not return a count, the header reads 'an
+// unknown number of customers'"). Scoped exactly to the one real per-action
+// blast-radius case this repo has (`bulk_notify_existing_customers`'s own
+// `targets[]`, attached to the payload by `draft()` — verified from source)
+// — any other single-node thread falls through to the unchanged literal
+// header below, never invented for action types that don't carry this shape.
+function BlastRadiusHeader({ count, reducedMotion }: { count: number | null; reducedMotion: boolean }) {
+  if (count === null) {
+    return (
+      <p className="j-fs-base font-bold text-amber-200">An unknown number of customers will be texted.</p>
+    )
+  }
+  const dotCount = Math.min(count, BLAST_RADIUS_DOT_CAP)
+  return (
+    <p className="j-fs-base flex flex-wrap items-center gap-2 font-bold text-[color:var(--j-text)]">
+      <span>
+        <BlastRadiusCount count={count} reduced={reducedMotion} /> customer{count === 1 ? "" : "s"} will be texted
+      </span>
+      {dotCount > 0 && (
+        <span className="inline-flex flex-wrap items-center gap-0.5" aria-hidden>
+          {Array.from({ length: dotCount }).map((_, i) => (
+            <motion.span key={i} {...blastRadiusDotVariants(i, reducedMotion)} className="h-1 w-1 rounded-full bg-amber-300/70" />
+          ))}
+        </span>
+      )}
+    </p>
+  )
+}
+
 // ⑤ APPROVAL — depth 2, `ApprovalCockpit` reused unmodified. The BlastRadius
 // header is THIS thread's own real count/amount, layered above the (tenant-
 // wide, unscoped) reused component per this session's binding: reuse, don't
@@ -265,6 +324,12 @@ export function ThreadClarify({ thread, onAnswer, onSkip, onCancel }: { thread: 
 export function ThreadApprovalCockpit({ thread, onClose, reducedMotion }: { thread: Thread; onClose: () => void; reducedMotion: boolean }) {
   const total = thread.nodes.reduce((sum, n) => (n.amountUsd !== null ? sum + n.amountUsd : sum), 0)
   const rise = cockpitRiseVariants(reducedMotion)
+  // A "blast" thread is exactly one node whose action type carries a real
+  // per-action recipient list — today, only bulk_notify_existing_customers.
+  // Every other shape (the golden journey's own N-separate-actions case,
+  // Flagship B's per-node cards, etc.) keeps the original header untouched.
+  const blastNode = thread.nodes.length === 1 && thread.nodes[0]!.actionType === "bulk_notify_existing_customers" ? thread.nodes[0]! : null
+  const blastCount = blastNode ? blastRadiusRecipientCount(blastNode.payload) : undefined
   // §5.4: "propose | cockpit rises | two-note rising, brighter."
   useEffect(() => {
     sfx.propose()
@@ -288,9 +353,13 @@ export function ThreadApprovalCockpit({ thread, onClose, reducedMotion }: { thre
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="j-panel mb-3 rounded-xl border border-amber-300/20 px-4 py-3">
-          <p className="j-fs-base font-bold text-[color:var(--j-text)]">
-            {thread.nodes.length} action{thread.nodes.length === 1 ? "" : "s"} · {formatUsd(total)} · {thread.nodes.length} customer{thread.nodes.length === 1 ? "" : "s"} will be texted
-          </p>
+          {blastNode ? (
+            <BlastRadiusHeader count={blastCount ?? null} reducedMotion={reducedMotion} />
+          ) : (
+            <p className="j-fs-base font-bold text-[color:var(--j-text)]">
+              {thread.nodes.length} action{thread.nodes.length === 1 ? "" : "s"} · {formatUsd(total)} · {thread.nodes.length} customer{thread.nodes.length === 1 ? "" : "s"} will be texted
+            </p>
+          )}
         </div>
         <ApprovalCockpit />
       </motion.div>

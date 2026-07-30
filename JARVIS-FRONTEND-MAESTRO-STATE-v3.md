@@ -214,7 +214,8 @@ Legend ⬜ not started · 🟡 in progress · ✅ complete · 🔴 blocked
 | **NEW-7** | CRIT | `views.tsx`'s `SystemHealthPanel`/`BindingChip` typed `environment.bindings` as `Record<capability, string>`; the real API returns `Record<capability, {mode, source}>` — comparing an object to `"emulator"` is always false, and rendering the object directly as a JSX child crashes React ("Objects are not valid as a React child") on `/jarvis`'s own "Production Readiness" view | P4.T6 | ✅ | `49295eb` · fixed the type (`BindingResolution` in `data-core.ts`) and the comparison/render in `views.tsx`. Found while wiring the exact same field for sandbox-honesty detection. |
 | **NEW-8** | MED | `ui/renderers/FallbackRenderer.tsx` still renders raw `JSON.stringify(payload, null, 2)` for any of the ~37 unregistered action types — a real, live hard-rule-8 gap | P5.T4 | 🔴 | Found via this phase's own required raw-JSON grep sweep. Not fixed here: §7.2 already schedules this exact fix ("`FallbackRenderer` → owner-debug only") at P5.T4 — fixing it now would be inventing P5 scope inside P4. Documented so it is not silently missed. |
 | **NEW-9** | MED | Real backend behaviour: the live LLM planner produces a genuine 0-action plan for the plan's own exact Flagship B phrase ("Book a water test for the Hendersons this week and give it to whoever's closest") — 4/4 real attempts this session, not a mix | — | 🔴 | Found via `e2e/jarvis-p5-flagship-b-real.spec.ts`, run live 4 times this session. Out of scope (planner/model behaviour, not frontend code) — documented, not fixed. Directly why P5.T1's live Execution/Receipt/DispatchMap evidence stays fixture-based — see **BLOCKER B-7**. |
-| **NEW-10** | LOW | `bridge/ThreadBlocks.tsx`'s `ThreadApprovalCockpit` header is a golden-journey-specific literal ("N actions · $X · N customers will be texted", §6⑤) applied to every thread regardless of action type — inaccurate for Flagship B (no texting involved at all) and for any non-monetary action (renders "$0") | P5.T3 | 🔴 | Found while building P5.T1's fixture screenshot (`flagship-b-fixture-approval-1440.png` reads "2 actions · $0 · 2 customers will be texted" for a water-test+assign-technician plan). Not fixed in T1 — P5.T3 ("M8 BlastRadius with a real recipient count... unknown → forced typed confirm") is the task that generalizes this header; fixing it now would be doing T3's work out of the user's own required strict ordering. Documented so it is not silently missed. |
+| **NEW-10** | LOW | `bridge/ThreadBlocks.tsx`'s `ThreadApprovalCockpit` header is a golden-journey-specific literal ("N actions · $X · N customers will be texted", §6⑤) applied to every thread regardless of action type — inaccurate for Flagship B (no texting involved at all) and for any non-monetary action (renders "$0") | P5.T3 | ✅ | Found while building P5.T1's fixture screenshot. Fixed in P5.T3: a single-node `bulk_notify_existing_customers` thread now renders a dedicated `BlastRadiusHeader` (real count or the literal "An unknown number of customers will be texted."); every other thread shape (golden journey, Flagship B) keeps the original literal unchanged — bounded fix, not a full generalization to all 41 action types (that remains out of scope). |
+| **NEW-11** | MED | Real backend behaviour: the live LLM planner produces a genuine 0-action plan for the plan's own exact Flagship C phrase ("Tell every customer on a softener plan that we're doing free hardness checks next month") in 3 of 4 real attempts this session; the 4th (screenshotted) was a real, working `clarification_request` asking for explicit household IDs/phone numbers | — | 🔴 | Found via `e2e/jarvis-p5-flagship-c-real.spec.ts`, run live 4 times this session. All 4 network captures showed zero non-clarification business actions, consistent with (but for attempts 1-3, whose screenshots were overwritten by later runs, not individually distinguishable from) the same clarification behaviour attempt 4 showed clearly. Out of scope (planner/model behaviour) — documented, not fixed. See **BLOCKER B-7**'s updated entry. |
 
 Deliberately **not** fixed in v3 (out of scope, recorded honestly): C-04 partial, C-12, C-16, C-18, C-19, C-20 — these concern legacy surfaces that §7.4 leaves at `/jarvis/classic`.
 
@@ -600,6 +601,28 @@ question, not a code one) to make a standalone live
 `assign_technician_to_visit` submission possible. **Who can unblock:** the
 plan owner. **Not recommended:** further resubmission of the exact flagship
 phrase — 4/4 empty this session is a real signal.
+
+**Part 3 — P5.T3 update, Flagship C's own phrase, 4 more real live
+attempts.** `e2e/jarvis-p5-flagship-c-real.spec.ts` submitted *"Tell every
+customer on a softener plan that we're doing free hardness checks next
+month"* against the real deployed backend 4 times:
+
+| Attempt | Real outcome |
+|---|---|
+| 1–3 | 0 non-clarification business actions (network capture only — screenshot overwritten by the next run) |
+| 4 | A real, working `clarification_request` — *"What are the phone numbers or household IDs of the customers on a softener plan?"* — screenshotted: `qa-screenshots/v3-P5/flagship-c-00-plan-1440.png` |
+
+Different character from Part 2's Flagship B finding: this is the planner
+correctly asking rather than guessing (§7.2's own "ask, don't guess"
+priority), not a broken/empty outcome — a genuinely positive real result,
+just not one this spec's own safety gate could act on (a clarification has
+no `Reject` button to click, matching `golden-consequence.spec.ts`'s own
+established pattern; nothing was approved, nothing was left in a bad
+state). Zero real bulk-notify actions were ever approved this session
+regardless of channel — the channel safety gate itself was never actually
+exercised against a real pending action. Built around it with real
+component-tree fixture evidence instead (`e2e/jarvis-p5-flagship-c-fixtures.spec.ts`,
+3 passing tests) — see P5.T3's own Evidence entry.
 
 ---
 
@@ -2187,8 +2210,83 @@ test; none is a live before/after measurement.
       was ever pending (the flagship-B phrase never produced one in 4/4
       attempts, and no other instruction this session targeted it) — left
       honestly to the fixture path, same posture as the rest of T1/T2.
-- [ ] **P5.T3** Flagship C + M8 BlastRadius with a **real** recipient count (unknown → forced typed confirm)
-      **Evidence:** · **Deviation:**
+- [x] **P5.T3** Flagship C + M8 BlastRadius with a **real** recipient count (unknown → forced typed confirm)
+      **Evidence:** New `lib/risk-tier.ts` (`deriveRiskTier`/`blastRadiusRecipientCount`,
+      pure functions, 9 unit tests) is the one real, additive source of
+      pre-receipt risk tier this phase adds — verified from source first
+      that `action.receipt` is always null pre-execution, so the prior
+      `(action.receipt?.riskTier) ?? "low"` could never surface anything
+      but "low" for any card a human actually decides on. Wired into all 3
+      of `ApprovalCockpit.tsx`'s tier call sites (the per-card badge, the
+      batch bar's highest-tier check, the mobile sheet's typed-confirm
+      gate) — every other action type's tier is byte-identical to before
+      (still "low" with no receipt), only `bulk_notify_existing_customers`
+      with a missing/malformed `targets` array is newly "high".
+      New M8 BlastRadius choreography (`kernel/choreography.ts`:
+      `blastRadiusDotVariants`, `BLAST_RADIUS_DOT_CAP=60`,
+      `P5_PROMOTED_MOTIONS=["M8"]`) — dots bloom 24ms-staggered, capped at
+      60 rendered, reduced-motion renders the end state with no stagger.
+      New `BlastRadiusHeader`/`BlastRadiusCount` in `bridge/ThreadBlocks.tsx`:
+      a single-node `bulk_notify_existing_customers` thread gets a
+      dedicated header (`<Ticker>` count-up 0→N reusing the existing shared
+      primitive, real dots) or the literal **"An unknown number of
+      customers will be texted."** in amber when the payload's `targets`
+      is genuinely absent — every other thread shape (golden journey,
+      Flagship B) keeps the original header untouched (**DEFECT LEDGER
+      NEW-10**, closed — bounded, not a full 41-action-type
+      generalization). Quiet-hours surfaced honestly in
+      `BulkNotifyScene.tsx`: verified from source first that
+      `quietHoursStart`/`quietHoursEnd` (schema.ts:1395-96) are a per-USER
+      notification preference with **zero backend enforcement** anywhere
+      in domain-plugins/orchestration/workflow-runtime (grepped,
+      confirmed) — the new banner reads *"Your own quiet hours are active
+      (HH:MM–HH:MM) — this mutes notifications for you. It does not delay
+      sending to customers."*, never implying real people are protected.
+      Real component-tree fixture evidence:
+      `e2e/jarvis-p5-flagship-c-fixtures.spec.ts` (3 passing tests) — known
+      count renders "12 customers will be texted" + 12 real amber dots +
+      LOW RISK
+      (`qa-screenshots/v3-P5/flagship-c-fixture-known-count-{1440,390}.png`);
+      unknown count renders the exact literal + HIGH RISK, and the real
+      batch "Select" → checkbox → "Approve 1" bar is genuinely disabled
+      until "APPROVE" is typed
+      (`flagship-c-fixture-unknown-count-1440.png`); active quiet hours
+      render the honest banner (`flagship-c-fixture-quiet-hours-1440.png`).
+      No raw JSON (asserted). Real live attempt:
+      `e2e/jarvis-p5-flagship-c-real.spec.ts`, run 4× against the real
+      deployed backend per this session's own pre-flight go-ahead (approve
+      only if channel is confirmed "sms") — see **BLOCKER B-7 Part 3** and
+      **DEFECT LEDGER NEW-11**: 3/4 zero-business-action, 1/4 a real,
+      working `clarification_request` (a genuinely positive "ask, don't
+      guess" outcome, screenshotted) — zero real bulk-notify actions ever
+      approved, the channel safety gate itself never actually exercised
+      against a real pending action.
+      ```
+      $ npx tsc --noEmit
+      TSC_EXIT=0
+      $ npm run lint
+      ✔ No ESLint warnings or errors
+      $ npx vitest run
+      Test Files  15 passed (15) · Tests  254 passed (254)
+      $ npx playwright test e2e/jarvis-p5-flagship-c-fixtures.spec.ts --project=desktop-chromium
+      3 passed (43.8s)
+      ```
+      **Deviation:** (a) The plan's own wording doesn't specify the exact
+      unknown-count literal's full sentence, only the noun phrase "an
+      unknown number of customers" — rendered as a complete sentence ("An
+      unknown number of customers will be texted.") to match the existing
+      template's own verb phrase, §0.1's own "internal helper"-adjacent
+      latitude for filling in ungiven punctuation, not a new design
+      decision. (b) "Forced to high-risk typed confirmation" is honored
+      exactly where this app already enforces typed confirmation for high
+      risk (the batch bar and the mobile bottom sheet) — desktop's single-
+      card "Approve" button has NO typed-confirm gate for ANY action type,
+      pre-existing and universal, not something this task invented or
+      unilaterally extended; recorded rather than silently building new
+      universal desktop-approval architecture beyond this task's own scope.
+      (c) `<Ticker>`'s own spring duration is a fixed 600ms (existing
+      shared primitive), not M8's own spec'd 520ms — reusing the
+      established primitive over forking a near-duplicate for one caller.
 - [ ] **P5.T4** `SchemaCard.tsx` as the designed default tier; `FallbackRenderer` → owner-debug only
       **Evidence:** · **Deviation:**
 - [ ] **P5.T5** **V8** follow-up reference resolves, **or** honestly falls through to a clarification

@@ -55,6 +55,7 @@ import { choreo } from "../ui/motion/choreo"
 import { EASE } from "../ui/motion/tokens"
 import { ActionRenderer } from "../ui/renderers/ActionRenderer"
 import { FieldList } from "../lib/field-format"
+import { deriveRiskTier } from "../lib/risk-tier"
 import { BorderBeam } from "../ui/fx/BorderBeam"
 import { registerAnchor, getAnchorRect } from "../lib/pulse-bus"
 import { KeymapHUD } from "./KeymapHUD"
@@ -206,7 +207,11 @@ function ApprovalCard({
   const [hovered, setHovered] = useState(false)
   const [diffOpenSku, setDiffOpenSku] = useState<string | null>(null)
   const tilt = useTilt(reduced)
-  const tier: RiskTier = (action.receipt?.riskTier as RiskTier) ?? "low"
+  // jarvis-v3 P5.T3: `action.receipt` is always null pre-execution, so this
+  // used to be "low" for every pending card, always — deriveRiskTier() is
+  // the one real, additive pre-receipt source this phase adds (bulk-notify
+  // with an unknown recipient count -> high; everything else unchanged).
+  const tier: RiskTier = deriveRiskTier(action)
   const isUnavailable = action.status === "blocked_integration_unavailable"
   const isNeedsReview = action.status === "needs_human_review"
 
@@ -823,7 +828,7 @@ export function ApprovalCockpit() {
   }
 
   const selectedItems = items.filter((a) => selected.has(a.id) && a.status !== "blocked_integration_unavailable")
-  const batchHighestTier = selectedItems.reduce((acc, a) => Math.max(acc, riskRank(a.receipt?.riskTier as RiskTier | undefined)), 0)
+  const batchHighestTier = selectedItems.reduce((acc, a) => Math.max(acc, riskRank(deriveRiskTier(a))), 0)
   const batchNeedsTypedConfirm = batchHighestTier === 2 // any selected item is high-tier
   const batchCanSubmit = selectedItems.length > 0 && (!batchNeedsTypedConfirm || batchConfirmText.trim().toUpperCase() === "APPROVE")
 
@@ -832,7 +837,7 @@ export function ApprovalCockpit() {
   // the single-action level so moving decisive actions into this sheet on
   // mobile never loosens what desktop's batch bar already requires.
   const mobileActiveAction = items.find((a) => a.id === mobileActiveId) ?? null
-  const mobileNeedsTypedConfirm = riskRank(mobileActiveAction?.receipt?.riskTier as RiskTier | undefined) === 2
+  const mobileNeedsTypedConfirm = mobileActiveAction ? riskRank(deriveRiskTier(mobileActiveAction)) === 2 : false
   const mobileCanApprove = !mobileNeedsTypedConfirm || mobileConfirmText.trim().toUpperCase() === "APPROVE"
   function decideMobile(verb: Verb) {
     if (!mobileActiveAction) return

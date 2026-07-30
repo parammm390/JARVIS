@@ -171,6 +171,49 @@ export const THREAD_FIXTURES: Record<string, Thread> = {
     instructionText: "Book a water test for the Hendersons this week and give it to whoever's closest",
     nodes: flagshipBNodes(),
   }),
+  // jarvis-v3 P5.T3 — Flagship C's single-node blast shape. The real
+  // recipient count lives on THIS node's own payload (bulk-notify/index.ts's
+  // draft() attaches `targets` there) — ThreadApprovalCockpit's blast-radius
+  // branch reads it from here, while ApprovalCockpit's own cards are driven
+  // by the SEPARATE `actions/pending` interception each e2e spec supplies
+  // (same two-source pattern flagship-b-approval already established). Two
+  // states, not one, because the header's own count (thread.nodes) and the
+  // cockpit's own card list (actions/pending) must agree on known-vs-unknown
+  // within a single test — a shared node would desync one from the other.
+  "flagship-c-approval-known": baseThread({
+    machine: stateFor("awaiting_approval"),
+    instructionText: "Tell every customer on a softener plan that we're doing free hardness checks next month",
+    nodes: [
+      {
+        id: "fixture-action-bulk-known",
+        actionType: "bulk_notify_existing_customers",
+        amountUsd: null,
+        targetLabel: null,
+        policyId: "fixture-policy-bulk-notify",
+        policyVersion: 1,
+        groundedPayload: [],
+        payload: { channel: "sms", targets: Array.from({ length: 12 }, (_, i) => ({ householdId: `hh-${i}` })) },
+        reasoning: "Instruction named a customer segment and an offer",
+      },
+    ],
+  }),
+  "flagship-c-approval-unknown": baseThread({
+    machine: stateFor("awaiting_approval"),
+    instructionText: "Tell every customer on a softener plan that we're doing free hardness checks next month",
+    nodes: [
+      {
+        id: "fixture-action-bulk-unknown",
+        actionType: "bulk_notify_existing_customers",
+        amountUsd: null,
+        targetLabel: null,
+        policyId: "fixture-policy-bulk-notify",
+        policyVersion: 1,
+        groundedPayload: [],
+        payload: { channel: "sms" },
+        reasoning: "Instruction named a customer segment and an offer",
+      },
+    ],
+  }),
 }
 
 export const FIXTURE_STATE_KEYS = Object.keys(THREAD_FIXTURES)
