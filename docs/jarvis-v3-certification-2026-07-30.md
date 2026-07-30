@@ -21,8 +21,8 @@ commit `14ac848`.
 | Golden mobile | Labelled fixture lifecycle suite passes at 390px; no approved safe live action (B-5) | unchecked |
 | Golden by voice | No audio input device for a real browser call | unchecked |
 | Clarification | P7 labelled fixture suite verifies controls at 1440px and 390px; no live tenant path | unchecked |
-| Flagship B | B-7: live planner produced no actionable plan | unchecked |
-| Flagship C | B-7: no safe actionable plan approved | unchecked |
+| Flagship B | Current guarded live rerun returned zero business actions; no call or approval | unchecked |
+| Flagship C | Current guarded live rerun returned zero business actions; no call or approval | unchecked |
 | Failure and recovery | P7 pure frontend tests; DB test unavailable under B-6 | unchecked |
 | Degraded API mid-run | Recovery → setup route is verified with a labelled receipt fixture; no API-kill/recovery run | unchecked |
 | Signed-out hygiene | `e2e/jarvis-network-hygiene.spec.ts` → 2 passed (45.3s): <5 private requests/30s and zero known private metric | certified |

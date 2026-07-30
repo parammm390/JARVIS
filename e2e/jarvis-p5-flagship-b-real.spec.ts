@@ -18,7 +18,7 @@ import { mkdirSync } from "node:fs"
 const email = process.env.TEST_OWNER_EMAIL
 const password = process.env.TEST_OWNER_PASSWORD
 
-const OUT_DIR = "qa-screenshots/v3-P5"
+const OUT_DIR = process.env.JARVIS_E2E_OUT_DIR ?? "qa-screenshots/v3-P5"
 const FORBIDDEN_ACTION_TYPE = "start_water_test_workflow"
 const SAFE_ACTION_TYPE = "assign_technician_to_visit"
 
