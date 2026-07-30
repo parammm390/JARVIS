@@ -7,7 +7,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import pg from "pg";
 import { migrate } from "../../packages/db/migrate";
-import { withTenant, closePool, tenants, workflowSteps, workflowRuns, commands, integrationOperations, compensationCases, appointments } from "@finnor/db";
+import { withTenant, closePool, tenants, workflowSteps, workflowRuns, commands, integrationOperations, compensationCases, appointments, decisionReceipts } from "@finnor/db";
 import { eq } from "drizzle-orm";
 import { submitCommand, executeCapability, compensateStep } from "@finnor/workflow-runtime";
 import {
@@ -54,6 +54,7 @@ describe.skipIf(!available)("compensation", () => {
   afterAll(async () => {
     await withTenant(TENANT_ID, async (db) => {
       await db.delete(compensationCases).where(eq(compensationCases.tenantId, TENANT_ID));
+      await db.delete(decisionReceipts).where(eq(decisionReceipts.tenantId, TENANT_ID));
       await db.delete(integrationOperations).where(eq(integrationOperations.tenantId, TENANT_ID));
       await db.delete(appointments).where(eq(appointments.tenantId, TENANT_ID));
       await db.delete(workflowSteps).where(eq(workflowSteps.tenantId, TENANT_ID));
@@ -86,6 +87,8 @@ describe.skipIf(!available)("compensation", () => {
     expect(caseRow!.status).toBe("succeeded");
     const [step] = await withTenant(TENANT_ID, (db) => db.select().from(workflowSteps).where(eq(workflowSteps.id, stepId)));
     expect(step!.status).toBe("compensated");
+    const [receipt] = await withTenant(TENANT_ID, (db) => db.select().from(decisionReceipts).where(eq(decisionReceipts.workflowStepId, stepId)));
+    expect(receipt!.actualResult).toMatchObject({ compensation: { status: "compensated", caseId, reason: "customer canceled" } });
   });
 
   it("native binding: a held appointment row is canceled on compensation, and the compensation_case resolves succeeded", async () => {

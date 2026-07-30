@@ -19,6 +19,7 @@ import { FieldList, ThreadVerification, type PredictedOutcome, type PredictionDi
 import { isSandboxStep, SANDBOX_LITERAL } from "./sandbox-detection"
 import { RecoveryPanel } from "../bridge/RecoveryPanel"
 import { recoveryKindFromErrorKind } from "../kernel/recovery"
+import { CompensationReceipt } from "../bridge/CompensationReceipt"
 
 // F3.T3 — FLOW-58's sibling receipt-depth task: evidence source iconography. A
 // keyword lookup against the REAL `source` string every evidence row already
@@ -226,6 +227,7 @@ export function ReceiptContent({
                 landing later (P4.T4) and re-fetching this same receipt id makes
                 the diff genuinely get truer in place, not a separate view. */}
             <ThreadVerification predicted={receipt.predicted ?? null} predictionDiff={receipt.predictionDiff ?? null} reducedMotion={reducedMotion} />
+            <CompensationReceipt actualResult={receipt.actualResult} />
 
             {/* F3.T3 — stagger-unfurl: the remaining sections cascade in (30ms/item,
                 <Stagger>, C2's own primitive) instead of all appearing at once —
