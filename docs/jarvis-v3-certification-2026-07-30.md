@@ -64,9 +64,10 @@ Initial JavaScript was measured from `.next/app-build-manifest.json`'s complete
 `/jarvis/page` client-file list after the same production build. The original
 fresh build measured **526,085 bytes**. After deferring existing non-owner role
 scenes, the Supabase browser SDK, the Thread Orb renderer, and execution/receipt
-surfaces from the owner/public initial graph, a fresh rebuild measured **305,560
-bytes** (298.4 KiB): a **220,525-byte / 41.9%** reduction. It still **fails**
-the ≤250 KiB gate by 55,560 bytes. TypeScript and lint passed; the Thread
+surfaces and development-only fixture data from the owner/public initial graph,
+a fresh rebuild measured **303,715 bytes** (296.6 KiB): a **222,370-byte /
+42.3%** reduction. It still **fails** the ≤250 KiB gate by 53,715 bytes.
+TypeScript and lint passed; the Thread
 fixture suite passed 14/14 and public/login suite passed 5/5. This is a
 measurement, not an estimate.
 

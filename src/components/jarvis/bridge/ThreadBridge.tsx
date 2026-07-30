@@ -24,7 +24,6 @@ import { DispatchMap } from "../panels/DispatchMap"
 import { MyDay } from "../panels/MyDay"
 import type { JarvisRole } from "../lib/jarvis-auth"
 import { derivePresence } from "../kernel/presence"
-import { THREAD_FIXTURES, THREAD_HISTORY_FIXTURES, FIXTURE_STATE_KEYS } from "./thread-fixtures"
 import { D3_LONG_EXECUTION_MS, D3_NARRATION_TEXT, shouldFireD3Narration } from "../lib/d3-narration"
 import type { Truth } from "../kernel/types"
 import type { OrbLiveState } from "./Orb3D"
@@ -296,11 +295,27 @@ function PreviewThread() {
 // ---------------------------------------------------------------------------
 function ThreadFixtureHarness({ fixtureKey }: { fixtureKey: string }) {
   const reducedMotion = useReducedMotion() ?? false
-  const thread = THREAD_FIXTURES[fixtureKey]
+  const [fixture, setFixture] = useState<{ thread: ThreadData | undefined; history: ThreadData[]; keys: string[] } | null>(null)
+
+  useEffect(() => {
+    let active = true
+    void import("./thread-fixtures").then(({ THREAD_FIXTURES, THREAD_HISTORY_FIXTURES, FIXTURE_STATE_KEYS }) => {
+      if (!active) return
+      setFixture({
+        thread: THREAD_FIXTURES[fixtureKey],
+        history: THREAD_HISTORY_FIXTURES[fixtureKey] ?? [],
+        keys: FIXTURE_STATE_KEYS,
+      })
+    })
+    return () => { active = false }
+  }, [fixtureKey])
+
+  if (!fixture) return null
+  const { thread } = fixture
   if (!thread) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#04070f] text-center text-white">
-        Unknown fixture &ldquo;{fixtureKey}&rdquo;. Known: {FIXTURE_STATE_KEYS.join(", ")}
+        Unknown fixture &ldquo;{fixtureKey}&rdquo;. Known: {fixture.keys.join(", ")}
       </div>
     )
   }
@@ -316,7 +331,7 @@ function ThreadFixtureHarness({ fixtureKey }: { fixtureKey: string }) {
   return (
     <ThreadBody
       thread={thread}
-      threadHistory={THREAD_HISTORY_FIXTURES[fixtureKey] ?? []}
+      threadHistory={fixture.history}
       presence={presence}
       overdueInvoices={{ status: "known", value: { count: 6, totalUsd: 4200 }, source: "fixture", atMs: 0 }}
       activeRunCount={thread.machine.instructionState === "executing" ? thread.nodes.length : 0}
