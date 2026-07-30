@@ -31,9 +31,9 @@
 | | |
 |---|---|
 | **ACTIVE PHASE** | **P7 — Truth, Recovery, Performance & Certification (in progress)** |
-| **Latest verified commit** | `59fe48b` |
+| **Latest verified commit** | `8206189` |
 | **Phases complete** | 1 / 7 (P2 code-complete, exit gate 7/10 green; P3 code-complete, exit gate 3/6 green; P4 code-complete, exit gate 2/5 green; **P5 code-complete, exit gate 3/6 green** — live Flagship B/C plans remain blocked by B-7 and a live barge-in measurement requires an audio input device) |
-| **Sessions logged** | 7 |
+| **Sessions logged** | 8 |
 | **Product exists at** | end of P2; cognition visible end of P3; predicted↔actual built end of P4; Flagships B/C, reference clarification, barge-in signal, D3 narration, and thread stacking built and fixture-verified end of P5 |
 
 ## NEXT EXACT TASK
@@ -50,6 +50,12 @@
 > authoritative integration-setup destination. P6.T4 records the same fact.
 > The plan requires a `Connect` setup deep link; do not invent one. P7 cannot
 > certify P6 role/mobile/cutover requirements whose visual evidence is absent.
+>
+> **P7.T6 has bounded fixture evidence** (`8206189`): the contradiction sweep
+> passes 12/12 at 1440 and 390 across all deterministic Thread fixtures. It
+> asserts that visible numeric leaf text sits under a `data-source` boundary;
+> fixture roots are explicitly labelled `data-source="fixture"`. This is not a
+> whole-product sweep, so it does not complete the plan's universal requirement.
 >
 > **P7.T7/T8 evidence is committed** (`59fe48b`, `be8f277`): desktop cold
 > Lighthouse median is 95 perf / 100 a11y, but the first run is 60 perf;
@@ -2588,7 +2594,7 @@ test; none is a live before/after measurement.
 - [ ] **P7.T5** All 10 certified paths green
       **Evidence:** · **Deviation:**
 - [ ] **P7.T6** Automated contradiction sweep — every visible number carries `data-source`
-      **Evidence:** · **Deviation:**
+      **Evidence:** `8206189` · `npx playwright test e2e/jarvis-contradiction-sweep.spec.ts --project=desktop-chromium` → 12 passed (25.4s); `npx tsc --noEmit && npm run lint` → TypeScript exit 0, lint clean. The sweep inspects visible numeric leaf text across understood/plan/clarify/approval/execution/receipt fixtures at 1440 and 390 and fails when no `data-source` ancestor exists. **Deviation:** this covers deterministic Thread fixture surfaces only; the fixture harness root is labelled `data-source="fixture"`, while production role/operational surfaces remain outside its scope. The universal task remains unchecked.
 - [ ] **P7.T7** Perf: 5 cold Lighthouse desktop + mobile; bundle ≤ 250 KB gz; ≥ 55 fps; event→pixel median + p95
       **Evidence:** `59fe48b` · five cold production-build desktop runs: perf `60,95,95,94,95`, a11y `100×5`; five mobile runs: perf `72×5`, a11y `100×5`; `/jarvis/page` app-manifest JS gzip sum `525,824` bytes. Full per-run metrics are in `docs/jarvis-v3-certification-2026-07-30.md`. **Deviation:** mobile perf fails ≥85 and initial JS fails ≤250 KB; six-lane fps and event-to-pixel cannot be measured without B-5/B-6 evidence, so this task remains unchecked.
 - [x] **P7.T8** `docs/jarvis-v3-certification-<date>.md` + `docs/motion-promoted.md` + the shipped voice table
@@ -2626,6 +2632,16 @@ test; none is a live before/after measurement.
 ## SESSION LOG
 
 <!-- Newest first. YYYY-MM-DD · P<n> · tasks done · findings · next task · blockers -->
+
+- **2026-07-30 · P7.T6 bounded evidence (`8206189`), not universal certification.**
+  Added a Playwright contradiction sweep spanning all six deterministic Thread
+  fixtures at desktop and mobile widths; it passed 12/12 and verifies each
+  visible numeric leaf belongs to a `data-source` boundary. The fixture harness
+  explicitly identifies itself as `fixture`, avoiding a false production-data
+  claim. This leaves the task and exit gate open because real role/operational
+  surfaces are not covered. TypeScript and lint are clean. **Next:** do not
+  manufacture the P7.T4 setup URL; obtain its authoritative destination, then
+  broaden the sweep only with source-backed data provenance.
 
 - **2026-07-30 · P7 partial execution (`d85baee`…`1e25f62`), not certifiable.**
   P7.T1 implemented the exact eight-kind recovery taxonomy in `kernel/types.ts`
