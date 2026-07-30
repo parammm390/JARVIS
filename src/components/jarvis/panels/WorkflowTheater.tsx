@@ -798,7 +798,7 @@ function RunBrowser({ runs, now, onOpen, onSelectStep }: { runs: WorkflowRun[]; 
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div>
           <div className="j-fs-micro font-black uppercase tracking-[0.16em] text-[color:var(--j-text-faint)]">Run browser</div>
-          <p className="j-fs-micro text-[color:var(--j-text-dim)]">{filtered.length} of {runs.length} real runs</p>
+          <p className="j-fs-micro text-[color:var(--j-text-dim)]" data-jarvis-fact data-source="workflowRuns">{filtered.length} of {runs.length} real runs</p>
         </div>
         <div className="flex flex-wrap gap-1.5">
           <select value={kind} onChange={(event) => setKind(event.target.value)} aria-label="Filter workflow kind" className="rounded-lg border border-white/10 bg-[#0a1324] px-2 py-1 j-fs-micro text-white/70">
@@ -883,7 +883,7 @@ export function WorkflowTheater() {
                 "Workflow Circuits"
               )}
             </span>
-            {mode === "live" && <span className="j-chip bg-cyan-400/10 text-cyan-300">{runs.length} in flight</span>}
+            {mode === "live" && <span className="j-chip bg-cyan-400/10 text-cyan-300" data-jarvis-fact data-source="workflowRuns">{runs.length} in flight</span>}
             {mode === "replay" && <span className="j-chip bg-violet-400/12 text-violet-300">replaying real runs</span>}
             {mode === "blueprint" && <span className="j-chip bg-blue-400/10 text-blue-300/80">BLUEPRINT</span>}
           </div>
@@ -897,7 +897,7 @@ export function WorkflowTheater() {
                 <LiveRunRow key={run.id} run={run} now={data.now} onOpen={() => setOpenRunId(run.id)} onSelectStep={setOpenReceiptStepId} />
               ))}
             </AnimatePresence>
-            {extra > 0 && <div className="text-center j-fs-micro text-[color:var(--j-text-dim)]">+{extra} more in flight</div>}
+            {extra > 0 && <div className="text-center j-fs-micro text-[color:var(--j-text-dim)]" data-jarvis-fact data-source="workflowRuns">+{extra} more in flight</div>}
           </div>
         )}
 

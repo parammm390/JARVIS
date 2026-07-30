@@ -1,8 +1,11 @@
 import { test, expect } from "@playwright/test"
 
-// P7.T6: a DOM-level check, not a source grep. It walks the actual visible leaf
-// text rendered by every deterministic Thread fixture and fails if any visible
-// numeral lacks a nearest `data-source` provenance marker.
+// P7.T6: a DOM-level check, not a source grep. It walks the actual visible
+// business facts rendered by every deterministic Thread fixture and fails if a
+// number-bearing fact lacks a selector-named `data-source` marker. Static copy,
+// addresses, and fixture chrome are deliberately out of scope: they are not
+// business facts. The labelled fixture root establishes fixture mode, not fact
+// provenance, so it is expressly insufficient for this check.
 const FIXTURES = ["understood", "plan", "clarify", "approval", "execution", "receipt"] as const
 const WIDTHS = [
   { width: 1440, height: 900 },
@@ -19,16 +22,13 @@ for (const fixture of FIXTURES) {
       await expect(page.getByText(`FIXTURE · ${fixture}`)).toBeVisible()
 
       const missing = await page.locator("[data-jarvis-thread]").evaluate((root) => {
-        const ignored = new Set(["SCRIPT", "STYLE", "NOSCRIPT", "SVG"])
-        const leaves = [...root.querySelectorAll<HTMLElement>("*")].filter((element) =>
-          !ignored.has(element.tagName) &&
-          element.children.length === 0 &&
-          element.offsetParent !== null &&
-          /\d/.test(element.innerText),
+        const facts = [...root.querySelectorAll<HTMLElement>("[data-jarvis-fact]")].filter((element) =>
+          element.offsetParent !== null && /\d/.test(element.innerText),
         )
-        return leaves
-          .filter((element) => !element.closest("[data-source]"))
-          .map((element) => ({ tag: element.tagName, text: element.innerText.trim() }))
+        return facts
+          .map((element) => ({ element, source: element.closest<HTMLElement>("[data-source]")?.dataset.source }))
+          .filter(({ source }) => !source || source === "fixture" || !/^[a-z][\w.[\]]*(?:\s*·\s*.+)?$/.test(source))
+          .map(({ element, source }) => ({ tag: element.tagName, text: element.innerText.trim(), source: source ?? null }))
       })
 
       expect(missing).toEqual([])

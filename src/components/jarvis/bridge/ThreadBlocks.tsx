@@ -128,6 +128,8 @@ export function ThreadUnderstood({ thread, reducedMotion }: { thread: Thread; re
               {...contextGatherChipVariants(i, reducedMotion)}
               className="j-chip justify-start border border-white/10 bg-white/[.035] text-[color:var(--j-text-dim)]"
               title={c.source}
+              data-jarvis-fact
+              data-source={`thread.contextChips · ${c.source}`}
             >
               {c.label}
             </motion.div>
@@ -171,6 +173,8 @@ export function ThreadPlan({ thread, reducedMotion }: { thread: Thread; reducedM
             key={n.id}
             {...planDrawNodeVariants(i, reducedMotion)}
             className="j-panel flex items-center justify-between gap-3 rounded-xl border border-white/8 px-3 py-2.5"
+            data-jarvis-fact
+            data-source="thread.nodes"
           >
             <span className="j-fs-base text-[color:var(--j-text)]">
               {humanizeActionType(n.actionType)}
@@ -197,7 +201,7 @@ export function ThreadPlan({ thread, reducedMotion }: { thread: Thread; reducedM
             animate={{ scaleY: 1 }}
             transition={{ duration: 0.3, ease: [0.65, 0, 0.35, 1] }}
           />
-          <p className="j-fs-sm text-[color:var(--j-text-dim)]">{policyLine(thread.nodes)}</p>
+          <p className="j-fs-sm text-[color:var(--j-text-dim)]" data-jarvis-fact data-source="thread.nodes[].policyVersion">{policyLine(thread.nodes)}</p>
         </motion.div>
       )}
     </div>
@@ -356,7 +360,7 @@ export function ThreadApprovalCockpit({ thread, onClose, reducedMotion, escalate
           {blastNode ? (
             <BlastRadiusHeader count={blastCount ?? null} reducedMotion={reducedMotion} />
           ) : (
-            <p className="j-fs-base font-bold text-[color:var(--j-text)]">
+            <p className="j-fs-base font-bold text-[color:var(--j-text)]" data-jarvis-fact data-source="thread.nodes">
               {thread.nodes.length} action{thread.nodes.length === 1 ? "" : "s"} · {formatUsd(total)} · {thread.nodes.length} customer{thread.nodes.length === 1 ? "" : "s"} will be texted
             </p>
           )}
@@ -474,13 +478,13 @@ export function ThreadReceipt({ thread, reducedMotion }: { thread: Thread; reduc
   return (
     <motion.div {...receiptSealVariants(reducedMotion)}>
       <div className="j-label mb-2">What actually happened</div>
-      <p className="j-fs-base text-[color:var(--j-text)]">
+      <p className="j-fs-base text-[color:var(--j-text)]" data-jarvis-fact data-source="thread.nodes">
         {thread.nodes.length} of {thread.nodes.length} action{thread.nodes.length === 1 ? "" : "s"} {outcome}.
       </p>
       <ul className="mt-3 space-y-1">
         {thread.nodes.map((n) =>
           receiptIds[n.id] ? (
-            <li key={n.id}>
+            <li key={n.id} data-jarvis-fact data-source="thread.nodes">
               <a href={`/jarvis/next#receipt-${receiptIds[n.id]}`} id={`receipt-${receiptIds[n.id]}`} className="j-fs-sm text-[color:var(--j-text-dim)] underline hover:text-cyan-200">
                 {humanizeActionType(n.actionType)}
                 {n.targetLabel ? ` · ${n.targetLabel}` : ""}
@@ -488,7 +492,7 @@ export function ThreadReceipt({ thread, reducedMotion }: { thread: Thread; reduc
               </a>
             </li>
           ) : (
-            <li key={n.id} className="j-fs-sm text-[color:var(--j-text-dim)]">
+            <li key={n.id} className="j-fs-sm text-[color:var(--j-text-dim)]" data-jarvis-fact data-source="thread.nodes">
               {humanizeActionType(n.actionType)}
               {n.targetLabel ? ` · ${n.targetLabel}` : ""}
               {n.amountUsd !== null ? ` · ${formatUsd(n.amountUsd)}` : ""}
