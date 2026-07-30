@@ -31,7 +31,7 @@ function mockFetchOnce(content: string) {
     "fetch",
     vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ choices: [{ message: { content } }] }),
+      json: async () => ({ output: { message: { content: [{ text: content }] } } }),
     }),
   );
 }

@@ -47,7 +47,7 @@ export class LLMPlanner implements Planner {
   private provider: LLMProvider | undefined;
   // Phase 8's high-tier second-candidate call — a distinct, separately injectable
   // provider so tests can stub it independently of the first-pass planner call
-  // (both default to real Groq in production, but a test may want candidate A from
+  // (the production default is an independent DeepSeek → OpenAI OSS chain, but a test may want candidate A from
   // one stub and candidate B from another).
   private secondCandidateProvider: LLMProvider | undefined;
 
@@ -523,8 +523,8 @@ export class LLMPlanner implements Planner {
   }
 
   /** High tier only (Phase 8): a second, independent candidate for a high-stakes
-   *  action, using the real planner-quality provider (Groq) — deliberately NOT the
-   *  cheap repair model, since this tier exists specifically to spend more
+   *  action, using the independent DeepSeek → OpenAI OSS chain — deliberately NOT the
+   *  planner or cheap repair model, since this tier exists specifically to spend more
    *  reasoning where stakes justify it. Same defensive malformed-JSON-safe-fallback
    *  pattern plan()'s own first call already uses: on any failure (network or
    *  parse), candidate B simply does not exist and scoring trivially picks A. */
@@ -552,7 +552,7 @@ export class LLMPlanner implements Planner {
       }),
     );
     try {
-      this.secondCandidateProvider ??= resolveProvider("groq");
+      this.secondCandidateProvider ??= resolveProvider("high-risk-second-candidate");
       const raw = await this.secondCandidateProvider.complete({ system, user, json: true, tenantId, traceId, purpose: "planning" });
       const parsed = SecondCandidateSchema.parse(JSON.parse(raw));
       if (!allowedActionTypes.includes(parsed.action_type)) return null;

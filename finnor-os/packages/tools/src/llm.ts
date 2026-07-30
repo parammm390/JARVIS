@@ -142,10 +142,14 @@ export class BedrockAnthropicProvider implements LLMProvider {
   }
 }
 
-/** DeepSeek (and any other OpenAI-chat-shaped model) on Bedrock — cheaper, used for
- *  lower-stakes text generation (e.g. narrating an execution result), not planning. */
-export class BedrockOpenAICompatProvider implements LLMProvider {
-  name = "bedrock-openai-compat";
+/**
+ * Bedrock Converse is the shared request/response format for the non-Anthropic
+ * models used by JARVIS (Qwen, DeepSeek, OpenAI OSS, and Amazon Nova). Keeping this
+ * adapter model-agnostic lets the routing policy change without coupling the rest of
+ * the system to each vendor's InvokeModel payload shape.
+ */
+export class BedrockConverseProvider implements LLMProvider {
+  name = "bedrock-converse";
   lastUsage?: LLMUsage;
   constructor(
     private modelId: string,
@@ -156,17 +160,16 @@ export class BedrockOpenAICompatProvider implements LLMProvider {
   async complete(opts: LLMCallOptions): Promise<string> {
     if (!this.apiKey) throw new Error("AWS_BEDROCK_API_KEY is not set");
     const res = await fetchWithTimeout(
-      `https://bedrock-runtime.${this.region}.amazonaws.com/model/${this.modelId}/invoke`,
+      `https://bedrock-runtime.${this.region}.amazonaws.com/model/${this.modelId}/converse`,
       {
         method: "POST",
         headers: { Authorization: `Bearer ${this.apiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({
-          max_tokens: 400,
-          temperature: 0.2,
+          system: [{ text: opts.system }],
           messages: [
-            { role: "system", content: opts.system },
-            { role: "user", content: opts.user },
+            { role: "user", content: [{ text: opts.user }] },
           ],
+          inferenceConfig: { maxTokens: 700, temperature: 0.1 },
         }),
       },
       8_000,
@@ -175,11 +178,15 @@ export class BedrockOpenAICompatProvider implements LLMProvider {
       const body = await res.text().catch(() => "");
       throw new Error(`Bedrock (${this.modelId}) failed (${res.status}): ${body.slice(0, 300)}`);
     }
-    const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }>; usage?: { prompt_tokens?: number; completion_tokens?: number } };
-    this.lastUsage = { model: this.modelId, inputTokens: data.usage?.prompt_tokens ?? null, outputTokens: data.usage?.completion_tokens ?? null };
-    return data.choices?.[0]?.message?.content ?? "";
+    const data = (await res.json()) as { output?: { message?: { content?: Array<{ text?: string }> } }; usage?: { inputTokens?: number; outputTokens?: number } };
+    this.lastUsage = { model: this.modelId, inputTokens: data.usage?.inputTokens ?? null, outputTokens: data.usage?.outputTokens ?? null };
+    return data.output?.message?.content?.map((block) => block.text ?? "").join("") ?? "";
   }
 }
+
+// Compatibility export for existing callers. All current non-Anthropic Bedrock
+// routing intentionally uses Converse; new callers should use the explicit name.
+export { BedrockConverseProvider as BedrockOpenAICompatProvider };
 
 /** Tries each provider in order — different vendor, different failure modes (rate
  *  limit, outage, auth) don't correlate, so a chain is strictly more available than
@@ -273,28 +280,25 @@ export class GroqProvider implements LLMProvider {
   }
 }
 
-/** Best available Sonnet-tier model on this Bedrock account, as of the last live check
- *  against ListFoundationModels — anthropic.claude-sonnet-5 itself isn't enabled on
- *  this account (403), claude-sonnet-4-6 is the newest one that is. */
-const BEDROCK_SONNET_MODEL_ID = process.env.AWS_BEDROCK_SONNET_MODEL_ID ?? "us.anthropic.claude-sonnet-4-6";
-const BEDROCK_HAIKU_MODEL_ID = process.env.AWS_BEDROCK_HAIKU_MODEL_ID ?? "us.anthropic.claude-haiku-4-5";
+const BEDROCK_QWEN_PLANNING_MODEL_ID = process.env.AWS_BEDROCK_QWEN_PLANNING_MODEL_ID ?? "qwen.qwen3-235b-a22b-2507-v1:0";
+const BEDROCK_QWEN_FAST_MODEL_ID = process.env.AWS_BEDROCK_QWEN_FAST_MODEL_ID ?? "qwen.qwen3-32b-v1:0";
 const BEDROCK_DEEPSEEK_MODEL_ID = process.env.AWS_BEDROCK_DEEPSEEK_MODEL_ID ?? "deepseek.v3.2";
+const BEDROCK_OPENAI_OSS_MODEL_ID = process.env.AWS_BEDROCK_OPENAI_OSS_MODEL_ID ?? "openai.gpt-oss-120b-1:0";
+const BEDROCK_NOVA_MICRO_MODEL_ID = process.env.AWS_BEDROCK_NOVA_MICRO_MODEL_ID ?? "amazon.nova-micro-v1:0";
+// Qwen 235B is not served from us-east-1. Keep a separate override so the rest of
+// the Bedrock fleet can remain in the deployment's primary region.
+const BEDROCK_QWEN_PLANNING_REGION = process.env.AWS_BEDROCK_QWEN_PLANNING_REGION ?? "us-east-2";
 
 /** Resolve the provider for an action type. Registry is config-extensible. */
 const providers = new Map<string, () => LLMProvider>();
-// Default chain: Bedrock Claude Sonnet first when a Bedrock API key is configured
-// (best structured-extraction/tool-call accuracy — this is the planner's real job),
-// Groq's 70B/8B chain as a same-request fallback if Bedrock errors or rate-limits.
-// Without AWS_BEDROCK_API_KEY set (e.g. local dev, tests) this is just GroqProvider,
-// unchanged from before — no new required secret for the existing test suite.
-providers.set("groq", () =>
-  process.env.AWS_BEDROCK_API_KEY
-    ? new CompositeProvider([new BedrockAnthropicProvider(BEDROCK_SONNET_MODEL_ID), new GroqProvider()])
-    : new GroqProvider(),
-);
-providers.set("bedrock-sonnet", () => new BedrockAnthropicProvider(BEDROCK_SONNET_MODEL_ID));
-providers.set("bedrock-haiku", () => new BedrockAnthropicProvider(BEDROCK_HAIKU_MODEL_ID));
-providers.set("bedrock-deepseek", () => new BedrockOpenAICompatProvider(BEDROCK_DEEPSEEK_MODEL_ID));
+providers.set("groq", () => new GroqProvider());
+providers.set("bedrock-qwen-planning", () => new BedrockConverseProvider(BEDROCK_QWEN_PLANNING_MODEL_ID, undefined, BEDROCK_QWEN_PLANNING_REGION));
+providers.set("bedrock-qwen-fast", () => new BedrockConverseProvider(BEDROCK_QWEN_FAST_MODEL_ID));
+providers.set("bedrock-deepseek", () => new BedrockConverseProvider(BEDROCK_DEEPSEEK_MODEL_ID));
+providers.set("bedrock-openai-oss", () => new BedrockConverseProvider(BEDROCK_OPENAI_OSS_MODEL_ID));
+providers.set("bedrock-nova-micro", () => new BedrockConverseProvider(BEDROCK_NOVA_MICRO_MODEL_ID));
+providers.set("planning", () => new CompositeProvider([new BedrockConverseProvider(BEDROCK_QWEN_PLANNING_MODEL_ID, undefined, BEDROCK_QWEN_PLANNING_REGION), new GroqProvider()]));
+providers.set("high-risk-second-candidate", () => new CompositeProvider([new BedrockConverseProvider(BEDROCK_DEEPSEEK_MODEL_ID), new BedrockConverseProvider(BEDROCK_OPENAI_OSS_MODEL_ID)]));
 
 export function registerProvider(name: string, factory: () => LLMProvider): void {
   providers.set(name, factory);
@@ -342,7 +346,7 @@ export function resolveProvider(name?: string): LLMProvider {
  * provider; unknown values safely fall back to the documented default. */
 export function resolveProviderForPurpose(purpose: LLMPurpose): LLMProvider {
   const defaults: Record<LLMPurpose, string> = {
-    planning: "groq", critic: "bedrock-haiku", repair: "bedrock-haiku", classification: "bedrock-haiku", answer: "groq",
+    planning: "planning", critic: "bedrock-qwen-fast", repair: "bedrock-qwen-fast", classification: "bedrock-nova-micro", answer: "groq",
   };
   const override = process.env[`LLM_MODEL_${purpose.toUpperCase()}`];
   return resolveProvider(override && providers.has(override) ? override : defaults[purpose]);
