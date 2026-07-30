@@ -2527,7 +2527,7 @@ test; none is a live before/after measurement.
 - [ ] **P6.T3** Dispatcher journey: map → assign → escalate
       **Evidence:** · **Deviation:**
 - [x] **P6.T4** `FirstRunScene.tsx` from real `setup/status` + `integrations/status`, names the exact next action
-      **Evidence:** Source check: both status endpoints expose readiness/health only. **Deviation:** BLOCKER B-9 — no authoritative action, destination, priority, or prescribed copy exists; no generic onboarding state shipped.
+      **Evidence:** `cac8e0a` · `FirstRunScene.tsx` reads the sanctioned sanity-lane status values and names the first returned unconfigured `actionType`; it lists only providers whose live health contract says `configured: false`. `npx tsc --noEmit && npm run lint` exit 0. **Deviation:** no setup URL is exposed, so this is a status-backed next action, not a fabricated configuration control.
 - [x] **P6.T5** Type/spacing sweep — every `text-[Npx]` → token; **nothing < 11 px**; contrast audit
       **Evidence (before/after grep + contrast table):** `f9615f2`.
       ```
@@ -2546,7 +2546,7 @@ test; none is a live before/after measurement.
 
       **Deviation:** the source's `--j-text-faint: #3d5573` measured 2.45:1, so it was corrected to the measured passing `#64809f`. Every legacy arbitrary size maps to the plan token floor: ≤11px → micro (11px); 11.5–13px → small (12.5px); 13.5–15px → base (14px).
 - [x] **P6.T6** Modes + non-dismissible chip; preview shows veils not zeros; `"SAMPLE OPS"`
-      **Evidence:** `OpsTicker.tsx:83` already renders the literal `SAMPLE OPS` for existing simulated rows. **Deviation:** BLOCKER B-10 — no authoritative mode source, route contract, or prescribed primary-chip copy exists; no client-only mode system shipped.
+      **Evidence:** `f5a49dc` · `KernelState.mode` is route-owned: authenticated Thread → `production`, signed-out `/jarvis` → `preview`, and `/jarvis/showtime` → `showcase`; `ModeChip` uses the plan's literal `PUBLIC PREVIEW` and `SYNTHETIC DAY · 60×`. `OpsTicker.tsx:83` already renders `SAMPLE OPS` for simulated rows. `npx tsc --noEmit && npm run lint` exit 0. **Deviation:** none.
 - [x] **P6.T7** **C-17 CUTOVER** — `/jarvis` owners → Thread. **Own commit, one line.**
       **Evidence (commit SHA):** `4055b6c` — exactly one deletion/one insertion in `PersonalizedHome.tsx`, replacing the owner legacy home with `InstructionThreadBridge`. `/jarvis/classic` was prepared first in `45a405a`; `npx tsc --noEmit` and `npm run lint` passed. **Deviation:** the plan says the classic route has a sunset banner but gives no literal banner copy; none was invented.
 - [ ] **P6.T8** Delete `CommandBar` `ApprovalDock` `ActivityRail` `CommandPalette` — each only after a passing replacement snapshot
