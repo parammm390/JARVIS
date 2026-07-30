@@ -50,7 +50,7 @@ function RoleLanding() {
   // failing closed until the bearer is present. Only wait for a role once a real
   // session has been restored, avoiding an avoidable blank first paint.
   if (session && !role) return <div className="min-h-screen bg-[#04070f]" />
-  if (!session) return <JarvisCommandCenter />
+  if (!session) return <InstructionThreadBridge />
   // Command Bridge (D1) is still mid-migration — only Overview/Pipeline scenes exist
   // there today, and it has no voice entry point at all (it only reads voiceState to
   // color the orb, never renders a mic control). Command Center already has every

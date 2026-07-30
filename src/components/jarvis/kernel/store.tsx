@@ -42,7 +42,7 @@ import {
   type PlannedActionResponse,
   type TraceEvent,
 } from "./instruction"
-import type { InstructionState, Presence, Truth } from "./types"
+import type { InstructionState, JarvisMode, Presence, Truth } from "./types"
 import { looksLikeFollowUpReference, UNRESOLVED_REFERENCE_MESSAGE, UNRESOLVED_REFERENCE_CONTEXT } from "./followup-reference"
 
 // ---------------------------------------------------------------------------
@@ -492,6 +492,7 @@ export function applyTraceEvents(thread: Thread, events: TraceEvent[], approval:
 // ---------------------------------------------------------------------------
 
 export interface KernelState {
+  mode: JarvisMode
   thread: Thread | null
   /** jarvis-v3 P5.T8 — §2.2 "Threads stack newest-first; older threads
    *  collapse to a single row." Newest-superseded-first. Each entry is a
@@ -529,9 +530,10 @@ export function useKernel(): KernelState {
   return ctx
 }
 
-function KernelInner({ children }: { children: React.ReactNode }) {
+function KernelInner({ children, mode }: { children: React.ReactNode; mode?: JarvisMode }) {
   const data = useJarvis()
   const auth = useJarvisAuth()
+  const effectiveMode: JarvisMode = mode ?? (auth.session ? "production" : "preview")
   const selectorInput = useSelectorInput()
   const lane = useLanePresentation()
 
@@ -1020,6 +1022,7 @@ function KernelInner({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<KernelState>(
     () => ({
+      mode: effectiveMode,
       thread,
       threadHistory,
       presence,
@@ -1037,7 +1040,7 @@ function KernelInner({ children }: { children: React.ReactNode }) {
       answerClarification,
       cancelThread,
     }),
-    [thread, threadHistory, presence, transport, selectorInput, lane, micOpen, voiceSpeaking, setVoiceIndicators, submit, answerClarification, cancelThread],
+    [effectiveMode, thread, threadHistory, presence, transport, selectorInput, lane, micOpen, voiceSpeaking, setVoiceIndicators, submit, answerClarification, cancelThread],
   )
 
   return <KernelContext.Provider value={value}>{children}</KernelContext.Provider>
@@ -1047,11 +1050,11 @@ function KernelInner({ children }: { children: React.ReactNode }) {
  *  exactly one of these; `/jarvis` (legacy) and `/jarvis/bridge` keep their own
  *  existing `JarvisAuthProvider`/`JarvisDataProvider` mounts untouched (§8 hard
  *  rule 9 — both must keep working). */
-export function KernelProvider({ children }: { children: React.ReactNode }) {
+export function KernelProvider({ children, mode }: { children: React.ReactNode; mode?: JarvisMode }) {
   return (
     <JarvisAuthProvider>
       <JarvisDataProvider>
-        <KernelInner>{children}</KernelInner>
+        <KernelInner mode={mode}>{children}</KernelInner>
       </JarvisDataProvider>
     </JarvisAuthProvider>
   )

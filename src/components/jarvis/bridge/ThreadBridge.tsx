@@ -19,6 +19,7 @@ import { ThreadStack } from "./ThreadStack"
 import { ThreadApprovalCockpit } from "./ThreadBlocks"
 import { CommandRail } from "./CommandRail"
 import { FirstRunScene } from "./FirstRunScene"
+import { ModeChip } from "./ModeChip"
 import { ReceiptContent } from "../lib/ReceiptDrawer"
 import { DispatchMap } from "../panels/DispatchMap"
 import { MyDay } from "../panels/MyDay"
@@ -124,6 +125,7 @@ function ThreadBody({
   showRail,
   fixtureLabel,
   role = "owner",
+  mode = "production",
 }: {
   thread: ThreadData | null
   threadHistory: ThreadData[]
@@ -137,6 +139,7 @@ function ThreadBody({
   showRail: boolean
   fixtureLabel?: string
   role?: JarvisRole
+  mode?: "production" | "showcase" | "preview"
 }) {
   const isApproving = role !== "technician" && thread?.machine.instructionState === "awaiting_approval"
   return (
@@ -146,6 +149,7 @@ function ThreadBody({
           <span className="j-chip border border-violet-300/40 bg-violet-400/15 text-violet-200">FIXTURE · {fixtureLabel}</span>
         </div>
       )}
+      <div className="fixed right-4 top-4 z-20"><ModeChip mode={mode} /></div>
       <ThreadField overdueInvoices={overdueInvoices} />
       {/* §6⓪: desktop docks the Orb top-left of the thread (64px); mobile docks
           it 44px, above the rail, so it never overlaps the (here, full-width)
@@ -253,8 +257,15 @@ function ThreadPage({ role }: { role: JarvisRole }) {
       onSkip={kernel.cancelThread}
       showRail
       role={role}
+      mode={kernel.mode}
     />
   )
+}
+
+function PreviewThread() {
+  const kernel = useKernel()
+  const reducedMotion = useReducedMotion() ?? false
+  return <ThreadBody thread={null} threadHistory={[]} presence={kernel.presence} overdueInvoices={kernel.overdueInvoices} activeRunCount={0} reducedMotion={reducedMotion} onCancel={() => {}} onAnswer={() => {}} onSkip={() => {}} showRail={false} mode={kernel.mode} />
 }
 
 // ---------------------------------------------------------------------------
@@ -316,7 +327,7 @@ function ThreadGate() {
   if (fixtureKey) return <ThreadFixtureHarness fixtureKey={fixtureKey} />
 
   if (auth.loading) return <LoadingGate />
-  if (!auth.session) return <SignInGate />
+  if (!auth.session) return <PreviewThread />
   if (auth.role === null) return <LoadingGate />
   return <ThreadPage role={auth.role} />
 }

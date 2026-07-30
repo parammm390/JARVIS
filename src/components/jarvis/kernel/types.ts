@@ -19,6 +19,10 @@ export type Truth<T> =
   | { status: "denied";      reason: "signed-out" | "role" }
   | { status: "unavailable"; reason: "network" | "server" | "not-configured"; sinceMs: number }
 
+/** Route-owned presentation posture; it labels the surface's data contract and
+ * never reclassifies business records or replaces backend authority. */
+export type JarvisMode = "production" | "showcase" | "preview"
+
 // ---------------------------------------------------------------------------
 // P2.T1 — canonical entity states, copied byte-for-byte from
 // finnor-os/packages/db/schema.ts (plan v3 §4.3). Do not rename anything here.

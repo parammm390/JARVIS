@@ -10,7 +10,9 @@ import Link from "next/link"
 import { motion, useReducedMotion } from "framer-motion"
 import { CirclePause, CirclePlay, Eye, RotateCcw, Sparkles } from "lucide-react"
 import "./jarvis-theme.css"
-import { JarvisAuthProvider, useJarvisAuth } from "./lib/jarvis-auth"
+import { useJarvisAuth } from "./lib/jarvis-auth"
+import { KernelProvider } from "./kernel/store"
+import { ModeChip } from "./bridge/ModeChip"
 import { jarvisClient, type DealerZeroScenario, type ShowtimeFrame, type TimeCompressedDemo } from "@/lib/jarvis-client"
 import { ReceiptDrawer } from "./lib/ReceiptDrawer"
 import { Orb3D, type OrbState } from "./bridge/Orb3D"
@@ -100,7 +102,7 @@ function ShowtimeShell() {
       <section className="relative mx-auto flex min-h-screen max-w-7xl flex-col px-5 py-6 md:px-8">
         <header className="flex flex-wrap items-start justify-between gap-5 border-b border-white/10 pb-5">
           <div>
-            <div className="mb-2 flex flex-wrap gap-2"><span className="j-chip bg-amber-300/15 text-amber-100">DEMO</span><span className="j-chip bg-amber-300/10 text-amber-100">SYNTHETIC · DEALER ZERO</span></div>
+            <div className="mb-2 flex flex-wrap gap-2"><ModeChip mode="showcase" /><span className="j-chip bg-amber-300/15 text-amber-100">DEMO</span><span className="j-chip bg-amber-300/10 text-amber-100">SYNTHETIC · DEALER ZERO</span></div>
             <h1 className="text-2xl font-black tracking-tight text-white">Showtime</h1>
             <p className="mt-1 max-w-xl j-fs-sm leading-relaxed text-[color:var(--j-text-dim)]">A B4 time-compressed script. It never sends a call, approves an action, or changes business data. Pause any marked beat to inspect its real receipt.</p>
           </div>
@@ -144,4 +146,4 @@ function ShowtimeShell() {
 
 function Gate({ title, detail }: { title: string; detail: string }) { return <main className="flex min-h-screen flex-col items-center justify-center bg-[#04070f] px-6 text-center text-white"><h1 className="text-xl font-black">{title}</h1><p className="mt-2 max-w-sm text-sm text-white/60">{detail}</p><Link href="/jarvis" className="mt-5 rounded-full border border-white/15 px-4 py-2 text-xs font-bold text-cyan-100">Back to JARVIS</Link></main> }
 
-export function Showtime() { return <JarvisAuthProvider><ShowtimeShell /></JarvisAuthProvider> }
+export function Showtime() { return <KernelProvider mode="showcase"><ShowtimeShell /></KernelProvider> }
