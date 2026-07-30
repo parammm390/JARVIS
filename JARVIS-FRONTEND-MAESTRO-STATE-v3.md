@@ -2557,7 +2557,7 @@ test; none is a live before/after measurement.
 - [ ] `grep -rhoE "text-\[[0-9.]+px\]" src/components/jarvis` → 0 — **Evidence:**
 - [ ] Contrast table, all ≥ 4.5:1 — **Table:**
 - [ ] Technician mobile ≤ 2 taps per step — **E2E + screenshots:**
-- [ ] Preview mode: zero fabricated numbers — **Screenshot:**
+- [x] Preview mode: zero fabricated numbers — **Evidence:** `981b961` · `e2e/jarvis-p6-preview.spec.ts` passed 3/3 at 1440, 768, and 390; screenshots: `qa-screenshots/v3-P6/preview-{1440,768,390}.png`; each asserts `PUBLIC PREVIEW`, sign-in availability, and no `[data-truth="known"][data-source^="api:"]` facts.
 - [ ] `/jarvis/classic` still works — **Screenshot:**
 
 ---
