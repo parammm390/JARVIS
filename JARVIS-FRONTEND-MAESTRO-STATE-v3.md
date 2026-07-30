@@ -559,6 +559,14 @@ component-tree fixture evidence instead (`e2e/jarvis-p5-flagship-c-fixtures.spec
 
 ---
 
+### B-8 · 2026-07-30 · P6.T2 · **The specified technician mobile journey cannot be implemented truthfully from the available backend.** OPEN.
+
+P6.T2 fixes the required sequence as `my day → work order → arrive → log → flag → done`, each at no more than two taps. Source verification found only one technician mutation: `POST /api/technician/my-day` requires `{ visitId, confirm: true }` and immediately writes `service_visits.completed_at` (`finnor-os/apps/api/app/api/technician/my-day/route.ts:52-72`). There is no work-order endpoint or route, no arrival state, and no mobile endpoint for `log_visit_report` or `flag_visit_issue`; those are planner action types, not direct technician controls (`finnor-os/packages/domain-plugins/technician-reports/index.ts:25-78`).
+
+The existing `MyDay` surface exposes the real completion action only. Adding local arrival/report/flag buttons would create UI states with no authoritative backend mutation, violating P6's backend-authority rule. P6.T2 remains unchecked; the P6.T1 role surface keeps the real My Day plus voice-first rail, but it does not claim the missing journey. What is needed: an approved backend contract for work-order lookup, arrival, report, and issue flags, or an explicit plan amendment mapping these steps to existing authoritative APIs.
+
+---
+
 **Raised earlier, now resolved — kept for history:**
 - ~~No `TEST_OWNER_EMAIL` / `TEST_OWNER_PASSWORD`.~~ **Resolved — see B-3.**
 - ~~Demo-tenant data, ≥ 3 real overdue invoices.~~ **Resolved — 7 real invoices,
@@ -2504,7 +2512,7 @@ test; none is a live before/after measurement.
 - [ ] **P6.T1** Role-scoped rail and scenes (owner / dispatcher / technician)
       **Evidence:** · **Deviation:**
 - [ ] **P6.T2** Technician mobile journey, **≤ 2 taps per step**, one-thumb
-      **Evidence:** · **Deviation:**
+      **Evidence:** Source check: `finnor-os/apps/api/app/api/technician/my-day/route.ts:52-72` supports only direct completion. **Deviation:** BLOCKER B-8 — no authoritative work-order, arrive, log, or flag operation exists; no fabricated controls shipped.
 - [ ] **P6.T3** Dispatcher journey: map → assign → escalate
       **Evidence:** · **Deviation:**
 - [ ] **P6.T4** `FirstRunScene.tsx` from real `setup/status` + `integrations/status`, names the exact next action
