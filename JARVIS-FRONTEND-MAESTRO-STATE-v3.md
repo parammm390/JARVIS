@@ -30,32 +30,26 @@
 
 | | |
 |---|---|
-| **ACTIVE PHASE** | **P6 — Roles, Mobile, Onboarding, Demo & Cutover (in progress)** |
-| **Latest verified commit** | `bae364b` |
+| **ACTIVE PHASE** | **P7 — Truth, Recovery, Performance & Certification (in progress)** |
+| **Latest verified commit** | `1e25f62` |
 | **Phases complete** | 1 / 7 (P2 code-complete, exit gate 7/10 green; P3 code-complete, exit gate 3/6 green; P4 code-complete, exit gate 2/5 green; **P5 code-complete, exit gate 3/6 green** — live Flagship B/C plans remain blocked by B-7 and a live barge-in measurement requires an audio input device) |
-| **Sessions logged** | 6 |
+| **Sessions logged** | 7 |
 | **Product exists at** | end of P2; cognition visible end of P3; predicted↔actual built end of P4; Flagships B/C, reference clarification, barge-in signal, D3 narration, and thread stacking built and fixture-verified end of P5 |
 
 ## NEXT EXACT TASK
 
-> **P6.T1 is committed** (`07d354e`): owner → Thread; dispatcher → Thread +
-> real DispatchMap with escalation-only decisions; technician → My Day + the
-> voice-first rail, with no approval cockpit. `npx tsc --noEmit` and `npm run
-> lint` passed. The pre-flight also found the prior state’s recorded commit
-> stale (`04ab19b`; repository source was `410eb65` before P6).
+> **P7.T1–T3 are committed** (`d85baee`, `5e27b39`, `1e25f62`): the §6.8
+> recovery taxonomy is exhaustive with no default; all 8 RunState and 6
+> StepState values have explicit compile-time-checked presentations; and
+> compensation updates its existing receipt in place. Frontend pure tests,
+> TypeScript, lint, and FINNOR OS typecheck pass. The backend integration test
+> self-skips because the sanctioned database is unavailable (B-6).
 >
-> **P6.T2 is blocked, not fabricated** (`bae364b`, BLOCKER B-8): the available
-> technician API directly completes a visit and exposes no authoritative work
-> order, arrive, report, or flag operation. Continue with P6.T3 around this
-> blocker; do not represent the required ≤2-tap journey as complete.
->
-> **P6 close-out is not yet possible.** B-8 and B-11 leave T2 and T8
-> honestly unchecked. The required full-suite run was started at P6
-> HEAD and first failed in `jarvis-golden-baseline` 1440px after the deliberate
-> T5 type sweep: expected 1440×1841, received 1440×1852, 99,529 pixels / 4%.
-> Artifact: `test-results/jarvis-golden-baseline-gol-f946b-signed-out-jarvis-at-1440px-desktop-chromium/error-context.md`.
-> Do not update that snapshot while the worktree contains the pre-existing
-> unrelated screenshot changes; P6 requires a measured, intentional capture.
+> **P7.T4 is blocked by source, not guessed:** `setup/status` and
+> `integrations/status` expose only configuration/health posture, no
+> authoritative integration-setup destination. P6.T4 records the same fact.
+> The plan requires a `Connect` setup deep link; do not invent one. P7 cannot
+> certify P6 role/mobile/cutover requirements whose visual evidence is absent.
 
 ## COMPLETION LEDGER
 
@@ -559,6 +553,17 @@ component-tree fixture evidence instead (`e2e/jarvis-p5-flagship-c-fixtures.spec
 3 passing tests) — see P5.T3's own Evidence entry.
 
 ---
+
+### B-12 · 2026-07-30 · P7.T4 · **No authoritative integration setup deep link is available.** OPEN.
+
+P7.T4 requires `PermissionVeil` with a `Connect` setup deep link on affected
+integration surfaces. Repository source provides status only: `setup/status`
+and `integrations/status`; `FirstRunScene.tsx` explicitly avoids inventing a
+configuration destination, and no JARVIS integration-settings route exists.
+A generic documentation/checklist page is not a tenant-authoritative setup
+action, so it is not used as a fake `Connect` target. What is needed: an
+approved setup destination/contract for each affected integration, or a plan
+amendment that permits a clearly labelled documentation-only destination.
 
 ### B-8 · 2026-07-30 · P6.T2 · **The specified technician mobile journey cannot be implemented truthfully from the available backend.** OPEN.
 
@@ -2563,14 +2568,14 @@ test; none is a live before/after measurement.
 ---
 
 # PHASE 7 — Truth, Recovery, Performance & Certification
-**Status:** ⬜ · **Sessions:** 2 · **Depends on:** P6 · **Plan:** §8 → PHASE 7
+**Status:** 🟡 · **Sessions:** 3 · **Depends on:** P6 · **Plan:** §8 → PHASE 7
 
-- [ ] **P7.T1** Failure taxonomy (§6.8) + `RecoveryPanel.tsx`; exhaustive switch, **no `default`**
-      **Evidence:** · **Deviation:**
-- [ ] **P7.T2** **C-08** `cancelled` + `escalated` render distinctly; all 8 `RunState` + 6 `StepState` exhaustive
-      **Evidence:** · **Deviation:**
-- [ ] **P7.T3** Compensation first-class: M13, `"Rolled back"`, compensation receipt
-      **Evidence:** · **Deviation:**
+- [x] **P7.T1** Failure taxonomy (§6.8) + `RecoveryPanel.tsx`; exhaustive switch, **no `default`**
+      **Evidence:** `d85baee` · `npm run test:unit -- recovery.test.ts && npx tsc --noEmit && npm run lint` → 2 tests passed, TypeScript exit 0, lint clean. The receipt preserves the backend kind and maps it only for §6.8 presentation. **Deviation:** backend `ErrorKind` uses source-defined values such as `validation`, `provider_down`, and `terminal`; these are transparently mapped to the plan's UI taxonomy rather than renamed.
+- [x] **P7.T2** **C-08** `cancelled` + `escalated` render distinctly; all 8 `RunState` + 6 `StepState` exhaustive
+      **Evidence:** `5e27b39` · `npm run test:unit -- workflow-presentation.test.ts recovery.test.ts && npx tsc --noEmit && npm run lint` → 4 tests passed, TypeScript exit 0, lint clean. `workflow-presentation.ts` has no-default exhaustive switches and distinct cancelled/escalated tones. **Deviation:** API response contracts expose string statuses, so narrowing occurs at the renderer boundary; the presentation union itself is compile-time exhaustive.
+- [x] **P7.T3** Compensation first-class: M13, `"Rolled back"`, compensation receipt
+      **Evidence:** `1e25f62` · frontend pure tests / TypeScript / lint clean; `finnor-os npm run typecheck` clean; `npx vitest run tests/integration/compensation.test.ts` → 1 file / 3 tests skipped (no sanctioned DB, B-6). `compensateStep()` writes an in-place compensation receipt and the frontend renders `Rolled back` only for a recorded successful compensation. **Deviation:** existing source uses an amber reverse graph edge, not the specified LiquidFill bar, so M13's literal visual remains unmeasured.
 - [ ] **P7.T4** Degraded integrations → `PermissionVeil` + setup link; never blank, never zero
       **Evidence:** · **Deviation:**
 - [ ] **P7.T5** All 10 certified paths green
@@ -2614,6 +2619,22 @@ test; none is a live before/after measurement.
 ## SESSION LOG
 
 <!-- Newest first. YYYY-MM-DD · P<n> · tasks done · findings · next task · blockers -->
+
+- **2026-07-30 · P7 partial execution (`d85baee`…`1e25f62`), not certifiable.**
+  P7.T1 implemented the exact eight-kind recovery taxonomy in `kernel/types.ts`
+  and `bridge/RecoveryPanel.tsx`; the presentation switch is exhaustive with no
+  default, and raw backend error kinds are retained before a transparent UI mapping.
+  P7.T2 added no-default compile-time-exhaustive presentation switches for all
+  8 RunState and 6 StepState values, including distinct cancelled/escalated and
+  literal rollback states. P7.T3 makes compensation first class by finalizing the
+  existing step receipt in place with its compensation case id/reason; frontend
+  pure tests, web TypeScript/lint, and FINNOR OS typecheck pass. The compensation
+  DB integration test self-skips under B-6. P7.T4 is blocked by B-12: status
+  contracts expose no authoritative setup destination, so a Connect deep link
+  cannot be invented. P7 certification also remains blocked by incomplete P6
+  visual/role evidence, the unavailable microphone for voice evidence, B-5/B-6/B-7,
+  and the absence of a safe setup contract. **Next:** obtain a sanctioned setup
+  destination or amend P7.T4; do not mark certification or P6 requirements green.
 
 - **2026-07-30 · P6 partial execution (`07d354e`…`5743475`), not closable.** P6.T1 scoped owner/dispatcher/technician surfaces; P6.T5 completed the global type-token sweep and contrast correction; P6.T7 preserved `/jarvis/classic` then made the isolated one-line owner cutover (`4055b6c`). Source checks found four real plan/source gaps, each documented rather than fabricated: B-8 (no technician work-order/arrive/log/flag APIs), B-9 (status APIs carry no exact onboarding action/destination), B-10 (no authoritative production/showcase/preview mode source), B-11 (the four P6.T8 deletion targets are still needed by the new classic route). Full E2E was started as required but first failed at the legacy 1440 baseline after the intentional type sweep (99,529 pixels / 4%, 11px page-height change); no snapshot was regenerated because the worktree already has unrelated prior-phase screenshot modifications. `npx tsc --noEmit` and `npm run lint` are green at `5743475`. **Next:** resolve the B-8/B-9/B-10/B-11 product contracts, then capture the required P6 role/mode/route evidence and rerun the full suite from a clean snapshot state.
 
