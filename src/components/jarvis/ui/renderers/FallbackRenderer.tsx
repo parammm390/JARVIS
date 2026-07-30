@@ -5,6 +5,13 @@
 // them) — this exists as the honest, designed backstop for a genuinely unregistered
 // type (a future 42nd action type, a typo, a workflow-step name mistakenly passed
 // here) rather than either crashing or silently rendering raw JSON by default.
+//
+// jarvis-v3 P5.T4 (§7.2, DEFECT LEDGER NEW-8): owner-debug only as of this
+// phase. `ActionRenderer.tsx` no longer mounts this automatically for an
+// unregistered type — `SchemaCard.tsx` is the new automatic default, and this
+// component is now reachable only through SchemaCard's own owner-role-gated
+// "view raw payload" toggle. Unchanged otherwise: same component, same
+// internal showRaw toggle, just no longer the default customer-facing path.
 
 import { useState } from "react"
 import { AlertTriangle, ChevronDown } from "lucide-react"

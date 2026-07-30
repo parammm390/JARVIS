@@ -212,7 +212,7 @@ Legend ⬜ not started · 🟡 in progress · ✅ complete · 🔴 blocked
 | C-21 | MED | Perf baseline unreproducible (56/95/98) | P1.T12 + P7.T7 | ✅ | 5 cold runs at final HEAD: **98/98/98/98/98**, TBT **0 ms** every run. Reproducible *because* P1.T9 removed the 401 storm from the load path. |
 | **NEW-6** | CRIT | `lib/ReceiptDrawer.tsx`'s `JsonBlock` rendered raw `JSON.stringify(expectedResult/actualResult, null, 2)` on every receipt — hard rule 8 violation, live on every surface reusing `ReceiptContent` (ApprovalCockpit drawer, WorkflowTheater, DailyBriefing, both `/jarvis` and `/jarvis/next`) | P4.T3 | ✅ | `de7c351` · replaced with the shared `FieldList` (`lib/field-format.tsx`). The required grep sweep then caught a second instance of the same class in this session's own new code — `formatFieldValue`'s array-of-objects fallback (`b1b8aee`) — fixed too. `grep -rn "JSON.stringify" src/components/jarvis --include="*.tsx"` shows only request-body serialization, storage writes, and search-string matching remaining — verified, not asserted. |
 | **NEW-7** | CRIT | `views.tsx`'s `SystemHealthPanel`/`BindingChip` typed `environment.bindings` as `Record<capability, string>`; the real API returns `Record<capability, {mode, source}>` — comparing an object to `"emulator"` is always false, and rendering the object directly as a JSX child crashes React ("Objects are not valid as a React child") on `/jarvis`'s own "Production Readiness" view | P4.T6 | ✅ | `49295eb` · fixed the type (`BindingResolution` in `data-core.ts`) and the comparison/render in `views.tsx`. Found while wiring the exact same field for sandbox-honesty detection. |
-| **NEW-8** | MED | `ui/renderers/FallbackRenderer.tsx` still renders raw `JSON.stringify(payload, null, 2)` for any of the ~37 unregistered action types — a real, live hard-rule-8 gap | P5.T4 | 🔴 | Found via this phase's own required raw-JSON grep sweep. Not fixed here: §7.2 already schedules this exact fix ("`FallbackRenderer` → owner-debug only") at P5.T4 — fixing it now would be inventing P5 scope inside P4. Documented so it is not silently missed. |
+| **NEW-8** | MED | `ui/renderers/FallbackRenderer.tsx` still renders raw `JSON.stringify(payload, null, 2)` for any of the ~37 unregistered action types — a real, live hard-rule-8 gap | P5.T4 | ✅ | Found via P4's own required raw-JSON grep sweep, fixed in P5.T4: new `SchemaCard.tsx` is now `ActionRenderer.tsx`'s automatic default for a genuinely unregistered type; `FallbackRenderer`'s own raw JSON `<pre>` (unchanged internally) is reachable only through SchemaCard's owner-role-gated "view raw payload" toggle. `grep -rn "<pre" src/components/jarvis --include="*.tsx"` → exactly one hit, `FallbackRenderer.tsx:49`, no longer the automatic path. |
 | **NEW-9** | MED | Real backend behaviour: the live LLM planner produces a genuine 0-action plan for the plan's own exact Flagship B phrase ("Book a water test for the Hendersons this week and give it to whoever's closest") — 4/4 real attempts this session, not a mix | — | 🔴 | Found via `e2e/jarvis-p5-flagship-b-real.spec.ts`, run live 4 times this session. Out of scope (planner/model behaviour, not frontend code) — documented, not fixed. Directly why P5.T1's live Execution/Receipt/DispatchMap evidence stays fixture-based — see **BLOCKER B-7**. |
 | **NEW-10** | LOW | `bridge/ThreadBlocks.tsx`'s `ThreadApprovalCockpit` header is a golden-journey-specific literal ("N actions · $X · N customers will be texted", §6⑤) applied to every thread regardless of action type — inaccurate for Flagship B (no texting involved at all) and for any non-monetary action (renders "$0") | P5.T3 | ✅ | Found while building P5.T1's fixture screenshot. Fixed in P5.T3: a single-node `bulk_notify_existing_customers` thread now renders a dedicated `BlastRadiusHeader` (real count or the literal "An unknown number of customers will be texted."); every other thread shape (golden journey, Flagship B) keeps the original literal unchanged — bounded fix, not a full generalization to all 41 action types (that remains out of scope). |
 | **NEW-11** | MED | Real backend behaviour: the live LLM planner produces a genuine 0-action plan for the plan's own exact Flagship C phrase ("Tell every customer on a softener plan that we're doing free hardness checks next month") in 3 of 4 real attempts this session; the 4th (screenshotted) was a real, working `clarification_request` asking for explicit household IDs/phone numbers | — | 🔴 | Found via `e2e/jarvis-p5-flagship-c-real.spec.ts`, run live 4 times this session. All 4 network captures showed zero non-clarification business actions, consistent with (but for attempts 1-3, whose screenshots were overwritten by later runs, not individually distinguishable from) the same clarification behaviour attempt 4 showed clearly. Out of scope (planner/model behaviour) — documented, not fixed. See **BLOCKER B-7**'s updated entry. |
@@ -2287,8 +2287,63 @@ test; none is a live before/after measurement.
       (c) `<Ticker>`'s own spring duration is a fixed 600ms (existing
       shared primitive), not M8's own spec'd 520ms — reusing the
       established primitive over forking a near-duplicate for one caller.
-- [ ] **P5.T4** `SchemaCard.tsx` as the designed default tier; `FallbackRenderer` → owner-debug only
-      **Evidence:** · **Deviation:**
+- [x] **P5.T4** `SchemaCard.tsx` as the designed default tier; `FallbackRenderer` → owner-debug only
+      **Evidence:** New `ui/renderers/SchemaCard.tsx` per §7.2's literal
+      spec: plugin-family 3px left accent stripe, human-cased title
+      (falls back to a humanized `actionType` when no plugin/label is
+      known — the true fallback path has neither), a typed field list
+      reusing `fields.ts`'s existing `formatFieldValue`/`formatUnknownValue`/
+      `prettifyKey` (the SAME formatters `StandardRenderer` already uses
+      for the 30 hand-authored types — StandardRenderer itself untouched,
+      this is the new default/fallback tier, not a replacement), a "Show
+      details" disclosure (collapses to 4 rows), an honest evidence footer
+      ("Rendered from the real action payload — no dedicated card exists
+      yet for `{actionType}`"), and an owner-role-gated ("`useJarvisAuth().role
+      === "owner"`") toggle that mounts the real, unmodified
+      `FallbackRenderer` (closes **DEFECT LEDGER NEW-8**).
+      `ActionRenderer.tsx`'s own `if (!entry)` branch now returns
+      `<SchemaCard>` instead of `<FallbackRenderer>` directly —
+      `FallbackRenderer.tsx` itself is unchanged code, just no longer the
+      automatic path (its own header comment updated to say so).
+      Real component-tree fixture evidence:
+      `e2e/jarvis-p5-schema-card-fixtures.spec.ts` (2 passing tests) — 5
+      genuinely unregistered `test_unregistered_action_*` types (prefixed
+      so they can never collide with any real/future registered type,
+      grep-verified against registry.ts), each exercising a distinct real
+      code path: flat payload, nested-object payload (flattened to
+      "key: value" text, never JSON), array payload (comma-joined), a
+      6-field payload (proves the real "Show details (2 more)" disclosure
+      and its expand), and a zero-field payload ("No payload fields set
+      yet"). A second test proves the owner-debug toggle is off by default
+      (no raw JSON in the DOM) and reveals real JSON only after BOTH its
+      own toggle AND FallbackRenderer's own separate internal toggle are
+      explicitly clicked. New `THREAD_FIXTURES["empty-approval"]` (zero
+      baked-in nodes) added to avoid the golden journey's own fixture
+      household names colliding with this test's own payload text.
+      `qa-screenshots/v3-P5/schema-card-fixture-unregistered-{1440,390}.png`,
+      no raw JSON (asserted).
+      ```
+      $ npx tsc --noEmit
+      TSC_EXIT=0
+      $ npm run lint
+      ✔ No ESLint warnings or errors
+      $ npx vitest run
+      Test Files  15 passed (15) · Tests  254 passed (254)
+      $ npx playwright test e2e/jarvis-p5-schema-card-fixtures.spec.ts --project=desktop-chromium
+      2 passed (33.0s)
+      $ grep -rn "<pre" src/components/jarvis --include="*.tsx" | grep -v .test.
+      FallbackRenderer.tsx:49 (only hit — no longer the automatic path)
+      ```
+      **Deviation:** (a) `<Ticker>`-style "the FieldSpec[]" wording in
+      §7.2 implies SchemaCard operates on a REGISTERED type's own field
+      spec — but the true fallback path (`ActionRenderer.tsx`'s `!entry`
+      branch, the actual bug NEW-8 describes) has no plugin/fields at all
+      by definition. SchemaCard accepts `plugin`/`label`/`fields` as
+      OPTIONAL props for exactly that reason — generic `formatUnknownValue`
+      rendering of every raw payload key is the real behavior for a truly
+      unregistered type, which is what NEW-8 needed fixed. (b) No unit
+      tests — same B-1 reasoning as every other renderer this phase; the
+      Playwright fixture spec is the only honest render-proof surface.
 - [ ] **P5.T5** **V8** follow-up reference resolves, **or** honestly falls through to a clarification
       **Evidence:** · **Deviation:**
 - [ ] **P5.T6** **V4** barge-in cancels queued TTS ≤ 200 ms

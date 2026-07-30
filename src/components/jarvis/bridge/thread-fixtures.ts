@@ -164,6 +164,14 @@ export const THREAD_FIXTURES: Record<string, Thread> = {
     },
   }),
   approval: baseThread({ machine: stateFor("awaiting_approval"), nodes: goldenNodes() }),
+  // jarvis-v3 P5.T4 — an awaiting_approval state with no baked-in golden
+  // nodes, for specs (like SchemaCard's own evidence) that supply their own
+  // `actions/pending` interception and don't want the golden journey's own
+  // household names (e.g. "Dana Alvarez") to collide with fixture payload
+  // text asserted elsewhere on the page. `stateFor` only needs a real count
+  // to reach the right MACHINE state — it's independent of this thread's own
+  // (here, empty) `nodes` array.
+  "empty-approval": baseThread({ machine: stateFor("awaiting_approval"), nodes: [] }),
   execution: baseThread({ machine: stateFor("executing"), nodes: goldenNodes(), everExecuted: true }),
   receipt: baseThread({ machine: stateFor("completed"), nodes: goldenNodes(), terminalAtMs: Date.now(), everExecuted: true }),
   "flagship-b-approval": baseThread({

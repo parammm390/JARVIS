@@ -7,13 +7,17 @@
 // than three parallel implementations that happen to look similar.
 
 import { StandardRenderer } from "./StandardRenderer"
-import { FallbackRenderer } from "./FallbackRenderer"
+import { SchemaCard } from "./SchemaCard"
 import { getRendererEntry } from "./registry"
 import type { ActionRendererProps } from "./types"
 
 export function ActionRenderer({ actionType, payload, compact }: ActionRendererProps) {
   const entry = getRendererEntry(actionType)
-  if (!entry) return <FallbackRenderer actionType={actionType} payload={payload} compact={compact} />
+  // jarvis-v3 P5.T4 (§7.2): SchemaCard is now the designed default tier for a
+  // genuinely unregistered action type — FallbackRenderer's own raw-JSON view
+  // is owner-debug only from here on, reachable only through SchemaCard's own
+  // gated toggle, never automatically.
+  if (!entry) return <SchemaCard actionType={actionType} payload={payload} compact={compact} />
   if ((entry.tier === "flagship" || entry.tier === "interactive") && entry.Component) {
     const Component = entry.Component
     return <Component actionType={actionType} payload={payload} compact={compact} />
