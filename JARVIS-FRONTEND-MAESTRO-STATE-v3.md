@@ -31,7 +31,7 @@
 | | |
 |---|---|
 | **ACTIVE PHASE** | **P7 — Truth, Recovery, Performance & Certification (in progress)** |
-| **Latest verified commit** | `710c0e6` |
+| **Latest verified commit** | `3e32d91` |
 | **Phases complete** | 1 / 7 (P2 code-complete, exit gate 7/10 green; P3 code-complete, exit gate 3/6 green; P4 code-complete, exit gate 2/5 green; **P5 code-complete, exit gate 3/6 green** — live Flagship B/C plans remain blocked by B-7 and a live barge-in measurement requires an audio input device) |
 | **Sessions logged** | 8 |
 | **Product exists at** | end of P2; cognition visible end of P3; predicted↔actual built end of P4; Flagships B/C, reference clarification, barge-in signal, D3 narration, and thread stacking built and fixture-verified end of P5 |
@@ -57,6 +57,11 @@
 > asserts that visible numeric leaf text sits under a `data-source` boundary;
 > fixture roots are explicitly labelled `data-source="fixture"`. This is not a
 > whole-product sweep, so it does not complete the plan's universal requirement.
+>
+> **P7.T5 has one certified-path result**: `npx playwright test
+> e2e/jarvis-network-hygiene.spec.ts --project=desktop-chromium` passed 2/2
+> (45.3s), proving the signed-out hygiene path. The remaining nine paths must
+> retain their individually scoped evidence; this does not make T5 green.
 >
 > **P7.T7/T8 evidence is committed** (`59fe48b`, `be8f277`): desktop cold
 > Lighthouse median is 95 perf / 100 a11y, but the first run is 60 perf;
@@ -2591,7 +2596,7 @@ test; none is a live before/after measurement.
 - [x] **P7.T4** Degraded integrations → `PermissionVeil` + setup link; never blank, never zero
       **Evidence:** `710c0e6` · `npx playwright test e2e/jarvis-p7-degraded-integration.spec.ts --project=desktop-chromium` → 1 passed (48.8s); screenshot `qa-screenshots/v3-P7/degraded-integration-recovery-1440.png`. The real receipt recovery path asserts exact provider copy, Connect href, and destination page. First-run provider posture and blocked approval actions render `PermissionVeil` with the same source-backed Connect link; `npx tsc --noEmit && npm run lint` → clean. **Deviation:** source provides a public deployment checklist, not a browser-local credential editor; the UI directs there and never claims it can configure credentials itself.
 - [ ] **P7.T5** All 10 certified paths green
-      **Evidence:** · **Deviation:**
+      **Evidence:** `npx playwright test e2e/jarvis-network-hygiene.spec.ts --project=desktop-chromium` → 2 passed (45.3s): signed-out `/jarvis` made fewer than 5 private requests in 30 seconds and rendered no known API-backed metric. **Deviation:** only the signed-out hygiene path is presently certified by this run; it does not substitute for the other nine required paths, so the task remains unchecked.
 - [ ] **P7.T6** Automated contradiction sweep — every visible number carries `data-source`
       **Evidence:** `8206189` · `npx playwright test e2e/jarvis-contradiction-sweep.spec.ts --project=desktop-chromium` → 12 passed (25.4s); `npx tsc --noEmit && npm run lint` → TypeScript exit 0, lint clean. The sweep inspects visible numeric leaf text across understood/plan/clarify/approval/execution/receipt fixtures at 1440 and 390 and fails when no `data-source` ancestor exists. **Deviation:** this covers deterministic Thread fixture surfaces only; the fixture harness root is labelled `data-source="fixture"`, while production role/operational surfaces remain outside its scope. The universal task remains unchecked.
 - [ ] **P7.T7** Perf: 5 cold Lighthouse desktop + mobile; bundle ≤ 250 KB gz; ≥ 55 fps; event→pixel median + p95
@@ -2631,6 +2636,17 @@ test; none is a live before/after measurement.
 ## SESSION LOG
 
 <!-- Newest first. YYYY-MM-DD · P<n> · tasks done · findings · next task · blockers -->
+
+- **2026-07-30 · P7.T4 completed (`710c0e6`, `3e32d91`); T5 evidence begun.**
+  The existing public JARVIS Deployment Setup Checklist is now the explicit,
+  source-backed Connect destination on first-run integration posture, blocked
+  approval actions, and integration-unavailable receipt recovery. The targeted
+  receipt E2E passed and captured `qa-screenshots/v3-P7/degraded-integration-
+  recovery-1440.png`. It links to the real public setup route rather than
+  claiming that browser-local credential configuration exists. Signed-out
+  hygiene passed 2/2. **Next:** execute the remaining P7.T5 paths with their
+  required scope; do not upgrade fixture or signed-out proof into live voice,
+  approved-action, or performance certification.
 
 - **2026-07-30 · P7.T6 bounded evidence (`8206189`), not universal certification.**
   Added a Playwright contradiction sweep spanning all six deterministic Thread
