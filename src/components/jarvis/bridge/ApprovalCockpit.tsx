@@ -43,6 +43,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { AnimatePresence, motion, useMotionValue, useReducedMotion, useSpring } from "framer-motion"
 import { Check, X, AlertTriangle, ChevronDown, ShieldAlert, Undo2, Ban } from "lucide-react"
+import { PermissionVeil } from "../ui/primitives/PermissionVeil"
+import { JARVIS_SETUP_HREF } from "./setup-link"
 
 import { sfx } from "../sound"
 import { useJarvis, ageLabel, type PendingAction } from "../lib/data-core"
@@ -334,6 +336,16 @@ function ApprovalCard({
             </button>
           )}
         </div>
+
+        {isUnavailable && (
+          <div className="mt-2">
+            <PermissionVeil
+              reason="This action is unavailable until its integration is connected."
+              actionLabel="Connect"
+              actionHref={JARVIS_SETUP_HREF}
+            />
+          </div>
+        )}
 
         {/* Diff preview: grounded-payload verification + price-book provenance. */}
         {(action.groundedPayload?.length || action.priceBookProvenance?.length) ? (

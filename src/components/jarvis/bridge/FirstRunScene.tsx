@@ -5,6 +5,8 @@
 // local control can configure a provider when configuration remains external.
 
 import { useLanePresentation } from "../kernel/useSelectorInput"
+import { PermissionVeil } from "../ui/primitives/PermissionVeil"
+import { JARVIS_SETUP_HREF } from "./setup-link"
 
 function readable(value: string): string {
   return value.replaceAll("_", " ")
@@ -48,7 +50,13 @@ export function FirstRunScene() {
           <p className="mt-2 j-fs-sm text-[color:var(--j-text-dim)]">All action types report configured.</p>
         )}
         {providers.length > 0 && (
-          <p className="mt-3 j-fs-micro text-[color:var(--j-text-dim)]">Not connected — add credentials to activate: {providers.map(readable).join(", ")}.</p>
+          <div className="mt-3">
+            <PermissionVeil
+              reason={`Not connected — add credentials to activate: ${providers.map(readable).join(", ")}.`}
+              actionLabel="Connect"
+              actionHref={JARVIS_SETUP_HREF}
+            />
+          </div>
         )}
       </div>
     </section>

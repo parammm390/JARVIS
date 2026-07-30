@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { recoveryPresentation } from "../kernel/recovery"
 import type { RecoveryKind } from "../kernel/types"
+import { JARVIS_SETUP_HREF } from "./setup-link"
 
 /** §6.8's one visible recovery path for a failed step or receipt. The caller
  * supplies an action only when a real, authoritative operation is available;
@@ -19,8 +20,8 @@ export function RecoveryPanel({
   errorDetail?: string
 }) {
   const recovery = recoveryPresentation(kind)
-  const action = recovery.affordance === "Connect" && setupHref
-    ? <Link href={setupHref} className="rounded-full border border-cyan-400/30 px-3 py-1.5 j-fs-micro font-bold text-cyan-200 hover:border-cyan-400/60 hover:bg-cyan-400/10">{recovery.affordance}</Link>
+  const action = recovery.affordance === "Connect"
+    ? <Link href={setupHref ?? JARVIS_SETUP_HREF} className="rounded-full border border-cyan-400/30 px-3 py-1.5 j-fs-micro font-bold text-cyan-200 hover:border-cyan-400/60 hover:bg-cyan-400/10">{recovery.affordance}</Link>
     : onRecover
       ? <button type="button" onClick={onRecover} className="rounded-full border border-red-300/30 px-3 py-1.5 j-fs-micro font-bold text-red-100 hover:border-red-300/60 hover:bg-red-300/10">{recovery.affordance}</button>
       : null
