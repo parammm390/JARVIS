@@ -143,7 +143,7 @@ function ThreadBody({
 }) {
   const isApproving = role !== "technician" && thread?.machine.instructionState === "awaiting_approval"
   return (
-    <div className="jarvis-root relative min-h-screen bg-[#04070f] text-[color:var(--j-text)]" data-jarvis-thread>
+    <div className="jarvis-root relative min-h-screen bg-[#04070f] text-[color:var(--j-text)]" data-jarvis-thread data-source={fixtureLabel ? "fixture" : undefined}>
       {fixtureLabel && (
         <div className="fixed left-1/2 top-2 z-50 -translate-x-1/2">
           <span className="j-chip border border-violet-300/40 bg-violet-400/15 text-violet-200">FIXTURE · {fixtureLabel}</span>
