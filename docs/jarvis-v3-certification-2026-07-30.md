@@ -17,7 +17,7 @@ commit `14ac848`.
 
 | Path | Evidence | Result |
 | --- | --- | --- |
-| Golden desktop | Labelled fixture lifecycle suite passes at 1440px; no approved safe live action (B-5) | unchecked |
+| Golden desktop | Labelled fixture lifecycle suite passes at 1440px; live re-run passed its binding gate but planner returned zero business actions | unchecked |
 | Golden mobile | Labelled fixture lifecycle suite passes at 390px; no approved safe live action (B-5) | unchecked |
 | Golden by voice | No audio input device for a real browser call | unchecked |
 | Clarification | P7 labelled fixture suite verifies controls at 1440px and 390px; no live tenant path | unchecked |

@@ -24,7 +24,10 @@ const email = process.env.TEST_OWNER_EMAIL
 const password = process.env.TEST_OWNER_PASSWORD
 const OS_API = process.env.NEXT_PUBLIC_OS_API_URL
 
-const OUT_DIR = "qa-screenshots/v3-P4"
+// P7 may re-run this real, conditionally authorized path. Keep its evidence
+// separate from P4's immutable captures when an explicit output directory is
+// supplied, rather than overwriting unrelated screenshots.
+const OUT_DIR = process.env.JARVIS_E2E_OUT_DIR ?? "qa-screenshots/v3-P4"
 const SAFE_ACTION_TYPE = "start_invoice_to_cash_workflow"
 
 interface PlannedAction {
@@ -100,6 +103,17 @@ test.describe("P4 — the golden consequence graph, driven for real", () => {
     const setupBody = setupRes.ok() ? await setupRes.json().catch(() => null) : null
     const deployedNodeEnv: string | undefined = setupBody?.environment?.nodeEnv
     console.log(`REAL deployed backend environment.nodeEnv: ${deployedNodeEnv ?? "(unavailable — " + setupRes.status() + ")"}`)
+
+    // The plan owner's narrow B-5 authorization covers this workflow only
+    // while its three externally-capable steps remain non-external. Assert the
+    // live posture before submitting or approving anything: create payment
+    // link -> payments; delivery -> CRM (native is the repository's DB-only
+    // sandbox-outbox binding, while GHL is external); accounting sync ->
+    // accounting (anything other than QuickBooks resolves to its emulator).
+    const bindings = setupBody?.environment?.bindings
+    expect(bindings?.payments?.mode, "B-5 no-go: payment-link binding must be emulator").toBe("emulator")
+    expect(bindings?.crm?.mode, "B-5 no-go: message delivery must not use external GHL").not.toBe("ghl")
+    expect(bindings?.accounting?.mode, "B-5 no-go: accounting sync must not use external QuickBooks").not.toBe("quickbooks")
 
     // Real overdue invoices BEFORE this run — the consequence checklist's own
     // "before" baseline (selectOverdueInvoices/selectCollectedUsd's real source).
