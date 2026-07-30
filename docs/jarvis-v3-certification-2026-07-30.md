@@ -29,11 +29,26 @@ that every exit gate is green. Evidence below reflects repository state at commi
 
 ## Measurements
 
-No Phase 7 measurements are claimed. Five cold Lighthouse runs on each target,
-initial JavaScript gzip size, six-lane execution fps, and event-to-pixel median/p95
-remain unmeasured. A live execution path would require explicit safe-action
-authorization and a planner outcome that satisfies B-5; event timings additionally
-require a sanctioned migrated database (B-6).
+All Lighthouse runs used the production build (`next build` then `next start -p
+3300`), a fresh Lighthouse browser/cache per run, Chrome at
+`/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`, and
+`--only-categories=performance,accessibility`. The five cold report files are
+in `/tmp/jarvis-p7-{desktop,mobile}-N.json` on the measurement host.
+
+| Target | Perf runs | A11y runs | Median / worst detail | Gate |
+| --- | --- | --- | --- | --- |
+| Desktop preset | 60, 95, 95, 94, 95 | 100, 100, 100, 100, 100 | perf median 95, worst 60; FCP median 313.729ms; LCP median 1565.257ms; TBT median 0ms, worst 1301.557ms; CLS 0 all runs | passes median perf/a11y, but first cold run is a material outlier |
+| Mobile preset | 72, 72, 72, 72, 72 | 100, 100, 100, 100, 100 | perf median/worst 72; FCP median 1560.330ms; LCP median 6072.904ms; TBT median 27.601ms, worst 63.476ms; CLS 0 all runs | **fails** required mobile perf ≥85 |
+
+Initial JavaScript was measured from `.next/app-build-manifest.json`'s complete
+`/jarvis/page` client-file list after the same production build. Gzip sum:
+**525,824 bytes** (513.5 KiB), which **fails** the ≤250 KiB gate. This is a
+measurement, not an estimate.
+
+Six-lane execution fps and event-to-pixel median/p95 remain unmeasured. A live
+execution path would require explicit safe-action authorization and a planner
+outcome that satisfies B-5; event timings additionally require a sanctioned
+migrated database (B-6).
 
 ## Blocking conditions
 
@@ -62,4 +77,3 @@ require a sanctioned migrated database (B-6).
 | D3 guaranteed tools while speaking | no ordering guarantee | not shipped; existing narration is explicitly best effort |
 | D4 client hold/resume | absent from SDK controls | not shipped |
 | D5 speaker diarisation | absent from browser payload | not shipped |
-
