@@ -568,6 +568,14 @@ What is needed: the plan owner must provide the authoritative setup-action mappi
 
 ---
 
+### B-10 · 2026-07-30 · P6.T6 · **No authoritative mode source or activation contract exists for `production | showcase | preview`.** OPEN.
+
+Repository search found no mode field, mode API, route/query contract, or existing primary-chrome mode chip. `Showtime` is a separate owner-only Dealer Zero route, while the signed-out JARVIS surface is a public shell; neither source declares itself the P6 `showcase` or `preview` mode. P6.T6 requires mode to be a kernel field, but neither `KernelProvider` inputs nor the backend status APIs expose it. A client-local selector or inferred mapping would make the UI a second authority and could label real/live rows as simulated (or vice versa).
+
+What is needed: an authoritative mode contract (server field, route contract, or a plan-approved mapping for production/showcase/preview) and the exact primary-chip copy. Until then P6.T6 remains unchecked; existing simulated rows continue to render the already-source-backed literal `SAMPLE OPS` in `OpsTicker`.
+
+---
+
 **Raised earlier, now resolved — kept for history:**
 - ~~No `TEST_OWNER_EMAIL` / `TEST_OWNER_PASSWORD`.~~ **Resolved — see B-3.**
 - ~~Demo-tenant data, ≥ 3 real overdue invoices.~~ **Resolved — 7 real invoices,
@@ -2536,7 +2544,7 @@ test; none is a live before/after measurement.
 
       **Deviation:** the source's `--j-text-faint: #3d5573` measured 2.45:1, so it was corrected to the measured passing `#64809f`. Every legacy arbitrary size maps to the plan token floor: ≤11px → micro (11px); 11.5–13px → small (12.5px); 13.5–15px → base (14px).
 - [ ] **P6.T6** Modes + non-dismissible chip; preview shows veils not zeros; `"SAMPLE OPS"`
-      **Evidence:** · **Deviation:**
+      **Evidence:** `OpsTicker.tsx:83` already renders the literal `SAMPLE OPS` for existing simulated rows. **Deviation:** BLOCKER B-10 — no authoritative mode source, route contract, or prescribed primary-chip copy exists; no client-only mode system shipped.
 - [ ] **P6.T7** **C-17 CUTOVER** — `/jarvis` owners → Thread. **Own commit, one line.**
       **Evidence (commit SHA):** · **Deviation:**
 - [ ] **P6.T8** Delete `CommandBar` `ApprovalDock` `ActivityRail` `CommandPalette` — each only after a passing replacement snapshot
