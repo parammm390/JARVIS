@@ -4,7 +4,7 @@ import Link from "next/link"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Lock, Mail } from "lucide-react"
-import { supabaseBrowser } from "@/lib/jarvis/supabase-browser"
+import { getSupabaseBrowser } from "@/lib/jarvis/supabase-browser"
 import "../jarvis-theme.css"
 
 export function ResetPasswordForm() {
@@ -17,7 +17,7 @@ export function ResetPasswordForm() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    supabaseBrowser.auth.getSession().then(({ data }) => setRecoverySession(Boolean(data.session)))
+    void getSupabaseBrowser().then((supabaseBrowser) => supabaseBrowser.auth.getSession()).then(({ data }) => setRecoverySession(Boolean(data.session)))
   }, [])
 
   async function requestReset(e: React.FormEvent): Promise<void> {
@@ -25,6 +25,7 @@ export function ResetPasswordForm() {
     if (busy) return
     setBusy(true)
     setError(null)
+    const supabaseBrowser = await getSupabaseBrowser()
     const { error: resetError } = await supabaseBrowser.auth.resetPasswordForEmail(email.trim(), {
       redirectTo: `${window.location.origin}/jarvis/reset-password`,
     })
@@ -41,6 +42,7 @@ export function ResetPasswordForm() {
     if (busy) return
     setBusy(true)
     setError(null)
+    const supabaseBrowser = await getSupabaseBrowser()
     const { error: updateError } = await supabaseBrowser.auth.updateUser({ password })
     setBusy(false)
     if (updateError) {

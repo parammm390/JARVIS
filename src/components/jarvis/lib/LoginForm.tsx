@@ -8,7 +8,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Lock } from "lucide-react"
-import { supabaseBrowser } from "@/lib/jarvis/supabase-browser"
+import { getSupabaseBrowser } from "@/lib/jarvis/supabase-browser"
 import "../jarvis-theme.css"
 
 export function LoginForm() {
@@ -23,6 +23,7 @@ export function LoginForm() {
     if (busy) return
     setBusy(true)
     setError(null)
+    const supabaseBrowser = await getSupabaseBrowser()
     const { error: signInError } = await supabaseBrowser.auth.signInWithPassword({ email: email.trim(), password })
     setBusy(false)
     if (signInError) {

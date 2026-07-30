@@ -8,7 +8,7 @@
 
 import { createContext, useContext, useEffect, useState } from "react"
 import type { Session } from "@supabase/supabase-js"
-import { supabaseBrowser } from "@/lib/jarvis/supabase-browser"
+import { getSupabaseBrowser } from "@/lib/jarvis/supabase-browser"
 import { jarvisGet } from "./api"
 
 // Phase 7 (§7.4, role-aware views): the backend already resolves a real role per
@@ -47,16 +47,27 @@ export function JarvisAuthProvider({ children }: { children: React.ReactNode }) 
   const [role, setRole] = useState<JarvisRole | null>(null)
 
   useEffect(() => {
-    supabaseBrowser.auth.getSession().then(({ data }) => {
-      currentSession = data.session
-      setSession(data.session)
-      setLoading(false)
+    let active = true
+    let unsubscribe: (() => void) | null = null
+    void getSupabaseBrowser().then((supabaseBrowser) => {
+      if (!active) return
+      void supabaseBrowser.auth.getSession().then(({ data }) => {
+        if (!active) return
+        currentSession = data.session
+        setSession(data.session)
+        setLoading(false)
+      })
+      const { data: sub } = supabaseBrowser.auth.onAuthStateChange((_event, next) => {
+        if (!active) return
+        currentSession = next
+        setSession(next)
+      })
+      unsubscribe = () => sub.subscription.unsubscribe()
     })
-    const { data: sub } = supabaseBrowser.auth.onAuthStateChange((_event, next) => {
-      currentSession = next
-      setSession(next)
-    })
-    return () => sub.subscription.unsubscribe()
+    return () => {
+      active = false
+      unsubscribe?.()
+    }
   }, [])
 
   useEffect(() => {
@@ -78,6 +89,7 @@ export function JarvisAuthProvider({ children }: { children: React.ReactNode }) 
   }, [session])
 
   async function signOut(): Promise<void> {
+    const supabaseBrowser = await getSupabaseBrowser()
     await supabaseBrowser.auth.signOut()
   }
 

@@ -31,7 +31,7 @@
 | | |
 |---|---|
 | **ACTIVE PHASE** | **P7 — Truth, Recovery, Performance & Certification (in progress)** |
-| **Latest verified commit** | `35c26c7` |
+| **Latest verified commit** | `dd68316` |
 | **Phases complete** | 1 / 7 (P2 code-complete, exit gate 7/10 green; P3 code-complete, exit gate 3/6 green; P4 code-complete, exit gate 2/5 green; **P5 code-complete, exit gate 3/6 green** — live Flagship B/C plans remain blocked by B-7 and a live barge-in measurement requires an audio input device) |
 | **Sessions logged** | 8 |
 | **Product exists at** | end of P2; cognition visible end of P3; predicted↔actual built end of P4; Flagships B/C, reference clarification, barge-in signal, D3 narration, and thread stacking built and fixture-verified end of P5 |
@@ -82,8 +82,8 @@
 > **P7.T7/T8 evidence is committed** (`59fe48b`, `be8f277`): desktop cold
 > Lighthouse median is 95 perf / 100 a11y, but the first run is 60 perf;
 > mobile is 72 perf / 100 a11y for all five runs, and initial `/jarvis` JS is
-> 366,811 gzip bytes after the role-scene split (down from 526,085 in a fresh
-> rebuild). Both mobile perf and the 250 KB budget still fail. The exact
+> 305,560 gzip bytes after route/state-boundary splits (down from 526,085 in a
+> fresh rebuild). Both mobile perf and the 250 KB budget still fail. The exact
 > data and honest voice/motion ledgers are in `docs/jarvis-v3-certification-
 > 2026-07-30.md` and `docs/motion-promoted.md`.
 
@@ -2640,7 +2640,7 @@ test; none is a live before/after measurement.
 - [ ] **P7.T6** Automated contradiction sweep — every visible number carries `data-source`
       **Evidence:** `0b8a072` · `npx playwright test e2e/jarvis-contradiction-sweep.spec.ts --project=desktop-chromium --workers=1` → 12 passed (28.5s); targeted lint and `npx tsc --noEmit` → clean. The sweep walks visible, number-bearing `[data-jarvis-fact]` business facts across understood/plan/clarify/approval/execution/receipt fixtures at 1440 and 390, and rejects absent, generic-fixture, or non-selector-named provenance. Thread context, plan, policy, approval, receipt, and workflow-run facts now carry explicit markers and sources. **Deviation:** static copy, addresses, and fixture chrome are not business facts; production role/operational surfaces remain outside this deterministic Thread scope. The universal task remains unchecked.
 - [ ] **P7.T7** Perf: 5 cold Lighthouse desktop + mobile; bundle ≤ 250 KB gz; ≥ 55 fps; event→pixel median + p95
-      **Evidence:** `59fe48b` · five cold production-build desktop runs: perf `60,95,95,94,95`, a11y `100×5`; five mobile runs: perf `72×5`, a11y `100×5`. P7 follow-up: `npm run build` then a Node gzip sum of `.next/app-build-manifest.json`'s `/jarvis/page` JS files measured **366,811 bytes** after deferring non-owner role scenes, down from the fresh pre-change **526,085 bytes** (−159,274 bytes / 30.3%). `npx tsc --noEmit && npm run lint` passed; `npx playwright test e2e/jarvis-p7-thread-fixtures.spec.ts e2e/jarvis-public.spec.ts --project=desktop-chromium --workers=1` → 19 passed. Full per-run metrics are in `docs/jarvis-v3-certification-2026-07-30.md`. **Deviation:** mobile perf still fails ≥85 and initial JS is still >250 KB; six-lane fps and event-to-pixel cannot be measured without B-5/B-6 evidence, so this task remains unchecked.
+      **Evidence:** `59fe48b` · five cold production-build desktop runs: perf `60,95,95,94,95`, a11y `100×5`; five mobile runs: perf `72×5`, a11y `100×5`. P7 follow-up: `npm run build` then a Node gzip sum of `.next/app-build-manifest.json`'s `/jarvis/page` JS files measured **305,560 bytes** after deferring non-owner role scenes, the Supabase browser SDK, the Orb renderer, and execution/receipt surfaces from the initial graph—down from the fresh pre-change **526,085 bytes** (−220,525 bytes / 41.9%). `npx tsc --noEmit && npm run lint` passed; `e2e/jarvis-p7-thread-fixtures.spec.ts` → 14 passed and `e2e/jarvis-public.spec.ts` → 5 passed under desktop Chromium. Full per-run metrics are in `docs/jarvis-v3-certification-2026-07-30.md`. **Deviation:** mobile perf still fails ≥85 and initial JS is still >250 KB; six-lane fps and event-to-pixel cannot be measured without B-5/B-6 evidence, so this task remains unchecked.
 - [x] **P7.T8** `docs/jarvis-v3-certification-<date>.md` + `docs/motion-promoted.md` + the shipped voice table
       **Evidence:** `be8f277` · created `docs/jarvis-v3-certification-2026-07-30.md` with an explicitly unfinalized certified-path ledger, measurements, blockers, and shipped V1–V9/D1–D5 table; `docs/motion-promoted.md` lists all 18 motion specs and current source wiring. **Deviation:** no certificate claims green evidence that does not exist.
 
@@ -2710,10 +2710,11 @@ test; none is a live before/after measurement.
   Removed the unused legacy command-center import and deferred the existing
   dispatcher/technician-only scene modules from the owner/public route; the
   Thread's Three.js Orb also loads after mount. A fresh production build's
-  `/jarvis/page` manifest sum fell **526,085 → 366,811 gzip bytes**. TypeScript,
-  lint, and the 19-test public/Thread fixture regression run passed. This is a
-  real 30.3% reduction, not a pass: it remains 116,811 bytes over the fixed
-  250 KB gate, while the five mobile Lighthouse runs remain 72. **Next:** keep
+  `/jarvis/page` manifest sum fell **526,085 → 305,560 gzip bytes** after the
+  follow-up lazy-auth and execution/receipt splits. TypeScript, lint, 14 Thread
+  fixtures, and 5 public/login checks passed. This is a real 41.9% reduction,
+  not a pass: it remains 55,560 bytes over the fixed 250 KB gate, while the five
+  mobile Lighthouse runs remain 72. **Next:** keep
   P7.T5/T6/T7 unchecked unless their full contracts and measurements are met;
   do not redefine the gate around this improvement.
 

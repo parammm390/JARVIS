@@ -7,6 +7,7 @@
 // re-expand on click") and mounts the shared motions from `kernel/choreography.ts`.
 
 import { useEffect, useMemo, useState } from "react"
+import dynamic from "next/dynamic"
 import { motion } from "framer-motion"
 import type { Thread, ThreadNode } from "../kernel/store"
 import {
@@ -19,13 +20,16 @@ import {
 } from "../kernel/choreography"
 import { sfx, stepCueThrottled } from "../sound"
 import { ApprovalCockpit } from "./ApprovalCockpit"
-import { WorkflowTheater } from "../panels/WorkflowTheater"
-import { ReceiptContent } from "../lib/ReceiptDrawer"
 import { useKernel } from "../kernel/store"
 import { jarvisGet } from "../lib/api"
 import { DecryptText } from "../ui/fx/DecryptText"
 import { Ticker } from "../ui/motion/primitives"
 import { blastRadiusRecipientCount } from "../lib/risk-tier"
+
+// These surfaces are only reachable once an instruction is executing or has a
+// receipt. Keep their existing implementations out of the initial Thread load.
+const WorkflowTheater = dynamic(() => import("../panels/WorkflowTheater").then((m) => m.WorkflowTheater), { ssr: false })
+const ReceiptContent = dynamic(() => import("../lib/ReceiptDrawer").then((m) => m.ReceiptContent), { ssr: false })
 
 function formatUsd(n: number): string {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n)

@@ -8,6 +8,7 @@
 // for the whole /jarvis section — this page does not remount it.
 
 import { useEffect, useRef, useState } from "react"
+import dynamic from "next/dynamic"
 import { useReducedMotion } from "framer-motion"
 import "../jarvis-theme.css"
 import { KernelProvider, useKernel, type Thread as ThreadData } from "../kernel/store"
@@ -19,7 +20,6 @@ import { ThreadApprovalCockpit } from "./ThreadBlocks"
 import { CommandRail } from "./CommandRail"
 import { FirstRunScene } from "./FirstRunScene"
 import { ModeChip } from "./ModeChip"
-import { ReceiptContent } from "../lib/ReceiptDrawer"
 import { DispatchMap } from "../panels/DispatchMap"
 import { MyDay } from "../panels/MyDay"
 import type { JarvisRole } from "../lib/jarvis-auth"
@@ -30,6 +30,8 @@ import type { Truth } from "../kernel/types"
 import type { OrbLiveState } from "./Orb3D"
 
 type OrbComponent = (props: { live: OrbLiveState; forceLowPower?: boolean }) => JSX.Element
+
+const ReceiptContent = dynamic(() => import("../lib/ReceiptDrawer").then((m) => m.ReceiptContent), { ssr: false })
 
 // Three.js is only needed after the Thread has mounted. A native import here,
 // rather than next/dynamic, intentionally avoids preloading the renderer as an
