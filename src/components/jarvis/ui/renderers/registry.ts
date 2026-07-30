@@ -18,6 +18,7 @@ import { SchedulingScene } from "./flagships/SchedulingScene"
 import { InvoiceToCashScene } from "./flagships/InvoiceToCashScene"
 import { BulkNotifyScene } from "./flagships/BulkNotifyScene"
 import { LeadToWaterTestScene } from "./flagships/LeadToWaterTestScene"
+import { RouteScene } from "./flagships/RouteScene"
 import { WaveTwoScene } from "./flagships/WaveTwoScenes"
 import { ClarificationScene } from "./ClarificationScene"
 import { ACTION_FIXTURES } from "./fixtures"
@@ -41,6 +42,7 @@ const FLAGSHIP_COMPONENT: Record<string, ComponentType<ActionRendererProps>> = {
   start_invoice_to_cash_workflow: InvoiceToCashScene,
   bulk_notify_existing_customers: BulkNotifyScene,
   start_water_test_workflow: LeadToWaterTestScene,
+  route_suggestion: RouteScene,
   renew_maintenance_agreement: WaveTwoScene,
   search_web: WaveTwoScene,
   scan_competitors: WaveTwoScene,
@@ -203,6 +205,7 @@ const FLAGSHIP_PLUGIN: Record<string, string> = {
   start_invoice_to_cash_workflow: "invoice-to-cash",
   bulk_notify_existing_customers: "bulk-notify",
   start_water_test_workflow: "lead-to-water-test",
+  route_suggestion: "route-optimization",
   renew_maintenance_agreement: "maintenance-agreement",
   search_web: "web-research", scan_competitors: "web-research", check_business_reviews: "web-research",
   get_business_overview: "ops-overview", answer_business_question: "ops-overview",

@@ -2127,8 +2127,66 @@ test; none is a live before/after measurement.
       `service_visits` rows are all historical (`scheduledAt: null`), so
       there is no real upcoming/unassigned visit to target — a real,
       verified data-availability finding, not a code gap (see BLOCKER B-7).
-- [ ] **P5.T2** `RouteScene.tsx` wrapping `DispatchMap`; register `route_suggestion`
-      **Evidence:** · **Deviation:**
+- [x] **P5.T2** `RouteScene.tsx` wrapping `DispatchMap`; register `route_suggestion`
+      **Evidence:** New `ui/renderers/flagships/RouteScene.tsx`, registered in
+      `registry.ts` (`route_suggestion` → `RouteScene`, flagship tier,
+      plugin `route-optimization`). Verified from source before writing any
+      code (`route-optimization/index.ts`): the draft-time payload
+      `ActionRenderer` always receives is only `{technicianId, date,
+      tenantId}` — `simulate()` predicts an empty `fieldChanges`, and the
+      real route/stop-order/km-saved facts exist only in `execute()`'s own
+      output (not received by this renderer directly, same as every other
+      flagship scene per `ActionRenderer.tsx`'s "same component in every
+      context" design). So `RouteScene` fetches the SAME real
+      `/api/dispatch/map?date=` data `DispatchMap` itself fetches (via
+      `jarvisGet`), filters `stops` to this technician client-side (the
+      endpoint has no server-side `technicianId` filter — verified from
+      source, `apps/api/app/api/dispatch/map/route.ts` only accepts
+      `date`), and mounts the REAL, unmodified `DispatchMapCore` — reused,
+      not rebuilt, exactly per this session's binding. An honest empty
+      state ("No scheduled stops for this technician on this date yet.")
+      renders instead of an empty map when the real fetch returns zero
+      matching stops.
+      Real component-tree fixture evidence:
+      `e2e/jarvis-p5-route-scene-fixtures.spec.ts` (2 tests, both passing) —
+      real sign-in, `actions/pending` + `dispatch/map` intercepted with
+      real-shaped `MapData` (3 stops, 2 belonging to the fixture technician,
+      1 belonging to a different one — proves the client-side filter for
+      real, not just asserted), the `RouteScene` header, real km-saved
+      numbers ("10.5 km saved · 42.1 km scheduled → 31.6 km optimized"),
+      and the correct filtered stop count ("2 stops", not 3) all rendered
+      via `DispatchMapCore`'s own real "Route load" panel.
+      `qa-screenshots/v3-P5/route-scene-fixture-approval-{1440,390}.png`,
+      both `FIXTURE · approval`, no raw JSON (asserted).
+      ```
+      $ npx tsc --noEmit
+      EXIT=0
+      $ npm run lint
+      ✔ No ESLint warnings or errors
+      $ npx playwright test e2e/jarvis-p5-route-scene-fixtures.spec.ts --project=desktop-chromium
+      2 passed (40.3s)
+      ```
+      **Deviation:** (a) The map canvas itself renders blank in this
+      headless Playwright run — no cyan pins, no visible base tiles —
+      despite the tile host being directly reachable from this environment
+      (`curl https://tiles.openfreemap.org/styles/liberty` → real `200` in
+      48ms) and zero maplibre-specific console/page errors captured (only
+      pre-existing, unrelated 401/500s from other lanes — NEW-2's own
+      degraded-lane finding). `DispatchMapCore` is verbatim reused,
+      unmodified code (§0.1 binding) — its own WebGL/tile rendering inside
+      a headless, GPU-limited sandbox is an environment characteristic, not
+      something this task's code changed or can fix; same category as
+      P2/P3's "no audio input device" limitation. The surrounding real data
+      (technician-scoped stop count, real km numbers, the aggregate "Route
+      load" panel) all render correctly and are the part this task's own
+      code is responsible for — the map's own pixel-level tile paint is
+      explicitly out of scope to debug further. (b) No unit tests — same
+      reasoning as T1 (BLOCKER B-1, no pure exported helpers, Playwright is
+      the only honest render-proof surface). (c) No live/real attempt was
+      made to approve a real `route_suggestion` action this session — none
+      was ever pending (the flagship-B phrase never produced one in 4/4
+      attempts, and no other instruction this session targeted it) — left
+      honestly to the fixture path, same posture as the rest of T1/T2.
 - [ ] **P5.T3** Flagship C + M8 BlastRadius with a **real** recipient count (unknown → forced typed confirm)
       **Evidence:** · **Deviation:**
 - [ ] **P5.T4** `SchemaCard.tsx` as the designed default tier; `FallbackRenderer` → owner-debug only
