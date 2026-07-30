@@ -57,7 +57,7 @@ function makeNoiseFilter() {
 }
 
 test.describe("public /jarvis page", () => {
-  test("loads, shows a live-ops status, and throws no unexpected console errors", async ({ page }) => {
+  test("loads the truthful public preview and throws no unexpected console errors", async ({ page }) => {
     const unexpected: string[] = []
     const isNoise = makeNoiseFilter()
     page.on("console", (msg) => {
@@ -66,19 +66,17 @@ test.describe("public /jarvis page", () => {
     page.on("pageerror", (err) => unexpected.push(err.message))
 
     await page.goto("/jarvis")
-    await expect(page.getByText("Good evening").or(page.getByText("Good morning")).or(page.getByText("Good afternoon"))).toBeVisible()
-    // The header's Live/Simulation badge specifically — a looser text match also
-    // catches the desktop sidebar's "Connected · Live" status card, which exists in
-    // the DOM but is CSS-hidden below the lg breakpoint (mobile-375 project).
-    await expect(page.locator("main").getByText(/^(Live|Simulation)$/).first()).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByText("PUBLIC PREVIEW", { exact: true })).toBeVisible()
+    await expect(page.getByText("Tell JARVIS what you need.")).toBeVisible()
+    await expect(page.getByText("Setup status unavailable")).toBeVisible()
 
     expect(unexpected, `unexpected console errors on /jarvis: ${unexpected.join("\n")}`).toEqual([])
   })
 
-  test("sidebar nav and command bar are present", async ({ page }) => {
+  test("public preview presents a sign-in path instead of a command surface", async ({ page }) => {
     await page.goto("/jarvis")
-    await expect(page.getByRole("button", { name: "Command Center" }).first()).toBeVisible()
-    await expect(page.getByPlaceholder(/what would you like me to do/i)).toBeVisible()
+    await expect(page.getByRole("link", { name: "Sign in" })).toBeVisible()
+    await expect(page.getByPlaceholder(/what would you like me to do/i)).toHaveCount(0)
   })
 
   test("logged out visitors see a sign-in affordance, not live private data", async ({ page }) => {
@@ -90,24 +88,13 @@ test.describe("public /jarvis page", () => {
   })
 })
 
-test.describe("technician mobile viewport (375px)", () => {
+test.describe("public preview mobile viewport (375px)", () => {
   test.use({ viewport: { width: 375, height: 812 } })
 
-  test("public page renders (mobile nav layout) with no horizontal overflow", async ({ page }) => {
+  test("public preview renders with no horizontal overflow", async ({ page }) => {
     await page.goto("/jarvis")
-    // Below the sidebar's responsive breakpoint the layout switches to a top nav
-    // bar (the ops ticker + a horizontally-scrollable pill row) — the desktop
-    // sidebar's logo text is legitimately not part of that layout, so this checks
-    // for what's actually there instead of assuming the desktop markup.
-    //
-    // Plan v3 P1.T10 / defect C-05: this used to assert the literal "LIVE OPS".
-    // Signed out, every ticker row is sample content prefixed `sim ·`, so a "LIVE"
-    // header was a false claim — that IS the defect, and this assertion was pinning
-    // it in place. The header is now "SAMPLE OPS" whenever any row is sample, so the
-    // test asserts the ticker is present without asserting which claim it makes.
-    await expect(page.getByText(/^(LIVE|SAMPLE) OPS$/)).toBeVisible()
-    // …and signed out, specifically, it must be the honest one.
-    await expect(page.getByText("SAMPLE OPS")).toBeVisible()
+    await expect(page.getByText("PUBLIC PREVIEW", { exact: true })).toBeVisible()
+    await expect(page.getByText("Tell JARVIS what you need.")).toBeVisible()
     const hasHorizontalScroll = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1)
     expect(hasHorizontalScroll).toBe(false)
   })

@@ -31,7 +31,7 @@
 | | |
 |---|---|
 | **ACTIVE PHASE** | **P7 — Truth, Recovery, Performance & Certification (in progress)** |
-| **Latest verified commit** | `3e32d91` |
+| **Latest verified commit** | `3c8c5f0` |
 | **Phases complete** | 1 / 7 (P2 code-complete, exit gate 7/10 green; P3 code-complete, exit gate 3/6 green; P4 code-complete, exit gate 2/5 green; **P5 code-complete, exit gate 3/6 green** — live Flagship B/C plans remain blocked by B-7 and a live barge-in measurement requires an audio input device) |
 | **Sessions logged** | 8 |
 | **Product exists at** | end of P2; cognition visible end of P3; predicted↔actual built end of P4; Flagships B/C, reference clarification, barge-in signal, D3 narration, and thread stacking built and fixture-verified end of P5 |
@@ -2596,7 +2596,7 @@ test; none is a live before/after measurement.
 - [x] **P7.T4** Degraded integrations → `PermissionVeil` + setup link; never blank, never zero
       **Evidence:** `710c0e6` · `npx playwright test e2e/jarvis-p7-degraded-integration.spec.ts --project=desktop-chromium` → 1 passed (48.8s); screenshot `qa-screenshots/v3-P7/degraded-integration-recovery-1440.png`. The real receipt recovery path asserts exact provider copy, Connect href, and destination page. First-run provider posture and blocked approval actions render `PermissionVeil` with the same source-backed Connect link; `npx tsc --noEmit && npm run lint` → clean. **Deviation:** source provides a public deployment checklist, not a browser-local credential editor; the UI directs there and never claims it can configure credentials itself.
 - [ ] **P7.T5** All 10 certified paths green
-      **Evidence:** `npx playwright test e2e/jarvis-network-hygiene.spec.ts --project=desktop-chromium` → 2 passed (45.3s): signed-out `/jarvis` made fewer than 5 private requests in 30 seconds and rendered no known API-backed metric. **Deviation:** only the signed-out hygiene path is presently certified by this run; it does not substitute for the other nine required paths, so the task remains unchecked.
+      **Evidence:** `npx playwright test e2e/jarvis-network-hygiene.spec.ts --project=desktop-chromium` → 2 passed (45.3s): signed-out `/jarvis` made fewer than 5 private requests in 30 seconds and rendered no known API-backed metric. `npx playwright test e2e/jarvis-public.spec.ts --project=desktop-chromium` → 5 passed (16.4s): public preview, setup-unavailable copy, sign-in path, login, and mobile no-overflow. **Deviation:** these cover signed-out hygiene and public/unconfigured posture only; they do not substitute for the other required paths, so the task remains unchecked.
 - [ ] **P7.T6** Automated contradiction sweep — every visible number carries `data-source`
       **Evidence:** `8206189` · `npx playwright test e2e/jarvis-contradiction-sweep.spec.ts --project=desktop-chromium` → 12 passed (25.4s); `npx tsc --noEmit && npm run lint` → TypeScript exit 0, lint clean. The sweep inspects visible numeric leaf text across understood/plan/clarify/approval/execution/receipt fixtures at 1440 and 390 and fails when no `data-source` ancestor exists. **Deviation:** this covers deterministic Thread fixture surfaces only; the fixture harness root is labelled `data-source="fixture"`, while production role/operational surfaces remain outside its scope. The universal task remains unchecked.
 - [ ] **P7.T7** Perf: 5 cold Lighthouse desktop + mobile; bundle ≤ 250 KB gz; ≥ 55 fps; event→pixel median + p95
