@@ -1,0 +1,15 @@
+=== Phase 3 discovery (repository root) ===
+repository_root=/Users/paramdave/Desktop/FINNOR
+head=05d02629abc0d1dfd9e5c5cb10dccf6b1e1e5e4a
+state_latest_verified=19:4. Verify HEAD against `Latest verified commit`.
+43:| **Latest verified commit** | `2dfa3b9` (`jarvis-release P2: close Bedrock single-key chain`) |
+sha movement since recorded P2 closure:
+ JARVIS-4-DAY-PRODUCTION-MAESTRO-STATE.md | 12 ++++++------
+ 1 file changed, 6 insertions(+), 6 deletions(-)
+M	JARVIS-4-DAY-PRODUCTION-MAESTRO-STATE.md
+=== corrected manifest invocation (finnor-os workspace) ===
+
+> finnor-os@0.1.0 release:manifest
+> tsx scripts/release/verify-action-manifest.ts
+
+PASS: fixed spec and discovered registry match 44/44 (docs/release/generated/action-manifest.md)

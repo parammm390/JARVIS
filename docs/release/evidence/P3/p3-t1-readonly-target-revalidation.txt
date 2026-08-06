@@ -1,0 +1,24 @@
+=== read-only Railway target revalidation ===
+railway_cli=available
+
+parammm390's Projects
+  confident-wisdom
+{
+  "environmentCount": 1,
+  "environments": [
+    {
+      "name": "production",
+      "services": [
+        {
+          "name": "finnor-worker",
+          "status": "SUCCESS"
+        }
+      ]
+    }
+  ]
+}
+=== committed deployment inventory conclusion ===
+22:| API | `finnor-os/apps/api`; Vercel Next.js project | Project `api` (`prj_BoMZ2AXdLIJQXAAe6RqDGBveyq3n`), root `apps/api`; current read-only listing found Ready Preview deployments `api-oqjj3i98u-bloodride2-3212s-projects.vercel.app` and `api-altwe0pzh-bloodride2-3212s-projects.vercel.app`, both 12 days old. | No unauthenticated generic health route found. Authenticated operational routes: `/api/vitals`, `/api/integrations/status`, and `/api/setup/status`. | Preview target recorded but not staging-certified: its database handshake resets and its Supabase auth origin matches Production. |
+23:| Console frontend | `finnor-os/apps/console`; Vercel Next.js project | Project `finnor-agency` (`prj_dttKVOUzFBGnSg6zNdRualYjQ3oe`), root `.`; current read-only listing exposes Ready Production deployments only. | No standalone health endpoint found; frontend must be checked at its configured Vercel URL in P3. | Production deployments observed read-only; no verified non-production frontend target. |
+25:| Orchestrator | `finnor-os/apps/orchestrator/src/index.ts`; same Railway dynamic start command | No service name, Railway project, environment, or URL is committed. | `/health` on `ORCHESTRATOR_PORT` (default `3200`). | Target must be supplied/linked before staging certification. |
+40:  production environment, one `finnor-worker` service, and no staging environment. Output is

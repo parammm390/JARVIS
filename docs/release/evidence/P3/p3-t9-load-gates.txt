@@ -1,0 +1,5 @@
+P3_T9_LOAD_GATES_STATUS=BLOCKED-CONFIG
+No staging request samples exist because the load guard refused before network.
+required_thresholds=error<1%;p95_read<2500ms;p95_draft<8000ms;p95_approval<2000ms;oldest_ready_age<30s;zero_duplicate_effects;zero_tenant_leaks;zero_corruption;zero_runaway_retries;sentry_unhandled=0
+measurements=not_available;cost=not_measured;queue=not_measured;reconciliation=not_run
+evidence=docs/release/evidence/P3/p3-t8-load-guard.txt,docs/release/generated/p3-load-results.json

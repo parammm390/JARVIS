@@ -1,0 +1,11 @@
+P3_T2_STAGING_MIGRATION_STATUS=BLOCKED-CONFIG
+No staging backup, migration application, or schema validation was attempted because no verified isolated staging database target is configured.
+STAGING_DATABASE_URL=missing
+STAGING_BACKUP_ID=missing
+P3_STAGING_BACKUP_ID=missing
+repository_migration_head=
+../finnor-os/packages/db/migrations/0064_evidence_corpus_search.sql
+../docs/release/generated/deployment-inventory.md:11:- Staging unapplied migrations: **not queried**. A Vercel Preview environment exposes a historical
+../docs/release/generated/deployment-inventory.md:22:| API | `finnor-os/apps/api`; Vercel Next.js project | Project `api` (`prj_BoMZ2AXdLIJQXAAe6RqDGBveyq3n`), root `apps/api`; current read-only listing found Ready Preview deployments `api-oqjj3i98u-bloodride2-3212s-projects.vercel.app` and `api-altwe0pzh-bloodride2-3212s-projects.vercel.app`, both 12 days old. | No unauthenticated generic health route found. Authenticated operational routes: `/api/vitals`, `/api/integrations/status`, and `/api/setup/status`. | Preview target recorded but not staging-certified: its database handshake resets and its Supabase auth origin matches Production. |
+../docs/release/generated/deployment-inventory.md:23:| Console frontend | `finnor-os/apps/console`; Vercel Next.js project | Project `finnor-agency` (`prj_dttKVOUzFBGnSg6zNdRualYjQ3oe`), root `.`; current read-only listing exposes Ready Production deployments only. | No standalone health endpoint found; frontend must be checked at its configured Vercel URL in P3. | Production deployments observed read-only; no verified non-production frontend target. |
+production_migration=not_attempted

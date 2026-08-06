@@ -1,0 +1,45 @@
+{
+  "phase": "P3",
+  "gate": "live-binding-smoke",
+  "status": "BLOCKED-CONFIG",
+  "pass": false,
+  "productionEgress": false,
+  "guard": {
+    "mode": "live-smoke",
+    "status": "BLOCKED-CONFIG",
+    "productionEgress": false,
+    "targetHosts": {},
+    "missing": [
+      "STAGING_API_URL",
+      "STAGING_FRONTEND_URL",
+      "STAGING_WORKER_URL",
+      "STAGING_ORCHESTRATOR_URL",
+      "STAGING_DATABASE_URL",
+      "P3_STAGING_IDENTITY_CONFIRMED",
+      "STAGING_AUTH_MODE",
+      "CERTIFICATION_TEST_EMAILS",
+      "CERTIFICATION_TEST_PHONES",
+      "STAGING_EXPECTED_SHA",
+      "LIVE_SMOKE_ALLOWED",
+      "P3_LIVE_ALLOWLIST_CONFIRMED",
+      "P3_LIVE_WRITE_FLAGS_CONFIRMED",
+      "P3_LIVE_BINDINGS",
+      "P3_LIVE_SMOKE_CASES_FILE",
+      "STAGING_JWT_ALPHA",
+      "STAGING_JWT_BRAVO",
+      "STAGING_JWT_CHARLIE"
+    ],
+    "failures": [],
+    "observations": [
+      "productionEgress=false",
+      "secretValuesPrinted=false",
+      "providerPayloadsPrinted=false",
+      "targets=0/5",
+      "targetHosts=none",
+      "externalBindings=allowlisted-live-mode"
+    ]
+  },
+  "error": null,
+  "bindings": [],
+  "evidence": "docs/release/generated/p3-live-binding-smoke.json"
+}

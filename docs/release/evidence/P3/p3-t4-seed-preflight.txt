@@ -1,0 +1,14 @@
+P3_T4_CERTIFICATION_SEED_STATUS=BLOCKED-CONFIG
+The guarded Alpha/Bravo/Charlie seed was not run because no isolated staging DATABASE_URL/JWT target exists; the existing P1 local seed evidence is not reused as staging proof.
+STAGING_DATABASE_URL=missing
+CERTIFICATION_SEED_ALLOWED=missing
+CERTIFICATION_TEST_EMAILS=missing
+CERTIFICATION_TEST_PHONES=missing
+327:export async function seedCertificationTenants(databaseUrl = process.env.DATABASE_URL): Promise<void> {
+328:  if (process.env.NODE_ENV === "production") throw new Error("Certification seed is disabled when NODE_ENV=production");
+329:  if (process.env.CERTIFICATION_SEED_ALLOWED !== "1") throw new Error("Set CERTIFICATION_SEED_ALLOWED=1 to run the certification seed");
+330:  if (!databaseUrl) throw new Error("DATABASE_URL is required for the certification seed");
+331:  const testEmails = requiredAllowlist("CERTIFICATION_TEST_EMAILS");
+332:  const testPhones = requiredAllowlist("CERTIFICATION_TEST_PHONES");
+340:    console.log("CERTIFICATION_SEED_PASS tenants=Alpha,Bravo,Charlie counts=Alpha:15u/40h/40c/20l/12o/10q/8i/10w/12a/8p/3m;Bravo:sentinel;Charlie:degraded-config");
+production_seed=not_attempted; external_effect=none

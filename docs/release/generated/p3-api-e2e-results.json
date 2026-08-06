@@ -1,0 +1,37 @@
+{
+  "phase": "P3",
+  "gate": "staging-identity",
+  "status": "BLOCKED-CONFIG",
+  "pass": false,
+  "productionEgress": false,
+  "guard": {
+    "mode": "identity",
+    "status": "BLOCKED-CONFIG",
+    "productionEgress": false,
+    "targetHosts": {},
+    "missing": [
+      "STAGING_API_URL",
+      "STAGING_FRONTEND_URL",
+      "STAGING_WORKER_URL",
+      "STAGING_ORCHESTRATOR_URL",
+      "STAGING_DATABASE_URL",
+      "P3_STAGING_IDENTITY_CONFIRMED",
+      "STAGING_AUTH_MODE",
+      "CERTIFICATION_TEST_EMAILS",
+      "CERTIFICATION_TEST_PHONES",
+      "LIVE_SMOKE_ALLOWED"
+    ],
+    "failures": [],
+    "observations": [
+      "productionEgress=false",
+      "secretValuesPrinted=false",
+      "providerPayloadsPrinted=false",
+      "targets=0/5",
+      "targetHosts=none",
+      "externalBindings=emulator-safe-required"
+    ]
+  },
+  "error": null,
+  "rows": [],
+  "evidence": "docs/release/generated/p3-api-e2e-results.json"
+}

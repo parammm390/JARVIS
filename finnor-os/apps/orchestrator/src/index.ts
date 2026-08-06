@@ -25,7 +25,12 @@ const server = createServer(async (req, res) => {
     res.writeHead(status, { "content-type": "application/json" });
     res.end(JSON.stringify(body));
   };
-  if (req.method === "GET" && req.url === "/health") return send(200, { ok: true, plugins: orchestrator.plugins.actionTypes() });
+  if (req.method === "GET" && req.url === "/health") return send(200, {
+    ok: true,
+    plugins: orchestrator.plugins.actionTypes(),
+    environment: process.env.NODE_ENV ?? "unknown",
+    release: process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.VERCEL_GIT_COMMIT_SHA ?? null,
+  });
   if (req.method === "POST" && req.url === "/plan") {
     let raw = "";
     req.on("data", (c) => (raw += c));

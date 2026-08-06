@@ -40,6 +40,7 @@
     "release:chaos": "tsx scripts/release/run-chaos-matrix.ts",
     "release:bedrock-smoke": "tsx scripts/release/run-bedrock-live-smoke.ts",
     "release:e2e": "tsx scripts/release/run-api-e2e-matrix.ts",
+    "release:live-smoke": "tsx scripts/release/run-live-binding-smoke.ts",
     "release:load": "tsx scripts/release/run-load-certification.ts",
     "release:certify": "tsx scripts/release/run-release-certification.ts"
   },

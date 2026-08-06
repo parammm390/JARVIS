@@ -1,0 +1,23 @@
+=== git status --short ===
+?? docs/release/evidence/P3/
+=== git rev-parse HEAD ===
+05d02629abc0d1dfd9e5c5cb10dccf6b1e1e5e4a
+=== git log --oneline -12 ===
+05d0262 jarvis-release P2: correct rollback record
+35f5d39 jarvis-release P2: record Bedrock closure state
+2dfa3b9 jarvis-release P2: close Bedrock single-key chain
+65ac387 jarvis-release P2: close phase state
+9c25deb jarvis-release P2: certify chaos and security hardening
+8ec3572 jarvis-release P1: close phase state
+ff346e2 jarvis-release P1: certify universal action contracts
+3391701 jarvis-release P0: close local deterministic gate
+bb8c2f1 jarvis-release P0: close final matrix record
+74b172d jarvis-release P0: align final command matrix
+ffe7b9f jarvis-release P0: close environment evidence record
+b8dfb7a jarvis-release P0: record planner environment rerun
+=== npm run release:manifest ===
+npm error Missing script: "release:manifest"
+npm error
+npm error To see a list of scripts, run:
+npm error   npm run
+npm error A complete log of this run can be found in: /Users/paramdave/.npm/_logs/2026-08-06T19_40_23_476Z-debug-0.log

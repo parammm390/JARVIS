@@ -1,0 +1,13 @@
+
+> finnor-os@0.1.0 release:e2e
+> tsx scripts/release/run-api-e2e-matrix.ts
+
+STAGING_GUARD mode=e2e status=BLOCKED-CONFIG
+productionEgress=false
+secretValuesPrinted=false
+providerPayloadsPrinted=false
+targets=0/5
+targetHosts=none
+externalBindings=emulator-safe-required
+missing=STAGING_API_URL,STAGING_FRONTEND_URL,STAGING_WORKER_URL,STAGING_ORCHESTRATOR_URL,STAGING_DATABASE_URL,P3_STAGING_IDENTITY_CONFIRMED,STAGING_AUTH_MODE,CERTIFICATION_TEST_EMAILS,CERTIFICATION_TEST_PHONES,STAGING_EXPECTED_SHA,LIVE_SMOKE_ALLOWED,P3_NO_EGRESS,STAGING_JWT_ALPHA,STAGING_JWT_BRAVO,STAGING_JWT_CHARLIE
+failures=none

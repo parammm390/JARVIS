@@ -1,0 +1,12 @@
+
+> finnor@0.1.0 test:unit
+> vitest run src/components/jarvis/lib/voice-state.test.ts src/components/jarvis/lib/useVapiSession.test.ts src/components/jarvis/lib/receipt-recovery.test.ts src/components/jarvis/bridge/approval-consequence.test.ts src/components/jarvis/bridge/approval-scope.test.ts src/components/jarvis/bridge/CompensationReceipt.test.ts src/components/jarvis/kernel/recovery.test.ts src/components/jarvis/kernel/transport.test.ts src/components/jarvis/kernel/instruction.test.ts src/components/jarvis/kernel/instruction-trace-poll.test.ts
+
+
+ RUN  v4.1.10 /Users/paramdave/Desktop/FINNOR
+
+
+ Test Files  10 passed (10)
+      Tests  64 passed (64)
+   Start at  01:21:21
+   Duration  2.76s (transform 3.27s, setup 0ms, import 5.21s, tests 305ms, environment 2ms)

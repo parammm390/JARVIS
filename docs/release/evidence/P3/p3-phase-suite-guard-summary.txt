@@ -1,0 +1,50 @@
+=== P3 diff check ===
+=== P3 tracked/untracked scope ===
+ M docs/release/generated/action-manifest.json
+ M finnor-os/apps/api/app/api/health/route.ts
+ M finnor-os/apps/orchestrator/src/index.ts
+ M finnor-os/apps/worker/src/sse/gateway.ts
+ M finnor-os/package.json
+?? docs/release/evidence/P3/
+?? docs/release/generated/p3-api-e2e-results.json
+?? docs/release/generated/p3-live-binding-smoke.json
+?? docs/release/generated/p3-load-results.json
+?? docs/release/integration-readiness.md
+?? docs/release/load-test-results.md
+?? finnor-os/scripts/release/run-api-e2e-matrix.ts
+?? finnor-os/scripts/release/run-live-binding-smoke.ts
+?? finnor-os/scripts/release/run-load-certification.ts
+?? finnor-os/scripts/release/staging-guards.ts
+=== P3 package script availability ===
+
+> finnor-os@0.1.0 release:manifest
+> tsx scripts/release/verify-action-manifest.ts
+
+PASS: fixed spec and discovered registry match 44/44 (docs/release/generated/action-manifest.md)
+release:e2e_identity_exit=1
+productionEgress=false
+secretValuesPrinted=false
+providerPayloadsPrinted=false
+targets=0/5
+targetHosts=none
+externalBindings=emulator-safe-required
+missing=STAGING_API_URL,STAGING_FRONTEND_URL,STAGING_WORKER_URL,STAGING_ORCHESTRATOR_URL,STAGING_DATABASE_URL,P3_STAGING_IDENTITY_CONFIRMED,STAGING_AUTH_MODE,CERTIFICATION_TEST_EMAILS,CERTIFICATION_TEST_PHONES,LIVE_SMOKE_ALLOWED
+failures=none
+release:load_exit=1
+productionEgress=false
+secretValuesPrinted=false
+providerPayloadsPrinted=false
+targets=0/5
+targetHosts=none
+externalBindings=emulator-safe-required
+missing=STAGING_API_URL,STAGING_FRONTEND_URL,STAGING_WORKER_URL,STAGING_ORCHESTRATOR_URL,STAGING_DATABASE_URL,P3_STAGING_IDENTITY_CONFIRMED,STAGING_AUTH_MODE,CERTIFICATION_TEST_EMAILS,CERTIFICATION_TEST_PHONES,STAGING_EXPECTED_SHA,LIVE_SMOKE_ALLOWED,P3_NO_EGRESS,P3_LOAD_JWTS_FILE,P3_LOAD_RECONCILIATION_FILE,P3_LOAD_INSTRUCTION
+failures=none
+release:live-smoke_exit=1
+productionEgress=false
+secretValuesPrinted=false
+providerPayloadsPrinted=false
+targets=0/5
+targetHosts=none
+externalBindings=allowlisted-live-mode
+missing=STAGING_API_URL,STAGING_FRONTEND_URL,STAGING_WORKER_URL,STAGING_ORCHESTRATOR_URL,STAGING_DATABASE_URL,P3_STAGING_IDENTITY_CONFIRMED,STAGING_AUTH_MODE,CERTIFICATION_TEST_EMAILS,CERTIFICATION_TEST_PHONES,STAGING_EXPECTED_SHA,LIVE_SMOKE_ALLOWED,P3_LIVE_ALLOWLIST_CONFIRMED,P3_LIVE_WRITE_FLAGS_CONFIRMED,P3_LIVE_BINDINGS,P3_LIVE_SMOKE_CASES_FILE,STAGING_JWT_ALPHA,STAGING_JWT_BRAVO,STAGING_JWT_CHARLIE
+failures=none

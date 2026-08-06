@@ -1,0 +1,4 @@
+P3_STAGED_DIFF_SECRET_SHAPE_SCAN
+credential_shape=NONE
+seeded_marker_shape=NONE
+diff_check=PASS

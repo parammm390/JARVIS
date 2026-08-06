@@ -1,0 +1,43 @@
+{
+  "phase": "P3",
+  "gate": "load",
+  "status": "BLOCKED-CONFIG",
+  "pass": false,
+  "productionEgress": false,
+  "guard": {
+    "mode": "load",
+    "status": "BLOCKED-CONFIG",
+    "productionEgress": false,
+    "targetHosts": {},
+    "missing": [
+      "STAGING_API_URL",
+      "STAGING_FRONTEND_URL",
+      "STAGING_WORKER_URL",
+      "STAGING_ORCHESTRATOR_URL",
+      "STAGING_DATABASE_URL",
+      "P3_STAGING_IDENTITY_CONFIRMED",
+      "STAGING_AUTH_MODE",
+      "CERTIFICATION_TEST_EMAILS",
+      "CERTIFICATION_TEST_PHONES",
+      "STAGING_EXPECTED_SHA",
+      "LIVE_SMOKE_ALLOWED",
+      "P3_NO_EGRESS",
+      "P3_LOAD_JWTS_FILE",
+      "P3_LOAD_RECONCILIATION_FILE",
+      "P3_LOAD_INSTRUCTION"
+    ],
+    "failures": [],
+    "observations": [
+      "productionEgress=false",
+      "secretValuesPrinted=false",
+      "providerPayloadsPrinted=false",
+      "targets=0/5",
+      "targetHosts=none",
+      "externalBindings=emulator-safe-required"
+    ]
+  },
+  "error": null,
+  "scenarios": [],
+  "reconciliation": "not_run",
+  "evidence": "docs/release/generated/p3-load-results.json"
+}
