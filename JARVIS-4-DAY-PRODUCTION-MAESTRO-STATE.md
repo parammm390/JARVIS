@@ -40,7 +40,7 @@ only after the phase cannot progress further.
 | | |
 |---|---|
 | **ACTIVE PHASE** | **P3 — Full-Stack Staging, Live-Binding Smoke, and 15-User Load** |
-| **Latest verified commit** | `pending P2 Bedrock single-key closure commit` |
+| **Latest verified commit** | `2dfa3b9` (`jarvis-release P2: close Bedrock single-key chain`) |
 | **Phases complete** | 3 / 5 |
 | **Actions CORE-CERTIFIED** | 0 / 44 — full 14-gate certification remains P2–P4 work; P1 contract gates are complete for all 44 |
 | **Actions LIVE-CERTIFIED** | 0 / 44 |
@@ -296,7 +296,7 @@ corrected evidence is p1-discovery-full.txt.
 **Status:** ✅ complete for the guarded local/test context and configured Bedrock chain · staging-only subgates remain P3-owned BLOCKED-CONFIG · **Window:** Day 2 · **Depends on:** P1
 **Plan section:** §6 → PHASE 2
 **Starting SHA:** `8ec35725b9009481607769fea8f48a113cd455ff`
-**Ending SHA:** `pending P2 Bedrock single-key closure commit`
+**Ending SHA:** `2dfa3b9`
 
 ### Discovery output
 
@@ -344,7 +344,7 @@ completion and exited 0.
       **Evidence:** `docs/release/generated/p2-chaos-results.json` records 14/14 `PASS` faults with `structuredLog=true`, `sentryEvent=true`, `piiSafe=true`, bounded `retryCount`, action/binding/provider, failure kind, and trace id; `docs/release/chaos-results.md` is the human-readable report.
       **Deviation:** Sentry events are test-context `captureMessage` evidence with safe tags, not live DSN delivery. Live release/environment/alert routing remains BLOCKED-CONFIG under R-11.
 - [x] **P2.T10** Commit `docs/release/chaos-results.md` and update ledgers.
-      **Evidence:** P2 Bedrock closure commit pending; `docs/release/chaos-results.md`; `docs/release/generated/p2-chaos-results.json`; `docs/release/evidence/P2/p2-bedrock-live-smoke.txt`; this state file’s P2, defect, action, integration, artifact, session, and deviation ledgers.
+      **Evidence:** `2dfa3b9`; `docs/release/chaos-results.md`; `docs/release/generated/p2-chaos-results.json`; `docs/release/evidence/P2/p2-bedrock-live-smoke.txt`; this state file’s P2, defect, action, integration, artifact, session, and deviation ledgers.
       **Deviation:** None beyond the explicitly phase-scoped isolated-staging blockers recorded above.
 
 ### Exit gate
@@ -598,7 +598,7 @@ Never paste values.
 | `docs/release/generated/ci-command-map.md` | P0 | ✅ committed | `dfc696d`; `docs/release/evidence/P0/p0-discovery.txt` |
 | `docs/release/P0-baseline.md` | P0 | ✅ committed | `b6b03d5`; `docs/release/P0-baseline.md` |
 | `docs/release/action-contract-results.md` | P1 | ✅ committed | `ff346e2`; `docs/release/evidence/P1/p1-contract-final.txt` |
-| `docs/release/chaos-results.md` | P2 | ✅ committed | P2 Bedrock closure commit pending; `docs/release/generated/p2-chaos-results.json`; `docs/release/evidence/P2/` |
+| `docs/release/chaos-results.md` | P2 | ✅ committed | `2dfa3b9`; `docs/release/generated/p2-chaos-results.json`; `docs/release/evidence/P2/` |
 | `docs/release/generated/p2-bedrock-live-smoke.json` | P2 | ✅ generated | `docs/release/evidence/P2/p2-bedrock-live-smoke.txt`; 3/3 guarded Bedrock completions, 20/20 route assertions, 3/3 ledger rows |
 | `docs/release/evidence/P2/p2-bedrock-live-smoke.txt` | P2 | ✅ generated | Concrete model/token/status provenance; credential value and response content withheld |
 | `docs/release/integration-readiness.md` | P3 | ⬜ | |
@@ -664,7 +664,7 @@ These are not executor blockers until their phase requires them:
 YYYY-MM-DD HH:MM · model · phase · starting SHA → ending SHA · tasks completed · test summary ·
 action count certified · defects opened/closed · score · next phase · blockers -->
 
-- **2026-08-07 · P2 BEDROCK SINGLE-KEY CLOSURE SESSION (GPT-5)** · `9c25deb` → pending P2 Bedrock closure commit · Configured GLM, Mistral, and DeepSeek aliases to prefer the shared Bedrock bearer credential, with model defaults `zai.glm-4.7`, `mistral.mistral-small-2402-v1:0`, and `deepseek.v3.2`, plus environment overrides. Added the guarded `release:bedrock-smoke` command; it made exactly 3 Bedrock calls against localhost-only seeded Postgres and passed 3/3 completions, 20/20 route assertions, and 3/3 `llm_calls` rows without writing the credential or response content. Focused P2 unit test passed 8/8; `npm run typecheck` passed; `npm run release:environment` passed with 152 names; final `npm run release:chaos` exited 0 with 4/4 groups, 219 tests passed, 0 skipped, and 14/14 faults passed. No P0/P1 suite rerun, no production/staging egress, and no business/external action occurred. P3 is next; isolated staging/JWT/replay/load prerequisites remain phase-scoped BLOCKED-CONFIG.
+- **2026-08-07 · P2 BEDROCK SINGLE-KEY CLOSURE SESSION (GPT-5)** · `9c25deb` → `2dfa3b9` · Configured GLM, Mistral, and DeepSeek aliases to prefer the shared Bedrock bearer credential, with model defaults `zai.glm-4.7`, `mistral.mistral-small-2402-v1:0`, and `deepseek.v3.2`, plus environment overrides. Added the guarded `release:bedrock-smoke` command; it made exactly 3 Bedrock calls against localhost-only seeded Postgres and passed 3/3 completions, 20/20 route assertions, and 3/3 `llm_calls` rows without writing the credential or response content. Focused P2 unit test passed 8/8; `npm run typecheck` passed; `npm run release:environment` passed with 152 names; final `npm run release:chaos` exited 0 with 4/4 groups, 219 tests passed, 0 skipped, and 14/14 faults passed. No P0/P1 suite rerun, no production/staging egress, and no business/external action occurred. P3 is next; isolated staging/JWT/replay/load prerequisites remain phase-scoped BLOCKED-CONFIG.
 
 - **2026-08-06 · P2 CHAOS/VOICE/MODEL/SECURITY CLOSURE SESSION (GPT-5)** · `8ec3572` → `9c25deb` · Read both Maestro files completely; executed all locally executable P2 tasks; added the guarded deterministic chaos runner, provider fault tests, transient-Postgres probe, and P2 evidence/report artifacts; retained the fixed 44-action scope and did not rerun completed P0/P1 suites. Final `npm run release:chaos` exited 0: 4/4 groups, 218 tests passed, 0 skipped, 14/14 injected faults PASS with structured-log/Sentry/PII-safe flags. `npm run typecheck` exited 0; production and missing-chaos-context guards refused with exit 1; `git diff --check` exited 0; seeded PII sentinel and changed-file credential-shaped scans had no matches. `gitleaks` was unavailable (exit 127), recorded without installation. Local P2 exit criteria pass; actual GLM/Mistral/DeepSeek live chain, live Sentry routing, and isolated staging remain BLOCKED-CONFIG. P3 is next; no production or remote staging action taken.
 
