@@ -1,0 +1,53 @@
+P0.T6 planner live-evaluation pacing repair and recheck
+Date: 2026-08-06
+
+Repair
+------
+- `finnor-os/scripts/eval-planner.ts` now accepts `PLANNER_EVAL_PACE_MS`, validates
+  it as a non-negative integer, and retains 4,000 ms as the local default.
+- `.github/workflows/planner-live-evals.yml` sets `PLANNER_EVAL_PACE_MS=30000` for
+  the complete provider-backed workflow. The workflow continues to pin both
+  planning and repair to the existing Groq provider; no production route or
+  provider lineup changed.
+- Validation command and output:
+  `npm run typecheck`
+  `> finnor-os@0.1.0 typecheck`
+  `> tsc -p tsconfig.json`
+  Exit 0; no TypeScript diagnostics.
+
+Recheck setup
+-------------
+- Preview environment variables were pulled read-only for the run. The required
+  Groq key/model and Bedrock metadata were present; values were never printed,
+  committed, or retained in this repository.
+- Effective route: `LLM_PROVIDER_PLANNING=groq`,
+  `LLM_PROVIDER_REPAIR=groq`.
+- Effective pace: `PLANNER_EVAL_PACE_MS=30000`.
+- Database: fresh disposable local PostgreSQL database
+  `finnor_planner_live_guard_20260806`; it was dropped after the run.
+- No production or remote database was used; the embedded local server was stopped
+  and the temporary environment/log directory was removed.
+
+Exact child command
+-------------------
+`npx tsx scripts/eval-planner.ts` from `finnor-os`, with the effective environment
+above and the disposable local `DATABASE_URL`. This is the command used by the
+workflow's `npm run eval:planner:live` script.
+
+Result
+------
+- All 41 scenarios reached a terminal result; the aggregate harness line was:
+  `17/41 passed, 9 failed, 15 errored`.
+- The harness result is non-green (exit condition is non-zero whenever any scenario
+  fails or errors).
+- A post-run sanitized classification observed 4 rate-limit/TPM signatures, no
+  authentication signatures, and no timeout signatures among the 15 errors. Raw
+  provider error text and payloads were not retained.
+
+Conclusion
+----------
+The pace repair eliminated the earlier incomplete six-scenario diagnostic and
+allowed a complete 41-scenario run, but it did not close the live planner gate.
+The provider-backed evaluation remains blocked/failed until an owner-approved
+provider route and capacity produce a complete green run. No production provider,
+deployment, migration, customer data, or outbound customer effect was used.

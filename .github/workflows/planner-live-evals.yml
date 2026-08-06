@@ -28,6 +28,10 @@ jobs:
       # planning route instead of silently running with no configured provider.
       LLM_PROVIDER_PLANNING: groq
       LLM_PROVIDER_REPAIR: groq
+      # The available Groq tier is TPM-limited; pace the complete 41-scenario
+      # harness explicitly instead of allowing a rate-limit wall to mask planner
+      # behavior. This does not reduce the scenario set or alter production routing.
+      PLANNER_EVAL_PACE_MS: "30000"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

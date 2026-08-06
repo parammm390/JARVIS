@@ -15,6 +15,15 @@ import { LLMPlanner, createDefaultPluginRegistry } from "@finnor/orchestration";
 import type { MemorySnapshot, TenantContext, DomainAction } from "@finnor/shared-types";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
+const PLANNER_EVAL_PACE_MS = (() => {
+  const raw = process.env.PLANNER_EVAL_PACE_MS;
+  if (raw === undefined) return 4_000;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 0) {
+    throw new Error("PLANNER_EVAL_PACE_MS must be a non-negative integer");
+  }
+  return value;
+})();
 
 interface Scenario {
   name: string;
@@ -166,10 +175,10 @@ async function main(): Promise<void> {
     results.push(result);
     console.log(`${result.status === "pass" ? "✓" : result.status === "fail" ? "✗" : "!"} ${result.scenario} — ${result.detail}`);
     // Real free/dev-tier LLM API keys (e.g. Groq's default tier) hit a tokens-per-minute
-    // ceiling well before 40 sequential planner calls finish — this paces the harness
-    // to stay under that, rather than reporting a wall of rate-limit errors as if the
-    // planner itself were failing. On a higher-tier key this is just unused headroom.
-    await new Promise((r) => setTimeout(r, 4_000));
+    // ceiling well before 40 sequential planner calls finish. The local default preserves
+    // the historical developer cadence; CI can select a slower, provider-approved cadence
+    // rather than reporting a wall of rate-limit errors as if the planner itself were failing.
+    await new Promise((r) => setTimeout(r, PLANNER_EVAL_PACE_MS));
   }
 
   const passed = results.filter((r) => r.status === "pass").length;
