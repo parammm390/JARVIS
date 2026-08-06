@@ -1,0 +1,5 @@
+Command: scoped certification count verification with explicit tenant predicates after two seed runs
+Alpha users=15 households=40 contacts=40 leads=20 opportunities=12 quotes=10 invoices=8 work_orders=10 appointments=12 proposals=8 maintenance_agreements=3 bravo_sentinel_households=0
+Bravo users=3 households=40 contacts=40 leads=20 opportunities=12 quotes=10 invoices=8 work_orders=10 appointments=12 proposals=8 maintenance_agreements=3 bravo_sentinel_households=0
+Charlie users=3 households=40 contacts=40 leads=20 opportunities=12 quotes=10 invoices=8 work_orders=10 appointments=12 proposals=8 maintenance_agreements=3 bravo_sentinel_households=0
+EXIT_CODE=0

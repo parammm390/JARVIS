@@ -1,0 +1,13 @@
+Command: npm run release:manifest && npm run release:contract
+Environment: local embedded certification Postgres; guarded seed allowlist enabled; no provider calls
+
+> finnor-os@0.1.0 release:manifest
+> tsx scripts/release/verify-action-manifest.ts
+
+PASS: fixed spec and discovered registry match 44/44 (docs/release/generated/action-manifest.md)
+
+> finnor-os@0.1.0 release:contract
+> tsx scripts/release/run-action-contract-matrix.ts
+
+P1_CONTRACT_MATRIX_FAIL DATABASE_URL is required; the Phase 1 core matrix never falls back to an unscoped or in-memory database
+EXIT_CODE=1

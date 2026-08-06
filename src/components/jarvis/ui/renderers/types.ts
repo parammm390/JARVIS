@@ -1,11 +1,12 @@
 // D3.T1 — shared types for the action-type renderer registry. Root `src/` never
 // imports finnor-os's zod schemas directly (no cross-workspace type dependency exists
 // anywhere in this codebase today, grepped, confirmed — jarvis-client's generated
-// OpenAPI types are the only backend-shape bridge) so each of the 41 action types'
+// OpenAPI types are the only backend-shape bridge) so each of the 44 action types'
 // field lists are hand-encoded here from the real schemas (packages/domain-plugins/*),
 // read file-by-file, not guessed.
 
 import type { ComponentType } from "react"
+import { CERTIFIED_ACTION_STATES, type CertifiedActionState } from "./action-state-contract"
 
 // P2.T8 (§7.2): "interactive" is `clarification_request`'s own tier — highest
 // priority in the product per §7.2's own renderer table, and deliberately
@@ -58,4 +59,9 @@ export interface RegistryEntry {
   /** A representative payload matching the real zod schema, used by the Stage
    *  catalog and nowhere else — never fed to a live context. */
   fixture: unknown
+  /** State coverage is explicit so certified paths never silently fall back for a
+   * pending, approved, executing, completed, failed, or blocked action. */
+  states: readonly CertifiedActionState[]
 }
+
+export { CERTIFIED_ACTION_STATES }

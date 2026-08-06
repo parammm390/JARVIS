@@ -1,0 +1,3 @@
+Command: direct FinnorOrchestrator.decide probe for typed-required ordinary approval
+typed_required ordinary_approval=rejected status=pending confirmation_audit_rows=0
+EXIT_CODE=0

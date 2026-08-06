@@ -86,8 +86,10 @@ export const quotationPlugin: DomainEnginePlugin = {
         ? { valid: true, errors: [] }
         : { valid: false, errors: p.error.issues.map((i) => `payload.${i.path.join(".")}: ${i.message}`) };
     }
-    if (payload !== null && typeof payload === "object") return { valid: true, errors: [] };
-    return { valid: false, errors: ["payload must be an object"] };
+    const p = QuotePayloadSchema.safeParse(payload);
+    return p.success
+      ? { valid: true, errors: [] }
+      : { valid: false, errors: p.error.issues.map((i) => `payload.${i.path.join(".")}: ${i.message}`) };
   },
 
   async draft(actionType, payload, policy: DomainPolicy): Promise<DraftAction> {

@@ -35,7 +35,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return Response.json({ error: `Action is ${row.status}; only pending actions can be approved` }, { status: 409 });
     }
 
-    const result = await getOrchestrator().decide(id, ctx.tenantId, "approve", ctx.userId, { role: ctx.role, note: body.data.note ?? null });
+    const result = await getOrchestrator().decide(id, ctx.tenantId, "approve", ctx.userId, {
+      role: ctx.role,
+      note: body.data.note ?? null,
+      typedConfirmation: body.data.typedConfirmation === true,
+    });
     return Response.json({ result });
   } catch (err) {
     return errorResponse(err);

@@ -1,6 +1,6 @@
 "use client"
 
-// D3 — Stage catalog: all 41 action types resolve (registry-driven grid) + the 8
+// D3 — Stage catalog: all 44 generated action types resolve (registry-driven grid) + the 8
 // flagship scenes get their own FlowCard-chromed section (Playwright's snapshot
 // target for the EXIT GATE's "8 flagship snapshots" bullet). Same convention as
 // C2/C3's catalogs (FlowCard chrome, fixture data, explicit tier labeling).
@@ -10,6 +10,7 @@ import { ActionRenderer } from "./ActionRenderer"
 import { VoiceCallScene } from "./flagships/VoiceCallScene"
 import { ACTION_FIXTURES, CALL_FIXTURE } from "./fixtures"
 import { ACTION_RENDERERS, REGISTERED_ACTION_TYPES } from "./registry"
+import { BACKEND_ACTION_TYPE_COUNT } from "./backend-action-types.generated"
 
 const FLAGSHIP_DEMOS: Array<{ id: string; title: string; actionType: string; reducedFallback: string }> = [
   { id: "D3-FS-01", title: "water_test", actionType: "schedule_water_test", reducedFallback: "needle snaps to final angle, no sweep" },
@@ -45,13 +46,13 @@ export function RendererCatalogSection() {
     <section className="j-panel space-y-4 p-5">
       <div className="mb-1 flex items-center justify-between">
         <h2 className="j-label">D3 — Action Renderer Registry</h2>
-        <span className="j-chip bg-cyan-400/12 text-cyan-300">{REGISTERED_ACTION_TYPES.length} / 42 registered</span>
+        <span className="j-chip bg-cyan-400/12 text-cyan-300">{REGISTERED_ACTION_TYPES.length} / {BACKEND_ACTION_TYPE_COUNT} registered</span>
       </div>
       <p className="j-fs-micro text-[color:var(--j-text-dim)]">
-        Every one of the 41 real business action types (packages/orchestration/src/plugin-registry.ts) resolves to a flagship
+        Every one of the generated backend action types resolves to a flagship
         scene or a schema-driven standard card — plus `clarification_request` (P2.T8, its own &ldquo;interactive&rdquo; tier,
         never flagship/standard: a question, not a business action) — zero raw-JSON default surfaces. 8 flagships below get the
-        full, non-compact treatment; the remaining 34 render compact in the grid beneath.
+        full, non-compact treatment; the remaining entries render compact in the grid beneath.
       </p>
 
       <div>
@@ -69,7 +70,7 @@ export function RendererCatalogSection() {
       </div>
 
       <div>
-        <h3 className="mb-2 j-fs-micro font-black uppercase tracking-widest text-white/50">All 41 registered types (compact)</h3>
+        <h3 className="mb-2 j-fs-micro font-black uppercase tracking-widest text-white/50">All {BACKEND_ACTION_TYPE_COUNT} registered types (compact)</h3>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {REGISTERED_ACTION_TYPES.map((actionType) => (
             <RegistryGridEntry key={actionType} actionType={actionType} />

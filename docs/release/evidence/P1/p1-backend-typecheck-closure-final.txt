@@ -1,0 +1,6 @@
+Command: npm run typecheck
+
+> finnor-os@0.1.0 typecheck
+> tsc -p tsconfig.json
+
+EXIT_CODE=0

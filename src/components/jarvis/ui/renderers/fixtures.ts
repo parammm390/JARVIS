@@ -51,6 +51,8 @@ export const ACTION_FIXTURES: Record<string, unknown> = {
     openForBooking: true,
   },
   reschedule_visit: { visitId: "9b1f2c3d-4e5f-4a6b-8c7d-1e2f3a4b5c6d", newTime: "2026-07-25T16:00:00.000Z", reason: "customer requested later slot" },
+  // route-optimization (flagship)
+  route_suggestion: { technicianId: "6c8e0d2a-1f3b-4a11-9c2e-8b7d5f0a9c11", date: FIXTURE_NOW.slice(0, 10) },
   // quotation (generate_quote flagship; others standard)
   generate_quote: { householdLabel: "The Websters", items: ["Whole-Home Softener", "RO Drinking System"] },
   size_equipment_for_household: { hardnessGpg: 14, ironPpm: 0.3, peopleInHousehold: 4, gallonsPerPersonPerDay: 75 },
@@ -125,10 +127,17 @@ export const ACTION_FIXTURES: Record<string, unknown> = {
     missingFields: ["householdId"],
     context: "Two households share the last name \"Henderson\" in this tenant.",
   },
+  // manual-step — an explicit, non-side-effecting operator handoff.
+  manual_step_suggestion: {
+    originalActionType: "send_customer_message",
+    originalPayload: { householdId: "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70" },
+    unavailableCapabilities: ["communications"],
+    reason: "The communications provider is not configured.",
+  },
 }
 
 /** Not an action type (see VoiceCallScene.tsx's header) — a `calls` table row
- *  fixture, kept alongside the other 41 for the Stage's flagship section. */
+ *  fixture, kept alongside the generated action fixtures for the Stage's flagship section. */
 export const CALL_FIXTURE = {
   direction: "inbound" as const,
   fromNumber: "+13195550187",

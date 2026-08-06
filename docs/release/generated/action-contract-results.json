@@ -1,0 +1,4746 @@
+{
+  "phase": "P1",
+  "generatedAt": "2026-08-06T18:18:18.753Z",
+  "actionCount": 44,
+  "passCount": 44,
+  "failCount": 0,
+  "frontend": {
+    "ok": true,
+    "actionTypes": [
+      "answer_business_question",
+      "answer_customer_question",
+      "answer_water_question",
+      "assign_lead_to_technician",
+      "assign_technician_to_visit",
+      "bulk_notify_existing_customers",
+      "call_overdue_invoices",
+      "check_business_reviews",
+      "check_reminder_due",
+      "check_stock_level",
+      "check_technician_availability",
+      "clarification_request",
+      "create_invoice",
+      "create_lead",
+      "create_review_request",
+      "flag_reorder_needed",
+      "flag_visit_issue",
+      "generate_compliance_summary",
+      "generate_quote",
+      "get_business_overview",
+      "launch_ad_campaign",
+      "log_interaction",
+      "log_stock_used_on_visit",
+      "log_visit_report",
+      "manual_step_suggestion",
+      "record_payment",
+      "renew_maintenance_agreement",
+      "request_proposal_signature",
+      "reschedule_visit",
+      "route_suggestion",
+      "scan_competitors",
+      "schedule_water_test",
+      "search_web",
+      "send_customer_message",
+      "send_follow_up",
+      "send_payment_reminder",
+      "send_proposal",
+      "send_proposal_to_recent_installs",
+      "size_equipment_for_household",
+      "start_installation_workflow",
+      "start_invoice_to_cash_workflow",
+      "start_water_test_workflow",
+      "summarize_ad_performance",
+      "update_lead_status"
+    ],
+    "fallbackMounts": 0,
+    "detail": "generated manifest, renderer entries, six-state coverage, and zero certified fallback mounts"
+  },
+  "rows": [
+    {
+      "actionType": "create_invoice",
+      "plugin": "accounting",
+      "profile": "OPERATIONAL_CHANGE",
+      "approvalFloor": "REQUIRED",
+      "external": true,
+      "status": "PASS",
+      "gates": {
+        "registry": {
+          "status": "PASS",
+          "evidenceId": "P1-REGISTRY-create_invoice",
+          "detail": "accounting resolved without collision"
+        },
+        "valid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-VALID-create_invoice",
+          "detail": "shared fixture accepted by runtime validator"
+        },
+        "invalid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-INVALID-create_invoice",
+          "detail": "null payload rejected"
+        },
+        "missing_entity": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-MISSING",
+          "detail": "1 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "cross_tenant": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-CROSS-TENANT",
+          "detail": "1 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "approval_floor": {
+          "status": "PASS",
+          "evidenceId": "P1-APPROVAL-create_invoice",
+          "detail": "REQUIRED: requires=true, typed=false, approval-queue=true"
+        },
+        "prediction": {
+          "status": "PASS",
+          "evidenceId": "P1-PREDICTION-create_invoice",
+          "detail": "schema prediction is explicit and labeled no-write by the plugin/registry contract"
+        },
+        "receipt_completed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-create_invoice-completed",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "receipt_rejected": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-create_invoice-rejected",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_blocked": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-create_invoice-blocked",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_failed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-create_invoice-failed",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_compensated": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-create_invoice-compensated",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "idempotency": {
+          "status": "PASS",
+          "evidenceId": "P1-IDEMPOTENCY-create_invoice",
+          "detail": "atomic action claim winners=1, repeat-after-terminal=0"
+        },
+        "provider_idempotency": {
+          "status": "PASS",
+          "evidenceId": "P1-PROVIDER-IDEMPOTENCY-create_invoice",
+          "detail": "sequential-effects=1 concurrent-effects=1 ledger=1/1"
+        },
+        "frontend": {
+          "status": "PASS",
+          "evidenceId": "P1-FRONTEND-create_invoice",
+          "detail": "generated manifest, renderer entries, six-state coverage, and zero certified fallback mounts"
+        },
+        "no_fallback": {
+          "status": "PASS",
+          "evidenceId": "P1-FALLBACK-create_invoice",
+          "detail": "certified ActionRenderer fallback imports=0"
+        }
+      },
+      "evidenceIds": [
+        "P1-REGISTRY-create_invoice",
+        "P1-SCHEMA-VALID-create_invoice",
+        "P1-SCHEMA-INVALID-create_invoice",
+        "P1-GROUND-MISSING",
+        "P1-GROUND-CROSS-TENANT",
+        "P1-APPROVAL-create_invoice",
+        "P1-PREDICTION-create_invoice",
+        "P1-RECEIPT-create_invoice-completed",
+        "P1-RECEIPT-create_invoice-rejected",
+        "P1-RECEIPT-create_invoice-blocked",
+        "P1-RECEIPT-create_invoice-failed",
+        "P1-RECEIPT-create_invoice-compensated",
+        "P1-IDEMPOTENCY-create_invoice",
+        "P1-PROVIDER-IDEMPOTENCY-create_invoice",
+        "P1-FRONTEND-create_invoice",
+        "P1-FALLBACK-create_invoice"
+      ]
+    },
+    {
+      "actionType": "send_payment_reminder",
+      "plugin": "accounting",
+      "profile": "EXTERNAL_SIDE_EFFECT",
+      "approvalFloor": "REQUIRED",
+      "external": true,
+      "status": "PASS",
+      "gates": {
+        "registry": {
+          "status": "PASS",
+          "evidenceId": "P1-REGISTRY-send_payment_reminder",
+          "detail": "accounting resolved without collision"
+        },
+        "valid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-VALID-send_payment_reminder",
+          "detail": "shared fixture accepted by runtime validator"
+        },
+        "invalid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-INVALID-send_payment_reminder",
+          "detail": "null payload rejected"
+        },
+        "missing_entity": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-MISSING",
+          "detail": "1 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "cross_tenant": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-CROSS-TENANT",
+          "detail": "1 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "approval_floor": {
+          "status": "PASS",
+          "evidenceId": "P1-APPROVAL-send_payment_reminder",
+          "detail": "REQUIRED: requires=true, typed=false, approval-queue=true"
+        },
+        "prediction": {
+          "status": "PASS",
+          "evidenceId": "P1-PREDICTION-send_payment_reminder",
+          "detail": "schema prediction is explicit and labeled no-write by the plugin/registry contract"
+        },
+        "receipt_completed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-send_payment_reminder-completed",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "receipt_rejected": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-send_payment_reminder-rejected",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_blocked": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-send_payment_reminder-blocked",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_failed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-send_payment_reminder-failed",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_compensated": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-send_payment_reminder-compensated",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "idempotency": {
+          "status": "PASS",
+          "evidenceId": "P1-IDEMPOTENCY-send_payment_reminder",
+          "detail": "atomic action claim winners=1, repeat-after-terminal=0"
+        },
+        "provider_idempotency": {
+          "status": "PASS",
+          "evidenceId": "P1-PROVIDER-IDEMPOTENCY-send_payment_reminder",
+          "detail": "sequential-effects=1 concurrent-effects=1 ledger=1/1"
+        },
+        "frontend": {
+          "status": "PASS",
+          "evidenceId": "P1-FRONTEND-send_payment_reminder",
+          "detail": "generated manifest, renderer entries, six-state coverage, and zero certified fallback mounts"
+        },
+        "no_fallback": {
+          "status": "PASS",
+          "evidenceId": "P1-FALLBACK-send_payment_reminder",
+          "detail": "certified ActionRenderer fallback imports=0"
+        }
+      },
+      "evidenceIds": [
+        "P1-REGISTRY-send_payment_reminder",
+        "P1-SCHEMA-VALID-send_payment_reminder",
+        "P1-SCHEMA-INVALID-send_payment_reminder",
+        "P1-GROUND-MISSING",
+        "P1-GROUND-CROSS-TENANT",
+        "P1-APPROVAL-send_payment_reminder",
+        "P1-PREDICTION-send_payment_reminder",
+        "P1-RECEIPT-send_payment_reminder-completed",
+        "P1-RECEIPT-send_payment_reminder-rejected",
+        "P1-RECEIPT-send_payment_reminder-blocked",
+        "P1-RECEIPT-send_payment_reminder-failed",
+        "P1-RECEIPT-send_payment_reminder-compensated",
+        "P1-IDEMPOTENCY-send_payment_reminder",
+        "P1-PROVIDER-IDEMPOTENCY-send_payment_reminder",
+        "P1-FRONTEND-send_payment_reminder",
+        "P1-FALLBACK-send_payment_reminder"
+      ]
+    },
+    {
+      "actionType": "record_payment",
+      "plugin": "accounting",
+      "profile": "FINANCIAL_WRITE",
+      "approvalFloor": "TYPED_REQUIRED",
+      "external": true,
+      "status": "PASS",
+      "gates": {
+        "registry": {
+          "status": "PASS",
+          "evidenceId": "P1-REGISTRY-record_payment",
+          "detail": "accounting resolved without collision"
+        },
+        "valid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-VALID-record_payment",
+          "detail": "shared fixture accepted by runtime validator"
+        },
+        "invalid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-INVALID-record_payment",
+          "detail": "null payload rejected"
+        },
+        "missing_entity": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-MISSING",
+          "detail": "1 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "cross_tenant": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-CROSS-TENANT",
+          "detail": "1 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "approval_floor": {
+          "status": "PASS",
+          "evidenceId": "P1-APPROVAL-record_payment",
+          "detail": "TYPED_REQUIRED: requires=true, typed=true, approval-queue=true"
+        },
+        "prediction": {
+          "status": "PASS",
+          "evidenceId": "P1-PREDICTION-record_payment",
+          "detail": "schema prediction is explicit and labeled no-write by the plugin/registry contract"
+        },
+        "receipt_completed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-record_payment-completed",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "receipt_rejected": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-record_payment-rejected",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_blocked": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-record_payment-blocked",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_failed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-record_payment-failed",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_compensated": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-record_payment-compensated",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "idempotency": {
+          "status": "PASS",
+          "evidenceId": "P1-IDEMPOTENCY-record_payment",
+          "detail": "atomic action claim winners=1, repeat-after-terminal=0"
+        },
+        "provider_idempotency": {
+          "status": "PASS",
+          "evidenceId": "P1-PROVIDER-IDEMPOTENCY-record_payment",
+          "detail": "sequential-effects=1 concurrent-effects=1 ledger=1/1"
+        },
+        "frontend": {
+          "status": "PASS",
+          "evidenceId": "P1-FRONTEND-record_payment",
+          "detail": "generated manifest, renderer entries, six-state coverage, and zero certified fallback mounts"
+        },
+        "no_fallback": {
+          "status": "PASS",
+          "evidenceId": "P1-FALLBACK-record_payment",
+          "detail": "certified ActionRenderer fallback imports=0"
+        }
+      },
+      "evidenceIds": [
+        "P1-REGISTRY-record_payment",
+        "P1-SCHEMA-VALID-record_payment",
+        "P1-SCHEMA-INVALID-record_payment",
+        "P1-GROUND-MISSING",
+        "P1-GROUND-CROSS-TENANT",
+        "P1-APPROVAL-record_payment",
+        "P1-PREDICTION-record_payment",
+        "P1-RECEIPT-record_payment-completed",
+        "P1-RECEIPT-record_payment-rejected",
+        "P1-RECEIPT-record_payment-blocked",
+        "P1-RECEIPT-record_payment-failed",
+        "P1-RECEIPT-record_payment-compensated",
+        "P1-IDEMPOTENCY-record_payment",
+        "P1-PROVIDER-IDEMPOTENCY-record_payment",
+        "P1-FRONTEND-record_payment",
+        "P1-FALLBACK-record_payment"
+      ]
+    },
+    {
+      "actionType": "call_overdue_invoices",
+      "plugin": "accounting",
+      "profile": "BATCH_EXTERNAL",
+      "approvalFloor": "TYPED_REQUIRED",
+      "external": true,
+      "status": "PASS",
+      "gates": {
+        "registry": {
+          "status": "PASS",
+          "evidenceId": "P1-REGISTRY-call_overdue_invoices",
+          "detail": "accounting resolved without collision"
+        },
+        "valid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-VALID-call_overdue_invoices",
+          "detail": "shared fixture accepted by runtime validator"
+        },
+        "invalid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-INVALID-call_overdue_invoices",
+          "detail": "null payload rejected"
+        },
+        "missing_entity": {
+          "status": "N/A",
+          "evidenceId": "P1-GROUND-MISSING",
+          "detail": "fixture has no referenced entity field"
+        },
+        "cross_tenant": {
+          "status": "N/A",
+          "evidenceId": "P1-GROUND-CROSS-TENANT",
+          "detail": "fixture has no referenced entity field"
+        },
+        "approval_floor": {
+          "status": "PASS",
+          "evidenceId": "P1-APPROVAL-call_overdue_invoices",
+          "detail": "TYPED_REQUIRED: requires=true, typed=true, approval-queue=true"
+        },
+        "prediction": {
+          "status": "PASS",
+          "evidenceId": "P1-PREDICTION-call_overdue_invoices",
+          "detail": "schema prediction is explicit and labeled no-write by the plugin/registry contract"
+        },
+        "receipt_completed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-call_overdue_invoices-completed",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "receipt_rejected": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-call_overdue_invoices-rejected",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_blocked": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-call_overdue_invoices-blocked",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_failed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-call_overdue_invoices-failed",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_compensated": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-call_overdue_invoices-compensated",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "idempotency": {
+          "status": "PASS",
+          "evidenceId": "P1-IDEMPOTENCY-call_overdue_invoices",
+          "detail": "atomic action claim winners=1, repeat-after-terminal=0"
+        },
+        "provider_idempotency": {
+          "status": "PASS",
+          "evidenceId": "P1-PROVIDER-IDEMPOTENCY-call_overdue_invoices",
+          "detail": "sequential-effects=1 concurrent-effects=1 ledger=1/1"
+        },
+        "frontend": {
+          "status": "PASS",
+          "evidenceId": "P1-FRONTEND-call_overdue_invoices",
+          "detail": "generated manifest, renderer entries, six-state coverage, and zero certified fallback mounts"
+        },
+        "no_fallback": {
+          "status": "PASS",
+          "evidenceId": "P1-FALLBACK-call_overdue_invoices",
+          "detail": "certified ActionRenderer fallback imports=0"
+        }
+      },
+      "evidenceIds": [
+        "P1-REGISTRY-call_overdue_invoices",
+        "P1-SCHEMA-VALID-call_overdue_invoices",
+        "P1-SCHEMA-INVALID-call_overdue_invoices",
+        "P1-GROUND-MISSING",
+        "P1-GROUND-CROSS-TENANT",
+        "P1-APPROVAL-call_overdue_invoices",
+        "P1-PREDICTION-call_overdue_invoices",
+        "P1-RECEIPT-call_overdue_invoices-completed",
+        "P1-RECEIPT-call_overdue_invoices-rejected",
+        "P1-RECEIPT-call_overdue_invoices-blocked",
+        "P1-RECEIPT-call_overdue_invoices-failed",
+        "P1-RECEIPT-call_overdue_invoices-compensated",
+        "P1-IDEMPOTENCY-call_overdue_invoices",
+        "P1-PROVIDER-IDEMPOTENCY-call_overdue_invoices",
+        "P1-FRONTEND-call_overdue_invoices",
+        "P1-FALLBACK-call_overdue_invoices"
+      ]
+    },
+    {
+      "actionType": "bulk_notify_existing_customers",
+      "plugin": "bulk-notify",
+      "profile": "BATCH_EXTERNAL",
+      "approvalFloor": "TYPED_REQUIRED",
+      "external": true,
+      "status": "PASS",
+      "gates": {
+        "registry": {
+          "status": "PASS",
+          "evidenceId": "P1-REGISTRY-bulk_notify_existing_customers",
+          "detail": "bulk-notify resolved without collision"
+        },
+        "valid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-VALID-bulk_notify_existing_customers",
+          "detail": "shared fixture accepted by runtime validator"
+        },
+        "invalid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-INVALID-bulk_notify_existing_customers",
+          "detail": "null payload rejected"
+        },
+        "missing_entity": {
+          "status": "N/A",
+          "evidenceId": "P1-GROUND-MISSING",
+          "detail": "fixture has no referenced entity field"
+        },
+        "cross_tenant": {
+          "status": "N/A",
+          "evidenceId": "P1-GROUND-CROSS-TENANT",
+          "detail": "fixture has no referenced entity field"
+        },
+        "approval_floor": {
+          "status": "PASS",
+          "evidenceId": "P1-APPROVAL-bulk_notify_existing_customers",
+          "detail": "TYPED_REQUIRED: requires=true, typed=true, approval-queue=true"
+        },
+        "prediction": {
+          "status": "PASS",
+          "evidenceId": "P1-PREDICTION-bulk_notify_existing_customers",
+          "detail": "dry_run prediction is explicit and labeled no-write by the plugin/registry contract"
+        },
+        "receipt_completed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-bulk_notify_existing_customers-completed",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "receipt_rejected": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-bulk_notify_existing_customers-rejected",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_blocked": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-bulk_notify_existing_customers-blocked",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_failed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-bulk_notify_existing_customers-failed",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_compensated": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-bulk_notify_existing_customers-compensated",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "idempotency": {
+          "status": "PASS",
+          "evidenceId": "P1-IDEMPOTENCY-bulk_notify_existing_customers",
+          "detail": "atomic action claim winners=1, repeat-after-terminal=0"
+        },
+        "provider_idempotency": {
+          "status": "PASS",
+          "evidenceId": "P1-PROVIDER-IDEMPOTENCY-bulk_notify_existing_customers",
+          "detail": "sequential-effects=1 concurrent-effects=1 ledger=1/1"
+        },
+        "frontend": {
+          "status": "PASS",
+          "evidenceId": "P1-FRONTEND-bulk_notify_existing_customers",
+          "detail": "generated manifest, renderer entries, six-state coverage, and zero certified fallback mounts"
+        },
+        "no_fallback": {
+          "status": "PASS",
+          "evidenceId": "P1-FALLBACK-bulk_notify_existing_customers",
+          "detail": "certified ActionRenderer fallback imports=0"
+        }
+      },
+      "evidenceIds": [
+        "P1-REGISTRY-bulk_notify_existing_customers",
+        "P1-SCHEMA-VALID-bulk_notify_existing_customers",
+        "P1-SCHEMA-INVALID-bulk_notify_existing_customers",
+        "P1-GROUND-MISSING",
+        "P1-GROUND-CROSS-TENANT",
+        "P1-APPROVAL-bulk_notify_existing_customers",
+        "P1-PREDICTION-bulk_notify_existing_customers",
+        "P1-RECEIPT-bulk_notify_existing_customers-completed",
+        "P1-RECEIPT-bulk_notify_existing_customers-rejected",
+        "P1-RECEIPT-bulk_notify_existing_customers-blocked",
+        "P1-RECEIPT-bulk_notify_existing_customers-failed",
+        "P1-RECEIPT-bulk_notify_existing_customers-compensated",
+        "P1-IDEMPOTENCY-bulk_notify_existing_customers",
+        "P1-PROVIDER-IDEMPOTENCY-bulk_notify_existing_customers",
+        "P1-FRONTEND-bulk_notify_existing_customers",
+        "P1-FALLBACK-bulk_notify_existing_customers"
+      ]
+    },
+    {
+      "actionType": "clarification_request",
+      "plugin": "clarification",
+      "profile": "META_NO_SIDE_EFFECT",
+      "approvalFloor": "NONE",
+      "external": false,
+      "status": "PASS",
+      "gates": {
+        "registry": {
+          "status": "PASS",
+          "evidenceId": "P1-REGISTRY-clarification_request",
+          "detail": "clarification resolved without collision"
+        },
+        "valid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-VALID-clarification_request",
+          "detail": "shared fixture accepted by runtime validator"
+        },
+        "invalid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-INVALID-clarification_request",
+          "detail": "null payload rejected"
+        },
+        "missing_entity": {
+          "status": "N/A",
+          "evidenceId": "P1-GROUND-MISSING",
+          "detail": "fixture has no referenced entity field"
+        },
+        "cross_tenant": {
+          "status": "N/A",
+          "evidenceId": "P1-GROUND-CROSS-TENANT",
+          "detail": "fixture has no referenced entity field"
+        },
+        "approval_floor": {
+          "status": "PASS",
+          "evidenceId": "P1-APPROVAL-clarification_request",
+          "detail": "NONE: requires=false, typed=false, approval-queue=false"
+        },
+        "prediction": {
+          "status": "PASS",
+          "evidenceId": "P1-PREDICTION-clarification_request",
+          "detail": "schema prediction is explicit and labeled no-write by the plugin/registry contract"
+        },
+        "receipt_completed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-clarification_request-completed",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "receipt_rejected": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-clarification_request-rejected",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_blocked": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-clarification_request-blocked",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_failed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-clarification_request-failed",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_compensated": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-clarification_request-compensated",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "idempotency": {
+          "status": "N/A",
+          "evidenceId": "P1-IDEMPOTENCY-clarification_request",
+          "detail": "read-only/meta action has no business or provider effect to repeat"
+        },
+        "provider_idempotency": {
+          "status": "N/A",
+          "evidenceId": "P1-PROVIDER-IDEMPOTENCY-clarification_request",
+          "detail": "read-only/meta action has no provider effect"
+        },
+        "frontend": {
+          "status": "PASS",
+          "evidenceId": "P1-FRONTEND-clarification_request",
+          "detail": "generated manifest, renderer entries, six-state coverage, and zero certified fallback mounts"
+        },
+        "no_fallback": {
+          "status": "PASS",
+          "evidenceId": "P1-FALLBACK-clarification_request",
+          "detail": "certified ActionRenderer fallback imports=0"
+        }
+      },
+      "evidenceIds": [
+        "P1-REGISTRY-clarification_request",
+        "P1-SCHEMA-VALID-clarification_request",
+        "P1-SCHEMA-INVALID-clarification_request",
+        "P1-GROUND-MISSING",
+        "P1-GROUND-CROSS-TENANT",
+        "P1-APPROVAL-clarification_request",
+        "P1-PREDICTION-clarification_request",
+        "P1-RECEIPT-clarification_request-completed",
+        "P1-RECEIPT-clarification_request-rejected",
+        "P1-RECEIPT-clarification_request-blocked",
+        "P1-RECEIPT-clarification_request-failed",
+        "P1-RECEIPT-clarification_request-compensated",
+        "P1-IDEMPOTENCY-clarification_request",
+        "P1-PROVIDER-IDEMPOTENCY-clarification_request",
+        "P1-FRONTEND-clarification_request",
+        "P1-FALLBACK-clarification_request"
+      ]
+    },
+    {
+      "actionType": "generate_compliance_summary",
+      "plugin": "compliance-documentation",
+      "profile": "INTERNAL_DRAFT",
+      "approvalFloor": "POLICY",
+      "external": false,
+      "status": "PASS",
+      "gates": {
+        "registry": {
+          "status": "PASS",
+          "evidenceId": "P1-REGISTRY-generate_compliance_summary",
+          "detail": "compliance-documentation resolved without collision"
+        },
+        "valid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-VALID-generate_compliance_summary",
+          "detail": "shared fixture accepted by runtime validator"
+        },
+        "invalid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-INVALID-generate_compliance_summary",
+          "detail": "null payload rejected"
+        },
+        "missing_entity": {
+          "status": "N/A",
+          "evidenceId": "P1-GROUND-MISSING",
+          "detail": "fixture has no referenced entity field"
+        },
+        "cross_tenant": {
+          "status": "N/A",
+          "evidenceId": "P1-GROUND-CROSS-TENANT",
+          "detail": "fixture has no referenced entity field"
+        },
+        "approval_floor": {
+          "status": "PASS",
+          "evidenceId": "P1-APPROVAL-generate_compliance_summary",
+          "detail": "POLICY: requires=true, typed=false, approval-queue=true"
+        },
+        "prediction": {
+          "status": "PASS",
+          "evidenceId": "P1-PREDICTION-generate_compliance_summary",
+          "detail": "schema prediction is explicit and labeled no-write by the plugin/registry contract"
+        },
+        "receipt_completed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-generate_compliance_summary-completed",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "receipt_rejected": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-generate_compliance_summary-rejected",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_blocked": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-generate_compliance_summary-blocked",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_failed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-generate_compliance_summary-failed",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_compensated": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-generate_compliance_summary-compensated",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "idempotency": {
+          "status": "PASS",
+          "evidenceId": "P1-IDEMPOTENCY-generate_compliance_summary",
+          "detail": "atomic action claim winners=1, repeat-after-terminal=0"
+        },
+        "frontend": {
+          "status": "PASS",
+          "evidenceId": "P1-FRONTEND-generate_compliance_summary",
+          "detail": "generated manifest, renderer entries, six-state coverage, and zero certified fallback mounts"
+        },
+        "no_fallback": {
+          "status": "PASS",
+          "evidenceId": "P1-FALLBACK-generate_compliance_summary",
+          "detail": "certified ActionRenderer fallback imports=0"
+        }
+      },
+      "evidenceIds": [
+        "P1-REGISTRY-generate_compliance_summary",
+        "P1-SCHEMA-VALID-generate_compliance_summary",
+        "P1-SCHEMA-INVALID-generate_compliance_summary",
+        "P1-GROUND-MISSING",
+        "P1-GROUND-CROSS-TENANT",
+        "P1-APPROVAL-generate_compliance_summary",
+        "P1-PREDICTION-generate_compliance_summary",
+        "P1-RECEIPT-generate_compliance_summary-completed",
+        "P1-RECEIPT-generate_compliance_summary-rejected",
+        "P1-RECEIPT-generate_compliance_summary-blocked",
+        "P1-RECEIPT-generate_compliance_summary-failed",
+        "P1-RECEIPT-generate_compliance_summary-compensated",
+        "P1-IDEMPOTENCY-generate_compliance_summary",
+        "P1-FRONTEND-generate_compliance_summary",
+        "P1-FALLBACK-generate_compliance_summary"
+      ]
+    },
+    {
+      "actionType": "create_lead",
+      "plugin": "crm",
+      "profile": "INTERNAL_WRITE",
+      "approvalFloor": "POLICY",
+      "external": false,
+      "status": "PASS",
+      "gates": {
+        "registry": {
+          "status": "PASS",
+          "evidenceId": "P1-REGISTRY-create_lead",
+          "detail": "crm resolved without collision"
+        },
+        "valid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-VALID-create_lead",
+          "detail": "shared fixture accepted by runtime validator"
+        },
+        "invalid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-INVALID-create_lead",
+          "detail": "null payload rejected"
+        },
+        "missing_entity": {
+          "status": "N/A",
+          "evidenceId": "P1-GROUND-MISSING",
+          "detail": "fixture has no referenced entity field"
+        },
+        "cross_tenant": {
+          "status": "N/A",
+          "evidenceId": "P1-GROUND-CROSS-TENANT",
+          "detail": "fixture has no referenced entity field"
+        },
+        "approval_floor": {
+          "status": "PASS",
+          "evidenceId": "P1-APPROVAL-create_lead",
+          "detail": "POLICY: requires=true, typed=false, approval-queue=true"
+        },
+        "prediction": {
+          "status": "PASS",
+          "evidenceId": "P1-PREDICTION-create_lead",
+          "detail": "schema prediction is explicit and labeled no-write by the plugin/registry contract"
+        },
+        "receipt_completed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-create_lead-completed",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "receipt_rejected": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-create_lead-rejected",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_blocked": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-create_lead-blocked",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_failed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-create_lead-failed",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_compensated": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-create_lead-compensated",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "idempotency": {
+          "status": "PASS",
+          "evidenceId": "P1-IDEMPOTENCY-create_lead",
+          "detail": "atomic action claim winners=1, repeat-after-terminal=0"
+        },
+        "frontend": {
+          "status": "PASS",
+          "evidenceId": "P1-FRONTEND-create_lead",
+          "detail": "generated manifest, renderer entries, six-state coverage, and zero certified fallback mounts"
+        },
+        "no_fallback": {
+          "status": "PASS",
+          "evidenceId": "P1-FALLBACK-create_lead",
+          "detail": "certified ActionRenderer fallback imports=0"
+        }
+      },
+      "evidenceIds": [
+        "P1-REGISTRY-create_lead",
+        "P1-SCHEMA-VALID-create_lead",
+        "P1-SCHEMA-INVALID-create_lead",
+        "P1-GROUND-MISSING",
+        "P1-GROUND-CROSS-TENANT",
+        "P1-APPROVAL-create_lead",
+        "P1-PREDICTION-create_lead",
+        "P1-RECEIPT-create_lead-completed",
+        "P1-RECEIPT-create_lead-rejected",
+        "P1-RECEIPT-create_lead-blocked",
+        "P1-RECEIPT-create_lead-failed",
+        "P1-RECEIPT-create_lead-compensated",
+        "P1-IDEMPOTENCY-create_lead",
+        "P1-FRONTEND-create_lead",
+        "P1-FALLBACK-create_lead"
+      ]
+    },
+    {
+      "actionType": "update_lead_status",
+      "plugin": "crm",
+      "profile": "INTERNAL_WRITE",
+      "approvalFloor": "POLICY",
+      "external": false,
+      "status": "PASS",
+      "gates": {
+        "registry": {
+          "status": "PASS",
+          "evidenceId": "P1-REGISTRY-update_lead_status",
+          "detail": "crm resolved without collision"
+        },
+        "valid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-VALID-update_lead_status",
+          "detail": "shared fixture accepted by runtime validator"
+        },
+        "invalid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-INVALID-update_lead_status",
+          "detail": "null payload rejected"
+        },
+        "missing_entity": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-MISSING",
+          "detail": "1 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "cross_tenant": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-CROSS-TENANT",
+          "detail": "1 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "approval_floor": {
+          "status": "PASS",
+          "evidenceId": "P1-APPROVAL-update_lead_status",
+          "detail": "POLICY: requires=true, typed=false, approval-queue=true"
+        },
+        "prediction": {
+          "status": "PASS",
+          "evidenceId": "P1-PREDICTION-update_lead_status",
+          "detail": "schema prediction is explicit and labeled no-write by the plugin/registry contract"
+        },
+        "receipt_completed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-update_lead_status-completed",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "receipt_rejected": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-update_lead_status-rejected",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_blocked": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-update_lead_status-blocked",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_failed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-update_lead_status-failed",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_compensated": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-update_lead_status-compensated",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "idempotency": {
+          "status": "PASS",
+          "evidenceId": "P1-IDEMPOTENCY-update_lead_status",
+          "detail": "atomic action claim winners=1, repeat-after-terminal=0"
+        },
+        "frontend": {
+          "status": "PASS",
+          "evidenceId": "P1-FRONTEND-update_lead_status",
+          "detail": "generated manifest, renderer entries, six-state coverage, and zero certified fallback mounts"
+        },
+        "no_fallback": {
+          "status": "PASS",
+          "evidenceId": "P1-FALLBACK-update_lead_status",
+          "detail": "certified ActionRenderer fallback imports=0"
+        }
+      },
+      "evidenceIds": [
+        "P1-REGISTRY-update_lead_status",
+        "P1-SCHEMA-VALID-update_lead_status",
+        "P1-SCHEMA-INVALID-update_lead_status",
+        "P1-GROUND-MISSING",
+        "P1-GROUND-CROSS-TENANT",
+        "P1-APPROVAL-update_lead_status",
+        "P1-PREDICTION-update_lead_status",
+        "P1-RECEIPT-update_lead_status-completed",
+        "P1-RECEIPT-update_lead_status-rejected",
+        "P1-RECEIPT-update_lead_status-blocked",
+        "P1-RECEIPT-update_lead_status-failed",
+        "P1-RECEIPT-update_lead_status-compensated",
+        "P1-IDEMPOTENCY-update_lead_status",
+        "P1-FRONTEND-update_lead_status",
+        "P1-FALLBACK-update_lead_status"
+      ]
+    },
+    {
+      "actionType": "log_interaction",
+      "plugin": "crm",
+      "profile": "INTERNAL_WRITE",
+      "approvalFloor": "NONE",
+      "external": false,
+      "status": "PASS",
+      "gates": {
+        "registry": {
+          "status": "PASS",
+          "evidenceId": "P1-REGISTRY-log_interaction",
+          "detail": "crm resolved without collision"
+        },
+        "valid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-VALID-log_interaction",
+          "detail": "shared fixture accepted by runtime validator"
+        },
+        "invalid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-INVALID-log_interaction",
+          "detail": "null payload rejected"
+        },
+        "missing_entity": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-MISSING",
+          "detail": "1 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "cross_tenant": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-CROSS-TENANT",
+          "detail": "1 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "approval_floor": {
+          "status": "PASS",
+          "evidenceId": "P1-APPROVAL-log_interaction",
+          "detail": "NONE: requires=false, typed=false, approval-queue=false"
+        },
+        "prediction": {
+          "status": "PASS",
+          "evidenceId": "P1-PREDICTION-log_interaction",
+          "detail": "schema prediction is explicit and labeled no-write by the plugin/registry contract"
+        },
+        "receipt_completed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-log_interaction-completed",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "receipt_rejected": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-log_interaction-rejected",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_blocked": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-log_interaction-blocked",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_failed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-log_interaction-failed",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_compensated": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-log_interaction-compensated",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "idempotency": {
+          "status": "PASS",
+          "evidenceId": "P1-IDEMPOTENCY-log_interaction",
+          "detail": "atomic action claim winners=1, repeat-after-terminal=0"
+        },
+        "frontend": {
+          "status": "PASS",
+          "evidenceId": "P1-FRONTEND-log_interaction",
+          "detail": "generated manifest, renderer entries, six-state coverage, and zero certified fallback mounts"
+        },
+        "no_fallback": {
+          "status": "PASS",
+          "evidenceId": "P1-FALLBACK-log_interaction",
+          "detail": "certified ActionRenderer fallback imports=0"
+        }
+      },
+      "evidenceIds": [
+        "P1-REGISTRY-log_interaction",
+        "P1-SCHEMA-VALID-log_interaction",
+        "P1-SCHEMA-INVALID-log_interaction",
+        "P1-GROUND-MISSING",
+        "P1-GROUND-CROSS-TENANT",
+        "P1-APPROVAL-log_interaction",
+        "P1-PREDICTION-log_interaction",
+        "P1-RECEIPT-log_interaction-completed",
+        "P1-RECEIPT-log_interaction-rejected",
+        "P1-RECEIPT-log_interaction-blocked",
+        "P1-RECEIPT-log_interaction-failed",
+        "P1-RECEIPT-log_interaction-compensated",
+        "P1-IDEMPOTENCY-log_interaction",
+        "P1-FRONTEND-log_interaction",
+        "P1-FALLBACK-log_interaction"
+      ]
+    },
+    {
+      "actionType": "assign_lead_to_technician",
+      "plugin": "crm",
+      "profile": "OPERATIONAL_CHANGE",
+      "approvalFloor": "REQUIRED",
+      "external": false,
+      "status": "PASS",
+      "gates": {
+        "registry": {
+          "status": "PASS",
+          "evidenceId": "P1-REGISTRY-assign_lead_to_technician",
+          "detail": "crm resolved without collision"
+        },
+        "valid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-VALID-assign_lead_to_technician",
+          "detail": "shared fixture accepted by runtime validator"
+        },
+        "invalid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-INVALID-assign_lead_to_technician",
+          "detail": "null payload rejected"
+        },
+        "missing_entity": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-MISSING",
+          "detail": "2 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "cross_tenant": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-CROSS-TENANT",
+          "detail": "2 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "approval_floor": {
+          "status": "PASS",
+          "evidenceId": "P1-APPROVAL-assign_lead_to_technician",
+          "detail": "REQUIRED: requires=true, typed=false, approval-queue=true"
+        },
+        "prediction": {
+          "status": "PASS",
+          "evidenceId": "P1-PREDICTION-assign_lead_to_technician",
+          "detail": "schema prediction is explicit and labeled no-write by the plugin/registry contract"
+        },
+        "receipt_completed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-assign_lead_to_technician-completed",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "receipt_rejected": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-assign_lead_to_technician-rejected",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_blocked": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-assign_lead_to_technician-blocked",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_failed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-assign_lead_to_technician-failed",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_compensated": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-assign_lead_to_technician-compensated",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "idempotency": {
+          "status": "PASS",
+          "evidenceId": "P1-IDEMPOTENCY-assign_lead_to_technician",
+          "detail": "atomic action claim winners=1, repeat-after-terminal=0"
+        },
+        "frontend": {
+          "status": "PASS",
+          "evidenceId": "P1-FRONTEND-assign_lead_to_technician",
+          "detail": "generated manifest, renderer entries, six-state coverage, and zero certified fallback mounts"
+        },
+        "no_fallback": {
+          "status": "PASS",
+          "evidenceId": "P1-FALLBACK-assign_lead_to_technician",
+          "detail": "certified ActionRenderer fallback imports=0"
+        }
+      },
+      "evidenceIds": [
+        "P1-REGISTRY-assign_lead_to_technician",
+        "P1-SCHEMA-VALID-assign_lead_to_technician",
+        "P1-SCHEMA-INVALID-assign_lead_to_technician",
+        "P1-GROUND-MISSING",
+        "P1-GROUND-CROSS-TENANT",
+        "P1-APPROVAL-assign_lead_to_technician",
+        "P1-PREDICTION-assign_lead_to_technician",
+        "P1-RECEIPT-assign_lead_to_technician-completed",
+        "P1-RECEIPT-assign_lead_to_technician-rejected",
+        "P1-RECEIPT-assign_lead_to_technician-blocked",
+        "P1-RECEIPT-assign_lead_to_technician-failed",
+        "P1-RECEIPT-assign_lead_to_technician-compensated",
+        "P1-IDEMPOTENCY-assign_lead_to_technician",
+        "P1-FRONTEND-assign_lead_to_technician",
+        "P1-FALLBACK-assign_lead_to_technician"
+      ]
+    },
+    {
+      "actionType": "answer_customer_question",
+      "plugin": "customer-comm",
+      "profile": "READ_ONLY",
+      "approvalFloor": "NONE",
+      "external": false,
+      "status": "PASS",
+      "gates": {
+        "registry": {
+          "status": "PASS",
+          "evidenceId": "P1-REGISTRY-answer_customer_question",
+          "detail": "customer-comm resolved without collision"
+        },
+        "valid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-VALID-answer_customer_question",
+          "detail": "shared fixture accepted by runtime validator"
+        },
+        "invalid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-INVALID-answer_customer_question",
+          "detail": "null payload rejected"
+        },
+        "missing_entity": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-MISSING",
+          "detail": "1 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "cross_tenant": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-CROSS-TENANT",
+          "detail": "1 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "approval_floor": {
+          "status": "PASS",
+          "evidenceId": "P1-APPROVAL-answer_customer_question",
+          "detail": "NONE: requires=false, typed=false, approval-queue=false"
+        },
+        "prediction": {
+          "status": "PASS",
+          "evidenceId": "P1-PREDICTION-answer_customer_question",
+          "detail": "schema prediction is explicit and labeled no-write by the plugin/registry contract"
+        },
+        "receipt_completed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-answer_customer_question-completed",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "receipt_rejected": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-answer_customer_question-rejected",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_blocked": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-answer_customer_question-blocked",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_failed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-answer_customer_question-failed",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_compensated": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-answer_customer_question-compensated",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "idempotency": {
+          "status": "N/A",
+          "evidenceId": "P1-IDEMPOTENCY-answer_customer_question",
+          "detail": "read-only/meta action has no business or provider effect to repeat"
+        },
+        "provider_idempotency": {
+          "status": "N/A",
+          "evidenceId": "P1-PROVIDER-IDEMPOTENCY-answer_customer_question",
+          "detail": "read-only/meta action has no provider effect"
+        },
+        "frontend": {
+          "status": "PASS",
+          "evidenceId": "P1-FRONTEND-answer_customer_question",
+          "detail": "generated manifest, renderer entries, six-state coverage, and zero certified fallback mounts"
+        },
+        "no_fallback": {
+          "status": "PASS",
+          "evidenceId": "P1-FALLBACK-answer_customer_question",
+          "detail": "certified ActionRenderer fallback imports=0"
+        }
+      },
+      "evidenceIds": [
+        "P1-REGISTRY-answer_customer_question",
+        "P1-SCHEMA-VALID-answer_customer_question",
+        "P1-SCHEMA-INVALID-answer_customer_question",
+        "P1-GROUND-MISSING",
+        "P1-GROUND-CROSS-TENANT",
+        "P1-APPROVAL-answer_customer_question",
+        "P1-PREDICTION-answer_customer_question",
+        "P1-RECEIPT-answer_customer_question-completed",
+        "P1-RECEIPT-answer_customer_question-rejected",
+        "P1-RECEIPT-answer_customer_question-blocked",
+        "P1-RECEIPT-answer_customer_question-failed",
+        "P1-RECEIPT-answer_customer_question-compensated",
+        "P1-IDEMPOTENCY-answer_customer_question",
+        "P1-PROVIDER-IDEMPOTENCY-answer_customer_question",
+        "P1-FRONTEND-answer_customer_question",
+        "P1-FALLBACK-answer_customer_question"
+      ]
+    },
+    {
+      "actionType": "send_customer_message",
+      "plugin": "customer-comm",
+      "profile": "EXTERNAL_SIDE_EFFECT",
+      "approvalFloor": "REQUIRED",
+      "external": true,
+      "status": "PASS",
+      "gates": {
+        "registry": {
+          "status": "PASS",
+          "evidenceId": "P1-REGISTRY-send_customer_message",
+          "detail": "customer-comm resolved without collision"
+        },
+        "valid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-VALID-send_customer_message",
+          "detail": "shared fixture accepted by runtime validator"
+        },
+        "invalid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-INVALID-send_customer_message",
+          "detail": "null payload rejected"
+        },
+        "missing_entity": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-MISSING",
+          "detail": "1 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "cross_tenant": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-CROSS-TENANT",
+          "detail": "1 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "approval_floor": {
+          "status": "PASS",
+          "evidenceId": "P1-APPROVAL-send_customer_message",
+          "detail": "REQUIRED: requires=true, typed=false, approval-queue=true"
+        },
+        "prediction": {
+          "status": "PASS",
+          "evidenceId": "P1-PREDICTION-send_customer_message",
+          "detail": "schema prediction is explicit and labeled no-write by the plugin/registry contract"
+        },
+        "receipt_completed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-send_customer_message-completed",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "receipt_rejected": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-send_customer_message-rejected",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_blocked": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-send_customer_message-blocked",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_failed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-send_customer_message-failed",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_compensated": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-send_customer_message-compensated",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "idempotency": {
+          "status": "PASS",
+          "evidenceId": "P1-IDEMPOTENCY-send_customer_message",
+          "detail": "atomic action claim winners=1, repeat-after-terminal=0"
+        },
+        "provider_idempotency": {
+          "status": "PASS",
+          "evidenceId": "P1-PROVIDER-IDEMPOTENCY-send_customer_message",
+          "detail": "sequential-effects=1 concurrent-effects=1 ledger=1/1"
+        },
+        "frontend": {
+          "status": "PASS",
+          "evidenceId": "P1-FRONTEND-send_customer_message",
+          "detail": "generated manifest, renderer entries, six-state coverage, and zero certified fallback mounts"
+        },
+        "no_fallback": {
+          "status": "PASS",
+          "evidenceId": "P1-FALLBACK-send_customer_message",
+          "detail": "certified ActionRenderer fallback imports=0"
+        }
+      },
+      "evidenceIds": [
+        "P1-REGISTRY-send_customer_message",
+        "P1-SCHEMA-VALID-send_customer_message",
+        "P1-SCHEMA-INVALID-send_customer_message",
+        "P1-GROUND-MISSING",
+        "P1-GROUND-CROSS-TENANT",
+        "P1-APPROVAL-send_customer_message",
+        "P1-PREDICTION-send_customer_message",
+        "P1-RECEIPT-send_customer_message-completed",
+        "P1-RECEIPT-send_customer_message-rejected",
+        "P1-RECEIPT-send_customer_message-blocked",
+        "P1-RECEIPT-send_customer_message-failed",
+        "P1-RECEIPT-send_customer_message-compensated",
+        "P1-IDEMPOTENCY-send_customer_message",
+        "P1-PROVIDER-IDEMPOTENCY-send_customer_message",
+        "P1-FRONTEND-send_customer_message",
+        "P1-FALLBACK-send_customer_message"
+      ]
+    },
+    {
+      "actionType": "send_follow_up",
+      "plugin": "customer-comm",
+      "profile": "EXTERNAL_SIDE_EFFECT",
+      "approvalFloor": "REQUIRED",
+      "external": true,
+      "status": "PASS",
+      "gates": {
+        "registry": {
+          "status": "PASS",
+          "evidenceId": "P1-REGISTRY-send_follow_up",
+          "detail": "customer-comm resolved without collision"
+        },
+        "valid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-VALID-send_follow_up",
+          "detail": "shared fixture accepted by runtime validator"
+        },
+        "invalid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-INVALID-send_follow_up",
+          "detail": "null payload rejected"
+        },
+        "missing_entity": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-MISSING",
+          "detail": "1 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "cross_tenant": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-CROSS-TENANT",
+          "detail": "1 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "approval_floor": {
+          "status": "PASS",
+          "evidenceId": "P1-APPROVAL-send_follow_up",
+          "detail": "REQUIRED: requires=true, typed=false, approval-queue=true"
+        },
+        "prediction": {
+          "status": "PASS",
+          "evidenceId": "P1-PREDICTION-send_follow_up",
+          "detail": "schema prediction is explicit and labeled no-write by the plugin/registry contract"
+        },
+        "receipt_completed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-send_follow_up-completed",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "receipt_rejected": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-send_follow_up-rejected",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_blocked": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-send_follow_up-blocked",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_failed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-send_follow_up-failed",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_compensated": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-send_follow_up-compensated",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "idempotency": {
+          "status": "PASS",
+          "evidenceId": "P1-IDEMPOTENCY-send_follow_up",
+          "detail": "atomic action claim winners=1, repeat-after-terminal=0"
+        },
+        "provider_idempotency": {
+          "status": "PASS",
+          "evidenceId": "P1-PROVIDER-IDEMPOTENCY-send_follow_up",
+          "detail": "sequential-effects=1 concurrent-effects=1 ledger=1/1"
+        },
+        "frontend": {
+          "status": "PASS",
+          "evidenceId": "P1-FRONTEND-send_follow_up",
+          "detail": "generated manifest, renderer entries, six-state coverage, and zero certified fallback mounts"
+        },
+        "no_fallback": {
+          "status": "PASS",
+          "evidenceId": "P1-FALLBACK-send_follow_up",
+          "detail": "certified ActionRenderer fallback imports=0"
+        }
+      },
+      "evidenceIds": [
+        "P1-REGISTRY-send_follow_up",
+        "P1-SCHEMA-VALID-send_follow_up",
+        "P1-SCHEMA-INVALID-send_follow_up",
+        "P1-GROUND-MISSING",
+        "P1-GROUND-CROSS-TENANT",
+        "P1-APPROVAL-send_follow_up",
+        "P1-PREDICTION-send_follow_up",
+        "P1-RECEIPT-send_follow_up-completed",
+        "P1-RECEIPT-send_follow_up-rejected",
+        "P1-RECEIPT-send_follow_up-blocked",
+        "P1-RECEIPT-send_follow_up-failed",
+        "P1-RECEIPT-send_follow_up-compensated",
+        "P1-IDEMPOTENCY-send_follow_up",
+        "P1-PROVIDER-IDEMPOTENCY-send_follow_up",
+        "P1-FRONTEND-send_follow_up",
+        "P1-FALLBACK-send_follow_up"
+      ]
+    },
+    {
+      "actionType": "check_stock_level",
+      "plugin": "inventory",
+      "profile": "READ_ONLY",
+      "approvalFloor": "NONE",
+      "external": false,
+      "status": "PASS",
+      "gates": {
+        "registry": {
+          "status": "PASS",
+          "evidenceId": "P1-REGISTRY-check_stock_level",
+          "detail": "inventory resolved without collision"
+        },
+        "valid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-VALID-check_stock_level",
+          "detail": "shared fixture accepted by runtime validator"
+        },
+        "invalid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-INVALID-check_stock_level",
+          "detail": "null payload rejected"
+        },
+        "missing_entity": {
+          "status": "N/A",
+          "evidenceId": "P1-GROUND-MISSING",
+          "detail": "fixture has no referenced entity field"
+        },
+        "cross_tenant": {
+          "status": "N/A",
+          "evidenceId": "P1-GROUND-CROSS-TENANT",
+          "detail": "fixture has no referenced entity field"
+        },
+        "approval_floor": {
+          "status": "PASS",
+          "evidenceId": "P1-APPROVAL-check_stock_level",
+          "detail": "NONE: requires=false, typed=false, approval-queue=false"
+        },
+        "prediction": {
+          "status": "PASS",
+          "evidenceId": "P1-PREDICTION-check_stock_level",
+          "detail": "schema prediction is explicit and labeled no-write by the plugin/registry contract"
+        },
+        "receipt_completed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-check_stock_level-completed",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "receipt_rejected": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-check_stock_level-rejected",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_blocked": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-check_stock_level-blocked",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_failed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-check_stock_level-failed",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_compensated": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-check_stock_level-compensated",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "idempotency": {
+          "status": "N/A",
+          "evidenceId": "P1-IDEMPOTENCY-check_stock_level",
+          "detail": "read-only/meta action has no business or provider effect to repeat"
+        },
+        "provider_idempotency": {
+          "status": "N/A",
+          "evidenceId": "P1-PROVIDER-IDEMPOTENCY-check_stock_level",
+          "detail": "read-only/meta action has no provider effect"
+        },
+        "frontend": {
+          "status": "PASS",
+          "evidenceId": "P1-FRONTEND-check_stock_level",
+          "detail": "generated manifest, renderer entries, six-state coverage, and zero certified fallback mounts"
+        },
+        "no_fallback": {
+          "status": "PASS",
+          "evidenceId": "P1-FALLBACK-check_stock_level",
+          "detail": "certified ActionRenderer fallback imports=0"
+        }
+      },
+      "evidenceIds": [
+        "P1-REGISTRY-check_stock_level",
+        "P1-SCHEMA-VALID-check_stock_level",
+        "P1-SCHEMA-INVALID-check_stock_level",
+        "P1-GROUND-MISSING",
+        "P1-GROUND-CROSS-TENANT",
+        "P1-APPROVAL-check_stock_level",
+        "P1-PREDICTION-check_stock_level",
+        "P1-RECEIPT-check_stock_level-completed",
+        "P1-RECEIPT-check_stock_level-rejected",
+        "P1-RECEIPT-check_stock_level-blocked",
+        "P1-RECEIPT-check_stock_level-failed",
+        "P1-RECEIPT-check_stock_level-compensated",
+        "P1-IDEMPOTENCY-check_stock_level",
+        "P1-PROVIDER-IDEMPOTENCY-check_stock_level",
+        "P1-FRONTEND-check_stock_level",
+        "P1-FALLBACK-check_stock_level"
+      ]
+    },
+    {
+      "actionType": "flag_reorder_needed",
+      "plugin": "inventory",
+      "profile": "INTERNAL_WRITE",
+      "approvalFloor": "POLICY",
+      "external": false,
+      "status": "PASS",
+      "gates": {
+        "registry": {
+          "status": "PASS",
+          "evidenceId": "P1-REGISTRY-flag_reorder_needed",
+          "detail": "inventory resolved without collision"
+        },
+        "valid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-VALID-flag_reorder_needed",
+          "detail": "shared fixture accepted by runtime validator"
+        },
+        "invalid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-INVALID-flag_reorder_needed",
+          "detail": "null payload rejected"
+        },
+        "missing_entity": {
+          "status": "N/A",
+          "evidenceId": "P1-GROUND-MISSING",
+          "detail": "fixture has no referenced entity field"
+        },
+        "cross_tenant": {
+          "status": "N/A",
+          "evidenceId": "P1-GROUND-CROSS-TENANT",
+          "detail": "fixture has no referenced entity field"
+        },
+        "approval_floor": {
+          "status": "PASS",
+          "evidenceId": "P1-APPROVAL-flag_reorder_needed",
+          "detail": "POLICY: requires=true, typed=false, approval-queue=true"
+        },
+        "prediction": {
+          "status": "PASS",
+          "evidenceId": "P1-PREDICTION-flag_reorder_needed",
+          "detail": "schema prediction is explicit and labeled no-write by the plugin/registry contract"
+        },
+        "receipt_completed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-flag_reorder_needed-completed",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "receipt_rejected": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-flag_reorder_needed-rejected",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_blocked": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-flag_reorder_needed-blocked",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_failed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-flag_reorder_needed-failed",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_compensated": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-flag_reorder_needed-compensated",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "idempotency": {
+          "status": "PASS",
+          "evidenceId": "P1-IDEMPOTENCY-flag_reorder_needed",
+          "detail": "atomic action claim winners=1, repeat-after-terminal=0"
+        },
+        "frontend": {
+          "status": "PASS",
+          "evidenceId": "P1-FRONTEND-flag_reorder_needed",
+          "detail": "generated manifest, renderer entries, six-state coverage, and zero certified fallback mounts"
+        },
+        "no_fallback": {
+          "status": "PASS",
+          "evidenceId": "P1-FALLBACK-flag_reorder_needed",
+          "detail": "certified ActionRenderer fallback imports=0"
+        }
+      },
+      "evidenceIds": [
+        "P1-REGISTRY-flag_reorder_needed",
+        "P1-SCHEMA-VALID-flag_reorder_needed",
+        "P1-SCHEMA-INVALID-flag_reorder_needed",
+        "P1-GROUND-MISSING",
+        "P1-GROUND-CROSS-TENANT",
+        "P1-APPROVAL-flag_reorder_needed",
+        "P1-PREDICTION-flag_reorder_needed",
+        "P1-RECEIPT-flag_reorder_needed-completed",
+        "P1-RECEIPT-flag_reorder_needed-rejected",
+        "P1-RECEIPT-flag_reorder_needed-blocked",
+        "P1-RECEIPT-flag_reorder_needed-failed",
+        "P1-RECEIPT-flag_reorder_needed-compensated",
+        "P1-IDEMPOTENCY-flag_reorder_needed",
+        "P1-FRONTEND-flag_reorder_needed",
+        "P1-FALLBACK-flag_reorder_needed"
+      ]
+    },
+    {
+      "actionType": "log_stock_used_on_visit",
+      "plugin": "inventory",
+      "profile": "OPERATIONAL_CHANGE",
+      "approvalFloor": "POLICY",
+      "external": false,
+      "status": "PASS",
+      "gates": {
+        "registry": {
+          "status": "PASS",
+          "evidenceId": "P1-REGISTRY-log_stock_used_on_visit",
+          "detail": "inventory resolved without collision"
+        },
+        "valid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-VALID-log_stock_used_on_visit",
+          "detail": "shared fixture accepted by runtime validator"
+        },
+        "invalid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-INVALID-log_stock_used_on_visit",
+          "detail": "null payload rejected"
+        },
+        "missing_entity": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-MISSING",
+          "detail": "1 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "cross_tenant": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-CROSS-TENANT",
+          "detail": "1 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "approval_floor": {
+          "status": "PASS",
+          "evidenceId": "P1-APPROVAL-log_stock_used_on_visit",
+          "detail": "POLICY: requires=true, typed=false, approval-queue=true"
+        },
+        "prediction": {
+          "status": "PASS",
+          "evidenceId": "P1-PREDICTION-log_stock_used_on_visit",
+          "detail": "dry_run prediction is explicit and labeled no-write by the plugin/registry contract"
+        },
+        "receipt_completed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-log_stock_used_on_visit-completed",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "receipt_rejected": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-log_stock_used_on_visit-rejected",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_blocked": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-log_stock_used_on_visit-blocked",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_failed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-log_stock_used_on_visit-failed",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_compensated": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-log_stock_used_on_visit-compensated",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "idempotency": {
+          "status": "PASS",
+          "evidenceId": "P1-IDEMPOTENCY-log_stock_used_on_visit",
+          "detail": "atomic action claim winners=1, repeat-after-terminal=0"
+        },
+        "frontend": {
+          "status": "PASS",
+          "evidenceId": "P1-FRONTEND-log_stock_used_on_visit",
+          "detail": "generated manifest, renderer entries, six-state coverage, and zero certified fallback mounts"
+        },
+        "no_fallback": {
+          "status": "PASS",
+          "evidenceId": "P1-FALLBACK-log_stock_used_on_visit",
+          "detail": "certified ActionRenderer fallback imports=0"
+        }
+      },
+      "evidenceIds": [
+        "P1-REGISTRY-log_stock_used_on_visit",
+        "P1-SCHEMA-VALID-log_stock_used_on_visit",
+        "P1-SCHEMA-INVALID-log_stock_used_on_visit",
+        "P1-GROUND-MISSING",
+        "P1-GROUND-CROSS-TENANT",
+        "P1-APPROVAL-log_stock_used_on_visit",
+        "P1-PREDICTION-log_stock_used_on_visit",
+        "P1-RECEIPT-log_stock_used_on_visit-completed",
+        "P1-RECEIPT-log_stock_used_on_visit-rejected",
+        "P1-RECEIPT-log_stock_used_on_visit-blocked",
+        "P1-RECEIPT-log_stock_used_on_visit-failed",
+        "P1-RECEIPT-log_stock_used_on_visit-compensated",
+        "P1-IDEMPOTENCY-log_stock_used_on_visit",
+        "P1-FRONTEND-log_stock_used_on_visit",
+        "P1-FALLBACK-log_stock_used_on_visit"
+      ]
+    },
+    {
+      "actionType": "start_invoice_to_cash_workflow",
+      "plugin": "invoice-to-cash",
+      "profile": "DURABLE_WORKFLOW",
+      "approvalFloor": "TYPED_REQUIRED",
+      "external": true,
+      "status": "PASS",
+      "gates": {
+        "registry": {
+          "status": "PASS",
+          "evidenceId": "P1-REGISTRY-start_invoice_to_cash_workflow",
+          "detail": "invoice-to-cash resolved without collision"
+        },
+        "valid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-VALID-start_invoice_to_cash_workflow",
+          "detail": "shared fixture accepted by runtime validator"
+        },
+        "invalid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-INVALID-start_invoice_to_cash_workflow",
+          "detail": "null payload rejected"
+        },
+        "missing_entity": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-MISSING",
+          "detail": "2 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "cross_tenant": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-CROSS-TENANT",
+          "detail": "2 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "approval_floor": {
+          "status": "PASS",
+          "evidenceId": "P1-APPROVAL-start_invoice_to_cash_workflow",
+          "detail": "TYPED_REQUIRED: requires=true, typed=true, approval-queue=true"
+        },
+        "prediction": {
+          "status": "PASS",
+          "evidenceId": "P1-PREDICTION-start_invoice_to_cash_workflow",
+          "detail": "dry_run prediction is explicit and labeled no-write by the plugin/registry contract"
+        },
+        "receipt_completed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-start_invoice_to_cash_workflow-completed",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "receipt_rejected": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-start_invoice_to_cash_workflow-rejected",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_blocked": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-start_invoice_to_cash_workflow-blocked",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_failed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-start_invoice_to_cash_workflow-failed",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_compensated": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-start_invoice_to_cash_workflow-compensated",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "idempotency": {
+          "status": "PASS",
+          "evidenceId": "P1-IDEMPOTENCY-start_invoice_to_cash_workflow",
+          "detail": "atomic action claim winners=1, repeat-after-terminal=0"
+        },
+        "provider_idempotency": {
+          "status": "PASS",
+          "evidenceId": "P1-PROVIDER-IDEMPOTENCY-start_invoice_to_cash_workflow",
+          "detail": "sequential-effects=1 concurrent-effects=1 ledger=1/1"
+        },
+        "frontend": {
+          "status": "PASS",
+          "evidenceId": "P1-FRONTEND-start_invoice_to_cash_workflow",
+          "detail": "generated manifest, renderer entries, six-state coverage, and zero certified fallback mounts"
+        },
+        "no_fallback": {
+          "status": "PASS",
+          "evidenceId": "P1-FALLBACK-start_invoice_to_cash_workflow",
+          "detail": "certified ActionRenderer fallback imports=0"
+        }
+      },
+      "evidenceIds": [
+        "P1-REGISTRY-start_invoice_to_cash_workflow",
+        "P1-SCHEMA-VALID-start_invoice_to_cash_workflow",
+        "P1-SCHEMA-INVALID-start_invoice_to_cash_workflow",
+        "P1-GROUND-MISSING",
+        "P1-GROUND-CROSS-TENANT",
+        "P1-APPROVAL-start_invoice_to_cash_workflow",
+        "P1-PREDICTION-start_invoice_to_cash_workflow",
+        "P1-RECEIPT-start_invoice_to_cash_workflow-completed",
+        "P1-RECEIPT-start_invoice_to_cash_workflow-rejected",
+        "P1-RECEIPT-start_invoice_to_cash_workflow-blocked",
+        "P1-RECEIPT-start_invoice_to_cash_workflow-failed",
+        "P1-RECEIPT-start_invoice_to_cash_workflow-compensated",
+        "P1-IDEMPOTENCY-start_invoice_to_cash_workflow",
+        "P1-PROVIDER-IDEMPOTENCY-start_invoice_to_cash_workflow",
+        "P1-FRONTEND-start_invoice_to_cash_workflow",
+        "P1-FALLBACK-start_invoice_to_cash_workflow"
+      ]
+    },
+    {
+      "actionType": "start_water_test_workflow",
+      "plugin": "lead-to-water-test",
+      "profile": "DURABLE_WORKFLOW",
+      "approvalFloor": "REQUIRED",
+      "external": true,
+      "status": "PASS",
+      "gates": {
+        "registry": {
+          "status": "PASS",
+          "evidenceId": "P1-REGISTRY-start_water_test_workflow",
+          "detail": "lead-to-water-test resolved without collision"
+        },
+        "valid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-VALID-start_water_test_workflow",
+          "detail": "shared fixture accepted by runtime validator"
+        },
+        "invalid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-INVALID-start_water_test_workflow",
+          "detail": "null payload rejected"
+        },
+        "missing_entity": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-MISSING",
+          "detail": "2 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "cross_tenant": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-CROSS-TENANT",
+          "detail": "2 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "approval_floor": {
+          "status": "PASS",
+          "evidenceId": "P1-APPROVAL-start_water_test_workflow",
+          "detail": "REQUIRED: requires=true, typed=false, approval-queue=true"
+        },
+        "prediction": {
+          "status": "PASS",
+          "evidenceId": "P1-PREDICTION-start_water_test_workflow",
+          "detail": "schema prediction is explicit and labeled no-write by the plugin/registry contract"
+        },
+        "receipt_completed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-start_water_test_workflow-completed",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "receipt_rejected": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-start_water_test_workflow-rejected",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_blocked": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-start_water_test_workflow-blocked",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_failed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-start_water_test_workflow-failed",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_compensated": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-start_water_test_workflow-compensated",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "idempotency": {
+          "status": "PASS",
+          "evidenceId": "P1-IDEMPOTENCY-start_water_test_workflow",
+          "detail": "atomic action claim winners=1, repeat-after-terminal=0"
+        },
+        "provider_idempotency": {
+          "status": "PASS",
+          "evidenceId": "P1-PROVIDER-IDEMPOTENCY-start_water_test_workflow",
+          "detail": "sequential-effects=1 concurrent-effects=1 ledger=1/1"
+        },
+        "frontend": {
+          "status": "PASS",
+          "evidenceId": "P1-FRONTEND-start_water_test_workflow",
+          "detail": "generated manifest, renderer entries, six-state coverage, and zero certified fallback mounts"
+        },
+        "no_fallback": {
+          "status": "PASS",
+          "evidenceId": "P1-FALLBACK-start_water_test_workflow",
+          "detail": "certified ActionRenderer fallback imports=0"
+        }
+      },
+      "evidenceIds": [
+        "P1-REGISTRY-start_water_test_workflow",
+        "P1-SCHEMA-VALID-start_water_test_workflow",
+        "P1-SCHEMA-INVALID-start_water_test_workflow",
+        "P1-GROUND-MISSING",
+        "P1-GROUND-CROSS-TENANT",
+        "P1-APPROVAL-start_water_test_workflow",
+        "P1-PREDICTION-start_water_test_workflow",
+        "P1-RECEIPT-start_water_test_workflow-completed",
+        "P1-RECEIPT-start_water_test_workflow-rejected",
+        "P1-RECEIPT-start_water_test_workflow-blocked",
+        "P1-RECEIPT-start_water_test_workflow-failed",
+        "P1-RECEIPT-start_water_test_workflow-compensated",
+        "P1-IDEMPOTENCY-start_water_test_workflow",
+        "P1-PROVIDER-IDEMPOTENCY-start_water_test_workflow",
+        "P1-FRONTEND-start_water_test_workflow",
+        "P1-FALLBACK-start_water_test_workflow"
+      ]
+    },
+    {
+      "actionType": "renew_maintenance_agreement",
+      "plugin": "maintenance-agreement",
+      "profile": "DURABLE_WORKFLOW",
+      "approvalFloor": "REQUIRED",
+      "external": true,
+      "status": "PASS",
+      "gates": {
+        "registry": {
+          "status": "PASS",
+          "evidenceId": "P1-REGISTRY-renew_maintenance_agreement",
+          "detail": "maintenance-agreement resolved without collision"
+        },
+        "valid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-VALID-renew_maintenance_agreement",
+          "detail": "shared fixture accepted by runtime validator"
+        },
+        "invalid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-INVALID-renew_maintenance_agreement",
+          "detail": "null payload rejected"
+        },
+        "missing_entity": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-MISSING",
+          "detail": "2 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "cross_tenant": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-CROSS-TENANT",
+          "detail": "2 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "approval_floor": {
+          "status": "PASS",
+          "evidenceId": "P1-APPROVAL-renew_maintenance_agreement",
+          "detail": "REQUIRED: requires=true, typed=false, approval-queue=true"
+        },
+        "prediction": {
+          "status": "PASS",
+          "evidenceId": "P1-PREDICTION-renew_maintenance_agreement",
+          "detail": "schema prediction is explicit and labeled no-write by the plugin/registry contract"
+        },
+        "receipt_completed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-renew_maintenance_agreement-completed",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "receipt_rejected": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-renew_maintenance_agreement-rejected",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_blocked": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-renew_maintenance_agreement-blocked",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_failed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-renew_maintenance_agreement-failed",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_compensated": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-renew_maintenance_agreement-compensated",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "idempotency": {
+          "status": "PASS",
+          "evidenceId": "P1-IDEMPOTENCY-renew_maintenance_agreement",
+          "detail": "atomic action claim winners=1, repeat-after-terminal=0"
+        },
+        "provider_idempotency": {
+          "status": "PASS",
+          "evidenceId": "P1-PROVIDER-IDEMPOTENCY-renew_maintenance_agreement",
+          "detail": "sequential-effects=1 concurrent-effects=1 ledger=1/1"
+        },
+        "frontend": {
+          "status": "PASS",
+          "evidenceId": "P1-FRONTEND-renew_maintenance_agreement",
+          "detail": "generated manifest, renderer entries, six-state coverage, and zero certified fallback mounts"
+        },
+        "no_fallback": {
+          "status": "PASS",
+          "evidenceId": "P1-FALLBACK-renew_maintenance_agreement",
+          "detail": "certified ActionRenderer fallback imports=0"
+        }
+      },
+      "evidenceIds": [
+        "P1-REGISTRY-renew_maintenance_agreement",
+        "P1-SCHEMA-VALID-renew_maintenance_agreement",
+        "P1-SCHEMA-INVALID-renew_maintenance_agreement",
+        "P1-GROUND-MISSING",
+        "P1-GROUND-CROSS-TENANT",
+        "P1-APPROVAL-renew_maintenance_agreement",
+        "P1-PREDICTION-renew_maintenance_agreement",
+        "P1-RECEIPT-renew_maintenance_agreement-completed",
+        "P1-RECEIPT-renew_maintenance_agreement-rejected",
+        "P1-RECEIPT-renew_maintenance_agreement-blocked",
+        "P1-RECEIPT-renew_maintenance_agreement-failed",
+        "P1-RECEIPT-renew_maintenance_agreement-compensated",
+        "P1-IDEMPOTENCY-renew_maintenance_agreement",
+        "P1-PROVIDER-IDEMPOTENCY-renew_maintenance_agreement",
+        "P1-FRONTEND-renew_maintenance_agreement",
+        "P1-FALLBACK-renew_maintenance_agreement"
+      ]
+    },
+    {
+      "actionType": "manual_step_suggestion",
+      "plugin": "manual-step",
+      "profile": "META_NO_SIDE_EFFECT",
+      "approvalFloor": "NONE",
+      "external": false,
+      "status": "PASS",
+      "gates": {
+        "registry": {
+          "status": "PASS",
+          "evidenceId": "P1-REGISTRY-manual_step_suggestion",
+          "detail": "manual-step resolved without collision"
+        },
+        "valid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-VALID-manual_step_suggestion",
+          "detail": "shared fixture accepted by runtime validator"
+        },
+        "invalid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-INVALID-manual_step_suggestion",
+          "detail": "null payload rejected"
+        },
+        "missing_entity": {
+          "status": "N/A",
+          "evidenceId": "P1-GROUND-MISSING",
+          "detail": "fixture has no referenced entity field"
+        },
+        "cross_tenant": {
+          "status": "N/A",
+          "evidenceId": "P1-GROUND-CROSS-TENANT",
+          "detail": "fixture has no referenced entity field"
+        },
+        "approval_floor": {
+          "status": "PASS",
+          "evidenceId": "P1-APPROVAL-manual_step_suggestion",
+          "detail": "NONE: requires=false, typed=false, approval-queue=false"
+        },
+        "prediction": {
+          "status": "PASS",
+          "evidenceId": "P1-PREDICTION-manual_step_suggestion",
+          "detail": "schema prediction is explicit and labeled no-write by the plugin/registry contract"
+        },
+        "receipt_completed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-manual_step_suggestion-completed",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "receipt_rejected": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-manual_step_suggestion-rejected",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_blocked": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-manual_step_suggestion-blocked",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_failed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-manual_step_suggestion-failed",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_compensated": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-manual_step_suggestion-compensated",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "idempotency": {
+          "status": "N/A",
+          "evidenceId": "P1-IDEMPOTENCY-manual_step_suggestion",
+          "detail": "read-only/meta action has no business or provider effect to repeat"
+        },
+        "provider_idempotency": {
+          "status": "N/A",
+          "evidenceId": "P1-PROVIDER-IDEMPOTENCY-manual_step_suggestion",
+          "detail": "read-only/meta action has no provider effect"
+        },
+        "frontend": {
+          "status": "PASS",
+          "evidenceId": "P1-FRONTEND-manual_step_suggestion",
+          "detail": "generated manifest, renderer entries, six-state coverage, and zero certified fallback mounts"
+        },
+        "no_fallback": {
+          "status": "PASS",
+          "evidenceId": "P1-FALLBACK-manual_step_suggestion",
+          "detail": "certified ActionRenderer fallback imports=0"
+        }
+      },
+      "evidenceIds": [
+        "P1-REGISTRY-manual_step_suggestion",
+        "P1-SCHEMA-VALID-manual_step_suggestion",
+        "P1-SCHEMA-INVALID-manual_step_suggestion",
+        "P1-GROUND-MISSING",
+        "P1-GROUND-CROSS-TENANT",
+        "P1-APPROVAL-manual_step_suggestion",
+        "P1-PREDICTION-manual_step_suggestion",
+        "P1-RECEIPT-manual_step_suggestion-completed",
+        "P1-RECEIPT-manual_step_suggestion-rejected",
+        "P1-RECEIPT-manual_step_suggestion-blocked",
+        "P1-RECEIPT-manual_step_suggestion-failed",
+        "P1-RECEIPT-manual_step_suggestion-compensated",
+        "P1-IDEMPOTENCY-manual_step_suggestion",
+        "P1-PROVIDER-IDEMPOTENCY-manual_step_suggestion",
+        "P1-FRONTEND-manual_step_suggestion",
+        "P1-FALLBACK-manual_step_suggestion"
+      ]
+    },
+    {
+      "actionType": "summarize_ad_performance",
+      "plugin": "marketing",
+      "profile": "READ_ONLY",
+      "approvalFloor": "NONE",
+      "external": false,
+      "status": "PASS",
+      "gates": {
+        "registry": {
+          "status": "PASS",
+          "evidenceId": "P1-REGISTRY-summarize_ad_performance",
+          "detail": "marketing resolved without collision"
+        },
+        "valid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-VALID-summarize_ad_performance",
+          "detail": "shared fixture accepted by runtime validator"
+        },
+        "invalid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-INVALID-summarize_ad_performance",
+          "detail": "null payload rejected"
+        },
+        "missing_entity": {
+          "status": "N/A",
+          "evidenceId": "P1-GROUND-MISSING",
+          "detail": "fixture has no referenced entity field"
+        },
+        "cross_tenant": {
+          "status": "N/A",
+          "evidenceId": "P1-GROUND-CROSS-TENANT",
+          "detail": "fixture has no referenced entity field"
+        },
+        "approval_floor": {
+          "status": "PASS",
+          "evidenceId": "P1-APPROVAL-summarize_ad_performance",
+          "detail": "NONE: requires=false, typed=false, approval-queue=false"
+        },
+        "prediction": {
+          "status": "PASS",
+          "evidenceId": "P1-PREDICTION-summarize_ad_performance",
+          "detail": "schema prediction is explicit and labeled no-write by the plugin/registry contract"
+        },
+        "receipt_completed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-summarize_ad_performance-completed",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "receipt_rejected": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-summarize_ad_performance-rejected",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_blocked": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-summarize_ad_performance-blocked",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_failed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-summarize_ad_performance-failed",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_compensated": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-summarize_ad_performance-compensated",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "idempotency": {
+          "status": "N/A",
+          "evidenceId": "P1-IDEMPOTENCY-summarize_ad_performance",
+          "detail": "read-only/meta action has no business or provider effect to repeat"
+        },
+        "provider_idempotency": {
+          "status": "N/A",
+          "evidenceId": "P1-PROVIDER-IDEMPOTENCY-summarize_ad_performance",
+          "detail": "read-only/meta action has no provider effect"
+        },
+        "frontend": {
+          "status": "PASS",
+          "evidenceId": "P1-FRONTEND-summarize_ad_performance",
+          "detail": "generated manifest, renderer entries, six-state coverage, and zero certified fallback mounts"
+        },
+        "no_fallback": {
+          "status": "PASS",
+          "evidenceId": "P1-FALLBACK-summarize_ad_performance",
+          "detail": "certified ActionRenderer fallback imports=0"
+        }
+      },
+      "evidenceIds": [
+        "P1-REGISTRY-summarize_ad_performance",
+        "P1-SCHEMA-VALID-summarize_ad_performance",
+        "P1-SCHEMA-INVALID-summarize_ad_performance",
+        "P1-GROUND-MISSING",
+        "P1-GROUND-CROSS-TENANT",
+        "P1-APPROVAL-summarize_ad_performance",
+        "P1-PREDICTION-summarize_ad_performance",
+        "P1-RECEIPT-summarize_ad_performance-completed",
+        "P1-RECEIPT-summarize_ad_performance-rejected",
+        "P1-RECEIPT-summarize_ad_performance-blocked",
+        "P1-RECEIPT-summarize_ad_performance-failed",
+        "P1-RECEIPT-summarize_ad_performance-compensated",
+        "P1-IDEMPOTENCY-summarize_ad_performance",
+        "P1-PROVIDER-IDEMPOTENCY-summarize_ad_performance",
+        "P1-FRONTEND-summarize_ad_performance",
+        "P1-FALLBACK-summarize_ad_performance"
+      ]
+    },
+    {
+      "actionType": "launch_ad_campaign",
+      "plugin": "marketing",
+      "profile": "EXTERNAL_SPEND",
+      "approvalFloor": "TYPED_REQUIRED",
+      "external": true,
+      "status": "PASS",
+      "gates": {
+        "registry": {
+          "status": "PASS",
+          "evidenceId": "P1-REGISTRY-launch_ad_campaign",
+          "detail": "marketing resolved without collision"
+        },
+        "valid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-VALID-launch_ad_campaign",
+          "detail": "shared fixture accepted by runtime validator"
+        },
+        "invalid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-INVALID-launch_ad_campaign",
+          "detail": "null payload rejected"
+        },
+        "missing_entity": {
+          "status": "N/A",
+          "evidenceId": "P1-GROUND-MISSING",
+          "detail": "fixture has no referenced entity field"
+        },
+        "cross_tenant": {
+          "status": "N/A",
+          "evidenceId": "P1-GROUND-CROSS-TENANT",
+          "detail": "fixture has no referenced entity field"
+        },
+        "approval_floor": {
+          "status": "PASS",
+          "evidenceId": "P1-APPROVAL-launch_ad_campaign",
+          "detail": "TYPED_REQUIRED: requires=true, typed=true, approval-queue=true"
+        },
+        "prediction": {
+          "status": "PASS",
+          "evidenceId": "P1-PREDICTION-launch_ad_campaign",
+          "detail": "schema prediction is explicit and labeled no-write by the plugin/registry contract"
+        },
+        "receipt_completed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-launch_ad_campaign-completed",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "receipt_rejected": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-launch_ad_campaign-rejected",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_blocked": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-launch_ad_campaign-blocked",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_failed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-launch_ad_campaign-failed",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_compensated": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-launch_ad_campaign-compensated",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "idempotency": {
+          "status": "PASS",
+          "evidenceId": "P1-IDEMPOTENCY-launch_ad_campaign",
+          "detail": "atomic action claim winners=1, repeat-after-terminal=0"
+        },
+        "provider_idempotency": {
+          "status": "PASS",
+          "evidenceId": "P1-PROVIDER-IDEMPOTENCY-launch_ad_campaign",
+          "detail": "sequential-effects=1 concurrent-effects=1 ledger=1/1"
+        },
+        "frontend": {
+          "status": "PASS",
+          "evidenceId": "P1-FRONTEND-launch_ad_campaign",
+          "detail": "generated manifest, renderer entries, six-state coverage, and zero certified fallback mounts"
+        },
+        "no_fallback": {
+          "status": "PASS",
+          "evidenceId": "P1-FALLBACK-launch_ad_campaign",
+          "detail": "certified ActionRenderer fallback imports=0"
+        }
+      },
+      "evidenceIds": [
+        "P1-REGISTRY-launch_ad_campaign",
+        "P1-SCHEMA-VALID-launch_ad_campaign",
+        "P1-SCHEMA-INVALID-launch_ad_campaign",
+        "P1-GROUND-MISSING",
+        "P1-GROUND-CROSS-TENANT",
+        "P1-APPROVAL-launch_ad_campaign",
+        "P1-PREDICTION-launch_ad_campaign",
+        "P1-RECEIPT-launch_ad_campaign-completed",
+        "P1-RECEIPT-launch_ad_campaign-rejected",
+        "P1-RECEIPT-launch_ad_campaign-blocked",
+        "P1-RECEIPT-launch_ad_campaign-failed",
+        "P1-RECEIPT-launch_ad_campaign-compensated",
+        "P1-IDEMPOTENCY-launch_ad_campaign",
+        "P1-PROVIDER-IDEMPOTENCY-launch_ad_campaign",
+        "P1-FRONTEND-launch_ad_campaign",
+        "P1-FALLBACK-launch_ad_campaign"
+      ]
+    },
+    {
+      "actionType": "create_review_request",
+      "plugin": "marketing",
+      "profile": "EXTERNAL_SIDE_EFFECT",
+      "approvalFloor": "REQUIRED",
+      "external": true,
+      "status": "PASS",
+      "gates": {
+        "registry": {
+          "status": "PASS",
+          "evidenceId": "P1-REGISTRY-create_review_request",
+          "detail": "marketing resolved without collision"
+        },
+        "valid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-VALID-create_review_request",
+          "detail": "shared fixture accepted by runtime validator"
+        },
+        "invalid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-INVALID-create_review_request",
+          "detail": "null payload rejected"
+        },
+        "missing_entity": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-MISSING",
+          "detail": "1 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "cross_tenant": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-CROSS-TENANT",
+          "detail": "1 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "approval_floor": {
+          "status": "PASS",
+          "evidenceId": "P1-APPROVAL-create_review_request",
+          "detail": "REQUIRED: requires=true, typed=false, approval-queue=true"
+        },
+        "prediction": {
+          "status": "PASS",
+          "evidenceId": "P1-PREDICTION-create_review_request",
+          "detail": "schema prediction is explicit and labeled no-write by the plugin/registry contract"
+        },
+        "receipt_completed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-create_review_request-completed",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "receipt_rejected": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-create_review_request-rejected",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_blocked": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-create_review_request-blocked",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_failed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-create_review_request-failed",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_compensated": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-create_review_request-compensated",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "idempotency": {
+          "status": "PASS",
+          "evidenceId": "P1-IDEMPOTENCY-create_review_request",
+          "detail": "atomic action claim winners=1, repeat-after-terminal=0"
+        },
+        "provider_idempotency": {
+          "status": "PASS",
+          "evidenceId": "P1-PROVIDER-IDEMPOTENCY-create_review_request",
+          "detail": "sequential-effects=1 concurrent-effects=1 ledger=1/1"
+        },
+        "frontend": {
+          "status": "PASS",
+          "evidenceId": "P1-FRONTEND-create_review_request",
+          "detail": "generated manifest, renderer entries, six-state coverage, and zero certified fallback mounts"
+        },
+        "no_fallback": {
+          "status": "PASS",
+          "evidenceId": "P1-FALLBACK-create_review_request",
+          "detail": "certified ActionRenderer fallback imports=0"
+        }
+      },
+      "evidenceIds": [
+        "P1-REGISTRY-create_review_request",
+        "P1-SCHEMA-VALID-create_review_request",
+        "P1-SCHEMA-INVALID-create_review_request",
+        "P1-GROUND-MISSING",
+        "P1-GROUND-CROSS-TENANT",
+        "P1-APPROVAL-create_review_request",
+        "P1-PREDICTION-create_review_request",
+        "P1-RECEIPT-create_review_request-completed",
+        "P1-RECEIPT-create_review_request-rejected",
+        "P1-RECEIPT-create_review_request-blocked",
+        "P1-RECEIPT-create_review_request-failed",
+        "P1-RECEIPT-create_review_request-compensated",
+        "P1-IDEMPOTENCY-create_review_request",
+        "P1-PROVIDER-IDEMPOTENCY-create_review_request",
+        "P1-FRONTEND-create_review_request",
+        "P1-FALLBACK-create_review_request"
+      ]
+    },
+    {
+      "actionType": "get_business_overview",
+      "plugin": "ops-overview",
+      "profile": "READ_ONLY",
+      "approvalFloor": "NONE",
+      "external": false,
+      "status": "PASS",
+      "gates": {
+        "registry": {
+          "status": "PASS",
+          "evidenceId": "P1-REGISTRY-get_business_overview",
+          "detail": "ops-overview resolved without collision"
+        },
+        "valid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-VALID-get_business_overview",
+          "detail": "shared fixture accepted by runtime validator"
+        },
+        "invalid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-INVALID-get_business_overview",
+          "detail": "null payload rejected"
+        },
+        "missing_entity": {
+          "status": "N/A",
+          "evidenceId": "P1-GROUND-MISSING",
+          "detail": "fixture has no referenced entity field"
+        },
+        "cross_tenant": {
+          "status": "N/A",
+          "evidenceId": "P1-GROUND-CROSS-TENANT",
+          "detail": "fixture has no referenced entity field"
+        },
+        "approval_floor": {
+          "status": "PASS",
+          "evidenceId": "P1-APPROVAL-get_business_overview",
+          "detail": "NONE: requires=false, typed=false, approval-queue=false"
+        },
+        "prediction": {
+          "status": "PASS",
+          "evidenceId": "P1-PREDICTION-get_business_overview",
+          "detail": "schema prediction is explicit and labeled no-write by the plugin/registry contract"
+        },
+        "receipt_completed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-get_business_overview-completed",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "receipt_rejected": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-get_business_overview-rejected",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_blocked": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-get_business_overview-blocked",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_failed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-get_business_overview-failed",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_compensated": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-get_business_overview-compensated",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "idempotency": {
+          "status": "N/A",
+          "evidenceId": "P1-IDEMPOTENCY-get_business_overview",
+          "detail": "read-only/meta action has no business or provider effect to repeat"
+        },
+        "provider_idempotency": {
+          "status": "N/A",
+          "evidenceId": "P1-PROVIDER-IDEMPOTENCY-get_business_overview",
+          "detail": "read-only/meta action has no provider effect"
+        },
+        "frontend": {
+          "status": "PASS",
+          "evidenceId": "P1-FRONTEND-get_business_overview",
+          "detail": "generated manifest, renderer entries, six-state coverage, and zero certified fallback mounts"
+        },
+        "no_fallback": {
+          "status": "PASS",
+          "evidenceId": "P1-FALLBACK-get_business_overview",
+          "detail": "certified ActionRenderer fallback imports=0"
+        }
+      },
+      "evidenceIds": [
+        "P1-REGISTRY-get_business_overview",
+        "P1-SCHEMA-VALID-get_business_overview",
+        "P1-SCHEMA-INVALID-get_business_overview",
+        "P1-GROUND-MISSING",
+        "P1-GROUND-CROSS-TENANT",
+        "P1-APPROVAL-get_business_overview",
+        "P1-PREDICTION-get_business_overview",
+        "P1-RECEIPT-get_business_overview-completed",
+        "P1-RECEIPT-get_business_overview-rejected",
+        "P1-RECEIPT-get_business_overview-blocked",
+        "P1-RECEIPT-get_business_overview-failed",
+        "P1-RECEIPT-get_business_overview-compensated",
+        "P1-IDEMPOTENCY-get_business_overview",
+        "P1-PROVIDER-IDEMPOTENCY-get_business_overview",
+        "P1-FRONTEND-get_business_overview",
+        "P1-FALLBACK-get_business_overview"
+      ]
+    },
+    {
+      "actionType": "answer_business_question",
+      "plugin": "ops-overview",
+      "profile": "READ_ONLY",
+      "approvalFloor": "NONE",
+      "external": false,
+      "status": "PASS",
+      "gates": {
+        "registry": {
+          "status": "PASS",
+          "evidenceId": "P1-REGISTRY-answer_business_question",
+          "detail": "ops-overview resolved without collision"
+        },
+        "valid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-VALID-answer_business_question",
+          "detail": "shared fixture accepted by runtime validator"
+        },
+        "invalid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-INVALID-answer_business_question",
+          "detail": "null payload rejected"
+        },
+        "missing_entity": {
+          "status": "N/A",
+          "evidenceId": "P1-GROUND-MISSING",
+          "detail": "fixture has no referenced entity field"
+        },
+        "cross_tenant": {
+          "status": "N/A",
+          "evidenceId": "P1-GROUND-CROSS-TENANT",
+          "detail": "fixture has no referenced entity field"
+        },
+        "approval_floor": {
+          "status": "PASS",
+          "evidenceId": "P1-APPROVAL-answer_business_question",
+          "detail": "NONE: requires=false, typed=false, approval-queue=false"
+        },
+        "prediction": {
+          "status": "PASS",
+          "evidenceId": "P1-PREDICTION-answer_business_question",
+          "detail": "schema prediction is explicit and labeled no-write by the plugin/registry contract"
+        },
+        "receipt_completed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-answer_business_question-completed",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "receipt_rejected": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-answer_business_question-rejected",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_blocked": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-answer_business_question-blocked",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_failed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-answer_business_question-failed",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_compensated": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-answer_business_question-compensated",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "idempotency": {
+          "status": "N/A",
+          "evidenceId": "P1-IDEMPOTENCY-answer_business_question",
+          "detail": "read-only/meta action has no business or provider effect to repeat"
+        },
+        "provider_idempotency": {
+          "status": "N/A",
+          "evidenceId": "P1-PROVIDER-IDEMPOTENCY-answer_business_question",
+          "detail": "read-only/meta action has no provider effect"
+        },
+        "frontend": {
+          "status": "PASS",
+          "evidenceId": "P1-FRONTEND-answer_business_question",
+          "detail": "generated manifest, renderer entries, six-state coverage, and zero certified fallback mounts"
+        },
+        "no_fallback": {
+          "status": "PASS",
+          "evidenceId": "P1-FALLBACK-answer_business_question",
+          "detail": "certified ActionRenderer fallback imports=0"
+        }
+      },
+      "evidenceIds": [
+        "P1-REGISTRY-answer_business_question",
+        "P1-SCHEMA-VALID-answer_business_question",
+        "P1-SCHEMA-INVALID-answer_business_question",
+        "P1-GROUND-MISSING",
+        "P1-GROUND-CROSS-TENANT",
+        "P1-APPROVAL-answer_business_question",
+        "P1-PREDICTION-answer_business_question",
+        "P1-RECEIPT-answer_business_question-completed",
+        "P1-RECEIPT-answer_business_question-rejected",
+        "P1-RECEIPT-answer_business_question-blocked",
+        "P1-RECEIPT-answer_business_question-failed",
+        "P1-RECEIPT-answer_business_question-compensated",
+        "P1-IDEMPOTENCY-answer_business_question",
+        "P1-PROVIDER-IDEMPOTENCY-answer_business_question",
+        "P1-FRONTEND-answer_business_question",
+        "P1-FALLBACK-answer_business_question"
+      ]
+    },
+    {
+      "actionType": "send_proposal_to_recent_installs",
+      "plugin": "proposal-batch",
+      "profile": "BATCH_EXTERNAL",
+      "approvalFloor": "TYPED_REQUIRED",
+      "external": true,
+      "status": "PASS",
+      "gates": {
+        "registry": {
+          "status": "PASS",
+          "evidenceId": "P1-REGISTRY-send_proposal_to_recent_installs",
+          "detail": "proposal-batch resolved without collision"
+        },
+        "valid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-VALID-send_proposal_to_recent_installs",
+          "detail": "shared fixture accepted by runtime validator"
+        },
+        "invalid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-INVALID-send_proposal_to_recent_installs",
+          "detail": "null payload rejected"
+        },
+        "missing_entity": {
+          "status": "N/A",
+          "evidenceId": "P1-GROUND-MISSING",
+          "detail": "fixture has no referenced entity field"
+        },
+        "cross_tenant": {
+          "status": "N/A",
+          "evidenceId": "P1-GROUND-CROSS-TENANT",
+          "detail": "fixture has no referenced entity field"
+        },
+        "approval_floor": {
+          "status": "PASS",
+          "evidenceId": "P1-APPROVAL-send_proposal_to_recent_installs",
+          "detail": "TYPED_REQUIRED: requires=true, typed=true, approval-queue=true"
+        },
+        "prediction": {
+          "status": "PASS",
+          "evidenceId": "P1-PREDICTION-send_proposal_to_recent_installs",
+          "detail": "schema prediction is explicit and labeled no-write by the plugin/registry contract"
+        },
+        "receipt_completed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-send_proposal_to_recent_installs-completed",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "receipt_rejected": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-send_proposal_to_recent_installs-rejected",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_blocked": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-send_proposal_to_recent_installs-blocked",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_failed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-send_proposal_to_recent_installs-failed",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_compensated": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-send_proposal_to_recent_installs-compensated",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "idempotency": {
+          "status": "PASS",
+          "evidenceId": "P1-IDEMPOTENCY-send_proposal_to_recent_installs",
+          "detail": "atomic action claim winners=1, repeat-after-terminal=0"
+        },
+        "provider_idempotency": {
+          "status": "PASS",
+          "evidenceId": "P1-PROVIDER-IDEMPOTENCY-send_proposal_to_recent_installs",
+          "detail": "sequential-effects=1 concurrent-effects=1 ledger=1/1"
+        },
+        "frontend": {
+          "status": "PASS",
+          "evidenceId": "P1-FRONTEND-send_proposal_to_recent_installs",
+          "detail": "generated manifest, renderer entries, six-state coverage, and zero certified fallback mounts"
+        },
+        "no_fallback": {
+          "status": "PASS",
+          "evidenceId": "P1-FALLBACK-send_proposal_to_recent_installs",
+          "detail": "certified ActionRenderer fallback imports=0"
+        }
+      },
+      "evidenceIds": [
+        "P1-REGISTRY-send_proposal_to_recent_installs",
+        "P1-SCHEMA-VALID-send_proposal_to_recent_installs",
+        "P1-SCHEMA-INVALID-send_proposal_to_recent_installs",
+        "P1-GROUND-MISSING",
+        "P1-GROUND-CROSS-TENANT",
+        "P1-APPROVAL-send_proposal_to_recent_installs",
+        "P1-PREDICTION-send_proposal_to_recent_installs",
+        "P1-RECEIPT-send_proposal_to_recent_installs-completed",
+        "P1-RECEIPT-send_proposal_to_recent_installs-rejected",
+        "P1-RECEIPT-send_proposal_to_recent_installs-blocked",
+        "P1-RECEIPT-send_proposal_to_recent_installs-failed",
+        "P1-RECEIPT-send_proposal_to_recent_installs-compensated",
+        "P1-IDEMPOTENCY-send_proposal_to_recent_installs",
+        "P1-PROVIDER-IDEMPOTENCY-send_proposal_to_recent_installs",
+        "P1-FRONTEND-send_proposal_to_recent_installs",
+        "P1-FALLBACK-send_proposal_to_recent_installs"
+      ]
+    },
+    {
+      "actionType": "request_proposal_signature",
+      "plugin": "proposal-signature",
+      "profile": "EXTERNAL_SIDE_EFFECT",
+      "approvalFloor": "REQUIRED",
+      "external": true,
+      "status": "PASS",
+      "gates": {
+        "registry": {
+          "status": "PASS",
+          "evidenceId": "P1-REGISTRY-request_proposal_signature",
+          "detail": "proposal-signature resolved without collision"
+        },
+        "valid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-VALID-request_proposal_signature",
+          "detail": "shared fixture accepted by runtime validator"
+        },
+        "invalid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-INVALID-request_proposal_signature",
+          "detail": "null payload rejected"
+        },
+        "missing_entity": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-MISSING",
+          "detail": "1 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "cross_tenant": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-CROSS-TENANT",
+          "detail": "1 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "approval_floor": {
+          "status": "PASS",
+          "evidenceId": "P1-APPROVAL-request_proposal_signature",
+          "detail": "REQUIRED: requires=true, typed=false, approval-queue=true"
+        },
+        "prediction": {
+          "status": "PASS",
+          "evidenceId": "P1-PREDICTION-request_proposal_signature",
+          "detail": "schema prediction is explicit and labeled no-write by the plugin/registry contract"
+        },
+        "receipt_completed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-request_proposal_signature-completed",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "receipt_rejected": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-request_proposal_signature-rejected",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_blocked": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-request_proposal_signature-blocked",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_failed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-request_proposal_signature-failed",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_compensated": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-request_proposal_signature-compensated",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "idempotency": {
+          "status": "PASS",
+          "evidenceId": "P1-IDEMPOTENCY-request_proposal_signature",
+          "detail": "atomic action claim winners=1, repeat-after-terminal=0"
+        },
+        "provider_idempotency": {
+          "status": "PASS",
+          "evidenceId": "P1-PROVIDER-IDEMPOTENCY-request_proposal_signature",
+          "detail": "sequential-effects=1 concurrent-effects=1 ledger=1/1"
+        },
+        "frontend": {
+          "status": "PASS",
+          "evidenceId": "P1-FRONTEND-request_proposal_signature",
+          "detail": "generated manifest, renderer entries, six-state coverage, and zero certified fallback mounts"
+        },
+        "no_fallback": {
+          "status": "PASS",
+          "evidenceId": "P1-FALLBACK-request_proposal_signature",
+          "detail": "certified ActionRenderer fallback imports=0"
+        }
+      },
+      "evidenceIds": [
+        "P1-REGISTRY-request_proposal_signature",
+        "P1-SCHEMA-VALID-request_proposal_signature",
+        "P1-SCHEMA-INVALID-request_proposal_signature",
+        "P1-GROUND-MISSING",
+        "P1-GROUND-CROSS-TENANT",
+        "P1-APPROVAL-request_proposal_signature",
+        "P1-PREDICTION-request_proposal_signature",
+        "P1-RECEIPT-request_proposal_signature-completed",
+        "P1-RECEIPT-request_proposal_signature-rejected",
+        "P1-RECEIPT-request_proposal_signature-blocked",
+        "P1-RECEIPT-request_proposal_signature-failed",
+        "P1-RECEIPT-request_proposal_signature-compensated",
+        "P1-IDEMPOTENCY-request_proposal_signature",
+        "P1-PROVIDER-IDEMPOTENCY-request_proposal_signature",
+        "P1-FRONTEND-request_proposal_signature",
+        "P1-FALLBACK-request_proposal_signature"
+      ]
+    },
+    {
+      "actionType": "start_installation_workflow",
+      "plugin": "proposal-to-installation",
+      "profile": "DURABLE_WORKFLOW",
+      "approvalFloor": "REQUIRED",
+      "external": true,
+      "status": "PASS",
+      "gates": {
+        "registry": {
+          "status": "PASS",
+          "evidenceId": "P1-REGISTRY-start_installation_workflow",
+          "detail": "proposal-to-installation resolved without collision"
+        },
+        "valid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-VALID-start_installation_workflow",
+          "detail": "shared fixture accepted by runtime validator"
+        },
+        "invalid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-INVALID-start_installation_workflow",
+          "detail": "null payload rejected"
+        },
+        "missing_entity": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-MISSING",
+          "detail": "2 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "cross_tenant": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-CROSS-TENANT",
+          "detail": "2 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "approval_floor": {
+          "status": "PASS",
+          "evidenceId": "P1-APPROVAL-start_installation_workflow",
+          "detail": "REQUIRED: requires=true, typed=false, approval-queue=true"
+        },
+        "prediction": {
+          "status": "PASS",
+          "evidenceId": "P1-PREDICTION-start_installation_workflow",
+          "detail": "schema prediction is explicit and labeled no-write by the plugin/registry contract"
+        },
+        "receipt_completed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-start_installation_workflow-completed",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "receipt_rejected": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-start_installation_workflow-rejected",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_blocked": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-start_installation_workflow-blocked",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_failed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-start_installation_workflow-failed",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_compensated": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-start_installation_workflow-compensated",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "idempotency": {
+          "status": "PASS",
+          "evidenceId": "P1-IDEMPOTENCY-start_installation_workflow",
+          "detail": "atomic action claim winners=1, repeat-after-terminal=0"
+        },
+        "provider_idempotency": {
+          "status": "PASS",
+          "evidenceId": "P1-PROVIDER-IDEMPOTENCY-start_installation_workflow",
+          "detail": "sequential-effects=1 concurrent-effects=1 ledger=1/1"
+        },
+        "frontend": {
+          "status": "PASS",
+          "evidenceId": "P1-FRONTEND-start_installation_workflow",
+          "detail": "generated manifest, renderer entries, six-state coverage, and zero certified fallback mounts"
+        },
+        "no_fallback": {
+          "status": "PASS",
+          "evidenceId": "P1-FALLBACK-start_installation_workflow",
+          "detail": "certified ActionRenderer fallback imports=0"
+        }
+      },
+      "evidenceIds": [
+        "P1-REGISTRY-start_installation_workflow",
+        "P1-SCHEMA-VALID-start_installation_workflow",
+        "P1-SCHEMA-INVALID-start_installation_workflow",
+        "P1-GROUND-MISSING",
+        "P1-GROUND-CROSS-TENANT",
+        "P1-APPROVAL-start_installation_workflow",
+        "P1-PREDICTION-start_installation_workflow",
+        "P1-RECEIPT-start_installation_workflow-completed",
+        "P1-RECEIPT-start_installation_workflow-rejected",
+        "P1-RECEIPT-start_installation_workflow-blocked",
+        "P1-RECEIPT-start_installation_workflow-failed",
+        "P1-RECEIPT-start_installation_workflow-compensated",
+        "P1-IDEMPOTENCY-start_installation_workflow",
+        "P1-PROVIDER-IDEMPOTENCY-start_installation_workflow",
+        "P1-FRONTEND-start_installation_workflow",
+        "P1-FALLBACK-start_installation_workflow"
+      ]
+    },
+    {
+      "actionType": "generate_quote",
+      "plugin": "quotation",
+      "profile": "INTERNAL_DRAFT",
+      "approvalFloor": "POLICY",
+      "external": false,
+      "status": "PASS",
+      "gates": {
+        "registry": {
+          "status": "PASS",
+          "evidenceId": "P1-REGISTRY-generate_quote",
+          "detail": "quotation resolved without collision"
+        },
+        "valid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-VALID-generate_quote",
+          "detail": "shared fixture accepted by runtime validator"
+        },
+        "invalid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-INVALID-generate_quote",
+          "detail": "null payload rejected"
+        },
+        "missing_entity": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-MISSING",
+          "detail": "1 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "cross_tenant": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-CROSS-TENANT",
+          "detail": "1 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "approval_floor": {
+          "status": "PASS",
+          "evidenceId": "P1-APPROVAL-generate_quote",
+          "detail": "POLICY: requires=true, typed=false, approval-queue=true"
+        },
+        "prediction": {
+          "status": "PASS",
+          "evidenceId": "P1-PREDICTION-generate_quote",
+          "detail": "dry_run prediction is explicit and labeled no-write by the plugin/registry contract"
+        },
+        "receipt_completed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-generate_quote-completed",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "receipt_rejected": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-generate_quote-rejected",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_blocked": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-generate_quote-blocked",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_failed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-generate_quote-failed",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_compensated": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-generate_quote-compensated",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "idempotency": {
+          "status": "PASS",
+          "evidenceId": "P1-IDEMPOTENCY-generate_quote",
+          "detail": "atomic action claim winners=1, repeat-after-terminal=0"
+        },
+        "frontend": {
+          "status": "PASS",
+          "evidenceId": "P1-FRONTEND-generate_quote",
+          "detail": "generated manifest, renderer entries, six-state coverage, and zero certified fallback mounts"
+        },
+        "no_fallback": {
+          "status": "PASS",
+          "evidenceId": "P1-FALLBACK-generate_quote",
+          "detail": "certified ActionRenderer fallback imports=0"
+        }
+      },
+      "evidenceIds": [
+        "P1-REGISTRY-generate_quote",
+        "P1-SCHEMA-VALID-generate_quote",
+        "P1-SCHEMA-INVALID-generate_quote",
+        "P1-GROUND-MISSING",
+        "P1-GROUND-CROSS-TENANT",
+        "P1-APPROVAL-generate_quote",
+        "P1-PREDICTION-generate_quote",
+        "P1-RECEIPT-generate_quote-completed",
+        "P1-RECEIPT-generate_quote-rejected",
+        "P1-RECEIPT-generate_quote-blocked",
+        "P1-RECEIPT-generate_quote-failed",
+        "P1-RECEIPT-generate_quote-compensated",
+        "P1-IDEMPOTENCY-generate_quote",
+        "P1-FRONTEND-generate_quote",
+        "P1-FALLBACK-generate_quote"
+      ]
+    },
+    {
+      "actionType": "size_equipment_for_household",
+      "plugin": "quotation",
+      "profile": "READ_ONLY",
+      "approvalFloor": "NONE",
+      "external": false,
+      "status": "PASS",
+      "gates": {
+        "registry": {
+          "status": "PASS",
+          "evidenceId": "P1-REGISTRY-size_equipment_for_household",
+          "detail": "quotation resolved without collision"
+        },
+        "valid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-VALID-size_equipment_for_household",
+          "detail": "shared fixture accepted by runtime validator"
+        },
+        "invalid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-INVALID-size_equipment_for_household",
+          "detail": "null payload rejected"
+        },
+        "missing_entity": {
+          "status": "N/A",
+          "evidenceId": "P1-GROUND-MISSING",
+          "detail": "fixture has no referenced entity field"
+        },
+        "cross_tenant": {
+          "status": "N/A",
+          "evidenceId": "P1-GROUND-CROSS-TENANT",
+          "detail": "fixture has no referenced entity field"
+        },
+        "approval_floor": {
+          "status": "PASS",
+          "evidenceId": "P1-APPROVAL-size_equipment_for_household",
+          "detail": "NONE: requires=false, typed=false, approval-queue=false"
+        },
+        "prediction": {
+          "status": "PASS",
+          "evidenceId": "P1-PREDICTION-size_equipment_for_household",
+          "detail": "schema prediction is explicit and labeled no-write by the plugin/registry contract"
+        },
+        "receipt_completed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-size_equipment_for_household-completed",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "receipt_rejected": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-size_equipment_for_household-rejected",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_blocked": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-size_equipment_for_household-blocked",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_failed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-size_equipment_for_household-failed",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_compensated": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-size_equipment_for_household-compensated",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "idempotency": {
+          "status": "N/A",
+          "evidenceId": "P1-IDEMPOTENCY-size_equipment_for_household",
+          "detail": "read-only/meta action has no business or provider effect to repeat"
+        },
+        "provider_idempotency": {
+          "status": "N/A",
+          "evidenceId": "P1-PROVIDER-IDEMPOTENCY-size_equipment_for_household",
+          "detail": "read-only/meta action has no provider effect"
+        },
+        "frontend": {
+          "status": "PASS",
+          "evidenceId": "P1-FRONTEND-size_equipment_for_household",
+          "detail": "generated manifest, renderer entries, six-state coverage, and zero certified fallback mounts"
+        },
+        "no_fallback": {
+          "status": "PASS",
+          "evidenceId": "P1-FALLBACK-size_equipment_for_household",
+          "detail": "certified ActionRenderer fallback imports=0"
+        }
+      },
+      "evidenceIds": [
+        "P1-REGISTRY-size_equipment_for_household",
+        "P1-SCHEMA-VALID-size_equipment_for_household",
+        "P1-SCHEMA-INVALID-size_equipment_for_household",
+        "P1-GROUND-MISSING",
+        "P1-GROUND-CROSS-TENANT",
+        "P1-APPROVAL-size_equipment_for_household",
+        "P1-PREDICTION-size_equipment_for_household",
+        "P1-RECEIPT-size_equipment_for_household-completed",
+        "P1-RECEIPT-size_equipment_for_household-rejected",
+        "P1-RECEIPT-size_equipment_for_household-blocked",
+        "P1-RECEIPT-size_equipment_for_household-failed",
+        "P1-RECEIPT-size_equipment_for_household-compensated",
+        "P1-IDEMPOTENCY-size_equipment_for_household",
+        "P1-PROVIDER-IDEMPOTENCY-size_equipment_for_household",
+        "P1-FRONTEND-size_equipment_for_household",
+        "P1-FALLBACK-size_equipment_for_household"
+      ]
+    },
+    {
+      "actionType": "send_proposal",
+      "plugin": "quotation",
+      "profile": "EXTERNAL_SIDE_EFFECT",
+      "approvalFloor": "REQUIRED",
+      "external": true,
+      "status": "PASS",
+      "gates": {
+        "registry": {
+          "status": "PASS",
+          "evidenceId": "P1-REGISTRY-send_proposal",
+          "detail": "quotation resolved without collision"
+        },
+        "valid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-VALID-send_proposal",
+          "detail": "shared fixture accepted by runtime validator"
+        },
+        "invalid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-INVALID-send_proposal",
+          "detail": "null payload rejected"
+        },
+        "missing_entity": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-MISSING",
+          "detail": "1 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "cross_tenant": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-CROSS-TENANT",
+          "detail": "1 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "approval_floor": {
+          "status": "PASS",
+          "evidenceId": "P1-APPROVAL-send_proposal",
+          "detail": "REQUIRED: requires=true, typed=false, approval-queue=true"
+        },
+        "prediction": {
+          "status": "PASS",
+          "evidenceId": "P1-PREDICTION-send_proposal",
+          "detail": "schema prediction is explicit and labeled no-write by the plugin/registry contract"
+        },
+        "receipt_completed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-send_proposal-completed",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "receipt_rejected": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-send_proposal-rejected",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_blocked": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-send_proposal-blocked",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_failed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-send_proposal-failed",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_compensated": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-send_proposal-compensated",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "idempotency": {
+          "status": "PASS",
+          "evidenceId": "P1-IDEMPOTENCY-send_proposal",
+          "detail": "atomic action claim winners=1, repeat-after-terminal=0"
+        },
+        "provider_idempotency": {
+          "status": "PASS",
+          "evidenceId": "P1-PROVIDER-IDEMPOTENCY-send_proposal",
+          "detail": "sequential-effects=1 concurrent-effects=1 ledger=1/1"
+        },
+        "frontend": {
+          "status": "PASS",
+          "evidenceId": "P1-FRONTEND-send_proposal",
+          "detail": "generated manifest, renderer entries, six-state coverage, and zero certified fallback mounts"
+        },
+        "no_fallback": {
+          "status": "PASS",
+          "evidenceId": "P1-FALLBACK-send_proposal",
+          "detail": "certified ActionRenderer fallback imports=0"
+        }
+      },
+      "evidenceIds": [
+        "P1-REGISTRY-send_proposal",
+        "P1-SCHEMA-VALID-send_proposal",
+        "P1-SCHEMA-INVALID-send_proposal",
+        "P1-GROUND-MISSING",
+        "P1-GROUND-CROSS-TENANT",
+        "P1-APPROVAL-send_proposal",
+        "P1-PREDICTION-send_proposal",
+        "P1-RECEIPT-send_proposal-completed",
+        "P1-RECEIPT-send_proposal-rejected",
+        "P1-RECEIPT-send_proposal-blocked",
+        "P1-RECEIPT-send_proposal-failed",
+        "P1-RECEIPT-send_proposal-compensated",
+        "P1-IDEMPOTENCY-send_proposal",
+        "P1-PROVIDER-IDEMPOTENCY-send_proposal",
+        "P1-FRONTEND-send_proposal",
+        "P1-FALLBACK-send_proposal"
+      ]
+    },
+    {
+      "actionType": "route_suggestion",
+      "plugin": "route-optimization",
+      "profile": "READ_ONLY",
+      "approvalFloor": "NONE",
+      "external": false,
+      "status": "PASS",
+      "gates": {
+        "registry": {
+          "status": "PASS",
+          "evidenceId": "P1-REGISTRY-route_suggestion",
+          "detail": "route-optimization resolved without collision"
+        },
+        "valid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-VALID-route_suggestion",
+          "detail": "shared fixture accepted by runtime validator"
+        },
+        "invalid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-INVALID-route_suggestion",
+          "detail": "null payload rejected"
+        },
+        "missing_entity": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-MISSING",
+          "detail": "1 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "cross_tenant": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-CROSS-TENANT",
+          "detail": "1 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "approval_floor": {
+          "status": "PASS",
+          "evidenceId": "P1-APPROVAL-route_suggestion",
+          "detail": "NONE: requires=false, typed=false, approval-queue=false"
+        },
+        "prediction": {
+          "status": "PASS",
+          "evidenceId": "P1-PREDICTION-route_suggestion",
+          "detail": "schema prediction is explicit and labeled no-write by the plugin/registry contract"
+        },
+        "receipt_completed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-route_suggestion-completed",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "receipt_rejected": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-route_suggestion-rejected",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_blocked": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-route_suggestion-blocked",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_failed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-route_suggestion-failed",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_compensated": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-route_suggestion-compensated",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "idempotency": {
+          "status": "N/A",
+          "evidenceId": "P1-IDEMPOTENCY-route_suggestion",
+          "detail": "read-only/meta action has no business or provider effect to repeat"
+        },
+        "provider_idempotency": {
+          "status": "N/A",
+          "evidenceId": "P1-PROVIDER-IDEMPOTENCY-route_suggestion",
+          "detail": "read-only/meta action has no provider effect"
+        },
+        "frontend": {
+          "status": "PASS",
+          "evidenceId": "P1-FRONTEND-route_suggestion",
+          "detail": "generated manifest, renderer entries, six-state coverage, and zero certified fallback mounts"
+        },
+        "no_fallback": {
+          "status": "PASS",
+          "evidenceId": "P1-FALLBACK-route_suggestion",
+          "detail": "certified ActionRenderer fallback imports=0"
+        }
+      },
+      "evidenceIds": [
+        "P1-REGISTRY-route_suggestion",
+        "P1-SCHEMA-VALID-route_suggestion",
+        "P1-SCHEMA-INVALID-route_suggestion",
+        "P1-GROUND-MISSING",
+        "P1-GROUND-CROSS-TENANT",
+        "P1-APPROVAL-route_suggestion",
+        "P1-PREDICTION-route_suggestion",
+        "P1-RECEIPT-route_suggestion-completed",
+        "P1-RECEIPT-route_suggestion-rejected",
+        "P1-RECEIPT-route_suggestion-blocked",
+        "P1-RECEIPT-route_suggestion-failed",
+        "P1-RECEIPT-route_suggestion-compensated",
+        "P1-IDEMPOTENCY-route_suggestion",
+        "P1-PROVIDER-IDEMPOTENCY-route_suggestion",
+        "P1-FRONTEND-route_suggestion",
+        "P1-FALLBACK-route_suggestion"
+      ]
+    },
+    {
+      "actionType": "assign_technician_to_visit",
+      "plugin": "scheduling",
+      "profile": "OPERATIONAL_CHANGE",
+      "approvalFloor": "REQUIRED",
+      "external": false,
+      "status": "PASS",
+      "gates": {
+        "registry": {
+          "status": "PASS",
+          "evidenceId": "P1-REGISTRY-assign_technician_to_visit",
+          "detail": "scheduling resolved without collision"
+        },
+        "valid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-VALID-assign_technician_to_visit",
+          "detail": "shared fixture accepted by runtime validator"
+        },
+        "invalid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-INVALID-assign_technician_to_visit",
+          "detail": "null payload rejected"
+        },
+        "missing_entity": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-MISSING",
+          "detail": "2 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "cross_tenant": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-CROSS-TENANT",
+          "detail": "2 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "approval_floor": {
+          "status": "PASS",
+          "evidenceId": "P1-APPROVAL-assign_technician_to_visit",
+          "detail": "REQUIRED: requires=true, typed=false, approval-queue=true"
+        },
+        "prediction": {
+          "status": "PASS",
+          "evidenceId": "P1-PREDICTION-assign_technician_to_visit",
+          "detail": "dry_run prediction is explicit and labeled no-write by the plugin/registry contract"
+        },
+        "receipt_completed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-assign_technician_to_visit-completed",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "receipt_rejected": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-assign_technician_to_visit-rejected",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_blocked": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-assign_technician_to_visit-blocked",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_failed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-assign_technician_to_visit-failed",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_compensated": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-assign_technician_to_visit-compensated",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "idempotency": {
+          "status": "PASS",
+          "evidenceId": "P1-IDEMPOTENCY-assign_technician_to_visit",
+          "detail": "atomic action claim winners=1, repeat-after-terminal=0"
+        },
+        "frontend": {
+          "status": "PASS",
+          "evidenceId": "P1-FRONTEND-assign_technician_to_visit",
+          "detail": "generated manifest, renderer entries, six-state coverage, and zero certified fallback mounts"
+        },
+        "no_fallback": {
+          "status": "PASS",
+          "evidenceId": "P1-FALLBACK-assign_technician_to_visit",
+          "detail": "certified ActionRenderer fallback imports=0"
+        }
+      },
+      "evidenceIds": [
+        "P1-REGISTRY-assign_technician_to_visit",
+        "P1-SCHEMA-VALID-assign_technician_to_visit",
+        "P1-SCHEMA-INVALID-assign_technician_to_visit",
+        "P1-GROUND-MISSING",
+        "P1-GROUND-CROSS-TENANT",
+        "P1-APPROVAL-assign_technician_to_visit",
+        "P1-PREDICTION-assign_technician_to_visit",
+        "P1-RECEIPT-assign_technician_to_visit-completed",
+        "P1-RECEIPT-assign_technician_to_visit-rejected",
+        "P1-RECEIPT-assign_technician_to_visit-blocked",
+        "P1-RECEIPT-assign_technician_to_visit-failed",
+        "P1-RECEIPT-assign_technician_to_visit-compensated",
+        "P1-IDEMPOTENCY-assign_technician_to_visit",
+        "P1-FRONTEND-assign_technician_to_visit",
+        "P1-FALLBACK-assign_technician_to_visit"
+      ]
+    },
+    {
+      "actionType": "check_technician_availability",
+      "plugin": "scheduling",
+      "profile": "READ_ONLY",
+      "approvalFloor": "NONE",
+      "external": false,
+      "status": "PASS",
+      "gates": {
+        "registry": {
+          "status": "PASS",
+          "evidenceId": "P1-REGISTRY-check_technician_availability",
+          "detail": "scheduling resolved without collision"
+        },
+        "valid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-VALID-check_technician_availability",
+          "detail": "shared fixture accepted by runtime validator"
+        },
+        "invalid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-INVALID-check_technician_availability",
+          "detail": "null payload rejected"
+        },
+        "missing_entity": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-MISSING",
+          "detail": "1 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "cross_tenant": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-CROSS-TENANT",
+          "detail": "1 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "approval_floor": {
+          "status": "PASS",
+          "evidenceId": "P1-APPROVAL-check_technician_availability",
+          "detail": "NONE: requires=false, typed=false, approval-queue=false"
+        },
+        "prediction": {
+          "status": "PASS",
+          "evidenceId": "P1-PREDICTION-check_technician_availability",
+          "detail": "dry_run prediction is explicit and labeled no-write by the plugin/registry contract"
+        },
+        "receipt_completed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-check_technician_availability-completed",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "receipt_rejected": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-check_technician_availability-rejected",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_blocked": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-check_technician_availability-blocked",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_failed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-check_technician_availability-failed",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_compensated": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-check_technician_availability-compensated",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "idempotency": {
+          "status": "N/A",
+          "evidenceId": "P1-IDEMPOTENCY-check_technician_availability",
+          "detail": "read-only/meta action has no business or provider effect to repeat"
+        },
+        "provider_idempotency": {
+          "status": "N/A",
+          "evidenceId": "P1-PROVIDER-IDEMPOTENCY-check_technician_availability",
+          "detail": "read-only/meta action has no provider effect"
+        },
+        "frontend": {
+          "status": "PASS",
+          "evidenceId": "P1-FRONTEND-check_technician_availability",
+          "detail": "generated manifest, renderer entries, six-state coverage, and zero certified fallback mounts"
+        },
+        "no_fallback": {
+          "status": "PASS",
+          "evidenceId": "P1-FALLBACK-check_technician_availability",
+          "detail": "certified ActionRenderer fallback imports=0"
+        }
+      },
+      "evidenceIds": [
+        "P1-REGISTRY-check_technician_availability",
+        "P1-SCHEMA-VALID-check_technician_availability",
+        "P1-SCHEMA-INVALID-check_technician_availability",
+        "P1-GROUND-MISSING",
+        "P1-GROUND-CROSS-TENANT",
+        "P1-APPROVAL-check_technician_availability",
+        "P1-PREDICTION-check_technician_availability",
+        "P1-RECEIPT-check_technician_availability-completed",
+        "P1-RECEIPT-check_technician_availability-rejected",
+        "P1-RECEIPT-check_technician_availability-blocked",
+        "P1-RECEIPT-check_technician_availability-failed",
+        "P1-RECEIPT-check_technician_availability-compensated",
+        "P1-IDEMPOTENCY-check_technician_availability",
+        "P1-PROVIDER-IDEMPOTENCY-check_technician_availability",
+        "P1-FRONTEND-check_technician_availability",
+        "P1-FALLBACK-check_technician_availability"
+      ]
+    },
+    {
+      "actionType": "reschedule_visit",
+      "plugin": "scheduling",
+      "profile": "OPERATIONAL_CHANGE",
+      "approvalFloor": "REQUIRED",
+      "external": true,
+      "status": "PASS",
+      "gates": {
+        "registry": {
+          "status": "PASS",
+          "evidenceId": "P1-REGISTRY-reschedule_visit",
+          "detail": "scheduling resolved without collision"
+        },
+        "valid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-VALID-reschedule_visit",
+          "detail": "shared fixture accepted by runtime validator"
+        },
+        "invalid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-INVALID-reschedule_visit",
+          "detail": "null payload rejected"
+        },
+        "missing_entity": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-MISSING",
+          "detail": "1 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "cross_tenant": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-CROSS-TENANT",
+          "detail": "1 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "approval_floor": {
+          "status": "PASS",
+          "evidenceId": "P1-APPROVAL-reschedule_visit",
+          "detail": "REQUIRED: requires=true, typed=false, approval-queue=true"
+        },
+        "prediction": {
+          "status": "PASS",
+          "evidenceId": "P1-PREDICTION-reschedule_visit",
+          "detail": "dry_run prediction is explicit and labeled no-write by the plugin/registry contract"
+        },
+        "receipt_completed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-reschedule_visit-completed",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "receipt_rejected": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-reschedule_visit-rejected",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_blocked": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-reschedule_visit-blocked",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_failed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-reschedule_visit-failed",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_compensated": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-reschedule_visit-compensated",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "idempotency": {
+          "status": "PASS",
+          "evidenceId": "P1-IDEMPOTENCY-reschedule_visit",
+          "detail": "atomic action claim winners=1, repeat-after-terminal=0"
+        },
+        "provider_idempotency": {
+          "status": "PASS",
+          "evidenceId": "P1-PROVIDER-IDEMPOTENCY-reschedule_visit",
+          "detail": "sequential-effects=1 concurrent-effects=1 ledger=1/1"
+        },
+        "frontend": {
+          "status": "PASS",
+          "evidenceId": "P1-FRONTEND-reschedule_visit",
+          "detail": "generated manifest, renderer entries, six-state coverage, and zero certified fallback mounts"
+        },
+        "no_fallback": {
+          "status": "PASS",
+          "evidenceId": "P1-FALLBACK-reschedule_visit",
+          "detail": "certified ActionRenderer fallback imports=0"
+        }
+      },
+      "evidenceIds": [
+        "P1-REGISTRY-reschedule_visit",
+        "P1-SCHEMA-VALID-reschedule_visit",
+        "P1-SCHEMA-INVALID-reschedule_visit",
+        "P1-GROUND-MISSING",
+        "P1-GROUND-CROSS-TENANT",
+        "P1-APPROVAL-reschedule_visit",
+        "P1-PREDICTION-reschedule_visit",
+        "P1-RECEIPT-reschedule_visit-completed",
+        "P1-RECEIPT-reschedule_visit-rejected",
+        "P1-RECEIPT-reschedule_visit-blocked",
+        "P1-RECEIPT-reschedule_visit-failed",
+        "P1-RECEIPT-reschedule_visit-compensated",
+        "P1-IDEMPOTENCY-reschedule_visit",
+        "P1-PROVIDER-IDEMPOTENCY-reschedule_visit",
+        "P1-FRONTEND-reschedule_visit",
+        "P1-FALLBACK-reschedule_visit"
+      ]
+    },
+    {
+      "actionType": "check_reminder_due",
+      "plugin": "service-reminders",
+      "profile": "READ_ONLY",
+      "approvalFloor": "NONE",
+      "external": false,
+      "status": "PASS",
+      "gates": {
+        "registry": {
+          "status": "PASS",
+          "evidenceId": "P1-REGISTRY-check_reminder_due",
+          "detail": "service-reminders resolved without collision"
+        },
+        "valid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-VALID-check_reminder_due",
+          "detail": "shared fixture accepted by runtime validator"
+        },
+        "invalid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-INVALID-check_reminder_due",
+          "detail": "null payload rejected"
+        },
+        "missing_entity": {
+          "status": "N/A",
+          "evidenceId": "P1-GROUND-MISSING",
+          "detail": "fixture has no referenced entity field"
+        },
+        "cross_tenant": {
+          "status": "N/A",
+          "evidenceId": "P1-GROUND-CROSS-TENANT",
+          "detail": "fixture has no referenced entity field"
+        },
+        "approval_floor": {
+          "status": "PASS",
+          "evidenceId": "P1-APPROVAL-check_reminder_due",
+          "detail": "NONE: requires=false, typed=false, approval-queue=false"
+        },
+        "prediction": {
+          "status": "PASS",
+          "evidenceId": "P1-PREDICTION-check_reminder_due",
+          "detail": "schema prediction is explicit and labeled no-write by the plugin/registry contract"
+        },
+        "receipt_completed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-check_reminder_due-completed",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "receipt_rejected": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-check_reminder_due-rejected",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_blocked": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-check_reminder_due-blocked",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_failed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-check_reminder_due-failed",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_compensated": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-check_reminder_due-compensated",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "idempotency": {
+          "status": "N/A",
+          "evidenceId": "P1-IDEMPOTENCY-check_reminder_due",
+          "detail": "read-only/meta action has no business or provider effect to repeat"
+        },
+        "provider_idempotency": {
+          "status": "N/A",
+          "evidenceId": "P1-PROVIDER-IDEMPOTENCY-check_reminder_due",
+          "detail": "read-only/meta action has no provider effect"
+        },
+        "frontend": {
+          "status": "PASS",
+          "evidenceId": "P1-FRONTEND-check_reminder_due",
+          "detail": "generated manifest, renderer entries, six-state coverage, and zero certified fallback mounts"
+        },
+        "no_fallback": {
+          "status": "PASS",
+          "evidenceId": "P1-FALLBACK-check_reminder_due",
+          "detail": "certified ActionRenderer fallback imports=0"
+        }
+      },
+      "evidenceIds": [
+        "P1-REGISTRY-check_reminder_due",
+        "P1-SCHEMA-VALID-check_reminder_due",
+        "P1-SCHEMA-INVALID-check_reminder_due",
+        "P1-GROUND-MISSING",
+        "P1-GROUND-CROSS-TENANT",
+        "P1-APPROVAL-check_reminder_due",
+        "P1-PREDICTION-check_reminder_due",
+        "P1-RECEIPT-check_reminder_due-completed",
+        "P1-RECEIPT-check_reminder_due-rejected",
+        "P1-RECEIPT-check_reminder_due-blocked",
+        "P1-RECEIPT-check_reminder_due-failed",
+        "P1-RECEIPT-check_reminder_due-compensated",
+        "P1-IDEMPOTENCY-check_reminder_due",
+        "P1-PROVIDER-IDEMPOTENCY-check_reminder_due",
+        "P1-FRONTEND-check_reminder_due",
+        "P1-FALLBACK-check_reminder_due"
+      ]
+    },
+    {
+      "actionType": "log_visit_report",
+      "plugin": "technician-reports",
+      "profile": "INTERNAL_WRITE",
+      "approvalFloor": "POLICY",
+      "external": false,
+      "status": "PASS",
+      "gates": {
+        "registry": {
+          "status": "PASS",
+          "evidenceId": "P1-REGISTRY-log_visit_report",
+          "detail": "technician-reports resolved without collision"
+        },
+        "valid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-VALID-log_visit_report",
+          "detail": "shared fixture accepted by runtime validator"
+        },
+        "invalid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-INVALID-log_visit_report",
+          "detail": "null payload rejected"
+        },
+        "missing_entity": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-MISSING",
+          "detail": "2 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "cross_tenant": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-CROSS-TENANT",
+          "detail": "2 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "approval_floor": {
+          "status": "PASS",
+          "evidenceId": "P1-APPROVAL-log_visit_report",
+          "detail": "POLICY: requires=true, typed=false, approval-queue=true"
+        },
+        "prediction": {
+          "status": "PASS",
+          "evidenceId": "P1-PREDICTION-log_visit_report",
+          "detail": "schema prediction is explicit and labeled no-write by the plugin/registry contract"
+        },
+        "receipt_completed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-log_visit_report-completed",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "receipt_rejected": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-log_visit_report-rejected",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_blocked": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-log_visit_report-blocked",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_failed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-log_visit_report-failed",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_compensated": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-log_visit_report-compensated",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "idempotency": {
+          "status": "PASS",
+          "evidenceId": "P1-IDEMPOTENCY-log_visit_report",
+          "detail": "atomic action claim winners=1, repeat-after-terminal=0"
+        },
+        "frontend": {
+          "status": "PASS",
+          "evidenceId": "P1-FRONTEND-log_visit_report",
+          "detail": "generated manifest, renderer entries, six-state coverage, and zero certified fallback mounts"
+        },
+        "no_fallback": {
+          "status": "PASS",
+          "evidenceId": "P1-FALLBACK-log_visit_report",
+          "detail": "certified ActionRenderer fallback imports=0"
+        }
+      },
+      "evidenceIds": [
+        "P1-REGISTRY-log_visit_report",
+        "P1-SCHEMA-VALID-log_visit_report",
+        "P1-SCHEMA-INVALID-log_visit_report",
+        "P1-GROUND-MISSING",
+        "P1-GROUND-CROSS-TENANT",
+        "P1-APPROVAL-log_visit_report",
+        "P1-PREDICTION-log_visit_report",
+        "P1-RECEIPT-log_visit_report-completed",
+        "P1-RECEIPT-log_visit_report-rejected",
+        "P1-RECEIPT-log_visit_report-blocked",
+        "P1-RECEIPT-log_visit_report-failed",
+        "P1-RECEIPT-log_visit_report-compensated",
+        "P1-IDEMPOTENCY-log_visit_report",
+        "P1-FRONTEND-log_visit_report",
+        "P1-FALLBACK-log_visit_report"
+      ]
+    },
+    {
+      "actionType": "flag_visit_issue",
+      "plugin": "technician-reports",
+      "profile": "INTERNAL_WRITE",
+      "approvalFloor": "POLICY",
+      "external": false,
+      "status": "PASS",
+      "gates": {
+        "registry": {
+          "status": "PASS",
+          "evidenceId": "P1-REGISTRY-flag_visit_issue",
+          "detail": "technician-reports resolved without collision"
+        },
+        "valid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-VALID-flag_visit_issue",
+          "detail": "shared fixture accepted by runtime validator"
+        },
+        "invalid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-INVALID-flag_visit_issue",
+          "detail": "null payload rejected"
+        },
+        "missing_entity": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-MISSING",
+          "detail": "1 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "cross_tenant": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-CROSS-TENANT",
+          "detail": "1 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "approval_floor": {
+          "status": "PASS",
+          "evidenceId": "P1-APPROVAL-flag_visit_issue",
+          "detail": "POLICY: requires=true, typed=false, approval-queue=true"
+        },
+        "prediction": {
+          "status": "PASS",
+          "evidenceId": "P1-PREDICTION-flag_visit_issue",
+          "detail": "schema prediction is explicit and labeled no-write by the plugin/registry contract"
+        },
+        "receipt_completed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-flag_visit_issue-completed",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "receipt_rejected": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-flag_visit_issue-rejected",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_blocked": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-flag_visit_issue-blocked",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_failed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-flag_visit_issue-failed",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_compensated": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-flag_visit_issue-compensated",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "idempotency": {
+          "status": "PASS",
+          "evidenceId": "P1-IDEMPOTENCY-flag_visit_issue",
+          "detail": "atomic action claim winners=1, repeat-after-terminal=0"
+        },
+        "frontend": {
+          "status": "PASS",
+          "evidenceId": "P1-FRONTEND-flag_visit_issue",
+          "detail": "generated manifest, renderer entries, six-state coverage, and zero certified fallback mounts"
+        },
+        "no_fallback": {
+          "status": "PASS",
+          "evidenceId": "P1-FALLBACK-flag_visit_issue",
+          "detail": "certified ActionRenderer fallback imports=0"
+        }
+      },
+      "evidenceIds": [
+        "P1-REGISTRY-flag_visit_issue",
+        "P1-SCHEMA-VALID-flag_visit_issue",
+        "P1-SCHEMA-INVALID-flag_visit_issue",
+        "P1-GROUND-MISSING",
+        "P1-GROUND-CROSS-TENANT",
+        "P1-APPROVAL-flag_visit_issue",
+        "P1-PREDICTION-flag_visit_issue",
+        "P1-RECEIPT-flag_visit_issue-completed",
+        "P1-RECEIPT-flag_visit_issue-rejected",
+        "P1-RECEIPT-flag_visit_issue-blocked",
+        "P1-RECEIPT-flag_visit_issue-failed",
+        "P1-RECEIPT-flag_visit_issue-compensated",
+        "P1-IDEMPOTENCY-flag_visit_issue",
+        "P1-FRONTEND-flag_visit_issue",
+        "P1-FALLBACK-flag_visit_issue"
+      ]
+    },
+    {
+      "actionType": "answer_water_question",
+      "plugin": "water-domain-knowledge",
+      "profile": "READ_ONLY",
+      "approvalFloor": "NONE",
+      "external": false,
+      "status": "PASS",
+      "gates": {
+        "registry": {
+          "status": "PASS",
+          "evidenceId": "P1-REGISTRY-answer_water_question",
+          "detail": "water-domain-knowledge resolved without collision"
+        },
+        "valid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-VALID-answer_water_question",
+          "detail": "shared fixture accepted by runtime validator"
+        },
+        "invalid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-INVALID-answer_water_question",
+          "detail": "null payload rejected"
+        },
+        "missing_entity": {
+          "status": "N/A",
+          "evidenceId": "P1-GROUND-MISSING",
+          "detail": "fixture has no referenced entity field"
+        },
+        "cross_tenant": {
+          "status": "N/A",
+          "evidenceId": "P1-GROUND-CROSS-TENANT",
+          "detail": "fixture has no referenced entity field"
+        },
+        "approval_floor": {
+          "status": "PASS",
+          "evidenceId": "P1-APPROVAL-answer_water_question",
+          "detail": "NONE: requires=false, typed=false, approval-queue=false"
+        },
+        "prediction": {
+          "status": "PASS",
+          "evidenceId": "P1-PREDICTION-answer_water_question",
+          "detail": "schema prediction is explicit and labeled no-write by the plugin/registry contract"
+        },
+        "receipt_completed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-answer_water_question-completed",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "receipt_rejected": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-answer_water_question-rejected",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_blocked": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-answer_water_question-blocked",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_failed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-answer_water_question-failed",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_compensated": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-answer_water_question-compensated",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "idempotency": {
+          "status": "N/A",
+          "evidenceId": "P1-IDEMPOTENCY-answer_water_question",
+          "detail": "read-only/meta action has no business or provider effect to repeat"
+        },
+        "provider_idempotency": {
+          "status": "N/A",
+          "evidenceId": "P1-PROVIDER-IDEMPOTENCY-answer_water_question",
+          "detail": "read-only/meta action has no provider effect"
+        },
+        "frontend": {
+          "status": "PASS",
+          "evidenceId": "P1-FRONTEND-answer_water_question",
+          "detail": "generated manifest, renderer entries, six-state coverage, and zero certified fallback mounts"
+        },
+        "no_fallback": {
+          "status": "PASS",
+          "evidenceId": "P1-FALLBACK-answer_water_question",
+          "detail": "certified ActionRenderer fallback imports=0"
+        }
+      },
+      "evidenceIds": [
+        "P1-REGISTRY-answer_water_question",
+        "P1-SCHEMA-VALID-answer_water_question",
+        "P1-SCHEMA-INVALID-answer_water_question",
+        "P1-GROUND-MISSING",
+        "P1-GROUND-CROSS-TENANT",
+        "P1-APPROVAL-answer_water_question",
+        "P1-PREDICTION-answer_water_question",
+        "P1-RECEIPT-answer_water_question-completed",
+        "P1-RECEIPT-answer_water_question-rejected",
+        "P1-RECEIPT-answer_water_question-blocked",
+        "P1-RECEIPT-answer_water_question-failed",
+        "P1-RECEIPT-answer_water_question-compensated",
+        "P1-IDEMPOTENCY-answer_water_question",
+        "P1-PROVIDER-IDEMPOTENCY-answer_water_question",
+        "P1-FRONTEND-answer_water_question",
+        "P1-FALLBACK-answer_water_question"
+      ]
+    },
+    {
+      "actionType": "schedule_water_test",
+      "plugin": "water-test",
+      "profile": "OPERATIONAL_CHANGE",
+      "approvalFloor": "REQUIRED",
+      "external": true,
+      "status": "PASS",
+      "gates": {
+        "registry": {
+          "status": "PASS",
+          "evidenceId": "P1-REGISTRY-schedule_water_test",
+          "detail": "water-test resolved without collision"
+        },
+        "valid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-VALID-schedule_water_test",
+          "detail": "shared fixture accepted by runtime validator"
+        },
+        "invalid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-INVALID-schedule_water_test",
+          "detail": "null payload rejected"
+        },
+        "missing_entity": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-MISSING",
+          "detail": "2 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "cross_tenant": {
+          "status": "PASS",
+          "evidenceId": "P1-GROUND-CROSS-TENANT",
+          "detail": "2 referenced id(s) refused in tenant-scoped grounding"
+        },
+        "approval_floor": {
+          "status": "PASS",
+          "evidenceId": "P1-APPROVAL-schedule_water_test",
+          "detail": "REQUIRED: requires=true, typed=false, approval-queue=true"
+        },
+        "prediction": {
+          "status": "PASS",
+          "evidenceId": "P1-PREDICTION-schedule_water_test",
+          "detail": "schema prediction is explicit and labeled no-write by the plugin/registry contract"
+        },
+        "receipt_completed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-schedule_water_test-completed",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "receipt_rejected": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-schedule_water_test-rejected",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_blocked": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-schedule_water_test-blocked",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_failed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-schedule_water_test-failed",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_compensated": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-schedule_water_test-compensated",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "idempotency": {
+          "status": "PASS",
+          "evidenceId": "P1-IDEMPOTENCY-schedule_water_test",
+          "detail": "atomic action claim winners=1, repeat-after-terminal=0"
+        },
+        "provider_idempotency": {
+          "status": "PASS",
+          "evidenceId": "P1-PROVIDER-IDEMPOTENCY-schedule_water_test",
+          "detail": "sequential-effects=1 concurrent-effects=1 ledger=1/1"
+        },
+        "frontend": {
+          "status": "PASS",
+          "evidenceId": "P1-FRONTEND-schedule_water_test",
+          "detail": "generated manifest, renderer entries, six-state coverage, and zero certified fallback mounts"
+        },
+        "no_fallback": {
+          "status": "PASS",
+          "evidenceId": "P1-FALLBACK-schedule_water_test",
+          "detail": "certified ActionRenderer fallback imports=0"
+        }
+      },
+      "evidenceIds": [
+        "P1-REGISTRY-schedule_water_test",
+        "P1-SCHEMA-VALID-schedule_water_test",
+        "P1-SCHEMA-INVALID-schedule_water_test",
+        "P1-GROUND-MISSING",
+        "P1-GROUND-CROSS-TENANT",
+        "P1-APPROVAL-schedule_water_test",
+        "P1-PREDICTION-schedule_water_test",
+        "P1-RECEIPT-schedule_water_test-completed",
+        "P1-RECEIPT-schedule_water_test-rejected",
+        "P1-RECEIPT-schedule_water_test-blocked",
+        "P1-RECEIPT-schedule_water_test-failed",
+        "P1-RECEIPT-schedule_water_test-compensated",
+        "P1-IDEMPOTENCY-schedule_water_test",
+        "P1-PROVIDER-IDEMPOTENCY-schedule_water_test",
+        "P1-FRONTEND-schedule_water_test",
+        "P1-FALLBACK-schedule_water_test"
+      ]
+    },
+    {
+      "actionType": "search_web",
+      "plugin": "web-research",
+      "profile": "READ_ONLY",
+      "approvalFloor": "NONE",
+      "external": false,
+      "status": "PASS",
+      "gates": {
+        "registry": {
+          "status": "PASS",
+          "evidenceId": "P1-REGISTRY-search_web",
+          "detail": "web-research resolved without collision"
+        },
+        "valid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-VALID-search_web",
+          "detail": "shared fixture accepted by runtime validator"
+        },
+        "invalid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-INVALID-search_web",
+          "detail": "null payload rejected"
+        },
+        "missing_entity": {
+          "status": "N/A",
+          "evidenceId": "P1-GROUND-MISSING",
+          "detail": "fixture has no referenced entity field"
+        },
+        "cross_tenant": {
+          "status": "N/A",
+          "evidenceId": "P1-GROUND-CROSS-TENANT",
+          "detail": "fixture has no referenced entity field"
+        },
+        "approval_floor": {
+          "status": "PASS",
+          "evidenceId": "P1-APPROVAL-search_web",
+          "detail": "NONE: requires=false, typed=false, approval-queue=false"
+        },
+        "prediction": {
+          "status": "PASS",
+          "evidenceId": "P1-PREDICTION-search_web",
+          "detail": "schema prediction is explicit and labeled no-write by the plugin/registry contract"
+        },
+        "receipt_completed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-search_web-completed",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "receipt_rejected": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-search_web-rejected",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_blocked": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-search_web-blocked",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_failed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-search_web-failed",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_compensated": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-search_web-compensated",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "idempotency": {
+          "status": "N/A",
+          "evidenceId": "P1-IDEMPOTENCY-search_web",
+          "detail": "read-only/meta action has no business or provider effect to repeat"
+        },
+        "provider_idempotency": {
+          "status": "N/A",
+          "evidenceId": "P1-PROVIDER-IDEMPOTENCY-search_web",
+          "detail": "read-only/meta action has no provider effect"
+        },
+        "frontend": {
+          "status": "PASS",
+          "evidenceId": "P1-FRONTEND-search_web",
+          "detail": "generated manifest, renderer entries, six-state coverage, and zero certified fallback mounts"
+        },
+        "no_fallback": {
+          "status": "PASS",
+          "evidenceId": "P1-FALLBACK-search_web",
+          "detail": "certified ActionRenderer fallback imports=0"
+        }
+      },
+      "evidenceIds": [
+        "P1-REGISTRY-search_web",
+        "P1-SCHEMA-VALID-search_web",
+        "P1-SCHEMA-INVALID-search_web",
+        "P1-GROUND-MISSING",
+        "P1-GROUND-CROSS-TENANT",
+        "P1-APPROVAL-search_web",
+        "P1-PREDICTION-search_web",
+        "P1-RECEIPT-search_web-completed",
+        "P1-RECEIPT-search_web-rejected",
+        "P1-RECEIPT-search_web-blocked",
+        "P1-RECEIPT-search_web-failed",
+        "P1-RECEIPT-search_web-compensated",
+        "P1-IDEMPOTENCY-search_web",
+        "P1-PROVIDER-IDEMPOTENCY-search_web",
+        "P1-FRONTEND-search_web",
+        "P1-FALLBACK-search_web"
+      ]
+    },
+    {
+      "actionType": "scan_competitors",
+      "plugin": "web-research",
+      "profile": "READ_ONLY",
+      "approvalFloor": "NONE",
+      "external": false,
+      "status": "PASS",
+      "gates": {
+        "registry": {
+          "status": "PASS",
+          "evidenceId": "P1-REGISTRY-scan_competitors",
+          "detail": "web-research resolved without collision"
+        },
+        "valid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-VALID-scan_competitors",
+          "detail": "shared fixture accepted by runtime validator"
+        },
+        "invalid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-INVALID-scan_competitors",
+          "detail": "null payload rejected"
+        },
+        "missing_entity": {
+          "status": "N/A",
+          "evidenceId": "P1-GROUND-MISSING",
+          "detail": "fixture has no referenced entity field"
+        },
+        "cross_tenant": {
+          "status": "N/A",
+          "evidenceId": "P1-GROUND-CROSS-TENANT",
+          "detail": "fixture has no referenced entity field"
+        },
+        "approval_floor": {
+          "status": "PASS",
+          "evidenceId": "P1-APPROVAL-scan_competitors",
+          "detail": "NONE: requires=false, typed=false, approval-queue=false"
+        },
+        "prediction": {
+          "status": "PASS",
+          "evidenceId": "P1-PREDICTION-scan_competitors",
+          "detail": "schema prediction is explicit and labeled no-write by the plugin/registry contract"
+        },
+        "receipt_completed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-scan_competitors-completed",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "receipt_rejected": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-scan_competitors-rejected",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_blocked": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-scan_competitors-blocked",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_failed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-scan_competitors-failed",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_compensated": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-scan_competitors-compensated",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "idempotency": {
+          "status": "N/A",
+          "evidenceId": "P1-IDEMPOTENCY-scan_competitors",
+          "detail": "read-only/meta action has no business or provider effect to repeat"
+        },
+        "provider_idempotency": {
+          "status": "N/A",
+          "evidenceId": "P1-PROVIDER-IDEMPOTENCY-scan_competitors",
+          "detail": "read-only/meta action has no provider effect"
+        },
+        "frontend": {
+          "status": "PASS",
+          "evidenceId": "P1-FRONTEND-scan_competitors",
+          "detail": "generated manifest, renderer entries, six-state coverage, and zero certified fallback mounts"
+        },
+        "no_fallback": {
+          "status": "PASS",
+          "evidenceId": "P1-FALLBACK-scan_competitors",
+          "detail": "certified ActionRenderer fallback imports=0"
+        }
+      },
+      "evidenceIds": [
+        "P1-REGISTRY-scan_competitors",
+        "P1-SCHEMA-VALID-scan_competitors",
+        "P1-SCHEMA-INVALID-scan_competitors",
+        "P1-GROUND-MISSING",
+        "P1-GROUND-CROSS-TENANT",
+        "P1-APPROVAL-scan_competitors",
+        "P1-PREDICTION-scan_competitors",
+        "P1-RECEIPT-scan_competitors-completed",
+        "P1-RECEIPT-scan_competitors-rejected",
+        "P1-RECEIPT-scan_competitors-blocked",
+        "P1-RECEIPT-scan_competitors-failed",
+        "P1-RECEIPT-scan_competitors-compensated",
+        "P1-IDEMPOTENCY-scan_competitors",
+        "P1-PROVIDER-IDEMPOTENCY-scan_competitors",
+        "P1-FRONTEND-scan_competitors",
+        "P1-FALLBACK-scan_competitors"
+      ]
+    },
+    {
+      "actionType": "check_business_reviews",
+      "plugin": "web-research",
+      "profile": "READ_ONLY",
+      "approvalFloor": "NONE",
+      "external": false,
+      "status": "PASS",
+      "gates": {
+        "registry": {
+          "status": "PASS",
+          "evidenceId": "P1-REGISTRY-check_business_reviews",
+          "detail": "web-research resolved without collision"
+        },
+        "valid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-VALID-check_business_reviews",
+          "detail": "shared fixture accepted by runtime validator"
+        },
+        "invalid_input": {
+          "status": "PASS",
+          "evidenceId": "P1-SCHEMA-INVALID-check_business_reviews",
+          "detail": "null payload rejected"
+        },
+        "missing_entity": {
+          "status": "N/A",
+          "evidenceId": "P1-GROUND-MISSING",
+          "detail": "fixture has no referenced entity field"
+        },
+        "cross_tenant": {
+          "status": "N/A",
+          "evidenceId": "P1-GROUND-CROSS-TENANT",
+          "detail": "fixture has no referenced entity field"
+        },
+        "approval_floor": {
+          "status": "PASS",
+          "evidenceId": "P1-APPROVAL-check_business_reviews",
+          "detail": "NONE: requires=false, typed=false, approval-queue=false"
+        },
+        "prediction": {
+          "status": "PASS",
+          "evidenceId": "P1-PREDICTION-check_business_reviews",
+          "detail": "schema prediction is explicit and labeled no-write by the plugin/registry contract"
+        },
+        "receipt_completed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-check_business_reviews-completed",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "receipt_rejected": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-check_business_reviews-rejected",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_blocked": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-check_business_reviews-blocked",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_failed": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-check_business_reviews-failed",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_compensated": {
+          "status": "PASS",
+          "evidenceId": "P1-RECEIPT-check_business_reviews-compensated",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "idempotency": {
+          "status": "N/A",
+          "evidenceId": "P1-IDEMPOTENCY-check_business_reviews",
+          "detail": "read-only/meta action has no business or provider effect to repeat"
+        },
+        "provider_idempotency": {
+          "status": "N/A",
+          "evidenceId": "P1-PROVIDER-IDEMPOTENCY-check_business_reviews",
+          "detail": "read-only/meta action has no provider effect"
+        },
+        "frontend": {
+          "status": "PASS",
+          "evidenceId": "P1-FRONTEND-check_business_reviews",
+          "detail": "generated manifest, renderer entries, six-state coverage, and zero certified fallback mounts"
+        },
+        "no_fallback": {
+          "status": "PASS",
+          "evidenceId": "P1-FALLBACK-check_business_reviews",
+          "detail": "certified ActionRenderer fallback imports=0"
+        }
+      },
+      "evidenceIds": [
+        "P1-REGISTRY-check_business_reviews",
+        "P1-SCHEMA-VALID-check_business_reviews",
+        "P1-SCHEMA-INVALID-check_business_reviews",
+        "P1-GROUND-MISSING",
+        "P1-GROUND-CROSS-TENANT",
+        "P1-APPROVAL-check_business_reviews",
+        "P1-PREDICTION-check_business_reviews",
+        "P1-RECEIPT-check_business_reviews-completed",
+        "P1-RECEIPT-check_business_reviews-rejected",
+        "P1-RECEIPT-check_business_reviews-blocked",
+        "P1-RECEIPT-check_business_reviews-failed",
+        "P1-RECEIPT-check_business_reviews-compensated",
+        "P1-IDEMPOTENCY-check_business_reviews",
+        "P1-PROVIDER-IDEMPOTENCY-check_business_reviews",
+        "P1-FRONTEND-check_business_reviews",
+        "P1-FALLBACK-check_business_reviews"
+      ]
+    }
+  ]
+}

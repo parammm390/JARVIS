@@ -82,6 +82,35 @@ export const ACTION_HARDENING_SPEC: readonly ActionHardeningSpecRow[] = FIXED_RO
 
 export const ACTION_HARDENING_SPEC_BY_ACTION = new Map(ACTION_HARDENING_SPEC.map((row) => [row.actionType, row]));
 
+/** Resolve the fixed approval floor at the execution boundary. */
+export function approvalRequirementForAction(
+  actionType: string,
+  policyRequiresConfirmation: boolean,
+  draftRequiresConfirmation: boolean,
+): { requiresConfirmation: boolean; typedConfirmation: boolean; approvalFloor: ApprovalFloor } {
+  const spec = ACTION_HARDENING_SPEC_BY_ACTION.get(actionType);
+  if (!spec) throw new Error(`Action ${actionType} is not present in the fixed hardening spec.`);
+
+  switch (spec.approvalFloor) {
+    case "NONE":
+      return { requiresConfirmation: false, typedConfirmation: false, approvalFloor: spec.approvalFloor };
+    case "POLICY":
+      return {
+        requiresConfirmation: policyRequiresConfirmation || draftRequiresConfirmation,
+        typedConfirmation: false,
+        approvalFloor: spec.approvalFloor,
+      };
+    case "REQUIRED":
+      return { requiresConfirmation: true, typedConfirmation: false, approvalFloor: spec.approvalFloor };
+    case "TYPED_REQUIRED":
+      return { requiresConfirmation: true, typedConfirmation: true, approvalFloor: spec.approvalFloor };
+  }
+}
+
+export function requiresTypedConfirmation(actionType: string): boolean {
+  return ACTION_HARDENING_SPEC_BY_ACTION.get(actionType)?.approvalFloor === "TYPED_REQUIRED";
+}
+
 if (ACTION_HARDENING_SPEC.length !== 44 || new Set(ACTION_HARDENING_SPEC.map((row) => row.actionType)).size !== 44) {
   throw new Error("The release action hardening spec must contain exactly 44 unique action types.");
 }

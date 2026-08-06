@@ -300,7 +300,7 @@ export class LLMPlanner implements Planner {
         for (const i of highIndices) {
       const candidateA = schemaRepair[i]!.candidate;
           const candidateB = secondCandidates.get(i) ?? null;
-          const groundedA = await groundEntitiesWithDb(db, candidateA.payload);
+          const groundedA = await groundEntitiesWithDb(db, tenantContext.tenantId, candidateA.payload);
           const scoreA = scoreCandidate({
             actionType: candidateA.actionType,
             groundedPayload: groundedA,
@@ -309,7 +309,7 @@ export class LLMPlanner implements Planner {
           let scoreB: number | null = null;
           let winner: "A" | "B" = "A";
           if (candidateB) {
-            const groundedB = await groundEntitiesWithDb(db, candidateB.payload);
+            const groundedB = await groundEntitiesWithDb(db, tenantContext.tenantId, candidateB.payload);
             scoreB = scoreCandidate({
               actionType: candidateB.actionType,
               groundedPayload: groundedB,
@@ -435,7 +435,7 @@ export class LLMPlanner implements Planner {
           const policy = policyByType.get(c.actionType);
           const requiresConfirmation = policy?.requiresConfirmation ?? true;
           return {
-            groundedPayload: await groundEntitiesWithDb(db, c.payload),
+            groundedPayload: await groundEntitiesWithDb(db, tenantContext.tenantId, c.payload),
             compiledGraph: buildCommandGraph(c.actionType, requiresConfirmation),
           };
         }),

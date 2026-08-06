@@ -1,9 +1,9 @@
 "use client"
 
 // D3.T1 — the "designed fallback" tier, per plan spec: "payload behind debug toggle."
-// Should never actually trigger for the 41 known types (registry.ts maps all of
+// Should never actually trigger for the 44 known types (registry.ts maps all of
 // them) — this exists as the honest, designed backstop for a genuinely unregistered
-// type (a future 42nd action type, a typo, a workflow-step name mistakenly passed
+// type (a future action type, a typo, a workflow-step name mistakenly passed
 // here) rather than either crashing or silently rendering raw JSON by default.
 //
 // jarvis-v3 P5.T4 (§7.2, DEFECT LEDGER NEW-8): owner-debug only as of this

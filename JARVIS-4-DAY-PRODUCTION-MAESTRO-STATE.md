@@ -40,14 +40,14 @@ only after the phase cannot progress further.
 | | |
 |---|---|
 | **ACTIVE PHASE** | **P1 — Universal Contract Hardening for All 44 Actions** |
-| **Latest verified commit** | `bb8c2f1` (`jarvis-release P0: close final matrix record`) |
-| **Phases complete** | 1 / 5 |
-| **Actions CORE-CERTIFIED** | 0 / 44 |
+| **Latest verified commit** | `3391701` (`jarvis-release P0: close local deterministic gate`) |
+| **Phases complete** | 2 / 5 |
+| **Actions CORE-CERTIFIED** | 0 / 44 — full 14-gate certification remains P2–P4 work; P1 contract gates are complete for all 44 |
 | **Actions LIVE-CERTIFIED** | 0 / 44 |
 | **Open P0 defects** | 0 — the local deterministic CI gate is green; provider-live and isolated-staging prerequisites are phase-scoped BLOCKED-CONFIG items |
-| **Open P1 defects** | 9 proof/follow-up rows; 3 phase-scoped prerequisites are BLOCKED-CONFIG (P2/P3), not P0 failures |
-| **Readiness score** | 0.0 / 10.0 — measured after P0 baseline |
-| **Sessions logged** | 7 |
+| **Open P1 defects** | 0 P1 contract defects; remaining P1-severity rows are owned by P2/P3/P4, with isolated-staging/provider prerequisites BLOCKED-CONFIG |
+| **Readiness score** | 0.0 / 10.0 — P1 contract proof is complete, but the launch score remains uncredited until the full P2–P4 gates are proven |
+| **Sessions logged** | 8 |
 
 ## NEXT EXACT PHASE
 
@@ -77,7 +77,7 @@ only after the phase cannot progress further.
 | Phase | Name | Window | Status | Exit gate |
 |---|---|---|---|---|
 | P0 | Release Lock, Source Audit & Clean CI | Day 1 AM | ✅ complete | ✅ |
-| P1 | Universal 44-Action Contract Hardening | Day 1 PM–Day 2 AM | 🟡 in progress | ⬜ |
+| P1 | Universal 44-Action Contract Hardening | Day 1 PM–Day 2 AM | ✅ complete | ✅ |
 | P2 | Chaos, Voice, Model, Integration & Security | Day 2 | ⬜ not started | ⬜ |
 | P3 | Full-Stack Staging & 15/25-User Load | Day 3 | ⬜ not started | ⬜ |
 | P4 | Production Rehearsal, Certification & Launch Freeze | Day 4 | ⬜ not started | ⬜ |
@@ -90,8 +90,8 @@ Legend: ⬜ not started · 🟡 in progress · ✅ complete · 🔴 blocked
 
 | Category | Weight | Current score | Evidence |
 |---|---:|---:|---|
-| 44-action contract coverage | 2.0 | 0.0 | |
-| Security + approval + idempotency | 2.0 | 0.0 | |
+| 44-action contract coverage | 2.0 | 0.0 | P1 contract rows 44/44 pass; full 14-gate CORE-CERTIFIED status still requires later phases — `docs/release/action-contract-results.md` |
+| Security + approval + idempotency | 2.0 | 0.0 | P1 cross-tenant/approval/idempotency gates pass; full category credit awaits later recovery/observability gates — P1 report |
 | Failure/recovery/durability | 1.5 | 0.0 | |
 | Integration + full-stack staging | 1.5 | 0.0 | |
 | 15-user + 25-user load | 1.0 | 0.0 | |
@@ -110,9 +110,9 @@ Do not close a defect without exact evidence. Add every new failure discovered b
 | R-01 | P1 | Clean monorepo CI/typecheck/test termination not freshly proven | P0 | ✅ closed — local deterministic P0 CI gate proven | Backend/Frontend evidence under `docs/release/evidence/P0/`; `p0-t6-ci-final-matrix.txt`; `p0-t6-local-staging-guard-repeat.txt`; no remote/live claim |
 | R-02 | P1 | Package test harness previously stalled before collection | P0 | ✅ closed | Disposable-db suite: 180 files, 851 tests — `docs/release/evidence/P0/p0-t6-fresh-db-ci-rerun-3.txt`; bounded timeout in `packages/db/index.ts` |
 | R-03 | P1 | Authorization-matrix failure previously reported | P0 | ✅ closed | `npm run authz:matrix && npm run authz:matrix:check`, exit 0 — `docs/release/evidence/P0/p0-t6-authz-typecheck-repair.txt` |
-| R-04 | P1 | 44 actions need behavioral contract certification beyond the P0 static release spec | P1 | 🟡 P0 static baseline closed; P1 behavioral proof pending | `docs/release/evidence/P0/p0-t3-release-manifest.txt`, 44/44 |
-| R-05 | P1 | Cross-tenant, approval, and duplicate-effect proof is incomplete across all 44 | P1/P2 | 🔴 open — proof pending, no observed P0 failure | |
-| R-06 | P1 | Current frontend 44/44 renderer and state coverage not freshly verified | P1 | 🔴 open | |
+| R-04 | P1 | 44 actions need behavioral contract certification beyond the P0 static release spec | P1 | ✅ closed — P1 contract matrix 44/44 | `docs/release/generated/action-contract-results.json`; `docs/release/action-contract-results.md`; `docs/release/evidence/P1/p1-contract-final.txt` |
+| R-05 | P1 | Cross-tenant, approval, and duplicate-effect proof is incomplete across all 44 | P1/P2 | ✅ P1 contract proof closed; P2/P3 recovery/live proof remains phase-owned | `docs/release/generated/action-contract-results.json`; `docs/release/evidence/P1/p1-typed-confirmation-final.txt`; no provider-live claim |
+| R-06 | P1 | Current frontend 44/44 renderer and state coverage not freshly verified | P1 | ✅ closed — generated contract, renderer test, state coverage, fallback assertion | `docs/release/evidence/P1/p1-frontend-renderer-test-final.txt`; `docs/release/action-contract-results.md` |
 | R-07 | P1 | Migration head/staging application of evidence corpus not freshly proven | P3 | 🟡 BLOCKED-CONFIG — isolated staging prerequisite | `docs/release/evidence/P0/p0-t7-vercel-preview-audit.txt`; no remote staging claim |
 | R-08 | P1 | Configured live integration credentials and write guards are unknown; current Vercel Preview metadata is present but its database is unreachable and its Supabase auth origin matches Production | P3 | 🟡 BLOCKED-CONFIG — isolated staging/live-binding prerequisite | `docs/release/evidence/P0/p0-t7-vercel-preview-audit.txt`; no values printed |
 | R-09 | P1 | Voice cancellation/approval may remain deferred or incomplete | P2 | 🔴 open | |
@@ -135,6 +135,7 @@ Do not close a defect without exact evidence. Add every new failure discovered b
 - **2026-08-06 · P0.T6 · historical scanner follow-up** · current P0 diff gitleaks is clean and OSV/npm audit are green; an all-history gitleaks scan reports three matches in older commits. Evidence: `p0-t6-security-final.txt`. Needed: owner/security decision on rotation/history remediation; P0 does not rewrite history or print candidate secrets.
 - **2026-08-06 · P0.T6/T7 · current Vercel Preview target is not certifiable as staging** · Read-only Vercel discovery found two Ready Preview API deployments and encrypted Preview bindings. Sanitized endpoint comparison shows the Preview database host/path differ from Production, but the Supabase auth origin is shared; the Preview Railway Postgres endpoint resets before authentication on three client configurations. Evidence: `p0-t7-vercel-preview-audit.txt`. Needed: owner-provided accessible isolated non-production database/auth target and a fresh deployment identity; P0 does not run against Production or the stale/unreachable Preview.
 - **2026-08-06 · P2.T4 · provider-backed planner live evaluation is BLOCKED-CONFIG, not a P0 failure** · Existing evidence records the initial provider-backed disposable-local run at 11/41 passed, 29 failed, 1 errored; the paced Preview-model recheck at 17/41 passed, 9 failed, 15 errored; and the workflow-faithful default-model recheck at 19/41 passed, 3 failed, 19 errored. The route/pacing harness changes are already recorded; P2 owns the actual configured GLM/Mistral/DeepSeek-class route evaluation and provenance/cost/fallback proof. No P0 rerun or production provider/customer effect is authorized. Evidence: `p0-t6-planner-live-eval.txt`, `p0-t6-planner-live-eval-paced-recheck.txt`, `p0-t6-planner-live-eval-workflow-faithful.txt`.
+- **2026-08-06 · P1.T1–T10 · universal contract phase complete** · Guarded Alpha/Bravo/Charlie seed is idempotent; the parameterized local runner passes 44/44 rows; cross-tenant, approval/typed, action/provider idempotency, five terminal receipts, prediction, and frontend/state/fallback gates pass without the prior pg query-queue warning. Evidence: `docs/release/evidence/P1/p1-suite-closure-no-warning.txt`, `docs/release/action-contract-results.md`, `docs/release/generated/action-contract-results.json`, `docs/release/evidence/P1/p1-frontend-tests-closure-final.txt`. No live provider or remote staging call was made; provider-live remains P2 BLOCKED-CONFIG and isolated staging/JWT/replay/load remain P3 BLOCKED-CONFIG.
 
 **Standing conditions:**
 - Missing credentials are not a reason to claim live readiness. Mark the binding/action `BLOCKED-CONFIG`.
@@ -223,60 +224,64 @@ workflow route pin and paced full recheck are recorded but not certification —
 
 # PHASE 1 — Universal Contract Hardening for All 44 Actions
 
-**Status:** 🟡 in progress · **Window:** Day 1 afternoon–Day 2 morning · **Depends on:** P0
+**Status:** ✅ complete · **Window:** Day 1 afternoon–Day 2 morning · **Depends on:** P0
 **Plan section:** §6 → PHASE 1
 **Starting SHA:** `bb8c2f1`
-**Ending SHA:**
+**Ending SHA:** `TO-BE-RECORDED-AFTER-P1-COMMIT`
 
 ### Discovery output
 
 ```text
-<!-- Paste manifest/idempotency/approval/receipt/renderer discovery evidence. -->
+P1 discovery: docs/release/evidence/P1/p1-discovery-full.txt (exit 0; fixed manifest 44/44;
+idempotency, approval/typed, prediction/receipt/actual, and frontend fallback/registry source
+inventories captured). The release scripts are owned by finnor-os/, so the manifest command was
+invoked from that workspace. The retained initial wrong-cwd attempt is p1-discovery.txt; the
+corrected evidence is p1-discovery-full.txt.
 ```
 
 ### Tasks
 
-- [ ] **P1.T1** Implement guarded, idempotent Alpha/Bravo/Charlie certification seed.
-      **Evidence:**
-      **Deviation:**
-- [ ] **P1.T2** Implement parameterised 44-action contract runner and reports.
-      **Evidence:**
-      **Deviation:**
-- [ ] **P1.T3** Fix registry/schema/invalid-input/missing-entity/tenant-grounding failures.
-      **Evidence:**
-      **Deviation:**
-- [ ] **P1.T4** Enforce fixed approval floors and typed confirmation rules.
-      **Evidence:**
-      **Deviation:**
-- [ ] **P1.T5** Prove/fix sequential and concurrent idempotency for all mutations/effects.
-      **Evidence:**
-      **Deviation:**
-- [ ] **P1.T6** Make every terminal outcome produce truthful receipt/audit/provenance.
-      **Evidence:**
-      **Deviation:**
-- [ ] **P1.T7** Make prediction/simulation explicit and truthful for all 44.
-      **Evidence:**
-      **Deviation:**
-- [ ] **P1.T8** Frontend generated contract and renderer/state coverage 44/44.
-      **Evidence:**
-      **Deviation:**
-- [ ] **P1.T9** Fix remaining action-specific failures and record why they were unique.
-      **Evidence:**
-      **Deviation:**
-- [ ] **P1.T10** Commit `docs/release/action-contract-results.md` and update ledger.
-      **Evidence:**
-      **Deviation:**
+- [x] **P1.T1** Implement guarded, idempotent Alpha/Bravo/Charlie certification seed.
+      **Evidence:** `finnor-os/scripts/release/seed-certification-tenants.ts`; `docs/release/evidence/P1/p1-seed-idempotency.txt`; `docs/release/evidence/P1/p1-seed-counts-marker-final.txt` (two seed runs, exact tenant-scoped counts, Bravo marker isolation).
+      **Deviation:** The existing database role enum has no `finance/admin` value; Alpha user 15 is the §4 finance/admin semantic user represented by the existing `owner` role. No schema change was made.
+- [x] **P1.T2** Implement parameterised 44-action contract runner and reports.
+      **Evidence:** `finnor-os/scripts/release/run-action-contract-matrix.ts`; `docs/release/generated/action-contract-results.json`; `docs/release/action-contract-results.md`; `docs/release/evidence/P1/p1-suite-closure-no-warning.txt` (exit 0, 44/44).
+      **Deviation:** Release scripts are owned by `finnor-os/`; commands were invoked from that workspace as recorded in the discovery evidence. The initial wrong-cwd discovery failure is retained at `p1-discovery.txt` and was not used as passing evidence.
+- [x] **P1.T3** Fix registry/schema/invalid-input/missing-entity/tenant-grounding failures.
+      **Evidence:** `finnor-os/packages/orchestration/src/compiler.ts`; `finnor-os/packages/domain-plugins/quotation/index.ts`; `finnor-os/packages/domain-plugins/proposal-batch/index.ts`; matrix report rows 1–44 all show registry, valid-input, invalid-input, missing-entity, and cross-tenant PASS/N/A as specified.
+      **Deviation:** Shared tenant-aware grounding was fixed before the two plugin-specific null/schema repairs; no action scope was removed.
+- [x] **P1.T4** Enforce fixed approval floors and typed confirmation rules.
+      **Evidence:** `finnor-os/scripts/release/action-hardening-spec.ts`; `finnor-os/packages/orchestration/src/executor.ts`; `finnor-os/packages/orchestration/src/index.ts`; `finnor-os/packages/policy-schema/src/index.ts`; `docs/release/evidence/P1/p1-typed-confirmation-final.txt`; matrix approval gate PASS 44/44.
+      **Deviation:** None. Live provider approval was not implied; the direct probe uses the guarded local database and a no-op executor.
+- [x] **P1.T5** Prove/fix sequential and concurrent idempotency for all mutations/effects.
+      **Evidence:** `docs/release/action-contract-results.md` and generated JSON: action-claim idempotency PASS for all 29 mutating rows and provider-ledger idempotency PASS for all 18 external rows; read-only/meta rows are explicitly N/A per spec.
+      **Deviation:** Provider effects are local deterministic registry probes only; live provider credentials remain phase-scoped BLOCKED-CONFIG.
+- [x] **P1.T6** Make every terminal outcome produce truthful receipt/audit/provenance.
+      **Evidence:** Generated report receipt gates `completed`, `rejected`, `blocked`, `failed`, and `compensated` each PASS 44/44, with tenant/policy/action/correlation provenance and seed-marker/allowlist exclusion checks.
+      **Deviation:** None.
+- [x] **P1.T7** Make prediction/simulation explicit and truthful for all 44.
+      **Evidence:** Generated report prediction gate PASS 44/44; every row returned an explicit schema/dry-run mode, summary, and predicted object without a provider call.
+      **Deviation:** None.
+- [x] **P1.T8** Frontend generated contract and renderer/state coverage 44/44.
+      **Evidence:** `src/components/jarvis/ui/renderers/backend-action-types.generated.ts`; `src/components/jarvis/ui/renderers/action-state-contract.ts`; `docs/release/evidence/P1/p1-frontend-tests-closure-final.txt`; matrix output `frontend=44/44 fallback_mounts=0`.
+      **Deviation:** The frontend registry has an explicit interactive clarification path; the checker recognizes that real registration rather than forcing it into a different tier.
+- [x] **P1.T9** Fix remaining action-specific failures and record why they were unique.
+      **Evidence:** Matrix discovery/fix history plus final report. Unique repairs were `generate_quote` schema validation, `send_proposal_to_recent_installs` null rejection, `manual_step_suggestion` renderer registration, and the missing `route_suggestion` renderer fixture; shared grounding/approval/receipt/idempotency fixes remain centralized.
+      **Deviation:** None.
+- [x] **P1.T10** Commit `docs/release/action-contract-results.md` and update ledger.
+      **Evidence:** `docs/release/action-contract-results.md`; this P1 state section and the 44-action ledger; final P1 commit recorded below; `p1-suite-closure-no-warning.txt`; backend/frontend typecheck and frontend test evidence under `docs/release/evidence/P1/`.
+      **Deviation:** None.
 
 ### Exit gate
 
-- [ ] 44/44 action contract rows pass — **Evidence:**
-- [ ] Cross-tenant tests pass — **Evidence:**
-- [ ] Approval floors/typed confirmation pass — **Evidence:**
-- [ ] Sequential/concurrent duplicates produce one effect — **Evidence:**
-- [ ] Receipts/audit/provenance truthful — **Evidence:**
-- [ ] Prediction/simulation truth explicit — **Evidence:**
-- [ ] Frontend coverage 44/44; zero fallback in certified paths — **Evidence:**
-- [ ] Zero open P0/P1 contract defects — **Evidence:**
+- [x] 44/44 action contract rows pass — **Evidence:** `docs/release/generated/action-contract-results.json`; `docs/release/action-contract-results.md`; `p1-suite-closure-no-warning.txt`.
+- [x] Cross-tenant tests pass — **Evidence:** generated report cross-tenant gate PASS for all 25 applicable rows; 19 N/A rows have no referenced entity field.
+- [x] Approval floors/typed confirmation pass — **Evidence:** generated report approval gate PASS 44/44; `p1-typed-confirmation-final.txt`.
+- [x] Sequential/concurrent duplicates produce one effect — **Evidence:** generated report action/provider idempotency gates; one winner and one ledger row per concurrent probe.
+- [x] Receipts/audit/provenance truthful — **Evidence:** generated report five terminal receipt gates PASS 44/44 with audit/provenance checks.
+- [x] Prediction/simulation truth explicit — **Evidence:** generated report prediction gate PASS 44/44.
+- [x] Frontend coverage 44/44; zero fallback in certified paths — **Evidence:** `p1-frontend-tests-closure-final.txt`; generated report frontend 44/44 and fallback mounts 0.
+- [x] Zero open P0/P1 contract defects — **Evidence:** P1 report has `passCount=44`, `failCount=0`; P0 remains closed. Provider-live and isolated-staging/JWT/replay/load items remain explicitly phase-scoped BLOCKED-CONFIG, not P0/P1 contract failures.
 
 ---
 
@@ -466,53 +471,56 @@ workflow route pin and paced full recheck are recorded but not certification —
 ## 44-ACTION CERTIFICATION LEDGER
 
 Update from generated reports only. `Core`, `Chaos`, `Staging`, and `UI/Receipt` require evidence paths.
+For this completed phase, `Core` and `UI/Receipt` cells marked `✅ P1` mean the Phase 1 contract
+gates only; `Final state` correctly remains `UNCERTIFIED` until the later recovery, live-binding,
+observability, and release gates are proven.
 
 | # | Action | Profile | Approval | Core | Chaos | Staging/live | UI/receipt | Final state |
 |---:|---|---|---|---|---|---|---|---|
-| 1 | `create_invoice` | `OPERATIONAL_CHANGE` | REQUIRED | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ UNCERTIFIED |
-| 2 | `send_payment_reminder` | `EXTERNAL_SIDE_EFFECT` | REQUIRED | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ UNCERTIFIED |
-| 3 | `record_payment` | `FINANCIAL_WRITE` | TYPED_REQUIRED | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ UNCERTIFIED |
-| 4 | `call_overdue_invoices` | `BATCH_EXTERNAL` | TYPED_REQUIRED | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ UNCERTIFIED |
-| 5 | `bulk_notify_existing_customers` | `BATCH_EXTERNAL` | TYPED_REQUIRED | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ UNCERTIFIED |
-| 6 | `clarification_request` | `META_NO_SIDE_EFFECT` | NONE | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ UNCERTIFIED |
-| 7 | `generate_compliance_summary` | `INTERNAL_DRAFT` | POLICY | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ UNCERTIFIED |
-| 8 | `create_lead` | `INTERNAL_WRITE` | POLICY | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ UNCERTIFIED |
-| 9 | `update_lead_status` | `INTERNAL_WRITE` | POLICY | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ UNCERTIFIED |
-| 10 | `log_interaction` | `INTERNAL_WRITE` | NONE | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ UNCERTIFIED |
-| 11 | `assign_lead_to_technician` | `OPERATIONAL_CHANGE` | REQUIRED | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ UNCERTIFIED |
-| 12 | `answer_customer_question` | `READ_ONLY` | NONE | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ UNCERTIFIED |
-| 13 | `send_customer_message` | `EXTERNAL_SIDE_EFFECT` | REQUIRED | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ UNCERTIFIED |
-| 14 | `send_follow_up` | `EXTERNAL_SIDE_EFFECT` | REQUIRED | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ UNCERTIFIED |
-| 15 | `check_stock_level` | `READ_ONLY` | NONE | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ UNCERTIFIED |
-| 16 | `flag_reorder_needed` | `INTERNAL_WRITE` | POLICY | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ UNCERTIFIED |
-| 17 | `log_stock_used_on_visit` | `OPERATIONAL_CHANGE` | POLICY | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ UNCERTIFIED |
-| 18 | `start_invoice_to_cash_workflow` | `DURABLE_WORKFLOW` | TYPED_REQUIRED | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ UNCERTIFIED |
-| 19 | `start_water_test_workflow` | `DURABLE_WORKFLOW` | REQUIRED | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ UNCERTIFIED |
-| 20 | `renew_maintenance_agreement` | `DURABLE_WORKFLOW` | REQUIRED | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ UNCERTIFIED |
-| 21 | `manual_step_suggestion` | `META_NO_SIDE_EFFECT` | NONE | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ UNCERTIFIED |
-| 22 | `summarize_ad_performance` | `READ_ONLY` | NONE | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ UNCERTIFIED |
-| 23 | `launch_ad_campaign` | `EXTERNAL_SPEND` | TYPED_REQUIRED | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ UNCERTIFIED |
-| 24 | `create_review_request` | `EXTERNAL_SIDE_EFFECT` | REQUIRED | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ UNCERTIFIED |
-| 25 | `get_business_overview` | `READ_ONLY` | NONE | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ UNCERTIFIED |
-| 26 | `answer_business_question` | `READ_ONLY` | NONE | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ UNCERTIFIED |
-| 27 | `send_proposal_to_recent_installs` | `BATCH_EXTERNAL` | TYPED_REQUIRED | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ UNCERTIFIED |
-| 28 | `request_proposal_signature` | `EXTERNAL_SIDE_EFFECT` | REQUIRED | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ UNCERTIFIED |
-| 29 | `start_installation_workflow` | `DURABLE_WORKFLOW` | REQUIRED | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ UNCERTIFIED |
-| 30 | `generate_quote` | `INTERNAL_DRAFT` | POLICY | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ UNCERTIFIED |
-| 31 | `size_equipment_for_household` | `READ_ONLY` | NONE | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ UNCERTIFIED |
-| 32 | `send_proposal` | `EXTERNAL_SIDE_EFFECT` | REQUIRED | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ UNCERTIFIED |
-| 33 | `route_suggestion` | `READ_ONLY` | NONE | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ UNCERTIFIED |
-| 34 | `assign_technician_to_visit` | `OPERATIONAL_CHANGE` | REQUIRED | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ UNCERTIFIED |
-| 35 | `check_technician_availability` | `READ_ONLY` | NONE | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ UNCERTIFIED |
-| 36 | `reschedule_visit` | `OPERATIONAL_CHANGE` | REQUIRED | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ UNCERTIFIED |
-| 37 | `check_reminder_due` | `READ_ONLY` | NONE | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ UNCERTIFIED |
-| 38 | `log_visit_report` | `INTERNAL_WRITE` | POLICY | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ UNCERTIFIED |
-| 39 | `flag_visit_issue` | `INTERNAL_WRITE` | POLICY | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ UNCERTIFIED |
-| 40 | `answer_water_question` | `READ_ONLY` | NONE | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ UNCERTIFIED |
-| 41 | `schedule_water_test` | `OPERATIONAL_CHANGE` | REQUIRED | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ UNCERTIFIED |
-| 42 | `search_web` | `READ_ONLY` | NONE | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ UNCERTIFIED |
-| 43 | `scan_competitors` | `READ_ONLY` | NONE | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ UNCERTIFIED |
-| 44 | `check_business_reviews` | `READ_ONLY` | NONE | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ UNCERTIFIED |
+| 1 | `create_invoice` | `OPERATIONAL_CHANGE` | REQUIRED | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
+| 2 | `send_payment_reminder` | `EXTERNAL_SIDE_EFFECT` | REQUIRED | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
+| 3 | `record_payment` | `FINANCIAL_WRITE` | TYPED_REQUIRED | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
+| 4 | `call_overdue_invoices` | `BATCH_EXTERNAL` | TYPED_REQUIRED | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
+| 5 | `bulk_notify_existing_customers` | `BATCH_EXTERNAL` | TYPED_REQUIRED | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
+| 6 | `clarification_request` | `META_NO_SIDE_EFFECT` | NONE | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
+| 7 | `generate_compliance_summary` | `INTERNAL_DRAFT` | POLICY | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
+| 8 | `create_lead` | `INTERNAL_WRITE` | POLICY | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
+| 9 | `update_lead_status` | `INTERNAL_WRITE` | POLICY | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
+| 10 | `log_interaction` | `INTERNAL_WRITE` | NONE | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
+| 11 | `assign_lead_to_technician` | `OPERATIONAL_CHANGE` | REQUIRED | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
+| 12 | `answer_customer_question` | `READ_ONLY` | NONE | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
+| 13 | `send_customer_message` | `EXTERNAL_SIDE_EFFECT` | REQUIRED | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
+| 14 | `send_follow_up` | `EXTERNAL_SIDE_EFFECT` | REQUIRED | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
+| 15 | `check_stock_level` | `READ_ONLY` | NONE | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
+| 16 | `flag_reorder_needed` | `INTERNAL_WRITE` | POLICY | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
+| 17 | `log_stock_used_on_visit` | `OPERATIONAL_CHANGE` | POLICY | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
+| 18 | `start_invoice_to_cash_workflow` | `DURABLE_WORKFLOW` | TYPED_REQUIRED | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
+| 19 | `start_water_test_workflow` | `DURABLE_WORKFLOW` | REQUIRED | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
+| 20 | `renew_maintenance_agreement` | `DURABLE_WORKFLOW` | REQUIRED | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
+| 21 | `manual_step_suggestion` | `META_NO_SIDE_EFFECT` | NONE | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
+| 22 | `summarize_ad_performance` | `READ_ONLY` | NONE | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
+| 23 | `launch_ad_campaign` | `EXTERNAL_SPEND` | TYPED_REQUIRED | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
+| 24 | `create_review_request` | `EXTERNAL_SIDE_EFFECT` | REQUIRED | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
+| 25 | `get_business_overview` | `READ_ONLY` | NONE | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
+| 26 | `answer_business_question` | `READ_ONLY` | NONE | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
+| 27 | `send_proposal_to_recent_installs` | `BATCH_EXTERNAL` | TYPED_REQUIRED | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
+| 28 | `request_proposal_signature` | `EXTERNAL_SIDE_EFFECT` | REQUIRED | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
+| 29 | `start_installation_workflow` | `DURABLE_WORKFLOW` | REQUIRED | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
+| 30 | `generate_quote` | `INTERNAL_DRAFT` | POLICY | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
+| 31 | `size_equipment_for_household` | `READ_ONLY` | NONE | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
+| 32 | `send_proposal` | `EXTERNAL_SIDE_EFFECT` | REQUIRED | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
+| 33 | `route_suggestion` | `READ_ONLY` | NONE | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
+| 34 | `assign_technician_to_visit` | `OPERATIONAL_CHANGE` | REQUIRED | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
+| 35 | `check_technician_availability` | `READ_ONLY` | NONE | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
+| 36 | `reschedule_visit` | `OPERATIONAL_CHANGE` | REQUIRED | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
+| 37 | `check_reminder_due` | `READ_ONLY` | NONE | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
+| 38 | `log_visit_report` | `INTERNAL_WRITE` | POLICY | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
+| 39 | `flag_visit_issue` | `INTERNAL_WRITE` | POLICY | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
+| 40 | `answer_water_question` | `READ_ONLY` | NONE | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
+| 41 | `schedule_water_test` | `OPERATIONAL_CHANGE` | REQUIRED | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
+| 42 | `search_web` | `READ_ONLY` | NONE | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
+| 43 | `scan_competitors` | `READ_ONLY` | NONE | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
+| 44 | `check_business_reviews` | `READ_ONLY` | NONE | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
 
 ---
 
@@ -628,6 +636,8 @@ These are not executor blockers until their phase requires them:
 <!-- Append one entry per phase/session, newest first:
 YYYY-MM-DD HH:MM · model · phase · starting SHA → ending SHA · tasks completed · test summary ·
 action count certified · defects opened/closed · score · next phase · blockers -->
+
+- **2026-08-06 · P1 UNIVERSAL CONTRACT CLOSURE SESSION (GPT-5)** · `3391701` → `TO-BE-RECORDED-AFTER-P1-COMMIT` · Read both Maestro files completely; retained the P0 close and reclassified provider-live to P2 BLOCKED-CONFIG and isolated staging/JWT/replay/load to P3 BLOCKED-CONFIG. Implemented the guarded certification seed, 44-row contract runner/reports, tenant-aware grounding, fixed approval floors/typed confirmation, null/schema repairs, receipts/provenance checks, generated frontend contract/state coverage, and renderer fixtures. Final local evidence is 44/44 contract rows, 44/44 frontend registry entries, zero certified fallback mounts, backend and frontend typechecks exit 0, targeted frontend tests 86/86, and the final contract suite exits 0 without a pg query-queue warning. No production or live-provider action taken.
 
 - **2026-08-06 · P0 PLANNER-PACING AND WORKFLOW RECHECK SESSION (GPT-5)** · `75f14c6d741c586036107515c61332e6147b0239` → `b6b03d5` · Added validated `PLANNER_EVAL_PACE_MS` support and a 30-second CI pace while preserving the 41-scenario set and explicit Groq route pins. `npm run typecheck` exited 0; `npm run test:planner-evals` exited 0 (3/3); `npm run release:manifest` exited 0 (44/44); `npm run release:environment` exited 0 (145 source names on rerun). A complete Preview-model paced run reached 41/41 with 17 passed, 9 failed, 15 errored; a workflow-faithful Groq-only/default-model run reached 41/41 with 19 passed, 3 failed, 19 errored (exit 1). Disposable databases were dropped, the embedded server was stopped, and temporary provider environment/log files were removed. No action certified; P0 remains blocked by non-green provider evaluation and the unavailable/unsafe remote non-production target/artifacts. No production action taken.
 

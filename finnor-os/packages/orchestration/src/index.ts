@@ -20,6 +20,7 @@ import { isPlanActionReady, planIdForAction, readyPlanActions, recordPredictionD
 import { plannerMemoryEnabled } from "./planner-memory";
 import { createInstructionTraceAnswerEnvelope, createInstructionTraceResultEnvelope, ensureInstructionSession, emitInstructionEvent, isReadOnlyAnswerAction } from "./instruction-trace";
 import { defaultFastReadOnlyRouter, type AnswerEnvelope, type FastReadOnlyRouter } from "./fast-read-lane";
+import { requiresTypedConfirmation } from "../../../scripts/release/action-hardening-spec";
 
 export * from "./llm";
 export * from "./planner";
@@ -574,8 +575,15 @@ export class FinnorOrchestrator implements Orchestrator {
     tenantId: string,
     decision: "approve" | "reject" | "escalate",
     decidedBy: string,
-    opts?: { role?: string; note?: string | null; reason?: string | null },
+    opts?: { role?: string; note?: string | null; reason?: string | null; typedConfirmation?: boolean },
   ): Promise<ExecutionResult> {
+    if (decision === "approve" && requiresTypedConfirmation((await this.actionTypeForDecision(actionId, tenantId)) ?? "") && opts?.typedConfirmation !== true) {
+      return {
+        status: "failure",
+        output: { requiresTypedConfirmation: true },
+        error: "This action requires explicit typed confirmation before it can be approved.",
+      };
+    }
     // Escalate is non-terminal (pending -> needs_human_review, still awaiting a
     // human): it only ever moves a genuinely still-pending action, never one already
     // under review (that transition is a no-op, handled by the idempotent branch
@@ -616,7 +624,12 @@ export class FinnorOrchestrator implements Orchestrator {
         tenantId,
         domainActionId: actionId,
         step: decision === "approve" ? "confirmed" : decision === "reject" ? "rejected" : "escalated",
-        input: { by: decidedBy, ...(opts?.role ? { role: opts.role } : {}) },
+        input: {
+          by: decidedBy,
+          policyVersion: before?.policyVersion ?? null,
+          ...(opts?.role ? { role: opts.role } : {}),
+          ...(decision === "approve" ? { typedConfirmation: opts?.typedConfirmation === true } : {}),
+        },
         output: {
           channel: decidedBy.startsWith("voice:") ? "voice" : "console",
           ...(decision === "approve" ? { note: opts?.note ?? null, policyDrift } : decision === "reject" ? { reason: opts?.reason ?? null } : { note: opts?.note ?? null }),
@@ -645,6 +658,17 @@ export class FinnorOrchestrator implements Orchestrator {
       return { status: "success", output: { escalated: true } };
     }
     return this.runAction(actionId, tenantId, decidedBy);
+  }
+
+  private async actionTypeForDecision(actionId: string, tenantId: string): Promise<string | null> {
+    const [row] = await withTenant(tenantId, (db) =>
+      db
+        .select({ actionType: domainActions.actionType })
+        .from(domainActions)
+        .where(and(eq(domainActions.id, actionId), eq(domainActions.tenantId, tenantId)))
+        .limit(1),
+    );
+    return row?.actionType ?? null;
   }
 
   /** Reflection loop: retry once on mismatch, escalate after that (§9). */

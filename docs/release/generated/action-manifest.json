@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-06T13:25:18.563Z",
+  "generatedAt": "2026-08-06T18:18:13.554Z",
   "actionCount": 44,
   "actions": [
     {
@@ -46,9 +46,9 @@
       "plugin": "bulk-notify",
       "actionType": "bulk_notify_existing_customers",
       "sourcePath": "finnor-os/packages/domain-plugins/bulk-notify/index.ts",
-      "sourceLine": 172,
+      "sourceLine": 182,
       "schemaSourcePath": "finnor-os/packages/domain-plugins/bulk-notify/index.ts",
-      "schemaSourceLine": 173
+      "schemaSourceLine": 183
     },
     {
       "plugin": "accounting",

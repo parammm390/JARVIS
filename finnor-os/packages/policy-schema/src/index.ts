@@ -67,6 +67,10 @@ export type SubmitInstruction = z.infer<typeof SubmitInstructionSchema>;
 
 export const ConfirmActionSchema = z.object({
   note: z.string().max(2000).optional(),
+  // TYPED_REQUIRED actions must carry an explicit confirmation signal. The
+  // orchestrator records this in immutable action-log input and refuses a normal
+  // approval with this field absent.
+  typedConfirmation: z.literal(true).optional(),
 });
 
 export const RejectActionSchema = z.object({

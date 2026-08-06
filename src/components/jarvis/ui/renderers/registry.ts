@@ -1,13 +1,13 @@
-// D3.T1 — the renderer registry: all 41 action types -> flagship/standard tier +
-// fixture, per plan spec ("renderers/registry.ts: all 41 types -> renderer +
+// D3.T1 — the renderer registry: all 44 generated action types -> flagship/standard tier +
+// fixture, per plan spec ("renderers/registry.ts: all 44 types -> renderer +
 // fixture. Tiers: flagship / standard (schema-driven designed card, plugin-family
-// styling) / designed fallback"). Field lists for the 30 standard-tier types are
+// styling) / designed fallback"). Field lists for standard-tier types are
 // hand-authored from each plugin's real zod schema (packages/domain-plugins/*, read
 // file-by-file this session) — never guessed, never a generic "dump all keys" mode.
 //
 // Zero raw-JSON default surfaces: getRendererEntry() always resolves to a tier;
 // FallbackRenderer.tsx (a designed, debug-gated backstop) is the only path that can
-// ever show raw JSON, and only for a genuinely unregistered type — none of the 41
+// ever show raw JSON, and only for a genuinely unregistered type — none of the 44
 // real ones hit it.
 
 import type { ComponentType } from "react"
@@ -23,6 +23,8 @@ import { WaveTwoScene } from "./flagships/WaveTwoScenes"
 import { ClarificationScene } from "./ClarificationScene"
 import { ACTION_FIXTURES } from "./fixtures"
 import type { ActionRendererProps, FieldSpec, RegistryEntry } from "./types"
+import { CERTIFIED_ACTION_STATES } from "./action-state-contract"
+import { BACKEND_ACTION_TYPES } from "./backend-action-types.generated"
 
 const f = (key: string, label: string, kind: FieldSpec["kind"]): FieldSpec => ({ key, label, kind })
 
@@ -186,6 +188,12 @@ const STANDARD_FIELDS: Record<string, { plugin: string; label: string; fields: F
     label: "Start Installation",
     fields: [f("quoteId", "quote", "uuid"), f("sku", "sku", "text"), f("quantity", "quantity", "number"), f("depositAmountUsd", "deposit", "currency")],
   },
+  // manual-step
+  manual_step_suggestion: {
+    plugin: "manual-step",
+    label: "Manual Step Suggested",
+    fields: [f("originalActionType", "original action", "text"), f("unavailableCapabilities", "unavailable capability", "text"), f("reason", "reason", "longtext")],
+  },
 }
 
 // ---------------------------------------------------------------------------
@@ -227,6 +235,7 @@ function buildRegistry(): Record<string, RegistryEntry> {
     label: "Clarification",
     Component: ClarificationScene,
     fixture: ACTION_FIXTURES.clarification_request,
+    states: CERTIFIED_ACTION_STATES,
   }
   for (const [actionType, Component] of Object.entries(FLAGSHIP_COMPONENT)) {
     registry[actionType] = {
@@ -235,6 +244,7 @@ function buildRegistry(): Record<string, RegistryEntry> {
       label: actionType.replaceAll("_", " "),
       Component,
       fixture: ACTION_FIXTURES[actionType],
+      states: CERTIFIED_ACTION_STATES,
     }
   }
   for (const [actionType, spec] of Object.entries(STANDARD_FIELDS)) {
@@ -248,6 +258,7 @@ function buildRegistry(): Record<string, RegistryEntry> {
       label: spec.label,
       fields: spec.fields,
       fixture: ACTION_FIXTURES[actionType],
+      states: CERTIFIED_ACTION_STATES,
     }
   }
   return registry
@@ -255,11 +266,21 @@ function buildRegistry(): Record<string, RegistryEntry> {
 
 export const ACTION_RENDERERS: Record<string, RegistryEntry> = buildRegistry()
 
+const frontendActionTypes = Object.keys(ACTION_RENDERERS).sort()
+const backendActionTypes = [...BACKEND_ACTION_TYPES].sort()
+if (frontendActionTypes.length !== backendActionTypes.length || frontendActionTypes.some((actionType, index) => actionType !== backendActionTypes[index])) {
+  throw new Error("Frontend renderer registry does not match the generated backend action manifest.")
+}
+for (const entry of Object.values(ACTION_RENDERERS)) {
+  if (entry.states.length !== CERTIFIED_ACTION_STATES.length || CERTIFIED_ACTION_STATES.some((state) => !entry.states.includes(state))) {
+    throw new Error("A certified action renderer is missing a required action state.")
+  }
+}
+
 export function getRendererEntry(actionType: string): RegistryEntry | undefined {
   return ACTION_RENDERERS[actionType]
 }
 
-/** The 41 real business action types (§1) PLUS `clarification_request` (P2.T8) —
- *  used by the Stage catalog and by tests/verification, never re-derived from a
- *  different source. */
+/** The generated 44 action types used by the Stage catalog and tests/verification,
+ *  never re-derived from a different source. */
 export const REGISTERED_ACTION_TYPES: string[] = Object.keys(ACTION_RENDERERS)

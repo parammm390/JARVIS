@@ -1,0 +1,15 @@
+Command: npm run test:unit -- src/components/jarvis/bridge/approval-consequence.test.ts src/components/jarvis/kernel/selectors.test.ts src/components/jarvis/lib/risk-tier.test.ts
+
+> finnor@0.1.0 test:unit
+> vitest run src/components/jarvis/bridge/approval-consequence.test.ts src/components/jarvis/kernel/selectors.test.ts src/components/jarvis/lib/risk-tier.test.ts
+
+
+ RUN  v4.1.10 /Users/paramdave/Desktop/FINNOR
+
+
+ Test Files  3 passed (3)
+      Tests  84 passed (84)
+   Start at  22:51:19
+   Duration  1.31s (transform 384ms, setup 0ms, import 480ms, tests 67ms, environment 0ms)
+
+EXIT_CODE=0

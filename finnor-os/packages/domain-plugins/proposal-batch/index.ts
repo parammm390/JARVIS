@@ -79,7 +79,7 @@ export const proposalBatchPlugin: DomainEnginePlugin = {
 
   validate(actionType, payload): ValidationResult {
     if (actionType !== ACTION) return { valid: false, errors: [`unhandled action ${actionType}`] };
-    const p = ProposalBatchPayloadSchema.safeParse(payload ?? {});
+    const p = ProposalBatchPayloadSchema.safeParse(payload);
     return p.success
       ? { valid: true, errors: [] }
       : { valid: false, errors: p.error.issues.map((i) => `payload.${i.path.join(".")}: ${i.message}`) };

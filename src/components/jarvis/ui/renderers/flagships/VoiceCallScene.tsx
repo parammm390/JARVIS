@@ -1,7 +1,7 @@
 "use client"
 
 // D3.T2 — flagship 3/8: voice call. Deviation, real and load-bearing: "voice call"
-// is NOT one of the 41 plugin action_types (confirmed via the full plugin-registry
+// is NOT one of the 44 generated plugin action_types (confirmed via the full plugin-registry
 // enumeration, packages/orchestration/src/plugin-registry.ts) — it's a `calls` table
 // row (packages/db/schema.ts:681), persisted by the Vapi webhook
 // (persistCall, packages/data-platform/src/conversations.ts), and surfaced today

@@ -1,6 +1,6 @@
 // D3.T1 — plugin family -> icon/accent, the generalized form of StepIcon.tsx's
 // ICON_MAP precedent (that file keys on workflow *step* types like generate_document;
-// this keys on the 21 domain *plugins* that own the 41 action types — a distinct,
+// this keys on the 21 domain *plugins* that own the 44 action types — a distinct,
 // wider taxonomy, not a rename of the same map).
 
 import {

@@ -1,0 +1,11 @@
+Command: npm run release:contract
+Environment: local embedded certification Postgres; guarded seed allowlist enabled; no provider calls
+
+> finnor-os@0.1.0 release:contract
+> tsx scripts/release/run-action-contract-matrix.ts
+
+CERTIFICATION_SEED_PASS tenants=Alpha,Bravo,Charlie counts=Alpha:15u/40h/40c/20l/12o/10q/8i/10w/12a/8p/3m;Bravo:sentinel;Charlie:degraded-config
+(node:19126) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+P1_CONTRACT_MATRIX_PASS rows=44/44 frontend=44/44 fallback_mounts=0
+EXIT_CODE=0

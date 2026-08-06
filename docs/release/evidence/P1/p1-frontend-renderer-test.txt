@@ -1,0 +1,32 @@
+Command: npm run test:unit -- src/components/jarvis/ui/renderers/registry.test.ts
+
+> finnor@0.1.0 test:unit
+> vitest run src/components/jarvis/ui/renderers/registry.test.ts
+
+
+ RUN  v4.1.10 /Users/paramdave/Desktop/FINNOR
+
+ ❯ src/components/jarvis/ui/renderers/registry.test.ts (2 tests | 1 failed) 12ms
+     × resolves every generated backend action type 9ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/components/jarvis/ui/renderers/registry.test.ts > certified action renderer registry > resolves every generated backend action type
+AssertionError: route_suggestion: expected undefined to be defined
+ ❯ src/components/jarvis/ui/renderers/registry.test.ts:15:42
+     13|       const entry = getRendererEntry(actionType)
+     14|       expect(entry, actionType).toBeDefined()
+     15|       expect(entry?.fixture, actionType).toBeDefined()
+       |                                          ^
+     16|       expect(entry?.states, actionType).toEqual(CERTIFIED_ACTION_STATE…
+     17|     }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed (2)
+   Start at  22:54:00
+   Duration  1.79s (transform 507ms, setup 0ms, import 1.09s, tests 12ms, environment 0ms)
+
+EXIT_CODE=1

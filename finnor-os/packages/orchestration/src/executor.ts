@@ -12,6 +12,7 @@ import type { PluginRegistry } from "./plugin-registry";
 import { diagnoseFailure, buildConfirmationScript } from "./voice";
 import { advanceWorkflowForAction } from "./workflow";
 import { executePluginViaRuntime } from "./runtime-bridge";
+import { approvalRequirementForAction } from "../../../scripts/release/action-hardening-spec";
 
 export interface Executor {
   execute(action: DomainAction, policy: DomainPolicy): Promise<ExecutionResult>;
@@ -48,9 +49,12 @@ export class GatedExecutor implements Executor {
     draft.domainActionId = action.id;
     await appendEpisode(action.tenantId, action.id, "draft", {}, { summary: draft.summary });
 
+    const approval = approvalRequirementForAction(action.actionType, policy.requiresConfirmation, draft.requiresConfirmation);
+
     // ---------------- THE CONFIRMATION GATE ----------------
-    // draft.requiresConfirmation can only tighten the gate (placeholder policies force it).
-    if ((policy.requiresConfirmation || draft.requiresConfirmation) && action.status !== "approved" && action.status !== "executing") {
+    // The fixed release floor is authoritative: a plugin draft cannot lower a
+    // required floor or turn a no-side-effect action into an approval item.
+    if (approval.requiresConfirmation && action.status !== "approved" && action.status !== "executing") {
       await withTenant(action.tenantId, async (db) => {
         await db
           .update(domainActions)
@@ -87,10 +91,11 @@ export class GatedExecutor implements Executor {
     // runtime bridge can distinguish this legitimate path from a forged SQL status.
     // Confirmation-required actions instead carry the `confirmed` episode written
     // by decide(), which the bridge validates independently.
-    if (!policy.requiresConfirmation && !draft.requiresConfirmation) {
+    if (!approval.requiresConfirmation) {
       await appendEpisode(action.tenantId, action.id, "policy_ungated_authorized", { policyId: policy.id ?? null }, {
         actionType: action.actionType,
-        reason: "policy does not require confirmation",
+        approvalFloor: approval.approvalFloor,
+        reason: "fixed action floor does not require confirmation",
       });
     }
     await this.setStatus(action, "executing");

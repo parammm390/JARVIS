@@ -2,7 +2,7 @@
 
 // jarvis-v3 P5.T4 (§7.2) — the designed generic renderer for "every other
 // action type": a genuinely UNREGISTERED action type (`getRendererEntry()`
-// returns undefined — every one of the 41+1 real types this repo has today
+// returns undefined — every one of the 44 generated real types this repo has today
 // IS registered, so this is the honest backstop for a future/typo'd type,
 // same posture `FallbackRenderer` documented for itself). Spec: plugin-family
 // accent stripe (left, 3px), human-cased title, a field list with typed

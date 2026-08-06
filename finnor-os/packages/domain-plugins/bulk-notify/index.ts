@@ -130,11 +130,21 @@ export async function findConsentedTargets(tenantId: string, window?: Inactivity
       if (!equipmentByHousehold.has(e.householdId)) equipmentByHousehold.set(e.householdId, e.type);
     }
     const householdIds = rows.map((row) => row.id);
-    const [visits, agreements, invoiceRows] = await Promise.all([
-      db.select({ householdId: serviceVisits.householdId, completedAt: serviceVisits.completedAt }).from(serviceVisits).where(inArray(serviceVisits.householdId, householdIds)),
-      db.select({ householdId: maintenanceAgreements.householdId, status: maintenanceAgreements.status }).from(maintenanceAgreements).where(inArray(maintenanceAgreements.householdId, householdIds)),
-      db.select({ householdId: invoices.householdId, status: invoices.status, amountUsd: invoices.amountUsd }).from(invoices).where(and(eq(invoices.tenantId, tenantId), inArray(invoices.householdId, householdIds))),
-    ]);
+    // Keep the transaction client single-flight. pg@9 warns when Drizzle queues
+    // concurrent queries on one checked-out client; these reads are independent but
+    // small and preserving deterministic query order keeps the simulation warning-free.
+    const visits = await db
+      .select({ householdId: serviceVisits.householdId, completedAt: serviceVisits.completedAt })
+      .from(serviceVisits)
+      .where(inArray(serviceVisits.householdId, householdIds));
+    const agreements = await db
+      .select({ householdId: maintenanceAgreements.householdId, status: maintenanceAgreements.status })
+      .from(maintenanceAgreements)
+      .where(inArray(maintenanceAgreements.householdId, householdIds));
+    const invoiceRows = await db
+      .select({ householdId: invoices.householdId, status: invoices.status, amountUsd: invoices.amountUsd })
+      .from(invoices)
+      .where(and(eq(invoices.tenantId, tenantId), inArray(invoices.householdId, householdIds)));
 
     const now = Date.now();
     const monthsAgo = (iso: string | null) =>

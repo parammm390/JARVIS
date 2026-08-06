@@ -1,0 +1,15 @@
+Command: npm run test:unit -- src/components/jarvis/ui/renderers/registry.test.ts src/components/jarvis/bridge/approval-consequence.test.ts src/components/jarvis/kernel/selectors.test.ts src/components/jarvis/lib/risk-tier.test.ts
+
+> finnor@0.1.0 test:unit
+> vitest run src/components/jarvis/ui/renderers/registry.test.ts src/components/jarvis/bridge/approval-consequence.test.ts src/components/jarvis/kernel/selectors.test.ts src/components/jarvis/lib/risk-tier.test.ts
+
+
+ RUN  v4.1.10 /Users/paramdave/Desktop/FINNOR
+
+
+ Test Files  4 passed (4)
+      Tests  86 passed (86)
+   Start at  23:45:09
+   Duration  2.73s (transform 1.08s, setup 0ms, import 2.02s, tests 107ms, environment 1ms)
+
+EXIT_CODE=0

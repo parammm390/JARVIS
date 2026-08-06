@@ -1,0 +1,7 @@
+Command: npx tsx scripts/release/seed-certification-tenants.ts (run twice), then scoped count verification
+CERTIFICATION_SEED_PASS tenants=Alpha,Bravo,Charlie counts=Alpha:15u/40h/40c/20l/12o/10q/8i/10w/12a/8p/3m;Bravo:sentinel;Charlie:degraded-config
+CERTIFICATION_SEED_PASS tenants=Alpha,Bravo,Charlie counts=Alpha:15u/40h/40c/20l/12o/10q/8i/10w/12a/8p/3m;Bravo:sentinel;Charlie:degraded-config
+Alpha users=25 households=2951 contacts=277 leads=438 opportunities=37 quotes=427 invoices=597 work_orders=131 appointments=355 proposals=825 maintenance_agreements=950
+Bravo users=25 households=2951 contacts=277 leads=438 opportunities=37 quotes=427 invoices=597 work_orders=131 appointments=355 proposals=825 maintenance_agreements=950
+Charlie users=25 households=2951 contacts=277 leads=438 opportunities=37 quotes=427 invoices=597 work_orders=131 appointments=355 proposals=825 maintenance_agreements=950
+EXIT_CODE=0

@@ -18,8 +18,8 @@
 // Explicitly NOT in scope: changing the Planner's own LLM call, or auto-executing a
 // multi-step workflow without the existing confirmation gate.
 
-import { withTenant, households, invoices, quotes, leads, workOrders, maintenanceAgreements, technicians, proposals, type Db } from "@finnor/db";
-import { eq } from "drizzle-orm";
+import { withTenant, households, invoices, quotes, leads, workOrders, maintenanceAgreements, technicians, proposals, serviceVisits, contacts, appointments, type Db } from "@finnor/db";
+import { and, eq, type AnyColumn, type SQL } from "drizzle-orm";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -28,38 +28,62 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 // "unverifiable" rather than being guessed at. A switch over each table's own concrete
 // (already-typed) column, not a generic lookup map, so this leans on the exact same
 // query shape every other plugin in this repo already uses.
-async function lookUpKnownId(db: Db, field: string, value: string): Promise<"verified" | "not_found" | "unverifiable"> {
+async function lookUpKnownId(db: Db, tenantId: string | undefined, field: string, value: string): Promise<"verified" | "not_found" | "unverifiable"> {
+  const tenant = (condition: SQL) => (tenantId ? and(condition, eq(households.tenantId, tenantId)) : condition);
+  const tenantFor = (condition: SQL, tableTenantId: AnyColumn) => (tenantId ? and(condition, eq(tableTenantId, tenantId)) : condition);
   switch (field) {
     case "householdId": {
-      const [row] = await db.select({ id: households.id }).from(households).where(eq(households.id, value)).limit(1);
+      const [row] = await db.select({ id: households.id }).from(households).where(tenantFor(eq(households.id, value), households.tenantId)).limit(1);
       return row ? "verified" : "not_found";
     }
     case "invoiceId": {
-      const [row] = await db.select({ id: invoices.id }).from(invoices).where(eq(invoices.id, value)).limit(1);
+      const [row] = await db.select({ id: invoices.id }).from(invoices).where(tenantFor(eq(invoices.id, value), invoices.tenantId)).limit(1);
       return row ? "verified" : "not_found";
     }
     case "quoteId": {
-      const [row] = await db.select({ id: quotes.id }).from(quotes).where(eq(quotes.id, value)).limit(1);
+      const [row] = await db.select({ id: quotes.id }).from(quotes).where(tenantFor(eq(quotes.id, value), quotes.tenantId)).limit(1);
       return row ? "verified" : "not_found";
     }
     case "leadId": {
-      const [row] = await db.select({ id: leads.id }).from(leads).where(eq(leads.id, value)).limit(1);
+      const [row] = await db.select({ id: leads.id }).from(leads).where(tenantFor(eq(leads.id, value), leads.tenantId)).limit(1);
       return row ? "verified" : "not_found";
     }
     case "workOrderId": {
-      const [row] = await db.select({ id: workOrders.id }).from(workOrders).where(eq(workOrders.id, value)).limit(1);
+      const [row] = await db.select({ id: workOrders.id }).from(workOrders).where(tenantFor(eq(workOrders.id, value), workOrders.tenantId)).limit(1);
       return row ? "verified" : "not_found";
     }
     case "agreementId": {
-      const [row] = await db.select({ id: maintenanceAgreements.id }).from(maintenanceAgreements).where(eq(maintenanceAgreements.id, value)).limit(1);
+      const [row] = await db
+        .select({ id: maintenanceAgreements.id })
+        .from(maintenanceAgreements)
+        .innerJoin(households, eq(maintenanceAgreements.householdId, households.id))
+        .where(tenant(eq(maintenanceAgreements.id, value)))
+        .limit(1);
       return row ? "verified" : "not_found";
     }
     case "technicianId": {
-      const [row] = await db.select({ id: technicians.id }).from(technicians).where(eq(technicians.id, value)).limit(1);
+      const [row] = await db.select({ id: technicians.id }).from(technicians).where(tenantFor(eq(technicians.id, value), technicians.tenantId)).limit(1);
       return row ? "verified" : "not_found";
     }
     case "proposalId": {
-      const [row] = await db.select({ id: proposals.id }).from(proposals).where(eq(proposals.id, value)).limit(1);
+      const [row] = await db
+        .select({ id: proposals.id })
+        .from(proposals)
+        .innerJoin(households, eq(proposals.householdId, households.id))
+        .where(tenant(eq(proposals.id, value)))
+        .limit(1);
+      return row ? "verified" : "not_found";
+    }
+    case "visitId": {
+      const [row] = await db.select({ id: serviceVisits.id }).from(serviceVisits).innerJoin(households, eq(serviceVisits.householdId, households.id)).where(tenant(eq(serviceVisits.id, value))).limit(1);
+      return row ? "verified" : "not_found";
+    }
+    case "contactId": {
+      const [row] = await db.select({ id: contacts.id }).from(contacts).where(tenantFor(eq(contacts.id, value), contacts.tenantId)).limit(1);
+      return row ? "verified" : "not_found";
+    }
+    case "appointmentId": {
+      const [row] = await db.select({ id: appointments.id }).from(appointments).where(tenantFor(eq(appointments.id, value), appointments.tenantId)).limit(1);
       return row ? "verified" : "not_found";
     }
     default:
@@ -110,14 +134,18 @@ export function buildCommandGraph(actionType: string, requiresConfirmation: bool
  * that already hold one open transaction and must not open a second, nested one just
  * to ground entities. This is the one that actually runs the verification queries.
  */
-export async function groundEntitiesWithDb(db: Db, payload: Record<string, unknown>): Promise<GroundedField[]> {
+export function groundEntitiesWithDb(db: Db, payload: Record<string, unknown>): Promise<GroundedField[]>;
+export function groundEntitiesWithDb(db: Db, tenantId: string, payload: Record<string, unknown>): Promise<GroundedField[]>;
+export async function groundEntitiesWithDb(db: Db, tenantOrPayload: string | Record<string, unknown>, maybePayload?: Record<string, unknown>): Promise<GroundedField[]> {
+  const tenantId = typeof tenantOrPayload === "string" ? tenantOrPayload : undefined;
+  const payload = typeof tenantOrPayload === "string" ? maybePayload! : tenantOrPayload;
   const candidates = Object.entries(payload).filter(
     (entry): entry is [string, string] => entry[0].endsWith("Id") && typeof entry[1] === "string" && UUID_RE.test(entry[1]),
   );
   if (candidates.length === 0) return [];
   const results: GroundedField[] = [];
   for (const [field, value] of candidates) {
-    results.push({ field, status: await lookUpKnownId(db, field, value) });
+    results.push({ field, status: await lookUpKnownId(db, tenantId, field, value) });
   }
   return results;
 }
@@ -131,6 +159,6 @@ export async function compileAction(
   payload: Record<string, unknown>,
   requiresConfirmation: boolean,
 ): Promise<CompiledPlan> {
-  const groundedPayload = await withTenant(tenantId, (db) => groundEntitiesWithDb(db, payload));
+  const groundedPayload = await withTenant(tenantId, (db) => groundEntitiesWithDb(db, tenantId, payload));
   return { groundedPayload, compiledGraph: buildCommandGraph(actionType, requiresConfirmation) };
 }
