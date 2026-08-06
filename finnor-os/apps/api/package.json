@@ -12,6 +12,7 @@
     "@finnor/db": "*",
     "@finnor/memory": "*",
     "@finnor/orchestration": "*",
+    "@finnor/plugin-technician-reports": "*",
     "@finnor/policy-schema": "*",
     "@finnor/projections": "*",
     "@finnor/read-models": "*",

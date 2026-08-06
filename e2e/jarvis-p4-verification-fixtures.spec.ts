@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test"
+import { test, expect, type Route } from "@playwright/test"
 import { mkdirSync } from "node:fs"
 import { SANDBOX_LITERAL } from "../src/components/jarvis/lib/sandbox-detection"
 
@@ -46,6 +46,40 @@ const FIXTURE_RECEIPT = {
   },
 }
 
+// Preserve the real SetupStatus envelope (especially actionTypes) and override
+// only the labelled binding facts needed to exercise the sandbox literal. A
+// partial synthetic response makes the actual Thread crash before the receipt
+// can render, which would test fixture shape rather than P4.T6 behavior.
+async function fulfillFixtureSetupStatus(route: Route): Promise<void> {
+  const response = await route.fetch()
+  const payload = await response.json() as Record<string, unknown>
+  const existingEnvironment = payload.environment && typeof payload.environment === "object"
+    ? payload.environment as Record<string, unknown>
+    : {}
+  const existingBindings = existingEnvironment.bindings && typeof existingEnvironment.bindings === "object"
+    ? existingEnvironment.bindings as Record<string, unknown>
+    : {}
+  await route.fulfill({
+    status: response.status(),
+    headers: {
+      ...Object.fromEntries(Object.entries(response.headers()).filter(([key]) => !["content-length", "content-encoding", "transfer-encoding"].includes(key))),
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      ...payload,
+      environment: {
+        ...existingEnvironment,
+        nodeEnv: "test",
+        bindings: {
+          ...existingBindings,
+          payments: { mode: "emulator", source: "default" },
+          crm: { mode: "native", source: "default" },
+        },
+      },
+    }),
+  })
+}
+
 const email = process.env.TEST_OWNER_EMAIL
 const password = process.env.TEST_OWNER_PASSWORD
 
@@ -81,9 +115,7 @@ test.describe("P4.T3/T6 — ThreadVerification + sandbox honesty, FIXTURE harnes
     mkdirSync(OUT_DIR, { recursive: true })
     await page.route("**/api/jarvis/receipts?domainActionId=*", (route) => route.fulfill({ json: { receipts: [{ id: FIXTURE_RECEIPT_ID }] } }))
     await page.route(`**/api/jarvis/receipts/${FIXTURE_RECEIPT_ID}`, (route) => route.fulfill({ json: { receipt: FIXTURE_RECEIPT } }))
-    await page.route("**/api/jarvis/setup/status", (route) =>
-      route.fulfill({ json: { environment: { nodeEnv: "test", bindings: { payments: { mode: "emulator", source: "default" }, crm: { mode: "native", source: "default" } } } } }),
-    )
+    await page.route("**/api/jarvis/setup/status", fulfillFixtureSetupStatus)
 
     await page.setViewportSize({ width: 1440, height: 900 })
     await page.goto("/jarvis/login", { waitUntil: "domcontentloaded" })
@@ -132,7 +164,7 @@ test.describe("P4.T3/T6 — ThreadVerification + sandbox honesty, FIXTURE harnes
         },
       }),
     )
-    await page.route("**/api/jarvis/setup/status", (route) => route.fulfill({ json: { environment: { nodeEnv: "test", bindings: {} } } }))
+    await page.route("**/api/jarvis/setup/status", fulfillFixtureSetupStatus)
 
     await page.setViewportSize({ width: 1440, height: 900 })
     await page.goto("/jarvis/next?fixture=receipt", { waitUntil: "domcontentloaded" })
@@ -154,10 +186,16 @@ test.describe("P4.T3/T6 — ThreadVerification + sandbox honesty, FIXTURE harnes
     await page.waitForURL("**/jarvis", { timeout: 20_000 })
 
     await page.goto("/jarvis/next", { waitUntil: "domcontentloaded" })
-    await page.waitForTimeout(1000)
+    // The real auth/role gate can still be in its honest "Waking JARVIS…"
+    // state one second after navigation. Wait for the real command rail rather
+    // than racing the shortcut against a listener that has not mounted yet.
+    await expect(page.getByRole("textbox", { name: "Tell JARVIS what you need" })).toBeVisible({ timeout: 10_000 })
 
     const urlBefore = page.url()
-    await page.keyboard.press("Meta+k")
+    // The product handler intentionally accepts either modifier; use the
+    // control chord so this evidence can run consistently across Chromium
+    // hosts while exercising that real meta-or-control listener.
+    await page.keyboard.press("Control+K")
     await expect(page.getByRole("dialog", { name: "Command palette" })).toBeVisible({ timeout: 5_000 })
     await page.getByRole("button", { name: /^Ops$/ }).click()
 
@@ -179,7 +217,7 @@ test.describe("P4.T3/T6 — ThreadVerification + sandbox honesty, FIXTURE harnes
     test.skip(test.info().project.name !== "desktop-chromium", "single real-session run")
     mkdirSync(OUT_DIR, { recursive: true })
     const fixtureAction = {
-      id: "fixture-action-0",
+      id: "fixture-node-0",
       actionType: "start_invoice_to_cash_workflow",
       summary: "Create a payment link for invoice fixture-, text/email it to the customer, and sync to QuickBooks.",
       payload: { invoiceId: "fixture-invoice-0", channel: "sms" },

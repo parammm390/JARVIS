@@ -45,8 +45,8 @@ describe("kernel/transport — sseHealth overrides the general lane signal (P3.T
     expect(deriveTransportHealth({ signedIn: true, statsDegraded: false, degradedForMs: null, sseHealth: "reconnecting" })).toBe("reconnecting")
   })
 
-  it("sseHealth 'unavailable' falls through to the general lane signal (the SSE ladder gave up — polling is now the real transport)", () => {
-    expect(deriveTransportHealth({ signedIn: true, statsDegraded: false, degradedForMs: null, sseHealth: "unavailable" })).toBe("polling")
+  it("sseHealth 'unavailable' stays honest when the bounded trace fallback also fails", () => {
+    expect(deriveTransportHealth({ signedIn: true, statsDegraded: false, degradedForMs: null, sseHealth: "unavailable" })).toBe("unavailable")
   })
 
   it("signed out still wins over sseHealth — never 'live' while signed out", () => {

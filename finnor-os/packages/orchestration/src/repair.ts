@@ -7,7 +7,7 @@
 // before opening any transaction.
 
 import { z } from "zod";
-import { type LLMProvider, resolveProviderForPurpose } from "./llm";
+import { isPurposeConfigured, type LLMChannel, type LLMProvider, resolveProviderForPurpose } from "./llm";
 import { redactStructured, redactText } from "@finnor/security";
 
 export interface RepairCandidate {
@@ -26,6 +26,10 @@ export interface RepairInput {
   validationError?: string;
   tenantId?: string;
   traceId?: string;
+  channel?: LLMChannel;
+  signal?: AbortSignal;
+  deadlineAt?: number;
+  deadlineMs?: number;
 }
 
 export interface RepairVerdict {
@@ -57,8 +61,8 @@ interface ChecklistRule {
 //   4. "Get the Hendersons' invoice paid — send them a payment link." -> send_payment_reminder /
 //      answer_business_question (expected start_invoice_to_cash_workflow) — the
 //      workflow-vs-single-step collision the roadmap itself names.
-// Seven other scenarios errored on a Groq rate limit during Step 0 (infra, not a
-// planner ambiguity) and are not represented here — see the phase report for the full
+    // Seven other scenarios errored on a provider rate limit during Step 0 (infra, not a
+    // planner ambiguity) and are not represented here — see the phase report for the full
 // classification table.
 
 const WORKFLOW_TO_SIMPLE: Record<string, string> = {
@@ -147,12 +151,12 @@ const RepairResponseSchema = z.object({
  *  critic.ts's criticConfigured()): nothing to do until a real key lands, never a
  *  hard failure in the meantime. */
 export function repairLlmConfigured(): boolean {
-  return Boolean(process.env.AWS_BEDROCK_API_KEY);
+  return isPurposeConfigured("repair");
 }
 
 export async function repairAction(
   input: RepairInput,
-  provider: LLMProvider = resolveProviderForPurpose("repair"),
+  provider?: LLMProvider,
 ): Promise<RepairVerdict> {
   const { flags, highConfidenceSuggestion } = runChecklist(input);
 
@@ -201,7 +205,8 @@ export async function repairAction(
 
   let verdict: RepairVerdict;
   try {
-    const raw = await provider.complete({ system, user, json: true, tenantId: input.tenantId, traceId: input.traceId, purpose: "repair" });
+    const selectedProvider = provider ?? resolveProviderForPurpose("repair", input.channel ?? "text");
+    const raw = await selectedProvider.complete({ system, user, json: true, tenantId: input.tenantId, traceId: input.traceId, purpose: "repair", channel: input.channel, signal: input.signal, deadlineAt: input.deadlineAt, deadlineMs: input.deadlineMs });
     const parsed = RepairResponseSchema.parse(JSON.parse(raw));
     verdict = { ...parsed, deterministicFlags: flags };
   } catch (err) {

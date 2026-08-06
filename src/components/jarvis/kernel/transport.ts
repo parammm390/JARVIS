@@ -12,16 +12,19 @@
 // change (same binding as P2).
 
 import { getCurrentAccessToken } from "../lib/jarvis-auth"
-import { startTracePoll, type TraceEvent, type TracePollHandle } from "./instruction"
+import { startTracePoll, type TraceEvent, type TracePollHandle, type TracePollFailure } from "./instruction"
 
-export type TransportHealth = "live" | "polling" | "reconnecting" | "offline"
+export type TransportHealth = "live" | "polling" | "reconnecting" | "offline" | "unavailable"
 
 const FAST_LANE_MS = 4000
 export const OFFLINE_AFTER_MS = FAST_LANE_MS * 2
 
 /** The active thread's own real-time delivery health, when one exists — `null`
  *  when no thread is tracing right now (the only case P2 ever had). */
-export type SseHealth = "live" | "reconnecting" | "unavailable" | null
+/** The active instruction trace's actual transport. `unavailable` is distinct
+ *  from `polling`: it means the bounded fallback also could not reach the trace
+ *  route/schema, so the UI must not imply that lifecycle events are flowing. */
+export type SseHealth = "live" | "polling" | "reconnecting" | "unavailable" | null
 
 export interface TransportInput {
   signedIn: boolean
@@ -42,7 +45,9 @@ export interface TransportInput {
 export function deriveTransportHealth(input: TransportInput): TransportHealth {
   if (!input.signedIn) return "polling"
   if (input.sseHealth === "live") return "live"
+  if (input.sseHealth === "polling") return "polling"
   if (input.sseHealth === "reconnecting") return "reconnecting"
+  if (input.sseHealth === "unavailable") return "unavailable"
   if (!input.statsDegraded || input.degradedForMs === null) return "polling"
   return input.degradedForMs >= OFFLINE_AFTER_MS ? "offline" : "reconnecting"
 }
@@ -71,22 +76,27 @@ export interface InstructionTransportHandle {
   stop: () => void
 }
 
-/** `NEXT_PUBLIC_JARVIS_SSE` gates whether SSE is attempted at all — default
- *  poll-first (this session's own binding). Reads the env var fresh per call
- *  (not hoisted), matching this repo's own established convention for flags read
- *  at call time rather than module load (e.g. apps/api's own rate-limit
- *  defaults). */
+/** SSE is on by default once the route is deployed. Set the public flag to `0`
+ *  for a deliberate poll-only rollout; this keeps a missing build-time env from
+ *  silently disabling the realtime path. Reads the env fresh per call. */
 function sseEnabled(): boolean {
-  return process.env.NEXT_PUBLIC_JARVIS_SSE === "1"
+  return process.env.NEXT_PUBLIC_JARVIS_SSE !== "0"
 }
 
-/** Poll-only path (SSE disabled, or given up after 2 failures). Reports
- *  `onHealthChange(null)` — polling is not an SSE health state, it is the
- *  absence of one; `deriveTransportHealth` falls through to the general lane
- *  signal in that case. */
+function pollHealth(status: "polling" | "reconnecting" | "unavailable", failure?: TracePollFailure): SseHealth {
+  // The failure object is intentionally consumed only as a status signal here;
+  // the caller's visible transport label must not expose backend error text that
+  // could contain implementation details.
+  void failure
+  return status
+}
+
+/** Poll-only path (SSE disabled, no token, or after the bounded SSE ladder). */
 function fallbackToPolling(opts: InstructionTransportOpts): TracePollHandle {
-  opts.onHealthChange(null)
-  return startTracePoll(opts.instructionId, opts.onEvents, resolveSinceSeq(opts.sinceSeq))
+  opts.onHealthChange("polling")
+  return startTracePoll(opts.instructionId, opts.onEvents, resolveSinceSeq(opts.sinceSeq), {
+    onStatus: (status, failure) => opts.onHealthChange(pollHealth(status, failure)),
+  })
 }
 
 // Plan v3 §0.6 rule 4 bans `?? 0` tree-wide (a ratchet, P1.T4 — the list of
@@ -114,9 +124,11 @@ export function startInstructionTransport(opts: InstructionTransportOpts): Instr
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
   let activePoll: TracePollHandle | null = null
   let lastSeq = resolveSinceSeq(opts.sinceSeq)
+  let terminalSeen = false
 
   function giveUpToPolling(): void {
     if (stopped) return
+    if (activePoll) return
     activePoll = fallbackToPolling({ ...opts, sinceSeq: lastSeq })
   }
 
@@ -141,9 +153,21 @@ export function startInstructionTransport(opts: InstructionTransportOpts): Instr
     }
     es.onmessage = (ev: MessageEvent<string>) => {
       try {
-        const parsed = JSON.parse(ev.data) as TraceEvent
-        if (typeof parsed.seq === "number") lastSeq = parsed.seq
-        opts.onEvents([parsed])
+        const parsed = JSON.parse(ev.data) as Partial<TraceEvent>
+        if (
+          typeof parsed.seq !== "number" || !Number.isInteger(parsed.seq) || parsed.seq < 0 ||
+          typeof parsed.phase !== "string" || !parsed.payload || typeof parsed.payload !== "object" || Array.isArray(parsed.payload) ||
+          typeof parsed.createdAt !== "string"
+        ) return
+        const event = parsed as TraceEvent
+        if (event.seq <= lastSeq) return
+        lastSeq = event.seq
+        opts.onEvents([event])
+        if (event.phase === "completed" || event.phase === "failed" || event.phase === "cancelled") {
+          terminalSeen = true
+          es?.close()
+          es = null
+        }
       } catch {
         // A malformed frame is a real no-op — never crashes the connection,
         // never fabricates an event.
@@ -152,9 +176,9 @@ export function startInstructionTransport(opts: InstructionTransportOpts): Instr
     es.onerror = () => {
       es?.close()
       es = null
-      if (stopped) return
+      if (stopped || terminalSeen) return
       failures += 1
-      if (failures > MAX_SSE_FAILURES) {
+      if (failures >= MAX_SSE_FAILURES) {
         opts.onHealthChange("unavailable")
         giveUpToPolling()
         return

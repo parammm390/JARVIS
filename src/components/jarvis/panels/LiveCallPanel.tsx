@@ -26,7 +26,7 @@ import Link from "next/link"
 import { motion, useReducedMotion } from "framer-motion"
 import { AlertTriangle, Lock, Mic, MicOff, PhoneOff } from "lucide-react"
 import { JarvisOrb } from "./JarvisOrb"
-import type { useVapiSession } from "../lib/useVapiSession"
+import { VAPI_WEB_ASSISTANT_ID, type useVapiSession } from "../lib/useVapiSession"
 import { onFrame } from "../lib/raf-bus"
 import { EASE } from "../ui/motion/tokens"
 import { getAnchorRect } from "../lib/pulse-bus"
@@ -222,6 +222,7 @@ export function LiveCallPanel({ session }: { session: ReturnType<typeof useVapiS
   const signedIn = !!authSession
   const [tab, setTab] = useState<"transcript" | "details">("transcript")
   const live = voiceState === "live" || voiceState === "speaking"
+  const webVoiceConfigured = configured && Boolean(VAPI_WEB_ASSISTANT_ID)
   const mm = String(Math.floor(callDurationSec / 60)).padStart(2, "0")
   const ss = String(callDurationSec % 60).padStart(2, "0")
   const feedRef = useRef<HTMLDivElement>(null)
@@ -282,9 +283,9 @@ export function LiveCallPanel({ session }: { session: ReturnType<typeof useVapiS
             <p className="mt-1.5 max-w-[240px] text-center j-fs-micro leading-relaxed text-[color:var(--j-text-dim)]">
               Book work, draft invoices, check stock — it plans, you approve.
             </p>
-            {!configured && (
+            {!webVoiceConfigured && (
               <div className="mt-3 rounded-lg border border-amber-400/25 bg-amber-400/5 px-3 py-2 text-center j-fs-micro text-amber-200">
-                Voice keys not configured on this deployment.
+                Dedicated browser voice is not configured on this deployment.
               </div>
             )}
             {lastError && (
@@ -340,13 +341,13 @@ export function LiveCallPanel({ session }: { session: ReturnType<typeof useVapiS
             </button>
           )}
           <motion.button
-            onClick={() => toggleVoice()}
+            onClick={() => toggleVoice(VAPI_WEB_ASSISTANT_ID ?? null)}
             // Starting is asynchronous. Keep the control inert while it joins so
             // a second tap cannot open a competing Daily microphone session. A
             // signed-out visitor can still END a call already in progress (can't
             // happen in practice since it can never start signed out) but can never
             // START a fresh one — real Vapi minutes cost real money per use.
-            disabled={!configured || voiceState === "connecting" || (!live && (!signedIn || authLoading))}
+            disabled={!webVoiceConfigured || voiceState === "connecting" || (!live && (!signedIn || authLoading))}
             whileHover={reduced ? {} : { scale: 1.04 }}
             whileTap={reduced ? {} : { scale: 0.97 }}
             className={`inline-flex h-10 items-center gap-2 rounded-full px-6 j-fs-micro font-black transition disabled:opacity-40 ${
@@ -358,6 +359,10 @@ export function LiveCallPanel({ session }: { session: ReturnType<typeof useVapiS
             {live ? (
               <>
                 <PhoneOff className="h-3.5 w-3.5" /> End Call
+              </>
+            ) : !webVoiceConfigured ? (
+              <>
+                <AlertTriangle className="h-3.5 w-3.5" /> Voice unavailable
               </>
             ) : !signedIn && !authLoading ? (
               <>

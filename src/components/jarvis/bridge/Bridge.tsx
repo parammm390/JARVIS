@@ -98,8 +98,11 @@ function useBridgeOrbPresence(): { state: Presence; activeRunCount: number; voic
   }, [data.statsDegraded, data.now])
   const degradedForMs = data.statsDegraded && degradedSinceRef.current !== null ? data.now - degradedSinceRef.current : null
   const transport = deriveTransportHealth({ signedIn: true, statsDegraded: data.statsDegraded, degradedForMs })
-  const voiceSpeaking = session.voiceState === "speaking"
-  const micOpen = session.voiceState === "live" || session.voiceState === "connecting"
+  // `speaking` in the Vapi SDK is the assistant's remote audio turn. Presence
+  // needs the user's real local-mic activity for `hearing`, otherwise the Orb
+  // claims to hear the user while JARVIS is the one talking.
+  const voiceSpeaking = session.userSpeaking
+  const micOpen = session.voiceState === "live" || session.voiceState === "speaking"
   const blocked = data.stats?.blocked ?? 0
   const state = derivePresence({
     transport,
@@ -425,7 +428,7 @@ function CenterStage({
                 {role === "owner" && <CertificationStatus />}
               </>
             )}
-            {activeKey !== "receipt" && scene === "pipeline" && <WorkflowTheater />}
+            {activeKey !== "receipt" && scene === "pipeline" && <WorkflowTheater actionIds={[]} />}
           </motion.div>
         </AnimatePresence>
       </div>

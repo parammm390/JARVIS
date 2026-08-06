@@ -291,6 +291,118 @@ export const embeddings = pgTable(
   ],
 );
 
+// Evidence is deliberately separate from `business_events` and the existing
+// semantic-memory table. `business_events` remains the immutable operational
+// ledger; these rows are source-backed research material with versioned snapshots
+// and retrieval metadata. Public rows use scope='public' and a null tenant_id so a
+// safe cache can be reused without making tenant-owned rows globally visible.
+export const evidenceSources = pgTable(
+  "evidence_sources",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    scope: text("scope", { enum: ["tenant", "public"] }).notNull().default("tenant"),
+    tenantId: uuid("tenant_id").references(() => tenants.id),
+    sourceKey: text("source_key").notNull(),
+    sourceType: text("source_type").notNull(),
+    canonicalUrl: text("canonical_url"),
+    title: text("title").notNull(),
+    publisher: text("publisher"),
+    metadata: jsonb("metadata").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    // Uniqueness is scope-aware and nullable for public rows, so the migration uses
+    // two partial unique indexes rather than Drizzle's nullable composite unique.
+    index("evidence_sources_tenant_idx").on(t.tenantId, t.scope),
+  ],
+);
+
+export const evidenceSourceVersions = pgTable(
+  "evidence_source_versions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sourceId: uuid("source_id").notNull().references(() => evidenceSources.id),
+    scope: text("scope", { enum: ["tenant", "public"] }).notNull(),
+    tenantId: uuid("tenant_id").references(() => tenants.id),
+    versionNumber: integer("version_number").notNull(),
+    contentHash: text("content_hash").notNull(),
+    content: text("content").notNull(),
+    snapshot: jsonb("snapshot").notNull().default({}),
+    asOf: timestamp("as_of", { withTimezone: true }).notNull(),
+    retrievedAt: timestamp("retrieved_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("evidence_source_versions_source_version_idx").on(t.sourceId, t.versionNumber),
+    unique("evidence_source_versions_source_hash_idx").on(t.sourceId, t.contentHash),
+    index("evidence_source_versions_scope_asof_idx").on(t.scope, t.tenantId, t.asOf),
+  ],
+);
+
+export const evidenceChunks = pgTable(
+  "evidence_chunks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sourceId: uuid("source_id").notNull().references(() => evidenceSources.id),
+    versionId: uuid("version_id").notNull().references(() => evidenceSourceVersions.id),
+    scope: text("scope", { enum: ["tenant", "public"] }).notNull(),
+    tenantId: uuid("tenant_id").references(() => tenants.id),
+    ordinal: integer("ordinal").notNull(),
+    content: text("content").notNull(),
+    tokenCount: integer("token_count").notNull(),
+    entityRefs: jsonb("entity_refs").notNull().default([]),
+    timeRefs: jsonb("time_refs").notNull().default([]),
+    // The migration keeps a jsonb fallback for local Postgres without pgvector;
+    // retrieval reads this column through raw SQL for both representations.
+    embedding: vector("embedding", { dimensions: 1024 }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("evidence_chunks_version_ordinal_idx").on(t.versionId, t.ordinal),
+    index("evidence_chunks_scope_idx").on(t.scope, t.tenantId, t.versionId),
+  ],
+);
+
+export const researchRuns = pgTable(
+  "research_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    query: text("query").notNull(),
+    asOf: timestamp("as_of", { withTimezone: true }).notNull(),
+    searchConfig: jsonb("search_config").notNull().default({}),
+    status: text("status", { enum: ["running", "completed", "failed"] }).notNull().default("running"),
+    error: text("error"),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (t) => [index("research_runs_tenant_started_idx").on(t.tenantId, t.startedAt)],
+);
+
+export const researchRunHits = pgTable(
+  "research_run_hits",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    researchRunId: uuid("research_run_id").notNull().references(() => researchRuns.id),
+    sourceId: uuid("source_id").notNull().references(() => evidenceSources.id),
+    versionId: uuid("version_id").notNull().references(() => evidenceSourceVersions.id),
+    chunkId: uuid("chunk_id").notNull().references(() => evidenceChunks.id),
+    scope: text("scope", { enum: ["tenant", "public"] }).notNull(),
+    rank: integer("rank").notNull(),
+    fusedScore: real("fused_score").notNull(),
+    lexicalScore: real("lexical_score"),
+    vectorScore: real("vector_score"),
+    excerpt: text("excerpt").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("research_run_hits_run_chunk_idx").on(t.researchRunId, t.chunkId),
+    index("research_run_hits_tenant_run_idx").on(t.tenantId, t.researchRunId, t.rank),
+  ],
+);
+
 // Phase 5 (§5.1): content-hash cache so re-ingesting an unchanged chunk never pays for
 // a second embedding call. Tenant-scoped (not global) — see migration 0028 for why a
 // shared global cache would be a cross-tenant information leak.

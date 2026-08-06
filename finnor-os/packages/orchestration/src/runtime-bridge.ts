@@ -17,7 +17,7 @@
 // behavior; the runtime just gains a durable record of what ran.
 
 import { withTenant, domainActions, actionLog } from "@finnor/db";
-import { submitCommand, claimStep, completeStep, failStep } from "@finnor/workflow-runtime";
+import { submitCommand, claimStep, completeStep, failStep, advanceWorkflow } from "@finnor/workflow-runtime";
 import { and, eq, or } from "drizzle-orm";
 import type { DraftAction, ExecutionResult, ErrorKind } from "@finnor/shared-types";
 import type { ToolRegistry } from "@finnor/tools";
@@ -157,6 +157,15 @@ export async function executePluginViaRuntime(params: ExecutePluginViaRuntimePar
     result = { ...result, errorKind };
     await failStep(params.tenantId, stepId, reason, errorKind);
   }
+
+  // This bridge executes the plugin synchronously, so there is no worker job left
+  // whose handler can advance the one-step run after the step reaches a terminal
+  // state. Without this call, completeStep()/failStep() update only
+  // workflow_steps; workflow_runs stays `running` forever and the JARVIS kernel's
+  // run-watch deliberately keeps the command rail disabled in executing state.
+  // Multi-step async workflows still use the worker's run_workflow_step handler,
+  // which calls the same advanceWorkflow function after each job.
+  await advanceWorkflow(params.tenantId, submitted.workflowRunId);
 
   return result;
 }

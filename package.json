@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "jarvis:types": "openapi-typescript finnor-os/openapi.json -o src/lib/jarvis/openapi-types.ts",
+    "jarvis:realtime:verify": "node scripts/verify-jarvis-realtime-release.mjs",
     "test:unit": "vitest run",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"

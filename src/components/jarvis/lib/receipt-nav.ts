@@ -11,6 +11,42 @@ export interface ReceiptSceneRequest {
   rowLayoutId: string
 }
 
+const RECEIPT_HASH_PREFIX = "#receipt-"
+
+/** The canonical address used by every receipt surface, including copied links. */
+export function receiptHash(receiptId: string): string {
+  return `${RECEIPT_HASH_PREFIX}${encodeURIComponent(receiptId)}`
+}
+
+/** Useful clipboard content for a receipt action: readable facts plus an
+ * addressable link, never just an opaque identifier or raw JSON. */
+export function receiptCopyText(input: {
+  receiptId: string
+  objective: string
+  outcome: string
+  href: string
+}): string {
+  return [
+    `JARVIS receipt · ${input.objective}`,
+    `Outcome: ${input.outcome}`,
+    `Receipt ID: ${input.receiptId}`,
+    `Open: ${input.href}`,
+  ].join("\n")
+}
+
+/** Parse only the receipt hash shape; malformed hashes stay on the current page. */
+export function receiptIdFromHash(hash: string): string | null {
+  if (!hash.startsWith(RECEIPT_HASH_PREFIX)) return null
+  const encoded = hash.slice(RECEIPT_HASH_PREFIX.length)
+  if (!encoded || encoded.includes("/") || encoded.includes("?")) return null
+  try {
+    const id = decodeURIComponent(encoded)
+    return /^[a-zA-Z0-9_-]+$/.test(id) ? id : null
+  } catch {
+    return null
+  }
+}
+
 type Listener = (req: ReceiptSceneRequest) => void
 
 let listener: Listener | null = null

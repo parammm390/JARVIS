@@ -113,7 +113,7 @@ test.describe("P5.T3 — Flagship C, FIXTURE harness (real component tree)", () 
   test("active quiet hours render the honest per-user banner, never implying customers are protected", async ({ page }) => {
     mkdirSync(OUT_DIR, { recursive: true })
     const action = {
-      id: "fixture-action-bulk-quiet",
+      id: "fixture-action-bulk-known",
       actionType: "bulk_notify_existing_customers",
       summary: `Reach ${REAL_TARGETS.length} customers with marketing consent via sms — approve to send all?`,
       payload: { channel: "sms", targets: REAL_TARGETS },

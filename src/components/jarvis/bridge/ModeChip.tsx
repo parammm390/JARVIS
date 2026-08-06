@@ -11,5 +11,5 @@ const LABEL: Record<JarvisMode, string | null> = {
 export function ModeChip({ mode }: { mode: JarvisMode }) {
   const label = LABEL[mode]
   if (!label) return null
-  return <span className="j-chip border border-amber-300/30 bg-amber-300/10 font-black tracking-wider text-amber-100" role="status">{label}</span>
+  return <span className="j-environment-label j-fs-micro max-w-full whitespace-nowrap font-bold uppercase tracking-[.1em]" data-jarvis-environment-label aria-label={`Environment: ${label}`}>{label}</span>
 }

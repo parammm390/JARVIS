@@ -181,35 +181,38 @@ export function KpiStrip({ onNavigate }: { onNavigate?: (view: string) => void }
   return (
     <StaleFog ageMs={laneAgeMs(lane.slowLastSuccessMs, lane.now)} staleAfterMs={SLOW_LANE_STALE_MS}>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-        {cards.map((c, i) => (
-          <button
-            key={c.key}
-            ref={(el) => {
-              if (el) cardRefs.current.set(c.key, el)
-            }}
-            onClick={() => onNavigate?.(c.view)}
-            onMouseEnter={() => setLineageHover(c.key)}
-            onMouseLeave={() => setLineageHover(null)}
-            onFocus={() => setLineageHover(c.key)}
-            onBlur={() => setLineageHover(null)}
-            style={{ animationDelay: `${i * 60}ms`, ["--rise-to" as string]: 1 }}
-            className="jarvis-rise j-panel group relative min-h-[118px] overflow-hidden p-3.5 text-left transition-transform duration-150 hover:-translate-y-0.5"
-          >
-            {/* accent glow seep, per-card color */}
-            <div
-              className="pointer-events-none absolute -right-8 -top-10 h-28 w-28 rounded-full opacity-[0.12] blur-2xl transition-opacity group-hover:opacity-25"
-              style={{ background: c.color }}
-            />
-            <Metric
-              label={c.label}
-              value={c.value}
-              format={c.format}
-              delta={c.delta}
-              sparkline={c.spark}
-            />
-            {c.sub}
-          </button>
-        ))}
+        {cards.map((c, i) => {
+          const Card = onNavigate ? "button" : "div"
+          return (
+            <Card
+              key={c.key}
+              ref={(el: HTMLElement | null) => {
+                if (el) cardRefs.current.set(c.key, el)
+              }}
+              onClick={onNavigate ? () => onNavigate(c.view) : undefined}
+              onMouseEnter={() => setLineageHover(c.key)}
+              onMouseLeave={() => setLineageHover(null)}
+              onFocus={() => setLineageHover(c.key)}
+              onBlur={() => setLineageHover(null)}
+              style={{ animationDelay: `${i * 60}ms`, ["--rise-to" as string]: 1 }}
+              className={`jarvis-rise j-panel group relative min-h-[118px] overflow-hidden p-3.5 text-left transition-transform duration-150 ${onNavigate ? "hover:-translate-y-0.5" : ""}`}
+            >
+              {/* accent glow seep, per-card color */}
+              <div
+                className="pointer-events-none absolute -right-8 -top-10 h-28 w-28 rounded-full opacity-[0.12] blur-2xl transition-opacity group-hover:opacity-25"
+                style={{ background: c.color }}
+              />
+              <Metric
+                label={c.label}
+                value={c.value}
+                format={c.format}
+                delta={c.delta}
+                sparkline={c.spark}
+              />
+              {c.sub}
+            </Card>
+          )
+        })}
       </div>
     </StaleFog>
   )

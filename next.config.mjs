@@ -6,11 +6,11 @@
 // (object-src, frame-ancestors, base-uri, form-action) are still locked down.
 const JARVIS_CSP = [
   "default-src 'self'",
-  // Next's production runtime still needs inline bootstrap scripts, but no JARVIS
-  // feature requires eval. Removing it closes an avoidable XSS escalation path.
+  // Next's production runtime still needs inline bootstrap scripts. Daily's CSP-
+  // compatible call machine is loaded from its own host when Vapi uses avoidEval.
   // Next's development client bundles use eval for source maps. Keep the production
   // policy eval-free, but allow dev hydration so browser QA can exercise JARVIS.
-  `script-src 'self' 'unsafe-inline'${process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : ""}`,
+  `script-src 'self' 'unsafe-inline' https://*.daily.co blob:${process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : ""}`,
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: https:",
   "font-src 'self' data:",

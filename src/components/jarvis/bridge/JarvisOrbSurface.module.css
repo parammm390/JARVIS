@@ -1,0 +1,134 @@
+.surface {
+  box-sizing: border-box;
+  position: relative;
+  display: grid;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  place-items: center;
+}
+
+.stage {
+  display: grid;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 0;
+  place-items: center;
+}
+
+.surface[data-jarvis-orb-expanded="true"],
+.surface[data-jarvis-orb-expanded="true"] .stage {
+  overflow: visible;
+}
+
+.consoleStack {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.previewAccess {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  justify-content: center;
+  margin-top: 0.25rem;
+  padding-inline: 1rem;
+}
+
+/* Immersive mode is a composition change, not a larger item in the live rail.
+   Keep the existing DOM order (presence → response → weave) so the truthful
+   action content remains available while the orb owns the visual center. */
+.immersiveLayout {
+  min-width: 0;
+}
+
+.ambientLayout {
+  min-width: 0;
+}
+
+@media (min-width: 768px) {
+  .immersiveLayout {
+    grid-template-columns: minmax(0, 960px);
+    width: min(100%, 960px);
+    margin-inline: auto;
+    gap: 16px;
+    overflow: visible;
+  }
+
+  .immersiveLayout > [data-jarvis-question-depth],
+  .immersiveLayout > [data-liveframe-surface="action-spine"] {
+    grid-column: 1;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .ambientLayout {
+    grid-template-columns: minmax(0, 960px);
+    width: min(100%, 960px);
+    margin-inline: auto;
+    gap: 24px;
+    overflow: visible;
+  }
+
+  .ambientLayout > [data-jarvis-question-depth],
+  .ambientLayout > [data-liveframe-surface="action-spine"] {
+    grid-column: 1;
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 767px) {
+  .immersiveLayout {
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+    min-width: 0;
+    overflow-x: clip;
+    overflow-y: visible;
+  }
+
+  .immersiveLayout > [data-jarvis-question-depth],
+  .immersiveLayout > [data-liveframe-surface="action-spine"] {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .ambientLayout {
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+    min-width: 0;
+    overflow-x: clip;
+    overflow-y: visible;
+  }
+
+  .ambientLayout > [data-jarvis-question-depth],
+  .ambientLayout > [data-liveframe-surface="action-spine"] {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+/* Keep context first in the resting narrative. Once the orb is expanded, the
+   stage leads the stack and context remains mounted after it as a secondary,
+   truthful reference. The control dock remains last in both compositions. */
+.consoleStack[data-jarvis-orb-composition="immersive"] > [data-jarvis-question-depth="setup"] {
+  order: 2;
+}
+
+.consoleStack[data-jarvis-orb-composition="immersive"] > [data-jarvis-composition-region="stage"] {
+  order: 1;
+}
+
+.consoleStack[data-jarvis-orb-composition="immersive"] > [data-jarvis-composition-region="controls"] {
+  order: 3;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .surface,
+  .stage {
+    transition: none;
+  }
+}

@@ -26,7 +26,7 @@
 // carry a NOTIFY trigger — that leg of pipeline-health only self-heals on the backstop
 // tick, not live).
 
-import { adminDb, readModelProjections, getPool } from "@finnor/db";
+import { withTenant, readModelProjections, getPool } from "@finnor/db";
 import { pipelineHealth, reliability, activitySnapshot, type PipelineHealth, type ReliabilityMetrics, type ActivitySnapshot } from "@finnor/read-models";
 import { and, eq } from "drizzle-orm";
 import { getLogger } from "@finnor/tools";
@@ -62,13 +62,19 @@ async function notifyProjectionUpdated(tenantId: string, view: ProjectedView): P
  *  the debounced dirty-refresh and the periodic backstop call. */
 export async function rebuildProjection<V extends ProjectedView>(tenantId: string, view: V): Promise<ProjectionData<V>> {
   const data = await computeView(tenantId, view);
-  await adminDb()
-    .insert(readModelProjections)
-    .values({ tenantId, view, data: data as object, updatedAt: new Date() })
-    .onConflictDoUpdate({
-      target: [readModelProjections.tenantId, readModelProjections.view],
-      set: { data: data as object, updatedAt: new Date() },
-    });
+  // read_model_projections is FORCE RLS. The old adminDb() call had no
+  // transaction-local app.tenant_id, so the restricted production role quite
+  // correctly rejected every cache write. Projection writes are tenant data and
+  // must use the same RLS context as the read-model computation.
+  await withTenant(tenantId, (db) =>
+    db
+      .insert(readModelProjections)
+      .values({ tenantId, view, data: data as object, updatedAt: new Date() })
+      .onConflictDoUpdate({
+        target: [readModelProjections.tenantId, readModelProjections.view],
+        set: { data: data as object, updatedAt: new Date() },
+      }),
+  );
   await notifyProjectionUpdated(tenantId, view);
   return data as ProjectionData<V>;
 }
@@ -76,10 +82,12 @@ export async function rebuildProjection<V extends ProjectedView>(tenantId: strin
 /** Read the cache; self-heals by computing live (and populating the cache) on a cold
  *  miss instead of ever returning nothing to an API caller. */
 export async function getProjection<V extends ProjectedView>(tenantId: string, view: V): Promise<ProjectionData<V>> {
-  const [row] = await adminDb()
-    .select()
-    .from(readModelProjections)
-    .where(and(eq(readModelProjections.tenantId, tenantId), eq(readModelProjections.view, view)));
+  const [row] = await withTenant(tenantId, (db) =>
+    db
+      .select()
+      .from(readModelProjections)
+      .where(and(eq(readModelProjections.tenantId, tenantId), eq(readModelProjections.view, view))),
+  );
   if (row) return row.data as ProjectionData<V>;
   return rebuildProjection(tenantId, view);
 }

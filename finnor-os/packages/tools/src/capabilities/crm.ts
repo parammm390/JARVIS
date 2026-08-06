@@ -8,7 +8,7 @@ import { z } from "zod";
 import type { CapabilityContract, CapabilityBinding, RetryPolicy } from "@finnor/workflow-runtime";
 import { connectGhl, callMcpTool } from "../mcp-client";
 import { withCircuitBreaker } from "../provider-circuit-breaker";
-import { upsertHouseholdByPhone, recordOutbound, bookServiceVisit } from "../sandbox";
+import { upsertHouseholdByPhone, recordOutbound, resolveSmsDestination, bookServiceVisit } from "../sandbox";
 import {
   emulatorUpsertContact,
   emulatorSendMessage,
@@ -139,7 +139,8 @@ export const sendMessageEmulatorBinding: CapabilityBinding<SendMessageInput, Sen
 export const sendMessageNativeBinding: CapabilityBinding<SendMessageInput, SendMessageOutput> = {
   name: "native",
   async call(input) {
-    await recordOutbound(input.tenantId, input.contactId, "sms", input.contactId, input.message);
+    const destination = await resolveSmsDestination(input.tenantId, input.contactId);
+    await recordOutbound(input.tenantId, destination.householdId, "sms", destination.phoneNumber, input.message);
     return { sent: true, channel: input.channel ?? "sms" };
   },
 };

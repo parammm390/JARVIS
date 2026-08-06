@@ -8,7 +8,7 @@ import { hybridRetrieve, type StructuredFact } from "@finnor/memory";
 import { withTenant, communicationsLog } from "@finnor/db";
 import { getOrCreateConversation, persistMessage } from "@finnor/data-platform";
 import { household360 } from "@finnor/read-models";
-import { resolveProvider } from "@finnor/tools";
+import { resolveProviderForPurpose } from "@finnor/tools";
 import type { ToolRegistry } from "@finnor/tools";
 import { findHousehold } from "../shared/db-helpers";
 import { readConfidenceThreshold } from "../shared/plugin-interface";
@@ -168,7 +168,7 @@ export const customerCommPlugin: DomainEnginePlugin = {
 
     let answer: string;
     try {
-      const provider = resolveProvider();
+      const provider = resolveProviderForPurpose("answer", "voice");
       answer = (
         await provider.complete({
           system:
@@ -180,6 +180,8 @@ export const customerCommPlugin: DomainEnginePlugin = {
             "structured fact when both exist. Never invent a number, date, or promise not present in the given " +
             "data. One or two short, warm sentences, no preamble.",
           user: JSON.stringify({ question, facts: retrieval.facts, semanticSnippets: retrieval.semanticHits.map((h) => h.chunk) }),
+          purpose: "answer",
+          channel: "voice",
         })
       ).trim();
     } catch {

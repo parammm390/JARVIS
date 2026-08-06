@@ -78,6 +78,14 @@ export function resetSessionId(source: InstructionSource): string {
   return fresh
 }
 
+/** Use the provider's call identity when it is available. The backend's voice
+ * path already namespaces Vapi calls this way, so browser turns from one call
+ * share the same short-term conversation without making a call id global. */
+export function sessionIdForVoiceCall(callId: string | null | undefined): string | null {
+  const normalized = typeof callId === "string" ? callId.trim() : ""
+  return normalized ? `vapi:${normalized}` : null
+}
+
 /** jarvis-v3 P3.T6: a FRESH id per submission (never persisted, never reused across
  *  turns — unlike sessionId) so the concurrent trace poll (`startTracePoll`, below)
  *  can target this exact call's own `instruction_events` rows. Minted by the CALLER
@@ -112,14 +120,38 @@ export interface PlannedActionResponse {
   payload: Record<string, unknown>
   policyId: string | null
   policyVersion?: number | null
+  /** Real sibling action ids from domain_actions.depends_on. The API returns
+   *  this durable DAG fact alongside each planned action when it is available. */
+  dependsOn?: string[] | null
   status: string
   createdAt: string
   groundedPayload?: Array<{ field: string; status: "verified" | "not_found" | "unverifiable" }> | null
   reasoning?: string
 }
 
+export interface AnswerResponseFact {
+  label: string
+  value: string
+  source?: string
+}
+
+/** Additive read-only answer returned alongside `planned` by the actions API.
+ *  The display projection is optional so the client remains compatible with
+ *  both the direct fast lane and older trace-shaped answer envelopes. */
+export interface AnswerResponse {
+  kind: "answer"
+  spokenSummary: string
+  displaySummary?: string
+  facts?: AnswerResponseFact[]
+  display?: {
+    title?: string
+    facts?: AnswerResponseFact[]
+  }
+}
+
 export interface SubmitInstructionResult {
   planned: PlannedActionResponse[]
+  answer?: AnswerResponse
   sessionId: string
 }
 
@@ -128,12 +160,13 @@ export interface SubmitInstructionResult {
  *  sends it in the POST body — the single change that closes V8's frontend gap. */
 export async function submitInstruction(text: string, opts: SubmitInstructionOpts): Promise<SubmitInstructionResult> {
   const sessionId = opts.sessionId ?? getOrCreateSessionId(opts.source)
-  const body = await jarvisPost<{ planned?: PlannedActionResponse[] }>("actions", {
+  const body = await jarvisPost<{ planned?: PlannedActionResponse[]; answer?: AnswerResponse }>("actions", {
     instruction: text,
+    channel: opts.source === "voice" ? "voice" : "text",
     sessionId,
     instructionId: opts.instructionId,
   })
-  return { planned: body.planned ?? [], sessionId }
+  return { planned: body.planned ?? [], ...(body.answer ? { answer: body.answer } : {}), sessionId }
 }
 
 // ---------------------------------------------------------------------------
@@ -146,6 +179,9 @@ export interface TraceEvent {
   phase: string
   payload: Record<string, unknown>
   createdAt: string
+  /** Optional envelope metadata. Most trace rows are scoped by the URL rather
+   * than repeating this value, but when a provider includes it we validate it. */
+  instructionId?: string
 }
 
 /** Phases that end the trace for this instruction — no further row will ever be
@@ -164,16 +200,69 @@ export interface TracePollHandle {
   stop: () => void
 }
 
+export type TracePollStatus = "polling" | "reconnecting" | "unavailable"
+
+export interface TracePollFailure {
+  status: number
+  message: string
+  attempts: number
+}
+
+export interface TracePollOptions {
+  /** Called whenever the poller's real transport state changes. */
+  onStatus?: (status: TracePollStatus, failure?: TracePollFailure) => void
+  /** Maximum consecutive network/5xx failures before the poll gives up. */
+  maxConsecutiveFailures?: number
+  /** A short startup grace for the real race where the poll beats POST's row insert. */
+  maxNotFoundRetries?: number
+}
+
+export const TRACE_POLL_MAX_FAILURES = 3
+export const TRACE_POLL_MAX_NOT_FOUND_RETRIES = 6
+export const TRACE_POLL_RETRY_BASE_MS = 400
+
+function isTraceEvent(value: unknown): value is TraceEvent {
+  if (!value || typeof value !== "object") return false
+  const candidate = value as Partial<TraceEvent>
+  return (
+    typeof candidate.seq === "number" && Number.isInteger(candidate.seq) && candidate.seq >= 0 &&
+    typeof candidate.phase === "string" &&
+    Boolean(candidate.payload) && typeof candidate.payload === "object" && !Array.isArray(candidate.payload) &&
+    typeof candidate.createdAt === "string" &&
+    (candidate.instructionId === undefined || typeof candidate.instructionId === "string")
+  )
+}
+
+function normalizeTraceEvents(events: unknown, instructionId?: string): TraceEvent[] {
+  if (!Array.isArray(events)) return []
+  return events
+    .filter(isTraceEvent)
+    .filter((event) => instructionId === undefined || event.instructionId === undefined || event.instructionId === instructionId)
+    .sort((a, b) => a.seq - b.seq)
+}
+
+function apiStatus(error: unknown): number {
+  if (!error || typeof error !== "object") return 0
+  const status = (error as { status?: unknown }).status
+  return typeof status === "number" ? status : 0
+}
+
+/** One bounded, authenticated snapshot. The kernel uses this after POST resolves
+ *  to drain a poll/SSE race without promoting the whole POST response to an event. */
+export async function fetchTraceEvents(instructionId: string, sinceSeq = 0): Promise<TraceEvent[]> {
+  const res = await jarvisGet<{ events?: unknown }>(`instructions/${instructionId}/events`, { after: String(sinceSeq) })
+  return normalizeTraceEvents(res.events, instructionId)
+}
+
 /** Polls `GET /api/instructions/:id/events?after={lastSeq}` every 400ms, calling
  *  `onEvents` with each newly-arrived batch (ascending seq, never re-delivered).
  *  Stops itself the instant a terminal-phase event arrives, or at the 120s ceiling —
  *  whichever is first. The caller (kernel/store.tsx) may also call `.stop()` earlier
  *  once the thread's own machine state has moved past where this trace can still
  *  usefully inform it (e.g. `awaiting_approval`) — stopping early is always safe,
- *  never loses an already-delivered event. A transient poll failure is not fatal —
- *  the same "try again next tick, never fabricate" honesty as data-core.ts's own
- *  lanes; it does not count toward the ceiling differently and does not stop the
- *  poll on its own. */
+ *  never loses an already-delivered event. A transient poll failure never fabricates
+ *  lifecycle data: it reports `reconnecting`, retries on a capped exponential
+ *  schedule, and becomes `unavailable` after the finite network/404 budget is spent. */
 export function startTracePoll(
   instructionId: string,
   onEvents: (events: TraceEvent[]) => void,
@@ -181,11 +270,24 @@ export function startTracePoll(
    *  event) instead of re-delivering everything from 0 — the restore effect
    *  already replayed history up to this point via a direct events fetch. */
   sinceSeq = 0,
+  options: TracePollOptions = {},
 ): TracePollHandle {
   let lastSeq = sinceSeq
   let stopped = false
   let timer: ReturnType<typeof setTimeout> | null = null
   const startedAtMs = Date.now()
+  let consecutiveFailures = 0
+  let notFoundRetries = 0
+  let lastStatus: TracePollStatus | null = null
+  const maxConsecutiveFailures = options.maxConsecutiveFailures ?? TRACE_POLL_MAX_FAILURES
+  const maxNotFoundRetries = options.maxNotFoundRetries ?? TRACE_POLL_MAX_NOT_FOUND_RETRIES
+
+  function report(status: TracePollStatus, failure?: TracePollFailure): void {
+    if (lastStatus === status && !failure) return
+    lastStatus = status
+    if (failure) options.onStatus?.(status, failure)
+    else options.onStatus?.(status)
+  }
 
   function stop(): void {
     if (stopped) return
@@ -196,12 +298,19 @@ export function startTracePoll(
     }
   }
 
+  function schedule(delayMs: number): void {
+    if (stopped) return
+    timer = setTimeout(() => void tick(), delayMs)
+  }
+
   async function tick(): Promise<void> {
     if (stopped) return
     try {
-      const res = await jarvisGet<{ events?: TraceEvent[] }>(`instructions/${instructionId}/events`, { after: String(lastSeq) })
-      const events = res.events ?? []
+      const events = await fetchTraceEvents(instructionId, lastSeq)
       if (stopped) return
+      consecutiveFailures = 0
+      notFoundRetries = 0
+      report("polling")
       if (events.length > 0) {
         lastSeq = events[events.length - 1]!.seq
         onEvents(events)
@@ -210,16 +319,42 @@ export function startTracePoll(
           return
         }
       }
-    } catch {
-      // Poll failed this tick — try again next tick. Never fabricates an event,
-      // never crashes the submission it is only describing.
+    } catch (error) {
+      // A 404 is expected for a short window because this poll starts before the
+      // POST has inserted instruction_sessions. It is not retried forever: after
+      // the bounded grace it means this route/schema is absent or the id is not
+      // visible to this tenant. All other transient failures get their own finite
+      // exponential retry ladder. Never fabricates an event.
+      const status = apiStatus(error)
+      const isNotFound = status === 404
+      const attempts = isNotFound ? notFoundRetries + 1 : consecutiveFailures + 1
+      if (isNotFound) notFoundRetries = attempts
+      else consecutiveFailures = attempts
+      const limit = isNotFound ? maxNotFoundRetries : maxConsecutiveFailures
+      const terminalAuthFailure = status === 401 || status === 403
+      if (terminalAuthFailure || attempts >= limit) {
+        report("unavailable", {
+          status,
+          message: error instanceof Error ? error.message : "Instruction trace unavailable",
+          attempts,
+        })
+        stop()
+        return
+      }
+      report("reconnecting", {
+        status,
+        message: error instanceof Error ? error.message : "Instruction trace retrying",
+        attempts,
+      })
     }
     if (stopped) return
     if (Date.now() - startedAtMs >= TRACE_POLL_CEILING_MS) {
       stop()
       return
     }
-    timer = setTimeout(() => void tick(), TRACE_POLL_INTERVAL_MS)
+    const failures = Math.max(consecutiveFailures, notFoundRetries)
+    const delay = failures > 0 ? TRACE_POLL_RETRY_BASE_MS * 2 ** (failures - 1) : TRACE_POLL_INTERVAL_MS
+    schedule(Math.min(delay, TRACE_POLL_INTERVAL_MS * 4))
   }
 
   void tick()

@@ -10,7 +10,7 @@ import { LLMPlanner, type Planner } from "./planner";
 import { GatedExecutor, type Executor } from "./executor";
 import { OutcomeReflection, type Reflection } from "./reflection";
 import { createDefaultPluginRegistry, PluginRegistry } from "./plugin-registry";
-import { resolveProvider } from "./llm";
+import { resolveProvider, resolveProviderForPurpose } from "./llm";
 import { AllowlistExecutor } from "./graph/allowlist-executor";
 import { LangGraphExecutor } from "./graph/executor";
 import { buildGateGraph } from "./graph/build-graph";
@@ -18,7 +18,8 @@ import { getCheckpointer } from "./graph/checkpointer";
 import { ensureSecretsLoaded, redactStructured, redactText } from "@finnor/security";
 import { isPlanActionReady, planIdForAction, readyPlanActions, recordPredictionDiff } from "./plan-dag";
 import { plannerMemoryEnabled } from "./planner-memory";
-import { ensureInstructionSession, emitInstructionEvent } from "./instruction-trace";
+import { createInstructionTraceAnswerEnvelope, createInstructionTraceResultEnvelope, ensureInstructionSession, emitInstructionEvent, isReadOnlyAnswerAction } from "./instruction-trace";
+import { defaultFastReadOnlyRouter, type AnswerEnvelope, type FastReadOnlyRouter } from "./fast-read-lane";
 
 export * from "./llm";
 export * from "./planner";
@@ -40,13 +41,34 @@ export * from "./planning-health";
 export * from "./planner-memory";
 export * from "./policy-simulation";
 export * from "./instruction-trace";
+export * from "./fast-read-lane";
+
+export interface InstructionResult {
+  actions: DomainAction[];
+  answer?: AnswerEnvelope;
+}
+
+export interface InstructionOptions {
+  sessionId?: string;
+  householdId?: string;
+  instructionId?: string;
+  channel?: "voice" | "text" | "console";
+  signal?: AbortSignal;
+  deadlineAt?: number;
+  deadlineMs?: number;
+}
 
 export interface Orchestrator {
   handleInstruction(
     instruction: string,
     ctx: TenantContext,
-    opts?: { sessionId?: string; householdId?: string; instructionId?: string },
+    opts?: InstructionOptions,
   ): Promise<DomainAction[]>;
+  handleInstructionResult(
+    instruction: string,
+    ctx: TenantContext,
+    opts?: InstructionOptions,
+  ): Promise<InstructionResult>;
   runAction(actionId: string, tenantId: string): Promise<ExecutionResult>;
   repairPlanAfterTerminalFailure(tenantId: string, domainActionId: string, workflowStepId: string): Promise<void>;
 }
@@ -74,6 +96,7 @@ export class FinnorOrchestrator implements Orchestrator {
   readonly planner: Planner;
   readonly executor: Executor;
   readonly reflection: Reflection;
+  readonly fastReadOnlyRouter: FastReadOnlyRouter;
 
   constructor(deps?: {
     plugins?: PluginRegistry;
@@ -81,11 +104,13 @@ export class FinnorOrchestrator implements Orchestrator {
     planner?: Planner;
     executor?: Executor;
     reflection?: Reflection;
+    fastReadOnlyRouter?: FastReadOnlyRouter;
   }) {
     this.plugins = deps?.plugins ?? createDefaultPluginRegistry();
     this.tools = deps?.tools ?? createDefaultRegistry();
     this.planner = deps?.planner ?? new LLMPlanner(this.plugins);
     this.reflection = deps?.reflection ?? new OutcomeReflection();
+    this.fastReadOnlyRouter = deps?.fastReadOnlyRouter ?? defaultFastReadOnlyRouter;
     if (deps?.executor) {
       this.executor = deps.executor;
     } else {
@@ -107,9 +132,20 @@ export class FinnorOrchestrator implements Orchestrator {
   async handleInstruction(
     instruction: string,
     ctx: TenantContext,
-    opts: { sessionId?: string; householdId?: string; instructionId?: string; channel?: "voice" | "text" | "console" } = {},
+    opts: InstructionOptions = {},
   ): Promise<DomainAction[]> {
-    await ensureSecretsLoaded();
+    const result = await this.handleInstructionResult(instruction, ctx, opts);
+    return result.actions;
+  }
+
+  /** Same instruction path as handleInstruction, with an additive direct-answer
+   * result for callers that can render read-only answers immediately. Existing
+   * callers should keep using handleInstruction when they only need action rows. */
+  async handleInstructionResult(
+    instruction: string,
+    ctx: TenantContext,
+    opts: InstructionOptions = {},
+  ): Promise<InstructionResult> {
     const instructionId = opts.instructionId;
     if (instructionId) {
       await ensureInstructionSession(ctx.tenantId, instructionId, instruction, {
@@ -119,6 +155,31 @@ export class FinnorOrchestrator implements Orchestrator {
       });
       await emitInstructionEvent(ctx.tenantId, instructionId, "received");
     }
+
+    // This branch is intentionally before memory retrieval and planner invocation.
+    // Classification is read-only and can only produce an AnswerEnvelope; it never
+    // selects an action type, policy, or write capability.
+    const fastAnswer = await this.fastReadOnlyRouter.route(instruction, ctx);
+    if (fastAnswer) {
+      if (instructionId) {
+        const answerId = `fast-read:${instructionId}`;
+        await emitInstructionEvent(ctx.tenantId, instructionId, "context_retrieved", {
+          chips: [fastAnswer.intent === "greeting"
+            ? { label: "assistant ready", source: "assistant:greeting" }
+            : { label: "cash collections read model", source: "read-model:cash-collections" }],
+        });
+        await emitInstructionEvent(ctx.tenantId, instructionId, "planning", { route: "fast_read_only" });
+        await emitInstructionEvent(ctx.tenantId, instructionId, "plan_ready", { count: 1, route: "fast_read_only" });
+        await emitInstructionEvent(ctx.tenantId, instructionId, "executing", { actionId: answerId, route: "fast_read_only" });
+        await emitInstructionEvent(ctx.tenantId, instructionId, "completed", createInstructionTraceAnswerEnvelope(answerId, fastAnswer));
+      }
+      return { actions: [], answer: fastAnswer };
+    }
+
+    // Secrets are needed by the existing planner/provider path only. Keeping boot
+    // after the deterministic branch makes a fast read independent of Secrets
+    // Manager latency or availability.
+    await ensureSecretsLoaded();
     const memory = await buildMemorySnapshot({
       tenantId: ctx.tenantId,
       sessionId: opts.sessionId,
@@ -141,7 +202,13 @@ export class FinnorOrchestrator implements Orchestrator {
     }
     let actions: DomainAction[];
     try {
-      actions = await this.planner.plan(instruction, ctx, memory);
+      actions = await this.planner.plan(instruction, ctx, memory, {
+        instructionId,
+        channel: opts.channel,
+        signal: opts.signal,
+        deadlineAt: opts.deadlineAt,
+        deadlineMs: opts.deadlineMs,
+      });
     } catch (err) {
       if (instructionId) {
         await emitInstructionEvent(ctx.tenantId, instructionId, "failed", { error: err instanceof Error ? err.message : "Planning failed" });
@@ -208,7 +275,9 @@ export class FinnorOrchestrator implements Orchestrator {
               ctx.tenantId,
               instructionId,
               result.status === "success" ? "completed" : "failed",
-              { actionId: action.id, ...(result.status !== "success" ? { error: result.error ?? null, errorKind: result.errorKind ?? null } : {}) },
+              result.status === "success" && isReadOnlyAnswerAction(action.actionType, result.expected, awaitingApproval)
+                ? createInstructionTraceResultEnvelope(action.id, result.output)
+                : { actionId: action.id, ...(result.status !== "success" ? { error: result.error ?? null, errorKind: result.errorKind ?? null } : {}) },
             );
           }
         }
@@ -252,7 +321,7 @@ export class FinnorOrchestrator implements Orchestrator {
         () => undefined,
       );
     }
-    return actions;
+    return { actions };
   }
 
   /**
@@ -611,9 +680,11 @@ export class FinnorOrchestrator implements Orchestrator {
   }
 }
 
-/** Convenience: resolve the model provider an action's policy asks for. */
-export function providerForPolicy(policy: DomainPolicy) {
-  return resolveProvider(policy.modelProvider);
+/** Convenience: resolve the model provider an action's policy asks for. An absent
+ * policy pin follows the explicit planning/text route; it never falls through to a
+ * legacy provider by accident. */
+export function providerForPolicy(policy: DomainPolicy, channel: "voice" | "text" | "console" | "background" = "text") {
+  return policy.modelProvider ? resolveProvider(policy.modelProvider) : resolveProviderForPurpose("planning", channel);
 }
 export * from "./workflow";
 export * from "./dealer-zero-replay";

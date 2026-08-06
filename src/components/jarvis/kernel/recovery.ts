@@ -16,9 +16,9 @@ export function recoveryPresentation(kind: RecoveryKind): RecoveryPresentation {
     case "policy_denied":
       return { affordance: "Escalate", copy: "Policy blocked this." }
     case "integration_unavailable":
-      return { affordance: "Connect", copy: "Stripe isn't connected yet." }
+      return { affordance: "Connect", copy: "The required integration isn't connected yet." }
     case "invalid_input":
-      return { affordance: "Correct", copy: "I need a valid phone number for this one." }
+      return { affordance: "Correct", copy: "This action needs a corrected input." }
     case "tool_error":
       return { affordance: "Retry", secondaryAffordance: "View error", copy: "The tool returned an error." }
     case "timeout":

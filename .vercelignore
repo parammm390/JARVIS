@@ -1,5 +1,13 @@
 finnor-os
+.claude
+.codex
+work
+outputs
+scratch-d3-verify
 node_modules
+.next
+.next.prebuild-stale
+finnor-os/.devdb
 qa-screenshots
 test-results
 *.mov

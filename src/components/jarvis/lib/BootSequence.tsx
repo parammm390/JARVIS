@@ -10,8 +10,6 @@ import { JarvisOrb } from "../panels/JarvisOrb"
 import { jarvisGet } from "./api"
 import { sfx } from "../sound"
 
-const OS_API = process.env.NEXT_PUBLIC_OS_API_URL
-
 type LineState = "pending" | "settling" | "online" | "standalone"
 interface Line {
   id: string
@@ -43,11 +41,7 @@ export function BootSequence({ onDone }: { onDone: () => void }) {
     }
     setLines((ls) => ls.map((l) => ({ ...l, state: "settling" })))
 
-    if (OS_API) {
-      fetch(`${OS_API}/api/health`, { cache: "no-store" }).then((r) => settle("core", r.ok), () => settle("core", false))
-    } else {
-      settle("core", false)
-    }
+    jarvisGet("health").then(() => settle("core", true), () => settle("core", false))
     jarvisGet("read-models/pipeline-health").then(() => settle("models", true), () => settle("models", false))
     jarvisGet("events").then(() => settle("events", true), () => settle("events", false))
     jarvisGet("actions/pending", { filter: "pending" }).then(() => settle("gate", true), () => settle("gate", false))

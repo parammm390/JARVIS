@@ -10,7 +10,7 @@ import { mkdirSync } from "node:fs"
 // blocker this spec works around dishonestly. This spec renders the REAL
 // ApprovalCockpit/ActionRenderer/LeadToWaterTestScene/SchedulingScene
 // component tree (not a separate mock) through the P2 fixture harness
-// (`/jarvis/next?fixture=approval`), with ONLY `actions/pending` intercepted
+// (`/jarvis/next?fixture=flagship-b-approval`), with ONLY `actions/pending` intercepted
 // — same pattern e2e/jarvis-p4-verification-fixtures.spec.ts already
 // established. Payload shapes match each plugin's real zod schema
 // (lead-to-water-test/index.ts's StartWaterTestWorkflowSchema,
@@ -31,7 +31,7 @@ test.describe("P5.T1 — Flagship B, FIXTURE harness (real component tree)", () 
     mkdirSync(OUT_DIR, { recursive: true })
 
     const waterTestAction = {
-      id: "fixture-action-water-test",
+      id: "fixture-node-water-test",
       actionType: "start_water_test_workflow",
       summary: "Hold a water test appointment on 2026-08-05 and confirm it with the customer at +13195550142.",
       payload: {
@@ -49,7 +49,7 @@ test.describe("P5.T1 — Flagship B, FIXTURE harness (real component tree)", () 
       predicted: null,
     }
     const assignTechAction = {
-      id: "fixture-action-assign-tech",
+      id: "fixture-node-assign-tech",
       actionType: "assign_technician_to_visit",
       summary: "Assign Priya Nair to visit 48ea2724.",
       payload: { visitId: "48ea2724-a211-4e24-a9ba-aecdad3145f5", technicianName: "Priya Nair" },

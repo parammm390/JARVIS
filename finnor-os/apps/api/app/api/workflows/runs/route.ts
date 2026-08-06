@@ -73,6 +73,7 @@ export async function GET(req: Request): Promise<Response> {
           status: s.status,
           attempts: s.attempts,
           terminalReason: s.terminalReason,
+          domainActionId: s.domainActionId,
           updatedAt: s.updatedAt,
         })),
       }));

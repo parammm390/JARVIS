@@ -2,26 +2,27 @@
 
 // The Instruction Thread — Command Rail (plan v3 §2.2/§6⓪/§3.4, P2.T6).
 //
-// Pinned, always focusable, `/` · `⌘K` · push-to-talk. Voice and text are one
-// code path (§3.2): both end at the SAME `kernel.submit(text, source)`.
+// Pinned, always focusable, `/` · `⌘K` · push-to-talk. Work voice and typed
+// input share the same authenticated `kernel.submit(text, source)` path; Vapi
+// supplies only the browser microphone and transcription transport.
 
-import { useCallback, useEffect, useRef, useState } from "react"
-import { motion } from "framer-motion"
-import { useKernel } from "../kernel/store"
+import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react"
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
+import { LoaderCircle, Mic, Send, Square } from "lucide-react"
+import { useKernel, type SubmissionOutcome } from "../kernel/store"
 import { useVapiSession, VAPI_WEB_ASSISTANT_ID } from "../lib/useVapiSession"
-import { railCommitVariants } from "../kernel/choreography"
+import { intentLaunchVariants, railCommitVariants, transcriptInkVariants } from "../kernel/choreography"
 import { sfx } from "../sound"
 import { CommandPaletteV2, useCommandPaletteV2 } from "../lib/CommandPaletteV2"
+import { registerAnchor } from "../lib/pulse-bus"
+import { deriveVoiceStateCopy } from "../lib/voice-state"
 import { OpsPanel } from "./OpsPanel"
 import { RecentThreadsPanel } from "./RecentThreadsPanel"
+import { sessionIdForVoiceCall } from "../kernel/instruction"
 import type { InstructionState } from "../kernel/types"
+import type { LiveFrameIntentLaunch, LiveFrameProjection } from "../kernel/liveframe"
 
-const DOT_COLOR: Record<"live" | "polling" | "reconnecting" | "offline", string> = {
-  live: "bg-cyan-300",
-  polling: "bg-cyan-300/70",
-  reconnecting: "bg-amber-300",
-  offline: "bg-red-400",
-}
+const HOLD_TO_TALK_MS = 360
 
 function railBusy(state: InstructionState | null): { disabled: boolean; placeholder?: string } {
   switch (state) {
@@ -39,33 +40,273 @@ function railBusy(state: InstructionState | null): { disabled: boolean; placehol
   }
 }
 
-export function CommandRail() {
+type MicControlVariant = "dock" | "orb"
+type TranscriptInk = { text: string; phase: "partial" | "final" }
+
+/** Vapi/provider versions expose the call identity at slightly different
+ *  boundaries. Read only the provider-owned identity when present; the kernel
+ *  falls back to its browser voice session id when this deployment does not
+ *  expose one. */
+function readProviderCallId(provider: unknown): string | null {
+  if (!provider || typeof provider !== "object") return null
+  const value = provider as Record<string, unknown>
+  const call = value.call && typeof value.call === "object" ? value.call as Record<string, unknown> : null
+  const activeCall = value.activeCall && typeof value.activeCall === "object" ? value.activeCall as Record<string, unknown> : null
+  for (const candidate of [value.voiceSessionId, value.callId, value.vapiCallId, call?.id, call?.callId, activeCall?.id, activeCall?.callId]) {
+    if (typeof candidate === "string" && candidate.trim()) return candidate.trim()
+  }
+  return null
+}
+
+/**
+ * One accessible mic control used by both the Presence Core and Command Dock.
+ * Both controls consume the same context-provided session callbacks; neither
+ * creates a Vapi instance. Space remains owned once by CommandRail's global
+ * shortcut, while pointer/tap semantics live here for both visible controls.
+ */
+export function MicControlButton({
+  variant,
+  liveframe,
+  children,
+  className = "",
+}: {
+  variant: MicControlVariant
+  liveframe?: LiveFrameProjection
+  children?: ReactNode
+  className?: string
+}) {
   const kernel = useKernel()
   const voice = useVapiSession()
+  const { startVoice, stopVoice, toggleVoice } = voice
+  const reducedMotion = useReducedMotion() ?? false
+  const threadState = kernel.thread?.machine.instructionState ?? null
+  const inputDisabled = railBusy(threadState).disabled
+  const voiceActive = voice.voiceState === "connecting" || voice.voiceState === "live" || voice.voiceState === "speaking"
+  // A failed lazy SDK import is retryable. Keep the control available when the
+  // dedicated assistant id exists; the visible availability/error row remains
+  // the truthful feedback surface.
+  const dedicatedVoiceConfigured = Boolean(VAPI_WEB_ASSISTANT_ID) && (voice.configured || Boolean(voice.lastError) || voice.voiceState === "connecting")
+  const voiceControlDisabled = (inputDisabled && !voiceActive) || !dedicatedVoiceConfigured
+  const voiceHoldTimerRef = useRef<number | null>(null)
+  const voiceHoldActiveRef = useRef(false)
+  const voicePointerIdRef = useRef<number | null>(null)
+  const suppressVoiceClickRef = useRef(false)
+
+  const clearVoiceHoldTimer = useCallback(() => {
+    if (voiceHoldTimerRef.current !== null) {
+      window.clearTimeout(voiceHoldTimerRef.current)
+      voiceHoldTimerRef.current = null
+    }
+  }, [])
+
+  const startVoiceHold = useCallback(() => {
+    voiceHoldActiveRef.current = true
+    suppressVoiceClickRef.current = true
+    void startVoice(VAPI_WEB_ASSISTANT_ID ?? null)
+  }, [startVoice])
+
+  const onVoicePointerDown = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (voiceControlDisabled) return
+    voicePointerIdRef.current = event.pointerId
+    voiceHoldActiveRef.current = false
+    suppressVoiceClickRef.current = false
+    event.currentTarget.setPointerCapture(event.pointerId)
+
+    // A short tap is handled by the native click below. Delaying only the
+    // start of a long press lets the same control support both tap-to-toggle
+    // and push-to-talk without opening a call twice.
+    if (!voiceActive) {
+      clearVoiceHoldTimer()
+      voiceHoldTimerRef.current = window.setTimeout(startVoiceHold, HOLD_TO_TALK_MS)
+    }
+  }, [clearVoiceHoldTimer, startVoiceHold, voiceActive, voiceControlDisabled])
+
+  const finishVoicePointer = useCallback((event: ReactPointerEvent<HTMLButtonElement>, cancelled = false) => {
+    if (voicePointerIdRef.current !== event.pointerId) return
+    clearVoiceHoldTimer()
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
+    voicePointerIdRef.current = null
+
+    if (voiceHoldActiveRef.current) {
+      voiceHoldActiveRef.current = false
+      suppressVoiceClickRef.current = true
+      void stopVoice()
+    } else if (cancelled) {
+      // Pointer cancellation must not fall through to a synthetic click that
+      // would start a session after the user's finger has left the control.
+      suppressVoiceClickRef.current = true
+    }
+  }, [clearVoiceHoldTimer, stopVoice])
+
+  const onVoiceClick = useCallback(() => {
+    if (suppressVoiceClickRef.current) {
+      suppressVoiceClickRef.current = false
+      return
+    }
+    if (voiceControlDisabled) return
+    void toggleVoice(VAPI_WEB_ASSISTANT_ID ?? null)
+  }, [toggleVoice, voiceControlDisabled])
+
+  const cancelVoicePointer = useCallback(() => {
+    const pointerWasActive = voicePointerIdRef.current !== null
+    clearVoiceHoldTimer()
+    voicePointerIdRef.current = null
+    if (voiceHoldActiveRef.current) {
+      voiceHoldActiveRef.current = false
+      suppressVoiceClickRef.current = true
+      void stopVoice()
+    } else if (pointerWasActive) {
+      // A window blur can prevent the browser from delivering pointercancel;
+      // suppress the matching synthetic click so a cancelled touch cannot open
+      // a new session after focus returns.
+      suppressVoiceClickRef.current = true
+    }
+  }, [clearVoiceHoldTimer, stopVoice])
+
+  useEffect(() => {
+    window.addEventListener("blur", cancelVoicePointer)
+    return () => {
+      window.removeEventListener("blur", cancelVoicePointer)
+      cancelVoicePointer()
+    }
+  }, [cancelVoicePointer])
+
+  const label = voice.voiceState === "connecting"
+    ? "Connecting microphone"
+    : voiceActive
+      ? "End voice session"
+      : "Tap to talk, or hold and release to push to talk"
+  const dockContent = voice.voiceState === "connecting"
+    ? <LoaderCircle className={`h-3.5 w-3.5${reducedMotion ? "" : " animate-spin"}`} />
+    : voiceActive
+      ? <Square className="h-3 w-3 fill-current" />
+      : <Mic className="h-3.5 w-3.5" />
+  const variantClass = variant === "orb"
+    ? "relative block cursor-pointer touch-none select-none appearance-none rounded-full bg-transparent p-0 outline-none focus-visible:ring-2 focus-visible:ring-cyan-200/80 disabled:cursor-not-allowed"
+    : `inline-flex h-11 min-w-11 shrink-0 touch-none select-none items-center justify-center gap-1.5 rounded-xl border px-2.5 j-fs-micro font-black transition disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto ${
+        voiceActive
+          ? "border-cyan-200/50 bg-cyan-300/15 text-cyan-100"
+          : "border-white/10 bg-white/[.045] text-[color:var(--j-text-dim)] hover:border-cyan-200/40 hover:text-cyan-100"
+      }`
+
+  return (
+    <button
+      type="button"
+      data-voice-control="true"
+      data-voice-state={voice.voiceState}
+      data-liveframe-energy={liveframe?.energy}
+      data-voice-energy={liveframe?.voiceEnergy}
+      aria-pressed={voiceActive}
+      aria-busy={voice.voiceState === "connecting"}
+      aria-label={label}
+      title={voiceActive ? "End voice session" : "Tap to talk · hold and release to push to talk"}
+      disabled={voiceControlDisabled}
+      onPointerDown={onVoicePointerDown}
+      onPointerUp={finishVoicePointer}
+      onPointerCancel={(event) => finishVoicePointer(event, true)}
+      onClick={onVoiceClick}
+      onContextMenu={(event) => event.preventDefault()}
+      className={`${variantClass} ${className}`.trim()}
+    >
+      {children ?? <><span aria-hidden>{dockContent}</span><span className="hidden sm:inline">{voice.voiceState === "connecting" ? "Connecting" : voiceActive ? "End" : "Talk"}</span></>}
+    </button>
+  )
+}
+
+export function CommandRail({
+  liveframe,
+  intentLaunch,
+  onIntentAccepted,
+  embedded = false,
+}: {
+  liveframe: LiveFrameProjection
+  intentLaunch?: LiveFrameIntentLaunch | null
+  onIntentAccepted?: () => void
+  /** The owner command center mounts the exact same rail inside its central
+   * stage so the composition remains dense. Other consumers keep the docked
+   * viewport treatment. Interaction and submission wiring stay identical. */
+  embedded?: boolean
+}) {
+  const kernel = useKernel()
+  const voice = useVapiSession()
+  const { startVoice, stopVoice, transcript } = voice
   const palette = useCommandPaletteV2()
   const [opsOpen, setOpsOpen] = useState(false)
   const [recentThreadsOpen, setRecentThreadsOpen] = useState(false)
   const [value, setValue] = useState("")
   const [committing, setCommitting] = useState(false)
+  const [transcriptInk, setTranscriptInk] = useState<TranscriptInk | null>(null)
+  const [voiceRetrying, setVoiceRetrying] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const dockRef = useRef<HTMLFormElement>(null)
   const spaceHeldRef = useRef(false)
+  const reducedMotion = useReducedMotion() ?? false
+
+  useEffect(() => {
+    // LF-04's flight reads the real Dock rect after the layout has mounted;
+    // the anchor registry owns no state and does not synthesize coordinates.
+    return registerAnchor("command-dock", () => dockRef.current?.getBoundingClientRect() ?? null)
+  }, [])
 
   const threadState = kernel.thread?.machine.instructionState ?? null
   const busy = railBusy(threadState)
+  const inputDisabled = busy.disabled || committing
+  const voiceActive = voice.voiceState === "connecting" || voice.voiceState === "live" || voice.voiceState === "speaking"
+  const waveformOpen = voice.voiceState === "live" || voice.voiceState === "speaking"
+  const voiceEnergy = liveframe.voiceEnergy
+  const sharedEnergy = liveframe.energy
+  // Fixed factors give the meter a stable silhouette. Its level and opacity
+  // come only from LIVEFRAME's real local mic contribution and shared energy.
+  const waveformFactors = [0.52, 0.78, 0.62, 1, 0.7]
+  // A failed lazy SDK import is still retryable. Keep the control available
+  // when the dedicated assistant id exists; `voice.configured` remains visible
+  // below as truthful availability feedback instead of making Retry inert.
+  const dedicatedVoiceConfigured = Boolean(VAPI_WEB_ASSISTANT_ID) && (voice.configured || Boolean(voice.lastError) || voice.voiceState === "connecting")
+  const voiceCopy = deriveVoiceStateCopy({
+    available: dedicatedVoiceConfigured,
+    voiceState: voice.voiceState,
+    userSpeaking: voice.userSpeaking,
+    micSilenceWarning: voice.micSilenceWarning,
+    lastError: voice.lastError,
+    retrying: voiceRetrying,
+  })
+  const voiceSessionId = sessionIdForVoiceCall(
+    typeof voice.voiceSessionId === "string" && voice.voiceSessionId.trim()
+      ? voice.voiceSessionId
+      : readProviderCallId(voice),
+  )
+
+  useEffect(() => {
+    if (voiceRetrying && voice.voiceState !== "connecting") setVoiceRetrying(false)
+  }, [voice.voiceState, voiceRetrying])
+
+  const retryVoice = useCallback(() => {
+    setVoiceRetrying(true)
+    void startVoice(VAPI_WEB_ASSISTANT_ID ?? null).catch(() => setVoiceRetrying(false))
+  }, [startVoice])
 
   const submitTyped = useCallback(async () => {
     const text = value.trim()
-    if (!text || busy.disabled) return
+    if (!text || inputDisabled) return
     setCommitting(true)
     sfx.commit()
     setValue("")
-    if (threadState === "clarifying") {
-      await kernel.answerClarification(text)
-    } else {
-      await kernel.submit(text, "typed")
+    let outcome: SubmissionOutcome = "failed"
+    try {
+      outcome = threadState === "clarifying"
+        ? await kernel.answerClarification(text)
+        : await kernel.submit(text, "typed")
+    } catch {
+      outcome = "failed"
+    } finally {
+      // A failed API call must never leave the command rail in its committing
+      // animation/disabled state. The previous path only cleared this flag on
+      // success, which made a transient backend failure look like a dead input.
+      setCommitting(false)
+      if (outcome === "failed") setValue(text)
+      if (outcome === "accepted") onIntentAccepted?.()
     }
-    setCommitting(false)
-  }, [value, busy.disabled, threadState, kernel])
+  }, [value, inputDisabled, threadState, kernel, onIntentAccepted])
 
   // `/` focuses the rail from anywhere except while already typing in a field.
   // `⌘K` is NOT handled here — `useCommandPaletteV2()` already owns that
@@ -80,40 +321,105 @@ export function CommandRail() {
         inputRef.current?.focus()
         return
       }
+      // The visible mic button owns pointer/touch gestures. Do not also handle
+      // keyboard events dispatched from that button, or a native button Space
+      // press would start a second session through this global listener.
+      if (target?.closest("[data-voice-control]")) return
       // Hold-Space push-to-talk (§3.4 point 1) — never while typing (a normal
       // space keystroke in the input must stay a space, not start a call).
-      if (e.code === "Space" && !typing && !spaceHeldRef.current && !busy.disabled) {
+      if (e.code === "Space" && !typing && !spaceHeldRef.current && !inputDisabled && !voiceActive && dedicatedVoiceConfigured) {
         e.preventDefault()
         spaceHeldRef.current = true
-        void voice.toggleVoice(VAPI_WEB_ASSISTANT_ID)
+        void startVoice(VAPI_WEB_ASSISTANT_ID ?? null)
       }
     }
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.code === "Space" && spaceHeldRef.current) {
         spaceHeldRef.current = false
-        void voice.toggleVoice(VAPI_WEB_ASSISTANT_ID)
+        void stopVoice()
       }
+    }
+    const onWindowBlur = () => {
+      if (!spaceHeldRef.current) return
+      spaceHeldRef.current = false
+      void stopVoice()
     }
     window.addEventListener("keydown", onKeyDown)
     window.addEventListener("keyup", onKeyUp)
+    window.addEventListener("blur", onWindowBlur)
     return () => {
       window.removeEventListener("keydown", onKeyDown)
       window.removeEventListener("keyup", onKeyUp)
+      window.removeEventListener("blur", onWindowBlur)
     }
-  }, [voice, busy.disabled])
+  }, [dedicatedVoiceConfigured, inputDisabled, startVoice, stopVoice, voiceActive])
 
-  // On a final transcript, submit exactly like a typed Enter — one code path.
-  const lastFinalRef = useRef<string | null>(null)
+  // LF-03: each real Vapi partial replaces the visible ink. The final event
+  // clears the partial state in the voice provider, but this local final ink
+  // stays mounted until the authenticated kernel promise resolves or fails.
   useEffect(() => {
-    const last = voice.transcript[voice.transcript.length - 1]
+    const partial = voice.partialTranscript
+    if (!partial) {
+      setTranscriptInk((current) => (current?.phase === "partial" ? null : current))
+      return
+    }
+    setTranscriptInk({ text: partial, phase: "partial" })
+  }, [voice.partialTranscript])
+
+  // On a final transcript, submit exactly like a typed Enter. Voice and typed
+  // work instructions stay on the same authenticated kernel path; Vapi is only
+  // the browser microphone/transcription transport.
+  const lastFinalRef = useRef<string | null>(null)
+  const finalTranscriptSessionRef = useRef<string | null>(null)
+  useEffect(() => {
+    const last = transcript[transcript.length - 1]
     if (!last || last.role !== "you") return
-    if (lastFinalRef.current === last.text) return
-    lastFinalRef.current = last.text
+    const sessionKey = voiceSessionId ?? "unscoped"
+    const finalKey = `${sessionKey}:${transcript.length}:${last.text}`
+
+    // The rendered transcript intentionally survives a component remount and a
+    // call boundary. Establish the current final as a baseline for each new
+    // voice session, so historical words can never become a fresh instruction.
+    if (finalTranscriptSessionRef.current !== sessionKey) {
+      finalTranscriptSessionRef.current = sessionKey
+      lastFinalRef.current = finalKey
+      return
+    }
+    if (lastFinalRef.current === finalKey) return
+    lastFinalRef.current = finalKey
+    // A final heard while an approval or another submission owns the input is
+    // deliberately consumed. Re-enabling the rail must not replay it later.
+    if (inputDisabled) return
     sfx.commit()
-    if (threadState === "clarifying") void kernel.answerClarification(last.text)
-    else void kernel.submit(last.text, "voice")
+    // Keep the final heard phrase visible while the authenticated kernel path
+    // starts. Clearing it before this request resolves made voice feel like it
+    // had been dropped, especially on a mobile network.
+    setValue(last.text)
+    setTranscriptInk({ text: last.text, phase: "final" })
+    setCommitting(true)
+    void (async () => {
+      let outcome: SubmissionOutcome = "failed"
+      try {
+        outcome = threadState === "clarifying"
+          ? await kernel.answerClarification(last.text)
+          : await kernel.submit(last.text, "voice", voiceSessionId ?? undefined)
+      } catch {
+        // The kernel reports normal transport failures as "failed"; this catch
+        // keeps the same editable retry behavior for an unexpected rejection.
+        outcome = "failed"
+      } finally {
+        setCommitting(false)
+        if (outcome === "accepted") {
+          setValue("")
+          onIntentAccepted?.()
+        }
+        // On failure the underlying input still contains the exact final
+        // phrase, now visible/editable after the lock overlay is removed.
+        setTranscriptInk(null)
+      }
+    })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [voice.transcript])
+  }, [transcript, inputDisabled, threadState, kernel, voiceSessionId])
 
   useEffect(() => {
     // jarvis-v3 P5.T6 (V4 barge-in) — real, live fix: §4.5's own rule is
@@ -125,41 +431,130 @@ export function CommandRail() {
     // — this is also what makes a real barge-in show `hearing` promptly
     // instead of staying stuck on whatever the assistant's own turn state
     // was a moment ago.
-    kernel.setVoiceIndicators({ micOpen: voice.voiceState === "live" || voice.voiceState === "connecting", speaking: voice.userSpeaking })
+    kernel.setVoiceIndicators({ micOpen: voice.voiceState === "live" || voice.voiceState === "speaking", speaking: voice.userSpeaking })
   }, [voice.voiceState, voice.userSpeaking, kernel])
 
   const showingPartial = Boolean(voice.partialTranscript)
-  const commitVariants = railCommitVariants(false)
+  const commitVariants = railCommitVariants(reducedMotion)
+  const canSend = Boolean(value.trim()) && !inputDisabled && !showingPartial
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-20 flex flex-col items-center gap-1.5 pb-[max(env(safe-area-inset-bottom),16px)]">
-      <motion.div
-        initial={false}
-        animate={committing ? commitVariants.animate : commitVariants.initial}
-        transition={commitVariants.transition}
-        className="flex w-[calc(100%-32px)] max-w-[720px] items-center gap-2 rounded-2xl border bg-[#05090f]/90 px-4 py-3.5 shadow-[0_10px_40px_rgba(0,0,0,0.5)] backdrop-blur-xl"
-        style={{ borderColor: "rgba(34,211,238,0.25)" }}
+    <div className={`pointer-events-none z-30 flex flex-col items-center gap-1.5 ${embedded ? "jarvis-command-rail--embedded relative w-full px-0 pb-0" : "fixed inset-x-0 bottom-0 px-3 pb-[max(env(safe-area-inset-bottom),12px)]"}`} data-jarvis-command-rail data-jarvis-command-rail-embedded={embedded || undefined} data-intent-feedback={committing ? "pending" : intentLaunch ? "accepted" : "idle"}>
+      <form
+        ref={dockRef}
+        onSubmit={(event) => {
+          event.preventDefault()
+          void submitTyped()
+        }}
+        className="pointer-events-auto relative w-full max-w-[720px]"
       >
-        <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${DOT_COLOR[kernel.transport]}`} data-connection-dot={kernel.transport} aria-label={`Connection: ${kernel.transport}`} />
-        <input
-          ref={inputRef}
-          value={showingPartial ? voice.partialTranscript ?? "" : value}
-          onChange={(e) => setValue(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") void submitTyped()
-          }}
-          disabled={busy.disabled || showingPartial}
-          placeholder={busy.placeholder ?? "Tell JARVIS what you need"}
-          className={`j-fs-base w-full flex-1 bg-transparent text-[color:var(--j-text)] outline-none placeholder:text-[color:var(--j-text-faint)] disabled:opacity-60 ${
-            showingPartial ? "italic text-[color:var(--j-text-dim)]" : ""
-          }`}
-          aria-label="Tell JARVIS what you need"
-        />
-        {voice.voiceState !== "idle" && voice.voiceState !== "error" && (
-          <span className="j-chip border border-cyan-300/30 bg-cyan-400/10 text-cyan-200">{voice.voiceState}</span>
+        <motion.div
+          initial={false}
+          animate={committing ? commitVariants.animate : commitVariants.initial}
+          transition={commitVariants.transition}
+          className="flex min-w-0 items-center gap-2 rounded-2xl border bg-[#05090f]/95 px-3 py-3 shadow-[0_10px_40px_rgba(0,0,0,0.5)] backdrop-blur-xl sm:px-4 sm:py-3.5"
+          style={{ borderColor: "rgba(34,211,238,0.25)" }}
+        >
+        <MicControlButton variant="dock" liveframe={liveframe} />
+        <div
+          className="relative min-w-0 flex-1"
+          data-transcript-ink-phase={transcriptInk?.phase ?? "none"}
+        >
+          <AnimatePresence initial={false} mode="sync">
+            {transcriptInk && (
+              <motion.span
+                key={`${transcriptInk.phase}:${transcriptInk.text}`}
+                {...transcriptInkVariants(transcriptInk.phase, reducedMotion)}
+                aria-hidden
+                className={`pointer-events-none absolute inset-0 flex items-center overflow-hidden whitespace-nowrap j-fs-base ${
+                  transcriptInk.phase === "partial" ? "italic text-[color:var(--j-text-dim)]" : "text-[color:var(--j-text)]"
+                }`}
+              >
+                {transcriptInk.text}
+              </motion.span>
+            )}
+          </AnimatePresence>
+          <input
+            ref={inputRef}
+            value={showingPartial ? voice.partialTranscript ?? "" : value}
+            onChange={(e) => setValue(e.target.value)}
+            disabled={inputDisabled || showingPartial}
+            placeholder={busy.placeholder ?? "Tell JARVIS what you need"}
+            className={`j-fs-base min-w-0 w-full bg-transparent text-[color:var(--j-text)] outline-none placeholder:text-[color:var(--j-text-faint)] disabled:opacity-60 ${
+              showingPartial ? "italic text-[color:var(--j-text-dim)]" : ""
+            } ${transcriptInk ? "text-transparent caret-transparent" : ""}`}
+            style={{ color: transcriptInk ? "transparent" : undefined }}
+            aria-label="Tell JARVIS what you need"
+            aria-busy={showingPartial || committing}
+          />
+        </div>
+        {waveformOpen && (
+          <div
+            className="flex h-7 w-9 shrink-0 items-center justify-center gap-0.5"
+            role="img"
+            aria-label={`Microphone level ${Math.round(voiceEnergy * 100)} percent`}
+            data-voice-waveform
+            data-voice-energy={voiceEnergy}
+            data-liveframe-energy={sharedEnergy}
+          >
+            {waveformFactors.map((factor) => (
+              <span
+                key={factor}
+                aria-hidden
+                className={`w-1 rounded-full${reducedMotion ? "" : " transition-[height,opacity] duration-100"}`}
+                style={{
+                  height: `${4 + voiceEnergy * 14 * factor}px`,
+                  backgroundColor: "var(--j-cyan)",
+                  opacity: 0.35 + sharedEnergy * 0.45,
+                }}
+              />
+            ))}
+          </div>
         )}
-      </motion.div>
-      <div className="j-fs-micro text-[color:var(--j-text-faint)]">/ to type · hold Space to talk · ⌘K for anything else</div>
+        <button
+          type="submit"
+          disabled={!canSend}
+          aria-label="Send instruction"
+          title="Send instruction"
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-cyan-200 text-slate-950 shadow-[0_0_26px_rgba(34,211,238,0.24)] transition hover:bg-white focus:outline-none disabled:cursor-not-allowed disabled:opacity-35"
+        >
+          <Send className="h-4 w-4" />
+        </button>
+        </motion.div>
+        {intentLaunch && (
+          <motion.span
+            key={intentLaunch.id}
+            {...intentLaunchVariants(reducedMotion)}
+            aria-hidden
+            className="pointer-events-none absolute inset-0 rounded-2xl border-2 border-cyan-200/80 shadow-[0_0_34px_rgba(34,211,238,0.38)]"
+          />
+        )}
+        <div
+          className="mt-1.5 flex min-h-11 flex-wrap items-center justify-between gap-2 rounded-xl border border-white/10 bg-[#05090f]/95 px-3 py-2 j-fs-micro text-[color:var(--j-text-dim)] shadow-[0_8px_24px_rgba(0,0,0,0.25)] backdrop-blur-xl"
+          data-voice-state={voiceCopy.state}
+          role="status"
+          aria-live="polite"
+        >
+          <span className="min-w-0 flex-1">
+            <span className="font-black text-[color:var(--j-text)]" data-voice-state-label>{voiceCopy.label}</span>
+            <span className="ml-2" data-voice-state-detail>{voiceCopy.detail}</span>
+          </span>
+          {voiceCopy.retryable && (
+            <button
+              type="button"
+              className="min-h-11 shrink-0 rounded-lg px-2 text-cyan-100 underline disabled:cursor-wait disabled:opacity-60"
+              onClick={retryVoice}
+              disabled={voiceRetrying}
+            >
+              {voiceRetrying ? "Retrying…" : "Retry"}
+            </button>
+          )}
+        </div>
+      </form>
+      <div className="pointer-events-none j-fs-micro text-center text-[color:var(--j-text-faint)]">
+        <span className="sm:hidden">Tap mic to talk · Enter to send</span>
+        <span className="hidden sm:inline">/ to type · tap mic to talk · hold mic or Space, then release · ⌘K for anything else</span>
+      </div>
       {palette.open && (
         // P4.T7: the real "⌘K → Ops" destination opens OpsPanel below — a
         // single deliberate overlay, never a route, never a landing page
@@ -170,6 +565,10 @@ export function CommandRail() {
           onNavigate={() => palette.setOpen(false)}
           onOpenOps={() => setOpsOpen(true)}
           onOpenRecentThreads={() => setRecentThreadsOpen(true)}
+          onInstruct={async (text) => {
+            const outcome = await kernel.submit(text, "typed")
+            if (outcome === "accepted") onIntentAccepted?.()
+          }}
         />
       )}
       <OpsPanel open={opsOpen} onClose={() => setOpsOpen(false)} />

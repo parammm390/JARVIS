@@ -36,19 +36,19 @@ export function RecoveryPanel({
     }
   }
   const action = recovery.affordance === "Connect"
-    ? <Link href={setupHref ?? JARVIS_SETUP_HREF} className="rounded-full border border-cyan-400/30 px-3 py-1.5 j-fs-micro font-bold text-cyan-200 hover:border-cyan-400/60 hover:bg-cyan-400/10">{recovery.affordance}</Link>
-    : onRecover
-      ? <button type="button" disabled={recovering} onClick={() => { void recover() }} className="rounded-full border border-red-300/30 px-3 py-1.5 j-fs-micro font-bold text-red-100 hover:border-red-300/60 hover:bg-red-300/10 disabled:cursor-not-allowed disabled:opacity-50">{recovery.affordance}</button>
+    ? <Link href={setupHref ?? JARVIS_SETUP_HREF} data-recovery-affordance={recovery.affordance} className="inline-flex min-h-12 items-center rounded-full border border-cyan-400/30 px-3 py-1.5 j-fs-micro font-bold text-cyan-200 hover:border-cyan-400/60 hover:bg-cyan-400/10">{recovery.affordance}</Link>
+      : onRecover
+      ? <button type="button" autoFocus disabled={recovering} onClick={() => { void recover() }} data-recovery-affordance={recovery.affordance} className="inline-flex min-h-12 items-center rounded-full border border-red-300/30 px-3 py-1.5 j-fs-micro font-bold text-red-100 hover:border-red-300/60 hover:bg-red-300/10 disabled:cursor-not-allowed disabled:opacity-50">{recovery.affordance}</button>
       : null
 
   return (
-    <section className="rounded-xl border border-red-400/25 bg-red-400/5 p-3" aria-label={`Recovery: ${kind}`}>
+    <section className="rounded-xl border border-red-400/25 bg-red-400/5 p-3" aria-label={`Recovery: ${kind}`} data-liveframe-motion="LF-13" data-recovery-kind={kind}>
       <p className="j-fs-sm font-bold text-red-100">{recovery.copy}</p>
       {action && <div className="mt-2">{action}</div>}
       {recoverError && <p role="alert" className="mt-2 j-fs-micro text-red-100/80">{recoverError}</p>}
-      {recovery.secondaryAffordance && errorDetail && (
+      {errorDetail && (
         <details className="mt-2 j-fs-micro text-red-100/80">
-          <summary className="cursor-pointer font-bold">{recovery.secondaryAffordance}</summary>
+          <summary className="cursor-pointer font-bold">{recovery.secondaryAffordance ?? "View error"}</summary>
           <p className="mt-1 break-words">{errorDetail}</p>
         </details>
       )}

@@ -7,7 +7,7 @@
 // DOM — same B-1 pattern as machine.ts/selectors.ts).
 
 import { describe, expect, it } from "vitest"
-import { applyTraceEvents, type Thread } from "./store"
+import { applyTraceEvents, carryThreadContinuity, parseAnswerResult, parseSubmissionAnswer, traceEventMatchesInstructionId, type Thread } from "./store"
 import { initialMachineState, transition } from "./machine"
 import type { TraceEvent } from "./instruction"
 
@@ -24,7 +24,7 @@ function baseThread(overrides: Partial<Thread> = {}): Thread {
     machine: transition(initialMachineState, { type: "SUBMITTED" }), // captured
     nodes: [],
     contextChips: [],
-    traceGating: { expectedCount: null, resolvedActionIds: [], gatedActionIds: [] },
+    traceGating: { expectedCount: null, resolvedActionIds: [], gatedActionIds: [], completedActionIds: [], failedActionIds: [] },
     clarification: null,
     submitError: null,
     approvalWatch: null,
@@ -101,6 +101,18 @@ describe("kernel/store — applyTraceEvents (P3.T7)", () => {
     expect(t.clarification?.question).toBe("original")
   })
 
+  it("keeps real plan/context facts at the clarification edge but carries only context into the same-thread answer turn", () => {
+    const node = { id: "a1", actionType: "prepare", amountUsd: null, targetLabel: null, policyId: null, policyVersion: null, groundedPayload: [], payload: {} }
+    const existing = planningThread({ nodes: [node], contextChips: [{ label: "verified household", source: "memory:episodic" }] })
+    const waiting = applyTraceEvents(existing, [ev(1, "clarification_required", { question: "Which household?", missingFields: ["householdId"] })], NO_DECISIONS)
+
+    expect(waiting.machine.instructionState).toBe("clarifying")
+    expect(waiting.nodes).toEqual([node])
+    expect(waiting.contextChips).toEqual([{ label: "verified household", source: "memory:episodic" }])
+    expect(carryThreadContinuity(waiting)).toEqual({ nodes: [], contextChips: [{ label: "verified household", source: "memory:episodic" }] })
+    expect(carryThreadContinuity(null)).toEqual({ nodes: [], contextChips: [] })
+  })
+
   it("'action_created' appends a thin node with id/actionType, no amount/target yet", () => {
     const t = applyTraceEvents(baseThread(), [ev(1, "action_created", { actionId: "a1", actionType: "start_invoice_to_cash_workflow" })], NO_DECISIONS)
     expect(t.nodes).toEqual([
@@ -114,9 +126,63 @@ describe("kernel/store — applyTraceEvents (P3.T7)", () => {
     expect(t.nodes).toHaveLength(1)
   })
 
+  it("'action_created' retains dependency ids when the real trace payload supplies them", () => {
+    const t = applyTraceEvents(
+      baseThread({ nodes: [{ id: "a1", actionType: "prepare", amountUsd: null, targetLabel: null, policyId: null, policyVersion: null, groundedPayload: [], payload: {} }] }),
+      [ev(2, "action_created", { actionId: "a2", actionType: "send_message", dependsOn: ["a1", "a1", 42] })],
+      NO_DECISIONS,
+    )
+    expect(t.nodes[1]).toMatchObject({ id: "a2", dependsOn: ["a1"] })
+  })
+
   it("'action_created' with a malformed payload (no actionId/actionType) is a real no-op — never fabricates a node", () => {
     const t = applyTraceEvents(baseThread(), [ev(1, "action_created", {})], NO_DECISIONS)
     expect(t.nodes).toHaveLength(0)
+  })
+
+  it("accepts the completed answer-result envelope defensively and keeps it out of execution", () => {
+    let t = planningThread()
+    t = applyTraceEvents(t, [ev(1, "plan_ready", { count: 1 }), ev(2, "action_created", { actionId: "answer-1", actionType: "lookup_invoice_status" })], NO_DECISIONS)
+    t = applyTraceEvents(
+      t,
+      [ev(3, "completed", { actionId: "answer-1", result: { kind: "answer", spokenSummary: "Invoice 42 is paid.", displaySummary: "Invoice 42 is paid.", facts: [{ label: "Status", value: "Paid", source: "invoice" }] } })],
+      NO_DECISIONS,
+    )
+    expect(t.answerResult).toEqual({
+      kind: "answer",
+      spokenSummary: "Invoice 42 is paid.",
+      displaySummary: "Invoice 42 is paid.",
+      facts: [{ label: "Status", value: "Paid", source: "invoice" }],
+    })
+    expect(t.machine.instructionState).toBe("completed")
+    expect(t.everExecuted).toBe(false)
+    expect(t.approvalWatch).toBeNull()
+    expect(parseAnswerResult({ result: { kind: "answer", spokenSummary: "   " } })).toBeNull()
+    expect(parseAnswerResult({ result: { kind: "action", spokenSummary: "not an answer" } })).toBeNull()
+  })
+
+  it("normalizes the direct actions response answer into the same safe display shape", () => {
+    expect(parseSubmissionAnswer({
+      kind: "answer",
+      spokenSummary: "Hi — I’m here and ready to help.",
+      display: {
+        title: "JARVIS is ready",
+        facts: [{ label: "Status", value: "Ready", source: "assistant" }],
+      },
+    })).toEqual({
+      kind: "answer",
+      spokenSummary: "Hi — I’m here and ready to help.",
+      displaySummary: "JARVIS is ready",
+      facts: [{ label: "Status", value: "Ready", source: "assistant" }],
+    })
+  })
+
+  it("rejects an explicitly mismatched instruction event, even when the local thread id is shared", () => {
+    const stale = { ...ev(1, "action_created", { actionId: "old", actionType: "send_sms" }), instructionId: "old-instruction" }
+    const t = applyTraceEvents(baseThread(), [stale], NO_DECISIONS)
+    expect(t.nodes).toHaveLength(0)
+    expect(traceEventMatchesInstructionId(stale, "i1")).toBe(false)
+    expect(traceEventMatchesInstructionId(ev(2, "received"), "i1")).toBe(true)
   })
 
   it("applies a real ordered batch exactly like a live golden-journey run would deliver it (context+plan only, before any gating resolves)", () => {
@@ -182,14 +248,27 @@ describe("kernel/store — applyTraceEvents (P3.T7)", () => {
       expect(t.approvalWatch?.approvalsAtStart).toBe(0)
     })
 
-    it("2 actions, both auto-executed (ungated) -> executing, gatedCount 0, no approvalWatch", () => {
+    it("2 actions, both auto-executed (ungated) -> completed without a workflow run watch", () => {
       let t = planningThread()
       t = applyTraceEvents(t, [ev(1, "plan_ready", { count: 2 })], NO_DECISIONS)
       t = applyTraceEvents(t, [ev(2, "executing", { actionId: "a1" }), ev(3, "completed", { actionId: "a1" }), ev(4, "executing", { actionId: "a2" }), ev(5, "completed", { actionId: "a2" })], NO_DECISIONS)
-      expect(t.machine.instructionState).toBe("executing")
+      expect(t.machine.instructionState).toBe("completed")
       expect(t.approvalWatch).toBeNull()
-      expect(t.runWatch).not.toBeNull()
+      expect(t.runWatch).toBeNull()
+      expect(t.terminalAtMs).not.toBeNull()
+      expect(t.traceGating.completedActionIds).toEqual(["a1", "a2"])
       expect(t.everExecuted).toBe(true) // gates whether Thread.tsx's Execution block exists at all
+    })
+
+    it("synchronous completed/failed outcomes across trace batches -> partial once every action resolves", () => {
+      let t = planningThread()
+      t = applyTraceEvents(t, [ev(1, "plan_ready", { count: 2 })], NO_DECISIONS)
+      t = applyTraceEvents(t, [ev(2, "executing", { actionId: "a1" }), ev(3, "completed", { actionId: "a1" })], NO_DECISIONS)
+      expect(t.machine.instructionState).toBe("executing")
+      t = applyTraceEvents(t, [ev(4, "executing", { actionId: "a2" }), ev(5, "failed", { actionId: "a2", error: "no phone number" })], NO_DECISIONS)
+      expect(t.machine.instructionState).toBe("partial")
+      expect(t.runWatch).toBeNull()
+      expect(t.traceGating.failedActionIds).toEqual(["a2"])
     })
 
     it("mixed: 1 gated + 1 ungated-failed -> awaiting_approval (any gated action forces approval)", () => {

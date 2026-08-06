@@ -13,6 +13,8 @@ const WINDOW = 50;
 const DEGRADED_CONSECUTIVE_FAILURES = 3;
 const DEGRADED_MIN_SAMPLES = 10;
 const DEGRADED_FAILURE_RATE = 0.5;
+const VOICE_LATENCY_MIN_SAMPLES = 3;
+const DEFAULT_VOICE_P50_LATENCY_MS = 1_500;
 
 interface Sample {
   ok: boolean;
@@ -65,9 +67,36 @@ export function healthSnapshot(provider: string): ProviderHealthSnapshot {
 }
 
 // degraded ⇔ consecutiveFailures >= 3 OR (window >= 10 AND failureRate > 0.5)
-export function isDegraded(provider: string): boolean {
+// Failure health remains the default so existing non-voice callers keep the same
+// semantics. Voice routing additionally treats a repeatedly slow provider as a poor
+// live-call candidate; the threshold is deployment configuration, not a market claim.
+export function isDegraded(provider: string, channel?: "voice" | "text" | "console" | "background"): boolean {
   const snap = healthSnapshot(provider);
-  return snap.consecutiveFailures >= DEGRADED_CONSECUTIVE_FAILURES || (snap.window >= DEGRADED_MIN_SAMPLES && snap.failureRate > DEGRADED_FAILURE_RATE);
+  const failureDegraded = snap.consecutiveFailures >= DEGRADED_CONSECUTIVE_FAILURES || (snap.window >= DEGRADED_MIN_SAMPLES && snap.failureRate > DEGRADED_FAILURE_RATE);
+  return failureDegraded || (channel === "voice" && isLatencyDegraded(provider));
+}
+
+export function isLatencyDegraded(provider: string): boolean {
+  const snap = healthSnapshot(provider);
+  const threshold = Number(process.env.LLM_VOICE_P50_LATENCY_MS ?? DEFAULT_VOICE_P50_LATENCY_MS);
+  return Number.isFinite(threshold) && threshold > 0 && snap.window >= VOICE_LATENCY_MIN_SAMPLES && snap.p50LatencyMs !== null && snap.p50LatencyMs > threshold;
+}
+
+/** Stable health-aware ordering for a fallback chain. Voice callers prefer a
+ * provider with observed latency over an unobserved one only when both have data;
+ * this preserves the configured cold-start order while allowing live-call traffic
+ * to move away from a provider that has become predictably slow. */
+export function orderProvidersByHealth<T extends { name: string }>(providers: T[], channel?: "voice" | "text" | "console" | "background"): T[] {
+  return providers
+    .map((provider, index) => ({ provider, index, degraded: isDegraded(provider.name, channel), snapshot: healthSnapshot(provider.name) }))
+    .sort((a, b) => {
+      if (a.degraded !== b.degraded) return a.degraded ? 1 : -1;
+      if (channel === "voice" && !a.degraded && !b.degraded && a.snapshot.p50LatencyMs !== null && b.snapshot.p50LatencyMs !== null && a.snapshot.p50LatencyMs !== b.snapshot.p50LatencyMs) {
+        return a.snapshot.p50LatencyMs - b.snapshot.p50LatencyMs;
+      }
+      return a.index - b.index;
+    })
+    .map(({ provider }) => provider);
 }
 
 export function resetProviderHealth(): void {

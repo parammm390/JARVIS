@@ -264,6 +264,35 @@ const doc = {
         responses: { "200": { description: "Saved policy" } },
       },
     },
+    "/api/instructions/{id}": {
+      get: {
+        summary: "Read one tenant-scoped instruction trace session",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        responses: { "200": { description: "Instruction session" }, "401": { description: "Bad auth" }, "404": { description: "Instruction not found" } },
+      },
+    },
+    "/api/instructions/{id}/events": {
+      get: {
+        summary: "Read new tenant-scoped instruction lifecycle events after a sequence number",
+        parameters: [
+          { name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+          { name: "after", in: "query", schema: { type: "integer", minimum: 0, default: 0 } },
+        ],
+        responses: { "200": { description: "Ordered instruction trace events" }, "400": { description: "Invalid after cursor" }, "401": { description: "Bad auth" }, "404": { description: "Instruction not found" } },
+      },
+    },
+    "/api/stream": {
+      get: {
+        summary: "Stream one instruction lifecycle as Server-Sent Events",
+        parameters: [{ name: "instructionId", in: "query", required: true, schema: { type: "string", format: "uuid" } }],
+        responses: {
+          "200": { description: "EventSource stream; each data frame is one instruction trace event" },
+          "400": { description: "instructionId is missing" },
+          "401": { description: "Bad auth" },
+          "404": { description: "Instruction not found" },
+        },
+      },
+    },
     // --- Not proxy-reachable from the frontend today (no entry in the jarvis proxy's
     // own allowlist) — documented for completeness/backend-direct use, same as before.
     "/api/webhooks/vapi": {

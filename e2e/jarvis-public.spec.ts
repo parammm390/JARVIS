@@ -68,7 +68,7 @@ test.describe("public /jarvis page", () => {
     await page.goto("/jarvis")
     await expect(page.getByText("PUBLIC PREVIEW", { exact: true })).toBeVisible()
     await expect(page.getByText("Tell JARVIS what you need.")).toBeVisible()
-    await expect(page.getByText("Setup status unavailable")).toBeVisible()
+    await expect(page.getByText("Connection status is unavailable.")).toBeVisible()
 
     expect(unexpected, `unexpected console errors on /jarvis: ${unexpected.join("\n")}`).toEqual([])
   })

@@ -74,17 +74,16 @@ function instructionPresence(state: InstructionState, terminalDecayActive: boole
 /** Derivation order — first match wins (§4.5).
  *
  * §4.5's own text names two transport values ("offline" | "degraded"); P2 has no
- * SSE yet (P3 adds it) and `kernel/transport.ts`'s real 4-value enum — matching
- * P3.T12's connection dot exactly — is `live | polling | reconnecting | offline`.
- * Only `offline` (sustained, wall-clock-confirmed unreachability) severs the Orb
- * here; a single `reconnecting` blip does not — otherwise the Orb would flash
- * severed on every transient missed poll, which is noisier than the signal
- * warrants and inconsistent with data-core's own backoff philosophy of not
- * overreacting to one failure. Recorded as a deviation, not silently decided. */
+ * SSE yet (P3 adds it) and `kernel/transport.ts`'s connection states are
+ * `live | polling | reconnecting | offline | unavailable`. `offline` means
+ * sustained general-lane unreachability; `unavailable` means the active trace
+ * exhausted its bounded SSE/poll fallback. Both are states in which the Orb must
+ * not imply that lifecycle facts are current. A single `reconnecting` blip does
+ * not sever it. */
 export function derivePresence(input: PresenceInput): Presence {
   // 1. Transport trouble outranks everything — the user must know the picture
   //    they're looking at may not be current.
-  if (input.transport === "offline") return "severed"
+  if (input.transport === "offline" || input.transport === "unavailable") return "severed"
 
   // 2. An active instruction's own presence, when it has one this moment.
   if (input.activeInstructionState) {

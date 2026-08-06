@@ -16,6 +16,7 @@ import { onPulse, ORB_AURA_THROTTLE_MS, type Pulse, type PulseKind } from "../li
 const RIPPLE_COLOR: Record<PulseKind, string> = {
   "business-event": "var(--j-cyan)",
   step: "var(--j-teal)",
+  fault: "var(--j-red)",
   run: "var(--j-green)",
   pending: "var(--j-amber)",
   decision: "var(--j-violet)",

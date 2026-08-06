@@ -27,7 +27,7 @@ export function runStatusPresentation(status: RunState): WorkflowStatusPresentat
 export function stepStatusPresentation(status: StepState): WorkflowStatusPresentation {
   switch (status) {
     case "pending": return { label: "pending", tone: "neutral" }
-    case "leased": return { label: "running", tone: "live" }
+    case "leased": return { label: "leased", tone: "live" }
     case "completed": return { label: "completed", tone: "success" }
     case "failed": return { label: "failed", tone: "failure" }
     case "compensating": return { label: "Rolling back", tone: "recovery" }

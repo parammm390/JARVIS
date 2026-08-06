@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useJarvisAuth } from "./lib/jarvis-auth"
-import { getCurrentAccessToken } from "./lib/jarvis-auth"
+import { jarvisGet, jarvisPost, jarvisPut } from "./lib/api"
 
 function publicKeyToBytes(value: string): Uint8Array {
   const base64 = value.replace(/-/g, "+").replace(/_/g, "/");
@@ -25,16 +25,13 @@ export function PushOptIn() {
       const permission = await Notification.requestPermission();
       if (permission !== "granted") { setState("unavailable"); return }
       const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: publicKeyToBytes(key) as unknown as BufferSource });
-      const token = getCurrentAccessToken();
-      const response = await fetch("/api/jarvis/push-subscriptions", { method: "POST", headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(subscription) });
-      if (!response.ok) { setState("error"); return }
+      await jarvisPost("push-subscriptions", subscription);
       // D6.T5's opt-in is a real preference as well as a browser subscription. Read
       // first so enabling push never deletes another notification channel's setting.
-      const prefsResponse = await fetch("/api/jarvis/user-prefs", { headers: token ? { authorization: `Bearer ${token}` } : {} });
-      const prefs = prefsResponse.ok ? await prefsResponse.json() as { prefs?: { notificationPreferences?: Record<string, boolean> } } : null;
+      const prefs = await jarvisGet<{ prefs?: { notificationPreferences?: Record<string, boolean> } }>("user-prefs");
       const preferences = { ...(prefs?.prefs?.notificationPreferences ?? {}), push: true };
-      const saved = await fetch("/api/jarvis/user-prefs", { method: "PUT", headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify({ notificationPreferences: preferences }) });
-      setState(saved.ok ? "enabled" : "error");
+      await jarvisPut("user-prefs", { notificationPreferences: preferences });
+      setState("enabled");
     } catch { setState("error"); }
   }
   if (!session) return null

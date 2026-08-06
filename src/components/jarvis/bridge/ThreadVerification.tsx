@@ -45,16 +45,33 @@ export function ThreadVerification({
   predicted,
   predictionDiff,
   reducedMotion,
+  refreshKey = 0,
 }: {
   predicted: PredictedOutcome | null
   predictionDiff: PredictionDiff | null
   reducedMotion: boolean
+  /** A real same-receipt refresh (business event or correction), not a timer. */
+  refreshKey?: number
 }) {
   const hasDiff = predictionDiff !== null && predictionDiff.compared > 0
   const hasPredictedOnly = !hasDiff && predicted !== null
 
   return (
-    <div className="mb-4">
+    <div className="mb-4" data-liveframe-motion={hasDiff || refreshKey > 0 ? "LF-16" : undefined} data-receipt-version={refreshKey}>
+      {refreshKey > 0 && (
+        <motion.div
+          key={`receipt-refresh-${refreshKey}`}
+          role="status"
+          aria-live="polite"
+          data-liveframe-motion="LF-15"
+          className="mb-2 rounded-lg border border-cyan-300/20 bg-cyan-300/[0.04] px-3 py-2 j-fs-micro font-bold text-cyan-100"
+          initial={reducedMotion ? { opacity: 1 } : { opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={reducedMotion ? { duration: 0 } : { duration: 0.42, ease: "easeOut" }}
+        >
+          Receipt refreshed in place from a new recorded update.
+        </motion.div>
+      )}
       <div className="mb-1 flex items-center justify-between j-fs-micro font-black uppercase tracking-widest text-[color:var(--j-text-faint)]">
         <span>Predicted vs actual</span>
         {hasDiff && predictionDiff!.accuracy !== null && (
@@ -76,7 +93,7 @@ export function ThreadVerification({
             const actualVariants = truthRevealActualVariants(reducedMotion)
             return (
               <motion.div
-                key={f.path}
+                key={`${f.path}-${refreshKey}`}
                 className={`grid grid-cols-[1fr_1fr_1fr] items-baseline gap-2 rounded-md px-1.5 py-1 j-fs-micro ${f.matched ? "" : "border border-amber-300/30"}`}
                 initial={pulse.initial}
                 animate={pulse.animate}

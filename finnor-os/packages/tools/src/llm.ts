@@ -1,6 +1,7 @@
-// LLM provider abstraction (§9): Groq is the default, injected — never hardcoded at
-// call sites. A stronger model can be swapped per action_type via domain_policies
-// (model_provider column), a config change, not a code change.
+// LLM provider abstraction for JARVIS. Provider choice is explicit and routed by
+// purpose/channel; there is intentionally no unnamed provider default. A model can
+// still be pinned per action_type via domain_policies (model_provider column), a
+// config change rather than a code change.
 //
 // Lives in @finnor/tools (not @finnor/orchestration) specifically so domain-plugins
 // can use it too — domain-plugins already depends on tools, and orchestration depends
@@ -11,18 +12,28 @@ import Groq from "groq-sdk";
 import { withTenant, decisionReceipts, llmCalls, tenantLlmBudgets } from "@finnor/db";
 import { and, eq, gte, sql } from "drizzle-orm";
 import { initObservability, Sentry } from "./observability";
-import { recordOutcome, isDegraded } from "./provider-health";
+import { orderProvidersByHealth, recordOutcome } from "./provider-health";
 
 export type LLMPurpose = "planning" | "critic" | "repair" | "classification" | "answer";
+export type LLMChannel = "voice" | "text" | "console" | "background";
 export interface LLMCallOptions {
   system: string;
   user: string;
   json?: boolean;
+  model?: string;
   tenantId?: string;
   actionId?: string;
   traceId?: string;
   purpose?: LLMPurpose;
+  channel?: LLMChannel;
   urgent?: boolean;
+  /** Absolute Unix epoch deadline shared by every provider in a fallback chain. */
+  deadlineAt?: number;
+  /** Relative convenience form; converted to deadlineAt once at call entry. */
+  deadlineMs?: number;
+  /** Legacy alias for deadlineMs. */
+  timeoutMs?: number;
+  signal?: AbortSignal;
 }
 export interface LLMUsage {
   model: string;
@@ -34,7 +45,83 @@ export interface LLMProvider {
   /** Usage belongs to the immediately preceding complete() call. Providers that do
    * not return it leave it undefined rather than estimating it. */
   lastUsage?: LLMUsage;
+  /** The concrete provider used by the immediately preceding call. Composite
+   * providers expose this so ledgers and observability do not record "composite". */
+  selectedProviderName?: string;
+  /** Composite providers record each attempt themselves; the outer wrapper must
+   * not add a second synthetic health sample. */
+  recordsHealthInternally?: boolean;
   complete(opts: LLMCallOptions): Promise<string>;
+}
+
+export class LLMProviderSelectionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "LLMProviderSelectionError";
+  }
+}
+
+export class LLMDeadlineExceededError extends Error {
+  constructor(readonly deadlineAt: number) {
+    super("LLM call deadline exceeded");
+    this.name = "LLMDeadlineExceededError";
+  }
+}
+
+const DEFAULT_DEADLINE_MS: Record<LLMChannel, number> = {
+  voice: 3_500,
+  text: 8_000,
+  console: 8_000,
+  background: 15_000,
+};
+
+function normalizeCallOptions(opts: LLMCallOptions): LLMCallOptions {
+  if (Number.isFinite(opts.deadlineAt)) return opts;
+  const relative = opts.deadlineMs ?? opts.timeoutMs ?? DEFAULT_DEADLINE_MS[opts.channel ?? "text"];
+  return { ...opts, deadlineAt: Date.now() + Math.max(0, relative) };
+}
+
+function remainingMs(opts: LLMCallOptions, fallbackMs: number): number {
+  const remaining = Number.isFinite(opts.deadlineAt) ? Number(opts.deadlineAt) - Date.now() : fallbackMs;
+  return Math.max(0, Math.min(fallbackMs, remaining));
+}
+
+function isAbortLike(error: unknown): boolean {
+  return error instanceof LLMDeadlineExceededError || (error instanceof Error && error.name === "AbortError");
+}
+
+/** Fetch with both the caller's signal and the shared absolute deadline. The
+ * provider-specific timeout is only a ceiling; fallbacks receive the same
+ * deadlineAt and therefore cannot restart the full timeout budget. */
+async function fetchWithCallBudget(url: string, init: RequestInit, opts: LLMCallOptions, providerCeilingMs = 8_000): Promise<Response> {
+  const normalized = normalizeCallOptions(opts);
+  const budgetMs = remainingMs(normalized, providerCeilingMs);
+  if (budgetMs <= 0) throw new LLMDeadlineExceededError(normalized.deadlineAt ?? Date.now());
+
+  const controller = new AbortController();
+  const onCallerAbort = () => controller.abort(normalized.signal?.reason);
+  if (normalized.signal?.aborted) onCallerAbort();
+  else normalized.signal?.addEventListener("abort", onCallerAbort, { once: true });
+  const sharedDeadlineOwnsTimer = Number.isFinite(normalized.deadlineAt) && Number(normalized.deadlineAt) - Date.now() <= providerCeilingMs;
+  const timerError = sharedDeadlineOwnsTimer
+    ? new LLMDeadlineExceededError(normalized.deadlineAt ?? Date.now() + budgetMs)
+    : Object.assign(new Error("LLM provider timeout"), { name: "ProviderTimeoutError" });
+  const timer = setTimeout(() => controller.abort(timerError), budgetMs);
+  try {
+    const response = await fetch(url, { ...init, signal: controller.signal });
+    if (Number.isFinite(normalized.deadlineAt) && Date.now() >= Number(normalized.deadlineAt)) throw new LLMDeadlineExceededError(Number(normalized.deadlineAt));
+    return response;
+  } catch (error) {
+    if (normalized.signal?.aborted) throw normalized.signal.reason ?? Object.assign(new Error("LLM request aborted"), { name: "AbortError" });
+    if (Number.isFinite(normalized.deadlineAt) && Date.now() >= Number(normalized.deadlineAt)) {
+      throw new LLMDeadlineExceededError(Number(normalized.deadlineAt));
+    }
+    if (controller.signal.aborted) throw timerError;
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    normalized.signal?.removeEventListener("abort", onCallerAbort);
+  }
 }
 
 /** Raised before a non-urgent call once the configured hard daily cap is reached.
@@ -72,10 +159,11 @@ function configuredCostUsd(usage: LLMUsage | undefined): number | null {
 async function recordCall(provider: LLMProvider, opts: LLMCallOptions, status: "completed" | "deferred" | "failed", detail: Record<string, unknown> = {}): Promise<void> {
   if (!opts.tenantId) return;
   const usage = provider.lastUsage;
+  const providerName = provider.selectedProviderName ?? provider.name;
   await withTenant(opts.tenantId, async (db) => {
     await db.insert(llmCalls).values({
       tenantId: opts.tenantId!, domainActionId: opts.actionId ?? null, traceId: opts.traceId ?? null,
-      purpose: opts.purpose ?? "answer", provider: provider.name, model: usage?.model ?? "unknown",
+      purpose: opts.purpose ?? "answer", provider: providerName, model: usage?.model ?? "unknown",
       inputTokens: usage?.inputTokens ?? null, outputTokens: usage?.outputTokens ?? null,
       costUsd: configuredCostUsd(usage), status, detail,
     });
@@ -92,20 +180,93 @@ async function recordCall(provider: LLMProvider, opts: LLMCallOptions, status: "
   });
 }
 
-/** Fetch with a hard timeout — Bedrock's runtime API has no client SDK dependency here,
- *  it's called directly over HTTPS with the account's Bedrock API key as a bearer token
- *  (AWS's simplified auth path for Bedrock, no SigV4 signing needed). */
-async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
-  const controller = new AbortController();
-  const t = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, { ...init, signal: controller.signal });
-  } finally {
-    clearTimeout(t);
+interface OpenAICompatibleResponse {
+  choices?: Array<{ message?: { content?: string | Array<{ text?: string }> } }>;
+  usage?: { prompt_tokens?: number; completion_tokens?: number; input_tokens?: number; output_tokens?: number };
+}
+
+function chatContent(data: OpenAICompatibleResponse): string {
+  const content = data.choices?.[0]?.message?.content;
+  if (typeof content === "string") return content;
+  return content?.map((part) => part.text ?? "").join("") ?? "";
+}
+
+/** Shared direct-fetch adapter for providers with the OpenAI-compatible chat API.
+ * Keys are read from the process environment at provider construction time; no
+ * credential is part of routing configuration or source control. */
+class OpenAICompatibleProvider implements LLMProvider {
+  lastUsage?: LLMUsage;
+
+  constructor(
+    public readonly name: string,
+    private readonly apiKey: string | undefined,
+    private readonly model: string,
+    private readonly endpoint: string,
+  ) {}
+
+  async complete(opts: LLMCallOptions): Promise<string> {
+    if (!this.apiKey) throw new Error(`${this.name.toUpperCase()}_API_KEY is not set`);
+    this.lastUsage = undefined;
+    const model = opts.model ?? this.model;
+    const res = await fetchWithCallBudget(
+      this.endpoint,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${this.apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: "system", content: opts.system },
+            { role: "user", content: opts.user },
+          ],
+          temperature: 0.1,
+          max_tokens: 700,
+          // Preserve the existing contract: callers validate/parse the returned JSON;
+          // the adapter only asks the provider for an object-shaped response.
+          ...(opts.json ? { response_format: { type: "json_object" } } : {}),
+        }),
+      },
+      opts,
+      8_000,
+    );
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`${this.name} failed (${res.status}): ${body.slice(0, 300)}`);
+    }
+    const data = (await res.json()) as OpenAICompatibleResponse;
+    this.lastUsage = {
+      model,
+      inputTokens: data.usage?.prompt_tokens ?? data.usage?.input_tokens ?? null,
+      outputTokens: data.usage?.completion_tokens ?? data.usage?.output_tokens ?? null,
+    };
+    return chatContent(data);
   }
 }
 
-/** Claude models on Bedrock — Anthropic Messages API shape, invoked via bearer-token auth. */
+export class MistralProvider extends OpenAICompatibleProvider {
+  constructor(
+    apiKey = process.env.MISTRAL_API_KEY,
+    model = process.env.MISTRAL_MODEL ?? "mistral-small-latest",
+    baseUrl = process.env.MISTRAL_API_BASE_URL ?? "https://api.mistral.ai/v1",
+  ) {
+    super("mistral", apiKey, model, `${baseUrl.replace(/\/$/, "")}/chat/completions`);
+  }
+}
+
+/** Direct DeepSeek support is optional; when only AWS Bedrock is configured the
+ * registry's deepseek alias uses the existing Bedrock Converse adapter instead. */
+export class DeepSeekProvider extends OpenAICompatibleProvider {
+  constructor(
+    apiKey = process.env.DEEPSEEK_API_KEY,
+    model = process.env.DEEPSEEK_MODEL ?? "deepseek-chat",
+    baseUrl = process.env.DEEPSEEK_API_BASE_URL ?? "https://api.deepseek.com/v1",
+  ) {
+    super("deepseek", apiKey, model, `${baseUrl.replace(/\/$/, "")}/chat/completions`);
+  }
+}
+
+/** Legacy explicit-only Bedrock Anthropic adapter. It is not part of any JARVIS
+ * default route; Mistral/DeepSeek are the configured first-party choices. */
 export class BedrockAnthropicProvider implements LLMProvider {
   name = "bedrock-anthropic";
   lastUsage?: LLMUsage;
@@ -117,7 +278,8 @@ export class BedrockAnthropicProvider implements LLMProvider {
 
   async complete(opts: LLMCallOptions): Promise<string> {
     if (!this.apiKey) throw new Error("AWS_BEDROCK_API_KEY is not set");
-    const res = await fetchWithTimeout(
+    this.lastUsage = undefined;
+    const res = await fetchWithCallBudget(
       `https://bedrock-runtime.${this.region}.amazonaws.com/model/${this.modelId}/invoke`,
       {
         method: "POST",
@@ -130,6 +292,7 @@ export class BedrockAnthropicProvider implements LLMProvider {
           messages: [{ role: "user", content: opts.user }],
         }),
       },
+      opts,
       8_000,
     );
     if (!res.ok) {
@@ -149,17 +312,21 @@ export class BedrockAnthropicProvider implements LLMProvider {
  * the system to each vendor's InvokeModel payload shape.
  */
 export class BedrockConverseProvider implements LLMProvider {
-  name = "bedrock-converse";
+  readonly name: string;
   lastUsage?: LLMUsage;
   constructor(
     private modelId: string,
     private apiKey = process.env.AWS_BEDROCK_API_KEY,
     private region = process.env.AWS_BEDROCK_REGION ?? "us-east-1",
-  ) {}
+    name = "bedrock-converse",
+  ) {
+    this.name = name;
+  }
 
   async complete(opts: LLMCallOptions): Promise<string> {
     if (!this.apiKey) throw new Error("AWS_BEDROCK_API_KEY is not set");
-    const res = await fetchWithTimeout(
+    this.lastUsage = undefined;
+    const res = await fetchWithCallBudget(
       `https://bedrock-runtime.${this.region}.amazonaws.com/model/${this.modelId}/converse`,
       {
         method: "POST",
@@ -172,6 +339,7 @@ export class BedrockConverseProvider implements LLMProvider {
           inferenceConfig: { maxTokens: 700, temperature: 0.1 },
         }),
       },
+      opts,
       8_000,
     );
     if (!res.ok) {
@@ -201,31 +369,41 @@ export { BedrockConverseProvider as BedrockOpenAICompatProvider };
  *  breadcrumb when the order actually changes. */
 export class CompositeProvider implements LLMProvider {
   name = "composite";
+  recordsHealthInternally = true;
   constructor(private providers: LLMProvider[]) {}
 
   lastUsage?: LLMUsage;
+  selectedProviderName?: string;
   async complete(opts: LLMCallOptions): Promise<string> {
-    const ordered = [...this.providers.filter((p) => !isDegraded(p.name)), ...this.providers.filter((p) => isDegraded(p.name))];
+    const sharedOpts = normalizeCallOptions(opts);
+    this.lastUsage = undefined;
+    this.selectedProviderName = undefined;
+    const ordered = orderProvidersByHealth(this.providers, sharedOpts.channel);
     if (ordered.some((p, i) => p !== this.providers[i])) {
       initObservability();
       Sentry.addBreadcrumb({ category: "llm", message: "provider-reorder", data: { order: ordered.map((p) => p.name) } });
     }
     let lastError: Error | null = null;
     for (const p of ordered) {
+      if (Number.isFinite(sharedOpts.deadlineAt) && Date.now() >= Number(sharedOpts.deadlineAt)) throw new LLMDeadlineExceededError(Number(sharedOpts.deadlineAt));
+      if (sharedOpts.signal?.aborted) throw sharedOpts.signal.reason ?? Object.assign(new Error("LLM request aborted"), { name: "AbortError" });
+      const selectedName = p.selectedProviderName ?? p.name;
+      this.selectedProviderName = selectedName;
       const start = Date.now();
       try {
-        const text = await p.complete(opts);
+        const text = await p.complete(sharedOpts);
         this.lastUsage = p.lastUsage;
-        // Recorded here, per sub-provider — the outer withObservability() wrap (see
-        // resolveProvider) only ever sees this composite as a single unit named
-        // "composite", so it can't supply the per-provider data isDegraded() above
-        // needs. This is the one place that actually knows which sub-provider just
-        // succeeded or failed.
-        recordOutcome(p.name, true, Date.now() - start);
+        // Record health at the concrete provider boundary. Nested composites already
+        // record their own attempts, and the outer observability wrapper skips the
+        // synthetic "composite" sample via recordsHealthInternally.
+        if (!p.recordsHealthInternally) recordOutcome(selectedName, true, Date.now() - start);
         return text;
       } catch (err) {
-        recordOutcome(p.name, false, Date.now() - start);
+        if (!p.recordsHealthInternally) recordOutcome(selectedName, false, Date.now() - start);
         lastError = err as Error;
+        // A fallback is useful for provider failures, not for an already-aborted
+        // voice request. Retrying after a shared deadline only makes latency worse.
+        if (isAbortLike(err)) throw err;
       }
     }
     throw lastError ?? new Error("All providers failed");
@@ -254,23 +432,31 @@ export class GroqProvider implements LLMProvider {
   }
 
   async complete(opts: LLMCallOptions): Promise<string> {
+    const sharedOpts = normalizeCallOptions(opts);
+    this.lastUsage = undefined;
     let lastError: Error | null = null;
     for (const model of this.models) {
+      const timeout = remainingMs(sharedOpts, 8_000);
+      if (timeout <= 0) throw new LLMDeadlineExceededError(sharedOpts.deadlineAt ?? Date.now());
       try {
-        const res = await this.client.chat.completions.create({
-          model,
-          messages: [
-            { role: "system", content: opts.system },
-            { role: "user", content: opts.user },
-          ],
-          temperature: 0.1,
-          max_tokens: 700,
-          ...(opts.json ? { response_format: { type: "json_object" as const } } : {}),
-        });
+        const res = await this.client.chat.completions.create(
+          {
+            model,
+            messages: [
+              { role: "system", content: sharedOpts.system },
+              { role: "user", content: sharedOpts.user },
+            ],
+            temperature: 0.1,
+            max_tokens: 700,
+            ...(sharedOpts.json ? { response_format: { type: "json_object" as const } } : {}),
+          },
+          { signal: sharedOpts.signal, timeout },
+        );
         this.lastUsage = { model, inputTokens: res.usage?.prompt_tokens ?? null, outputTokens: res.usage?.completion_tokens ?? null };
         return res.choices[0]?.message?.content ?? "";
       } catch (err) {
         lastError = err as Error;
+        if (isAbortLike(err)) throw err;
         // 429 / 5xx / timeout → next model, next bucket. Hard auth errors don't retry.
         const status = (err as { status?: number }).status;
         if (status === 401 || status === 403) break;
@@ -280,28 +466,68 @@ export class GroqProvider implements LLMProvider {
   }
 }
 
-const BEDROCK_QWEN_PLANNING_MODEL_ID = process.env.AWS_BEDROCK_QWEN_PLANNING_MODEL_ID ?? "qwen.qwen3-235b-a22b-2507-v1:0";
-const BEDROCK_QWEN_FAST_MODEL_ID = process.env.AWS_BEDROCK_QWEN_FAST_MODEL_ID ?? "qwen.qwen3-32b-v1:0";
-const BEDROCK_DEEPSEEK_MODEL_ID = process.env.AWS_BEDROCK_DEEPSEEK_MODEL_ID ?? "deepseek.v3.2";
-const BEDROCK_OPENAI_OSS_MODEL_ID = process.env.AWS_BEDROCK_OPENAI_OSS_MODEL_ID ?? "openai.gpt-oss-120b-1:0";
-const BEDROCK_NOVA_MICRO_MODEL_ID = process.env.AWS_BEDROCK_NOVA_MICRO_MODEL_ID ?? "amazon.nova-micro-v1:0";
+const BEDROCK_QWEN_PLANNING_MODEL_ID = () => process.env.AWS_BEDROCK_QWEN_PLANNING_MODEL_ID ?? "qwen.qwen3-235b-a22b-2507-v1:0";
+const BEDROCK_QWEN_FAST_MODEL_ID = () => process.env.AWS_BEDROCK_QWEN_FAST_MODEL_ID ?? "qwen.qwen3-32b-v1:0";
+const BEDROCK_DEEPSEEK_MODEL_ID = () => process.env.AWS_BEDROCK_DEEPSEEK_MODEL_ID ?? "deepseek.v3.2";
+const BEDROCK_OPENAI_OSS_MODEL_ID = () => process.env.AWS_BEDROCK_OPENAI_OSS_MODEL_ID ?? "openai.gpt-oss-120b-1:0";
+const BEDROCK_NOVA_MICRO_MODEL_ID = () => process.env.AWS_BEDROCK_NOVA_MICRO_MODEL_ID ?? "amazon.nova-micro-v1:0";
 // Qwen 235B is not served from us-east-1. Keep a separate override so the rest of
 // the Bedrock fleet can remain in the deployment's primary region.
-const BEDROCK_QWEN_PLANNING_REGION = process.env.AWS_BEDROCK_QWEN_PLANNING_REGION ?? "us-east-2";
+const BEDROCK_QWEN_PLANNING_REGION = () => process.env.AWS_BEDROCK_QWEN_PLANNING_REGION ?? "us-east-2";
 
-/** Resolve the provider for an action type. Registry is config-extensible. */
-const providers = new Map<string, () => LLMProvider>();
-providers.set("groq", () => new GroqProvider());
-providers.set("bedrock-qwen-planning", () => new BedrockConverseProvider(BEDROCK_QWEN_PLANNING_MODEL_ID, undefined, BEDROCK_QWEN_PLANNING_REGION));
-providers.set("bedrock-qwen-fast", () => new BedrockConverseProvider(BEDROCK_QWEN_FAST_MODEL_ID));
-providers.set("bedrock-deepseek", () => new BedrockConverseProvider(BEDROCK_DEEPSEEK_MODEL_ID));
-providers.set("bedrock-openai-oss", () => new BedrockConverseProvider(BEDROCK_OPENAI_OSS_MODEL_ID));
-providers.set("bedrock-nova-micro", () => new BedrockConverseProvider(BEDROCK_NOVA_MICRO_MODEL_ID));
-providers.set("planning", () => new CompositeProvider([new BedrockConverseProvider(BEDROCK_QWEN_PLANNING_MODEL_ID, undefined, BEDROCK_QWEN_PLANNING_REGION), new GroqProvider()]));
-providers.set("high-risk-second-candidate", () => new CompositeProvider([new BedrockConverseProvider(BEDROCK_DEEPSEEK_MODEL_ID), new BedrockConverseProvider(BEDROCK_OPENAI_OSS_MODEL_ID)]));
+interface ProviderRegistration {
+  factory: () => LLMProvider;
+  configured: () => boolean;
+}
 
-export function registerProvider(name: string, factory: () => LLMProvider): void {
-  providers.set(name, factory);
+class UnavailableProvider implements LLMProvider {
+  lastUsage?: LLMUsage;
+  constructor(public readonly name: string, private readonly reason: string) {}
+
+  async complete(): Promise<string> {
+    throw new LLMProviderSelectionError(`${this.name} is unavailable: ${this.reason}`);
+  }
+}
+
+/** Registry entries are lazy so importing @finnor/tools and constructing an
+ * orchestrator never requires provider credentials. */
+const providers = new Map<string, ProviderRegistration>();
+function addProvider(name: string, factory: () => LLMProvider, configured: () => boolean): void {
+  providers.set(name, { factory, configured });
+}
+
+const bedrockConfigured = () => Boolean(process.env.AWS_BEDROCK_API_KEY);
+const mistralConfigured = () => Boolean(process.env.MISTRAL_API_KEY);
+const deepseekConfigured = () => Boolean(process.env.DEEPSEEK_API_KEY || process.env.AWS_BEDROCK_API_KEY);
+const groqConfigured = () => Boolean(process.env.GROQ_API_KEY);
+
+addProvider("mistral", () => new MistralProvider(), mistralConfigured);
+addProvider("deepseek", () => (process.env.DEEPSEEK_API_KEY ? new DeepSeekProvider() : new BedrockConverseProvider(BEDROCK_DEEPSEEK_MODEL_ID(), undefined, undefined, "deepseek")), deepseekConfigured);
+// Legacy providers remain available only when named explicitly or selected by an
+// explicit route override. None is a default fallback in the JARVIS route table.
+addProvider("groq", () => new GroqProvider(), groqConfigured);
+addProvider("bedrock-qwen-planning", () => new BedrockConverseProvider(BEDROCK_QWEN_PLANNING_MODEL_ID(), undefined, BEDROCK_QWEN_PLANNING_REGION(), "bedrock-qwen-planning"), bedrockConfigured);
+addProvider("bedrock-qwen-fast", () => new BedrockConverseProvider(BEDROCK_QWEN_FAST_MODEL_ID(), undefined, undefined, "bedrock-qwen-fast"), bedrockConfigured);
+addProvider("bedrock-deepseek", () => new BedrockConverseProvider(BEDROCK_DEEPSEEK_MODEL_ID(), undefined, undefined, "bedrock-deepseek"), bedrockConfigured);
+addProvider("bedrock-openai-oss", () => new BedrockConverseProvider(BEDROCK_OPENAI_OSS_MODEL_ID(), undefined, undefined, "bedrock-openai-oss"), bedrockConfigured);
+addProvider("bedrock-nova-micro", () => new BedrockConverseProvider(BEDROCK_NOVA_MICRO_MODEL_ID(), undefined, undefined, "bedrock-nova-micro"), bedrockConfigured);
+addProvider("planning", () => {
+  const chain: LLMProvider[] = [];
+  if (bedrockConfigured()) chain.push(new BedrockConverseProvider(BEDROCK_QWEN_PLANNING_MODEL_ID(), undefined, BEDROCK_QWEN_PLANNING_REGION(), "bedrock-qwen-planning"));
+  if (groqConfigured()) chain.push(new GroqProvider());
+  return chain.length > 0 ? new CompositeProvider(chain) : new UnavailableProvider("planning", "no explicitly configured legacy planning provider");
+}, () => bedrockConfigured() || groqConfigured());
+addProvider("high-risk-second-candidate", () => {
+  const chain: LLMProvider[] = [];
+  if (bedrockConfigured()) {
+    chain.push(new BedrockConverseProvider(BEDROCK_DEEPSEEK_MODEL_ID(), undefined, undefined, "bedrock-deepseek"));
+    chain.push(new BedrockConverseProvider(BEDROCK_OPENAI_OSS_MODEL_ID(), undefined, undefined, "bedrock-openai-oss"));
+  }
+  return chain.length > 0 ? new CompositeProvider(chain) : new UnavailableProvider("high-risk-second-candidate", "AWS_BEDROCK_API_KEY is not set");
+}, bedrockConfigured);
+
+export function registerProvider(name: string, factory: () => LLMProvider, configured: () => boolean = () => true): void {
+  providers.set(name, { factory, configured });
 }
 
 /** Wraps a provider with a Sentry breadcrumb per complete() call (provider name,
@@ -313,24 +539,32 @@ function withObservability(provider: LLMProvider): LLMProvider {
   return {
     name: provider.name,
     get lastUsage() { return provider.lastUsage; },
+    get selectedProviderName() { return provider.selectedProviderName; },
+    // This wrapper owns the health sample for ordinary providers. Composite
+    // providers also report their concrete attempts internally, so an outer
+    // wrapper must treat them as already accounted for.
+    recordsHealthInternally: true,
     async complete(opts) {
+      const sharedOpts = normalizeCallOptions(opts);
       initObservability();
       const start = Date.now();
       try {
-        await enforceBudget(opts);
-        const text = await provider.complete(opts);
+        await enforceBudget(sharedOpts);
+        const text = await provider.complete(sharedOpts);
         const ms = Date.now() - start;
-        Sentry.addBreadcrumb({ category: "llm", message: provider.name, data: { ok: true, ms } });
-        recordOutcome(provider.name, true, ms);
-        await recordCall(provider, opts, "completed").catch(() => undefined);
+        const providerName = provider.selectedProviderName ?? provider.name;
+        Sentry.addBreadcrumb({ category: "llm", message: providerName, data: { ok: true, ms } });
+        if (!provider.recordsHealthInternally) recordOutcome(providerName, true, ms);
+        await recordCall(provider, sharedOpts, "completed").catch(() => undefined);
         return text;
       } catch (err) {
         const ms = Date.now() - start;
-        Sentry.addBreadcrumb({ category: "llm", message: provider.name, data: { ok: false, ms } });
-        Sentry.captureMessage(`llm_failed:${provider.name}`, { level: "warning" });
-        recordOutcome(provider.name, false, ms);
+        const providerName = provider.selectedProviderName ?? provider.name;
+        Sentry.addBreadcrumb({ category: "llm", message: providerName, data: { ok: false, ms } });
+        Sentry.captureMessage(`llm_failed:${providerName}`, { level: "warning" });
+        if (!provider.recordsHealthInternally) recordOutcome(providerName, false, ms);
         const deferred = err instanceof LLMBudgetDeferredError;
-        await recordCall(provider, opts, deferred ? "deferred" : "failed", { error: (err as Error).message }).catch(() => undefined);
+        await recordCall(provider, sharedOpts, deferred ? "deferred" : "failed", { error: (err as Error).message }).catch(() => undefined);
         throw err;
       }
     },
@@ -338,16 +572,138 @@ function withObservability(provider: LLMProvider): LLMProvider {
 }
 
 export function resolveProvider(name?: string): LLMProvider {
-  const factory = providers.get(name ?? "groq") ?? providers.get("groq")!;
-  return withObservability(factory());
+  if (!name) throw new LLMProviderSelectionError("No LLM provider selected; use resolveProviderForPurpose() or provide an explicit provider name");
+  const registration = providers.get(name);
+  if (!registration) throw new LLMProviderSelectionError(`Unknown LLM provider "${name}"`);
+  return withObservability(registration.factory());
 }
 
-/** One explicit router for call purpose. Environment overrides name a registered
- * provider; unknown values safely fall back to the documented default. */
-export function resolveProviderForPurpose(purpose: LLMPurpose): LLMProvider {
-  const defaults: Record<LLMPurpose, string> = {
-    planning: "planning", critic: "bedrock-qwen-fast", repair: "bedrock-qwen-fast", classification: "bedrock-nova-micro", answer: "groq",
+export interface LLMRouteRequest {
+  purpose: LLMPurpose;
+  channel?: LLMChannel;
+  /** Explicit policy/config pin. This bypasses fallback ordering by design. */
+  provider?: string;
+  deadlineAt?: number;
+  deadlineMs?: number;
+  signal?: AbortSignal;
+}
+
+export interface LLMRouteDescription {
+  purpose: LLMPurpose;
+  channel: LLMChannel;
+  providerNames: string[];
+  deadlineMs: number;
+}
+
+const DEFAULT_ROUTE_ORDER: Record<LLMPurpose, Record<LLMChannel, string[]>> = {
+  planning: {
+    voice: ["mistral", "deepseek"],
+    text: ["mistral", "deepseek"],
+    console: ["mistral", "deepseek"],
+    background: ["deepseek", "mistral"],
+  },
+  critic: {
+    voice: ["deepseek", "mistral"],
+    text: ["deepseek", "mistral"],
+    console: ["deepseek", "mistral"],
+    background: ["deepseek", "mistral"],
+  },
+  repair: {
+    voice: ["deepseek", "mistral"],
+    text: ["deepseek", "mistral"],
+    console: ["deepseek", "mistral"],
+    background: ["deepseek", "mistral"],
+  },
+  classification: {
+    voice: ["mistral", "deepseek"],
+    text: ["mistral", "deepseek"],
+    console: ["mistral", "deepseek"],
+    background: ["mistral", "deepseek"],
+  },
+  answer: {
+    voice: ["mistral", "deepseek"],
+    text: ["mistral", "deepseek"],
+    console: ["mistral", "deepseek"],
+    background: ["deepseek", "mistral"],
+  },
+};
+
+/** Returns null only when no route override key exists. An explicitly set but
+ * unknown/unconfigured override is intentionally returned as an empty route so
+ * it cannot silently fall through to the safe defaults. */
+function envRouteOverride(purpose: LLMPurpose, channel: LLMChannel): string[] | null {
+  const suffixes = [`${purpose.toUpperCase()}_${channel.toUpperCase()}`, purpose.toUpperCase()];
+  for (const suffix of suffixes) {
+    const providerKey = `LLM_PROVIDER_${suffix}`;
+    const modelKey = `LLM_MODEL_${suffix}`;
+    const selected = process.env[providerKey] ?? process.env[modelKey];
+    if (selected === undefined) continue;
+    const fallback = process.env[`LLM_FALLBACKS_${suffix}`] ?? "";
+    return [selected, ...fallback.split(",").map((name) => name.trim()).filter(Boolean)];
+  }
+  return null;
+}
+
+function routeNames(purpose: LLMPurpose, channel: LLMChannel): string[] {
+  const override = envRouteOverride(purpose, channel);
+  const configured = (candidates: string[]) => [...new Set(candidates)].filter((name) => providers.get(name)?.configured() === true);
+  // An explicit route is authoritative: unknown/unconfigured names yield an
+  // unavailable route instead of silently switching to a different provider.
+  if (override !== null) {
+    const names = [...new Set(override)];
+    return names.length > 0 && names.every((name) => providers.get(name)?.configured() === true) ? names : [];
+  }
+  return configured(DEFAULT_ROUTE_ORDER[purpose][channel]);
+}
+
+export function describeLLMRoute(purpose: LLMPurpose, channel: LLMChannel = "text"): LLMRouteDescription {
+  return { purpose, channel, providerNames: routeNames(purpose, channel), deadlineMs: DEFAULT_DEADLINE_MS[channel] };
+}
+
+export function isProviderConfigured(name: string): boolean {
+  return providers.get(name)?.configured() === true;
+}
+
+export function isPurposeConfigured(purpose: LLMPurpose, channel: LLMChannel = "text"): boolean {
+  return routeNames(purpose, channel).length > 0;
+}
+
+export function resolveProviderForRequest(request: LLMRouteRequest): LLMProvider {
+  const channel = request.channel ?? "text";
+  if (request.provider) return resolveProvider(request.provider);
+  const names = routeNames(request.purpose, channel);
+  if (names.length === 0) {
+    return withObservability(new UnavailableProvider(`route:${request.purpose}:${channel}`, "no configured provider matched the safe route"));
+  }
+  const selected = names.map((name) => providers.get(name)!.factory());
+  const provider = selected.length === 1 ? selected[0]! : new CompositeProvider(selected);
+  const boundProvider: LLMProvider = {
+    name: provider.name,
+    get lastUsage() { return provider.lastUsage; },
+    get selectedProviderName() { return provider.selectedProviderName; },
+    get recordsHealthInternally() { return provider.recordsHealthInternally; },
+    complete(opts) {
+      return provider.complete({
+        ...opts,
+        purpose: opts.purpose ?? request.purpose,
+        channel: opts.channel ?? channel,
+        ...(opts.deadlineAt === undefined && request.deadlineAt !== undefined ? { deadlineAt: request.deadlineAt } : {}),
+        ...(opts.deadlineMs === undefined && request.deadlineMs !== undefined ? { deadlineMs: request.deadlineMs } : {}),
+        ...(opts.signal === undefined && request.signal !== undefined ? { signal: request.signal } : {}),
+      });
+    },
   };
-  const override = process.env[`LLM_MODEL_${purpose.toUpperCase()}`];
-  return resolveProvider(override && providers.has(override) ? override : defaults[purpose]);
+  return withObservability(boundProvider);
+}
+
+/** Purpose/channel-aware resolver used by orchestration and answer plugins. The
+ * string overload keeps existing call sites source-compatible while making the
+ * channel explicit wherever latency matters. */
+export function resolveProviderForPurpose(purpose: LLMPurpose, channelOrRequest: LLMChannel | Omit<LLMRouteRequest, "purpose"> = "text"): LLMProvider {
+  const request = typeof channelOrRequest === "string" ? { purpose, channel: channelOrRequest } : { purpose, ...channelOrRequest };
+  return resolveProviderForRequest(request);
+}
+
+export function resolveProviderForChannel(purpose: LLMPurpose, channel: LLMChannel): LLMProvider {
+  return resolveProviderForPurpose(purpose, channel);
 }

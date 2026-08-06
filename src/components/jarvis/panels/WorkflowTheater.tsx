@@ -3,11 +3,10 @@
 // §7.5 THE CENTERPIECE — a live node-graph. Real workflow_runs render as chains whose
 // edges FLOW into the currently-leased step (dash animation + a traveling light dot);
 // completed edges settle solid green; step completion pops the node and draws a check.
-// With nothing in flight, Blueprint mode renders the four real lifecycle graphs from
-// the actual step maps (including the installation workflow's genuine parallel branch)
-// as dim ambient circuitry — no ages, no counts, nothing data-shaped (§2).
+// The canonical instruction path is action-ID scoped: no blueprint or replay mode
+// is allowed to stand in for a linked run.
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
 import { Check, Pause, Play, XCircle, RotateCcw, ArrowUpCircle } from "lucide-react"
 import { LiveDot } from "../atmosphere"
@@ -18,10 +17,13 @@ import { sfx } from "../sound"
 import { burstAt } from "../lib/EventFX"
 import { ReceiptDrawer } from "../lib/ReceiptDrawer"
 import { useJarvisAuth } from "../lib/jarvis-auth"
-import { onPulse } from "../lib/pulse-bus"
+import { getAnchorRect, onPulse, registerAnchor } from "../lib/pulse-bus"
 import { isSandboxStep, SANDBOX_LITERAL } from "../lib/sandbox-detection"
+import { LF10_WORKFLOW_IGNITION_MS, LF12_STEP_SPARK_MS, leasedFlowDurationMs, workflowFaultVariants } from "../kernel/execution-choreography"
+import { executionMetricTransitionKey, markExecutionPixelPainted } from "../kernel/execution-metrics"
 import { choreo } from "../ui/motion/choreo"
 import { runStatusPresentation, stepStatusPresentation } from "../kernel/workflow-presentation"
+import { executionProgressForActions, runsForActionIds, scopedExecutionMode, type ScopedExecutionMode } from "../kernel/execution-presentation"
 import type { StepState } from "../kernel/types"
 
 // F8.T1 — FLOW-60 FlowParticulate: real steps/min from pulse-bus's "step" kind
@@ -31,12 +33,15 @@ import type { StepState } from "../kernel/types"
 // useEventRateOpacity — mirrored here rather than imported since that hook is
 // Bridge-local and this needs a plain steps/min NUMBER, not a caustic opacity.
 const THROUGHPUT_WINDOW_MS = 60_000
-export function useStepsPerMinute(): number {
+export function useStepsPerMinute(stepIds?: readonly string[]): number {
   const timestampsRef = useRef<number[]>([])
   const [perMinute, setPerMinute] = useState(0)
   useEffect(() => {
     const off = onPulse((pulse) => {
       if (pulse.kind !== "step") return
+      const detail = pulse.detail
+      const stepId = typeof detail === "object" && detail !== null && "stepId" in detail && typeof detail.stepId === "string" ? detail.stepId : null
+      if (stepIds && (!stepId || !stepIds.includes(stepId))) return
       timestampsRef.current.push(pulse.at)
     })
     const recompute = () => {
@@ -50,7 +55,7 @@ export function useStepsPerMinute(): number {
       off()
       window.clearInterval(id)
     }
-  }, [])
+  }, [stepIds])
   return perMinute
 }
 
@@ -74,6 +79,13 @@ const NODE_H = 72
 const GAP_X = 56
 const GAP_Y = 26
 const X = (col: number) => col * (NODE_W + GAP_X)
+
+type IgnitionPoint = { left: number; top: number }
+
+function ignitionPath(from: IgnitionPoint, to: IgnitionPoint): string {
+  const midX = from.left + (to.left - from.left) * 0.52
+  return `M${from.left},${from.top} C${midX},${from.top} ${midX},${to.top} ${to.left},${to.top}`
+}
 const Y = (row: number) => row * (NODE_H + GAP_Y)
 
 export interface GraphNode {
@@ -93,57 +105,6 @@ export interface GraphEdge {
   optional?: boolean
 }
 
-// The four real lifecycles, laid out from their actual step maps. The installation
-// workflow genuinely has an optional procurement branch — drawn as one.
-const BLUEPRINTS: Array<{ title: string; nodes: GraphNode[]; edges: GraphEdge[] }> = [
-  {
-    title: "Lead to Water Test",
-    nodes: [
-      { id: "a", stepType: "hold_appointment", col: 0, row: 0, status: "blueprint" },
-      { id: "b", stepType: "send_confirmation_call", col: 1, row: 0, status: "blueprint" },
-      { id: "c", stepType: "generate_document", col: 2, row: 0, status: "blueprint" },
-    ],
-    edges: [
-      { from: "a", to: "b" },
-      { from: "b", to: "c" },
-    ],
-  },
-  {
-    title: "Water Test to Signed Proposal",
-    nodes: [
-      { id: "a", stepType: "generate_document", col: 0, row: 0, status: "blueprint" },
-      { id: "b", stepType: "request_signature", col: 1, row: 0, status: "blueprint" },
-    ],
-    edges: [{ from: "a", to: "b" }],
-  },
-  {
-    title: "Proposal to Installation",
-    nodes: [
-      { id: "p", stepType: "receive_procurement", col: 0, row: 1, status: "blueprint", optional: true },
-      { id: "a", stepType: "reserve_stock", col: 0, row: 0, status: "blueprint" },
-      { id: "b", stepType: "record_deposit_payment", col: 1, row: 0, status: "blueprint" },
-      { id: "c", stepType: "create_work_order", col: 2, row: 0, status: "blueprint" },
-    ],
-    edges: [
-      { from: "p", to: "b", optional: true },
-      { from: "a", to: "b" },
-      { from: "b", to: "c" },
-    ],
-  },
-  {
-    title: "Invoice to Cash",
-    nodes: [
-      { id: "a", stepType: "create_payment_link", col: 0, row: 0, status: "blueprint" },
-      { id: "b", stepType: "send_message", col: 1, row: 0, status: "blueprint" },
-      { id: "c", stepType: "sync_invoice", col: 2, row: 0, status: "blueprint" },
-    ],
-    edges: [
-      { from: "a", to: "b" },
-      { from: "b", to: "c" },
-    ],
-  },
-]
-
 function edgePath(from: GraphNode, to: GraphNode): string {
   const x1 = X(from.col) + NODE_W
   const y1 = Y(from.row) + NODE_H / 2
@@ -153,9 +114,9 @@ function edgePath(from: GraphNode, to: GraphNode): string {
   return `M${x1},${y1} C${mid},${y1} ${mid},${y2} ${x2},${y2}`
 }
 
-export type EdgeState = "done" | "flowing" | "future" | "blueprint" | "rewind"
+export type EdgeState = "done" | "flowing" | "future" | "fault" | "rewind" | "rewound"
 
-function GraphEdges({ nodes, edges, edgeState, particulate = 1 }: { nodes: GraphNode[]; edges: GraphEdge[]; edgeState: (e: GraphEdge) => EdgeState; particulate?: number }) {
+function GraphEdges({ nodes, edges, edgeState, particulate = 1, energy = 0 }: { nodes: GraphNode[]; edges: GraphEdge[]; edgeState: (e: GraphEdge) => EdgeState; particulate?: number; energy?: number }) {
   const reduced = useHydratedReducedMotion()
   const byId = new Map(nodes.map((n) => [n.id, n]))
   const maxCol = Math.max(...nodes.map((n) => n.col))
@@ -176,29 +137,27 @@ function GraphEdges({ nodes, edges, edgeState, particulate = 1 }: { nodes: Graph
         if (!from || !to) return null
         const d = edgePath(from, to)
         const state = edgeState(e)
-        const stroke =
-          state === "done" ? "var(--j-green)" : state === "flowing" ? "var(--j-cyan)" : state === "rewind" ? "var(--j-amber)" : state === "blueprint" ? "rgba(59,130,246,0.5)" : "var(--j-text-faint)"
+        const stroke = state === "done" ? "var(--j-green)" : state === "flowing" ? "var(--j-cyan)" : state === "fault" ? "var(--j-red)" : state === "rewind" || state === "rewound" ? "var(--j-amber)" : "var(--j-text-faint)"
         // FLOW-60 FlowParticulate: real steps/min (0/low/med/high tiers, never a
-        // fabricated smooth interpolation) scales BOTH the traveling-dot count and
-        // their travel speed on a genuinely flowing edge — idle real throughput
-        // shows one dot at the base 1.4s pace, busy real throughput shows all three
-        // at a faster pace. `particulate` defaults to 1 (LiveRunRow/ReplayRow that
-        // don't pass a real rate — e.g. blueprint/replay contexts — keep today's
-        // pre-F8 single-dot behavior unchanged).
-        const dotDur = particulate >= 3 ? "0.85s" : particulate === 2 ? "1.1s" : "1.4s"
+        // fabricated smooth interpolation) controls the traveling-dot count on a
+        // genuinely flowing edge. The directional speed is the Phase 4 contract's
+        // real LIVEFRAME energy value, passed separately below.
+        const dotDur = `${(leasedFlowDurationMs(energy) / 1000).toFixed(2)}s`
         return (
           <g key={i}>
-            {(state === "flowing" || state === "rewind" || state === "blueprint") && (
-              <path d={d} fill="none" stroke={stroke} strokeWidth={6} opacity={state === "blueprint" ? 0.12 : 0.3} style={{ filter: "blur(4px)" }} />
-            )}
+            {/* P4.T8 frame budget: the semantic path is sufficient while the
+                active Weave owns motion; avoid a second blurred path per lane. */}
             <path
               d={d}
               fill="none"
               stroke={stroke}
-              strokeWidth={state === "done" || state === "flowing" || state === "rewind" ? 2 : 1.4}
-              strokeDasharray={state === "done" ? undefined : state === "flowing" || state === "rewind" ? "5 8" : e.optional ? "2 7" : "3 8"}
-              className={!reduced && state === "flowing" ? "jarvis-edge-flow" : !reduced && state === "rewind" ? "jarvis-edge-rewind" : !reduced && state === "blueprint" ? "jarvis-edge-blueprint" : ""}
-              opacity={state === "future" ? 0.35 : state === "blueprint" ? 0.7 : 1}
+              strokeWidth={state === "done" || state === "flowing" || state === "fault" || state === "rewind" || state === "rewound" ? 2 : 1.4}
+              strokeDasharray={state === "done" || state === "rewound" ? undefined : state === "flowing" || state === "rewind" ? "5 8" : e.optional ? "2 7" : "3 8"}
+              // P4.T8 frame budget: the one real traveling dot below carries the
+              // leased/compensating direction; a second dash-offset loop on the
+              // same edge is redundant work while the active Weave is visible.
+              className=""
+              opacity={state === "future" ? 0.35 : 1}
             />
             {!reduced && state === "flowing" && (
               <>
@@ -215,9 +174,6 @@ function GraphEdges({ nodes, edges, edgeState, particulate = 1 }: { nodes: Graph
                     <animateMotion dur={dotDur} repeatCount="indefinite" path={d} begin="0.3s" />
                   </circle>
                 )}
-                <circle r={6} fill="var(--j-cyan)" opacity={0.25}>
-                  <animateMotion dur={dotDur} repeatCount="indefinite" path={d} />
-                </circle>
               </>
             )}
             {/* FLOW-62 CompensationRewind: a compensation edge's dot travels the
@@ -227,11 +183,6 @@ function GraphEdges({ nodes, edges, edgeState, particulate = 1 }: { nodes: Graph
             {!reduced && state === "rewind" && (
               <circle r={2.6} fill="var(--j-amber)">
                 <animateMotion dur="1.4s" repeatCount="indefinite" path={d} keyPoints="1;0" keyTimes="0;1" />
-              </circle>
-            )}
-            {!reduced && state === "blueprint" && (
-              <circle r={2} fill="rgba(94,197,255,0.8)">
-                <animateMotion dur="7s" repeatCount="indefinite" path={d} begin={`${i * 1.7}s`} />
               </circle>
             )}
           </g>
@@ -244,29 +195,24 @@ function GraphEdges({ nodes, edges, edgeState, particulate = 1 }: { nodes: Graph
   )
 }
 
-export const NODE_TONE: Record<string, { border: string; iconBg: string; icon: string; shadow?: string }> & Record<StepState | "blueprint", { border: string; iconBg: string; icon: string; shadow?: string }> = {
+export const NODE_TONE: Record<string, { border: string; iconBg: string; icon: string; shadow?: string }> & Record<StepState, { border: string; iconBg: string; icon: string; shadow?: string }> = {
   pending: { border: "rgba(100,128,159,0.18)", iconBg: "rgba(100,128,159,0.1)", icon: "var(--j-text-dim)" },
   leased: { border: "var(--j-border-hot)", iconBg: "rgba(34,211,238,0.14)", icon: "var(--j-cyan)", shadow: "0 0 22px rgba(34,211,238,0.28)" },
   completed: { border: "rgba(52,211,153,0.45)", iconBg: "rgba(52,211,153,0.12)", icon: "var(--j-green)" },
   failed: { border: "rgba(248,113,113,0.5)", iconBg: "rgba(248,113,113,0.12)", icon: "var(--j-red)", shadow: "0 0 18px rgba(248,113,113,0.22)" },
   compensating: { border: "rgba(251,191,36,0.5)", iconBg: "rgba(251,191,36,0.12)", icon: "var(--j-amber)" },
   compensated: { border: "rgba(251,191,36,0.3)", iconBg: "rgba(251,191,36,0.08)", icon: "var(--j-amber)" },
-  blueprint: { border: "rgba(59,130,246,0.16)", iconBg: "rgba(59,130,246,0.08)", icon: "rgba(94,148,213,0.75)" },
 }
 
-export function GraphNodeCard({ node, now, blueprint, onSelect }: { node: GraphNode; now: number; blueprint?: boolean; onSelect?: (node: GraphNode) => void }) {
+export function GraphNodeCard({ node, now, onSelect }: { node: GraphNode; now: number; onSelect?: (node: GraphNode) => void }) {
   const reduced = useHydratedReducedMotion()
-  const tone = NODE_TONE[node.status as StepState | "blueprint"] ?? NODE_TONE.pending!
+  const tone = NODE_TONE[node.status as StepState] ?? NODE_TONE.pending!
   const isLeased = node.status === "leased"
   const isDone = node.status === "completed"
-  // jarvis-v3 P4.T6 (§8 PHASE 4) — sandbox honesty for "the step": a blueprint
-  // tile is a reference catalog entry, not a real execution, so it's never
-  // eligible. A real (non-blueprint) create_payment_link/send_message step
-  // that resolved to a non-real provider gets the literal string as an
-  // accessible title (a real DOM string, not a tooltip-only decoration) —
-  // this tile's own layout has no room for a second inline banner.
+  // A real step that resolved to a non-real provider gets the literal string as
+  // an accessible title (a real DOM string, not a tooltip-only decoration).
   const { setupStatus } = useJarvis()
-  const sandboxed = !blueprint && isSandboxStep(node.stepType, setupStatus?.environment?.bindings)
+  const sandboxed = isSandboxStep(node.stepType, setupStatus?.environment?.bindings)
   // FLOW-59 ChamberPressure: only a genuinely leased node with a REAL retry
   // (attempts > 1, straight from workflow_steps.attempts) gets the pressure glow —
   // a first-attempt leased node keeps today's plain cyan pulse-ring unchanged.
@@ -274,9 +220,18 @@ export function GraphNodeCard({ node, now, blueprint, onSelect }: { node: GraphN
   const prevStatusRef = useRef(node.status)
   const [shockwaveKey, setShockwaveKey] = useState(0)
   const [ignitionKey, setIgnitionKey] = useState(0)
+  const [faultKey, setFaultKey] = useState(0)
   const nodeElRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
+    const previousStatus = prevStatusRef.current
+    const transitionType = node.status === "completed" ? "step-completed" : node.status === "failed" ? "step-failed" : null
+    const metricKey = transitionType && previousStatus !== node.status
+      ? executionMetricTransitionKey(transitionType, node.id, previousStatus, node.status)
+      : null
+    const frame = metricKey
+      ? window.requestAnimationFrame((timestamp) => { markExecutionPixelPainted(metricKey, timestamp) })
+      : null
     if (prevStatusRef.current !== "completed" && node.status === "completed") {
       setShockwaveKey((k) => k + 1)
       const rect = nodeElRef.current?.getBoundingClientRect()
@@ -288,10 +243,17 @@ export function GraphNodeCard({ node, now, blueprint, onSelect }: { node: GraphN
     if (prevStatusRef.current !== "leased" && node.status === "leased" && prevStatusRef.current !== node.status) {
       setIgnitionKey((k) => k + 1)
     }
+    // M14 FaultShake: only a real status transition gets the one-shot cue. A
+    // failed node first observed after a refresh is already the durable red
+    // state and reason text, so it stays still instead of replaying history.
+    if (prevStatusRef.current !== "failed" && node.status === "failed") {
+      setFaultKey((k) => k + 1)
+    }
     prevStatusRef.current = node.status
-  }, [node.status])
+    return () => { if (frame !== null) window.cancelAnimationFrame(frame) }
+  }, [node.id, node.status])
 
-  const interactive = Boolean(onSelect && !blueprint)
+  const interactive = Boolean(onSelect)
 
   return (
     <div
@@ -299,7 +261,8 @@ export function GraphNodeCard({ node, now, blueprint, onSelect }: { node: GraphN
       data-node
       role={interactive ? "button" : undefined}
       tabIndex={interactive ? 0 : undefined}
-      aria-label={interactive ? `Open receipt for ${humanizeStepType(node.stepType)}` : undefined}
+      aria-label={interactive ? `Open evidence for ${humanizeStepType(node.stepType)}` : undefined}
+      data-workflow-step-status={node.status}
       title={sandboxed ? SANDBOX_LITERAL : undefined}
       onClick={interactive ? () => onSelect?.(node) : undefined}
       onKeyDown={interactive ? (event) => {
@@ -308,7 +271,10 @@ export function GraphNodeCard({ node, now, blueprint, onSelect }: { node: GraphN
           onSelect?.(node)
         }
       } : undefined}
-      className={`j-node jarvis-rise group absolute flex items-center gap-2.5 rounded-xl border bg-[rgba(10,19,36,0.92)] px-3 backdrop-blur-md transition-[opacity,border-color,box-shadow] duration-500 ${interactive ? "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70" : ""}`}
+      // Keep the six-lane surface opaque. A backdrop filter on every node
+      // forces a full-field blur under the animated atmosphere on each frame;
+      // the node's own elevated background already preserves the hierarchy.
+      className={`j-node group absolute flex items-center gap-2.5 rounded-xl border bg-[rgba(10,19,36,0.96)] px-3 transition-[opacity,border-color,box-shadow] duration-500 ${interactive ? "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70" : ""}`}
       style={{
         left: X(node.col),
         top: Y(node.row),
@@ -316,8 +282,7 @@ export function GraphNodeCard({ node, now, blueprint, onSelect }: { node: GraphN
         height: NODE_H,
         borderColor: tone.border,
         boxShadow: tone.shadow,
-        opacity: blueprint ? 0.75 : node.status === "pending" ? 0.55 : 1,
-        ["--rise-to" as string]: blueprint ? 0.75 : node.status === "pending" ? 0.55 : 1,
+        opacity: node.status === "pending" ? 0.55 : 1,
       }}
     >
       <span aria-hidden className="absolute -left-[3px] top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full border" style={{ background: "#0a1324", borderColor: isLeased ? "var(--j-cyan)" : "var(--j-border)" }} />
@@ -334,6 +299,17 @@ export function GraphNodeCard({ node, now, blueprint, onSelect }: { node: GraphN
           animate="animate"
         />
       )}
+      {!reduced && faultKey > 0 && (
+        <motion.span
+          key={faultKey}
+          aria-hidden
+          className="pointer-events-none absolute -inset-1 rounded-xl border-2 border-red-300/70"
+          variants={workflowFaultVariants(reduced)}
+          initial="initial"
+          animate="animate"
+          onAnimationComplete={() => setFaultKey(0)}
+        />
+      )}
       {underPressure && (
         <motion.span
           aria-hidden
@@ -346,9 +322,10 @@ export function GraphNodeCard({ node, now, blueprint, onSelect }: { node: GraphN
       )}
       <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border" style={{ background: tone.iconBg, borderColor: tone.border, color: tone.icon }}>
         <StepIcon stepType={node.stepType} className="h-4 w-4" />
-        {isLeased && !reduced && <span className="jarvis-pulse-ring absolute inset-0 rounded-full border border-cyan-300/60" />}
+        {/* P4.T8: the leased label, cyan outline, and real edge dot are enough
+            to identify this durable state; avoid a second node-local loop. */}
         {isLeased && (
-          <svg className={`absolute -inset-1.5 ${reduced ? "" : "jarvis-spin"}`} width={44} height={44} viewBox="0 0 44 44" aria-hidden>
+          <svg className="absolute -inset-1.5" width={44} height={44} viewBox="0 0 44 44" aria-hidden>
             <circle cx={22} cy={22} r={19} fill="none" stroke="var(--j-cyan)" strokeWidth={2} strokeDasharray="70 40" strokeLinecap="round" opacity={0.85} />
           </svg>
         )}
@@ -356,20 +333,17 @@ export function GraphNodeCard({ node, now, blueprint, onSelect }: { node: GraphN
       <div className="min-w-0">
         <div className="truncate j-fs-sm font-bold capitalize leading-tight text-[color:var(--j-text)]">{humanizeStepType(node.stepType)}</div>
         <div className="j-fs-micro text-[color:var(--j-text-dim)]">
-          {blueprint
-            ? node.optional
-              ? "optional"
-              : " "
-            : node.status === "leased" && node.updatedAt
-              ? `running · ${ageSeconds(node.updatedAt, now)}s`
-              : stepStatusPresentation(node.status as StepState).label + ((node.attempts ?? 0) > 1 ? ` · retry ${node.attempts}` : "")}
+          {node.status === "leased" && node.updatedAt
+            ? `leased · ${ageSeconds(node.updatedAt, now)}s`
+            : stepStatusPresentation(node.status as StepState).label + ((node.attempts ?? 0) > 1 ? ` · retry ${node.attempts}` : "")}
         </div>
       </div>
       {isDone && (
         <motion.div
-          initial={{ scale: 0 }}
+          key={shockwaveKey > 0 ? `spark-${shockwaveKey}` : "settled-check"}
+          initial={shockwaveKey > 0 && !reduced ? { scale: 0 } : false}
           animate={{ scale: 1 }}
-          transition={{ type: "spring", stiffness: 300, damping: 18 }}
+          transition={reduced ? { duration: 0 } : { duration: LF12_STEP_SPARK_MS / 1000, ease: "easeOut" }}
           className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-400 text-slate-950 shadow-[0_0_12px_rgba(52,211,153,0.6)]"
         >
           <Check className="h-3 w-3" strokeWidth={3.5} />
@@ -389,22 +363,23 @@ export function GraphNodeCard({ node, now, blueprint, onSelect }: { node: GraphN
   )
 }
 
-export function Graph({ nodes, edges, edgeState, now, blueprint, onSelectNode, particulate }: { nodes: GraphNode[]; edges: GraphEdge[]; edgeState: (e: GraphEdge) => EdgeState; now: number; blueprint?: boolean; onSelectNode?: (node: GraphNode) => void; particulate?: number }) {
+export function Graph({ nodes, edges, edgeState, now, onSelectNode, particulate, energy }: { nodes: GraphNode[]; edges: GraphEdge[]; edgeState: (e: GraphEdge) => EdgeState; now: number; onSelectNode?: (node: GraphNode) => void; particulate?: number; energy?: number }) {
   const maxCol = Math.max(...nodes.map((n) => n.col))
   const maxRow = Math.max(...nodes.map((n) => n.row))
   return (
-    <div className="j-scroll overflow-x-auto pb-1 pt-1">
-      <div data-graph className="relative" style={{ width: X(maxCol) + NODE_W, height: Y(maxRow) + NODE_H, minWidth: X(maxCol) + NODE_W }}>
-        <GraphEdges nodes={nodes} edges={edges} edgeState={edgeState} particulate={particulate} />
+    <div className="jarvis-workflow-graph-scroll j-scroll overflow-x-auto pb-1 pt-1">
+      <div data-graph data-graph-lanes={nodes.length} className="jarvis-workflow-graph relative" style={{ width: X(maxCol) + NODE_W, height: Y(maxRow) + NODE_H, minWidth: X(maxCol) + NODE_W }}>
+        <GraphEdges nodes={nodes} edges={edges} edgeState={edgeState} particulate={particulate} energy={energy} />
         {nodes.map((n) => (
-          <GraphNodeCard key={n.id} node={n} now={now} blueprint={blueprint} onSelect={onSelectNode} />
+          <GraphNodeCard key={n.id} node={n} now={now} onSelect={onSelectNode} />
         ))}
       </div>
     </div>
   )
 }
 
-function LiveRunRow({ run, now, onOpen, onSelectStep }: { run: WorkflowRun; now: number; onOpen: () => void; onSelectStep?: (stepId: string) => void }) {
+function LiveRunRow({ run, now, onOpen, onSelectStep, energy = 0 }: { run: WorkflowRun; now: number; onOpen: () => void; onSelectStep?: (node: GraphNode) => void; energy?: number }) {
+  const previousRunStatusRef = useRef(run.status)
   const nodes: GraphNode[] = run.steps.map((s, i) => ({
     id: s.id,
     stepType: s.stepType,
@@ -416,41 +391,50 @@ function LiveRunRow({ run, now, onOpen, onSelectStep }: { run: WorkflowRun; now:
     terminalReason: s.terminalReason,
   }))
   const edges: GraphEdge[] = run.steps.slice(1).map((s, i) => ({ from: run.steps[i]!.id, to: s.id }))
-  const leasedIdx = run.steps.findIndex((s) => s.status === "leased" || s.status === "pending")
+  const leasedIdx = run.steps.findIndex((s) => s.status === "leased")
   const pct = runProgressPct(run)
-  const stepsPerMin = useStepsPerMinute()
-  // FLOW-60 tiers: 0 real steps/min in the trailing 60s window = the pre-F8 single
-  // dot; 1-2 = two dots; 3+ = three dots (today's original always-3 look, now
-  // genuinely earned by real throughput instead of hardcoded).
+  const stepIds = useMemo(() => run.steps.map((step) => step.id), [run.steps])
+  const stepsPerMin = useStepsPerMinute(stepIds)
+  // FLOW-60 tiers: 0 real steps/min in the trailing 60s window = one dot;
+  // 1-2 = two dots; 3+ = three dots. The count is earned by real throughput,
+  // while flow speed comes from the current LIVEFRAME energy value.
   const particulate = stepsPerMin >= 3 ? 3 : stepsPerMin >= 1 ? 2 : 1
   const runPresentation = runStatusPresentation(run.status as import("../kernel/types").RunState)
 
+  useEffect(() => {
+    const previousStatus = previousRunStatusRef.current
+    const transitionType = run.status === "completed" ? "run-completed" : run.status === "failed" ? "run-failed" : null
+    const metricKey = transitionType && previousStatus !== run.status
+      ? executionMetricTransitionKey(transitionType, run.id, previousStatus, run.status)
+      : null
+    const frame = metricKey
+      ? window.requestAnimationFrame((timestamp) => { markExecutionPixelPainted(metricKey, timestamp) })
+      : null
+    previousRunStatusRef.current = run.status
+    return () => { if (frame !== null) window.cancelAnimationFrame(frame) }
+  }, [run.id, run.status])
+
   const edgeState = (e: GraphEdge): EdgeState => {
     const toStep = run.steps.find((s) => s.id === e.to)
-    if (toStep?.status === "compensating" || toStep?.status === "compensated") return "rewind"
+    if (toStep?.status === "compensating") return "rewind"
+    if (toStep?.status === "compensated") return "rewound"
+    if (toStep?.status === "failed") return "fault"
     const toIdx = run.steps.findIndex((s) => s.id === e.to)
     if (run.steps[toIdx]?.status === "completed") return "done"
     if (toIdx === leasedIdx) return "flowing"
     return "future"
   }
 
-  const prevRunStatusRef = useRef(run.status)
-  const [sweepKey, setSweepKey] = useState(0)
-  useEffect(() => {
-    if (prevRunStatusRef.current !== "completed" && run.status === "completed") {
-      setSweepKey((k) => k + 1)
-    }
-    prevRunStatusRef.current = run.status
-  }, [run.status])
-
   return (
     <motion.div
       layout
-      initial={{ opacity: 0, y: 14 }}
+      initial={false}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.98 }}
       transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-      className={`rounded-2xl border border-[color:var(--j-border)] bg-white/[0.015] p-4 ${sweepKey > 0 ? "jarvis-sweep" : ""}`}
+      className="rounded-2xl border border-[color:var(--j-border)] bg-white/[0.015] p-4"
+      data-run-status={run.status}
+      data-workflow-energy={energy.toFixed(2)}
     >
       <button onClick={onOpen} className="mb-3 flex w-full items-center justify-between gap-3 text-left">
         <div className="flex min-w-0 items-center gap-2.5">
@@ -473,85 +457,9 @@ function LiveRunRow({ run, now, onOpen, onSelectStep }: { run: WorkflowRun; now:
           </div>
         </div>
       </button>
-      <Graph nodes={nodes} edges={edges} edgeState={edgeState} now={now} onSelectNode={(node) => onSelectStep?.(node.id)} particulate={particulate} />
+      <Graph nodes={nodes} edges={edges} edgeState={edgeState} now={now} onSelectNode={onSelectStep} particulate={particulate} energy={energy} />
     </motion.div>
   )
-}
-
-// Replay theater — re-enacts REAL terminal runs step-by-step so the circuit is always
-// alive. Labeled REPLAY with the run's real completion age; step timing is compressed
-// presentation, every node and outcome is the genuine record.
-function ReplayRow({ run, now }: { run: WorkflowRun; now: number }) {
-  const [cursor, setCursor] = useState(0)
-  const total = run.steps.length
-  const done = cursor >= total
-
-  useEffect(() => {
-    setCursor(0)
-    const t = setInterval(() => {
-      if (document.visibilityState === "hidden") return
-      setCursor((c) => Math.min(total, c + 1))
-    }, 2000)
-    return () => clearInterval(t)
-  }, [run.id, total])
-
-  const nodes: GraphNode[] = run.steps.map((s, i) => ({
-    id: s.id,
-    stepType: s.stepType,
-    col: i,
-    row: 0,
-    status: i < cursor ? (s.status === "failed" ? "failed" : "completed") : i === cursor && !done ? "leased" : "pending",
-    terminalReason: s.terminalReason,
-  }))
-  const edges: GraphEdge[] = run.steps.slice(1).map((s, i) => ({ from: run.steps[i]!.id, to: s.id }))
-  const edgeState = (e: GraphEdge): EdgeState => {
-    const toIdx = run.steps.findIndex((s) => s.id === e.to)
-    if (toIdx < cursor) return "done"
-    if (toIdx === cursor && !done) return "flowing"
-    return "future"
-  }
-  const pct = Math.round((Math.min(cursor, total) / total) * 100)
-
-  return (
-    <div
-      className={`jarvis-rise relative overflow-hidden rounded-2xl border p-4 transition-colors duration-700 ${
-        done ? "border-emerald-400/35 bg-emerald-400/[0.03]" : "border-[color:var(--j-border)] bg-white/[0.015]"
-      }`}
-    >
-      <div className="mb-3 flex w-full flex-wrap items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <span className="truncate j-fs-base font-black text-[color:var(--j-text)]">{humanizeWorkflowType(run.workflowType)}</span>
-          <span className="j-chip bg-violet-400/12 text-violet-300">REPLAY</span>
-          <span className="j-chip bg-white/6 font-mono text-[color:var(--j-text-dim)]">
-            {run.status} {ageLabel(run.updatedAt, now)} ago
-          </span>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <span className="font-mono j-fs-micro tabular-nums text-[color:var(--j-text-dim)]">{pct}%</span>
-          <div className="h-1.5 w-24 overflow-hidden rounded-full bg-white/8">
-            <div className={`h-full rounded-full bg-gradient-to-r transition-[width] duration-500 ease-out ${done ? "from-emerald-400 to-teal-300" : "from-teal-400 to-cyan-400"}`} style={{ width: `${pct}%` }} />
-          </div>
-        </div>
-      </div>
-      <Graph nodes={nodes} edges={edges} edgeState={edgeState} now={now} />
-      <div className="mt-2 j-fs-micro text-[color:var(--j-text-faint)]">Re-enactment of a real run from the ledger · step timing compressed for display.</div>
-    </div>
-  )
-}
-
-function ReplayTheater({ pool, now }: { pool: WorkflowRun[]; now: number }) {
-  const [idx, setIdx] = useState(0)
-  const run = pool[idx % pool.length]!
-  const total = run.steps.length
-
-  // advance to the next real run after the re-enactment finishes + a short hold
-  useEffect(() => {
-    const holdMs = (total + 1) * 2000 + 3000
-    const t = setTimeout(() => setIdx((i) => i + 1), holdMs)
-    return () => clearTimeout(t)
-  }, [run.id, total])
-
-  return <ReplayRow key={`${run.id}-${idx}`} run={run} now={now} />
 }
 
 // Phase 7 (§7.2): which run-control verbs are even legal from the run's CURRENT
@@ -664,27 +572,82 @@ function WhyStepButton({ stepId }: { stepId: string }) {
   )
 }
 
-// A node click has the same receipt lookup contract as the explicit "Why?" action.
-// Workflow-run payloads intentionally do not embed receipt ids, so this stays an
-// on-demand tenant-scoped lookup rather than inventing a second source of truth.
-function StepReceiptLookup({ stepId, onClose }: { stepId: string; onClose: () => void }) {
+// A node click reveals the real step fields first, then performs the same
+// tenant-scoped receipt lookup as the explicit "Why?" action. A missing receipt
+// is a visible state, not an empty click or invented JSON.
+function StepEvidenceDrawer({ node, onClose }: { node: GraphNode; onClose: () => void }) {
   const [receiptId, setReceiptId] = useState<string | null>(null)
+  const [receiptOpen, setReceiptOpen] = useState(false)
+  const [lookupState, setLookupState] = useState<"loading" | "found" | "none">("loading")
+  const closeRef = useRef<HTMLButtonElement | null>(null)
+
+  useEffect(() => {
+    closeRef.current?.focus({ preventScroll: true })
+  }, [])
 
   useEffect(() => {
     let current = true
-    void jarvisGet<{ receipts: Array<{ id: string }> }>("receipts", { workflowStepId: stepId })
+    setLookupState("loading")
+    void jarvisGet<{ receipts: Array<{ id: string }> }>("receipts", { workflowStepId: node.id })
       .then((res) => {
-        if (current) setReceiptId(res.receipts[0]?.id ?? null)
+        if (!current) return
+        const id = res.receipts[0]?.id ?? null
+        setReceiptId(id)
+        setLookupState(id ? "found" : "none")
       })
       .catch(() => {
-        if (current) setReceiptId(null)
+        if (!current) return
+        setReceiptId(null)
+        setLookupState("none")
       })
     return () => {
       current = false
     }
-  }, [stepId])
+  }, [node.id])
 
-  return receiptId ? <ReceiptDrawer receiptId={receiptId} onClose={onClose} /> : null
+  return (
+    <AnimatePresence>
+      <motion.div className="fixed inset-0 z-40 bg-black/55 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
+      <motion.aside
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Evidence for ${humanizeStepType(node.stepType)}`}
+        className="fixed right-0 top-0 z-50 h-full w-full max-w-md overflow-y-auto border-l border-[color:var(--j-border)] bg-[#070d1a] p-5"
+        initial={{ x: "100%" }}
+        animate={{ x: 0 }}
+        exit={{ x: "100%" }}
+        transition={{ type: "spring", stiffness: 300, damping: 30 }}
+        onKeyDown={(event) => { if (event.key === "Escape") onClose() }}
+        data-testid="workflow-step-evidence"
+      >
+        <div className="mb-5 flex items-center justify-between gap-3">
+          <div>
+            <div className="j-label">Step evidence</div>
+            <h3 className="mt-1 text-lg font-black text-[color:var(--j-text)]">{humanizeStepType(node.stepType)}</h3>
+          </div>
+          <button ref={closeRef} type="button" onClick={onClose} className="min-h-11 rounded-full border border-white/12 px-3 j-fs-sm text-white/60 hover:text-white">Close</button>
+        </div>
+        <dl className="grid gap-3 rounded-2xl border border-white/8 bg-white/[0.02] p-4 j-fs-sm">
+          <div className="flex items-center justify-between gap-4"><dt className="text-[color:var(--j-text-faint)]">Status</dt><dd className="font-bold text-[color:var(--j-text)]">{stepStatusPresentation(node.status as StepState).label}</dd></div>
+          <div className="flex items-center justify-between gap-4"><dt className="text-[color:var(--j-text-faint)]">Attempts</dt><dd className="font-bold text-[color:var(--j-text)]">{node.attempts ?? 0}</dd></div>
+          <div className="flex items-center justify-between gap-4"><dt className="text-[color:var(--j-text-faint)]">Last observed</dt><dd className="text-right font-bold text-[color:var(--j-text)]">{node.updatedAt ? new Date(node.updatedAt).toLocaleString() : "Not observed"}</dd></div>
+          {node.terminalReason && <div className="border-t border-white/8 pt-3"><dt className="text-[color:var(--j-text-faint)]">Reason</dt><dd className="mt-1 text-red-200">{node.terminalReason}</dd></div>}
+        </dl>
+        <div className="mt-4 rounded-2xl border border-white/8 bg-white/[0.02] p-4">
+          <div className="j-label">Receipt</div>
+          {lookupState === "loading" && <p className="mt-2 j-fs-sm text-[color:var(--j-text-dim)]">Checking for a recorded receipt…</p>}
+          {lookupState === "none" && <p className="mt-2 j-fs-sm text-[color:var(--j-text-dim)]" data-testid="workflow-step-no-receipt">No receipt has landed for this step yet.</p>}
+          {lookupState === "found" && receiptId && (
+            <div className="mt-2 flex items-center justify-between gap-3">
+              <p className="j-fs-sm text-emerald-100">Receipt recorded for this step.</p>
+              <button type="button" className="min-h-11 rounded-full border border-cyan-300/30 px-3 j-fs-micro font-black text-cyan-200" onClick={() => setReceiptOpen(true)}>Open receipt</button>
+            </div>
+          )}
+        </div>
+        {receiptOpen && receiptId && <ReceiptDrawer receiptId={receiptId} onClose={() => setReceiptOpen(false)} />}
+      </motion.aside>
+    </AnimatePresence>
+  )
 }
 
 function RunDrawer({ run, onClose }: { run: WorkflowRun; onClose: () => void }) {
@@ -712,7 +675,7 @@ function RunDrawer({ run, onClose }: { run: WorkflowRun; onClose: () => void }) 
                 <span className="flex items-center gap-2 capitalize">
                   <StepIcon stepType={s.stepType} className="h-3.5 w-3.5" /> {humanizeStepType(s.stepType)}
                 </span>
-                <span className="text-[color:var(--j-text-dim)]">{s.status}</span>
+                <span className="text-[color:var(--j-text-dim)]">{stepStatusPresentation(s.status as StepState).label}</span>
               </div>
               <div className="mt-1 flex items-center justify-between font-mono j-fs-micro text-[color:var(--j-text-faint)]">
                 <span>
@@ -729,7 +692,7 @@ function RunDrawer({ run, onClose }: { run: WorkflowRun; onClose: () => void }) 
   )
 }
 
-function RunBrowser({ runs, now, onOpen, onSelectStep }: { runs: WorkflowRun[]; now: number; onOpen: (runId: string) => void; onSelectStep: (stepId: string) => void }) {
+function RunBrowser({ runs, now, onOpen, onSelectStep, energy = 0 }: { runs: WorkflowRun[]; now: number; onOpen: (runId: string) => void; onSelectStep: (node: GraphNode) => void; energy?: number }) {
   const [kind, setKind] = useState("all")
   const [status, setStatus] = useState("all")
   const [age, setAge] = useState("all")
@@ -789,7 +752,7 @@ function RunBrowser({ runs, now, onOpen, onSelectStep }: { runs: WorkflowRun[]; 
           <span>{runStatusPresentation(run.status as import("../kernel/types").RunState).label}</span><span>·</span><span>{ageLabel(run.updatedAt, now)}</span>
         </span>
       </button>
-      {expandedRunId === run.id && <div className="mt-3"><LiveRunRow run={run} now={now} onOpen={() => onOpen(run.id)} onSelectStep={onSelectStep} /></div>}
+      {expandedRunId === run.id && <div className="mt-3"><LiveRunRow run={run} now={now} onOpen={() => onOpen(run.id)} onSelectStep={onSelectStep} energy={energy} /></div>}
     </div>
   )
 
@@ -836,39 +799,170 @@ function RunBrowser({ runs, now, onOpen, onSelectStep }: { runs: WorkflowRun[]; 
   )
 }
 
-export function WorkflowTheater() {
+function ScopedExecutionWaiting({ actionCount }: { actionCount: number }) {
+  return (
+    <div className="rounded-2xl border border-amber-300/20 bg-amber-300/[0.035] p-4" data-testid="workflow-scope-waiting">
+      <div className="j-fs-base font-bold text-amber-100">Waiting for this instruction&rsquo;s workflow</div>
+      <p className="mt-1 j-fs-sm text-[color:var(--j-text-dim)]">
+        {actionCount} action{actionCount === 1 ? "" : "s"} accepted; no linked workflow run has landed yet.
+      </p>
+      <p className="mt-2 j-fs-micro text-[color:var(--j-text-faint)]">Other tenant runs are hidden until this instruction&rsquo;s action IDs appear.</p>
+    </div>
+  )
+}
+
+function ScopedExecutionEmpty() {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4" data-testid="workflow-scope-required">
+      <div className="j-fs-base font-bold text-[color:var(--j-text)]">No linked workflow for this instruction</div>
+      <p className="mt-1 j-fs-sm text-[color:var(--j-text-dim)]">The execution view stays empty until this instruction exposes real action IDs.</p>
+    </div>
+  )
+}
+
+function ScopedTraceOutcome({ progress }: { progress: NonNullable<ReturnType<typeof executionProgressForActions>> }) {
+  return (
+    <div className="rounded-2xl border border-emerald-300/20 bg-emerald-300/[0.035] p-4" data-testid="workflow-trace-settled">
+      <div className="j-fs-base font-bold text-emerald-100">Instruction outcome recorded</div>
+      <p className="mt-1 j-fs-sm text-[color:var(--j-text-dim)]">
+        {progress.completedActions} of {progress.totalActions} action{progress.totalActions === 1 ? "" : "s"} completed
+        {progress.failedActions > 0 ? ` · ${progress.failedActions} failed` : ""} from the instruction trace.
+      </p>
+      <p className="mt-2 j-fs-micro text-[color:var(--j-text-faint)]">No durable workflow run was emitted for this synchronous action path.</p>
+    </div>
+  )
+}
+
+const ACTIVE_SCOPED_RUN_STATES = new Set(["running", "paused", "compensating"])
+
+export function WorkflowTheater({ actionIds, traceOutcomes, blockedActionIds = [], energy = 0 }: {
+  /** Mandatory active-instruction scope; an unscoped theater is not renderable. */
+  actionIds: readonly string[]
+  traceOutcomes?: { completedActionIds?: readonly string[]; failedActionIds?: readonly string[] }
+  blockedActionIds?: readonly string[]
+  /** Current real LIVEFRAME energy; used only to tune a real leased edge. */
+  energy?: number
+}) {
   const data = useJarvis()
+  const reduced = useHydratedReducedMotion()
   const [openRunId, setOpenRunId] = useState<string | null>(null)
-  const [openReceiptStepId, setOpenReceiptStepId] = useState<string | null>(null)
+  const [selectedStep, setSelectedStep] = useState<GraphNode | null>(null)
   const handledRunLinkRef = useRef<string | null>(null)
-  const runs = data.runs
-  const visible = runs.slice(0, 3)
-  const extra = runs.length - visible.length
-  const openRun = runs.find((r) => r.id === openRunId) ?? null
+  const theaterRef = useRef<HTMLDivElement | null>(null)
+  const seenRunIdsRef = useRef<Set<string> | null>(null)
+  const ignitionSequenceRef = useRef(0)
+  const [ignitionKey, setIgnitionKey] = useState(0)
+  const [ignitionPathState, setIgnitionPathState] = useState<{ id: number; from: IgnitionPoint; to: IgnitionPoint } | null>(null)
+  const allRuns = useMemo(() => [...data.runs, ...data.terminalRuns], [data.runs, data.terminalRuns])
+  const scopedRuns = useMemo(() => runsForActionIds(allRuns, actionIds), [actionIds, allRuns])
+  const runs = useMemo(() => scopedRuns.filter((run) => ACTIVE_SCOPED_RUN_STATES.has(run.status)), [scopedRuns])
+  const terminalRuns = useMemo(() => scopedRuns.filter((run) => !ACTIVE_SCOPED_RUN_STATES.has(run.status)), [scopedRuns])
+  const progress = useMemo(
+    () => executionProgressForActions(actionIds, allRuns, traceOutcomes, blockedActionIds),
+    [actionIds, allRuns, blockedActionIds, traceOutcomes],
+  )
+  const displayRuns = runs.length > 0 ? runs : terminalRuns
+  const runBrowserRuns = useMemo(
+    () => scopedRuns,
+    [scopedRuns],
+  )
+  const visible = displayRuns.slice(0, 3)
+  const extra = displayRuns.length - visible.length
+  const openRun = runBrowserRuns.find((r) => r.id === openRunId) ?? null
+
+  useEffect(() => registerAnchor("workflow-origin", () => theaterRef.current?.getBoundingClientRect() ?? null), [])
+
+  useEffect(() => {
+    if (seenRunIdsRef.current === null) {
+      seenRunIdsRef.current = new Set(scopedRuns.map((run) => run.id))
+      return
+    }
+    const seen = seenRunIdsRef.current
+    const newRunObserved = scopedRuns.some((run) => !seen.has(run.id))
+    scopedRuns.forEach((run) => seen.add(run.id))
+    if (newRunObserved) {
+      setIgnitionKey((key) => key + 1)
+      const firstLinkedActionId = actionIds.find((actionId) => scopedRuns.some((run) => run.steps.some((step) => step.domainActionId === actionId)))
+      const sourceRect = firstLinkedActionId ? getAnchorRect(`approval-action-${firstLinkedActionId}`) : null
+      const fallbackSourceRect = sourceRect ?? getAnchorRect("approval-cockpit")
+      const targetRect = theaterRef.current?.getBoundingClientRect() ?? null
+      if (fallbackSourceRect && targetRect) {
+        const center = (rect: DOMRect): IgnitionPoint => ({ left: rect.left + rect.width / 2, top: rect.top + rect.height / 2 })
+        ignitionSequenceRef.current += 1
+        const id = ignitionSequenceRef.current
+        setIgnitionPathState({ id, from: center(fallbackSourceRect), to: center(targetRect) })
+      }
+    }
+  }, [actionIds, scopedRuns])
+
+  useEffect(() => {
+    if (!ignitionPathState) return
+    const timer = window.setTimeout(() => setIgnitionPathState((current) => current?.id === ignitionPathState.id ? null : current), LF10_WORKFLOW_IGNITION_MS)
+    return () => window.clearTimeout(timer)
+  }, [ignitionPathState])
 
   useEffect(() => {
     const requestedRunId = new URLSearchParams(window.location.search).get("workflowRunId")
-    if (requestedRunId && requestedRunId !== handledRunLinkRef.current && runs.some((run) => run.id === requestedRunId)) {
+    if (requestedRunId && requestedRunId !== handledRunLinkRef.current && runBrowserRuns.some((run) => run.id === requestedRunId)) {
       handledRunLinkRef.current = requestedRunId
       setOpenRunId(requestedRunId)
     }
-  }, [runs])
+  }, [runBrowserRuns])
 
   useEffect(() => {
-    const offs = [onJarvisEvent("step-completed", () => sfx.stepTick()), onJarvisEvent("run-completed", () => sfx.runDone())]
+    const linkedRunIds = new Set(scopedRuns.map((run) => run.id))
+    const linkedStepIds = new Set(scopedRuns.flatMap((run) => run.steps.map((step) => step.id)))
+    const idFrom = (detail: unknown, key: "runId" | "stepId"): string | null => {
+      if (typeof detail !== "object" || detail === null || !(key in detail)) return null
+      const value = (detail as Record<string, unknown>)[key]
+      return typeof value === "string" ? value : null
+    }
+    const offs = [
+      onJarvisEvent("step-completed", (detail) => { if (linkedStepIds.has(idFrom(detail, "stepId") ?? "")) sfx.stepTick() }),
+      onJarvisEvent("run-completed", (detail) => { if (linkedRunIds.has(idFrom(detail, "runId") ?? "")) sfx.runDone() }),
+    ]
     return () => offs.forEach((off) => off())
-  }, [])
+  }, [scopedRuns])
 
-  const replayPool = data.terminalRuns
-    .filter((r) => r.steps.length >= 2)
-    .slice()
-    .sort((a, b) => (a.status === "completed" ? 0 : 1) - (b.status === "completed" ? 0 : 1))
-  const mode: "live" | "replay" | "blueprint" = runs.length > 0 ? "live" : replayPool.length > 0 ? "replay" : "blueprint"
+  const mode: ScopedExecutionMode = scopedExecutionMode(actionIds, runs, terminalRuns, progress)
+
+  const progressCopy = progress
+    ? `${progress.completedActions} of ${progress.totalActions} actions complete${[
+        progress.failedActions > 0 ? `${progress.failedActions} failed` : null,
+        progress.blockedActions > 0 ? `${progress.blockedActions} blocked` : null,
+        progress.runningActions > 0 ? `${progress.runningActions} running` : null,
+        progress.pausedActions > 0 ? `${progress.pausedActions} paused` : null,
+        progress.compensatingActions > 0 ? `${progress.compensatingActions} rolling back` : null,
+        progress.compensatedActions > 0 ? `${progress.compensatedActions} rolled back` : null,
+        progress.cancelledActions > 0 ? `${progress.cancelledActions} cancelled` : null,
+        progress.escalatedActions > 0 ? `${progress.escalatedActions} escalated` : null,
+        progress.unresolvedActions > 0 ? `${progress.unresolvedActions} not observed` : null,
+      ].filter((detail): detail is string => detail !== null).map((detail) => ` · ${detail}`).join("")}`
+    : null
 
   return (
-    <div id="workflow-theater" className="j-panel j-hud relative overflow-hidden xl:col-span-2">
-      {/* ambient scan sweep */}
-      <div className="jarvis-scan jarvis-ambient pointer-events-none absolute inset-y-0 w-1/3 bg-gradient-to-r from-transparent via-cyan-300/[0.03] to-transparent" aria-hidden />
+    <div id="workflow-theater" ref={theaterRef} className="j-panel j-hud relative overflow-hidden xl:col-span-2" data-workflow-scope="action-ids" data-action-ids={actionIds.join(",")} data-workflow-energy={energy.toFixed(2)}>
+      <AnimatePresence initial={false}>
+        {ignitionPathState && !reduced && (
+          <motion.svg
+            key={ignitionPathState.id}
+            aria-hidden
+            data-liveframe-impulse="LF-10"
+            className="pointer-events-none fixed inset-0 z-[55] h-screen w-screen overflow-visible"
+          >
+            <motion.path
+              d={ignitionPath(ignitionPathState.from, ignitionPathState.to)}
+              fill="none"
+              stroke="var(--j-cyan)"
+              strokeWidth={2}
+              strokeDasharray="5 8"
+              initial={{ pathLength: 0, opacity: 0 }}
+              animate={{ pathLength: 1, opacity: [0, 0.9, 0] }}
+              transition={{ duration: LF10_WORKFLOW_IGNITION_MS / 1000, ease: "easeOut" }}
+            />
+          </motion.svg>
+        )}
+      </AnimatePresence>
       <div className="p-4 md:p-5">
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -877,59 +971,54 @@ export function WorkflowTheater() {
                 <>
                   <LiveDot /> Live Workflow
                 </>
-              ) : mode === "replay" ? (
-                "Workflow Theater"
+              ) : mode === "settled" ? (
+                "Recorded Workflow"
+              ) : mode === "waiting" ? (
+                "Instruction Workflow"
+              ) : mode === "trace" ? (
+                "Instruction Outcome"
+              ) : mode === "empty" ? (
+                "Instruction Workflow"
               ) : (
-                "Workflow Circuits"
+                "Instruction Workflow"
               )}
             </span>
-            {mode === "live" && <span className="j-chip bg-cyan-400/10 text-cyan-300" data-jarvis-fact data-source="workflowRuns">{runs.length} in flight</span>}
-            {mode === "replay" && <span className="j-chip bg-violet-400/12 text-violet-300">replaying real runs</span>}
-            {mode === "blueprint" && <span className="j-chip bg-blue-400/10 text-blue-300/80">BLUEPRINT</span>}
+            {progressCopy && (
+              <span className="j-chip bg-cyan-400/10 text-cyan-300" data-jarvis-fact data-source="thread.actionIds">
+                {progressCopy}
+              </span>
+            )}
+            {mode === "live" && <span className="j-chip bg-cyan-400/10 text-cyan-300">{runs.length} linked run{runs.length === 1 ? "" : "s"}</span>}
+            {mode === "settled" && <span className="j-chip bg-emerald-400/10 text-emerald-300">{terminalRuns.length} linked run{terminalRuns.length === 1 ? "" : "s"} recorded</span>}
+            {mode === "waiting" && <span className="j-chip bg-amber-300/10 text-amber-200">awaiting linked run</span>}
+            {ignitionKey > 0 && <motion.span key={ignitionKey} data-liveframe-impulse="LF-10" className="j-chip bg-cyan-300/15 text-cyan-100" initial={{ opacity: 0, scale: 0.9 }} animate={reduced ? { opacity: 1, scale: 1 } : { opacity: [0, 1, 0], scale: [0.9, 1, 1.04] }} transition={{ duration: reduced ? 0 : LF10_WORKFLOW_IGNITION_MS / 1000 }}>linked run observed</motion.span>}
           </div>
           <span className="j-chip bg-white/5 text-[color:var(--j-text-dim)]">every consequential step is gated</span>
         </div>
 
-        {mode === "live" && (
+        {(mode === "live" || mode === "settled") && (
           <div className="space-y-3">
             <AnimatePresence initial={false}>
               {visible.map((run) => (
-                <LiveRunRow key={run.id} run={run} now={data.now} onOpen={() => setOpenRunId(run.id)} onSelectStep={setOpenReceiptStepId} />
+                <LiveRunRow key={run.id} run={run} now={data.now} onOpen={() => setOpenRunId(run.id)} onSelectStep={setSelectedStep} energy={energy} />
               ))}
             </AnimatePresence>
-            {extra > 0 && <div className="text-center j-fs-micro text-[color:var(--j-text-dim)]" data-jarvis-fact data-source="workflowRuns">+{extra} more in flight</div>}
+            {extra > 0 && <div className="text-center j-fs-micro text-[color:var(--j-text-dim)]" data-jarvis-fact data-source="workflowRuns">+{extra} more linked run{extra === 1 ? "" : "s"}</div>}
           </div>
         )}
 
-        {mode === "replay" && (
-          <div className="space-y-4">
-            <ReplayTheater pool={replayPool} now={data.now} />
-            <div className="rounded-2xl border border-white/5 bg-white/[0.008] p-4">
-              <div className="mb-2.5 j-fs-micro font-bold uppercase tracking-[0.14em] text-[color:var(--j-text-faint)]">
-                {BLUEPRINTS[2]!.title} · circuit map
-              </div>
-              <Graph nodes={BLUEPRINTS[2]!.nodes} edges={BLUEPRINTS[2]!.edges} edgeState={() => "blueprint"} now={data.now} blueprint />
-            </div>
-          </div>
-        )}
+        {mode === "empty" && <ScopedExecutionEmpty />}
 
-        {mode === "blueprint" && (
-          <div className="space-y-4">
-            {BLUEPRINTS.map((bp) => (
-              <div key={bp.title} className="rounded-2xl border border-white/5 bg-white/[0.008] p-4">
-                <div className="mb-2.5 j-fs-micro font-bold uppercase tracking-[0.14em] text-[color:var(--j-text-faint)]">{bp.title}</div>
-                <Graph nodes={bp.nodes} edges={bp.edges} edgeState={() => "blueprint"} now={data.now} blueprint />
-              </div>
-            ))}
-            <p className="text-center j-fs-sm text-[color:var(--j-text-dim)]">
-              Say &ldquo;start the invoice to cash workflow&rdquo; and watch a circuit light up live.
-            </p>
-          </div>
+        {mode === "waiting" && <ScopedExecutionWaiting actionCount={actionIds.length} />}
+
+        {mode === "trace" && progress && <ScopedTraceOutcome progress={progress} />}
+
+        {(mode === "live" || mode === "settled") && (
+            <RunBrowser runs={runBrowserRuns} now={data.now} onOpen={setOpenRunId} onSelectStep={setSelectedStep} energy={energy} />
         )}
-        <RunBrowser runs={[...runs, ...data.terminalRuns.filter((terminal) => !runs.some((run) => run.id === terminal.id))]} now={data.now} onOpen={setOpenRunId} onSelectStep={setOpenReceiptStepId} />
       </div>
       {openRun && <RunDrawer run={openRun} onClose={() => setOpenRunId(null)} />}
-      {openReceiptStepId && <StepReceiptLookup stepId={openReceiptStepId} onClose={() => setOpenReceiptStepId(null)} />}
+      {selectedStep && <StepEvidenceDrawer node={selectedStep} onClose={() => setSelectedStep(null)} />}
     </div>
   )
 }

@@ -59,14 +59,24 @@ afterEach(() => {
 })
 
 describe("kernel/transport — startInstructionTransport (P3.T11)", () => {
-  it("NEXT_PUBLIC_JARVIS_SSE unset -> polling immediately, no EventSource ever created", () => {
+  it("NEXT_PUBLIC_JARVIS_SSE unset -> SSE is enabled by default", () => {
     delete process.env.NEXT_PUBLIC_JARVIS_SSE
     const onEvents = vi.fn()
     const onHealthChange = vi.fn()
     startInstructionTransport({ instructionId: "i1", onEvents, onHealthChange })
+    expect(FakeEventSource.instances).toHaveLength(1)
+    expect(startTracePollMock).not.toHaveBeenCalled()
+    expect(onHealthChange).not.toHaveBeenCalled()
+  })
+
+  it("NEXT_PUBLIC_JARVIS_SSE=0 -> polling immediately", () => {
+    process.env.NEXT_PUBLIC_JARVIS_SSE = "0"
+    const onEvents = vi.fn()
+    const onHealthChange = vi.fn()
+    startInstructionTransport({ instructionId: "i1", onEvents, onHealthChange })
     expect(FakeEventSource.instances).toHaveLength(0)
-    expect(startTracePollMock).toHaveBeenCalledWith("i1", onEvents, 0)
-    expect(onHealthChange).toHaveBeenCalledWith(null)
+    expect(startTracePollMock).toHaveBeenCalledWith("i1", onEvents, 0, { onStatus: expect.any(Function) })
+    expect(onHealthChange).toHaveBeenCalledWith("polling")
   })
 
   it("flag enabled but no access token -> falls back to polling, never opens a connection", () => {
@@ -75,7 +85,8 @@ describe("kernel/transport — startInstructionTransport (P3.T11)", () => {
     const onHealthChange = vi.fn()
     startInstructionTransport({ instructionId: "i1", onEvents: vi.fn(), onHealthChange })
     expect(FakeEventSource.instances).toHaveLength(0)
-    expect(startTracePollMock).toHaveBeenCalledWith("i1", expect.any(Function), 0)
+    expect(startTracePollMock).toHaveBeenCalledWith("i1", expect.any(Function), 0, { onStatus: expect.any(Function) })
+    expect(onHealthChange).toHaveBeenCalledWith("polling")
   })
 
   it("flag enabled with a token -> opens a real EventSource at /api/jarvis/stream with instructionId+token", () => {
@@ -113,6 +124,21 @@ describe("kernel/transport — startInstructionTransport (P3.T11)", () => {
     expect(onEvents).not.toHaveBeenCalled()
   })
 
+  it("a terminal real frame closes the stream without opening a reconnect", async () => {
+    process.env.NEXT_PUBLIC_JARVIS_SSE = "1"
+    const onEvents = vi.fn()
+    const onHealthChange = vi.fn()
+    startInstructionTransport({ instructionId: "i1", onEvents, onHealthChange })
+    const es = FakeEventSource.instances[0]!
+    es.onmessage?.({ data: JSON.stringify({ seq: 9, phase: "completed", payload: {}, createdAt: "t" }) })
+
+    expect(es.closed).toBe(true)
+    expect(onEvents).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(2_000)
+    expect(FakeEventSource.instances).toHaveLength(1)
+    expect(onHealthChange).not.toHaveBeenCalledWith("reconnecting")
+  })
+
   it("first onerror -> 'reconnecting', closes the dead connection, does NOT fall back yet", () => {
     process.env.NEXT_PUBLIC_JARVIS_SSE = "1"
     const onHealthChange = vi.fn()
@@ -124,7 +150,7 @@ describe("kernel/transport — startInstructionTransport (P3.T11)", () => {
     expect(startTracePollMock).not.toHaveBeenCalled()
   })
 
-  it("a 3rd consecutive failure (> MAX_SSE_FAILURES=2) gives up to polling, resuming from the last seen seq", async () => {
+  it("a 2nd consecutive failure gives up to polling, resuming from the last seen seq", async () => {
     process.env.NEXT_PUBLIC_JARVIS_SSE = "1"
     const onEvents = vi.fn()
     const onHealthChange = vi.fn()
@@ -132,13 +158,11 @@ describe("kernel/transport — startInstructionTransport (P3.T11)", () => {
 
     FakeEventSource.instances[0]!.onmessage?.({ data: JSON.stringify({ seq: 5, phase: "planning", payload: {}, createdAt: "t" }) })
     FakeEventSource.instances[0]!.onerror?.() // failure 1 -> reconnecting, schedules a retry
-    await vi.advanceTimersByTimeAsync(2000)
-    FakeEventSource.instances[1]!.onerror?.() // failure 2 -> reconnecting, schedules a retry
-    await vi.advanceTimersByTimeAsync(2000)
-    FakeEventSource.instances[2]!.onerror?.() // failure 3 -> gives up
+    await vi.advanceTimersByTimeAsync(500)
+    FakeEventSource.instances[1]!.onerror?.() // failure 2 -> gives up
 
     expect(onHealthChange).toHaveBeenCalledWith("unavailable")
-    expect(startTracePollMock).toHaveBeenCalledWith("i1", onEvents, 5)
+    expect(startTracePollMock).toHaveBeenCalledWith("i1", onEvents, 5, { onStatus: expect.any(Function) })
   })
 
   it("stop() closes the EventSource and clears any pending reconnect", () => {
@@ -155,10 +179,8 @@ describe("kernel/transport — startInstructionTransport (P3.T11)", () => {
     startTracePollMock.mockReturnValue({ stop: stopPollMock })
     const handle = startInstructionTransport({ instructionId: "i1", onEvents: vi.fn(), onHealthChange: vi.fn() })
     FakeEventSource.instances[0]!.onerror?.() // failure 1 -> schedules a retry
-    await vi.advanceTimersByTimeAsync(2000)
-    FakeEventSource.instances[1]!.onerror?.() // failure 2 -> schedules a retry
-    await vi.advanceTimersByTimeAsync(2000)
-    FakeEventSource.instances[2]!.onerror?.() // failure 3 -> gives up, starts the fallback poll
+    await vi.advanceTimersByTimeAsync(500)
+    FakeEventSource.instances[1]!.onerror?.() // failure 2 -> gives up, starts the fallback poll
     handle.stop()
     expect(stopPollMock).toHaveBeenCalled()
   })

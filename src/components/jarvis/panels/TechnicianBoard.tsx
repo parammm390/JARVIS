@@ -15,6 +15,7 @@ import { Wrench, RefreshCw, AlertTriangle } from "lucide-react"
 import { useJarvisAuth } from "../lib/jarvis-auth"
 import { jarvisGet } from "../lib/api"
 import { hasActiveSession } from "../lib/jarvis-auth"
+import { ErrorState } from "../ui/primitives/ErrorState"
 
 interface Visit {
   id: string
@@ -61,7 +62,7 @@ export function TechnicianBoard() {
           Showing every upcoming visit tenant-wide — there&rsquo;s no link yet between your
           sign-in and a specific technician record, so this can&rsquo;t filter to &ldquo;yours&rdquo; alone.
         </div>
-        {error && <div className="mb-2 rounded-lg border border-red-400/30 bg-red-400/5 px-3 py-2 j-fs-micro text-red-300">{error}</div>}
+        {error && <ErrorState message={visits ? `Showing the last successful visit list. ${error}` : error} onRetry={load} />}
         {!visits && !error && <div className="jarvis-skeleton-tide h-16 rounded-lg bg-white/5" />}
         {visits && upcoming.length === 0 && <div className="rounded-xl border border-white/8 bg-white/[0.02] px-4 py-6 text-center j-fs-sm text-[color:var(--j-text-dim)]">Nothing upcoming.</div>}
         <div className="space-y-2">

@@ -21,7 +21,7 @@
 // Wraps the EXISTING jarvisGet/jarvisPost (same fetch/auth/telemetry every panel
 // already uses) — this is a typed layer on top, not a second network stack.
 
-import { jarvisGet, jarvisPost, JarvisApiError } from "../components/jarvis/lib/api"
+import { jarvisGet, jarvisPost, jarvisPut, JarvisApiError } from "../components/jarvis/lib/api"
 import type { paths } from "./jarvis/openapi-types"
 import type {
   StatsResponse,
@@ -84,6 +84,8 @@ const API_PATHS = {
   vitals: "/api/vitals",
   activity: "/api/activity",
   dealerZeroTimeCompression: "/api/dealer-zero/time-compression",
+  instruction: "/api/instructions/{id}",
+  instructionEvents: "/api/instructions/{id}/events",
 } as const satisfies Record<string, keyof paths>
 
 // ---------------------------------------------------------------------------
@@ -290,7 +292,7 @@ export const jarvisClient = {
 
   // Honestly loose response — the domain_policies row shape wasn't read/verified this session.
   upsertPolicy: (tenantId: string, actionType: string, body: { policy: Record<string, unknown>; requiresConfirmation: boolean }): Promise<unknown> =>
-    jarvisPost(`policies/${tenantId}/${actionType}`, body),
+    jarvisPut(`policies/${tenantId}/${actionType}`, body),
 
   // D1.T2 pulse bar / D1.T3 activity theater.
   vitals: (): Promise<Vitals> => jarvisGet<Vitals>("vitals"),

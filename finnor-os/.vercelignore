@@ -1,0 +1,7 @@
+node_modules
+.next
+.devdb
+dist
+coverage
+test-results
+*.log

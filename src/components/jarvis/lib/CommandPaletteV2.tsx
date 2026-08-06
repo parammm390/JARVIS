@@ -26,6 +26,7 @@ export function CommandPaletteV2({
   onNavigate,
   onOpenOps,
   onOpenRecentThreads,
+  onInstruct,
 }: {
   onClose: () => void
   onNavigate: (scene: "overview" | "pipeline") => void
@@ -38,6 +39,10 @@ export function CommandPaletteV2({
   /** jarvis-v3 P5.T8 — "⌘K → recent threads" (§8 P5.T8), same additive
    *  pattern as `onOpenOps` above: /jarvis/bridge never supplies this. */
   onOpenRecentThreads?: () => void
+  /** The Instruction Thread's single submission path. When supplied, Cmd-K
+   *  must create the same trace/thread/run state as the pinned rail rather than
+   *  posting directly and injecting an optimistic tenant-wide pending row. */
+  onInstruct?: (text: string) => Promise<void>
 }) {
   const data = useJarvis(); const reduced = useReducedMotion(); const input = useRef<HTMLInputElement>(null); const dialog = useRef<HTMLElement>(null); const priorFocus = useRef<HTMLElement | null>(null)
   const [mode, setMode] = useState<Mode>("navigate"); const [query, setQuery] = useState(""); const [busy, setBusy] = useState(false); const [error, setError] = useState<string | null>(null); const [planned, setPlanned] = useState<Planned[]>([]); const [results, setResults] = useState<string[]>([])
@@ -60,9 +65,29 @@ export function CommandPaletteV2({
     onClose()
   }
   async function search() { setBusy(true); setError(null); try { const [receipts, households, runs] = await Promise.all([jarvisClient.receipts({}), jarvisClient.resources("households"), jarvisClient.workflowRuns()]); const q = query.toLowerCase(); const matched = [`${receipts.receipts.filter((r) => `${r.objective} ${r.id}`.toLowerCase().includes(q)).length} receipts`, `${households.rows.filter((r) => JSON.stringify(r).toLowerCase().includes(q)).length} households`, `${runs.runs.filter((r) => JSON.stringify(r).toLowerCase().includes(q)).length} runs`]; setResults(matched) } catch (e) { setError(e instanceof Error ? e.message : "Search failed") } finally { setBusy(false) } }
-  async function instruct() { const instruction = query.trim(); if (!instruction) return; setBusy(true); setError(null); try { const result = await jarvisClient.submitAction({ instruction, channel: "console" }) as { planned: Planned[] }; const actions = result.planned ?? []; setPlanned(actions); data.injectOptimisticPending(actions.map((action) => ({ ...action, summary: null, groundedPayload: undefined }))) } catch (e) { setError(e instanceof JarvisApiError && e.status === 401 ? "Sign in to plan an instruction." : e instanceof Error ? e.message : "Instruction could not be planned.") } finally { setBusy(false) } }
+  async function instruct() {
+    const instruction = query.trim()
+    if (!instruction) return
+    setBusy(true)
+    setError(null)
+    try {
+      if (onInstruct) {
+        await onInstruct(instruction)
+        onClose()
+        return
+      }
+      const result = await jarvisClient.submitAction({ instruction, channel: "console" }) as { planned: Planned[] }
+      const actions = result.planned ?? []
+      setPlanned(actions)
+      data.injectOptimisticPending(actions.map((action) => ({ ...action, summary: null, groundedPayload: undefined })))
+    } catch (e) {
+      setError(e instanceof JarvisApiError && e.status === 401 ? "Sign in to plan an instruction." : e instanceof Error ? e.message : "Instruction could not be planned.")
+    } finally {
+      setBusy(false)
+    }
+  }
   const submit = () => mode === "navigate" ? navigation[0] && selectNavigation(navigation[0].scene) : mode === "search" ? void search() : void instruct()
-  return <AnimatePresence><motion.div className="fixed inset-0 z-[100] flex items-start justify-center bg-black/70 px-4 pt-[12vh]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={onClose}><motion.section ref={dialog} role="dialog" aria-modal="true" aria-label="Command palette" onKeyDown={trapFocus} className="w-full max-w-2xl overflow-hidden rounded-2xl border border-cyan-300/30 bg-[#07101d] shadow-[0_25px_100px_rgba(0,0,0,.6)]" initial={{ y: -10, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -10, opacity: 0 }} transition={reduced ? { duration: .1 } : { type: "spring", stiffness: 340, damping: 28 }} onMouseDown={(event) => event.stopPropagation()}>
+  return <AnimatePresence><motion.div className="pointer-events-auto fixed inset-0 z-[100] flex items-start justify-center bg-black/70 px-4 pt-[12vh]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={onClose}><motion.section ref={dialog} role="dialog" aria-modal="true" aria-label="Command palette" onKeyDown={trapFocus} className="w-full max-w-2xl overflow-hidden rounded-2xl border border-cyan-300/30 bg-[#07101d] shadow-[0_25px_100px_rgba(0,0,0,.6)]" initial={{ y: -10, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -10, opacity: 0 }} transition={reduced ? { duration: .1 } : { type: "spring", stiffness: 340, damping: 28 }} onMouseDown={(event) => event.stopPropagation()}>
     <div className="flex border-b border-white/10"><PaletteTab active={mode === "navigate"} onClick={() => setMode("navigate")} label="Navigate"/><PaletteTab active={mode === "search"} onClick={() => setMode("search")} label="Search"/><PaletteTab active={mode === "instruct"} onClick={() => setMode("instruct")} label="Instruct"/></div>
     {/* F2.T3 — FLOW-48 CommandGravity: real focus state (`focus-within`, no JS) lifts
         + glows this bar. The modal's own `bg-black/70` backdrop above already dims

@@ -40,7 +40,7 @@ test.describe("P5.T2 — RouteScene, FIXTURE harness (real component tree)", () 
     mkdirSync(OUT_DIR, { recursive: true })
 
     const routeAction = {
-      id: "fixture-action-route",
+      id: "fixture-node-route",
       actionType: "route_suggestion",
       summary: `Review the ${FIXTURE_DATE} route suggestion for Priya Nair (2 scheduled stops).`,
       payload: { technicianId: FIXTURE_TECH_ID, date: FIXTURE_DATE },
@@ -65,7 +65,7 @@ test.describe("P5.T2 — RouteScene, FIXTURE harness (real component tree)", () 
     await page.getByRole("button", { name: /sign in/i }).click()
     await page.waitForURL("**/jarvis", { timeout: 20_000 })
 
-    await page.goto("/jarvis/next?fixture=approval", { waitUntil: "domcontentloaded" })
+    await page.goto("/jarvis/next?fixture=route-approval", { waitUntil: "domcontentloaded" })
     await page.waitForTimeout(5_000)
 
     await expect(page.getByText("Route Suggestion", { exact: true }).first()).toBeVisible({ timeout: 10_000 })
@@ -91,7 +91,7 @@ test.describe("P5.T2 — RouteScene, FIXTURE harness (real component tree)", () 
     test.skip(test.info().project.name !== "desktop-chromium", "single real-session run")
     mkdirSync(OUT_DIR, { recursive: true })
     const routeAction = {
-      id: "fixture-action-route-empty",
+      id: "fixture-node-route-empty",
       actionType: "route_suggestion",
       summary: "Review the 2026-08-06 route suggestion for Dale Brooks (0 scheduled stops).",
       payload: { technicianId: "fixture-tech-empty", date: "2026-08-06" },
@@ -118,7 +118,7 @@ test.describe("P5.T2 — RouteScene, FIXTURE harness (real component tree)", () 
     await page.getByRole("button", { name: /sign in/i }).click()
     await page.waitForURL("**/jarvis", { timeout: 20_000 })
 
-    await page.goto("/jarvis/next?fixture=approval", { waitUntil: "domcontentloaded" })
+    await page.goto("/jarvis/next?fixture=route-empty-approval", { waitUntil: "domcontentloaded" })
     await page.waitForTimeout(5_000)
     await expect(page.getByText("No scheduled stops for this technician on this date yet.")).toBeVisible({ timeout: 10_000 })
   })

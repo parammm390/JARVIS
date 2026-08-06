@@ -17,7 +17,7 @@
 
 import { onJarvisEvent, type JarvisEventType } from "./data-core"
 
-export type PulseKind = "business-event" | "step" | "run" | "pending" | "decision" | "activity" | "poll"
+export type PulseKind = "business-event" | "step" | "fault" | "run" | "pending" | "decision" | "activity" | "poll"
 
 export interface Pulse {
   kind: PulseKind
@@ -31,7 +31,9 @@ const pulseListeners = new Set<PulseListener>()
 const KIND_BY_EVENT: Record<JarvisEventType, PulseKind> = {
   "new-business-event": "business-event",
   "step-completed": "step",
+  "step-failed": "fault",
   "run-completed": "run",
+  "run-failed": "fault",
   "new-pending-action": "pending",
   "action-decided": "decision",
   "poll-landed": "poll",

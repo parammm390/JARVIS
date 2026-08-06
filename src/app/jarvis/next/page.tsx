@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 import { notFound } from "next/navigation"
-import { Bridge as InstructionThreadBridge } from "@/components/jarvis/bridge/ThreadBridge"
+import { InstructionThreadBridge } from "@/components/jarvis/bridge/ThreadBridge"
 
 export const metadata: Metadata = {
   title: "FINNOR JARVIS",

@@ -14,8 +14,13 @@ import { X } from "lucide-react"
 import type { Thread as ThreadData } from "../kernel/store"
 import { summarizeThreadOutcome, threadRowElementId } from "./ThreadStack"
 
-function scrollToThread(threadId: string) {
-  document.getElementById(threadRowElementId(threadId))?.scrollIntoView({ behavior: "smooth", block: "start" })
+function scrollToThread(threadId: string, reducedMotion: boolean) {
+  const target = document.getElementById(threadRowElementId(threadId))
+  if (!target) return
+  target.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "start" })
+  window.requestAnimationFrame(() => {
+    if (target instanceof HTMLElement) target.focus({ preventScroll: true })
+  })
 }
 
 export function RecentThreadsPanel({
@@ -31,6 +36,21 @@ export function RecentThreadsPanel({
 }) {
   const reduced = useReducedMotion()
   const dialogRef = useRef<HTMLDivElement>(null)
+  const previousFocusRef = useRef<HTMLElement | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const frame = window.requestAnimationFrame(() => {
+      dialogRef.current?.querySelector<HTMLButtonElement>("button")?.focus()
+    })
+    return () => {
+      window.cancelAnimationFrame(frame)
+      const previous = previousFocusRef.current
+      previousFocusRef.current = null
+      if (previous?.isConnected) previous.focus({ preventScroll: true })
+    }
+  }, [open])
 
   useEffect(() => {
     if (!open) return
@@ -80,7 +100,7 @@ export function RecentThreadsPanel({
                     key={t.id}
                     type="button"
                     onClick={() => {
-                      scrollToThread(t.id)
+                      scrollToThread(t.id, reduced ?? false)
                       onClose()
                     }}
                     className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-cyan-300/10"

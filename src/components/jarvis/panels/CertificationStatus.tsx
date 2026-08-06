@@ -10,6 +10,7 @@ import { RefreshCw, TrendingUp, Zap } from "lucide-react"
 import { jarvisGet } from "../lib/api"
 import { useJarvisAuth } from "../lib/jarvis-auth"
 import { ageLabel } from "../lib/data-core"
+import { ErrorState } from "../ui/primitives/ErrorState"
 
 interface ReadinessDay {
   logDate: string
@@ -85,7 +86,7 @@ export function CertificationStatus() {
         </div>
       </div>
       <div className="px-4 py-3">
-        {error && <div className="mb-2 rounded-lg border border-red-400/30 bg-red-400/5 px-3 py-2 j-fs-micro text-red-300">{error}</div>}
+        {error && <ErrorState message={days ? `Showing the last successful certification snapshot. ${error}` : error} onRetry={() => void load()} />}
         {!days && !error && <div className="jarvis-skeleton-tide h-16 rounded-lg bg-white/5" />}
 
         {days && (

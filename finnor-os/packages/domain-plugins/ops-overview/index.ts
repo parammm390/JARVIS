@@ -6,7 +6,7 @@
 import type { DomainEnginePlugin } from "../shared/plugin-interface";
 import type { DraftAction, ExecutionResult, ValidationResult, DomainPolicy } from "@finnor/shared-types";
 import type { ToolRegistry } from "@finnor/tools";
-import { resolveProvider, testAdsConnections, testQuickBooksConnection } from "@finnor/tools";
+import { resolveProviderForPurpose, testAdsConnections, testQuickBooksConnection } from "@finnor/tools";
 import { withTenant, households, domainActions, inventoryItems, invoices, serviceVisits, communicationsLog, maintenanceAgreements } from "@finnor/db";
 import { hybridRetrieve } from "@finnor/memory";
 import { readConfidenceThreshold } from "../shared/plugin-interface";
@@ -15,6 +15,18 @@ import { z } from "zod";
 
 const ACTION = "get_business_overview";
 const ASK_ACTION = "answer_business_question";
+
+const CAPABILITY_SUMMARY =
+  "I can give you a live business overview, check inventory and invoices, review customers and visits, answer water-treatment questions, and prepare business actions for your approval.";
+const CAPABILITY_AREAS = ["business overview", "inventory", "invoices", "customers", "visits", "water-treatment questions", "approval-gated business actions"];
+
+export function isCapabilityQuestion(question: string): boolean {
+  return /\bwhat can (?:you|i) do\b|\bwhat do you handle\b|\bwhat can i ask\b|\bwhat are you able to do\b/i.test(question);
+}
+
+export function isInventoryQuestion(question: string): boolean {
+  return /\b(inventory|stock|on hand|reorder|replenish|items? in stock)\b/i.test(question);
+}
 
 export const OverviewPayloadSchema = z.object({
   focus: z
@@ -85,6 +97,14 @@ async function loadOverview(tenantId: string) {
   });
 }
 
+type InventorySnapshotItem = { sku: string; name: string; quantity: number; reorderThreshold: number };
+
+async function loadInventorySnapshot(tenantId: string): Promise<InventorySnapshotItem[]> {
+  return withTenant(tenantId, (db) =>
+    db.select({ sku: inventoryItems.sku, name: inventoryItems.name, quantity: inventoryItems.quantity, reorderThreshold: inventoryItems.reorderThreshold }).from(inventoryItems),
+  );
+}
+
 function speak(o: Awaited<ReturnType<typeof loadOverview>>): string {
   const parts: string[] = [];
   parts.push(`${o.leads.total} lead${o.leads.total === 1 ? "" : "s"} on file.`);
@@ -117,6 +137,35 @@ function speak(o: Awaited<ReturnType<typeof loadOverview>>): string {
       : "No upcoming visits scheduled.",
   );
   return parts.join(" ");
+}
+
+function displaySafeOverview(o: Awaited<ReturnType<typeof loadOverview>>): Record<string, unknown> {
+  return {
+    leads: o.leads,
+    pending: o.pending,
+    inventory: o.inventory,
+    invoices: o.invoices,
+    visits: o.visits,
+  };
+}
+
+function speakInventory(items: InventorySnapshotItem[]): string {
+  if (items.length === 0) return "There are no inventory items on file.";
+  const totalUnits = items.reduce((sum, item) => sum + item.quantity, 0);
+  const lowStock = items.filter((item) => item.quantity <= item.reorderThreshold);
+  const sample = items
+    .slice(0, 5)
+    .map((item) => `${item.name} (${item.quantity} in stock)`)
+    .join(", ");
+  return `I found ${items.length} inventory item${items.length === 1 ? "" : "s"} with ${totalUnits} total unit${totalUnits === 1 ? "" : "s"} on hand: ${sample}${items.length > 5 ? ", and more" : ""}.` +
+    (lowStock.length > 0 ? ` ${lowStock.length} item${lowStock.length === 1 ? " is" : "s are"} at or below the reorder threshold.` : " Nothing is at or below the reorder threshold.");
+}
+
+function displaySafeInventory(items: InventorySnapshotItem[]): Record<string, unknown> {
+  return {
+    totalItems: items.length,
+    items: items.slice(0, 10).map(({ sku, name, quantity, reorderThreshold }) => ({ sku, name, quantity, reorderThreshold })),
+  };
 }
 
 /**
@@ -165,10 +214,10 @@ async function loadFinanceAndHistorySnapshot(tenantId: string) {
   });
 }
 
-/** Sonnet if available (best grounding discipline), DeepSeek/Groq fallback via the
- *  same composite chain everything else uses — resolveProvider() with no arg. */
+/** Grounded answer synthesis uses the explicit answer/voice route so live calls do
+ * not inherit an unrelated planner or legacy provider default. */
 async function synthesizeAnswer(question: string, data: unknown): Promise<string> {
-  const provider = resolveProvider();
+  const provider = resolveProviderForPurpose("answer", "voice");
   const text = await provider.complete({
     system:
       "You answer a water treatment dealer owner's business question using ONLY the JSON data given. " +
@@ -178,6 +227,8 @@ async function synthesizeAnswer(question: string, data: unknown): Promise<string
       "the data, say so plainly and offer the closest real figure that IS available. One or two short spoken " +
       "sentences, no preamble.",
     user: JSON.stringify({ question, data }),
+    purpose: "answer",
+    channel: "voice",
   });
   return text.trim();
 }
@@ -224,16 +275,29 @@ export const opsOverviewPlugin: DomainEnginePlugin = {
     const tenantId = String(draft.payload.tenantId ?? "");
     if (draft.actionType === ASK_ACTION) {
       const question = String(draft.payload.question ?? "");
+      if (isCapabilityQuestion(question)) {
+        return {
+          status: "success",
+          output: {
+            spokenSummary: CAPABILITY_SUMMARY,
+            displaySafe: { topic: "capabilities", areas: CAPABILITY_AREAS },
+            citations: [],
+          },
+          expected: { answered: true },
+        };
+      }
       // Integration health checks cost real OAuth round trips (Meta, Google, QBO) —
       // only pay that latency when the question is actually about integrations, not
       // on every grounded-QA call regardless of topic.
       const asksAboutIntegrations = /\b(integration|connected|quickbooks|meta ads|google ads|ads account|vapi|ghl|gohighlevel)\b/i.test(question);
-      const [overview, finance, integrations] = await Promise.all([
+      const asksAboutInventory = isInventoryQuestion(question);
+      const [overview, finance, integrations, inventory] = await Promise.all([
         loadOverview(tenantId),
         loadFinanceAndHistorySnapshot(tenantId),
         asksAboutIntegrations
           ? Promise.all([testAdsConnections(), testQuickBooksConnection()]).then(([ads, qb]) => ({ meta_ads: ads.meta, google_ads: ads.googleAds, quickbooks: qb }))
           : Promise.resolve(undefined),
+        asksAboutInventory ? loadInventorySnapshot(tenantId) : Promise.resolve(undefined),
       ]);
       // §5.3: structured facts (the real overview/finance query results above) come
       // first — retrieval order is law. Semantic memory (past receipts, transcripts,
@@ -244,13 +308,26 @@ export const opsOverviewPlugin: DomainEnginePlugin = {
         { source: "business_overview", ref: "current", data: overview },
         { source: "finance_history_snapshot", ref: "current", data: finance },
         ...(integrations ? [{ source: "integrations_status", ref: "current", data: integrations }] : []),
+        ...(inventory ? [{ source: "inventory_snapshot", ref: "current", data: inventory }] : []),
       ];
       const confidenceThreshold = typeof draft.payload.retrievalConfidenceThreshold === "number" ? draft.payload.retrievalConfidenceThreshold : undefined;
       const retrieval = await hybridRetrieve({ tenantId, query: question, structured, confidenceThreshold });
       const data = { ...retrieval.facts, semanticSnippets: retrieval.semanticHits.map((h) => h.chunk) };
+      if (asksAboutInventory && inventory) {
+        return {
+          status: "success",
+          output: {
+            spokenSummary: speakInventory(inventory),
+            groundedOn: data,
+            displaySafe: displaySafeInventory(inventory),
+            citations: retrieval.citations,
+          },
+          expected: { answered: true },
+        };
+      }
       try {
         const answer = await synthesizeAnswer(question, data);
-        return { status: "success", output: { spokenSummary: answer, groundedOn: data, citations: retrieval.citations }, expected: { answered: true } };
+        return { status: "success", output: { spokenSummary: answer, groundedOn: data, displaySafe: displaySafeOverview(overview), citations: retrieval.citations }, expected: { answered: true } };
       } catch (err) {
         // LLM synthesis failed — never silently drop the question. Fall back to the
         // deterministic overview narration so the caller still gets something real.
@@ -259,6 +336,7 @@ export const opsOverviewPlugin: DomainEnginePlugin = {
           output: {
             spokenSummary: `I couldn't fully process that question, but here's the current picture: ${speak(overview)}`,
             error: (err as Error).message,
+            displaySafe: displaySafeOverview(overview),
             citations: retrieval.citations,
           },
           expected: { answered: true },
@@ -277,7 +355,7 @@ export const opsOverviewPlugin: DomainEnginePlugin = {
     });
     return {
       status: "success",
-      output: { ...overview, spokenSummary: speak(overview), citations: retrieval.citations },
+      output: { ...overview, spokenSummary: speak(overview), displaySafe: displaySafeOverview(overview), citations: retrieval.citations },
       expected: { answered: true },
     };
   },

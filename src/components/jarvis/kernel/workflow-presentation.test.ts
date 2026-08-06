@@ -16,6 +16,7 @@ describe("P7.T2 workflow state coverage", () => {
   it("renders all six StepState values distinctly", () => {
     const presentations = STEP_STATES.map(stepStatusPresentation)
     expect(presentations).toHaveLength(6)
+    expect(stepStatusPresentation("leased").label).toBe("leased")
     expect(stepStatusPresentation("compensating").label).toBe("Rolling back")
     expect(stepStatusPresentation("compensated").label).toBe("Rolled back")
   })

@@ -6,12 +6,13 @@
 // handled it — no automatic fix exists for e.g. two conflicting phone numbers, so
 // this never claims to have silently corrected the underlying data.
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { RefreshCw, Check } from "lucide-react"
 import { jarvisGet, jarvisPost } from "../lib/api"
 import { useJarvisAuth } from "../lib/jarvis-auth"
 import { hasActiveSession } from "../lib/jarvis-auth"
 import { ageLabel } from "../lib/data-core"
+import { ErrorState } from "../ui/primitives/ErrorState"
 
 interface Finding {
   id: string
@@ -35,6 +36,7 @@ export function DataQualityQueue() {
   const [error, setError] = useState<string | null>(null)
   const [inflight, setInflight] = useState<string | null>(null)
   const [now, setNow] = useState(Date.now())
+  const retryRef = useRef<(() => void) | null>(null)
 
   const load = useCallback(async () => {
     if (!hasActiveSession()) return
@@ -42,8 +44,10 @@ export function DataQualityQueue() {
     try {
       const res = await jarvisGet<{ findings: Finding[] }>("data-quality/findings")
       setRows(res.findings)
+      retryRef.current = null
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't load the data-quality queue.")
+      retryRef.current = () => { void load() }
     }
   }, [])
 
@@ -56,15 +60,21 @@ export function DataQualityQueue() {
 
   async function resolve(id: string) {
     if (inflight) return
-    setInflight(id)
-    try {
-      await jarvisPost(`data-quality/findings/${id}/resolve`, {})
-      setRows((prev) => prev?.filter((r) => r.id !== id) ?? prev)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "That didn't go through.")
-    } finally {
-      setInflight(null)
+    const attempt = async () => {
+      setInflight(id)
+      setError(null)
+      try {
+        await jarvisPost(`data-quality/findings/${id}/resolve`, {})
+        setRows((prev) => prev?.filter((r) => r.id !== id) ?? prev)
+        retryRef.current = null
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "That didn't go through.")
+        retryRef.current = () => { void attempt() }
+      } finally {
+        setInflight(null)
+      }
     }
+    await attempt()
   }
 
   return (
@@ -83,7 +93,7 @@ export function DataQualityQueue() {
         </div>
       </div>
       <div className="px-4 py-3">
-        {error && <div className="mb-2 rounded-lg border border-red-400/30 bg-red-400/5 px-3 py-2 j-fs-micro text-red-300">{error}</div>}
+        {error && <ErrorState message={rows ? `Showing the last successful queue. ${error}` : error} onRetry={retryRef.current ?? (() => { void load() })} />}
         {!rows && !error && <div className="jarvis-skeleton-tide h-16 rounded-lg bg-white/5" />}
         {rows && rows.length === 0 && <div className="rounded-xl border border-white/8 bg-white/[0.02] px-4 py-6 text-center j-fs-sm text-[color:var(--j-text-dim)]">No open findings.</div>}
         <div className="space-y-2">

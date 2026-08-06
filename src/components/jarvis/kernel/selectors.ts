@@ -44,8 +44,13 @@ export interface SelectorInput {
   stats: StatsResponse | null
   statsDegraded: boolean
   pendingActions: PendingAction[]
+  /** Real action rows the server classified as blocked before a workflow run. */
+  blockedActions?: PendingAction[]
   pendingDegraded: boolean
   runs: WorkflowRun[]
+  /** Recent recorded runs are kept separate from the fast-lane running list so
+   * instruction surfaces can still bind to paused and terminal actions. */
+  terminalRuns?: WorkflowRun[]
   runsDegraded: boolean
   events: EventRow[]
   eventsDegraded: boolean

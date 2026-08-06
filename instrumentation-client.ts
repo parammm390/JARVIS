@@ -3,7 +3,7 @@
 // no-ops harmlessly without a DSN, so this ships inert until NEXT_PUBLIC_SENTRY_DSN is
 // set (client code needs the NEXT_PUBLIC_ prefix to reach the browser bundle — DSNs
 // aren't privileged secrets, see JARVIS-CREDENTIALS-LEDGER.md).
-import * as Sentry from "@sentry/nextjs";
+import * as Sentry from "@sentry/browser";
 
 Sentry.init({
   dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
@@ -12,4 +12,12 @@ Sentry.init({
   tracesSampleRate: process.env.NEXT_PUBLIC_SENTRY_DSN ? 0.1 : 0,
 });
 
-export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;
+export function onRouterTransitionStart(url: string, navigationType: string) {
+  if (!Sentry.getClient()) return
+
+  Sentry.addBreadcrumb({
+    category: "navigation",
+    message: `${navigationType} ${url}`,
+    level: "info",
+  })
+}

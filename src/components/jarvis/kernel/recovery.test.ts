@@ -12,8 +12,8 @@ describe("P7.T1 recovery taxonomy", () => {
     expect(ALL_RECOVERY_KINDS.map((kind) => [kind, recoveryPresentation(kind)])).toEqual([
       ["transient", { affordance: "Retry", copy: "That timed out. Try again?" }],
       ["policy_denied", { affordance: "Escalate", copy: "Policy blocked this." }],
-      ["integration_unavailable", { affordance: "Connect", copy: "Stripe isn't connected yet." }],
-      ["invalid_input", { affordance: "Correct", copy: "I need a valid phone number for this one." }],
+      ["integration_unavailable", { affordance: "Connect", copy: "The required integration isn't connected yet." }],
+      ["invalid_input", { affordance: "Correct", copy: "This action needs a corrected input." }],
       ["tool_error", { affordance: "Retry", secondaryAffordance: "View error", copy: "The tool returned an error." }],
       ["timeout", { affordance: "Retry", copy: "No response in time." }],
       ["compensated", { affordance: "View rollback", copy: "Rolled back — nothing was charged." }],

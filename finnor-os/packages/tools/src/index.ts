@@ -20,6 +20,7 @@ export * from "./resend";
 export * from "./backup-storage-github";
 export * from "./maps";
 export * from "./exa";
+export * from "./firecrawl";
 export * from "./llm";
 export * from "./voice-personas";
 export * from "./ads";

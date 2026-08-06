@@ -6,12 +6,24 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const jarvisGetMock = vi.fn()
-vi.mock("../lib/api", () => ({
-  jarvisGet: (...args: unknown[]) => jarvisGetMock(...args),
-  jarvisPost: vi.fn(),
-}))
+vi.mock("../lib/api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/api")>()
+  return {
+    ...actual,
+    jarvisGet: (...args: unknown[]) => jarvisGetMock(...args),
+    jarvisPost: vi.fn(),
+  }
+})
 
-import { mintInstructionId, startTracePoll, TRACE_POLL_CEILING_MS, TRACE_POLL_INTERVAL_MS } from "./instruction"
+import {
+  mintInstructionId,
+  startTracePoll,
+  TRACE_POLL_CEILING_MS,
+  TRACE_POLL_INTERVAL_MS,
+  TRACE_POLL_MAX_FAILURES,
+  TRACE_POLL_MAX_NOT_FOUND_RETRIES,
+  TRACE_POLL_RETRY_BASE_MS,
+} from "./instruction"
 
 beforeEach(() => {
   vi.useFakeTimers()
@@ -98,13 +110,49 @@ describe("kernel/instruction — startTracePoll (P3.T6, §7.1 Stage 1)", () => {
     expect(jarvisGetMock.mock.calls.length).toBe(callsAtCeiling)
   })
 
-  it("a transient poll failure does not stop the poll — tries again next tick", async () => {
+  it("a transient poll failure reconnects on a bounded backoff and then resumes", async () => {
     jarvisGetMock.mockRejectedValueOnce(new Error("network blip"))
     jarvisGetMock.mockResolvedValueOnce({ events: [] })
-    startTracePoll("instr-8", () => {})
+    const onStatus = vi.fn()
+    startTracePoll("instr-8", () => {}, 0, { onStatus })
     await vi.waitFor(() => expect(jarvisGetMock).toHaveBeenCalledTimes(1))
-    await vi.advanceTimersByTimeAsync(TRACE_POLL_INTERVAL_MS)
+    await vi.waitFor(() => expect(onStatus).toHaveBeenCalledWith("reconnecting", expect.objectContaining({ attempts: 1 })))
+    await vi.advanceTimersByTimeAsync(TRACE_POLL_RETRY_BASE_MS)
     expect(jarvisGetMock).toHaveBeenCalledTimes(2)
+    expect(onStatus).toHaveBeenLastCalledWith("polling")
+  })
+
+  it("stops after the finite consecutive network-failure budget and reports unavailable", async () => {
+    jarvisGetMock.mockRejectedValue(new Error("backend unavailable"))
+    const onStatus = vi.fn()
+    startTracePoll("instr-10", () => {}, 0, { onStatus })
+    await vi.waitFor(() => expect(jarvisGetMock).toHaveBeenCalledTimes(1))
+    await vi.advanceTimersByTimeAsync(TRACE_POLL_RETRY_BASE_MS)
+    await vi.advanceTimersByTimeAsync(TRACE_POLL_RETRY_BASE_MS * 2)
+    expect(jarvisGetMock).toHaveBeenCalledTimes(TRACE_POLL_MAX_FAILURES)
+    expect(onStatus).toHaveBeenLastCalledWith(
+      "unavailable",
+      expect.objectContaining({ attempts: TRACE_POLL_MAX_FAILURES, status: 0 }),
+    )
+    await vi.advanceTimersByTimeAsync(TRACE_POLL_RETRY_BASE_MS * 8)
+    expect(jarvisGetMock).toHaveBeenCalledTimes(TRACE_POLL_MAX_FAILURES)
+  })
+
+  it("gives a missing trace route a finite startup grace, then reports unavailable", async () => {
+    jarvisGetMock.mockRejectedValue({ status: 404, message: "Instruction not found" })
+    const onStatus = vi.fn()
+    startTracePoll("instr-11", () => {}, 0, { onStatus })
+    await vi.waitFor(() => expect(jarvisGetMock).toHaveBeenCalledTimes(1))
+    for (let attempt = 1; attempt < TRACE_POLL_MAX_NOT_FOUND_RETRIES; attempt += 1) {
+      await vi.advanceTimersByTimeAsync(Math.min(TRACE_POLL_RETRY_BASE_MS * 2 ** (attempt - 1), TRACE_POLL_INTERVAL_MS * 4))
+    }
+    expect(jarvisGetMock).toHaveBeenCalledTimes(TRACE_POLL_MAX_NOT_FOUND_RETRIES)
+    expect(onStatus).toHaveBeenLastCalledWith(
+      "unavailable",
+      expect.objectContaining({ attempts: TRACE_POLL_MAX_NOT_FOUND_RETRIES, status: 404 }),
+    )
+    await vi.advanceTimersByTimeAsync(TRACE_POLL_INTERVAL_MS * 8)
+    expect(jarvisGetMock).toHaveBeenCalledTimes(TRACE_POLL_MAX_NOT_FOUND_RETRIES)
   })
 
   it("external .stop() halts future polls immediately", async () => {

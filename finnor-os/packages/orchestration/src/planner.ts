@@ -4,8 +4,8 @@
 import type { TenantContext, MemorySnapshot, DomainAction, DomainPolicy } from "@finnor/shared-types";
 import { withTenant, domainActions, domainPolicyRevisions } from "@finnor/db";
 import { and, desc, eq, inArray, lte } from "drizzle-orm";
-import type { LLMProvider } from "./llm";
-import { resolveProvider } from "./llm";
+import type { LLMChannel, LLMProvider } from "./llm";
+import { resolveProviderForPurpose } from "./llm";
 import type { PluginRegistry } from "./plugin-registry";
 import { z } from "zod";
 import { redactStructured, redactText, restoreTokens } from "@finnor/security";
@@ -38,17 +38,23 @@ const SecondCandidateSchema = z.object({
 });
 
 export interface Planner {
-  plan(instruction: string, tenantContext: TenantContext, memory: MemorySnapshot): Promise<DomainAction[]>;
+  plan(
+    instruction: string,
+    tenantContext: TenantContext,
+    memory: MemorySnapshot,
+    opts?: { instructionId?: string; channel?: LLMChannel; signal?: AbortSignal; deadlineAt?: number; deadlineMs?: number },
+  ): Promise<DomainAction[]>;
 }
 
 export class LLMPlanner implements Planner {
   // Providers resolve lazily on first use so constructing an orchestrator never
   // requires LLM credentials (executor-only paths, tests, workers that never plan).
   private provider: LLMProvider | undefined;
+  private routedProviders = new Map<LLMChannel, LLMProvider>();
   // Phase 8's high-tier second-candidate call — a distinct, separately injectable
   // provider so tests can stub it independently of the first-pass planner call
-  // (the production default is an independent DeepSeek → OpenAI OSS chain, but a test may want candidate A from
-  // one stub and candidate B from another).
+  // (production follows the explicit planning route, while tests may want candidate
+  // A from one stub and candidate B from another).
   private secondCandidateProvider: LLMProvider | undefined;
 
   constructor(
@@ -95,6 +101,7 @@ export class LLMPlanner implements Planner {
     instruction: string,
     tenantContext: TenantContext,
     memory: MemorySnapshot,
+    opts: { instructionId?: string; channel?: LLMChannel; signal?: AbortSignal; deadlineAt?: number; deadlineMs?: number } = {},
   ): Promise<DomainAction[]> {
     const actionTypes = this.plugins.actionTypes();
     const system = this.systemPrompt();
@@ -115,10 +122,23 @@ export class LLMPlanner implements Planner {
       memoryContext: plannerMemoryContext(memory),
     });
 
+    const channel = opts.channel ?? "text";
     let raw: string;
     try {
-      this.provider ??= resolveProvider();
-      raw = await this.provider.complete({ system, user, json: true, tenantId: tenantContext.tenantId, traceId: tenantContext.correlationId, purpose: "planning" });
+      const provider = this.provider ?? this.routedProviders.get(channel) ?? resolveProviderForPurpose("planning", channel);
+      if (!this.provider) this.routedProviders.set(channel, provider);
+      raw = await provider.complete({
+        system,
+        user,
+        json: true,
+        tenantId: tenantContext.tenantId,
+        traceId: tenantContext.correlationId,
+        purpose: "planning",
+        channel,
+        signal: opts.signal,
+        deadlineAt: opts.deadlineAt,
+        deadlineMs: opts.deadlineMs,
+      });
     } catch (err) {
       throw new Error(`Planner LLM call failed: ${(err as Error).message}`);
     }
@@ -190,6 +210,10 @@ export class LLMPlanner implements Planner {
           validationError,
           tenantId: tenantContext.tenantId,
           traceId: tenantContext.correlationId,
+          channel,
+          signal: opts.signal,
+          deadlineAt: opts.deadlineAt,
+          deadlineMs: opts.deadlineMs,
         });
         const repairedPlugin = verdict.repaired ? this.plugins.resolve(verdict.actionType) : undefined;
         const repairedPolicy =
@@ -228,9 +252,8 @@ export class LLMPlanner implements Planner {
 
     // High tier only: generate a second candidate per high-tier action, entirely
     // BEFORE any transaction opens (finding #2 — no LLM call may share a transaction).
-    // Uses the real planner-quality provider (Groq), deliberately NOT the cheap
-    // repair model — this tier exists specifically to spend more reasoning where
-    // stakes justify it.
+    // Uses the planning route again, deliberately NOT the cheap repair model — this
+    // tier exists specifically to spend more reasoning where stakes justify it.
     const highIndices = valid.map((_, i) => i).filter((i) => tierInfo[i]!.tier === "high");
     const secondCandidatePairs = await Promise.all(
       highIndices.map(async (i) => {
@@ -241,6 +264,10 @@ export class LLMPlanner implements Planner {
           actionTypes,
           tenantContext.tenantId,
           tenantContext.correlationId,
+          channel,
+          opts.signal,
+          opts.deadlineAt,
+          opts.deadlineMs,
         );
         return [i, candidateB] as const;
       }),
@@ -317,6 +344,10 @@ export class LLMPlanner implements Planner {
           reasoning: a.reasoning,
           allowedActionTypes: actionTypes,
           payloadSpec: this.plugins.payloadSpecJson(),
+          channel,
+          signal: opts.signal,
+          deadlineAt: opts.deadlineAt,
+          deadlineMs: opts.deadlineMs,
         });
       }),
     );
@@ -425,6 +456,7 @@ export class LLMPlanner implements Planner {
             planId,
             dependsOn: dependencyIndexes[i]!.map((dependency) => planActionIds[dependency]!),
             predictedReceipt: predictedReceipts[i]!,
+            instructionId: opts.instructionId ?? null,
           })),
         )
         .returning();
@@ -523,8 +555,8 @@ export class LLMPlanner implements Planner {
   }
 
   /** High tier only (Phase 8): a second, independent candidate for a high-stakes
-   *  action, using the independent DeepSeek → OpenAI OSS chain — deliberately NOT the
-   *  planner or cheap repair model, since this tier exists specifically to spend more
+   *  action, using the explicit planning route — deliberately NOT the cheap repair
+   *  model, since this tier exists specifically to spend more
    *  reasoning where stakes justify it. Same defensive malformed-JSON-safe-fallback
    *  pattern plan()'s own first call already uses: on any failure (network or
    *  parse), candidate B simply does not exist and scoring trivially picks A. */
@@ -535,6 +567,10 @@ export class LLMPlanner implements Planner {
     allowedActionTypes: string[],
     tenantId: string,
     traceId?: string,
+    channel: LLMChannel = "text",
+    signal?: AbortSignal,
+    deadlineAt?: number,
+    deadlineMs?: number,
   ): Promise<{ actionType: string; payload: Record<string, unknown> } | null> {
     const system = [
       "This is a HIGH-STAKES action — a multi-step workflow or a large dollar amount — worth a second, independent look before a human reviews it.",
@@ -552,8 +588,8 @@ export class LLMPlanner implements Planner {
       }),
     );
     try {
-      this.secondCandidateProvider ??= resolveProvider("high-risk-second-candidate");
-      const raw = await this.secondCandidateProvider.complete({ system, user, json: true, tenantId, traceId, purpose: "planning" });
+      this.secondCandidateProvider ??= resolveProviderForPurpose("planning", channel);
+      const raw = await this.secondCandidateProvider.complete({ system, user, json: true, tenantId, traceId, purpose: "planning", channel, signal, deadlineAt, deadlineMs });
       const parsed = SecondCandidateSchema.parse(JSON.parse(raw));
       if (!allowedActionTypes.includes(parsed.action_type)) return null;
       return { actionType: parsed.action_type, payload: parsed.payload };

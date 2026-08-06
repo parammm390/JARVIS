@@ -3,27 +3,50 @@
 // Single fetch surface for every JARVIS panel. Both reads and writes go through the
 // same-origin /api/jarvis/* proxy and forward the caller's real Supabase session
 // token — the finnor-os backend's own requireContext/RBAC decides what a signed-in
-// user can see and do. Logged-out visitors still get the 3 public-aggregate paths
-// (stats, setup/status, integrations/status); everything else 401s and the panels
-// already degrade gracefully to their sample-data view.
+// user can see and do. A separately opt-in JARVIS test mode can use the legacy shared
+// owner key from localStorage for repeated product testing without creating users; it
+// is disabled unless NEXT_PUBLIC_JARVIS_TEST_MODE=1.
 
 import { getCurrentAccessToken } from "./jarvis-auth"
+
+const TEST_KEY_STORAGE = "jarvis_admin_key"
+const TEST_MODE = process.env.NEXT_PUBLIC_JARVIS_TEST_MODE === "1"
+
+export function getJarvisTestKey(): string | null {
+  if (!TEST_MODE || typeof window === "undefined") return null
+  return window.localStorage.getItem(TEST_KEY_STORAGE)
+}
+
+export function setJarvisTestKey(key: string): void {
+  if (!TEST_MODE || typeof window === "undefined") return
+  window.localStorage.setItem(TEST_KEY_STORAGE, key)
+}
+
+export function clearJarvisTestKey(): void {
+  if (typeof window === "undefined") return
+  window.localStorage.removeItem(TEST_KEY_STORAGE)
+}
 
 export class JarvisApiError extends Error {
   constructor(
     message: string,
     public readonly status: number,
+    public readonly retryable = status === 0 || status >= 500,
   ) {
     super(message)
+    this.name = "JarvisApiError"
   }
 }
+
+export const JARVIS_GET_TIMEOUT_MS = 5_000
+export const JARVIS_MUTATION_TIMEOUT_MS = 30_000
 
 // ---------------------------------------------------------------------------
 // Request telemetry — every REAL fetch this page makes is published here, so the
 // SystemConsole can stream genuine backend traffic (method, status, measured ms).
 // ---------------------------------------------------------------------------
 export interface JarvisRequestLog {
-  method: "GET" | "POST" | "PUT"
+  method: "GET" | "POST" | "PUT" | "DELETE"
   path: string
   status: number
   ms: number
@@ -40,70 +63,89 @@ function publish(r: JarvisRequestLog): void {
 
 function authHeaders(): Record<string, string> | undefined {
   const token = getCurrentAccessToken()
-  return token ? { authorization: `Bearer ${token}` } : undefined
+  if (token) return { authorization: `Bearer ${token}` }
+  const testKey = getJarvisTestKey()
+  return testKey ? { "x-jarvis-key": testKey } : undefined
 }
 
-export async function jarvisGet<T>(path: string, params?: Record<string, string>): Promise<T> {
+type JarvisMethod = "GET" | "POST" | "PUT" | "DELETE"
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === "AbortError"
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error && error.message ? error.message : "network failure"
+}
+
+async function readJson<T>(res: Response, method: JarvisMethod, path: string): Promise<T> {
+  const text = await res.text()
+  let json: unknown = undefined
+  if (text.trim()) {
+    try {
+      json = JSON.parse(text)
+    } catch {
+      throw new JarvisApiError(`${method} ${path} returned invalid JSON`, 502)
+    }
+  }
+  if (!res.ok) {
+    const message = json && typeof json === "object" && "error" in json && typeof json.error === "string" ? json.error : `${method} ${path} failed (${res.status})`
+    throw new JarvisApiError(message, res.status)
+  }
+  return json as T
+}
+
+async function jarvisRequest<T>(method: JarvisMethod, path: string, body?: unknown, params?: Record<string, string>): Promise<T> {
   const qs = params ? `?${new URLSearchParams(params).toString()}` : ""
   const started = performance.now()
   let status = 0
-  // The public console already has an explicit degraded/sample-data state. A
-  // read that never settles cannot add truth, but it does keep the initial page
-  // load open forever when the upstream is unreachable (notably in release
-  // audits). Bound it so the UI can honestly enter that existing state.
   const controller = new AbortController()
-  const timeoutId = window.setTimeout(() => controller.abort(), 5_000)
+  const timeoutMs = method === "GET" ? JARVIS_GET_TIMEOUT_MS : JARVIS_MUTATION_TIMEOUT_MS
+  const timeoutId = globalThis.setTimeout(() => controller.abort(), timeoutMs)
+  const auth = authHeaders()
   try {
+    if (method !== "GET" && !auth) {
+      status = 401
+      throw new JarvisApiError(auth ? "Sign in required" : "Test key or sign in required", 401, false)
+    }
     const res = await fetch(`/api/jarvis/${path}${qs}`, {
+      method,
       cache: "no-store",
-      headers: authHeaders(),
+      headers: {
+        ...(auth ?? {}),
+        ...(method !== "GET" ? { "content-type": "application/json" } : {}),
+      },
+      ...(method !== "GET" ? { body: JSON.stringify(body ?? {}) } : {}),
       signal: controller.signal,
     })
     status = res.status
-    if (!res.ok) throw new JarvisApiError(`GET ${path} failed (${res.status})`, res.status)
-    return (await res.json()) as T
+    return await readJson<T>(res, method, path)
+  } catch (error) {
+    if (isAbortError(error)) {
+      status = 504
+      throw new JarvisApiError(`${method} ${path} timed out after ${timeoutMs / 1000} seconds`, 504)
+    }
+    if (error instanceof JarvisApiError) throw error
+    status = 503
+    throw new JarvisApiError(`${method} ${path} unavailable: ${errorMessage(error)}`, 503)
   } finally {
-    window.clearTimeout(timeoutId)
-    publish({ method: "GET", path: `/${path}`, status, ms: Math.round(performance.now() - started), at: Date.now() })
+    globalThis.clearTimeout(timeoutId)
+    publish({ method, path: `/${path}`, status, ms: Math.round(performance.now() - started), at: Date.now() })
   }
+}
+
+export async function jarvisGet<T>(path: string, params?: Record<string, string>): Promise<T> {
+  return jarvisRequest<T>("GET", path, undefined, params)
 }
 
 export async function jarvisPost<T>(path: string, body: unknown): Promise<T> {
-  const auth = authHeaders()
-  if (!auth) throw new JarvisApiError("Sign in required", 401)
-  const started = performance.now()
-  let status = 0
-  try {
-    const res = await fetch(`/api/jarvis/${path}`, {
-      method: "POST",
-      headers: { "content-type": "application/json", ...auth },
-      body: JSON.stringify(body ?? {}),
-    })
-    status = res.status
-    const json = (await res.json().catch(() => ({}))) as T & { error?: string }
-    if (!res.ok) throw new JarvisApiError(json?.error ?? `POST ${path} failed (${res.status})`, res.status)
-    return json
-  } finally {
-    publish({ method: "POST", path: `/${path}`, status, ms: Math.round(performance.now() - started), at: Date.now() })
-  }
+  return jarvisRequest<T>("POST", path, body)
 }
 
 export async function jarvisPut<T>(path: string, body: unknown): Promise<T> {
-  const auth = authHeaders()
-  if (!auth) throw new JarvisApiError("Sign in required", 401)
-  const started = performance.now()
-  let status = 0
-  try {
-    const res = await fetch(`/api/jarvis/${path}`, {
-      method: "PUT",
-      headers: { "content-type": "application/json", ...auth },
-      body: JSON.stringify(body ?? {}),
-    })
-    status = res.status
-    const json = (await res.json().catch(() => ({}))) as T & { error?: string }
-    if (!res.ok) throw new JarvisApiError(json?.error ?? `PUT ${path} failed (${res.status})`, res.status)
-    return json
-  } finally {
-    publish({ method: "PUT", path: `/${path}`, status, ms: Math.round(performance.now() - started), at: Date.now() })
-  }
+  return jarvisRequest<T>("PUT", path, body)
+}
+
+export async function jarvisDelete<T>(path: string): Promise<T> {
+  return jarvisRequest<T>("DELETE", path)
 }

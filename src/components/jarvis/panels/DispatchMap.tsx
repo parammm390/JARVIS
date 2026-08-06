@@ -31,10 +31,11 @@
 // re-probed against real source per Start Ritual step 2, not assumed from the plan's
 // wording).
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { CalendarDays, MapPinned, Route, X } from "lucide-react"
 import { jarvisGet, jarvisPost } from "../lib/api"
 import { Drawer } from "../ui/primitives/Drawer"
+import { ErrorState } from "../ui/primitives/ErrorState"
 
 type Stop = { visitId: string; technicianId: string; technicianName: string; householdId: string; address: string; latitude: number | null; longitude: number | null; type: string; scheduledAt: string | null; notes: string | null; optimized: { sequence: number } | null }
 type MapData = { date: string; synthetic: boolean; stops: Stop[]; technicians?: Array<{ id: string; name: string }>; unplacedStops: number; route: { naiveKm: number | null; optimizedKm: number | null; kmSaved: number | null } | null }
@@ -118,16 +119,19 @@ function cometPosition(ordered: Stop[], scrub: number): [number, number] | null 
   return [a.longitude! + (b.longitude! - a.longitude!) * frac, a.latitude! + (b.latitude! - a.latitude!) * frac]
 }
 
-export function DispatchMapCore({ data, error }: { data: MapData | null; error: string | null }) {
+export function DispatchMapCore({ data, error, loading = false, onRetry = () => {}, onAssigned = () => {} }: { data: MapData | null; error: string | null; loading?: boolean; onRetry?: () => void; onAssigned?: () => void }) {
   const container = useRef<HTMLDivElement>(null)
   const map = useRef<import("maplibre-gl").Map | null>(null)
   const cometMarkers = useRef<import("maplibre-gl").Marker[]>([])
   const zoneRaf = useRef<number | null>(null)
   const [selected, setSelected] = useState<Stop | null>(null)
   const [household, setHousehold] = useState<Household | null>(null)
+  const [householdError, setHouseholdError] = useState<string | null>(null)
   const [scrub, setScrub] = useState(0)
   const [scrubbing, setScrubbing] = useState(false)
   const [assignee, setAssignee] = useState("")
+  const [assigning, setAssigning] = useState(false)
+  const [assignError, setAssignError] = useState<string | null>(null)
 
   const ordered = useMemo(() => orderedPlaced(data), [data])
 
@@ -241,8 +245,27 @@ export function DispatchMapCore({ data, error }: { data: MapData | null; error: 
   useEffect(() => {
     if (!selected) return
     setHousehold(null)
-    void jarvisGet<{ data: Household }>("read-models/household-360", { householdId: selected.householdId }).then((r) => setHousehold(r.data)).catch(() => setHousehold(null))
+    setHouseholdError(null)
+    void jarvisGet<{ data: Household }>("read-models/household-360", { householdId: selected.householdId })
+      .then((r) => setHousehold(r.data))
+      .catch((cause) => setHouseholdError(cause instanceof Error ? cause.message : "Couldn’t load the household record."))
   }, [selected])
+
+  async function assignVisit(): Promise<void> {
+    if (!selected || !assignee || assigning) return
+    setAssigning(true)
+    setAssignError(null)
+    try {
+      await jarvisPost("dispatch/map", { visitId: selected.visitId, technicianId: assignee })
+      setSelected(null)
+      setAssignee("")
+      onAssigned()
+    } catch (cause) {
+      setAssignError(cause instanceof Error ? cause.message : "Couldn’t assign the visit.")
+    } finally {
+      setAssigning(false)
+    }
+  }
 
   useEffect(() => {
     if (!scrubbing) {
@@ -266,7 +289,9 @@ export function DispatchMapCore({ data, error }: { data: MapData | null; error: 
   return (
     <div className="space-y-4">
       {data?.synthetic && <div className="rounded-xl border border-amber-300/25 bg-amber-300/5 px-3 py-2 j-fs-micro text-amber-100">Dealer Zero — synthetic Houston-metro fixture data.</div>}
-      {error && <div className="rounded-xl border border-red-400/30 p-3 text-sm text-red-300">{error}</div>}
+      {error && <ErrorState message={data ? `Showing the last successful route. ${error}` : error} onRetry={onRetry} />}
+      {assignError && <ErrorState message={assignError} onRetry={() => void assignVisit()} />}
+      {loading && !data && <div className="rounded-xl border border-white/8 bg-white/[0.02] p-4 j-fs-sm text-[color:var(--j-text-dim)]">Loading the real dispatch route…</div>}
       <div className="grid gap-4 xl:grid-cols-[1fr_280px]">
         <div className="space-y-2">
           <div className="relative h-[58vh] min-h-[420px] overflow-hidden rounded-2xl border border-white/10 bg-[#0a1220]">
@@ -330,7 +355,7 @@ export function DispatchMapCore({ data, error }: { data: MapData | null; error: 
               <select aria-label="Assign technician" value={assignee} onChange={(event) => setAssignee(event.target.value)} className="mt-2 w-full rounded-lg border border-white/12 bg-[#0b1423] p-2 j-fs-sm text-white">
                 <option value="">Choose technician</option>{data?.technicians?.map((technician) => <option key={technician.id} value={technician.id}>{technician.name}</option>)}
               </select>
-              <button type="button" disabled={!assignee} onClick={() => void jarvisPost("dispatch/map", { visitId: selected.visitId, technicianId: assignee }).then(() => { setSelected(null); window.location.reload() })} className="mt-2 min-h-11 w-full rounded-lg bg-cyan-300 px-3 j-fs-sm font-black text-slate-950 disabled:opacity-50">Assign visit</button>
+              <button type="button" disabled={!assignee || assigning} onClick={() => void assignVisit()} className="mt-2 min-h-11 w-full rounded-lg bg-cyan-300 px-3 j-fs-sm font-black text-slate-950 disabled:opacity-50">{assigning ? "Assigning…" : "Assign visit"}</button>
             </div>
             {household ? (
               <>
@@ -348,6 +373,13 @@ export function DispatchMapCore({ data, error }: { data: MapData | null; error: 
                   <div className="mt-1 j-fs-micro text-white/40">Count from the tenant household-360 read model.</div>
                 </div>
               </>
+            ) : householdError ? (
+              <ErrorState message={householdError} onRetry={() => {
+                setHouseholdError(null)
+                void jarvisGet<{ data: Household }>("read-models/household-360", { householdId: selected.householdId })
+                  .then((r) => setHousehold(r.data))
+                  .catch((cause) => setHouseholdError(cause instanceof Error ? cause.message : "Couldn’t load the household record."))
+              }} />
             ) : (
               <div className="text-white/50">Loading real household record…</div>
             )}
@@ -362,12 +394,21 @@ export function DispatchMap() {
   const [date, setDate] = useState(isoToday)
   const [data, setData] = useState<MapData | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
 
-  useEffect(() => {
-    jarvisGet<MapData>("dispatch/map", { date })
-      .then(setData)
-      .catch((e) => setError(e instanceof Error ? e.message : "Couldn't load dispatch."))
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      setData(await jarvisGet<MapData>("dispatch/map", { date }))
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Couldn’t load dispatch.")
+    } finally {
+      setLoading(false)
+    }
   }, [date])
+
+  useEffect(() => { void load() }, [load])
 
   return (
     <div className="space-y-4">
@@ -383,7 +424,7 @@ export function DispatchMap() {
           <input aria-label="Dispatch day" className="bg-transparent text-white" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
         </label>
       </div>
-      <DispatchMapCore data={data} error={error} />
+      <DispatchMapCore data={data} error={error} loading={loading} onRetry={() => void load()} onAssigned={() => void load()} />
     </div>
   )
 }

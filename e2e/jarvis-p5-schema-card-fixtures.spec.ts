@@ -79,7 +79,7 @@ test.describe("P5.T4 — SchemaCard, FIXTURE harness (real component tree)", () 
     await page.getByRole("button", { name: /sign in/i }).click()
     await page.waitForURL("**/jarvis", { timeout: 20_000 })
 
-    await page.goto("/jarvis/next?fixture=empty-approval", { waitUntil: "domcontentloaded" })
+    await page.goto("/jarvis/next?fixture=schema-approval", { waitUntil: "domcontentloaded" })
     await page.waitForTimeout(5_000)
 
     // Each humanized title renders — proves SchemaCard, not FallbackRenderer's
@@ -140,7 +140,7 @@ test.describe("P5.T4 — SchemaCard, FIXTURE harness (real component tree)", () 
     await page.getByRole("button", { name: /sign in/i }).click()
     await page.waitForURL("**/jarvis", { timeout: 20_000 })
 
-    await page.goto("/jarvis/next?fixture=empty-approval", { waitUntil: "domcontentloaded" })
+    await page.goto("/jarvis/next?fixture=schema-approval", { waitUntil: "domcontentloaded" })
     await page.waitForTimeout(5_000)
 
     // TEST_OWNER_* is a real owner account (BLOCKER B-3) — the toggle should

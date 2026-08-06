@@ -9,6 +9,7 @@ import { useEffect, useState, type CSSProperties, type FormEvent, type ReactNode
 import { useReducedMotion, motion } from "framer-motion"
 import { Tag, User, Calendar, MessageSquare, Wrench, FileText, Package, DollarSign } from "lucide-react"
 import { jarvisGet, jarvisPost } from "./api"
+import { receiptCopyText, receiptHash } from "./receipt-nav"
 import { useLanePresentation } from "../kernel/useSelectorInput"
 import { Drawer } from "../ui/primitives/Drawer"
 import { ActionRenderer } from "../ui/renderers/ActionRenderer"
@@ -68,6 +69,24 @@ export interface FullReceipt {
   predictionDiff?: PredictionDiff | null
 }
 
+function resultStatus(value: unknown): string | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null
+  const record = value as Record<string, unknown>
+  if (typeof record.status === "string" && record.status.trim()) return record.status
+  if (record.output && typeof record.output === "object" && !Array.isArray(record.output)) {
+    const output = record.output as Record<string, unknown>
+    if (typeof output.status === "string" && output.status.trim()) return output.status
+  }
+  return null
+}
+
+function receiptOutcomeLabel(receipt: FullReceipt): string {
+  if (receipt.failure) return `Failed · ${receipt.failure.errorKind}`
+  if (!receipt.finalizedAt) return "Awaiting recorded outcome"
+  const status = resultStatus(receipt.actualResult)
+  return status ? `Recorded · ${status}` : "Recorded outcome"
+}
+
 type ReceiptRun = { id: string; status: string; version: number }
 
 // D3.T1 — `proposedAction` (declared on FullReceipt but never rendered before this
@@ -116,10 +135,12 @@ function ReceiptRecoveryPanel({
   receipt,
   run,
   role,
+  onReceiptChanged,
 }: {
   receipt: FullReceipt
   run: ReceiptRun | null
   role: ReturnType<typeof useJarvisAuth>["role"]
+  onReceiptChanged?: () => void
 }) {
   const [correcting, setCorrecting] = useState(false)
   const [correctedFact, setCorrectedFact] = useState("")
@@ -128,7 +149,10 @@ function ReceiptRecoveryPanel({
   const verb = receiptRecoveryVerb(receipt)
   const compensation = compensationReceiptFromActual(receipt.actualResult)
   const onRecover = kind && verb && run && role === "owner" && isLegalReceiptRecovery(verb, run.status)
-    ? async () => { await jarvisPost(`workflows/runs/${run.id}/${verb}`, { expectedVersion: run.version }) }
+    ? async () => {
+        await jarvisPost(`workflows/runs/${run.id}/${verb}`, { expectedVersion: run.version })
+        onReceiptChanged?.()
+      }
     : kind === "compensated" && compensation
       ? async () => { document.getElementById(`compensation-${compensation.caseId}`)?.scrollIntoView({ block: "center" }) }
       : kind === "invalid_input" && role === "owner"
@@ -144,6 +168,7 @@ function ReceiptRecoveryPanel({
       await jarvisPost("corrections", { receiptId: receipt.id, correctedFact: value })
       setCorrectedFact("")
       setCorrecting(false)
+      onReceiptChanged?.()
     } catch (error) {
       setCorrectionError(error instanceof Error ? error.message : "Correction request failed")
     }
@@ -168,7 +193,7 @@ function ReceiptRecoveryPanel({
             className="min-h-20 w-full rounded-lg border border-white/15 bg-black/20 p-2 j-fs-sm text-white outline-none focus:border-cyan-300/60"
           />
           <div className="mt-2 flex justify-end">
-            <button type="submit" className="rounded-full border border-red-300/30 px-3 py-1.5 j-fs-micro font-bold text-red-100 hover:border-red-300/60 hover:bg-red-300/10">Correct</button>
+            <button type="submit" className="inline-flex min-h-12 items-center rounded-full border border-red-300/30 px-3 py-1.5 j-fs-micro font-bold text-red-100 hover:border-red-300/60 hover:bg-red-300/10">Correct</button>
           </div>
           {correctionError && <p role="alert" className="mt-2 j-fs-micro text-red-100/80">{correctionError}</p>}
         </form>
@@ -199,9 +224,13 @@ export function ReceiptContent({
   const [receipt, setReceipt] = useState<FullReceipt | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [receiptRun, setReceiptRun] = useState<ReceiptRun | null>(null)
+  const [localRefreshKey, setLocalRefreshKey] = useState(0)
+  const [copyState, setCopyState] = useState<"idle" | "copied">("idle")
+  const [copyError, setCopyError] = useState<string | null>(null)
   const reducedMotion = useReducedMotion() ?? false
   const { setupStatus } = useLanePresentation()
   const { role } = useJarvisAuth()
+  const updateKey = (typeof refreshKey === "number" ? refreshKey : 0) + localRefreshKey
 
   useEffect(() => {
     let cancelled = false
@@ -244,7 +273,7 @@ export function ReceiptContent({
   // already-displayed receipt just stays as it was; the next real poll tries
   // again) rather than replacing good data with an error banner.
   useEffect(() => {
-    if (!refreshKey) return
+    if (!updateKey) return
     let cancelled = false
     jarvisGet<{ receipt: FullReceipt }>(`receipts/${receiptId}`)
       .then((r) => {
@@ -255,7 +284,33 @@ export function ReceiptContent({
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refreshKey])
+  }, [receiptId, updateKey])
+
+  async function copyReceipt() {
+    if (!receipt) return
+    const href = new URL(`/jarvis/next${receiptHash(receipt.id)}`, window.location.origin).toString()
+    const text = receiptCopyText({ receiptId: receipt.id, objective: receipt.objective, outcome: receiptOutcomeLabel(receipt), href })
+    try {
+      if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(text)
+      else {
+        const input = document.createElement("textarea")
+        input.value = text
+        input.setAttribute("readonly", "")
+        input.style.position = "fixed"
+        input.style.opacity = "0"
+        document.body.appendChild(input)
+        input.select()
+        const copied = document.execCommand("copy")
+        input.remove()
+        if (!copied) throw new Error("clipboard unavailable")
+      }
+      setCopyError(null)
+      setCopyState("copied")
+      window.setTimeout(() => setCopyState("idle"), 1600)
+    } catch {
+      setCopyError("Couldn’t copy the receipt summary.")
+    }
+  }
 
   return (
     <>
@@ -284,6 +339,7 @@ export function ReceiptContent({
                 suite below. */}
             <motion.div
               layoutId={headerLayoutId}
+              data-liveframe-motion="LF-16"
               className="-mx-5 -mt-5 mb-4 border-b border-white/6 px-5 pb-4 pt-5"
               style={{
                 background:
@@ -308,6 +364,13 @@ export function ReceiptContent({
                   {receipt.finalizedAt ? "finalized" : "in progress"}
                 </span>
               </div>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span className="j-fs-micro font-bold text-[color:var(--j-text-dim)]" data-receipt-outcome>{receiptOutcomeLabel(receipt)}</span>
+                <button type="button" onClick={() => void copyReceipt()} className="inline-flex min-h-12 items-center rounded-full border border-cyan-300/25 px-3 py-1.5 j-fs-micro font-black text-cyan-100 hover:bg-cyan-300/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60">
+                  {copyState === "copied" ? "Receipt copied" : "Copy receipt"}
+                </button>
+              </div>
+              {copyError && <p role="alert" className="mt-2 j-fs-micro text-amber-200">{copyError}</p>}
               {/* jarvis-v3 P4.T6 (§8 PHASE 4) — sandbox honesty: this receipt's
                   own step (create_payment_link/send_message) resolved to a
                   non-real provider. Literal string, never disguised as a real
@@ -322,7 +385,7 @@ export function ReceiptContent({
                 is the SAME section every receipt renders, so a payment webhook
                 landing later (P4.T4) and re-fetching this same receipt id makes
                 the diff genuinely get truer in place, not a separate view. */}
-            <ThreadVerification predicted={receipt.predicted ?? null} predictionDiff={receipt.predictionDiff ?? null} reducedMotion={reducedMotion} />
+            <ThreadVerification predicted={receipt.predicted ?? null} predictionDiff={receipt.predictionDiff ?? null} reducedMotion={reducedMotion} refreshKey={updateKey} />
             <CompensationReceipt actualResult={receipt.actualResult} />
 
             {/* F3.T3 — stagger-unfurl: the remaining sections cascade in (30ms/item,
@@ -359,6 +422,15 @@ export function ReceiptContent({
                   <Section key="proposed" label="Proposed action">
                     <ProposedActionSection proposedAction={receipt.proposedAction} />
                   </Section>,
+                  <Section key="tool-outcome" label="Tool outcome">
+                    <div className="j-fs-micro text-[color:var(--j-text-dim)]" data-receipt-tool-outcome>{receiptOutcomeLabel(receipt)}</div>
+                  </Section>,
+                  <Section key="timing" label="Run timing">
+                    <div className="space-y-1 j-fs-micro text-[color:var(--j-text-dim)]" data-receipt-timing>
+                      <div>Opened · {new Date(receipt.createdAt).toLocaleString()}</div>
+                      <div>{receipt.finalizedAt ? `Finalized · ${new Date(receipt.finalizedAt).toLocaleString()}` : "Still reconciling · no finalized time recorded"}</div>
+                    </div>
+                  </Section>,
                   <Section key="expected" label="Expected result">
                     <FieldList value={receipt.expectedResult} />
                   </Section>,
@@ -369,7 +441,7 @@ export function ReceiptContent({
                     <Section key="failure" label="Failure + recovery path">
                       <div className="space-y-2">
                         <div className="j-fs-micro text-red-200/80">backend kind: {receipt.failure.errorKind} · {receipt.failure.recoveryPath}</div>
-                        <ReceiptRecoveryPanel receipt={receipt} run={receiptRun} role={role} />
+                        <ReceiptRecoveryPanel receipt={receipt} run={receiptRun} role={role} onReceiptChanged={() => setLocalRefreshKey((key) => key + 1)} />
                       </div>
                     </Section>
                   ) : null,
@@ -377,10 +449,6 @@ export function ReceiptContent({
               ).filter(Boolean)}
             </Stagger>
 
-            <div className="mt-4 font-mono j-fs-micro text-[color:var(--j-text-faint)]">
-              opened {new Date(receipt.createdAt).toLocaleString()}
-              {receipt.finalizedAt ? ` · finalized ${new Date(receipt.finalizedAt).toLocaleString()}` : ""}
-            </div>
           </>
         )}
     </>

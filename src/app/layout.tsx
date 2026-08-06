@@ -2,12 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 
-import CustomCursor from "@/components/ui/custom-cursor";
-import ParticleNetwork from "@/components/ui/particle-network";
-import ScrollProgress from "@/components/ui/scroll-progress";
-import GrainOverlay from "@/components/ui/grain-overlay";
-import SmoothScroll from "@/components/ui/smooth-scroll";
-import { FinnorAIConcierge } from "@/components/ai-concierge/FinnorAIConcierge";
+import GlobalChrome from "@/components/layout/GlobalChrome";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -137,14 +132,7 @@ export default function RootLayout({
             }),
           }}
         />
-        <SmoothScroll>
-          <ParticleNetwork />
-          <CustomCursor />
-          <ScrollProgress />
-          <GrainOverlay />
-          {children}
-          <FinnorAIConcierge />
-        </SmoothScroll>
+        <GlobalChrome>{children}</GlobalChrome>
       </body>
     </html>
   );

@@ -37,6 +37,7 @@ import * as THREE from "three"
 import { useReducedMotion } from "framer-motion"
 import { registerAnchor } from "../lib/pulse-bus"
 import type { Presence } from "../kernel/types"
+import type { LiveFrameMode } from "../kernel/liveframe"
 
 // P2.T12 (C-13): the Orb now takes the kernel's real 12-value `Presence`
 // (`kernel/types.ts` §4.5) instead of this component's own 5-value `OrbState`.
@@ -135,12 +136,13 @@ const VERT = /* glsl */ `
 `
 const FRAG = /* glsl */ `
   uniform vec3 uColor;
+  uniform float uOpacity;
   varying float vSeed;
   void main() {
     vec2 uv = gl_PointCoord - 0.5;
     float d = length(uv);
     if (d > 0.5) discard;
-    float alpha = smoothstep(0.5, 0.0, d) * (0.16 + vSeed * 0.34);
+    float alpha = smoothstep(0.5, 0.0, d) * (0.16 + vSeed * 0.34) * uOpacity;
     gl_FragColor = vec4(uColor, alpha);
   }
 `
@@ -171,6 +173,13 @@ function buildGeometry(): THREE.BufferGeometry {
 export interface OrbLiveState {
   state: OrbState
   activeRunCount: number
+  /** Canonical `/jarvis` LIVEFRAME projection. The Orb consumes this shared
+   *  value rather than deriving a second mode energy table. */
+  energy?: number
+  /** Canonical `/jarvis` local microphone contribution from LIVEFRAME. */
+  voiceEnergy?: number
+  /** The presentation mode that owns LF-01's ready-state breath. */
+  mode?: LiveFrameMode
   /** P2.T12 — the REAL local mic level from `useVapiSession().localVolumeLevel`
    *  (Vapi's own `local-volume-level` event, 0-1 — the user's own mic, NOT
    *  `volumeLevel`, which is the assistant's remote output and would be the
@@ -182,6 +191,36 @@ export interface OrbLiveState {
   voiceAmplitude?: number
 }
 
+function clampUnit(value: number | undefined, fallback = 0): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return fallback
+  return Math.min(1, Math.max(0, value))
+}
+
+function sharedEnergy(live: OrbLiveState): number {
+  // The optional fallback exists only for the legacy `/jarvis/bridge` caller,
+  // which is outside v4 route scope. The canonical `/jarvis` path always passes
+  // the pure LIVEFRAME projection's energy.
+  return clampUnit(live.energy, STATE_ENERGY[live.state])
+}
+
+function sharedVoiceEnergy(live: OrbLiveState): number {
+  return clampUnit(
+    live.voiceEnergy,
+    live.state === "hearing" ? clampUnit(live.voiceAmplitude) : 0,
+  )
+}
+
+function breathValues(timeSeconds: number, active: boolean): { scale: number; opacity: number } {
+  if (!active) return { scale: 1, opacity: 1 }
+  const phase = (timeSeconds % 4.2) / 4.2 * Math.PI * 2
+  return {
+    // LF-01: 1 → 1.025 → 1 over the named 4.2s loop.
+    scale: 1 + 0.0125 * (1 - Math.cos(phase)),
+    // LF-01: a restrained ±0.06 shell/aura opacity excursion.
+    opacity: 0.94 + 0.06 * (0.5 + 0.5 * Math.cos(phase)),
+  }
+}
+
 // Real, non-fabricated low-power signal: navigator.deviceMemory (Chrome/Edge/Android;
 // undefined on Safari/iOS, which we then treat as capable rather than guessing weak).
 function isLowPowerDevice(): boolean {
@@ -189,25 +228,35 @@ function isLowPowerDevice(): boolean {
   return typeof mem === "number" && mem <= 2
 }
 
-function StaticOrb({ state }: { state: OrbState }) {
+function StaticOrb({ live, reducedMotion }: { live: OrbLiveState; reducedMotion: boolean }) {
+  const { state } = live
   const [r, g, b] = STATE_COLOR[state]
   const rgb = `${Math.round(r * 255)},${Math.round(g * 255)},${Math.round(b * 255)}`
+  const energy = sharedEnergy(live)
+  const voiceEnergy = sharedVoiceEnergy(live)
+  const scale = 1 + voiceEnergy * 0.08
   return (
     <div
       aria-hidden
       className="h-full w-full rounded-full"
       style={{
         background: `radial-gradient(circle at 38% 32%, rgba(${rgb},0.9) 0%, rgba(${rgb},0.35) 45%, rgba(6,11,24,0.05) 72%)`,
-        boxShadow: `0 0 60px rgba(${rgb},0.35)`,
+        boxShadow: `0 0 ${24 + energy * 24 + voiceEnergy * 16}px rgba(${rgb},${0.06 + energy * 0.08 + voiceEnergy * 0.08})`,
+        transform: `scale(${scale})`,
+        opacity: 0.94 + energy * 0.06,
+        transition: reducedMotion ? "none" : "transform 120ms ease-out, box-shadow 120ms ease-out",
       }}
       data-orb-mode="static"
       data-orb-state={state}
+      data-orb-energy={energy}
+      data-orb-voice-energy={voiceEnergy}
     />
   )
 }
 
-export function Orb3D({ live, forceLowPower = false }: { live: OrbLiveState; forceLowPower?: boolean }) {
+export function Orb3D({ live, forceLowPower = false, deferWebgl = false }: { live: OrbLiveState; forceLowPower?: boolean; deferWebgl?: boolean }) {
   const containerRef = useRef<HTMLDivElement>(null)
+  const auraRef = useRef<HTMLSpanElement>(null)
   const reduced = useReducedMotion()
   const [lowPower, setLowPower] = useState(false)
   const [visible, setVisible] = useState(false)
@@ -234,7 +283,10 @@ export function Orb3D({ live, forceLowPower = false }: { live: OrbLiveState; for
   // rect via pulse-bus, never their own duplicate ref into this component's DOM.
   useEffect(() => registerAnchor("orb", () => containerRef.current?.getBoundingClientRect() ?? null), [])
 
-  const useStatic = mounted && (!!reduced || lowPower || forceLowPower)
+  // P4.T8: the linked execution Weave owns the active frame budget. Keep the
+  // semantic Presence Core visible, but defer the 14k-particle renderer while
+  // the causal graph is live; reduced/low-power posture remains unchanged.
+  const useStatic = mounted && (!!reduced || lowPower || forceLowPower || deferWebgl)
 
   useEffect(() => {
     if (useStatic || !containerRef.current) return
@@ -271,6 +323,7 @@ export function Orb3D({ live, forceLowPower = false }: { live: OrbLiveState; for
         uEnergy: { value: STATE_ENERGY.dormant },
         uColor: { value: new THREE.Color(...STATE_COLOR.dormant) },
         uFracture: { value: 0 },
+        uOpacity: { value: 1 },
       },
     })
     const points = new THREE.Points(geometry, material)
@@ -303,7 +356,8 @@ export function Orb3D({ live, forceLowPower = false }: { live: OrbLiveState; for
     function frame(): void {
       if (stopped) return
       const t = clock.getElapsedTime()
-      const { state, activeRunCount } = liveRef.current
+      const current = liveRef.current
+      const { state, activeRunCount } = current
 
       // "severed" (P2.T1/§4.5 rule 1: transport trouble) is this component's
       // successor to the old 5-state model's "error" — the fracture burst is a
@@ -320,13 +374,27 @@ export function Orb3D({ live, forceLowPower = false }: { live: OrbLiveState; for
       // amplitude, never blended into any other state. Blends UP from the
       // state's base energy (never down), so a quiet moment mid-utterance
       // doesn't read as dormant.
-      const amp = state === "hearing" ? (liveRef.current.voiceAmplitude ?? 0) : 0
-      mat.uniforms.uEnergy.value = Math.min(1, Math.max(STATE_ENERGY[state], amp))
+      const energy = sharedEnergy(current)
+      const voiceEnergy = sharedVoiceEnergy(current)
+      const breath = breathValues(t, current.mode === "ready")
+      mat.uniforms.uEnergy.value = energy
+      mat.uniforms.uOpacity.value = breath.opacity
       ;(mat.uniforms.uColor.value as THREE.Color).setRGB(r, g, b)
       mat.uniforms.uFracture.value = Math.max(0, fractureUntil - t) * 0.9
 
+      // LF-02: the same LIVEFRAME local mic contribution that raises shared
+      // energy also gives the Orb a bounded +8% resonance. No random waveform
+      // or assistant-output volume is used here.
+      points.scale.setScalar(breath.scale * (1 + voiceEnergy * 0.08))
       points.rotation.y += STATE_SPIN[state] * 0.01
       points.rotation.x = Math.sin(t * 0.15) * 0.08
+
+      const aura = auraRef.current
+      if (aura) {
+        aura.style.transform = `scale(${breath.scale * (1 + voiceEnergy * 0.08)})`
+        aura.style.opacity = String((0.04 + energy * 0.06 + voiceEnergy * 0.1) * breath.opacity)
+        aura.style.boxShadow = `0 0 ${24 + energy * 24 + voiceEnergy * 32}px rgba(${r * 255},${g * 255},${b * 255},${0.06 + energy * 0.08 + voiceEnergy * 0.1})`
+      }
 
       const shown = Math.min(activeRunCount, MAX_RINGS)
       for (let i = 0; i < MAX_RINGS; i++) {
@@ -386,8 +454,25 @@ export function Orb3D({ live, forceLowPower = false }: { live: OrbLiveState; for
   }, [useStatic, visible])
 
   return (
-    <div ref={containerRef} className="relative h-full w-full" data-orb-mode={useStatic ? "static" : "webgl"}>
-      {useStatic && <StaticOrb state={live.state} />}
+    <div
+      ref={containerRef}
+      className="relative h-full w-full"
+      data-orb-mode={useStatic ? "static" : "webgl"}
+      data-orb-energy={sharedEnergy(live)}
+      data-orb-voice-energy={sharedVoiceEnergy(live)}
+    >
+      <span
+        ref={auraRef}
+        aria-hidden
+        data-orb-aura
+        className="pointer-events-none absolute -inset-[8%] rounded-full"
+        style={{
+          opacity: 0.04 + sharedEnergy(live) * 0.06 + sharedVoiceEnergy(live) * 0.1,
+          transform: `scale(${1 + sharedVoiceEnergy(live) * 0.08})`,
+          boxShadow: `0 0 ${24 + sharedEnergy(live) * 24 + sharedVoiceEnergy(live) * 32}px rgba(${STATE_COLOR[live.state][0] * 255},${STATE_COLOR[live.state][1] * 255},${STATE_COLOR[live.state][2] * 255},${0.06 + sharedEnergy(live) * 0.08 + sharedVoiceEnergy(live) * 0.1})`,
+        }}
+      />
+      {useStatic && <div className="relative z-[1] h-full w-full"><StaticOrb live={live} reducedMotion={reduced === true} /></div>}
     </div>
   )
 }

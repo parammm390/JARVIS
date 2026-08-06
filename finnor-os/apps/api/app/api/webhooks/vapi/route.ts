@@ -16,7 +16,7 @@ import { VapiWebhookSchema } from "@finnor/policy-schema";
 import { adminDb, jobs, withTenant, domainActions, domainPolicies, actionLog, tenantPhoneNumbers, getPool } from "@finnor/db";
 import { persistCall } from "@finnor/data-platform";
 import { ensureSecretsLoaded } from "@finnor/security";
-import { parseSpokenDecision, diagnoseFailure, resolveProvider } from "@finnor/orchestration";
+import { parseSpokenDecision, diagnoseFailure, resolveProviderForPurpose } from "@finnor/orchestration";
 import { logWithTrace } from "@finnor/tools";
 import type { Role } from "@finnor/shared-types";
 import {
@@ -122,11 +122,16 @@ async function naturalizeScalars(actionSummary: string | null, scalarEntries: [s
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 2_500);
+    const deadlineAt = Date.now() + 2_500;
     const text = await Promise.race([
-      resolveProvider("bedrock-deepseek").complete({
+      resolveProviderForPurpose("answer", "voice").complete({
         system:
           "Rewrite this raw key:value execution result as one short, natural spoken sentence a person would say out loud. State every fact given — never drop or invent a value. No preamble, just the sentence.",
         user: raw,
+        purpose: "answer",
+        channel: "voice",
+        signal: controller.signal,
+        deadlineAt,
       }),
       new Promise<string>((_, reject) => setTimeout(() => reject(new Error("narration timeout")), 2_500)),
     ]);
@@ -219,11 +224,12 @@ async function handleToolCalls(message: Record<string, unknown>): Promise<Respon
           });
           continue;
         }
-        const actions = await getOrchestrator().handleInstruction(
+        const instructionResult = await getOrchestrator().handleInstructionResult(
           instruction,
           { tenantId, userId: staffCtx.userId, role: staffCtx.role, correlationId },
-          { sessionId: `vapi:${callId}` },
+          { sessionId: `vapi:${callId}`, channel: "voice" },
         );
+        const actions = instructionResult.actions;
         await appendVoiceTurn({
           tenantId,
           voiceSessionId: session.id,
@@ -231,6 +237,10 @@ async function handleToolCalls(message: Record<string, unknown>): Promise<Respon
           transcriptText: instruction,
           resolvedActionIds: actions.map((a) => a.id),
         });
+        if (instructionResult.answer) {
+          results.push({ toolCallId: tc.id, result: instructionResult.answer.spokenSummary });
+          continue;
+        }
         if (actions.length === 0) {
           results.push({
             toolCallId: tc.id,

@@ -6,12 +6,13 @@
 // allowlist). Gated to dispatcher/owner — the server's own canApprove RBAC is the
 // real authorizer for any action taken from here; this is the read surface.
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { CalendarClock, Users, RefreshCw } from "lucide-react"
 import { useJarvis, ageLabel } from "../lib/data-core"
 import { useJarvisAuth } from "../lib/jarvis-auth"
 import { jarvisGet } from "../lib/api"
 import { hasActiveSession } from "../lib/jarvis-auth"
+import { ErrorState } from "../ui/primitives/ErrorState"
 
 interface Visit {
   id: string
@@ -28,12 +29,18 @@ export function DispatcherBoard() {
   const [visits, setVisits] = useState<Visit[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
+  const load = useCallback(async () => {
     if (!hasActiveSession() || (role !== "dispatcher" && role !== "owner")) return
-    jarvisGet<{ rows: Visit[] }>("resources/visits")
-      .then((r) => setVisits(r.rows))
-      .catch((e) => setError(e instanceof Error ? e.message : "Couldn't load visits."))
+    setError(null)
+    try {
+      const response = await jarvisGet<{ rows: Visit[] }>("resources/visits")
+      setVisits(response.rows)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Couldn’t load visits.")
+    }
   }, [role])
+
+  useEffect(() => { void load() }, [load])
 
   if (role !== "dispatcher" && role !== "owner") return null
 
@@ -69,12 +76,12 @@ export function DispatcherBoard() {
           <span className="j-label flex items-center gap-1.5">
             <CalendarClock className="h-3.5 w-3.5" /> Visits Needing Attention
           </span>
-          <button type="button" onClick={() => jarvisGet<{ rows: Visit[] }>("resources/visits").then((r) => setVisits(r.rows))} className="rounded-full border border-white/12 p-1 text-white/50 hover:text-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60">
+          <button type="button" onClick={() => void load()} className="rounded-full border border-white/12 p-1 text-white/50 hover:text-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60">
             <RefreshCw className="h-3 w-3" />
           </button>
         </div>
         <div className="space-y-2 px-4 py-3">
-          {error && <div className="rounded-lg border border-red-400/30 bg-red-400/5 px-3 py-2 j-fs-micro text-red-300">{error}</div>}
+          {error && <ErrorState message={visits ? `Showing the last successful visit list. ${error}` : error} onRetry={() => void load()} />}
           {!visits && !error && <div className="jarvis-skeleton-tide h-16 rounded-lg bg-white/5" />}
           {visits && overdue.length === 0 && upcoming.length === 0 && (
             <div className="rounded-xl border border-white/8 bg-white/[0.02] px-4 py-6 text-center j-fs-sm text-[color:var(--j-text-dim)]">Nothing overdue or imminent.</div>

@@ -11,7 +11,8 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react"
 import { jarvisGet, JarvisApiError } from "./api"
-import { hasActiveSession } from "./jarvis-auth"
+import { getCurrentSessionKey, hasActiveSession, useJarvisAuth } from "./jarvis-auth"
+import { executionMetricTransitionKey, recordExecutionEventReceived } from "../kernel/execution-metrics"
 
 // ---------------------------------------------------------------------------
 // Types (§4 endpoint shapes, verified against the live API)
@@ -62,6 +63,9 @@ export interface PriceBookProvenanceEntry {
 }
 export interface PendingAction {
   id: string
+  /** The backend's durable link to the instruction that produced this action.
+   *  Older/system-originated rows may omit it; action-id scoping still applies. */
+  instructionId?: string | null
   actionType: string
   summary: string | null
   payload: unknown
@@ -84,6 +88,7 @@ export interface WorkflowStep {
   status: string
   attempts: number
   terminalReason: string | null
+  domainActionId: string | null
   updatedAt: string
 }
 export interface WorkflowRun {
@@ -258,7 +263,15 @@ export interface IntegrationsStatus {
 // Change events — the nervous system. Every panel pulse traces to a real diff.
 // ---------------------------------------------------------------------------
 
-export type JarvisEventType = "new-business-event" | "step-completed" | "run-completed" | "new-pending-action" | "action-decided" | "poll-landed"
+export type JarvisEventType =
+  | "new-business-event"
+  | "step-completed"
+  | "step-failed"
+  | "run-completed"
+  | "run-failed"
+  | "new-pending-action"
+  | "action-decided"
+  | "poll-landed"
 type Listener = (detail: unknown) => void
 const listeners = new Map<JarvisEventType, Set<Listener>>()
 
@@ -278,6 +291,33 @@ interface FastSnapshot {
   runStatusById: Map<string, string>
 }
 
+/** One canonical edge ledger for fast/medium reconciliation. A run can be
+ * present in both lane responses; the same status edge must produce one cue. */
+export function shouldEmitStatusTransition(
+  ledger: Set<string>,
+  type: JarvisEventType,
+  id: string,
+  previous: string | undefined,
+  next: string,
+): boolean {
+  const targetStatus: Partial<Record<JarvisEventType, string>> = {
+    "step-completed": "completed",
+    "step-failed": "failed",
+    "run-completed": "completed",
+    "run-failed": "failed",
+  }
+  if (targetStatus[type] !== undefined && next !== targetStatus[type]) return false
+  if (previous === undefined || previous === next) return false
+  const key = `${type}:${id}:${previous}->${next}`
+  if (ledger.has(key)) return false
+  ledger.add(key)
+  if (ledger.size > 1000) {
+    const oldest = ledger.values().next().value
+    if (typeof oldest === "string") ledger.delete(oldest)
+  }
+  return true
+}
+
 // ---------------------------------------------------------------------------
 // Context shape
 // ---------------------------------------------------------------------------
@@ -294,6 +334,8 @@ interface JarvisDataState {
   runs: WorkflowRun[]
   runsDegraded: boolean
   /** Latest 20 REAL terminal runs (completed/failed) — fuel for the honest replay theater. */
+  /** Recent non-running snapshots from the medium lane; paused/rollback rows stay
+   * available to instruction-scoped execution while completed/failed rows back receipts. */
   terminalRuns: WorkflowRun[]
   lastPollAtMs: number | null
   /** F6.T2 — FLOW-92 StaleFog's real lane timestamp: the wall-clock moment the slow
@@ -337,7 +379,8 @@ interface JarvisDataState {
   newPendingSinceOpen: number
   approvalsThisSession: number
   rejectionsThisSession: number
-  recordDecision: (verb: "confirm" | "reject" | "escalate") => void
+  /** Called only after the authoritative decision request resolves. */
+  recordDecision: (verb: "confirm" | "reject" | "escalate", actionId?: string) => void
   /** Phase 7 (§7.5, command bar): prepend freshly-planned actions into the
    *  Approval Inbox immediately, before the next poll confirms them. Best-effort —
    *  an action that turns out to have auto-run (ungated) rather than land as a
@@ -485,20 +528,39 @@ export function classifyLaneOutcome(results: PromiseSettledResult<unknown>[]): L
 const RING_BUFFER_SIZE = 30
 
 export function JarvisDataProvider({ children }: { children: React.ReactNode }): React.ReactElement {
+  const auth = useJarvisAuth()
+  const privateDataReady = Boolean(auth.session && auth.role && !auth.roleLoading && !auth.roleError)
   const [state, setState] = useState<JarvisDataState>(EMPTY_STATE)
   const visibleRef = useRef(true)
   const ringRef = useRef<FastSnapshot[]>([])
   const firstPendingIdsRef = useRef<Set<string> | null>(null)
   const sessionRef = useRef({ approvals: 0, rejections: 0 })
+  const transitionLedgerRef = useRef<Set<string>>(new Set())
 
-  const recordDecision = useCallback((verb: "confirm" | "reject" | "escalate") => {
+  const emitStatusTransition = useCallback((type: JarvisEventType, id: string, previous: string | undefined, next: string, detail: Record<string, unknown>) => {
+    if (!shouldEmitStatusTransition(transitionLedgerRef.current, type, id, previous, next)) return
+    const entity = type.startsWith("run-") ? "run" : "step"
+    recordExecutionEventReceived({
+      key: executionMetricTransitionKey(type, id, previous, next),
+      entity,
+      entityId: id,
+      status: next,
+      // Workflow status currently reaches this provider through its polling
+      // lanes. An SSE caller can use the same metric boundary with transport
+      // "sse" when the backend exposes workflow SSE delivery.
+      transport: "poll",
+    })
+    emit(type, { ...detail, from: previous, to: next })
+  }, [])
+
+  const recordDecision = useCallback((verb: "confirm" | "reject" | "escalate", actionId?: string) => {
     // Escalate leaves the action open for a human (needs_human_review, not
     // terminal) — it doesn't count toward the approve/reject session tally, but
     // still emits the event so other panels can react to it honestly.
     if (verb === "confirm") sessionRef.current.approvals += 1
     else if (verb === "reject") sessionRef.current.rejections += 1
     setState((prev) => ({ ...prev, approvalsThisSession: sessionRef.current.approvals, rejectionsThisSession: sessionRef.current.rejections }))
-    emit("action-decided", { verb })
+    emit("action-decided", { verb, actionId: actionId ?? null, authoritative: true })
   }, [])
 
   const injectOptimisticPending = useCallback((actions: PendingAction[]) => {
@@ -518,6 +580,11 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
   // and must not themselves cause a render.
   const deniedRef = useRef<DeniedReason | null>(null)
   const failuresRef = useRef<Record<LaneName, number>>({ fast: 0, medium: 0, slow: 0, sanity: 0 })
+  // Shared across the fast in-flight lane and the medium all-runs lane. A run
+  // can move from the former into the latter between polls; one ledger keeps a
+  // failure edge from producing two identical owner-journey cues.
+  const observedRunStatusRef = useRef<Map<string, string>>(new Map())
+  const observedStepStatusRef = useRef<Map<string, string>>(new Map())
 
   const noteLaneOutcome = useCallback((lane: LaneName, results: PromiseSettledResult<unknown>[]) => {
     const { denied, transientFailure } = classifyLaneOutcome(results)
@@ -570,15 +637,26 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
       }
       if (prevSnapshot) {
         for (const [stepId, status] of stepStatusById) {
-          if (status === "completed" && prevSnapshot.stepStatusById.get(stepId) !== "completed") {
-            emit("step-completed", { stepId })
+          if (status === "completed") {
+            emitStatusTransition("step-completed", stepId, prevSnapshot.stepStatusById.get(stepId), status, { stepId })
           }
+          if (status === "failed") {
+            emitStatusTransition("step-failed", stepId, prevSnapshot.stepStatusById.get(stepId), status, { stepId })
+          }
+          observedStepStatusRef.current.set(stepId, status)
         }
         for (const [runId, status] of runStatusById) {
-          if (status === "completed" && prevSnapshot.runStatusById.get(runId) !== "completed") {
-            emit("run-completed", { runId })
+          if (status === "completed") {
+            emitStatusTransition("run-completed", runId, prevSnapshot.runStatusById.get(runId), status, { runId })
           }
+          if (status === "failed") {
+            emitStatusTransition("run-failed", runId, prevSnapshot.runStatusById.get(runId), status, { runId })
+          }
+          observedRunStatusRef.current.set(runId, status)
         }
+      } else {
+        for (const [stepId, status] of stepStatusById) observedStepStatusRef.current.set(stepId, status)
+        for (const [runId, status] of runStatusById) observedRunStatusRef.current.set(runId, status)
       }
       const pendingIds: Set<string> = pendingActions ? new Set(pendingActions.map((a) => a.id)) : new Set()
       ringRef.current = [...ringRef.current, { at: nowTs, pendingIds, stepStatusById, runStatusById }].slice(-RING_BUFFER_SIZE)
@@ -606,10 +684,14 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
     if (statsRes.status === "fulfilled") emit("poll-landed", { latency })
     // Poll failures surface as degraded/SIMULATION badges in the UI (§2, §9) — never
     // console.error here, so a kill-the-API pass stays console-clean by construction.
-  }, [noteLaneOutcome])
+  }, [emitStatusTransition, noteLaneOutcome])
 
   // ---- medium lane ----
   const prevEventIdsRef = useRef<Set<string>>(new Set())
+  // The fast lane normally observes in-flight runs only. The shared status
+  // ledger above lets the all-runs medium lane emit a real failure edge when a
+  // run disappears from the in-flight response without duplicating a fast-lane
+  // edge that already reached the owner surface.
   const pollMedium = useCallback(async () => {
     if (!visibleRef.current) return
     const [eventsRes, commsRes, allRunsRes] = await Promise.allSettled([
@@ -628,6 +710,22 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
       }
       prevEventIdsRef.current = ids
     }
+    if (allRunsRes.status === "fulfilled") {
+      for (const run of allRunsRes.value.runs) {
+        const previousRunStatus = observedRunStatusRef.current.get(run.id)
+        if (run.status === "failed") {
+          emitStatusTransition("run-failed", run.id, previousRunStatus, run.status, { runId: run.id })
+        }
+        observedRunStatusRef.current.set(run.id, run.status)
+        for (const step of run.steps) {
+          const previousStepStatus = observedStepStatusRef.current.get(step.id)
+          if (step.status === "failed") {
+            emitStatusTransition("step-failed", step.id, previousStepStatus, step.status, { stepId: step.id })
+          }
+          observedStepStatusRef.current.set(step.id, step.status)
+        }
+      }
+    }
     const merged: CommsRow[] | null =
       commsRes.status === "fulfilled"
         ? [
@@ -643,10 +741,10 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
       commsDegraded: commsRes.status === "rejected",
       terminalRuns:
         allRunsRes.status === "fulfilled"
-          ? allRunsRes.value.runs.filter((r) => r.status === "completed" || r.status === "failed" || r.status === "compensated")
+          ? allRunsRes.value.runs.filter((r) => r.status !== "running")
           : prev.terminalRuns,
     }))
-  }, [noteLaneOutcome])
+  }, [emitStatusTransition, noteLaneOutcome])
 
   // ---- slow lane ----
   const pollSlow = useCallback(async () => {
@@ -677,8 +775,9 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
       jarvisGet<{ data: ReliabilityMetrics }>("read-models/reliability"),
     ])
     noteLaneOutcome("slow", [pipeline, cash, sla, stock, followUp, techLoad, serviceDue, dataQuality, insights, reliability])
-    const anyDegraded = [pipeline, cash, sla, stock, followUp, techLoad, serviceDue, dataQuality].some((r) => r.status === "rejected")
-    const anySucceeded = [pipeline, cash, sla, stock, followUp, techLoad, serviceDue, dataQuality].some((r) => r.status === "fulfilled")
+    const slowResults = [pipeline, cash, sla, stock, followUp, techLoad, serviceDue, dataQuality, insights, reliability]
+    const anyDegraded = slowResults.some((r) => r.status === "rejected")
+    const anySucceeded = slowResults.some((r) => r.status === "fulfilled")
     const nowTs = Date.now()
     setState((prev) => ({
       ...prev,
@@ -739,14 +838,21 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
   }, [noteLaneOutcome])
 
   useEffect(() => {
-    setState((prev) => ({ ...prev, mountedAt: Date.now(), now: Date.now(), recordDecision, injectOptimisticPending, refetchSlowLaneNow }))
+    setState((prev) => ({
+      ...(privateDataReady ? prev : EMPTY_STATE),
+      mountedAt: prev.mountedAt || Date.now(),
+      now: Date.now(),
+      recordDecision,
+      injectOptimisticPending,
+      refetchSlowLaneNow,
+    }))
     const onVisibility = () => {
       const wasHidden = !visibleRef.current
       visibleRef.current = document.visibilityState !== "hidden"
       document.documentElement.setAttribute("data-hidden", (!visibleRef.current).toString())
       // P1.T9: returning to the tab must not resurrect a refused or signed-out
       // lane — that was one of the ways the 401 storm restarted itself.
-      if (visibleRef.current && wasHidden && hasActiveSession() && !deniedRef.current) {
+      if (visibleRef.current && wasHidden && privateDataReady && hasActiveSession() && !deniedRef.current) {
         void pollFast()
         void pollMedium()
         void pollSlow()
@@ -758,7 +864,7 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
     // P1.T9 / C-15 — the scheduler. Every lane reschedules itself rather than
     // running on a fixed interval, because "when do we ask again" now depends on
     // what happened last time:
-    //   - no session          -> do not ask at all; re-check at the lane's interval
+    //   - no session/role     -> do not ask at all; auth/session changes restart it
     //   - denied (401/403)    -> stop this lane permanently until the session changes
     //   - transient failure   -> BACKOFF_LADDER_MS[n]: 4 -> 8 -> 16 -> 32 -> 60 s
     //   - success             -> reset to the lane's own interval
@@ -769,12 +875,10 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
       if (stopped) return
       const base = LANE_BASE_MS[lane]
 
-      // Rule 1: a private lane never runs without a session. This alone takes the
+      // Rule 1: a private lane never runs without a session and resolved role. This
+      // keeps the initial /me handshake from racing the data lanes, and takes the
       // signed-out page from ~90 requests/min to zero.
-      if (!hasActiveSession()) {
-        timers.set(lane, window.setTimeout(() => runLane(lane, poll), base))
-        return
-      }
+      if (!privateDataReady || !hasActiveSession()) return
 
       // Rule 2: we were refused. Asking again on a timer cannot change the answer.
       if (deniedRef.current) return
@@ -794,20 +898,27 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
     runLane("slow", pollSlow)
     runLane("sanity", pollSanity)
 
-    // When a session appears (or is replaced), clear the refusal and restart every
-    // lane immediately — a fresh token deserves a fresh answer, and waiting a full
-    // interval after sign-in would be a visible dead patch.
-    let hadSession = hasActiveSession()
+    // When a session appears, changes user, refreshes its token, or disappears,
+    // clear the refusal and private snapshots. A role/token change must never show
+    // the previous tenant's numbers while the new boundary answer is pending.
+    let sessionKey = privateDataReady ? getCurrentSessionKey() : null
     const tSession = window.setInterval(() => {
-      const has = hasActiveSession()
-      if (has === hadSession) return
-      hadSession = has
-      if (!has) return
+      const nextSessionKey = privateDataReady ? getCurrentSessionKey() : null
+      if (nextSessionKey === sessionKey) return
+      sessionKey = nextSessionKey
       deniedRef.current = null
       failuresRef.current = { fast: 0, medium: 0, slow: 0, sanity: 0 }
-      setState((prev) => (prev.accessDenied === null ? prev : { ...prev, accessDenied: null }))
       for (const [, id] of timers) window.clearTimeout(id)
       timers.clear()
+      setState((prev) => ({
+        ...EMPTY_STATE,
+        now: Date.now(),
+        mountedAt: prev.mountedAt,
+        recordDecision,
+        injectOptimisticPending,
+        refetchSlowLaneNow,
+      }))
+      if (!privateDataReady || !nextSessionKey) return
       runLane("fast", pollFast)
       runLane("medium", pollMedium)
       runLane("slow", pollSlow)
@@ -824,7 +935,7 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
       window.clearInterval(tSession)
       clearInterval(tTick)
     }
-  }, [pollFast, pollMedium, pollSlow, pollSanity, recordDecision, injectOptimisticPending, refetchSlowLaneNow])
+  }, [privateDataReady, pollFast, pollMedium, pollSlow, pollSanity, recordDecision, injectOptimisticPending, refetchSlowLaneNow])
 
   return React.createElement(JarvisDataContext.Provider, { value: state }, children)
 }

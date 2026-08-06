@@ -15,9 +15,88 @@
 
 import { z } from "zod";
 import type { Tool, ToolRegistry } from "./registry";
-import { withTenant, households, serviceVisits, communicationsLog, sandboxOutbox } from "@finnor/db";
-import { eq, sql } from "drizzle-orm";
+import { withTenant, households, serviceVisits, communicationsLog, sandboxOutbox, contacts, contactMethods } from "@finnor/db";
+import { and, eq, or, sql } from "drizzle-orm";
 import { createContact, addContactMethod, getOrCreateConversation, persistMessage } from "@finnor/data-platform";
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+// Carrier-facing destinations are always stored and forwarded in E.164 form. A UUID
+// identifies a record; it is never a routable destination.
+export const DestinationPhoneSchema = z.string().trim().regex(/^\+[1-9]\d{7,14}$/, "must be a valid E.164 phone number");
+
+export function validateDestinationPhone(value: string): string {
+  return DestinationPhoneSchema.parse(value);
+}
+
+function tryValidateDestinationPhone(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const parsed = DestinationPhoneSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
+}
+
+export interface SmsDestination {
+  householdId: string | null;
+  phoneNumber: string;
+}
+
+/** Resolve the caller-facing contact reference to a validated carrier destination. */
+export async function resolveSmsDestination(tenantId: string, contactId: string): Promise<SmsDestination> {
+  const identifier = contactId.trim();
+  const directPhone = tryValidateDestinationPhone(identifier);
+  if (directPhone) return { householdId: null, phoneNumber: directPhone };
+  if (!UUID_PATTERN.test(identifier)) throw new Error("SMS contactId must resolve to a valid E.164 phone number");
+
+  return withTenant(tenantId, async (db) => {
+    const [household] = await db
+      .select({ id: households.id, contactInfo: households.contactInfo })
+      .from(households)
+      .where(and(eq(households.tenantId, tenantId), eq(households.id, identifier)))
+      .limit(1);
+
+    const [contact] = await db
+      .select({ id: contacts.id, householdId: contacts.householdId })
+      .from(contacts)
+      .where(and(eq(contacts.tenantId, tenantId), or(eq(contacts.id, identifier), eq(contacts.householdId, identifier))))
+      .limit(1);
+
+    const relatedHousehold =
+      household ??
+      (contact?.householdId
+        ? (
+            await db
+              .select({ id: households.id, contactInfo: households.contactInfo })
+              .from(households)
+              .where(and(eq(households.tenantId, tenantId), eq(households.id, contact.householdId)))
+              .limit(1)
+          )[0]
+        : undefined);
+
+    const contactPhone = tryValidateDestinationPhone(
+      (relatedHousehold?.contactInfo as Record<string, unknown> | undefined)?.phone,
+    );
+    if (contactPhone) return { householdId: relatedHousehold?.id ?? contact?.householdId ?? null, phoneNumber: contactPhone };
+
+    if (contact) {
+      const methods = await db
+        .select({ value: contactMethods.value })
+        .from(contactMethods)
+        .where(
+          and(
+            eq(contactMethods.tenantId, tenantId),
+            eq(contactMethods.contactId, contact.id),
+            or(eq(contactMethods.methodType, "phone"), eq(contactMethods.methodType, "sms")),
+          ),
+        );
+      const methodPhone = methods
+        .map((method) => tryValidateDestinationPhone(method.value))
+        .find((phone): phone is string => phone !== null);
+      if (methodPhone) return { householdId: relatedHousehold?.id ?? contact.householdId ?? null, phoneNumber: methodPhone };
+    }
+
+    throw new Error("Contact has no validated phone number for SMS");
+  });
+}
 
 // Exported for reuse by the CRM capability contract's "native" binding
 // (packages/tools/src/capabilities/crm.ts) — same logic, one definition.
@@ -73,8 +152,9 @@ export async function recordOutbound(
   toNumber: string,
   content: string,
 ): Promise<void> {
+  const validatedPhone = validateDestinationPhone(toNumber);
   await withTenant(tenantId, async (db) => {
-    await db.insert(sandboxOutbox).values({ tenantId, channel, toNumber, content });
+    await db.insert(sandboxOutbox).values({ tenantId, channel, toNumber: validatedPhone, content });
     if (householdId) {
       await db.insert(communicationsLog).values({
         householdId,
@@ -138,15 +218,9 @@ export function registerSandboxComms(registry: ToolRegistry): void {
       piiAllowlist: ["contactId", "message", "tenantId"],
       async run(input) {
         const tenantId = String(input.tenantId);
-        const householdId = /^[0-9a-f-]{36}$/i.test(String(input.contactId)) ? String(input.contactId) : null;
-        const phone = householdId
-          ? await withTenant(tenantId, async (db) => {
-              const [hh] = await db.select({ contactInfo: households.contactInfo }).from(households).where(eq(households.id, householdId));
-              return String((hh?.contactInfo as Record<string, unknown> | undefined)?.phone ?? "unknown");
-            })
-          : String(input.contactId);
-        await recordOutbound(tenantId, householdId, "sms", phone, String(input.message));
-        return { sent: true, to: phone, simulated: true };
+        const destination = await resolveSmsDestination(tenantId, String(input.contactId));
+        await recordOutbound(tenantId, destination.householdId, "sms", destination.phoneNumber, String(input.message));
+        return { sent: true, to: destination.phoneNumber, simulated: true };
       },
     },
     {

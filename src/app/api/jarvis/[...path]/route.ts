@@ -3,17 +3,23 @@
 // based demo auth is intentionally disabled there). Phase 1.4: private paths now
 // forward the CALLER's own bearer token verbatim — the backend's own requireContext/
 // canApprove RBAC is the sole authorizer, this file makes no authorization decisions
-// beyond "is there a token at all" and "is this path on the allowlist". Only the 3
-// public aggregate paths (see isPublicGet) use the shared service-account token, and
+// beyond "is there a token at all" and "is this path on the allowlist". The public
+// allowlisted paths (see isPublicGet) use the shared service-account token, and
 // only they accept anonymous requests.
 import { NextRequest } from "next/server"
 import { z } from "zod"
 import { getServiceToken } from "@/lib/jarvis/proxy-auth"
+import { JARVIS_PROXY_READ_TIMEOUT_MS, JARVIS_PROXY_WRITE_TIMEOUT_MS } from "./proxy-config"
 
-const OS_API = process.env.NEXT_PUBLIC_OS_API_URL
+// Resolve this per request so a warmed serverless module cannot retain an old
+// upstream URL after configuration changes, and so the boundary is easy to test.
+function osApi(): string | undefined {
+  return process.env.NEXT_PUBLIC_OS_API_URL
+}
 
 const READ_MODEL_VIEWS = new Set([
   "pipeline-health",
+  "activity-snapshot",
   "technician-load",
   "stock-risk",
   "cash-collections",
@@ -24,6 +30,7 @@ const READ_MODEL_VIEWS = new Set([
   "household-360",
   "reliability",
   "readiness",
+  "readiness-slo",
   "failure-injections",
 ])
 const RESOURCE_KINDS = new Set(["households", "inventory", "invoices", "technicians", "visits", "compliance-policy", "workflows"])
@@ -31,6 +38,7 @@ const RESOURCE_KINDS = new Set(["households", "inventory", "invoices", "technici
 function isPublicGet(segments: string[]): boolean {
   const [a, b] = segments
   if (segments.length === 1 && a === "stats") return true
+  if (segments.length === 1 && a === "health") return true
   if (segments.length === 2 && a === "setup" && b === "status") return true
   if (segments.length === 2 && a === "integrations" && b === "status") return true
   return false
@@ -41,6 +49,7 @@ const RUN_CONTROL_VERBS = new Set(["pause", "resume", "cancel", "retry", "escala
 function isAllowedGet(segments: string[]): boolean {
   const [a, b, c] = segments
   if (segments.length === 1 && a === "stats") return true
+  if (segments.length === 1 && a === "health") return true
   if (segments.length === 2 && a === "actions" && b === "pending") return true
   if (segments.length === 2 && a === "workflows" && b === "runs") return true
   if (segments.length === 1 && a === "events") return true
@@ -68,6 +77,12 @@ function isAllowedGet(segments: string[]): boolean {
   if (segments.length === 1 && a === "activity") return true
   if (segments.length === 1 && a === "user-prefs") return true
   if (segments.length === 2 && a === "user-prefs" && b === "digest") return true
+  if (segments.length === 2 && a === "data-quality" && b === "findings") return true
+  if (segments.length === 2 && a === "dispatch" && b === "map") return true
+  if (segments.length === 2 && a === "technician" && b === "my-day") return true
+  if (segments.length === 3 && a === "policies") return true
+  if (segments.length === 2 && a === "price-book") return true
+  if (segments.length === 2 && a === "documents") return true
   // jarvis-v3 P3.T5: the instruction lifecycle trace (§7.1) — GET /instructions/:id
   // and GET /instructions/:id/events?after=. Deliberately does NOT include
   // "stream" — that path is served by the dedicated, non-buffering
@@ -89,6 +104,9 @@ function isAllowedPost(segments: string[]): boolean {
   if (segments.length === 4 && a === "workflows" && b === "runs" && RUN_CONTROL_VERBS.has(d!)) return true
   if (segments.length === 3 && a === "dlq" && (c === "replay" || c === "discard")) return true
   if (segments.length === 1 && a === "corrections") return true
+  if (segments.length === 4 && a === "data-quality" && b === "findings" && d === "resolve") return true
+  if (segments.length === 2 && a === "technician" && b === "my-day") return true
+  if (segments.length === 4 && a === "policies" && d === "simulate") return true
   if (segments.length === 1 && a === "push-subscriptions") return true
   // D8: owner/Dealer-Zero authorization remains entirely in finnor-os; this proxy
   // only exposes the one existing, read-only time-compression route.
@@ -140,59 +158,143 @@ function clientIp(req: NextRequest): string {
   return req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? req.headers.get("x-real-ip") ?? "unknown";
 }
 
-async function doForward(req: NextRequest, segments: string[], method: "GET" | "POST" | "PUT" | "DELETE", authorization: string): Promise<Response> {
-  if (!OS_API) return Response.json({ error: "Jarvis proxy is not configured" }, { status: 500 });
+function proxyError(error: string, status: number): Response {
+  return Response.json({ error }, { status, headers: { "cache-control": "no-store" } });
+}
 
-  const url = new URL(`${OS_API}/api/${segments.join("/")}`);
+function hasBearer(req: NextRequest): string | null {
+  const value = req.headers.get("authorization");
+  return value && /^Bearer\s+\S+$/.test(value) ? value : null;
+}
+
+function hasTestKey(req: NextRequest): boolean {
+  const configured = process.env.JARVIS_ADMIN_KEY;
+  return process.env.JARVIS_TEST_MODE === "1" && Boolean(configured) && req.headers.get("x-jarvis-key") === configured;
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error("Jarvis proxy auth timed out")), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+  }
+}
+
+async function doForward(
+  req: NextRequest,
+  segments: string[],
+  method: "GET" | "POST" | "PUT" | "DELETE",
+  authorization?: string,
+): Promise<Response> {
+  const upstreamBase = osApi();
+  if (!upstreamBase) return proxyError("Jarvis proxy is not configured", 500);
+
+  let url: URL;
+  try {
+    url = new URL(`${upstreamBase}/api/${segments.join("/")}`);
+  } catch {
+    return proxyError("Jarvis proxy is misconfigured", 500);
+  }
   req.nextUrl.searchParams.forEach((v, k) => url.searchParams.set(k, v));
 
+  const controller = new AbortController();
+  const timeoutMs = method === "GET" ? JARVIS_PROXY_READ_TIMEOUT_MS : JARVIS_PROXY_WRITE_TIMEOUT_MS;
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   const init: RequestInit = {
     method,
-    headers: { authorization, "content-type": "application/json" },
+    headers: {
+      ...(authorization ? { authorization } : {}),
+      "content-type": "application/json",
+    },
     cache: "no-store",
+    signal: controller.signal,
   };
-  if (method === "POST" || method === "PUT") {
-    const body = await req.text();
-    init.body = body.length > 0 ? body : "{}";
+  try {
+    if (method === "POST" || method === "PUT") {
+      const body = await req.text();
+      init.body = body.length > 0 ? body : "{}";
+    }
+    const upstream = await fetch(url.toString(), init);
+    // Keep this byte-preserving: the allowlist includes the tenant-scoped
+    // documents endpoint, whose response is a PDF rather than JSON.
+    const body = await upstream.arrayBuffer();
+    return new Response(body, {
+      status: upstream.status,
+      headers: {
+        "content-type": upstream.headers.get("content-type") ?? "application/json",
+        "cache-control": "no-store",
+      },
+    });
+  } catch (error) {
+    if (controller.signal.aborted) {
+      return proxyError(`Jarvis backend timed out after ${timeoutMs / 1000} seconds`, 504);
+    }
+    // Keep upstream failures as stable retryable boundary responses. Letting a
+    // rejected fetch escape turns a recoverable outage into an opaque Next.js 500.
+    return proxyError("Jarvis backend is unavailable", 502);
+  } finally {
+    clearTimeout(timeoutId);
   }
-
-  const upstream = await fetch(url.toString(), init);
-  const text = await upstream.text();
-  return new Response(text, { status: upstream.status, headers: { "content-type": "application/json" } });
 }
 
 async function forwardPublic(req: NextRequest, segments: string[]): Promise<Response> {
+  // finnor-os exposes /health without authentication. Do not make liveness
+  // depend on the optional shared service-account credentials.
+  if (segments.length === 1 && segments[0] === "health") return doForward(req, segments, "GET");
   let token: string;
   try {
-    token = await getServiceToken();
-  } catch {
-    return Response.json({ error: "Jarvis proxy auth unavailable" }, { status: 502 });
+    token = await withTimeout(getServiceToken(), JARVIS_PROXY_READ_TIMEOUT_MS);
+  } catch (error) {
+    if (error instanceof Error && error.message === "Jarvis proxy auth timed out") {
+      return proxyError(`Jarvis proxy auth timed out after ${JARVIS_PROXY_READ_TIMEOUT_MS / 1000} seconds`, 504);
+    }
+    return proxyError("Jarvis proxy auth unavailable", 502);
   }
   return doForward(req, segments, "GET", `Bearer ${token}`);
 }
 
+async function forwardTest(req: NextRequest, segments: string[], method: "GET" | "POST" | "PUT" | "DELETE"): Promise<Response> {
+  try {
+    const token = await withTimeout(getServiceToken(), method === "GET" ? JARVIS_PROXY_READ_TIMEOUT_MS : JARVIS_PROXY_WRITE_TIMEOUT_MS);
+    return doForward(req, segments, method, `Bearer ${token}`);
+  } catch (error) {
+    if (error instanceof Error && error.message === "Jarvis proxy auth timed out") {
+      return proxyError(`Jarvis proxy auth timed out after ${(method === "GET" ? JARVIS_PROXY_READ_TIMEOUT_MS : JARVIS_PROXY_WRITE_TIMEOUT_MS) / 1000} seconds`, 504);
+    }
+    return proxyError("Jarvis test-mode owner session unavailable", 502);
+  }
+}
+
 export async function GET(req: NextRequest, { params }: { params: { path: string[] } }): Promise<Response> {
   const segments = params.path;
-  if (!validSegments(segments) || !validQuery(req.nextUrl)) return Response.json({ error: "Invalid request" }, { status: 400 });
-  if (!isAllowedGet(segments)) return Response.json({ error: "Not found" }, { status: 404 });
+  if (!validSegments(segments) || !validQuery(req.nextUrl)) return proxyError("Invalid request", 400);
+  if (!isAllowedGet(segments)) return proxyError("Not found", 404);
 
   if (isPublicGet(segments)) {
-    if (!checkRateLimit(clientIp(req))) return Response.json({ error: "Rate limit exceeded — slow down and try again shortly." }, { status: 429 });
+    if (!checkRateLimit(clientIp(req))) return proxyError("Rate limit exceeded — slow down and try again shortly.", 429);
     return forwardPublic(req, segments);
   }
 
-  const auth = req.headers.get("authorization");
-  if (!auth?.startsWith("Bearer ")) return Response.json({ error: "Sign in required" }, { status: 401 });
+  if (hasTestKey(req)) return forwardTest(req, segments, "GET");
+  const auth = hasBearer(req);
+  if (!auth) return proxyError("Sign in required", 401);
   return doForward(req, segments, "GET", auth);
 }
 
 export async function POST(req: NextRequest, { params }: { params: { path: string[] } }): Promise<Response> {
   const segments = params.path;
-  if (!validSegments(segments)) return Response.json({ error: "Invalid request" }, { status: 400 });
-  if (!isAllowedPost(segments)) return Response.json({ error: "Not found" }, { status: 404 });
+  if (!validSegments(segments) || !validQuery(req.nextUrl)) return proxyError("Invalid request", 400);
+  if (!isAllowedPost(segments)) return proxyError("Not found", 404);
 
-  const auth = req.headers.get("authorization");
-  if (!auth?.startsWith("Bearer ")) return Response.json({ error: "Sign in required" }, { status: 401 });
+  if (hasTestKey(req)) return forwardTest(req, segments, "POST");
+  const auth = hasBearer(req);
+  if (!auth) return proxyError("Sign in required", 401);
   return doForward(req, segments, "POST", auth);
 }
 
@@ -202,18 +304,24 @@ function isUserPrefs(segments: string[]): boolean {
   return segments.length === 1 && (segments[0] === "user-prefs" || segments[0] === "push-subscriptions");
 }
 
+function isAllowedPut(segments: string[]): boolean {
+  return isUserPrefs(segments) || (segments.length === 3 && segments[0] === "policies") || (segments.length === 2 && segments[0] === "price-book");
+}
+
 export async function PUT(req: NextRequest, { params }: { params: { path: string[] } }): Promise<Response> {
   const segments = params.path;
-  if (!validSegments(segments) || !isUserPrefs(segments)) return Response.json({ error: "Not found" }, { status: 404 });
-  const auth = req.headers.get("authorization");
-  if (!auth?.startsWith("Bearer ")) return Response.json({ error: "Sign in required" }, { status: 401 });
+  if (!validSegments(segments) || !validQuery(req.nextUrl) || !isAllowedPut(segments)) return proxyError("Not found", 404);
+  if (hasTestKey(req)) return forwardTest(req, segments, "PUT");
+  const auth = hasBearer(req);
+  if (!auth) return proxyError("Sign in required", 401);
   return doForward(req, segments, "PUT", auth);
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: { path: string[] } }): Promise<Response> {
   const segments = params.path;
-  if (!validSegments(segments) || !isUserPrefs(segments)) return Response.json({ error: "Not found" }, { status: 404 });
-  const auth = req.headers.get("authorization");
-  if (!auth?.startsWith("Bearer ")) return Response.json({ error: "Sign in required" }, { status:401 });
+  if (!validSegments(segments) || !validQuery(req.nextUrl) || !isUserPrefs(segments)) return proxyError("Not found", 404);
+  if (hasTestKey(req)) return forwardTest(req, segments, "DELETE");
+  const auth = hasBearer(req);
+  if (!auth) return proxyError("Sign in required", 401);
   return doForward(req, segments, "DELETE", auth);
 }

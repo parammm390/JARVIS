@@ -2,49 +2,472 @@
 
 // The Instruction Thread — top-level page (plan v3 §2.2/§6⓪, P2.T5).
 //
-// Mounts the kernel (which itself mounts JarvisAuthProvider/JarvisDataProvider —
-// §4.1, the kernel wraps data-core, never replaces it) and gates on owner role.
+// Mounts the kernel when used standalone and gates on owner role. The canonical
+// `/jarvis` landing supplies the already-mounted auth/data contexts through
+// `KernelSurface`, so the Thread and its shell share one live data/realtime stack.
 // `VapiSessionProvider` is already mounted once at `src/app/jarvis/layout.tsx`
 // for the whole /jarvis section — this page does not remount it.
 
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import dynamic from "next/dynamic"
-import { useReducedMotion } from "framer-motion"
+import { motion, useReducedMotion } from "framer-motion"
 import "../jarvis-theme.css"
-import { KernelProvider, useKernel, type Thread as ThreadData } from "../kernel/store"
+import { KernelProvider, KernelSurface, useKernel, type Thread as ThreadData } from "../kernel/store"
 import { useJarvisAuth } from "../lib/jarvis-auth"
 import { useVapiSession } from "../lib/useVapiSession"
 import { ThreadField } from "./ThreadField"
 import { ThreadStack } from "./ThreadStack"
-import { ThreadApprovalCockpit } from "./ThreadBlocks"
-import { CommandRail } from "./CommandRail"
-import { FirstRunScene } from "./FirstRunScene"
+import { ThreadEventAtmosphere } from "./ThreadAtmosphere"
+import { ThreadApprovalCockpit, ThreadExecutionWeave } from "./ThreadBlocks"
+import type { ExecutionWeavePlacement } from "./ThreadBlocks"
+import { CommandRail, MicControlButton } from "./CommandRail"
+import { SetupRail } from "./FirstRunScene"
 import { ModeChip } from "./ModeChip"
 import { DispatchMap } from "../panels/DispatchMap"
 import { MyDay } from "../panels/MyDay"
 import type { JarvisRole } from "../lib/jarvis-auth"
 import { derivePresence } from "../kernel/presence"
 import { D3_LONG_EXECUTION_MS, D3_NARRATION_TEXT, shouldFireD3Narration } from "../lib/d3-narration"
-import type { Truth } from "../kernel/types"
-import type { OrbLiveState } from "./Orb3D"
+import { receiptIdFromHash } from "../lib/receipt-nav"
+import { deriveMood } from "../lib/mood"
+import { useQuietHours } from "../lib/quiet-hours"
+import { initialLowPowerMode, persistLowPowerMode } from "../lib/low-power"
+import { ConsoleAtmosphere } from "../atmosphere"
+import { GridBackdrop } from "../ui/fx/GridBackdrop"
+import { OrbAuraRipple } from "./OrbAuraRipple"
+import type { Presence, Truth } from "../kernel/types"
+import type { TransportHealth } from "../kernel/transport"
+import { JarvisOrbSurface } from "./JarvisOrbSurface"
+import orbSurfaceStyles from "./JarvisOrbSurface.module.css"
+import { deriveOrbVisualState, type CorrelatedOrbAction } from "./orb-visual-state"
+import { INTENT_LAUNCH_DURATION_MS, intentLaunchVariants, questionFocusLayerVariants } from "../kernel/choreography"
+import { deriveLiveFrame, type LiveFrameIntentLaunch, type LiveFrameMode, type LiveFrameProjection } from "../kernel/liveframe"
+import { getAnchorRect } from "../lib/pulse-bus"
+import { approvalConsequencePrompt } from "./approval-consequence"
+import {
+  OperationalCommandIndex,
+  OperationalContextRail,
+  OperationalFloor,
+  OperationalSignalRail,
+  OperationsHeader,
+  OrbIntelligenceReadout,
+} from "./OperationalConsole"
+import {
+  onTracePixelMeasurement,
+  recordTraceEventReceived,
+  resetTracePixelMeasurements,
+  type TracePixelMeasurement,
+} from "../kernel/trace-metrics"
 
-type OrbComponent = (props: { live: OrbLiveState; forceLowPower?: boolean }) => JSX.Element
 
 const ReceiptContent = dynamic(() => import("../lib/ReceiptDrawer").then((m) => m.ReceiptContent), { ssr: false })
+const ParticleField = dynamic(() => import("../panels/ParticleField").then((m) => m.ParticleField), { ssr: false })
+
+// All existing labelled Thread fixtures carry this source-defined instruction
+// id; using it here lets the real Thread paint marker close the fixture event.
+const FIXTURE_JOURNEY_INSTRUCTION_ID = "fixture-instruction"
+const FIXTURE_JOURNEY_STEPS = [
+  { key: "rest", label: "ready", phase: null },
+  { key: "heard", label: "captured", phase: "received" },
+  { key: "understood", label: "understanding", phase: "context_retrieved" },
+  { key: "plan", label: "planning", phase: "plan_ready" },
+  { key: "clarify", label: "clarifying", phase: "clarification_required" },
+  { key: "approval", label: "approval", phase: "action_gated" },
+  { key: "execution", label: "executing", phase: "executing" },
+  { key: "verifying", label: "verifying", phase: "verifying" },
+  { key: "receipt", label: "terminal", phase: "completed" },
+] as const
 
 // Three.js is only needed after the Thread has mounted. A native import here,
 // rather than next/dynamic, intentionally avoids preloading the renderer as an
 // initial-route dependency; the original Orb also initialized only after mount.
-function DeferredOrb({ live }: { live: OrbLiveState }) {
-  const [Orb, setOrb] = useState<OrbComponent | null>(null)
+
+type Daypart = "dawn" | "day" | "dusk" | "night"
+
+function getDaypart(): Daypart {
+  const hour = new Date().getHours()
+  if (hour >= 5 && hour < 8) return "dawn"
+  if (hour >= 8 && hour < 18) return "day"
+  if (hour >= 18 && hour < 21) return "dusk"
+  return "night"
+}
+
+interface ThreadAtmosphereState {
+  mood: ReturnType<typeof deriveMood>
+  daypart: Daypart
+  forceLowPower: boolean
+  quiet: boolean
+  relighting: boolean
+  transport: TransportHealth
+  voiceAmplitude?: number
+  diagnostics: {
+    now: number
+    lastPollAtMs: number | null
+    slowLastSuccessMs: number | null
+    apiLatencyMs: number | null
+  }
+  onToggleLowPower: () => void
+}
+
+function useThreadAtmosphere(
+  voice: ReturnType<typeof useVapiSession>,
+  transport: ThreadAtmosphereState["transport"],
+  presence: Presence,
+  diagnostics: ThreadAtmosphereState["diagnostics"],
+): ThreadAtmosphereState {
+  const { quiet } = useQuietHours()
+  const [daypart, setDaypart] = useState<Daypart>("day")
+  const [forceLowPower, setForceLowPower] = useState(false)
+  const [relighting, setRelighting] = useState(false)
+  const degraded = transport === "offline" || transport === "reconnecting" || transport === "unavailable"
+  const wasDegradedRef = useRef(degraded)
+
   useEffect(() => {
-    let active = true
-    void import("./Orb3D").then(({ Orb3D }) => {
-      if (active) setOrb(() => Orb3D)
-    })
-    return () => { active = false }
+    setDaypart(getDaypart())
+    setForceLowPower(initialLowPowerMode())
+    const id = window.setInterval(() => setDaypart(getDaypart()), 5 * 60 * 1000)
+    return () => window.clearInterval(id)
   }, [])
-  return Orb ? <Orb live={live} /> : null
+
+  useEffect(() => {
+    if (wasDegradedRef.current && !degraded) {
+      setRelighting(true)
+      const id = window.setTimeout(() => setRelighting(false), 900)
+      wasDegradedRef.current = degraded
+      return () => window.clearTimeout(id)
+    }
+    wasDegradedRef.current = degraded
+  }, [degraded])
+
+  const onToggleLowPower = () => {
+    setForceLowPower((current) => {
+      const next = !current
+      persistLowPowerMode(next)
+      return next
+    })
+  }
+
+  return {
+    mood: deriveMood({
+      voiceLive: voice.voiceState === "live" || voice.voiceState === "speaking",
+      degraded,
+    }),
+    daypart,
+    forceLowPower,
+    quiet,
+    relighting,
+    transport,
+    voiceAmplitude: presence === "hearing" ? voice.localVolumeLevel : undefined,
+    diagnostics,
+    onToggleLowPower,
+  }
+}
+
+const PRIMARY_STATUS_BY_MODE: Record<LiveFrameMode, string> = {
+  ready: "Ready",
+  listening: "Listening",
+  thinking: "Understanding / Building the plan",
+  decision: "Needs your approval",
+  working: "Working",
+  verifying: "Verifying the outcome",
+  resolved: "Done",
+  fault: "Needs attention",
+}
+
+function primaryStatus(liveframe: LiveFrameProjection): string {
+  if (liveframe.mode === "decision" && liveframe.focus === "clarification") return "Needs one detail"
+  if (liveframe.mode === "fault" && (liveframe.transportPosture === "offline" || liveframe.presence === "severed")) return "Connection lost"
+  if (liveframe.mode === "fault" && liveframe.presence === "wounded") return "Partially completed"
+  return PRIMARY_STATUS_BY_MODE[liveframe.mode]
+}
+
+function diagnosticAge(lastAtMs: number | null, now: number): string {
+  if (lastAtMs === null) return "Not observed"
+  const ageMs = Math.max(0, now - lastAtMs)
+  if (ageMs < 1_000) return "Just now"
+  if (ageMs < 60_000) return String(Math.floor(ageMs / 1_000)) + "s ago"
+  if (ageMs < 3_600_000) return String(Math.floor(ageMs / 60_000)) + "m ago"
+  return String(Math.floor(ageMs / 3_600_000)) + "h ago"
+}
+
+const TRANSPORT_DIAGNOSTIC: Record<TransportHealth, string> = {
+  live: "Live",
+  polling: "Polling",
+  reconnecting: "Reconnecting",
+  offline: "Offline",
+  unavailable: "Unavailable",
+}
+
+function DiagnosticsDisclosure({
+  atmosphere,
+  onRetry,
+}: {
+  atmosphere: ThreadAtmosphereState
+  onRetry?: () => void
+}) {
+  const { diagnostics } = atmosphere
+  return (
+    <details className="relative" data-jarvis-diagnostics>
+      <summary className="j-chip min-h-11 cursor-pointer list-none border border-white/10 bg-white/[.035] px-3 text-[color:var(--j-text-dim)] hover:text-cyan-100">Diagnostics</summary>
+      <div className="fixed left-2 right-2 top-[6.75rem] z-40 w-auto rounded-2xl border border-white/10 bg-[#07101d]/[.98] p-3 text-left shadow-[0_16px_48px_rgba(0,0,0,0.45)] backdrop-blur-xl sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-[min(22rem,calc(100vw-2rem))]">
+        <dl className="grid gap-2 j-fs-micro text-[color:var(--j-text-dim)]">
+          <div className="flex items-center justify-between gap-3"><dt>Transport</dt><dd className="font-bold text-[color:var(--j-text)]" data-diagnostics-transport>{TRANSPORT_DIAGNOSTIC[atmosphere.transport]}</dd></div>
+          <div className="flex items-center justify-between gap-3"><dt>Last poll</dt><dd className="font-bold text-[color:var(--j-text)]">{diagnosticAge(diagnostics.lastPollAtMs, diagnostics.now)}</dd></div>
+          <div className="flex items-center justify-between gap-3"><dt>Source freshness</dt><dd className="font-bold text-[color:var(--j-text)]">{diagnosticAge(diagnostics.slowLastSuccessMs, diagnostics.now)}</dd></div>
+          <div className="flex items-center justify-between gap-3"><dt>API latency</dt><dd className="font-bold text-[color:var(--j-text)]">{diagnostics.apiLatencyMs === null ? "Not observed" : String(Math.round(diagnostics.apiLatencyMs)) + " ms"}</dd></div>
+          <div className="flex items-center justify-between gap-3"><dt>Low power</dt><dd className="font-bold text-[color:var(--j-text)]">{atmosphere.forceLowPower ? "On" : "Off"}</dd></div>
+        </dl>
+        <div className="mt-3 flex flex-wrap gap-2 border-t border-white/10 pt-3">
+          <button type="button" className="min-h-11 rounded-xl border border-white/10 px-3 j-fs-micro font-bold text-[color:var(--j-text-dim)] hover:text-cyan-100" onClick={atmosphere.onToggleLowPower} aria-pressed={atmosphere.forceLowPower}>
+            {atmosphere.forceLowPower ? "Turn low power off" : "Turn low power on"}
+          </button>
+          {onRetry && <button type="button" className="min-h-11 rounded-xl border border-white/10 px-3 j-fs-micro font-bold text-[color:var(--j-text-dim)] hover:text-cyan-100" onClick={onRetry}>Retry data</button>}
+        </div>
+      </div>
+    </details>
+  )
+}
+
+function ThreadAtmosphere({
+  atmosphere,
+  liveframe,
+}: {
+  atmosphere: ThreadAtmosphereState
+  liveframe: LiveFrameProjection
+}) {
+  // P1 rest gate: ready owns the Presence Breath and the source-backed Field
+  // drift only. The generic cinematic atmosphere and particle canvas belong to
+  // active presentation modes, so they must not add standing loops to the rest
+  // scene. Once a linked workflow is actually visible, the Weave owns the live
+  // motion budget and the expensive cinematic/particle layers stay deferred.
+  const linkedWorkflowVisible = liveframe.linkedRunIds.length > 0 || liveframe.activeRunIds.length > 0 || liveframe.activeStepIds.length > 0
+  const showCinematicAtmosphere = liveframe.mode !== "ready" && !linkedWorkflowVisible
+  return (
+    <>
+      <div
+        className="pointer-events-none fixed inset-0 z-0 overflow-hidden"
+        data-jarvis-atmosphere
+        style={{ opacity: "var(--aurora-opacity)", backgroundColor: "var(--day-tint)", transition: "background-color 2s ease" }}
+      >
+        {!atmosphere.forceLowPower && showCinematicAtmosphere && <ConsoleAtmosphere slow={atmosphere.quiet} />}
+      </div>
+      {!atmosphere.forceLowPower && showCinematicAtmosphere && <ParticleField />}
+      <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
+        <GridBackdrop />
+      </div>
+    </>
+  )
+}
+
+function PresenceCore({
+  liveframe,
+  visualState,
+  forceLowPower,
+  deferWebgl = false,
+  docked,
+  intentLaunch,
+  reducedMotion,
+  showVoiceControl = false,
+  orbExpanded = false,
+  onOrbExpandedChange,
+  telemetry,
+}: {
+  liveframe: LiveFrameProjection
+  visualState: ReturnType<typeof deriveOrbVisualState>
+  forceLowPower?: boolean
+  /** Keep the 14k-particle WebGL orb deferred while the linked SVG Weave owns the active frame budget. */
+  deferWebgl?: boolean
+  docked: boolean
+  intentLaunch?: LiveFrameIntentLaunch | null
+  reducedMotion: boolean
+  showVoiceControl?: boolean
+  orbExpanded?: boolean
+  onOrbExpandedChange?: (expanded: boolean) => void
+  /** Source-backed labels around the Orb. They belong to the same liveframe
+   * projection and make the surface operational rather than decorative. */
+  telemetry?: ReactNode
+}) {
+  return (
+    <section
+      className={`jarvis-presence-core relative${docked ? " jarvis-presence-core--docked" : ""}${orbExpanded ? " jarvis-presence-core--immersive" : ""}`}
+      data-liveframe-surface="presence-core"
+      data-liveframe-mode={liveframe.mode}
+      data-liveframe-focus={liveframe.focus}
+      data-liveframe-energy={liveframe.energy}
+      data-jarvis-orb-expanded={orbExpanded ? "true" : "false"}
+      data-jarvis-orb-depth={orbExpanded ? "immersive" : "ambient"}
+      data-intent-launch={intentLaunch ? "accepted" : undefined}
+      aria-label="JARVIS Presence Core"
+    >
+      <div className="jarvis-presence-core__orb">
+        <JarvisOrbSurface
+          visualState={visualState}
+          liveFrame={liveframe}
+          forceLowPower={forceLowPower || deferWebgl}
+          reducedMotion={reducedMotion}
+          activeRunCount={liveframe.activeRunIds.length}
+          onExpandedChange={onOrbExpandedChange}
+        />
+        {!forceLowPower && <OrbAuraRipple />}
+        {telemetry}
+      </div>
+      {showVoiceControl && (
+        <div className="jarvis-presence-core__mic" data-jarvis-orb-control="microphone">
+          <MicControlButton variant="orb" liveframe={liveframe} />
+        </div>
+      )}
+      {intentLaunch && (
+        <motion.span
+          key={intentLaunch.id}
+          {...intentLaunchVariants(reducedMotion)}
+          aria-hidden
+          className="pointer-events-none absolute inset-[-10px] rounded-full border-2 border-cyan-200/80 shadow-[0_0_34px_rgba(34,211,238,0.38)]"
+        />
+      )}
+    </section>
+  )
+}
+
+function rectCenter(rect: DOMRect): { left: number; top: number } {
+  return { left: rect.left + rect.width / 2, top: rect.top + rect.height / 2 }
+}
+
+function IntentLaunchTrail({
+  event,
+  reducedMotion,
+  onComplete,
+}: {
+  event: LiveFrameIntentLaunch | null | undefined
+  reducedMotion: boolean
+  onComplete?: () => void
+}) {
+  const [flight, setFlight] = useState<{ id: number; from: { left: number; top: number }; to: { left: number; top: number } } | null>(null)
+
+  useEffect(() => {
+    if (!event) {
+      setFlight(null)
+      return
+    }
+
+    setFlight(null)
+    let active = true
+    let frame: number | null = null
+    let timeout: number | null = null
+
+    if (reducedMotion) {
+      frame = window.requestAnimationFrame(() => {
+        if (active) onComplete?.()
+      })
+    } else {
+      frame = window.requestAnimationFrame(() => {
+        if (!active) return
+        const from = getAnchorRect("command-dock")
+        const to = getAnchorRect("instruction-heard")
+        if (!from || !to) {
+          timeout = window.setTimeout(() => {
+            if (active) onComplete?.()
+          }, INTENT_LAUNCH_DURATION_MS)
+          return
+        }
+        setFlight({ id: event.id, from: rectCenter(from), to: rectCenter(to) })
+      })
+    }
+
+    return () => {
+      active = false
+      if (frame !== null) window.cancelAnimationFrame(frame)
+      if (timeout !== null) window.clearTimeout(timeout)
+    }
+  }, [event, onComplete, reducedMotion])
+
+  if (!event || reducedMotion || !flight) return null
+  const variants = intentLaunchVariants(false)
+  return (
+    <motion.span
+      key={flight.id}
+      initial={{ ...variants.initial, left: flight.from.left, top: flight.from.top }}
+      animate={{ ...variants.animate, left: flight.to.left, top: flight.to.top }}
+      transition={variants.transition}
+      onAnimationComplete={() => onComplete?.()}
+      aria-hidden
+      className="pointer-events-none fixed z-[60] h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-cyan-100 shadow-[0_0_28px_rgba(34,211,238,0.8)]"
+    />
+  )
+}
+
+function useExecutionWeavePlacement(): ExecutionWeavePlacement {
+  const [placement, setPlacement] = useState<ExecutionWeavePlacement>("document")
+  useEffect(() => {
+    const media = window.matchMedia("(min-width: 1180px)")
+    const sync = () => setPlacement(media.matches ? "side" : "document")
+    sync()
+    media.addEventListener?.("change", sync)
+    return () => media.removeEventListener?.("change", sync)
+  }, [])
+  return placement
+}
+
+/** LF-07 canvas depth: every non-spine surface consumes the same real
+ * LIVEFRAME clarification focus. The wrapper changes only opacity, so the
+ * controls remain mounted and reachable while the action spine stays at full
+ * emphasis. */
+function QuestionDepth({ surface, focused, reducedMotion, className = "", children }: { surface: string; focused: boolean; reducedMotion: boolean; className?: string; children: ReactNode }) {
+  const variants = questionFocusLayerVariants(reducedMotion, focused)
+  return (
+    <motion.div
+      initial={false}
+      animate={variants.animate}
+      transition={variants.transition}
+      data-jarvis-question-depth={surface}
+      data-jarvis-question-dimmed={focused ? "true" : "false"}
+      className={className}
+    >
+      {children}
+    </motion.div>
+  )
+}
+
+function projectKernelLiveFrame(
+  kernel: ReturnType<typeof useKernel>,
+  localVolumeLevel?: number,
+  latestImpulse: LiveFrameIntentLaunch | null = null,
+): LiveFrameProjection {
+  const workflowRuns = kernel.selectorInput.terminalRuns
+    ? [...kernel.selectorInput.runs, ...kernel.selectorInput.terminalRuns]
+    : kernel.selectorInput.runs
+  const state = kernel.thread?.machine.instructionState ?? null
+  return deriveLiveFrame({
+    presence: kernel.presence,
+    transport: kernel.transport,
+    micOpen: kernel.micOpen,
+    voiceSpeaking: kernel.voiceSpeaking,
+    localVolumeLevel,
+    nowMs: kernel.selectorInput.now,
+    instruction: kernel.thread
+      ? {
+          state,
+          actionIds: kernel.thread.nodes.map((node) => node.id),
+          clarificationRequired: kernel.thread.clarification !== null || state === "clarifying",
+          approvalRequired: state === "awaiting_approval",
+          verificationActive: state === "verifying",
+        }
+      : null,
+    workflowRuns,
+    latestImpulse,
+  })
+}
+
+function projectKernelOrbActions(kernel: ReturnType<typeof useKernel>): CorrelatedOrbAction[] {
+  const rows = [
+    ...kernel.selectorInput.pendingActions,
+    ...(kernel.selectorInput.blockedActions ?? []),
+  ]
+  const byId = new Map<string, CorrelatedOrbAction>()
+  for (const row of rows) {
+    if (!row.id) continue
+    byId.set(row.id, { id: row.id, instructionId: row.instructionId, status: row.status })
+  }
+  return [...byId.values()]
 }
 
 function LoadingGate() {
@@ -54,6 +477,30 @@ function LoadingGate() {
         <span className="flex h-9 w-9 animate-pulse items-center justify-center rounded-xl bg-cyan-400/20 text-xs font-black text-cyan-200 shadow-lg">F</span>
         Waking JARVIS…
       </div>
+    </div>
+  )
+}
+
+function RoleErrorGate({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-[#04070f] px-6 text-center">
+      <h1 className="text-lg font-black text-white">JARVIS could not load your workspace</h1>
+      <p className="max-w-md j-fs-sm text-[color:var(--j-text-dim)]">{message}</p>
+      <button type="button" onClick={onRetry} className="rounded-full bg-teal-300 px-4 py-1.5 j-fs-micro font-black text-slate-950 hover:bg-teal-200">
+        Retry connection
+      </button>
+    </div>
+  )
+}
+
+function AuthErrorGate({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-[#04070f] px-6 text-center">
+      <h1 className="text-lg font-black text-white">JARVIS could not restore sign-in</h1>
+      <p className="max-w-md j-fs-sm text-[color:var(--j-text-dim)]">{message}</p>
+      <button type="button" onClick={onRetry} className="rounded-full bg-teal-300 px-4 py-1.5 j-fs-micro font-black text-slate-950 hover:bg-teal-200">
+        Retry connection
+      </button>
     </div>
   )
 }
@@ -89,7 +536,7 @@ function StandaloneReceiptView({ receiptId, onBack }: { receiptId: string; onBac
   // across a reload until P3's instruction_sessions ships; the RECEIPT itself,
   // being real stored data, already can).
   return (
-    <div className="mx-auto max-w-[720px] px-4 pb-40 pt-24">
+    <div className="mx-auto max-w-[720px] px-4 pb-[calc(10rem+env(safe-area-inset-bottom))] pt-24 sm:pb-40">
       <button type="button" onClick={onBack} className="j-chip mb-3 border border-white/10 bg-white/[.035] text-[color:var(--j-text-dim)]">
         ← Back
       </button>
@@ -103,9 +550,11 @@ function StandaloneReceiptView({ receiptId, onBack }: { receiptId: string; onBac
 function RestPrompt({
   overdue,
   pending,
+  onRetry,
 }: {
   overdue: Truth<{ count: number; totalUsd: number }>
   pending: Truth<number>
+  onRetry?: () => void
 }) {
   const segments: Array<{ source: "selectOverdueInvoices" | "selectPendingApprovals"; text: string }> = []
   if (overdue.status === "known" || overdue.status === "stale") {
@@ -122,10 +571,13 @@ function RestPrompt({
   }
   const errored = overdue.status === "unavailable"
   return (
-    <div className="flex min-h-[38vh] flex-col items-center justify-center px-4 text-center">
+    <div className="jarvis-rest-prompt flex min-h-0 flex-col items-center justify-center px-4 pb-[calc(10rem+env(safe-area-inset-bottom))] text-center sm:pb-0">
       <p className="j-fs-lg font-bold text-[color:var(--j-text)]">Tell JARVIS what you need.</p>
       {errored ? (
-        <p className="j-fs-sm mt-2 text-[color:var(--j-red)]">Can&rsquo;t reach JARVIS. <button type="button" className="underline">Retry</button></p>
+        <p className="j-fs-sm mt-2 text-[color:var(--j-red)]">
+          Can&rsquo;t reach JARVIS.{" "}
+          <button type="button" className="underline" onClick={onRetry}>Retry</button>
+        </p>
       ) : (
         segments.length > 0 && (
           <p className="j-fs-sm mt-2 text-[color:var(--j-text-dim)]">
@@ -155,14 +607,27 @@ function ThreadBody({
   overdueInvoices,
   pendingApprovals,
   activeRunCount,
+  transport,
+  voiceAmplitude,
   reducedMotion,
   onCancel,
   onAnswer,
   onSkip,
+  onRetry,
+  onRetryThread,
   showRail,
   fixtureLabel,
+  fixtureLabelPlacement = "fixed",
   role = "owner",
   mode = "production",
+  atmosphere,
+  liveframe,
+  orbActions,
+  intentLaunch,
+  onIntentAccepted,
+  onIntentLaunchComplete,
+  threadRestored = false,
+  restoredTraceEventCount = 0,
 }: {
   thread: ThreadData | null
   threadHistory: ThreadData[]
@@ -170,53 +635,201 @@ function ThreadBody({
   overdueInvoices: Truth<{ count: number; totalUsd: number }>
   pendingApprovals: Truth<number>
   activeRunCount: number
+  transport: TransportHealth
+  /** The real local Vapi mic level; omitted by fixture/preview surfaces. */
+  voiceAmplitude?: number
   reducedMotion: boolean
   onCancel: () => void
   onAnswer: (text: string) => void
   onSkip: () => void
+  onRetry?: () => void
+  onRetryThread?: () => void | Promise<void>
   showRail: boolean
   fixtureLabel?: string
+  fixtureLabelPlacement?: "fixed" | "flow"
   role?: JarvisRole
   mode?: "production" | "showcase" | "preview"
+  atmosphere?: ThreadAtmosphereState
+  liveframe: LiveFrameProjection
+  /** Pending/blocked rows already fetched by the shared data provider. The
+   * adapter correlates them against this thread's instruction/action ids. */
+  orbActions?: readonly CorrelatedOrbAction[]
+  intentLaunch?: LiveFrameIntentLaunch | null
+  onIntentAccepted?: () => void
+  onIntentLaunchComplete?: () => void
+  threadRestored?: boolean
+  restoredTraceEventCount?: number
 }) {
   const isApproving = role !== "technician" && thread?.machine.instructionState === "awaiting_approval"
+  const showWeave = liveframe.linkedRunIds.length > 0 || liveframe.activeRunIds.length > 0 || liveframe.activeStepIds.length > 0
+  const executionWeavePlacement = useExecutionWeavePlacement()
+  const isRestComposition = role !== "technician" && !thread && !showWeave
+  const presenceDocked = Boolean(thread && liveframe.mode !== "ready" && liveframe.mode !== "listening")
+  const questionFocus = liveframe.focus === "clarification"
+  // The rails are an owner-facing projection of the same kernel/data state.
+  // Public preview stays deliberately sparse because it has no private source
+  // observations to populate an operational surface with.
+  const showOperationalDeck = role === "owner" && mode !== "preview"
+  const [orbExpanded, setOrbExpanded] = useState(false)
+  const onOrbExpandedChange = useCallback((expanded: boolean) => setOrbExpanded(expanded), [])
+  const visualState = deriveOrbVisualState({
+    instructionId: thread?.instructionId,
+    instructionState: thread?.machine.instructionState,
+    answerResult: thread?.answerResult,
+    actions: orbActions,
+    currentActionIds: thread?.nodes.map((node) => node.id),
+    transport,
+    presence,
+    liveFrame: liveframe,
+  })
+  const renderActionSpine = () => (
+    <section className="jarvis-action-spine" data-liveframe-surface="action-spine" data-jarvis-composition-region="response" data-jarvis-orb-secondary="true">
+      {!thread && <RestPrompt overdue={overdueInvoices} pending={pendingApprovals} onRetry={onRetry} />}
+      {!thread && mode === "preview" && (
+        <div className={orbSurfaceStyles.previewAccess} data-jarvis-composition-region="access">
+          <a href="/jarvis/login" className="flex min-h-11 w-fit items-center rounded-full bg-teal-300 px-4 py-2.5 j-fs-sm font-black text-slate-950">
+            Sign in
+          </a>
+        </div>
+      )}
+      {thread && <ThreadStack thread={thread} threadHistory={threadHistory} onCancel={onCancel} onAnswer={onAnswer} onSkip={onSkip} onRetry={onRetryThread} reducedMotion={reducedMotion} intentLaunch={intentLaunch} executionWeavePlacement={executionWeavePlacement} executionEnergy={liveframe.energy} threadRestored={threadRestored} restoredTraceEventCount={restoredTraceEventCount} />}
+      {role === "dispatcher" && <DispatchMap />}
+    </section>
+  )
+  const renderStage = () => {
+    if (role === "technician") {
+      return <main className="mx-auto max-w-lg px-4 pb-[calc(10rem+env(safe-area-inset-bottom))] pt-8 lg:pb-32"><MyDay /></main>
+    }
+    if (isRestComposition) {
+      return (
+        <main className={`jarvis-canvas jarvis-rest-composition${mode === "preview" ? " jarvis-canvas--preview" : ""}${orbExpanded ? " jarvis-canvas--orb-expanded" : ""}`} data-liveframe-composition="rest" data-jarvis-composition-region="stage" data-jarvis-orb-composition={orbExpanded ? "immersive" : "ambient"}>
+          <QuestionDepth surface="presence" focused={questionFocus} reducedMotion={reducedMotion} className="w-full min-w-0">
+            <PresenceCore
+              liveframe={liveframe}
+              visualState={visualState}
+              forceLowPower={atmosphere?.forceLowPower}
+              docked={false}
+              intentLaunch={intentLaunch}
+              reducedMotion={reducedMotion}
+              showVoiceControl={showRail && !showOperationalDeck}
+              orbExpanded={orbExpanded}
+              onOrbExpandedChange={onOrbExpandedChange}
+              telemetry={<OrbIntelligenceReadout thread={thread} liveframe={liveframe} pendingApprovals={pendingApprovals} />}
+            />
+          </QuestionDepth>
+          {renderActionSpine()}
+        </main>
+      )
+    }
+    return (
+      <main className={`jarvis-canvas jarvis-live-layout ${showWeave ? "jarvis-live-layout--weave" : "jarvis-live-layout--no-weave"}${orbExpanded ? ` jarvis-canvas--orb-expanded ${orbSurfaceStyles.immersiveLayout}` : !showWeave ? ` ${orbSurfaceStyles.ambientLayout}` : ""}`} data-liveframe-composition="live" data-jarvis-composition-region="stage" data-jarvis-orb-composition={orbExpanded ? "immersive" : "ambient"}>
+        <QuestionDepth surface="presence" focused={questionFocus} reducedMotion={reducedMotion} className="w-full min-w-0">
+          <aside className="jarvis-presence-rail" data-jarvis-orb-composition={orbExpanded ? "immersive" : "ambient"}>
+            <PresenceCore
+              liveframe={liveframe}
+              visualState={visualState}
+              forceLowPower={atmosphere?.forceLowPower}
+              deferWebgl={showWeave}
+              docked={presenceDocked}
+              intentLaunch={intentLaunch}
+              reducedMotion={reducedMotion}
+              showVoiceControl={showRail && !showOperationalDeck}
+              orbExpanded={orbExpanded}
+              onOrbExpandedChange={onOrbExpandedChange}
+              telemetry={<OrbIntelligenceReadout thread={thread} liveframe={liveframe} pendingApprovals={pendingApprovals} />}
+            />
+          </aside>
+        </QuestionDepth>
+        {renderActionSpine()}
+        {showWeave && executionWeavePlacement === "side" && thread && (
+          <QuestionDepth surface="execution-weave" focused={questionFocus} reducedMotion={reducedMotion} className="w-full min-w-0">
+            <ThreadExecutionWeave thread={thread} restored={threadRestored} energy={liveframe.energy} />
+          </QuestionDepth>
+        )}
+      </main>
+    )
+  }
+  // In the owner command center, the real command rail belongs directly below
+  // the intelligence surface rather than after the tallest side rail. This is
+  // presentation-only: it is still the same authenticated input, voice, and
+  // keyboard contract. Non-owner/preview surfaces retain their existing dock.
+  const renderCommandDock = () => showRail && !isApproving ? (
+    <div data-jarvis-composition-region="controls">
+      <QuestionDepth surface="command-dock" focused={questionFocus} reducedMotion={reducedMotion}>
+        <CommandRail liveframe={liveframe} intentLaunch={intentLaunch} onIntentAccepted={onIntentAccepted} embedded={showOperationalDeck} />
+      </QuestionDepth>
+    </div>
+  ) : null
   return (
-    <div className="jarvis-root relative min-h-screen bg-[#04070f] text-[color:var(--j-text)]" data-jarvis-thread data-source={fixtureLabel ? "fixture" : undefined}>
+    <div
+      className="jarvis-root relative min-h-screen bg-[#04070f] text-[color:var(--j-text)]"
+      data-jarvis-thread
+      data-source={fixtureLabel ? "fixture" : undefined}
+      data-mood={atmosphere?.mood}
+      data-daypart={atmosphere?.daypart}
+      data-low-power={atmosphere?.forceLowPower || undefined}
+      data-relighting={atmosphere?.relighting || undefined}
+      data-liveframe-mode={liveframe.mode}
+      data-liveframe-focus={liveframe.focus}
+      data-liveframe-posture={liveframe.transportPosture}
+      data-liveframe-weave={showWeave ? "true" : undefined}
+      data-jarvis-orb-expanded={orbExpanded ? "true" : "false"}
+      data-jarvis-orb-depth={orbExpanded ? "immersive" : "ambient"}
+      data-jarvis-orb-composition={orbExpanded ? "immersive" : "ambient"}
+      data-jarvis-question-focus={questionFocus ? "true" : "false"}
+    >
+      {atmosphere ? (
+        <QuestionDepth surface="atmosphere" focused={questionFocus} reducedMotion={reducedMotion}>
+          <ThreadAtmosphere atmosphere={atmosphere} liveframe={liveframe} />
+        </QuestionDepth>
+      ) : null}
+      {atmosphere && (
+        <QuestionDepth surface="event-atmosphere" focused={questionFocus} reducedMotion={reducedMotion}>
+          <ThreadEventAtmosphere instructionState={thread?.machine.instructionState ?? null} transport={atmosphere.transport} />
+        </QuestionDepth>
+      )}
       {fixtureLabel && (
-        <div className="fixed left-1/2 top-2 z-50 -translate-x-1/2">
+        <div className={fixtureLabelPlacement === "flow" ? "relative z-50 mx-auto flex w-fit justify-center pt-2" : "fixed left-1/2 top-2 z-50 -translate-x-1/2"}>
           <span className="j-chip border border-violet-300/40 bg-violet-400/15 text-violet-200">FIXTURE · {fixtureLabel}</span>
         </div>
       )}
-      <div className="fixed right-4 top-4 z-20"><ModeChip mode={mode} /></div>
-      <ThreadField overdueInvoices={overdueInvoices} />
-      {/* §6⓪: desktop docks the Orb top-left of the thread (64px); mobile docks
-          it 44px, above the rail, so it never overlaps the (here, full-width)
-          thread column the way a top-left fixed position would at narrow
-          widths. `isApproving`'s reposition-to-the-cockpit-corner (§6⑤: "it
-          moves... docks to the cockpit's top-left") is desktop-only — the
-          cockpit is a full-width bottom sheet on mobile (§6⑤ Mobile), so
-          there's no "corner" to dock to there. */}
-      <div
-        className={`fixed z-10 h-11 w-11 bottom-24 left-1/2 -translate-x-1/2 lg:h-16 lg:w-16 lg:bottom-auto lg:translate-x-0 ${
-          isApproving ? "lg:left-auto lg:top-24 lg:right-[calc(50%+380px)]" : "lg:left-6 lg:top-24"
-        }`}
-      >
-        <DeferredOrb live={{ state: presence, activeRunCount, voiceAmplitude: undefined }} />
-      </div>
-      <div className="relative z-[1]">
-        {role === "owner" && <FirstRunScene />}
-        {role === "technician" ? (
-          <main className="mx-auto max-w-lg px-4 pb-32 pt-8"><MyDay /></main>
-        ) : (
-          <>
-            {!thread && <RestPrompt overdue={overdueInvoices} pending={pendingApprovals} />}
-            {thread && <ThreadStack thread={thread} threadHistory={threadHistory} onCancel={onCancel} onAnswer={onAnswer} onSkip={onSkip} />}
-            {role === "dispatcher" && <aside className="mx-auto max-w-[720px] px-4 pb-32"><DispatchMap /></aside>}
-          </>
+      <QuestionDepth surface="field" focused={questionFocus} reducedMotion={reducedMotion}>
+      <ThreadField overdueInvoices={overdueInvoices} contextChips={thread?.contextChips ?? []} freezeMotion={showWeave} />
+      </QuestionDepth>
+      <div className={`${orbSurfaceStyles.consoleStack} relative z-[1] jarvis-console-stack`} data-jarvis-console-stack data-jarvis-orb-composition={orbExpanded ? "immersive" : "ambient"}>
+        <OperationsHeader
+          liveframe={liveframe}
+          primaryStatus={primaryStatus(liveframe)}
+          diagnostics={atmosphere ? <DiagnosticsDisclosure atmosphere={atmosphere} onRetry={onRetry} /> : undefined}
+          environment={mode === "production" ? undefined : <ModeChip mode={mode} />}
+          showSignIn={mode !== "preview"}
+        />
+        {showOperationalDeck ? <OperationalCommandIndex /> : null}
+        {role === "owner" && (
+          <QuestionDepth surface="setup" focused={questionFocus} reducedMotion={reducedMotion}>
+            <div id="jarvis-setup" className="jarvis-setup-region" data-jarvis-composition-region="context" data-jarvis-orb-secondary="true"><SetupRail /></div>
+          </QuestionDepth>
         )}
+        {showOperationalDeck ? (
+          <div className="jarvis-command-deck" data-liveframe-weave={showWeave ? "true" : undefined}>
+            <QuestionDepth surface="operational-context" focused={questionFocus} reducedMotion={reducedMotion} className="min-w-0">
+              <OperationalContextRail thread={thread} liveframe={liveframe} pendingApprovals={pendingApprovals} overdueInvoices={overdueInvoices} fixtureLabel={fixtureLabel} />
+            </QuestionDepth>
+            <div id="jarvis-command-core" className="jarvis-command-deck__stage min-w-0">
+              {renderStage()}
+              {renderCommandDock()}
+            </div>
+            <QuestionDepth surface="operational-signals" focused={questionFocus} reducedMotion={reducedMotion} className="min-w-0">
+              <OperationalSignalRail thread={thread} liveframe={liveframe} pendingApprovals={pendingApprovals} fixtureLabel={fixtureLabel} />
+            </QuestionDepth>
+            <QuestionDepth surface="operations-floor" focused={questionFocus} reducedMotion={reducedMotion} className="jarvis-command-deck__floor min-w-0">
+              <OperationalFloor />
+            </QuestionDepth>
+          </div>
+        ) : <>{renderStage()}{renderCommandDock()}</>}
       </div>
-      {isApproving && thread && <ThreadApprovalCockpit thread={thread} onClose={() => {}} reducedMotion={reducedMotion} escalateOnly={role === "dispatcher"} />}
-      {showRail && <CommandRail />}
+      {isApproving && thread && <ThreadApprovalCockpit thread={thread} onClose={() => {}} reducedMotion={reducedMotion} escalateOnly={role === "dispatcher"} restored={threadRestored} />}
+      <IntentLaunchTrail event={intentLaunch} reducedMotion={reducedMotion} onComplete={onIntentLaunchComplete} />
     </div>
   )
 }
@@ -230,30 +843,63 @@ function ThreadPage({ role }: { role: JarvisRole }) {
   const kernel = useKernel()
   const voice = useVapiSession()
   const reducedMotion = useReducedMotion() ?? false
+  const atmosphere = useThreadAtmosphere(voice, kernel.transport, kernel.presence, {
+    now: kernel.lane.now,
+    lastPollAtMs: kernel.lane.lastPollAtMs,
+    slowLastSuccessMs: kernel.lane.slowLastSuccessMs,
+    apiLatencyMs: kernel.lane.apiLatencyMs,
+  })
+  const [intentLaunch, setIntentLaunch] = useState<LiveFrameIntentLaunch | null>(null)
+  const intentLaunchIdRef = useRef(0)
+  const onIntentAccepted = useCallback(() => {
+    intentLaunchIdRef.current += 1
+    setIntentLaunch({
+      id: intentLaunchIdRef.current,
+      atMs: Date.now(),
+      durationMs: INTENT_LAUNCH_DURATION_MS,
+      kind: "intent-launch",
+    })
+  }, [])
+  const onIntentLaunchComplete = useCallback(() => setIntentLaunch(null), [])
+  const liveframe = projectKernelLiveFrame(kernel, voice.localVolumeLevel, intentLaunch)
+  const orbActions = projectKernelOrbActions(kernel)
   const [standaloneReceiptId, setStandaloneReceiptId] = useState<string | null>(null)
   const executingNarratedThreadIdRef = useRef<string | null>(null)
+  const answeredThreadKeyRef = useRef<string | null>(null)
+  const approvalNarratedThreadKeyRef = useRef<string | null>(null)
+  const currentThread = kernel.thread
+  const say = voice.say
 
   useEffect(() => {
-    const match = window.location.hash.match(/^#receipt-([0-9a-fA-F-]{36})$/)
-    if (match) setStandaloneReceiptId(match[1]!)
+    const syncReceiptHash = () => setStandaloneReceiptId(receiptIdFromHash(window.location.hash))
+    syncReceiptHash()
+    window.addEventListener("hashchange", syncReceiptHash)
+    return () => window.removeEventListener("hashchange", syncReceiptHash)
   }, [])
 
   useEffect(() => {
-    // §3.4 point 4: JARVIS speaks the plan summary the instant it's ready, and
-    // the outcome once the thread reaches its receipt — the only two moments it
-    // speaks unprompted.
-    const state = kernel.thread?.machine.instructionState
-    if (!kernel.thread) return
-    if (state === "awaiting_approval" && kernel.thread.nodes.length > 0) {
-      const total = kernel.thread.nodes.reduce((sum, n) => (n.amountUsd !== null ? sum + n.amountUsd : sum), 0)
-      voice.say(`I found ${kernel.thread.nodes.length} action${kernel.thread.nodes.length === 1 ? "" : "s"} totalling $${total.toLocaleString("en-US")}. Want me to go ahead?`)
+    // Consequential work keeps its explicit approval prompt. A read-only
+    // completion instead speaks the backend-grounded summary exactly once;
+    // there is no generic completion narration to blur the two experiences.
+    const thread = currentThread
+    if (!thread) return
+    const answer = thread.answerResult
+    if (answer) {
+      const key = `${thread.instructionId ?? thread.id}:${answer.spokenSummary}`
+      if (answeredThreadKeyRef.current !== key) {
+        answeredThreadKeyRef.current = key
+        say(answer.spokenSummary)
+      }
+      return
     }
-    if (state === "completed" || state === "partial") {
-      const n = kernel.thread.nodes.length
-      voice.say(state === "completed" ? `${n} of ${n} done. I'll tell you as anything changes.` : `Some of that went through. I'll show you exactly which.`)
+    if (thread.machine.instructionState === "awaiting_approval" && thread.nodes.length > 0) {
+      const key = `${thread.instructionId ?? thread.id}:approval`
+      if (approvalNarratedThreadKeyRef.current !== key) {
+        approvalNarratedThreadKeyRef.current = key
+        say(`${approvalConsequencePrompt(thread.nodes)} Want me to go ahead?`)
+      }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [kernel.thread?.machine.instructionState])
+  }, [currentThread, say])
 
   // jarvis-v3 P5.T7 — D3 pilot (see D3_LONG_EXECUTION_MS's own header
   // comment for why this is content-free and one-shot). Separate effect from
@@ -261,23 +907,23 @@ function ThreadPage({ role }: { role: JarvisRole }) {
   // trigger, not a state-transition edge.
   useEffect(() => {
     const thread = kernel.thread
-    if (!shouldFireD3Narration(thread?.id, thread?.machine.instructionState, executingNarratedThreadIdRef.current)) return
+    if (thread?.answerResult || !shouldFireD3Narration(thread?.id, thread?.machine.instructionState, executingNarratedThreadIdRef.current)) return
     const timer = window.setTimeout(() => {
       executingNarratedThreadIdRef.current = thread!.id
       voice.say(D3_NARRATION_TEXT)
     }, D3_LONG_EXECUTION_MS)
     return () => window.clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [kernel.thread?.id, kernel.thread?.machine.instructionState])
+  }, [kernel.thread?.id, kernel.thread?.machine.instructionState, kernel.thread?.answerResult?.spokenSummary])
 
   if (standaloneReceiptId) {
     return (
       <StandaloneReceiptView
         receiptId={standaloneReceiptId}
-        onBack={() => {
-          setStandaloneReceiptId(null)
-          window.history.replaceState(null, "", window.location.pathname)
-        }}
+          onBack={() => {
+            setStandaloneReceiptId(null)
+            window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`)
+          }}
       />
     )
   }
@@ -290,21 +936,41 @@ function ThreadPage({ role }: { role: JarvisRole }) {
       overdueInvoices={kernel.overdueInvoices}
       pendingApprovals={kernel.pendingApprovals}
       activeRunCount={kernel.selectorInput.runs.length}
+      transport={kernel.transport}
+      voiceAmplitude={kernel.presence === "hearing" ? voice.localVolumeLevel : undefined}
       reducedMotion={reducedMotion}
       onCancel={kernel.cancelThread}
       onAnswer={kernel.answerClarification}
       onSkip={kernel.cancelThread}
+      onRetry={kernel.refetchSlowLaneNow}
+      onRetryThread={kernel.retryThread}
       showRail
       role={role}
       mode={kernel.mode}
+      atmosphere={atmosphere}
+      liveframe={liveframe}
+      orbActions={orbActions}
+      intentLaunch={intentLaunch}
+      onIntentAccepted={onIntentAccepted}
+      onIntentLaunchComplete={onIntentLaunchComplete}
+      threadRestored={kernel.threadRestored}
+      restoredTraceEventCount={kernel.restoredTraceEventCount}
     />
   )
 }
 
 function PreviewThread() {
   const kernel = useKernel()
+  const voice = useVapiSession()
   const reducedMotion = useReducedMotion() ?? false
-  return <><ThreadBody thread={null} threadHistory={[]} presence={kernel.presence} overdueInvoices={kernel.overdueInvoices} pendingApprovals={kernel.pendingApprovals} activeRunCount={0} reducedMotion={reducedMotion} onCancel={() => {}} onAnswer={() => {}} onSkip={() => {}} showRail={false} mode={kernel.mode} /><a href="/jarvis/login" className="fixed bottom-6 left-1/2 z-30 -translate-x-1/2 rounded-full bg-teal-300 px-4 py-2 j-fs-sm font-black text-slate-950">Sign in</a></>
+  const atmosphere = useThreadAtmosphere(voice, kernel.transport, kernel.presence, {
+    now: kernel.lane.now,
+    lastPollAtMs: kernel.lane.lastPollAtMs,
+    slowLastSuccessMs: kernel.lane.slowLastSuccessMs,
+    apiLatencyMs: kernel.lane.apiLatencyMs,
+  })
+  const liveframe = projectKernelLiveFrame(kernel)
+  return <ThreadBody thread={null} threadHistory={[]} presence={kernel.presence} overdueInvoices={kernel.overdueInvoices} pendingApprovals={kernel.pendingApprovals} activeRunCount={0} transport={kernel.transport} reducedMotion={reducedMotion} onCancel={() => {}} onAnswer={() => {}} onSkip={() => {}} onRetry={kernel.refetchSlowLaneNow} onRetryThread={() => {}} showRail={false} mode="preview" atmosphere={atmosphere} liveframe={liveframe} threadRestored={false} />
 }
 
 // ---------------------------------------------------------------------------
@@ -314,8 +980,9 @@ function PreviewThread() {
 // reachable without the credentials this environment does not have. This can
 // never reach a production build regardless of query string.
 // ---------------------------------------------------------------------------
-function ThreadFixtureHarness({ fixtureKey }: { fixtureKey: string }) {
+function ThreadFixtureHarness({ fixtureKey, restored = false }: { fixtureKey: string; restored?: boolean }) {
   const reducedMotion = useReducedMotion() ?? false
+  const kernel = useKernel()
   const [fixture, setFixture] = useState<{ thread: ThreadData | undefined; history: ThreadData[]; keys: string[] } | null>(null)
 
   useEffect(() => {
@@ -341,6 +1008,13 @@ function ThreadFixtureHarness({ fixtureKey }: { fixtureKey: string }) {
     )
   }
   const fixtureThread = thread ?? null
+  // The fixture label remains the authority boundary: this is a real
+  // source-labelled Thread tree, with optional intercepted workflow GET data
+  // supplied through the same KernelProvider bridge as production. It is not a
+  // second run store and it never creates a business event.
+  const workflowRuns = kernel.selectorInput.terminalRuns
+    ? [...kernel.selectorInput.runs, ...kernel.selectorInput.terminalRuns]
+    : kernel.selectorInput.runs
   const presence = derivePresence({
     transport: "polling",
     activeInstructionState: fixtureThread?.machine.instructionState ?? null,
@@ -350,6 +1024,24 @@ function ThreadFixtureHarness({ fixtureKey }: { fixtureKey: string }) {
     blockedCount: 0,
     needsHumanReviewCount: 0,
   })
+  const liveframe = deriveLiveFrame({
+    presence,
+    transport: "polling",
+    micOpen: false,
+    voiceSpeaking: false,
+    nowMs: kernel.selectorInput.now,
+    instruction: fixtureThread
+      ? {
+          state: fixtureThread.machine.instructionState,
+          actionIds: fixtureThread.nodes.map((node) => node.id),
+          clarificationRequired: fixtureThread.clarification !== null || fixtureThread.machine.instructionState === "clarifying",
+          approvalRequired: fixtureThread.machine.instructionState === "awaiting_approval",
+          verificationActive: fixtureThread.machine.instructionState === "verifying",
+        }
+      : null,
+    workflowRuns,
+    latestImpulse: null,
+  })
   return (
     <ThreadBody
       thread={fixtureThread}
@@ -358,41 +1050,168 @@ function ThreadFixtureHarness({ fixtureKey }: { fixtureKey: string }) {
       overdueInvoices={{ status: "known", value: { count: 6, totalUsd: 4200 }, source: "fixture", atMs: 0 }}
       pendingApprovals={{ status: "known", value: 2, source: "fixture", atMs: 0 }}
       activeRunCount={fixtureThread?.machine.instructionState === "executing" ? fixtureThread.nodes.length : 0}
+      transport="polling"
       reducedMotion={reducedMotion}
       onCancel={() => {}}
       onAnswer={() => {}}
       onSkip={() => {}}
+      onRetryThread={() => {}}
       showRail={false}
       fixtureLabel={fixtureKey}
+      liveframe={liveframe}
+      threadRestored={restored}
     />
+  )
+}
+
+// P3 exit-gate evidence harness. This is a visibly labelled, dev-only journey
+// through the same ThreadBody/ThreadStack/Thread components using the existing
+// source-labelled fixture states. The button makes each same-document edge
+// deterministic for a recording; it never reaches the kernel or a backend.
+function FixtureJourneyHarness() {
+  const reducedMotion = useReducedMotion() ?? false
+  const [fixtures, setFixtures] = useState<Record<string, ThreadData> | null>(null)
+  const [stepIndex, setStepIndex] = useState(0)
+  const [measurements, setMeasurements] = useState<TracePixelMeasurement[]>([])
+
+  useEffect(() => {
+    let active = true
+    void import("./thread-fixtures").then(({ THREAD_FIXTURES }) => {
+      if (active) setFixtures(THREAD_FIXTURES)
+    })
+    return () => { active = false }
+  }, [])
+
+  useEffect(() => {
+    resetTracePixelMeasurements()
+    return onTracePixelMeasurement((measurement) => {
+      if (measurement.instructionId !== FIXTURE_JOURNEY_INSTRUCTION_ID) return
+      setMeasurements((previous) => [...previous, measurement].slice(-20))
+    })
+  }, [])
+
+  if (!fixtures) return null
+  const step = FIXTURE_JOURNEY_STEPS[stepIndex]!
+  const fixtureThread = step.key === "rest" ? null : fixtures[step.key] ?? null
+  if (step.key !== "rest" && !fixtureThread) return null
+
+  const presence = derivePresence({
+    transport: "polling",
+    activeInstructionState: fixtureThread?.machine.instructionState ?? null,
+    terminalDecayActive: true,
+    voiceSpeaking: false,
+    micOpen: false,
+    blockedCount: 0,
+    needsHumanReviewCount: 0,
+  })
+  const liveframe = deriveLiveFrame({
+    presence,
+    transport: "polling",
+    micOpen: false,
+    voiceSpeaking: false,
+    nowMs: 0,
+    instruction: fixtureThread
+      ? {
+          state: fixtureThread.machine.instructionState,
+          actionIds: fixtureThread.nodes.map((node) => node.id),
+          clarificationRequired: fixtureThread.clarification !== null || fixtureThread.machine.instructionState === "clarifying",
+          approvalRequired: fixtureThread.machine.instructionState === "awaiting_approval",
+          verificationActive: fixtureThread.machine.instructionState === "verifying",
+        }
+      : null,
+    workflowRuns: [],
+    latestImpulse: null,
+  })
+
+  const advance = () => {
+    const nextIndex = Math.min(stepIndex + 1, FIXTURE_JOURNEY_STEPS.length - 1)
+    if (nextIndex === stepIndex) return
+    const next = FIXTURE_JOURNEY_STEPS[nextIndex]!
+    if (next.phase) {
+      recordTraceEventReceived(FIXTURE_JOURNEY_INSTRUCTION_ID, { seq: nextIndex, phase: next.phase }, performance.now())
+    }
+    setStepIndex(nextIndex)
+  }
+
+  return (
+    <div data-fixture-journey>
+      <div data-fixture-journey-controls className="relative z-[60] mx-auto flex w-full max-w-[720px] items-center justify-center gap-2 px-4 pt-4 text-violet-100">
+        <span data-fixture-journey-state={step.key} data-fixture-journey-label={step.label} className="j-fs-micro rounded-full border border-violet-300/30 bg-slate-950/90 px-3 py-2 font-bold uppercase tracking-widest">{step.label}</span>
+        <button type="button" data-fixture-journey-next onClick={advance} disabled={stepIndex >= FIXTURE_JOURNEY_STEPS.length - 1} className="min-h-9 rounded-full border border-violet-300/40 bg-slate-950/90 px-3 j-fs-sm disabled:opacity-40">
+          {stepIndex >= FIXTURE_JOURNEY_STEPS.length - 1 ? "Journey complete" : "Advance fixture"}
+        </button>
+      </div>
+      <ThreadBody
+        thread={fixtureThread}
+        threadHistory={[]}
+        presence={presence}
+        overdueInvoices={{ status: "known", value: { count: 6, totalUsd: 4200 }, source: "fixture", atMs: 0 }}
+        pendingApprovals={{ status: "known", value: 2, source: "fixture", atMs: 0 }}
+        activeRunCount={fixtureThread && (step.key === "execution" || step.key === "verifying") ? fixtureThread.nodes.length : 0}
+        transport="polling"
+        reducedMotion={reducedMotion}
+        onCancel={() => {}}
+        onAnswer={() => {}}
+        onSkip={() => {}}
+        onRetry={() => {}}
+        onRetryThread={() => {}}
+        showRail={false}
+        fixtureLabel="journey"
+        fixtureLabelPlacement="flow"
+        liveframe={liveframe}
+        threadRestored={false}
+      />
+      <div data-fixture-trace-metrics aria-label="Fixture event to pixel metrics" className="mx-auto mb-8 mt-4 w-[calc(100%-1.5rem)] max-w-[720px] rounded-lg border border-violet-300/20 bg-slate-950/90 px-3 py-2 text-violet-100">
+        {measurements.map((measurement) => (
+          <div key={`${measurement.seq}-${measurement.stage}`} data-fixture-trace-metric data-fixture-trace-metric-seq={measurement.seq} data-fixture-trace-metric-stage={measurement.stage} data-fixture-trace-event-to-pixel-ms={measurement.eventToPixelMs} className="j-fs-micro">
+            {measurement.phase} → {measurement.stage}: {measurement.eventToPixelMs}ms
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
 
 function ThreadGate() {
   const auth = useJarvisAuth()
   const [fixtureKey, setFixtureKey] = useState<string | null | undefined>(undefined)
+  const [fixtureRestored, setFixtureRestored] = useState(false)
 
   useEffect(() => {
     if (process.env.NODE_ENV === "production") {
       setFixtureKey(null)
       return
     }
-    setFixtureKey(new URLSearchParams(window.location.search).get("fixture"))
+    const params = new URLSearchParams(window.location.search)
+    setFixtureKey(params.get("fixture"))
+    setFixtureRestored(params.get("restore") === "1")
   }, [])
 
   if (fixtureKey === undefined) return null // avoid a hydration flash either way
-  if (fixtureKey) return <ThreadFixtureHarness fixtureKey={fixtureKey} />
+  if (fixtureKey === "journey") return <FixtureJourneyHarness />
+  if (fixtureKey) return <ThreadFixtureHarness fixtureKey={fixtureKey} restored={fixtureRestored} />
 
   if (auth.loading) return <LoadingGate />
+  if (auth.authError) return <AuthErrorGate message={auth.authError} onRetry={auth.retryAuth} />
   if (!auth.session) return <PreviewThread />
-  if (auth.role === null) return <LoadingGate />
+  if (auth.roleError) return <RoleErrorGate message={auth.roleError} onRetry={auth.retryRole} />
+  if (auth.roleLoading || auth.role === null) return <LoadingGate />
   return <ThreadPage role={auth.role} />
 }
 
-export function Bridge() {
-  return (
+export function InstructionThreadBridge({ standalone = true }: { standalone?: boolean } = {}) {
+  return standalone ? (
     <KernelProvider>
       <ThreadGate />
     </KernelProvider>
+  ) : (
+    <KernelSurface>
+      <ThreadGate />
+    </KernelSurface>
   )
+}
+
+/** Backward-compatible name for the standalone Thread route. */
+export function Bridge() {
+  return <InstructionThreadBridge />
 }

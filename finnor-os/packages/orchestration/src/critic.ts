@@ -8,7 +8,7 @@
 // wait costs zero added latency (see apps/worker/src/handlers/critic-review.ts).
 
 import { z } from "zod";
-import { type LLMProvider, resolveProviderForPurpose } from "./llm";
+import { isPurposeConfigured, type LLMChannel, type LLMProvider, resolveProviderForPurpose } from "./llm";
 import { redactStructured } from "@finnor/security";
 
 export interface CriticInput {
@@ -20,6 +20,10 @@ export interface CriticInput {
   tenantId?: string;
   actionId?: string;
   traceId?: string;
+  channel?: LLMChannel;
+  signal?: AbortSignal;
+  deadlineAt?: number;
+  deadlineMs?: number;
 }
 
 export interface CriticVerdict {
@@ -35,7 +39,7 @@ const CriticVerdictSchema = z.object({
 /** Same plug-and-play signal every other adapter in this codebase uses: nothing to
  *  do until a real key lands, never a hard failure in the meantime. */
 export function criticConfigured(): boolean {
-  return Boolean(process.env.AWS_BEDROCK_API_KEY);
+  return isPurposeConfigured("critic");
 }
 
 const SYSTEM_PROMPT = [
@@ -48,11 +52,12 @@ const SYSTEM_PROMPT = [
 
 export async function reviewAction(
   input: CriticInput,
-  provider: LLMProvider = resolveProviderForPurpose("critic"),
+  provider?: LLMProvider,
 ): Promise<CriticVerdict> {
   let raw: string;
   try {
-    raw = await provider.complete({ system: SYSTEM_PROMPT, user: JSON.stringify(redactStructured(input)), json: true, tenantId: input.tenantId, actionId: input.actionId, traceId: input.traceId, purpose: "critic" });
+    const selectedProvider = provider ?? resolveProviderForPurpose("critic", input.channel ?? "text");
+    raw = await selectedProvider.complete({ system: SYSTEM_PROMPT, user: JSON.stringify(redactStructured(input)), json: true, tenantId: input.tenantId, actionId: input.actionId, traceId: input.traceId, purpose: "critic", channel: input.channel, signal: input.signal, deadlineAt: input.deadlineAt, deadlineMs: input.deadlineMs });
   } catch (err) {
     throw new Error(`Critic LLM call failed: ${(err as Error).message}`);
   }

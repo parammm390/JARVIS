@@ -11,6 +11,7 @@ import { sendEmail } from "./email";
 import { geocodeAddress, distanceMiles } from "./maps";
 import { placeVapiCall } from "./vapi-rest";
 import { exaSearch } from "./exa";
+import { firecrawlScrape } from "./firecrawl";
 import { getAdPerformance, adsProviderStatus } from "./ads";
 import { syncInvoiceToQuickBooks } from "./quickbooks";
 import { launchAdCampaign, type CampaignLaunchInput } from "./ads-write";
@@ -48,8 +49,12 @@ export function commsMode(): "ghl" | "native" {
 }
 
 export function registerBuiltinTools(registry: ToolRegistry): void {
-  registerUniversalTools(registry); // email + maps + accounting: real in every mode
-  if (commsMode() === "native") {
+  const mode = commsMode();
+  // Live Vapi is allowed only in the real communications posture. Resolve this before
+  // sandbox registration so a duplicate tool name cannot let registration order retain
+  // a live call driver in sandbox/native mode.
+  registerUniversalTools(registry, mode === "ghl"); // email + maps + accounting: real in every mode
+  if (mode === "native") {
     // Finnor's own database is the CRM/calendar system of record. Only SMS carrier
     // delivery is recorded-not-transmitted until an SMS provider is connected.
     registerSandboxComms(registry);
@@ -118,8 +123,8 @@ function vapiPstnConfigured(): boolean {
   );
 }
 
-function registerUniversalTools(registry: ToolRegistry): void {
-  if (vapiPstnConfigured()) {
+function registerUniversalTools(registry: ToolRegistry, allowLiveVapi: boolean): void {
+  if (allowLiveVapi && vapiPstnConfigured()) {
     // REAL outbound phone calls — Vapi phone number is configured.
     registry.register({
       name: "vapi_place_call",
@@ -165,6 +170,31 @@ function registerUniversalTools(registry: ToolRegistry): void {
     async run(input) {
       const results = await exaSearch({ query: String(input.query), numResults: input.numResults ? Number(input.numResults) : 5 });
       return { results };
+    },
+  });
+  registry.register({
+    name: "firecrawl_scrape",
+    description: "Read-only source retrieval via Firecrawl with robots, URL-safety, and citation metadata",
+    integration: "firecrawl",
+    inputSchema: z
+      .object({
+        url: z.string().url().max(2048),
+        maxChars: z.number().int().min(100).max(40_000).optional(),
+        allowedDomains: z.array(z.string().min(1).max(253)).max(20).optional(),
+        termsApproved: z.boolean().optional(),
+        requireTermsApproval: z.boolean().optional(),
+      })
+      .passthrough(),
+    piiAllowlist: ["url", "maxChars", "allowedDomains", "termsApproved", "requireTermsApproval"],
+    async run(input) {
+      const result = await firecrawlScrape({
+        url: String(input.url),
+        maxChars: input.maxChars === undefined ? undefined : Number(input.maxChars),
+        allowedDomains: Array.isArray(input.allowedDomains) ? input.allowedDomains.map(String) : undefined,
+        termsApproved: input.termsApproved === true,
+        requireTermsApproval: input.requireTermsApproval === true,
+      });
+      return { result };
     },
   });
   registry.register({

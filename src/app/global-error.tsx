@@ -2,7 +2,7 @@
 // reach captureException on their own (Sentry's own recommended pattern).
 "use client"
 
-import * as Sentry from "@sentry/nextjs"
+import * as Sentry from "@sentry/browser"
 import NextError from "next/error"
 import { useEffect } from "react"
 

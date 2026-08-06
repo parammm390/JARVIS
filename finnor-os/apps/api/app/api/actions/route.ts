@@ -28,12 +28,12 @@ export async function POST(req: Request): Promise<Response> {
     // from instruction text by default) — a client that didn't supply a key gets
     // today's unchanged behavior, every submission plans for real.
     if (!body.data.idempotencyKey) {
-      const actions = await getOrchestrator().handleInstruction(body.data.instruction, ctx, {
+      const result = await getOrchestrator().handleInstructionResult(body.data.instruction, ctx, {
         sessionId: body.data.sessionId,
         instructionId: body.data.instructionId,
         channel: body.data.channel,
       });
-      return Response.json({ planned: actions }, { status: 201 });
+      return Response.json({ planned: result.actions, ...(result.answer ? { answer: result.answer } : {}) }, { status: 201 });
     }
 
     const claim = await claimOrGetCachedIntake(ctx.tenantId, body.data.idempotencyKey);
@@ -46,12 +46,12 @@ export async function POST(req: Request): Promise<Response> {
         { status: 409 },
       );
     }
-    const actions = await getOrchestrator().handleInstruction(body.data.instruction, ctx, {
+    const result = await getOrchestrator().handleInstructionResult(body.data.instruction, ctx, {
       sessionId: body.data.sessionId,
       instructionId: body.data.instructionId,
       channel: body.data.channel,
     });
-    const response = { planned: actions };
+    const response = { planned: result.actions, ...(result.answer ? { answer: result.answer } : {}) };
     await completeIntakeClaim(ctx.tenantId, claim.id, response);
     return Response.json(response, { status: 201 });
   } catch (err) {

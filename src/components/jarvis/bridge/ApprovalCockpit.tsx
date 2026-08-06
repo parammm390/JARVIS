@@ -64,6 +64,7 @@ import { KeymapHUD } from "./KeymapHUD"
 import { EmptyState } from "../ui/primitives/EmptyState"
 import { ErrorState } from "../ui/primitives/ErrorState"
 import { useHapticsEnabled, vibrateIfEnabled, HAPTIC_PATTERNS } from "../lib/haptics"
+import { filterApprovalActions, isScopedApprovalSurface, type ApprovalScope } from "./approval-scope"
 
 // ---------------------------------------------------------------------------
 // Small local helpers (deliberately not imported from ApprovalDock.tsx — that file is
@@ -141,6 +142,7 @@ const RANK_TO_TIER: RiskTier[] = ["low", "medium", "high"]
 
 type Verb = "confirm" | "reject" | "escalate"
 type CockpitAction = PendingAction & { kind: "pending" | "blocked" }
+type DecisionFailure = { verb: Verb; message: string }
 
 // ---------------------------------------------------------------------------
 // 3D hover tilt — decorative spectacle, honored reduced-motion by simply never
@@ -190,6 +192,9 @@ function ApprovalCard({
   cardRef,
   reduced,
   escalateOnly,
+  deciding,
+  restored,
+  decisionFailure,
 }: {
   action: CockpitAction
   index: number
@@ -205,12 +210,16 @@ function ApprovalCard({
   cardRef: (el: HTMLDivElement | null) => void
   reduced: boolean
   escalateOnly: boolean
+  deciding: Verb | null
+  restored: boolean
+  decisionFailure?: DecisionFailure
 }) {
   const [expanded, setExpanded] = useState(false)
   const [predictedExpanded, setPredictedExpanded] = useState(false)
   const [hovered, setHovered] = useState(false)
   const [diffOpenSku, setDiffOpenSku] = useState<string | null>(null)
   const tilt = useTilt(reduced)
+  const cardElementRef = useRef<HTMLDivElement | null>(null)
   // jarvis-v3 P5.T3: `action.receipt` is always null pre-execution, so this
   // used to be "low" for every pending card, always — deriveRiskTier() is
   // the one real, additive pre-receipt source this phase adds (bulk-notify
@@ -218,17 +227,23 @@ function ApprovalCard({
   const tier: RiskTier = deriveRiskTier(action)
   const isUnavailable = action.status === "blocked_integration_unavailable"
   const isNeedsReview = action.status === "needs_human_review"
+  const decisionPending = deciding !== null
+
+  useEffect(() => registerAnchor(`approval-action-${action.id}`, () => cardElementRef.current?.getBoundingClientRect() ?? null), [action.id])
 
   return (
     <motion.div
-      ref={cardRef}
+      ref={(element) => {
+        cardElementRef.current = element
+        cardRef(element)
+      }}
       layoutId={`approval-card-${action.id}`}
       layout
       tabIndex={focused ? 0 : -1}
       onFocus={() => onFocus(index)}
       role="group"
       aria-label={`${action.actionType.replaceAll("_", " ")} — ${tier} risk`}
-      initial={{ opacity: 0, y: 8 }}
+      initial={restored ? false : { opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, x: -60 }}
       transition={{ duration: 0.3 }}
@@ -269,6 +284,37 @@ function ApprovalCard({
         </div>
 
         <div className="j-fs-sm leading-relaxed text-[color:var(--j-text)]">{action.summary ?? "Drafted action awaiting approval."}</div>
+
+        {decisionPending && (
+          <div className="mt-2 flex items-center gap-2 rounded-lg border border-cyan-300/20 bg-cyan-300/[0.04] px-2.5 py-2 j-fs-micro font-black text-cyan-200" aria-live="polite" aria-busy="true" data-jarvis-decision-state>
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-cyan-300" />
+            {deciding === "confirm" ? "Approving…" : deciding === "reject" ? "Rejecting…" : "Escalating…"}
+          </div>
+        )}
+
+        {decisionFailure && (
+          <div className="mt-2 rounded-lg border border-red-300/30 bg-red-400/[0.06] px-2.5 py-2 j-fs-micro text-red-100" role="alert" data-liveframe-focus="recovery" data-jarvis-decision-failure>
+            <p>{decisionFailure.message}</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => onDecide(action, decisionFailure.verb)}
+                className="inline-flex min-h-11 items-center rounded-full border border-red-200/35 px-3 py-1 font-black text-red-100 hover:bg-red-300/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200/60"
+              >
+                Retry {decisionFailure.verb === "confirm" ? "approval" : decisionFailure.verb === "reject" ? "rejection" : "escalation"}
+              </button>
+              {decisionFailure.verb !== "escalate" && (action.status === "pending" || action.status === "needs_human_review") && (
+                <button
+                  type="button"
+                  onClick={() => onDecide(action, "escalate")}
+                  className="inline-flex min-h-11 items-center rounded-full border border-amber-200/35 px-3 py-1 font-black text-amber-100 hover:bg-amber-300/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-200/60"
+                >
+                  Escalate
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* D3.T1 — the renderer registry's real scene for this action's payload,
             same ActionRenderer component the Activity Theater (feed) and
@@ -426,9 +472,10 @@ function ApprovalCard({
               <motion.button
                 onClick={() => onDecide(action, "confirm")}
                 whileTap={{ scale: 0.96 }}
+                disabled={decisionPending}
                 aria-disabled={isUnavailable}
                 title={isUnavailable ? "Integration unavailable — can't execute yet" : undefined}
-                className={`inline-flex items-center gap-1 rounded-full bg-teal-300 px-3 py-1 j-fs-micro font-black text-slate-950 shadow-[var(--j-glow-teal)] transition hover:-translate-y-0.5 focus-visible:outline-none ${
+                className={`inline-flex min-h-11 items-center gap-1 rounded-full bg-teal-300 px-3 py-1 j-fs-micro font-black text-slate-950 shadow-[var(--j-glow-teal)] transition hover:-translate-y-0.5 focus-visible:outline-none ${
                   isUnavailable ? "opacity-40 hover:translate-y-0" : ""
                 }`}
               >
@@ -437,7 +484,8 @@ function ApprovalCard({
               <motion.button
                 onClick={() => onDecide(action, "reject")}
                 whileTap={{ scale: 0.96 }}
-                className="inline-flex items-center gap-1 rounded-full border border-white/15 px-3 py-1 j-fs-micro font-black text-white/70 transition hover:-translate-y-0.5 hover:text-red-300 focus-visible:outline-none"
+                disabled={decisionPending}
+                className="inline-flex min-h-11 items-center gap-1 rounded-full border border-white/15 px-3 py-1 j-fs-micro font-black text-white/70 transition hover:-translate-y-0.5 hover:text-red-300 focus-visible:outline-none"
               >
                 <X className="h-3 w-3" /> Reject
               </motion.button>
@@ -445,7 +493,8 @@ function ApprovalCard({
               <motion.button
                 onClick={() => onDecide(action, "escalate")}
                 whileTap={{ scale: 0.96 }}
-                className="inline-flex items-center gap-1 rounded-full border border-white/15 px-3 py-1 j-fs-micro font-black text-white/50 transition hover:-translate-y-0.5 hover:text-amber-200 focus-visible:outline-none"
+                disabled={decisionPending}
+                className="inline-flex min-h-11 items-center gap-1 rounded-full border border-white/15 px-3 py-1 j-fs-micro font-black text-white/50 transition hover:-translate-y-0.5 hover:text-amber-200 focus-visible:outline-none"
               >
                 <AlertTriangle className="h-3 w-3" /> Escalate
               </motion.button>
@@ -460,15 +509,16 @@ function ApprovalCard({
               <button
                 type="button"
                 onClick={() => onDecide(action, "escalate")}
-                className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-amber-300/30 bg-amber-300/[0.04] py-2.5 j-fs-micro font-black text-amber-100 lg:hidden"
+                disabled={decisionPending}
+                className="mt-2 flex min-h-12 w-full items-center justify-center gap-1.5 rounded-lg border border-amber-300/30 bg-amber-300/[0.04] py-2.5 j-fs-micro font-black text-amber-100 lg:hidden"
               >
                 <AlertTriangle className="h-3 w-3" /> Escalate
               </button>
             ) : <button
               type="button"
               onClick={() => onActivateMobile(action.id)}
-              disabled={isUnavailable}
-              className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-white/15 bg-white/[0.03] py-2.5 j-fs-micro font-black text-white/80 disabled:opacity-40 lg:hidden"
+              disabled={isUnavailable || decisionPending}
+              className="mt-2 flex min-h-12 w-full items-center justify-center gap-1.5 rounded-lg border border-white/15 bg-white/[0.03] py-2.5 j-fs-micro font-black text-white/80 disabled:opacity-40 lg:hidden"
             >
               Decide <ChevronDown className="h-3 w-3" />
             </button>}
@@ -519,7 +569,7 @@ function RejectGhost({ rect, label, reduced }: { rect: DOMRect; label: string; r
       className="pointer-events-none flex items-center justify-center gap-1.5 rounded-xl border border-red-400/40 bg-red-400/10 j-fs-micro font-black text-red-300"
     >
       <GateValveGlyph variant="seal" reduced={reduced} />
-      REJECTED — {label.replaceAll("_", " ")}
+      REJECTING — {label.replaceAll("_", " ")}
     </motion.div>
   )
 }
@@ -552,7 +602,7 @@ function ApproveStamp({ rect, label, reduced }: { rect: DOMRect; label: string; 
         animate="animate"
       />
       <GateValveGlyph variant="open" reduced={reduced} />
-      APPROVED — {label.replaceAll("_", " ")}
+      APPROVING — {label.replaceAll("_", " ")}
     </motion.div>
   )
 }
@@ -580,8 +630,8 @@ export function EscalateBeacon({ rect, reduced }: { rect: DOMRect; reduced: bool
 // F3.T1 — FLOW-55 ConsequenceTrail: once an approval lands, a small receipt chip
 // flies from the card's own last rect to the real ActivityTheater feed anchor
 // (pulse-bus's named registry — the same real "activity-feed" rect EventMeteor
-// already draws to), while the header's pending-count Ticker decrements in the same
-// beat (the real optimistic hide + eventual refetch, not a fabricated countdown).
+// already draws to), while the header's pending-count Ticker decrements once the
+// real decision POST lands (not a fabricated countdown).
 // Honest-absent when no feed anchor is mounted (e.g. this component alone on Stage,
 // outside the real Bridge) — fades in place instead of flying nowhere.
 // ---------------------------------------------------------------------------
@@ -644,12 +694,60 @@ function UndoToast({
   )
 }
 
+function DecisionNotice({
+  actionType,
+  verb,
+  status,
+}: {
+  actionType: string
+  verb: Verb
+  status: "sending" | "succeeded"
+}) {
+  const noun = actionType.replaceAll("_", " ")
+  const text =
+    status === "sending"
+      ? verb === "confirm"
+        ? "Approving"
+        : verb === "reject"
+          ? "Rejecting"
+          : "Escalating"
+      : verb === "confirm"
+        ? "Approved"
+        : verb === "reject"
+          ? "Rejected"
+          : "Escalated"
+  return (
+    <div data-liveframe-motion={status === "succeeded" ? "LF-09" : undefined}>
+      <ToastShell>
+        <span aria-live="polite" data-jarvis-decision-notice>
+          {text} <span className="text-white/50">{noun}</span>
+        </span>
+      </ToastShell>
+    </div>
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Cockpit
 // ---------------------------------------------------------------------------
 const UNDO_WINDOW_MS = 5000
 
-export function ApprovalCockpit({ escalateOnly = false }: { escalateOnly?: boolean }) {
+type DecisionState = { actionType: string; verb: Verb; status: "sending" | "succeeded" }
+
+export function ApprovalCockpit({
+  escalateOnly = false,
+  scopeActionIds,
+  scopeInstructionId,
+  restored = false,
+}: {
+  escalateOnly?: boolean
+  /** Defined (including as []) for the Instruction Thread. Omitted for the
+   *  standalone Bridge inbox, which intentionally remains tenant-wide. */
+  scopeActionIds?: readonly string[]
+  scopeInstructionId?: string | null
+  /** A restored thread starts its existing approval rows at their settled state. */
+  restored?: boolean
+}) {
   const data = useJarvis()
   const reducedRaw = useReducedMotion()
   const reduced = reducedRaw ?? false
@@ -667,7 +765,7 @@ export function ApprovalCockpit({ escalateOnly = false }: { escalateOnly?: boole
   const [escalateBeacons, setEscalateBeacons] = useState<Array<{ id: string; rect: DOMRect }>>([])
   const [consequenceChips, setConsequenceChips] = useState<Array<{ id: string; rect: DOMRect; label: string }>>([])
   const [keymapOpen, setKeymapOpen] = useState(false)
-  const [undo, setUndo] = useState<{ id: string; actionType: string; expiresAt: number; status: "waiting" | "reverting" | "reverted" | "already-claimed" } | null>(
+  const [undo, setUndo] = useState<{ id: string; actionType: string; instructionId?: string | null; expiresAt: number; status: "waiting" | "reverting" | "reverted" | "already-claimed" } | null>(
     null,
   )
   const [now, setNow] = useState(Date.now())
@@ -677,6 +775,8 @@ export function ApprovalCockpit({ escalateOnly = false }: { escalateOnly?: boole
   // confirm text mirroring batchConfirmText's real high-risk gate below.
   const [mobileActiveId, setMobileActiveId] = useState<string | null>(null)
   const [mobileConfirmText, setMobileConfirmText] = useState("")
+  const [decisionStates, setDecisionStates] = useState<Record<string, DecisionState>>({})
+  const [decisionFailures, setDecisionFailures] = useState<Record<string, DecisionFailure>>({})
   const hapticsEnabled = useHapticsEnabled()
 
   const inflight = useRef<Set<string>>(new Set())
@@ -687,11 +787,18 @@ export function ApprovalCockpit({ escalateOnly = false }: { escalateOnly?: boole
   // card (see ConstellationLink.tsx's hand-authored lineage map).
   useEffect(() => registerAnchor("approval-cockpit", () => containerRef.current?.getBoundingClientRect() ?? null), [])
 
+  const approvalScope = useMemo<ApprovalScope>(() => ({ actionIds: scopeActionIds, instructionId: scopeInstructionId }), [scopeActionIds, scopeInstructionId])
+  const scoped = isScopedApprovalSurface(approvalScope)
+
   const items: CockpitAction[] = useMemo(() => {
-    const pending = data.pendingActions.filter((a) => !hidden.has(a.id)).map((a) => ({ ...a, kind: "pending" as const }))
-    const blocked = data.blockedActions.filter((a) => !hidden.has(a.id)).map((a) => ({ ...a, kind: "blocked" as const }))
-    return [...pending, ...blocked].slice(0, 10)
-  }, [data.pendingActions, data.blockedActions, hidden])
+    const pending = filterApprovalActions(data.pendingActions, approvalScope).filter((a) => !hidden.has(a.id)).map((a) => ({ ...a, kind: "pending" as const }))
+    const blocked = filterApprovalActions(data.blockedActions, approvalScope).filter((a) => !hidden.has(a.id)).map((a) => ({ ...a, kind: "blocked" as const }))
+    const all = [...pending, ...blocked]
+    // The standalone inbox keeps its existing compact cap. A thread-scoped
+    // cockpit must show every action it owns, otherwise its N-action plan can
+    // disagree with the physical approval surface again.
+    return scoped ? all : all.slice(0, 10)
+  }, [approvalScope, data.pendingActions, data.blockedActions, hidden, scoped])
 
   useEffect(() => {
     if (focusedIndex >= items.length) setFocusedIndex(Math.max(0, items.length - 1))
@@ -764,6 +871,8 @@ export function ApprovalCockpit({ escalateOnly = false }: { escalateOnly?: boole
 
   const decide = useCallback(
     async (action: CockpitAction, verb: Verb) => {
+      if (!filterApprovalActions([action], approvalScope).length) return
+      setError(null)
       // FLOW-25 ShakeDeny: confirm() will 409 on a blocked_integration_unavailable
       // action (decide()'s own fromStatuses only ever include pending/needs_human_
       // review — see finnor-os/packages/orchestration/src/index.ts) — caught here,
@@ -778,49 +887,66 @@ export function ApprovalCockpit({ escalateOnly = false }: { escalateOnly?: boole
       }
       if (inflight.current.has(action.id)) return
       inflight.current.add(action.id)
+      setDecisionFailures((failures) => {
+        if (!failures[action.id]) return failures
+        const next = { ...failures }
+        delete next[action.id]
+        return next
+      })
+      setDecisionStates((states) => ({ ...states, [action.id]: { actionType: action.actionType, verb, status: "sending" } }))
       const idx = items.findIndex((x) => x.id === action.id)
       const cardRect = cardRefs.current[idx]?.getBoundingClientRect() ?? null
-      if (verb === "confirm") {
-        sfx.approve()
-        // F11.T2 — real approve pattern (plan §5: "approve 10ms"). Pref-gated
-        // (D6.T1's real `notificationPreferences.haptics`), default off.
-        vibrateIfEnabled(hapticsEnabled, HAPTIC_PATTERNS.approve)
-        if (cardRect) setApproveStamps((s) => [...s, { id: action.id, rect: cardRect, label: action.actionType }])
-        setFlights((f) => [...f, { id: action.id, actionType: action.actionType }])
-      } else if (verb === "reject") {
-        sfx.reject()
-        // F11.T2 — real reject pattern (plan §5: "reject 30ms").
-        vibrateIfEnabled(hapticsEnabled, HAPTIC_PATTERNS.reject)
-        if (cardRect) setRejectGhosts((g) => [...g, { id: action.id, rect: cardRect, label: action.actionType }])
-      } else if (verb === "escalate") {
-        if (cardRect) setEscalateBeacons((b) => [...b, { id: action.id, rect: cardRect }])
-      }
-      if (verb !== "escalate") setHidden((h) => new Set(h).add(action.id))
       try {
         await jarvisPost(`actions/${action.id}/${verb}`, {})
-        data.recordDecision(verb)
+        // The decision event is the authoritative boundary. All success
+        // motion/audio/haptics is emitted after this request resolves, never
+        // from the pointer press or optimistic hide.
+        data.recordDecision(verb, action.id)
+        if (verb !== "escalate") setHidden((h) => new Set(h).add(action.id))
+        setDecisionStates((states) => ({ ...states, [action.id]: { actionType: action.actionType, verb, status: "succeeded" } }))
         if (verb === "confirm") {
-          setUndo({ id: action.id, actionType: action.actionType, expiresAt: Date.now() + UNDO_WINDOW_MS, status: "waiting" })
+          sfx.approve()
+          vibrateIfEnabled(hapticsEnabled, HAPTIC_PATTERNS.approve)
+          if (cardRect) setApproveStamps((s) => [...s, { id: action.id, rect: cardRect, label: action.actionType }])
+        } else if (verb === "reject") {
+          sfx.reject()
+          vibrateIfEnabled(hapticsEnabled, HAPTIC_PATTERNS.reject)
+          if (cardRect) setRejectGhosts((g) => [...g, { id: action.id, rect: cardRect, label: action.actionType }])
+        } else if (cardRect) {
+          setEscalateBeacons((b) => [...b, { id: action.id, rect: cardRect }])
+        }
+        if (verb === "confirm") {
+          // The dock and consequence trail are post-success effects. The card's
+          // inline "Approving…" state is immediate, but it never claims that an
+          // external action started before the decision endpoint actually won.
+          setFlights((f) => [...f, { id: action.id, actionType: action.actionType }])
+          setUndo({ id: action.id, actionType: action.actionType, instructionId: action.instructionId, expiresAt: Date.now() + UNDO_WINDOW_MS, status: "waiting" })
           // FLOW-55 ConsequenceTrail: only once the approval has genuinely landed
           // (this POST resolved) does the receipt chip fly toward the real activity
           // feed — never on the optimistic hide alone.
           if (cardRect) setConsequenceChips((c) => [...c, { id: action.id, rect: cardRect, label: action.actionType }])
         }
+        window.setTimeout(() => setDecisionStates((states) => {
+          const next = { ...states }
+          delete next[action.id]
+          return next
+        }), verb === "reject" ? 1800 : 900)
       } catch (e) {
-        setHidden((h) => {
-          const next = new Set(h)
-          next.delete(action.id)
+        setDecisionStates((states) => {
+          const next = { ...states }
+          delete next[action.id]
           return next
         })
-        setFlights((f) => f.filter((x) => x.id !== action.id))
-        setError(e instanceof Error ? e.message : "Decision failed — action is back in the queue.")
+        const message = e instanceof Error ? e.message : "Decision failed — action is back in the queue."
+        setDecisionFailures((failures) => ({ ...failures, [action.id]: { verb, message } }))
+        setError(null)
         // F11.T2 — real error pattern (plan §5: "error 10-30-10").
         vibrateIfEnabled(hapticsEnabled, HAPTIC_PATTERNS.error)
       } finally {
         inflight.current.delete(action.id)
       }
     },
-    [data, items, hapticsEnabled],
+    [approvalScope, data, items, hapticsEnabled],
   )
 
   const undoNow = useCallback(async () => {
@@ -829,7 +955,7 @@ export function ApprovalCockpit({ escalateOnly = false }: { escalateOnly?: boole
     try {
       await jarvisPost(`actions/${undo.id}/revert`, {})
       data.injectOptimisticPending([
-        { id: undo.id, actionType: undo.actionType, summary: null, payload: {}, status: "pending", createdAt: new Date().toISOString() },
+        { id: undo.id, actionType: undo.actionType, instructionId: undo.instructionId, summary: null, payload: {}, status: "pending", createdAt: new Date().toISOString() },
       ])
       setUndo((u) => (u ? { ...u, status: "reverted" } : u))
       window.setTimeout(() => setUndo(null), 2000)
@@ -916,11 +1042,12 @@ export function ApprovalCockpit({ escalateOnly = false }: { escalateOnly?: boole
   }
 
   const msLeft = undo ? Math.max(0, undo.expiresAt - now) : 0
+  const activeDecision = Object.entries(decisionStates)[0]
 
   return (
     <div id="approval-cockpit" ref={containerRef} onKeyDown={onContainerKeyDown} className="j-panel scroll-mt-4">
       <div className="flex items-center justify-between border-b border-white/6 px-4 py-2.5">
-        <span className="j-label">Awaiting Your Approval</span>
+          <span className="j-label">Awaiting Your Approval{scoped ? " · This Thread" : ""}</span>
         <div className="flex items-center gap-2">
           {items.length > 0 && !escalateOnly && (
             <span className="rounded-full bg-cyan-300/15 px-2 py-0.5 j-fs-micro font-black text-cyan-200">
@@ -934,7 +1061,7 @@ export function ApprovalCockpit({ escalateOnly = false }: { escalateOnly?: boole
               setBatchMode((b) => !b)
               setSelected(new Set())
             }}
-            className={`rounded-full border px-2 py-0.5 j-fs-micro font-black uppercase tracking-wide ${
+            className={`inline-flex min-h-11 items-center rounded-full border px-3 py-0.5 j-fs-micro font-black uppercase tracking-wide ${
               batchMode ? "border-cyan-300/50 bg-cyan-300/10 text-cyan-200" : "border-white/15 text-white/50 hover:text-white/80"
             }`}
           >
@@ -945,9 +1072,9 @@ export function ApprovalCockpit({ escalateOnly = false }: { escalateOnly?: boole
 
       <div className="px-4 py-3">
         {/* F6.T3 — FLOW-89 ErrorFracture: real decide()-POST failure. "Retry" dismisses
-            the banner rather than replaying the POST itself — the failed action is
-            already restored to the visible queue above (the `hidden` rollback a few
-            lines up), so the honest next step is a fresh click, not a hidden re-fire. */}
+            the banner rather than replaying the POST itself — the action stayed in
+            the visible queue while the request was in flight, so the honest next
+            step is a fresh click, not a hidden re-fire. */}
         {error && <ErrorState message={error} onRetry={() => setError(null)} />}
         <ExecutingDock flights={flights} />
 
@@ -955,7 +1082,15 @@ export function ApprovalCockpit({ escalateOnly = false }: { escalateOnly?: boole
           <AnimatePresence initial={false}>
             {items.length === 0 && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                <EmptyState family="approvals" title="Nothing needs you" description="Finnor is holding the line — approvals land here the moment something needs a human." />
+                {scoped ? (
+                  <EmptyState
+                    family="approvals"
+                    title="Waiting for this thread"
+                    description={scopeActionIds && scopeActionIds.length > 0 ? `${scopeActionIds.length} action${scopeActionIds.length === 1 ? " is" : "s are"} attached to this thread; its approval rows will appear here when the queue catches up.` : scopeInstructionId ? "Waiting for an approval row produced by this instruction; unrelated tenant actions stay out of this cockpit." : "This thread has no resolved action ids to approve yet."}
+                  />
+                ) : (
+                  <EmptyState family="approvals" title="Nothing needs you" description="Finnor is holding the line — approvals land here the moment something needs a human." />
+                )}
               </motion.div>
             )}
             {items.map((a, i) => (
@@ -980,6 +1115,9 @@ export function ApprovalCockpit({ escalateOnly = false }: { escalateOnly?: boole
                 }}
                 reduced={reduced}
                 escalateOnly={escalateOnly}
+                deciding={decisionStates[a.id]?.status === "sending" ? decisionStates[a.id]!.verb : null}
+                restored={restored}
+                decisionFailure={decisionFailures[a.id]}
               />
             ))}
           </AnimatePresence>
@@ -1020,7 +1158,7 @@ export function ApprovalCockpit({ escalateOnly = false }: { escalateOnly?: boole
               type="button"
               onClick={submitBatch}
               disabled={!batchCanSubmit}
-              className="rounded-full bg-teal-300 px-4 py-1.5 j-fs-micro font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-40"
+              className="min-h-11 rounded-full bg-teal-300 px-4 py-1.5 j-fs-micro font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-40"
             >
               Approve {selectedItems.length}
             </button>
@@ -1042,14 +1180,14 @@ export function ApprovalCockpit({ escalateOnly = false }: { escalateOnly?: boole
             animate={reduced ? { opacity: 1 } : { y: 0 }}
             exit={reduced ? { opacity: 0 } : { y: "100%" }}
             transition={reduced ? { duration: 0.15 } : { type: "spring", stiffness: 380, damping: 34 }}
-            className="fixed inset-x-0 bottom-0 z-40 rounded-t-2xl border-t border-white/12 bg-[#05090f] p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] shadow-[0_-8px_30px_rgba(0,0,0,0.5)] lg:hidden"
+            className="fixed inset-x-0 bottom-0 z-40 max-h-[min(78dvh,32rem)] overflow-y-auto overscroll-contain rounded-t-2xl border-t border-white/12 bg-[#05090f] p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] shadow-[0_-8px_30px_rgba(0,0,0,0.5)] touch-pan-y lg:hidden"
           >
             <div className="mb-2 flex items-start justify-between gap-3">
               <div>
                 <div className="j-fs-micro font-black uppercase tracking-widest text-[color:var(--j-text-faint)]">{mobileActiveAction.actionType.replaceAll("_", " ")}</div>
                 <div className="mt-0.5 j-fs-sm text-[color:var(--j-text)]">{mobileActiveAction.summary ?? "Drafted action awaiting approval."}</div>
               </div>
-              <button type="button" onClick={() => setMobileActiveId(null)} aria-label="Close" className="shrink-0 rounded-full border border-white/15 p-1 text-white/50">
+              <button type="button" onClick={() => setMobileActiveId(null)} aria-label="Close" className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full border border-white/15 p-1 text-white/50">
                 <X className="h-3.5 w-3.5" />
               </button>
             </div>
@@ -1067,21 +1205,21 @@ export function ApprovalCockpit({ escalateOnly = false }: { escalateOnly?: boole
                 type="button"
                 onClick={() => decideMobile("confirm")}
                 disabled={!mobileCanApprove}
-                className="flex items-center justify-center gap-1 rounded-xl bg-teal-300 py-3 j-fs-sm font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex min-h-12 items-center justify-center gap-1 rounded-xl bg-teal-300 py-3 j-fs-sm font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <Check className="h-4 w-4" /> Approve
               </button>
               <button
                 type="button"
                 onClick={() => decideMobile("reject")}
-                className="flex items-center justify-center gap-1 rounded-xl border border-white/15 py-3 j-fs-sm font-black text-white/80"
+                className="flex min-h-12 items-center justify-center gap-1 rounded-xl border border-white/15 py-3 j-fs-sm font-black text-white/80"
               >
                 <X className="h-4 w-4" /> Reject
               </button>
               <button
                 type="button"
                 onClick={() => decideMobile("escalate")}
-                className="flex items-center justify-center gap-1 rounded-xl border border-white/15 py-3 j-fs-sm font-black text-white/60"
+                className="flex min-h-12 items-center justify-center gap-1 rounded-xl border border-white/15 py-3 j-fs-sm font-black text-white/60"
               >
                 <AlertTriangle className="h-4 w-4" /> Escalate
               </button>
@@ -1091,6 +1229,9 @@ export function ApprovalCockpit({ escalateOnly = false }: { escalateOnly?: boole
       </AnimatePresence>
 
       {openReceiptId && <ReceiptDrawer receiptId={openReceiptId} onClose={() => setOpenReceiptId(null)} />}
+      <AnimatePresence>
+        {activeDecision && <DecisionNotice actionType={activeDecision[1].actionType} verb={activeDecision[1].verb} status={activeDecision[1].status} />}
+      </AnimatePresence>
       <AnimatePresence>
         {undo && <UndoToast actionType={undo.actionType} msLeft={msLeft} status={undo.status} onUndo={undoNow} durationMs={UNDO_WINDOW_MS} />}
       </AnimatePresence>

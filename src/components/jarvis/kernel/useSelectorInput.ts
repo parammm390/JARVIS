@@ -31,8 +31,10 @@ export function useSelectorInput(): SelectorInput {
     stats: data.stats,
     statsDegraded: data.statsDegraded,
     pendingActions: data.pendingActions,
+    blockedActions: data.blockedActions,
     pendingDegraded: data.pendingDegraded,
     runs: data.runs,
+    terminalRuns: data.terminalRuns,
     runsDegraded: data.runsDegraded,
     events: data.events,
     eventsDegraded: data.eventsDegraded,
@@ -61,6 +63,9 @@ export function useSelectorInput(): SelectorInput {
 export interface LanePresentation {
   now: number
   metricHistory: Record<string, number[]>
+  /** Measured fast-lane request durations, retained only for a session-local
+   * transport trend. It is never used as a business metric. */
+  latencyHistory: number[]
   newPendingSinceOpen: number
   slowLastSuccessMs: number | null
   /** Transport health, not a business fact: when the last poll landed and how long
@@ -81,6 +86,7 @@ export function useLanePresentation(): LanePresentation {
   return {
     now: data.now,
     metricHistory: data.metricHistory,
+    latencyHistory: data.latencyHistory,
     newPendingSinceOpen: data.newPendingSinceOpen,
     slowLastSuccessMs: data.slowLastSuccessMs,
     lastPollAtMs: data.lastPollAtMs,

@@ -4,7 +4,7 @@
 // actually touches.
 
 import { afterEach, describe, expect, it } from "vitest"
-import { getOrCreateSessionId, resetSessionId } from "./instruction"
+import { getOrCreateSessionId, resetSessionId, sessionIdForVoiceCall } from "./instruction"
 
 function fakeSessionStorage() {
   const store = new Map<string, string>()
@@ -57,6 +57,12 @@ describe("kernel/instruction — session id minting (P2.T4, closing the V8 gap)"
     const rotated = resetSessionId("voice")
     expect(rotated).not.toBe(original)
     expect(getOrCreateSessionId("voice")).toBe(rotated)
+  })
+
+  it("uses the provider call id as a namespaced voice session when one is exposed", () => {
+    expect(sessionIdForVoiceCall(" call-123 ")).toBe("vapi:call-123")
+    expect(sessionIdForVoiceCall(null)).toBeNull()
+    expect(sessionIdForVoiceCall("   ")).toBeNull()
   })
 
   it("a storage exception (private mode) degrades to a fresh id, never throws", () => {

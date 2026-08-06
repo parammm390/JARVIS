@@ -9,10 +9,17 @@ import { useEffect, useRef, useState } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import { TerminalSquare } from "lucide-react"
 import { onJarvisRequest, type JarvisRequestLog } from "../lib/api"
+import { onTracePixelMeasurement, type TracePixelMeasurement } from "../kernel/trace-metrics"
 
-interface Line extends JarvisRequestLog {
+interface RequestLine extends JarvisRequestLog {
   key: number
+  kind: "request"
 }
+interface TraceLine extends TracePixelMeasurement {
+  key: number
+  kind: "trace"
+}
+type Line = RequestLine | TraceLine
 
 // A module-level sequence survives React development remounts. The telemetry event
 // bus can publish while a Strict Mode cleanup/re-subscribe cycle is in flight, so a
@@ -31,14 +38,22 @@ export function SystemConsole() {
   const [lines, setLines] = useState<Line[]>([])
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  useEffect(
-    () =>
-      onJarvisRequest((r) => {
-        telemetryLineKey += 1
-        setLines((prev) => [...prev, { ...r, key: telemetryLineKey }].slice(-22))
-      }),
-    [],
-  )
+  useEffect(() => {
+    const offRequest = onJarvisRequest((r) => {
+      telemetryLineKey += 1
+      const line: RequestLine = { ...r, key: telemetryLineKey, kind: "request" }
+      setLines((prev) => [...prev, line].slice(-22))
+    })
+    const offTrace = onTracePixelMeasurement((measurement) => {
+      telemetryLineKey += 1
+      const line: TraceLine = { ...measurement, key: telemetryLineKey, kind: "trace" }
+      setLines((prev) => [...prev, line].slice(-22))
+    })
+    return () => {
+      offRequest()
+      offTrace()
+    }
+  }, [])
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight })
@@ -50,7 +65,7 @@ export function SystemConsole() {
         <span className="j-label flex items-center gap-2">
           <TerminalSquare className="h-3.5 w-3.5 text-cyan-300" /> Live Telemetry
         </span>
-        <span className="j-chip bg-emerald-400/10 text-emerald-300">real requests</span>
+        <span className="j-chip bg-emerald-400/10 text-emerald-300">real transport + paint</span>
       </div>
       <div ref={scrollRef} className="h-[196px] overflow-y-auto px-4 py-2 font-mono j-fs-micro leading-[1.75]">
         {lines.length === 0 && <div className="text-[color:var(--j-text-faint)]">awaiting first poll…</div>}
@@ -67,11 +82,22 @@ export function SystemConsole() {
               transition={{ duration: 0.25 }}
               className="j-console-line flex gap-2 whitespace-nowrap"
             >
-              <span className="text-[color:var(--j-text-faint)]">{new Date(l.at).toLocaleTimeString("en-US", { hour12: false })}</span>
-              <span className={l.method === "GET" ? "text-sky-300" : "text-violet-300"}>{l.method}</span>
-              <span className="min-w-0 flex-1 truncate text-[color:var(--j-text-dim)]">{l.path}</span>
-              <span className={statusColor(l.status)}>{l.status || "ERR"}</span>
-              <span className="text-[color:var(--j-text-faint)]">{l.ms}ms</span>
+              <span className="text-[color:var(--j-text-faint)]">{new Date(l.kind === "trace" ? Date.now() : l.at).toLocaleTimeString("en-US", { hour12: false })}</span>
+              {l.kind === "trace" ? (
+                <>
+                  <span className="text-amber-200">TRACE</span>
+                  <span className="min-w-0 flex-1 truncate text-[color:var(--j-text-dim)]">{l.phase} → {l.stage}</span>
+                  <span className="text-emerald-300">{Math.round(l.eventToPixelMs)}ms</span>
+                  <span className="text-[color:var(--j-text-faint)]">event→pixel</span>
+                </>
+              ) : (
+                <>
+                  <span className={l.method === "GET" ? "text-sky-300" : "text-violet-300"}>{l.method}</span>
+                  <span className="min-w-0 flex-1 truncate text-[color:var(--j-text-dim)]">{l.path}</span>
+                  <span className={statusColor(l.status)}>{l.status || "ERR"}</span>
+                  <span className="text-[color:var(--j-text-faint)]">{l.ms}ms</span>
+                </>
+              )}
             </motion.div>
           ))}
         </AnimatePresence>

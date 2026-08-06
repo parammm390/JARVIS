@@ -11,7 +11,7 @@
 // gated on `process.env.NODE_ENV !== "production"` — this can never appear in a
 // production build regardless of the query string.
 
-import type { ContextChip, Thread } from "../kernel/store"
+import type { ContextChip, Thread, ThreadNode } from "../kernel/store"
 import { initialMachineState, transition } from "../kernel/machine"
 import type { InstructionState } from "../kernel/types"
 import { UNRESOLVED_REFERENCE_MESSAGE, UNRESOLVED_REFERENCE_CONTEXT } from "../kernel/followup-reference"
@@ -104,11 +104,9 @@ const GOLDEN_CONTEXT_CHIPS: ContextChip[] = [
 // jarvis-v3 P5.T1 — Flagship B's own two real action types, shaped exactly
 // like the live plugins' real payloads (lead-to-water-test/index.ts's
 // StartWaterTestWorkflowSchema, scheduling/index.ts's AssignTechSchema).
-// ThreadApprovalCockpit's header text (below) is a golden-journey literal
-// ("N customers will be texted", §6⑤) that does not generalize to these two
-// action types — neither texts anyone. Left unchanged here per this
-// session's own strict task ordering (P5.T3 owns generalizing the BlastRadius
-// header); this fixture's own node count/total are still real and correct.
+// ThreadApprovalCockpit's header is derived from each node's action type and
+// payload, so neither of these actions inherits the golden journey's
+// invoice/customer-texting language.
 function flagshipBNodes() {
   return [
     {
@@ -142,6 +140,80 @@ function flagshipBNodes() {
   ]
 }
 
+function routeNode(id: string, date: string, technicianId: string, technicianName: string): ThreadNode {
+  return {
+    id,
+    actionType: "route_suggestion",
+    amountUsd: null,
+    targetLabel: technicianName,
+    policyId: "fixture-policy-route-suggestion",
+    policyVersion: 1,
+    groundedPayload: [{ field: "technicianId", status: "verified" }],
+    payload: { technicianId, date },
+    reasoning: "Review the technician's scheduled stops for the requested date",
+  }
+}
+
+function schemaApprovalNodes(): ThreadNode[] {
+  return [
+    {
+      id: "fixture-unreg-1",
+      actionType: "test_unregistered_action_alpha",
+      amountUsd: null,
+      targetLabel: "Dana Alvarez",
+      policyId: null,
+      policyVersion: null,
+      groundedPayload: [],
+      payload: { customerName: "Dana Alvarez", amountUsd: 240, scheduledFor: "2026-08-10" },
+      reasoning: "Fixture for a flat unregistered payload",
+    },
+    {
+      id: "fixture-unreg-2",
+      actionType: "test_unregistered_action_beta",
+      amountUsd: null,
+      targetLabel: "Ortiz · Spring Hollow Ct",
+      policyId: null,
+      policyVersion: null,
+      groundedPayload: [],
+      payload: { target: { householdId: "hh-9", label: "Ortiz · Spring Hollow Ct" }, note: "verify before sending" },
+      reasoning: "Fixture for a nested-object unregistered payload",
+    },
+    {
+      id: "fixture-unreg-3",
+      actionType: "test_unregistered_action_gamma",
+      amountUsd: null,
+      targetLabel: null,
+      policyId: null,
+      policyVersion: null,
+      groundedPayload: [],
+      payload: { steps: ["check_inventory", "reserve_parts", "notify_technician"], urgent: true },
+      reasoning: "Fixture for an array unregistered payload",
+    },
+    {
+      id: "fixture-unreg-4",
+      actionType: "test_unregistered_action_delta",
+      amountUsd: null,
+      targetLabel: null,
+      policyId: null,
+      policyVersion: null,
+      groundedPayload: [],
+      payload: { fieldOne: "a", fieldTwo: "b", fieldThree: "c", fieldFour: "d", fieldFive: "e", fieldSix: "f" },
+      reasoning: "Fixture for a long unregistered payload",
+    },
+    {
+      id: "fixture-unreg-5",
+      actionType: "test_unregistered_action_epsilon",
+      amountUsd: null,
+      targetLabel: null,
+      policyId: null,
+      policyVersion: null,
+      groundedPayload: [],
+      payload: {},
+      reasoning: "Fixture for an empty unregistered payload",
+    },
+  ]
+}
+
 export const THREAD_FIXTURES: Record<string, Thread> = {
   heard: baseThread({ machine: stateFor("captured") }),
   understood: baseThread({ machine: stateFor("understanding"), nodes: goldenNodes(), contextChips: GOLDEN_CONTEXT_CHIPS }),
@@ -165,14 +237,24 @@ export const THREAD_FIXTURES: Record<string, Thread> = {
     },
   }),
   approval: baseThread({ machine: stateFor("awaiting_approval"), nodes: goldenNodes() }),
-  // jarvis-v3 P5.T4 — an awaiting_approval state with no baked-in golden
-  // nodes, for specs (like SchemaCard's own evidence) that supply their own
-  // `actions/pending` interception and don't want the golden journey's own
-  // household names (e.g. "Dana Alvarez") to collide with fixture payload
-  // text asserted elsewhere on the page. `stateFor` only needs a real count
-  // to reach the right MACHINE state — it's independent of this thread's own
-  // (here, empty) `nodes` array.
+  // jarvis-v3 P5.T4 — an awaiting_approval state with no baked-in nodes for
+  // tests that intentionally exercise the scoped empty state.
   "empty-approval": baseThread({ machine: stateFor("awaiting_approval"), nodes: [] }),
+  "schema-approval": baseThread({
+    machine: stateFor("awaiting_approval"),
+    instructionText: "Review these unregistered action payloads",
+    nodes: schemaApprovalNodes(),
+  }),
+  "route-approval": baseThread({
+    machine: stateFor("awaiting_approval"),
+    instructionText: "Review Priya Nair's route for Wednesday",
+    nodes: [routeNode("fixture-node-route", "2026-08-05", "fixture-tech-priya", "Priya Nair")],
+  }),
+  "route-empty-approval": baseThread({
+    machine: stateFor("awaiting_approval"),
+    instructionText: "Review Dale Brooks' route for Thursday",
+    nodes: [routeNode("fixture-node-route-empty", "2026-08-06", "fixture-tech-empty", "Dale Brooks")],
+  }),
   // jarvis-v3 P5.T5 (V8) — the real, live outcome this session's own
   // e2e/jarvis-p5-followup-real.spec.ts found: a follow-up-shaped instruction
   // ("Actually, make that Thursday instead") with nothing in the real
@@ -192,6 +274,7 @@ export const THREAD_FIXTURES: Record<string, Thread> = {
     clarification: { question: UNRESOLVED_REFERENCE_MESSAGE, missingFields: ["instruction"], context: UNRESOLVED_REFERENCE_CONTEXT },
   }),
   execution: baseThread({ machine: stateFor("executing"), nodes: goldenNodes(), everExecuted: true }),
+  verifying: baseThread({ machine: stateFor("verifying"), nodes: goldenNodes(), everExecuted: true }),
   receipt: baseThread({ machine: stateFor("completed"), nodes: goldenNodes(), terminalAtMs: Date.now(), everExecuted: true }),
   "flagship-b-approval": baseThread({
     machine: stateFor("awaiting_approval"),

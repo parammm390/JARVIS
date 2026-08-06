@@ -104,7 +104,7 @@ function CommandCenterHome({
         <TechnicianBoard />
       </div>
       <div key={`${igniteKey}-2`} className="jarvis-rise grid grid-cols-1 gap-4 xl:grid-cols-3" style={delay(2)}>
-        <WorkflowTheater />
+        <WorkflowTheater actionIds={[]} />
         <LiveCallPanel session={session} />
       </div>
       <div key={`${igniteKey}-3`} className="jarvis-rise grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4" style={delay(3)}>

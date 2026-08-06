@@ -12,6 +12,7 @@ import { RefreshCw, AlertTriangle } from "lucide-react"
 import { jarvisGet } from "../lib/api"
 import { hasActiveSession } from "../lib/jarvis-auth"
 import { ReceiptDrawer } from "../lib/ReceiptDrawer"
+import { ErrorState } from "../ui/primitives/ErrorState"
 
 interface OverviewResponse {
   domainActionId: string
@@ -106,7 +107,7 @@ export function DailyBriefing() {
         </button>
       </div>
       <div className="px-4 py-3">
-        {error && <div className="mb-2 rounded-lg border border-red-400/30 bg-red-400/5 px-3 py-2 j-fs-micro text-red-300">{error}</div>}
+        {error && <ErrorState message={data ? `Showing the last successful briefing. ${error}` : error} onRetry={() => void load(false)} />}
         {!data && !error && <div className="jarvis-skeleton-tide h-20 rounded-lg bg-white/5" />}
         {data && (
           <>
