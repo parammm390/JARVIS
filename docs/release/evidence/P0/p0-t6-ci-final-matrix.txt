@@ -18,7 +18,10 @@ PASS, exit 0:
   planner live-eval pacing repair/recheck: typecheck exit 0; complete 41-scenario
   Groq-routed disposable-local recheck at PLANNER_EVAL_PACE_MS=30000 reached all
   scenarios but remained non-green: 17 passed, 9 failed, 15 provider-call errors.
-  See p0-t6-planner-live-eval-paced-recheck.txt; no provider payloads were retained.
+  A workflow-faithful default-model recheck also reached all 41 and returned 19
+  passed, 3 failed, 19 provider-call errors (exit 1). See
+  p0-t6-planner-live-eval-paced-recheck.txt and
+  p0-t6-planner-live-eval-workflow-faithful.txt; no provider payloads were retained.
 
 Expected fail-closed/environment-gated results, recorded rather than bypassed:
   npm run test:staging — refuses without explicit STAGING=1 and verified staging DATABASE_URL;
@@ -35,8 +38,10 @@ Expected fail-closed/environment-gated results, recorded rather than bypassed:
     secret before running the CI-only load scenario.
   planner live eval — current Preview credential metadata is present. The initial provider-backed
     run completed 11/41 passed, 29 failed, 1 errored; after explicit Groq route pins and a validated
-    30-second provider pace, the complete recheck reached all 41 scenarios but remained non-green at
-    17/41 passed, 9 failed, 15 errored. See p0-t6-planner-live-eval.txt and
-    p0-t6-planner-live-eval-paced-recheck.txt. No passing live-eval claim is made.
+    30-second provider pace, the Preview-model complete recheck reached all 41 scenarios but remained
+    non-green at 17/41 passed, 9 failed, 15 errored. The workflow-faithful default-model recheck
+    likewise reached all 41 and returned 19/41 passed, 3 failed, 19 errored (exit 1). See
+    p0-t6-planner-live-eval.txt, p0-t6-planner-live-eval-paced-recheck.txt, and
+    p0-t6-planner-live-eval-workflow-faithful.txt. No passing live-eval claim is made.
 
 No production deployment, migration, provider call, or live outbound effect was performed.

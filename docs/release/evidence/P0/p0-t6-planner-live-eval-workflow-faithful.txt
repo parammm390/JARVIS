@@ -1,0 +1,37 @@
+P0.T6 workflow-faithful planner live-evaluation recheck
+Date: 2026-08-06
+
+Purpose
+-------
+Repeat the complete planner harness with the effective provider environment from
+`.github/workflows/planner-live-evals.yml`: Groq only, explicit planning/repair
+route pins, and the new 30-second pace. The Preview `GROQ_API_KEY` was used only
+as the currently available disposable-evaluation credential; its value was never
+printed or retained.
+
+Effective environment
+---------------------
+- `LLM_PROVIDER_PLANNING=groq`
+- `LLM_PROVIDER_REPAIR=groq`
+- `PLANNER_EVAL_PACE_MS=30000`
+- `GROQ_API_KEY` present
+- `GROQ_MODEL` absent, so the provider's committed default model was used
+- Bedrock, Mistral, and DeepSeek variables absent
+- `DATABASE_URL` pointed to fresh disposable local PostgreSQL
+
+Command and result
+------------------
+- Child command: `npx tsx scripts/eval-planner.ts` from `finnor-os`.
+- All 41 scenarios reached a terminal result.
+- Aggregate: `19/41 passed, 3 failed, 19 errored`.
+- Exit: 1.
+
+Cleanup and conclusion
+----------------------
+The disposable database was dropped, the embedded local PostgreSQL server was
+stopped, and the temporary environment/log directory was removed. This result is
+not a green planner certification. It confirms that the committed pacing and route
+configuration allow the full harness to complete, but the available Groq-backed
+workflow remains non-green and needs owner-approved provider capacity/quality or a
+new authorized provider configuration. No production provider, deployment,
+migration, customer data, or outbound customer effect was used.
