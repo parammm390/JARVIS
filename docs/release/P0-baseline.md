@@ -33,7 +33,7 @@ Repairs made: bounded local DB connection timeout; regenerated authz matrix; see
 
 ## Remaining defects/blockers
 
-- **P0/P3 environment blocker:** `npm run test:staging`, tenant-isolation probing, Dealer Zero replay, live planner evaluation, and k6 load remain environment-gated. Railway read-only discovery exposes only `confident-wisdom/production`, not a verified non-production target; no staging URL, JWTs, replay artifacts, live provider credential, or k6 binary is available. These are recorded as fail-closed prerequisites and were not replaced with production or fabricated fixtures.
+- **P0/P3 environment blocker:** `npm run test:staging`, tenant-isolation probing, Dealer Zero replay, live planner evaluation, and k6 load remain environment-gated. A current Vercel Preview target is discoverable, but its database endpoint resets before PostgreSQL authentication and its Supabase auth origin matches Production, so it is not a verified isolated staging target. Railway read-only discovery still exposes only `confident-wisdom/production`; no usable staging JWTs, replay artifacts, live provider credential, or k6 binary is available. These are recorded as fail-closed prerequisites and were not replaced with Production or fabricated fixtures — `docs/release/evidence/P0/p0-t7-vercel-preview-audit.txt`.
 - **Historical scanner follow-up:** all-history gitleaks reports three pre-existing matches in older commits; the current P0 diff is clean. Rewriting history or rotating owner credentials is outside this phase and was not performed.
 - Full Playwright certification completed after the targeted repairs: 113 passed, 167 pre-existing skips, and 0 failures. The final lint and TypeScript check also pass (`p0-t6-frontend-e2e-280-final.txt`).
 

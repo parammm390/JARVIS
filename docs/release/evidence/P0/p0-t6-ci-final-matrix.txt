@@ -11,7 +11,10 @@ PASS, exit 0:
 
 Expected fail-closed/environment-gated results, recorded rather than bypassed:
   npm run test:staging — refuses without explicit STAGING=1 and verified staging DATABASE_URL;
-    STAGING=1 without DATABASE_URL also refuses.
+    STAGING=1 without DATABASE_URL also refuses. A current Vercel Preview DATABASE_URL was
+    discovered read-only, but its PostgreSQL handshake resets (`ECONNRESET`) and its Supabase
+    auth origin matches Production; the staging suite was not pointed at that unsafe/unavailable
+    target. See p0-t7-vercel-preview-audit.txt.
   npx tsx scripts/probe-tenant-isolation.ts — refuses without both environment URLs, two JWTs,
     and tenant-A marker IDs.
   npx tsx scripts/replay-dealer-zero.ts — refuses without baseline/candidate staging artifacts.

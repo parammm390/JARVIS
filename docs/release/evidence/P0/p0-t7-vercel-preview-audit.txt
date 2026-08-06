@@ -1,0 +1,40 @@
+P0.T6/T7 current non-production target revalidation — 2026-08-06
+
+Read-only target discovery:
+  `railway project list --json` — exit 0; current account exposes only
+  `confident-wisdom` with a `production` environment and `finnor-worker` service.
+  `vercel project inspect api` — exit 0; project `api`, root `apps/api`, current
+  project identity recorded without credentials.
+  `vercel ls api` — exit 0; two Ready Preview deployments were found, both created
+  12 days ago: `api-oqjj3i98u-bloodride2-3212s-projects.vercel.app` and
+  `api-altwe0pzh-bloodride2-3212s-projects.vercel.app`.
+  `vercel env ls preview` / `vercel env ls production` — exit 0; encrypted
+  environment metadata is present in both targets. Values were not printed.
+
+Sanitized encrypted-environment comparison:
+  A temporary `vercel env pull` was used only to compare endpoint identity and was
+  deleted by the probe. No credential value was emitted or committed.
+  Preview DATABASE_URL endpoint: `sakura.proxy.rlwy.net:26940/railway`.
+  Production DATABASE_URL endpoint: `aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres`.
+  Database host and database path differ: PASS for those two isolation checks.
+  Preview and Production SUPABASE_URL origins are the same: FAIL for separate-auth
+  isolation required by `docs/staging-setup.md` and the Maestro §4 contract.
+  Preview has a database URL, service-role key, Redis URL, and no AUTH_DEV_BYPASS
+  flag in the pulled environment metadata; values were not printed.
+
+Connectivity:
+  TCP connect to `sakura.proxy.rlwy.net:26940` — exit 0, socket opened.
+  PostgreSQL client probe using the supplied URL, URL without query parameters with
+  SSL disabled, and URL without query parameters with permissive SSL — process exit
+  0 overall; all three connection attempts failed with `ECONNRESET` before `select 1`.
+  No migration head, tenant data, or staging application health could therefore be
+  queried.
+
+Conclusion:
+  The historical Vercel Preview target is discoverable but is not a currently
+  verified staging target: its database connection resets and its auth origin is
+  shared with Production. P0 did not run the staging integration suite against it,
+  did not use Production as a substitute, and did not perform any deployment,
+  migration, provider call, or outbound side effect. Owner action needed: restore
+  an accessible isolated non-production database/auth target, or provide explicit
+  evidence that the target is safe and current, plus a fresh deployment identity.

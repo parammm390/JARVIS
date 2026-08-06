@@ -45,9 +45,9 @@ only after the phase cannot progress further.
 | **Actions CORE-CERTIFIED** | 0 / 44 |
 | **Actions LIVE-CERTIFIED** | 0 / 44 |
 | **Open P0 defects** | 0 — local P0 source gates are green; exit remains blocked only by the absent verified non-production target and owner-bound live artifacts |
-| **Open P1 defects** | 11 initial known-risk rows; reclassify from evidence |
+| **Open P1 defects** | 11 initial known-risk rows; reclassify from evidence; current Preview target is unavailable/shared-auth and remains open |
 | **Readiness score** | 0.0 / 10.0 — measured after P0 baseline |
-| **Sessions logged** | 2 |
+| **Sessions logged** | 3 |
 
 ## NEXT EXACT PHASE
 
@@ -113,7 +113,7 @@ Do not close a defect without exact evidence. Add every new failure discovered b
 | R-05 | P0 | Cross-tenant, approval, and duplicate-effect proof is incomplete across all 44 | P1/P2 | 🔴 open | |
 | R-06 | P1 | Current frontend 44/44 renderer and state coverage not freshly verified | P1 | 🔴 open | |
 | R-07 | P1 | Migration head/staging application of evidence corpus not freshly proven | P0/P3 | 🔴 open | |
-| R-08 | P1 | Configured live integration credentials and write guards are unknown | P0/P3 | 🔴 open | |
+| R-08 | P1 | Configured live integration credentials and write guards are unknown; current Vercel Preview metadata is present but its database is unreachable and its Supabase auth origin matches Production | P0/P3 | 🔴 open | `docs/release/evidence/P0/p0-t7-vercel-preview-audit.txt`; no values printed |
 | R-09 | P1 | Voice cancellation/approval may remain deferred or incomplete | P2 | 🔴 open | |
 | R-10 | P1 | Watch targets/cadence/alert destination may remain unconfigured | P2/P3 | 🔴 open | |
 | R-11 | P1 | Sentry release/environment/alert routing not certified end to end | P2/P3 | 🔴 open | |
@@ -131,6 +131,7 @@ Do not close a defect without exact evidence. Add every new failure discovered b
 - **2026-08-06 · P0.T6 · local backup drill prerequisite resolved** · PostgreSQL client utilities were built in an external cache, the drill was repaired to probe optional local vector availability and close its probe client, and the dump/restore round-trip passed with all four sentinel counts matching. Evidence: `p0-t6-backup-restore-drill-final.txt`. No repository runtime dependency or production database was changed.
 - **2026-08-06 · P0.T6/T7 · staging and live-only commands remain fail-closed without identity/artifacts** · `npm run test:staging` refused without explicit `STAGING=1` plus a staging `DATABASE_URL`; the tenant-isolation probe refused without two target URLs/JWTs/markers; Dealer Zero replay refused without baseline/candidate artifacts; k6 is not installed; live planner evaluation has no configured provider credential. Read-only Railway discovery found only `confident-wisdom/production`, not a non-production environment. Evidence: `p0-t6-ci-final-matrix.txt`, `p0-t6-staging-guard.txt`, `p0-t7-railway-status.txt`. Needed: owner-provided verified non-production target and artifacts in P3; P0 must not guess/use a production URL.
 - **2026-08-06 · P0.T6 · historical scanner follow-up** · current P0 diff gitleaks is clean and OSV/npm audit are green; an all-history gitleaks scan reports three matches in older commits. Evidence: `p0-t6-security-final.txt`. Needed: owner/security decision on rotation/history remediation; P0 does not rewrite history or print candidate secrets.
+- **2026-08-06 · P0.T6/T7 · current Vercel Preview target is not certifiable as staging** · Read-only Vercel discovery found two Ready Preview API deployments and encrypted Preview bindings. Sanitized endpoint comparison shows the Preview database host/path differ from Production, but the Supabase auth origin is shared; the Preview Railway Postgres endpoint resets before authentication on three client configurations. Evidence: `p0-t7-vercel-preview-audit.txt`. Needed: owner-provided accessible isolated non-production database/auth target and a fresh deployment identity; P0 does not run against Production or the stale/unreachable Preview.
 
 **Standing conditions:**
 - Missing credentials are not a reason to claim live readiness. Mark the binding/action `BLOCKED-CONFIG`.
@@ -159,9 +160,11 @@ scan (paths only) and `git diff --check`; final current-diff gitleaks verificati
 `docs/release/evidence/P0/p0-t6-ci-final-matrix.txt` — final local CI-equivalent matrix summary;
 all executable local commands pass, while staging/live-only commands fail closed on missing target
 identity/artifacts.
-`docs/release/evidence/P0/p0-t6-backend-fresh-final.txt` and
+`docs/release/evidence/P0/p0-t6-backend-fresh-final.txt`,
 `docs/release/evidence/P0/p0-t6-backup-restore-drill-final.txt` — fresh backend suite and CLI
 backup/restore round-trip both pass after the final repairs.
+`docs/release/evidence/P0/p0-t7-vercel-preview-audit.txt` — current Vercel/Railway staging-target
+revalidation; Preview database handshake resets and auth origin is shared with Production.
 ```
 
 ### Tasks
@@ -182,11 +185,11 @@ backup/restore round-trip both pass after the final repairs.
       **Evidence:** `docs/release/generated/ci-command-map.md`; source workflows and package scripts audited in `docs/release/evidence/P0/p0-discovery.txt`.
       **Deviation:**
 - [ ] **P0.T6** Fix all existing CI/typecheck/test hangs and failures; no skips.
-      **Evidence:** Local executable matrix passes: fresh backend 180 files/851 tests/3 pre-existing conditional skips — `p0-t6-backend-fresh-final.txt`; frontend lint/typecheck/contrast/unit/build passes; final Playwright 280 total with 113 passed, 167 pre-existing skips, 0 failures — `p0-t6-frontend-e2e-280-final.txt`; backup round-trip PASS — `p0-t6-backup-restore-drill-final.txt`; security final checks PASS — `p0-t6-security-final.txt`. Staging, tenant-isolation, replay, load, and live-eval commands remain explicitly fail-closed without owner-bound target identity/artifacts.
-      **Deviation:** Embedded Postgres needed its provided symlink hydration; browser snapshots were regenerated after visual comparison showed the committed images represented an older public-preview layout. P3 fixture tests were corrected to assert the current truthful recovery, safe-area, and post-transition stability contracts rather than stale structural counts/labels. The full phase command map includes environment-gated commands that cannot be truthfully run against the only discovered production environment.
+      **Evidence:** Local executable matrix passes: fresh backend 180 files/851 tests/3 pre-existing conditional skips — `p0-t6-backend-fresh-final.txt`; frontend lint/typecheck/contrast/unit/build passes; final Playwright 280 total with 113 passed, 167 pre-existing skips, 0 failures — `p0-t6-frontend-e2e-280-final.txt`; backup round-trip PASS — `p0-t6-backup-restore-drill-final.txt`; security final checks PASS — `p0-t6-security-final.txt`. Staging, tenant-isolation, replay, load, and live-eval commands remain explicitly fail-closed. A current Vercel Preview database target was revalidated read-only but resets during PostgreSQL handshake and shares the Production Supabase auth origin — `p0-t7-vercel-preview-audit.txt`.
+      **Deviation:** Embedded Postgres needed its provided symlink hydration; browser snapshots were regenerated after visual comparison showed the committed images represented an older public-preview layout. P3 fixture tests were corrected to assert the current truthful recovery, safe-area, and post-transition stability contracts rather than stale structural counts/labels. The full phase command map includes environment-gated commands that cannot be truthfully run against the only current non-production target because that target is unavailable and not separately authenticated.
 - [x] **P0.T7** Record current migration head and deployment targets; no production changes.
-      **Evidence:** `docs/release/generated/deployment-inventory.md`; `docs/release/evidence/P0/p0-t7-railway-status.txt`; local migration evidence `p0-t6-clean-db-prerequisites.txt`.
-      **Deviation:** Read-only Railway discovery found one accessible production project/environment but no non-production environment or staging DB; inventory records the production target without using it for tests.
+      **Evidence:** `docs/release/generated/deployment-inventory.md`; `docs/release/evidence/P0/p0-t7-railway-status.txt`; `docs/release/evidence/P0/p0-t7-vercel-preview-audit.txt`; local migration evidence `p0-t6-clean-db-prerequisites.txt`.
+      **Deviation:** Read-only Railway discovery found one accessible production project/environment. Vercel Preview metadata exposed a historical non-production-looking Railway endpoint, but the endpoint resets and the auth origin matches Production; inventory records both facts without using either target for tests.
 - [x] **P0.T8** Write and commit `docs/release/P0-baseline.md`.
       **Evidence:** `dfc696d`; `docs/release/P0-baseline.md`.
       **Deviation:** Strict starting score remains 0.0/10 because no §2.3 category has full-credit proof; the report records the remaining environment blockers instead of inventing staging evidence.
@@ -199,7 +202,7 @@ backup/restore round-trip both pass after the final repairs.
 - [x] Environment/binding contract generated safely — **Evidence:** `docs/release/evidence/P0/p0-t4-environment-contract.txt`, exit 0; no values emitted.
 - [ ] All existing CI-equivalent commands terminate and pass — **Evidence:** all executable local commands pass; backup/restore is now green. Staging, tenant isolation, replay, k6 load, and live planner commands are recorded as fail-closed because no verified non-production identity, credentials, or artifacts are available; see `p0-t6-ci-final-matrix.txt`.
 - [x] Zero skips/quarantines added — **Evidence:** `docs/release/evidence/P0/p0-t6-skip-audit.txt`; full browser run reports 167 pre-existing skips, no added quarantine.
-- [x] Migration/deployment inventory recorded — **Evidence:** `docs/release/generated/deployment-inventory.md`; `docs/release/evidence/P0/p0-t7-railway-status.txt`.
+- [x] Migration/deployment inventory recorded — **Evidence:** `docs/release/generated/deployment-inventory.md`; `docs/release/evidence/P0/p0-t7-railway-status.txt`; `docs/release/evidence/P0/p0-t7-vercel-preview-audit.txt`.
 - [x] P0 baseline report committed — **Evidence:** `dfc696d`; `docs/release/P0-baseline.md`.
 - [x] Zero open P0 defects — **Evidence:** source defects R-02/R-03 are closed and R-04/R-13 are correctly P1/P4; the two remaining items are external P0 exit prerequisites above.
 
@@ -612,6 +615,8 @@ These are not executor blockers until their phase requires them:
 <!-- Append one entry per phase/session, newest first:
 YYYY-MM-DD HH:MM · model · phase · starting SHA → ending SHA · tasks completed · test summary ·
 action count certified · defects opened/closed · score · next phase · blockers -->
+
+- **2026-08-06 · P0 TARGET REVALIDATION SESSION (GPT-5)** · `dfc696d` → `P0 revalidation evidence commit` · Re-read the plan and state completely; rechecked Railway/Vercel targets without production writes; discovered the historical Preview bindings, confirmed database host/path difference but shared Supabase auth origin, and proved the Preview Postgres endpoint resets before authentication. `npm run release:manifest` exit 0 (44/44), `npm run release:environment` exit 0 (144 names), `git diff --check` exit 0, current-worktree gitleaks exit 0. No action certified; P0 remains blocked by the unavailable/unsafe non-production target, missing tenant/JWT/replay/load/live-provider artifacts, and historical gitleaks follow-up. No production action taken.
 
 - **2026-08-06 · P0 FINAL VERIFICATION SESSION (GPT-5)** · `4888c6d22ed211cb918f30edc2b508fe1a04bcde` → `dfc696d` · Committed feature freeze, fixed 44-action spec/discovery/manifest, environment contract, CI map, deployment inventory, P0 baseline, evidence, dependency-security overrides, browser/test repairs, and backup/restore repair. Final local evidence: 280 browser tests total, 113 passed, 167 pre-existing skips, 0 failures; fresh backend 180 files/851 tests, 3 pre-existing skips; backup/restore sentinel counts matched; current-diff gitleaks, OSV, npm audit, contrast, lint, typecheck, planner eval, policy coverage, and builds pass. **Next:** remain in P0 blocked state; do not begin P1. **Blockers:** no verified non-production Railway environment, staging URL/JWTs, replay artifacts, live provider credential, or k6 binary; all affected commands fail closed. Historical gitleaks follow-up has 3 pre-existing matches; no history rewrite or production action taken.
 
