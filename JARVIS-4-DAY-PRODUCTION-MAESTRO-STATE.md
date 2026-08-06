@@ -40,14 +40,14 @@ only after the phase cannot progress further.
 | | |
 |---|---|
 | **ACTIVE PHASE** | **P3 — Full-Stack Staging, Live-Binding Smoke, and 15-User Load — BLOCKED-CONFIG** |
-| **Latest verified commit** | `9c87610` (`jarvis-release P3: record blocked staging exit`) |
+| **Latest verified commit** | `8c8f830` (`jarvis-release P3: record target revalidation`) |
 | **Phases complete** | 3 / 5 |
 | **Actions CORE-CERTIFIED** | 0 / 44 — full 14-gate certification remains P2–P4 work; P1 contract gates are complete for all 44 |
 | **Actions LIVE-CERTIFIED** | 0 / 44 |
 | **Open P0 defects** | 0 — local deterministic CI and the guarded Bedrock chain are green; isolated-staging prerequisites remain phase-scoped P3 BLOCKED-CONFIG items |
 | **Open P1 defects** | 0 P1 contract defects; provider-backed P2 routing is now configured/live-smoked, while isolated-staging/JWT/replay/load prerequisites remain P3 BLOCKED-CONFIG |
 | **Readiness score** | 0.0 / 10.0 — P1 contract proof and local P2 evidence are complete, but no P3 staging/load category can be credited without an isolated target and measurements |
-| **Sessions logged** | 12 |
+| **Sessions logged** | 13 |
 
 ## NEXT EXACT PHASE
 
@@ -149,6 +149,8 @@ Do not close a defect without exact evidence. Add every new failure discovered b
 - **P3.T1/T2/T3/T4/T5/T6/T8** · plan expected verified isolated targets and owner-supplied certification artifacts · repository reality exposes only a read-only production Railway environment and no staging target/JWT/case/load/allowlist set · added fail-closed runners and sanitized machine reports without substituting production or inventing evidence · `docs/release/evidence/P3/p3-t1-staging-identity-guard.txt`, `p3-t2-staging-backup-migration-preflight.txt`, `p3-t3-rc-deploy-preflight.txt`, `p3-t4-seed-preflight.txt`, `p3-t5-api-e2e-guard.txt`, `p3-t6-live-binding-guard.txt`, `p3-t8-load-guard.txt`.
 - **P3 discovery** · plan’s release commands are owned by `finnor-os`, while a root invocation has no `release:manifest` script · ran the required discovery from the owning workspace and retained the root invocation failure as evidence; no scope was reduced · `docs/release/evidence/P3/p3-discovery-manifest.txt`, `p3-discovery-manifest-corrected.txt`.
 - **P3.T7/T10** · plan expected staging journey and live Sentry proof · local contracts are executable, but the staging frontend/voice/approval/recovery/receipt target and Sentry project/release/alert destination are absent · recorded the 10-file/64-test local slice and explicit live preflight block without claiming staging certification · `docs/release/evidence/P3/p3-t7-frontend-voice-approval-recovery.txt`, `p3-t10-sentry-drill-preflight.txt`.
+
+- **2026-08-07 · P3.T1 continuation revalidation** · Current read-only Railway/Vercel checks found no new non-production target: Railway still exposes only `confident-wisdom/production` with `finnor-worker`, and the linked Vercel console listing is Production-only. The installed Railway CLI forms that require a project link were not usable from this checkout; no link, deploy, variable read, or other state-changing command was attempted. Evidence: `docs/release/evidence/P3/p3-t1-readonly-target-revalidation-continuation.txt`. The original blocker is unchanged; no production egress occurred.
 
 **Standing conditions:**
 - Missing credentials are not a reason to claim live readiness. Mark the binding/action `BLOCKED-CONFIG`.
@@ -378,7 +380,7 @@ completion and exited 0.
 **Plan section:** §6 → PHASE 3
 **Starting SHA:** `05d0262`
 **Implementation/evidence SHA:** `551c199`
-**Ending SHA:** `9c87610`
+**Ending SHA:** `8c8f830`
 
 ### Discovery output
 
@@ -403,12 +405,17 @@ requests with `BLOCKED-CONFIG`; generated reports are `docs/release/generated/p3
 `p3-t3-rc-deploy-preflight.txt`, `p3-t4-seed-preflight.txt`, `p3-t9-load-gates.txt`, and
 `p3-t10-sentry-drill-preflight.txt` record the remaining exact blockers and confirm that no staging
 backup, migration, seed, deploy, load, or live Sentry action was attempted.
+
+`docs/release/evidence/P3/p3-t1-readonly-target-revalidation-continuation.txt` — current read-only
+Railway/Vercel revalidation found no new non-production target: Railway still exposes only
+`confident-wisdom/production` with `finnor-worker`, and the linked Vercel console listing is
+Production-only. No state-changing command or Phase 3 runner was invoked.
 ```
 
 ### Tasks
 
 - [ ] **P3.T1** Prove staging identity and no-egress/allowlist guards.
-      **Evidence:** `docs/release/evidence/P3/p3-t1-readonly-target-revalidation.txt`; `p3-t1-staging-identity-guard.txt`; guard report `docs/release/generated/p3-api-e2e-results.json`.
+      **Evidence:** `docs/release/evidence/P3/p3-t1-readonly-target-revalidation.txt`; `p3-t1-readonly-target-revalidation-continuation.txt`; `p3-t1-staging-identity-guard.txt`; guard report `docs/release/generated/p3-api-e2e-results.json`.
       **Deviation:** The repository exposes only a read-only production Railway environment and no verified isolated staging target. The new guard requires explicit target hosts, `P3_STAGING_IDENTITY_CONFIRMED=1`, JWT auth mode, allowlists, and `LIVE_SMOKE_ALLOWED=0`; it refused before network.
 - [ ] **P3.T2** Back up staging; apply and verify pending migrations.
       **Evidence:** `docs/release/evidence/P3/p3-t2-staging-backup-migration-preflight.txt`; repository head remains `0064_evidence_corpus_search.sql` from the committed inventory.
@@ -594,10 +601,10 @@ Never paste values.
 |---|---|---|---|---|
 | Postgres / RLS / migrations | required | 🟡 configured-emulator | P0/P3/P4 | Fresh local migrations 0000–0064, seed, LangGraph setup, backend suite, and backup/restore — `docs/release/evidence/P0/p0-t6-backend-fresh-final.txt`, `p0-t6-backup-restore-drill-final.txt`; P3 staging backup/migration preflight is BLOCKED-CONFIG — `docs/release/evidence/P3/p3-t2-staging-backup-migration-preflight.txt` |
 | Redis memory + rate limiting | required | 🟡 configured-emulator | P2/P3 | `docs/release/evidence/P2/p2-deterministic-unit.txt` — Redis outage fallback/rate-limit tests; P3 staging binding is BLOCKED-CONFIG — `docs/release/integration-readiness.md` |
-| Railway API service | required | 🟡 blocked-config | P3 | Read-only Railway revalidation exposes only `confident-wisdom/production`; no verified non-production target — `docs/release/evidence/P3/p3-t1-readonly-target-revalidation.txt` |
-| Railway worker service | required | 🟡 blocked-config | P3 | Read-only Railway exposes `finnor-worker` in `production` only; no staging target — `docs/release/evidence/P3/p3-t1-readonly-target-revalidation.txt` |
+| Railway API service | required | 🟡 blocked-config | P3 | Read-only Railway revalidation exposes only `confident-wisdom/production`; no verified non-production target — `docs/release/evidence/P3/p3-t1-readonly-target-revalidation.txt`, `p3-t1-readonly-target-revalidation-continuation.txt` |
+| Railway worker service | required | 🟡 blocked-config | P3 | Read-only Railway exposes `finnor-worker` in `production` only; no staging target — `docs/release/evidence/P3/p3-t1-readonly-target-revalidation.txt`, `p3-t1-readonly-target-revalidation-continuation.txt` |
 | Railway orchestrator service | required | 🟡 blocked-config | P3 | No verified non-production service/environment/URL — `docs/release/evidence/P3/p3-t1-readonly-target-revalidation.txt` |
-| Frontend deployment | required | 🟡 blocked-config | P3 | No verified isolated staging URL or deployment identity — `docs/release/evidence/P3/p3-t1-readonly-target-revalidation.txt` |
+| Frontend deployment | required | 🟡 blocked-config | P3 | No verified isolated staging URL or deployment identity; current linked Vercel listing is Production-only — `docs/release/evidence/P3/p3-t1-readonly-target-revalidation-continuation.txt` |
 | Sentry | required | 🟡 configured-emulator | P2/P3 | `docs/release/chaos-results.md`; test-context events only; staging DSN/release/alert destination preflight is BLOCKED-CONFIG — `docs/release/evidence/P3/p3-t10-sentry-drill-preflight.txt` |
 | Supabase auth/RBAC | required | 🟡 configured-emulator | P2/P3 | `docs/release/evidence/P2/p2-security-and-tenant-boundaries.txt`; P3 JWT/auth identity and isolated origin are BLOCKED-CONFIG — `docs/release/evidence/P3/p3-t1-staging-identity-guard.txt` |
 | Vapi | pilot if voice enabled | 🟡 configured-emulator | P2/P3 | `docs/release/evidence/P2/p2-evidence-and-voice.txt`; allowlisted staging/live outbound pilot is BLOCKED-CONFIG — `docs/release/evidence/P3/p3-t6-live-binding-guard.txt` |
@@ -646,6 +653,7 @@ Never paste values.
 | `finnor-os/scripts/release/run-api-e2e-matrix.ts` | P3 | ✅ committed | `551c199`; guarded 44-row staging E2E runner |
 | `finnor-os/scripts/release/run-live-binding-smoke.ts` | P3 | ✅ committed | `551c199`; guarded configured-provider smoke runner |
 | `finnor-os/scripts/release/run-load-certification.ts` | P3 | ✅ committed | `551c199`; guarded exact 15/25-user load runner |
+| `docs/release/evidence/P3/p3-t1-readonly-target-revalidation-continuation.txt` | P3 | ✅ committed | `8c8f830`; current read-only Railway/Vercel revalidation, no new non-production target |
 | `docs/release/deployment-runbook.md` | P4 | ⬜ | |
 | `docs/release/rollback-runbook.md` | P4 | ⬜ | |
 | `docs/release/incident-runbook.md` | P4 | ⬜ | |
@@ -706,6 +714,8 @@ These are not executor blockers until their phase requires them:
 <!-- Append one entry per phase/session, newest first:
 YYYY-MM-DD HH:MM · model · phase · starting SHA → ending SHA · tasks completed · test summary ·
 action count certified · defects opened/closed · score · next phase · blockers -->
+
+- **2026-08-07 · P3.T1 CONTINUATION REVALIDATION SESSION (GPT-5)** · `9a448e4` → `8c8f830` · Rechecked current environment names without printing values; ran read-only Railway project/status checks and the linked Vercel deployment listing. Railway still exposes only `confident-wisdom/production` with `finnor-worker`; Vercel listed Ready Production deployments only. The installed CLI forms requiring an explicit project link were unavailable from this checkout, so no link or state-changing command was attempted. No P0/P1 suite rerun, no production/staging egress, no deploy/migration/seed/load/provider/Sentry action, and no secrets or payloads recorded. P3 remains BLOCKED-CONFIG with the exact continuation evidence at `docs/release/evidence/P3/p3-t1-readonly-target-revalidation-continuation.txt`.
 
 - **2026-08-07 · P2 BEDROCK SINGLE-KEY CLOSURE SESSION (GPT-5)** · `9c25deb` → `2dfa3b9` · Configured GLM, Mistral, and DeepSeek aliases to prefer the shared Bedrock bearer credential, with model defaults `zai.glm-4.7`, `mistral.mistral-small-2402-v1:0`, and `deepseek.v3.2`, plus environment overrides. Added the guarded `release:bedrock-smoke` command; it made exactly 3 Bedrock calls against localhost-only seeded Postgres and passed 3/3 completions, 20/20 route assertions, and 3/3 `llm_calls` rows without writing the credential or response content. Focused P2 unit test passed 8/8; `npm run typecheck` passed; `npm run release:environment` passed with 152 names; final `npm run release:chaos` exited 0 with 4/4 groups, 219 tests passed, 0 skipped, and 14/14 faults passed. No P0/P1 suite rerun, no production/staging egress, and no business/external action occurred. P3 is next; isolated staging/JWT/replay/load prerequisites remain phase-scoped BLOCKED-CONFIG.
 
