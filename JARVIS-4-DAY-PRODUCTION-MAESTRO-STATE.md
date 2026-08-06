@@ -40,14 +40,14 @@ only after the phase cannot progress further.
 | | |
 |---|---|
 | **ACTIVE PHASE** | **P3 — Full-Stack Staging, Live-Binding Smoke, and 15-User Load — BLOCKED-CONFIG** |
-| **Latest verified commit** | `ad2801d` (`jarvis-release P3: record API preview revalidation`) |
+| **Latest verified commit** | `2547453` (`jarvis-release P3: record current target recheck`) |
 | **Phases complete** | 3 / 5 |
 | **Actions CORE-CERTIFIED** | 0 / 44 — full 14-gate certification remains P2–P4 work; P1 contract gates are complete for all 44 |
 | **Actions LIVE-CERTIFIED** | 0 / 44 |
 | **Open P0 defects** | 0 — local deterministic CI and the guarded Bedrock chain are green; isolated-staging prerequisites remain phase-scoped P3 BLOCKED-CONFIG items |
 | **Open P1 defects** | 0 P1 contract defects; provider-backed P2 routing is now configured/live-smoked, while isolated-staging/JWT/replay/load prerequisites remain P3 BLOCKED-CONFIG |
 | **Readiness score** | 0.0 / 10.0 — P1 contract proof and local P2 evidence are complete, but no P3 staging/load category can be credited without an isolated target and measurements |
-| **Sessions logged** | 15 |
+| **Sessions logged** | 16 |
 
 ## NEXT EXACT PHASE
 
@@ -152,6 +152,7 @@ Do not close a defect without exact evidence. Add every new failure discovered b
 
 - **2026-08-07 · P3.T1 continuation revalidation** · Current read-only Railway/Vercel checks found no new non-production target: Railway still exposes only `confident-wisdom/production` with `finnor-worker`, and the linked Vercel console listing is Production-only. The installed Railway CLI forms that require a project link were not usable from this checkout; no link, deploy, variable read, or other state-changing command was attempted. Evidence: `docs/release/evidence/P3/p3-t1-readonly-target-revalidation-continuation.txt`. The original blocker is unchanged; no production egress occurred.
 - **2026-08-07 · P3.T1 documented-project/API Preview revalidation** · Explicit read-only checks for the repository-documented Railway project names `imaginative-enchantment` and `innovative-prosperity` returned not found for the current account. The linked API Vercel project lists two Ready Preview deployments, but they remain uncertifiable as isolated staging because retained P0 evidence shows the Preview database handshake resets and its Supabase auth origin is shared with Production. No link, deploy, variable read, provider request, or other state-changing command was attempted. Evidence: `docs/release/evidence/P3/p3-t1-readonly-target-revalidation-continuation.txt`. P3 remains BLOCKED-CONFIG; no production egress occurred.
+- **2026-08-07 · P3.T1 current target recheck** · Revalidated the current HEAD and environment names read-only. No staging/P3 environment names were present; Railway still exposes only `confident-wisdom/production` with `finnor-worker` and a SUCCESS/RUNNING production deployment; the documented legacy projects remain not found; the root Vercel project remains Production-only; and the API project’s two Preview deployments remain uncertifiable by the retained P0 database/auth findings. No runner, link, deploy, variable read, migration, seed, provider, load, or Sentry action was attempted. Evidence: `docs/release/evidence/P3/p3-t1-readonly-target-revalidation-continuation.txt`. P3 remains BLOCKED-CONFIG; no production/staging/provider egress occurred.
 
 **Standing conditions:**
 - Missing credentials are not a reason to claim live readiness. Mark the binding/action `BLOCKED-CONFIG`.
@@ -380,8 +381,8 @@ completion and exited 0.
 **Status:** 🔴 BLOCKED-CONFIG — all independent repository work is implemented and evidenced; isolated staging, live-binding, load, and Sentry prerequisites are absent · **Window:** Day 3 · **Depends on:** P2
 **Plan section:** §6 → PHASE 3
 **Starting SHA:** `05d0262`
-**Implementation/evidence SHA:** `ad2801d`
-**Ending SHA:** `ad2801d`
+**Implementation/evidence SHA:** `2547453`
+**Ending SHA:** `2547453`
 
 ### Discovery output
 
@@ -412,7 +413,9 @@ Railway/Vercel revalidation found no new non-production target: Railway still ex
 `confident-wisdom/production` with `finnor-worker`, and the linked Vercel console listing is
 Production-only; explicit checks for the two documented legacy Railway project names returned not
 found, and the linked API project’s Preview deployments remain uncertified because of the retained
-P0 database/auth findings. No state-changing command or Phase 3 runner was invoked.
+P0 database/auth findings. The post-ledger recheck at repository HEAD `65dbf34` found the same
+posture and no staging/P3 environment variable names. No state-changing command or Phase 3 runner
+was invoked.
 
 `docs/release/evidence/P3/p3-runner-contract-repair-validation.txt` — after the continuation audit,
 the E2E runner now validates all three tenant JWTs, expected terminal receipts, duplicate action IDs,
@@ -425,7 +428,7 @@ refused before network/provider/load requests.
 
 - [ ] **P3.T1** Prove staging identity and no-egress/allowlist guards.
       **Evidence:** `docs/release/evidence/P3/p3-t1-readonly-target-revalidation.txt`; `p3-t1-readonly-target-revalidation-continuation.txt`; `p3-t1-staging-identity-guard.txt`; guard report `docs/release/generated/p3-api-e2e-results.json`; repair validation `docs/release/evidence/P3/p3-runner-contract-repair-validation.txt`.
-      **Deviation:** The repository exposes only a read-only production Railway environment and no verified isolated staging target. Explicit checks for the documented legacy Railway project names also returned not found, while the linked API Preview deployments remain uncertified by the retained P0 database/auth findings. The repaired guard requires six explicit target hosts including Redis, `P3_STAGING_IDENTITY_CONFIRMED=1`, JWT auth mode, all three JWTs, `P3_NO_EGRESS=1`, allowlists, and `LIVE_SMOKE_ALLOWED=0`; it refused before network.
+      **Deviation:** The repository exposes only a read-only production Railway environment and no verified isolated staging target. The current recheck found no staging/P3 environment names; explicit checks for the documented legacy Railway project names also returned not found, while the linked API Preview deployments remain uncertified by the retained P0 database/auth findings. The repaired guard requires six explicit target hosts including Redis, `P3_STAGING_IDENTITY_CONFIRMED=1`, JWT auth mode, all three JWTs, `P3_NO_EGRESS=1`, allowlists, and `LIVE_SMOKE_ALLOWED=0`; it refused before network.
 - [ ] **P3.T2** Back up staging; apply and verify pending migrations.
       **Evidence:** `docs/release/evidence/P3/p3-t2-staging-backup-migration-preflight.txt`; repository head remains `0064_evidence_corpus_search.sql` from the committed inventory.
       **Deviation:** No staging database or backup id exists in the execution context; no backup, migration, or production database operation was attempted.
@@ -663,7 +666,7 @@ Never paste values.
 | `finnor-os/scripts/release/run-live-binding-smoke.ts` | P3 | ✅ committed | `733207f`; guarded configured-provider smoke runner with receipt reconciliation |
 | `finnor-os/scripts/release/run-load-certification.ts` | P3 | ✅ committed | `733207f`; guarded exact 15/25-user load runner with duplicate coverage |
 | `docs/release/evidence/P3/p3-runner-contract-repair-validation.txt` | P3 | ✅ committed | `733207f`; typecheck and fail-closed runner repair validation |
-| `docs/release/evidence/P3/p3-t1-readonly-target-revalidation-continuation.txt` | P3 | ✅ committed | `ad2801d`; current Railway/Vercel revalidation, documented Railway projects not found, API Preview not staging-certified |
+| `docs/release/evidence/P3/p3-t1-readonly-target-revalidation-continuation.txt` | P3 | ✅ committed | `2547453`; current target recheck confirms no staging/P3 names, documented Railway projects not found, API Preview not staging-certified |
 | `docs/release/deployment-runbook.md` | P4 | ⬜ | |
 | `docs/release/rollback-runbook.md` | P4 | ⬜ | |
 | `docs/release/incident-runbook.md` | P4 | ⬜ | |
@@ -728,6 +731,8 @@ action count certified · defects opened/closed · score · next phase · blocke
 - **2026-08-07 · P3 RUNNER CONTRACT REPAIR SESSION (GPT-5)** · `8c8f830` → `733207f` · Audited the exact Phase 3 plan against the committed runners and found the API E2E receipt flag hardcoded false, Bravo excluded from the tenant type, no Redis target in the identity guard, no provider-label receipt reconciliation, and no concurrent duplicate load class. Repaired those contracts, retained exact 44-row and 15-user/25-user scope, added explicit voice-session non-testability coverage, ran `finnor-os npm run typecheck` exit 0, and reran all guarded P3 commands: identity, API E2E, live smoke, and load each exited 1 before network/provider/load requests with `targets=0/6`. No P0/P1 suite rerun, no production/staging egress, and no external effect occurred. P3 remains BLOCKED-CONFIG pending isolated target and owner artifacts.
 
 - **2026-08-07 · P3.T1 DOCUMENTED-TARGET REVALIDATION SESSION (GPT-5)** · `7b59103` → `ad2801d` · Ran explicit read-only checks for the documented Railway project names `imaginative-enchantment` and `innovative-prosperity`; neither was found by the current account. Rechecked the linked API Vercel project: two Ready Preview deployments are listed, but retained P0 evidence prevents treating them as isolated staging because the database handshake resets and Supabase auth is shared with Production. Recorded the result without linking, deploying, reading variables, sending requests, or rerunning P0/P1 work. P3 remains BLOCKED-CONFIG; no production/staging/provider egress occurred.
+
+- **2026-08-07 · P3.T1 CURRENT TARGET RECHECK SESSION (GPT-5)** · `65dbf34` → `2547453` · Revalidated current environment names and read-only Railway/Vercel deployment state. No staging/P3 names were present; Railway remained production-only with `finnor-worker`, the two documented legacy projects remained unavailable, the root Vercel project remained Production-only, and the API Preview deployments remained uncertified by retained P0 database/auth findings. Recorded the exact result and no-op posture without invoking any Phase 3 runner or external write. P3 remains BLOCKED-CONFIG; no production/staging/provider egress occurred.
 
 - **2026-08-07 · P3.T1 CONTINUATION REVALIDATION SESSION (GPT-5)** · `9a448e4` → `8c8f830` · Rechecked current environment names without printing values; ran read-only Railway project/status checks and the linked Vercel deployment listing. Railway still exposes only `confident-wisdom/production` with `finnor-worker`; Vercel listed Ready Production deployments only. The installed CLI forms requiring an explicit project link were unavailable from this checkout, so no link or state-changing command was attempted. No P0/P1 suite rerun, no production/staging egress, no deploy/migration/seed/load/provider/Sentry action, and no secrets or payloads recorded. P3 remains BLOCKED-CONFIG with the exact continuation evidence at `docs/release/evidence/P3/p3-t1-readonly-target-revalidation-continuation.txt`.
 
