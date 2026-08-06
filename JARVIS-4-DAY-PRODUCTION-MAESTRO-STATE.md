@@ -40,7 +40,7 @@ only after the phase cannot progress further.
 | | |
 |---|---|
 | **ACTIVE PHASE** | **P0 — Release Lock, Source Audit, and Clean CI** |
-| **Latest verified commit** | `b8dfb7a` (`jarvis-release P0: record planner environment rerun`) |
+| **Latest verified commit** | `74b172d` (`jarvis-release P0: align final command matrix`) |
 | **Phases complete** | 0 / 5 |
 | **Actions CORE-CERTIFIED** | 0 / 44 |
 | **Actions LIVE-CERTIFIED** | 0 / 44 |
@@ -149,7 +149,7 @@ Do not close a defect without exact evidence. Add every new failure discovered b
 **Status:** 🔴 blocked · **Window:** Day 1 morning · **Depends on:** none
 **Plan section:** §6 → PHASE 0
 **Starting SHA:** `4888c6d22ed211cb918f30edc2b508fe1a04bcde`
-**Ending SHA:** `b8dfb7a`
+**Ending SHA:** `74b172d`
 
 ### Discovery output
 
