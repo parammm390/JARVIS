@@ -1,0 +1,61 @@
+# Phase 2 security, secret, and guard evidence
+
+Date: 2026-08-06
+Repository: /Users/paramdave/FINNOR
+
+## Tool availability
+
+Command:
+
+```sh
+if command -v gitleaks >/dev/null 2>&1; then gitleaks version; gitleaks detect --source . --no-banner --redact; else echo 'gitleaks: NOT_INSTALLED'; exit 127; fi
+```
+
+Result: exit 127 — `gitleaks: NOT_INSTALLED`. No scanner was installed and no historical credentials were rotated or rewritten.
+
+## Fallback scans
+
+Command:
+
+```sh
+git diff --check
+```
+
+Result: exit 0; no whitespace errors.
+
+Command:
+
+```sh
+rg -n 'BRAVO-ISOLATION-SENTINEL' finnor-os/packages finnor-os/apps finnor-os/tests docs/release --glob '*.ts' --glob '*.tsx' --glob '*.md' --glob '*.json'
+```
+
+Result: exit 1 with no matches; the tenant sentinel is not present in source or release artifacts.
+
+Command:
+
+```sh
+git diff --unified=0 -- finnor-os/scripts/release/run-chaos-matrix.ts finnor-os/tests/integration/p2-postgres-transient.test.ts finnor-os/tests/integration/langgraph-workflow-actions.test.ts finnor-os/tests/integration/terminal-plan-repair.test.ts finnor-os/tests/integration/voice-and-batch.test.ts finnor-os/tests/unit/p2-llm-faults.test.ts docs/release/chaos-results.md docs/release/generated/p2-chaos-results.json | rg -n '^\\+.*(sk-[A-Za-z0-9]|AKIA[0-9A-Z]{16}|-----BEGIN .*PRIVATE KEY-----|gh[pousr]_[A-Za-z0-9_]{20,}|xox[baprs]-)'
+```
+
+Result: exit 1 with no matches; no new credential-shaped value appears in the P2 diff.
+
+## Chaos guard refusal
+
+```text
+NODE_ENV=production FINNOR_CHAOS_TEST_CONTEXT=1 DATABASE_URL=postgres://finnor:finnor@localhost:5432/finnor npm run release:chaos
+P2_CHAOS_MATRIX_FAIL P2 chaos runner refuses NODE_ENV=production
+exit 1
+
+NODE_ENV=test DATABASE_URL=postgres://finnor:finnor@localhost:5432/finnor npm run release:chaos
+P2_CHAOS_MATRIX_FAIL P2 chaos runner requires FINNOR_CHAOS_TEST_CONTEXT=1
+exit 1
+```
+
+## Type validation
+
+```text
+npm run typecheck
+exit 0
+```
+
+The P2 runner also removes provider, Sentry, CRM, payment, voice, and web-research credentials from child processes and refuses non-local database hosts. The positive matrix evidence is in `docs/release/chaos-results.md` and the four `p2-*.txt` group reports.

@@ -1,0 +1,305 @@
+Command: grep -R "Sentry\|captureException\|trace_id\|correlation" . --include='*.ts' --include='*.tsx' | head -300
+Exit code: 0
+Original token count: 11632
+
+./finnor-os/node_modules/@types/node/worker_threads.d.ts: * correlation between tasks and their outcomes. See `"Using AsyncResource for a Worker thread pool"` in the `async_hooks` documentation for an example implementation.
+./finnor-os/node_modules/groq-sdk/node_modules/@types/node/worker_threads.d.ts: * correlation between tasks and their outcomes. See `"Using AsyncResource for a Worker thread pool"` in the `async_hooks` documentation for an example implementation.
+./finnor-os/node_modules/langsmith/dist/experimental/otel/translator.d.ts:    trace_id: string;
+./finnor-os/node_modules/langsmith/dist/_openapi_client/resources/threads.d.ts:     * `first_trace_id` is the root trace UUID for the chronologically first trace in
+./finnor-os/node_modules/langsmith/dist/_openapi_client/resources/threads.d.ts:    first_trace_id?: string;
+./finnor-os/node_modules/langsmith/dist/_openapi_client/resources/threads.d.ts:     * `last_trace_id` is the root trace UUID for the chronologically last trace in the
+./finnor-os/node_modules/langsmith/dist/_openapi_client/resources/threads.d.ts:    last_trace_id?: string;
+./finnor-os/node_modules/langsmith/dist/_openapi_client/resources/threads.d.ts:     * `trace_id` is a representative root trace UUID when the summary includes one,
+./finnor-os/node_modules/langsmith/dist/_openapi_client/resources/threads.d.ts:    trace_id?: string;
+./finnor-os/node_modules/langsmith/dist/_openapi_client/resources/threads.d.ts:     * `trace_id` is the UUID of this trace (the root run). Always present.
+./finnor-os/node_modules/langsmith/dist/_openapi_client/resources/threads.d.ts:    trace_id?: string;
+./finnor-os/node_modules/langsmith/dist/_openapi_client/resources/threads.d.ts:     * Properties not listed are omitted from each trace object; `trace_id` is always
+./finnor-os/node_modules/langsmith/dist/_openapi_client/resources/threads.d.ts:     * eq(trace_id, "0190a1b2-c3d4-7ef0-a5b6-6ea3a82e9328"). See
+./finnor-os/node_modules/langsmith/dist/_openapi_client/resources/traces.d.ts:     * clients never have to merge by `trace_id`.
+./finnor-os/node_modules/langsmith/dist/_openapi_client/resources/traces.d.ts:     * `trace_ids` is an optional fast-path restriction to a known set of trace UUIDs.
+./finnor-os/node_modules/langsmith/dist/_openapi_client/resources/traces.d.ts:    trace_ids?: Array<string>;
+./finnor-os/node_modules/langsmith/dist/_openapi_client/resources/runs/share.d.ts:     * Deletes the share token for the trace identified by trace_id and session_id.
+./finnor-os/node_modules/langsmith/dist/_openapi_client/resources/runs/share.d.ts:     * trace_id is the root trace UUID to share.
+./finnor-os/node_modules/langsmith/dist/_openapi_client/resources/runs/share.d.ts:    trace_id?: string;
+./finnor-os/node_modules/langsmith/dist/_openapi_client/resources/runs/runs.d.ts:     * supply the run's project_id and trace_id as query parameters; start_time is
+./finnor-os/node_modules/langsmith/dist/_openapi_client/resources/runs/runs.d.ts:     *   { project_id: 'project_id', trace_id: 'trace_id' },
+./finnor-os/node_modules/langsmith/dist/_openapi_client/resources/runs/runs.d.ts:     * `trace_id` is the root trace UUID; for a root run it matches `id`.
+./finnor-os/node_modules/langsmith/dist/_openapi_client/resources/runs/runs.d.ts:    trace_id?: string;
+./finnor-os/node_modules/langsmith/dist/_openapi_client/resources/runs/runs.d.ts:    trace_id?: string;
+./finnor-os/node_modules/langsmith/dist/_openapi_client/resources/runs/runs.d.ts:    trace_id: string;
+./finnor-os/node_modules/langsmith/dist/_openapi_client/resources/runs/runs.d.ts:    trace_id: string;
+./finnor-os/node_modules/langsmith/dist/_openapi_client/resources/runs/runs.d.ts:     * Body param: `trace_id` optionally limits results to runs belonging to this trace
+./finnor-os/node_modules/langsmith/dist/_openapi_client/resources/runs/runs.d.ts:    trace_id?: string;
+./finnor-os/node_modules/langsmith/dist/_openapi_client/resources/runs/runs.d.ts:     * Body param: `trace_id` optionally limits results to runs belonging to this trace
+./finnor-os/node_modules/langsmith/dist/_openapi_client/resources/runs/runs.d.ts:    trace_id?: string;
+./finnor-os/node_modules/langsmith/dist/utils/_uuid.d.ts: * @param idType - The type of ID (e.g., "run_id", "trace_id") for the warning message
+./finnor-os/node_modules/langsmith/dist/run_trees.d.ts:    trace_id?: string;
+./finnor-os/node_modules/langsmith/dist/run_trees.d.ts:    trace_id: string;
+./finnor-os/node_modules/langsmith/dist/schemas.d.ts:    trace_id?: string;
+./finnor-os/node_modules/langsmith/dist/schemas.d.ts:    trace_id?: string;
+./finnor-os/node_modules/langsmith/dist/client.d.ts:    trace_id?: string;
+./finnor-os/node_modules/@sentry/core/build/types/metrics/public-api.d.ts: * Sentry.metrics.count('api.requests', 1, {
+./finnor-os/node_modules/@sentry/core/build/types/metrics/public-api.d.ts: * Sentry.metrics.count('items.processed', 5, {
+./finnor-os/node_modules/@sentry/core/build/types/metrics/public-api.d.ts: * Sentry.metrics.gauge('memory.usage', 1024, {
+./finnor-os/node_modules/@sentry/core/build/types/metrics/public-api.d.ts: * Sentry.metrics.gauge('active.connections', 42, {
+./finnor-os/node_modules/@sentry/core/build/types/metrics/public-api.d.ts: * Sentry.metrics.distribution('task.duration', 500, {
+./finnor-os/node_modules/@sentry/core/build/types/metrics/public-api.d.ts: * Sentry.metrics.distribution('batch.size', 100, {
+./finnor-os/node_modules/@sentry/core/build/types/metrics/internal.d.ts: * the stable Sentry SDK API and can be changed or removed without warning.
+./finnor-os/node_modules/@sentry/core/build/types/metrics/internal.d.ts: * Captures a metric event and sends it to Sentry.
+./finnor-os/node_modules/@sentry/core/build/types/metrics/internal.d.ts: * the stable Sentry SDK API and can be changed or removed without warning.
+./finnor-os/node_modules/@sentry/core/build/types/metrics/internal.d.ts: * Flushes the metrics buffer to Sentry.
+./finnor-os/node_modules/@sentry/core/build/types/metrics/internal.d.ts: * the stable Sentry SDK API and can be changed or removed without warning.
+./finnor-os/node_modules/@sentry/core/build/types/tracing/trace.d.ts:import { SentryNonRecordingSpan } from './sentryNonRecordingSpan';
+./finnor-os/node_modules/@sentry/core/build/types/tracing/trace.d.ts: * and can be accessed via `Sentry.getActiveSpan()`, as long as the function is executed while the scope is active.
+./finnor-os/node_modules/@sentry/core/build/types/tracing/trace.d.ts: * Similar to `Sentry.startSpan`. Wraps a function with a transaction/span, but does not finish the span
+./finnor-os/node_modules/@sentry/core/build/types/tracing/trace.d.ts: * and can be accessed via `Sentry.getActiveSpan()`, as long as the function is executed while the scope is active.
+./finnor-os/node_modules/@sentry/core/build/types/tracing/trace.d.ts: * as children or be able to be accessed via `Sentry.getActiveSpan()`.
+./finnor-os/node_modules/@sentry/core/build/types/tracing/trace.d.ts: * Used by SentryTracerProvider to create spans without triggering recursion
+./finnor-os/node_modules/@sentry/core/build/types/tracing/trace.d.ts:export declare function spanIsIgnored(span: Span): span is SentryNonRecordingSpan;
+./finnor-os/node_modules/@sentry/core/build/types/tracing/spans/spanBuffer.d.ts: * A buffer for serialized streamed span JSON objects that flushes them to Sentry in Span v2 envelopes.
+./finnor-os/node_modules/@sentry/core/build/types/tracing/spans/beforeSendSpan.d.ts: * Sentry.init({
+./finnor-os/node_modules/@sentry/core/build/types/tracing/langchain/embeddings.d.ts: * Wraps a LangChain embedding method (embedQuery or embedDocuments) to create Sentry spans.
+./finnor-os/node_modules/@sentry/core/build/types/tracing/langchain/embeddings.d.ts: * Wraps a LangChain embeddings instance to create Sentry spans for `embedQuery` and `embedDocuments` calls.
+./finnor-os/node_modules/@sentry/core/build/types/tracing/langchain/embeddings.d.ts: * import * as Sentry from '@sentry/cloudflare';
+./finnor-os/node_modules/@sentry/core/build/types/tracing/langchain/embeddings.d.ts: * const embeddings = Sentry.instrumentLangChainEmbeddings(
+./finnor-os/node_modules/@sentry/core/build/types/tracing/langchain/index.d.ts: * Creates a Sentry callback handler for LangChain
+./finnor-os/node_modules/@sentry/core/build/types/tracing/workers-ai/constants.d.ts: * The Sentry origin for spans created by the Workers AI instrumentation.
+./finnor-os/node_modules/@sentry/core/build/types/tracing/workers-ai/utils.d.ts: * attributes because Sentry's product reads the model output from `gen_ai.output.messages` first.
+./finnor-os/node_modules/@sentry/core/build/types/tracing/workers-ai/index.d.ts: * Instrument a Cloudflare Workers AI binding (`env.AI`) with Sentry tracing.
+./finnor-os/node_modules/@sentry/core/build/types/tracing/workers-ai/index.d.ts: * Sentry AI Agents conventions. All other methods are passed through untouched.
+./finnor-os/node_modules/@sentry/core/build/types/tracing/workers-ai/index.d.ts: * const ai = Sentry.instrumentWorkersAiClient(env.AI, { recordInputs: true, recordOutputs: true });
+./finnor-os/node_modules/@sentry/core/build/types/tracing/anthropic-ai/index.d.ts: * Instrument an Anthropic AI client with Sentry tracing
+./finnor-os/node_modules/@sentry/core/build/types/tracing/sentryNonRecordingSpan.d.ts:import type { SentrySpanArguments, Span, SpanAttributes, SpanAttributeValue, SpanContextData, SpanTimeInput } from '../types/span';
+./finnor-os/node_modules/@sentry/core/build/types/tracing/sentryNonRecordingSpan.d.ts:interface SentryNonRecordingSpanArguments extends SentrySpanArguments {
+./finnor-os/node_modules/@sentry/core/build/types/tracing/sentryNonRecordingSpan.d.ts: * A Sentry Span that is non-recording, meaning it will not be sent to Sentry.
+./finnor-os/node_modules/@sentry/core/build/types/tracing/sentryNonRecordingSpan.d.ts:export declare class SentryNonRecordingSpan implements Span {
+./finnor-os/node_modules/@sentry/core/build/types/tracing/sentryNonRecordingSpan.d.ts:    constructor(spanContext?: SentryNonRecordingSpanArguments);
+./finnor-os/node_modules/@sentry/core/build/types/tracing/sentryNonRecordingSpan.d.ts: * Whether the given span is a {@link SentryNonRecordingSpan}.
+./finnor-os/node_modules/@sentry/core/build/types/tracing/sentryNonRecordingSpan.d.ts:export declare function spanIsNonRecordingSpan(span: Span | undefined): span is SentryNonRecordingSpan;
+./finnor-os/node_modules/@sentry/core/build/types/tracing/dynamicSamplingContext.d.ts:export declare function getDynamicSamplingContextFromClient(trace_id: string, client: Client): DynamicSamplingContext;
+./finnor-os/node_modules/@sentry/core/build/types/tracing/utils.d.ts: * Set by `SentryTraceProvider` on the spans it creates; read by `SentrySpan.updateName()` and
+./finnor-os/node_modules/@sentry/core/build/types/tracing/utils.d.ts: * `applyOtelSpanData` keeps that source (and name) instead of overriding it. Set by `SentrySpan`
+./finnor-os/node_modules/@sentry/core/build/types/tracing/utils.d.ts: * Mark a span as created by the `SentryTracerProvider` (via the OTel tracer). Set by `SentryTracer`
+./finnor-os/node_modules/@sentry/core/build/types/tracing/utils.d.ts: * on every span it creates; read by `SentrySpan.end()` to seal the span against further writes once
+./finnor-os/node_modules/@sentry/core/build/types/tracing/utils.d.ts:/** Whether a span was created by the `SentryTracerProvider` (see {@link markSpanAsTracerProviderSpan}). */
+./finnor-os/node_modules/@sentry/core/build/types/tracing/segmentSpanCaptureStrategy.d.ts: * `_INTERNAL_setDeferSegmentSpanCapture`); when unset, `SentrySpan` captures synchronously. Living
+./finnor-os/node_modules/@sentry/core/build/types/tracing/ai/utils.d.ts: * promise to preserve Sentry's span instrumentation, while custom SDK methods are
+./finnor-os/node_modules/@sentry/core/build/types/tracing/google-genai/index.d.ts: * Instrument a Google GenAI client with Sentry tracing
+./finnor-os/node_modules/@sentry/core/build/types/tracing/sampling.d.ts: * sent to Sentry.
+./finnor-os/node_modules/@sentry/core/build/types/tracing/deferSegmentSpanCapture.d.ts: * `SentrySpan` otherwise assembles the transaction synchronously the instant a segment span ends, which
+./finnor-os/node_modules/@sentry/core/build/types/tracing/deferSegmentSpanCapture.d.ts: * `Sentry.flush()` / `client.close()` cannot resolve before they run.
+./finnor-os/node_modules/@sentry/core/build/types/tracing/sentrySpan.d.ts:import type { SentrySpanArguments, Span, SpanAttributes, SpanAttributeValue, SpanContextData, SpanJSON, SpanTimeInput, StreamedSpanJSON } from '../types/span';
+./finnor-os/node_modules/@sentry/core/build/types/tracing/sentrySpan.d.ts:export declare class SentrySpan implements Span {
+./finnor-os/node_modules/@sentry/core/build/types/tracing/sentrySpan.d.ts:     * You should never call the constructor manually, always use `Sentry.startSpan()`
+./finnor-os/node_modules/@sentry/core/build/types/tracing/sentrySpan.d.ts:    constructor(spanContext?: SentrySpanArguments);
+./finnor-os/node_modules/@sentry/core/build/types/tracing/sentrySpan.d.ts:     * Finish the transaction & prepare the event to send to Sentry.
+./finnor-os/node_modules/@sentry/core/build/types/tracing/index.d.ts:export { SentrySpan } from './sentrySpan';
+./finnor-os/node_modules/@sentry/core/build/types/tracing/index.d.ts:export { SentryNonRecordingSpan } from './sentryNonRecordingSpan';
+./finnor-os/node_modules/@sentry/core/build/types/tracing/openai/index.d.ts: * Instrument an OpenAI client with Sentry tracing
+./finnor-os/node_modules/@sentry/core/build/types/carrier.d.ts:} & Record<Exclude<string, 'version'>, SentryCarrier>;
+./finnor-os/node_modules/@sentry/core/build/types/carrier.d.ts:export interface SentryCarrier {
+./finnor-os/node_modules/@sentry/core/build/types/carrier.d.ts:     * A map of Sentry clients to their log buffers.
+./finnor-os/node_modules/@sentry/core/build/types/carrier.d.ts:     * This is used to store logs that are sent to Sentry.
+./finnor-os/node_modules/@sentry/core/build/types/carrier.d.ts:     * A map of Sentry clients to their metric buffers.
+./finnor-os/node_modules/@sentry/core/build/types/carrier.d.ts:     * This is used to store metrics that are sent to Sentry.
+./finnor-os/node_modules/@sentry/core/build/types/carrier.d.ts:export declare function getSentryCarrier(carrier: Carrier): SentryCarrier;
+./finnor-os/node_modules/@sentry/core/build/types/carrier.d.ts:export declare function getGlobalSingleton<Prop extends keyof SentryCarrier>(name: Prop, creator: () => NonNullable<SentryCarrier[Prop]>, obj?: import("./shared-exports").InternalGlobal): NonNullable<SentryCarrier[Prop]>;
+./finnor-os/node_modules/@sentry/core/build/types/types/request.d.ts: * Request data included in an event as sent to Sentry.
+./finnor-os/node_modules/@sentry/core/build/types/types/samplingcontext.d.ts: * Auxiliary data for various sampling mechanisms in the Sentry SDK.
+./finnor-os/node_modules/@sentry/core/build/types/types/instrument.d.ts:export interface SentryWrappedXMLHttpRequest {
+./finnor-os/node_modules/@sentry/core/build/types/types/instrument.d.ts:    __sentry_xhr_v3__?: SentryXhrData;
+./finnor-os/node_modules/@sentry/core/build/types/types/instrument.d.ts:export interface SentryXhrData {
+./finnor-os/node_modules/@sentry/core/build/types/types/instrument.d.ts:    xhr: SentryWrappedXMLHttpRequest;
+./finnor-os/node_modules/@sentry/core/build/types/types/instrument.d.ts:interface SentryFetchData {
+./finnor-os/node_modules/@sentry/core/build/types/types/instrument.d.ts:    fetchData: SentryFetchData;
+./finnor-os/node_modules/@sentry/core/build/types/types/wrappedfunction.d.ts: * A function that is possibly wrapped by Sentry.
+./finnor-os/node_modules/@sentry/core/build/types/types/span.d.ts:    trace_id: string;
+./finnor-os/node_modules/@sentry/core/build/types/types/span.d.ts: * This is the final, serialized span format that is sent to Sentry.
+./finnor-os/node_modules/@sentry/core/build/types/types/span.d.ts:    trace_id: string;
+./finnor-os/node_modules/@sentry/core/build/types/types/span.d.ts:     * Only true if the SentrySpanArguments was propagated from a remote parent.
+./finnor-os/node_modules/@sentry/core/build/types/types/span.d.ts:export interface SentrySpanArguments {
+./finnor-os/node_modules/@sentry/core/build/types/types/span.d.ts:     * **Important:** You most likely want to use `Sentry.updateSpanName(span, name)` instead!
+./finnor-os/node_modules/@sentry/core/build/types/types/span.d.ts:     * You can ensure that your name is kept and not overwritten by calling `Sentry.updateSpanName(span, name)`
+./finnor-os/node_modules/@sentry/core/build/types/types/span.d.ts:     * Prefer setting links directly when starting a span (e.g. `Sentry.startSpan()`) as some context information is only available during span creation.
+./finnor-os/node_modules/@sentry/core/build/types/types/span.d.ts:     * Prefer setting links directly when starting a span (e.g. `Sentry.startSpan()`) as some context information is only available during span creation.
+./finnor-os/node_modules/@sentry/core/build/types/types/session.d.ts:     * the Sentry servers expect a slightly different schema of a session
+./finnor-os/node_modules/@sentry/core/build/types/types/session.d.ts:     * @return a Sentry-backend conforming JSON object of the session
+./finnor-os/node_modules/@sentry/core/build/types/types/options.d.ts:     * Sentry.init({
+./finnor-os/node_modules/@sentry/core/build/types/types/options.d.ts:     * If you use Spotlight by Sentry during development, use
+./finnor-os/node_modules/@sentry/core/build/types/types/options.d.ts:     * this option to forward captured Sentry events to Spotlight.
+./finnor-os/node_modules/@sentry/core/build/types/types/options.d.ts:     * Specifies whether this SDK should send events to Sentry. Setting this to `enabled: false`
+./finnor-os/node_modules/@sentry/core/build/types/types/options.d.ts:     * doesn't prevent all overhead from Sentry instrumentation. To disable Sentry completely,
+./finnor-os/node_modules/@sentry/core/build/types/types/options.d.ts:     * depending on environment, call `Sentry.init conditionally.
+./finnor-os/node_modules/@sentry/core/build/types/types/options.d.ts:     * When enabled, stack traces are automatically attached to all events captured with `Sentry.captureMessage`.
+./finnor-os/node_modules/@sentry/core/build/types/types/options.d.ts:     * Grouping in Sentry is different for events with stack traces and without. As a result, you will get
+./finnor-os/node_modules/@sentry/core/build/types/types/options.d.ts:     * The DSN tells the SDK where to send the events. If this is not set, the SDK will not send any events to Sentry.
+./finnor-os/node_modules/@sentry/core/build/types/types/options.d.ts:     * Sets the release. Release names are strings, but some formats are detected by Sentry and might be
+./finnor-os/node_modules/@sentry/core/build/types/types/options.d.ts:     * rendered differently. Learn more about how to send release data so Sentry can tell you about
+./finnor-os/node_modules/@sentry/core/build/types/types/options.d.ts:     * A function that takes transport options and returns the Transport object which is used to send events to Sentry.
+./finnor-os/node_modules/@sentry/core/build/types/types/options.d.ts:     * Sentry has a maximum payload size of 1MB and any events exceeding that payload size will be dropped.
+./finnor-os/node_modules/@sentry/core/build/types/types/options.d.ts:     * A pattern for error messages which should not be sent to Sentry.
+./finnor-os/node_modules/@sentry/core/build/types/types/options.d.ts:     * Behavior of the `ignoreErrors` option is controlled by the `Sentry.eventFiltersIntegration` integration. If the
+./finnor-os/node_modules/@sentry/core/build/types/types/options.d.ts:     * A pattern for transaction names which should not be sent to Sentry.
+./finnor-os/node_modules/@sentry/core/build/types/types/options.d.ts:     * Behavior of the `ignoreTransactions` option is controlled by the `Sentry.eventFiltersIntegration` integration.
+./finnor-os/node_modules/@sentry/core/build/types/types/options.d.ts:     * that accepts Sentry envelopes for forwarding. This can be used to force data
+./finnor-os/node_modules/@sentry/core/build/types/types/options.d.ts:     * Controls if potentially sensitive data should be sent to Sentry by default.
+./finnor-os/node_modules/@sentry/core/build/types/types/options.d.ts:     * but not data that was explicitly set (e.g. by calling `Sentry.setUser()`).
+./finnor-os/node_modules/@sentry/core/build/types/types/options.d.ts:     * Controls what data the SDK collects and sends to Sentry.
+./finnor-os/node_modules/@sentry/core/build/types/types/options.d.ts:     * - `'report-only'`: Only enhances the message when sending to Sentry. The original error
+./finnor-os/node_modules/@sentry/core/build/types/types/options.d.ts:     * A pattern for error URLs which should exclusively be sent to Sentry.
+./finnor-os/node_modules/@sentry/core/build/types/types/options.d.ts:     * Behavior of the `allowUrls` option is controlled by the `Sentry.eventFiltersIntegration` integration.
+./finnor-os/node_modules/@sentry/core/build/types/types/options.d.ts:     * A pattern for error URLs which should not be sent to Sentry.
+./finnor-os/node_modules/@sentry/core/build/types/types/options.d.ts:     * Behavior of the `denyUrls` option is controlled by the `Sentry.eventFiltersIntegration` integration.
+./finnor-os/node_modules/@sentry/core/build/types/types/options.d.ts:     * `baggage` header matches the `organization ID` of the current Sentry client.
+./finnor-os/node_modules/@sentry/core/build/types/types/options.d.ts:     * The organization ID for your Sentry project.
+./finnor-os/node_modules/@sentry/core/build/types/types/options.d.ts:     * A function that takes transport options and returns the Transport object which is used to send events to Sentry.
+./finnor-os/node_modules/@sentry/core/build/types/types/attachment.d.ts: * An attachment to an event. This is used to upload arbitrary data to Sentry.
+./finnor-os/node_modules/@sentry/core/build/types/types/mechanism.d.ts:     * True when `captureException` is called with anything other than an instance of `Error` (or, in the case of browser,
+./finnor-os/node_modules/@sentry/core/build/types/types/log.d.ts:    trace_id?: string;
+./finnor-os/node_modules/@sentry/core/build/types/types/breadcrumb.d.ts: * Sentry uses breadcrumbs to create a trail of events that happened prior to an issue.
+./finnor-os/node_modules/@sentry/core/build/types/types/breadcrumb.d.ts:     * By default, all breadcrumbs are recorded as default, which makes them appear as a Debug entry, but Sentry provides
+./finnor-os/node_modules/@sentry/core/build/types/types/replay.d.ts:    trace_ids: string[];
+./finnor-os/node_modules/@sentry/core/build/types/types/event.d.ts:/** An event to be sent to Sentry. */
+./finnor-os/node_modules/@sentry/core/build/types/types/feedback/config.d.ts:     * Show the Sentry branding
+./finnor-os/node_modules/@sentry/core/build/types/types/feedback/config.d.ts:     * Should the email input field be visible? Note: email will still be collected if set via `Sentry.setUser()`
+./finnor-os/node_modules/@sentry/core/build/types/types/feedback/config.d.ts:     * Should the name input field be visible? Note: name will still be collected if set via `Sentry.setUser()`
+./finnor-os/node_modules/@sentry/core/build/types/types/feedback/config.d.ts:     * Fill in email/name input fields with Sentry user context if it exists.
+./finnor-os/node_modules/@sentry/core/build/types/types/feedback/config.d.ts:    useSentryUser: {
+./finnor-os/node_modules/@sentry/core/build/types/types/feedback/config.d.ts:     * Error text shown when the Sentry client is not set up
+./finnor-os/node_modules/@sentry/core/build/types/types/context.d.ts:    trace_id: string;
+./finnor-os/node_modules/@sentry/core/build/types/types/metric.d.ts:    trace_id: string;
+./finnor-os/node_modules/@sentry/core/build/types/types/profiling.d.ts:        trace_id: string;
+./finnor-os/node_modules/@sentry/core/build/types/types/profiling.d.ts:        trace_id: string;
+./finnor-os/node_modules/@sentry/core/build/types/types/link.d.ts:     * Setting the link type to 'previous_trace' helps the Sentry product linking to the previous trace
+./finnor-os/node_modules/@sentry/core/build/types/types/link.d.ts:    trace_id: string;
+./finnor-os/node_modules/@sentry/core/build/types/types/startSpanOptions.d.ts:     * If set to true, this span will be forced to be treated as a transaction in the Sentry UI, if possible and applicable.
+./finnor-os/node_modules/@sentry/core/build/types/types/startSpanOptions.d.ts:         * Sentry might change at any time.
+./finnor-os/node_modules/@sentry/core/build/types/types/envelope.d.ts:    trace_id: string;
+./finnor-os/node_modules/@sentry/core/build/types/types/debugMeta.d.ts: * Holds meta information to customize the behavior of Sentry's server-side event processing.
+./finnor-os/node_modules/@sentry/core/build/types/types/datacollection.d.ts: * Controls what data the SDK collects and sends to Sentry.
+./finnor-os/node_modules/@sentry/core/build/types/types/dsn.d.ts:/** Supported Sentry transport protocols in a Dsn. */
+./finnor-os/node_modules/@sentry/core/build/types/types/dsn.d.ts:    /** Protocol used to connect to Sentry. */
+./finnor-os/node_modules/@sentry/core/build/types/types/dsn.d.ts:    /** Hostname of the Sentry instance. */
+./finnor-os/node_modules/@sentry/core/build/types/types/dsn.d.ts:    /** Port of the Sentry instance. */
+./finnor-os/node_modules/@sentry/core/build/types/server-exports.d.ts: * Server-only utilities for Sentry SDKs.
+./finnor-os/node_modules/@sentry/core/build/types/server-exports.d.ts:export { wrapMcpServerWithSentry } from './integrations/mcp-server';
+./finnor-os/node_modules/@sentry/core/build/types/server.d.ts: * The Sentry core SDK and integrations used by node, node-core, cloudflare,
+./finnor-os/node_modules/@sentry/core/build/types/shared-exports.d.ts:export type { ClientClass as SentryCoreCurrentScopes } from './sdk';
+./finnor-os/node_modules/@sentry/core/build/types/shared-exports.d.ts:export { captureCheckIn, withMonitor, captureException, captureEvent, captureMessage, lastEventId, close, flush, setContext, setExtra, setExtras, setTag, setTags, setAttribute, setAttributes, setUser, setConversationId, isInitialized, isEnabled, startSession, endSession, captureSession, addEventProcessor, } from './exports';
+./finnor-os/node_modules/@sentry/core/build/types/shared-exports.d.ts:export { isSentryRequestUrl } from './utils/isSentryRequestUrl';
+./finnor-os/node_modules/@sentry/core/build/types/shared-exports.d.ts:export { convertSpanLinksForEnvelope, spanToTraceHeader, spanToJSON, spanToStreamedSpanJSON, spanIsSampled, spanIsSentrySpan, spanToTraceContext, getSpanDescendants, getStatusMessage, getRootSpan, INTERNAL_getSegmentSpan, getActiveSpan, addChildSpanToSpan, spanTimeInputToSeconds, updateSpanName, } from './utils/spanUtils';
+./finnor-os/node_modules/@sentry/core/build/types/shared-exports.d.ts:export { SentryError } from './utils/error';
+./finnor-os/node_modules/@sentry/core/build/types/shared-exports.d.ts:export type { SentryDebugLogger } from './utils/debug-logger';
+./finnor-os/node_modules/@sentry/core/build/types/shared-exports.d.ts:export { UNKNOWN_FUNCTION, createStackParser, getFramesFromEvent, getFunctionName, stackParserFromStackParserOptions, stripSentryFramesAndReverse, } from './utils/stacktrace';
+./finnor-os/node_modules/@sentry/core/build/types/shared-exports.d.ts:export { TRACEPARENT_REGEXP, extractTraceparentData, generateSentryTraceHeader, propagationContextFromHeaders, shouldContinueTrace, generateTraceparentHeader, } from './utils/tracing';
+./finnor-os/node_modules/@sentry/core/build/types/shared-exports.d.ts:export { MAX_BAGGAGE_STRING_LENGTH, SENTRY_BAGGAGE_KEY_PREFIX, SENTRY_BAGGAGE_KEY_PREFIX_REGEX, baggageHeaderToDynamicSamplingContext, dynamicSamplingContextToSentryBaggageHeader, parseBaggageHeader, objectToBaggageHeader, mergeBaggageHeaders, } from './utils/baggage';
+./finnor-os/node_modules/@sentry/core/build/types/shared-exports.d.ts:export { eventFromMessage, eventFromUnknownInput, exceptionFromError, parseStackFrames, _enhanceErrorWithSentryInfo as _INTERNAL_enhanceErrorWithSentryInfo, } from './utils/eventbuilder';
+./finnor-os/node_modules/@sentry/core/build/types/shared-exports.d.ts:export type { Span, SentrySpanArguments, SpanOrigin, SpanAttributeValue, SpanAttributes, SpanTimeInput, SpanJSON, SpanContextData, TraceFlag, SerializedStreamedSpan, SerializedStreamedSpanContainer, StreamedSpanJSON, } from './types/span';
+./finnor-os/node_modules/@sentry/core/build/types/trpc.d.ts:interface SentryTrpcMiddlewareOptions {
+./finnor-os/node_modules/@sentry/core/build/types/trpc.d.ts:export interface SentryTrpcMiddlewareArguments<T> {
+./finnor-os/node_modules/@sentry/core/build/types/trpc.d.ts:type SentryTrpcMiddleware<T> = T extends Promise<unknown> ? T : Promise<T>;
+./finnor-os/node_modules/@sentry/core/build/types/trpc.d.ts: * Sentry tRPC middleware that captures errors and creates spans for tRPC procedures.
+./finnor-os/node_modules/@sentry/core/build/types/trpc.d.ts:export declare function trpcMiddleware(options?: SentryTrpcMiddlewareOptions): <T>(opts: SentryTrpcMiddlewareArguments<T>) => SentryTrpcMiddleware<T>;
+./finnor-os/node_modules/@sentry/core/build/types/scope.d.ts:     * sent to Sentry
+./finnor-os/node_modules/@sentry/core/build/types/scope.d.ts:     * @param {string[]} fingerprint Fingerprint to group events in Sentry.
+./finnor-os/node_modules/@sentry/core/build/types/scope.d.ts:     * `Sentry.updateSpanName(rootSpan, 'new name')` instead.
+./finnor-os/node_modules/@sentry/core/build/types/scope.d.ts:     * Add data which will be accessible during event processing but won't get sent to Sentry.
+./finnor-os/node_modules/@sentry/core/build/types/scope.d.ts:     * @returns {string} The id of the captured Sentry event.
+./finnor-os/node_modules/@sentry/core/build/types/scope.d.ts:    captureException(exception: unknown, hint?: EventHint): string;
+./finnor-os/node_modules/@sentry/core/build/types/scope.d.ts:     * Capture a Sentry event for this scope.
+./finnor-os/node_modules/@sentry/core/build/types/transports/base.d.ts: * Creates an instance of a Sentry `Transport`
+./finnor-os/node_modules/@sentry/core/build/types/transports/offline.d.ts:     * Should an attempt be made to send the envelope to Sentry.
+./finnor-os/node_modules/@sentry/core/build/types/metadata.d.ts: * Metadata is injected by the Sentry bundler plugins using the `_experiments.moduleMetadata` config option.
+./finnor-os/node_modules/@sentry/core/build/types/metadata.d.ts: * Metadata is injected by the Sentry bundler plugins using the `_experiments.moduleMetadata` config option.
+./finnor-os/node_modules/@sentry/core/build/types/build-time-plugins/buildTimeOptionsBase.d.ts: * Sentry-internal base interface for build-time options used in Sentry's meta-framework SDKs (e.g., Next.js, Nuxt, SvelteKit).
+./finnor-os/node_modules/@sentry/core/build/types/build-time-plugins/buildTimeOptionsBase.d.ts: * import type { SentryVitePluginOptions } from '@sentry/vite-plugin';
+./finnor-os/node_modules/@sentry/core/build/types/build-time-plugins/buildTimeOptionsBase.d.ts: *   UnstableVitePluginOptions<SentryVitePluginOptions> & {
+./finnor-os/node_modules/@sentry/core/build/types/build-time-plugins/buildTimeOptionsBase.d.ts: * @internal Only meant for Sentry-internal SDK usage.
+./finnor-os/node_modules/@sentry/core/build/types/build-time-plugins/buildTimeOptionsBase.d.ts:     * The slug of the Sentry organization associated with the app.
+./finnor-os/node_modules/@sentry/core/build/types/build-time-plugins/buildTimeOptionsBase.d.ts:     * The slug of the Sentry project associated with the app.
+./finnor-os/node_modules/@sentry/core/build/types/build-time-plugins/buildTimeOptionsBase.d.ts:     * The authentication token to use for all communication with Sentry.
+./finnor-os/node_modules/@sentry/core/build/types/build-time-plugins/buildTimeOptionsBase.d.ts:     * The base URL of your Sentry instance. Use this if you are using a self-hosted
+./finnor-os/node_modules/@sentry/core/build/types/build-time-plugins/buildTimeOptionsBase.d.ts:     * or Sentry instance other than sentry.io.
+./finnor-os/node_modules/@sentry/core/build/types/build-time-plugins/buildTimeOptionsBase.d.ts:     * Additional headers to send with every outgoing request to Sentry.
+./finnor-os/node_modules/@sentry/core/build/types/build-time-plugins/buildTimeOptionsBase.d.ts:     * If this flag is `true`, internal plugin errors and performance data will be sent to Sentry.
+./finnor-os/node_modules/@sentry/core/build/types/build-time-plugins/buildTimeOptionsBase.d.ts:     * At Sentry, we like to use Sentry ourselves to deliver faster and more stable products.
+./finnor-os/node_modules/@sentry/core/build/types/build-time-plugins/buildTimeOptionsBase.d.ts:     * Suppresses all Sentry SDK build logs.
+./finnor-os/node_modules/@sentry/core/build/types/build-time-plugins/buildTimeOptionsBase.d.ts:     * Options related to managing the Sentry releases for a build.
+./finnor-os/node_modules/@sentry/core/build/types/build-time-plugins/buildTimeOptionsBase.d.ts:     * Options for bundle size optimizations by excluding certain features of the Sentry SDK.
+./finnor-os/node_modules/@sentry/core/build/types/build-time-plugins/buildTimeOptionsBase.d.ts:     * A key that is used to identify the application in the Sentry bundler plugins.
+./finnor-os/node_modules/@sentry/core/build/types/build-time-plugins/buildTimeOptionsBase.d.ts: * type SomeSDKsBuildOptions = BuildTimeOptionsBase & UnstableVitePluginOptions<SentryVitePluginOptions>;
+./finnor-os/node_modules/@sentry/core/build/types/build-time-plugins/buildTimeOptionsBase.d.ts: * @internal Only meant for Sentry-internal SDK usage.
+./finnor-os/node_modules/@sentry/core/build/types/build-time-plugins/buildTimeOptionsBase.d.ts:     * Options to be passed directly to the Sentry Vite Plugin (`@sentry/vite-plugin`) that ships with the Sentry SDK.
+./finnor-os/node_modules/@sentry/core/build/types/build-time-plugins/buildTimeOptionsBase.d.ts: * type SomeSDKsBuildOptions = BuildTimeOptionsBase & UnstableWebpackPluginOptions<SentryWebpackPluginOptions>;
+./finnor-os/node_modules/@sentry/core/build/types/build-time-plugins/buildTimeOptionsBase.d.ts: * @internal Only meant for Sentry-internal SDK usage.
+./finnor-os/node_modules/@sentry/core/build/types/build-time-plugins/buildTimeOptionsBase.d.ts:     * Options to be passed directly to the Sentry Webpack Plugin (`@sentry/webpack-plugin`) that ships with the Sentry SDK.
+./finnor-os/node_modules/@sentry/core/build/types/build-time-plugins/buildTimeOptionsBase.d.ts: * type SomeSDKsBuildOptions = BuildTimeOptionsBase & UnstableRollupPluginOptions<SentryRollupPluginOptions>;
+./finnor-os/node_modules/@sentry/core/build/types/build-time-plugins/buildTimeOptionsBase.d.ts: * @internal Only meant for Sentry-internal SDK usage.
+./finnor-os/node_modules/@sentry/core/build/types/build-time-plugins/buildTimeOptionsBase.d.ts:     * Options to be passed directly to the Sentry Rollup Plugin (`@sentry/rollup-plugin`) that ships with the Sentry SDK.
+./finnor-os/node_modules/@sentry/core/build/types/build-time-plugins/buildTimeOptionsBase.d.ts:     * By default (`false`), the plugin automatically uploads source maps during a production build if a Sentry auth token is detected.
+./finnor-os/node_modules/@sentry/core/build/types/build-time-plugins/buildTimeOptionsBase.d.ts:     * If set to `"disable-upload"`, the plugin will not upload source maps to Sentry, but will inject debug IDs into the build artifacts.
+./finnor-os/node_modules/@sentry/core/build/types/build-time-plugins/buildTimeOptionsBase.d.ts:     * This is useful if you want to manually upload source maps to Sentry at a later point in time.
+./finnor-os/node_modules/@sentry/core/build/types/build-time-plugins/buildTimeOptionsBase.d.ts:     * A glob or an array of globs that specify the build artifacts and source maps that will be uploaded to Sentry.
+./finnor-os/node_modules/@sentry/core/build/types/build-time-plugins/buildTimeOptionsBase.d.ts:     * A glob or an array of globs that specifies which build artifacts should not be uploaded to Sentry.
+./finnor-os/node_modules/@sentry/core/build/types/build-time-plugins/buildTimeOptionsBase.d.ts:     * upload to Sentry has been completed.
+./finnor-os/node_modules/@sentry/core/build/types/build-time-plugins/buildTimeOptionsBase.d.ts:     * Hook to rewrite the `sources` field inside the source map before being uploaded to Sentry. Does not modify the actual source map.
+./finnor-os/node_modules/@sentry/core/build/types/build-time-plugins/buildTimeOptionsBase.d.ts:     * The full repo name as defined in Sentry.
+./finnor-os/node_modules/@sentry/core/build/types/build-time-plugins/buildTimeOptionsBase.d.ts:     * Note that a release may still appear in Sentry even if this value is `false`. Any Sentry event that has a release value attached
+./finnor-os/node_modules/@sentry/core/build/types/build-time-plugins/buildTimeOptionsBase.d.ts:     * Configuration for associating the release with its commits in Sentry.
+./finnor-os/node_modules/@sentry/core/build/types/build-time-plugins/buildTimeOptionsBase.d.ts:         * Defaults to the last commit of the previous release in Sentry.
+./finnor-os/node_modules/@sentry/core/build/types/build-time-plugins/buildTimeOptionsBase.d.ts:     * Configuration for adding deployment information to the release in Sentry.
+./finnor-os/node_modules/@sentry/core/build/types/build-time-plugins/buildTimeOptionsBase.d.ts:     * If set to `true`, the Sentry SDK will attempt to tree-shake (remove) any debugging code within itself during the build.
+./finnor-os/node_modules/@sentry/core/build/types/build-time-plugins/buildTimeOptionsBase.d.ts:     * If set to `true`, the Sentry SDK will attempt to tree-shake (remove) code within itself that is related to tracing and performance monitoring.
+./finnor-os/node_modules/@sentry/core/build/types/build-time-plugins/buildTimeOptionsBase.d.ts:     * **Notice:** Do not enable this when you're using any performance monitoring-related SDK features (e.g. `Sentry.startTransaction()`).
+./finnor-os/node_modules/@sentry/core/build/types/build-time-plugins/buildTimeOptionsBase.d.ts:     * If set to `true`, the Sentry SDK will attempt to tree-shake (remove) code related to the SDK's Session Replay Shadow DOM recording functionality.
+./finnor-os/node_modules/@sentry/core/build/types/build-time-plugins/buildTimeOptionsBase.d.ts:     * This option is safe to be used when you do not want to capture any Shadow DOM activity via Sentry Session Replay.
+./finnor-os/node_modules/@sentry/core/build/types/build-time-plugins/buildTimeOptionsBase.d.ts:     * If set to `true`, the Sentry SDK will attempt to tree-shake (remove) code related to the SDK's Session Replay `iframe` recording functionality.
+./finnor-os/node_modules/@sentry/core/build/types/build-time-plugins/buildTimeOptionsBase.d.ts:     * You can safely do this when you do not want to capture any `iframe` activity via Sentry Session Replay.
+./finnor-os/node_modules/@sentry/core/build/types/build-time-plugins/buildTimeOptionsBase.d.ts:     * If set to `true`, the Sentry SDK will attempt to tree-shake (remove) code related to the SDK's Session Replay's Compression Web Worker.
+./finnor-os/node_modules/@sentry/core/build/types/build-time-plugins/buildTimeOptionsBase.d.ts:     * **Notice:** You should only use this option if you manually host a compression worker and configure it in your Sentry Session Replay integration config via the `workerUrl` option.
+./finnor-os/node_modules/@sentry/core/build/types/utils/error.d.ts: * An error emitted by Sentry SDKs and related utilities.
+./finnor-os/node_modules/@sentry/core/build/types/utils/error.d.ts:export declare class SentryError extends Error {
+./finnor-os/node_modules/@sentry/core/build/types/utils/baggage.d.ts:export declare function dynamicSamplingContextToSentryBaggageHeader(dynamicSamplingContext?: Partial<DynamicSamplingContext>): string | undefined;
+./finnor-os/node_modules/@sentry/core/build/types/utils/baggage.d.ts: * - Sentry-specific entries (keys starting with "sentry-") from the new
+./finnor-os/node_modules/@sentry/core/build/types/utils/baggage.d.ts: * - Non-Sentry entries from existing baggage take precedence
+./finnor-os/node_modules/@sentry/core/build/types/utils/normalize.d.ts: * Normalizes URLs in exceptions and stacktraces to a base path so Sentry can fingerprint
+./finnor-os/node_modules/@sentry/core/build/types/utils/stacktrace.d.ts: * StackFrames are returned in the correct order for Sentry Exception
+./finnor-os/node_modules/@sentry/core/build/types/utils/stacktrace.d.ts: * frames and with Sentry SDK internal frames removed from the top and bottom
+./finnor-os/node_modules/@sentry/core/build/types/utils/stacktrace.d.ts: * Removes Sentry frames from the top and bottom of the stack if present and enforces a limit of max number of frames.
+./finnor-os/node_modules/@sentry/core/build/types/utils/stacktrace.d.ts:export declare function stripSentryFramesAndReverse(stack: ReadonlyArray<StackFrame>): StackFrame[];
+./finnor-os/node_modules/@sentry/core/build/types/utils/traceData.d.ts: * Sentry span, this function returns an empty object to defer outgoing request propagation to the external
+./finnor-os/node_modules/@sentry/core/build/types/utils/debug-logger.d.ts:export interface SentryDebugLogger {
+./finnor-os/node_modules/@sentry/core/build/types/utils/parameterize.d.ts: * @returns A `ParameterizedString` object that can be passed into `captureMessage` or Sentry.logger.X methods.
+./finnor-os/node_modules/@sentry/core/build/types/utils/parameterize.d.ts: * @returns A `ParameterizedString` object that can be passed into `captureMessage` or Sentry.logger.X methods.
+./finnor-os/node_modules/@sentry/core/build/types/utils/isSentryRequestUrl.d.ts: * Checks whether given url points to Sentry server
+./finnor-os/node_modules/@sentry/core/build/types/utils/isSentryRequestUrl.d.ts:export declare function isSentryRequestUrl(url: string, client: Client | undefined): boolean;
+./finnor-os/node_modules/@sentry/core/build/types/utils/isSentryRequestUrl.d.ts://# sourceMappingURL=isSentryRequestUrl.d.ts.map
+./finnor-os/node_modules/@sentry/core/build/types/utils/worldwide.d.ts:/** Internal global with common properties and Sentry extensions  */
+./finnor-os/node_modules/@sentry/core/build/types/utils/worldwide.d.ts:    Sentry?: any;
+./finnor-os/node_modules/@sentry/core/build/types/utils/worldwide.d.ts:     * Debug IDs are indirectly injected by Sentry CLI or bundler plugins to directly reference a particular source map
+./finnor-os/node_modules/@sentry/core/build/types/utils/tracing.d.ts:export declare function generateSentryTraceHeader(traceId?: string | undefined, spanId?: string | undefined, sampled?: boolean): string;
+./finnor-os/node_modules/@sentry/core/build/types/utils/flushIfServerless.d.ts: *  Flushes the event queue with a timeout in serverless environments to ensure that events are sent to Sentry before the
+./finnor-os/node_modules/@sentry/core/build/types/utils/flushIfServerless.d.ts: *  @internal This function is supposed for internal Sentry SDK usage only.
+./finnor-os/node_modules/@sentry/core/build/types/utils/eventUtils.d.ts: * Get a list of possible event messages from a Sentry event.
+./finnor-os/node_modules/@sentry/core/build/types/utils/anr.d.ts: * Converts Debugger.CallFrame to Sentry StackFrame
+./finnor-os/node_modules/@sentry/core/build/types/utils/ai/providerSkip.d.ts: * This is automatically called at the start of Sentry.init() to ensure a clean state
+./finnor-os/node_modules/@sentry/core/build/types/utils/spanUtils.d.ts:import type { SentrySpan } from '../tracing/sentrySpan';
+./finnor-os/node_modules/@sentry/core/build/types/utils/spanUtils.d.ts: * By default, this will only include trace_id, span_id & parent_span_id.
+./finnor-os/node_modules/@sentry/core/build/types/utils/spanUtils.d.ts: * Convert a Span to a Sentry trace header.
+./finnor-os/node_modules/@sentry/core/build/types/utils/spanUtils.d.ts: * This is the final serialized span format that is sent to Sentry.
+./finnor-os/node_modules/@sentry/core/build/types/utils/spanUtils.d.ts:export declare function spanIsSentrySpan(span: Span): span is SentrySpan;
+./finnor-os/node_modules/@sentry/core/build/types/utils/spanUtils.d.ts: * Convert the various statuses to the simple ones expected by Sentry for streamed spans ('ok' is default).
+./finnor-os/node_modules/@sentry/core/build/types/utils/spanUtils.d.ts: * overwritten by the Sentry SDK.
+./finnor-os/node_modules/@sentry/core/build/types/utils/spanUtils.d.ts: * Sentry SDK would otherwise overwrite the span name with a high-quality name
+./finnor-os/node_modules/@sentry/core/build/types/utils/featureFlags.d.ts: * Max size of the LRU flag buffer stored in Sentry scope and event contexts.
+./finnor-os/node_modules/@sentry/core/build/types/utils/eventbuilder.d.ts: * Enhances the error message with the hostname for better Sentry error reporting.
+./finnor-os/node_modules/@sentry/core/build/types/utils/eventbuilder.d.ts: * while Sentry gets the enhanced version with context.
+./finnor-os/node_modules/@sentry/core/build/types/utils/eventbuilder.d.ts:export declare function _enhanceErrorWithSentryInfo<T extends Error>(error: T): string;
+./finnor-os/node_modules/@sentry/core/build/types/utils/eventbuilder.d.ts: * Extracts stack frames from the error and builds a Sentry Exception
+./finnor-os/node_modules/@sentry/core/build/types/utils/tunnel.d.ts:    /** Incoming request containing the Sentry envelope as its body */
+./finnor-os/node_modules/@sentry/core/build/types/utils/tunnel.d.ts: * Core Sentry tunnel handler - framework agnostic.
+./finnor-os/node_modules/@sentry/core/build/types/utils/tunnel.d.ts: * envelope to the Sentry ingest endpoint.
+./finnor-os/node_modules/@sentry/core/build/types/utils/tunnel.d.ts: * @returns A `Response` — either the upstream Sentry response on success, or an error response.
+./finnor-os/node_modules/@sentry/core/build/types/utils/dsn.d.ts: * Creates a valid Sentry Dsn object, identifying a Sentry instance and project.
+./finnor-os/node_modules/@sentry/core/build/types/exports.d.ts: * Captures an exception event and sends it to Sentry.
+

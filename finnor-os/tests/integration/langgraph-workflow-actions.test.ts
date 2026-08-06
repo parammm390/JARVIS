@@ -152,7 +152,7 @@ describe.skipIf(!available)("LangGraph restart proof — start_invoice_to_cash_w
     // graph, executor, orchestrator. Nothing here is the same JS object as above —
     // only the tenant/action IDs and the shared Postgres database connect them.
     const resumeOrchestratorA = freshGraphOrchestrator();
-    const result = await resumeOrchestratorA.decide(action.id, TENANT_ID, "approve", "test:owner-after-restart");
+    const result = await resumeOrchestratorA.decide(action.id, TENANT_ID, "approve", "test:owner-after-restart", { typedConfirmation: true });
     expect(result.status).toBe("success");
     expect((await getAction(action.id)).status).toBe("completed");
 
@@ -171,7 +171,7 @@ describe.skipIf(!available)("LangGraph restart proof — start_invoice_to_cash_w
     // (c) a second decide(approve) — via yet another fresh instance — is idempotent:
     // no second submitCommand, action stays completed.
     const resumeOrchestratorB = freshGraphOrchestrator();
-    const again = await resumeOrchestratorB.decide(action.id, TENANT_ID, "approve", "test:owner-second-attempt");
+    const again = await resumeOrchestratorB.decide(action.id, TENANT_ID, "approve", "test:owner-second-attempt", { typedConfirmation: true });
     expect(again.output.idempotent).toBe(true);
     expect((await getAction(action.id)).status).toBe("completed");
     expect(await countCommands(idempotencyKey)).toBe(1);

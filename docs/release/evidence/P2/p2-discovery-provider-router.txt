@@ -1,0 +1,116 @@
+Command: grep -R "deadline\|AbortSignal\|circuit\|provider.*health\|llmCalls" finnor-os/packages --include='*.ts'
+Exit code: 0
+
+finnor-os/packages/tools/src/capabilities/communications.ts:import { withCircuitBreaker } from "../provider-circuit-breaker";
+finnor-os/packages/tools/src/capabilities/documents.ts:import { withCircuitBreaker } from "../provider-circuit-breaker";
+finnor-os/packages/tools/src/capabilities/crm.ts:import { withCircuitBreaker } from "../provider-circuit-breaker";
+finnor-os/packages/tools/src/capabilities/accounting.ts:import { withCircuitBreaker } from "../provider-circuit-breaker";
+finnor-os/packages/tools/src/provider-health.ts:// Per-process LLM provider health tracker (Phase 13 Part B, ground-truth §9): Sentry
+finnor-os/packages/tools/src/provider-health.ts:// provider, used to prefer healthy providers in a fallback chain.
+finnor-os/packages/tools/src/provider-health.ts:    .map((provider, index) => ({ provider, index, degraded: isDegraded(provider.name, channel), snapshot: healthSnapshot(provider.name) }))
+finnor-os/packages/tools/src/provider-circuit-breaker.ts:// Phase 4 (§4.4): durable circuit breaker for the 9 capability-provider bindings.
+finnor-os/packages/tools/src/provider-circuit-breaker.ts:// Distinct from ./provider-health.ts (that one is an in-process LLM-fallback signal,
+finnor-os/packages/tools/src/provider-circuit-breaker.ts:export async function circuitSnapshot(provider: string): Promise<CircuitState> {
+finnor-os/packages/tools/src/provider-circuit-breaker.ts:  const snap = await circuitSnapshot(provider);
+finnor-os/packages/tools/src/provider-circuit-breaker.ts:      log.warn({ event: "circuit_breaker_refused", consecutiveFailures: snap.consecutiveFailures }, `circuit breaker open for ${provider} — call refused`);
+finnor-os/packages/tools/src/provider-circuit-breaker.ts:      throw new Error(`degraded: awaiting ${provider} (circuit breaker open after repeated failures)`);
+finnor-os/packages/tools/src/provider-circuit-breaker.ts:    log.info({ event: "circuit_breaker_half_open_probe" }, `circuit breaker cooldown elapsed for ${provider} — attempting one probe call`);
+finnor-os/packages/tools/src/provider-circuit-breaker.ts:    if (snap.state === "open") log.info({ event: "circuit_breaker_closed" }, `circuit breaker for ${provider} closed — probe succeeded`);
+finnor-os/packages/tools/src/provider-circuit-breaker.ts:        { event: "circuit_breaker_open", consecutiveFailures: after.consecutiveFailures, err: (err as Error).message },
+finnor-os/packages/tools/src/provider-circuit-breaker.ts:        `circuit breaker for ${provider} is open`,
+finnor-os/packages/tools/src/resend.ts:import { withCircuitBreaker } from "./provider-circuit-breaker";
+finnor-os/packages/tools/src/idempotent-call.ts:  const deadline = Date.now() + 2_000;
+finnor-os/packages/tools/src/idempotent-call.ts:  while (current.status === "running" && Date.now() < deadline) {
+finnor-os/packages/tools/src/llm.ts:import { withTenant, decisionReceipts, llmCalls, tenantLlmBudgets } from "@finnor/db";
+finnor-os/packages/tools/src/llm.ts:import { orderProvidersByHealth, recordOutcome } from "./provider-health";
+finnor-os/packages/tools/src/llm.ts:  /** Absolute Unix epoch deadline shared by every provider in a fallback chain. */
+finnor-os/packages/tools/src/llm.ts:  deadlineAt?: number;
+finnor-os/packages/tools/src/llm.ts:  /** Relative convenience form; converted to deadlineAt once at call entry. */
+finnor-os/packages/tools/src/llm.ts:  deadlineMs?: number;
+finnor-os/packages/tools/src/llm.ts:  /** Legacy alias for deadlineMs. */
+finnor-os/packages/tools/src/llm.ts:  signal?: AbortSignal;
+finnor-os/packages/tools/src/llm.ts:  constructor(readonly deadlineAt: number) {
+finnor-os/packages/tools/src/llm.ts:    super("LLM call deadline exceeded");
+finnor-os/packages/tools/src/llm.ts:  if (Number.isFinite(opts.deadlineAt)) return opts;
+finnor-os/packages/tools/src/llm.ts:  const relative = opts.deadlineMs ?? opts.timeoutMs ?? DEFAULT_DEADLINE_MS[opts.channel ?? "text"];
+finnor-os/packages/tools/src/llm.ts:  return { ...opts, deadlineAt: Date.now() + Math.max(0, relative) };
+finnor-os/packages/tools/src/llm.ts:  const remaining = Number.isFinite(opts.deadlineAt) ? Number(opts.deadlineAt) - Date.now() : fallbackMs;
+finnor-os/packages/tools/src/llm.ts:/** Fetch with both the caller's signal and the shared absolute deadline. The
+finnor-os/packages/tools/src/llm.ts: * deadlineAt and therefore cannot restart the full timeout budget. */
+finnor-os/packages/tools/src/llm.ts:  if (budgetMs <= 0) throw new LLMDeadlineExceededError(normalized.deadlineAt ?? Date.now());
+finnor-os/packages/tools/src/llm.ts:  const sharedDeadlineOwnsTimer = Number.isFinite(normalized.deadlineAt) && Number(normalized.deadlineAt) - Date.now() <= providerCeilingMs;
+finnor-os/packages/tools/src/llm.ts:    ? new LLMDeadlineExceededError(normalized.deadlineAt ?? Date.now() + budgetMs)
+finnor-os/packages/tools/src/llm.ts:    if (Number.isFinite(normalized.deadlineAt) && Date.now() >= Number(normalized.deadlineAt)) throw new LLMDeadlineExceededError(Number(normalized.deadlineAt));
+finnor-os/packages/tools/src/llm.ts:    if (Number.isFinite(normalized.deadlineAt) && Date.now() >= Number(normalized.deadlineAt)) {
+finnor-os/packages/tools/src/llm.ts:      throw new LLMDeadlineExceededError(Number(normalized.deadlineAt));
+finnor-os/packages/tools/src/llm.ts:    const [usage] = await db.select({ tokens: sql<number>`coalesce(sum(coalesce(${llmCalls.inputTokens}, 0) + coalesce(${llmCalls.outputTokens}, 0)), 0)` })
+finnor-os/packages/tools/src/llm.ts:      .from(llmCalls).where(and(eq(llmCalls.tenantId, opts.tenantId!), gte(llmCalls.createdAt, start)));
+finnor-os/packages/tools/src/llm.ts:    await db.insert(llmCalls).values({
+finnor-os/packages/tools/src/llm.ts:      if (Number.isFinite(sharedOpts.deadlineAt) && Date.now() >= Number(sharedOpts.deadlineAt)) throw new LLMDeadlineExceededError(Number(sharedOpts.deadlineAt));
+finnor-os/packages/tools/src/llm.ts:        // voice request. Retrying after a shared deadline only makes latency worse.
+finnor-os/packages/tools/src/llm.ts:      if (timeout <= 0) throw new LLMDeadlineExceededError(sharedOpts.deadlineAt ?? Date.now());
+finnor-os/packages/tools/src/llm.ts:  deadlineAt?: number;
+finnor-os/packages/tools/src/llm.ts:  deadlineMs?: number;
+finnor-os/packages/tools/src/llm.ts:  signal?: AbortSignal;
+finnor-os/packages/tools/src/llm.ts:  deadlineMs: number;
+finnor-os/packages/tools/src/llm.ts:  return { purpose, channel, providerNames: routeNames(purpose, channel), deadlineMs: DEFAULT_DEADLINE_MS[channel] };
+finnor-os/packages/tools/src/llm.ts:        ...(opts.deadlineAt === undefined && request.deadlineAt !== undefined ? { deadlineAt: request.deadlineAt } : {}),
+finnor-os/packages/tools/src/llm.ts:        ...(opts.deadlineMs === undefined && request.deadlineMs !== undefined ? { deadlineMs: request.deadlineMs } : {}),
+finnor-os/packages/tools/src/index.ts:export * from "./provider-health";
+finnor-os/packages/tools/src/index.ts:export * from "./provider-circuit-breaker";
+finnor-os/packages/domain-plugins/scheduling/index.ts:      // B3.T2: an address + actual SLA deadline asks for a ranked proposal. Without
+finnor-os/packages/memory/src/semantic.ts: *  provider-circuit-breaker convention ("queue as degraded, never silently emulated"). */
+finnor-os/packages/memory/src/semantic.ts:export function embeddingsProviderStatus(): { configured: boolean; provider: string; healthy: boolean | null } {
+finnor-os/packages/memory/src/semantic.ts:  return { configured: embeddingsConfigured(), provider: VOYAGE_MODEL, healthy: embeddingsConfigured() ? null : false };
+finnor-os/packages/orchestration/src/critic.ts:  signal?: AbortSignal;
+finnor-os/packages/orchestration/src/critic.ts:  deadlineAt?: number;
+finnor-os/packages/orchestration/src/critic.ts:  deadlineMs?: number;
+finnor-os/packages/orchestration/src/critic.ts:    raw = await selectedProvider.complete({ system: SYSTEM_PROMPT, user: JSON.stringify(redactStructured(input)), json: true, tenantId: input.tenantId, actionId: input.actionId, traceId: input.traceId, purpose: "critic", channel: input.channel, signal: input.signal, deadlineAt: input.deadlineAt, deadlineMs: input.deadlineMs });
+finnor-os/packages/orchestration/src/planning-health.ts:// B2.T5: the planner consumes the same tenant integration rows and durable circuit
+finnor-os/packages/orchestration/src/planning-health.ts:  circuit: "closed" | "open";
+finnor-os/packages/orchestration/src/planning-health.ts: * post-plan safeguard below.  A tenant-row health=down or an open durable circuit
+finnor-os/packages/orchestration/src/planning-health.ts: * pretend that a circuit is open.
+finnor-os/packages/orchestration/src/planning-health.ts:  const circuits = await withTenant(tenantId, (db) =>
+finnor-os/packages/orchestration/src/planning-health.ts:  const circuitByProvider = new Map(circuits.map((row) => [row.provider, row]));
+finnor-os/packages/orchestration/src/planning-health.ts:      const circuit = circuitByProvider.get(resolution.mode);
+finnor-os/packages/orchestration/src/planning-health.ts:      const circuitOpen = circuit?.state === "open";
+finnor-os/packages/orchestration/src/planning-health.ts:      const reason = circuitOpen
+finnor-os/packages/orchestration/src/planning-health.ts:        ? `${resolution.mode} circuit breaker is open after repeated real-call failures.`
+finnor-os/packages/orchestration/src/planning-health.ts:          circuit: circuitOpen ? "open" : "closed",
+finnor-os/packages/orchestration/src/planning-health.ts:          unavailable: circuitOpen || down,
+finnor-os/packages/orchestration/src/planning-health.ts: * the thing that enforces an open circuit. */
+finnor-os/packages/orchestration/src/index.ts:  signal?: AbortSignal;
+finnor-os/packages/orchestration/src/index.ts:  deadlineAt?: number;
+finnor-os/packages/orchestration/src/index.ts:  deadlineMs?: number;
+finnor-os/packages/orchestration/src/index.ts:        deadlineAt: opts.deadlineAt,
+finnor-os/packages/orchestration/src/index.ts:        deadlineMs: opts.deadlineMs,
+finnor-os/packages/orchestration/src/planner.ts:    opts?: { instructionId?: string; channel?: LLMChannel; signal?: AbortSignal; deadlineAt?: number; deadlineMs?: number },
+finnor-os/packages/orchestration/src/planner.ts:    opts: { instructionId?: string; channel?: LLMChannel; signal?: AbortSignal; deadlineAt?: number; deadlineMs?: number } = {},
+finnor-os/packages/orchestration/src/planner.ts:    // guard that prevents a known-open circuit from being planned through, it fails
+finnor-os/packages/orchestration/src/planner.ts:    // before creating any action rather than guessing that the provider is healthy.
+finnor-os/packages/orchestration/src/planner.ts:        deadlineAt: opts.deadlineAt,
+finnor-os/packages/orchestration/src/planner.ts:        deadlineMs: opts.deadlineMs,
+finnor-os/packages/orchestration/src/planner.ts:          deadlineAt: opts.deadlineAt,
+finnor-os/packages/orchestration/src/planner.ts:          deadlineMs: opts.deadlineMs,
+finnor-os/packages/orchestration/src/planner.ts:          opts.deadlineAt,
+finnor-os/packages/orchestration/src/planner.ts:          opts.deadlineMs,
+finnor-os/packages/orchestration/src/planner.ts:          deadlineAt: opts.deadlineAt,
+finnor-os/packages/orchestration/src/planner.ts:          deadlineMs: opts.deadlineMs,
+finnor-os/packages/orchestration/src/planner.ts:    signal?: AbortSignal,
+finnor-os/packages/orchestration/src/planner.ts:    deadlineAt?: number,
+finnor-os/packages/orchestration/src/planner.ts:    deadlineMs?: number,
+finnor-os/packages/orchestration/src/planner.ts:      const raw = await this.secondCandidateProvider.complete({ system, user, json: true, tenantId, traceId, purpose: "planning", channel, signal, deadlineAt, deadlineMs });
+finnor-os/packages/orchestration/src/repair.ts:  signal?: AbortSignal;
+finnor-os/packages/orchestration/src/repair.ts:  deadlineAt?: number;
+finnor-os/packages/orchestration/src/repair.ts:  deadlineMs?: number;
+finnor-os/packages/orchestration/src/repair.ts:    const raw = await selectedProvider.complete({ system, user, json: true, tenantId: input.tenantId, traceId: input.traceId, purpose: "repair", channel: input.channel, signal: input.signal, deadlineAt: input.deadlineAt, deadlineMs: input.deadlineMs });
+finnor-os/packages/db/schema.ts:// Phase 4 (§4.4): durable per-provider circuit-breaker state — global per provider,
+finnor-os/packages/db/schema.ts:export const providerCircuitState = pgTable("provider_circuit_state", {
+finnor-os/packages/db/schema.ts:export const llmCalls = pgTable(
+finnor-os/packages/db/schema.ts:    llmCalls: integer("llm_calls"),
+finnor-os/packages/db/migrations-bundle.ts:  { name: "0026_provider_circuit_state.sql", sql: "-- Phase 4 (§4.4): durable, per-provider circuit-breaker state. Global per provider\n-- (a provider's own uptime doesn't vary by tenant), not per-tenant -- per-tenant daily\n-- budgets/caps reuse the existing api_rate_limits table instead (bucket_key convention:\n-- \"budget:<tenantId>:<provider>:<YYYY-MM-DD>\"). Deliberately NOT in-memory: capability\n-- calls run inside short-lived serverless invocations (Vercel functions, worker job\n-- handlers) that don't share process state, so \"N consecutive failures\" can only mean\n-- anything if it's tracked in Postgres.\n\nCREATE TABLE IF NOT EXISTS finnor_os.provider_circuit_state (\n  provider text PRIMARY KEY,\n  consecutive_failures integer NOT NULL DEFAULT 0,\n  state text NOT NULL DEFAULT 'closed' CHECK (state IN ('closed', 'open')),\n  opened_at timestamptz,\n  last_failure_at timestamptz,\n  last_success_at timestamptz,\n  updated_at timestamptz NOT NULL DEFAULT now()\n);\n\nDO $do$\nBEGIN\n  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'finnor_app') THEN\n    GRANT SELECT, INSERT, UPDATE, DELETE ON finnor_os.provider_circuit_state TO finnor_app;\n  END IF;\nEND $do$;\n" },
+finnor-os/packages/db/migrations-bundle.ts:  { name: "0035_worker_heartbeat.sql", sql: "-- A2.T4: durable dead-man-switch state for the worker process. Global, not\n-- tenant-scoped — same convention as migration 0026's provider_circuit_state (a\n-- worker's own liveness doesn't vary by tenant). id is a fixed logical name (\"worker\")\n-- today; B7.T6's fleet-ready worker can widen this to one row per instance later\n-- without a shape change (id already supports it).\n\nCREATE TABLE IF NOT EXISTS finnor_os.worker_heartbeat (\n  id text PRIMARY KEY,\n  last_beat_at timestamptz NOT NULL DEFAULT now(),\n  meta jsonb NOT NULL DEFAULT '{}'\n);\n\nDO $do$\nBEGIN\n  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'finnor_app') THEN\n    GRANT SELECT, INSERT, UPDATE, DELETE ON finnor_os.worker_heartbeat TO finnor_app;\n  END IF;\nEND $do$;\n" },
+finnor-os/packages/workflow-runtime/src/receipts.ts:import { withTenant, decisionReceipts, llmCalls } from "@finnor/db";
+finnor-os/packages/workflow-runtime/src/receipts.ts:      ? await db.select({ total: sql<number | null>`sum(${llmCalls.costUsd})` }).from(llmCalls)
+finnor-os/packages/workflow-runtime/src/receipts.ts:          .where(and(eq(llmCalls.tenantId, params.tenantId), eq(llmCalls.domainActionId, params.domainActionId)))
+

@@ -116,7 +116,7 @@ describe.skipIf(!available)("consent filter on bulk_notify (TCPA)", () => {
     });
     const policy = await orchestrator.loadPolicy(action);
     await orchestrator.executor.execute(action, policy); // gate
-    const result = await orchestrator.decide(action.id, SEED_TENANT_ID, "approve", "voice:test-call");
+    const result = await orchestrator.decide(action.id, SEED_TENANT_ID, "approve", "voice:test-call", { typedConfirmation: true });
     expect(result.status).toBe("success");
     const smsSends = calls.filter((c) => c.tool === "ghl_send_sms");
     const consented = await findConsentedTargets(SEED_TENANT_ID);
@@ -147,7 +147,7 @@ describe.skipIf(!available)("send_proposal_to_recent_installs — full gated bat
 
     // Simulate the spoken approval exactly as the webhook does.
     expect(parseSpokenDecision("yes go ahead and send them")).toBe("approve");
-    const result = await orchestrator.decide(action.id, SEED_TENANT_ID, "approve", "voice:test-call");
+    const result = await orchestrator.decide(action.id, SEED_TENANT_ID, "approve", "voice:test-call", { typedConfirmation: true });
     expect(result.status).toBe("success");
     expect(calls.some((c) => c.tool === "ghl_send_sms")).toBe(true);
 

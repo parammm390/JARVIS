@@ -65,6 +65,9 @@ describe.skipIf(!available)("terminal plan repair", () => {
       db.select().from(domainActions).where(and(eq(domainActions.tenantId, TENANT_ID), eq(domainActions.planId, repair!.repairPlanId!))),
     );
     expect(replacement).toHaveLength(1);
-    expect(replacement[0]).toMatchObject({ actionType: "manual_step_suggestion", status: "pending", repairedFromPlanId: sourcePlanId });
+    // manual_step_suggestion is META_NO_SIDE_EFFECT: the repaired node is still
+    // created and lineaged, but it completes immediately because it cannot create
+    // a consequential effect or approval item.
+    expect(replacement[0]).toMatchObject({ actionType: "manual_step_suggestion", status: "completed", repairedFromPlanId: sourcePlanId });
   });
 });
