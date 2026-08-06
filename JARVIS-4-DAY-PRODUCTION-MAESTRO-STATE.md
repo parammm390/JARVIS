@@ -159,6 +159,8 @@ Do not close a defect without exact evidence. Add every new failure discovered b
 `docs/release/evidence/P0/p0-t1-baseline-audit.txt` — exit 0: baseline status/log/secret-pattern
 scan (paths only) and `git diff --check`; final current-diff gitleaks verification is in
 `p0-t6-security-final.txt`.
+`docs/release/evidence/P0/p0-t4-environment-contract-rerun.txt` — exit 0 after the planner
+harness repair; 145 source variable names scanned, values omitted.
 `docs/release/evidence/P0/p0-t6-ci-final-matrix.txt` — final local CI-equivalent matrix summary;
 local commands pass after the recorded staging-suite repeat (one retained first-run timeout,
 three fresh exit-0 reruns), while remote staging/live-only commands remain blocked on missing
@@ -189,8 +191,8 @@ workflow route pin and paced full recheck are recorded but not certification —
       **Evidence:** `npm run release:manifest`, exit 0; `docs/release/evidence/P0/p0-t3-release-manifest.txt`; generated `docs/release/generated/action-manifest.{json,md}`.
       **Deviation:** Release script names live in `finnor-os/package.json`, preserving the required names because that is the workspace which owns `scripts/release/`.
 - [x] **P0.T4** Generate environment/binding contract without values.
-      **Evidence:** `npm run release:environment`, exit 0; `docs/release/evidence/P0/p0-t4-environment-contract.txt`; `docs/release/generated/environment-contract.md` (144 source variable names scanned, values omitted).
-      **Deviation:**
+      **Evidence:** `npm run release:environment`, exit 0; original P0 evidence `docs/release/evidence/P0/p0-t4-environment-contract.txt` (144 source names) and rerun `docs/release/evidence/P0/p0-t4-environment-contract-rerun.txt` (145 source names); `docs/release/generated/environment-contract.md` contains names only and no values.
+      **Deviation:** The planner harness adds one test-only source reference, `PLANNER_EVAL_PACE_MS`; the rerun records the resulting 145-name scan without adding a production binding.
 - [x] **P0.T5** Generate complete CI command map.
       **Evidence:** `docs/release/generated/ci-command-map.md`; source workflows and package scripts audited in `docs/release/evidence/P0/p0-discovery.txt`.
       **Deviation:**
@@ -209,7 +211,7 @@ workflow route pin and paced full recheck are recorded but not certification —
 - [x] Baseline SHA recorded; no secret/customer data committed — **Evidence:** `be27bfa9236b0adb0a7510aeed833076cf91b1c4`; `docs/release/evidence/P0/p0-t1-baseline-audit.txt`.
 - [x] Feature freeze committed — **Evidence:** `dfc696d`; `docs/release/FEATURE-FREEZE.md`.
 - [x] Discovered registry exactly equals fixed 44-action spec — **Evidence:** `docs/release/evidence/P0/p0-t3-release-manifest.txt`, exit 0 (44/44).
-- [x] Environment/binding contract generated safely — **Evidence:** `docs/release/evidence/P0/p0-t4-environment-contract.txt`, exit 0; no values emitted.
+- [x] Environment/binding contract generated safely — **Evidence:** original `docs/release/evidence/P0/p0-t4-environment-contract.txt` exit 0 (144 names) plus rerun `docs/release/evidence/P0/p0-t4-environment-contract-rerun.txt` exit 0 (145 names after the test-only pace reference); no values emitted.
 - [ ] All existing CI-equivalent commands terminate and pass — **Evidence:** the exact local `STAGING=1` suite was run against fresh disposable databases: run 1 exited 1 with one planner-DAG PostgreSQL connection-timeout failure; runs 2–4 exited 0 with 557 passed tests and 3 pre-existing skips per run. This local emulator evidence is retained in `p0-t6-local-staging-guard-repeat.txt`; it does not certify remote staging. Tenant isolation, replay, and k6 remain fail-closed or unavailable. The complete paced provider-backed rechecks reached all 41 scenarios but remained non-green: Preview-model route 17/41 passed, 9 failed, 15 errored; workflow-faithful default-model route 19/41 passed, 3 failed, 19 errored. See `p0-t6-ci-final-matrix.txt`, `p0-t6-planner-live-eval-paced-recheck.txt`, and `p0-t6-planner-live-eval-workflow-faithful.txt`.
 - [x] Zero skips/quarantines added — **Evidence:** `docs/release/evidence/P0/p0-t6-skip-audit.txt`; full browser run reports 167 pre-existing skips, no added quarantine.
 - [x] Migration/deployment inventory recorded — **Evidence:** `docs/release/generated/deployment-inventory.md`; `docs/release/evidence/P0/p0-t7-railway-status.txt`; `docs/release/evidence/P0/p0-t7-vercel-preview-audit.txt`.
@@ -626,7 +628,7 @@ These are not executor blockers until their phase requires them:
 YYYY-MM-DD HH:MM · model · phase · starting SHA → ending SHA · tasks completed · test summary ·
 action count certified · defects opened/closed · score · next phase · blockers -->
 
-- **2026-08-06 · P0 PLANNER-PACING AND WORKFLOW RECHECK SESSION (GPT-5)** · `75f14c6d741c586036107515c61332e6147b0239` → `b6b03d5` · Added validated `PLANNER_EVAL_PACE_MS` support and a 30-second CI pace while preserving the 41-scenario set and explicit Groq route pins. `npm run typecheck` exited 0. A complete Preview-model paced run reached 41/41 with 17 passed, 9 failed, 15 errored; a workflow-faithful Groq-only/default-model run reached 41/41 with 19 passed, 3 failed, 19 errored (exit 1). Disposable databases were dropped, the embedded server was stopped, and temporary provider environment/log files were removed. No action certified; P0 remains blocked by non-green provider evaluation and the unavailable/unsafe remote non-production target/artifacts. No production action taken.
+- **2026-08-06 · P0 PLANNER-PACING AND WORKFLOW RECHECK SESSION (GPT-5)** · `75f14c6d741c586036107515c61332e6147b0239` → `b6b03d5` · Added validated `PLANNER_EVAL_PACE_MS` support and a 30-second CI pace while preserving the 41-scenario set and explicit Groq route pins. `npm run typecheck` exited 0; `npm run test:planner-evals` exited 0 (3/3); `npm run release:manifest` exited 0 (44/44); `npm run release:environment` exited 0 (145 source names on rerun). A complete Preview-model paced run reached 41/41 with 17 passed, 9 failed, 15 errored; a workflow-faithful Groq-only/default-model run reached 41/41 with 19 passed, 3 failed, 19 errored (exit 1). Disposable databases were dropped, the embedded server was stopped, and temporary provider environment/log files were removed. No action certified; P0 remains blocked by non-green provider evaluation and the unavailable/unsafe remote non-production target/artifacts. No production action taken.
 
 - **2026-08-06 · P0 STAGING-GUARD REPEAT SESSION (GPT-5)** · `e5f0dea89d758ccb1ac863002c758a72fee6f145` → `4a5a46a` · Re-audited the committed P0 state; ran the exact `STAGING=1 DATABASE_URL=postgres://finnor:finnor@127.0.0.1:5432/finnor_p0_guard_20260806 npm run test:staging` command four times against fresh disposable local databases. Run 1 exited 1 with one planner-DAG PostgreSQL connection-timeout failure; runs 2–4 exited 0 with 121 passed files, 1 pre-existing skipped file, 557 passed tests, and 3 pre-existing skipped tests each. The disposable database was dropped and the embedded server stopped. Re-ran `npm run release:manifest` (exit 0, 44/44) and `npm run release:environment` (exit 0, 144 names). Added the full evidence file and updated the state/baseline/CI matrix. No source or production change; no action certified; P0 remains blocked by the unavailable/unsafe remote non-production target, missing live artifacts, and non-green provider-backed planner evaluation.
 

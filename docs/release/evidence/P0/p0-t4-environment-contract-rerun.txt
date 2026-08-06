@@ -1,0 +1,14 @@
+P0.T4 environment-contract rerun after planner-evaluation harness repair
+Date: 2026-08-06
+
+Command:
+`npm run release:environment` from `finnor-os`
+
+Output:
+`PASS: environment contract written to docs/release/generated/environment-contract.md; 145 source variable names scanned.`
+
+Exit: 0
+
+Values were not emitted. The count is one higher than the original P0.T4 run
+because the test-only `PLANNER_EVAL_PACE_MS` reference is now part of source
+discovery; no production provider or binding was added.
