@@ -31,6 +31,18 @@ deployment_or_provider_write=false
 secrets_or_payloads_recorded=false
 No Phase 3 runner, deployment, migration, seed, load request, provider request, or Sentry event was sent.
 
+=== Vercel account-level project discovery ===
+date=2026-08-07
+vercel_project_list=api; finnor-agency; finnor-os-console; finnor-os; finnor-release-cb27d47; v0-project; sendme-claim-gift; v0-creator-store-platform; fintech-reveal
+vercel_finnor_release_project=one Ready Production deployment; no Preview deployment
+vercel_finnor_os_console_project=three Ready Production deployments; no Preview deployment
+vercel_finnor_os_project=no deployments
+vercel_account_level_staging_target_found=false
+account_level_conclusion=no additional FINNOR staging/preview target was discovered; existing API Preview deployments remain uncertified
+production_egress=false
+deployment_or_provider_write=false
+No Phase 3 runner, deployment, migration, seed, load request, provider request, or Sentry event was sent.
+
 === post-ledger read-only revalidation ===
 date=2026-08-07
 repository_head_at_check=65dbf34
