@@ -1,7 +1,7 @@
 # Phase 3 Integration Readiness
 
 **Generated:** 2026-08-07
-**Candidate SHA:** `05d02629abc0d1dfd9e5c5cb10dccf6b1e1e5e4a`
+**Candidate SHA:** `551c199` (`jarvis-release P3: add guarded staging certification runners`)
 **Status:** `BLOCKED-CONFIG` — no isolated non-production staging target was available.
 
 This is an evidence report, not a live-certification claim. The Phase 3 runners refused before any

@@ -1,7 +1,7 @@
 # Phase 3 Load Test Results
 
 **Generated:** 2026-08-07
-**Candidate SHA:** `05d02629abc0d1dfd9e5c5cb10dccf6b1e1e5e4a`
+**Candidate SHA:** `551c199` (`jarvis-release P3: add guarded staging certification runners`)
 **Status:** `BLOCKED-CONFIG` — no isolated staging target or load artifacts were available.
 
 The Node runner is implemented at `finnor-os/scripts/release/run-load-certification.ts` and uses only

@@ -39,24 +39,26 @@ only after the phase cannot progress further.
 
 | | |
 |---|---|
-| **ACTIVE PHASE** | **P3 — Full-Stack Staging, Live-Binding Smoke, and 15-User Load** |
-| **Latest verified commit** | `2dfa3b9` (`jarvis-release P2: close Bedrock single-key chain`) |
+| **ACTIVE PHASE** | **P3 — Full-Stack Staging, Live-Binding Smoke, and 15-User Load — BLOCKED-CONFIG** |
+| **Latest verified commit** | `551c199` (`jarvis-release P3: add guarded staging certification runners`) |
 | **Phases complete** | 3 / 5 |
 | **Actions CORE-CERTIFIED** | 0 / 44 — full 14-gate certification remains P2–P4 work; P1 contract gates are complete for all 44 |
 | **Actions LIVE-CERTIFIED** | 0 / 44 |
 | **Open P0 defects** | 0 — local deterministic CI and the guarded Bedrock chain are green; isolated-staging prerequisites remain phase-scoped P3 BLOCKED-CONFIG items |
 | **Open P1 defects** | 0 P1 contract defects; provider-backed P2 routing is now configured/live-smoked, while isolated-staging/JWT/replay/load prerequisites remain P3 BLOCKED-CONFIG |
-| **Readiness score** | 0.0 / 10.0 — P1 contract proof is complete, but the launch score remains uncredited until the full P2–P4 gates are proven |
-| **Sessions logged** | 10 |
+| **Readiness score** | 0.0 / 10.0 — P1 contract proof and local P2 evidence are complete, but no P3 staging/load category can be credited without an isolated target and measurements |
+| **Sessions logged** | 12 |
 
 ## NEXT EXACT PHASE
 
-> **PHASE 3 — Full-Stack Staging, Live-Binding Smoke, and 15-User Load**
+> **PHASE 3 — Full-Stack Staging, Live-Binding Smoke, and 15-User Load — BLOCKED-CONFIG**
 >
 > Read plan §0, §1, §3, §4, §5, and §6 PHASE 3 in full. Execute every P3 task in order. P0/P1
 > work is complete and P2 deterministic plus guarded Bedrock-chain evidence is recorded. Do not rerun
 > completed P0/P1 work. The isolated staging/JWT/replay/load prerequisites recorded below remain
-> BLOCKED-CONFIG until owner-provided isolated non-production bindings and artifacts exist.
+> BLOCKED-CONFIG until owner-provided isolated non-production bindings and artifacts exist. The
+> Phase 3 runners and reports are committed; do not advance to P4 or claim a staging gate until the
+> missing target, identity, JWT, allowlist, case-corpus, reconciliation, and Sentry artifacts exist.
 
 ---
 
@@ -79,7 +81,7 @@ only after the phase cannot progress further.
 | P0 | Release Lock, Source Audit & Clean CI | Day 1 AM | ✅ complete | ✅ |
 | P1 | Universal 44-Action Contract Hardening | Day 1 PM–Day 2 AM | ✅ complete | ✅ |
 | P2 | Chaos, Voice, Model, Integration & Security | Day 2 | ✅ complete | ✅ deterministic gate + guarded Bedrock chain; staging-only subgates remain P3 |
-| P3 | Full-Stack Staging & 15/25-User Load | Day 3 | ⬜ not started | ⬜ |
+| P3 | Full-Stack Staging & 15/25-User Load | Day 3 | 🔴 BLOCKED-CONFIG — guarded runners/reports committed; target and owner artifacts absent | 🔴 |
 | P4 | Production Rehearsal, Certification & Launch Freeze | Day 4 | ⬜ not started | ⬜ |
 
 Legend: ⬜ not started · 🟡 in progress · ✅ complete · 🔴 blocked
@@ -117,12 +119,12 @@ Do not close a defect without exact evidence. Add every new failure discovered b
 | R-04 | P1 | 44 actions need behavioral contract certification beyond the P0 static release spec | P1 | ✅ closed — P1 contract matrix 44/44 | `docs/release/generated/action-contract-results.json`; `docs/release/action-contract-results.md`; `docs/release/evidence/P1/p1-contract-final.txt` |
 | R-05 | P1 | Cross-tenant, approval, and duplicate-effect proof is incomplete across all 44 | P1/P2 | ✅ local P1 contract + P2 recovery proof closed; P3 live proof remains phase-owned | `docs/release/generated/action-contract-results.json`; `docs/release/chaos-results.md`; no provider-live claim |
 | R-06 | P1 | Current frontend 44/44 renderer and state coverage not freshly verified | P1 | ✅ closed — generated contract, renderer test, state coverage, fallback assertion | `docs/release/evidence/P1/p1-frontend-renderer-test-final.txt`; `docs/release/action-contract-results.md` |
-| R-07 | P1 | Migration head/staging application of evidence corpus not freshly proven | P3 | 🟡 BLOCKED-CONFIG — isolated staging prerequisite | `docs/release/evidence/P0/p0-t7-vercel-preview-audit.txt`; no remote staging claim |
-| R-08 | P1 | Configured live integration credentials and write guards are unknown; current Vercel Preview metadata is present but its database is unreachable and its Supabase auth origin matches Production | P3 | 🟡 BLOCKED-CONFIG — isolated staging/live-binding prerequisite | `docs/release/evidence/P0/p0-t7-vercel-preview-audit.txt`; no values printed |
+| R-07 | P1 | Migration head/staging application of evidence corpus not freshly proven | P3 | 🟡 BLOCKED-CONFIG — isolated staging prerequisite remains open | `docs/release/evidence/P3/p3-t2-staging-backup-migration-preflight.txt`; `docs/release/generated/deployment-inventory.md`; no remote staging claim |
+| R-08 | P1 | Configured live integration credentials and write guards are unknown; current Vercel Preview metadata is present but its database is unreachable and its Supabase auth origin matches Production | P3 | 🟡 BLOCKED-CONFIG — isolated staging/live-binding prerequisite remains open | `docs/release/evidence/P3/p3-t1-staging-identity-guard.txt`; `docs/release/evidence/P3/p3-t6-live-binding-guard.txt`; no values printed |
 | R-09 | P1 | Voice cancellation/approval may remain deferred or incomplete | P2 | 🟡 local contract PASS; live Vapi pilot BLOCKED-CONFIG | `docs/release/evidence/P2/p2-evidence-and-voice.txt`; `docs/release/evidence/P2/p2-deterministic-unit.txt`; no live outbound claim |
-| R-10 | P1 | Watch targets/cadence/alert destination may remain unconfigured | P2/P3 | 🟡 local hash/citation PASS; live target/cadence/destination BLOCKED-CONFIG | `docs/release/evidence/P2/p2-deterministic-unit.txt`; no live watch destination claim |
-| R-11 | P1 | Sentry release/environment/alert routing not certified end to end | P2/P3 | 🟡 local structured/test event PASS; live DSN/release/alert routing BLOCKED-CONFIG | `docs/release/chaos-results.md`; `docs/release/evidence/P2/p2-security-scans.txt` |
-| R-12 | P1 | 15-user and 25-user concurrency not certified | P3 | 🔴 open | |
+| R-10 | P1 | Watch targets/cadence/alert destination may remain unconfigured | P2/P3 | 🟡 local hash/citation PASS; live target/cadence/destination BLOCKED-CONFIG | `docs/release/evidence/P2/p2-deterministic-unit.txt`; `docs/release/evidence/P3/p3-t10-sentry-drill-preflight.txt`; no live watch destination claim |
+| R-11 | P1 | Sentry release/environment/alert routing not certified end to end | P2/P3 | 🟡 local structured/test event PASS; live DSN/release/alert routing BLOCKED-CONFIG | `docs/release/chaos-results.md`; `docs/release/evidence/P3/p3-t10-sentry-drill-preflight.txt` |
+| R-12 | P1 | 15-user and 25-user concurrency not certified | P3 | 🔴 open — runner is implemented but refused before network on missing target/artifacts | `docs/release/evidence/P3/p3-t8-load-guard.txt`; `docs/release/generated/p3-load-results.json` |
 | R-13 | P4 | Backup restore and migration rollback not rehearsed | P4 | 🔴 open | P0 local CLI dump/restore now passes; staging restore and migration rollback remain P4 work — `p0-t6-backup-restore-drill-final.txt` |
 | R-14 | P1 | Clean-checkout release build not proven | P4 | 🔴 open | |
 | R-15 | P1 | Historical gitleaks matches remain in pre-existing commits | P0/security follow-up | 🟡 owner/security follow-up | Current P0 diff is clean; all-history scan found 3 old matches; no history rewrite or credential rotation performed — `p0-t6-security-final.txt` |
@@ -142,6 +144,11 @@ Do not close a defect without exact evidence. Add every new failure discovered b
 - **2026-08-06 · P1.T1–T10 · universal contract phase complete** · Guarded Alpha/Bravo/Charlie seed is idempotent; the parameterized local runner passes 44/44 rows; cross-tenant, approval/typed, action/provider idempotency, five terminal receipts, prediction, and frontend/state/fallback gates pass without the prior pg query-queue warning. Evidence: `docs/release/evidence/P1/p1-suite-closure-no-warning.txt`, `docs/release/action-contract-results.md`, `docs/release/generated/action-contract-results.json`, `docs/release/evidence/P1/p1-frontend-tests-closure-final.txt`. No live provider or remote staging call was made; provider-live remains P2 BLOCKED-CONFIG and isolated staging/JWT/replay/load remain P3 BLOCKED-CONFIG.
 - **2026-08-07 · P2.T4 · Bedrock single-key chain closure** · Source registration now resolves GLM, Mistral, and DeepSeek through Bedrock Converse when the shared Bedrock credential is present, with defaults `zai.glm-4.7`, `mistral.mistral-small-2402-v1:0`, and `deepseek.v3.2` plus environment overrides. The guarded smoke passed 3/3, all 20 purpose/channel routes matched the configured order, and 3/3 ledger rows matched provider/model/status. Token usage is recorded; cost remains null because no deployment pricing rates were configured. Evidence: `docs/release/evidence/P2/p2-bedrock-live-smoke.txt`; `docs/release/generated/p2-bedrock-live-smoke.json`; `docs/release/chaos-results.md`. No direct vendor key path was used by the smoke and no production egress occurred.
 - **2026-08-06 · P2.T8 · gitleaks unavailable in the execution environment** · The prescribed gitleaks command returned exit 127 (`gitleaks: NOT_INSTALLED`). The phase retained the prior historical-match owner follow-up, ran `git diff --check`, a seeded-PII sentinel scan, and a credential-shaped-value scan over the P2 diff, and recorded the exact guard result. Evidence: `docs/release/evidence/P2/p2-security-scans.txt`. No scanner was installed and no history rewrite or credential rotation was performed.
+- **2026-08-07 · P3.T1/T2/T3/T4/T5/T6/T8/T9/T10 · isolated staging prerequisites remain BLOCKED-CONFIG** · Read-only Railway revalidation found one accessible `production` environment and one `finnor-worker`; no verified non-production API/frontend/worker/orchestrator/database target, expected service SHA, staging JWTs, allowlists, 44-case API corpus, 25-user token set, reconciliation artifact, or Sentry alert destination is configured. The new identity, API E2E, live-binding, and load runners all refuse before network/provider requests and record sanitized machine reports. Evidence: `docs/release/evidence/P3/p3-t1-readonly-target-revalidation.txt`, `docs/release/evidence/P3/p3-t1-staging-identity-guard.txt`, `docs/release/evidence/P3/p3-t2-staging-backup-migration-preflight.txt`, `docs/release/evidence/P3/p3-t3-rc-deploy-preflight.txt`, `docs/release/evidence/P3/p3-t4-seed-preflight.txt`, `docs/release/evidence/P3/p3-t5-api-e2e-guard.txt`, `docs/release/evidence/P3/p3-t6-live-binding-guard.txt`, `docs/release/evidence/P3/p3-t8-load-guard.txt`, `docs/release/evidence/P3/p3-t10-sentry-drill-preflight.txt`. Needed: owner-provided isolated staging bindings and artifacts; no production URL was used.
+
+- **P3.T1/T2/T3/T4/T5/T6/T8** · plan expected verified isolated targets and owner-supplied certification artifacts · repository reality exposes only a read-only production Railway environment and no staging target/JWT/case/load/allowlist set · added fail-closed runners and sanitized machine reports without substituting production or inventing evidence · `docs/release/evidence/P3/p3-t1-staging-identity-guard.txt`, `p3-t2-staging-backup-migration-preflight.txt`, `p3-t3-rc-deploy-preflight.txt`, `p3-t4-seed-preflight.txt`, `p3-t5-api-e2e-guard.txt`, `p3-t6-live-binding-guard.txt`, `p3-t8-load-guard.txt`.
+- **P3 discovery** · plan’s release commands are owned by `finnor-os`, while a root invocation has no `release:manifest` script · ran the required discovery from the owning workspace and retained the root invocation failure as evidence; no scope was reduced · `docs/release/evidence/P3/p3-discovery-manifest.txt`, `p3-discovery-manifest-corrected.txt`.
+- **P3.T7/T10** · plan expected staging journey and live Sentry proof · local contracts are executable, but the staging frontend/voice/approval/recovery/receipt target and Sentry project/release/alert destination are absent · recorded the 10-file/64-test local slice and explicit live preflight block without claiming staging certification · `docs/release/evidence/P3/p3-t7-frontend-voice-approval-recovery.txt`, `p3-t10-sentry-drill-preflight.txt`.
 
 **Standing conditions:**
 - Missing credentials are not a reason to claim live readiness. Mark the binding/action `BLOCKED-CONFIG`.
@@ -367,65 +374,89 @@ completion and exited 0.
 
 # PHASE 3 — Full-Stack Staging, Live-Binding Smoke, and 15-User Load
 
-**Status:** ⬜ not started · **Window:** Day 3 · **Depends on:** P2
+**Status:** 🔴 BLOCKED-CONFIG — all independent repository work is implemented and evidenced; isolated staging, live-binding, load, and Sentry prerequisites are absent · **Window:** Day 3 · **Depends on:** P2
 **Plan section:** §6 → PHASE 3
-**Starting SHA:**
-**Ending SHA:**
+**Starting SHA:** `05d0262`
+**Implementation/evidence SHA:** `551c199`
+**Ending SHA:** `pending state-ledger commit`
 
 ### Discovery output
 
 ```text
-<!-- Paste staging identity, service SHA, migration, health, integration evidence. -->
+`docs/release/evidence/P3/p3-discovery-manifest-corrected.txt` — exit 0 from the owning
+`finnor-os/` workspace; fixed/discovered manifest 44/44. The root invocation is retained as an
+exit-1 workspace-path deviation in `p3-discovery-manifest.txt`.
+
+`docs/release/evidence/P3/p3-t1-readonly-target-revalidation.txt` — read-only Railway revalidation
+found one accessible `production` environment and one `finnor-worker`; the committed inventory has
+no verified isolated staging API/frontend/worker/orchestrator/database target. No production target
+was called by a Phase 3 runner.
+
+`docs/release/evidence/P3/p3-t1-staging-identity-guard.txt`, `p3-t5-api-e2e-guard.txt`,
+`p3-t6-live-binding-guard.txt`, and `p3-t8-load-guard.txt` — all fail closed before network/provider
+requests with `BLOCKED-CONFIG`; generated reports are `docs/release/generated/p3-{api-e2e,live-binding-smoke,load-results}.json`.
+
+`docs/release/evidence/P3/p3-t7-frontend-voice-approval-recovery.txt` — local targeted slice passed
+10 files / 64 tests; this is not staging certification.
+
+`docs/release/evidence/P3/p3-t2-staging-backup-migration-preflight.txt`,
+`p3-t3-rc-deploy-preflight.txt`, `p3-t4-seed-preflight.txt`, `p3-t9-load-gates.txt`, and
+`p3-t10-sentry-drill-preflight.txt` record the remaining exact blockers and confirm that no staging
+backup, migration, seed, deploy, load, or live Sentry action was attempted.
 ```
 
 ### Tasks
 
 - [ ] **P3.T1** Prove staging identity and no-egress/allowlist guards.
-      **Evidence:**
-      **Deviation:**
+      **Evidence:** `docs/release/evidence/P3/p3-t1-readonly-target-revalidation.txt`; `p3-t1-staging-identity-guard.txt`; guard report `docs/release/generated/p3-api-e2e-results.json`.
+      **Deviation:** The repository exposes only a read-only production Railway environment and no verified isolated staging target. The new guard requires explicit target hosts, `P3_STAGING_IDENTITY_CONFIRMED=1`, JWT auth mode, allowlists, and `LIVE_SMOKE_ALLOWED=0`; it refused before network.
 - [ ] **P3.T2** Back up staging; apply and verify pending migrations.
-      **Evidence:**
-      **Deviation:**
+      **Evidence:** `docs/release/evidence/P3/p3-t2-staging-backup-migration-preflight.txt`; repository head remains `0064_evidence_corpus_search.sql` from the committed inventory.
+      **Deviation:** No staging database or backup id exists in the execution context; no backup, migration, or production database operation was attempted.
 - [ ] **P3.T3** Deploy one RC SHA to frontend/API/worker/orchestrator; Sentry release same SHA.
-      **Evidence:**
-      **Deviation:**
+      **Evidence:** `docs/release/evidence/P3/p3-t3-rc-deploy-preflight.txt`; candidate code SHA `551c199`.
+      **Deviation:** No staging deployment identity/token/expected SHA or Sentry release destination is available. Health endpoints now expose sanitized environment/release metadata for the next verified deployment; no deployment was made.
 - [ ] **P3.T4** Seed and verify Alpha/Bravo/Charlie.
-      **Evidence:**
-      **Deviation:**
+      **Evidence:** `docs/release/evidence/P3/p3-t4-seed-preflight.txt`; guarded seed source `finnor-os/scripts/release/seed-certification-tenants.ts`.
+      **Deviation:** The seed was not run without an explicit isolated staging database and allowlisted test values; the earlier local P1 seed evidence is not reused as staging proof.
 - [ ] **P3.T5** Run 44-action staging API E2E matrix.
-      **Evidence:**
-      **Deviation:**
+      **Evidence:** `docs/release/evidence/P3/p3-t5-api-e2e-guard.txt`; `docs/release/generated/p3-api-e2e-results.json`; runner `finnor-os/scripts/release/run-api-e2e-matrix.ts`.
+      **Deviation:** The runner requires a supplied 44-row case corpus, real staging JWTs, service health, and terminal receipt verification. It refused before any request because the staging contract is absent; no 44/44 pass is claimed.
 - [ ] **P3.T6** Run configured allowlisted live-provider smokes; mark missing as BLOCKED-CONFIG.
-      **Evidence:**
-      **Deviation:**
+      **Evidence:** `docs/release/evidence/P3/p3-t6-live-binding-guard.txt`; `docs/release/generated/p3-live-binding-smoke.json`; runner `finnor-os/scripts/release/run-live-binding-smoke.ts`.
+      **Deviation:** No isolated staging account, allowlisted binding list, write-enable confirmation, or case corpus is available. `LIVE_SMOKE_ALLOWED=1` was not set and no provider egress occurred; unavailable bindings remain BLOCKED-CONFIG.
 - [ ] **P3.T7** Run frontend/voice/approval/recovery/receipt certified journeys.
-      **Evidence:**
-      **Deviation:**
+      **Evidence:** Local targeted slice `docs/release/evidence/P3/p3-t7-frontend-voice-approval-recovery.txt` — 10 files / 64 tests passed; staging target evidence is absent.
+      **Deviation:** The local slice proves pure frontend/voice/approval/recovery/receipt contracts only. Full deployed journey, voice session, approval, recovery, and receipt reconciliation could not run without the isolated frontend/API/worker target.
 - [ ] **P3.T8** Run 15-user 20-min and 25-user 10-min load scenarios.
-      **Evidence:**
-      **Deviation:**
+      **Evidence:** `docs/release/evidence/P3/p3-t8-load-guard.txt`; `docs/release/generated/p3-load-results.json`; runner `finnor-os/scripts/release/run-load-certification.ts`.
+      **Deviation:** The Node runner is implemented with the exact durations but refused before network because the target, 25-user JWT file, instruction fixture, and reconciliation artifact are missing. No duration was shortened and no load request was sent.
 - [ ] **P3.T9** Meet all latency/error/queue/cost/load gates.
-      **Evidence:**
-      **Deviation:**
+      **Evidence:** `docs/release/evidence/P3/p3-t9-load-gates.txt`; `docs/release/load-test-results.md`.
+      **Deviation:** No measurements exist because T8 did not start. Fixed thresholds remain unchanged; no latency, queue, cost, Sentry, corruption, or duplicate-effect claim is made.
 - [ ] **P3.T10** Complete Sentry alert/trace drill per service.
-      **Evidence:**
-      **Deviation:**
-- [ ] **P3.T11** Commit integration and load reports; update ledgers.
-      **Evidence:**
-      **Deviation:**
+      **Evidence:** `docs/release/evidence/P3/p3-t10-sentry-drill-preflight.txt`; P2 test-context evidence remains at `docs/release/chaos-results.md`.
+      **Deviation:** No staging Sentry DSN/project/release/alert destination is configured, so no event or alert was sent. The P2 sanitized test-context result is not live staging proof.
+- [x] **P3.T11** Commit integration and load reports; update ledgers.
+      **Evidence:** `551c199`; `docs/release/integration-readiness.md`; `docs/release/load-test-results.md`; generated P3 machine reports; this state section and ledgers.
+      **Deviation:** Reports truthfully preserve BLOCKED-CONFIG status; no missing external evidence was converted to a pass.
 
 ### Exit gate
 
-- [ ] Staging/no-egress identity proven — **Evidence:**
-- [ ] Backup + migrations verified — **Evidence:**
-- [ ] All services use one SHA — **Evidence:**
-- [ ] Three tenants verified — **Evidence:**
-- [ ] 44/44 staging API E2E passes — **Evidence:**
-- [ ] Configured live bindings certified; missing ones truthfully blocked — **Evidence:**
-- [ ] Frontend/voice/approval/recovery/receipt journeys pass — **Evidence:**
-- [ ] 15-user and 25-user load gates pass — **Evidence:**
-- [ ] Sentry releases/alerts/traces proven — **Evidence:**
-- [ ] Zero open P0/P1 staging/load defects — **Evidence:**
+- [ ] Staging/no-egress identity proven — **Evidence:** `BLOCKED-CONFIG`; `docs/release/evidence/P3/p3-t1-staging-identity-guard.txt`
+- [ ] Backup + migrations verified — **Evidence:** `BLOCKED-CONFIG`; `docs/release/evidence/P3/p3-t2-staging-backup-migration-preflight.txt`
+- [ ] All services use one SHA — **Evidence:** `BLOCKED-CONFIG`; `docs/release/evidence/P3/p3-t3-rc-deploy-preflight.txt`
+- [ ] Three tenants verified — **Evidence:** `BLOCKED-CONFIG`; `docs/release/evidence/P3/p3-t4-seed-preflight.txt`
+- [ ] 44/44 staging API E2E passes — **Evidence:** `BLOCKED-CONFIG`; `docs/release/generated/p3-api-e2e-results.json`
+- [ ] Configured live bindings certified; missing ones truthfully blocked — **Evidence:** `BLOCKED-CONFIG`; `docs/release/generated/p3-live-binding-smoke.json`
+- [ ] Frontend/voice/approval/recovery/receipt journeys pass — **Evidence:** local slice only; staging `BLOCKED-CONFIG`; `docs/release/evidence/P3/p3-t7-frontend-voice-approval-recovery.txt`
+- [ ] 15-user and 25-user load gates pass — **Evidence:** `BLOCKED-CONFIG`; `docs/release/generated/p3-load-results.json`
+- [ ] Sentry releases/alerts/traces proven — **Evidence:** `BLOCKED-CONFIG`; `docs/release/evidence/P3/p3-t10-sentry-drill-preflight.txt`
+- [ ] Zero open P0/P1 staging/load defects — **Evidence:** no new P0/P1 defect discovered; P3 prerequisites R-07/R-08/R-10/R-11/R-12 remain blocked/open with evidence above.
+
+**P3 exit result:** `BLOCKED-CONFIG`, not complete. All independent repository hardening, guard, report,
+and local-contract work is committed. P4 must not start until the isolated staging target and owner-only
+artifacts listed in `docs/release/integration-readiness.md` exist.
 
 ---
 
@@ -498,50 +529,55 @@ observability, and release gates are proven.
 
 | # | Action | Profile | Approval | Core | Chaos | Staging/live | UI/receipt | Final state |
 |---:|---|---|---|---|---|---|---|---|
-| 1 | `create_invoice` | `OPERATIONAL_CHANGE` | REQUIRED | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
-| 2 | `send_payment_reminder` | `EXTERNAL_SIDE_EFFECT` | REQUIRED | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
-| 3 | `record_payment` | `FINANCIAL_WRITE` | TYPED_REQUIRED | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
-| 4 | `call_overdue_invoices` | `BATCH_EXTERNAL` | TYPED_REQUIRED | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
-| 5 | `bulk_notify_existing_customers` | `BATCH_EXTERNAL` | TYPED_REQUIRED | ✅ P1 | ✅ P2 | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
-| 6 | `clarification_request` | `META_NO_SIDE_EFFECT` | NONE | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
-| 7 | `generate_compliance_summary` | `INTERNAL_DRAFT` | POLICY | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
-| 8 | `create_lead` | `INTERNAL_WRITE` | POLICY | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
-| 9 | `update_lead_status` | `INTERNAL_WRITE` | POLICY | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
-| 10 | `log_interaction` | `INTERNAL_WRITE` | NONE | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
-| 11 | `assign_lead_to_technician` | `OPERATIONAL_CHANGE` | REQUIRED | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
-| 12 | `answer_customer_question` | `READ_ONLY` | NONE | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
-| 13 | `send_customer_message` | `EXTERNAL_SIDE_EFFECT` | REQUIRED | ✅ P1 | ✅ P2 | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
-| 14 | `send_follow_up` | `EXTERNAL_SIDE_EFFECT` | REQUIRED | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
-| 15 | `check_stock_level` | `READ_ONLY` | NONE | ✅ P1 | ✅ P2 | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
-| 16 | `flag_reorder_needed` | `INTERNAL_WRITE` | POLICY | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
-| 17 | `log_stock_used_on_visit` | `OPERATIONAL_CHANGE` | POLICY | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
-| 18 | `start_invoice_to_cash_workflow` | `DURABLE_WORKFLOW` | TYPED_REQUIRED | ✅ P1 | ✅ P2 | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
-| 19 | `start_water_test_workflow` | `DURABLE_WORKFLOW` | REQUIRED | ✅ P1 | ✅ P2 | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
-| 20 | `renew_maintenance_agreement` | `DURABLE_WORKFLOW` | REQUIRED | ✅ P1 | ✅ P2 | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
-| 21 | `manual_step_suggestion` | `META_NO_SIDE_EFFECT` | NONE | ✅ P1 | ✅ P2 | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
-| 22 | `summarize_ad_performance` | `READ_ONLY` | NONE | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
-| 23 | `launch_ad_campaign` | `EXTERNAL_SPEND` | TYPED_REQUIRED | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
-| 24 | `create_review_request` | `EXTERNAL_SIDE_EFFECT` | REQUIRED | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
-| 25 | `get_business_overview` | `READ_ONLY` | NONE | ✅ P1 | ✅ P2 | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
-| 26 | `answer_business_question` | `READ_ONLY` | NONE | ✅ P1 | ✅ P2 | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
-| 27 | `send_proposal_to_recent_installs` | `BATCH_EXTERNAL` | TYPED_REQUIRED | ✅ P1 | ✅ P2 | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
-| 28 | `request_proposal_signature` | `EXTERNAL_SIDE_EFFECT` | REQUIRED | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
-| 29 | `start_installation_workflow` | `DURABLE_WORKFLOW` | REQUIRED | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
-| 30 | `generate_quote` | `INTERNAL_DRAFT` | POLICY | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
-| 31 | `size_equipment_for_household` | `READ_ONLY` | NONE | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
-| 32 | `send_proposal` | `EXTERNAL_SIDE_EFFECT` | REQUIRED | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
-| 33 | `route_suggestion` | `READ_ONLY` | NONE | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
-| 34 | `assign_technician_to_visit` | `OPERATIONAL_CHANGE` | REQUIRED | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
-| 35 | `check_technician_availability` | `READ_ONLY` | NONE | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
-| 36 | `reschedule_visit` | `OPERATIONAL_CHANGE` | REQUIRED | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
-| 37 | `check_reminder_due` | `READ_ONLY` | NONE | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
-| 38 | `log_visit_report` | `INTERNAL_WRITE` | POLICY | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
-| 39 | `flag_visit_issue` | `INTERNAL_WRITE` | POLICY | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
-| 40 | `answer_water_question` | `READ_ONLY` | NONE | ✅ P1 | ⬜ | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
-| 41 | `schedule_water_test` | `OPERATIONAL_CHANGE` | REQUIRED | ✅ P1 | ✅ P2 | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
-| 42 | `search_web` | `READ_ONLY` | NONE | ✅ P1 | ✅ P2 | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
-| 43 | `scan_competitors` | `READ_ONLY` | NONE | ✅ P1 | ✅ P2 | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
-| 44 | `check_business_reviews` | `READ_ONLY` | NONE | ✅ P1 | ✅ P2 | ⬜ | ✅ P1 | ⬜ UNCERTIFIED |
+| 1 | `create_invoice` | `OPERATIONAL_CHANGE` | REQUIRED | ✅ P1 | ⬜ | 🟡 P3 BLOCKED-CONFIG | ✅ P1 | ⬜ UNCERTIFIED |
+| 2 | `send_payment_reminder` | `EXTERNAL_SIDE_EFFECT` | REQUIRED | ✅ P1 | ⬜ | 🟡 P3 BLOCKED-CONFIG | ✅ P1 | ⬜ UNCERTIFIED |
+| 3 | `record_payment` | `FINANCIAL_WRITE` | TYPED_REQUIRED | ✅ P1 | ⬜ | 🟡 P3 BLOCKED-CONFIG | ✅ P1 | ⬜ UNCERTIFIED |
+| 4 | `call_overdue_invoices` | `BATCH_EXTERNAL` | TYPED_REQUIRED | ✅ P1 | ⬜ | 🟡 P3 BLOCKED-CONFIG | ✅ P1 | ⬜ UNCERTIFIED |
+| 5 | `bulk_notify_existing_customers` | `BATCH_EXTERNAL` | TYPED_REQUIRED | ✅ P1 | ✅ P2 | 🟡 P3 BLOCKED-CONFIG | ✅ P1 | ⬜ UNCERTIFIED |
+| 6 | `clarification_request` | `META_NO_SIDE_EFFECT` | NONE | ✅ P1 | ⬜ | 🟡 P3 BLOCKED-CONFIG | ✅ P1 | ⬜ UNCERTIFIED |
+| 7 | `generate_compliance_summary` | `INTERNAL_DRAFT` | POLICY | ✅ P1 | ⬜ | 🟡 P3 BLOCKED-CONFIG | ✅ P1 | ⬜ UNCERTIFIED |
+| 8 | `create_lead` | `INTERNAL_WRITE` | POLICY | ✅ P1 | ⬜ | 🟡 P3 BLOCKED-CONFIG | ✅ P1 | ⬜ UNCERTIFIED |
+| 9 | `update_lead_status` | `INTERNAL_WRITE` | POLICY | ✅ P1 | ⬜ | 🟡 P3 BLOCKED-CONFIG | ✅ P1 | ⬜ UNCERTIFIED |
+| 10 | `log_interaction` | `INTERNAL_WRITE` | NONE | ✅ P1 | ⬜ | 🟡 P3 BLOCKED-CONFIG | ✅ P1 | ⬜ UNCERTIFIED |
+| 11 | `assign_lead_to_technician` | `OPERATIONAL_CHANGE` | REQUIRED | ✅ P1 | ⬜ | 🟡 P3 BLOCKED-CONFIG | ✅ P1 | ⬜ UNCERTIFIED |
+| 12 | `answer_customer_question` | `READ_ONLY` | NONE | ✅ P1 | ⬜ | 🟡 P3 BLOCKED-CONFIG | ✅ P1 | ⬜ UNCERTIFIED |
+| 13 | `send_customer_message` | `EXTERNAL_SIDE_EFFECT` | REQUIRED | ✅ P1 | ✅ P2 | 🟡 P3 BLOCKED-CONFIG | ✅ P1 | ⬜ UNCERTIFIED |
+| 14 | `send_follow_up` | `EXTERNAL_SIDE_EFFECT` | REQUIRED | ✅ P1 | ⬜ | 🟡 P3 BLOCKED-CONFIG | ✅ P1 | ⬜ UNCERTIFIED |
+| 15 | `check_stock_level` | `READ_ONLY` | NONE | ✅ P1 | ✅ P2 | 🟡 P3 BLOCKED-CONFIG | ✅ P1 | ⬜ UNCERTIFIED |
+| 16 | `flag_reorder_needed` | `INTERNAL_WRITE` | POLICY | ✅ P1 | ⬜ | 🟡 P3 BLOCKED-CONFIG | ✅ P1 | ⬜ UNCERTIFIED |
+| 17 | `log_stock_used_on_visit` | `OPERATIONAL_CHANGE` | POLICY | ✅ P1 | ⬜ | 🟡 P3 BLOCKED-CONFIG | ✅ P1 | ⬜ UNCERTIFIED |
+| 18 | `start_invoice_to_cash_workflow` | `DURABLE_WORKFLOW` | TYPED_REQUIRED | ✅ P1 | ✅ P2 | 🟡 P3 BLOCKED-CONFIG | ✅ P1 | ⬜ UNCERTIFIED |
+| 19 | `start_water_test_workflow` | `DURABLE_WORKFLOW` | REQUIRED | ✅ P1 | ✅ P2 | 🟡 P3 BLOCKED-CONFIG | ✅ P1 | ⬜ UNCERTIFIED |
+| 20 | `renew_maintenance_agreement` | `DURABLE_WORKFLOW` | REQUIRED | ✅ P1 | ✅ P2 | 🟡 P3 BLOCKED-CONFIG | ✅ P1 | ⬜ UNCERTIFIED |
+| 21 | `manual_step_suggestion` | `META_NO_SIDE_EFFECT` | NONE | ✅ P1 | ✅ P2 | 🟡 P3 BLOCKED-CONFIG | ✅ P1 | ⬜ UNCERTIFIED |
+| 22 | `summarize_ad_performance` | `READ_ONLY` | NONE | ✅ P1 | ⬜ | 🟡 P3 BLOCKED-CONFIG | ✅ P1 | ⬜ UNCERTIFIED |
+| 23 | `launch_ad_campaign` | `EXTERNAL_SPEND` | TYPED_REQUIRED | ✅ P1 | ⬜ | 🟡 P3 BLOCKED-CONFIG | ✅ P1 | ⬜ UNCERTIFIED |
+| 24 | `create_review_request` | `EXTERNAL_SIDE_EFFECT` | REQUIRED | ✅ P1 | ⬜ | 🟡 P3 BLOCKED-CONFIG | ✅ P1 | ⬜ UNCERTIFIED |
+| 25 | `get_business_overview` | `READ_ONLY` | NONE | ✅ P1 | ✅ P2 | 🟡 P3 BLOCKED-CONFIG | ✅ P1 | ⬜ UNCERTIFIED |
+| 26 | `answer_business_question` | `READ_ONLY` | NONE | ✅ P1 | ✅ P2 | 🟡 P3 BLOCKED-CONFIG | ✅ P1 | ⬜ UNCERTIFIED |
+| 27 | `send_proposal_to_recent_installs` | `BATCH_EXTERNAL` | TYPED_REQUIRED | ✅ P1 | ✅ P2 | 🟡 P3 BLOCKED-CONFIG | ✅ P1 | ⬜ UNCERTIFIED |
+| 28 | `request_proposal_signature` | `EXTERNAL_SIDE_EFFECT` | REQUIRED | ✅ P1 | ⬜ | 🟡 P3 BLOCKED-CONFIG | ✅ P1 | ⬜ UNCERTIFIED |
+| 29 | `start_installation_workflow` | `DURABLE_WORKFLOW` | REQUIRED | ✅ P1 | ⬜ | 🟡 P3 BLOCKED-CONFIG | ✅ P1 | ⬜ UNCERTIFIED |
+| 30 | `generate_quote` | `INTERNAL_DRAFT` | POLICY | ✅ P1 | ⬜ | 🟡 P3 BLOCKED-CONFIG | ✅ P1 | ⬜ UNCERTIFIED |
+| 31 | `size_equipment_for_household` | `READ_ONLY` | NONE | ✅ P1 | ⬜ | 🟡 P3 BLOCKED-CONFIG | ✅ P1 | ⬜ UNCERTIFIED |
+| 32 | `send_proposal` | `EXTERNAL_SIDE_EFFECT` | REQUIRED | ✅ P1 | ⬜ | 🟡 P3 BLOCKED-CONFIG | ✅ P1 | ⬜ UNCERTIFIED |
+| 33 | `route_suggestion` | `READ_ONLY` | NONE | ✅ P1 | ⬜ | 🟡 P3 BLOCKED-CONFIG | ✅ P1 | ⬜ UNCERTIFIED |
+| 34 | `assign_technician_to_visit` | `OPERATIONAL_CHANGE` | REQUIRED | ✅ P1 | ⬜ | 🟡 P3 BLOCKED-CONFIG | ✅ P1 | ⬜ UNCERTIFIED |
+| 35 | `check_technician_availability` | `READ_ONLY` | NONE | ✅ P1 | ⬜ | 🟡 P3 BLOCKED-CONFIG | ✅ P1 | ⬜ UNCERTIFIED |
+| 36 | `reschedule_visit` | `OPERATIONAL_CHANGE` | REQUIRED | ✅ P1 | ⬜ | 🟡 P3 BLOCKED-CONFIG | ✅ P1 | ⬜ UNCERTIFIED |
+| 37 | `check_reminder_due` | `READ_ONLY` | NONE | ✅ P1 | ⬜ | 🟡 P3 BLOCKED-CONFIG | ✅ P1 | ⬜ UNCERTIFIED |
+| 38 | `log_visit_report` | `INTERNAL_WRITE` | POLICY | ✅ P1 | ⬜ | 🟡 P3 BLOCKED-CONFIG | ✅ P1 | ⬜ UNCERTIFIED |
+| 39 | `flag_visit_issue` | `INTERNAL_WRITE` | POLICY | ✅ P1 | ⬜ | 🟡 P3 BLOCKED-CONFIG | ✅ P1 | ⬜ UNCERTIFIED |
+| 40 | `answer_water_question` | `READ_ONLY` | NONE | ✅ P1 | ⬜ | 🟡 P3 BLOCKED-CONFIG | ✅ P1 | ⬜ UNCERTIFIED |
+| 41 | `schedule_water_test` | `OPERATIONAL_CHANGE` | REQUIRED | ✅ P1 | ✅ P2 | 🟡 P3 BLOCKED-CONFIG | ✅ P1 | ⬜ UNCERTIFIED |
+| 42 | `search_web` | `READ_ONLY` | NONE | ✅ P1 | ✅ P2 | 🟡 P3 BLOCKED-CONFIG | ✅ P1 | ⬜ UNCERTIFIED |
+| 43 | `scan_competitors` | `READ_ONLY` | NONE | ✅ P1 | ✅ P2 | 🟡 P3 BLOCKED-CONFIG | ✅ P1 | ⬜ UNCERTIFIED |
+| 44 | `check_business_reviews` | `READ_ONLY` | NONE | ✅ P1 | ✅ P2 | 🟡 P3 BLOCKED-CONFIG | ✅ P1 | ⬜ UNCERTIFIED |
+
+All 44 `Staging/live` cells are explicitly marked `🟡 P3 BLOCKED-CONFIG`; none is a staging pass or
+LIVE-CERTIFIED claim. The generated guard reports and integration matrix are the source of this cell
+state: `docs/release/generated/p3-api-e2e-results.json`, `p3-live-binding-smoke.json`, and
+`docs/release/integration-readiness.md`.
 
 P2 `Chaos` cells are marked only where the exact action type or its documented shared binding was
 exercised by the local P2 evidence. Unmarked rows retain their P1 contract result and remain
@@ -556,33 +592,33 @@ Never paste values.
 
 | System / binding | Requirement | Status | Certification phase | Evidence |
 |---|---|---|---|---|
-| Postgres / RLS / migrations | required | 🟡 configured-emulator | P0/P3/P4 | Fresh local migrations 0000–0064, seed, LangGraph setup, backend suite, and backup/restore — `docs/release/evidence/P0/p0-t6-backend-fresh-final.txt`, `p0-t6-backup-restore-drill-final.txt` |
-| Redis memory + rate limiting | required | 🟡 configured-emulator | P2/P3 | `docs/release/evidence/P2/p2-deterministic-unit.txt` — Redis outage fallback/rate-limit tests; no remote Redis claim |
-| Railway API service | required | 🟡 blocked-config | P3 | No verified non-production target; read-only Railway account exposes only `confident-wisdom/production` |
-| Railway worker service | required | 🟡 blocked-config | P3 | Production worker observed read-only; no staging environment exposed — `docs/release/evidence/P0/p0-t7-railway-status.txt` |
-| Railway orchestrator service | required | 🟡 blocked-config | P3 | No non-production service target recorded |
-| Frontend deployment | required | 🟡 blocked-config | P3 | Local Vercel project links exist but no verified staging URL |
-| Sentry | required | 🟡 configured-emulator | P2/P3 | `docs/release/chaos-results.md`; test-context events only; live DSN/alert routing BLOCKED-CONFIG |
-| Supabase auth/RBAC | required | 🟡 configured-emulator | P2/P3 | `docs/release/evidence/P2/p2-security-and-tenant-boundaries.txt`; no live auth-origin claim |
-| Vapi | pilot if voice enabled | 🟡 configured-emulator | P2/P3 | `docs/release/evidence/P2/p2-evidence-and-voice.txt`; live outbound pilot BLOCKED-CONFIG |
-| OpenAI Realtime | pilot if voice enabled | ⬜ unknown | P2/P3 | |
-| GLM provider family | current router | 🟢 configured-live | P2 | Shared Bedrock credential; observed `zai.glm-4.7` in the 3/3 guarded smoke — `docs/release/evidence/P2/p2-bedrock-live-smoke.txt` |
-| Mistral provider family | current router | 🟢 configured-live | P2 | Shared Bedrock credential; observed `mistral.mistral-small-2402-v1:0` in the 3/3 guarded smoke — `docs/release/evidence/P2/p2-bedrock-live-smoke.txt` |
-| DeepSeek provider family | current router | 🟢 configured-live | P2 | Shared Bedrock credential; observed `deepseek.v3.2` in the 3/3 guarded smoke — `docs/release/evidence/P2/p2-bedrock-live-smoke.txt` |
-| Exa | web research | 🟡 configured-emulator | P2/P3 | `docs/release/evidence/P2/p2-deterministic-unit.txt`; no external request claim |
-| Firecrawl | web verification | 🟡 configured-emulator | P2/P3 | `docs/release/evidence/P2/p2-deterministic-unit.txt`; no external request claim |
+| Postgres / RLS / migrations | required | 🟡 configured-emulator | P0/P3/P4 | Fresh local migrations 0000–0064, seed, LangGraph setup, backend suite, and backup/restore — `docs/release/evidence/P0/p0-t6-backend-fresh-final.txt`, `p0-t6-backup-restore-drill-final.txt`; P3 staging backup/migration preflight is BLOCKED-CONFIG — `docs/release/evidence/P3/p3-t2-staging-backup-migration-preflight.txt` |
+| Redis memory + rate limiting | required | 🟡 configured-emulator | P2/P3 | `docs/release/evidence/P2/p2-deterministic-unit.txt` — Redis outage fallback/rate-limit tests; P3 staging binding is BLOCKED-CONFIG — `docs/release/integration-readiness.md` |
+| Railway API service | required | 🟡 blocked-config | P3 | Read-only Railway revalidation exposes only `confident-wisdom/production`; no verified non-production target — `docs/release/evidence/P3/p3-t1-readonly-target-revalidation.txt` |
+| Railway worker service | required | 🟡 blocked-config | P3 | Read-only Railway exposes `finnor-worker` in `production` only; no staging target — `docs/release/evidence/P3/p3-t1-readonly-target-revalidation.txt` |
+| Railway orchestrator service | required | 🟡 blocked-config | P3 | No verified non-production service/environment/URL — `docs/release/evidence/P3/p3-t1-readonly-target-revalidation.txt` |
+| Frontend deployment | required | 🟡 blocked-config | P3 | No verified isolated staging URL or deployment identity — `docs/release/evidence/P3/p3-t1-readonly-target-revalidation.txt` |
+| Sentry | required | 🟡 configured-emulator | P2/P3 | `docs/release/chaos-results.md`; test-context events only; staging DSN/release/alert destination preflight is BLOCKED-CONFIG — `docs/release/evidence/P3/p3-t10-sentry-drill-preflight.txt` |
+| Supabase auth/RBAC | required | 🟡 configured-emulator | P2/P3 | `docs/release/evidence/P2/p2-security-and-tenant-boundaries.txt`; P3 JWT/auth identity and isolated origin are BLOCKED-CONFIG — `docs/release/evidence/P3/p3-t1-staging-identity-guard.txt` |
+| Vapi | pilot if voice enabled | 🟡 configured-emulator | P2/P3 | `docs/release/evidence/P2/p2-evidence-and-voice.txt`; allowlisted staging/live outbound pilot is BLOCKED-CONFIG — `docs/release/evidence/P3/p3-t6-live-binding-guard.txt` |
+| OpenAI Realtime | pilot if voice enabled | 🟡 blocked-config | P2/P3 | No isolated staging/live voice binding supplied; Phase 3 live-binding guard refused before egress — `docs/release/integration-readiness.md` |
+| GLM provider family | current router | 🟢 configured-live | P2/P3 | Shared Bedrock credential; observed `zai.glm-4.7` in the 3/3 guarded smoke — `docs/release/evidence/P2/p2-bedrock-live-smoke.txt`; no P3 staging certification claim — `docs/release/integration-readiness.md` |
+| Mistral provider family | current router | 🟢 configured-live | P2/P3 | Shared Bedrock credential; observed `mistral.mistral-small-2402-v1:0` in the 3/3 guarded smoke — `docs/release/evidence/P2/p2-bedrock-live-smoke.txt`; no P3 staging certification claim — `docs/release/integration-readiness.md` |
+| DeepSeek provider family | current router | 🟢 configured-live | P2/P3 | Shared Bedrock credential; observed `deepseek.v3.2` in the 3/3 guarded smoke — `docs/release/evidence/P2/p2-bedrock-live-smoke.txt`; no P3 staging certification claim — `docs/release/integration-readiness.md` |
+| Exa | web research | 🟡 configured-emulator | P2/P3 | `docs/release/evidence/P2/p2-deterministic-unit.txt`; no external request claim and no P3 staging research binding — `docs/release/integration-readiness.md` |
+| Firecrawl | web verification | 🟡 configured-emulator | P2/P3 | `docs/release/evidence/P2/p2-deterministic-unit.txt`; no external request claim and no P3 staging research binding — `docs/release/integration-readiness.md` |
 | Embeddings provider | semantic evidence if enabled | ⬜ unknown | P0/P2 | |
 | Zep | optional additive memory | ⬜ unknown | P0/P2 | |
-| Communications/SMS | external actions | ⬜ unknown | P3 | |
-| Resend/email | external actions | ⬜ unknown | P3 | |
-| Vapi outbound calling | external actions | ⬜ unknown | P3 | |
-| DocuSign/e-sign | external actions | ⬜ unknown | P3 | |
-| QuickBooks/accounting | external actions | ⬜ unknown | P3 | |
-| Stripe/payments | external actions | ⬜ unknown | P3 | |
-| GoHighLevel/CRM | external actions | ⬜ unknown | P3 | |
-| Meta Ads | marketing | ⬜ unknown | P3 | |
-| Google Ads | marketing | ⬜ unknown | P3 | |
-| OSRM/routing | route suggestion | ⬜ unknown | P3 | |
+| Communications/SMS | external actions | 🟡 blocked-config | P3 | No allowlisted staging recipients/accounts supplied; live-binding guard refused before egress — `docs/release/integration-readiness.md` |
+| Resend/email | external actions | 🟡 blocked-config | P3 | No allowlisted staging recipients/accounts supplied; live-binding guard refused before egress — `docs/release/integration-readiness.md` |
+| Vapi outbound calling | external actions | 🟡 blocked-config | P3 | No isolated allowlisted voice account/recipient supplied; live-binding guard refused before egress — `docs/release/integration-readiness.md` |
+| DocuSign/e-sign | external actions | 🟡 blocked-config | P3 | No staging account/binding supplied; live-binding guard refused before egress — `docs/release/integration-readiness.md` |
+| QuickBooks/accounting | external actions | 🟡 blocked-config | P3 | No staging account/binding supplied; live-binding guard refused before egress — `docs/release/integration-readiness.md` |
+| Stripe/payments | external actions | 🟡 blocked-config | P3 | No staging account/binding supplied; live-binding guard refused before egress — `docs/release/integration-readiness.md` |
+| GoHighLevel/CRM | external actions | 🟡 blocked-config | P3 | No staging account/binding supplied; live-binding guard refused before egress — `docs/release/integration-readiness.md` |
+| Meta Ads | marketing | 🟡 blocked-config | P3 | No staging ad account/write flag/allowlist supplied; live-binding guard refused before egress — `docs/release/integration-readiness.md` |
+| Google Ads | marketing | 🟡 blocked-config | P3 | No staging ad account/write flag/allowlist supplied; live-binding guard refused before egress — `docs/release/integration-readiness.md` |
+| OSRM/routing | route suggestion | 🟡 blocked-config | P3 | No verified staging binding supplied — `docs/release/integration-readiness.md` |
 | Secrets provider | production boot | 🟡 configured-emulator | P0/P2 | `docs/release/evidence/P2/p2-deterministic-unit.txt`; production boot refusal tests pass; no production secret-provider claim |
 
 ---
@@ -601,8 +637,15 @@ Never paste values.
 | `docs/release/chaos-results.md` | P2 | ✅ committed | `2dfa3b9`; `docs/release/generated/p2-chaos-results.json`; `docs/release/evidence/P2/` |
 | `docs/release/generated/p2-bedrock-live-smoke.json` | P2 | ✅ generated | `docs/release/evidence/P2/p2-bedrock-live-smoke.txt`; 3/3 guarded Bedrock completions, 20/20 route assertions, 3/3 ledger rows |
 | `docs/release/evidence/P2/p2-bedrock-live-smoke.txt` | P2 | ✅ generated | Concrete model/token/status provenance; credential value and response content withheld |
-| `docs/release/integration-readiness.md` | P3 | ⬜ | |
-| `docs/release/load-test-results.md` | P3 | ⬜ | |
+| `docs/release/integration-readiness.md` | P3 | ✅ committed | `551c199`; BLOCKED-CONFIG report with target/binding matrix and exact unblock inputs |
+| `docs/release/load-test-results.md` | P3 | ✅ committed | `551c199`; exact 15×20-minute and 25×10-minute scenarios/gates, no measurements claimed |
+| `docs/release/generated/p3-api-e2e-results.json` | P3 | ✅ generated | `551c199`; fail-closed identity guard report, no requests sent |
+| `docs/release/generated/p3-live-binding-smoke.json` | P3 | ✅ generated | `551c199`; fail-closed live-binding guard report, no provider egress |
+| `docs/release/generated/p3-load-results.json` | P3 | ✅ generated | `551c199`; fail-closed load guard report, no load requests sent |
+| `finnor-os/scripts/release/staging-guards.ts` | P3 | ✅ committed | `551c199`; shared production/no-egress/allowlist guard |
+| `finnor-os/scripts/release/run-api-e2e-matrix.ts` | P3 | ✅ committed | `551c199`; guarded 44-row staging E2E runner |
+| `finnor-os/scripts/release/run-live-binding-smoke.ts` | P3 | ✅ committed | `551c199`; guarded configured-provider smoke runner |
+| `finnor-os/scripts/release/run-load-certification.ts` | P3 | ✅ committed | `551c199`; guarded exact 15/25-user load runner |
 | `docs/release/deployment-runbook.md` | P4 | ⬜ | |
 | `docs/release/rollback-runbook.md` | P4 | ⬜ | |
 | `docs/release/incident-runbook.md` | P4 | ⬜ | |
@@ -649,9 +692,9 @@ These are not executor blockers until their phase requires them:
 
 | Action | Needed by | Status | Notes |
 |---|---|---|---|
-| Provide/verify allowlisted staging email/phone | P3 | ⬜ | Never paste values into state |
-| Confirm staging provider accounts are not production | P3 | ⬜ | Evidence can be redacted screenshot/path |
-| Confirm Sentry alert destination | P3 | ⬜ | No personal secret values |
+| Provide/verify allowlisted staging email/phone | P3 | 🔴 required | Missing; runner remains fail-closed. Never paste values into state — `docs/release/evidence/P3/p3-t1-staging-identity-guard.txt` |
+| Confirm staging provider accounts are not production | P3 | 🔴 required | Missing; live-binding guard remains fail-closed. Evidence can be a redacted screenshot/path — `docs/release/evidence/P3/p3-t6-live-binding-guard.txt` |
+| Confirm Sentry alert destination | P3 | 🔴 required | Missing; no staging event/alert drill was sent — `docs/release/evidence/P3/p3-t10-sentry-drill-preflight.txt` |
 | Review paid-pilot terms and usage allowance | P4 | ⬜ | Defaults fixed in plan |
 | Review final readiness report and RC tag | Monday | ⬜ | Required before go-live `/goal` |
 | Explicitly authorise production deployment | Monday | ⬜ | Separate instruction only |
@@ -665,6 +708,8 @@ YYYY-MM-DD HH:MM · model · phase · starting SHA → ending SHA · tasks compl
 action count certified · defects opened/closed · score · next phase · blockers -->
 
 - **2026-08-07 · P2 BEDROCK SINGLE-KEY CLOSURE SESSION (GPT-5)** · `9c25deb` → `2dfa3b9` · Configured GLM, Mistral, and DeepSeek aliases to prefer the shared Bedrock bearer credential, with model defaults `zai.glm-4.7`, `mistral.mistral-small-2402-v1:0`, and `deepseek.v3.2`, plus environment overrides. Added the guarded `release:bedrock-smoke` command; it made exactly 3 Bedrock calls against localhost-only seeded Postgres and passed 3/3 completions, 20/20 route assertions, and 3/3 `llm_calls` rows without writing the credential or response content. Focused P2 unit test passed 8/8; `npm run typecheck` passed; `npm run release:environment` passed with 152 names; final `npm run release:chaos` exited 0 with 4/4 groups, 219 tests passed, 0 skipped, and 14/14 faults passed. No P0/P1 suite rerun, no production/staging egress, and no business/external action occurred. P3 is next; isolated staging/JWT/replay/load prerequisites remain phase-scoped BLOCKED-CONFIG.
+
+- **2026-08-07 · P3 STAGING/LOAD GUARD CLOSURE SESSION (GPT-5)** · `05d0262` → `551c199` · Read both Maestro files completely; ran the exact P3 discovery from the owning `finnor-os` workspace and confirmed the fixed manifest at 44/44; audited the P3 deployment, health, migration, identity, seed, E2E, live-binding, load, frontend, voice, approval, recovery, receipt, and Sentry paths; added guarded identity/E2E/live-binding/load runners, sanitized service release metadata, integration/load reports, and machine reports. Read-only Railway revalidation found only `confident-wisdom/production` with `finnor-worker`; identity, API E2E, live-binding, and load guards exited 1 before network/provider requests. Local frontend/voice/approval/recovery/receipt slice passed 10 files/64 tests; `finnor-os` typecheck exited 0; `git diff --check` and staged safety scan passed. No P0/P1 suite rerun, no production/staging egress, and no external effect occurred. P3 T1–T10 staging-dependent gates remain BLOCKED-CONFIG; P3 T11 reports/ledgers are recorded. Next: remain in P3 BLOCKED-CONFIG until the owner supplies isolated target, expected SHA, JWTs/markers, allowlists, 44-case corpus, 25-user/load reconciliation artifacts, and Sentry destination.
 
 - **2026-08-06 · P2 CHAOS/VOICE/MODEL/SECURITY CLOSURE SESSION (GPT-5)** · `8ec3572` → `9c25deb` · Read both Maestro files completely; executed all locally executable P2 tasks; added the guarded deterministic chaos runner, provider fault tests, transient-Postgres probe, and P2 evidence/report artifacts; retained the fixed 44-action scope and did not rerun completed P0/P1 suites. Final `npm run release:chaos` exited 0: 4/4 groups, 218 tests passed, 0 skipped, 14/14 injected faults PASS with structured-log/Sentry/PII-safe flags. `npm run typecheck` exited 0; production and missing-chaos-context guards refused with exit 1; `git diff --check` exited 0; seeded PII sentinel and changed-file credential-shaped scans had no matches. `gitleaks` was unavailable (exit 127), recorded without installation. Local P2 exit criteria pass; actual GLM/Mistral/DeepSeek live chain, live Sentry routing, and isolated staging remain BLOCKED-CONFIG. P3 is next; no production or remote staging action taken.
 
