@@ -31,6 +31,17 @@ deployment_or_provider_write=false
 secrets_or_payloads_recorded=false
 No Phase 3 runner, deployment, migration, seed, load request, provider request, or Sentry event was sent.
 
+=== linked Vercel environment metadata (names/targets only) ===
+date=2026-08-07
+vercel_finnor_agency_environment_targets=Development; Preview; Production
+vercel_api_environment_targets=Preview; Production
+vercel_custom_staging_environment_found=false
+vercel_preview_metadata=Preview variables exist for database, Redis, Sentry, bindings, auth, and provider-related configuration; values were not read or recorded
+vercel_preview_certification=not staging-certified; Preview remains disqualified by retained database-handshake and shared-Production-auth findings
+metadata_read_values=false
+deployment_or_provider_write=false
+No Phase 3 runner, deployment, migration, seed, load request, provider request, or Sentry event was sent.
+
 === Vercel account-level project discovery ===
 date=2026-08-07
 vercel_project_list=api; finnor-agency; finnor-os-console; finnor-os; finnor-release-cb27d47; v0-project; sendme-claim-gift; v0-creator-store-platform; fintech-reveal
