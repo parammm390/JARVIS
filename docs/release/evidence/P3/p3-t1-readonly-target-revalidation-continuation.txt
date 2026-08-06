@@ -17,6 +17,12 @@ vercel_scope=linked finnor-agency project
 current_listing_result=all listed deployments Ready / Production
 preview_or_staging_target_found=no
 
+=== additional documented-project checks ===
+railway_explicit_project_imaginative_enchantment=not found by current account
+railway_explicit_project_innovative_prosperity=not found by current account
+vercel_api_scope=linked api project; current listing includes two Ready Preview deployments and Ready/Error Production deployments
+vercel_api_preview_conclusion=not staging-certified; retained P0 evidence shows the Preview database handshake resets and its Supabase auth origin is shared with Production
+
 === conclusion ===
 result=BLOCKED-CONFIG
 reason=no verified isolated non-production API, frontend, worker, orchestrator, database, Redis, or auth target was discovered
