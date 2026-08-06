@@ -30,3 +30,21 @@ production_egress=false
 deployment_or_provider_write=false
 secrets_or_payloads_recorded=false
 No Phase 3 runner, deployment, migration, seed, load request, provider request, or Sentry event was sent.
+
+=== post-ledger read-only revalidation ===
+date=2026-08-07
+repository_head_at_check=65dbf34
+environment_variable_names_for_staging_or_p3=none
+railway_project_list=confident-wisdom only
+railway_confident_wisdom_environment=production only
+railway_confident_wisdom_services=finnor-worker only
+railway_confident_wisdom_production_status=deployment SUCCESS; instance RUNNING
+railway_legacy_project_checks=imaginative-enchantment not found; innovative-prosperity not found
+vercel_root_project_listing=linked finnor-agency; listed deployments are Ready Production
+vercel_api_project_listing=two Ready Preview deployments plus Ready/Error Production deployments
+vercel_api_preview_certification=not staging-certified; retained P0 database-handshake and shared-Production-auth findings remain applicable
+post_revalidation_conclusion=BLOCKED-CONFIG; no isolated API, frontend, worker, orchestrator, database, Redis, or auth target was discovered
+production_egress=false
+deployment_or_provider_write=false
+secrets_or_payloads_recorded=false
+No Phase 3 runner, deployment, migration, seed, load request, provider request, or Sentry event was sent.
