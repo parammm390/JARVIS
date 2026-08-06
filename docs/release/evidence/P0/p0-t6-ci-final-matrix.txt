@@ -20,7 +20,10 @@ Expected fail-closed/environment-gated results, recorded rather than bypassed:
   npx tsx scripts/replay-dealer-zero.ts — refuses without baseline/candidate staging artifacts.
   k6 — not installed locally; the workflow requires a staging URL, tenant, token, and webhook
     secret before running the CI-only load scenario.
-  planner live eval — requires a configured live provider credential and is explicitly not a local
-    CI substitute in the command map; no provider call was fabricated.
+  planner live eval — current Preview credential metadata is present, but the provider-backed run
+    completed 11/41 passed, 29 failed, 1 errored (exit 1). The workflow had only a Groq secret while
+    the default planning/repair routes exclude Groq; a CI-only route pin was added, but a follow-up
+    diagnostic hit the configured Groq TPM limit and was stopped after confirming the failure. See
+    p0-t6-planner-live-eval.txt. No passing live-eval claim is made.
 
 No production deployment, migration, provider call, or live outbound effect was performed.

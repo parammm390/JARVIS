@@ -1,0 +1,35 @@
+P0.T6 planner live-evaluation recheck — 2026-08-06
+
+Credential metadata:
+  Read-only `vercel env pull` from the current Preview environment succeeded. The
+  sanitized probe found non-empty `GROQ_API_KEY` and `GROQ_MODEL`, non-empty
+  `AWS_BEDROCK_API_KEY` and `AWS_BEDROCK_REGION`, and no Mistral/DeepSeek API-key
+  variables. Values were never printed, persisted in the repository, or included in
+  this evidence.
+
+Source/config mismatch found:
+  `.github/workflows/planner-live-evals.yml` supplied only `GROQ_API_KEY`.
+  `finnor-os/packages/tools/src/llm.ts` default planning and repair routes are
+  Mistral/DeepSeek, while Groq is available only when explicitly routed. The
+  workflow therefore had a configured secret but no configured provider route.
+  Minimal CI-only repair: pin `LLM_PROVIDER_PLANNING=groq` and
+  `LLM_PROVIDER_REPAIR=groq` in the workflow. Production provider defaults and
+  the provider lineup were not changed.
+
+Live run against a disposable local Postgres database:
+  A first run with the available Bedrock + Groq Preview credentials completed the
+  41-scenario harness with **11/41 passed, 29 failed, 1 errored; exit 1**. This is
+  a real provider-backed result, not a pass claim. The database was local and
+  disposable; no customer or production target was used.
+  A follow-up run with Groq explicitly selected for planning began exercising the
+  route, but was stopped after the configured provider returned its TPM rate-limit
+  failure and the repair route was observed as unconfigured before the workflow
+  repair was added. It was terminated with exit 130 after six scenario outputs;
+  this is recorded as an incomplete/failing diagnostic, not certification.
+
+Conclusion:
+  The live planner command is not green. The workflow route-pin repair is committed
+  with the next P0 evidence update, but a full pass still needs an owner-approved
+  provider credential/usage budget with sufficient capacity (or a configured
+  staging provider chain) and a fresh complete 41-scenario run. No production
+  provider, database, deployment, or outbound customer effect was used.

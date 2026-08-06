@@ -23,6 +23,11 @@ jobs:
     env:
       DATABASE_URL: postgres://finnor:finnor@localhost:5432/finnor
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      # The router only includes legacy Groq when the purpose route is explicit;
+      # this workflow supplies Groq as its sole live-eval credential, so pin the
+      # planning route instead of silently running with no configured provider.
+      LLM_PROVIDER_PLANNING: groq
+      LLM_PROVIDER_REPAIR: groq
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
