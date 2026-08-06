@@ -40,7 +40,7 @@ only after the phase cannot progress further.
 | | |
 |---|---|
 | **ACTIVE PHASE** | **P1 — Universal Contract Hardening for All 44 Actions** |
-| **Latest verified commit** | `3391701` (`jarvis-release P0: close local deterministic gate`) |
+| **Latest verified commit** | `ff346e2` (`jarvis-release P1: certify universal action contracts`) |
 | **Phases complete** | 2 / 5 |
 | **Actions CORE-CERTIFIED** | 0 / 44 — full 14-gate certification remains P2–P4 work; P1 contract gates are complete for all 44 |
 | **Actions LIVE-CERTIFIED** | 0 / 44 |
@@ -227,7 +227,7 @@ workflow route pin and paced full recheck are recorded but not certification —
 **Status:** ✅ complete · **Window:** Day 1 afternoon–Day 2 morning · **Depends on:** P0
 **Plan section:** §6 → PHASE 1
 **Starting SHA:** `bb8c2f1`
-**Ending SHA:** `TO-BE-RECORDED-AFTER-P1-COMMIT`
+**Ending SHA:** `ff346e2`
 
 ### Discovery output
 
@@ -637,7 +637,7 @@ These are not executor blockers until their phase requires them:
 YYYY-MM-DD HH:MM · model · phase · starting SHA → ending SHA · tasks completed · test summary ·
 action count certified · defects opened/closed · score · next phase · blockers -->
 
-- **2026-08-06 · P1 UNIVERSAL CONTRACT CLOSURE SESSION (GPT-5)** · `3391701` → `TO-BE-RECORDED-AFTER-P1-COMMIT` · Read both Maestro files completely; retained the P0 close and reclassified provider-live to P2 BLOCKED-CONFIG and isolated staging/JWT/replay/load to P3 BLOCKED-CONFIG. Implemented the guarded certification seed, 44-row contract runner/reports, tenant-aware grounding, fixed approval floors/typed confirmation, null/schema repairs, receipts/provenance checks, generated frontend contract/state coverage, and renderer fixtures. Final local evidence is 44/44 contract rows, 44/44 frontend registry entries, zero certified fallback mounts, backend and frontend typechecks exit 0, targeted frontend tests 86/86, and the final contract suite exits 0 without a pg query-queue warning. No production or live-provider action taken.
+- **2026-08-06 · P1 UNIVERSAL CONTRACT CLOSURE SESSION (GPT-5)** · `3391701` → `ff346e2` · Read both Maestro files completely; retained the P0 close and reclassified provider-live to P2 BLOCKED-CONFIG and isolated staging/JWT/replay/load to P3 BLOCKED-CONFIG. Implemented the guarded certification seed, 44-row contract runner/reports, tenant-aware grounding, fixed approval floors/typed confirmation, null/schema repairs, receipts/provenance checks, generated frontend contract/state coverage, and renderer fixtures. Final local evidence is 44/44 contract rows, 44/44 frontend registry entries, zero certified fallback mounts, backend and frontend typechecks exit 0, targeted frontend tests 86/86, and the final contract suite exits 0 without a pg query-queue warning. No production or live-provider action taken.
 
 - **2026-08-06 · P0 PLANNER-PACING AND WORKFLOW RECHECK SESSION (GPT-5)** · `75f14c6d741c586036107515c61332e6147b0239` → `b6b03d5` · Added validated `PLANNER_EVAL_PACE_MS` support and a 30-second CI pace while preserving the 41-scenario set and explicit Groq route pins. `npm run typecheck` exited 0; `npm run test:planner-evals` exited 0 (3/3); `npm run release:manifest` exited 0 (44/44); `npm run release:environment` exited 0 (145 source names on rerun). A complete Preview-model paced run reached 41/41 with 17 passed, 9 failed, 15 errored; a workflow-faithful Groq-only/default-model run reached 41/41 with 19 passed, 3 failed, 19 errored (exit 1). Disposable databases were dropped, the embedded server was stopped, and temporary provider environment/log files were removed. No action certified; P0 remains blocked by non-green provider evaluation and the unavailable/unsafe remote non-production target/artifacts. No production action taken.
 
