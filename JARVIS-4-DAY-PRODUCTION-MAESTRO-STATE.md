@@ -40,22 +40,22 @@ only after the phase cannot progress further.
 | | |
 |---|---|
 | **ACTIVE PHASE** | **P3 — Full-Stack Staging, Live-Binding Smoke, and 15-User Load** |
-| **Latest verified commit** | `9c25deb` (`jarvis-release P2: certify chaos and security hardening`) |
+| **Latest verified commit** | `pending P2 Bedrock single-key closure commit` |
 | **Phases complete** | 3 / 5 |
 | **Actions CORE-CERTIFIED** | 0 / 44 — full 14-gate certification remains P2–P4 work; P1 contract gates are complete for all 44 |
 | **Actions LIVE-CERTIFIED** | 0 / 44 |
-| **Open P0 defects** | 0 — the local deterministic CI gate is green; provider-live and isolated-staging prerequisites are phase-scoped BLOCKED-CONFIG items |
-| **Open P1 defects** | 0 P1 contract defects; remaining P1-severity rows are owned by P2/P3/P4, with isolated-staging/provider prerequisites BLOCKED-CONFIG |
+| **Open P0 defects** | 0 — local deterministic CI and the guarded Bedrock chain are green; isolated-staging prerequisites remain phase-scoped P3 BLOCKED-CONFIG items |
+| **Open P1 defects** | 0 P1 contract defects; provider-backed P2 routing is now configured/live-smoked, while isolated-staging/JWT/replay/load prerequisites remain P3 BLOCKED-CONFIG |
 | **Readiness score** | 0.0 / 10.0 — P1 contract proof is complete, but the launch score remains uncredited until the full P2–P4 gates are proven |
-| **Sessions logged** | 9 |
+| **Sessions logged** | 10 |
 
 ## NEXT EXACT PHASE
 
 > **PHASE 3 — Full-Stack Staging, Live-Binding Smoke, and 15-User Load**
 >
 > Read plan §0, §1, §3, §4, §5, and §6 PHASE 3 in full. Execute every P3 task in order. P0/P1
-> work is complete and P2 local deterministic chaos/security evidence is recorded. Do not rerun
-> completed P0/P1 work. The provider/staging/JWT/replay/load prerequisites recorded below remain
+> work is complete and P2 deterministic plus guarded Bedrock-chain evidence is recorded. Do not rerun
+> completed P0/P1 work. The isolated staging/JWT/replay/load prerequisites recorded below remain
 > BLOCKED-CONFIG until owner-provided isolated non-production bindings and artifacts exist.
 
 ---
@@ -64,8 +64,8 @@ only after the phase cannot progress further.
 
 | Date | Required phase state by end of day | Actual | Status |
 |---|---|---|---|
-| Thu 2026-08-06 | P0 complete; P1 running | P0, P1, and local deterministic P2 complete; live P2 provider/staging subgates BLOCKED-CONFIG | 🟡 |
-| Fri 2026-08-07 | P1 and P2 complete | P2 local gate complete; P3 prerequisites remain BLOCKED-CONFIG | 🟡 |
+| Thu 2026-08-06 | P0 complete; P1 running | P0, P1, and local deterministic P2 complete; live P2 provider chain awaiting owner clarification | 🟡 |
+| Fri 2026-08-07 | P1 and P2 complete | P2 complete including guarded Bedrock chain 3/3; P3 staging prerequisites remain BLOCKED-CONFIG | ✅ |
 | Sat 2026-08-08 | P3 complete | | ⬜ |
 | Sun 2026-08-09 | P4 complete; RC tag created | | ⬜ |
 | Mon 2026-08-10 | Owner-approved production runbook | | ⬜ |
@@ -78,15 +78,15 @@ only after the phase cannot progress further.
 |---|---|---|---|---|
 | P0 | Release Lock, Source Audit & Clean CI | Day 1 AM | ✅ complete | ✅ |
 | P1 | Universal 44-Action Contract Hardening | Day 1 PM–Day 2 AM | ✅ complete | ✅ |
-| P2 | Chaos, Voice, Model, Integration & Security | Day 2 | ✅ complete* | ✅ local deterministic gate; live provider/staging subgates BLOCKED-CONFIG |
+| P2 | Chaos, Voice, Model, Integration & Security | Day 2 | ✅ complete | ✅ deterministic gate + guarded Bedrock chain; staging-only subgates remain P3 |
 | P3 | Full-Stack Staging & 15/25-User Load | Day 3 | ⬜ not started | ⬜ |
 | P4 | Production Rehearsal, Certification & Launch Freeze | Day 4 | ⬜ not started | ⬜ |
 
 Legend: ⬜ not started · 🟡 in progress · ✅ complete · 🔴 blocked
 
-\* P2 completed every locally executable task and exit criterion without production or remote
-egress. The actual configured GLM/Mistral/DeepSeek live-chain check and isolated staging-dependent
-checks remain truthfully BLOCKED-CONFIG; see P2.T4 and R-16.
+P2 completed every required task and exit criterion available in the repository without production
+or remote staging egress. The configured GLM/Mistral/DeepSeek chain passed its guarded three-call
+Bedrock smoke; isolated staging-dependent checks remain P3-owned BLOCKED-CONFIG items.
 
 ---
 
@@ -126,7 +126,7 @@ Do not close a defect without exact evidence. Add every new failure discovered b
 | R-13 | P4 | Backup restore and migration rollback not rehearsed | P4 | 🔴 open | P0 local CLI dump/restore now passes; staging restore and migration rollback remain P4 work — `p0-t6-backup-restore-drill-final.txt` |
 | R-14 | P1 | Clean-checkout release build not proven | P4 | 🔴 open | |
 | R-15 | P1 | Historical gitleaks matches remain in pre-existing commits | P0/security follow-up | 🟡 owner/security follow-up | Current P0 diff is clean; all-history scan found 3 old matches; no history rewrite or credential rotation performed — `p0-t6-security-final.txt` |
-| R-16 | P1 | Provider-backed planner live evaluation is not green; the current source has Mistral/DeepSeek route entries but no GLM registration, and no live provider credentials are available | P2 | 🟡 BLOCKED-CONFIG — local router/fault/ledger proof passes; actual GLM/Mistral/DeepSeek evaluation needs owner-provided isolated credentials and staging | `docs/release/chaos-results.md`; `docs/release/evidence/P2/p2-deterministic-unit.txt`; prior live-eval evidence under `docs/release/evidence/P0/` |
+| R-16 | P1 | Provider-backed GLM/Mistral/DeepSeek chain needed a single Bedrock credential path and live provenance proof | P2 | ✅ closed — all three aliases route through the configured Bedrock key and the guarded smoke passed 3/3 with concrete model provenance and ledger rows | `docs/release/evidence/P2/p2-bedrock-live-smoke.txt`; `docs/release/generated/p2-bedrock-live-smoke.json`; `docs/release/chaos-results.md` |
 
 ---
 
@@ -138,9 +138,9 @@ Do not close a defect without exact evidence. Add every new failure discovered b
 - **2026-08-06 · P3.T1/T2/T5/T8 · isolated staging and external artifacts are BLOCKED-CONFIG, not P0 failures** · Existing evidence records three fresh exit-0 local `STAGING=1` guard reruns after the retained first-run timeout, but the tenant-isolation probe still refuses without two target URLs/JWTs/markers; Dealer Zero replay refuses without baseline/candidate artifacts; k6 is not installed; and read-only Railway discovery found only `confident-wisdom/production`, not a non-production environment. Evidence: `p0-t6-local-staging-guard-repeat.txt`, `p0-t6-ci-final-matrix.txt`, `p0-t6-staging-guard.txt`, `p0-t7-railway-status.txt`. Needed in P3: owner-provided verified non-production target, JWTs/markers, replay artifacts, and load tooling. No production URL is used.
 - **2026-08-06 · P0.T6 · historical scanner follow-up** · current P0 diff gitleaks is clean and OSV/npm audit are green; an all-history gitleaks scan reports three matches in older commits. Evidence: `p0-t6-security-final.txt`. Needed: owner/security decision on rotation/history remediation; P0 does not rewrite history or print candidate secrets.
 - **2026-08-06 · P0.T6/T7 · current Vercel Preview target is not certifiable as staging** · Read-only Vercel discovery found two Ready Preview API deployments and encrypted Preview bindings. Sanitized endpoint comparison shows the Preview database host/path differ from Production, but the Supabase auth origin is shared; the Preview Railway Postgres endpoint resets before authentication on three client configurations. Evidence: `p0-t7-vercel-preview-audit.txt`. Needed: owner-provided accessible isolated non-production database/auth target and a fresh deployment identity; P0 does not run against Production or the stale/unreachable Preview.
-- **2026-08-06 · P2.T4 · provider-backed planner live evaluation is BLOCKED-CONFIG, not a P0 failure** · Existing evidence records the initial provider-backed disposable-local run at 11/41 passed, 29 failed, 1 errored; the paced Preview-model recheck at 17/41 passed, 9 failed, 15 errored; and the workflow-faithful default-model recheck at 19/41 passed, 3 failed, 19 errored. The route/pacing harness changes are already recorded; P2 owns the actual configured GLM/Mistral/DeepSeek-class route evaluation and provenance/cost/fallback proof. No P0 rerun or production provider/customer effect is authorized. Evidence: `p0-t6-planner-live-eval.txt`, `p0-t6-planner-live-eval-paced-recheck.txt`, `p0-t6-planner-live-eval-workflow-faithful.txt`.
+- **2026-08-06 → 2026-08-07 · P2.T4 · provider-backed planner live-chain blocker resolved** · The prior disposable-local planner evaluations remain historical diagnostic evidence; P2 then configured the single Bedrock credential path for GLM, Mistral, and DeepSeek, ran one bounded request per model, and recorded concrete model/token provenance plus three local `llm_calls` rows. Evidence: `docs/release/evidence/P2/p2-bedrock-live-smoke.txt`, `docs/release/generated/p2-bedrock-live-smoke.json`, `docs/release/evidence/P2/p2-deterministic-unit.txt`. No production provider/customer effect occurred.
 - **2026-08-06 · P1.T1–T10 · universal contract phase complete** · Guarded Alpha/Bravo/Charlie seed is idempotent; the parameterized local runner passes 44/44 rows; cross-tenant, approval/typed, action/provider idempotency, five terminal receipts, prediction, and frontend/state/fallback gates pass without the prior pg query-queue warning. Evidence: `docs/release/evidence/P1/p1-suite-closure-no-warning.txt`, `docs/release/action-contract-results.md`, `docs/release/generated/action-contract-results.json`, `docs/release/evidence/P1/p1-frontend-tests-closure-final.txt`. No live provider or remote staging call was made; provider-live remains P2 BLOCKED-CONFIG and isolated staging/JWT/replay/load remain P3 BLOCKED-CONFIG.
-- **2026-08-06 · P2.T4 · live provider chain remains BLOCKED-CONFIG** · Source review found Mistral and DeepSeek route entries but no GLM provider registration; the guarded runner removed all provider credentials and used deterministic in-process seams. The exact local route/deadline/abort/fallback/ledger tests pass, but an actual configured GLM/Mistral/DeepSeek evaluation cannot be claimed without owner-provided isolated credentials and a safe staging target. Evidence: `docs/release/chaos-results.md`, `docs/release/evidence/P2/p2-deterministic-unit.txt`, `docs/release/evidence/P2/p2-security-scans.txt`. No lineup change, provider migration, or production egress was made.
+- **2026-08-07 · P2.T4 · Bedrock single-key chain closure** · Source registration now resolves GLM, Mistral, and DeepSeek through Bedrock Converse when the shared Bedrock credential is present, with defaults `zai.glm-4.7`, `mistral.mistral-small-2402-v1:0`, and `deepseek.v3.2` plus environment overrides. The guarded smoke passed 3/3, all 20 purpose/channel routes matched the configured order, and 3/3 ledger rows matched provider/model/status. Token usage is recorded; cost remains null because no deployment pricing rates were configured. Evidence: `docs/release/evidence/P2/p2-bedrock-live-smoke.txt`; `docs/release/generated/p2-bedrock-live-smoke.json`; `docs/release/chaos-results.md`. No direct vendor key path was used by the smoke and no production egress occurred.
 - **2026-08-06 · P2.T8 · gitleaks unavailable in the execution environment** · The prescribed gitleaks command returned exit 127 (`gitleaks: NOT_INSTALLED`). The phase retained the prior historical-match owner follow-up, ran `git diff --check`, a seeded-PII sentinel scan, and a credential-shaped-value scan over the P2 diff, and recorded the exact guard result. Evidence: `docs/release/evidence/P2/p2-security-scans.txt`. No scanner was installed and no history rewrite or credential rotation was performed.
 
 **Standing conditions:**
@@ -293,10 +293,10 @@ corrected evidence is p1-discovery-full.txt.
 
 # PHASE 2 — Chaos, Voice, Model, Integration, and Security Hardening
 
-**Status:** ✅ complete for the guarded local/test context · live provider/staging subgates BLOCKED-CONFIG · **Window:** Day 2 · **Depends on:** P1
+**Status:** ✅ complete for the guarded local/test context and configured Bedrock chain · staging-only subgates remain P3-owned BLOCKED-CONFIG · **Window:** Day 2 · **Depends on:** P1
 **Plan section:** §6 → PHASE 2
 **Starting SHA:** `8ec35725b9009481607769fea8f48a113cd455ff`
-**Ending SHA:** `9c25deb`
+**Ending SHA:** `pending P2 Bedrock single-key closure commit`
 
 ### Discovery output
 
@@ -326,8 +326,8 @@ completion and exited 0.
       **Evidence:** `docs/release/evidence/P2/p2-queue-and-workflow-durability.txt` — 12 files/63 tests passed, including lease recovery, bounded retry/backoff, max-attempt DLQ, replayability, LangGraph fresh-instance resume, unfinished-node plan repair, reconciliation, and compensation receipts; `docs/release/evidence/P2/p2-postgres-transient.test.ts` is included in the group.
       **Deviation:** The completed-P1 `full-flow.test.ts` was not rerun; its stale fixture required an implicit LangGraph schema setup. Dedicated LangGraph gate/restart tests and the queue/workflow durability tests were retained and passed.
 - [x] **P2.T4** Certify actual GLM/Mistral/DeepSeek routing, deadlines, aborts, fallback, provenance, cost.
-      **Evidence:** `docs/release/evidence/P2/p2-deterministic-unit.txt` — 19 files/98 tests passed, including every current purpose/channel route, absolute deadline/caller abort, 429/401/500/malformed fallback, concrete provider provenance, budget refusal, circuit behavior, and ledger observability; `docs/release/chaos-results.md` records 14/14 fault rows and configuration truth.
-      **Deviation:** The source has Mistral and DeepSeek route entries but no GLM registration, and no live provider credentials were available. The actual three-provider live-chain portion is BLOCKED-CONFIG; the model lineup was not changed and no live provider call was made.
+      **Evidence:** `docs/release/evidence/P2/p2-deterministic-unit.txt` — 19 files/99 tests passed, including every purpose/channel route, absolute deadline/caller abort, 429/401/500/malformed fallback, concrete provider provenance, budget refusal, circuit behavior, and ledger observability; `docs/release/evidence/P2/p2-bedrock-live-smoke.txt` and `docs/release/generated/p2-bedrock-live-smoke.json` — 3/3 guarded Bedrock completions, concrete model provenance, 20/20 route assertions, and 3/3 local `llm_calls` rows; `docs/release/chaos-results.md` records 14/14 fault rows and configuration truth.
+      **Deviation:** The repository previously lacked a GLM registration and the provider family contract did not express the shared Bedrock credential. The smallest preserving change added GLM/Mistral/DeepSeek Bedrock Converse aliases, standard Bedrock bearer-token fallback, model-ID environment overrides, and a Bedrock-only smoke guard. Direct vendor keys remain compatibility fallbacks only when Bedrock is absent; no direct vendor key was used in the smoke. Usage is recorded, but no cost is invented because deployment rates are unset.
 - [x] **P2.T5** Certify fast read-only cash-collections lane.
       **Evidence:** `docs/release/evidence/P2/p2-deterministic-unit.txt` — `fast-read-lane.test.ts` passed eligibility, tenant-scoped real read-model data, safe fallback, and no planner/secrets/memory access for the eligible path.
       **Deviation:** No remote read-model or production tenant was used; the proof is local authenticated/emulator evidence only.
@@ -344,22 +344,22 @@ completion and exited 0.
       **Evidence:** `docs/release/generated/p2-chaos-results.json` records 14/14 `PASS` faults with `structuredLog=true`, `sentryEvent=true`, `piiSafe=true`, bounded `retryCount`, action/binding/provider, failure kind, and trace id; `docs/release/chaos-results.md` is the human-readable report.
       **Deviation:** Sentry events are test-context `captureMessage` evidence with safe tags, not live DSN delivery. Live release/environment/alert routing remains BLOCKED-CONFIG under R-11.
 - [x] **P2.T10** Commit `docs/release/chaos-results.md` and update ledgers.
-      **Evidence:** phase commit `9c25deb`; `docs/release/chaos-results.md`; `docs/release/generated/p2-chaos-results.json`; this state file’s P2, defect, action, integration, artifact, session, and deviation ledgers.
-      **Deviation:** None beyond the explicit live-configuration blockers recorded above.
+      **Evidence:** P2 Bedrock closure commit pending; `docs/release/chaos-results.md`; `docs/release/generated/p2-chaos-results.json`; `docs/release/evidence/P2/p2-bedrock-live-smoke.txt`; this state file’s P2, defect, action, integration, artifact, session, and deviation ledgers.
+      **Deviation:** None beyond the explicitly phase-scoped isolated-staging blockers recorded above.
 
 ### Exit gate
 
 - [x] Zero tenant leaks/approval bypasses/duplicate effects under the exercised local faults — **Evidence:** prior 44/44 P1 tenant/approval/idempotency report plus `docs/release/chaos-results.md` and `docs/release/evidence/P2/p2-queue-and-workflow-durability.txt`; no P2 failure row.
 - [x] Bounded retry, truthful DLQ/reconciliation — **Evidence:** `docs/release/evidence/P2/p2-queue-and-workflow-durability.txt`; no unbounded retry or false success observed.
 - [x] Queue/LangGraph restart recovery passes — **Evidence:** `docs/release/evidence/P2/p2-queue-and-workflow-durability.txt`; fresh-instance LangGraph and queue restart tests passed.
-- [ ] Actual GLM/Mistral/DeepSeek live routing, abort, fallback, and ledger provenance — **Evidence:** local Mistral/DeepSeek seam passes in `docs/release/evidence/P2/p2-deterministic-unit.txt`; actual three-provider chain is BLOCKED-CONFIG by R-16 because GLM is not registered and live credentials/staging are absent.
+- [x] Actual GLM/Mistral/DeepSeek live routing, abort, fallback, and ledger provenance — **Evidence:** `docs/release/evidence/P2/p2-bedrock-live-smoke.txt` and `docs/release/generated/p2-bedrock-live-smoke.json` show 3/3 Bedrock completions with observed models `zai.glm-4.7`, `mistral.mistral-small-2402-v1:0`, and `deepseek.v3.2`, 20/20 route assertions, and 3/3 completed ledger rows; `docs/release/evidence/P2/p2-deterministic-unit.txt` covers deadline/abort/fallback/circuit/budget seams.
 - [x] Fast read lane + local evidence/web research pass — **Evidence:** `docs/release/evidence/P2/p2-deterministic-unit.txt` and `docs/release/evidence/P2/p2-evidence-and-voice.txt`.
 - [x] All locally executable voice invariants pass — **Evidence:** `docs/release/evidence/P2/p2-evidence-and-voice.txt`; live outbound portion is BLOCKED-CONFIG.
 - [x] Security/secret/PII tests pass with the scanner limitation recorded — **Evidence:** `docs/release/evidence/P2/p2-security-and-tenant-boundaries.txt`; `docs/release/evidence/P2/p2-security-scans.txt`.
 - [x] Sentry/structured observability is proven in test context — **Evidence:** `docs/release/generated/p2-chaos-results.json` and `docs/release/chaos-results.md`; live DSN/alert routing remains BLOCKED-CONFIG.
-- [x] Zero new open P0/P1 chaos/security defects — **Evidence:** all four P2 groups exit 0 with 218 tests passed, 0 skipped, 14/14 faults passed; R-15 and R-16 are pre-existing/configuration follow-ups, not new P2 code failures.
+- [x] Zero new open P0/P1 chaos/security defects — **Evidence:** all four P2 groups exit 0 with 219 tests passed, 0 skipped, 14/14 faults passed; R-15 remains the historical scanner follow-up and R-16 is closed by the Bedrock-chain evidence.
 
-**P2 local exit result:** PASS for every locally executable criterion above. The unchecked three-provider live-chain line is an explicit external-configuration gate, not a hidden pass or a production claim.
+**P2 exit result:** PASS for every P2 task and exit criterion. The GLM/Mistral/DeepSeek chain is configured through the shared Bedrock credential and passed the bounded live smoke; isolated staging, outbound voice, live Sentry routing, replay artifacts, and load tooling remain P3/P4-owned gates and are not implied by this P2 result.
 
 **Rollback:** Revert commit `9c25deb`. The fault runner refuses production and non-local database targets and requires the explicit test-context guard, so hooks are unreachable outside the permitted test/staging guard conditions.
 
@@ -566,9 +566,9 @@ Never paste values.
 | Supabase auth/RBAC | required | 🟡 configured-emulator | P2/P3 | `docs/release/evidence/P2/p2-security-and-tenant-boundaries.txt`; no live auth-origin claim |
 | Vapi | pilot if voice enabled | 🟡 configured-emulator | P2/P3 | `docs/release/evidence/P2/p2-evidence-and-voice.txt`; live outbound pilot BLOCKED-CONFIG |
 | OpenAI Realtime | pilot if voice enabled | ⬜ unknown | P2/P3 | |
-| GLM provider family | current router | 🟡 blocked-config | P2 | No GLM registration found in source; `docs/release/chaos-results.md`; live chain BLOCKED-CONFIG |
-| Mistral provider family | current router | 🟡 configured-emulator | P2 | `docs/release/evidence/P2/p2-deterministic-unit.txt`; deterministic HTTP/fallback seam, no live credential claim |
-| DeepSeek provider family | current router | 🟡 configured-emulator | P2 | `docs/release/evidence/P2/p2-deterministic-unit.txt`; deterministic route seam, no live credential claim |
+| GLM provider family | current router | 🟢 configured-live | P2 | Shared Bedrock credential; observed `zai.glm-4.7` in the 3/3 guarded smoke — `docs/release/evidence/P2/p2-bedrock-live-smoke.txt` |
+| Mistral provider family | current router | 🟢 configured-live | P2 | Shared Bedrock credential; observed `mistral.mistral-small-2402-v1:0` in the 3/3 guarded smoke — `docs/release/evidence/P2/p2-bedrock-live-smoke.txt` |
+| DeepSeek provider family | current router | 🟢 configured-live | P2 | Shared Bedrock credential; observed `deepseek.v3.2` in the 3/3 guarded smoke — `docs/release/evidence/P2/p2-bedrock-live-smoke.txt` |
 | Exa | web research | 🟡 configured-emulator | P2/P3 | `docs/release/evidence/P2/p2-deterministic-unit.txt`; no external request claim |
 | Firecrawl | web verification | 🟡 configured-emulator | P2/P3 | `docs/release/evidence/P2/p2-deterministic-unit.txt`; no external request claim |
 | Embeddings provider | semantic evidence if enabled | ⬜ unknown | P0/P2 | |
@@ -598,7 +598,9 @@ Never paste values.
 | `docs/release/generated/ci-command-map.md` | P0 | ✅ committed | `dfc696d`; `docs/release/evidence/P0/p0-discovery.txt` |
 | `docs/release/P0-baseline.md` | P0 | ✅ committed | `b6b03d5`; `docs/release/P0-baseline.md` |
 | `docs/release/action-contract-results.md` | P1 | ✅ committed | `ff346e2`; `docs/release/evidence/P1/p1-contract-final.txt` |
-| `docs/release/chaos-results.md` | P2 | ✅ committed | `9c25deb`; `docs/release/generated/p2-chaos-results.json`; `docs/release/evidence/P2/` |
+| `docs/release/chaos-results.md` | P2 | ✅ committed | P2 Bedrock closure commit pending; `docs/release/generated/p2-chaos-results.json`; `docs/release/evidence/P2/` |
+| `docs/release/generated/p2-bedrock-live-smoke.json` | P2 | ✅ generated | `docs/release/evidence/P2/p2-bedrock-live-smoke.txt`; 3/3 guarded Bedrock completions, 20/20 route assertions, 3/3 ledger rows |
+| `docs/release/evidence/P2/p2-bedrock-live-smoke.txt` | P2 | ✅ generated | Concrete model/token/status provenance; credential value and response content withheld |
 | `docs/release/integration-readiness.md` | P3 | ⬜ | |
 | `docs/release/load-test-results.md` | P3 | ⬜ | |
 | `docs/release/deployment-runbook.md` | P4 | ⬜ | |
@@ -662,6 +664,8 @@ These are not executor blockers until their phase requires them:
 YYYY-MM-DD HH:MM · model · phase · starting SHA → ending SHA · tasks completed · test summary ·
 action count certified · defects opened/closed · score · next phase · blockers -->
 
+- **2026-08-07 · P2 BEDROCK SINGLE-KEY CLOSURE SESSION (GPT-5)** · `9c25deb` → pending P2 Bedrock closure commit · Configured GLM, Mistral, and DeepSeek aliases to prefer the shared Bedrock bearer credential, with model defaults `zai.glm-4.7`, `mistral.mistral-small-2402-v1:0`, and `deepseek.v3.2`, plus environment overrides. Added the guarded `release:bedrock-smoke` command; it made exactly 3 Bedrock calls against localhost-only seeded Postgres and passed 3/3 completions, 20/20 route assertions, and 3/3 `llm_calls` rows without writing the credential or response content. Focused P2 unit test passed 8/8; `npm run typecheck` passed; `npm run release:environment` passed with 152 names; final `npm run release:chaos` exited 0 with 4/4 groups, 219 tests passed, 0 skipped, and 14/14 faults passed. No P0/P1 suite rerun, no production/staging egress, and no business/external action occurred. P3 is next; isolated staging/JWT/replay/load prerequisites remain phase-scoped BLOCKED-CONFIG.
+
 - **2026-08-06 · P2 CHAOS/VOICE/MODEL/SECURITY CLOSURE SESSION (GPT-5)** · `8ec3572` → `9c25deb` · Read both Maestro files completely; executed all locally executable P2 tasks; added the guarded deterministic chaos runner, provider fault tests, transient-Postgres probe, and P2 evidence/report artifacts; retained the fixed 44-action scope and did not rerun completed P0/P1 suites. Final `npm run release:chaos` exited 0: 4/4 groups, 218 tests passed, 0 skipped, 14/14 injected faults PASS with structured-log/Sentry/PII-safe flags. `npm run typecheck` exited 0; production and missing-chaos-context guards refused with exit 1; `git diff --check` exited 0; seeded PII sentinel and changed-file credential-shaped scans had no matches. `gitleaks` was unavailable (exit 127), recorded without installation. Local P2 exit criteria pass; actual GLM/Mistral/DeepSeek live chain, live Sentry routing, and isolated staging remain BLOCKED-CONFIG. P3 is next; no production or remote staging action taken.
 
 - **2026-08-06 · P1 UNIVERSAL CONTRACT CLOSURE SESSION (GPT-5)** · `3391701` → `ff346e2` · Read both Maestro files completely; retained the P0 close and reclassified provider-live to P2 BLOCKED-CONFIG and isolated staging/JWT/replay/load to P3 BLOCKED-CONFIG. Implemented the guarded certification seed, 44-row contract runner/reports, tenant-aware grounding, fixed approval floors/typed confirmation, null/schema repairs, receipts/provenance checks, generated frontend contract/state coverage, and renderer fixtures. Final local evidence is 44/44 contract rows, 44/44 frontend registry entries, zero certified fallback mounts, backend and frontend typechecks exit 0, targeted frontend tests 86/86, and the final contract suite exits 0 without a pg query-queue warning. No production or live-provider action taken.
@@ -698,7 +702,7 @@ action count certified · defects opened/closed · score · next phase · blocke
 - **P0.T6/T7** · the CI map includes staging/live-only commands but Railway read-only discovery exposes only production · left those commands fail-closed and recorded the exact missing identity/artifacts rather than targeting production · `p0-t6-ci-final-matrix.txt`, `p0-t7-railway-status.txt`.
 - **P2.T2** · the plan requires before/during/after-effect faults for every mutating/external profile · retained the prior 44-row approval/idempotency contract evidence and added real local crash/retry/restart/duplicate/compensation paths for the applicable effect classes; provider-specific per-action live injections remain BLOCKED-CONFIG without isolated staging/provider credentials · `docs/release/chaos-results.md`, `docs/release/evidence/P2/p2-queue-and-workflow-durability.txt`.
 - **P2.T3** · the P2 durability group would have rerun a completed P1 full-flow fixture whose setup assumes an implicit LangGraph schema · excluded only that stale P1 fixture from the P2 group and retained the dedicated LangGraph gate/restart and queue recovery tests; no production runtime scope was reduced · `docs/release/evidence/P2/p2-queue-and-workflow-durability.txt`.
-- **P2.T4** · the plan names a GLM/Mistral/DeepSeek chain but the current source registers no GLM provider and no live credentials are available · preserved the current Mistral/DeepSeek lineup, certified local deadline/abort/fallback/provenance/ledger behavior, and recorded the actual three-provider check BLOCKED-CONFIG · `docs/release/chaos-results.md`, `docs/release/evidence/P2/p2-deterministic-unit.txt`.
+- **P2.T4** · the repository had no GLM alias and did not express the shared Bedrock credential across all three provider families · added the smallest Bedrock-preferred GLM/Mistral/DeepSeek aliases, standard bearer-token fallback, model-ID overrides, and a Bedrock-only three-call smoke; direct vendor compatibility fallbacks remain only for environments without Bedrock · `docs/release/evidence/P2/p2-bedrock-live-smoke.txt`, `docs/release/generated/p2-bedrock-live-smoke.json`, `docs/release/chaos-results.md`.
 - **P2.T8** · the prescribed gitleaks binary is absent in the environment · recorded exit 127 and ran the scoped diff, sentinel, whitespace, and guard fallback checks; did not install tooling or rewrite history · `docs/release/evidence/P2/p2-security-scans.txt`.
 
 ---

@@ -1,6 +1,6 @@
 {
   "phase": "P2",
-  "generatedAt": "2026-08-06T19:00:42.761Z",
+  "generatedAt": "2026-08-06T19:32:04.998Z",
   "guardedContext": true,
   "localDatabaseOnly": true,
   "productionEgress": false,
@@ -35,7 +35,7 @@
       "status": "PASS",
       "skipped": 0,
       "evidencePath": "docs/release/evidence/P2/p2-deterministic-unit.txt",
-      "summary": "Test Files  19 passed (19) | Tests  98 passed (98)"
+      "summary": "Test Files  19 passed (19) | Tests  99 passed (99)"
     },
     {
       "id": "queue-and-workflow-durability",
@@ -54,7 +54,7 @@
         "tests/integration/reflection-error-kind-gate.test.ts",
         "tests/integration/terminal-plan-repair.test.ts"
       ],
-      "database": "finnor_p2_23662_1786042790204_688c6555",
+      "database": "finnor_p2_26255_1786044675581_02e3c5c0",
       "exitCode": 0,
       "signal": null,
       "status": "PASS",
@@ -74,7 +74,7 @@
         "tests/integration/policy-engine-v2.test.ts",
         "tests/integration/reasoning-tier.test.ts"
       ],
-      "database": "finnor_p2_23662_1786042814960_942e2311",
+      "database": "finnor_p2_26255_1786044697345_2eebabb5",
       "exitCode": 0,
       "signal": null,
       "status": "PASS",
@@ -93,7 +93,7 @@
         "tests/integration/payment-webhook-auth.test.ts",
         "tests/integration/payment-webhook-receipt.test.ts"
       ],
-      "database": "finnor_p2_23662_1786042830934_57afee03",
+      "database": "finnor_p2_26255_1786044711351_fb264495",
       "exitCode": 0,
       "signal": null,
       "status": "PASS",
@@ -301,10 +301,10 @@
     }
   ],
   "providerConfiguration": {
-    "glm": "not_registered_in_source",
-    "mistral": "deterministic_test_seam_only",
-    "deepseek": "deterministic_test_seam_only",
-    "liveSmoke": "BLOCKED-CONFIG"
+    "glm": "bedrock:zai.glm-4.7",
+    "mistral": "bedrock:mistral.mistral-small-2402-v1:0",
+    "deepseek": "bedrock:deepseek.v3.2",
+    "liveSmoke": "separate guarded Bedrock smoke"
   },
   "pass": true
 }

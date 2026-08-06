@@ -90,6 +90,13 @@ function isAbortLike(error: unknown): boolean {
   return error instanceof LLMDeadlineExceededError || (error instanceof Error && error.name === "AbortError");
 }
 
+/** Amazon Bedrock long-lived API keys are exposed by AWS as a bearer token. Keep
+ * the repository's established variable name while also accepting AWS's standard
+ * name so the same single Bedrock credential works in every deployment surface. */
+function bedrockApiKey(): string | undefined {
+  return process.env.AWS_BEDROCK_API_KEY ?? process.env.AWS_BEARER_TOKEN_BEDROCK;
+}
+
 /** Fetch with both the caller's signal and the shared absolute deadline. The
  * provider-specific timeout is only a ceiling; fallbacks receive the same
  * deadlineAt and therefore cannot restart the full timeout budget. */
@@ -266,18 +273,18 @@ export class DeepSeekProvider extends OpenAICompatibleProvider {
 }
 
 /** Legacy explicit-only Bedrock Anthropic adapter. It is not part of any JARVIS
- * default route; Mistral/DeepSeek are the configured first-party choices. */
+ * default route; GLM/Mistral/DeepSeek are the configured first-party choices. */
 export class BedrockAnthropicProvider implements LLMProvider {
   name = "bedrock-anthropic";
   lastUsage?: LLMUsage;
   constructor(
     private modelId: string,
-    private apiKey = process.env.AWS_BEDROCK_API_KEY,
+    private apiKey = bedrockApiKey(),
     private region = process.env.AWS_BEDROCK_REGION ?? "us-east-1",
   ) {}
 
   async complete(opts: LLMCallOptions): Promise<string> {
-    if (!this.apiKey) throw new Error("AWS_BEDROCK_API_KEY is not set");
+    if (!this.apiKey) throw new Error("AWS_BEDROCK_API_KEY or AWS_BEARER_TOKEN_BEDROCK is not set");
     this.lastUsage = undefined;
     const res = await fetchWithCallBudget(
       `https://bedrock-runtime.${this.region}.amazonaws.com/model/${this.modelId}/invoke`,
@@ -307,7 +314,7 @@ export class BedrockAnthropicProvider implements LLMProvider {
 
 /**
  * Bedrock Converse is the shared request/response format for the non-Anthropic
- * models used by JARVIS (Qwen, DeepSeek, OpenAI OSS, and Amazon Nova). Keeping this
+ * models used by JARVIS (GLM, Mistral, Qwen, DeepSeek, OpenAI OSS, and Amazon Nova). Keeping this
  * adapter model-agnostic lets the routing policy change without coupling the rest of
  * the system to each vendor's InvokeModel payload shape.
  */
@@ -316,7 +323,7 @@ export class BedrockConverseProvider implements LLMProvider {
   lastUsage?: LLMUsage;
   constructor(
     private modelId: string,
-    private apiKey = process.env.AWS_BEDROCK_API_KEY,
+    private apiKey = bedrockApiKey(),
     private region = process.env.AWS_BEDROCK_REGION ?? "us-east-1",
     name = "bedrock-converse",
   ) {
@@ -324,7 +331,7 @@ export class BedrockConverseProvider implements LLMProvider {
   }
 
   async complete(opts: LLMCallOptions): Promise<string> {
-    if (!this.apiKey) throw new Error("AWS_BEDROCK_API_KEY is not set");
+    if (!this.apiKey) throw new Error("AWS_BEDROCK_API_KEY or AWS_BEARER_TOKEN_BEDROCK is not set");
     this.lastUsage = undefined;
     const res = await fetchWithCallBudget(
       `https://bedrock-runtime.${this.region}.amazonaws.com/model/${this.modelId}/converse`,
@@ -468,6 +475,10 @@ export class GroqProvider implements LLMProvider {
 
 const BEDROCK_QWEN_PLANNING_MODEL_ID = () => process.env.AWS_BEDROCK_QWEN_PLANNING_MODEL_ID ?? "qwen.qwen3-235b-a22b-2507-v1:0";
 const BEDROCK_QWEN_FAST_MODEL_ID = () => process.env.AWS_BEDROCK_QWEN_FAST_MODEL_ID ?? "qwen.qwen3-32b-v1:0";
+// These are the Bedrock model IDs for the single-key JARVIS provider chain. Each
+// can be overridden when an account pins a different active model revision.
+const BEDROCK_GLM_MODEL_ID = () => process.env.AWS_BEDROCK_GLM_MODEL_ID ?? "zai.glm-4.7";
+const BEDROCK_MISTRAL_MODEL_ID = () => process.env.AWS_BEDROCK_MISTRAL_MODEL_ID ?? "mistral.mistral-small-2402-v1:0";
 const BEDROCK_DEEPSEEK_MODEL_ID = () => process.env.AWS_BEDROCK_DEEPSEEK_MODEL_ID ?? "deepseek.v3.2";
 const BEDROCK_OPENAI_OSS_MODEL_ID = () => process.env.AWS_BEDROCK_OPENAI_OSS_MODEL_ID ?? "openai.gpt-oss-120b-1:0";
 const BEDROCK_NOVA_MICRO_MODEL_ID = () => process.env.AWS_BEDROCK_NOVA_MICRO_MODEL_ID ?? "amazon.nova-micro-v1:0";
@@ -496,13 +507,20 @@ function addProvider(name: string, factory: () => LLMProvider, configured: () =>
   providers.set(name, { factory, configured });
 }
 
-const bedrockConfigured = () => Boolean(process.env.AWS_BEDROCK_API_KEY);
+const bedrockConfigured = () => Boolean(bedrockApiKey());
 const mistralConfigured = () => Boolean(process.env.MISTRAL_API_KEY);
-const deepseekConfigured = () => Boolean(process.env.DEEPSEEK_API_KEY || process.env.AWS_BEDROCK_API_KEY);
+const deepseekConfigured = () => Boolean(process.env.DEEPSEEK_API_KEY || bedrockConfigured());
 const groqConfigured = () => Boolean(process.env.GROQ_API_KEY);
 
-addProvider("mistral", () => new MistralProvider(), mistralConfigured);
-addProvider("deepseek", () => (process.env.DEEPSEEK_API_KEY ? new DeepSeekProvider() : new BedrockConverseProvider(BEDROCK_DEEPSEEK_MODEL_ID(), undefined, undefined, "deepseek")), deepseekConfigured);
+const singleKeyMistralConfigured = () => Boolean(mistralConfigured() || bedrockConfigured());
+const singleKeyBedrockProvider = (modelId: string, name: string) => new BedrockConverseProvider(modelId, undefined, undefined, name);
+
+// Prefer the one configured Bedrock credential when present. Direct vendor keys
+// remain a compatibility fallback for explicitly separate deployments, but a
+// Bedrock-configured deployment never silently leaves the approved provider path.
+addProvider("glm", () => singleKeyBedrockProvider(BEDROCK_GLM_MODEL_ID(), "glm"), bedrockConfigured);
+addProvider("mistral", () => bedrockConfigured() ? singleKeyBedrockProvider(BEDROCK_MISTRAL_MODEL_ID(), "mistral") : new MistralProvider(), singleKeyMistralConfigured);
+addProvider("deepseek", () => bedrockConfigured() ? singleKeyBedrockProvider(BEDROCK_DEEPSEEK_MODEL_ID(), "deepseek") : new DeepSeekProvider(), deepseekConfigured);
 // Legacy providers remain available only when named explicitly or selected by an
 // explicit route override. None is a default fallback in the JARVIS route table.
 addProvider("groq", () => new GroqProvider(), groqConfigured);
@@ -597,34 +615,34 @@ export interface LLMRouteDescription {
 
 const DEFAULT_ROUTE_ORDER: Record<LLMPurpose, Record<LLMChannel, string[]>> = {
   planning: {
-    voice: ["mistral", "deepseek"],
-    text: ["mistral", "deepseek"],
-    console: ["mistral", "deepseek"],
-    background: ["deepseek", "mistral"],
+    voice: ["mistral", "deepseek", "glm"],
+    text: ["mistral", "deepseek", "glm"],
+    console: ["mistral", "deepseek", "glm"],
+    background: ["deepseek", "mistral", "glm"],
   },
   critic: {
-    voice: ["deepseek", "mistral"],
-    text: ["deepseek", "mistral"],
-    console: ["deepseek", "mistral"],
-    background: ["deepseek", "mistral"],
+    voice: ["deepseek", "mistral", "glm"],
+    text: ["deepseek", "mistral", "glm"],
+    console: ["deepseek", "mistral", "glm"],
+    background: ["deepseek", "mistral", "glm"],
   },
   repair: {
-    voice: ["deepseek", "mistral"],
-    text: ["deepseek", "mistral"],
-    console: ["deepseek", "mistral"],
-    background: ["deepseek", "mistral"],
+    voice: ["deepseek", "mistral", "glm"],
+    text: ["deepseek", "mistral", "glm"],
+    console: ["deepseek", "mistral", "glm"],
+    background: ["deepseek", "mistral", "glm"],
   },
   classification: {
-    voice: ["mistral", "deepseek"],
-    text: ["mistral", "deepseek"],
-    console: ["mistral", "deepseek"],
-    background: ["mistral", "deepseek"],
+    voice: ["mistral", "deepseek", "glm"],
+    text: ["mistral", "deepseek", "glm"],
+    console: ["mistral", "deepseek", "glm"],
+    background: ["mistral", "deepseek", "glm"],
   },
   answer: {
-    voice: ["mistral", "deepseek"],
-    text: ["mistral", "deepseek"],
-    console: ["mistral", "deepseek"],
-    background: ["deepseek", "mistral"],
+    voice: ["mistral", "deepseek", "glm"],
+    text: ["mistral", "deepseek", "glm"],
+    console: ["mistral", "deepseek", "glm"],
+    background: ["deepseek", "mistral", "glm"],
   },
 };
 

@@ -1,0 +1,413 @@
+{
+  "phase": "P2",
+  "generatedAt": "2026-08-06T19:27:53.896Z",
+  "pass": true,
+  "guardedContext": true,
+  "localDatabaseOnly": true,
+  "productionEgress": false,
+  "businessActions": [],
+  "credentialSource": "AWS_BEDROCK_API_KEY|AWS_BEARER_TOKEN_BEDROCK (value withheld)",
+  "directVendorKeysUsed": false,
+  "models": [
+    {
+      "provider": "glm",
+      "model": "zai.glm-4.7",
+      "transport": "bedrock-converse"
+    },
+    {
+      "provider": "mistral",
+      "model": "mistral.mistral-small-2402-v1:0",
+      "transport": "bedrock-converse"
+    },
+    {
+      "provider": "deepseek",
+      "model": "deepseek.v3.2",
+      "transport": "bedrock-converse"
+    }
+  ],
+  "results": [
+    {
+      "provider": "glm",
+      "configuredModel": "zai.glm-4.7",
+      "selectedProvider": "glm",
+      "observedModel": "zai.glm-4.7",
+      "status": "completed",
+      "responseShape": "non-empty",
+      "inputTokens": 33,
+      "outputTokens": 7,
+      "costUsd": null,
+      "elapsedMs": 1989,
+      "traceId": "p2:bedrock-live:glm:8ae69d3b-fdd0-4689-b0b4-ab4792692ab5"
+    },
+    {
+      "provider": "mistral",
+      "configuredModel": "mistral.mistral-small-2402-v1:0",
+      "selectedProvider": "mistral",
+      "observedModel": "mistral.mistral-small-2402-v1:0",
+      "status": "completed",
+      "responseShape": "non-empty",
+      "inputTokens": 39,
+      "outputTokens": 10,
+      "costUsd": null,
+      "elapsedMs": 771,
+      "traceId": "p2:bedrock-live:mistral:354a02ee-03c3-4e49-9f0a-375b14231528"
+    },
+    {
+      "provider": "deepseek",
+      "configuredModel": "deepseek.v3.2",
+      "selectedProvider": "deepseek",
+      "observedModel": "deepseek.v3.2",
+      "status": "completed",
+      "responseShape": "non-empty",
+      "inputTokens": 33,
+      "outputTokens": 8,
+      "costUsd": null,
+      "elapsedMs": 939,
+      "traceId": "p2:bedrock-live:deepseek:086a2ae0-e9d5-4415-ac28-cd9c200c513e"
+    }
+  ],
+  "routes": [
+    {
+      "purpose": "planning",
+      "channel": "voice",
+      "providerNames": [
+        "mistral",
+        "deepseek",
+        "glm"
+      ],
+      "expectedProviderNames": [
+        "mistral",
+        "deepseek",
+        "glm"
+      ],
+      "pass": true
+    },
+    {
+      "purpose": "planning",
+      "channel": "text",
+      "providerNames": [
+        "mistral",
+        "deepseek",
+        "glm"
+      ],
+      "expectedProviderNames": [
+        "mistral",
+        "deepseek",
+        "glm"
+      ],
+      "pass": true
+    },
+    {
+      "purpose": "planning",
+      "channel": "console",
+      "providerNames": [
+        "mistral",
+        "deepseek",
+        "glm"
+      ],
+      "expectedProviderNames": [
+        "mistral",
+        "deepseek",
+        "glm"
+      ],
+      "pass": true
+    },
+    {
+      "purpose": "planning",
+      "channel": "background",
+      "providerNames": [
+        "deepseek",
+        "mistral",
+        "glm"
+      ],
+      "expectedProviderNames": [
+        "deepseek",
+        "mistral",
+        "glm"
+      ],
+      "pass": true
+    },
+    {
+      "purpose": "critic",
+      "channel": "voice",
+      "providerNames": [
+        "deepseek",
+        "mistral",
+        "glm"
+      ],
+      "expectedProviderNames": [
+        "deepseek",
+        "mistral",
+        "glm"
+      ],
+      "pass": true
+    },
+    {
+      "purpose": "critic",
+      "channel": "text",
+      "providerNames": [
+        "deepseek",
+        "mistral",
+        "glm"
+      ],
+      "expectedProviderNames": [
+        "deepseek",
+        "mistral",
+        "glm"
+      ],
+      "pass": true
+    },
+    {
+      "purpose": "critic",
+      "channel": "console",
+      "providerNames": [
+        "deepseek",
+        "mistral",
+        "glm"
+      ],
+      "expectedProviderNames": [
+        "deepseek",
+        "mistral",
+        "glm"
+      ],
+      "pass": true
+    },
+    {
+      "purpose": "critic",
+      "channel": "background",
+      "providerNames": [
+        "deepseek",
+        "mistral",
+        "glm"
+      ],
+      "expectedProviderNames": [
+        "deepseek",
+        "mistral",
+        "glm"
+      ],
+      "pass": true
+    },
+    {
+      "purpose": "repair",
+      "channel": "voice",
+      "providerNames": [
+        "deepseek",
+        "mistral",
+        "glm"
+      ],
+      "expectedProviderNames": [
+        "deepseek",
+        "mistral",
+        "glm"
+      ],
+      "pass": true
+    },
+    {
+      "purpose": "repair",
+      "channel": "text",
+      "providerNames": [
+        "deepseek",
+        "mistral",
+        "glm"
+      ],
+      "expectedProviderNames": [
+        "deepseek",
+        "mistral",
+        "glm"
+      ],
+      "pass": true
+    },
+    {
+      "purpose": "repair",
+      "channel": "console",
+      "providerNames": [
+        "deepseek",
+        "mistral",
+        "glm"
+      ],
+      "expectedProviderNames": [
+        "deepseek",
+        "mistral",
+        "glm"
+      ],
+      "pass": true
+    },
+    {
+      "purpose": "repair",
+      "channel": "background",
+      "providerNames": [
+        "deepseek",
+        "mistral",
+        "glm"
+      ],
+      "expectedProviderNames": [
+        "deepseek",
+        "mistral",
+        "glm"
+      ],
+      "pass": true
+    },
+    {
+      "purpose": "classification",
+      "channel": "voice",
+      "providerNames": [
+        "mistral",
+        "deepseek",
+        "glm"
+      ],
+      "expectedProviderNames": [
+        "mistral",
+        "deepseek",
+        "glm"
+      ],
+      "pass": true
+    },
+    {
+      "purpose": "classification",
+      "channel": "text",
+      "providerNames": [
+        "mistral",
+        "deepseek",
+        "glm"
+      ],
+      "expectedProviderNames": [
+        "mistral",
+        "deepseek",
+        "glm"
+      ],
+      "pass": true
+    },
+    {
+      "purpose": "classification",
+      "channel": "console",
+      "providerNames": [
+        "mistral",
+        "deepseek",
+        "glm"
+      ],
+      "expectedProviderNames": [
+        "mistral",
+        "deepseek",
+        "glm"
+      ],
+      "pass": true
+    },
+    {
+      "purpose": "classification",
+      "channel": "background",
+      "providerNames": [
+        "mistral",
+        "deepseek",
+        "glm"
+      ],
+      "expectedProviderNames": [
+        "mistral",
+        "deepseek",
+        "glm"
+      ],
+      "pass": true
+    },
+    {
+      "purpose": "answer",
+      "channel": "voice",
+      "providerNames": [
+        "mistral",
+        "deepseek",
+        "glm"
+      ],
+      "expectedProviderNames": [
+        "mistral",
+        "deepseek",
+        "glm"
+      ],
+      "pass": true
+    },
+    {
+      "purpose": "answer",
+      "channel": "text",
+      "providerNames": [
+        "mistral",
+        "deepseek",
+        "glm"
+      ],
+      "expectedProviderNames": [
+        "mistral",
+        "deepseek",
+        "glm"
+      ],
+      "pass": true
+    },
+    {
+      "purpose": "answer",
+      "channel": "console",
+      "providerNames": [
+        "mistral",
+        "deepseek",
+        "glm"
+      ],
+      "expectedProviderNames": [
+        "mistral",
+        "deepseek",
+        "glm"
+      ],
+      "pass": true
+    },
+    {
+      "purpose": "answer",
+      "channel": "background",
+      "providerNames": [
+        "deepseek",
+        "mistral",
+        "glm"
+      ],
+      "expectedProviderNames": [
+        "deepseek",
+        "mistral",
+        "glm"
+      ],
+      "pass": true
+    }
+  ],
+  "ledger": {
+    "rows": 3,
+    "expectedRows": 3,
+    "pass": true,
+    "costUsd": null,
+    "costConfigured": false,
+    "rowsDetail": [
+      {
+        "traceId": "p2:bedrock-live:deepseek:086a2ae0-e9d5-4415-ac28-cd9c200c513e",
+        "provider": "deepseek",
+        "model": "deepseek.v3.2",
+        "status": "completed",
+        "inputTokens": 33,
+        "outputTokens": 8,
+        "costUsd": null
+      },
+      {
+        "traceId": "p2:bedrock-live:mistral:354a02ee-03c3-4e49-9f0a-375b14231528",
+        "provider": "mistral",
+        "model": "mistral.mistral-small-2402-v1:0",
+        "status": "completed",
+        "inputTokens": 39,
+        "outputTokens": 10,
+        "costUsd": null
+      },
+      {
+        "traceId": "p2:bedrock-live:glm:8ae69d3b-fdd0-4689-b0b4-ab4792692ab5",
+        "provider": "glm",
+        "model": "zai.glm-4.7",
+        "status": "completed",
+        "inputTokens": 33,
+        "outputTokens": 7,
+        "costUsd": null
+      }
+    ]
+  },
+  "assertions": {
+    "completedResults": true,
+    "provenancePass": true,
+    "routePass": true,
+    "ledgerPass": true
+  }
+}

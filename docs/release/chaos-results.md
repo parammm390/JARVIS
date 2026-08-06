@@ -34,6 +34,6 @@ No production or remote staging target was contacted. Provider credentials were 
 
 ## Configuration truth
 
-- The source-verified router exposes Mistral and DeepSeek route entries; no GLM provider registration was found in the current repository.
-- The local runner therefore certifies deadline/abort/fallback/ledger behavior against the current Mistral/DeepSeek code seam and records the missing GLM/live credentials as configuration evidence.
+- The source-verified router is a single-key Bedrock chain: GLM (`zai.glm-4.7`), Mistral (`mistral.mistral-small-2402-v1:0`), and DeepSeek (`deepseek.v3.2`), each with an environment override for the model ID.
+- This local runner deliberately removes the Bedrock key from child processes; the positive matrix therefore certifies fault/deadline/abort/fallback/ledger seams without spending live inference credits. The bounded live smoke is recorded separately at `docs/release/evidence/P2/p2-bedrock-live-smoke.txt` and `docs/release/generated/p2-bedrock-live-smoke.json`.
 - The 401 case is a bounded alternate-provider fallback when another configured route member exists; an exhausted/auth-only route remains a truthful failure.

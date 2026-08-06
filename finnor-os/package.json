@@ -38,6 +38,7 @@
     "release:environment": "tsx scripts/release/generate-environment-contract.ts",
     "release:contract": "tsx scripts/release/run-action-contract-matrix.ts",
     "release:chaos": "tsx scripts/release/run-chaos-matrix.ts",
+    "release:bedrock-smoke": "tsx scripts/release/run-bedrock-live-smoke.ts",
     "release:e2e": "tsx scripts/release/run-api-e2e-matrix.ts",
     "release:load": "tsx scripts/release/run-load-certification.ts",
     "release:certify": "tsx scripts/release/run-release-certification.ts"

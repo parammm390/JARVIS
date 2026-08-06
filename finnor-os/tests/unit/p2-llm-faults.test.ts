@@ -8,6 +8,7 @@ import {
   LLMDeadlineExceededError,
   MistralProvider,
   describeLLMRoute,
+  resolveProvider,
   resetProviderHealth,
 } from "@finnor/tools";
 
@@ -116,6 +117,41 @@ describe("Phase 2 deterministic LLM fault matrix", () => {
           expected,
         );
         expect(route.deadlineMs).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("routes GLM, Mistral, and DeepSeek through one Bedrock key with concrete model provenance", async () => {
+    vi.stubEnv("MISTRAL_API_KEY", "");
+    vi.stubEnv("DEEPSEEK_API_KEY", "");
+    vi.stubEnv("AWS_BEDROCK_API_KEY", "phase2-test-bedrock");
+    const fetchMock = vi.fn().mockResolvedValue(response(200, {
+      output: { message: { content: [{ text: "BEDROCK_OK" }] } },
+      usage: { inputTokens: 3, outputTokens: 2 },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const expectedModels = [
+      ["glm", "zai.glm-4.7"],
+      ["mistral", "mistral.mistral-small-2402-v1:0"],
+      ["deepseek", "deepseek.v3.2"],
+    ] as const;
+    for (const [name, model] of expectedModels) {
+      const provider = resolveProvider(name);
+      await expect(provider.complete({ system: "s", user: "u", purpose: "answer", channel: "text", deadlineMs: 2_000 }))
+        .resolves.toBe("BEDROCK_OK");
+      expect(provider.lastUsage).toEqual({ model, inputTokens: 3, outputTokens: 2 });
+    }
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    for (const [url, init] of fetchMock.mock.calls as Array<[string, RequestInit]>) {
+      expect(url).toMatch(/^https:\/\/bedrock-runtime\.us-east-1\.amazonaws\.com\/model\/(zai\.glm-4\.7|mistral\.mistral-small-2402-v1:0|deepseek\.v3\.2)\/converse$/);
+      expect((init.headers as Record<string, string>).Authorization).toBe("Bearer phase2-test-bedrock");
+      expect(url).toContain("/converse");
+    }
+    for (const purpose of ["planning", "critic", "repair", "classification", "answer"] as const) {
+      for (const channel of ["voice", "text", "console", "background"] as const) {
+        expect(describeLLMRoute(purpose, channel).providerNames).toHaveLength(3);
       }
     }
   });

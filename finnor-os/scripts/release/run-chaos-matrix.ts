@@ -154,7 +154,8 @@ const FAULTS: readonly FaultScenario[] = [
 ];
 
 const PROVIDER_ENV_KEYS = [
-  "MISTRAL_API_KEY", "DEEPSEEK_API_KEY", "GLM_API_KEY", "AWS_BEDROCK_API_KEY", "GROQ_API_KEY",
+  "MISTRAL_API_KEY", "DEEPSEEK_API_KEY", "GLM_API_KEY", "AWS_BEDROCK_API_KEY", "AWS_BEARER_TOKEN_BEDROCK",
+  "AWS_BEDROCK_GLM_MODEL_ID", "AWS_BEDROCK_MISTRAL_MODEL_ID", "AWS_BEDROCK_DEEPSEEK_MODEL_ID", "GROQ_API_KEY",
   "EXA_API_KEY", "FIRECRAWL_API_KEY", "VAPI_API_KEY", "VAPI_PHONE_NUMBER_ID", "VAPI_ASSISTANT_ID",
   "GOHIGHLEVEL_API_KEY", "QUICKBOOKS_CLIENT_ID", "QUICKBOOKS_CLIENT_SECRET", "STRIPE_SECRET_KEY",
   "DOCUSIGN_INTEGRATION_KEY", "RESEND_API_KEY", "SENTRY_DSN", "AXIOM_TOKEN",
@@ -348,7 +349,7 @@ function markdownReport(groups: GroupResult[], faults: FaultResult[]): string {
   for (const fault of faults) {
     lines.push(`| ${fault.kind} | \`${fault.actionType}\` | ${fault.provider ?? fault.binding ?? "n/a"} | ${fault.failureKind} | **${fault.status}** | ${fault.structuredLog ? "PASS" : "FAIL"} | ${fault.sentryEvent ? "PASS" : "FAIL"} | ${fault.piiSafe ? "PASS" : "FAIL"} | \`${fault.evidence}\` |`);
   }
-  lines.push("", "## Configuration truth", "", "- The source-verified router exposes Mistral and DeepSeek route entries; no GLM provider registration was found in the current repository.", "- The local runner therefore certifies deadline/abort/fallback/ledger behavior against the current Mistral/DeepSeek code seam and records the missing GLM/live credentials as configuration evidence.", "- The 401 case is a bounded alternate-provider fallback when another configured route member exists; an exhausted/auth-only route remains a truthful failure.", "");
+  lines.push("", "## Configuration truth", "", "- The source-verified router is a single-key Bedrock chain: GLM (`zai.glm-4.7`), Mistral (`mistral.mistral-small-2402-v1:0`), and DeepSeek (`deepseek.v3.2`), each with an environment override for the model ID.", "- This local runner deliberately removes the Bedrock key from child processes; the positive matrix therefore certifies fault/deadline/abort/fallback/ledger seams without spending live inference credits. The bounded live smoke is recorded separately at `docs/release/evidence/P2/p2-bedrock-live-smoke.txt` and `docs/release/generated/p2-bedrock-live-smoke.json`.", "- The 401 case is a bounded alternate-provider fallback when another configured route member exists; an exhausted/auth-only route remains a truthful failure.", "");
   return lines.join("\n");
 }
 
@@ -380,10 +381,10 @@ export async function runChaosMatrix(databaseUrl = process.env.DATABASE_URL ?? D
     groups,
     faults,
     providerConfiguration: {
-      glm: "not_registered_in_source",
-      mistral: "deterministic_test_seam_only",
-      deepseek: "deterministic_test_seam_only",
-      liveSmoke: "BLOCKED-CONFIG",
+      glm: "bedrock:zai.glm-4.7",
+      mistral: "bedrock:mistral.mistral-small-2402-v1:0",
+      deepseek: "bedrock:deepseek.v3.2",
+      liveSmoke: "separate guarded Bedrock smoke",
     },
     pass: groups.every((group) => group.status === "PASS") && faults.every((fault) => fault.status === "PASS" && fault.piiSafe),
   };
