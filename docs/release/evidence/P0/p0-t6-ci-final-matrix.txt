@@ -9,9 +9,17 @@ PASS, exit 0:
   security: current-diff gitleaks; OSV lockfile scan; npm audit
   browser: 280 total, 113 passed, 167 pre-existing skips, 0 failures
 
+  local staging guard repeat: exact STAGING=1 test:staging against a fresh
+  disposable local database had one first-run exit 1 (one planner-DAG PostgreSQL
+  connection-timeout failure), followed by three fresh exit-0 reruns with 121 passed
+  test files, 1 pre-existing skipped file, 557 passed tests, and 3 pre-existing
+  skipped tests. Full timings and cleanup evidence: p0-t6-local-staging-guard-repeat.txt.
+
 Expected fail-closed/environment-gated results, recorded rather than bypassed:
   npm run test:staging — refuses without explicit STAGING=1 and verified staging DATABASE_URL;
-    STAGING=1 without DATABASE_URL also refuses. A current Vercel Preview DATABASE_URL was
+    STAGING=1 without DATABASE_URL also refuses. The local exact command was exercised against
+    disposable Postgres and is recorded above; it is not remote staging certification. A current
+    Vercel Preview DATABASE_URL was
     discovered read-only, but its PostgreSQL handshake resets (`ECONNRESET`) and its Supabase
     auth origin matches Production; the staging suite was not pointed at that unsafe/unavailable
     target. See p0-t7-vercel-preview-audit.txt.

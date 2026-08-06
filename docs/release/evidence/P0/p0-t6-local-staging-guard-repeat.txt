@@ -1,0 +1,47 @@
+P0.T6 local staging-guard repeat evidence
+Date: 2026-08-06
+
+Purpose
+-------
+Exercise the exact staging test command against a freshly migrated disposable local
+PostgreSQL database. This validates the guard and local integration-test mechanics;
+it is not remote staging certification.
+
+Database safety
+---------------
+- Database name: `finnor_p0_guard_20260806` (disposable local database).
+- The database was freshly created/migrated before each run and dropped after the
+  final run.
+- The embedded local PostgreSQL server was stopped after the final run.
+- No production or remote staging endpoint was used.
+
+Exact command
+-------------
+`STAGING=1 DATABASE_URL=postgres://finnor:finnor@127.0.0.1:5432/finnor_p0_guard_20260806 npm run test:staging`
+
+Observed runs
+-------------
+1. Fresh database, exit 1, duration 111.31s. Vitest reported 120 passed test
+   files, 1 failed test file, 1 skipped test file; 556 passed tests, 1 failed
+   test, and 3 skipped tests. The failure was the first
+   `tests/integration/planner-plan-dag.test.ts` case, with a PostgreSQL pool
+   connection timeout while entering the tenant/planner path.
+2. Database dropped and recreated. Fresh database, exit 0, duration 104.90s.
+   Vitest reported 121 passed test files and 1 skipped test file; 557 passed
+   tests and 3 skipped tests.
+3. Database dropped and recreated. Fresh database, exit 0, duration 105.18s.
+   Vitest reported 121 passed test files and 1 skipped test file; 557 passed
+   tests and 3 skipped tests.
+4. Database dropped and recreated. Fresh database, exit 0, duration 105.01s.
+   Vitest reported 121 passed test files and 1 skipped test file; 557 passed
+   tests and 3 skipped tests.
+
+Conclusion
+----------
+Three consecutive fresh reruns passed with only the pre-existing conditional skips;
+no skip or quarantine was added. The isolated first-run timeout is retained as
+observed evidence and is not silently reclassified as a pass. These runs establish
+that the local `STAGING=1` guard and staging suite execute end-to-end against the
+disposable emulator. They do not close P0.T6 because the verified remote staging
+identity/database, tenant credentials, replay artifacts, load tooling, and green
+provider-backed planner evaluation remain unavailable or failing.
