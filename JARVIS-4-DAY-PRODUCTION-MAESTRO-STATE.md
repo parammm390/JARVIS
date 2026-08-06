@@ -40,7 +40,7 @@ only after the phase cannot progress further.
 | | |
 |---|---|
 | **ACTIVE PHASE** | **P0 — Release Lock, Source Audit, and Clean CI** |
-| **Latest verified commit** | `e88eaed` (`jarvis-release P0: refresh verified staging target evidence`) |
+| **Latest verified commit** | `eb13883` (`jarvis-release P0: record live planner gate failure`) |
 | **Phases complete** | 0 / 5 |
 | **Actions CORE-CERTIFIED** | 0 / 44 |
 | **Actions LIVE-CERTIFIED** | 0 / 44 |
@@ -149,7 +149,7 @@ Do not close a defect without exact evidence. Add every new failure discovered b
 **Status:** 🔴 blocked · **Window:** Day 1 morning · **Depends on:** none
 **Plan section:** §6 → PHASE 0
 **Starting SHA:** `4888c6d22ed211cb918f30edc2b508fe1a04bcde`
-**Ending SHA:** `e88eaed`
+**Ending SHA:** `eb13883`
 
 ### Discovery output
 
@@ -195,7 +195,7 @@ workflow route pin is a minimal CI-only repair, not a certification.
       **Evidence:** `docs/release/generated/deployment-inventory.md`; `docs/release/evidence/P0/p0-t7-railway-status.txt`; `docs/release/evidence/P0/p0-t7-vercel-preview-audit.txt`; local migration evidence `p0-t6-clean-db-prerequisites.txt`.
       **Deviation:** Read-only Railway discovery found one accessible production project/environment. Vercel Preview metadata exposed a historical non-production-looking Railway endpoint, but the endpoint resets and the auth origin matches Production; inventory records both facts without using either target for tests.
 - [x] **P0.T8** Write and commit `docs/release/P0-baseline.md`.
-      **Evidence:** `e88eaed`; `docs/release/P0-baseline.md`.
+      **Evidence:** `eb13883`; `docs/release/P0-baseline.md`.
       **Deviation:** Strict starting score remains 0.0/10 because no §2.3 category has full-credit proof; the report records the remaining environment blockers instead of inventing staging evidence.
 
 ### Exit gate
@@ -207,7 +207,7 @@ workflow route pin is a minimal CI-only repair, not a certification.
 - [ ] All existing CI-equivalent commands terminate and pass — **Evidence:** all executable local commands pass; backup/restore is now green. Staging, tenant isolation, replay, k6 load, and live planner commands are recorded as fail-closed because no verified non-production identity, credentials, or artifacts are available; see `p0-t6-ci-final-matrix.txt`.
 - [x] Zero skips/quarantines added — **Evidence:** `docs/release/evidence/P0/p0-t6-skip-audit.txt`; full browser run reports 167 pre-existing skips, no added quarantine.
 - [x] Migration/deployment inventory recorded — **Evidence:** `docs/release/generated/deployment-inventory.md`; `docs/release/evidence/P0/p0-t7-railway-status.txt`; `docs/release/evidence/P0/p0-t7-vercel-preview-audit.txt`.
-- [x] P0 baseline report committed — **Evidence:** `e88eaed`; `docs/release/P0-baseline.md`.
+- [x] P0 baseline report committed — **Evidence:** `eb13883`; `docs/release/P0-baseline.md`.
 - [x] Zero open P0 defects — **Evidence:** source defects R-02/R-03 are closed and R-04/R-13 are correctly P1/P4; the two remaining items are external P0 exit prerequisites above.
 
 ---
@@ -554,7 +554,7 @@ Never paste values.
 | `docs/release/generated/action-manifest.md` | P0 | ✅ committed | `e88eaed`; `docs/release/evidence/P0/p0-t3-release-manifest.txt` |
 | `docs/release/generated/environment-contract.md` | P0 | ✅ committed | `dfc696d`; `docs/release/evidence/P0/p0-t4-environment-contract.txt` |
 | `docs/release/generated/ci-command-map.md` | P0 | ✅ committed | `dfc696d`; `docs/release/evidence/P0/p0-discovery.txt` |
-| `docs/release/P0-baseline.md` | P0 | ✅ committed | `e88eaed`; `docs/release/P0-baseline.md` |
+| `docs/release/P0-baseline.md` | P0 | ✅ committed | `eb13883`; `docs/release/P0-baseline.md` |
 | `docs/release/action-contract-results.md` | P1 | ⬜ | |
 | `docs/release/chaos-results.md` | P2 | ⬜ | |
 | `docs/release/integration-readiness.md` | P3 | ⬜ | |
@@ -620,7 +620,7 @@ These are not executor blockers until their phase requires them:
 YYYY-MM-DD HH:MM · model · phase · starting SHA → ending SHA · tasks completed · test summary ·
 action count certified · defects opened/closed · score · next phase · blockers -->
 
-- **2026-08-06 · P0 LIVE-PLANNER REVALIDATION SESSION (GPT-5)** · `e88eaed` → `P0 planner-eval evidence commit` · Rechecked the configured Preview provider metadata without printing values; ran the provider-backed planner harness against disposable local Postgres and recorded 11/41 passed, 29 failed, 1 errored (exit 1). Found the workflow’s Groq-only secret did not select the router’s default planning/repair route; added only CI route pins for planning and repair. Follow-up Groq diagnostic hit the provider TPM ceiling and was stopped after confirming the failure. No action certified; P0 remains blocked by the failing live eval, unavailable/unsafe staging target, missing tenant/replay/load artifacts, and historical gitleaks follow-up. No production action taken.
+- **2026-08-06 · P0 LIVE-PLANNER REVALIDATION SESSION (GPT-5)** · `e88eaed` → `eb13883` · Rechecked the configured Preview provider metadata without printing values; ran the provider-backed planner harness against disposable local Postgres and recorded 11/41 passed, 29 failed, 1 errored (exit 1). Found the workflow’s Groq-only secret did not select the router’s default planning/repair route; added only CI route pins for planning and repair. Follow-up Groq diagnostic hit the provider TPM ceiling and was stopped after confirming the failure. No action certified; P0 remains blocked by the failing live eval, unavailable/unsafe staging target, missing tenant/replay/load artifacts, and historical gitleaks follow-up. No production action taken.
 
 - **2026-08-06 · P0 TARGET REVALIDATION SESSION (GPT-5)** · `dfc696d` → `e88eaed` · Re-read the plan and state completely; rechecked Railway/Vercel targets without production writes; discovered the historical Preview bindings, confirmed database host/path difference but shared Supabase auth origin, and proved the Preview Postgres endpoint resets before authentication. `npm run release:manifest` exit 0 (44/44), `npm run release:environment` exit 0 (144 names), `git diff --check` exit 0, current-worktree gitleaks exit 0, staged gitleaks exit 0. No action certified; P0 remains blocked by the unavailable/unsafe non-production target, missing tenant/JWT/replay/load/live-provider artifacts, and historical gitleaks follow-up. No production action taken.
 
