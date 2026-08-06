@@ -160,8 +160,9 @@ Do not close a defect without exact evidence. Add every new failure discovered b
 scan (paths only) and `git diff --check`; final current-diff gitleaks verification is in
 `p0-t6-security-final.txt`.
 `docs/release/evidence/P0/p0-t6-ci-final-matrix.txt` — final local CI-equivalent matrix summary;
-all executable local commands pass, while staging/live-only commands fail closed on missing target
-identity/artifacts.
+local commands pass after the recorded staging-suite repeat (one retained first-run timeout,
+three fresh exit-0 reruns), while remote staging/live-only commands remain blocked on missing
+target identity/artifacts.
 `docs/release/evidence/P0/p0-t6-backend-fresh-final.txt`,
 `docs/release/evidence/P0/p0-t6-backup-restore-drill-final.txt` — fresh backend suite and CLI
 backup/restore round-trip both pass after the final repairs.
@@ -557,7 +558,7 @@ Never paste values.
 | `docs/release/generated/action-manifest.md` | P0 | ✅ committed | `e88eaed`; `docs/release/evidence/P0/p0-t3-release-manifest.txt` |
 | `docs/release/generated/environment-contract.md` | P0 | ✅ committed | `dfc696d`; `docs/release/evidence/P0/p0-t4-environment-contract.txt` |
 | `docs/release/generated/ci-command-map.md` | P0 | ✅ committed | `dfc696d`; `docs/release/evidence/P0/p0-discovery.txt` |
-| `docs/release/P0-baseline.md` | P0 | ✅ committed | `eb13883`; `docs/release/P0-baseline.md` |
+| `docs/release/P0-baseline.md` | P0 | ✅ committed | `4a5a46a`; `docs/release/P0-baseline.md` |
 | `docs/release/action-contract-results.md` | P1 | ⬜ | |
 | `docs/release/chaos-results.md` | P2 | ⬜ | |
 | `docs/release/integration-readiness.md` | P3 | ⬜ | |
