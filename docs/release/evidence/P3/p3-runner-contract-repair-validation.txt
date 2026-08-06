@@ -1,0 +1,24 @@
+=== Phase 3 runner contract repair validation ===
+date=2026-08-07
+source_typecheck=PASS (finnor-os npm run typecheck, exit 0)
+productionEgress=false
+secretValuesPrinted=false
+providerPayloadsPrinted=false
+
+=== repaired runner behavior ===
+api_e2e=requires declared expectedTerminalStatus, Alpha/Bravo/Charlie tenant coverage, duplicate action-id match, optional approve/reject decision, and tenant-scoped receipt verification
+live_binding=requires expectedProvider and provider label reconciliation from a finalized local receipt
+load=includes read-only, draft, approval, concurrent duplicate, and queue-vitals request classes; exact scenarios remain 15 users x 20 minutes and 25 users x 10 minutes; voice session is explicitly not testable without an isolated voice binding
+staging_guard=requires STAGING_REDIS_URL, P3_NO_EGRESS=1 for identity/e2e/load, and Alpha/Bravo/Charlie JWTs for identity/e2e/live-smoke
+
+=== fail-closed command results after repair ===
+release:e2e --identity-only=exit 1; targets=0/6; no network
+release:e2e=exit 1; targets=0/6; no network
+release:live-smoke=exit 1; targets=0/6; no provider egress
+release:load=exit 1; targets=0/6; no load requests
+all guard failures=missing configuration only; failures=none
+
+=== generated machine reports ===
+docs/release/generated/p3-api-e2e-results.json=BLOCKED-CONFIG
+docs/release/generated/p3-live-binding-smoke.json=BLOCKED-CONFIG
+docs/release/generated/p3-load-results.json=BLOCKED-CONFIG; coverage includes concurrentDuplicates=true and voiceSession=not-testable-without-isolated-voice-binding

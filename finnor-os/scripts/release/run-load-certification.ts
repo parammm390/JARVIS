@@ -14,7 +14,16 @@ const REPO_ROOT = resolve(FINNOR_OS_ROOT, "..");
 const REPORT_PATH = resolve(REPO_ROOT, "docs/release/generated/p3-load-results.json");
 const EVIDENCE_DIR = resolve(REPO_ROOT, "docs/release/evidence/P3");
 
-type RequestKind = "read" | "draft" | "approval" | "vitals";
+const LOAD_COVERAGE = {
+  readOnlyQuestions: true,
+  actionDrafts: true,
+  approvals: true,
+  concurrentDuplicates: true,
+  queueVitals: true,
+  voiceSession: "not-testable-without-isolated-voice-binding",
+} as const;
+
+type RequestKind = "read" | "draft" | "approval" | "duplicate" | "vitals";
 
 interface Sample {
   kind: RequestKind;
@@ -68,6 +77,34 @@ async function request(kind: RequestKind, token: string, userIndex: number, iter
   const started = Date.now();
   const headers = { accept: "application/json", authorization: `Bearer ${token}` };
   let response: Response;
+  if (kind === "duplicate") {
+    const idempotencyKey = `p3-load-duplicate-${userIndex}-${iteration}`;
+    const body = JSON.stringify({ instruction: process.env.P3_LOAD_INSTRUCTION, channel: "text", idempotencyKey });
+    const first = await fetch(new URL("/api/actions", base), {
+      method: "POST",
+      headers: { ...headers, "content-type": "application/json", "x-correlation-id": idempotencyKey },
+      body,
+      signal: AbortSignal.timeout(30_000),
+    });
+    await first.text();
+    const second = await fetch(new URL("/api/actions", base), {
+      method: "POST",
+      headers: { ...headers, "content-type": "application/json", "x-correlation-id": idempotencyKey },
+      body,
+      signal: AbortSignal.timeout(30_000),
+    });
+    const secondText = await second.text();
+    let secondBody: unknown = null;
+    try { secondBody = secondText ? JSON.parse(secondText) : null; } catch { /* duplicate marker remains false */ }
+    const duplicate = Boolean(secondBody && typeof secondBody === "object" && (secondBody as Record<string, unknown>).duplicate === true);
+    return {
+      kind,
+      status: second.status,
+      elapsedMs: Date.now() - started,
+      ok: first.ok && second.ok && duplicate,
+      queueOldestAgeSeconds: null,
+    };
+  }
   if (kind === "draft") {
     const idempotencyKey = `p3-load-${userIndex}-${iteration}`;
     response = await fetch(new URL("/api/actions", base), {
@@ -98,7 +135,7 @@ async function runScenario(name: string, users: number, durationMinutes: number,
   async function userLoop(userIndex: number): Promise<void> {
     while (Date.now() < end) {
       const current = iteration++;
-      for (const kind of ["read", "draft", "approval", "vitals"] as const) {
+      for (const kind of ["read", "draft", "approval", "duplicate", "vitals"] as const) {
         try {
           samples.push(await request(kind, tokens[userIndex]!, userIndex, current));
         } catch {
@@ -113,9 +150,10 @@ async function runScenario(name: string, users: number, durationMinutes: number,
   const failureCount = samples.filter((sample) => !sample.ok).length;
   const errorRate = samples.length ? failureCount / samples.length : 1;
   const oldestQueueAgeSeconds = Math.max(...samples.map((sample) => sample.queueOldestAgeSeconds ?? 0));
-  const p50Ms = Object.fromEntries((["read", "draft", "approval", "vitals"] as const).map((kind) => [kind, p(kind, 50)])) as Record<RequestKind, number | null>;
-  const p95Ms = Object.fromEntries((["read", "draft", "approval", "vitals"] as const).map((kind) => [kind, p(kind, 95)])) as Record<RequestKind, number | null>;
-  const p99Ms = Object.fromEntries((["read", "draft", "approval", "vitals"] as const).map((kind) => [kind, p(kind, 99)])) as Record<RequestKind, number | null>;
+  const measuredKinds = ["read", "draft", "approval", "duplicate", "vitals"] as const;
+  const p50Ms = Object.fromEntries(measuredKinds.map((kind) => [kind, p(kind, 50)])) as Record<RequestKind, number | null>;
+  const p95Ms = Object.fromEntries(measuredKinds.map((kind) => [kind, p(kind, 95)])) as Record<RequestKind, number | null>;
+  const p99Ms = Object.fromEntries(measuredKinds.map((kind) => [kind, p(kind, 99)])) as Record<RequestKind, number | null>;
   const pass = samples.length > 0
     && errorRate < 0.01
     && (p95Ms.read ?? Number.POSITIVE_INFINITY) < 2_500
@@ -156,6 +194,7 @@ function blockedReport(guard: StagingGuardReport, error?: string): Record<string
     error: error ?? null,
     scenarios: [],
     reconciliation: "not_run",
+    coverage: LOAD_COVERAGE,
     evidence: "docs/release/generated/p3-load-results.json",
   };
 }
@@ -184,6 +223,7 @@ export async function runLoadCertification(): Promise<Record<string, unknown>> {
     guard,
     scenarios,
     reconciliation: { pass: reconciliation.pass === true, duplicateEffects: reconciliation.duplicateEffects ?? null, tenantLeaks: reconciliation.tenantLeaks ?? null, dataCorruption: reconciliation.dataCorruption ?? null },
+    coverage: LOAD_COVERAGE,
     evidence: "docs/release/generated/p3-load-results.json",
   };
   await writeReport(report);

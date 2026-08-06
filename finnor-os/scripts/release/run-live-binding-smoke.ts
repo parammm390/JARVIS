@@ -18,7 +18,8 @@ interface LiveSmokeCase {
   binding: string;
   actionType: string;
   instruction: string;
-  tenant?: "alpha" | "charlie";
+  expectedProvider: string;
+  tenant?: "alpha" | "bravo" | "charlie";
   typedConfirmation?: boolean;
 }
 
@@ -30,10 +31,11 @@ interface SafeResponse {
   receiptCount: number;
   finalizedReceiptCount: number;
   idempotent: boolean;
+  providerLabels: string[];
 }
 
-function tokenFor(tenant: "alpha" | "charlie"): string {
-  const name = tenant === "alpha" ? "STAGING_JWT_ALPHA" : "STAGING_JWT_CHARLIE";
+function tokenFor(tenant: "alpha" | "bravo" | "charlie"): string {
+  const name = tenant === "alpha" ? "STAGING_JWT_ALPHA" : tenant === "bravo" ? "STAGING_JWT_BRAVO" : "STAGING_JWT_CHARLIE";
   const token = process.env[name];
   if (!token) throw new Error(`${name} is required; token value withheld`);
   return token;
@@ -60,6 +62,13 @@ async function request(path: string, token: string, init?: RequestInit): Promise
   const first = planned[0] && typeof planned[0] === "object" ? planned[0] as Record<string, unknown> : {};
   const receipts = Array.isArray(record.receipts) ? record.receipts : [];
   const finalizedReceiptCount = receipts.filter((receipt) => receipt && typeof receipt === "object" && Boolean((receipt as Record<string, unknown>).finalizedAt)).length;
+  const providerLabels = receipts.flatMap((receipt) => {
+    if (!receipt || typeof receipt !== "object") return [];
+    const value = (receipt as Record<string, unknown>).actualResult;
+    if (!value || typeof value !== "object") return [];
+    const result = value as Record<string, unknown>;
+    return [result.provider, result.binding, result.integration].filter((label): label is string => typeof label === "string");
+  });
   return {
     status: response.status,
     ok: response.ok,
@@ -68,6 +77,7 @@ async function request(path: string, token: string, init?: RequestInit): Promise
     receiptCount: receipts.length,
     finalizedReceiptCount,
     idempotent: record.idempotent === true,
+    providerLabels: [...new Set(providerLabels)],
   };
 }
 
@@ -81,19 +91,19 @@ async function loadCases(): Promise<LiveSmokeCase[]> {
   const actual = new Set((cases as LiveSmokeCase[]).map((row) => row.binding));
   if (actual.size !== expected.size || [...expected].some((binding) => !actual.has(binding))) throw new Error("Live smoke cases do not cover exactly the configured P3_LIVE_BINDINGS");
   for (const row of cases as LiveSmokeCase[]) {
-    if (!row.binding || !row.actionType || !row.instruction) throw new Error("Every live smoke case needs binding, actionType, and instruction");
+    if (!row.binding || !row.actionType || !row.instruction || !row.expectedProvider) throw new Error("Every live smoke case needs binding, actionType, instruction, and expectedProvider");
   }
   return cases as LiveSmokeCase[];
 }
 
-async function waitForReceipt(actionId: string, token: string): Promise<SafeResponse> {
+async function waitForReceipt(actionId: string, token: string, expectedProvider: string): Promise<SafeResponse> {
   let last: SafeResponse | null = null;
   for (let attempt = 0; attempt < 12; attempt += 1) {
     last = await request(`/api/receipts?domainActionId=${encodeURIComponent(actionId)}`, token);
-    if (last.finalizedReceiptCount > 0) return last;
+    if (last.finalizedReceiptCount > 0 && last.providerLabels.includes(expectedProvider)) return last;
     await new Promise((resolveWait) => setTimeout(resolveWait, 5_000));
   }
-  return last ?? { status: 599, ok: false, elapsedMs: 0, actionId, receiptCount: 0, finalizedReceiptCount: 0, idempotent: false };
+  return last ?? { status: 599, ok: false, elapsedMs: 0, actionId, receiptCount: 0, finalizedReceiptCount: 0, idempotent: false, providerLabels: [] };
 }
 
 async function writeReport(report: Record<string, unknown>): Promise<void> {
@@ -136,9 +146,10 @@ export async function runLiveBindingSmoke(): Promise<Record<string, unknown>> {
     }
     const confirmed = await request(`/api/actions/${planned.actionId}/confirm`, token, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(smoke.typedConfirmation ? { typedConfirmation: true } : {}) });
     const duplicateConfirm = await request(`/api/actions/${planned.actionId}/confirm`, token, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(smoke.typedConfirmation ? { typedConfirmation: true } : {}) });
-    const receipt = await waitForReceipt(planned.actionId, token);
-    const pass = planned.ok && confirmed.ok && duplicateConfirm.idempotent && receipt.finalizedReceiptCount > 0;
-    rows.push({ binding: smoke.binding, actionType: smoke.actionType, status: pass ? "PASS" : "FAIL", plannedStatus: planned.status, confirmStatus: confirmed.status, duplicateConfirmStatus: duplicateConfirm.status, receipt: receipt.finalizedReceiptCount > 0 ? "finalized" : "missing", elapsedMs: planned.elapsedMs + confirmed.elapsedMs + receipt.elapsedMs });
+    const receipt = await waitForReceipt(planned.actionId, token, smoke.expectedProvider);
+    const providerReconciled = receipt.providerLabels.includes(smoke.expectedProvider);
+    const pass = planned.ok && confirmed.ok && duplicateConfirm.idempotent && receipt.finalizedReceiptCount > 0 && providerReconciled;
+    rows.push({ binding: smoke.binding, actionType: smoke.actionType, expectedProvider: smoke.expectedProvider, providerReconciled, status: pass ? "PASS" : "FAIL", plannedStatus: planned.status, confirmStatus: confirmed.status, duplicateConfirmStatus: duplicateConfirm.status, receipt: receipt.finalizedReceiptCount > 0 ? "finalized" : "missing", elapsedMs: planned.elapsedMs + confirmed.elapsedMs + receipt.elapsedMs });
   }
   const report = {
     phase: "P3",

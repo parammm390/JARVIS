@@ -1,11 +1,11 @@
 {
   "phase": "P3",
-  "gate": "staging-identity",
+  "gate": "api-e2e",
   "status": "BLOCKED-CONFIG",
   "pass": false,
   "productionEgress": false,
   "guard": {
-    "mode": "identity",
+    "mode": "e2e",
     "status": "BLOCKED-CONFIG",
     "productionEgress": false,
     "targetHosts": {},
@@ -15,18 +15,24 @@
       "STAGING_WORKER_URL",
       "STAGING_ORCHESTRATOR_URL",
       "STAGING_DATABASE_URL",
+      "STAGING_REDIS_URL",
       "P3_STAGING_IDENTITY_CONFIRMED",
       "STAGING_AUTH_MODE",
       "CERTIFICATION_TEST_EMAILS",
       "CERTIFICATION_TEST_PHONES",
-      "LIVE_SMOKE_ALLOWED"
+      "STAGING_EXPECTED_SHA",
+      "LIVE_SMOKE_ALLOWED",
+      "P3_NO_EGRESS",
+      "STAGING_JWT_ALPHA",
+      "STAGING_JWT_BRAVO",
+      "STAGING_JWT_CHARLIE"
     ],
     "failures": [],
     "observations": [
       "productionEgress=false",
       "secretValuesPrinted=false",
       "providerPayloadsPrinted=false",
-      "targets=0/5",
+      "targets=0/6",
       "targetHosts=none",
       "externalBindings=emulator-safe-required"
     ]

@@ -21,6 +21,7 @@ const TARGETS = [
   ["STAGING_WORKER_URL", "worker"],
   ["STAGING_ORCHESTRATOR_URL", "orchestrator"],
   ["STAGING_DATABASE_URL", "database"],
+  ["STAGING_REDIS_URL", "redis"],
 ] as const;
 
 const AUTH_TARGETS = ["STAGING_JWT_ALPHA", "STAGING_JWT_BRAVO", "STAGING_JWT_CHARLIE"] as const;
@@ -63,7 +64,7 @@ function checkTarget(name: string, label: string, missing: string[], failures: s
   targetHosts[label] = host;
   try {
     const parsed = new URL(value);
-    if (!["http:", "https:", "postgres:", "postgresql:"].includes(parsed.protocol)) failures.push(`${name} uses an unsupported protocol`);
+    if (!["http:", "https:", "postgres:", "postgresql:", "redis:", "rediss:"].includes(parsed.protocol)) failures.push(`${name} uses an unsupported protocol`);
     if (isProductionHost(parsed.hostname)) failures.push(`${name} resolves to a known production host`);
   } catch {
     failures.push(`${name} is not a valid URL`);
@@ -102,7 +103,7 @@ export function evaluateStagingGuards(mode: StagingGuardMode): StagingGuardRepor
     requireOne("LIVE_SMOKE_ALLOWED", missing, failures, mode === "live-smoke" ? "1" : "0");
   }
 
-  if (mode === "e2e" || mode === "load") requireOne("P3_NO_EGRESS", missing, failures, "1");
+  if (mode === "identity" || mode === "e2e" || mode === "load") requireOne("P3_NO_EGRESS", missing, failures, "1");
   if (mode === "live-smoke") {
     requireOne("P3_LIVE_ALLOWLIST_CONFIRMED", missing, failures, "1");
     requireOne("P3_LIVE_WRITE_FLAGS_CONFIRMED", missing, failures, "1");
@@ -110,7 +111,7 @@ export function evaluateStagingGuards(mode: StagingGuardMode): StagingGuardRepor
     requireOne("P3_LIVE_SMOKE_CASES_FILE", missing, failures);
   }
 
-  if (mode === "e2e" || mode === "live-smoke") {
+  if (mode === "identity" || mode === "e2e" || mode === "live-smoke") {
     for (const name of AUTH_TARGETS) requireOne(name, missing, failures);
   }
   if (mode === "load") {

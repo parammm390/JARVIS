@@ -15,6 +15,7 @@
       "STAGING_WORKER_URL",
       "STAGING_ORCHESTRATOR_URL",
       "STAGING_DATABASE_URL",
+      "STAGING_REDIS_URL",
       "P3_STAGING_IDENTITY_CONFIRMED",
       "STAGING_AUTH_MODE",
       "CERTIFICATION_TEST_EMAILS",
@@ -34,7 +35,7 @@
       "productionEgress=false",
       "secretValuesPrinted=false",
       "providerPayloadsPrinted=false",
-      "targets=0/5",
+      "targets=0/6",
       "targetHosts=none",
       "externalBindings=allowlisted-live-mode"
     ]
