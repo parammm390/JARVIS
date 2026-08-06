@@ -1,0 +1,29 @@
+$ git status --short
+?? "JARVIS-4-DAY-PRODUCTION-MAESTRO-PLAN (1).md"
+?? "JARVIS-4-DAY-PRODUCTION-MAESTRO-STATE (1).md"
+?? docs/release/
+$ git rev-parse HEAD
+4888c6d22ed211cb918f30edc2b508fe1a04bcde
+$ git log --oneline -12
+4888c6d release: FINNOR v0.1.0
+cb27d47 jarvis-v3 P7.T5: record green regression evidence
+b9272b7 jarvis-v3 P7.T5: align public preview verification
+d41d229 jarvis-v3 P7.T5: bind inline receipt correction
+60e6e57 jarvis-v3 P7.T5: target compensation rollback
+1e94532 jarvis-v3 P7.T5: verify receipt recovery binding
+f7c3286 jarvis-v3 P7.T5: bind receipt run recovery
+e6bda14 jarvis-v3 P7.T7: record fresh bundle measurement
+2216f26 jarvis-v3 P7.T6: cover at-rest selector facts
+34bdee1 jarvis-v3 P7.T7: defer fixture data
+8e7de50 jarvis-v3 P7.T7: defer authenticated thread code
+dd68316 jarvis-v3 P7.T7: split role scene bundles
+$ command -v gitleaks trufflehog detect-secrets
+$ git grep secret-pattern scan (paths only; env and generated artifacts excluded)
+JARVIS-FRONTEND-MAESTRO-STATE-v1-ARCHIVE.md
+finnor-os/docs/owner-actions.md
+finnor-os/tests/integration/authz.test.ts
+$ git diff --check
+$ git grep secret-pattern findings (path:line only)
+JARVIS-FRONTEND-MAESTRO-STATE-v1-ARCHIVE.md:13
+finnor-os/docs/owner-actions.md:113
+finnor-os/tests/integration/authz.test.ts:82
