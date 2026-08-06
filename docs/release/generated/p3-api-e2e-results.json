@@ -1,43 +1,87 @@
 {
   "phase": "P3",
-  "gate": "api-e2e",
-  "status": "BLOCKED-CONFIG",
-  "pass": false,
+  "gate": "staging-identity",
+  "status": "PASS",
+  "pass": true,
   "productionEgress": false,
   "guard": {
-    "mode": "e2e",
-    "status": "BLOCKED-CONFIG",
+    "mode": "identity",
+    "status": "PASS",
     "productionEgress": false,
-    "targetHosts": {},
-    "missing": [
-      "STAGING_API_URL",
-      "STAGING_FRONTEND_URL",
-      "STAGING_WORKER_URL",
-      "STAGING_ORCHESTRATOR_URL",
-      "STAGING_DATABASE_URL",
-      "STAGING_REDIS_URL",
-      "P3_STAGING_IDENTITY_CONFIRMED",
-      "STAGING_AUTH_MODE",
-      "CERTIFICATION_TEST_EMAILS",
-      "CERTIFICATION_TEST_PHONES",
-      "STAGING_EXPECTED_SHA",
-      "LIVE_SMOKE_ALLOWED",
-      "P3_NO_EGRESS",
-      "STAGING_JWT_ALPHA",
-      "STAGING_JWT_BRAVO",
-      "STAGING_JWT_CHARLIE"
-    ],
+    "targetHosts": {
+      "api": "finnor-p3-api-staging-5ccmq8g7d-bloodride2-3212s-projects.vercel.app",
+      "frontend": "finnor-p3-console-staging-6s3gt7j4k-bloodride2-3212s-projects.vercel.app",
+      "worker": "finnor-worker-staging.up.railway.app",
+      "orchestrator": "finnor-orchestrator-staging.up.railway.app",
+      "database": "aws-0-ap-southeast-1.pooler.supabase.com",
+      "redis": "redis.railway.internal"
+    },
+    "missing": [],
     "failures": [],
     "observations": [
       "productionEgress=false",
       "secretValuesPrinted=false",
       "providerPayloadsPrinted=false",
-      "targets=0/6",
-      "targetHosts=none",
+      "targets=6/6",
+      "targetHosts=api:finnor-p3-api-staging-5ccmq8g7d-bloodride2-3212s-projects.vercel.app,frontend:finnor-p3-console-staging-6s3gt7j4k-bloodride2-3212s-projects.vercel.app,worker:finnor-worker-staging.up.railway.app,orchestrator:finnor-orchestrator-staging.up.railway.app,database:aws-0-ap-southeast-1.pooler.supabase.com,redis:redis.railway.internal",
       "externalBindings=emulator-safe-required"
     ]
   },
-  "error": null,
-  "rows": [],
+  "services": {
+    "api": {
+      "status": 200,
+      "elapsedMs": 2627,
+      "ok": true,
+      "jsonKeys": [
+        "environment",
+        "ok",
+        "release",
+        "service"
+      ],
+      "plannedActions": [],
+      "duplicate": false,
+      "returnedStatus": null,
+      "release": "",
+      "environment": "production"
+    },
+    "frontend": {
+      "status": 200,
+      "elapsedMs": 1235,
+      "ok": true,
+      "jsonKeys": [],
+      "plannedActions": [],
+      "duplicate": false,
+      "returnedStatus": null,
+      "release": null,
+      "environment": null
+    },
+    "worker": {
+      "status": 200,
+      "elapsedMs": 620,
+      "ok": true,
+      "jsonKeys": [],
+      "plannedActions": [],
+      "duplicate": false,
+      "returnedStatus": null,
+      "release": "3facd0279e93feeb11fdba36d3dc8255aed67700",
+      "environment": "staging"
+    },
+    "orchestrator": {
+      "status": 200,
+      "elapsedMs": 660,
+      "ok": true,
+      "jsonKeys": [
+        "environment",
+        "ok",
+        "plugins",
+        "release"
+      ],
+      "plannedActions": [],
+      "duplicate": false,
+      "returnedStatus": null,
+      "release": "3facd0279e93feeb11fdba36d3dc8255aed67700",
+      "environment": "staging"
+    }
+  },
   "evidence": "docs/release/generated/p3-api-e2e-results.json"
 }

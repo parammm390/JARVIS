@@ -28,8 +28,8 @@ const server = createServer(async (req, res) => {
   if (req.method === "GET" && req.url === "/health") return send(200, {
     ok: true,
     plugins: orchestrator.plugins.actionTypes(),
-    environment: process.env.NODE_ENV ?? "unknown",
-    release: process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.VERCEL_GIT_COMMIT_SHA ?? null,
+    environment: process.env.FINNOR_ENVIRONMENT ?? process.env.NODE_ENV ?? "unknown",
+    release: process.env.RELEASE_SHA ?? process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.VERCEL_GIT_COMMIT_SHA ?? null,
   });
   if (req.method === "POST" && req.url === "/plan") {
     let raw = "";

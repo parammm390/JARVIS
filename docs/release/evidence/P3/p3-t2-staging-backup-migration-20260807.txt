@@ -1,0 +1,46 @@
+P3.T2 STAGING BACKUP / MIGRATION VERIFICATION
+Date: 2026-08-07 Asia/Kolkata
+Scope: isolated Supabase project finnor-p3-staging; no production database target used.
+
+Backup
+- Repository backup implementation: packages/db/backup.ts (pure-JS logical dump).
+- pg_dump/pg_restore/psql were not installed in the execution environment; the repository's
+  documented pure-JS backup path was used instead.
+- Backup artifact: /tmp/p3-staging-backup-20260807.json.gz (mode 0600; retained outside git).
+- Backup schema version: 1.
+- Backup table count: 92.
+- Backup row count: 1770.
+- Compressed bytes: 42086.
+- SHA-256: 1879f5bfd2bcbddbb1c348f0deac1e5044d52480e0677459bce7e43dc8eeff11.
+- Decompress and JSON round-trip: PASS.
+- Backup output recorded counts only; no row values or credentials were emitted.
+
+Migration application
+- Command: DATABASE_URL=<localhost broker value> npm run db:migrate
+- Exit: 0.
+- Result: Already up to date.
+- Migration files on disk: 65.
+- Applied migrations: 65.
+- Missing migrations: none.
+- Migration head: 0064_evidence_corpus_search.sql.
+- Head applied_at: 2026-08-06T23:03:26.056Z UTC.
+- Command: DATABASE_URL=<localhost broker value> npm run setup:langgraph
+- Exit: 0.
+- Result: LangGraph checkpointer schema ready (finnor_langgraph).
+
+Schema validation
+- search_path: finnor_os, public (staging-only role default on the newly created isolated
+  project; no shared/production role was changed).
+- finnor_os base tables: 92.
+- RLS enabled: 84/84 RLS-scoped tables.
+- FORCE ROW LEVEL SECURITY: 84/84 RLS-scoped tables.
+- RLS policies: 90 across 84 tables.
+- Non-RLS tables are global/control-plane tables only: _migrations, api_rate_limits, jobs,
+  plan_repairs, provider_circuit_state, tenant_phone_numbers, webhook_receipts, worker_heartbeat.
+- User-defined triggers: 17, including audit immutability, evidence immutability/parent-scope,
+  and domain/workflow notification triggers.
+- Indexes: 183 total; invalid indexes: 0.
+- LangGraph base tables: 4.
+
+Result: PASS for isolated staging backup, migration head/application, schema, RLS, trigger, and
+index verification. No production migration or backup operation was performed.

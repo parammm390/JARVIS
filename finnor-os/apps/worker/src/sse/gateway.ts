@@ -129,8 +129,8 @@ export function createSseGateway(): http.Server {
     if (req.method === "GET" && url.pathname === "/healthz") {
       res.writeHead(200, {
         "content-type": "text/plain",
-        "x-finnor-environment": process.env.NODE_ENV ?? "unknown",
-        "x-finnor-release": process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.VERCEL_GIT_COMMIT_SHA ?? "",
+        "x-finnor-environment": process.env.FINNOR_ENVIRONMENT ?? process.env.NODE_ENV ?? "unknown",
+        "x-finnor-release": process.env.RELEASE_SHA ?? process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.VERCEL_GIT_COMMIT_SHA ?? "",
       });
       res.end("ok");
       return;

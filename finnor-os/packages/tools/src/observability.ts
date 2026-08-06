@@ -14,11 +14,11 @@ export function initObservability(): void {
   initialized = true;
   Sentry.init({
     dsn: process.env.SENTRY_DSN,
-    environment: process.env.NODE_ENV ?? "development",
+    environment: process.env.FINNOR_ENVIRONMENT ?? process.env.NODE_ENV ?? "development",
     tracesSampleRate: process.env.SENTRY_DSN ? 0.1 : 0,
     // A2.T3: release-tagged by git SHA — Vercel (api) and Railway (worker) both inject
     // their own commit-sha env var name; whichever platform this runs on wins.
-    release: process.env.VERCEL_GIT_COMMIT_SHA ?? process.env.RAILWAY_GIT_COMMIT_SHA,
+    release: process.env.RELEASE_SHA ?? process.env.VERCEL_GIT_COMMIT_SHA ?? process.env.RAILWAY_GIT_COMMIT_SHA,
   });
 }
 

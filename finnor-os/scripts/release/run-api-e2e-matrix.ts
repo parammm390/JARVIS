@@ -228,7 +228,11 @@ async function loadCases(): Promise<E2ECase[]> {
 async function probeServices(): Promise<{ pass: boolean; services: Record<string, SafeResponse> }> {
   const api = process.env.STAGING_API_URL!;
   const services: Record<string, SafeResponse> = {};
-  services.api = await requestJson(api, "/api/health");
+  // The API's edge middleware requires an auth-shaped request for every `/api/*`
+  // route, including the intentionally secret-free health route. Use the already
+  // guard-validated Alpha JWT for the probe; the route does not resolve tenant data,
+  // but this keeps the staging probe faithful to the deployed ingress contract.
+  services.api = await requestJson(api, "/api/health", process.env.STAGING_JWT_ALPHA);
   services.frontend = await requestJson(process.env.STAGING_FRONTEND_URL!, "/");
   services.worker = await requestJson(process.env.STAGING_WORKER_URL!, "/healthz");
   services.orchestrator = await requestJson(process.env.STAGING_ORCHESTRATOR_URL!, "/health");
