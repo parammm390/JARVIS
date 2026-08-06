@@ -1,7 +1,7 @@
 # Phase 3 Integration Readiness
 
 **Generated:** 2026-08-07
-**Candidate SHA:** `551c199` (`jarvis-release P3: add guarded staging certification runners`)
+**Candidate SHA:** `733207f` (`jarvis-release P3: harden staging certification contracts`)
 **Status:** `BLOCKED-CONFIG` — no isolated non-production staging target was available.
 
 This is an evidence report, not a live-certification claim. The Phase 3 runners refused before any
@@ -14,13 +14,14 @@ performed.
 | Check | Result | Evidence |
 |---|---|---|
 | Phase 3 discovery and 44-action manifest | PASS — corrected workspace invocation; 44/44 | `docs/release/evidence/P3/p3-discovery-manifest-corrected.txt` |
-| Current target revalidation | BLOCKED-CONFIG — Railway exposes one `production` environment and one worker; committed inventory has no verified staging API/frontend/orchestrator/database | `docs/release/evidence/P3/p3-t1-readonly-target-revalidation.txt`, `docs/release/generated/deployment-inventory.md` |
+| Current target revalidation | BLOCKED-CONFIG — Railway exposes one `production` environment and one worker; current Vercel console listing is Production-only; committed inventory has no verified staging API/frontend/orchestrator/database/Redis | `docs/release/evidence/P3/p3-t1-readonly-target-revalidation-continuation.txt`, `docs/release/generated/deployment-inventory.md` |
 | Identity/no-egress guard | BLOCKED-CONFIG before network | `docs/release/evidence/P3/p3-t1-staging-identity-guard.txt` |
 | API E2E guard | BLOCKED-CONFIG before requests | `docs/release/evidence/P3/p3-t5-api-e2e-guard.txt`, `docs/release/generated/p3-api-e2e-results.json` |
 | Live-binding smoke guard | BLOCKED-CONFIG before provider egress | `docs/release/evidence/P3/p3-t6-live-binding-guard.txt`, `docs/release/generated/p3-live-binding-smoke.json` |
 | Frontend/voice/approval/recovery/receipt local slice | PASS — 10 files, 64 tests | `docs/release/evidence/P3/p3-t7-frontend-voice-approval-recovery.txt` |
 | Staging frontend/voice journey | BLOCKED-CONFIG — no verified frontend target | `docs/release/evidence/P3/p3-t1-readonly-target-revalidation.txt` |
 | Source typecheck | PASS | `docs/release/evidence/P3/p3-source-typecheck-after-runners.txt` |
+| Runner contract repair validation | PASS — typecheck exit 0; guarded commands remain fail-closed; E2E receipts, live provider reconciliation, duplicate load coverage, and voice non-testability are explicit | `docs/release/evidence/P3/p3-runner-contract-repair-validation.txt` |
 
 ## Binding matrix
 

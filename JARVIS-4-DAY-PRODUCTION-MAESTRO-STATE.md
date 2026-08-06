@@ -40,14 +40,14 @@ only after the phase cannot progress further.
 | | |
 |---|---|
 | **ACTIVE PHASE** | **P3 — Full-Stack Staging, Live-Binding Smoke, and 15-User Load — BLOCKED-CONFIG** |
-| **Latest verified commit** | `8c8f830` (`jarvis-release P3: record target revalidation`) |
+| **Latest verified commit** | `733207f` (`jarvis-release P3: harden staging certification contracts`) |
 | **Phases complete** | 3 / 5 |
 | **Actions CORE-CERTIFIED** | 0 / 44 — full 14-gate certification remains P2–P4 work; P1 contract gates are complete for all 44 |
 | **Actions LIVE-CERTIFIED** | 0 / 44 |
 | **Open P0 defects** | 0 — local deterministic CI and the guarded Bedrock chain are green; isolated-staging prerequisites remain phase-scoped P3 BLOCKED-CONFIG items |
 | **Open P1 defects** | 0 P1 contract defects; provider-backed P2 routing is now configured/live-smoked, while isolated-staging/JWT/replay/load prerequisites remain P3 BLOCKED-CONFIG |
 | **Readiness score** | 0.0 / 10.0 — P1 contract proof and local P2 evidence are complete, but no P3 staging/load category can be credited without an isolated target and measurements |
-| **Sessions logged** | 13 |
+| **Sessions logged** | 14 |
 
 ## NEXT EXACT PHASE
 
@@ -379,8 +379,8 @@ completion and exited 0.
 **Status:** 🔴 BLOCKED-CONFIG — all independent repository work is implemented and evidenced; isolated staging, live-binding, load, and Sentry prerequisites are absent · **Window:** Day 3 · **Depends on:** P2
 **Plan section:** §6 → PHASE 3
 **Starting SHA:** `05d0262`
-**Implementation/evidence SHA:** `551c199`
-**Ending SHA:** `8c8f830`
+**Implementation/evidence SHA:** `733207f`
+**Ending SHA:** `733207f`
 
 ### Discovery output
 
@@ -410,34 +410,40 @@ backup, migration, seed, deploy, load, or live Sentry action was attempted.
 Railway/Vercel revalidation found no new non-production target: Railway still exposes only
 `confident-wisdom/production` with `finnor-worker`, and the linked Vercel console listing is
 Production-only. No state-changing command or Phase 3 runner was invoked.
+
+`docs/release/evidence/P3/p3-runner-contract-repair-validation.txt` — after the continuation audit,
+the E2E runner now validates all three tenant JWTs, expected terminal receipts, duplicate action IDs,
+and approval decisions; the live runner validates expected provider labels in finalized receipts; the
+load runner includes concurrent duplicate probes. Typecheck passed and all guarded commands still
+refused before network/provider/load requests.
 ```
 
 ### Tasks
 
 - [ ] **P3.T1** Prove staging identity and no-egress/allowlist guards.
-      **Evidence:** `docs/release/evidence/P3/p3-t1-readonly-target-revalidation.txt`; `p3-t1-readonly-target-revalidation-continuation.txt`; `p3-t1-staging-identity-guard.txt`; guard report `docs/release/generated/p3-api-e2e-results.json`.
-      **Deviation:** The repository exposes only a read-only production Railway environment and no verified isolated staging target. The new guard requires explicit target hosts, `P3_STAGING_IDENTITY_CONFIRMED=1`, JWT auth mode, allowlists, and `LIVE_SMOKE_ALLOWED=0`; it refused before network.
+      **Evidence:** `docs/release/evidence/P3/p3-t1-readonly-target-revalidation.txt`; `p3-t1-readonly-target-revalidation-continuation.txt`; `p3-t1-staging-identity-guard.txt`; guard report `docs/release/generated/p3-api-e2e-results.json`; repair validation `docs/release/evidence/P3/p3-runner-contract-repair-validation.txt`.
+      **Deviation:** The repository exposes only a read-only production Railway environment and no verified isolated staging target. The repaired guard requires six explicit target hosts including Redis, `P3_STAGING_IDENTITY_CONFIRMED=1`, JWT auth mode, all three JWTs, `P3_NO_EGRESS=1`, allowlists, and `LIVE_SMOKE_ALLOWED=0`; it refused before network.
 - [ ] **P3.T2** Back up staging; apply and verify pending migrations.
       **Evidence:** `docs/release/evidence/P3/p3-t2-staging-backup-migration-preflight.txt`; repository head remains `0064_evidence_corpus_search.sql` from the committed inventory.
       **Deviation:** No staging database or backup id exists in the execution context; no backup, migration, or production database operation was attempted.
 - [ ] **P3.T3** Deploy one RC SHA to frontend/API/worker/orchestrator; Sentry release same SHA.
-      **Evidence:** `docs/release/evidence/P3/p3-t3-rc-deploy-preflight.txt`; candidate code SHA `551c199`.
+      **Evidence:** `docs/release/evidence/P3/p3-t3-rc-deploy-preflight.txt`; candidate code SHA `733207f`.
       **Deviation:** No staging deployment identity/token/expected SHA or Sentry release destination is available. Health endpoints now expose sanitized environment/release metadata for the next verified deployment; no deployment was made.
 - [ ] **P3.T4** Seed and verify Alpha/Bravo/Charlie.
       **Evidence:** `docs/release/evidence/P3/p3-t4-seed-preflight.txt`; guarded seed source `finnor-os/scripts/release/seed-certification-tenants.ts`.
       **Deviation:** The seed was not run without an explicit isolated staging database and allowlisted test values; the earlier local P1 seed evidence is not reused as staging proof.
 - [ ] **P3.T5** Run 44-action staging API E2E matrix.
-      **Evidence:** `docs/release/evidence/P3/p3-t5-api-e2e-guard.txt`; `docs/release/generated/p3-api-e2e-results.json`; runner `finnor-os/scripts/release/run-api-e2e-matrix.ts`.
-      **Deviation:** The runner requires a supplied 44-row case corpus, real staging JWTs, service health, and terminal receipt verification. It refused before any request because the staging contract is absent; no 44/44 pass is claimed.
+      **Evidence:** `docs/release/evidence/P3/p3-t5-api-e2e-guard.txt`; `docs/release/generated/p3-api-e2e-results.json`; runner `finnor-os/scripts/release/run-api-e2e-matrix.ts`; repair validation `docs/release/evidence/P3/p3-runner-contract-repair-validation.txt`.
+      **Deviation:** The repaired runner requires a supplied 44-row corpus with Alpha/Bravo/Charlie coverage, declared terminal outcomes, real staging JWTs, service health, duplicate action-id matching, optional approval/rejection, and terminal receipt verification. It refused before any request because the staging contract and case corpus are absent; no 44/44 pass is claimed.
 - [ ] **P3.T6** Run configured allowlisted live-provider smokes; mark missing as BLOCKED-CONFIG.
-      **Evidence:** `docs/release/evidence/P3/p3-t6-live-binding-guard.txt`; `docs/release/generated/p3-live-binding-smoke.json`; runner `finnor-os/scripts/release/run-live-binding-smoke.ts`.
-      **Deviation:** No isolated staging account, allowlisted binding list, write-enable confirmation, or case corpus is available. `LIVE_SMOKE_ALLOWED=1` was not set and no provider egress occurred; unavailable bindings remain BLOCKED-CONFIG.
+      **Evidence:** `docs/release/evidence/P3/p3-t6-live-binding-guard.txt`; `docs/release/generated/p3-live-binding-smoke.json`; runner `finnor-os/scripts/release/run-live-binding-smoke.ts`; repair validation `docs/release/evidence/P3/p3-runner-contract-repair-validation.txt`.
+      **Deviation:** The repaired runner requires every live case to declare an expected provider and proves that label in a finalized local receipt. No isolated staging account, allowlisted binding list, write-enable confirmation, or case corpus is available. `LIVE_SMOKE_ALLOWED=1` was not set and no provider egress occurred; unavailable bindings remain BLOCKED-CONFIG.
 - [ ] **P3.T7** Run frontend/voice/approval/recovery/receipt certified journeys.
       **Evidence:** Local targeted slice `docs/release/evidence/P3/p3-t7-frontend-voice-approval-recovery.txt` — 10 files / 64 tests passed; staging target evidence is absent.
       **Deviation:** The local slice proves pure frontend/voice/approval/recovery/receipt contracts only. Full deployed journey, voice session, approval, recovery, and receipt reconciliation could not run without the isolated frontend/API/worker target.
 - [ ] **P3.T8** Run 15-user 20-min and 25-user 10-min load scenarios.
-      **Evidence:** `docs/release/evidence/P3/p3-t8-load-guard.txt`; `docs/release/generated/p3-load-results.json`; runner `finnor-os/scripts/release/run-load-certification.ts`.
-      **Deviation:** The Node runner is implemented with the exact durations but refused before network because the target, 25-user JWT file, instruction fixture, and reconciliation artifact are missing. No duration was shortened and no load request was sent.
+      **Evidence:** `docs/release/evidence/P3/p3-t8-load-guard.txt`; `docs/release/generated/p3-load-results.json`; runner `finnor-os/scripts/release/run-load-certification.ts`; repair validation `docs/release/evidence/P3/p3-runner-contract-repair-validation.txt`.
+      **Deviation:** The Node runner retains the exact durations and includes read-only, draft, approval, concurrent duplicate, and queue-vitals classes. Voice-session establishment is explicitly not testable without an isolated voice binding. It refused before network because the target, 25-user JWT file, instruction fixture, and reconciliation artifact are missing; no duration was shortened and no load request was sent.
 - [ ] **P3.T9** Meet all latency/error/queue/cost/load gates.
       **Evidence:** `docs/release/evidence/P3/p3-t9-load-gates.txt`; `docs/release/load-test-results.md`.
       **Deviation:** No measurements exist because T8 did not start. Fixed thresholds remain unchanged; no latency, queue, cost, Sentry, corruption, or duplicate-effect claim is made.
@@ -445,8 +451,8 @@ Production-only. No state-changing command or Phase 3 runner was invoked.
       **Evidence:** `docs/release/evidence/P3/p3-t10-sentry-drill-preflight.txt`; P2 test-context evidence remains at `docs/release/chaos-results.md`.
       **Deviation:** No staging Sentry DSN/project/release/alert destination is configured, so no event or alert was sent. The P2 sanitized test-context result is not live staging proof.
 - [x] **P3.T11** Commit integration and load reports; update ledgers.
-      **Evidence:** `551c199`; `docs/release/integration-readiness.md`; `docs/release/load-test-results.md`; generated P3 machine reports; this state section and ledgers.
-      **Deviation:** Reports truthfully preserve BLOCKED-CONFIG status; no missing external evidence was converted to a pass.
+      **Evidence:** `733207f`; `docs/release/integration-readiness.md`; `docs/release/load-test-results.md`; generated P3 machine reports; `docs/release/evidence/P3/p3-runner-contract-repair-validation.txt`; this state section and ledgers.
+      **Deviation:** Reports truthfully preserve BLOCKED-CONFIG status; the runner contract gaps found during continuation were repaired without converting missing external evidence to a pass.
 
 ### Exit gate
 
@@ -644,15 +650,16 @@ Never paste values.
 | `docs/release/chaos-results.md` | P2 | ✅ committed | `2dfa3b9`; `docs/release/generated/p2-chaos-results.json`; `docs/release/evidence/P2/` |
 | `docs/release/generated/p2-bedrock-live-smoke.json` | P2 | ✅ generated | `docs/release/evidence/P2/p2-bedrock-live-smoke.txt`; 3/3 guarded Bedrock completions, 20/20 route assertions, 3/3 ledger rows |
 | `docs/release/evidence/P2/p2-bedrock-live-smoke.txt` | P2 | ✅ generated | Concrete model/token/status provenance; credential value and response content withheld |
-| `docs/release/integration-readiness.md` | P3 | ✅ committed | `551c199`; BLOCKED-CONFIG report with target/binding matrix and exact unblock inputs |
-| `docs/release/load-test-results.md` | P3 | ✅ committed | `551c199`; exact 15×20-minute and 25×10-minute scenarios/gates, no measurements claimed |
-| `docs/release/generated/p3-api-e2e-results.json` | P3 | ✅ generated | `551c199`; fail-closed identity guard report, no requests sent |
-| `docs/release/generated/p3-live-binding-smoke.json` | P3 | ✅ generated | `551c199`; fail-closed live-binding guard report, no provider egress |
-| `docs/release/generated/p3-load-results.json` | P3 | ✅ generated | `551c199`; fail-closed load guard report, no load requests sent |
-| `finnor-os/scripts/release/staging-guards.ts` | P3 | ✅ committed | `551c199`; shared production/no-egress/allowlist guard |
-| `finnor-os/scripts/release/run-api-e2e-matrix.ts` | P3 | ✅ committed | `551c199`; guarded 44-row staging E2E runner |
-| `finnor-os/scripts/release/run-live-binding-smoke.ts` | P3 | ✅ committed | `551c199`; guarded configured-provider smoke runner |
-| `finnor-os/scripts/release/run-load-certification.ts` | P3 | ✅ committed | `551c199`; guarded exact 15/25-user load runner |
+| `docs/release/integration-readiness.md` | P3 | ✅ committed | `733207f`; BLOCKED-CONFIG report with target/binding matrix and exact unblock inputs |
+| `docs/release/load-test-results.md` | P3 | ✅ committed | `733207f`; exact 15×20-minute and 25×10-minute scenarios/gates, no measurements claimed |
+| `docs/release/generated/p3-api-e2e-results.json` | P3 | ✅ generated | `733207f`; fail-closed six-target guard report, no requests sent |
+| `docs/release/generated/p3-live-binding-smoke.json` | P3 | ✅ generated | `733207f`; fail-closed six-target live-binding guard report, no provider egress |
+| `docs/release/generated/p3-load-results.json` | P3 | ✅ generated | `733207f`; fail-closed six-target load report with duplicate/voice coverage, no load requests sent |
+| `finnor-os/scripts/release/staging-guards.ts` | P3 | ✅ committed | `733207f`; shared six-target production/no-egress/allowlist guard |
+| `finnor-os/scripts/release/run-api-e2e-matrix.ts` | P3 | ✅ committed | `733207f`; guarded 44-row staging E2E runner with receipt/tenant/duplicate proof |
+| `finnor-os/scripts/release/run-live-binding-smoke.ts` | P3 | ✅ committed | `733207f`; guarded configured-provider smoke runner with receipt reconciliation |
+| `finnor-os/scripts/release/run-load-certification.ts` | P3 | ✅ committed | `733207f`; guarded exact 15/25-user load runner with duplicate coverage |
+| `docs/release/evidence/P3/p3-runner-contract-repair-validation.txt` | P3 | ✅ committed | `733207f`; typecheck and fail-closed runner repair validation |
 | `docs/release/evidence/P3/p3-t1-readonly-target-revalidation-continuation.txt` | P3 | ✅ committed | `8c8f830`; current read-only Railway/Vercel revalidation, no new non-production target |
 | `docs/release/deployment-runbook.md` | P4 | ⬜ | |
 | `docs/release/rollback-runbook.md` | P4 | ⬜ | |
@@ -715,6 +722,8 @@ These are not executor blockers until their phase requires them:
 YYYY-MM-DD HH:MM · model · phase · starting SHA → ending SHA · tasks completed · test summary ·
 action count certified · defects opened/closed · score · next phase · blockers -->
 
+- **2026-08-07 · P3 RUNNER CONTRACT REPAIR SESSION (GPT-5)** · `8c8f830` → `733207f` · Audited the exact Phase 3 plan against the committed runners and found the API E2E receipt flag hardcoded false, Bravo excluded from the tenant type, no Redis target in the identity guard, no provider-label receipt reconciliation, and no concurrent duplicate load class. Repaired those contracts, retained exact 44-row and 15-user/25-user scope, added explicit voice-session non-testability coverage, ran `finnor-os npm run typecheck` exit 0, and reran all guarded P3 commands: identity, API E2E, live smoke, and load each exited 1 before network/provider/load requests with `targets=0/6`. No P0/P1 suite rerun, no production/staging egress, and no external effect occurred. P3 remains BLOCKED-CONFIG pending isolated target and owner artifacts.
+
 - **2026-08-07 · P3.T1 CONTINUATION REVALIDATION SESSION (GPT-5)** · `9a448e4` → `8c8f830` · Rechecked current environment names without printing values; ran read-only Railway project/status checks and the linked Vercel deployment listing. Railway still exposes only `confident-wisdom/production` with `finnor-worker`; Vercel listed Ready Production deployments only. The installed CLI forms requiring an explicit project link were unavailable from this checkout, so no link or state-changing command was attempted. No P0/P1 suite rerun, no production/staging egress, no deploy/migration/seed/load/provider/Sentry action, and no secrets or payloads recorded. P3 remains BLOCKED-CONFIG with the exact continuation evidence at `docs/release/evidence/P3/p3-t1-readonly-target-revalidation-continuation.txt`.
 
 - **2026-08-07 · P2 BEDROCK SINGLE-KEY CLOSURE SESSION (GPT-5)** · `9c25deb` → `2dfa3b9` · Configured GLM, Mistral, and DeepSeek aliases to prefer the shared Bedrock bearer credential, with model defaults `zai.glm-4.7`, `mistral.mistral-small-2402-v1:0`, and `deepseek.v3.2`, plus environment overrides. Added the guarded `release:bedrock-smoke` command; it made exactly 3 Bedrock calls against localhost-only seeded Postgres and passed 3/3 completions, 20/20 route assertions, and 3/3 `llm_calls` rows without writing the credential or response content. Focused P2 unit test passed 8/8; `npm run typecheck` passed; `npm run release:environment` passed with 152 names; final `npm run release:chaos` exited 0 with 4/4 groups, 219 tests passed, 0 skipped, and 14/14 faults passed. No P0/P1 suite rerun, no production/staging egress, and no business/external action occurred. P3 is next; isolated staging/JWT/replay/load prerequisites remain phase-scoped BLOCKED-CONFIG.
@@ -759,6 +768,7 @@ action count certified · defects opened/closed · score · next phase · blocke
 - **P2.T3** · the P2 durability group would have rerun a completed P1 full-flow fixture whose setup assumes an implicit LangGraph schema · excluded only that stale P1 fixture from the P2 group and retained the dedicated LangGraph gate/restart and queue recovery tests; no production runtime scope was reduced · `docs/release/evidence/P2/p2-queue-and-workflow-durability.txt`.
 - **P2.T4** · the repository had no GLM alias and did not express the shared Bedrock credential across all three provider families · added the smallest Bedrock-preferred GLM/Mistral/DeepSeek aliases, standard bearer-token fallback, model-ID overrides, and a Bedrock-only three-call smoke; direct vendor compatibility fallbacks remain only for environments without Bedrock · `docs/release/evidence/P2/p2-bedrock-live-smoke.txt`, `docs/release/generated/p2-bedrock-live-smoke.json`, `docs/release/chaos-results.md`.
 - **P2.T8** · the prescribed gitleaks binary is absent in the environment · recorded exit 127 and ran the scoped diff, sentinel, whitespace, and guard fallback checks; did not install tooling or rewrite history · `docs/release/evidence/P2/p2-security-scans.txt`.
+- **P3.T5/T6/T8** · the first certification runners were too weak to prove receipts/provider reconciliation and omitted Bravo/Redis/concurrent-duplicate coverage · repaired only those certification-contract gaps, retaining the fixed 44-action and exact 15/25-user scope; no staging or provider request was enabled by the change · `docs/release/evidence/P3/p3-runner-contract-repair-validation.txt`, `docs/release/generated/p3-{api-e2e,live-binding-smoke,load-results}.json`.
 
 ---
 
