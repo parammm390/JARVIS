@@ -4,7 +4,7 @@ PASS, exit 0:
   root: npm run lint; npm run test:unit; npm run build; node scripts/contrast-audit.mjs
   backend: npm run authz:matrix:check; npm run typecheck; npm run test:planner-evals;
     npm run policy:lint; fresh db:migrate; fresh db:seed; setup:langgraph; npm test
-  release: npm run release:manifest (44/44); npm run release:environment (144 names, no values)
+  release: npm run release:manifest (44/44); npm run release:environment (latest rerun 145 names, no values; original P0 run 144)
   backup: npx tsx scripts/backup-restore-drill.ts (row-count round-trip PASS)
   security: current-diff gitleaks; OSV lockfile scan; npm audit
   browser: 280 total, 113 passed, 167 pre-existing skips, 0 failures
