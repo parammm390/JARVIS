@@ -1,0 +1,98 @@
+
+[WebServer] (node:86058) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+[WebServer] (node:86062) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+
+Running 14 tests using 2 workers
+
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+
+(node:86072) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+(node:86071) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[1/14] [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=rest at 1440
+[2/14] [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=rest at 390
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+[3/14] [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=understood at 1440
+[4/14] [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=understood at 390
+[5/14] [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=plan at 1440
+[6/14] [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=plan at 390
+[7/14] [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=clarify at 1440
+[8/14] [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=clarify at 390
+[9/14] [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=approval at 1440
+[10/14] [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=approval at 390
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+[11/14] [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=execution at 1440
+
+[WebServer] (node:86113) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[12/14] [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=execution at 390
+[13/14] [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=receipt at 1440
+[14/14] [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=receipt at 390
+
+[WebServer] (node:86125) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+  14 passed (59.8s)

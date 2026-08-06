@@ -1,0 +1,638 @@
+$ npm run db:migrate
+
+> finnor-os@0.1.0 db:migrate
+> tsx packages/db/migrate.ts
+
+Applied: 0000_init.sql, 0001_local_app_role.sql, 0002_voice_and_consent.sql, 0003_sandbox_outbox.sql, 0004_native_business_layer.sql, 0005_scan_findings.sql, 0006_security_controls.sql, 0007_execution_recovery.sql, 0008_canonical_data_platform.sql, 0009_durable_execution_runtime.sql, 0010_voice_os.sql, 0011_plan_compiler.sql, 0012_scan_findings_lifecycle.sql, 0013_tenant_phone_numbers.sql, 0014_audit_immutability.sql, 0015_audit_immutability_trigger.sql, 0016_decision_receipts_and_dlq.sql, 0017_outbox_hardening.sql, 0018_command_correlation_id.sql, 0019_amc_renewal_sequence_columns.sql, 0020_workflow_run_controls.sql, 0021_workflow_step_domain_action_link.sql, 0022_confirmation_timeout.sql, 0023_domain_policy_version.sql, 0024_tenant_settings.sql, 0025_document_contents_and_external_refs.sql, 0026_provider_circuit_state.sql, 0027_embeddings_voyage_dimensions.sql, 0028_embedding_cache.sql, 0029_contradiction_detection.sql, 0030_memory_corrections.sql, 0031_decision_receipts_domain_action_index.sql, 0032_least_privilege_app_role.sql, 0033_readiness_and_failure_injections.sql, 0034_fix_finnor_app_audit_immutability_regression.sql, 0035_worker_heartbeat.sql, 0036_finnor_langgraph_grants.sql, 0037_pg_notify_jarvis_events.sql, 0038_read_model_projections.sql, 0039_tenant_integrations.sql, 0040_error_kind_needs_human_config.sql, 0041_dlq_auto_triage.sql, 0042_intake_idempotency.sql, 0043_planner_plan_dags.sql, 0044_predicted_receipt.sql, 0045_prediction_diffs.sql, 0046_plan_repair_lineage.sql, 0047_dispatch_profiles.sql, 0048_auth_identity_bootstrap.sql, 0049_api_rate_limits_repair.sql, 0050_dispatch_my_day.sql, 0051_dealer_zero_replay.sql, 0052_dealer_zero_shadow_reports.sql, 0053_training_mode.sql, 0054_user_prefs.sql, 0055_user_prefs_last_seen.sql, 0056_push_subscriptions.sql, 0057_llm_cost_governor.sql, 0058_policy_engine_v2.sql, 0059_data_retention.sql, 0060_worker_priority_lanes.sql, 0061_a7_slo_failure_calendar.sql, 0062_instruction_lifecycle.sql, 0063_repair_orphaned_completed_runs.sql, 0064_evidence_corpus_search.sql
+$ npm run db:seed
+
+> finnor-os@0.1.0 db:seed
+> tsx packages/db/seed.ts
+
+Seeded test tenant 00000000-0000-4000-8000-000000000001
+$ npm run setup:langgraph
+
+> finnor-os@0.1.0 setup:langgraph
+> tsx packages/orchestration/src/graph/setup.ts
+
+LangGraph checkpointer schema ready (finnor_langgraph)
+$ npm test
+
+> finnor-os@0.1.0 test
+> vitest run
+
+
+ RUN  v4.1.10 /Users/paramdave/Desktop/FINNOR/finnor-os
+
+(node:79200) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+ ❯ tests/integration/scan-handlers.test.ts (14 tests | 1 failed) 870ms
+     × scheduled_reminder (renewal scan) drafts through the real pipeline — real summary, never a blank card 45ms
+ ❯ tests/integration/compensation.test.ts (3 tests | 1 failed) 321ms
+     × emulator binding: a held appointment is released on compensation, and the compensation_case resolves succeeded 99ms
+ ❯ tests/integration/overview-route.test.ts (3 tests | 2 failed) 283ms
+     × runs a real get_business_overview action and returns real leads/pending/inventory/invoices/visits + citations 57ms
+     × reuses the cached result on a second call within the cache window, without creating a new domain_action 37ms
+ ❯ tests/integration/evidence-corpus.test.ts (3 tests | 2 failed) 251ms
+     × appends an immutable version, is retry-idempotent, and records citable research hits 62ms
+     × does not return tenant A's evidence in tenant B's scoped search 11ms
+ ❯ tests/integration/chaos-matrix.test.ts (20 tests | 4 failed) 1404ms
+       × worker killed mid-step: draft-then-crash before approval is untouched; approving afterward still executes exactly once 37ms
+       × same event x5: approving/executing the same action 5 times concurrently produces exactly one real send 34ms
+       × provider timeout -> retry: the plugin's own tool call retries and ultimately succeeds 24ms
+       × provider hard-fail: a permanently failing send is recorded as a real failure, never silently swallowed 24ms
+ ❯ tests/integration/single-action-runtime-bridge.test.ts (4 tests | 2 failed) 389ms
+     × a successful single-action execution produces a command/run/step/receipt trail 163ms
+     × reflection's retry-once mechanism creates a SECOND independent step + receipt, not a swallowed no-op 92ms
+ ❯ tests/integration/dealer-zero-detection-loops.test.ts (2 tests | 1 failed) 1049ms
+     × scan_low_inventory drafts real flag_reorder_needed actions (with receipts) for below-threshold seeded stock 77ms
+(node:79300) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:79339) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+ ❯ tests/integration/sandbox-complete-flow.test.ts (4 tests | 2 failed) 767ms
+     × schedule_water_test: approve → REAL booked visit + comms log + workflow advanced 239ms
+     × renew_maintenance_agreement: approve → outbox row + communications_log, marked simulated 29ms
+ ❯ tests/integration/full-flow.test.ts (6 tests | 4 failed) 524ms
+     × schedule_water_test: gates before any tool call, executes after approve, audits every step 205ms
+     × renew_maintenance_agreement: same gate, same guarantees 29ms
+     × property sweep: every unapproved persisted status stays gated on the legacy executor 22ms
+     × failing integration → retry once → escalate to needs_human_review, never silent (§9, §30) 42ms
+ ❯ tests/integration/langgraph-gate-flow.test.ts (4 tests | 4 failed) 433ms
+     × gates before any tool call, executes after approve via decide(), audits every step — same guarantees as the legacy engine 124ms
+     × reject halts execution permanently: no tool ever fires, thread is closed not left dangling 70ms
+     × property sweep: every unapproved persisted status is re-gated with zero tool calls 27ms
+     × THE ACTUAL POINT: a gate survives a full instance restart — a completely fresh executor/checkpointer/graph, sharing no in-memory state with the one that gated the action, resumes it correctly purely from Postgres 19ms
+(node:79383) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+ ❯ tests/integration/receipt-policy-and-approver.test.ts (1 test | 1 failed) 469ms
+     × a system-drafted (draftKnownAction), gated, API-approved action gets a receipt with a real policyApplied and a real approvedBy 41ms
+ ❯ tests/integration/amc-renewal-sequence.test.ts (3 tests | 1 failed) 713ms
+     × drafts a real gated reminder immediately, then completes as 'renewed' when the customer responds before the follow-up wait elapses 71ms
+(node:79506) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:79532) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:79552) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+ ❯ tests/integration/reasoning-tier.test.ts (5 tests | 2 failed) 375ms
+     × 1. requiresConfirmation:false takes the low path — no repair episode, tier:low, candidateBGenerated:false 95ms
+     × 5. a tenant policy override (riskThresholds.amountUsd:100) makes a $150 invoice high tier even though the default would make it medium 16ms
+[10:44:28] [32mINFO[39m: [36m[critic_review] Bedrock not configured — skipping[39m
+    [35mtenantId[39m: "00000000-0000-4000-8000-0000000000f2"
+    [35mactionId[39m: "827eb4bb-c679-4703-9ade-00d34d6c14b9"
+(node:79639) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:79644) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+[10:44:35] [32mINFO[39m: [36m[sse] listening on jarvis_events[39m
+(node:79676) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+[10:44:55] [32mINFO[39m: [36mjob test_ok completed[39m
+    [35mtraceId[39m: "6207aaf4-fdd4-4985-a425-a70b648521c4"
+    [35mjobType[39m: "test_ok"
+    [35mjobId[39m: "6207aaf4-fdd4-4985-a425-a70b648521c4"
+    [35mok[39m: true
+    [35mms[39m: 1
+[10:44:55] [31mERROR[39m: [36mjob test_fail failed[39m
+    [35mtraceId[39m: "3ae35ded-2e90-464a-a4a0-83d196de15e6"
+    [35mjobType[39m: "test_fail"
+    [35mjobId[39m: "3ae35ded-2e90-464a-a4a0-83d196de15e6"
+    [35mok[39m: false
+    [35mms[39m: 0
+    err: "simulated failure"
+[10:44:55] [31mERROR[39m: [36mjob test_fail failed[39m
+    [35mtraceId[39m: "3ae35ded-2e90-464a-a4a0-83d196de15e6"
+    [35mjobType[39m: "test_fail"
+    [35mjobId[39m: "3ae35ded-2e90-464a-a4a0-83d196de15e6"
+    [35mok[39m: false
+    [35mms[39m: 0
+    err: "simulated failure"
+[10:44:55] [32mINFO[39m: [36mjob drain_test completed[39m
+    [35mtraceId[39m: "24fb417b-36bd-4faf-80c0-67457e3ac541"
+    [35mjobType[39m: "drain_test"
+    [35mjobId[39m: "24fb417b-36bd-4faf-80c0-67457e3ac541"
+    [35mok[39m: true
+    [35mms[39m: 0
+[10:44:56] [32mINFO[39m: [36mjob drain_test completed[39m
+    [35mtraceId[39m: "939cc782-b8ea-4dc3-b2ae-a9ce46769bba"
+    [35mjobType[39m: "drain_test"
+    [35mjobId[39m: "939cc782-b8ea-4dc3-b2ae-a9ce46769bba"
+    [35mok[39m: true
+    [35mms[39m: 0
+[10:44:56] [32mINFO[39m: [36mjob drain_test completed[39m
+    [35mtraceId[39m: "c1b0f16a-c8a5-4459-8a3d-fa2967f4ef8a"
+    [35mjobType[39m: "drain_test"
+    [35mjobId[39m: "c1b0f16a-c8a5-4459-8a3d-fa2967f4ef8a"
+    [35mok[39m: true
+    [35mms[39m: 0
+[10:44:56] [32mINFO[39m: [36mjob drain_on_shutdown completed[39m
+    [35mtraceId[39m: "9004a249-2e99-46f2-8ec6-adb71f1274d5"
+    [35mjobType[39m: "drain_on_shutdown"
+    [35mjobId[39m: "9004a249-2e99-46f2-8ec6-adb71f1274d5"
+    [35mok[39m: true
+    [35mms[39m: 0
+[10:45:06] [33mWARN[39m: [36m[vapi] no tenant_phone_numbers match — falling back to VAPI_DEFAULT_TENANT_ID[39m
+[10:45:06] [33mWARN[39m: [36m[vapi] no tenant_phone_numbers match — falling back to VAPI_DEFAULT_TENANT_ID[39m
+(node:79778) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:79782) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:79808) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+[10:45:16] [33mWARN[39m: [36m[vapi] no tenant_phone_numbers match — falling back to VAPI_DEFAULT_TENANT_ID[39m
+(node:79885) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:79942) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:79966) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+stderr | tests/unit/webhook-fuzz.test.ts > inbound webhook fuzz wall > rejects malformed or unauthenticated payloads on every provider route without a 5xx
+[security] production refused: AUTH_DEV_BYPASS must be unset
+
+stderr | tests/unit/webhook-fuzz.test.ts > inbound webhook fuzz wall > rejects malformed or unauthenticated payloads on every provider route without a 5xx
+[security] production refused: AUTH_DEV_BYPASS must be unset
+
+ ❯ tests/unit/webhook-fuzz.test.ts (1 test | 1 failed) 18ms
+     × rejects malformed or unauthenticated payloads on every provider route without a 5xx 17ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 28 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/amc-renewal-sequence.test.ts > AMC renewal sequence — ported to the Postgres-native scan (§2.6) > drafts a real gated reminder immediately, then completes as 'renewed' when the customer responds before the follow-up wait elapses
+AssertionError: expected 'needs_human_review' to be 'pending' // Object.is equality
+
+Expected: "pending"
+Received: "needs_human_review"
+
+ ❯ tests/integration/amc-renewal-sequence.test.ts:69:26
+     67|     const mine = drafted.find((d) => (d.payload as Record<string, unkn…
+     68|     expect(mine, "the first reminder should have drafted a real, gated…
+     69|     expect(mine!.status).toBe("pending"); // gated — never auto-sent
+       |                          ^
+     70|
+     71|     const [agreementAfterFirst] = await withTenant(SEED_TENANT_ID, (db…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/28]⎯
+
+ FAIL  tests/integration/chaos-matrix.test.ts > chaos matrix (§2.8) > flow 3 — AMC renewal > worker killed mid-step: draft-then-crash before approval is untouched; approving afterward still executes exactly once
+AssertionError: expected 'needs_human_review' to be 'pending' // Object.is equality
+
+Expected: "pending"
+Received: "needs_human_review"
+
+ ❯ tests/integration/chaos-matrix.test.ts:578:30
+    576|       ).then((rows) => rows.filter((r) => (r.payload as Record<string,…
+    577|       expect(action, "drafting must survive a crash simulated right af…
+    578|       expect(action!.status).toBe("pending");
+       |                              ^
+    579|     });
+    580|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/28]⎯
+
+ FAIL  tests/integration/chaos-matrix.test.ts > chaos matrix (§2.8) > flow 3 — AMC renewal > same event x5: approving/executing the same action 5 times concurrently produces exactly one real send
+AssertionError: expected 0 to be greater than or equal to 1
+ ❯ tests/integration/chaos-matrix.test.ts:595:68
+    593|       const policy = await orchestrator.loadPolicy(domainAction);
+    594|       const results = await Promise.all(Array.from({ length: 5 }, () =…
+    595|       expect(results.filter((r) => r.status === "success").length).toB…
+       |                                                                    ^
+    596|       // §2.5's runtime bridge deliberately submits a fresh, unkeyed c…
+    597|       // (so a genuine reflection retry always re-executes for real — …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/28]⎯
+
+ FAIL  tests/integration/chaos-matrix.test.ts > chaos matrix (§2.8) > flow 3 — AMC renewal > provider timeout -> retry: the plugin's own tool call retries and ultimately succeeds
+AssertionError: expected 'failure' to be 'success' // Object.is equality
+
+Expected: "success"
+Received: "failure"
+
+ ❯ tests/integration/chaos-matrix.test.ts:646:29
+    644|       const policy = await orchestrator.loadPolicy(domainAction);
+    645|       const result = await orchestrator.executor.execute(domainAction,…
+    646|       expect(result.status).toBe("success");
+       |                             ^
+    647|     });
+    648|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/28]⎯
+
+ FAIL  tests/integration/chaos-matrix.test.ts > chaos matrix (§2.8) > flow 3 — AMC renewal > provider hard-fail: a permanently failing send is recorded as a real failure, never silently swallowed
+AssertionError: expected 'failure' to be 'integration_unavailable' // Object.is equality
+
+Expected: "integration_unavailable"
+Received: "failure"
+
+ ❯ tests/integration/chaos-matrix.test.ts:669:29
+    667|       // runtime bridge's classifyFailure maps it onto the receipt as …
+    668|       // "provider_down", a more honest label than a generic "terminal…
+    669|       expect(result.status).toBe("integration_unavailable");
+       |                             ^
+    670|
+    671|       const [receipt] = await withTenant(SEED_TENANT_ID, (db) => db.se…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/28]⎯
+
+ FAIL  tests/integration/compensation.test.ts > compensation > emulator binding: a held appointment is released on compensation, and the compensation_case resolves succeeded
+TypeError: Cannot read properties of undefined (reading 'actualResult')
+ ❯ tests/integration/compensation.test.ts:91:21
+     89|     expect(step!.status).toBe("compensated");
+     90|     const [receipt] = await withTenant(TENANT_ID, (db) => db.select().…
+     91|     expect(receipt!.actualResult).toMatchObject({ compensation: { stat…
+       |                     ^
+     92|   });
+     93|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/28]⎯
+
+ FAIL  tests/integration/dealer-zero-detection-loops.test.ts > Dealer Zero detection loops (§3.4) > scan_low_inventory drafts real flag_reorder_needed actions (with receipts) for below-threshold seeded stock
+AssertionError: expected undefined to be truthy
+
+- Expected:
+true
+
++ Received:
+undefined
+
+ ❯ tests/integration/dealer-zero-detection-loops.test.ts:61:21
+     59|     const newest = after[after.length - 1]!;
+     60|     const [receipt] = await withTenant(DEALER_ZERO_TENANT_ID, (db) => …
+     61|     expect(receipt).toBeTruthy();
+       |                     ^
+     62|     // flag_reorder_needed is auto-run (requiresConfirmation: false, p…
+     63|     // — it executes immediately rather than sitting pending, but it's…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/28]⎯
+
+ FAIL  tests/integration/evidence-corpus.test.ts > evidence corpus > appends an immutable version, is retry-idempotent, and records citable research hits
+error: could not determine data type of parameter $2
+ ❯ node_modules/pg/lib/client.js:652:17
+ ❯ searchEvidence packages/memory/src/evidence.ts:499:24
+    497|         vector.push(...result.rows.map((row) => ({ ...mapEvidenceRow(r…
+    498|       } else {
+    499|         const result = await client.query(`${base} AND c.embedding IS …
+       |                        ^
+    500|         const scored = result.rows.map((row) => {
+    501|           const candidate = mapEvidenceRow(row);
+ ❯ tests/integration/evidence-corpus.test.ts:60:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/28]⎯
+
+ FAIL  tests/integration/evidence-corpus.test.ts > evidence corpus > does not return tenant A's evidence in tenant B's scoped search
+error: could not determine data type of parameter $2
+ ❯ node_modules/pg/lib/client.js:652:17
+ ❯ searchEvidence packages/memory/src/evidence.ts:499:24
+    497|         vector.push(...result.rows.map((row) => ({ ...mapEvidenceRow(r…
+    498|       } else {
+    499|         const result = await client.query(`${base} AND c.embedding IS …
+       |                        ^
+    500|         const scored = result.rows.map((row) => {
+    501|           const candidate = mapEvidenceRow(row);
+ ❯ tests/integration/evidence-corpus.test.ts:76:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/28]⎯
+
+ FAIL  tests/integration/full-flow.test.ts > full gated flow (§32.6, §32.11) > schedule_water_test: gates before any tool call, executes after approve, audits every step
+AssertionError: expected undefined to be true // Object.is equality
+
+- Expected:
+true
+
++ Received:
+undefined
+
+ ❯ tests/integration/full-flow.test.ts:130:32
+    128|     const policy = await orchestrator.loadPolicy(action);
+    129|     const gated = await orchestrator.executor.execute(action, policy);
+    130|     expect(gated.output.gated).toBe(true);
+       |                                ^
+    131|     expect(calls).toHaveLength(0);
+    132|     expect((await getAction(action.id)).status).toBe("pending");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/28]⎯
+
+ FAIL  tests/integration/full-flow.test.ts > full gated flow (§32.6, §32.11) > renew_maintenance_agreement: same gate, same guarantees
+AssertionError: expected 'failed' to be 'pending' // Object.is equality
+
+Expected: "pending"
+Received: "failed"
+
+ ❯ tests/integration/full-flow.test.ts:161:49
+    159|     await orchestrator.executor.execute(action, policy);
+    160|     expect(calls).toHaveLength(0);
+    161|     expect((await getAction(action.id)).status).toBe("pending");
+       |                                                 ^
+    162|
+    163|     const result = await approveAndRun(orchestrator, action.id);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/28]⎯
+
+ FAIL  tests/integration/full-flow.test.ts > full gated flow (§32.6, §32.11) > property sweep: every unapproved persisted status stays gated on the legacy executor
+AssertionError: draft: expected undefined to be true // Object.is equality
+
+- Expected:
+true
+
++ Received:
+undefined
+
+ ❯ tests/integration/full-flow.test.ts:213:43
+    211|       );
+    212|
+    213|       expect(result.output.gated, status).toBe(true);
+       |                                           ^
+    214|       expect(calls, status).toHaveLength(0);
+    215|       expect((await getAction(action.id)).status, status).toBe("pendin…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/28]⎯
+
+ FAIL  tests/integration/full-flow.test.ts > full gated flow (§32.6, §32.11) > failing integration → retry once → escalate to needs_human_review, never silent (§9, §30)
+AssertionError: expected 0 to be greater than or equal to 2
+ ❯ tests/integration/full-flow.test.ts:246:22
+    244|     const row = await getAction(action.id);
+    245|     expect(row.status).toBe("needs_human_review");
+    246|     expect(attempts).toBeGreaterThanOrEqual(2); // original + exactly …
+       |                      ^
+    247|     const steps = await getLogSteps(action.id);
+    248|     expect(steps).toContain("reflection_retry");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/28]⎯
+
+ FAIL  tests/integration/langgraph-gate-flow.test.ts > LangGraph gate flow — schedule_water_test on the new engine > gates before any tool call, executes after approve via decide(), audits every step — same guarantees as the legacy engine
+AssertionError: expected undefined to be true // Object.is equality
+
+- Expected:
+true
+
++ Received:
+undefined
+
+ ❯ tests/integration/langgraph-gate-flow.test.ts:133:32
+    131|     const policy = await orchestrator.loadPolicy(action);
+    132|     const gated = await orchestrator.executor.execute(action, policy);
+    133|     expect(gated.output.gated).toBe(true);
+       |                                ^
+    134|     expect(calls).toHaveLength(0); // nothing ran before the gate clea…
+    135|     expect((await getAction(action.id)).status).toBe("pending");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/28]⎯
+
+ FAIL  tests/integration/langgraph-gate-flow.test.ts > LangGraph gate flow — schedule_water_test on the new engine > reject halts execution permanently: no tool ever fires, thread is closed not left dangling
+AssertionError: expected 'failed' to be 'pending' // Object.is equality
+
+Expected: "pending"
+Received: "failed"
+
+ ❯ tests/integration/langgraph-gate-flow.test.ts:160:49
+    158|     const policy = await orchestrator.loadPolicy(action);
+    159|     await orchestrator.executor.execute(action, policy);
+    160|     expect((await getAction(action.id)).status).toBe("pending");
+       |                                                 ^
+    161|
+    162|     const result = await orchestrator.decide(action.id, SEED_TENANT_ID…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/28]⎯
+
+ FAIL  tests/integration/langgraph-gate-flow.test.ts > LangGraph gate flow — schedule_water_test on the new engine > property sweep: every unapproved persisted status is re-gated with zero tool calls
+AssertionError: draft: expected undefined to be true // Object.is equality
+
+- Expected:
+true
+
++ Received:
+undefined
+
+ ❯ tests/integration/langgraph-gate-flow.test.ts:194:43
+    192|       );
+    193|
+    194|       expect(result.output.gated, status).toBe(true);
+       |                                           ^
+    195|       expect(calls, status).toHaveLength(0);
+    196|       expect((await getAction(action.id)).status, status).toBe("pendin…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/28]⎯
+
+ FAIL  tests/integration/langgraph-gate-flow.test.ts > LangGraph gate flow — schedule_water_test on the new engine > THE ACTUAL POINT: a gate survives a full instance restart — a completely fresh executor/checkpointer/graph, sharing no in-memory state with the one that gated the action, resumes it correctly purely from Postgres
+AssertionError: expected undefined to be true // Object.is equality
+
+- Expected:
+true
+
++ Received:
+undefined
+
+ ❯ tests/integration/langgraph-gate-flow.test.ts:211:32
+    209|     const policy = await gatingOrchestrator.loadPolicy(action);
+    210|     const gated = await gatingOrchestrator.executor.execute(action, po…
+    211|     expect(gated.output.gated).toBe(true);
+       |                                ^
+    212|     expect((await getAction(action.id)).status).toBe("pending");
+    213|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/28]⎯
+
+ FAIL  tests/integration/overview-route.test.ts > GET /api/overview (Phase 7.6) > runs a real get_business_overview action and returns real leads/pending/inventory/invoices/visits + citations
+TypeError: Cannot read properties of undefined (reading 'total')
+ ❯ tests/integration/overview-route.test.ts:73:23
+     71|     expect(body.cached).toBe(false);
+     72|     expect(body.domainActionId).toBeTruthy();
+     73|     expect(body.leads.total).toBeGreaterThanOrEqual(1);
+       |                       ^
+     74|     expect(body.spokenSummary).toBeTruthy();
+     75|     expect(Array.isArray(body.citations)).toBe(true);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/28]⎯
+
+ FAIL  tests/integration/overview-route.test.ts > GET /api/overview (Phase 7.6) > reuses the cached result on a second call within the cache window, without creating a new domain_action
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/integration/overview-route.test.ts:87:31
+     85|     const second = await overviewGET(req());
+     86|     const secondBody = await second.json();
+     87|     expect(secondBody.cached).toBe(true);
+       |                               ^
+     88|     expect(secondBody.domainActionId).toBe(first.domainActionId);
+     89|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[19/28]⎯
+
+ FAIL  tests/integration/reasoning-tier.test.ts > LLMPlanner reasoning tier > 1. requiresConfirmation:false takes the low path — no repair episode, tier:low, candidateBGenerated:false
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ tests/integration/reasoning-tier.test.ts:119:55
+    117|
+    118|     const episodes = await readEpisodes(TENANT_ID, { domainActionId: r…
+    119|     expect(episodes.some((e) => e.step === "repair")).toBe(false);
+       |                                                       ^
+    120|     const tierEpisode = episodes.find((e) => e.step === "reasoning_tie…
+    121|     expect(tierEpisode).toBeTruthy();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[20/28]⎯
+
+ FAIL  tests/integration/reasoning-tier.test.ts > LLMPlanner reasoning tier > 5. a tenant policy override (riskThresholds.amountUsd:100) makes a $150 invoice high tier even though the default would make it medium
+AssertionError: expected 'medium' to be 'high' // Object.is equality
+
+Expected: "high"
+Received: "medium"
+
+ ❯ tests/integration/reasoning-tier.test.ts:209:67
+    207|     const episodes = await readEpisodes(TENANT_ID, { domainActionId: r…
+    208|     const tierEpisode = episodes.find((e) => e.step === "reasoning_tie…
+    209|     expect((tierEpisode!.output as Record<string, unknown>).tier).toBe…
+       |                                                                   ^
+    210|   });
+    211| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[21/28]⎯
+
+ FAIL  tests/integration/receipt-policy-and-approver.test.ts > DecisionReceipt.policyApplied + approval.approvedBy — regression (§3.6 finding) > a system-drafted (draftKnownAction), gated, API-approved action gets a receipt with a real policyApplied and a real approvedBy
+AssertionError: policyId must be persisted at draft time, not left null: expected null to be truthy
+
+- Expected:
+true
+
++ Received:
+null
+
+ ❯ tests/integration/receipt-policy-and-approver.test.ts:77:100
+     75|     const [rowBeforeApproval] = await withTenant(DEALER_ZERO_TENANT_ID…
+     76|     expect(rowBeforeApproval!.status, "create_lead must be gated").toB…
+     77|     expect(rowBeforeApproval!.policyId, "policyId must be persisted at…
+       |                                                                                                    ^
+     78|
+     79|     const [policyRow] = await withTenant(DEALER_ZERO_TENANT_ID, (db) =…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22/28]⎯
+
+ FAIL  tests/integration/sandbox-complete-flow.test.ts > sandbox mode: the complete workflow is REAL (§99%) > schedule_water_test: approve → REAL booked visit + comms log + workflow advanced
+AssertionError: expected undefined to be true // Object.is equality
+
+- Expected:
+true
+
++ Received:
+undefined
+
+ ❯ tests/integration/sandbox-complete-flow.test.ts:94:32
+     92|     const policy = await orchestrator.loadPolicy(action);
+     93|     const gated = await orchestrator.executor.execute(action, policy);
+     94|     expect(gated.output.gated).toBe(true);
+       |                                ^
+     95|
+     96|     // Approve (voice or click — same path).
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[23/28]⎯
+
+ FAIL  tests/integration/sandbox-complete-flow.test.ts > sandbox mode: the complete workflow is REAL (§99%) > renew_maintenance_agreement: approve → outbox row + communications_log, marked simulated
+AssertionError: expected 'Your water test results are in — ever…' to match /renewal/i
+
+- Expected:
+/renewal/i
+
++ Received:
+"Your water test results are in — everything looks great except hardness at 18 gpg. We'll walk you through options."
+
+ ❯ tests/integration/sandbox-complete-flow.test.ts:153:29
+    151|     expect(latest!.toNumber).toBe("+13195550142");
+    152|     expect(latest!.simulated).toBe(true); // honest: delivery hop is t…
+    153|     expect(latest!.content).toMatch(/renewal/i);
+       |                             ^
+    154|
+    155|     // Mirrored into the household's real communications history.
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[24/28]⎯
+
+ FAIL  tests/integration/scan-handlers.test.ts > proactive scan handlers > scheduled_reminder (renewal scan) drafts through the real pipeline — real summary, never a blank card
+AssertionError: expected 'needs_human_review' to be 'pending' // Object.is equality
+
+Expected: "pending"
+Received: "needs_human_review"
+
+ ❯ tests/integration/scan-handlers.test.ts:191:25
+    189|     expect(drafted.length).toBeGreaterThanOrEqual(1);
+    190|     const last = drafted[drafted.length - 1]!;
+    191|     expect(last.status).toBe("pending");
+       |                         ^
+    192|     expect(last.summary).toBeTruthy(); // the actual bug being fixed: …
+    193|     expect(last.summary).not.toBe("No summary drafted.");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[25/28]⎯
+
+ FAIL  tests/integration/single-action-runtime-bridge.test.ts > single-action execution via the runtime bridge (§2.5) > a successful single-action execution produces a command/run/step/receipt trail
+AssertionError: expected 'failure' to be 'success' // Object.is equality
+
+Expected: "success"
+Received: "failure"
+
+ ❯ tests/integration/single-action-runtime-bridge.test.ts:145:29
+    143|
+    144|     try {
+    145|       expect(result.status).toBe("success");
+       |                             ^
+    146|       expect(newIds).toHaveLength(1);
+    147|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[26/28]⎯
+
+ FAIL  tests/integration/single-action-runtime-bridge.test.ts > single-action execution via the runtime bridge (§2.5) > reflection's retry-once mechanism creates a SECOND independent step + receipt, not a swallowed no-op
+AssertionError: expected [] to have a length of 2 but got +0
+
+- Expected
++ Received
+
+- 2
++ 0
+
+ ❯ tests/integration/single-action-runtime-bridge.test.ts:239:22
+    237|       // idempotency at the tool-call layer, ScopedToolRegistry/extern…
+    238|       // unrelated to this bridge — so this test does not assert both …
+    239|       expect(newIds).toHaveLength(2);
+       |                      ^
+    240|       const steps = await withTenant(SEED_TENANT_ID, async (db) => {
+    241|         const rows = [];
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[27/28]⎯
+
+ FAIL  tests/unit/webhook-fuzz.test.ts > inbound webhook fuzz wall > rejects malformed or unauthenticated payloads on every provider route without a 5xx
+Error: Property failed after 1 tests
+{ seed: -321556498, path: "0:0", endOnFailure: true }
+Counterexample: [""]
+Shrunk 1 time(s)
+
+Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+ ❯ buildError node_modules/fast-check/lib/fast-check.js:2462:16
+ ❯ asyncThrowIfFailed node_modules/fast-check/lib/fast-check.js:2474:8
+
+Caused by: Error: Production refuses to boot while AUTH_DEV_BYPASS is configured
+ ❯ packages/security/src/secrets.ts:79:13
+ ❯ ensureSecretsLoaded packages/security/src/secrets.ts:99:3
+ ❯ POST apps/api/app/api/webhooks/ghl/route.ts:32:9
+ ❯ tests/unit/webhook-fuzz.test.ts:24:32
+ ❯ AsyncProperty.run node_modules/fast-check/lib/fast-check.js:1217:19
+ ❯ asyncRunIt node_modules/fast-check/lib/fast-check.js:2516:15
+ ❯ tests/unit/webhook-fuzz.test.ts:22:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[28/28]⎯
+
+
+  Snapshots  1 obsolete
+             ↳ tests/integration/chaos-matrix.test.ts
+               · chaos matrix (§2.8) > flow 3 — AMC renewal > provider hard-fail: a permanently failing send is recorded as a real failure, never silently swallowed 1
+
+ Test Files  14 failed | 166 passed | 1 skipped (181)
+      Tests  28 failed | 823 passed | 3 skipped (854)
+   Start at  16:11:57
+   Duration  301.26s (transform 4.48s, setup 0ms, import 206.37s, tests 68.09s, environment 18ms)

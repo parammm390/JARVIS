@@ -42,6 +42,21 @@ async function listFinnorArrayColumns(client: pg.Client): Promise<Map<string, Se
   return result;
 }
 
+async function listFinnorGeneratedColumns(client: pg.Client): Promise<Map<string, Set<string>>> {
+  const { rows } = await client.query<{ table_name: string; column_name: string }>(
+    `SELECT table_name, column_name
+       FROM information_schema.columns
+      WHERE table_schema = 'finnor_os' AND is_generated = 'ALWAYS'`,
+  );
+  const result = new Map<string, Set<string>>();
+  for (const row of rows) {
+    const columns = result.get(row.table_name) ?? new Set<string>();
+    columns.add(row.column_name);
+    result.set(row.table_name, columns);
+  }
+  return result;
+}
+
 /** Dumps every real table in the finnor_os schema. Dev/demo-scale only (Dealer Zero,
  *  not a real multi-tenant production body of data) — a straight `SELECT *` per table
  *  is the honest scope here; a real production-scale dump would need streaming/paging,
@@ -80,6 +95,7 @@ export async function restoreAllTables(databaseUrl: string, dump: DatabaseDump):
     // explicit JSON string (see below), while a real `uuid[]`/`text[]` must remain a
     // native array for pg to encode as a Postgres array literal.
     const arrayColumns = await listFinnorArrayColumns(client);
+    const generatedColumns = await listFinnorGeneratedColumns(client);
     // Reverse order for TRUNCATE doesn't matter with FK checks disabled, but keep it
     // deterministic (declaration order) for readable logs/failures.
     for (const name of tableNames) {
@@ -88,7 +104,9 @@ export async function restoreAllTables(databaseUrl: string, dump: DatabaseDump):
     for (const name of tableNames) {
       const rows = dump.tables[name]!;
       for (const row of rows) {
-        const columns = Object.keys(row);
+        // Stored generated columns (currently search_vector) must be recomputed by
+        // PostgreSQL; an INSERT may not provide an explicit value for them.
+        const columns = Object.keys(row).filter((column) => !generatedColumns.get(name)?.has(column));
         if (columns.length === 0) continue;
         const placeholders = columns.map((_, i) => `$${i + 1}`).join(", ");
         // node-postgres's implicit array-vs-JSON handling picks the WRONG one for a

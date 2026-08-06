@@ -111,7 +111,10 @@ export function getPool(): pg.Pool {
       // one short-lived session each; localhost/CI remains intentionally generous.
       max: unpooledLocal ? 10 : 1,
       idleTimeoutMillis: unpooledLocal ? undefined : 1_000,
-      connectionTimeoutMillis: unpooledLocal ? undefined : 5_000,
+      // CI and local test runners must fail with a real connection error when their
+      // disposable database is unavailable. Leaving localhost unbounded made Vitest
+      // stall before collection forever after a stopped dev database.
+      connectionTimeoutMillis: 5_000,
     });
     // Do not issue client.query() from the pool's connect event: node-postgres does
     // not await it, so a first caller can race that setup query. Restricted runtime

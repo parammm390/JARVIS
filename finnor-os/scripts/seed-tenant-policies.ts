@@ -14,7 +14,7 @@
 //   npx tsx scripts/seed-tenant-policies.ts --verify   (no writes — prints the registered action-type count)
 
 import "dotenv/config";
-import { withTenant, closePool, domainPolicies } from "@finnor/db";
+import { withTenant, closePool, domainPolicies, domainPolicyRevisions } from "@finnor/db";
 import { and, eq } from "drizzle-orm";
 import { createDefaultPluginRegistry } from "@finnor/orchestration";
 import { PRICING_CATALOG_ACTION_TYPE } from "../packages/domain-plugins/shared/pricing-catalog";
@@ -179,8 +179,8 @@ export async function seedTenantPolicies(tenantId: string, opts: { reviewLinkUrl
         .select()
         .from(domainPolicies)
         .where(and(eq(domainPolicies.tenantId, tenantId), eq(domainPolicies.actionType, row.actionType)));
-      if (existing) {
-        await db
+      const [persisted] = existing
+        ? await db
           .update(domainPolicies)
           .set({
             policy: row.policy,
@@ -188,16 +188,31 @@ export async function seedTenantPolicies(tenantId: string, opts: { reviewLinkUrl
             confirmationTemplate: row.confirmationTemplate ?? existing.confirmationTemplate ?? null,
             version: existing.version + 1,
           })
-          .where(eq(domainPolicies.id, existing.id));
-      } else {
-        await db.insert(domainPolicies).values({
+          .where(eq(domainPolicies.id, existing.id))
+          .returning()
+        : await db.insert(domainPolicies).values({
           tenantId,
           actionType: row.actionType,
           policy: row.policy,
           requiresConfirmation: row.requiresConfirmation,
           confirmationTemplate: row.confirmationTemplate ?? null,
-        });
-      }
+        }).returning();
+      if (!persisted) throw new Error(`Policy seed did not persist ${row.actionType}`);
+      // Policy execution resolves only immutable revision rows. Each seed update
+      // creates exactly the matching revision version; repeated seeding remains
+      // idempotent because the policy version advances with deliberate updates.
+      await db.insert(domainPolicyRevisions).values({
+        tenantId,
+        policyId: persisted.id,
+        actionType: persisted.actionType,
+        version: persisted.version,
+        policy: persisted.policy,
+        requiresConfirmation: persisted.requiresConfirmation,
+        confirmationTemplate: persisted.confirmationTemplate,
+        modelProvider: persisted.modelProvider,
+        confirmationTimeoutHours: persisted.confirmationTimeoutHours,
+        effectiveFrom: persisted.effectiveFrom,
+      }).onConflictDoNothing();
       actionTypesSeeded++;
     }
   });

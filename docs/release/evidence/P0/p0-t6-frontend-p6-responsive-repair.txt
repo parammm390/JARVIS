@@ -1,0 +1,87 @@
+
+[WebServer] (node:89200) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+[WebServer] (node:89202) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+
+Running 3 tests using 2 workers
+
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+
+(node:89214) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+(node:89213) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[1/3] [desktop-chromium] › e2e/jarvis-p6-responsive.spec.ts:14:9 › P6.T1 — responsive collision and keyboard sweep › keeps the approval surface usable at 768px
+[2/3] [desktop-chromium] › e2e/jarvis-p6-responsive.spec.ts:14:9 › P6.T1 — responsive collision and keyboard sweep › keeps the approval surface usable at 1440px
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+[3/3] [desktop-chromium] › e2e/jarvis-p6-responsive.spec.ts:14:9 › P6.T1 — responsive collision and keyboard sweep › keeps the approval surface usable at 390px
+
+[WebServer] (node:89228) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+[WebServer] (node:89231) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+  3 passed (13.9s)

@@ -1,0 +1,325 @@
+$ pwd
+/Users/paramdave/Desktop/FINNOR
+$ git status --short
+?? docs/release/evidence/P0/p0-discovery.txt
+$ git rev-parse HEAD
+be27bfa9236b0adb0a7510aeed833076cf91b1c4
+$ git log --oneline -12
+be27bfa jarvis-release BASELINE: preserve pre-hardening product state
+4888c6d release: FINNOR v0.1.0
+cb27d47 jarvis-v3 P7.T5: record green regression evidence
+b9272b7 jarvis-v3 P7.T5: align public preview verification
+d41d229 jarvis-v3 P7.T5: bind inline receipt correction
+60e6e57 jarvis-v3 P7.T5: target compensation rollback
+1e94532 jarvis-v3 P7.T5: verify receipt recovery binding
+f7c3286 jarvis-v3 P7.T5: bind receipt run recovery
+e6bda14 jarvis-v3 P7.T7: record fresh bundle measurement
+2216f26 jarvis-v3 P7.T6: cover at-rest selector facts
+34bdee1 jarvis-v3 P7.T7: defer fixture data
+8e7de50 jarvis-v3 P7.T7: defer authenticated thread code
+$ node --version && npm --version
+v22.18.0
+10.9.3
+$ find . -maxdepth 3 -name package.json -not -path */node_modules/* -print
+./finnor-os/package.json
+./.next/types/package.json
+./.next/package.json
+./package.json
+$ find finnor-os/packages/domain-plugins -mindepth 2 -maxdepth 2 -name index.ts -print | sort
+finnor-os/packages/domain-plugins/accounting/index.ts
+finnor-os/packages/domain-plugins/bulk-notify/index.ts
+finnor-os/packages/domain-plugins/clarification/index.ts
+finnor-os/packages/domain-plugins/compliance-documentation/index.ts
+finnor-os/packages/domain-plugins/crm/index.ts
+finnor-os/packages/domain-plugins/customer-comm/index.ts
+finnor-os/packages/domain-plugins/inventory/index.ts
+finnor-os/packages/domain-plugins/invoice-to-cash/index.ts
+finnor-os/packages/domain-plugins/lead-to-water-test/index.ts
+finnor-os/packages/domain-plugins/maintenance-agreement/index.ts
+finnor-os/packages/domain-plugins/manual-step/index.ts
+finnor-os/packages/domain-plugins/marketing/index.ts
+finnor-os/packages/domain-plugins/ops-overview/index.ts
+finnor-os/packages/domain-plugins/proposal-batch/index.ts
+finnor-os/packages/domain-plugins/proposal-signature/index.ts
+finnor-os/packages/domain-plugins/proposal-to-installation/index.ts
+finnor-os/packages/domain-plugins/quotation/index.ts
+finnor-os/packages/domain-plugins/route-optimization/index.ts
+finnor-os/packages/domain-plugins/scheduling/index.ts
+finnor-os/packages/domain-plugins/service-reminders/index.ts
+finnor-os/packages/domain-plugins/technician-reports/index.ts
+finnor-os/packages/domain-plugins/water-domain-knowledge/index.ts
+finnor-os/packages/domain-plugins/water-test/index.ts
+finnor-os/packages/domain-plugins/web-research/index.ts
+$ find finnor-os/packages/db/migrations -maxdepth 1 -type f | sort | tail -10
+finnor-os/packages/db/migrations/0055_user_prefs_last_seen.sql
+finnor-os/packages/db/migrations/0056_push_subscriptions.sql
+finnor-os/packages/db/migrations/0057_llm_cost_governor.sql
+finnor-os/packages/db/migrations/0058_policy_engine_v2.sql
+finnor-os/packages/db/migrations/0059_data_retention.sql
+finnor-os/packages/db/migrations/0060_worker_priority_lanes.sql
+finnor-os/packages/db/migrations/0061_a7_slo_failure_calendar.sql
+finnor-os/packages/db/migrations/0062_instruction_lifecycle.sql
+finnor-os/packages/db/migrations/0063_repair_orphaned_completed_runs.sql
+finnor-os/packages/db/migrations/0064_evidence_corpus_search.sql
+$ grep -R 'actionTypes\|const ACTION\|SCHEMAS' finnor-os/packages/domain-plugins --include='*.ts'
+finnor-os/packages/domain-plugins/quotation/index.ts:  actionTypes: ["generate_quote", "size_equipment_for_household", "send_proposal"],
+finnor-os/packages/domain-plugins/quotation/index.ts:    return this.actionTypes.includes(t);
+finnor-os/packages/domain-plugins/accounting/index.ts:const SCHEMAS: Record<string, z.ZodTypeAny> = {
+finnor-os/packages/domain-plugins/accounting/index.ts:  actionTypes: Object.keys(SCHEMAS),
+finnor-os/packages/domain-plugins/accounting/index.ts:  payloadSchemas: SCHEMAS,
+finnor-os/packages/domain-plugins/accounting/index.ts:    return t in SCHEMAS;
+finnor-os/packages/domain-plugins/accounting/index.ts:    const schema = SCHEMAS[actionType];
+finnor-os/packages/domain-plugins/accounting/index.ts:    const p = SCHEMAS[actionType]!.parse(payload) as Record<string, unknown>;
+finnor-os/packages/domain-plugins/invoice-to-cash/index.ts:const SCHEMAS: Record<string, z.ZodTypeAny> = {
+finnor-os/packages/domain-plugins/invoice-to-cash/index.ts:  actionTypes: Object.keys(SCHEMAS),
+finnor-os/packages/domain-plugins/invoice-to-cash/index.ts:  payloadSchemas: SCHEMAS,
+finnor-os/packages/domain-plugins/invoice-to-cash/index.ts:    return t in SCHEMAS;
+finnor-os/packages/domain-plugins/invoice-to-cash/index.ts:    const schema = SCHEMAS[actionType];
+finnor-os/packages/domain-plugins/ops-overview/index.ts:const ACTION = "get_business_overview";
+finnor-os/packages/domain-plugins/ops-overview/index.ts:  actionTypes: [ACTION, ASK_ACTION],
+finnor-os/packages/domain-plugins/customer-comm/index.ts:  actionTypes: ["answer_customer_question", "send_customer_message", "send_follow_up"],
+finnor-os/packages/domain-plugins/customer-comm/index.ts:    return this.actionTypes.includes(t);
+finnor-os/packages/domain-plugins/route-optimization/index.ts:  actionTypes: [ROUTE_SUGGESTION_ACTION],
+finnor-os/packages/domain-plugins/clarification/index.ts:const ACTION = "clarification_request";
+finnor-os/packages/domain-plugins/clarification/index.ts:  actionTypes: [ACTION],
+finnor-os/packages/domain-plugins/scheduling/index.ts:const SCHEMAS: Record<string, z.ZodTypeAny> = {
+finnor-os/packages/domain-plugins/scheduling/index.ts:  actionTypes: Object.keys(SCHEMAS),
+finnor-os/packages/domain-plugins/scheduling/index.ts:  payloadSchemas: SCHEMAS,
+finnor-os/packages/domain-plugins/scheduling/index.ts:    return t in SCHEMAS;
+finnor-os/packages/domain-plugins/scheduling/index.ts:    const schema = SCHEMAS[actionType];
+finnor-os/packages/domain-plugins/scheduling/index.ts:    const p = SCHEMAS[actionType]!.parse(payload) as Record<string, unknown>;
+finnor-os/packages/domain-plugins/scheduling/index.ts:    const p = SCHEMAS[actionType]!.parse(payload) as Record<string, unknown>;
+finnor-os/packages/domain-plugins/proposal-signature/index.ts:const SCHEMAS: Record<string, z.ZodTypeAny> = {
+finnor-os/packages/domain-plugins/proposal-signature/index.ts:  actionTypes: Object.keys(SCHEMAS),
+finnor-os/packages/domain-plugins/proposal-signature/index.ts:  payloadSchemas: SCHEMAS,
+finnor-os/packages/domain-plugins/proposal-signature/index.ts:    return t in SCHEMAS;
+finnor-os/packages/domain-plugins/proposal-signature/index.ts:    const schema = SCHEMAS[actionType];
+finnor-os/packages/domain-plugins/technician-reports/index.ts:  actionTypes: ["log_visit_report", "flag_visit_issue"],
+finnor-os/packages/domain-plugins/bulk-notify/index.ts:const ACTION = "bulk_notify_existing_customers";
+finnor-os/packages/domain-plugins/bulk-notify/index.ts:  actionTypes: [ACTION],
+finnor-os/packages/domain-plugins/crm/index.ts:const SCHEMAS: Record<string, z.ZodTypeAny> = {
+finnor-os/packages/domain-plugins/crm/index.ts:  actionTypes: Object.keys(SCHEMAS),
+finnor-os/packages/domain-plugins/crm/index.ts:  payloadSchemas: SCHEMAS,
+finnor-os/packages/domain-plugins/crm/index.ts:    return t in SCHEMAS;
+finnor-os/packages/domain-plugins/crm/index.ts:    const schema = SCHEMAS[actionType];
+finnor-os/packages/domain-plugins/crm/index.ts:    const p = SCHEMAS[actionType]!.parse(payload) as Record<string, unknown>;
+finnor-os/packages/domain-plugins/lead-to-water-test/index.ts:const SCHEMAS: Record<string, z.ZodTypeAny> = {
+finnor-os/packages/domain-plugins/lead-to-water-test/index.ts:  actionTypes: Object.keys(SCHEMAS),
+finnor-os/packages/domain-plugins/lead-to-water-test/index.ts:  payloadSchemas: SCHEMAS,
+finnor-os/packages/domain-plugins/lead-to-water-test/index.ts:    return t in SCHEMAS;
+finnor-os/packages/domain-plugins/lead-to-water-test/index.ts:    const schema = SCHEMAS[actionType];
+finnor-os/packages/domain-plugins/shared/plugin-interface.ts:  actionTypes: string[];
+finnor-os/packages/domain-plugins/shared/plugin-interface.ts:export function createStubPlugin(name: string, actionTypes: string[]): DomainEnginePlugin {
+finnor-os/packages/domain-plugins/shared/plugin-interface.ts:    actionTypes,
+finnor-os/packages/domain-plugins/shared/plugin-interface.ts:    canHandle: (t) => actionTypes.includes(t),
+finnor-os/packages/domain-plugins/shared/plugin-interface.ts:      if (!actionTypes.includes(actionType)) {
+finnor-os/packages/domain-plugins/service-reminders/index.ts:const ACTION = "check_reminder_due";
+finnor-os/packages/domain-plugins/service-reminders/index.ts:  actionTypes: [ACTION],
+finnor-os/packages/domain-plugins/water-domain-knowledge/index.ts:const ACTION = "answer_water_question";
+finnor-os/packages/domain-plugins/water-domain-knowledge/index.ts:  actionTypes: [ACTION],
+finnor-os/packages/domain-plugins/proposal-batch/index.ts:const ACTION = "send_proposal_to_recent_installs";
+finnor-os/packages/domain-plugins/proposal-batch/index.ts:  actionTypes: [ACTION],
+finnor-os/packages/domain-plugins/inventory/index.ts:const SCHEMAS: Record<string, z.ZodTypeAny> = {
+finnor-os/packages/domain-plugins/inventory/index.ts:  actionTypes: Object.keys(SCHEMAS),
+finnor-os/packages/domain-plugins/inventory/index.ts:  payloadSchemas: SCHEMAS,
+finnor-os/packages/domain-plugins/inventory/index.ts:    return t in SCHEMAS;
+finnor-os/packages/domain-plugins/inventory/index.ts:    const schema = SCHEMAS[actionType];
+finnor-os/packages/domain-plugins/inventory/index.ts:    const p = SCHEMAS[actionType]!.parse(payload) as Record<string, unknown>;
+finnor-os/packages/domain-plugins/inventory/index.ts:    const p = SCHEMAS[actionType]!.parse(payload) as Record<string, unknown>;
+finnor-os/packages/domain-plugins/proposal-to-installation/index.ts:const SCHEMAS: Record<string, z.ZodTypeAny> = {
+finnor-os/packages/domain-plugins/proposal-to-installation/index.ts:  actionTypes: Object.keys(SCHEMAS),
+finnor-os/packages/domain-plugins/proposal-to-installation/index.ts:  payloadSchemas: SCHEMAS,
+finnor-os/packages/domain-plugins/proposal-to-installation/index.ts:    return t in SCHEMAS;
+finnor-os/packages/domain-plugins/proposal-to-installation/index.ts:    const schema = SCHEMAS[actionType];
+finnor-os/packages/domain-plugins/maintenance-agreement/index.ts:const ACTION = "renew_maintenance_agreement";
+finnor-os/packages/domain-plugins/maintenance-agreement/index.ts:  actionTypes: [ACTION],
+finnor-os/packages/domain-plugins/marketing/index.ts:  actionTypes: [SUMMARIZE, LAUNCH_CAMPAIGN, REVIEW_REQUEST],
+finnor-os/packages/domain-plugins/marketing/index.ts:    return this.actionTypes.includes(t);
+finnor-os/packages/domain-plugins/manual-step/index.ts:const ACTION = "manual_step_suggestion";
+finnor-os/packages/domain-plugins/manual-step/index.ts:  actionTypes: [ACTION],
+finnor-os/packages/domain-plugins/water-test/index.ts:const ACTION = "schedule_water_test";
+finnor-os/packages/domain-plugins/water-test/index.ts:  actionTypes: [ACTION],
+finnor-os/packages/domain-plugins/web-research/index.ts:const SCHEMAS: Record<string, z.ZodTypeAny> = {
+finnor-os/packages/domain-plugins/web-research/index.ts:  actionTypes: Object.keys(SCHEMAS),
+finnor-os/packages/domain-plugins/web-research/index.ts:  payloadSchemas: SCHEMAS,
+finnor-os/packages/domain-plugins/web-research/index.ts:    return t in SCHEMAS;
+finnor-os/packages/domain-plugins/web-research/index.ts:    const schema = SCHEMAS[actionType];
+finnor-os/packages/domain-plugins/web-research/index.ts:    const p = SCHEMAS[actionType]!.parse(payload) as Record<string, unknown>;
+finnor-os/packages/domain-plugins/compliance-documentation/index.ts:const ACTION = "generate_compliance_summary";
+finnor-os/packages/domain-plugins/compliance-documentation/index.ts:  actionTypes: [ACTION],
+$ grep -R 'GLM\|Mistral\|DeepSeek\|Firecrawl\|Exa\|Realtime\|Vapi' finnor-os/packages finnor-os/apps --include='*.ts' | head -300
+finnor-os/packages/tools/src/firecrawl.ts:// Firecrawl adapter for read-only source retrieval. The provider credential is
+finnor-os/packages/tools/src/firecrawl.ts:export interface FirecrawlScrapeResult {
+finnor-os/packages/tools/src/firecrawl.ts:export interface FirecrawlScrapeRequest {
+finnor-os/packages/tools/src/firecrawl.ts:export interface FirecrawlAdapterOptions {
+finnor-os/packages/tools/src/firecrawl.ts:  /** Test/local endpoint seam; production defaults to Firecrawl's public API. */
+finnor-os/packages/tools/src/firecrawl.ts:interface FirecrawlHttpResponse {
+finnor-os/packages/tools/src/firecrawl.ts:type HttpFetch = (input: string, init?: RequestInit) => Promise<RobotsResponse & FirecrawlHttpResponse>;
+finnor-os/packages/tools/src/firecrawl.ts:export class FirecrawlAdapter {
+finnor-os/packages/tools/src/firecrawl.ts:  constructor(options: FirecrawlAdapterOptions = {}) {
+finnor-os/packages/tools/src/firecrawl.ts:  async scrape(request: FirecrawlScrapeRequest): Promise<FirecrawlScrapeResult> {
+finnor-os/packages/tools/src/firecrawl.ts:      return this.limiter.run(new URL(this.apiBaseUrl).hostname, () => this.callFirecrawl(url, request.maxChars));
+finnor-os/packages/tools/src/firecrawl.ts:  private async callFirecrawl(url: URL, requestedMaxChars: number | undefined): Promise<FirecrawlScrapeResult> {
+finnor-os/packages/tools/src/firecrawl.ts:  private async fetchWithTimeout(url: string, init: RequestInit, operation: string): Promise<RobotsResponse & FirecrawlHttpResponse> {
+finnor-os/packages/tools/src/firecrawl.ts:export async function firecrawlScrape(request: FirecrawlScrapeRequest): Promise<FirecrawlScrapeResult> {
+finnor-os/packages/tools/src/firecrawl.ts:  return new FirecrawlAdapter().scrape(request);
+finnor-os/packages/tools/src/capabilities/communications.ts:// existing real adapter (placeVapiCall, packages/tools/src/vapi-rest.ts), rebound to
+finnor-os/packages/tools/src/capabilities/communications.ts:import { placeVapiCall } from "../vapi-rest";
+finnor-os/packages/tools/src/capabilities/communications.ts:// Phase 4 (§4.4): real, configurable daily cap on outbound Vapi calls per tenant —
+finnor-os/packages/tools/src/capabilities/communications.ts:export function isVapiConfigured(): boolean {
+finnor-os/packages/tools/src/capabilities/communications.ts:      const r = await placeVapiCall({
+finnor-os/packages/tools/src/capabilities/communications.ts:      if (!r.ok) throw new Error(r.error ?? "Vapi call failed");
+finnor-os/packages/tools/src/capabilities/crm.ts:// GOHIGHLEVEL_API_KEY exactly like Phase 2's Vapi gate.
+finnor-os/packages/tools/src/capabilities/accounting.ts:// (packages/tools/src/quickbooks.ts) — same shape as Phase 2's Vapi treatment.
+finnor-os/packages/tools/src/mcp-client.ts:// MCP client connections (§28): GoHighLevel official server + Vapi's MCP server.
+finnor-os/packages/tools/src/mcp-client.ts:/** Vapi MCP server for natural-language-to-outbound-call (§28). */
+finnor-os/packages/tools/src/mcp-client.ts:export async function connectVapi(): Promise<McpConnection> {
+finnor-os/packages/tools/src/sandbox.ts:// arrive, createDefaultRegistry() swaps these for the live GHL/Vapi drivers with zero
+finnor-os/packages/tools/src/sandbox.ts:      // optional metadata — unlike the live GHL/Vapi adapters, never omit them.
+finnor-os/packages/tools/src/sandbox.ts:    if (!registry.has(t.name)) registry.register(t); // real drivers (e.g. live Vapi) take precedence
+finnor-os/packages/tools/src/vapi-rest.ts:// Vapi REST client for outbound calls (voice confirmations + spoken failure alerts).
+finnor-os/packages/tools/src/vapi-rest.ts:export async function placeVapiCall(opts: OutboundCallOpts): Promise<ToolCallResult> {
+finnor-os/packages/tools/src/vapi-rest.ts:        "VAPI_PHONE_NUMBER_ID is not set — create/import a number in the Vapi dashboard and set its id",
+finnor-os/packages/tools/src/llm.ts:export class MistralProvider extends OpenAICompatibleProvider {
+finnor-os/packages/tools/src/llm.ts:/** Direct DeepSeek support is optional; when only AWS Bedrock is configured the
+finnor-os/packages/tools/src/llm.ts:export class DeepSeekProvider extends OpenAICompatibleProvider {
+finnor-os/packages/tools/src/llm.ts: * default route; Mistral/DeepSeek are the configured first-party choices. */
+finnor-os/packages/tools/src/llm.ts: * models used by JARVIS (Qwen, DeepSeek, OpenAI OSS, and Amazon Nova). Keeping this
+finnor-os/packages/tools/src/llm.ts:addProvider("mistral", () => new MistralProvider(), mistralConfigured);
+finnor-os/packages/tools/src/llm.ts:addProvider("deepseek", () => (process.env.DEEPSEEK_API_KEY ? new DeepSeekProvider() : new BedrockConverseProvider(BEDROCK_DEEPSEEK_MODEL_ID(), undefined, undefined, "deepseek")), deepseekConfigured);
+finnor-os/packages/tools/src/voice-personas.ts:// Single source of truth for every Vapi voice-assistant persona this system dials
+finnor-os/packages/tools/src/voice-personas.ts:// Each of these is a REAL, separately-created Vapi assistant (verify bindings in the
+finnor-os/packages/tools/src/voice-personas.ts:// Vapi dashboard, not just here — this file only records which id is which persona,
+finnor-os/packages/tools/src/voice-personas.ts:// not what tools/system prompt that assistant actually has configured on Vapi's side).
+finnor-os/packages/tools/src/voice-personas.ts:/** Resolve a persona name to its Vapi assistant id, or undefined if unset/unknown —
+finnor-os/packages/tools/src/exa.ts:// Exa web search — real-time web intelligence (competitor scans, review lookups,
+finnor-os/packages/tools/src/exa.ts:export interface ExaResult {
+finnor-os/packages/tools/src/exa.ts:}): Promise<ExaResult[]> {
+finnor-os/packages/tools/src/builtin-tools.ts:// MCP-backed (GHL, Vapi) or an explicit not_implemented stub behind the same
+finnor-os/packages/tools/src/builtin-tools.ts:import { connectGhl, connectVapi, callMcpTool } from "./mcp-client";
+finnor-os/packages/tools/src/builtin-tools.ts:import { placeVapiCall } from "./vapi-rest";
+finnor-os/packages/tools/src/builtin-tools.ts: *  - "real":    always live GHL/Vapi (fails loudly if keys are missing)
+finnor-os/packages/tools/src/builtin-tools.ts:  // Live Vapi is allowed only in the real communications posture. Resolve this before
+finnor-os/packages/tools/src/builtin-tools.ts:    description: "Place an outbound call via Vapi",
+finnor-os/packages/tools/src/builtin-tools.ts:      const conn = await connectVapi();
+finnor-os/packages/tools/src/builtin-tools.ts:function registerUniversalTools(registry: ToolRegistry, allowLiveVapi: boolean): void {
+finnor-os/packages/tools/src/builtin-tools.ts:  if (allowLiveVapi && vapiPstnConfigured()) {
+finnor-os/packages/tools/src/builtin-tools.ts:    // REAL outbound phone calls — Vapi phone number is configured.
+finnor-os/packages/tools/src/builtin-tools.ts:      description: "Place a REAL outbound call via the dealer's Vapi phone number, optionally with a specialized assistant persona",
+finnor-os/packages/tools/src/builtin-tools.ts:        const r = await placeVapiCall({
+finnor-os/packages/tools/src/builtin-tools.ts:        if (!r.ok) throw new Error(r.error ?? "Vapi call failed");
+finnor-os/packages/tools/src/builtin-tools.ts:    description: "Real-time web search via Exa (competitors, reviews, news, anything)",
+finnor-os/packages/tools/src/builtin-tools.ts:    description: "Read-only source retrieval via Firecrawl with robots, URL-safety, and citation metadata",
+finnor-os/packages/tools/src/health.ts:import { connectVapi } from "./mcp-client";
+finnor-os/packages/tools/src/health.ts:export async function testVapiConnection(): Promise<HealthEntry> {
+finnor-os/packages/tools/src/health.ts:    const conn = await connectVapi();
+finnor-os/packages/domain-plugins/invoice-to-cash/index.ts: * Dedups via receiveInboxEvent exactly like the real Vapi/GHL webhook routes, then
+finnor-os/packages/domain-plugins/proposal-signature/index.ts: * provider's webhook). Dedups via receiveInboxEvent exactly like the real Vapi/GHL
+finnor-os/packages/domain-plugins/shared/db-helpers.ts:    // Exact-ish first, then token match: spoken queries arrive as "RO membranes",
+finnor-os/packages/domain-plugins/web-research/watch-service.ts:  FirecrawlAdapter,
+finnor-os/packages/domain-plugins/web-research/watch-service.ts:  FirecrawlScrapeRequest,
+finnor-os/packages/domain-plugins/web-research/watch-service.ts:  FirecrawlScrapeResult,
+finnor-os/packages/domain-plugins/web-research/watch-service.ts:    private readonly adapter: Pick<FirecrawlAdapter, "scrape">,
+finnor-os/packages/domain-plugins/web-research/watch-service.ts:        const scrapeRequest: FirecrawlScrapeRequest = {
+finnor-os/packages/domain-plugins/web-research/index.ts:// Web research domain plugin — REAL via Exa: competitor scans, review lookups, and
+finnor-os/packages/domain-plugins/web-research/index.ts:import type { FirecrawlScrapeResult, WebCitation } from "@finnor/tools";
+finnor-os/packages/domain-plugins/web-research/index.ts:type VerifiedDiscovery = { discovery: DiscoveryResult; firecrawl: FirecrawlScrapeResult };
+finnor-os/packages/domain-plugins/web-research/index.ts:function typedFirecrawlResult(output: Record<string, unknown>): FirecrawlScrapeResult | undefined {
+finnor-os/packages/domain-plugins/web-research/index.ts:  const value = candidate as Partial<FirecrawlScrapeResult>;
+finnor-os/packages/domain-plugins/web-research/index.ts:  return value as FirecrawlScrapeResult;
+finnor-os/packages/domain-plugins/web-research/index.ts:  const attempts = new Map<string, { result?: FirecrawlScrapeResult; error?: string }>();
+finnor-os/packages/domain-plugins/web-research/index.ts:    const verified = response.ok ? typedFirecrawlResult(response.output) : undefined;
+finnor-os/packages/domain-plugins/web-research/index.ts:      : { error: response.error ?? "Firecrawl verification returned no typed source" });
+finnor-os/packages/domain-plugins/web-research/index.ts:      ? `Search found ${results.length} candidate source${results.length === 1 ? "" : "s"}, but Firecrawl could not verify their contents. I won't summarize unverified discovery as fact.`
+finnor-os/packages/domain-plugins/web-research/index.ts:      : `Verified ${verified.length} source${verified.length === 1 ? "" : "s"} via Firecrawl. Top verified source: ${verified[0]!.firecrawl.title}. ${verified[0]!.firecrawl.excerpt.slice(0, 200)}${unverifiedCount > 0 ? ` ${unverifiedCount} discovery candidate${unverifiedCount === 1 ? " remains" : "s remain"} unverified and is not included as fact.` : ""}`;
+finnor-os/packages/domain-plugins/web-research/index.ts:  // Explicit source URLs opt this scan into Firecrawl snapshots. Discovery still
+finnor-os/packages/domain-plugins/web-research/index.ts:  // uses Exa below; monitoring never guesses URLs from a search snippet.
+finnor-os/packages/domain-plugins/web-research/index.ts:      const scraped: FirecrawlScrapeResult[] = [];
+finnor-os/packages/domain-plugins/web-research/index.ts:          const value = result.output.result as FirecrawlScrapeResult | undefined;
+finnor-os/packages/memory/src/evidence-recorder.ts:export type FirecrawlFreshness = "fresh" | "stale" | "unknown" | "unavailable";
+finnor-os/packages/memory/src/evidence-recorder.ts:export interface FirecrawlEvidenceCitation {
+finnor-os/packages/memory/src/evidence-recorder.ts:  freshness: FirecrawlFreshness;
+finnor-os/packages/memory/src/evidence-recorder.ts:/** Structural copy of the Firecrawl snapshot returned to the watch worker. */
+finnor-os/packages/memory/src/evidence-recorder.ts:export interface FirecrawlEvidenceSnapshot {
+finnor-os/packages/memory/src/evidence-recorder.ts:  freshness: FirecrawlFreshness;
+finnor-os/packages/memory/src/evidence-recorder.ts:export interface FirecrawlEvidenceRecord {
+finnor-os/packages/memory/src/evidence-recorder.ts:  citation: FirecrawlEvidenceCitation;
+finnor-os/packages/memory/src/evidence-recorder.ts:  snapshot: FirecrawlEvidenceSnapshot;
+finnor-os/packages/memory/src/evidence-recorder.ts:export interface FirecrawlEvidenceRecorderDependencies {
+finnor-os/packages/memory/src/evidence-recorder.ts:  if (typeof value !== "string" || !value.trim()) throw new Error("Firecrawl evidence requires a source URL");
+finnor-os/packages/memory/src/evidence-recorder.ts:    throw new Error("Firecrawl evidence source URL must be absolute");
+finnor-os/packages/memory/src/evidence-recorder.ts:    throw new Error("Firecrawl evidence source URL must use HTTP(S)");
+finnor-os/packages/memory/src/evidence-recorder.ts:  if (url.username || url.password) throw new Error("Firecrawl evidence source URL cannot contain credentials");
+finnor-os/packages/memory/src/evidence-recorder.ts:  citation: FirecrawlEvidenceCitation,
+finnor-os/packages/memory/src/evidence-recorder.ts:  snapshot: FirecrawlEvidenceSnapshot,
+finnor-os/packages/memory/src/evidence-recorder.ts:  input: FirecrawlEvidenceRecord,
+finnor-os/packages/memory/src/evidence-recorder.ts:function sourceInputFor(input: FirecrawlEvidenceRecord): EvidenceSourceInput {
+finnor-os/packages/memory/src/evidence-recorder.ts:  if (url !== citationUrl) throw new Error("Firecrawl citation and snapshot URLs must match");
+finnor-os/packages/memory/src/evidence-recorder.ts:function datesFor(input: FirecrawlEvidenceRecord, now: () => Date): Pick<EvidenceVersionInput, "asOf" | "retrievedAt"> {
+finnor-os/packages/memory/src/evidence-recorder.ts:export class FirecrawlEvidenceRecorder {
+finnor-os/packages/memory/src/evidence-recorder.ts:  constructor(dependencies: FirecrawlEvidenceRecorderDependencies = {}) {
+finnor-os/packages/memory/src/evidence-recorder.ts:  async record(input: FirecrawlEvidenceRecord): Promise<void> {
+finnor-os/packages/memory/src/evidence-recorder.ts:      throw new Error("Firecrawl evidence requires a tenantId");
+finnor-os/packages/memory/src/evidence-recorder.ts:      throw new Error("Firecrawl evidence requires an idempotencyKey");
+finnor-os/packages/memory/src/evidence-recorder.ts:      throw new Error("Firecrawl evidence content cannot be empty");
+finnor-os/packages/memory/src/evidence-recorder.ts:      throw new Error("Firecrawl evidence accepts only Firecrawl citations and snapshots");
+finnor-os/packages/memory/src/evidence-recorder.ts:      throw new Error("Firecrawl evidence recorder refuses public evidence sources");
+finnor-os/packages/memory/src/evidence-recorder.ts:export function createFirecrawlEvidenceRecorder(
+finnor-os/packages/memory/src/evidence-recorder.ts:  dependencies: FirecrawlEvidenceRecorderDependencies = {},
+finnor-os/packages/memory/src/evidence-recorder.ts:): FirecrawlEvidenceRecorder {
+finnor-os/packages/memory/src/evidence-recorder.ts:  return new FirecrawlEvidenceRecorder(dependencies);
+finnor-os/packages/policy-schema/src/index.ts:// Vapi webhook: transcript events feed the Planner as instructions.
+finnor-os/packages/policy-schema/src/index.ts:// `call` uses .passthrough() at every level — Vapi's payload carries fields (customer.number,
+finnor-os/packages/policy-schema/src/index.ts:export const VapiWebhookSchema = z.object({
+finnor-os/packages/orchestration/src/executor.ts:      // Voice-native confirmation: if Vapi is configured, have it read the draft to the
+finnor-os/packages/orchestration/src/voice.ts:// building the sentences Vapi speaks. Pure = unit-testable without any Vapi account.
+finnor-os/packages/orchestration/src/voice.ts:  vapi: "Vapi (your phone system)",
+finnor-os/packages/orchestration/src/voice.ts:/** The sentence Vapi reads before capturing the spoken yes/no. */
+finnor-os/packages/orchestration/src/runtime-bridge.ts:// (POST /actions/:id/confirm, the Vapi voice-confirmation flow that must speak a real
+finnor-os/packages/orchestration/src/llm.ts:  DeepSeekProvider,
+finnor-os/packages/orchestration/src/llm.ts:  MistralProvider,
+finnor-os/packages/orchestration/src/planning-health.ts:/** Exact provider-backed paths in the current plugins.  We deliberately do not
+finnor-os/packages/orchestration/src/planner-memory.ts:/** Exactly five semantic rows maximum; the combined redacted content is capped at
+finnor-os/packages/db/schema.ts:// Resolves which tenant a Vapi call belongs to from the DIALED number. Not
+finnor-os/packages/db/seed.ts:    // Maps the seed tenant's registered Vapi line to VAPI_PHONE_NUMBER_ID (the real
+finnor-os/packages/db/seed.ts:    // Vapi assistant's dialed-number id) when the env var is present, so the tenant
+finnor-os/packages/db/seed.ts:    // real Vapi, and esign/accounting/payments/marketing stay emulator until a real
+finnor-os/packages/db/migrations-bundle.ts:  { name: "0003_sandbox_outbox.sql", sql: "-- Every message/call Finnor \"sends\" while real carriers (GHL SMS, Vapi PSTN) are not\n-- yet connected lands here — real, observable, tenant-scoped. When carriers connect,\n-- the same tool names route to the real drivers and this table stops growing.\nCREATE TABLE IF NOT EXISTS finnor_os.sandbox_outbox (\n  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),\n  tenant_id uuid NOT NULL REFERENCES finnor_os.tenants(id),\n  channel text NOT NULL CHECK (channel IN ('sms','call','email')),\n  to_number text NOT NULL,\n  content text NOT NULL,\n  simulated boolean NOT NULL DEFAULT true,\n  created_at timestamptz NOT NULL DEFAULT now()\n);\nALTER TABLE finnor_os.sandbox_outbox ENABLE ROW LEVEL SECURITY;\nALTER TABLE finnor_os.sandbox_outbox FORCE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS tenant_isolation ON finnor_os.sandbox_outbox;\nCREATE POLICY tenant_isolation ON finnor_os.sandbox_outbox\n  USING (tenant_id = finnor_os.request_tenant_id())\n  WITH CHECK (tenant_id = finnor_os.request_tenant_id());\nDO $do$\nBEGIN\n  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'finnor_app') THEN\n    GRANT SELECT, INSERT ON finnor_os.sandbox_outbox TO finnor_app;\n  END IF;\nEND $do$;\n" },
+finnor-os/packages/db/migrations-bundle.ts:  { name: "0013_tenant_phone_numbers.sql", sql: "-- Phase 14 (docs/jarvis-99-phase-10-16-execution-plan.md, \"PHASE 14\"): resolves which\n-- tenant a Vapi call belongs to from the DIALED number, so a multi-tenant deployment\n-- routes correctly instead of every call defaulting to VAPI_DEFAULT_TENANT_ID.\n--\n-- Not tenant-scoped and deliberately has NO RLS policy — same convention as\n-- finnor_os.jobs (0000_init.sql): this table is looked up during tenant *resolution*,\n-- before tenant_id is known, so a request_tenant_id()-gated RLS policy would make the\n-- lookup that establishes tenant_id unable to run at all.\n--\n-- Uniques are GLOBAL (not per-tenant) on purpose: one dialed number must resolve to\n-- exactly one tenant.\nCREATE TABLE IF NOT EXISTS finnor_os.tenant_phone_numbers (\n  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),\n  tenant_id uuid NOT NULL REFERENCES finnor_os.tenants(id),\n  phone_number text NOT NULL,\n  vapi_phone_number_id text,\n  label text,\n  created_at timestamptz NOT NULL DEFAULT now(),\n  UNIQUE (phone_number),\n  UNIQUE (vapi_phone_number_id)\n);\n" },
+finnor-os/packages/db/migrations-bundle.ts:  { name: "0025_document_contents_and_external_refs.sql", sql: "-- Phase 4 (§4.2/§4.5): two tables.\n--\n-- document_contents: real PDF bytes, Postgres-backed (no blob-storage account exists\n-- or is in scope this phase) -- separate from documents' metadata row, same\n-- convention as decision_receipts living apart from workflow_steps. One row per\n-- document; content is immutable once written (a re-generation with the same\n-- idempotency key is a no-op at the capability layer, never an in-place edit here).\n--\n-- external_refs: the single join between a Finnor-internal entity and a real\n-- provider's object, once Phase 4's provider bindings start flipping from emulator to\n-- real (GHL contacts, QuickBooks customers/invoices, Stripe payment links, DocuSign\n-- envelopes, Vapi call ids). No provider ids scattered across domain tables.\n\nCREATE TABLE IF NOT EXISTS finnor_os.document_contents (\n  document_id uuid PRIMARY KEY REFERENCES finnor_os.documents(id),\n  tenant_id uuid NOT NULL REFERENCES finnor_os.tenants(id),\n  content_type text NOT NULL DEFAULT 'application/pdf',\n  bytes bytea NOT NULL,\n  size_bytes integer NOT NULL,\n  created_at timestamptz NOT NULL DEFAULT now()\n);\n\nCREATE TABLE IF NOT EXISTS finnor_os.external_refs (\n  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),\n  tenant_id uuid NOT NULL REFERENCES finnor_os.tenants(id),\n  entity text NOT NULL, -- e.g. \"household\", \"invoice\", \"proposal\", \"appointment\"\n  internal_id uuid NOT NULL,\n  provider text NOT NULL, -- e.g. \"ghl\", \"quickbooks\", \"stripe\", \"docusign\", \"vapi\"\n  external_id text NOT NULL,\n  synced_at timestamptz NOT NULL DEFAULT now()\n);\n\nCREATE UNIQUE INDEX IF NOT EXISTS external_refs_internal_provider_idx\n  ON finnor_os.external_refs (tenant_id, entity, internal_id, provider);\nCREATE INDEX IF NOT EXISTS external_refs_external_id_idx\n  ON finnor_os.external_refs (tenant_id, provider, external_id);\n\nDO $do$\nBEGIN\n  ALTER TABLE finnor_os.document_contents ENABLE ROW LEVEL SECURITY;\n  ALTER TABLE finnor_os.document_contents FORCE ROW LEVEL SECURITY;\n  DROP POLICY IF EXISTS tenant_isolation ON finnor_os.document_contents;\n  CREATE POLICY tenant_isolation ON finnor_os.document_contents\n    USING (tenant_id = finnor_os.request_tenant_id())\n    WITH CHECK (tenant_id = finnor_os.request_tenant_id());\n\n  ALTER TABLE finnor_os.external_refs ENABLE ROW LEVEL SECURITY;\n  ALTER TABLE finnor_os.external_refs FORCE ROW LEVEL SECURITY;\n  DROP POLICY IF EXISTS tenant_isolation ON finnor_os.external_refs;\n  CREATE POLICY tenant_isolation ON finnor_os.external_refs\n    USING (tenant_id = finnor_os.request_tenant_id())\n    WITH CHECK (tenant_id = finnor_os.request_tenant_id());\n\n  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'finnor_app') THEN\n    GRANT SELECT, INSERT, UPDATE, DELETE ON finnor_os.document_contents TO finnor_app;\n    GRANT SELECT, INSERT, UPDATE, DELETE ON finnor_os.external_refs TO finnor_app;\n  END IF;\nEND $do$;\n" },
+finnor-os/packages/db/migrations-bundle.ts:  { name: "0037_pg_notify_jarvis_events.sql", sql: "-- B1.T1 — realtime backbone: a single generic trigger function notifies on the\n-- 'jarvis_events' channel with IDs only ({tenantId, kind, id, ts}) — never the row\n-- payload itself. Listeners (the SSE gateway, apps/worker/src/sse/) relay the id to\n-- authz'd clients, who refetch full data through the existing REST APIs they already\n-- have tenant-scoped access to. This keeps the trigger cheap (no risk of leaking a\n-- row's contents to a channel with no RLS of its own) and keeps NOTIFY's 8000-byte\n-- payload ceiling a complete non-issue.\n--\n-- kind values: 'action_log' | 'workflow_step' | 'dead_letter' | 'domain_action' | 'call'.\n-- 'call' rides the same mechanism for B1.T4's durable half (a call finishing and\n-- being persisted via persistCall) — the in-progress/ephemeral half (Vapi\n-- status-update messages, which have no durable row of their own) is a direct\n-- pg_notify from the webhook handler itself, not a trigger, since there is no table\n-- write to hang a trigger off for that case.\nCREATE OR REPLACE FUNCTION finnor_os.notify_jarvis_event() RETURNS trigger AS $$\nDECLARE\n  kind text := TG_ARGV[0];\nBEGIN\n  PERFORM pg_notify('jarvis_events', json_build_object(\n    'tenantId', NEW.tenant_id,\n    'kind', kind,\n    'id', NEW.id,\n    'ts', to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"')\n  )::text);\n  RETURN NEW;\nEND;\n$$ LANGUAGE plpgsql;\n\n-- action_log is append-only (§10/§19) — insert only, never updated.\nDROP TRIGGER IF EXISTS action_log_notify ON finnor_os.action_log;\nCREATE TRIGGER action_log_notify\n  AFTER INSERT ON finnor_os.action_log\n  FOR EACH ROW EXECUTE FUNCTION finnor_os.notify_jarvis_event('action_log');\n\nDROP TRIGGER IF EXISTS workflow_steps_notify ON finnor_os.workflow_steps;\nCREATE TRIGGER workflow_steps_notify\n  AFTER INSERT OR UPDATE ON finnor_os.workflow_steps\n  FOR EACH ROW EXECUTE FUNCTION finnor_os.notify_jarvis_event('workflow_step');\n\nDROP TRIGGER IF EXISTS dead_letters_notify ON finnor_os.dead_letters;\nCREATE TRIGGER dead_letters_notify\n  AFTER INSERT OR UPDATE ON finnor_os.dead_letters\n  FOR EACH ROW EXECUTE FUNCTION finnor_os.notify_jarvis_event('dead_letter');\n\n-- domain_actions(status) per the plan — only fires on insert (initial draft status) or\n-- when status itself actually changes, not on every unrelated column touch.\nDROP TRIGGER IF EXISTS domain_actions_status_notify ON finnor_os.domain_actions;\nCREATE TRIGGER domain_actions_status_notify\n  AFTER INSERT OR UPDATE OF status ON finnor_os.domain_actions\n  FOR EACH ROW EXECUTE FUNCTION finnor_os.notify_jarvis_event('domain_action');\n\n-- B1.T4 durable half: a call finishing (persistCall's insert) streams to the cockpit\n-- the same way everything else does. calls rows are never updated after insert today.\nDROP TRIGGER IF EXISTS calls_notify ON finnor_os.calls;\nCREATE TRIGGER calls_notify\n  AFTER INSERT ON finnor_os.calls\n  FOR EACH ROW EXECUTE FUNCTION finnor_os.notify_jarvis_event('call');\n\n-- B1.T3 coverage gap, found while wiring the pipeline-health projection: the plan's\n-- own trigger list (action_log/workflow_steps/dead_letters/domain_actions) covers\n-- reliability and activity, but NOTHING notifies on the tables pipeline-health is\n-- actually computed from (leads/quotes/proposals status). Without this, that\n-- projection could only ever go stale under a NOTIFY-driven design. Added here rather\n-- than treated as a \"changes the design\" stop: same generic trigger function, two more\n-- tables, same IDs-only shape — an extension of B1.T1's own mechanism, not a new one.\n-- proposals is deliberately excluded: it has no tenant_id column of its own (see\n-- packages/read-models pipelineHealth()'s own comment — it's scoped via household_id\n-- instead), so this generic NEW.tenant_id-reading trigger can't fire on it without a\n-- join the trigger function doesn't do. That leg of pipeline-health relies on the\n-- periodic rebuild-all backstop (packages/projections) instead of a live NOTIFY.\nDROP TRIGGER IF EXISTS leads_notify ON finnor_os.leads;\nCREATE TRIGGER leads_notify\n  AFTER INSERT OR UPDATE OF status ON finnor_os.leads\n  FOR EACH ROW EXECUTE FUNCTION finnor_os.notify_jarvis_event('lead');\n\nDROP TRIGGER IF EXISTS quotes_notify ON finnor_os.quotes;\nCREATE TRIGGER quotes_notify\n  AFTER INSERT OR UPDATE OF status ON finnor_os.quotes\n  FOR EACH ROW EXECUTE FUNCTION finnor_os.notify_jarvis_event('quote');\n" },
+finnor-os/packages/data-platform/src/conversations.ts:// Persists what the Vapi webhook used to throw away: a queryable, permanent record of
+finnor-os/apps/api/app/api/setup/status/route.ts:  testVapiConnection,
+finnor-os/apps/api/app/api/setup/status/route.ts:      testVapiConnection(),
+finnor-os/apps/api/app/api/integrations/status/route.ts:  testVapiConnection,
+finnor-os/apps/api/app/api/integrations/status/route.ts:      testVapiConnection(),
+finnor-os/apps/api/app/api/actions/[id]/reject/route.ts:// Vapi webhook (see confirm/route.ts for why).
+finnor-os/apps/api/app/api/actions/[id]/confirm/route.ts:// executor (legacy GatedExecutor or LangGraph), shared with reject and the Vapi
+finnor-os/apps/api/app/api/webhooks/payment/route.ts:      // `t=<unix>,v1=<hex hmac>` shape the Vapi route already verifies.
+finnor-os/apps/api/app/api/webhooks/esign/route.ts:// body (header `x-docusign-signature-1`) — no timestamp component, unlike Vapi/
+finnor-os/apps/api/app/api/webhooks/marketing/route.ts: * platform-native signature scheme to verify against — unlike GHL/Vapi/Stripe/
+finnor-os/apps/api/app/api/webhooks/vapi/route.ts://  1. tool-calls (live call): the Vapi assistant exposes two tools —
+finnor-os/apps/api/app/api/webhooks/vapi/route.ts:import { VapiWebhookSchema } from "@finnor/policy-schema";
+finnor-os/apps/api/app/api/webhooks/vapi/route.ts: * Match order: (1) Vapi's own phoneNumberId (preferred — stable across number
+finnor-os/apps/api/app/api/webhooks/vapi/route.ts:    const [byVapiId] = await adminDb()
+finnor-os/apps/api/app/api/webhooks/vapi/route.ts:    if (byVapiId) return byVapiId.tenantId;
+finnor-os/apps/api/app/api/webhooks/vapi/route.ts:interface VapiToolCall {
+finnor-os/apps/api/app/api/webhooks/vapi/route.ts:  const list = (message.toolCallList ?? message.toolCalls ?? []) as VapiToolCall[];
+finnor-os/apps/api/app/api/webhooks/vapi/route.ts:  const parsed = VapiWebhookSchema.safeParse(json);
+finnor-os/apps/api/app/api/webhooks/vapi/route.ts:    const toolCallIds = ((msg.toolCallList ?? msg.toolCalls ?? []) as VapiToolCall[]).map((tc) => tc.id).join(",");
+finnor-os/apps/api/lib/verify-hmac-signature.ts:// Shared HMAC-with-timestamp webhook signature verifier. Extracted from the Vapi
+finnor-os/apps/api/lib/verify-hmac-signature.ts:// exact same shape Vapi already uses, not a coincidence worth re-deriving.
+finnor-os/apps/worker/src/handlers/scheduled-reminder.ts:/** No response after both reminders: mark the agreement lapsed and have Vapi tell the
+finnor-os/apps/worker/src/handlers/send-push-notification.ts:  webpush.setVapidDetails(subject, publicKey, privateKey);
+finnor-os/apps/worker/src/handlers/voice-confirm-request.ts:// outbound Vapi call to the OWNER, read the draft, and let the end-of-call webhook
+finnor-os/apps/worker/src/handlers/voice-confirm-request.ts:import { placeVapiCall } from "@finnor/tools";
+finnor-os/apps/worker/src/handlers/voice-confirm-request.ts:  const result = await placeVapiCall({
+finnor-os/apps/worker/src/handlers/voice-confirm-request.ts:  if (!result.ok) throw new Error(result.error ?? "Vapi call failed");
+finnor-os/apps/worker/src/handlers/scan-integration-health.ts:  testVapiConnection,
+finnor-os/apps/worker/src/handlers/scan-integration-health.ts:      const r = await testVapiConnection();
+finnor-os/apps/worker/src/handlers/owner-digest.ts:import { placeVapiCall, VOICE_PERSONAS, logWithTrace, isAllowlistedRecipient, sendResendEmail } from "@finnor/tools";
+finnor-os/apps/worker/src/handlers/owner-digest.ts:    const result = await placeVapiCall({
+finnor-os/apps/worker/src/handlers/process-instruction.ts:// process_instruction job: the async entry point for Vapi transcripts — runs the full
+finnor-os/apps/worker/src/handlers/voice-notify-failure.ts:import { placeVapiCall } from "@finnor/tools";
+finnor-os/apps/worker/src/handlers/voice-notify-failure.ts:  const result = await placeVapiCall({
+finnor-os/apps/worker/src/handlers/voice-notify-failure.ts:  if (!result.ok) throw new Error(result.error ?? "Vapi call failed");

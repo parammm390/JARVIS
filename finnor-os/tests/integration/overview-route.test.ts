@@ -6,7 +6,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import pg from "pg";
 import { randomUUID } from "node:crypto";
 import { migrate } from "../../packages/db/migrate";
-import { withTenant, closePool, tenants, domainActions, households, domainPolicies } from "@finnor/db";
+import { withTenant, closePool, tenants, domainActions, households, domainPolicies, domainPolicyRevisions } from "@finnor/db";
 import { eq } from "drizzle-orm";
 import { GET as overviewGET } from "../../apps/api/app/api/overview/route";
 
@@ -46,9 +46,24 @@ describe.skipIf(!available)("GET /api/overview (Phase 7.6)", () => {
     // is ungated, low risk) — the fail-closed defaultPolicy() otherwise requires
     // confirmation for any tenant with no seeded policy row, which is correct for an
     // unconfigured tenant but not what this route needs to prove against a real one.
-    await withTenant(TENANT_ID, (db) =>
-      db.insert(domainPolicies).values({ tenantId: TENANT_ID, actionType: "get_business_overview", requiresConfirmation: false }).onConflictDoNothing(),
-    );
+    await withTenant(TENANT_ID, async (db) => {
+      const [policy] = await db
+        .insert(domainPolicies)
+        .values({ tenantId: TENANT_ID, actionType: "get_business_overview", requiresConfirmation: false })
+        .returning();
+      await db.insert(domainPolicyRevisions).values({
+        tenantId: TENANT_ID,
+        policyId: policy!.id,
+        actionType: policy!.actionType,
+        version: policy!.version,
+        policy: policy!.policy,
+        requiresConfirmation: policy!.requiresConfirmation,
+        confirmationTemplate: policy!.confirmationTemplate,
+        modelProvider: policy!.modelProvider,
+        confirmationTimeoutHours: policy!.confirmationTimeoutHours,
+        effectiveFrom: policy!.effectiveFrom,
+      });
+    });
   });
 
   afterAll(async () => {

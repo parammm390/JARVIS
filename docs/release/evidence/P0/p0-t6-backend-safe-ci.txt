@@ -1,0 +1,46 @@
+$ npm run authz:matrix:check
+
+> finnor-os@0.1.0 authz:matrix:check
+> tsx scripts/generate-authz-matrix.ts --check
+
+Authorization matrix is stale. Run: npm run authz:matrix
+exit=1
+$ npm run typecheck
+
+> finnor-os@0.1.0 typecheck
+> tsc -p tsconfig.json
+
+packages/orchestration/src/instruction-trace.test.ts(38,13): error TS2352: Conversion of type 'InstructionTraceAnswerResult' to type 'Record<string, unknown>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Index signature for type 'string' is missing in type 'InstructionTraceAnswerResult'.
+scripts/release/action-hardening-spec.ts(26,14): error TS2322: Type '{ plugin: string | boolean | undefined; actionType: string | boolean | undefined; profile: ActionProfile; approvalFloor: ApprovalFloor; capabilityFamily: string | ... 1 more ... | undefined; external: string | ... 1 more ... | undefined; receipt: true; }[]' is not assignable to type 'readonly ActionHardeningSpecRow[]'.
+  Type '{ plugin: string | boolean | undefined; actionType: string | boolean | undefined; profile: ActionProfile; approvalFloor: ApprovalFloor; capabilityFamily: string | boolean | undefined; external: string | ... 1 more ... | undefined; receipt: true; }' is not assignable to type 'ActionHardeningSpecRow'.
+    Types of property 'plugin' are incompatible.
+      Type 'string | boolean | undefined' is not assignable to type 'string'.
+        Type 'undefined' is not assignable to type 'string'.
+scripts/release/discover-action-registry.ts(54,24): error TS2345: Argument of type 'Expression | undefined' is not assignable to parameter of type 'Node'.
+  Type 'undefined' is not assignable to type 'Node'.
+scripts/release/generate-environment-contract.ts(45,105): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+tests/unit/fast-read-lane.test.ts(74,70): error TS2322: Type '{ classify: () => { route: string; intent: "cash_collections"; }; route: Mock<() => Promise<AnswerEnvelope>>; }' is not assignable to type 'FastReadOnlyRouter'.
+  The types returned by 'classify(...)' are incompatible between these types.
+    Type '{ route: string; intent: "cash_collections"; }' is not assignable to type 'FastReadOnlyClassification'.
+      Type '{ route: string; intent: "cash_collections"; }' is not assignable to type '{ route: "fast_read"; intent: "cash_collections"; } | { route: "planner"; reason: "not_question" | "mutation_or_advice" | "external_or_ambiguous" | "unsupported"; }'.
+        Type '{ route: string; intent: "cash_collections"; }' is not assignable to type '{ route: "fast_read"; intent: "cash_collections"; }'.
+          Types of property 'route' are incompatible.
+            Type 'string' is not assignable to type '"fast_read"'.
+exit=2
+$ npm run test:planner-evals
+
+> finnor-os@0.1.0 test:planner-evals
+> vitest run tests/planner-evals
+
+
+ RUN  v4.1.10 /Users/paramdave/Desktop/FINNOR/finnor-os
+
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  16:02:11
+   Duration  3.15s (transform 749ms, setup 0ms, import 3.02s, tests 5ms, environment 0ms)
+
+exit=0

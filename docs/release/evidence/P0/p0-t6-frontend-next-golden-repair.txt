@@ -1,0 +1,107 @@
+
+[WebServer] (node:86864) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+[WebServer] (node:86869) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+
+Running 17 tests using 2 workers
+
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+
+(node:86876) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+(node:86877) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[1/17] [desktop-chromium] › e2e/jarvis-next-golden.spec.ts:36:9 › P2 — signed-out /jarvis/next route (real, no fixture) › signed-out /jarvis/next at 1440px
+[2/17] [desktop-chromium] › e2e/jarvis-next-golden.spec.ts:36:9 › P2 — signed-out /jarvis/next route (real, no fixture) › signed-out /jarvis/next at 390px
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+[3/17] [desktop-chromium] › e2e/jarvis-next-golden.spec.ts:68:11 › P2 — golden-journey states (labelled FIXTURE harness) › fixture=heard at 1440px
+
+[WebServer] (node:86893) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[4/17] [desktop-chromium] › e2e/jarvis-next-golden.spec.ts:68:11 › P2 — golden-journey states (labelled FIXTURE harness) › fixture=heard at 390px
+[5/17] [desktop-chromium] › e2e/jarvis-next-golden.spec.ts:68:11 › P2 — golden-journey states (labelled FIXTURE harness) › fixture=understood at 1440px
+[6/17] [desktop-chromium] › e2e/jarvis-next-golden.spec.ts:68:11 › P2 — golden-journey states (labelled FIXTURE harness) › fixture=understood at 390px
+[7/17] [desktop-chromium] › e2e/jarvis-next-golden.spec.ts:68:11 › P2 — golden-journey states (labelled FIXTURE harness) › fixture=plan at 1440px
+[8/17] [desktop-chromium] › e2e/jarvis-next-golden.spec.ts:68:11 › P2 — golden-journey states (labelled FIXTURE harness) › fixture=plan at 390px
+[9/17] [desktop-chromium] › e2e/jarvis-next-golden.spec.ts:68:11 › P2 — golden-journey states (labelled FIXTURE harness) › fixture=clarify at 1440px
+[10/17] [desktop-chromium] › e2e/jarvis-next-golden.spec.ts:68:11 › P2 — golden-journey states (labelled FIXTURE harness) › fixture=clarify at 390px
+[11/17] [desktop-chromium] › e2e/jarvis-next-golden.spec.ts:68:11 › P2 — golden-journey states (labelled FIXTURE harness) › fixture=approval at 1440px
+[12/17] [desktop-chromium] › e2e/jarvis-next-golden.spec.ts:68:11 › P2 — golden-journey states (labelled FIXTURE harness) › fixture=approval at 390px
+
+[WebServer] (node:86928) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[13/17] [desktop-chromium] › e2e/jarvis-next-golden.spec.ts:68:11 › P2 — golden-journey states (labelled FIXTURE harness) › fixture=execution at 1440px
+[14/17] [desktop-chromium] › e2e/jarvis-next-golden.spec.ts:68:11 › P2 — golden-journey states (labelled FIXTURE harness) › fixture=execution at 390px
+[15/17] [desktop-chromium] › e2e/jarvis-next-golden.spec.ts:68:11 › P2 — golden-journey states (labelled FIXTURE harness) › fixture=receipt at 1440px
+
+[WebServer] (node:86941) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[16/17] [desktop-chromium] › e2e/jarvis-next-golden.spec.ts:68:11 › P2 — golden-journey states (labelled FIXTURE harness) › fixture=receipt at 390px
+[17/17] [desktop-chromium] › e2e/jarvis-next-golden.spec.ts:107:7 › P2 — keyboard reachability (structural, not a full authenticated journey) › Clarify's Answer input auto-focuses, and Answer/Skip/Cancel are all keyboard-reachable
+
+[WebServer] (node:86948) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+  17 passed (1.3m)

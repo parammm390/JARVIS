@@ -1,0 +1,5 @@
+
+> finnor-os@0.1.0 test:staging
+> tsx scripts/guard-staging.ts
+
+[test:staging] refusing to run: set STAGING=1 to confirm you mean to target a staging database.

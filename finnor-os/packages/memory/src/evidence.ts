@@ -496,7 +496,10 @@ export async function searchEvidence(input: EvidenceSearchInput): Promise<Eviden
         );
         vector.push(...result.rows.map((row) => ({ ...mapEvidenceRow(row), vectorScore: Number(row.vector_score ?? 0) })));
       } else {
-        const result = await client.query(`${base} AND c.embedding IS NOT NULL`, params);
+        // Keep $2 typed in the no-pgvector fallback: `base` uses $1 (tenant) and
+        // $3 (as-of), while the shared parameter layout reserves $2 for the query.
+        // PostgreSQL rejects an otherwise-unused $2 because it cannot infer its type.
+        const result = await client.query(`${base} AND c.embedding IS NOT NULL AND $2::text IS NOT NULL ORDER BY c.id LIMIT $4`, params);
         const scored = result.rows.map((row) => {
           const candidate = mapEvidenceRow(row);
           const embedding = parseJsonArray(row.embedding).map(Number);

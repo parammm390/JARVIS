@@ -1,0 +1,5 @@
+
+> finnor-os@0.1.0 release:manifest
+> tsx scripts/release/verify-action-manifest.ts
+
+PASS: fixed spec and discovered registry match 44/44 (docs/release/generated/action-manifest.md)

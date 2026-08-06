@@ -1,0 +1,234 @@
+
+[WebServer] (node:89013) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+[WebServer] (node:89018) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+
+Running 10 tests using 2 workers
+
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+
+(node:89036) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+(node:89037) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[1/10] [desktop-chromium] › e2e/jarvis-p3-clarification-fixtures.spec.ts:18:9 › P3.T3 — clarification question focus, labelled fixture › question owns focus and keyboard return at 1440px
+[2/10] [desktop-chromium] › e2e/jarvis-p3-clarification-fixtures.spec.ts:18:9 › P3.T3 — clarification question focus, labelled fixture › question owns focus and keyboard return at 390px
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+[3/10] [desktop-chromium] › e2e/jarvis-p3-clarification-fixtures.spec.ts:68:7 › P3.T3 — clarification question focus, labelled fixture › reduced motion settles the same dim/focus state without travel
+[4/10] [desktop-chromium] › e2e/jarvis-p3-lifecycle-fixture.spec.ts:142:7 › P3 exit-gate same-document lifecycle, labelled fixture › ready through terminal remains one causal document at 1440px
+[5/10] [desktop-chromium] › e2e/jarvis-p3-lifecycle-fixture.spec.ts:148:7 › P3 exit-gate same-document lifecycle, labelled fixture › ready through terminal remains one causal document at 390px
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+
+[WebServer] (node:89059) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[desktop-chromium] › e2e/jarvis-p3-lifecycle-fixture.spec.ts:142:7 › P3 exit-gate same-document lifecycle, labelled fixture › ready through terminal remains one causal document at 1440px
+[P3.EXIT] 1440px reduced=false transcript=[{"step":"rest","activeBlock":null,"focus":"body","scrollY":0,"scrollHeight":1295,"scrollWidth":1440,"layoutShift":0,"metrics":[]},{"step":"heard","activeBlock":"heard","focus":"journey-next","scrollY":0},{"step":"understood","activeBlock":"understood","focus":"journey-next","scrollY":0},{"step":"plan","activeBlock":"plan","focus":"journey-next","scrollY":228},{"step":"clarify","activeBlock":"plan","focus":"journey-next","scrollY":0},{"step":"approval","activeBlock":"plan","focus":"h2","scrollY":0},{"step":"execution","activeBlock":"execution","focus":"journey-next","scrollY":0},{"step":"verifying","activeBlock":"execution","focus":"journey-next","scrollY":0},{"step":"receipt","activeBlock":"receipt","focus":"div","scrollY":0}] runtime={"activeBlock":"receipt","focus":"div","scrollY":0,"scrollHeight":1597,"scrollWidth":1440,"layoutShift":0,"metrics":[{"seq":"1","stage":"heard","eventToPixelMs":1.1999999940395583},{"seq":"2","stage":"understood","eventToPixelMs":0},{"seq":"3","stage":"plan","eventToPixelMs":0},{"seq":"4","stage":"plan","eventToPixelMs":0},{"seq":"5","stage":"plan","eventToPixelMs":0},{"seq":"6","stage":"execution","eventToPixelMs":20.40000000000009},{"seq":"7","stage":"execution","eventToPixelMs":0},{"seq":"8","stage":"receipt","eventToPixelMs":0}]}
+
+[6/10] [desktop-chromium] › e2e/jarvis-p3-lifecycle-fixture.spec.ts:154:7 › P3 exit-gate same-document lifecycle, labelled fixture › reduced motion preserves the same lifecycle states at 390px
+
+[WebServer] (node:89081) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+[WebServer] (node:89085) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[desktop-chromium] › e2e/jarvis-p3-lifecycle-fixture.spec.ts:148:7 › P3 exit-gate same-document lifecycle, labelled fixture › ready through terminal remains one causal document at 390px
+[P3.EXIT] 390px reduced=false transcript=[{"step":"rest","activeBlock":null,"focus":"body","scrollY":0,"scrollHeight":2176,"scrollWidth":390,"layoutShift":0,"metrics":[]},{"step":"heard","activeBlock":"heard","focus":"journey-next","scrollY":378},{"step":"understood","activeBlock":"understood","focus":"journey-next","scrollY":626},{"step":"plan","activeBlock":"plan","focus":"journey-next","scrollY":780},{"step":"clarify","activeBlock":"plan","focus":"journey-next","scrollY":49},{"step":"approval","activeBlock":"plan","focus":"h2","scrollY":0},{"step":"execution","activeBlock":"execution","focus":"journey-next","scrollY":24},{"step":"verifying","activeBlock":"execution","focus":"journey-next","scrollY":0},{"step":"receipt","activeBlock":"receipt","focus":"div","scrollY":647}] runtime={"activeBlock":"receipt","focus":"div","scrollY":919,"scrollHeight":3055,"scrollWidth":390,"layoutShift":0.004017136971950432,"metrics":[{"seq":"1","stage":"heard","eventToPixelMs":0},{"seq":"2","stage":"understood","eventToPixelMs":0},{"seq":"3","stage":"plan","eventToPixelMs":25.532000008940486},{"seq":"4","stage":"plan","eventToPixelMs":0},{"seq":"5","stage":"plan","eventToPixelMs":0},{"seq":"6","stage":"execution","eventToPixelMs":0},{"seq":"7","stage":"execution","eventToPixelMs":0},{"seq":"8","stage":"receipt","eventToPixelMs":2.8999999970201316}]}
+
+[7/10] [desktop-chromium] › e2e/jarvis-p6-responsive.spec.ts:14:9 › P6.T1 — responsive collision and keyboard sweep › keeps the approval surface usable at 1440px
+[desktop-chromium] › e2e/jarvis-p3-lifecycle-fixture.spec.ts:154:7 › P3 exit-gate same-document lifecycle, labelled fixture › reduced motion preserves the same lifecycle states at 390px
+[P3.EXIT] 390px reduced=true transcript=[{"step":"rest","activeBlock":null,"focus":"body","scrollY":0,"scrollHeight":2176,"scrollWidth":390,"layoutShift":0,"metrics":[]},{"step":"heard","activeBlock":"heard","focus":"journey-next","scrollY":378},{"step":"understood","activeBlock":"understood","focus":"journey-next","scrollY":365},{"step":"plan","activeBlock":"plan","focus":"journey-next","scrollY":535},{"step":"clarify","activeBlock":"plan","focus":"journey-next","scrollY":156},{"step":"approval","activeBlock":"plan","focus":"h2","scrollY":0},{"step":"execution","activeBlock":"execution","focus":"journey-next","scrollY":93},{"step":"verifying","activeBlock":"execution","focus":"journey-next","scrollY":0},{"step":"receipt","activeBlock":"receipt","focus":"div","scrollY":621}] runtime={"activeBlock":"receipt","focus":"div","scrollY":621,"scrollHeight":3079,"scrollWidth":390,"layoutShift":0,"metrics":[{"seq":"1","stage":"heard","eventToPixelMs":45.798000005960375},{"seq":"2","stage":"understood","eventToPixelMs":12.299999999999955},{"seq":"3","stage":"plan","eventToPixelMs":13.799999994039581},{"seq":"4","stage":"plan","eventToPixelMs":0},{"seq":"5","stage":"plan","eventToPixelMs":0},{"seq":"6","stage":"execution","eventToPixelMs":11.800000005960555},{"seq":"7","stage":"execution","eventToPixelMs":0},{"seq":"8","stage":"receipt","eventToPixelMs":11.999999994039626}]}
+
+[8/10] [desktop-chromium] › e2e/jarvis-p6-responsive.spec.ts:14:9 › P6.T1 — responsive collision and keyboard sweep › keeps the approval surface usable at 768px
+
+[WebServer] (node:89089) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+  1) [desktop-chromium] › e2e/jarvis-p6-responsive.spec.ts:14:9 › P6.T1 — responsive collision and keyboard sweep › keeps the approval surface usable at 1440px
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('checkbox', { name: 'Select for batch decision' })
+    Expected: visible
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 10000ms
+      - waiting for getByRole('checkbox', { name: 'Select for batch decision' })
+
+
+      54 |       expect(await select.evaluate((element) => document.activeElement === element)).toBe(true)
+      55 |       await page.keyboard.press("Enter")
+    > 56 |       await expect(page.getByRole("checkbox", { name: "Select for batch decision" })).toBeVisible()
+         |                                                                                       ^
+      57 |     })
+      58 |   }
+      59 | })
+        at /Users/paramdave/Desktop/FINNOR/e2e/jarvis-p6-responsive.spec.ts:56:87
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/jarvis-p6-responsive-P6-T1-d5acb-al-surface-usable-at-1440px-desktop-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/jarvis-p6-responsive-P6-T1-d5acb-al-surface-usable-at-1440px-desktop-chromium/error-context.md
+
+
+  2) [desktop-chromium] › e2e/jarvis-p6-responsive.spec.ts:14:9 › P6.T1 — responsive collision and keyboard sweep › keeps the approval surface usable at 768px
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('checkbox', { name: 'Select for batch decision' })
+    Expected: visible
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 10000ms
+      - waiting for getByRole('checkbox', { name: 'Select for batch decision' })
+
+
+      54 |       expect(await select.evaluate((element) => document.activeElement === element)).toBe(true)
+      55 |       await page.keyboard.press("Enter")
+    > 56 |       await expect(page.getByRole("checkbox", { name: "Select for batch decision" })).toBeVisible()
+         |                                                                                       ^
+      57 |     })
+      58 |   }
+      59 | })
+        at /Users/paramdave/Desktop/FINNOR/e2e/jarvis-p6-responsive.spec.ts:56:87
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/jarvis-p6-responsive-P6-T1-28121-val-surface-usable-at-768px-desktop-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/jarvis-p6-responsive-P6-T1-28121-val-surface-usable-at-768px-desktop-chromium/error-context.md
+
+
+
+(node:89114) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[9/10] [desktop-chromium] › e2e/jarvis-p6-responsive.spec.ts:14:9 › P6.T1 — responsive collision and keyboard sweep › keeps the approval surface usable at 390px
+
+(node:89116) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[10/10] [desktop-chromium] › e2e/jarvis-p7-degraded-integration.spec.ts:31:5 › P7 degraded integration receipt exposes a truthful Connect setup path
+
+[WebServer] (node:89130) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/api/jarvis/[...path]/route.ts
+  3) [desktop-chromium] › e2e/jarvis-p6-responsive.spec.ts:14:9 › P6.T1 — responsive collision and keyboard sweep › keeps the approval surface usable at 390px
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('checkbox', { name: 'Select for batch decision' })
+    Expected: visible
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 10000ms
+      - waiting for getByRole('checkbox', { name: 'Select for batch decision' })
+
+
+      54 |       expect(await select.evaluate((element) => document.activeElement === element)).toBe(true)
+      55 |       await page.keyboard.press("Enter")
+    > 56 |       await expect(page.getByRole("checkbox", { name: "Select for batch decision" })).toBeVisible()
+         |                                                                                       ^
+      57 |     })
+      58 |   }
+      59 | })
+        at /Users/paramdave/Desktop/FINNOR/e2e/jarvis-p6-responsive.spec.ts:56:87
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/jarvis-p6-responsive-P6-T1-535f3-val-surface-usable-at-390px-desktop-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/jarvis-p6-responsive-P6-T1-535f3-val-surface-usable-at-390px-desktop-chromium/error-context.md
+
+
+  3 failed
+    [desktop-chromium] › e2e/jarvis-p6-responsive.spec.ts:14:9 › P6.T1 — responsive collision and keyboard sweep › keeps the approval surface usable at 1440px
+    [desktop-chromium] › e2e/jarvis-p6-responsive.spec.ts:14:9 › P6.T1 — responsive collision and keyboard sweep › keeps the approval surface usable at 768px
+    [desktop-chromium] › e2e/jarvis-p6-responsive.spec.ts:14:9 › P6.T1 — responsive collision and keyboard sweep › keeps the approval surface usable at 390px
+  7 passed (47.0s)

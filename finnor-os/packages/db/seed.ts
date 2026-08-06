@@ -439,6 +439,20 @@ export async function seed(databaseUrl = process.env.DATABASE_URL): Promise<void
       [SEED_TENANT_ID],
     );
 
+    // domain_policy_revisions is the execution source of truth after migration
+    // 0058. The seed creates its policy rows after that migration has run, so the
+    // migration's one-time backfill cannot populate them. Keep the seed idempotent
+    // while ensuring every seeded policy has its immutable version-1 execution row.
+    await client.query(
+      `INSERT INTO domain_policy_revisions
+        (tenant_id, policy_id, action_type, version, policy, requires_confirmation, confirmation_template, model_provider, confirmation_timeout_hours, effective_from)
+       SELECT tenant_id, id, action_type, version, policy, requires_confirmation, confirmation_template, model_provider, confirmation_timeout_hours, effective_from
+       FROM domain_policies
+       WHERE tenant_id = $1
+       ON CONFLICT (policy_id, version) DO NOTHING`,
+      [SEED_TENANT_ID],
+    );
+
     await client.query("COMMIT");
   } catch (err) {
     await client.query("ROLLBACK").catch(() => undefined);

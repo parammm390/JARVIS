@@ -1,0 +1,759 @@
+
+> finnor@0.1.0 test:e2e
+> playwright test
+
+[WebServer] (node:87532) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:87534) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+
+Running 280 tests using 2 workers
+°°°°[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+(node:87544) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:87545) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+········[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+·[WebServer] (node:87596) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+··[WebServer] (node:87607) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+··[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+·[WebServer] (node:87627) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:87638) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+···[WebServer] (node:87650) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:87659) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+·[WebServer] (node:87668) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+··[WebServer] (node:87683) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+·[WebServer] (node:87689) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+·[WebServer] (node:87697) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+··········[WebServer] (node:87788) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+····[WebServer] (node:87807) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+··°·×(node:87828) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+×(node:87841) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+F(node:87861) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+F(node:87870) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+×(node:87879) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+·F(node:87893) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+·[WebServer] (node:87902) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+·[WebServer] (node:87906) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+·[WebServer] (node:87909) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+··[WebServer] (node:87927) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:87929) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+×(node:87933) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+×(node:87935) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:87956) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:87961) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[P3.EXIT] 1440px reduced=false transcript=[{"step":"rest","activeBlock":null,"focus":"body","scrollY":0,"scrollHeight":1295,"scrollWidth":1440,"layoutShift":0,"metrics":[]},{"step":"heard","activeBlock":"heard","focus":"journey-next","scrollY":0},{"step":"understood","activeBlock":"understood","focus":"journey-next","scrollY":0},{"step":"plan","activeBlock":"plan","focus":"journey-next","scrollY":333},{"step":"clarify","activeBlock":"plan","focus":"journey-next","scrollY":0},{"step":"approval","activeBlock":"plan","focus":"h2","scrollY":0},{"step":"execution","activeBlock":"execution","focus":"journey-next","scrollY":100},{"step":"verifying","activeBlock":"execution","focus":"journey-next","scrollY":0},{"step":"receipt","activeBlock":"receipt","focus":"div","scrollY":0}] runtime={"activeBlock":"receipt","focus":"div","scrollY":0,"scrollHeight":1597,"scrollWidth":1440,"layoutShift":0.011666949320558985,"metrics":[{"seq":"1","stage":"heard","eventToPixelMs":59.899999999999636},{"seq":"2","stage":"understood","eventToPixelMs":0},{"seq":"3","stage":"plan","eventToPixelMs":0},{"seq":"4","stage":"plan","eventToPixelMs":0},{"seq":"5","stage":"plan","eventToPixelMs":0},{"seq":"6","stage":"execution","eventToPixelMs":0},{"seq":"7","stage":"execution","eventToPixelMs":0},{"seq":"8","stage":"receipt","eventToPixelMs":0}]}
+F±°°(node:87997) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+·[WebServer] (node:88009) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[P3.EXIT] 390px reduced=true transcript=[{"step":"rest","activeBlock":null,"focus":"body","scrollY":0,"scrollHeight":2176,"scrollWidth":390,"layoutShift":0,"metrics":[]},{"step":"heard","activeBlock":"heard","focus":"journey-next","scrollY":378},{"step":"understood","activeBlock":"understood","focus":"journey-next","scrollY":365},{"step":"plan","activeBlock":"plan","focus":"journey-next","scrollY":535},{"step":"clarify","activeBlock":"plan","focus":"journey-next","scrollY":156},{"step":"approval","activeBlock":"plan","focus":"h2","scrollY":0},{"step":"execution","activeBlock":"execution","focus":"journey-next","scrollY":93},{"step":"verifying","activeBlock":"execution","focus":"journey-next","scrollY":0},{"step":"receipt","activeBlock":"receipt","focus":"div","scrollY":621}] runtime={"activeBlock":"receipt","focus":"div","scrollY":621,"scrollHeight":3079,"scrollWidth":390,"layoutShift":0,"metrics":[{"seq":"1","stage":"heard","eventToPixelMs":141.19400000000041},{"seq":"2","stage":"understood","eventToPixelMs":10.299999994039354},{"seq":"3","stage":"plan","eventToPixelMs":6.199999999999818},{"seq":"4","stage":"plan","eventToPixelMs":0},{"seq":"5","stage":"plan","eventToPixelMs":0},{"seq":"6","stage":"execution","eventToPixelMs":18.599999994039536},{"seq":"7","stage":"execution","eventToPixelMs":0},{"seq":"8","stage":"receipt","eventToPixelMs":9.700000002980232}]}
+··[WebServer] (node:88016) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:88019) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[P3.T7] 1440px before={"restored":"true","stackRestored":"true","blocks":[{"key":"heard","state":"collapsed","collapsed":"true","entry":"settled"},{"key":"understood","state":"collapsed","collapsed":"true","entry":"settled"},{"key":"plan","state":"collapsed","collapsed":"true","entry":"settled"},{"key":"execution","state":"collapsed","collapsed":"true","entry":"settled"},{"key":"receipt","state":"active","collapsed":"false","entry":"settled"}],"activeBlock":"receipt","receiptMotion":"settled","receiptText":"What actually happened0 of 6 actions sent · 6 outcomes not observed.Invoice to cash · Henderson · Cedar Creek Rd · $890 · outcome not observed · No receipt yetInvoice to cash · Alvarez · Birchwood Ln · $620 · outcome not observed · No receipt yetInvoice to cash · Petersons · Maple Ridge Rd · $540 · outcome not observed · No receipt yetInvoice to cash · Ortiz · Spring Hollow Ct · $710 · outcome not observed · No receipt yetInvoice to cash · Webb · 4821 Cedar Creek Rd · $830 · outcome not observed · No receipt yetInvoice to cash · Dana Alvarez · 12 Birchwood Ln · $610 · outcome not observed · No receipt yet","historyCount":"3","scrollHeight":1441,"scrollWidth":1440,"settledMotionAnimations":0,"layoutShift":0,"focusedBlock":null} after={"restored":"true","stackRestored":"true","blocks":[{"key":"heard","state":"collapsed","collapsed":"true","entry":"settled"},{"key":"understood","state":"collapsed","collapsed":"true","entry":"settled"},{"key":"plan","state":"collapsed","collapsed":"true","entry":"settled"},{"key":"execution","state":"collapsed","collapsed":"true","entry":"settled"},{"key":"receipt","state":"active","collapsed":"false","entry":"settled"}],"activeBlock":"receipt","receiptMotion":"settled","receiptText":"What actually happened0 of 6 actions sent · 6 outcomes not observed.Invoice to cash · Henderson · Cedar Creek Rd · $890 · outcome not observed · No receipt yetInvoice to cash · Alvarez · Birchwood Ln · $620 · outcome not observed · No receipt yetInvoice to cash · Petersons · Maple Ridge Rd · $540 · outcome not observed · No receipt yetInvoice to cash · Ortiz · Spring Hollow Ct · $710 · outcome not observed · No receipt yetInvoice to cash · Webb · 4821 Cedar Creek Rd · $830 · outcome not observed · No receipt yetInvoice to cash · Dana Alvarez · 12 Birchwood Ln · $610 · outcome not observed · No receipt yet","historyCount":"3","scrollHeight":1412,"scrollWidth":1440,"settledMotionAnimations":0,"layoutShift":0,"focusedBlock":null}
+·[P3.T7] 390px before={"restored":"true","stackRestored":"true","blocks":[{"key":"heard","state":"collapsed","collapsed":"true","entry":"settled"},{"key":"understood","state":"collapsed","collapsed":"true","entry":"settled"},{"key":"plan","state":"collapsed","collapsed":"true","entry":"settled"},{"key":"execution","state":"collapsed","collapsed":"true","entry":"settled"},{"key":"receipt","state":"active","collapsed":"false","entry":"settled"}],"activeBlock":"receipt","receiptMotion":"settled","receiptText":"What actually happened0 of 6 actions sent · 6 outcomes not observed.Invoice to cash · Henderson · Cedar Creek Rd · $890 · outcome not observed · No receipt yetInvoice to cash · Alvarez · Birchwood Ln · $620 · outcome not observed · No receipt yetInvoice to cash · Petersons · Maple Ridge Rd · $540 · outcome not observed · No receipt yetInvoice to cash · Ortiz · Spring Hollow Ct · $710 · outcome not observed · No receipt yetInvoice to cash · Webb · 4821 Cedar Creek Rd · $830 · outcome not observed · No receipt yetInvoice to cash · Dana Alvarez · 12 Birchwood Ln · $610 · outcome not observed · No receipt yet","historyCount":"3","scrollHeight":2732,"scrollWidth":390,"settledMotionAnimations":0,"layoutShift":0,"focusedBlock":null} after={"restored":"true","stackRestored":"true","blocks":[{"key":"heard","state":"collapsed","collapsed":"true","entry":"settled"},{"key":"understood","state":"collapsed","collapsed":"true","entry":"settled"},{"key":"plan","state":"collapsed","collapsed":"true","entry":"settled"},{"key":"execution","state":"collapsed","collapsed":"true","entry":"settled"},{"key":"receipt","state":"active","collapsed":"false","entry":"settled"}],"activeBlock":"receipt","receiptMotion":"settled","receiptText":"What actually happened0 of 6 actions sent · 6 outcomes not observed.Invoice to cash · Henderson · Cedar Creek Rd · $890 · outcome not observed · No receipt yetInvoice to cash · Alvarez · Birchwood Ln · $620 · outcome not observed · No receipt yetInvoice to cash · Petersons · Maple Ridge Rd · $540 · outcome not observed · No receipt yetInvoice to cash · Ortiz · Spring Hollow Ct · $710 · outcome not observed · No receipt yetInvoice to cash · Webb · 4821 Cedar Creek Rd · $830 · outcome not observed · No receipt yetInvoice to cash · Dana Alvarez · 12 Birchwood Ln · $610 · outcome not observed · No receipt yet","historyCount":"3","scrollHeight":2732,"scrollWidth":390,"settledMotionAnimations":0,"layoutShift":0,"focusedBlock":null}
+[WebServer] (node:88026) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+·°[WebServer] (node:88032) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[P3.T7] reduced before={"restored":"true","stackRestored":"true","blocks":[{"key":"heard","state":"collapsed","collapsed":"true","entry":"settled"},{"key":"understood","state":"collapsed","collapsed":"true","entry":"settled"},{"key":"plan","state":"collapsed","collapsed":"true","entry":"settled"},{"key":"execution","state":"collapsed","collapsed":"true","entry":"settled"},{"key":"receipt","state":"active","collapsed":"false","entry":"settled"}],"activeBlock":"receipt","receiptMotion":"settled","receiptText":"What actually happened0 of 6 actions sent · 6 outcomes not observed.Invoice to cash · Henderson · Cedar Creek Rd · $890 · outcome not observed · No receipt yetInvoice to cash · Alvarez · Birchwood Ln · $620 · outcome not observed · No receipt yetInvoice to cash · Petersons · Maple Ridge Rd · $540 · outcome not observed · No receipt yetInvoice to cash · Ortiz · Spring Hollow Ct · $710 · outcome not observed · No receipt yetInvoice to cash · Webb · 4821 Cedar Creek Rd · $830 · outcome not observed · No receipt yetInvoice to cash · Dana Alvarez · 12 Birchwood Ln · $610 · outcome not observed · No receipt yet","historyCount":"3","scrollHeight":2866,"scrollWidth":390,"settledMotionAnimations":0,"layoutShift":0,"focusedBlock":null} after={"restored":"true","stackRestored":"true","blocks":[{"key":"heard","state":"collapsed","collapsed":"true","entry":"settled"},{"key":"understood","state":"collapsed","collapsed":"true","entry":"settled"},{"key":"plan","state":"collapsed","collapsed":"true","entry":"settled"},{"key":"execution","state":"collapsed","collapsed":"true","entry":"settled"},{"key":"receipt","state":"active","collapsed":"false","entry":"settled"}],"activeBlock":"receipt","receiptMotion":"settled","receiptText":"What actually happened0 of 6 actions sent · 6 outcomes not observed.Invoice to cash · Henderson · Cedar Creek Rd · $890 · outcome not observed · No receipt yetInvoice to cash · Alvarez · Birchwood Ln · $620 · outcome not observed · No receipt yetInvoice to cash · Petersons · Maple Ridge Rd · $540 · outcome not observed · No receipt yetInvoice to cash · Ortiz · Spring Hollow Ct · $710 · outcome not observed · No receipt yetInvoice to cash · Webb · 4821 Cedar Creek Rd · $830 · outcome not observed · No receipt yetInvoice to cash · Dana Alvarez · 12 Birchwood Ln · $610 · outcome not observed · No receipt yet","historyCount":"3","scrollHeight":2866,"scrollWidth":390,"settledMotionAnimations":0,"layoutShift":0,"focusedBlock":null}
+·······°°°°°
+°°°°°°°°°°°°°°·[WebServer] (node:88107) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+·[WebServer] (node:88124) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+·[WebServer] (node:88135) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+·[WebServer] (node:88178) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+·×[WebServer] (node:88190) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+(node:88191) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+×(node:88197) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:88206) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+FF(node:88212) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:88218) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:88234) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+×(node:88243) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+×(node:88252) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:88408) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+F(node:88415) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+°°°F(node:88430) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+···[WebServer] (node:88456) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+··[WebServer] (node:88461) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+·····[WebServer] (node:88476) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+··[WebServer] (node:88480) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+··[WebServer] (node:88496) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+··[WebServer] (node:88499) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+·[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+·°[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/api/jarvis/[...path]/route.ts
+···°°°°·°°°°°°°[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/api/jarvis/[...path]/route.ts
+°[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/api/jarvis/[...path]/route.ts
+[WebServer] (node:88575) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+··[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/api/jarvis/[...path]/route.ts
+°°°°°(node:88578) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+°°°°°°[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/api/jarvis/[...path]/route.ts
+°°
+°°°°°°·(node:88601) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:88607) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+···°[WebServer] (node:88612) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+°[WebServer] (node:88618) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+·[WebServer] (node:88627) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+·°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°
+°°°°°°°°°°°°°°°°°°°°°°°[WebServer] (node:88711) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+·[WebServer] (node:88713) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+·[WebServer] (node:88715) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+·[WebServer] (node:88719) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+··°···°°°°°°°°°°°·°[WebServer] (node:88744) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+·°··
+
+  1) [desktop-chromium] › e2e/jarvis-p3-clarification-fixtures.spec.ts:18:9 › P3.T3 — clarification question focus, labelled fixture › question owns focus and keyboard return at 1440px
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: 3
+    Received: 6
+
+      43 |       const dimmed = page.locator("[data-jarvis-question-depth][data-jarvis-question-dimmed='true']")
+      44 |       const dimmedCount = await dimmed.count()
+    > 45 |       expect(dimmedCount).toBe(3)
+         |                           ^
+      46 |       const firstDimmed = dimmed.nth(0)
+      47 |       await expect.poll(async () => Number(await firstDimmed.evaluate((element) => getComputedStyle(element).opacity))).toBe(0.42)
+      48 |
+        at /Users/paramdave/Desktop/FINNOR/e2e/jarvis-p3-clarification-fixtures.spec.ts:45:27
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/jarvis-p3-clarification-fi-0f48c-d-keyboard-return-at-1440px-desktop-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/jarvis-p3-clarification-fi-0f48c-d-keyboard-return-at-1440px-desktop-chromium/error-context.md
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: 3
+    Received: 6
+
+      43 |       const dimmed = page.locator("[data-jarvis-question-depth][data-jarvis-question-dimmed='true']")
+      44 |       const dimmedCount = await dimmed.count()
+    > 45 |       expect(dimmedCount).toBe(3)
+         |                           ^
+      46 |       const firstDimmed = dimmed.nth(0)
+      47 |       await expect.poll(async () => Number(await firstDimmed.evaluate((element) => getComputedStyle(element).opacity))).toBe(0.42)
+      48 |
+        at /Users/paramdave/Desktop/FINNOR/e2e/jarvis-p3-clarification-fixtures.spec.ts:45:27
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/jarvis-p3-clarification-fi-0f48c-d-keyboard-return-at-1440px-desktop-chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/jarvis-p3-clarification-fi-0f48c-d-keyboard-return-at-1440px-desktop-chromium-retry1/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/jarvis-p3-clarification-fi-0f48c-d-keyboard-return-at-1440px-desktop-chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/jarvis-p3-clarification-fi-0f48c-d-keyboard-return-at-1440px-desktop-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [desktop-chromium] › e2e/jarvis-p3-clarification-fixtures.spec.ts:18:9 › P3.T3 — clarification question focus, labelled fixture › question owns focus and keyboard return at 390px
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: 3
+    Received: 6
+
+      43 |       const dimmed = page.locator("[data-jarvis-question-depth][data-jarvis-question-dimmed='true']")
+      44 |       const dimmedCount = await dimmed.count()
+    > 45 |       expect(dimmedCount).toBe(3)
+         |                           ^
+      46 |       const firstDimmed = dimmed.nth(0)
+      47 |       await expect.poll(async () => Number(await firstDimmed.evaluate((element) => getComputedStyle(element).opacity))).toBe(0.42)
+      48 |
+        at /Users/paramdave/Desktop/FINNOR/e2e/jarvis-p3-clarification-fixtures.spec.ts:45:27
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/jarvis-p3-clarification-fi-b20bc-nd-keyboard-return-at-390px-desktop-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/jarvis-p3-clarification-fi-b20bc-nd-keyboard-return-at-390px-desktop-chromium/error-context.md
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: 3
+    Received: 6
+
+      43 |       const dimmed = page.locator("[data-jarvis-question-depth][data-jarvis-question-dimmed='true']")
+      44 |       const dimmedCount = await dimmed.count()
+    > 45 |       expect(dimmedCount).toBe(3)
+         |                           ^
+      46 |       const firstDimmed = dimmed.nth(0)
+      47 |       await expect.poll(async () => Number(await firstDimmed.evaluate((element) => getComputedStyle(element).opacity))).toBe(0.42)
+      48 |
+        at /Users/paramdave/Desktop/FINNOR/e2e/jarvis-p3-clarification-fixtures.spec.ts:45:27
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/jarvis-p3-clarification-fi-b20bc-nd-keyboard-return-at-390px-desktop-chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/jarvis-p3-clarification-fi-b20bc-nd-keyboard-return-at-390px-desktop-chromium-retry1/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/jarvis-p3-clarification-fi-b20bc-nd-keyboard-return-at-390px-desktop-chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/jarvis-p3-clarification-fi-b20bc-nd-keyboard-return-at-390px-desktop-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) [desktop-chromium] › e2e/jarvis-p3-clarification-fixtures.spec.ts:65:7 › P3.T3 — clarification question focus, labelled fixture › reduced motion settles the same dim/focus state without travel
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: 3
+    Received: 6
+
+      76 |     const dimmed = page.locator("[data-jarvis-question-depth][data-jarvis-question-dimmed='true']")
+      77 |     const dimmedCount = await dimmed.count()
+    > 78 |     expect(dimmedCount).toBe(3)
+         |                         ^
+      79 |     const firstDimmed = dimmed.nth(0)
+      80 |     await expect.poll(async () => Number(await firstDimmed.evaluate((element) => getComputedStyle(element).opacity))).toBe(0.42)
+      81 |     await page.screenshot({ path: `${OUT_DIR}/clarification-390-reduced.png`, fullPage: false })
+        at /Users/paramdave/Desktop/FINNOR/e2e/jarvis-p3-clarification-fixtures.spec.ts:78:25
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/jarvis-p3-clarification-fi-c8910--focus-state-without-travel-desktop-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/jarvis-p3-clarification-fi-c8910--focus-state-without-travel-desktop-chromium/error-context.md
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: 3
+    Received: 6
+
+      76 |     const dimmed = page.locator("[data-jarvis-question-depth][data-jarvis-question-dimmed='true']")
+      77 |     const dimmedCount = await dimmed.count()
+    > 78 |     expect(dimmedCount).toBe(3)
+         |                         ^
+      79 |     const firstDimmed = dimmed.nth(0)
+      80 |     await expect.poll(async () => Number(await firstDimmed.evaluate((element) => getComputedStyle(element).opacity))).toBe(0.42)
+      81 |     await page.screenshot({ path: `${OUT_DIR}/clarification-390-reduced.png`, fullPage: false })
+        at /Users/paramdave/Desktop/FINNOR/e2e/jarvis-p3-clarification-fixtures.spec.ts:78:25
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/jarvis-p3-clarification-fi-c8910--focus-state-without-travel-desktop-chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/jarvis-p3-clarification-fi-c8910--focus-state-without-travel-desktop-chromium-retry1/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/jarvis-p3-clarification-fi-c8910--focus-state-without-travel-desktop-chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/jarvis-p3-clarification-fi-c8910--focus-state-without-travel-desktop-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) [desktop-chromium] › e2e/jarvis-p3-lifecycle-fixture.spec.ts:137:7 › P3 exit-gate same-document lifecycle, labelled fixture › ready through terminal remains one causal document at 390px
+
+    Error: expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 0.03
+    Received:    0.7689548964648777
+
+      115 |   expect(unauthorizedUrls.every((url) => /^https?:\/\/[^/]+\/api\/jarvis\/user-prefs$/.test(url) || /^https?:\/\/[^/]+\/api\/jarvis\/receipts\?domainActionId=fixture-node-\d+$/.test(url))).toBe(true)
+      116 |   expect(runtime.scrollWidth).toBeLessThanOrEqual(width)
+    > 117 |   expect(runtime.layoutShift).toBeLessThanOrEqual(0.03)
+          |                               ^
+      118 |   expect(runtime.metrics).toHaveLength(8)
+      119 |   expect(runtime.metrics.every((metric) => Number.isFinite(metric.eventToPixelMs) && metric.eventToPixelMs >= 0)).toBe(true)
+      120 |   expect(transcript.map((entry) => entry.step)).toEqual(STEPS.map((step) => step.key))
+        at runJourney (/Users/paramdave/Desktop/FINNOR/e2e/jarvis-p3-lifecycle-fixture.spec.ts:117:31)
+        at /Users/paramdave/Desktop/FINNOR/e2e/jarvis-p3-lifecycle-fixture.spec.ts:140:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/jarvis-p3-lifecycle-fixtur-20b7d-ne-causal-document-at-390px-desktop-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/jarvis-p3-lifecycle-fixtur-20b7d-ne-causal-document-at-390px-desktop-chromium/error-context.md
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 0.03
+    Received:    0.7982970907131697
+
+      115 |   expect(unauthorizedUrls.every((url) => /^https?:\/\/[^/]+\/api\/jarvis\/user-prefs$/.test(url) || /^https?:\/\/[^/]+\/api\/jarvis\/receipts\?domainActionId=fixture-node-\d+$/.test(url))).toBe(true)
+      116 |   expect(runtime.scrollWidth).toBeLessThanOrEqual(width)
+    > 117 |   expect(runtime.layoutShift).toBeLessThanOrEqual(0.03)
+          |                               ^
+      118 |   expect(runtime.metrics).toHaveLength(8)
+      119 |   expect(runtime.metrics.every((metric) => Number.isFinite(metric.eventToPixelMs) && metric.eventToPixelMs >= 0)).toBe(true)
+      120 |   expect(transcript.map((entry) => entry.step)).toEqual(STEPS.map((step) => step.key))
+        at runJourney (/Users/paramdave/Desktop/FINNOR/e2e/jarvis-p3-lifecycle-fixture.spec.ts:117:31)
+        at /Users/paramdave/Desktop/FINNOR/e2e/jarvis-p3-lifecycle-fixture.spec.ts:140:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/jarvis-p3-lifecycle-fixtur-20b7d-ne-causal-document-at-390px-desktop-chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/jarvis-p3-lifecycle-fixtur-20b7d-ne-causal-document-at-390px-desktop-chromium-retry1/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/jarvis-p3-lifecycle-fixtur-20b7d-ne-causal-document-at-390px-desktop-chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/jarvis-p3-lifecycle-fixtur-20b7d-ne-causal-document-at-390px-desktop-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  5) [desktop-chromium] › e2e/jarvis-p6-responsive.spec.ts:14:9 › P6.T1 — responsive collision and keyboard sweep › keeps the approval surface usable at 1440px
+
+    Error: expect(received).toBeGreaterThan(expected)
+
+    Expected: > 0
+    Received:   0
+
+      36 |
+      37 |       expect(metrics.scrollWidth, `${viewport.label}px horizontal overflow`).toBeLessThanOrEqual(metrics.clientWidth)
+    > 38 |       expect(metrics.rootPaddingBottom).toBeGreaterThan(0)
+         |                                         ^
+      39 |       expect(metrics.canvasPaddingBottom).toBeGreaterThan(0)
+      40 |       expect(metrics.dialogPaddingBottom).toBeGreaterThan(0)
+      41 |       expect(metrics.selectRect).not.toBeNull()
+        at /Users/paramdave/Desktop/FINNOR/e2e/jarvis-p6-responsive.spec.ts:38:41
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/jarvis-p6-responsive-P6-T1-d5acb-al-surface-usable-at-1440px-desktop-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/jarvis-p6-responsive-P6-T1-d5acb-al-surface-usable-at-1440px-desktop-chromium/error-context.md
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: expect(received).toBeGreaterThan(expected)
+
+    Expected: > 0
+    Received:   0
+
+      36 |
+      37 |       expect(metrics.scrollWidth, `${viewport.label}px horizontal overflow`).toBeLessThanOrEqual(metrics.clientWidth)
+    > 38 |       expect(metrics.rootPaddingBottom).toBeGreaterThan(0)
+         |                                         ^
+      39 |       expect(metrics.canvasPaddingBottom).toBeGreaterThan(0)
+      40 |       expect(metrics.dialogPaddingBottom).toBeGreaterThan(0)
+      41 |       expect(metrics.selectRect).not.toBeNull()
+        at /Users/paramdave/Desktop/FINNOR/e2e/jarvis-p6-responsive.spec.ts:38:41
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/jarvis-p6-responsive-P6-T1-d5acb-al-surface-usable-at-1440px-desktop-chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/jarvis-p6-responsive-P6-T1-d5acb-al-surface-usable-at-1440px-desktop-chromium-retry1/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/jarvis-p6-responsive-P6-T1-d5acb-al-surface-usable-at-1440px-desktop-chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/jarvis-p6-responsive-P6-T1-d5acb-al-surface-usable-at-1440px-desktop-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  6) [desktop-chromium] › e2e/jarvis-p6-responsive.spec.ts:14:9 › P6.T1 — responsive collision and keyboard sweep › keeps the approval surface usable at 768px
+
+    Error: expect(received).toBeGreaterThan(expected)
+
+    Expected: > 0
+    Received:   0
+
+      36 |
+      37 |       expect(metrics.scrollWidth, `${viewport.label}px horizontal overflow`).toBeLessThanOrEqual(metrics.clientWidth)
+    > 38 |       expect(metrics.rootPaddingBottom).toBeGreaterThan(0)
+         |                                         ^
+      39 |       expect(metrics.canvasPaddingBottom).toBeGreaterThan(0)
+      40 |       expect(metrics.dialogPaddingBottom).toBeGreaterThan(0)
+      41 |       expect(metrics.selectRect).not.toBeNull()
+        at /Users/paramdave/Desktop/FINNOR/e2e/jarvis-p6-responsive.spec.ts:38:41
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/jarvis-p6-responsive-P6-T1-28121-val-surface-usable-at-768px-desktop-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/jarvis-p6-responsive-P6-T1-28121-val-surface-usable-at-768px-desktop-chromium/error-context.md
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: expect(received).toBeGreaterThan(expected)
+
+    Expected: > 0
+    Received:   0
+
+      36 |
+      37 |       expect(metrics.scrollWidth, `${viewport.label}px horizontal overflow`).toBeLessThanOrEqual(metrics.clientWidth)
+    > 38 |       expect(metrics.rootPaddingBottom).toBeGreaterThan(0)
+         |                                         ^
+      39 |       expect(metrics.canvasPaddingBottom).toBeGreaterThan(0)
+      40 |       expect(metrics.dialogPaddingBottom).toBeGreaterThan(0)
+      41 |       expect(metrics.selectRect).not.toBeNull()
+        at /Users/paramdave/Desktop/FINNOR/e2e/jarvis-p6-responsive.spec.ts:38:41
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/jarvis-p6-responsive-P6-T1-28121-val-surface-usable-at-768px-desktop-chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/jarvis-p6-responsive-P6-T1-28121-val-surface-usable-at-768px-desktop-chromium-retry1/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/jarvis-p6-responsive-P6-T1-28121-val-surface-usable-at-768px-desktop-chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/jarvis-p6-responsive-P6-T1-28121-val-surface-usable-at-768px-desktop-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  7) [desktop-chromium] › e2e/jarvis-p6-responsive.spec.ts:14:9 › P6.T1 — responsive collision and keyboard sweep › keeps the approval surface usable at 390px
+
+    Error: expect(received).toBeGreaterThan(expected)
+
+    Expected: > 0
+    Received:   0
+
+      36 |
+      37 |       expect(metrics.scrollWidth, `${viewport.label}px horizontal overflow`).toBeLessThanOrEqual(metrics.clientWidth)
+    > 38 |       expect(metrics.rootPaddingBottom).toBeGreaterThan(0)
+         |                                         ^
+      39 |       expect(metrics.canvasPaddingBottom).toBeGreaterThan(0)
+      40 |       expect(metrics.dialogPaddingBottom).toBeGreaterThan(0)
+      41 |       expect(metrics.selectRect).not.toBeNull()
+        at /Users/paramdave/Desktop/FINNOR/e2e/jarvis-p6-responsive.spec.ts:38:41
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/jarvis-p6-responsive-P6-T1-535f3-val-surface-usable-at-390px-desktop-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/jarvis-p6-responsive-P6-T1-535f3-val-surface-usable-at-390px-desktop-chromium/error-context.md
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('FIXTURE · flagship-c-approval-known')
+    Expected: visible
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 10000ms
+      - waiting for getByText('FIXTURE · flagship-c-approval-known')
+
+
+      16 |       await page.setViewportSize(viewport)
+      17 |       await page.goto("/jarvis/next?fixture=flagship-c-approval-known", { waitUntil: "domcontentloaded" })
+    > 18 |       await expect(page.getByText("FIXTURE · flagship-c-approval-known")).toBeVisible({ timeout: 10_000 })
+         |                                                                           ^
+      19 |       await expect(page.getByRole("heading", { name: /needs your approval/i })).toBeVisible()
+      20 |
+      21 |       const metrics = await page.evaluate(() => {
+        at /Users/paramdave/Desktop/FINNOR/e2e/jarvis-p6-responsive.spec.ts:18:75
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/jarvis-p6-responsive-P6-T1-535f3-val-surface-usable-at-390px-desktop-chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/jarvis-p6-responsive-P6-T1-535f3-val-surface-usable-at-390px-desktop-chromium-retry1/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/jarvis-p6-responsive-P6-T1-535f3-val-surface-usable-at-390px-desktop-chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/jarvis-p6-responsive-P6-T1-535f3-val-surface-usable-at-390px-desktop-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  8) [desktop-chromium] › e2e/jarvis-p7-degraded-integration.spec.ts:31:5 › P7 degraded integration receipt exposes a truthful Connect setup path
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('Stripe isn\'t connected yet.')
+    Expected: visible
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 10000ms
+      - waiting for getByText('Stripe isn\'t connected yet.')
+
+
+      39 |   await page.goto("/jarvis/next?fixture=receipt", { waitUntil: "domcontentloaded" })
+      40 |
+    > 41 |   await expect(page.getByText("Stripe isn't connected yet.")).toBeVisible({ timeout: 10_000 })
+         |                                                               ^
+      42 |   const connect = page.getByRole("link", { name: "Connect" })
+      43 |   await expect(connect).toHaveAttribute("href", "/resources/pilot-setup-checklist")
+      44 |   await page.screenshot({ path: "qa-screenshots/v3-P7/degraded-integration-recovery-1440.png", fullPage: true, animations: "disabled" })
+        at /Users/paramdave/Desktop/FINNOR/e2e/jarvis-p7-degraded-integration.spec.ts:41:63
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/jarvis-p7-degraded-integra-17355-truthful-Connect-setup-path-desktop-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/jarvis-p7-degraded-integra-17355-truthful-Connect-setup-path-desktop-chromium/error-context.md
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('Stripe isn\'t connected yet.')
+    Expected: visible
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 10000ms
+      - waiting for getByText('Stripe isn\'t connected yet.')
+
+
+      39 |   await page.goto("/jarvis/next?fixture=receipt", { waitUntil: "domcontentloaded" })
+      40 |
+    > 41 |   await expect(page.getByText("Stripe isn't connected yet.")).toBeVisible({ timeout: 10_000 })
+         |                                                               ^
+      42 |   const connect = page.getByRole("link", { name: "Connect" })
+      43 |   await expect(connect).toHaveAttribute("href", "/resources/pilot-setup-checklist")
+      44 |   await page.screenshot({ path: "qa-screenshots/v3-P7/degraded-integration-recovery-1440.png", fullPage: true, animations: "disabled" })
+        at /Users/paramdave/Desktop/FINNOR/e2e/jarvis-p7-degraded-integration.spec.ts:41:63
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/jarvis-p7-degraded-integra-17355-truthful-Connect-setup-path-desktop-chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/jarvis-p7-degraded-integra-17355-truthful-Connect-setup-path-desktop-chromium-retry1/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/jarvis-p7-degraded-integra-17355-truthful-Connect-setup-path-desktop-chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/jarvis-p7-degraded-integra-17355-truthful-Connect-setup-path-desktop-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  9) [desktop-chromium] › e2e/jarvis-p3-lifecycle-fixture.spec.ts:131:7 › P3 exit-gate same-document lifecycle, labelled fixture › ready through terminal remains one causal document at 1440px
+
+    Error: expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 0.03
+    Received:    0.13795180416237995
+
+      115 |   expect(unauthorizedUrls.every((url) => /^https?:\/\/[^/]+\/api\/jarvis\/user-prefs$/.test(url) || /^https?:\/\/[^/]+\/api\/jarvis\/receipts\?domainActionId=fixture-node-\d+$/.test(url))).toBe(true)
+      116 |   expect(runtime.scrollWidth).toBeLessThanOrEqual(width)
+    > 117 |   expect(runtime.layoutShift).toBeLessThanOrEqual(0.03)
+          |                               ^
+      118 |   expect(runtime.metrics).toHaveLength(8)
+      119 |   expect(runtime.metrics.every((metric) => Number.isFinite(metric.eventToPixelMs) && metric.eventToPixelMs >= 0)).toBe(true)
+      120 |   expect(transcript.map((entry) => entry.step)).toEqual(STEPS.map((step) => step.key))
+        at runJourney (/Users/paramdave/Desktop/FINNOR/e2e/jarvis-p3-lifecycle-fixture.spec.ts:117:31)
+        at /Users/paramdave/Desktop/FINNOR/e2e/jarvis-p3-lifecycle-fixture.spec.ts:134:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/jarvis-p3-lifecycle-fixtur-f101e-e-causal-document-at-1440px-desktop-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/jarvis-p3-lifecycle-fixtur-f101e-e-causal-document-at-1440px-desktop-chromium/error-context.md
+
+  8 failed
+    [desktop-chromium] › e2e/jarvis-p3-clarification-fixtures.spec.ts:18:9 › P3.T3 — clarification question focus, labelled fixture › question owns focus and keyboard return at 1440px
+    [desktop-chromium] › e2e/jarvis-p3-clarification-fixtures.spec.ts:18:9 › P3.T3 — clarification question focus, labelled fixture › question owns focus and keyboard return at 390px
+    [desktop-chromium] › e2e/jarvis-p3-clarification-fixtures.spec.ts:65:7 › P3.T3 — clarification question focus, labelled fixture › reduced motion settles the same dim/focus state without travel
+    [desktop-chromium] › e2e/jarvis-p3-lifecycle-fixture.spec.ts:137:7 › P3 exit-gate same-document lifecycle, labelled fixture › ready through terminal remains one causal document at 390px
+    [desktop-chromium] › e2e/jarvis-p6-responsive.spec.ts:14:9 › P6.T1 — responsive collision and keyboard sweep › keeps the approval surface usable at 1440px
+    [desktop-chromium] › e2e/jarvis-p6-responsive.spec.ts:14:9 › P6.T1 — responsive collision and keyboard sweep › keeps the approval surface usable at 768px
+    [desktop-chromium] › e2e/jarvis-p6-responsive.spec.ts:14:9 › P6.T1 — responsive collision and keyboard sweep › keeps the approval surface usable at 390px
+    [desktop-chromium] › e2e/jarvis-p7-degraded-integration.spec.ts:31:5 › P7 degraded integration receipt exposes a truthful Connect setup path
+  1 flaky
+    [desktop-chromium] › e2e/jarvis-p3-lifecycle-fixture.spec.ts:131:7 › P3 exit-gate same-document lifecycle, labelled fixture › ready through terminal remains one causal document at 1440px
+  167 skipped
+  104 passed (8.2m)

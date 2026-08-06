@@ -1,0 +1,14 @@
+P0.T6 final fresh-database backend evidence
+
+Disposable database: `finnor_p0_ci_pkg_20260806` (connection value not recorded).
+
+Commands, each exit 0:
+  npm run db:migrate — applied migrations 0000 through 0064
+  npm run db:seed — seeded test tenant 00000000-0000-4000-8000-000000000001
+  npm run setup:langgraph — checkpointer schema ready (`finnor_langgraph`)
+  npm test — 180 files passed, 1 pre-existing conditional file skip; 851 tests passed, 3
+    pre-existing conditional skips; 0 failed; duration 128.80s
+  dropdb --if-exists finnor_p0_ci_pkg_20260806 — cleanup exit 0
+
+The suite was rerun after the dependency-security override update. A reused database run is not
+used as evidence because its prior state correctly exposed two stateful-test failures.

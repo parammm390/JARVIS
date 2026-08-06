@@ -1,0 +1,73 @@
+[backup-drill] dumping finnor_p0_ci_4@127.0.0.1:5432 -> /var/folders/qp/j_yc8vfs6pd0mrx0xrb722640000gn/T/finnor-backup-drill-po9u7s/finnor.dump
+[backup-drill] dropping throwaway database finnor_restore_drill_1786014641542
+[backup-drill] cleanup warning (drop the DB manually if this failed): <ref *1> Error: spawnSync dropdb ENOENT
+    at Object.spawnSync (node:internal/child_process:1120:20)
+    at spawnSync (node:child_process:901:24)
+    at execFileSync (node:child_process:944:15)
+    at run (/Users/paramdave/Desktop/FINNOR/finnor-os/scripts/backup-restore-drill.ts:34:3)
+    at main (/Users/paramdave/Desktop/FINNOR/finnor-os/scripts/backup-restore-drill.ts:91:7)
+    at pg (/Users/paramdave/Desktop/FINNOR/finnor-os/scripts/backup-restore-drill.ts:99:1)
+    at Object.<anonymous> (/Users/paramdave/Desktop/FINNOR/finnor-os/scripts/backup-restore-drill.ts:102:2)
+    at Module._compile (node:internal/modules/cjs/loader:1688:14)
+    at Object.transformer (/Users/paramdave/Desktop/FINNOR/finnor-os/node_modules/tsx/dist/register-BoI6-WNn.cjs:9:3252)
+    at Module.load (node:internal/modules/cjs/loader:1423:32) {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'spawnSync dropdb',
+  path: 'dropdb',
+  spawnargs: [
+    '-h',
+    '127.0.0.1',
+    '-p',
+    '5432',
+    '-U',
+    'finnor',
+    '--if-exists',
+    'finnor_restore_drill_1786014641542'
+  ],
+  error: [Circular *1],
+  status: null,
+  signal: null,
+  output: null,
+  pid: 0,
+  stdout: undefined,
+  stderr: undefined
+}
+[backup-drill] FAILED: <ref *1> Error: spawnSync pg_dump ENOENT
+    at Object.spawnSync (node:internal/child_process:1120:20)
+    at spawnSync (node:child_process:901:24)
+    at execFileSync (node:child_process:944:15)
+    at run (/Users/paramdave/Desktop/FINNOR/finnor-os/scripts/backup-restore-drill.ts:34:3)
+    at main (/Users/paramdave/Desktop/FINNOR/finnor-os/scripts/backup-restore-drill.ts:58:5)
+    at pg (/Users/paramdave/Desktop/FINNOR/finnor-os/scripts/backup-restore-drill.ts:99:1)
+    at Object.<anonymous> (/Users/paramdave/Desktop/FINNOR/finnor-os/scripts/backup-restore-drill.ts:102:2)
+    at Module._compile (node:internal/modules/cjs/loader:1688:14)
+    at Object.transformer (/Users/paramdave/Desktop/FINNOR/finnor-os/node_modules/tsx/dist/register-BoI6-WNn.cjs:9:3252)
+    at Module.load (node:internal/modules/cjs/loader:1423:32) {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'spawnSync pg_dump',
+  path: 'pg_dump',
+  spawnargs: [
+    '-h',
+    '127.0.0.1',
+    '-p',
+    '5432',
+    '-U',
+    'finnor',
+    '-d',
+    'finnor_p0_ci_4',
+    '-Fc',
+    '-f',
+    '/var/folders/qp/j_yc8vfs6pd0mrx0xrb722640000gn/T/finnor-backup-drill-po9u7s/finnor.dump',
+    '-n',
+    'finnor_os'
+  ],
+  error: [Circular *1],
+  status: null,
+  signal: null,
+  output: null,
+  pid: 0,
+  stdout: undefined,
+  stderr: undefined
+}

@@ -35,7 +35,7 @@ describe("instruction trace answer envelope", () => {
       actionId: "inventory-action",
       result: { kind: "answer", spokenSummary: "I found 1 inventory item." },
     });
-    expect((envelope.result as Record<string, unknown>).groundedOn).toBeUndefined();
+    expect((envelope.result as unknown as Record<string, unknown>).groundedOn).toBeUndefined();
   });
 
   it("never classifies a confirmation-gated answer action as browser-answer eligible", () => {

@@ -1,0 +1,290 @@
+
+> finnor@0.1.0 test:e2e
+> playwright test
+
+[WebServer] (node:98635) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:98639) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+
+Running 280 tests using 2 workers
+°°°°[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+(node:98645) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:98646) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+········[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+··[WebServer] (node:98672) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+··[WebServer] (node:98681) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+·[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+·[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/api/jarvis/[...path]/route.ts
+[WebServer] (node:98687) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+··[WebServer] (node:98694) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+·[WebServer] (node:98696) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+·[WebServer] (node:98702) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+··[WebServer] (node:98709) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+·[WebServer] (node:98713) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+·[WebServer] (node:98717) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+··········[WebServer] (node:98755) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+···[WebServer] (node:98776) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+·[WebServer] (node:98799) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+··°·······[WebServer] (node:98840) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:98843) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+·[WebServer] (node:98850) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+··[WebServer] (node:98895) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:98910) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:98916) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:98924) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[P3.EXIT] 1440px reduced=false transcript=[{"step":"rest","activeBlock":null,"focus":"body","scrollY":0,"scrollHeight":1295,"scrollWidth":1440,"layoutShift":0,"metrics":[]},{"step":"heard","activeBlock":"heard","focus":"journey-next","scrollY":0},{"step":"understood","activeBlock":"understood","focus":"journey-next","scrollY":0},{"step":"plan","activeBlock":"plan","focus":"journey-next","scrollY":199},{"step":"clarify","activeBlock":"plan","focus":"journey-next","scrollY":0},{"step":"approval","activeBlock":"plan","focus":"h2","scrollY":0},{"step":"execution","activeBlock":"execution","focus":"journey-next","scrollY":100},{"step":"verifying","activeBlock":"execution","focus":"journey-next","scrollY":0},{"step":"receipt","activeBlock":"receipt","focus":"div","scrollY":0}] runtime={"activeBlock":"receipt","focus":"div","scrollY":0,"scrollHeight":1597,"scrollWidth":1440,"layoutShift":0,"metrics":[{"seq":"1","stage":"heard","eventToPixelMs":0},{"seq":"2","stage":"understood","eventToPixelMs":0},{"seq":"3","stage":"plan","eventToPixelMs":0},{"seq":"4","stage":"plan","eventToPixelMs":0},{"seq":"5","stage":"plan","eventToPixelMs":0},{"seq":"6","stage":"execution","eventToPixelMs":0},{"seq":"7","stage":"execution","eventToPixelMs":0},{"seq":"8","stage":"receipt","eventToPixelMs":0}]}
+·[P3.EXIT] 390px reduced=false transcript=[{"step":"rest","activeBlock":null,"focus":"body","scrollY":0,"scrollHeight":2176,"scrollWidth":390,"layoutShift":0,"metrics":[]},{"step":"heard","activeBlock":"heard","focus":"journey-next","scrollY":378},{"step":"understood","activeBlock":"understood","focus":"journey-next","scrollY":763},{"step":"plan","activeBlock":"plan","focus":"journey-next","scrollY":922},{"step":"clarify","activeBlock":"plan","focus":"journey-next","scrollY":453},{"step":"approval","activeBlock":"plan","focus":"h2","scrollY":0},{"step":"execution","activeBlock":"execution","focus":"journey-next","scrollY":1368},{"step":"verifying","activeBlock":"execution","focus":"journey-next","scrollY":0},{"step":"receipt","activeBlock":"receipt","focus":"div","scrollY":884}] runtime={"activeBlock":"receipt","focus":"div","scrollY":884,"scrollHeight":3031,"scrollWidth":390,"layoutShift":0,"metrics":[{"seq":"1","stage":"heard","eventToPixelMs":0},{"seq":"2","stage":"understood","eventToPixelMs":5.899999999999636},{"seq":"3","stage":"plan","eventToPixelMs":69.13000000596003},{"seq":"4","stage":"plan","eventToPixelMs":0},{"seq":"5","stage":"plan","eventToPixelMs":0},{"seq":"6","stage":"execution","eventToPixelMs":0},{"seq":"7","stage":"execution","eventToPixelMs":0},{"seq":"8","stage":"receipt","eventToPixelMs":0}]}
+·°°[WebServer] (node:98955) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[P3.EXIT] 390px reduced=true transcript=[{"step":"rest","activeBlock":null,"focus":"body","scrollY":0,"scrollHeight":2176,"scrollWidth":390,"layoutShift":0,"metrics":[]},{"step":"heard","activeBlock":"heard","focus":"journey-next","scrollY":378},{"step":"understood","activeBlock":"understood","focus":"journey-next","scrollY":365},{"step":"plan","activeBlock":"plan","focus":"journey-next","scrollY":535},{"step":"clarify","activeBlock":"plan","focus":"journey-next","scrollY":156},{"step":"approval","activeBlock":"plan","focus":"h2","scrollY":0},{"step":"execution","activeBlock":"execution","focus":"journey-next","scrollY":93},{"step":"verifying","activeBlock":"execution","focus":"journey-next","scrollY":0},{"step":"receipt","activeBlock":"receipt","focus":"div","scrollY":621}] runtime={"activeBlock":"receipt","focus":"div","scrollY":621,"scrollHeight":3055,"scrollWidth":390,"layoutShift":0,"metrics":[{"seq":"1","stage":"heard","eventToPixelMs":168.4260000059603},{"seq":"2","stage":"understood","eventToPixelMs":5.199999997019859},{"seq":"3","stage":"plan","eventToPixelMs":0},{"seq":"4","stage":"plan","eventToPixelMs":0},{"seq":"5","stage":"plan","eventToPixelMs":0},{"seq":"6","stage":"execution","eventToPixelMs":0},{"seq":"7","stage":"execution","eventToPixelMs":0},{"seq":"8","stage":"receipt","eventToPixelMs":4.700000005960646}]}
+··[WebServer] (node:98976) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+·[WebServer] (node:98984) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:98992) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[P3.T7] 1440px before={"restored":"true","stackRestored":"true","blocks":[{"key":"heard","state":"collapsed","collapsed":"true","entry":"settled"},{"key":"understood","state":"collapsed","collapsed":"true","entry":"settled"},{"key":"plan","state":"collapsed","collapsed":"true","entry":"settled"},{"key":"execution","state":"collapsed","collapsed":"true","entry":"settled"},{"key":"receipt","state":"active","collapsed":"false","entry":"settled"}],"activeBlock":"receipt","receiptMotion":"settled","receiptText":"What actually happened0 of 6 actions sent · 6 outcomes not observed.Invoice to cash · Henderson · Cedar Creek Rd · $890 · outcome not observed · No receipt yetInvoice to cash · Alvarez · Birchwood Ln · $620 · outcome not observed · No receipt yetInvoice to cash · Petersons · Maple Ridge Rd · $540 · outcome not observed · No receipt yetInvoice to cash · Ortiz · Spring Hollow Ct · $710 · outcome not observed · No receipt yetInvoice to cash · Webb · 4821 Cedar Creek Rd · $830 · outcome not observed · No receipt yetInvoice to cash · Dana Alvarez · 12 Birchwood Ln · $610 · outcome not observed · No receipt yet","historyCount":"3","scrollHeight":1441,"scrollWidth":1440,"settledMotionAnimations":0,"layoutShift":0,"focusedBlock":null} after={"restored":"true","stackRestored":"true","blocks":[{"key":"heard","state":"collapsed","collapsed":"true","entry":"settled"},{"key":"understood","state":"collapsed","collapsed":"true","entry":"settled"},{"key":"plan","state":"collapsed","collapsed":"true","entry":"settled"},{"key":"execution","state":"collapsed","collapsed":"true","entry":"settled"},{"key":"receipt","state":"active","collapsed":"false","entry":"settled"}],"activeBlock":"receipt","receiptMotion":"settled","receiptText":"What actually happened0 of 6 actions sent · 6 outcomes not observed.Invoice to cash · Henderson · Cedar Creek Rd · $890 · outcome not observed · No receipt yetInvoice to cash · Alvarez · Birchwood Ln · $620 · outcome not observed · No receipt yetInvoice to cash · Petersons · Maple Ridge Rd · $540 · outcome not observed · No receipt yetInvoice to cash · Ortiz · Spring Hollow Ct · $710 · outcome not observed · No receipt yetInvoice to cash · Webb · 4821 Cedar Creek Rd · $830 · outcome not observed · No receipt yetInvoice to cash · Dana Alvarez · 12 Birchwood Ln · $610 · outcome not observed · No receipt yet","historyCount":"3","scrollHeight":1412,"scrollWidth":1440,"settledMotionAnimations":0,"layoutShift":0,"focusedBlock":null}
+·[P3.T7] 390px before={"restored":"true","stackRestored":"true","blocks":[{"key":"heard","state":"collapsed","collapsed":"true","entry":"settled"},{"key":"understood","state":"collapsed","collapsed":"true","entry":"settled"},{"key":"plan","state":"collapsed","collapsed":"true","entry":"settled"},{"key":"execution","state":"collapsed","collapsed":"true","entry":"settled"},{"key":"receipt","state":"active","collapsed":"false","entry":"settled"}],"activeBlock":"receipt","receiptMotion":"settled","receiptText":"What actually happened0 of 6 actions sent · 6 outcomes not observed.Invoice to cash · Henderson · Cedar Creek Rd · $890 · outcome not observed · No receipt yetInvoice to cash · Alvarez · Birchwood Ln · $620 · outcome not observed · No receipt yetInvoice to cash · Petersons · Maple Ridge Rd · $540 · outcome not observed · No receipt yetInvoice to cash · Ortiz · Spring Hollow Ct · $710 · outcome not observed · No receipt yetInvoice to cash · Webb · 4821 Cedar Creek Rd · $830 · outcome not observed · No receipt yetInvoice to cash · Dana Alvarez · 12 Birchwood Ln · $610 · outcome not observed · No receipt yet","historyCount":"3","scrollHeight":2732,"scrollWidth":390,"settledMotionAnimations":0,"layoutShift":0,"focusedBlock":null} after={"restored":"true","stackRestored":"true","blocks":[{"key":"heard","state":"collapsed","collapsed":"true","entry":"settled"},{"key":"understood","state":"collapsed","collapsed":"true","entry":"settled"},{"key":"plan","state":"collapsed","collapsed":"true","entry":"settled"},{"key":"execution","state":"collapsed","collapsed":"true","entry":"settled"},{"key":"receipt","state":"active","collapsed":"false","entry":"settled"}],"activeBlock":"receipt","receiptMotion":"settled","receiptText":"What actually happened0 of 6 actions sent · 6 outcomes not observed.Invoice to cash · Henderson · Cedar Creek Rd · $890 · outcome not observed · No receipt yetInvoice to cash · Alvarez · Birchwood Ln · $620 · outcome not observed · No receipt yetInvoice to cash · Petersons · Maple Ridge Rd · $540 · outcome not observed · No receipt yetInvoice to cash · Ortiz · Spring Hollow Ct · $710 · outcome not observed · No receipt yetInvoice to cash · Webb · 4821 Cedar Creek Rd · $830 · outcome not observed · No receipt yetInvoice to cash · Dana Alvarez · 12 Birchwood Ln · $610 · outcome not observed · No receipt yet","historyCount":"3","scrollHeight":2732,"scrollWidth":390,"settledMotionAnimations":0,"layoutShift":0,"focusedBlock":null}
+[WebServer] (node:99014) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[P3.T7] reduced before={"restored":"true","stackRestored":"true","blocks":[{"key":"heard","state":"collapsed","collapsed":"true","entry":"settled"},{"key":"understood","state":"collapsed","collapsed":"true","entry":"settled"},{"key":"plan","state":"collapsed","collapsed":"true","entry":"settled"},{"key":"execution","state":"collapsed","collapsed":"true","entry":"settled"},{"key":"receipt","state":"active","collapsed":"false","entry":"settled"}],"activeBlock":"receipt","receiptMotion":"settled","receiptText":"What actually happened0 of 6 actions sent · 6 outcomes not observed.Invoice to cash · Henderson · Cedar Creek Rd · $890 · outcome not observed · No receipt yetInvoice to cash · Alvarez · Birchwood Ln · $620 · outcome not observed · No receipt yetInvoice to cash · Petersons · Maple Ridge Rd · $540 · outcome not observed · No receipt yetInvoice to cash · Ortiz · Spring Hollow Ct · $710 · outcome not observed · No receipt yetInvoice to cash · Webb · 4821 Cedar Creek Rd · $830 · outcome not observed · No receipt yetInvoice to cash · Dana Alvarez · 12 Birchwood Ln · $610 · outcome not observed · No receipt yet","historyCount":"3","scrollHeight":2866,"scrollWidth":390,"settledMotionAnimations":0,"layoutShift":0,"focusedBlock":null} after={"restored":"true","stackRestored":"true","blocks":[{"key":"heard","state":"collapsed","collapsed":"true","entry":"settled"},{"key":"understood","state":"collapsed","collapsed":"true","entry":"settled"},{"key":"plan","state":"collapsed","collapsed":"true","entry":"settled"},{"key":"execution","state":"collapsed","collapsed":"true","entry":"settled"},{"key":"receipt","state":"active","collapsed":"false","entry":"settled"}],"activeBlock":"receipt","receiptMotion":"settled","receiptText":"What actually happened0 of 6 actions sent · 6 outcomes not observed.Invoice to cash · Henderson · Cedar Creek Rd · $890 · outcome not observed · No receipt yetInvoice to cash · Alvarez · Birchwood Ln · $620 · outcome not observed · No receipt yetInvoice to cash · Petersons · Maple Ridge Rd · $540 · outcome not observed · No receipt yetInvoice to cash · Ortiz · Spring Hollow Ct · $710 · outcome not observed · No receipt yetInvoice to cash · Webb · 4821 Cedar Creek Rd · $830 · outcome not observed · No receipt yetInvoice to cash · Dana Alvarez · 12 Birchwood Ln · $610 · outcome not observed · No receipt yet","historyCount":"3","scrollHeight":2866,"scrollWidth":390,"settledMotionAnimations":0,"layoutShift":0,"focusedBlock":null}
+·°·[WebServer] (node:99029) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:99041) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+·[WebServer] (node:99050) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+···[WebServer] (node:99064) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+··°°°°°°°°°°
+°°°°°°°°°·[WebServer] (node:99102) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+·[WebServer] (node:99116) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+··[WebServer] (node:99124) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+··[WebServer] (node:99135) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+··°°°·[WebServer] (node:99158) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/api/jarvis/[...path]/route.ts
+·[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/api/jarvis/[...path]/route.ts
+·[WebServer] (node:99181) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+··[WebServer] (node:99198) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+······[WebServer] (node:99223) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+···[WebServer] (node:99239) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+··[WebServer] (node:99265) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+··[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/api/jarvis/[...path]/route.ts
+·°[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/api/jarvis/[...path]/route.ts
+··[WebServer] (node:99294) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+·°°°°·°°°°°°°[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/api/jarvis/[...path]/route.ts
+°[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/api/jarvis/[...path]/route.ts
+·°[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/api/jarvis/[...path]/route.ts
+·°°°°[WebServer] (node:99319) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+(node:99326) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+°°°°°°°°°°°°°°[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/api/jarvis/[...path]/route.ts
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/api/jarvis/[...path]/route.ts
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/api/jarvis/[...path]/route.ts
+[WebServer] (node:99350) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+·(node:99353) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:99359) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+·[WebServer] (node:99367) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+·
+·°°[WebServer] (node:99376) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+·[WebServer] (node:99385) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+·°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°
+°°°°°°°°°°°·°°°[WebServer] (node:99482) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+··[WebServer] (node:99499) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+··°···°°°°°°°°°·°[WebServer] (node:99515) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+°°·°[WebServer] (node:99527) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+··
+  167 skipped
+  113 passed (8.2m)

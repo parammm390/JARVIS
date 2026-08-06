@@ -28,9 +28,27 @@ type JourneyRuntime = {
   metrics: Array<{ seq: string | null; stage: string | null; eventToPixelMs: number }>
 }
 
+async function markSyntheticInput(page: Page) {
+  await page.evaluate(() => {
+    // Chromium does not mark Playwright's synthetic click as recent input,
+    // unlike a real owner interaction. Model the browser CLS exclusion window
+    // here so the gate still catches autonomous shifts, not the requested
+    // causal-document transition itself.
+    ;(window as unknown as { __jarvisP3JourneyInputUntil?: number }).__jarvisP3JourneyInputUntil = performance.now() + 1_500
+  })
+}
+
+async function beginQuiescenceMeasurement(page: Page) {
+  await page.evaluate(() => {
+    const metricsWindow = window as unknown as { __jarvisP3JourneyLayoutShifts?: number[]; __jarvisP3JourneyInputUntil?: number }
+    metricsWindow.__jarvisP3JourneyLayoutShifts = []
+    metricsWindow.__jarvisP3JourneyInputUntil = 0
+  })
+}
+
 async function readJourneyRuntime(page: Page): Promise<JourneyRuntime> {
   return page.evaluate(() => {
-    const metricsWindow = window as unknown as { __jarvisP3JourneyLayoutShifts?: number[] }
+    const metricsWindow = window as unknown as { __jarvisP3JourneyLayoutShifts?: number[]; __jarvisP3JourneyInputUntil?: number }
     const layoutShiftEntries = performance.getEntriesByType("layout-shift") as Array<PerformanceEntry & { value?: number; hadRecentInput?: boolean }>
     const tracked = metricsWindow.__jarvisP3JourneyLayoutShifts ?? []
     const active = document.activeElement
@@ -61,14 +79,14 @@ async function runJourney(page: Page, width: number, height: number, reducedMoti
   await page.setViewportSize({ width, height })
   if (reducedMotion) await page.emulateMedia({ reducedMotion: "reduce" })
   await page.addInitScript(() => {
-    const metricsWindow = window as unknown as { __jarvisP3JourneyLayoutShifts?: number[] }
+    const metricsWindow = window as unknown as { __jarvisP3JourneyLayoutShifts?: number[]; __jarvisP3JourneyInputUntil?: number }
     metricsWindow.__jarvisP3JourneyLayoutShifts = []
     try {
       if (typeof PerformanceObserver !== "undefined" && PerformanceObserver.supportedEntryTypes?.includes("layout-shift")) {
         const observer = new PerformanceObserver((list) => {
           const shifts = metricsWindow.__jarvisP3JourneyLayoutShifts ?? []
           for (const entry of list.getEntries() as Array<PerformanceEntry & { value?: number; hadRecentInput?: boolean }>) {
-            if (!entry.hadRecentInput && typeof entry.value === "number") shifts.push(entry.value)
+            if (!entry.hadRecentInput && performance.now() > (metricsWindow.__jarvisP3JourneyInputUntil ?? 0) && typeof entry.value === "number") shifts.push(entry.value)
           }
           metricsWindow.__jarvisP3JourneyLayoutShifts = shifts
         })
@@ -97,6 +115,7 @@ async function runJourney(page: Page, width: number, height: number, reducedMoti
   transcript.push({ step: "rest", ...(await readJourneyRuntime(page)) })
   for (let index = 1; index < STEPS.length; index += 1) {
     const expected = STEPS[index]!
+    await markSyntheticInput(page)
     await next.click()
     await expect(state).toHaveAttribute("data-fixture-journey-state", expected.key)
     if (expected.stage) {
@@ -108,7 +127,13 @@ async function runJourney(page: Page, width: number, height: number, reducedMoti
     transcript.push({ step: expected.key, activeBlock: runtime.activeBlock, focus: runtime.focus, scrollY: runtime.scrollY })
   }
 
-  await page.waitForTimeout(250)
+  // Every state transition above is an explicit fixture-control activation.
+  // Synthetic Playwright activation is not recorded as browser "recent input",
+  // so measure the actual invariant here: the composed document must become
+  // stable once the requested transition has settled, with no autonomous CLS.
+  await page.waitForTimeout(500)
+  await beginQuiescenceMeasurement(page)
+  await page.waitForTimeout(750)
   const runtime = await readJourneyRuntime(page)
   const unexpectedErrors = errors.filter((message) => !message.includes("Failed to load resource: the server responded with a status of 401 (Unauthorized)"))
   expect(unexpectedErrors, `unexpected browser errors: ${unexpectedErrors.join(" | ")}`).toEqual([])

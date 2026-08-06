@@ -61,15 +61,26 @@ async function main(): Promise<void> {
     run("createdb", ["-h", conn.host, "-p", conn.port, "-U", conn.user, RESTORE_DB], env);
 
     // Extensions are per-database, not per-cluster -- a fresh createdb has none, but
-    // the dump contains objects (embeddings/embedding_cache columns) of type `vector`.
-    // Without this, every such object fails to restore with `type "public.vector" does
-    // not exist` -- a real, previously-unexercised gap: this drill had never actually
-    // run against a pgvector-enabled source before (this repo's first-ever green CI run).
+    // a pgvector-backed source dump needs `vector` available before its schema is
+    // restored. The embedded local Postgres used by this repository does not ship
+    // pgvector, so the probe is intentionally fail-open only when the source cluster
+    // cannot provide that optional extension. A pgvector-enabled CI/staging cluster
+    // still takes the CREATE EXTENSION path.
     const restoreUrl = `postgres://${conn.user}:${conn.password}@${conn.host}:${conn.port}/${RESTORE_DB}`;
     const extClient = new pg.Client({ connectionString: restoreUrl });
     await extClient.connect();
-    await extClient.query("CREATE EXTENSION IF NOT EXISTS vector");
-    await extClient.end();
+    try {
+      const { rows } = await extClient.query<{ available: boolean }>(
+        "SELECT EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'vector') AS available",
+      );
+      if (rows[0]?.available) {
+        await extClient.query("CREATE EXTENSION IF NOT EXISTS vector");
+      } else {
+        console.log("[backup-drill] vector extension unavailable on this cluster; continuing with the source schema as dumped");
+      }
+    } finally {
+      await extClient.end();
+    }
 
     console.log(`[backup-drill] restoring into ${RESTORE_DB}`);
     run("pg_restore", ["-h", conn.host, "-p", conn.port, "-U", conn.user, "-d", RESTORE_DB, dumpFile], env);

@@ -346,7 +346,7 @@ export function OperationalSignalRail({ thread, liveframe, pendingApprovals, fix
  * decorative object. All callouts are grounded in the active instruction or
  * real data lanes; no callout is rendered merely to make the composition busy.
  */
-export function OrbIntelligenceReadout({ thread, liveframe, pendingApprovals }: Pick<OperationalConsoleProps, "thread" | "liveframe" | "pendingApprovals">) {
+export function OrbIntelligenceReadout({ thread, liveframe, pendingApprovals, fixtureLabel }: Pick<OperationalConsoleProps, "thread" | "liveframe" | "pendingApprovals" | "fixtureLabel">) {
   const selector = useSelectorInput()
   const lane = useLanePresentation()
   const runsTruth = selectRunsInFlight(selector)
@@ -373,21 +373,21 @@ export function OrbIntelligenceReadout({ thread, liveframe, pendingApprovals }: 
         <span className="jarvis-orb-readout__connection">{connectionCopy(liveframe.transportPosture)}</span>
       </div>
       {runs !== null ? (
-        <div className="jarvis-orb-readout__satellite jarvis-orb-readout__satellite--workflow" data-jarvis-fact data-source="api:workflow-runs">
+        <div className="jarvis-orb-readout__satellite jarvis-orb-readout__satellite--workflow" data-jarvis-fact data-source={fixtureLabel ? "fixture.workflowRuns" : "api:workflow-runs"}>
           <Workflow className="h-3.5 w-3.5" aria-hidden />
           <span>Workflow lanes</span>
           <strong>{runs} active</strong>
         </div>
       ) : null}
       {queuedActionRecords !== null ? (
-        <div className="jarvis-orb-readout__satellite jarvis-orb-readout__satellite--actions" data-jarvis-fact data-source="api:actions-pending">
+        <div className="jarvis-orb-readout__satellite jarvis-orb-readout__satellite--actions" data-jarvis-fact data-source={fixtureLabel ? "fixture.pendingActions" : "api:actions-pending"}>
           <ShieldCheck className="h-3.5 w-3.5" aria-hidden />
           <span>Action records</span>
           <strong>{queuedActionRecords} queued</strong>
         </div>
       ) : null}
       {integrations ? (
-        <div className="jarvis-orb-readout__satellite jarvis-orb-readout__satellite--integrations" data-jarvis-fact data-source="api:integrations-status">
+        <div className="jarvis-orb-readout__satellite jarvis-orb-readout__satellite--integrations" data-jarvis-fact data-source={fixtureLabel ? "fixture.integrationsStatus" : "api:integrations-status"}>
           <Network className="h-3.5 w-3.5" aria-hidden />
           <span>Connections</span>
           <strong>{integrations.summary.healthyCount} / {integrations.summary.configuredCount} healthy</strong>

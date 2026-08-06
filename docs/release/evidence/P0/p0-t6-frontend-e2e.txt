@@ -1,0 +1,535 @@
+
+> finnor@0.1.0 test:e2e
+> playwright test
+
+
+[WebServer] (node:84200) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+[WebServer] (node:84205) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/layout.tsx
+
+Running 280 tests using 4 workers
+
+[1/280] [desktop-chromium] › e2e/golden-consequence.spec.ts:64:7 › P4 — the golden consequence graph, driven for real › approving a real start_invoice_to_cash_workflow action changes every surface in the consequence graph
+[2/280] [desktop-chromium] › e2e/jarvis-authenticated.spec.ts:27:7 › authenticated cockpit flow › daily briefing renders real numbers and a Why? link works
+[3/280] [desktop-chromium] › e2e/jarvis-authenticated.spec.ts:34:7 › authenticated cockpit flow › approving a pending action removes it from the inbox
+[4/280] [desktop-chromium] › e2e/jarvis-authenticated.spec.ts:45:7 › authenticated cockpit flow › a live workflow run's drawer opens and shows its steps
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/layout.tsx
+
+(node:84214) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+(node:84213) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+(node:84216) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+(node:84215) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[5/280] [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=rest at 390
+[6/280] [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=understood at 1440
+[7/280] [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=understood at 390
+[8/280] [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=rest at 1440
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/layout.tsx
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+  1) [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=understood at 390
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('FIXTURE · understood')
+    Expected: visible
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 10000ms
+      - waiting for getByText('FIXTURE · understood')
+
+
+      20 |       await page.setViewportSize(viewport)
+      21 |       await page.goto(`/jarvis/next?fixture=${fixture}`, { waitUntil: "domcontentloaded" })
+    > 22 |       await expect(page.getByText(`FIXTURE · ${fixture}`)).toBeVisible()
+         |                                                            ^
+      23 |
+      24 |       const missing = await page.locator("[data-jarvis-thread]").evaluate((root) => {
+      25 |         const facts = [...root.querySelectorAll<HTMLElement>("[data-jarvis-fact]")].filter((element) =>
+        at /Users/paramdave/Desktop/FINNOR/e2e/jarvis-contradiction-sweep.spec.ts:22:60
+
+    Error Context: test-results/jarvis-contradiction-sweep-433de-p-fixture-understood-at-390-desktop-chromium/error-context.md
+
+
+  2) [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=rest at 390
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('FIXTURE · rest')
+    Expected: visible
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 10000ms
+      - waiting for getByText('FIXTURE · rest')
+
+
+      20 |       await page.setViewportSize(viewport)
+      21 |       await page.goto(`/jarvis/next?fixture=${fixture}`, { waitUntil: "domcontentloaded" })
+    > 22 |       await expect(page.getByText(`FIXTURE · ${fixture}`)).toBeVisible()
+         |                                                            ^
+      23 |
+      24 |       const missing = await page.locator("[data-jarvis-thread]").evaluate((root) => {
+      25 |         const facts = [...root.querySelectorAll<HTMLElement>("[data-jarvis-fact]")].filter((element) =>
+        at /Users/paramdave/Desktop/FINNOR/e2e/jarvis-contradiction-sweep.spec.ts:22:60
+
+    Error Context: test-results/jarvis-contradiction-sweep-ec8e8-n-sweep-fixture-rest-at-390-desktop-chromium/error-context.md
+
+
+  3) [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=understood at 1440
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('FIXTURE · understood')
+    Expected: visible
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 10000ms
+      - waiting for getByText('FIXTURE · understood')
+
+
+      20 |       await page.setViewportSize(viewport)
+      21 |       await page.goto(`/jarvis/next?fixture=${fixture}`, { waitUntil: "domcontentloaded" })
+    > 22 |       await expect(page.getByText(`FIXTURE · ${fixture}`)).toBeVisible()
+         |                                                            ^
+      23 |
+      24 |       const missing = await page.locator("[data-jarvis-thread]").evaluate((root) => {
+      25 |         const facts = [...root.querySelectorAll<HTMLElement>("[data-jarvis-fact]")].filter((element) =>
+        at /Users/paramdave/Desktop/FINNOR/e2e/jarvis-contradiction-sweep.spec.ts:22:60
+
+    Error Context: test-results/jarvis-contradiction-sweep-50032--fixture-understood-at-1440-desktop-chromium/error-context.md
+
+
+  4) [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=rest at 1440
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('FIXTURE · rest')
+    Expected: visible
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 10000ms
+      - waiting for getByText('FIXTURE · rest')
+
+
+      20 |       await page.setViewportSize(viewport)
+      21 |       await page.goto(`/jarvis/next?fixture=${fixture}`, { waitUntil: "domcontentloaded" })
+    > 22 |       await expect(page.getByText(`FIXTURE · ${fixture}`)).toBeVisible()
+         |                                                            ^
+      23 |
+      24 |       const missing = await page.locator("[data-jarvis-thread]").evaluate((root) => {
+      25 |         const facts = [...root.querySelectorAll<HTMLElement>("[data-jarvis-fact]")].filter((element) =>
+        at /Users/paramdave/Desktop/FINNOR/e2e/jarvis-contradiction-sweep.spec.ts:22:60
+
+    Error Context: test-results/jarvis-contradiction-sweep-0276e--sweep-fixture-rest-at-1440-desktop-chromium/error-context.md
+
+
+
+(node:84256) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+(node:84255) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[9/280] [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=plan at 1440
+[10/280] [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=plan at 390
+
+(node:84259) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+(node:84260) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[11/280] [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=clarify at 1440
+[12/280] [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=clarify at 390
+  5) [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=clarify at 390
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('FIXTURE · clarify')
+    Expected: visible
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 10000ms
+      - waiting for getByText('FIXTURE · clarify')
+
+
+      20 |       await page.setViewportSize(viewport)
+      21 |       await page.goto(`/jarvis/next?fixture=${fixture}`, { waitUntil: "domcontentloaded" })
+    > 22 |       await expect(page.getByText(`FIXTURE · ${fixture}`)).toBeVisible()
+         |                                                            ^
+      23 |
+      24 |       const missing = await page.locator("[data-jarvis-thread]").evaluate((root) => {
+      25 |         const facts = [...root.querySelectorAll<HTMLElement>("[data-jarvis-fact]")].filter((element) =>
+        at /Users/paramdave/Desktop/FINNOR/e2e/jarvis-contradiction-sweep.spec.ts:22:60
+
+    Error Context: test-results/jarvis-contradiction-sweep-13cbc-weep-fixture-clarify-at-390-desktop-chromium/error-context.md
+
+
+  6) [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=clarify at 1440
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('FIXTURE · clarify')
+    Expected: visible
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 10000ms
+      - waiting for getByText('FIXTURE · clarify')
+
+
+      20 |       await page.setViewportSize(viewport)
+      21 |       await page.goto(`/jarvis/next?fixture=${fixture}`, { waitUntil: "domcontentloaded" })
+    > 22 |       await expect(page.getByText(`FIXTURE · ${fixture}`)).toBeVisible()
+         |                                                            ^
+      23 |
+      24 |       const missing = await page.locator("[data-jarvis-thread]").evaluate((root) => {
+      25 |         const facts = [...root.querySelectorAll<HTMLElement>("[data-jarvis-fact]")].filter((element) =>
+        at /Users/paramdave/Desktop/FINNOR/e2e/jarvis-contradiction-sweep.spec.ts:22:60
+
+    Error Context: test-results/jarvis-contradiction-sweep-9bd65-eep-fixture-clarify-at-1440-desktop-chromium/error-context.md
+
+
+  7) [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=plan at 390
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('FIXTURE · plan')
+    Expected: visible
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 10000ms
+      - waiting for getByText('FIXTURE · plan')
+
+
+      20 |       await page.setViewportSize(viewport)
+      21 |       await page.goto(`/jarvis/next?fixture=${fixture}`, { waitUntil: "domcontentloaded" })
+    > 22 |       await expect(page.getByText(`FIXTURE · ${fixture}`)).toBeVisible()
+         |                                                            ^
+      23 |
+      24 |       const missing = await page.locator("[data-jarvis-thread]").evaluate((root) => {
+      25 |         const facts = [...root.querySelectorAll<HTMLElement>("[data-jarvis-fact]")].filter((element) =>
+        at /Users/paramdave/Desktop/FINNOR/e2e/jarvis-contradiction-sweep.spec.ts:22:60
+
+    Error Context: test-results/jarvis-contradiction-sweep-9e943-n-sweep-fixture-plan-at-390-desktop-chromium/error-context.md
+
+
+  8) [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=plan at 1440
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('FIXTURE · plan')
+    Expected: visible
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 10000ms
+      - waiting for getByText('FIXTURE · plan')
+
+
+      20 |       await page.setViewportSize(viewport)
+      21 |       await page.goto(`/jarvis/next?fixture=${fixture}`, { waitUntil: "domcontentloaded" })
+    > 22 |       await expect(page.getByText(`FIXTURE · ${fixture}`)).toBeVisible()
+         |                                                            ^
+      23 |
+      24 |       const missing = await page.locator("[data-jarvis-thread]").evaluate((root) => {
+      25 |         const facts = [...root.querySelectorAll<HTMLElement>("[data-jarvis-fact]")].filter((element) =>
+        at /Users/paramdave/Desktop/FINNOR/e2e/jarvis-contradiction-sweep.spec.ts:22:60
+
+    Error Context: test-results/jarvis-contradiction-sweep-8a93a--sweep-fixture-plan-at-1440-desktop-chromium/error-context.md
+
+
+
+(node:84307) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+(node:84309) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+(node:84305) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[13/280] [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=execution at 1440
+
+(node:84306) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[14/280] [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=execution at 390
+[15/280] [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=approval at 1440
+[16/280] [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=approval at 390
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+  9) [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=execution at 390
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('FIXTURE · execution')
+    Expected: visible
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 10000ms
+      - waiting for getByText('FIXTURE · execution')
+
+
+      20 |       await page.setViewportSize(viewport)
+      21 |       await page.goto(`/jarvis/next?fixture=${fixture}`, { waitUntil: "domcontentloaded" })
+    > 22 |       await expect(page.getByText(`FIXTURE · ${fixture}`)).toBeVisible()
+         |                                                            ^
+      23 |
+      24 |       const missing = await page.locator("[data-jarvis-thread]").evaluate((root) => {
+      25 |         const facts = [...root.querySelectorAll<HTMLElement>("[data-jarvis-fact]")].filter((element) =>
+        at /Users/paramdave/Desktop/FINNOR/e2e/jarvis-contradiction-sweep.spec.ts:22:60
+
+    Error Context: test-results/jarvis-contradiction-sweep-70647-ep-fixture-execution-at-390-desktop-chromium/error-context.md
+
+
+  10) [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=approval at 390
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('FIXTURE · approval')
+    Expected: visible
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 10000ms
+      - waiting for getByText('FIXTURE · approval')
+
+
+      20 |       await page.setViewportSize(viewport)
+      21 |       await page.goto(`/jarvis/next?fixture=${fixture}`, { waitUntil: "domcontentloaded" })
+    > 22 |       await expect(page.getByText(`FIXTURE · ${fixture}`)).toBeVisible()
+         |                                                            ^
+      23 |
+      24 |       const missing = await page.locator("[data-jarvis-thread]").evaluate((root) => {
+      25 |         const facts = [...root.querySelectorAll<HTMLElement>("[data-jarvis-fact]")].filter((element) =>
+        at /Users/paramdave/Desktop/FINNOR/e2e/jarvis-contradiction-sweep.spec.ts:22:60
+
+    Error Context: test-results/jarvis-contradiction-sweep-773ce-eep-fixture-approval-at-390-desktop-chromium/error-context.md
+
+
+  11) [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=approval at 1440
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('FIXTURE · approval')
+    Expected: visible
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 10000ms
+      - waiting for getByText('FIXTURE · approval')
+
+
+      20 |       await page.setViewportSize(viewport)
+      21 |       await page.goto(`/jarvis/next?fixture=${fixture}`, { waitUntil: "domcontentloaded" })
+    > 22 |       await expect(page.getByText(`FIXTURE · ${fixture}`)).toBeVisible()
+         |                                                            ^
+      23 |
+      24 |       const missing = await page.locator("[data-jarvis-thread]").evaluate((root) => {
+      25 |         const facts = [...root.querySelectorAll<HTMLElement>("[data-jarvis-fact]")].filter((element) =>
+        at /Users/paramdave/Desktop/FINNOR/e2e/jarvis-contradiction-sweep.spec.ts:22:60
+
+    Error Context: test-results/jarvis-contradiction-sweep-5173e-ep-fixture-approval-at-1440-desktop-chromium/error-context.md
+
+
+  12) [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=execution at 1440
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('FIXTURE · execution')
+    Expected: visible
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 10000ms
+      - waiting for getByText('FIXTURE · execution')
+
+
+      20 |       await page.setViewportSize(viewport)
+      21 |       await page.goto(`/jarvis/next?fixture=${fixture}`, { waitUntil: "domcontentloaded" })
+    > 22 |       await expect(page.getByText(`FIXTURE · ${fixture}`)).toBeVisible()
+         |                                                            ^
+      23 |
+      24 |       const missing = await page.locator("[data-jarvis-thread]").evaluate((root) => {
+      25 |         const facts = [...root.querySelectorAll<HTMLElement>("[data-jarvis-fact]")].filter((element) =>
+        at /Users/paramdave/Desktop/FINNOR/e2e/jarvis-contradiction-sweep.spec.ts:22:60
+
+    Error Context: test-results/jarvis-contradiction-sweep-930d6-p-fixture-execution-at-1440-desktop-chromium/error-context.md
+
+
+
+(node:84343) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+(node:84342) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+(node:84341) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[17/280] [desktop-chromium] › e2e/jarvis-d9-a11y.spec.ts:11:5 › public preview labels its mode and exposes the sign-in path
+
+(node:84345) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[18/280] [desktop-chromium] › e2e/jarvis-d9-a11y.spec.ts:17:5 › public preview does not render private API facts
+[19/280] [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=receipt at 1440
+[20/280] [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=receipt at 390
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/jarvis/next/page.tsx
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/jarvis/next/page.tsx
+
+[WebServer] (node:84380) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+  13) [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=receipt at 390
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('FIXTURE · receipt')
+    Expected: visible
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 10000ms
+      - waiting for getByText('FIXTURE · receipt')
+
+
+      20 |       await page.setViewportSize(viewport)
+      21 |       await page.goto(`/jarvis/next?fixture=${fixture}`, { waitUntil: "domcontentloaded" })
+    > 22 |       await expect(page.getByText(`FIXTURE · ${fixture}`)).toBeVisible()
+         |                                                            ^
+      23 |
+      24 |       const missing = await page.locator("[data-jarvis-thread]").evaluate((root) => {
+      25 |         const facts = [...root.querySelectorAll<HTMLElement>("[data-jarvis-fact]")].filter((element) =>
+        at /Users/paramdave/Desktop/FINNOR/e2e/jarvis-contradiction-sweep.spec.ts:22:60
+
+    Error Context: test-results/jarvis-contradiction-sweep-19d51-weep-fixture-receipt-at-390-desktop-chromium/error-context.md
+
+
+
+[WebServer] (node:84394) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+  14) [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=receipt at 1440
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('FIXTURE · receipt')
+    Expected: visible
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 10000ms
+      - waiting for getByText('FIXTURE · receipt')
+
+
+      20 |       await page.setViewportSize(viewport)
+      21 |       await page.goto(`/jarvis/next?fixture=${fixture}`, { waitUntil: "domcontentloaded" })
+    > 22 |       await expect(page.getByText(`FIXTURE · ${fixture}`)).toBeVisible()
+         |                                                            ^
+      23 |
+      24 |       const missing = await page.locator("[data-jarvis-thread]").evaluate((root) => {
+      25 |         const facts = [...root.querySelectorAll<HTMLElement>("[data-jarvis-fact]")].filter((element) =>
+        at /Users/paramdave/Desktop/FINNOR/e2e/jarvis-contradiction-sweep.spec.ts:22:60
+
+    Error Context: test-results/jarvis-contradiction-sweep-446cd-eep-fixture-receipt-at-1440-desktop-chromium/error-context.md

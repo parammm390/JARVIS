@@ -1,0 +1,12 @@
+
+ RUN  v4.1.10 /Users/paramdave/Desktop/FINNOR/finnor-os
+
+stderr | tests/integration/receipt-policy-and-approver.test.ts > DecisionReceipt.policyApplied + approval.approvedBy — regression (§3.6 finding) > a system-drafted (draftKnownAction), gated, API-approved action gets a receipt with a real policyApplied and a real approvedBy
+[rate-limit] Redis unavailable; using in-memory fallback Stream isn't writeable and enableOfflineQueue options is false
+
+·
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  16:28:08
+   Duration  6.51s (transform 1.68s, setup 0ms, import 4.50s, tests 1.87s, environment 0ms)

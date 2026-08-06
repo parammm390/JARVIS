@@ -1,0 +1,50 @@
+
+> finnor-os@0.1.0 test
+> vitest run
+
+
+ RUN  v4.1.10 /Users/paramdave/Desktop/FINNOR/finnor-os
+
+ ❯ tests/integration/backup-restore.test.ts (1 test | 1 failed) 25154ms
+     × dumps every finnor_os table and restores it into a fresh database with matching row counts 23974ms
+(node:78505) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+ ❯ tests/integration/scan-handlers.test.ts (14 tests | 2 failed) 5439ms
+     × scan_cold_leads drafts a real gated action when a win-back script IS configured 226ms
+     × scheduled_reminder (renewal scan) drafts through the real pipeline — real summary, never a blank card 84ms
+ ❯ tests/integration/dealer-zero-seed.test.ts (4 tests | 1 failed) 2889ms
+     × re-running seedTenantPolicies is idempotent — same row count, versions bump, no duplicates 54ms
+ ❯ tests/integration/compensation.test.ts (3 tests | 1 failed) 334ms
+     × emulator binding: a held appointment is released on compensation, and the compensation_case resolves succeeded 140ms
+ ❯ tests/integration/authz.test.ts (10 tests | 1 failed) 213ms
+     × A4.T5: POST /api/actions enforces its own tighter intake bucket, independent of the generic tenant bucket 13ms
+ ❯ tests/integration/overview-route.test.ts (3 tests | 2 failed) 239ms
+     × runs a real get_business_overview action and returns real leads/pending/inventory/invoices/visits + citations 49ms
+     × reuses the cached result on a second call within the cache window, without creating a new domain_action 34ms
+ ❯ tests/integration/evidence-corpus.test.ts (3 tests | 2 failed) 153ms
+     × appends an immutable version, is retry-idempotent, and records citable research hits 42ms
+     × does not return tenant A's evidence in tenant B's scoped search 3ms
+(node:78555) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:78621) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:78660) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:78702) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:78834) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:78872) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:78890) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+[10:40:50] [32mINFO[39m: [36m[critic_review] Bedrock not configured — skipping[39m
+    [35mtenantId[39m: "00000000-0000-4000-8000-0000000000f2"
+    [35mactionId[39m: "bbbd9c20-b987-4ff6-8d66-2178fb3849f3"
+(node:78970) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:78975) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+[10:40:58] [32mINFO[39m: [36m[sse] listening on jarvis_events[39m
+(node:79012) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)

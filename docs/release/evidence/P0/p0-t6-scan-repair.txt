@@ -1,0 +1,42 @@
+
+ RUN  v4.1.10 /Users/paramdave/Desktop/FINNOR/finnor-os
+
+x·(node:81633) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+···x··········
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/dealer-zero-detection-loops.test.ts > Dealer Zero detection loops (§3.4) > scan_low_inventory drafts real flag_reorder_needed actions (with receipts) for below-threshold seeded stock
+AssertionError: expected 3 to be greater than 3
+ ❯ tests/integration/dealer-zero-detection-loops.test.ts:56:26
+     54|     );
+     55|     // seed-dealer-zero.ts seeds 3 below-threshold SKUs (FILT-SED, FIL…
+     56|     expect(after.length).toBeGreaterThan(before.length);
+       |                          ^
+     57|     expect(after.length).toBeGreaterThanOrEqual(3);
+     58|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/integration/scan-handlers.test.ts > proactive scan handlers > scheduled_reminder (renewal scan) drafts through the real pipeline — real summary, never a blank card
+AssertionError: expected 'needs_human_review' to be 'pending' // Object.is equality
+
+Expected: "pending"
+Received: "needs_human_review"
+
+ ❯ tests/integration/scan-handlers.test.ts:191:25
+    189|     expect(drafted.length).toBeGreaterThanOrEqual(1);
+    190|     const last = drafted[drafted.length - 1]!;
+    191|     expect(last.status).toBe("pending");
+       |                         ^
+    192|     expect(last.summary).toBeTruthy(); // the actual bug being fixed: …
+    193|     expect(last.summary).not.toBe("No summary drafted.");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  2 failed | 14 passed (16)
+   Start at  16:28:22
+   Duration  5.81s (transform 900ms, setup 0ms, import 4.47s, tests 1.11s, environment 0ms)

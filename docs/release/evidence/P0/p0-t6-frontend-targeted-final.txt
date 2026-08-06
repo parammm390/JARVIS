@@ -1,0 +1,7 @@
+P0.T6 repaired-target browser evidence
+
+Command:
+  npm run test:e2e -- --project=desktop-chromium --workers=1 --retries=0
+  (targeted P3 clarification/lifecycle, P6 responsive, and P7 degraded-integration files)
+
+Result: exit 0; 10 passed; 0 failed; 0 newly skipped.

@@ -9,7 +9,7 @@ import pg from "pg";
 import { migrate } from "../../packages/db/migrate";
 import { withTenant, closePool, tenants, workflowSteps, workflowRuns, commands, integrationOperations, compensationCases, appointments, decisionReceipts } from "@finnor/db";
 import { eq } from "drizzle-orm";
-import { submitCommand, executeCapability, compensateStep } from "@finnor/workflow-runtime";
+import { submitCommand, executeCapability, compensateStep, claimStep } from "@finnor/workflow-runtime";
 import {
   holdAppointmentContract,
   emulatorSchedulingBinding,
@@ -42,7 +42,11 @@ async function newStep(stepType: string): Promise<string> {
   const submitted = await withTenant(TENANT_ID, (db) =>
     submitCommand(db, { tenantId: TENANT_ID, commandType: "compensation_test", payload: {}, workflowType: "compensation_test", steps: [{ stepType, payload: {} }] }),
   );
-  return submitted.stepIds[0]!;
+  const stepId = submitted.stepIds[0]!;
+  // The worker claims a step before running a capability. Claim it here too so this
+  // direct capability harness opens the one lifecycle receipt compensation updates.
+  expect(await claimStep(TENANT_ID, stepId)).toBeTruthy();
+  return stepId;
 }
 
 describe.skipIf(!available)("compensation", () => {

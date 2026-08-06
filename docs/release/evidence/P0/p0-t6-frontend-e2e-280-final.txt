@@ -1,0 +1,18 @@
+P0.T6 final frontend E2E evidence
+
+Command:
+  CI=1 PLAYWRIGHT_BASE_URL=http://localhost:3000 npm run test:e2e -- --reporter=line
+
+Server prerequisite:
+  A manually owned local `next dev` server was started with `NEXT_PUBLIC_JARVIS_NEXT=1`.
+  The fixture-enabled development server is required because the labelled fixture harness is
+  intentionally unavailable in a production build. No external target was used.
+
+Result (exit 0):
+  Running 280 tests using 2 workers
+  113 passed
+  167 skipped (pre-existing conditional project/credential skips; no skip or quarantine was added)
+  0 failed
+  Duration: 4.6m
+
+The 113 passing tests include both desktop-chromium and mobile-375 projects.

@@ -1,0 +1,58 @@
+
+> finnor-os@0.1.0 test
+> vitest run
+
+
+ RUN  v4.1.10 /Users/paramdave/Desktop/FINNOR/finnor-os
+
+(node:81956) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:81977) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+[11:03:04] [31mERROR[39m: [36munhandled route failure[39m
+    [35mtraceId[39m: "f0dda2a0-ac15-43be-9c8a-ed3bd1880979"
+    err: "relation \"finnor_langgraph.checkpoints\" does not exist"
+[11:03:04] [31mERROR[39m: [36munhandled route failure[39m
+    [35mtraceId[39m: "6d0318e8-1960-488f-ad06-d3c5b327d9ba"
+    err: "relation \"finnor_langgraph.checkpoints\" does not exist"
+ ❯ tests/integration/rbac-approval.test.ts (6 tests | 2 failed) 347ms
+     × dispatcher approves a scheduling action — 200 122ms
+     × no role_permissions rows at all for a tenant falls back to owner-only (regression) 15ms
+(node:82098) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:82142) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:82155) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:82176) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:82214) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:82240) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+[11:03:59] [32mINFO[39m: [36m[sse] listening on jarvis_events[39m
+(node:82335) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:82381) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+[11:04:35] [32mINFO[39m: [36m[critic_review] Bedrock not configured — skipping[39m
+    [35mtenantId[39m: "00000000-0000-4000-8000-0000000000f2"
+    [35mactionId[39m: "00a7b310-cf47-4f22-b998-261b5a755ccd"
+[11:04:37] [33mWARN[39m: [36m[vapi] no tenant_phone_numbers match — falling back to VAPI_DEFAULT_TENANT_ID[39m
+[11:04:37] [33mWARN[39m: [36m[vapi] no tenant_phone_numbers match — falling back to VAPI_DEFAULT_TENANT_ID[39m
+[11:04:42] [33mWARN[39m: [36m[vapi] no tenant_phone_numbers match — falling back to VAPI_DEFAULT_TENANT_ID[39m
+[11:04:42] [33mWARN[39m: [36m[vapi] no tenant_phone_numbers match — falling back to VAPI_DEFAULT_TENANT_ID[39m
+[11:04:42] [33mWARN[39m: [36m[vapi] no tenant_phone_numbers match — falling back to VAPI_DEFAULT_TENANT_ID[39m
+[11:04:42] [33mWARN[39m: [36m[vapi] no tenant_phone_numbers match — falling back to VAPI_DEFAULT_TENANT_ID[39m
+(node:82496) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:82524) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:82562) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:82583) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:82645) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:82657) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)

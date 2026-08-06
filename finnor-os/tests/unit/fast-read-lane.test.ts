@@ -66,7 +66,7 @@ describe("fast read-only lane", () => {
   it("does not load secrets, memory, or the planner on the fast path", async () => {
     const answer = answerCashCollections(CASH_SNAPSHOT, "2026-08-04T12:00:00.000Z");
     const router = {
-      classify: () => ({ route: "fast_read", intent: "cash_collections" as const }),
+      classify: () => ({ route: "fast_read", intent: "cash_collections" } as const),
       route: vi.fn(async () => answer),
     };
     const planner = { plan: vi.fn() } as unknown as Planner;

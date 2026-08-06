@@ -1,0 +1,77 @@
+
+ RUN  v4.1.10 /Users/paramdave/Desktop/FINNOR/finnor-os
+
+······xx·
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/evidence-corpus.test.ts > evidence corpus > appends an immutable version, is retry-idempotent, and records citable research hits
+error: bind message supplies 4 parameters, but prepared statement "" requires 3
+ ❯ node_modules/pg/lib/client.js:652:17
+ ❯ searchEvidence packages/memory/src/evidence.ts:502:24
+    500|         // $3 (as-of), while the shared parameter layout reserves $2 f…
+    501|         // PostgreSQL rejects an otherwise-unused $2 because it cannot…
+    502|         const result = await client.query(`${base} AND c.embedding IS …
+       |                        ^
+    503|         const scored = result.rows.map((row) => {
+    504|           const candidate = mapEvidenceRow(row);
+ ❯ tests/integration/evidence-corpus.test.ts:60:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/integration/evidence-corpus.test.ts > evidence corpus > does not return tenant A's evidence in tenant B's scoped search
+error: bind message supplies 4 parameters, but prepared statement "" requires 3
+ ❯ node_modules/pg/lib/client.js:652:17
+ ❯ searchEvidence packages/memory/src/evidence.ts:502:24
+    500|         // $3 (as-of), while the shared parameter layout reserves $2 f…
+    501|         // PostgreSQL rejects an otherwise-unused $2 because it cannot…
+    502|         const result = await client.query(`${base} AND c.embedding IS …
+       |                        ^
+    503|         const scored = result.rows.map((row) => {
+    504|           const candidate = mapEvidenceRow(row);
+ ❯ tests/integration/evidence-corpus.test.ts:76:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  2 failed | 7 passed (9)
+   Start at  16:19:27
+   Duration  4.80s (transform 848ms, setup 0ms, import 3.77s, tests 797ms, environment 0ms)
+
+
+ RUN  v4.1.10 /Users/paramdave/Desktop/FINNOR/finnor-os
+
+x··
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/evidence-corpus.test.ts > evidence corpus > appends an immutable version, is retry-idempotent, and records citable research hits
+AssertionError: expected { …(12) } to match object { …(3) }
+(9 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "asOf": "2026-08-04T00:00:00.000Z",
+-   "source": "evidence-test:1786013388288",
++   "source": "evidence-test:1786012943900",
+    "version": 1,
+  }
+
+ ❯ tests/integration/evidence-corpus.test.ts:61:38
+     59|     const runId = await startResearchRun(TENANT_A, { query: "published…
+     60|     const result = await searchEvidence({ tenantId: TENANT_A, query: "…
+     61|     expect(result.hits[0]!.citation).toMatchObject({
+       |                                      ^
+     62|       source: SOURCE_KEY,
+     63|       version: 1,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 2 passed (3)
+   Start at  16:19:47
+   Duration  1.17s (transform 213ms, setup 0ms, import 893ms, tests 160ms, environment 0ms)

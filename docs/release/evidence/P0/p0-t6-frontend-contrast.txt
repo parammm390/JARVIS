@@ -1,0 +1,82 @@
+{
+  "checks": [
+    {
+      "label": "glass fill vs --j-text-dim (default)",
+      "ratio": 4.67,
+      "minimum": 4.5,
+      "pass": true,
+      "gates": true
+    },
+    {
+      "label": "glass fill vs --j-text (default)",
+      "ratio": 16.75,
+      "minimum": 4.5,
+      "pass": true,
+      "gates": true
+    },
+    {
+      "label": "panel border vs --j-bg, decorative non-text UI (default)",
+      "ratio": 1.14,
+      "minimum": 3,
+      "pass": false,
+      "gates": false
+    },
+    {
+      "label": "glass fill vs --j-text-dim (standalone)",
+      "ratio": 4.67,
+      "minimum": 4.5,
+      "pass": true,
+      "gates": true
+    },
+    {
+      "label": "glass fill vs --j-text (standalone)",
+      "ratio": 16.75,
+      "minimum": 4.5,
+      "pass": true,
+      "gates": true
+    },
+    {
+      "label": "panel border vs --j-bg, decorative non-text UI (standalone)",
+      "ratio": 1.2,
+      "minimum": 3,
+      "pass": false,
+      "gates": false
+    },
+    {
+      "label": "RiskBadge low text vs material",
+      "ratio": 10.58,
+      "minimum": 4.5,
+      "pass": true,
+      "gates": true
+    },
+    {
+      "label": "RiskBadge medium text vs material",
+      "ratio": 14.81,
+      "minimum": 4.5,
+      "pass": true,
+      "gates": true
+    },
+    {
+      "label": "RiskBadge high text vs material",
+      "ratio": 12.66,
+      "minimum": 4.5,
+      "pass": true,
+      "gates": true
+    },
+    {
+      "label": "AnomalyFlare label text (red-200) vs annotation chip bg (red-950/80)",
+      "ratio": 11.96,
+      "minimum": 4.5,
+      "pass": true,
+      "gates": true
+    },
+    {
+      "label": "OfflineDrift 'reconnecting' chip text (amber-200) vs chip bg (amber-400/12)",
+      "ratio": 13.47,
+      "minimum": 4.5,
+      "pass": true,
+      "gates": true
+    }
+  ],
+  "failedCount": 0
+}

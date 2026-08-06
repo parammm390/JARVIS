@@ -1,0 +1,20 @@
+P0.T6 final backup/restore drill evidence
+
+Command (connection value redacted in this record):
+  PATH=<external PostgreSQL-client-cache>/bin:$PATH npx tsx scripts/backup-restore-drill.ts
+
+The client utilities were built in an external user cache from PostgreSQL source; no repository
+runtime dependency was added. The source was the disposable local CI database only.
+
+Result: exit 0.
+  dump: PASS
+  throwaway database creation: PASS
+  vector extension probe: unavailable on the embedded local cluster; the source schema contains no
+    required vector extension object, so the drill continued honestly without creating it
+  restore: PASS
+  tenants: source=66 restored=66 OK
+  domain_actions: source=293 restored=293 OK
+  households: source=189 restored=189 OK
+  action_log: source=1246 restored=1246 OK
+  round-trip verdict: PASSED
+  throwaway database cleanup: PASS

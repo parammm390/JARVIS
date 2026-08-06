@@ -1,0 +1,35 @@
+
+ RUN  v4.1.10 /Users/paramdave/Desktop/FINNOR/finnor-os
+
+(node:81821) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+ ✓ tests/integration/scan-handlers.test.ts > proactive scan handlers > scan_low_inventory records a real finding for an item below threshold, nothing when none are 31ms
+ ✓ tests/integration/scan-handlers.test.ts > proactive scan handlers > scan_service_due finds equipment overdue by its real install date, real math not a guess 20ms
+ ✓ tests/integration/scan-handlers.test.ts > proactive scan handlers > scan_cold_leads drafts a real gated action when a win-back script IS configured 69ms
+ ✓ tests/integration/scan-handlers.test.ts > proactive scan handlers > scheduled_reminder (renewal scan) drafts through the real pipeline — real summary, never a blank card 32ms
+ ✓ tests/integration/scan-handlers.test.ts > proactive scan handlers > scan_data_quality flags a duplicate household pair sharing the same phone 30ms
+ ✓ tests/integration/scan-handlers.test.ts > proactive scan handlers > scan_data_quality flags a lead with no phone or email, and a scheduled work order with no technician 29ms
+ ✓ tests/integration/scan-handlers.test.ts > proactive scan handlers > scan_data_quality flags a household whose legacy phone disagrees with its canonical contact's phone (§5.4 contradiction) 25ms
+ ✓ tests/integration/scan-handlers.test.ts > proactive scan handlers > scan_data_quality never flags a household whose legacy and canonical phones genuinely agree 28ms
+ ✓ tests/integration/scan-handlers.test.ts > proactive scan handlers > scan_data_quality flags duplicate equipment of the same type for the same household 21ms
+ ✓ tests/integration/scan-handlers.test.ts > proactive scan handlers > scan_data_quality flags overlapping appointments for the same technician 28ms
+ ✓ tests/integration/scan-handlers.test.ts > proactive scan handlers > scan_data_quality never flags non-overlapping appointments for the same technician 23ms
+ ✓ tests/integration/scan-handlers.test.ts > proactive scan handlers > owner_digest is a no-op (no call attempted) when there's nothing to report 59ms
+ ✓ tests/integration/scan-handlers.test.ts > proactive scan handlers > owner_digest marks findings digested even with no phone configured (never piles up forever) 19ms
+ ✓ tests/integration/scan-handlers.test.ts > proactive scan handlers > owner_digest sends an allowlisted owner a query-backed daily email without claiming an approval happened 25ms
+ ✓ tests/integration/reasoning-tier.test.ts > LLMPlanner reasoning tier > 1. requiresConfirmation:false takes the low path — no repair episode, tier:low, candidateBGenerated:false 69ms
+ ✓ tests/integration/reasoning-tier.test.ts > LLMPlanner reasoning tier > 2. $50 invoice (below default $500 threshold, requiresConfirmation:true) is medium — repair runs, no candidate B 89ms
+ ✓ tests/integration/reasoning-tier.test.ts > LLMPlanner reasoning tier > 3. $5,000 invoice (above threshold) is high — candidate B generated, both scored, winner logged 16ms
+ ✓ tests/integration/reasoning-tier.test.ts > LLMPlanner reasoning tier > 4. a workflow-tagged action type is high regardless of amount — the compiledGraph.kind trigger 18ms
+ ✓ tests/integration/reasoning-tier.test.ts > LLMPlanner reasoning tier > 5. a tenant policy override (riskThresholds.amountUsd:100) makes a $150 invoice high tier even though the default would make it medium 14ms
+ ✓ tests/integration/compensation.test.ts > compensation > emulator binding: a held appointment is released on compensation, and the compensation_case resolves succeeded 133ms
+ ✓ tests/integration/compensation.test.ts > compensation > native binding: a held appointment row is canceled on compensation, and the compensation_case resolves succeeded 75ms
+ ✓ tests/integration/compensation.test.ts > compensation > communications binding has no compensate() — compensateStep records an explicit failed compensation_case, never a silent no-op 68ms
+ ✓ tests/integration/overview-route.test.ts > GET /api/overview (Phase 7.6) > runs a real get_business_overview action and returns real leads/pending/inventory/invoices/visits + citations 115ms
+ ✓ tests/integration/overview-route.test.ts > GET /api/overview (Phase 7.6) > reuses the cached result on a second call within the cache window, without creating a new domain_action 10ms
+ ✓ tests/integration/overview-route.test.ts > GET /api/overview (Phase 7.6) > ?refresh=1 forces a brand-new run even within the cache window 47ms
+
+ Test Files  4 passed (4)
+      Tests  25 passed (25)
+   Start at  16:31:48
+   Duration  8.79s (transform 894ms, setup 0ms, import 6.86s, tests 1.48s, environment 0ms)

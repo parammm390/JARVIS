@@ -1,0 +1,99 @@
+
+[WebServer] (node:98559) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+[WebServer] (node:98563) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+
+Running 3 tests using 2 workers
+
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+
+(node:98569) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+(node:98570) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[1/3] [desktop-chromium] › e2e/jarvis-p3-lifecycle-fixture.spec.ts:156:7 › P3 exit-gate same-document lifecycle, labelled fixture › ready through terminal remains one causal document at 1440px
+[2/3] [desktop-chromium] › e2e/jarvis-p3-lifecycle-fixture.spec.ts:162:7 › P3 exit-gate same-document lifecycle, labelled fixture › ready through terminal remains one causal document at 390px
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+
+[WebServer] (node:98587) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+[WebServer] (node:98588) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[desktop-chromium] › e2e/jarvis-p3-lifecycle-fixture.spec.ts:156:7 › P3 exit-gate same-document lifecycle, labelled fixture › ready through terminal remains one causal document at 1440px
+[P3.EXIT] 1440px reduced=false transcript=[{"step":"rest","activeBlock":null,"focus":"body","scrollY":0,"scrollHeight":1295,"scrollWidth":1440,"layoutShift":0,"metrics":[]},{"step":"heard","activeBlock":"heard","focus":"journey-next","scrollY":0},{"step":"understood","activeBlock":"understood","focus":"journey-next","scrollY":0},{"step":"plan","activeBlock":"plan","focus":"journey-next","scrollY":140},{"step":"clarify","activeBlock":"plan","focus":"journey-next","scrollY":0},{"step":"approval","activeBlock":"plan","focus":"h2","scrollY":0},{"step":"execution","activeBlock":"execution","focus":"journey-next","scrollY":0},{"step":"verifying","activeBlock":"execution","focus":"journey-next","scrollY":100},{"step":"receipt","activeBlock":"receipt","focus":"div","scrollY":0}] runtime={"activeBlock":"receipt","focus":"div","scrollY":0,"scrollHeight":1597,"scrollWidth":1440,"layoutShift":0,"metrics":[{"seq":"1","stage":"heard","eventToPixelMs":6.300000000000182},{"seq":"2","stage":"understood","eventToPixelMs":7.799999994039354},{"seq":"3","stage":"plan","eventToPixelMs":0},{"seq":"4","stage":"plan","eventToPixelMs":0},{"seq":"5","stage":"plan","eventToPixelMs":0},{"seq":"6","stage":"execution","eventToPixelMs":0},{"seq":"7","stage":"execution","eventToPixelMs":0},{"seq":"8","stage":"receipt","eventToPixelMs":0}]}
+
+[desktop-chromium] › e2e/jarvis-p3-lifecycle-fixture.spec.ts:162:7 › P3 exit-gate same-document lifecycle, labelled fixture › ready through terminal remains one causal document at 390px
+[P3.EXIT] 390px reduced=false transcript=[{"step":"rest","activeBlock":null,"focus":"body","scrollY":0,"scrollHeight":2176,"scrollWidth":390,"layoutShift":0,"metrics":[]},{"step":"heard","activeBlock":"heard","focus":"journey-next","scrollY":378},{"step":"understood","activeBlock":"understood","focus":"journey-next","scrollY":700},{"step":"plan","activeBlock":"plan","focus":"journey-next","scrollY":944},{"step":"clarify","activeBlock":"plan","focus":"journey-next","scrollY":297},{"step":"approval","activeBlock":"plan","focus":"h2","scrollY":0},{"step":"execution","activeBlock":"execution","focus":"journey-next","scrollY":609},{"step":"verifying","activeBlock":"execution","focus":"journey-next","scrollY":0},{"step":"receipt","activeBlock":"receipt","focus":"div","scrollY":883}] runtime={"activeBlock":"receipt","focus":"div","scrollY":897,"scrollHeight":3031,"scrollWidth":390,"layoutShift":0,"metrics":[{"seq":"1","stage":"heard","eventToPixelMs":11.89999998807889},{"seq":"2","stage":"understood","eventToPixelMs":9.999999991059667},{"seq":"3","stage":"plan","eventToPixelMs":0},{"seq":"4","stage":"plan","eventToPixelMs":0},{"seq":"5","stage":"plan","eventToPixelMs":0},{"seq":"6","stage":"execution","eventToPixelMs":0},{"seq":"7","stage":"execution","eventToPixelMs":0},{"seq":"8","stage":"receipt","eventToPixelMs":0}]}
+
+[3/3] [desktop-chromium] › e2e/jarvis-p3-lifecycle-fixture.spec.ts:168:7 › P3 exit-gate same-document lifecycle, labelled fixture › reduced motion preserves the same lifecycle states at 390px
+
+[WebServer] (node:98591) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[desktop-chromium] › e2e/jarvis-p3-lifecycle-fixture.spec.ts:168:7 › P3 exit-gate same-document lifecycle, labelled fixture › reduced motion preserves the same lifecycle states at 390px
+[P3.EXIT] 390px reduced=true transcript=[{"step":"rest","activeBlock":null,"focus":"body","scrollY":0,"scrollHeight":2176,"scrollWidth":390,"layoutShift":0,"metrics":[]},{"step":"heard","activeBlock":"heard","focus":"journey-next","scrollY":378},{"step":"understood","activeBlock":"understood","focus":"journey-next","scrollY":365},{"step":"plan","activeBlock":"plan","focus":"journey-next","scrollY":535},{"step":"clarify","activeBlock":"plan","focus":"journey-next","scrollY":156},{"step":"approval","activeBlock":"plan","focus":"h2","scrollY":0},{"step":"execution","activeBlock":"execution","focus":"journey-next","scrollY":93},{"step":"verifying","activeBlock":"execution","focus":"journey-next","scrollY":0},{"step":"receipt","activeBlock":"receipt","focus":"div","scrollY":621}] runtime={"activeBlock":"receipt","focus":"div","scrollY":621,"scrollHeight":3079,"scrollWidth":390,"layoutShift":0,"metrics":[{"seq":"1","stage":"heard","eventToPixelMs":62.063999997019664},{"seq":"2","stage":"understood","eventToPixelMs":13.199999994039445},{"seq":"3","stage":"plan","eventToPixelMs":14.100000002980323},{"seq":"4","stage":"plan","eventToPixelMs":0},{"seq":"5","stage":"plan","eventToPixelMs":0},{"seq":"6","stage":"execution","eventToPixelMs":3.39999999403949},{"seq":"7","stage":"execution","eventToPixelMs":0},{"seq":"8","stage":"receipt","eventToPixelMs":13.299999997019768}]}
+
+  3 passed (26.8s)

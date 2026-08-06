@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fc from "fast-check";
 import { POST as esign } from "../../apps/api/app/api/webhooks/esign/route";
 import { POST as ghl } from "../../apps/api/app/api/webhooks/ghl/route";
@@ -10,7 +10,18 @@ const routes = [esign, ghl, marketing, payment, vapi] as const;
 const badBodies = fc.oneof(fc.string(), fc.uint8Array().map((v) => new TextDecoder().decode(v)), fc.constantFrom("", "{", "[]", "null", "not-json"));
 
 describe("inbound webhook fuzz wall", () => {
-  afterEach(() => vi.unstubAllEnvs());
+  let inheritedAuthDevBypass: string | undefined;
+  beforeEach(() => {
+    // CI intentionally enables the local-only auth bypass. This test exercises
+    // production webhook rejection behaviour, where that bypass must be absent.
+    inheritedAuthDevBypass = process.env.AUTH_DEV_BYPASS;
+    delete process.env.AUTH_DEV_BYPASS;
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    if (inheritedAuthDevBypass === undefined) delete process.env.AUTH_DEV_BYPASS;
+    else process.env.AUTH_DEV_BYPASS = inheritedAuthDevBypass;
+  });
   it("rejects malformed or unauthenticated payloads on every provider route without a 5xx", async () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("ALLOW_PLAINTEXT_ENV_SECRETS", "1");

@@ -42,9 +42,12 @@ test.describe("P3.T3 — clarification question focus, labelled fixture", () => 
 
       const dimmed = page.locator("[data-jarvis-question-depth][data-jarvis-question-dimmed='true']")
       const dimmedCount = await dimmed.count()
-      expect(dimmedCount).toBe(3)
-      const firstDimmed = dimmed.nth(0)
-      await expect.poll(async () => Number(await firstDimmed.evaluate((element) => getComputedStyle(element).opacity))).toBe(0.42)
+      // The command deck intentionally contains several non-action-spine
+      // surfaces. Every one must dim while the clarification owns focus; the
+      // number is composition-dependent, so a fixed count would assert a
+      // layout implementation rather than the focus contract.
+      expect(dimmedCount).toBeGreaterThanOrEqual(3)
+      await expect.poll(async () => await dimmed.evaluateAll((elements) => elements.map((element) => Number(getComputedStyle(element).opacity)))).toEqual(Array(dimmedCount).fill(0.42))
 
       const why = page.getByRole("button", { name: "Why I’m asking" })
       await expect(why).toHaveCount(1)
@@ -75,10 +78,8 @@ test.describe("P3.T3 — clarification question focus, labelled fixture", () => 
     await expect(input).toBeFocused()
     const dimmed = page.locator("[data-jarvis-question-depth][data-jarvis-question-dimmed='true']")
     const dimmedCount = await dimmed.count()
-    expect(dimmedCount).toBe(3)
-    const firstDimmed = dimmed.nth(0)
-    await expect.poll(async () => Number(await firstDimmed.evaluate((element) => getComputedStyle(element).opacity))).toBe(0.42)
+    expect(dimmedCount).toBeGreaterThanOrEqual(3)
+    await expect.poll(async () => await dimmed.evaluateAll((elements) => elements.map((element) => Number(getComputedStyle(element).opacity)))).toEqual(Array(dimmedCount).fill(0.42))
     await page.screenshot({ path: `${OUT_DIR}/clarification-390-reduced.png`, fullPage: false })
   })
 })
-

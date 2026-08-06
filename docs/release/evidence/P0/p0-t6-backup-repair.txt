@@ -1,0 +1,9 @@
+
+ RUN  v4.1.10 /Users/paramdave/Desktop/FINNOR/finnor-os
+
+·
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  16:27:27
+   Duration  2.83s (transform 135ms, setup 0ms, import 657ms, tests 2.04s, environment 0ms)

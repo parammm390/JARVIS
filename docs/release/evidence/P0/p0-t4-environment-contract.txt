@@ -1,0 +1,5 @@
+
+> finnor-os@0.1.0 release:environment
+> tsx scripts/release/generate-environment-contract.ts
+
+PASS: environment contract written to docs/release/generated/environment-contract.md; 144 source variable names scanned.

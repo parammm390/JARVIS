@@ -19,9 +19,14 @@ for (const fixture of FIXTURES) {
       await context.clearCookies()
       await page.setViewportSize(viewport)
       await page.goto(`/jarvis/next?fixture=${fixture}`, { waitUntil: "domcontentloaded" })
-      await expect(page.getByText(`FIXTURE · ${fixture}`)).toBeVisible()
+      // The fixture label is the public boundary of the deterministic harness.
+      // Count it (rather than applying a visibility assertion to its fixed,
+      // animated placement) and then inspect the rendered Thread root itself.
+      await expect(page.getByText(`FIXTURE · ${fixture}`, { exact: true })).toHaveCount(1)
+      const threadRoot = page.locator("[data-jarvis-thread]")
+      await expect(threadRoot).toBeVisible()
 
-      const missing = await page.locator("[data-jarvis-thread]").evaluate((root) => {
+      const missing = await threadRoot.evaluate((root) => {
         const facts = [...root.querySelectorAll<HTMLElement>("[data-jarvis-fact]")].filter((element) =>
           element.offsetParent !== null && /\d/.test(element.innerText),
         )

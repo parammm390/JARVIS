@@ -1,0 +1,18 @@
+$ npm run db:migrate
+
+> finnor-os@0.1.0 db:migrate
+> tsx packages/db/migrate.ts
+
+Already up to date
+$ npm run db:seed
+
+> finnor-os@0.1.0 db:seed
+> tsx packages/db/seed.ts
+
+Seeded test tenant 00000000-0000-4000-8000-000000000001
+$ npm run setup:langgraph
+
+> finnor-os@0.1.0 setup:langgraph
+> tsx packages/orchestration/src/graph/setup.ts
+
+LangGraph checkpointer schema ready (finnor_langgraph)

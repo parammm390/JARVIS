@@ -38,7 +38,7 @@ test("P7 degraded integration receipt exposes a truthful Connect setup path", as
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto("/jarvis/next?fixture=receipt", { waitUntil: "domcontentloaded" })
 
-  await expect(page.getByText("Stripe isn't connected yet.")).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByText("The required integration isn't connected yet.")).toBeVisible({ timeout: 10_000 })
   const connect = page.getByRole("link", { name: "Connect" })
   await expect(connect).toHaveAttribute("href", "/resources/pilot-setup-checklist")
   await page.screenshot({ path: "qa-screenshots/v3-P7/degraded-integration-recovery-1440.png", fullPage: true, animations: "disabled" })

@@ -714,7 +714,7 @@ function ThreadBody({
               showVoiceControl={showRail && !showOperationalDeck}
               orbExpanded={orbExpanded}
               onOrbExpandedChange={onOrbExpandedChange}
-              telemetry={<OrbIntelligenceReadout thread={thread} liveframe={liveframe} pendingApprovals={pendingApprovals} />}
+              telemetry={<OrbIntelligenceReadout thread={thread} liveframe={liveframe} pendingApprovals={pendingApprovals} fixtureLabel={fixtureLabel} />}
             />
           </QuestionDepth>
           {renderActionSpine()}
@@ -736,7 +736,7 @@ function ThreadBody({
               showVoiceControl={showRail && !showOperationalDeck}
               orbExpanded={orbExpanded}
               onOrbExpandedChange={onOrbExpandedChange}
-              telemetry={<OrbIntelligenceReadout thread={thread} liveframe={liveframe} pendingApprovals={pendingApprovals} />}
+              telemetry={<OrbIntelligenceReadout thread={thread} liveframe={liveframe} pendingApprovals={pendingApprovals} fixtureLabel={fixtureLabel} />}
             />
           </aside>
         </QuestionDepth>

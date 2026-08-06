@@ -1,0 +1,368 @@
+
+[WebServer] (node:85386) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+[WebServer] (node:85393) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+
+Running 14 tests using 2 workers
+
+
+(node:85405) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+(node:85404) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+[1/14] [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=rest at 1440
+[2/14] [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=rest at 390
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+[3/14] [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=understood at 1440
+[4/14] [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=understood at 390
+[5/14] [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=plan at 1440
+[6/14] [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=plan at 390
+  1) [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=plan at 1440
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 38
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "source": "instruction_events.action_created + domain_actions",
+    +     "tag": "DIV",
+    +     "text": "Invoice to cash · Henderson · Cedar Creek Rd
+    + $890",
+    +   },
+    +   Object {
+    +     "source": "instruction_events.action_created + domain_actions",
+    +     "tag": "DIV",
+    +     "text": "Invoice to cash · Alvarez · Birchwood Ln
+    + $620",
+    +   },
+    +   Object {
+    +     "source": "instruction_events.action_created + domain_actions",
+    +     "tag": "DIV",
+    +     "text": "Invoice to cash · Petersons · Maple Ridge Rd
+    + $540",
+    +   },
+    +   Object {
+    +     "source": "instruction_events.action_created + domain_actions",
+    +     "tag": "DIV",
+    +     "text": "Invoice to cash · Ortiz · Spring Hollow Ct
+    + $710",
+    +   },
+    +   Object {
+    +     "source": "instruction_events.action_created + domain_actions",
+    +     "tag": "DIV",
+    +     "text": "Invoice to cash · Webb · 4821 Cedar Creek Rd
+    + $830",
+    +   },
+    +   Object {
+    +     "source": "instruction_events.action_created + domain_actions",
+    +     "tag": "DIV",
+    +     "text": "Invoice to cash · Dana Alvarez · 12 Birchwood Ln
+    + $610",
+    +   },
+    + ]
+
+      38 |       })
+      39 |
+    > 40 |       expect(missing).toEqual([])
+         |                       ^
+      41 |     })
+      42 |   }
+      43 | }
+        at /Users/paramdave/Desktop/FINNOR/e2e/jarvis-contradiction-sweep.spec.ts:40:23
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/jarvis-contradiction-sweep-8a93a--sweep-fixture-plan-at-1440-desktop-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/jarvis-contradiction-sweep-8a93a--sweep-fixture-plan-at-1440-desktop-chromium/error-context.md
+
+
+  2) [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=plan at 390
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 38
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "source": "instruction_events.action_created + domain_actions",
+    +     "tag": "DIV",
+    +     "text": "Invoice to cash · Henderson · Cedar Creek Rd
+    + $890",
+    +   },
+    +   Object {
+    +     "source": "instruction_events.action_created + domain_actions",
+    +     "tag": "DIV",
+    +     "text": "Invoice to cash · Alvarez · Birchwood Ln
+    + $620",
+    +   },
+    +   Object {
+    +     "source": "instruction_events.action_created + domain_actions",
+    +     "tag": "DIV",
+    +     "text": "Invoice to cash · Petersons · Maple Ridge Rd
+    + $540",
+    +   },
+    +   Object {
+    +     "source": "instruction_events.action_created + domain_actions",
+    +     "tag": "DIV",
+    +     "text": "Invoice to cash · Ortiz · Spring Hollow Ct
+    + $710",
+    +   },
+    +   Object {
+    +     "source": "instruction_events.action_created + domain_actions",
+    +     "tag": "DIV",
+    +     "text": "Invoice to cash · Webb · 4821 Cedar Creek Rd
+    + $830",
+    +   },
+    +   Object {
+    +     "source": "instruction_events.action_created + domain_actions",
+    +     "tag": "DIV",
+    +     "text": "Invoice to cash · Dana Alvarez · 12 Birchwood Ln
+    + $610",
+    +   },
+    + ]
+
+      38 |       })
+      39 |
+    > 40 |       expect(missing).toEqual([])
+         |                       ^
+      41 |     })
+      42 |   }
+      43 | }
+        at /Users/paramdave/Desktop/FINNOR/e2e/jarvis-contradiction-sweep.spec.ts:40:23
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/jarvis-contradiction-sweep-9e943-n-sweep-fixture-plan-at-390-desktop-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/jarvis-contradiction-sweep-9e943-n-sweep-fixture-plan-at-390-desktop-chromium/error-context.md
+
+
+
+(node:85437) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[7/14] [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=clarify at 1440
+
+(node:85439) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[8/14] [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=clarify at 390
+[9/14] [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=approval at 1440
+[10/14] [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=approval at 390
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+  3) [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=approval at 1440
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 38
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "source": "instruction_events.action_created + domain_actions",
+    +     "tag": "DIV",
+    +     "text": "Invoice to cash · Henderson · Cedar Creek Rd
+    + $890",
+    +   },
+    +   Object {
+    +     "source": "instruction_events.action_created + domain_actions",
+    +     "tag": "DIV",
+    +     "text": "Invoice to cash · Alvarez · Birchwood Ln
+    + $620",
+    +   },
+    +   Object {
+    +     "source": "instruction_events.action_created + domain_actions",
+    +     "tag": "DIV",
+    +     "text": "Invoice to cash · Petersons · Maple Ridge Rd
+    + $540",
+    +   },
+    +   Object {
+    +     "source": "instruction_events.action_created + domain_actions",
+    +     "tag": "DIV",
+    +     "text": "Invoice to cash · Ortiz · Spring Hollow Ct
+    + $710",
+    +   },
+    +   Object {
+    +     "source": "instruction_events.action_created + domain_actions",
+    +     "tag": "DIV",
+    +     "text": "Invoice to cash · Webb · 4821 Cedar Creek Rd
+    + $830",
+    +   },
+    +   Object {
+    +     "source": "instruction_events.action_created + domain_actions",
+    +     "tag": "DIV",
+    +     "text": "Invoice to cash · Dana Alvarez · 12 Birchwood Ln
+    + $610",
+    +   },
+    + ]
+
+      38 |       })
+      39 |
+    > 40 |       expect(missing).toEqual([])
+         |                       ^
+      41 |     })
+      42 |   }
+      43 | }
+        at /Users/paramdave/Desktop/FINNOR/e2e/jarvis-contradiction-sweep.spec.ts:40:23
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/jarvis-contradiction-sweep-5173e-ep-fixture-approval-at-1440-desktop-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/jarvis-contradiction-sweep-5173e-ep-fixture-approval-at-1440-desktop-chromium/error-context.md
+
+
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+
+(node:85463) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[11/14] [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=execution at 1440
+
+[WebServer] (node:85465) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+  4) [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=approval at 390
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 38
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "source": "instruction_events.action_created + domain_actions",
+    +     "tag": "DIV",
+    +     "text": "Invoice to cash · Henderson · Cedar Creek Rd
+    + $890",
+    +   },
+    +   Object {
+    +     "source": "instruction_events.action_created + domain_actions",
+    +     "tag": "DIV",
+    +     "text": "Invoice to cash · Alvarez · Birchwood Ln
+    + $620",
+    +   },
+    +   Object {
+    +     "source": "instruction_events.action_created + domain_actions",
+    +     "tag": "DIV",
+    +     "text": "Invoice to cash · Petersons · Maple Ridge Rd
+    + $540",
+    +   },
+    +   Object {
+    +     "source": "instruction_events.action_created + domain_actions",
+    +     "tag": "DIV",
+    +     "text": "Invoice to cash · Ortiz · Spring Hollow Ct
+    + $710",
+    +   },
+    +   Object {
+    +     "source": "instruction_events.action_created + domain_actions",
+    +     "tag": "DIV",
+    +     "text": "Invoice to cash · Webb · 4821 Cedar Creek Rd
+    + $830",
+    +   },
+    +   Object {
+    +     "source": "instruction_events.action_created + domain_actions",
+    +     "tag": "DIV",
+    +     "text": "Invoice to cash · Dana Alvarez · 12 Birchwood Ln
+    + $610",
+    +   },
+    + ]
+
+      38 |       })
+      39 |
+    > 40 |       expect(missing).toEqual([])
+         |                       ^
+      41 |     })
+      42 |   }
+      43 | }
+        at /Users/paramdave/Desktop/FINNOR/e2e/jarvis-contradiction-sweep.spec.ts:40:23
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/jarvis-contradiction-sweep-773ce-eep-fixture-approval-at-390-desktop-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/jarvis-contradiction-sweep-773ce-eep-fixture-approval-at-390-desktop-chromium/error-context.md
+
+
+
+(node:85471) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[12/14] [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=execution at 390
+[13/14] [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=receipt at 1440
+
+[WebServer] (node:85486) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[14/14] [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=receipt at 390
+
+[WebServer] (node:85497) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)

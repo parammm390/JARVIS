@@ -1,0 +1,5 @@
+
+> finnor-os@0.1.0 setup:langgraph
+> tsx packages/orchestration/src/graph/setup.ts
+
+LangGraph checkpointer schema ready (finnor_langgraph)

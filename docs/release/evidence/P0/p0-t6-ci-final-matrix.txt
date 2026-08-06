@@ -1,0 +1,23 @@
+P0.T6 final CI-equivalent command matrix summary
+
+PASS, exit 0:
+  root: npm run lint; npm run test:unit; npm run build; node scripts/contrast-audit.mjs
+  backend: npm run authz:matrix:check; npm run typecheck; npm run test:planner-evals;
+    npm run policy:lint; fresh db:migrate; fresh db:seed; setup:langgraph; npm test
+  release: npm run release:manifest (44/44); npm run release:environment (144 names, no values)
+  backup: npx tsx scripts/backup-restore-drill.ts (row-count round-trip PASS)
+  security: current-diff gitleaks; OSV lockfile scan; npm audit
+  browser: 280 total, 113 passed, 167 pre-existing skips, 0 failures
+
+Expected fail-closed/environment-gated results, recorded rather than bypassed:
+  npm run test:staging — refuses without explicit STAGING=1 and verified staging DATABASE_URL;
+    STAGING=1 without DATABASE_URL also refuses.
+  npx tsx scripts/probe-tenant-isolation.ts — refuses without both environment URLs, two JWTs,
+    and tenant-A marker IDs.
+  npx tsx scripts/replay-dealer-zero.ts — refuses without baseline/candidate staging artifacts.
+  k6 — not installed locally; the workflow requires a staging URL, tenant, token, and webhook
+    secret before running the CI-only load scenario.
+  planner live eval — requires a configured live provider credential and is explicitly not a local
+    CI substitute in the command map; no provider call was fabricated.
+
+No production deployment, migration, provider call, or live outbound effect was performed.

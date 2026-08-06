@@ -1,0 +1,235 @@
+
+[WebServer] (node:85192) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+[WebServer] (node:85195) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+
+Running 28 tests using 2 workers
+
+
+(node:85207) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+
+(node:85208) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[1/28] [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=rest at 390
+[2/28] [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=rest at 1440
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+
+[WebServer]  ⚠ ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+[WebServer]
+[WebServer] Import trace for requested module:
+[WebServer] ./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+[WebServer] ./node_modules/@sentry/node/build/cjs/index.js
+[WebServer] ./node_modules/@sentry/nextjs/build/cjs/index.server.js
+[WebServer] ./src/app/page.tsx
+[3/28] [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=understood at 1440
+
+(node:85228) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[4/28] (retries) [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=rest at 1440 (retry #1)
+
+(node:85241) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[5/28] (retries) [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=understood at 1440 (retry #1)
+  1) [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=rest at 1440
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 8
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "source": "fixture",
+    +     "tag": "DIV",
+    +     "text": "ACTION RECORDS
+    + 0 queued",
+    +   },
+    + ]
+
+      38 |       })
+      39 |
+    > 40 |       expect(missing).toEqual([])
+         |                       ^
+      41 |     })
+      42 |   }
+      43 | }
+        at /Users/paramdave/Desktop/FINNOR/e2e/jarvis-contradiction-sweep.spec.ts:40:23
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/jarvis-contradiction-sweep-0276e--sweep-fixture-rest-at-1440-desktop-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/jarvis-contradiction-sweep-0276e--sweep-fixture-rest-at-1440-desktop-chromium/error-context.md
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 8
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "source": "fixture",
+    +     "tag": "DIV",
+    +     "text": "ACTION RECORDS
+    + 0 queued",
+    +   },
+    + ]
+
+      38 |       })
+      39 |
+    > 40 |       expect(missing).toEqual([])
+         |                       ^
+      41 |     })
+      42 |   }
+      43 | }
+        at /Users/paramdave/Desktop/FINNOR/e2e/jarvis-contradiction-sweep.spec.ts:40:23
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/jarvis-contradiction-sweep-0276e--sweep-fixture-rest-at-1440-desktop-chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/jarvis-contradiction-sweep-0276e--sweep-fixture-rest-at-1440-desktop-chromium-retry1/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/jarvis-contradiction-sweep-0276e--sweep-fixture-rest-at-1440-desktop-chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/jarvis-contradiction-sweep-0276e--sweep-fixture-rest-at-1440-desktop-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+
+(node:85251) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[6/28] [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=understood at 390
+  2) [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=understood at 1440
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 8
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "source": "fixture",
+    +     "tag": "DIV",
+    +     "text": "ACTION RECORDS
+    + 0 queued",
+    +   },
+    + ]
+
+      38 |       })
+      39 |
+    > 40 |       expect(missing).toEqual([])
+         |                       ^
+      41 |     })
+      42 |   }
+      43 | }
+        at /Users/paramdave/Desktop/FINNOR/e2e/jarvis-contradiction-sweep.spec.ts:40:23
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/jarvis-contradiction-sweep-50032--fixture-understood-at-1440-desktop-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/jarvis-contradiction-sweep-50032--fixture-understood-at-1440-desktop-chromium/error-context.md
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 8
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "source": "fixture",
+    +     "tag": "DIV",
+    +     "text": "ACTION RECORDS
+    + 0 queued",
+    +   },
+    + ]
+
+      38 |       })
+      39 |
+    > 40 |       expect(missing).toEqual([])
+         |                       ^
+      41 |     })
+      42 |   }
+      43 | }
+        at /Users/paramdave/Desktop/FINNOR/e2e/jarvis-contradiction-sweep.spec.ts:40:23
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/jarvis-contradiction-sweep-50032--fixture-understood-at-1440-desktop-chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/jarvis-contradiction-sweep-50032--fixture-understood-at-1440-desktop-chromium-retry1/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/jarvis-contradiction-sweep-50032--fixture-understood-at-1440-desktop-chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/jarvis-contradiction-sweep-50032--fixture-understood-at-1440-desktop-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[7/28] [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=plan at 390
+
+(node:85273) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[8/28] [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=plan at 1440
+
+(node:85281) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[9/28] (retries) [desktop-chromium] › e2e/jarvis-contradiction-sweep.spec.ts:17:9 › P7 contradiction sweep: fixture=plan at 390 (retry #1)
+
+(node:85297) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)

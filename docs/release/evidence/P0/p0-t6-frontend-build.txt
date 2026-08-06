@@ -1,0 +1,82 @@
+
+> finnor@0.1.0 build
+> next build
+
+  ▲ Next.js 14.2.5
+  - Environments: .env.local
+  - Experiments (use with caution):
+    · instrumentationHook
+
+   Creating an optimized production build ...
+ ⚠ Compiled with warnings
+
+./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+Module not found: ESM packages (@apm-js-collab/tracing-hooks/hook-sync.mjs) need to be imported. Use 'import' to reference the package instead. https://nextjs.org/docs/messages/import-esm-externals
+
+Import trace for requested module:
+./node_modules/@sentry/server-utils/build/cjs/orchestrion/runtime/register.js
+./node_modules/@sentry/node/build/cjs/sdk/experimentalUseDiagnosticsChannelInjection.js
+./node_modules/@sentry/node/build/cjs/index.js
+./node_modules/@sentry/nextjs/build/cjs/index.server.js
+./src/app/layout.tsx
+
+   Linting and checking validity of types ...
+   Collecting page data ...
+ ⚠ Using edge runtime on a page currently disables static generation for that page
+   Generating static pages (0/38) ...
+   Generating static pages (9/38)
+   Generating static pages (18/38)
+   Generating static pages (28/38)
+ ✓ Generating static pages (38/38)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                 Size     First Load JS
+┌ ○ /                                       29.7 kB         194 kB
+├ ○ /_not-found                             1.03 kB         116 kB
+├ ƒ /api/ai-concierge                       0 B                0 B
+├ ƒ /api/contact                            0 B                0 B
+├ ƒ /api/demo-leads                         0 B                0 B
+├ ƒ /api/demo-leads/update                  0 B                0 B
+├ ƒ /api/demo-profile                       0 B                0 B
+├ ƒ /api/demo-scrape                        0 B                0 B
+├ ƒ /api/demo/extract-intake                0 B                0 B
+├ ƒ /api/generate-demo                      0 B                0 B
+├ ƒ /api/health                             0 B                0 B
+├ ƒ /api/jarvis/[...path]                   0 B                0 B
+├ ƒ /api/jarvis/stream                      0 B                0 B
+├ ƒ /api/lifecycle/diagnose                 0 B                0 B
+├ ƒ /api/lifecycle/water                    0 B                0 B
+├ ƒ /api/voice/webhook                      0 B                0 B
+├ ○ /dashboard-demo                         322 B           115 kB
+├ ○ /demo                                   99.8 kB         264 kB
+├ ƒ /demo/[slug]                            323 B           115 kB
+├ ○ /demo/lifecycle                         20.6 kB         174 kB
+├ ○ /icon.svg                               0 B                0 B
+├ ○ /jarvis                                 333 B           204 kB
+├ ○ /jarvis/bridge                          15 kB           386 kB
+├ ○ /jarvis/classic                         333 B           204 kB
+├ ○ /jarvis/login                           2.25 kB         124 kB
+├ ○ /jarvis/next                            64.2 kB         445 kB
+├ ○ /jarvis/reset-password                  2.57 kB         125 kB
+├ ○ /jarvis/showtime                        6.03 kB         370 kB
+├ ○ /jarvis/stage                           48.8 kB         274 kB
+├ ○ /manifest.webmanifest                   0 B                0 B
+├ ○ /privacy                                1.77 kB         155 kB
+├ ○ /resources                              4.41 kB         161 kB
+├ ○ /resources/admissions-ai-glossary       322 B           115 kB
+├ ○ /resources/dispatch-ai-glossary         2.51 kB         159 kB
+├ ○ /resources/missed-call-cost-calculator  3.69 kB         160 kB
+├ ○ /resources/pilot-setup-checklist        2.44 kB         159 kB
+├ ○ /robots.txt                             0 B                0 B
+├ ○ /sitemap.xml                            0 B                0 B
+├ ○ /terms                                  1.77 kB         155 kB
+└ ○ /trust-safety                           3.77 kB         161 kB
++ First Load JS shared by all               115 kB
+  ├ chunks/3213-b8fae25e626ebf7f.js         57.1 kB
+  ├ chunks/fd9d1056-1e05e45bc7c3f82d.js     53.8 kB
+  └ other shared chunks (total)             4.04 kB
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand

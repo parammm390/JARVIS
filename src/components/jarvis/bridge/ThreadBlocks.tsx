@@ -392,7 +392,7 @@ export function ThreadPlan({ thread, reducedMotion }: { thread: Thread; reducedM
                 data-jarvis-fact
                 data-jarvis-plan-node={n.id}
                 data-jarvis-plan-node-entering={entering ? "true" : "false"}
-                data-source="instruction_events.action_created + domain_actions"
+                data-source="instruction_events.action_created · domain_actions"
               >
                 <span className="j-fs-base text-[color:var(--j-text)]">{planNodeLabel(n)}</span>
                 {n.amountUsd !== null && <span className="j-fs-base font-bold tabular-nums text-[color:var(--j-green)]">{formatUsd(n.amountUsd)}</span>}

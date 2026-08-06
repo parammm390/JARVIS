@@ -1,0 +1,17 @@
+P0.T6 final security/tooling evidence
+
+Secret scan:
+  gitleaks git --pre-commit --redact --no-banner . — exit 0; no leaks in the current uncommitted
+  P0 diff.
+  A separate read-only all-history scan found 3 pre-existing historical matches in older commits
+  (two old Vapi-state entries and one public Supabase publishable key). These are not in the current
+  P0 diff and were not rewritten or exposed; the finding is retained for owner/security follow-up.
+
+Dependency scan:
+  osv-scanner scan --lockfile=finnor-os/package-lock.json — exit 0; no issues found after the
+  minimal overrides for fast-uri 3.1.5, hono 4.12.34, and ip-address 10.3.1.
+  npm audit --omit=dev --audit-level=high — exit 0; found 0 vulnerabilities.
+
+Other release checks:
+  node scripts/contrast-audit.mjs — exit 0; failedCount=0.
+  npm run jarvis:realtime:verify — exit 0; read-only preflight PASS.

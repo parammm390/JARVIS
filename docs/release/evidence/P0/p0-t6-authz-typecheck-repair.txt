@@ -1,0 +1,28 @@
+$ npm run authz:matrix
+
+> finnor-os@0.1.0 authz:matrix
+> tsx scripts/generate-authz-matrix.ts
+
+$ npm run authz:matrix:check
+
+> finnor-os@0.1.0 authz:matrix:check
+> tsx scripts/generate-authz-matrix.ts --check
+
+$ npm run typecheck
+
+> finnor-os@0.1.0 typecheck
+> tsc -p tsconfig.json
+
+scripts/release/generate-environment-contract.ts(45,105): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+
+> finnor-os@0.1.0 typecheck
+> tsc -p tsconfig.json
+
+
+> finnor-os@0.1.0 typecheck
+> tsc -p tsconfig.json
+
+
+> finnor-os@0.1.0 typecheck
+> tsc -p tsconfig.json

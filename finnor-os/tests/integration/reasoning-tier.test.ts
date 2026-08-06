@@ -8,7 +8,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
 import pg from "pg";
 import { migrate } from "../../packages/db/migrate";
-import { getPool, closePool, withTenant, domainPolicies } from "@finnor/db";
+import { getPool, closePool, withTenant, domainPolicies, domainPolicyRevisions } from "@finnor/db";
 import { and, eq } from "drizzle-orm";
 import { readEpisodes } from "@finnor/memory";
 import { LLMPlanner, createDefaultPluginRegistry } from "@finnor/orchestration";
@@ -78,13 +78,44 @@ const neverCalledProvider: LLMProvider = {
 async function setPolicy(actionType: string, requiresConfirmation: boolean, policy: Record<string, unknown> = {}) {
   await withTenant(TENANT_ID, async (db) => {
     const [existing] = await db
-      .select({ id: domainPolicies.id })
+      .select({ id: domainPolicies.id, version: domainPolicies.version })
       .from(domainPolicies)
       .where(and(eq(domainPolicies.tenantId, TENANT_ID), eq(domainPolicies.actionType, actionType)));
     if (existing) {
-      await db.update(domainPolicies).set({ requiresConfirmation, policy }).where(eq(domainPolicies.id, existing.id));
+      const [updated] = await db
+        .update(domainPolicies)
+        .set({ requiresConfirmation, policy, version: existing.version + 1, effectiveFrom: new Date() })
+        .where(eq(domainPolicies.id, existing.id))
+        .returning();
+      await db.insert(domainPolicyRevisions).values({
+        tenantId: TENANT_ID,
+        policyId: updated!.id,
+        actionType,
+        version: updated!.version,
+        policy: updated!.policy,
+        requiresConfirmation: updated!.requiresConfirmation,
+        confirmationTemplate: updated!.confirmationTemplate,
+        modelProvider: updated!.modelProvider,
+        confirmationTimeoutHours: updated!.confirmationTimeoutHours,
+        effectiveFrom: updated!.effectiveFrom,
+      });
     } else {
-      await db.insert(domainPolicies).values({ tenantId: TENANT_ID, actionType, requiresConfirmation, policy });
+      const [created] = await db
+        .insert(domainPolicies)
+        .values({ tenantId: TENANT_ID, actionType, requiresConfirmation, policy })
+        .returning();
+      await db.insert(domainPolicyRevisions).values({
+        tenantId: TENANT_ID,
+        policyId: created!.id,
+        actionType,
+        version: created!.version,
+        policy: created!.policy,
+        requiresConfirmation: created!.requiresConfirmation,
+        confirmationTemplate: created!.confirmationTemplate,
+        modelProvider: created!.modelProvider,
+        confirmationTimeoutHours: created!.confirmationTimeoutHours,
+        effectiveFrom: created!.effectiveFrom,
+      });
     }
   });
 }

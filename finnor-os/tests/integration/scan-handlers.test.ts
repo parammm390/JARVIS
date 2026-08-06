@@ -16,6 +16,7 @@ import {
   maintenanceAgreements,
   communicationsLog,
   domainPolicies,
+  domainPolicyRevisions,
   scanFindings,
   domainActions,
   leads,
@@ -50,6 +51,40 @@ async function dbUp(): Promise<boolean> {
   }
 }
 const available = await dbUp();
+
+/** Mirror the owner policy API: every mutable policy write gets a new immutable
+ * revision. The orchestrator intentionally reads revisions, never an unversioned
+ * test-only policy row. */
+async function upsertVersionedPolicy(
+  actionType: string,
+  values: { policy: Record<string, unknown>; requiresConfirmation: boolean },
+  existing?: typeof domainPolicies.$inferSelect,
+): Promise<void> {
+  await withTenant(TENANT_ID, async (db) => {
+    const [persisted] = existing
+      ? await db
+          .update(domainPolicies)
+          .set({ ...values, version: existing.version + 1, effectiveFrom: new Date() })
+          .where(eq(domainPolicies.id, existing.id))
+          .returning()
+      : await db
+          .insert(domainPolicies)
+          .values({ tenantId: TENANT_ID, actionType, ...values })
+          .returning();
+    await db.insert(domainPolicyRevisions).values({
+      tenantId: TENANT_ID,
+      policyId: persisted!.id,
+      actionType: persisted!.actionType,
+      version: persisted!.version,
+      policy: persisted!.policy,
+      requiresConfirmation: persisted!.requiresConfirmation,
+      confirmationTemplate: persisted!.confirmationTemplate,
+      modelProvider: persisted!.modelProvider,
+      confirmationTimeoutHours: persisted!.confirmationTimeoutHours,
+      effectiveFrom: persisted!.effectiveFrom,
+    });
+  });
+}
 
 describe.skipIf(!available)("proactive scan handlers", () => {
   beforeAll(async () => {
@@ -138,11 +173,7 @@ describe.skipIf(!available)("proactive scan handlers", () => {
         .where(and(eq(domainPolicies.tenantId, TENANT_ID), eq(domainPolicies.actionType, "bulk_notify_existing_customers"))),
     );
     const policyValues = { policy: { winback_offer_script: "Test win-back: 15% off, book a free water test." }, requiresConfirmation: true };
-    if (existingPolicy) {
-      await withTenant(TENANT_ID, (db) => db.update(domainPolicies).set(policyValues).where(eq(domainPolicies.id, existingPolicy.id)));
-    } else {
-      await withTenant(TENANT_ID, (db) => db.insert(domainPolicies).values({ tenantId: TENANT_ID, actionType: "bulk_notify_existing_customers", ...policyValues }));
-    }
+    await upsertVersionedPolicy("bulk_notify_existing_customers", policyValues, existingPolicy);
     await scanColdLeads({ tenantId: TENANT_ID });
     const drafted = await withTenant(TENANT_ID, (db) =>
       db.select().from(domainActions).where(and(eq(domainActions.tenantId, TENANT_ID), eq(domainActions.actionType, "bulk_notify_existing_customers"))),
@@ -177,11 +208,7 @@ describe.skipIf(!available)("proactive scan handlers", () => {
       db.select().from(domainPolicies).where(and(eq(domainPolicies.tenantId, TENANT_ID), eq(domainPolicies.actionType, "renew_maintenance_agreement"))),
     );
     const renewalPolicyValues = { policy: { price_usd: 199 }, requiresConfirmation: true };
-    if (existingRenewalPolicy) {
-      await withTenant(TENANT_ID, (db) => db.update(domainPolicies).set(renewalPolicyValues).where(eq(domainPolicies.id, existingRenewalPolicy.id)));
-    } else {
-      await withTenant(TENANT_ID, (db) => db.insert(domainPolicies).values({ tenantId: TENANT_ID, actionType: "renew_maintenance_agreement", ...renewalPolicyValues }));
-    }
+    await upsertVersionedPolicy("renew_maintenance_agreement", renewalPolicyValues, existingRenewalPolicy);
     await scheduledReminder({ tenantId: TENANT_ID, windowDays: 30 });
     const drafted = await withTenant(TENANT_ID, (db) =>
       db.select().from(domainActions).where(and(eq(domainActions.tenantId, TENANT_ID), eq(domainActions.actionType, "renew_maintenance_agreement"))),

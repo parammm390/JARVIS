@@ -1,0 +1,5 @@
+
+> finnor-os@0.1.0 policy:lint
+> tsx scripts/lint-policy-coverage.ts
+
+policy coverage green: 44/44 registered action types
