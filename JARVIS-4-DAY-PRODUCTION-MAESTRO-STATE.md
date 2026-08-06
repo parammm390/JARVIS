@@ -361,7 +361,7 @@ completion and exited 0.
 
 **P2 exit result:** PASS for every P2 task and exit criterion. The GLM/Mistral/DeepSeek chain is configured through the shared Bedrock credential and passed the bounded live smoke; isolated staging, outbound voice, live Sentry routing, replay artifacts, and load tooling remain P3/P4-owned gates and are not implied by this P2 result.
 
-**Rollback:** Revert commit `9c25deb`. The fault runner refuses production and non-local database targets and requires the explicit test-context guard, so hooks are unreachable outside the permitted test/staging guard conditions.
+**Rollback:** Revert implementation/evidence commit `2dfa3b9` (and the state-only metadata commit `35f5d39` if reverting the recorded closure state). The fault runner refuses production and non-local database targets and requires the explicit test-context guard, so hooks are unreachable outside the permitted test/staging guard conditions.
 
 ---
 
