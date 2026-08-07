@@ -153,7 +153,7 @@ if (isMain) {
     log.warn({ event: "emulator_faults_applied", capabilities: faultedCapabilities }, "[worker] EMULATOR_FAULTS applied — emulators are adversarial");
   }
   startHeartbeat(30_000, controller.signal);
-  const certificationMode = process.env.FINNOR_ENVIRONMENT === "staging" && process.env.P3_DISABLE_PROACTIVE_SCHEDULER === "1";
+  const certificationMode = process.env.FINNOR_ENVIRONMENT?.trim() === "staging" && process.env.P3_DISABLE_PROACTIVE_SCHEDULER?.trim() === "1";
   if (certificationMode) {
     log.warn({ event: "proactive_scheduler_disabled", reason: "P3 staging certification mode" }, "[scheduler] proactive scans disabled for isolated staging certification");
   } else {

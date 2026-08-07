@@ -24,13 +24,15 @@ export interface BindingResolution {
 }
 
 function resolveOwned(envValue: string | undefined): BindingResolution {
-  if (!envValue) return { mode: "native", source: "default" };
-  return { mode: envValue as BindingMode, source: "env" }; // "emulator" (opt-out) or e.g. crm's "ghl"
+  const normalized = envValue?.trim();
+  if (!normalized) return { mode: "native", source: "default" };
+  return { mode: normalized as BindingMode, source: "env" }; // "emulator" (opt-out) or e.g. crm's "ghl"
 }
 
 function resolveExternal(envValue: string | undefined, realMode: BindingMode): BindingResolution {
-  if (!envValue) return { mode: "emulator", source: "default" };
-  return { mode: envValue === realMode ? realMode : (envValue as BindingMode), source: "env" };
+  const normalized = envValue?.trim();
+  if (!normalized) return { mode: "emulator", source: "default" };
+  return { mode: normalized === realMode ? realMode : (normalized as BindingMode), source: "env" };
 }
 
 export interface CapabilityBindingsReport {
