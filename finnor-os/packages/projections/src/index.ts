@@ -122,6 +122,12 @@ const DIRTY_VIEWS_BY_KIND: Record<string, ProjectedView[]> = {
 
 const DEBOUNCE_MS = 750;
 const pendingRefreshes = new Map<string, ReturnType<typeof setTimeout>>();
+// The staging/production cloud pool intentionally uses one session per process.
+// Distinct NOTIFY events can dirty distinct views at the same time; launching those
+// rebuilds independently makes them wait on the same session and produces avoidable
+// connection-timeout noise. Keep the debounce behavior, but serialize the actual
+// rebuilds so one session can drain each refresh cleanly.
+let serializedRefreshes: Promise<void> = Promise.resolve();
 
 function scheduleDebouncedRebuild(tenantId: string, view: ProjectedView): void {
   const key = `${tenantId}:${view}`;
@@ -131,11 +137,15 @@ function scheduleDebouncedRebuild(tenantId: string, view: ProjectedView): void {
     key,
     setTimeout(() => {
       pendingRefreshes.delete(key);
-      rebuildProjection(tenantId, view).catch((err) => {
-        getLogger().error(
-          { tenantId, view, err: err instanceof Error ? err.message : String(err) },
-          "[projections] debounced rebuild failed",
-        );
+      serializedRefreshes = serializedRefreshes.then(async () => {
+        try {
+          await rebuildProjection(tenantId, view);
+        } catch (err) {
+          getLogger().error(
+            { tenantId, view, err: err instanceof Error ? err.message : String(err) },
+            "[projections] debounced rebuild failed",
+          );
+        }
       });
     }, DEBOUNCE_MS),
   );
