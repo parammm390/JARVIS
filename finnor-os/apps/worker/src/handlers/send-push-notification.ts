@@ -22,7 +22,14 @@ export const sendPushNotification: JobHandler = async (payload) => {
   const publicKey = process.env.VAPID_PUBLIC_KEY;
   const privateKey = process.env.VAPID_PRIVATE_KEY;
   const subject = process.env.VAPID_SUBJECT;
-  if (!publicKey || !privateKey || !subject) throw new Error("VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, and VAPID_SUBJECT are required");
+  if (!publicKey || !privateKey || !subject) {
+    const certificationMode = process.env.FINNOR_ENVIRONMENT?.trim() === "staging" && process.env.P3_DISABLE_PROACTIVE_SCHEDULER?.trim() === "1";
+    if (certificationMode) {
+      console.warn("[push] skipped unconfigured Web Push nudge in isolated staging certification mode");
+      return;
+    }
+    throw new Error("VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, and VAPID_SUBJECT are required");
+  }
   webpush.setVapidDetails(subject, publicKey, privateKey);
   const { rows } = await getPool().query(
     `SELECT id, endpoint, p256dh, auth FROM finnor_os.push_subscriptions WHERE tenant_id = $1`, [tenantId],

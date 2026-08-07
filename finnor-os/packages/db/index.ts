@@ -103,6 +103,12 @@ export function getPool(): pg.Pool {
     // Fail fast under saturation instead: a real, bounded error the app already
     // handles gracefully (degraded/SAMPLE DATA badges) beats an unbounded queue that
     // makes every other request wait behind requests nobody is listening for anymore.
+    const idleTimeoutOverride = Number(process.env.FINNOR_DB_IDLE_TIMEOUT_MS);
+    const idleTimeoutMillis = Number.isFinite(idleTimeoutOverride) && idleTimeoutOverride > 0
+      ? Math.min(idleTimeoutOverride, 60_000)
+      : unpooledLocal
+        ? undefined
+        : 1_000;
     pool = new pg.Pool({
       ...cfg,
       // Vercel can run enough API instances concurrently that even two sessions per
@@ -110,7 +116,7 @@ export function getPool(): pg.Pool {
       // EMAXCONNSESSION under Bridge polling). Production functions therefore use
       // one short-lived session each; localhost/CI remains intentionally generous.
       max: unpooledLocal ? 10 : 1,
-      idleTimeoutMillis: unpooledLocal ? undefined : 1_000,
+      idleTimeoutMillis,
       // CI and local test runners must fail with a real connection error when their
       // disposable database is unavailable. Leaving localhost unbounded made Vitest
       // stall before collection forever after a stopped dev database.
