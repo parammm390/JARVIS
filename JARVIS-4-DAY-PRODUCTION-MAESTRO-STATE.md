@@ -484,9 +484,9 @@ this report and the targeted harness repair.
       **Evidence:** `docs/release/evidence/P3/p3-t10-sentry-drill-preflight.txt`; `docs/release/evidence/P3/p3-t10-sentry-drill-20260807.txt`; source `finnor-os/packages/tools/src/observability.ts`; P2 test-context evidence remains at `docs/release/chaos-results.md`.
       **Result:** `BLOCKED-CONFIG`. Read-only Railway inspection found `SENTRY_DSN` and `RELEASE_SHA` present on worker and orchestrator, but no project/org/alert destination proof was available.
       **Deviation:** A DSN-presence check is not Sentry project, environment, release-ingestion, alert-routing, trace-correlation, or on-call proof. No staging exception/message/trace was sent; the P2 sanitized test-context result is not live staging proof.
-- [ ] **P3.T11** Commit integration and load reports; update ledgers.
-      **Evidence:** `docs/release/integration-readiness.md`; `docs/release/load-test-results.md`; current generated P3 machine reports; current P3 evidence files; this state section and ledgers.
-      **Result:** Reports and ledgers are updated and final validation passed; the required commit is the remaining T11 action.
+- [x] **P3.T11** Commit integration and load reports; update ledgers.
+      **Evidence:** `15e5ab6`; `docs/release/integration-readiness.md`; `docs/release/load-test-results.md`; current generated P3 machine reports; current P3 evidence files; this state section and ledgers.
+      **Result:** Reports and ledgers were committed in `15e5ab6` after typecheck, renderer tests, diff validation, and machine-artifact checks passed.
       **Deviation:** Reports truthfully preserve the owner-directed T5 deferral and T6/T7/T8/T9/T10 BLOCKED-CONFIG results; no missing external evidence was converted to a pass.
 
 ### Exit gate
@@ -503,8 +503,8 @@ this report and the targeted harness repair.
 - [ ] Zero open P0/P1 staging/load defects — **Evidence:** no new P0/P1 defect discovered; P3 prerequisites R-07/R-08/R-10/R-11/R-12 remain blocked/open with evidence above.
 
 **P3 exit result:** `BLOCKED-CONFIG`, not complete. T5 is explicitly owner-deferred, and the remaining
-T6/T7/T8/T9/T10 gates retain concrete blocked evidence. T11 reports are updated and require the final
-report/state commit. P4 must not start until the open gates and owner-only artifacts listed in
+T6/T7/T8/T9/T10 gates retain concrete blocked evidence. T11 reports and state were committed in
+`15e5ab6`. P4 must not start until the open gates and owner-only artifacts listed in
 `docs/release/integration-readiness.md` are resolved.
 
 ---
