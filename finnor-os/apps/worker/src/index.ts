@@ -153,11 +153,16 @@ if (isMain) {
     log.warn({ event: "emulator_faults_applied", capabilities: faultedCapabilities }, "[worker] EMULATOR_FAULTS applied — emulators are adversarial");
   }
   startHeartbeat(30_000, controller.signal);
-  startScheduler(PROACTIVE_SCANS, 15 * 60_000, controller.signal);
+  const certificationMode = process.env.FINNOR_ENVIRONMENT === "staging" && process.env.P3_DISABLE_PROACTIVE_SCHEDULER === "1";
+  if (certificationMode) {
+    log.warn({ event: "proactive_scheduler_disabled", reason: "P3 staging certification mode" }, "[scheduler] proactive scans disabled for isolated staging certification");
+  } else {
+    startScheduler(PROACTIVE_SCANS, 15 * 60_000, controller.signal);
+  }
   // A4.T4: global (no tenant loop) — a DB backup isn't per-tenant data, same posture as
   // worker_heartbeat. No-ops loudly inside the handler itself until Param supplies
   // BACKUP_GITHUB_TOKEN/BACKUP_GITHUB_REPO.
-  startGlobalScheduler("backup_db", 6, 15 * 60_000, controller.signal);
+  if (!certificationMode) startGlobalScheduler("backup_db", 6, 15 * 60_000, controller.signal);
   // B1.T2, deployed same process as the job loop: this repo's single railway.json
   // start command (`npx tsx apps/$SERVICE_APP/src/index.ts`) means finnor-worker has
   // exactly one entrypoint — a second Railway service isn't needed (and isn't
