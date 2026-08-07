@@ -1,0 +1,35 @@
+{
+  "phase": "P3",
+  "gate": "known-action-e2e",
+  "status": "FAIL",
+  "pass": false,
+  "productionEgress": false,
+  "plannerInvocations": 0,
+  "failingRowPreflight": null,
+  "guard": {
+    "mode": "e2e",
+    "status": "PASS",
+    "productionEgress": false,
+    "targetHosts": {
+      "api": "finnor-p3-api-staging-jx9i7rqam-bloodride2-3212s-projects.vercel.app",
+      "frontend": "finnor-p3-console-staging-pjg3wqn01-bloodride2-3212s-projects.vercel.app",
+      "worker": "finnor-worker-staging.up.railway.app",
+      "orchestrator": "finnor-orchestrator-staging.up.railway.app",
+      "database": "aws-0-ap-southeast-1.pooler.supabase.com",
+      "redis": "redis.railway.internal"
+    },
+    "missing": [],
+    "failures": [],
+    "observations": [
+      "productionEgress=false",
+      "secretValuesPrinted=false",
+      "providerPayloadsPrinted=false",
+      "targets=6/6",
+      "targetHosts=api:finnor-p3-api-staging-jx9i7rqam-bloodride2-3212s-projects.vercel.app,frontend:finnor-p3-console-staging-pjg3wqn01-bloodride2-3212s-projects.vercel.app,worker:finnor-worker-staging.up.railway.app,orchestrator:finnor-orchestrator-staging.up.railway.app,database:aws-0-ap-southeast-1.pooler.supabase.com,redis:redis.railway.internal",
+      "externalBindings=emulator-safe-required"
+    ]
+  },
+  "rows": [],
+  "error": "Auth is not configured SUPABASE_URL  key missing",
+  "evidence": "docs/release/generated/p3-known-action-results.json"
+}

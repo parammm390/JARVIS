@@ -1,0 +1,23 @@
+P3.T5 — bounded API E2E runner repair validation
+Date: 2026-08-07
+
+The first staging matrix invocation reached the real API path but terminated
+with an AbortSignal timeout at the previous 30-second request limit. The run is
+retained at docs/release/evidence/P3/p3-t5-api-e2e-20260807.txt with exit=1; it
+is not counted as a pass.
+
+The runner was then repaired only to make the staging contract measurable:
+  - request and receipt calls use P3_API_TIMEOUT_MS, clamped to 5,000–120,000 ms;
+  - the 44 rows use bounded P3_E2E_CONCURRENCY, clamped to 1–8;
+  - one request failure is recorded on its row so the remaining fixed rows run;
+  - a guard-passing runtime failure is reported as FAIL, never BLOCKED-CONFIG;
+  - response evidence remains sanitized to status/keys/action/status/receipt
+    metadata and never stores request/provider payloads or token values.
+
+Validation:
+  command: (cd finnor-os && npm run typecheck && git diff --check)
+  result: exit=0
+  corrected run settings: P3_E2E_CONCURRENCY=4, P3_API_TIMEOUT_MS=120000
+
+This repair does not relax the six-target staging guard, the exact 44-row
+contract, receipt verification, tenant coverage, or no-egress requirements.

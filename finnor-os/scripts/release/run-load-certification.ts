@@ -6,6 +6,7 @@
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
+import { Client } from "pg";
 import { evaluateStagingGuards, formatStagingGuardReport, type StagingGuardReport } from "./staging-guards";
 
 const SCRIPT_DIR = dirname(new URL(import.meta.url).pathname);
@@ -13,6 +14,12 @@ const FINNOR_OS_ROOT = resolve(SCRIPT_DIR, "../..");
 const REPO_ROOT = resolve(FINNOR_OS_ROOT, "..");
 const REPORT_PATH = resolve(REPO_ROOT, "docs/release/generated/p3-load-results.json");
 const EVIDENCE_DIR = resolve(REPO_ROOT, "docs/release/evidence/P3");
+
+const CERTIFICATION_TENANTS = {
+  alpha: "00000000-0000-4000-8000-0000000000a1",
+  bravo: "00000000-0000-4000-8000-0000000000b1",
+  charlie: "00000000-0000-4000-8000-0000000000c1",
+} as const;
 
 const LOAD_COVERAGE = {
   readOnlyQuestions: true,
@@ -183,6 +190,66 @@ async function writeReport(report: Record<string, unknown>): Promise<void> {
   await writeFile(REPORT_PATH, `${JSON.stringify(report, null, 2)}\n`, "utf8");
 }
 
+/**
+ * Reconcile the exact load submission namespace after the timed scenarios. The
+ * load runner owns the `p3-load-*` namespace, so the intake unique key is a
+ * direct database proof that the concurrent duplicate class did not create a
+ * second planner claim. Marker visibility and fixed certification IDs provide
+ * the tenant-boundary/data-integrity checks without printing payloads.
+ */
+async function reconcileStagingLoad(): Promise<Record<string, unknown>> {
+  const connectionString = process.env.STAGING_DATABASE_URL ?? process.env.DATABASE_URL;
+  if (!connectionString) throw new Error("STAGING_DATABASE_URL or DATABASE_URL is required for post-load reconciliation");
+  const parsed = new URL(connectionString);
+  parsed.searchParams.delete("sslmode");
+  const client = new Client({ connectionString: parsed.toString(), ssl: { rejectUnauthorized: false } });
+  const perTenant: Record<string, { intakeRows: number; duplicateKeys: number; bravoMarkerVisible: number; ownMarkerVisible: number; fixedHouseholds: number }> = {};
+  try {
+    await client.connect();
+    for (const [alias, tenantId] of Object.entries(CERTIFICATION_TENANTS)) {
+      await client.query("BEGIN");
+      await client.query("SELECT set_config('app.tenant_id', $1, true)", [tenantId]);
+      const intake = await client.query<{ idempotency_key: string }>(
+        "SELECT idempotency_key FROM finnor_os.intake_idempotency WHERE idempotency_key LIKE 'p3-load-%'",
+      );
+      const keys = intake.rows.map((row) => row.idempotency_key);
+      const uniqueKeys = new Set(keys);
+      const markers = await client.query<{ bravo: string; own: string }>(
+        "SELECT count(*) FILTER (WHERE water_profile::text LIKE '%BRAVO-ISOLATION-SENTINEL%')::int AS bravo, count(*) FILTER (WHERE water_profile::text LIKE $1)::int AS own FROM finnor_os.households",
+        [`%${alias.toUpperCase()}-CERTIFICATION%`],
+      );
+      const fixed = await client.query<{ n: number }>(
+        "SELECT count(*)::int AS n FROM finnor_os.households WHERE id::text LIKE $1",
+        [`${alias === "alpha" ? "a1000000" : alias === "bravo" ? "b1000000" : "c1000000"}%`],
+      );
+      perTenant[alias] = {
+        intakeRows: keys.length,
+        duplicateKeys: keys.length - uniqueKeys.size,
+        bravoMarkerVisible: Number(markers.rows[0]?.bravo ?? 0),
+        ownMarkerVisible: Number(markers.rows[0]?.own ?? 0),
+        fixedHouseholds: Number(fixed.rows[0]?.n ?? 0),
+      };
+      await client.query("ROLLBACK");
+    }
+  } finally {
+    await client.end().catch(() => undefined);
+  }
+  const tenantLeaks = Object.entries(perTenant).reduce((count, [alias, value]) => count + (alias === "bravo" ? 0 : value.bravoMarkerVisible), 0);
+  const dataCorruption = Object.values(perTenant).reduce((count, value) => count + (value.fixedHouseholds === 40 ? 0 : 1), 0);
+  const duplicateEffects = Object.values(perTenant).reduce((count, value) => count + value.duplicateKeys, 0);
+  return {
+    phase: "P3",
+    gate: "load-reconciliation",
+    status: duplicateEffects === 0 && tenantLeaks === 0 && dataCorruption === 0 ? "PASS" : "FAIL",
+    pass: duplicateEffects === 0 && tenantLeaks === 0 && dataCorruption === 0,
+    duplicateEffects,
+    tenantLeaks,
+    dataCorruption,
+    perTenant,
+    evidence: "docs/release/generated/p3-load-reconciliation-20260807.json",
+  };
+}
+
 function blockedReport(guard: StagingGuardReport, error?: string): Record<string, unknown> {
   return {
     phase: "P3",
@@ -213,7 +280,8 @@ export async function runLoadCertification(): Promise<Record<string, unknown>> {
     await runScenario("25-user-10-minute", 25, 10, tokens),
   ];
   const reconciliationPath = process.env.P3_LOAD_RECONCILIATION_FILE!;
-  const reconciliation = JSON.parse(await readFile(reconciliationPath, "utf8")) as { pass?: boolean; duplicateEffects?: number; tenantLeaks?: number; dataCorruption?: number };
+  const reconciliation = await reconcileStagingLoad();
+  await writeFile(reconciliationPath, `${JSON.stringify(reconciliation, null, 2)}\n`, "utf8");
   const report = {
     phase: "P3",
     gate: "load",
@@ -237,7 +305,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     if (!report.pass) process.exitCode = 1;
   }).catch(async (error) => {
     const guard = evaluateStagingGuards("load");
-    await writeReport(blockedReport(guard, error instanceof Error ? error.message : "unknown error"));
+    const message = error instanceof Error ? error.message : "unknown error";
+    await writeReport({
+      ...blockedReport(guard, message),
+      status: guard.status === "PASS" ? "FAIL" : "BLOCKED-CONFIG",
+    });
     console.error(`P3_LOAD_FAIL ${error instanceof Error ? error.message : "unknown error"}`);
     process.exitCode = 1;
   });

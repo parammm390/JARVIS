@@ -1,0 +1,26 @@
+P3.T3 — RELEASE CANDIDATE DEPLOYMENT SHA VERIFICATION
+Date: 2026-08-07
+
+Verification commands (read-only):
+- `git rev-parse HEAD` → `f4623cb15a496cc0d78aa5e8025ed1ba7281ce73`, exit 0.
+- `vercel list finnor-p3-api-staging --format json` filtered to READY deployments with the
+  current SHA → `finnor-p3-api-staging-jx9i7rqam-bloodride2-3212s-projects.vercel.app`, READY,
+  current SHA, message `jarvis-release P3: serialize projection refreshes`, exit 0.
+- `vercel list finnor-p3-console-staging --format json` filtered the same way →
+  `finnor-p3-console-staging-pjg3wqn01-bloodride2-3212s-projects.vercel.app`, READY, current
+  SHA, same release message, exit 0.
+- `railway variable list --service finnor-orchestrator --environment staging --json` →
+  `FINNOR_ENVIRONMENT=staging`, `RELEASE_SHA=f4623cb15a496cc0d78aa5e8025ed1ba7281ce73`, exit 0.
+- `railway variable list --service finnor-worker --environment staging --json` →
+  `FINNOR_ENVIRONMENT=staging`, `RELEASE_SHA=f4623cb15a496cc0d78aa5e8025ed1ba7281ce73`, exit 0.
+- `rg -n 'release: process.env.RELEASE_SHA' packages/tools/src/observability.ts` → line 21,
+  Sentry release is sourced from `RELEASE_SHA` before platform fallbacks, exit 0.
+
+Health verification is retained in `p3-t1-staging-identity-current-20260807.txt` and
+`docs/release/generated/p3-api-e2e-results.json`: API, worker, and orchestrator returned HTTP
+200 with `environment=staging` and the same current SHA; frontend returned HTTP 200.
+
+Result: PASS. The four deployed surfaces (Vercel API, Vercel console, Railway worker, Railway
+orchestrator) are on one current release SHA. No deployment command or production target was used
+in this verification session; the isolated staging deployments already existed at this SHA.
+No Sentry event was sent by this verification.

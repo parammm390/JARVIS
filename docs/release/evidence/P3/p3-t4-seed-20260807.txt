@@ -1,0 +1,45 @@
+P3.T4 — CERTIFICATION SEED AND TENANT VERIFICATION
+Date: 2026-08-07
+Target: owner-provisioned isolated staging database; connection value withheld
+Bindings: emulator-safe; reserved example.invalid and 555 test fixtures only
+
+Preflight:
+- A direct PostgreSQL connectivity probe using the staging DATABASE_URL completed with
+  db_connect=PASS, elapsedMs=675, rows=1. No production database was used.
+- The first seed invocation did not emit a terminal line before the bounded execution
+  session ended; it produced no success claim and was not used as evidence. A subsequent
+  invocation was allowed to finish through the same guarded seed path.
+
+Seed command:
+- command: npx --no-install tsx scripts/release/seed-certification-tenants.ts
+- guards: NODE_ENV=test, FINNOR_ENVIRONMENT=staging, CERTIFICATION_SEED_ALLOWED=1
+- output: CERTIFICATION_SEED_PASS tenants=Alpha,Bravo,Charlie counts=Alpha:15u/40h/40c/20l/12o/10q/8i/10w/12a/8p/3m;Bravo:sentinel;Charlie:degraded-config
+- exit code: 0
+- no secret, token, provider payload, or customer PII was printed
+
+RLS-scoped verification command:
+- a read-only PostgreSQL probe set app.tenant_id separately for Alpha, Bravo, and Charlie,
+  counted the fixed certification ids, grouped Alpha roles, and checked the Bravo marker
+  visibility under each tenant context
+- exit code: 0
+- exact certification rows per tenant:
+  Alpha: users=15, households=40, contacts=40, leads=20, opportunities=12, quotes=10,
+  invoices=8, work_orders=10, appointments=12, proposals=8, maintenance_agreements=3
+  Bravo: users=3, households=40, contacts=40, leads=20, opportunities=12, quotes=10,
+  invoices=8, work_orders=10, appointments=12, proposals=8, maintenance_agreements=3
+  Charlie: users=3, households=40, contacts=40, leads=20, opportunities=12, quotes=10,
+  invoices=8, work_orders=10, appointments=12, proposals=8, maintenance_agreements=3
+- Alpha fixed-user roles: owner=2, dispatcher=3, technician=10
+- Bravo sentinel inventory rows visible in tenant context: 6
+- Bravo sentinel rows visible from Alpha context: 0
+- Bravo sentinel rows visible from Charlie context: 0
+
+Auth fixture preparation:
+- the three synthetic certification auth identities already existed in the same isolated
+  Supabase project; their passwords were rotated in staging and three short-lived bearer
+  tokens were generated into a mode-0600 temporary file for guarded E2E use
+- created=0, updated=3, tokenValuesPrinted=false
+
+Result: PASS for the fixed certification rows, Alpha/Bravo/Charlie RLS marker isolation,
+and guarded auth fixture readiness. Any unrelated pre-existing rows outside the fixed
+certification ids were excluded from the exact certification count.

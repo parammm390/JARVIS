@@ -1,0 +1,54 @@
+P3.T5 — EXACT INTERRUPTED-ROW REPORT BEFORE ANY FURTHER MATRIX RERUN
+generatedAt=2026-08-07T04:55:21.749Z
+source=corrected deterministic draftKnownAction matrix attempt
+gate=known-action-e2e status=INTERRUPTED pass=false
+exactRows=44 observedRows=23 passRows=19 failRows=3 interruptedRows=1 notRunRows=21
+stopReason=row 23 launch_ad_campaign did not return a terminal result within the bounded observation window; the process was stopped
+
+number action tenant expectedStatus state attempted actionStatus elapsedMs reason
+1 create_invoice alpha completed PASS true completed null runner emitted PASS
+2 send_payment_reminder alpha completed PASS true completed null runner emitted PASS
+3 record_payment alpha completed PASS true completed null runner emitted PASS
+4 call_overdue_invoices alpha completed PASS true completed null runner emitted PASS
+5 bulk_notify_existing_customers alpha completed PASS true completed null runner emitted PASS
+6 clarification_request alpha completed PASS true completed null runner emitted PASS
+7 generate_compliance_summary alpha completed PASS true completed null runner emitted PASS
+8 create_lead alpha completed PASS true completed null runner emitted PASS
+9 update_lead_status alpha completed PASS true completed null runner emitted PASS
+10 log_interaction alpha completed PASS true completed null runner emitted PASS
+11 assign_lead_to_technician alpha completed PASS true completed null runner emitted PASS
+12 answer_customer_question alpha completed PASS true completed null runner emitted PASS
+13 send_customer_message alpha completed PASS true completed null runner emitted PASS
+14 send_follow_up alpha completed PASS true completed null runner emitted PASS
+15 check_stock_level charlie completed PASS true completed null runner emitted PASS
+16 flag_reorder_needed alpha completed PASS true completed null runner emitted PASS
+17 log_stock_used_on_visit alpha completed PASS true completed null runner emitted PASS
+18 start_invoice_to_cash_workflow alpha completed FAIL true draft 5182 deterministic runner emitted FAIL persisted action remained draft
+19 start_water_test_workflow alpha completed FAIL true draft 5128 deterministic runner emitted FAIL persisted action remained draft
+20 renew_maintenance_agreement alpha completed FAIL true needs_human_review 69168 deterministic runner emitted FAIL persisted action ended needs_human_review
+21 manual_step_suggestion alpha completed PASS true completed null runner emitted PASS
+22 summarize_ad_performance alpha completed PASS true completed null runner emitted PASS
+23 launch_ad_campaign alpha completed INTERRUPTED true executing null runner was stopped after launch_ad_campaign exceeded the available bounded observation window no terminal row was emitted
+24 create_review_request alpha completed NOT_RUN false null null row was not reached before the runner stopped
+25 get_business_overview bravo completed NOT_RUN false null null row was not reached before the runner stopped
+26 answer_business_question alpha completed NOT_RUN false null null row was not reached before the runner stopped
+27 send_proposal_to_recent_installs alpha completed NOT_RUN false null null row was not reached before the runner stopped
+28 request_proposal_signature alpha completed NOT_RUN false null null row was not reached before the runner stopped
+29 start_installation_workflow alpha completed NOT_RUN false null null row was not reached before the runner stopped
+30 generate_quote alpha completed NOT_RUN false null null row was not reached before the runner stopped
+31 size_equipment_for_household alpha completed NOT_RUN false null null row was not reached before the runner stopped
+32 send_proposal alpha completed NOT_RUN false null null row was not reached before the runner stopped
+33 route_suggestion alpha completed NOT_RUN false null null row was not reached before the runner stopped
+34 assign_technician_to_visit alpha completed NOT_RUN false null null row was not reached before the runner stopped
+35 check_technician_availability alpha completed NOT_RUN false null null row was not reached before the runner stopped
+36 reschedule_visit alpha completed NOT_RUN false null null row was not reached before the runner stopped
+37 check_reminder_due alpha completed NOT_RUN false null null row was not reached before the runner stopped
+38 log_visit_report alpha completed NOT_RUN false null null row was not reached before the runner stopped
+39 flag_visit_issue alpha completed NOT_RUN false null null row was not reached before the runner stopped
+40 answer_water_question alpha completed NOT_RUN false null null row was not reached before the runner stopped
+41 schedule_water_test alpha completed NOT_RUN false null null row was not reached before the runner stopped
+42 search_web alpha completed NOT_RUN false null null row was not reached before the runner stopped
+43 scan_competitors alpha completed NOT_RUN false null null row was not reached before the runner stopped
+44 check_business_reviews alpha completed NOT_RUN false null null row was not reached before the runner stopped
+
+This is an interruption/failure artifact, not a certification claim. Rows 24–44 were not run. The next full matrix run is forbidden until the targeted harness repair is validated.

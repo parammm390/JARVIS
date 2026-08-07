@@ -1,0 +1,25 @@
+P3.T5 — deterministic known-action auth preflight
+Date: 2026-08-07
+
+The exact 44-row failing baseline was preserved before any corrected full-matrix
+execution:
+  source=docs/release/generated/p3-api-e2e-results.json
+  preflight=docs/release/generated/p3-t5-failing-rows-before-known-action.json
+  rows=44 failures=44
+
+The corrected runner's staging guard passed with six non-production targets and
+emulator-safe bindings. The run then stopped before row 1 during real staging
+identity verification:
+  result=FAIL rowsSent=0 plannerInvocations=0
+  error=Auth is not configured (SUPABASE_URL / key missing) in the local runner
+
+The retained staging JWT file contains short-lived Supabase tokens whose expiry
+has passed. The staging Vercel runtime rejects the same expired bearer as
+Invalid or expired token. No decoded-only identity, expired-token bypass, or
+local development auth bypass was used. No T1–T4 task was rerun, no provider
+request was sent, and no deterministic row was counted as certified.
+
+This is a prerequisite/configuration blocker for the next bounded attempt:
+provide a current staging auth bundle containing a usable staging Supabase
+verification key and fresh Alpha/Bravo/Charlie JWTs. The exact failing-row
+preflight remains mandatory before any future 44-row rerun.

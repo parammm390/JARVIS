@@ -1,0 +1,40 @@
+P3.T5 planner-run preservation evidence — 2026-08-07
+
+Purpose
+-------
+The prior 44-row staging API E2E attempt was intentionally stopped at the user's
+direction after it was clear that the LLM planner path was being used as the
+certification harness. This file preserves that run as evidence; it is not a
+pass claim and it is not a replacement for the deterministic certification.
+
+Run disposition
+---------------
+- The active planner-based run was started with the exact 44-row corpus and the
+  staging API/worker/orchestrator/frontend targets.
+- It was run with P3_E2E_CONCURRENCY=2, P3_API_TIMEOUT_MS=120000,
+  P3_NO_EGRESS=1, LIVE_SMOKE_ALLOWED=0, and freshly refreshed staging JWTs.
+- The process was stopped by the user-directed Ctrl-C. The observed process exit
+  was 130. It did not write a final report for this stopped attempt.
+- The last completed report remains
+  docs/release/generated/p3-api-e2e-results.json. It contains all 44 rows and
+  is FAIL; no rows from that report are being counted as certified.
+
+Exact failing-row evidence retained
+------------------------------------
+The retained report is the exact failing-row report required before any future
+full-matrix execution. Its run metadata records the previous P3 planner run's
+44 rows, request/duplicate statuses, elapsed times, and failure state. The
+failure was contaminated when the staging auth passwords were rotated while an
+earlier matrix was still running to create the bounded-load JWT set; the
+resulting JWT invalidations are recorded in the related rerun evidence. The
+report is therefore preserved as historical failure evidence, not silently
+reinterpreted as a clean certification result.
+
+Harness correction
+------------------
+No further planner-based 44-row matrix is authorized. T5 continues with the
+same 44 action rows through the existing draftKnownAction/known-action path,
+real staging JWT verification, real policy/approval/execution/receipt paths,
+and the existing intake idempotency primitive. A separate bounded planner
+smoke suite will use representative action profiles only; its latency and
+failures will be written to a separate report.

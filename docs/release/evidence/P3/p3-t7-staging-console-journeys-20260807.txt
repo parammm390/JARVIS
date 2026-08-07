@@ -1,0 +1,29 @@
+P3.T7 — staging console journey inspection
+Date: 2026-08-07
+Target: isolated Vercel P3 console deployment at the recorded staging URL
+
+Read-only browser evidence:
+  - `/` rendered the Finnor dashboard shell and navigation.
+  - `/confirm` rendered Confirmation Queue with Awaiting approval and
+    Blocked / needs review controls; the queue was empty in this synthetic
+    browser context.
+  - `/audit`, `/comms`, `/policy`, and `/customers` each rendered their named
+    surface and navigation without a frontend runtime crash.
+  - `/talk` rendered the voice surface, but Start talking was disabled and the
+    page reported that NEXT_PUBLIC_VAPI_PUBLIC_KEY and
+    NEXT_PUBLIC_VAPI_ASSISTANT_ID are not configured in this staging deployment.
+  - The data-backed dashboard/queue surfaces showed their unauthenticated API
+    error/empty state; no browser credentials or local storage were inspected,
+    and no form was submitted.
+  - A visual screenshot of `/confirm` was inspected during the run; it showed
+    the expected Confirmation Queue layout and no action was sent.
+
+Existing local certified slice (retained, not rerun):
+  docs/release/evidence/P3/p3-t7-frontend-voice-approval-recovery.txt
+  10 files passed, 64 tests passed.
+
+Result: the staging shell/navigation and blocked voice configuration state are
+verified. The full T7 gate is not marked PASS because a configured isolated
+voice binding/authenticated data session was not supplied; approval,
+execution, recovery, and receipt UI journeys cannot be truthfully claimed from
+this unauthenticated read-only inspection.

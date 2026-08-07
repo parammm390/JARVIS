@@ -380,11 +380,11 @@ completion and exited 0.
 
 # PHASE 3 — Full-Stack Staging, Live-Binding Smoke, and 15-User Load
 
-**Status:** 🔴 BLOCKED-CONFIG — all independent repository work is implemented and evidenced; isolated staging, live-binding, load, and Sentry prerequisites are absent · **Window:** Day 3 · **Depends on:** P2
+**Status:** 🟡 IN PROGRESS — isolated staging is now verified; remaining Phase 3 tasks are being executed and are not yet complete · **Window:** Day 3 · **Depends on:** P2
 **Plan section:** §6 → PHASE 3
 **Starting SHA:** `05d0262`
-**Implementation/evidence SHA:** `3fe7cc7`
-**Ending SHA:** `3fe7cc7`
+**Implementation/evidence SHA:** `7e66c1148ac6e52982f48721cc287c4199c828f3`
+**Ending SHA:** pending Phase 3 completion
 
 ### Discovery output
 
@@ -427,50 +427,74 @@ the E2E runner now validates all three tenant JWTs, expected terminal receipts, 
 and approval decisions; the live runner validates expected provider labels in finalized receipts; the
 load runner includes concurrent duplicate probes. Typecheck passed and all guarded commands still
 refused before network/provider/load requests.
+
+Current execution session: the isolated Supabase, Railway, Redis, Vercel API, and Vercel console
+targets were provisioned and verified without production egress. The current target set and authenticated
+health evidence are in `docs/release/evidence/P3/p3-t1-staging-identity-20260807.txt` and the machine
+report `docs/release/generated/p3-api-e2e-results.json`. T3/T4 current-session verification is retained
+in `p3-t3-rc-deploy-20260807.txt` and `p3-t4-seed-20260807.txt`; those tasks are not being rerun.
+
+Current harness correction: the original planner-based 44-row attempt remains historical FAIL evidence
+only. The corrected T5 runner certifies the exact same 44 rows through `draftKnownAction` with a planner
+guard that fails on any invocation; it retains real staging auth, policy, approval, worker notification,
+intake idempotency, execution, and receipt assertions. A separate bounded planner smoke selects one
+representative instruction per unique domain/action-profile pair and writes latency/failures to its own
+report. `docs/release/generated/p3-t5-failing-rows-before-known-action.json` and its evidence file were
+written before the corrected matrix was attempted. The first authenticated corrected attempt reached 23/44
+rows: 19 PASS, rows 18–20 FAIL, row 23 INTERRUPTED, and rows 24–44 NOT_RUN. The exact observed state is
+preserved in `docs/release/generated/p3-t5-known-action-interrupted.json` and
+`docs/release/evidence/P3/p3-t5-known-action-interrupted-20260807.txt`; no full rerun is permitted without
+this report and the targeted harness repair.
 ```
 
 ### Tasks
 
-- [ ] **P3.T1** Prove staging identity and no-egress/allowlist guards.
-      **Evidence:** `docs/release/evidence/P3/p3-t1-readonly-target-revalidation.txt`; `p3-t1-readonly-target-revalidation-continuation.txt`; `p3-t1-staging-identity-guard.txt`; guard report `docs/release/generated/p3-api-e2e-results.json`; repair validation `docs/release/evidence/P3/p3-runner-contract-repair-validation.txt`.
-      **Deviation:** The repository exposes only a read-only production Railway environment and no verified isolated staging target. The current recheck found no staging/P3 environment names; explicit checks for the documented legacy Railway project names also returned not found; account-level Vercel discovery found no additional FINNOR staging/Preview project; linked Vercel metadata exposes no custom staging environment; and the linked API Preview deployments remain uncertified by the retained P0 database/auth findings. The repaired guard requires six explicit target hosts including Redis, `P3_STAGING_IDENTITY_CONFIRMED=1`, JWT auth mode, all three JWTs, `P3_NO_EGRESS=1`, allowlists, and `LIVE_SMOKE_ALLOWED=0`; it refused before network.
-- [ ] **P3.T2** Back up staging; apply and verify pending migrations.
-      **Evidence:** `docs/release/evidence/P3/p3-t2-staging-backup-migration-preflight.txt`; repository head remains `0064_evidence_corpus_search.sql` from the committed inventory.
-      **Deviation:** No staging database or backup id exists in the execution context; no backup, migration, or production database operation was attempted.
+- [x] **P3.T1** Prove staging identity and no-egress/allowlist guards.
+      **Evidence:** `docs/release/evidence/P3/p3-t1-staging-identity-20260807.txt`; machine report `docs/release/generated/p3-api-e2e-results.json`; prior guard contract validation `docs/release/evidence/P3/p3-runner-contract-repair-validation.txt`.
+      **Result:** `PASS`. The identity runner reported `targets=6/6`, `productionEgress=false`, no missing variables, no guard failures, emulator-safe external bindings, `LIVE_SMOKE_ALLOWED=0`, and `P3_NO_EGRESS=1`. Authenticated API, frontend, worker, and orchestrator probes returned HTTP 200; the API, worker, and orchestrator reported `environment=staging` and the common release SHA `7e66c1148ac6e52982f48721cc287c4199c828f3`. No production target or provider was called.
+- [x] **P3.T2** Back up staging; apply and verify pending migrations.
+      **Evidence:** `docs/release/evidence/P3/p3-t2-staging-backup-migration-20260807.txt`; backup `/tmp/p3-staging-backup-20260807.json.gz` (retained outside git); migration head `0064_evidence_corpus_search.sql`.
+      **Result:** `PASS`. The isolated Supabase staging database backup contains 92 tables and 1,770 rows, is mode 0600, round-trips through gzip/JSON, and has SHA-256 `1879f5bfd2bcbddbb1c348f0deac1e5044d52480e0677459bce7e43dc8eeff11`. The recorded migration run exited 0 with 65/65 migrations applied and no missing migrations; the current read-only check reports `_migrations` head `0064_evidence_corpus_search.sql`, 84 RLS-enabled tables, and zero invalid indexes. LangGraph setup also exited 0. No production database was used.
 - [ ] **P3.T3** Deploy one RC SHA to frontend/API/worker/orchestrator; Sentry release same SHA.
-      **Evidence:** `docs/release/evidence/P3/p3-t3-rc-deploy-preflight.txt`; candidate code SHA `733207f`.
-      **Deviation:** No staging deployment identity/token/expected SHA or Sentry release destination is available. Health endpoints now expose sanitized environment/release metadata for the next verified deployment; no deployment was made.
-- [ ] **P3.T4** Seed and verify Alpha/Bravo/Charlie.
-      **Evidence:** `docs/release/evidence/P3/p3-t4-seed-preflight.txt`; guarded seed source `finnor-os/scripts/release/seed-certification-tenants.ts`.
-      **Deviation:** The seed was not run without an explicit isolated staging database and allowlisted test values; the earlier local P1 seed evidence is not reused as staging proof.
+      **Evidence:** `docs/release/evidence/P3/p3-t3-rc-deploy-20260807.txt`; current SHA `f4623cb15a496cc0d78aa5e8025ed1ba7281ce73`.
+      **Result:** Deployment SHA portion is `PASS` from read-only verification of the existing isolated deployments; all four surfaces report the same current SHA. Sentry destination/release ingestion remains unproven, so the complete task is not marked complete and no deployment was repeated.
+- [x] **P3.T4** Seed and verify Alpha/Bravo/Charlie.
+      **Evidence:** `docs/release/evidence/P3/p3-t4-seed-20260807.txt`; guarded seed source `finnor-os/scripts/release/seed-certification-tenants.ts`.
+      **Result:** `PASS` from the retained current-session seed/RLS/auth-fixture evidence. No seed or auth-identity preparation was repeated.
 - [ ] **P3.T5** Run 44-action staging API E2E matrix.
-      **Evidence:** `docs/release/evidence/P3/p3-t5-api-e2e-guard.txt`; `docs/release/generated/p3-api-e2e-results.json`; runner `finnor-os/scripts/release/run-api-e2e-matrix.ts`; repair validation `docs/release/evidence/P3/p3-runner-contract-repair-validation.txt`.
-      **Deviation:** The repaired runner requires a supplied 44-row corpus with Alpha/Bravo/Charlie coverage, declared terminal outcomes, real staging JWTs, service health, duplicate action-id matching, optional approval/rejection, and terminal receipt verification. It refused before any request because the staging contract and case corpus are absent; no 44/44 pass is claimed.
+      **Evidence:** `docs/release/generated/p3-t5-failing-rows-before-known-action.json`; `docs/release/evidence/P3/p3-t5-failing-rows-before-known-action-20260807.txt`; corrected runner `finnor-os/scripts/release/run-known-action-e2e-matrix.ts`; `docs/release/generated/p3-t5-known-action-interrupted.json`; `docs/release/evidence/P3/p3-t5-known-action-interrupted-20260807.txt`; `docs/release/generated/p3-known-action-results.json`; bounded planner runner `finnor-os/scripts/release/run-planner-smoke.ts`.
+      **Deviation:** Per explicit owner direction on 2026-08-07, T5 is deferred/skipped for this Phase 3 continuation; this is not a pass and the 44-action scope is not reduced. The legacy planner-path failure baseline and the corrected known-action interruption report remain preserved as exact historical evidence. No further T5 rerun or planner-smoke run will be performed in this continuation. All downstream tasks are being executed truthfully; any exit gate that depends on T5 remains unchecked.
 - [ ] **P3.T6** Run configured allowlisted live-provider smokes; mark missing as BLOCKED-CONFIG.
-      **Evidence:** `docs/release/evidence/P3/p3-t6-live-binding-guard.txt`; `docs/release/generated/p3-live-binding-smoke.json`; runner `finnor-os/scripts/release/run-live-binding-smoke.ts`; repair validation `docs/release/evidence/P3/p3-runner-contract-repair-validation.txt`.
-      **Deviation:** The repaired runner requires every live case to declare an expected provider and proves that label in a finalized local receipt. No isolated staging account, allowlisted binding list, write-enable confirmation, or case corpus is available. `LIVE_SMOKE_ALLOWED=1` was not set and no provider egress occurred; unavailable bindings remain BLOCKED-CONFIG.
+      **Evidence:** `docs/release/evidence/P3/p3-t6-live-binding-20260807.txt`; `docs/release/generated/p3-live-binding-smoke.json`; runner `finnor-os/scripts/release/run-live-binding-smoke.ts`; repair validation `docs/release/evidence/P3/p3-runner-contract-repair-validation.txt`.
+      **Result:** `BLOCKED-CONFIG`. The live-mode guard covered all 6/6 verified staging targets with `LIVE_SMOKE_ALLOWED=1` and stopped before `/api/actions`.
+      **Deviation:** No owner-provided `P3_LIVE_ALLOWLIST_CONFIRMED`, `P3_LIVE_WRITE_FLAGS_CONFIRMED`, `P3_LIVE_BINDINGS`, or `P3_LIVE_SMOKE_CASES_FILE` exists, and no JWT values were supplied to this guard run. No provider egress, payment, ad spend, message, or customer contact occurred; this is not a live-smoke pass.
 - [ ] **P3.T7** Run frontend/voice/approval/recovery/receipt certified journeys.
-      **Evidence:** Local targeted slice `docs/release/evidence/P3/p3-t7-frontend-voice-approval-recovery.txt` — 10 files / 64 tests passed; staging target evidence is absent.
-      **Deviation:** The local slice proves pure frontend/voice/approval/recovery/receipt contracts only. Full deployed journey, voice session, approval, recovery, and receipt reconciliation could not run without the isolated frontend/API/worker target.
+      **Evidence:** `docs/release/evidence/P3/p3-t7-frontend-voice-approval-recovery.txt` — rerun 10 files / 64 tests passed; renderer registry 1 file / 2 tests passed with generated 44/44 action types and zero fallback tier; `docs/release/evidence/P3/p3-t7-staging-console-journeys-20260807.txt` — read-only staging shell/navigation inspection.
+      **Result:** Local contract and renderer checks pass. The deployed T7 gate remains `BLOCKED-CONFIG` because the staging voice surface reports missing VAPI public key/assistant ID and the read-only browser session was unauthenticated; approval, execution, recovery, and receipt reconciliation were not claimed as deployed journeys.
+      **Deviation:** The local slice proves frontend/voice/approval/recovery/receipt contracts only. Full deployed text/voice/approval/rejection/execution/failure-recovery/receipt journeys require configured voice and an authenticated staging data session; no form or action was submitted.
 - [ ] **P3.T8** Run 15-user 20-min and 25-user 10-min load scenarios.
       **Evidence:** `docs/release/evidence/P3/p3-t8-load-guard.txt`; `docs/release/generated/p3-load-results.json`; runner `finnor-os/scripts/release/run-load-certification.ts`; repair validation `docs/release/evidence/P3/p3-runner-contract-repair-validation.txt`.
-      **Deviation:** The Node runner retains the exact durations and includes read-only, draft, approval, concurrent duplicate, and queue-vitals classes. Voice-session establishment is explicitly not testable without an isolated voice binding. It refused before network because the target, 25-user JWT file, instruction fixture, and reconciliation artifact are missing; no duration was shortened and no load request was sent.
+      **Result:** `BLOCKED-CONFIG`. The guard covered all 6/6 verified staging targets and stopped before the load runner requested a token or made a request.
+      **Deviation:** The prior load JWT artifact was expired and no fresh owner-supplied 25-user JWT file, load instruction fixture, or reconciliation path is available. The Node runner retains the exact 15-user/20-minute and 25-user/10-minute scenarios plus read-only, draft, approval, concurrent duplicate, queue-vitals, and explicitly untestable voice-session classes. No duration was shortened and no load request was sent.
 - [ ] **P3.T9** Meet all latency/error/queue/cost/load gates.
-      **Evidence:** `docs/release/evidence/P3/p3-t9-load-gates.txt`; `docs/release/load-test-results.md`.
-      **Deviation:** No measurements exist because T8 did not start. Fixed thresholds remain unchanged; no latency, queue, cost, Sentry, corruption, or duplicate-effect claim is made.
+      **Evidence:** `docs/release/evidence/P3/p3-t9-load-gates.txt`; `docs/release/load-test-results.md`; `docs/release/generated/p3-load-results.json`.
+      **Result:** `BLOCKED-CONFIG`. No request samples, latency, error, queue, cost, or reconciliation measurements exist because T8 stopped before network.
+      **Deviation:** All fixed thresholds remain unchanged. No latency, queue, cost, Sentry, corruption, or duplicate-effect claim is made; missing T8 artifacts are recorded rather than replaced with synthetic metrics.
 - [ ] **P3.T10** Complete Sentry alert/trace drill per service.
-      **Evidence:** `docs/release/evidence/P3/p3-t10-sentry-drill-preflight.txt`; P2 test-context evidence remains at `docs/release/chaos-results.md`.
-      **Deviation:** No staging Sentry DSN/project/release/alert destination is configured, so no event or alert was sent. The P2 sanitized test-context result is not live staging proof.
-- [x] **P3.T11** Commit integration and load reports; update ledgers.
-      **Evidence:** `733207f`; `docs/release/integration-readiness.md`; `docs/release/load-test-results.md`; generated P3 machine reports; `docs/release/evidence/P3/p3-runner-contract-repair-validation.txt`; this state section and ledgers.
-      **Deviation:** Reports truthfully preserve BLOCKED-CONFIG status; the runner contract gaps found during continuation were repaired without converting missing external evidence to a pass.
+      **Evidence:** `docs/release/evidence/P3/p3-t10-sentry-drill-preflight.txt`; `docs/release/evidence/P3/p3-t10-sentry-drill-20260807.txt`; source `finnor-os/packages/tools/src/observability.ts`; P2 test-context evidence remains at `docs/release/chaos-results.md`.
+      **Result:** `BLOCKED-CONFIG`. Read-only Railway inspection found `SENTRY_DSN` and `RELEASE_SHA` present on worker and orchestrator, but no project/org/alert destination proof was available.
+      **Deviation:** A DSN-presence check is not Sentry project, environment, release-ingestion, alert-routing, trace-correlation, or on-call proof. No staging exception/message/trace was sent; the P2 sanitized test-context result is not live staging proof.
+- [ ] **P3.T11** Commit integration and load reports; update ledgers.
+      **Evidence:** `docs/release/integration-readiness.md`; `docs/release/load-test-results.md`; current generated P3 machine reports; current P3 evidence files; this state section and ledgers.
+      **Result:** Reports and ledgers are updated and final validation passed; the required commit is the remaining T11 action.
+      **Deviation:** Reports truthfully preserve the owner-directed T5 deferral and T6/T7/T8/T9/T10 BLOCKED-CONFIG results; no missing external evidence was converted to a pass.
 
 ### Exit gate
 
-- [ ] Staging/no-egress identity proven — **Evidence:** `BLOCKED-CONFIG`; `docs/release/evidence/P3/p3-t1-staging-identity-guard.txt`
-- [ ] Backup + migrations verified — **Evidence:** `BLOCKED-CONFIG`; `docs/release/evidence/P3/p3-t2-staging-backup-migration-preflight.txt`
-- [ ] All services use one SHA — **Evidence:** `BLOCKED-CONFIG`; `docs/release/evidence/P3/p3-t3-rc-deploy-preflight.txt`
-- [ ] Three tenants verified — **Evidence:** `BLOCKED-CONFIG`; `docs/release/evidence/P3/p3-t4-seed-preflight.txt`
+- [x] Staging/no-egress identity proven — **Evidence:** `PASS`; `docs/release/evidence/P3/p3-t1-staging-identity-20260807.txt`; `docs/release/generated/p3-api-e2e-results.json`
+- [x] Backup + migrations verified — **Evidence:** `PASS`; `docs/release/evidence/P3/p3-t2-staging-backup-migration-20260807.txt`
+- [x] All services use one SHA — **Evidence:** `PASS` for frontend/API/worker/orchestrator current SHA `f4623cb15a496cc0d78aa5e8025ed1ba7281ce73`; Sentry release ingestion remains a separate unchecked T3 requirement; `docs/release/evidence/P3/p3-t3-rc-deploy-20260807.txt`
+- [x] Three tenants verified — **Evidence:** retained current-session T4 PASS; `docs/release/evidence/P3/p3-t4-seed-20260807.txt`
 - [ ] 44/44 staging API E2E passes — **Evidence:** `BLOCKED-CONFIG`; `docs/release/generated/p3-api-e2e-results.json`
 - [ ] Configured live bindings certified; missing ones truthfully blocked — **Evidence:** `BLOCKED-CONFIG`; `docs/release/generated/p3-live-binding-smoke.json`
 - [ ] Frontend/voice/approval/recovery/receipt journeys pass — **Evidence:** local slice only; staging `BLOCKED-CONFIG`; `docs/release/evidence/P3/p3-t7-frontend-voice-approval-recovery.txt`
@@ -478,9 +502,10 @@ refused before network/provider/load requests.
 - [ ] Sentry releases/alerts/traces proven — **Evidence:** `BLOCKED-CONFIG`; `docs/release/evidence/P3/p3-t10-sentry-drill-preflight.txt`
 - [ ] Zero open P0/P1 staging/load defects — **Evidence:** no new P0/P1 defect discovered; P3 prerequisites R-07/R-08/R-10/R-11/R-12 remain blocked/open with evidence above.
 
-**P3 exit result:** `BLOCKED-CONFIG`, not complete. All independent repository hardening, guard, report,
-and local-contract work is committed. P4 must not start until the isolated staging target and owner-only
-artifacts listed in `docs/release/integration-readiness.md` exist.
+**P3 exit result:** `BLOCKED-CONFIG`, not complete. T5 is explicitly owner-deferred, and the remaining
+T6/T7/T8/T9/T10 gates retain concrete blocked evidence. T11 reports are updated and require the final
+report/state commit. P4 must not start until the open gates and owner-only artifacts listed in
+`docs/release/integration-readiness.md` are resolved.
 
 ---
 

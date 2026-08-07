@@ -1,0 +1,6 @@
+
+> finnor-os@0.1.0 release:e2e
+> tsx scripts/release/run-api-e2e-matrix.ts
+
+P3_API_E2E_FAIL The operation was aborted due to timeout
+e2e_runner_exit=1

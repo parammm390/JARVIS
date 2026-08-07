@@ -2,14 +2,15 @@
 
 **Generated:** 2026-08-07
 **Candidate SHA:** `733207f` (`jarvis-release P3: harden staging certification contracts`)
-**Status:** `BLOCKED-CONFIG` — no isolated staging target or load artifacts were available.
+**Status:** `BLOCKED-CONFIG` — the six-target isolated staging contract is verified, but the required load artifacts are not supplied.
 
 The Node runner is implemented at `finnor-os/scripts/release/run-load-certification.ts` and uses only
-built-in `fetch`. It refuses before sending a request unless staging identity, JWT mode, no-egress
-posture, 25 authenticated-user tokens, the instruction fixture, and a reconciliation artifact are
-present. The measured request classes include read-only questions, action drafts, approvals, concurrent
-duplicate probes, and queue vitals; voice-session establishment is explicitly not testable without an
-isolated voice binding. No load request was sent and no latency or error number is claimed.
+built-in `fetch`. The current guard verified all six staging targets and refused before sending a
+request because `P3_LOAD_JWTS_FILE`, `P3_LOAD_RECONCILIATION_FILE`, and `P3_LOAD_INSTRUCTION` are
+missing. The prior JWT artifact was expired. The measured request classes include read-only questions,
+action drafts, approvals, concurrent duplicate probes, and queue vitals; voice-session establishment is
+explicitly not testable without an isolated voice binding. No load request was sent and no latency or
+error number is claimed.
 
 ## Required scenarios
 

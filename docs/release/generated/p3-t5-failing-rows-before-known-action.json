@@ -1,92 +1,17 @@
 {
   "phase": "P3",
-  "gate": "api-e2e",
-  "status": "FAIL",
-  "pass": false,
-  "productionEgress": false,
-  "guard": {
-    "mode": "e2e",
-    "status": "PASS",
-    "productionEgress": false,
-    "targetHosts": {
-      "api": "finnor-p3-api-staging-jx9i7rqam-bloodride2-3212s-projects.vercel.app",
-      "frontend": "finnor-p3-console-staging-pjg3wqn01-bloodride2-3212s-projects.vercel.app",
-      "worker": "finnor-worker-staging.up.railway.app",
-      "orchestrator": "finnor-orchestrator-staging.up.railway.app",
-      "database": "aws-0-ap-southeast-1.pooler.supabase.com",
-      "redis": "redis.railway.internal"
-    },
-    "missing": [],
-    "failures": [],
-    "observations": [
-      "productionEgress=false",
-      "secretValuesPrinted=false",
-      "providerPayloadsPrinted=false",
-      "targets=6/6",
-      "targetHosts=api:finnor-p3-api-staging-jx9i7rqam-bloodride2-3212s-projects.vercel.app,frontend:finnor-p3-console-staging-pjg3wqn01-bloodride2-3212s-projects.vercel.app,worker:finnor-worker-staging.up.railway.app,orchestrator:finnor-orchestrator-staging.up.railway.app,database:aws-0-ap-southeast-1.pooler.supabase.com,redis:redis.railway.internal",
-      "externalBindings=emulator-safe-required"
-    ]
-  },
-  "services": {
-    "api": {
-      "status": 200,
-      "elapsedMs": 649,
-      "ok": true,
-      "jsonKeys": [
-        "environment",
-        "ok",
-        "release",
-        "service"
-      ],
-      "plannedActions": [],
-      "duplicate": false,
-      "returnedStatus": null,
-      "release": "f4623cb15a496cc0d78aa5e8025ed1ba7281ce73",
-      "environment": "staging"
-    },
-    "frontend": {
-      "status": 200,
-      "elapsedMs": 506,
-      "ok": true,
-      "jsonKeys": [],
-      "plannedActions": [],
-      "duplicate": false,
-      "returnedStatus": null,
-      "release": null,
-      "environment": null
-    },
-    "worker": {
-      "status": 200,
-      "elapsedMs": 461,
-      "ok": true,
-      "jsonKeys": [],
-      "plannedActions": [],
-      "duplicate": false,
-      "returnedStatus": null,
-      "release": "f4623cb15a496cc0d78aa5e8025ed1ba7281ce73",
-      "environment": "staging"
-    },
-    "orchestrator": {
-      "status": 200,
-      "elapsedMs": 413,
-      "ok": true,
-      "jsonKeys": [
-        "environment",
-        "ok",
-        "plugins",
-        "release"
-      ],
-      "plannedActions": [],
-      "duplicate": false,
-      "returnedStatus": null,
-      "release": "f4623cb15a496cc0d78aa5e8025ed1ba7281ce73",
-      "environment": "staging"
-    }
-  },
-  "concurrency": 8,
-  "requestTimeoutMs": 120000,
+  "task": "P3.T5",
+  "purpose": "exact failing-row report required before corrected full-matrix rerun",
+  "generatedAt": "2026-08-07T04:06:30.217Z",
+  "sourceReport": "docs/release/generated/p3-api-e2e-results.json",
+  "sourceGate": "api-e2e",
+  "sourceStatus": "FAIL",
+  "priorHarness": "planner-path API E2E attempt; not deterministic known-action certification",
+  "rowCount": 44,
+  "failCount": 44,
   "rows": [
     {
+      "number": 1,
       "actionType": "create_invoice",
       "tenant": "alpha",
       "expectedTerminalStatus": "completed",
@@ -102,6 +27,7 @@
       "elapsedMs": 61481
     },
     {
+      "number": 2,
       "actionType": "send_payment_reminder",
       "tenant": "alpha",
       "expectedTerminalStatus": "completed",
@@ -117,6 +43,7 @@
       "elapsedMs": 68188
     },
     {
+      "number": 3,
       "actionType": "record_payment",
       "tenant": "alpha",
       "expectedTerminalStatus": "completed",
@@ -132,6 +59,7 @@
       "elapsedMs": 39718
     },
     {
+      "number": 4,
       "actionType": "call_overdue_invoices",
       "tenant": "alpha",
       "expectedTerminalStatus": "completed",
@@ -147,6 +75,7 @@
       "elapsedMs": 31612
     },
     {
+      "number": 5,
       "actionType": "bulk_notify_existing_customers",
       "tenant": "alpha",
       "expectedTerminalStatus": "completed",
@@ -162,6 +91,7 @@
       "elapsedMs": 26057
     },
     {
+      "number": 6,
       "actionType": "clarification_request",
       "tenant": "alpha",
       "expectedTerminalStatus": "completed",
@@ -177,6 +107,7 @@
       "elapsedMs": 111587
     },
     {
+      "number": 7,
       "actionType": "generate_compliance_summary",
       "tenant": "alpha",
       "expectedTerminalStatus": "completed",
@@ -192,6 +123,7 @@
       "elapsedMs": 39324
     },
     {
+      "number": 8,
       "actionType": "create_lead",
       "tenant": "alpha",
       "expectedTerminalStatus": "completed",
@@ -207,6 +139,7 @@
       "elapsedMs": 38207
     },
     {
+      "number": 9,
       "actionType": "update_lead_status",
       "tenant": "alpha",
       "expectedTerminalStatus": "completed",
@@ -222,6 +155,7 @@
       "elapsedMs": 40811
     },
     {
+      "number": 10,
       "actionType": "log_interaction",
       "tenant": "alpha",
       "expectedTerminalStatus": "completed",
@@ -237,6 +171,7 @@
       "elapsedMs": 51656
     },
     {
+      "number": 11,
       "actionType": "assign_lead_to_technician",
       "tenant": "alpha",
       "expectedTerminalStatus": "completed",
@@ -252,6 +187,7 @@
       "elapsedMs": 30982
     },
     {
+      "number": 12,
       "actionType": "answer_customer_question",
       "tenant": "alpha",
       "expectedTerminalStatus": "completed",
@@ -267,6 +203,7 @@
       "elapsedMs": 19106
     },
     {
+      "number": 13,
       "actionType": "send_customer_message",
       "tenant": "alpha",
       "expectedTerminalStatus": "completed",
@@ -282,6 +219,7 @@
       "elapsedMs": 75802
     },
     {
+      "number": 14,
       "actionType": "send_follow_up",
       "tenant": "alpha",
       "expectedTerminalStatus": "completed",
@@ -297,6 +235,7 @@
       "elapsedMs": 6681
     },
     {
+      "number": 15,
       "actionType": "check_stock_level",
       "tenant": "charlie",
       "expectedTerminalStatus": "completed",
@@ -312,6 +251,7 @@
       "elapsedMs": 31184
     },
     {
+      "number": 16,
       "actionType": "flag_reorder_needed",
       "tenant": "alpha",
       "expectedTerminalStatus": "completed",
@@ -327,6 +267,7 @@
       "elapsedMs": 1992
     },
     {
+      "number": 17,
       "actionType": "log_stock_used_on_visit",
       "tenant": "alpha",
       "expectedTerminalStatus": "completed",
@@ -342,6 +283,7 @@
       "elapsedMs": 1436
     },
     {
+      "number": 18,
       "actionType": "start_invoice_to_cash_workflow",
       "tenant": "alpha",
       "expectedTerminalStatus": "completed",
@@ -357,6 +299,7 @@
       "elapsedMs": 1584
     },
     {
+      "number": 19,
       "actionType": "start_water_test_workflow",
       "tenant": "alpha",
       "expectedTerminalStatus": "completed",
@@ -372,6 +315,7 @@
       "elapsedMs": 1864
     },
     {
+      "number": 20,
       "actionType": "renew_maintenance_agreement",
       "tenant": "alpha",
       "expectedTerminalStatus": "completed",
@@ -387,6 +331,7 @@
       "elapsedMs": 1888
     },
     {
+      "number": 21,
       "actionType": "manual_step_suggestion",
       "tenant": "alpha",
       "expectedTerminalStatus": "completed",
@@ -402,6 +347,7 @@
       "elapsedMs": 1446
     },
     {
+      "number": 22,
       "actionType": "summarize_ad_performance",
       "tenant": "alpha",
       "expectedTerminalStatus": "completed",
@@ -417,6 +363,7 @@
       "elapsedMs": 1399
     },
     {
+      "number": 23,
       "actionType": "launch_ad_campaign",
       "tenant": "alpha",
       "expectedTerminalStatus": "completed",
@@ -432,6 +379,7 @@
       "elapsedMs": 1993
     },
     {
+      "number": 24,
       "actionType": "create_review_request",
       "tenant": "alpha",
       "expectedTerminalStatus": "completed",
@@ -447,6 +395,7 @@
       "elapsedMs": 1936
     },
     {
+      "number": 25,
       "actionType": "get_business_overview",
       "tenant": "bravo",
       "expectedTerminalStatus": "completed",
@@ -462,6 +411,7 @@
       "elapsedMs": 1846
     },
     {
+      "number": 26,
       "actionType": "answer_business_question",
       "tenant": "alpha",
       "expectedTerminalStatus": "completed",
@@ -477,6 +427,7 @@
       "elapsedMs": 2011
     },
     {
+      "number": 27,
       "actionType": "send_proposal_to_recent_installs",
       "tenant": "alpha",
       "expectedTerminalStatus": "completed",
@@ -492,6 +443,7 @@
       "elapsedMs": 1382
     },
     {
+      "number": 28,
       "actionType": "request_proposal_signature",
       "tenant": "alpha",
       "expectedTerminalStatus": "completed",
@@ -507,6 +459,7 @@
       "elapsedMs": 1415
     },
     {
+      "number": 29,
       "actionType": "start_installation_workflow",
       "tenant": "alpha",
       "expectedTerminalStatus": "completed",
@@ -522,6 +475,7 @@
       "elapsedMs": 1380
     },
     {
+      "number": 30,
       "actionType": "generate_quote",
       "tenant": "alpha",
       "expectedTerminalStatus": "completed",
@@ -537,6 +491,7 @@
       "elapsedMs": 1464
     },
     {
+      "number": 31,
       "actionType": "size_equipment_for_household",
       "tenant": "alpha",
       "expectedTerminalStatus": "completed",
@@ -552,6 +507,7 @@
       "elapsedMs": 1431
     },
     {
+      "number": 32,
       "actionType": "send_proposal",
       "tenant": "alpha",
       "expectedTerminalStatus": "completed",
@@ -567,6 +523,7 @@
       "elapsedMs": 2356
     },
     {
+      "number": 33,
       "actionType": "route_suggestion",
       "tenant": "alpha",
       "expectedTerminalStatus": "completed",
@@ -582,6 +539,7 @@
       "elapsedMs": 1642
     },
     {
+      "number": 34,
       "actionType": "assign_technician_to_visit",
       "tenant": "alpha",
       "expectedTerminalStatus": "completed",
@@ -597,6 +555,7 @@
       "elapsedMs": 1495
     },
     {
+      "number": 35,
       "actionType": "check_technician_availability",
       "tenant": "alpha",
       "expectedTerminalStatus": "completed",
@@ -612,6 +571,7 @@
       "elapsedMs": 1434
     },
     {
+      "number": 36,
       "actionType": "reschedule_visit",
       "tenant": "alpha",
       "expectedTerminalStatus": "completed",
@@ -627,6 +587,7 @@
       "elapsedMs": 1430
     },
     {
+      "number": 37,
       "actionType": "check_reminder_due",
       "tenant": "alpha",
       "expectedTerminalStatus": "completed",
@@ -642,6 +603,7 @@
       "elapsedMs": 1417
     },
     {
+      "number": 38,
       "actionType": "log_visit_report",
       "tenant": "alpha",
       "expectedTerminalStatus": "completed",
@@ -657,6 +619,7 @@
       "elapsedMs": 1888
     },
     {
+      "number": 39,
       "actionType": "flag_visit_issue",
       "tenant": "alpha",
       "expectedTerminalStatus": "completed",
@@ -672,6 +635,7 @@
       "elapsedMs": 1463
     },
     {
+      "number": 40,
       "actionType": "answer_water_question",
       "tenant": "alpha",
       "expectedTerminalStatus": "completed",
@@ -687,6 +651,7 @@
       "elapsedMs": 1373
     },
     {
+      "number": 41,
       "actionType": "schedule_water_test",
       "tenant": "alpha",
       "expectedTerminalStatus": "completed",
@@ -702,6 +667,7 @@
       "elapsedMs": 1377
     },
     {
+      "number": 42,
       "actionType": "search_web",
       "tenant": "alpha",
       "expectedTerminalStatus": "completed",
@@ -717,6 +683,7 @@
       "elapsedMs": 1388
     },
     {
+      "number": 43,
       "actionType": "scan_competitors",
       "tenant": "alpha",
       "expectedTerminalStatus": "completed",
@@ -732,6 +699,7 @@
       "elapsedMs": 2101
     },
     {
+      "number": 44,
       "actionType": "check_business_reviews",
       "tenant": "alpha",
       "expectedTerminalStatus": "completed",
@@ -747,6 +715,6 @@
       "elapsedMs": 1379
     }
   ],
-  "evidence": "docs/release/generated/p3-api-e2e-results.json",
-  "error": "P3 API E2E matrix did not prove every action and receipt path"
+  "nextHarness": "draftKnownAction deterministic matrix; planner smoke is separate and bounded",
+  "evidence": "docs/release/evidence/P3/p3-t5-failing-rows-before-known-action-20260807.txt"
 }

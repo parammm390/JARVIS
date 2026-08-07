@@ -1,0 +1,6 @@
+
+> finnor-os@0.1.0 release:e2e
+> tsx scripts/release/run-api-e2e-matrix.ts
+
+P3_API_E2E_FAIL P3 API E2E matrix did not prove every action and receipt path
+e2e_runner_exit=1

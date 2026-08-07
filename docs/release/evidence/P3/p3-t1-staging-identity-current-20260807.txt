@@ -1,0 +1,6 @@
+
+> finnor-os@0.1.0 release:e2e
+> tsx scripts/release/run-api-e2e-matrix.ts --identity-only
+
+P3_STAGING_IDENTITY_PASS services=4
+identity_runner_exit=0

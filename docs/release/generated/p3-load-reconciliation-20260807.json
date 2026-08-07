@@ -1,0 +1,10 @@
+{
+  "phase": "P3",
+  "gate": "load-reconciliation",
+  "status": "PENDING_POST_RUN",
+  "pass": false,
+  "duplicateEffects": null,
+  "tenantLeaks": null,
+  "dataCorruption": null,
+  "note": "Input placeholder only; run-load-certification.ts overwrites this file with post-run staging DB reconciliation. No gate is credited from this placeholder."
+}

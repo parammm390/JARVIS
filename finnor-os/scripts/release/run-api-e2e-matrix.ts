@@ -66,6 +66,12 @@ interface MatrixRow {
   receiptFinalized: boolean;
   status: "PASS" | "FAIL" | "BLOCKED-CONFIG";
   elapsedMs: number | null;
+  error?: string;
+}
+
+function apiTimeoutMs(): number {
+  const configured = Number(process.env.P3_API_TIMEOUT_MS ?? 120_000);
+  return Number.isFinite(configured) ? Math.min(Math.max(configured, 5_000), 120_000) : 120_000;
 }
 
 function urlFor(base: string, path: string): string {
@@ -117,7 +123,7 @@ async function requestJson(base: string, path: string, token?: string, init?: Re
   const started = Date.now();
   const response = await fetch(urlFor(base, path), {
     ...init,
-    signal: AbortSignal.timeout(30_000),
+    signal: AbortSignal.timeout(apiTimeoutMs()),
     headers: {
       accept: "application/json",
       ...(token ? { authorization: `Bearer ${token}` } : {}),
@@ -144,7 +150,7 @@ async function requestJson(base: string, path: string, token?: string, init?: Re
 
 async function requestReceipts(base: string, actionId: string, token: string): Promise<{ ok: boolean; status: number; receipts: ReceiptSummary[] }> {
   const response = await fetch(urlFor(base, `/api/receipts?domainActionId=${encodeURIComponent(actionId)}`), {
-    signal: AbortSignal.timeout(30_000),
+    signal: AbortSignal.timeout(apiTimeoutMs()),
     headers: { accept: "application/json", authorization: `Bearer ${token}` },
   });
   const text = await response.text();
@@ -246,6 +252,20 @@ async function writeReport(report: Record<string, unknown>): Promise<void> {
   await writeFile(REPORT_PATH, `${JSON.stringify(report, null, 2)}\n`, "utf8");
 }
 
+async function mapWithConcurrency<T, R>(items: T[], concurrency: number, fn: (item: T, index: number) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  async function worker(): Promise<void> {
+    while (true) {
+      const index = next++;
+      if (index >= items.length) return;
+      results[index] = await fn(items[index]!, index);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(Math.max(concurrency, 1), items.length || 1) }, () => worker()));
+  return results;
+}
+
 function blockedReport(mode: string, guard: StagingGuardReport, error?: string): Record<string, unknown> {
   return {
     phase: "P3",
@@ -255,6 +275,20 @@ function blockedReport(mode: string, guard: StagingGuardReport, error?: string):
     productionEgress: false,
     guard,
     error: error ?? null,
+    rows: [],
+    evidence: "docs/release/generated/p3-api-e2e-results.json",
+  };
+}
+
+function failedReport(mode: string, guard: StagingGuardReport, error: unknown): Record<string, unknown> {
+  return {
+    phase: "P3",
+    gate: mode,
+    status: "FAIL",
+    pass: false,
+    productionEgress: false,
+    guard,
+    error: (error instanceof Error ? error.message : "unknown runtime failure").replace(/[^A-Za-z0-9 _.:-]/g, ""),
     rows: [],
     evidence: "docs/release/generated/p3-api-e2e-results.json",
   };
@@ -289,62 +323,84 @@ export async function runApiE2EMatrix(identityOnly = process.argv.includes("--id
 
   if (!services.pass) throw new Error("Staging service health probes did not pass; no action requests were sent");
   const cases = await loadCases();
-  const rows: MatrixRow[] = [];
-  for (const row of cases) {
-    const tenant = row.tenant!;
-    const token = tokenFor(tenant);
-    const idempotencyKey = `p3-e2e-${row.actionType}-${randomUUID()}`;
-    const body = JSON.stringify({ instruction: row.instruction, channel: row.channel ?? "text", idempotencyKey });
-    const first = await requestJson(process.env.STAGING_API_URL!, "/api/actions", token, { method: "POST", body, headers: { "content-type": "application/json", "x-correlation-id": idempotencyKey } });
-    const second = await requestJson(process.env.STAGING_API_URL!, "/api/actions", token, { method: "POST", body, headers: { "content-type": "application/json", "x-correlation-id": idempotencyKey } });
-    const plannedAction = first.plannedActions.find((action) => action.actionType === row.actionType) ?? null;
-    const duplicateAction = second.plannedActions.find((action) => action.actionType === row.actionType) ?? null;
-    const planned = Boolean(plannedAction?.id);
-    const duplicateSafe = Boolean(
-      plannedAction?.id
-      && second.duplicate
-      && duplicateAction?.id === plannedAction.id,
-    );
-    let decision: SafeResponse | null = null;
-    const confirmation = row.confirmation ?? "none";
-    if (plannedAction?.id && confirmation === "approve") {
-      decision = await requestJson(process.env.STAGING_API_URL!, `/api/actions/${plannedAction.id}/confirm`, token, {
-        method: "POST",
-        body: JSON.stringify(row.typedConfirmation ? { typedConfirmation: true } : {}),
-        headers: { "content-type": "application/json", "x-correlation-id": idempotencyKey },
-      });
-    } else if (plannedAction?.id && confirmation === "reject") {
-      decision = await requestJson(process.env.STAGING_API_URL!, `/api/actions/${plannedAction.id}/reject`, token, {
-        method: "POST",
-        body: JSON.stringify({ reason: `P3 certification decision for ${row.actionType}` }),
-        headers: { "content-type": "application/json", "x-correlation-id": idempotencyKey },
-      });
+  const concurrency = Number.isFinite(Number(process.env.P3_E2E_CONCURRENCY))
+    ? Math.min(Math.max(Number(process.env.P3_E2E_CONCURRENCY), 1), 8)
+    : 1;
+  const rows = await mapWithConcurrency(cases, concurrency, async (row): Promise<MatrixRow> => {
+    try {
+      const tenant = row.tenant!;
+      const token = tokenFor(tenant);
+      const idempotencyKey = `p3-e2e-${row.actionType}-${randomUUID()}`;
+      const body = JSON.stringify({ instruction: row.instruction, channel: row.channel ?? "text", idempotencyKey });
+      const first = await requestJson(process.env.STAGING_API_URL!, "/api/actions", token, { method: "POST", body, headers: { "content-type": "application/json", "x-correlation-id": idempotencyKey } });
+      const second = await requestJson(process.env.STAGING_API_URL!, "/api/actions", token, { method: "POST", body, headers: { "content-type": "application/json", "x-correlation-id": idempotencyKey } });
+      const plannedAction = first.plannedActions.find((action) => action.actionType === row.actionType) ?? null;
+      const duplicateAction = second.plannedActions.find((action) => action.actionType === row.actionType) ?? null;
+      const planned = Boolean(plannedAction?.id);
+      const duplicateSafe = Boolean(
+        plannedAction?.id
+        && second.duplicate
+        && duplicateAction?.id === plannedAction.id,
+      );
+      let decision: SafeResponse | null = null;
+      const confirmation = row.confirmation ?? "none";
+      if (plannedAction?.id && confirmation === "approve") {
+        decision = await requestJson(process.env.STAGING_API_URL!, `/api/actions/${plannedAction.id}/confirm`, token, {
+          method: "POST",
+          body: JSON.stringify(row.typedConfirmation ? { typedConfirmation: true } : {}),
+          headers: { "content-type": "application/json", "x-correlation-id": idempotencyKey },
+        });
+      } else if (plannedAction?.id && confirmation === "reject") {
+        decision = await requestJson(process.env.STAGING_API_URL!, `/api/actions/${plannedAction.id}/reject`, token, {
+          method: "POST",
+          body: JSON.stringify({ reason: `P3 certification decision for ${row.actionType}` }),
+          headers: { "content-type": "application/json", "x-correlation-id": idempotencyKey },
+        });
+      }
+      const receipt = plannedAction?.id
+        ? await waitForReceipt(process.env.STAGING_API_URL!, plannedAction.id, token, row.expectedTerminalStatus)
+        : { verified: false, receipt: null, observedStatus: null } satisfies ReceiptCheck;
+      const observedStatus = decision?.returnedStatus ?? receipt.observedStatus ?? plannedAction?.status ?? null;
+      const statusMatches = row.expectedTerminalStatus === "pending" || row.expectedTerminalStatus === "needs_human_review"
+        ? plannedAction?.status === row.expectedTerminalStatus || (row.expectedTerminalStatus === "pending" && plannedAction?.status === "needs_human_review")
+        : receipt.observedStatus === row.expectedTerminalStatus;
+      const decisionSafe = confirmation === "none" || Boolean(decision?.ok);
+      const receiptVerified = receipt.verified;
+      return {
+        actionType: row.actionType,
+        tenant,
+        expectedTerminalStatus: row.expectedTerminalStatus,
+        observedStatus,
+        requestStatus: first.status,
+        duplicateStatus: second.status,
+        planned,
+        duplicateSafe,
+        receiptVerified,
+        receiptId: receipt.receipt?.id ?? null,
+        receiptFinalized: Boolean(receipt.receipt?.finalizedAt),
+        status: planned && duplicateSafe && decisionSafe && statusMatches && receiptVerified ? "PASS" : "FAIL",
+        elapsedMs: first.elapsedMs + second.elapsedMs + (decision?.elapsedMs ?? 0),
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "unknown request error";
+      return {
+        actionType: row.actionType,
+        tenant: row.tenant ?? "unknown",
+        expectedTerminalStatus: row.expectedTerminalStatus,
+        observedStatus: null,
+        requestStatus: null,
+        duplicateStatus: null,
+        planned: false,
+        duplicateSafe: false,
+        receiptVerified: false,
+        receiptId: null,
+        receiptFinalized: false,
+        status: "FAIL",
+        elapsedMs: null,
+        error: message.replace(/[^A-Za-z0-9 _.:-]/g, ""),
+      };
     }
-    const receipt = plannedAction?.id
-      ? await waitForReceipt(process.env.STAGING_API_URL!, plannedAction.id, token, row.expectedTerminalStatus)
-      : { verified: false, receipt: null, observedStatus: null } satisfies ReceiptCheck;
-    const observedStatus = decision?.returnedStatus ?? receipt.observedStatus ?? plannedAction?.status ?? null;
-    const statusMatches = row.expectedTerminalStatus === "pending" || row.expectedTerminalStatus === "needs_human_review"
-      ? plannedAction?.status === row.expectedTerminalStatus || (row.expectedTerminalStatus === "pending" && plannedAction?.status === "needs_human_review")
-      : receipt.observedStatus === row.expectedTerminalStatus;
-    const decisionSafe = confirmation === "none" || Boolean(decision?.ok);
-    const receiptVerified = receipt.verified;
-    rows.push({
-      actionType: row.actionType,
-      tenant,
-      expectedTerminalStatus: row.expectedTerminalStatus,
-      observedStatus,
-      requestStatus: first.status,
-      duplicateStatus: second.status,
-      planned,
-      duplicateSafe,
-      receiptVerified,
-      receiptId: receipt.receipt?.id ?? null,
-      receiptFinalized: Boolean(receipt.receipt?.finalizedAt),
-      status: planned && duplicateSafe && decisionSafe && statusMatches && receiptVerified ? "PASS" : "FAIL",
-      elapsedMs: first.elapsedMs + second.elapsedMs + (decision?.elapsedMs ?? 0),
-    });
-  }
+  });
   const report = {
     phase: "P3",
     gate: "api-e2e",
@@ -353,12 +409,14 @@ export async function runApiE2EMatrix(identityOnly = process.argv.includes("--id
     productionEgress: false,
     guard,
     services: services.services,
+    concurrency,
+    requestTimeoutMs: apiTimeoutMs(),
     rows,
     evidence: "docs/release/generated/p3-api-e2e-results.json",
   };
   await writeReport(report);
   if (!report.pass) throw new Error("P3 API E2E matrix did not prove every action and receipt path");
-  console.log("P3_API_E2E_PASS rows=44/44");
+  console.log(`P3_API_E2E_PASS rows=44/44 concurrency=${concurrency}`);
   return report;
 }
 
@@ -366,8 +424,27 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   runApiE2EMatrix().then((report) => {
     if (!report.pass) process.exitCode = 1;
   }).catch(async (error) => {
-    const guard = evaluateStagingGuards(process.argv.includes("--identity-only") ? "identity" : "e2e");
-    await writeReport(blockedReport(process.argv.includes("--identity-only") ? "staging-identity" : "api-e2e", guard, error instanceof Error ? error.message : "unknown error"));
+    const identityOnly = process.argv.includes("--identity-only");
+    const mode = identityOnly ? "identity" : "e2e";
+    const guard = evaluateStagingGuards(mode);
+    const errorMessage = error instanceof Error ? error.message : "unknown error";
+    let preservedReport: Record<string, unknown> | null = null;
+    if (guard.status === "PASS" && !identityOnly) {
+      try {
+        const existing = JSON.parse(await readFile(REPORT_PATH, "utf8")) as Record<string, unknown>;
+        if (existing.gate === "api-e2e" && Array.isArray(existing.rows) && existing.rows.length > 0) {
+          preservedReport = {
+            ...existing,
+            status: "FAIL",
+            pass: false,
+            error: errorMessage.replace(/[^A-Za-z0-9 _.:-]/g, ""),
+          };
+        }
+      } catch {
+        // A pre-report failure has no row matrix to preserve.
+      }
+    }
+    await writeReport(preservedReport ?? (guard.status === "PASS" ? failedReport(identityOnly ? "staging-identity" : "api-e2e", guard, error) : blockedReport(identityOnly ? "staging-identity" : "api-e2e", guard, errorMessage)));
     console.error(`P3_API_E2E_FAIL ${error instanceof Error ? error.message : "unknown error"}`);
     process.exitCode = 1;
   });

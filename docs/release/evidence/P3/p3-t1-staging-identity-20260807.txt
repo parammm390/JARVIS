@@ -1,0 +1,29 @@
+P3.T1 — STAGING IDENTITY AND EGRESS GUARD
+Date: 2026-08-07
+Repository SHA: 7e66c1148ac6e52982f48721cc287c4199c828f3
+
+Result: PASS
+Runner: finnor-os/scripts/release/run-api-e2e-matrix.ts --identity-only
+Machine report: docs/release/generated/p3-api-e2e-results.json
+
+Guard evidence:
+- mode=identity status=PASS productionEgress=false
+- targets=6/6; missing=none; failures=none
+- external bindings were emulator-safe; LIVE_SMOKE_ALLOWED=0; P3_NO_EGRESS=1
+- secret values and provider payloads were not printed
+- target hosts were distinct and non-production:
+  api=finnor-p3-api-staging-e1r0acypd-bloodride2-3212s-projects.vercel.app
+  frontend=finnor-p3-console-staging-2rl6z9h8x-bloodride2-3212s-projects.vercel.app
+  worker=finnor-worker-staging.up.railway.app
+  orchestrator=finnor-orchestrator-staging.up.railway.app
+  database=aws-0-ap-southeast-1.pooler.supabase.com
+  redis=redis.railway.internal
+
+Health evidence:
+- API: HTTP 200, environment=staging, release=7e66c1148ac6e52982f48721cc287c4199c828f3
+- frontend: HTTP 200
+- worker: HTTP 200, environment=staging, release=7e66c1148ac6e52982f48721cc287c4199c828f3
+- orchestrator: HTTP 200, environment=staging, release=7e66c1148ac6e52982f48721cc287c4199c828f3
+
+Timing (runner report): API 1195ms; frontend 1316ms; worker 618ms; orchestrator 653ms.
+No production target was called and no provider egress occurred.

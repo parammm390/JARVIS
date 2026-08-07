@@ -1,4 +1,12 @@
 
+P3.T7 local contract rerun — 2026-08-07 10:31 IST
+Command: npm run test:unit -- src/components/jarvis/lib/voice-state.test.ts src/components/jarvis/lib/useVapiSession.test.ts src/components/jarvis/lib/receipt-recovery.test.ts src/components/jarvis/bridge/approval-consequence.test.ts src/components/jarvis/bridge/approval-scope.test.ts src/components/jarvis/bridge/CompensationReceipt.test.ts src/components/jarvis/kernel/recovery.test.ts src/components/jarvis/kernel/transport.test.ts src/components/jarvis/kernel/instruction.test.ts src/components/jarvis/kernel/instruction-trace-poll.test.ts
+Result: PASS — 10 files, 64 tests.
+
+P3.T7 renderer registry rerun — 2026-08-07 10:31 IST
+Command: npm run test:unit -- src/components/jarvis/ui/renderers/registry.test.ts
+Result: PASS — 1 file, 2 tests; generated backend action registry resolved 44/44 action types and no certified action used the fallback tier.
+
 > finnor@0.1.0 test:unit
 > vitest run src/components/jarvis/lib/voice-state.test.ts src/components/jarvis/lib/useVapiSession.test.ts src/components/jarvis/lib/receipt-recovery.test.ts src/components/jarvis/bridge/approval-consequence.test.ts src/components/jarvis/bridge/approval-scope.test.ts src/components/jarvis/bridge/CompensationReceipt.test.ts src/components/jarvis/kernel/recovery.test.ts src/components/jarvis/kernel/transport.test.ts src/components/jarvis/kernel/instruction.test.ts src/components/jarvis/kernel/instruction-trace-poll.test.ts
 

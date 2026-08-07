@@ -1,13 +1,22 @@
+P3.T8 — load guard
+Date: 2026-08-07
 
-> finnor-os@0.1.0 release:load
-> tsx scripts/release/run-load-certification.ts
+Command: (cd finnor-os && npm run release:load) through the isolated Railway
+staging service with the six verified staging targets, `LIVE_SMOKE_ALLOWED=0`,
+and `P3_NO_EGRESS=1`.
 
-STAGING_GUARD mode=load status=BLOCKED-CONFIG
-productionEgress=false
-secretValuesPrinted=false
-providerPayloadsPrinted=false
-targets=0/5
-targetHosts=none
-externalBindings=emulator-safe-required
-missing=STAGING_API_URL,STAGING_FRONTEND_URL,STAGING_WORKER_URL,STAGING_ORCHESTRATOR_URL,STAGING_DATABASE_URL,P3_STAGING_IDENTITY_CONFIRMED,STAGING_AUTH_MODE,CERTIFICATION_TEST_EMAILS,CERTIFICATION_TEST_PHONES,STAGING_EXPECTED_SHA,LIVE_SMOKE_ALLOWED,P3_NO_EGRESS,P3_LOAD_JWTS_FILE,P3_LOAD_RECONCILIATION_FILE,P3_LOAD_INSTRUCTION
-failures=none
+Observed output:
+  STAGING_GUARD mode=load status=BLOCKED-CONFIG
+  productionEgress=false
+  secretValuesPrinted=false
+  providerPayloadsPrinted=false
+  targets=6/6
+  targetHosts=api:finnor-p3-api-staging-e1r0acypd-bloodride2-3212s-projects.vercel.app,frontend:finnor-p3-console-staging-2rl6z9h8x-bloodride2-3212s-projects.vercel.app,worker:finnor-worker-staging.up.railway.app,orchestrator:finnor-orchestrator-staging.up.railway.app,database:aws-0-ap-southeast-1.pooler.supabase.com,redis:redis.railway.internal
+  externalBindings=emulator-safe-required
+  missing=P3_LOAD_JWTS_FILE,P3_LOAD_RECONCILIATION_FILE,P3_LOAD_INSTRUCTION
+  failures=none
+
+The prior load JWT artifact was expired and no fresh owner-supplied 25-user
+JWT file, instruction fixture, or reconciliation path is available. No load
+request was sent. The exact 15-user/20-minute and 25-user/10-minute scenarios
+were not shortened or claimed.

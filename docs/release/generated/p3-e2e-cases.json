@@ -1,0 +1,406 @@
+{
+  "phase": "P3",
+  "generatedFrom": [
+    "finnor-os/scripts/release/action-hardening-spec.ts",
+    "finnor-os/scripts/release/run-action-contract-matrix.ts#buildActionFixture"
+  ],
+  "syntheticOnly": true,
+  "cases": [
+    {
+      "actionType": "create_invoice",
+      "instruction": "For isolated staging certification, execute exactly the named action type below.\naction_type=create_invoice\nUse this exact JSON payload and do not select a different action:\n{\"householdId\":\"a1000000-0000-4000-8000-000000000001\",\"customerName\":\"Certification Household\",\"amountUsd\":1250,\"memo\":\"Certification invoice\",\"dueDate\":\"2026-09-01T00:00:00.000Z\"}",
+      "tenant": "alpha",
+      "channel": "text",
+      "expectedTerminalStatus": "completed",
+      "confirmation": "approve",
+      "typedConfirmation": false
+    },
+    {
+      "actionType": "send_payment_reminder",
+      "instruction": "For isolated staging certification, execute exactly the named action type below.\naction_type=send_payment_reminder\nUse this exact JSON payload and do not select a different action:\n{\"invoiceId\":\"a6000000-0000-4000-8000-000000000001\",\"channel\":\"auto\"}",
+      "tenant": "alpha",
+      "channel": "text",
+      "expectedTerminalStatus": "completed",
+      "confirmation": "approve",
+      "typedConfirmation": false
+    },
+    {
+      "actionType": "record_payment",
+      "instruction": "For isolated staging certification, execute exactly the named action type below.\naction_type=record_payment\nUse this exact JSON payload and do not select a different action:\n{\"invoiceId\":\"a6000000-0000-4000-8000-000000000001\"}",
+      "tenant": "alpha",
+      "channel": "text",
+      "expectedTerminalStatus": "completed",
+      "confirmation": "approve",
+      "typedConfirmation": true
+    },
+    {
+      "actionType": "call_overdue_invoices",
+      "instruction": "For isolated staging certification, execute exactly the named action type below.\naction_type=call_overdue_invoices\nUse this exact JSON payload and do not select a different action:\n{}",
+      "tenant": "alpha",
+      "channel": "text",
+      "expectedTerminalStatus": "completed",
+      "confirmation": "approve",
+      "typedConfirmation": true
+    },
+    {
+      "actionType": "bulk_notify_existing_customers",
+      "instruction": "For isolated staging certification, execute exactly the named action type below.\naction_type=bulk_notify_existing_customers\nUse this exact JSON payload and do not select a different action:\n{\"offerScript\":\"Certification filter offer\",\"channel\":\"sms\",\"discountPercent\":10,\"minMonthsInactive\":1,\"maxMonthsInactive\":24}",
+      "tenant": "alpha",
+      "channel": "text",
+      "expectedTerminalStatus": "completed",
+      "confirmation": "approve",
+      "typedConfirmation": true
+    },
+    {
+      "actionType": "clarification_request",
+      "instruction": "For isolated staging certification, execute exactly the named action type below.\naction_type=clarification_request\nUse this exact JSON payload and do not select a different action:\n{\"question\":\"Which certification household should I use?\",\"missingFields\":[\"householdId\"],\"context\":\"The request named more than one household.\"}",
+      "tenant": "alpha",
+      "channel": "text",
+      "expectedTerminalStatus": "completed",
+      "confirmation": "none",
+      "typedConfirmation": false
+    },
+    {
+      "actionType": "generate_compliance_summary",
+      "instruction": "For isolated staging certification, execute exactly the named action type below.\naction_type=generate_compliance_summary\nUse this exact JSON payload and do not select a different action:\n{\"householdLabel\":\"Certification Household\",\"waterProfile\":{\"hardness_gpg\":14,\"pfoa_ppt\":2,\"pfos_ppt\":2,\"fluoride_mg_l\":0.6}}",
+      "tenant": "alpha",
+      "channel": "text",
+      "expectedTerminalStatus": "completed",
+      "confirmation": "approve",
+      "typedConfirmation": false
+    },
+    {
+      "actionType": "create_lead",
+      "instruction": "For isolated staging certification, execute exactly the named action type below.\naction_type=create_lead\nUse this exact JSON payload and do not select a different action:\n{\"name\":\"Certification Lead\",\"phone\":\"+15550000001\",\"email\":\"certification@example.invalid\",\"address\":\"Certification address\",\"notes\":\"Contract fixture\"}",
+      "tenant": "alpha",
+      "channel": "text",
+      "expectedTerminalStatus": "completed",
+      "confirmation": "approve",
+      "typedConfirmation": false
+    },
+    {
+      "actionType": "update_lead_status",
+      "instruction": "For isolated staging certification, execute exactly the named action type below.\naction_type=update_lead_status\nUse this exact JSON payload and do not select a different action:\n{\"householdId\":\"a1000000-0000-4000-8000-000000000001\",\"status\":\"lead\"}",
+      "tenant": "alpha",
+      "channel": "text",
+      "expectedTerminalStatus": "completed",
+      "confirmation": "approve",
+      "typedConfirmation": false
+    },
+    {
+      "actionType": "log_interaction",
+      "instruction": "For isolated staging certification, execute exactly the named action type below.\naction_type=log_interaction\nUse this exact JSON payload and do not select a different action:\n{\"householdId\":\"a1000000-0000-4000-8000-000000000001\",\"channel\":\"call\",\"direction\":\"inbound\",\"content\":\"Certification interaction\"}",
+      "tenant": "alpha",
+      "channel": "text",
+      "expectedTerminalStatus": "completed",
+      "confirmation": "none",
+      "typedConfirmation": false
+    },
+    {
+      "actionType": "assign_lead_to_technician",
+      "instruction": "For isolated staging certification, execute exactly the named action type below.\naction_type=assign_lead_to_technician\nUse this exact JSON payload and do not select a different action:\n{\"householdId\":\"a1000000-0000-4000-8000-000000000001\",\"technicianId\":\"a0100000-0000-4000-8000-000000000001\",\"phone\":\"+15550000001\"}",
+      "tenant": "alpha",
+      "channel": "text",
+      "expectedTerminalStatus": "completed",
+      "confirmation": "approve",
+      "typedConfirmation": false
+    },
+    {
+      "actionType": "answer_customer_question",
+      "instruction": "For isolated staging certification, execute exactly the named action type below.\naction_type=answer_customer_question\nUse this exact JSON payload and do not select a different action:\n{\"question\":\"What is the certification water profile?\",\"householdId\":\"a1000000-0000-4000-8000-000000000001\"}",
+      "tenant": "alpha",
+      "channel": "text",
+      "expectedTerminalStatus": "completed",
+      "confirmation": "none",
+      "typedConfirmation": false
+    },
+    {
+      "actionType": "send_customer_message",
+      "instruction": "For isolated staging certification, execute exactly the named action type below.\naction_type=send_customer_message\nUse this exact JSON payload and do not select a different action:\n{\"householdId\":\"a1000000-0000-4000-8000-000000000001\",\"phone\":\"+15550000001\",\"email\":\"certification@example.invalid\",\"message\":\"Certification message\",\"channel\":\"sms\"}",
+      "tenant": "alpha",
+      "channel": "text",
+      "expectedTerminalStatus": "completed",
+      "confirmation": "approve",
+      "typedConfirmation": false
+    },
+    {
+      "actionType": "send_follow_up",
+      "instruction": "For isolated staging certification, execute exactly the named action type below.\naction_type=send_follow_up\nUse this exact JSON payload and do not select a different action:\n{\"householdId\":\"a1000000-0000-4000-8000-000000000001\",\"phone\":\"+15550000001\",\"context\":\"Certification follow-up\"}",
+      "tenant": "alpha",
+      "channel": "text",
+      "expectedTerminalStatus": "completed",
+      "confirmation": "approve",
+      "typedConfirmation": false
+    },
+    {
+      "actionType": "check_stock_level",
+      "instruction": "For isolated staging certification, execute exactly the named action type below.\naction_type=check_stock_level\nUse this exact JSON payload and do not select a different action:\n{\"sku\":\"SED-FILT-10\"}",
+      "tenant": "charlie",
+      "channel": "text",
+      "expectedTerminalStatus": "completed",
+      "confirmation": "none",
+      "typedConfirmation": false
+    },
+    {
+      "actionType": "flag_reorder_needed",
+      "instruction": "For isolated staging certification, execute exactly the named action type below.\naction_type=flag_reorder_needed\nUse this exact JSON payload and do not select a different action:\n{\"sku\":\"SED-FILT-10\",\"name\":\"Sediment filter\",\"reasoning\":\"Certification stock check\",\"suggestedQuantity\":4}",
+      "tenant": "alpha",
+      "channel": "text",
+      "expectedTerminalStatus": "completed",
+      "confirmation": "approve",
+      "typedConfirmation": false
+    },
+    {
+      "actionType": "log_stock_used_on_visit",
+      "instruction": "For isolated staging certification, execute exactly the named action type below.\naction_type=log_stock_used_on_visit\nUse this exact JSON payload and do not select a different action:\n{\"sku\":\"SED-FILT-10\",\"quantity\":1,\"visitId\":\"a7100000-0000-4000-8000-000000000001\"}",
+      "tenant": "alpha",
+      "channel": "text",
+      "expectedTerminalStatus": "completed",
+      "confirmation": "approve",
+      "typedConfirmation": false
+    },
+    {
+      "actionType": "start_invoice_to_cash_workflow",
+      "instruction": "For isolated staging certification, execute exactly the named action type below.\naction_type=start_invoice_to_cash_workflow\nUse this exact JSON payload and do not select a different action:\n{\"invoiceId\":\"a6000000-0000-4000-8000-000000000001\",\"contactId\":\"a2000000-0000-4000-8000-000000000001\",\"channel\":\"sms\"}",
+      "tenant": "alpha",
+      "channel": "text",
+      "expectedTerminalStatus": "completed",
+      "confirmation": "approve",
+      "typedConfirmation": true
+    },
+    {
+      "actionType": "start_water_test_workflow",
+      "instruction": "For isolated staging certification, execute exactly the named action type below.\naction_type=start_water_test_workflow\nUse this exact JSON payload and do not select a different action:\n{\"householdId\":\"a1000000-0000-4000-8000-000000000001\",\"technicianId\":\"a0100000-0000-4000-8000-000000000001\",\"scheduledAt\":\"2026-08-10T10:00:00.000Z\",\"phoneNumber\":\"+15550000001\",\"confirmationMessage\":\"Certification appointment confirmation\"}",
+      "tenant": "alpha",
+      "channel": "text",
+      "expectedTerminalStatus": "completed",
+      "confirmation": "approve",
+      "typedConfirmation": false
+    },
+    {
+      "actionType": "renew_maintenance_agreement",
+      "instruction": "For isolated staging certification, execute exactly the named action type below.\naction_type=renew_maintenance_agreement\nUse this exact JSON payload and do not select a different action:\n{\"agreementId\":\"a8100000-0000-4000-8000-000000000001\",\"householdId\":\"a1000000-0000-4000-8000-000000000001\",\"householdLabel\":\"Certification Household\",\"contactPhone\":\"+15550000001\",\"cadence\":\"annual\",\"message\":\"Certification renewal\"}",
+      "tenant": "alpha",
+      "channel": "text",
+      "expectedTerminalStatus": "completed",
+      "confirmation": "approve",
+      "typedConfirmation": false
+    },
+    {
+      "actionType": "manual_step_suggestion",
+      "instruction": "For isolated staging certification, execute exactly the named action type below.\naction_type=manual_step_suggestion\nUse this exact JSON payload and do not select a different action:\n{\"originalActionType\":\"send_customer_message\",\"originalPayload\":{\"householdId\":\"a1000000-0000-4000-8000-000000000001\"},\"unavailableCapabilities\":[\"communications\"],\"reason\":\"Certification provider is not configured\"}",
+      "tenant": "alpha",
+      "channel": "text",
+      "expectedTerminalStatus": "completed",
+      "confirmation": "none",
+      "typedConfirmation": false
+    },
+    {
+      "actionType": "summarize_ad_performance",
+      "instruction": "For isolated staging certification, execute exactly the named action type below.\naction_type=summarize_ad_performance\nUse this exact JSON payload and do not select a different action:\n{\"windowDays\":30}",
+      "tenant": "alpha",
+      "channel": "text",
+      "expectedTerminalStatus": "completed",
+      "confirmation": "none",
+      "typedConfirmation": false
+    },
+    {
+      "actionType": "launch_ad_campaign",
+      "instruction": "For isolated staging certification, execute exactly the named action type below.\naction_type=launch_ad_campaign\nUse this exact JSON payload and do not select a different action:\n{\"name\":\"Certification campaign\",\"dailyBudgetUsd\":10,\"objective\":\"leads\",\"targetZip\":\"00000\"}",
+      "tenant": "alpha",
+      "channel": "text",
+      "expectedTerminalStatus": "completed",
+      "confirmation": "approve",
+      "typedConfirmation": true
+    },
+    {
+      "actionType": "create_review_request",
+      "instruction": "For isolated staging certification, execute exactly the named action type below.\naction_type=create_review_request\nUse this exact JSON payload and do not select a different action:\n{\"householdId\":\"a1000000-0000-4000-8000-000000000001\",\"contactName\":\"Certification Contact\",\"phone\":\"+15550000001\",\"email\":\"certification@example.invalid\"}",
+      "tenant": "alpha",
+      "channel": "text",
+      "expectedTerminalStatus": "completed",
+      "confirmation": "approve",
+      "typedConfirmation": false
+    },
+    {
+      "actionType": "get_business_overview",
+      "instruction": "For isolated staging certification, execute exactly the named action type below.\naction_type=get_business_overview\nUse this exact JSON payload and do not select a different action:\n{\"focus\":\"pending\"}",
+      "tenant": "bravo",
+      "channel": "text",
+      "expectedTerminalStatus": "completed",
+      "confirmation": "none",
+      "typedConfirmation": false
+    },
+    {
+      "actionType": "answer_business_question",
+      "instruction": "For isolated staging certification, execute exactly the named action type below.\naction_type=answer_business_question\nUse this exact JSON payload and do not select a different action:\n{\"question\":\"How many certification invoices are overdue?\"}",
+      "tenant": "alpha",
+      "channel": "text",
+      "expectedTerminalStatus": "completed",
+      "confirmation": "none",
+      "typedConfirmation": false
+    },
+    {
+      "actionType": "send_proposal_to_recent_installs",
+      "instruction": "For isolated staging certification, execute exactly the named action type below.\naction_type=send_proposal_to_recent_installs\nUse this exact JSON payload and do not select a different action:\n{\"windowDays\":30,\"limit\":5,\"offerNote\":\"Certification offer\"}",
+      "tenant": "alpha",
+      "channel": "text",
+      "expectedTerminalStatus": "completed",
+      "confirmation": "approve",
+      "typedConfirmation": true
+    },
+    {
+      "actionType": "request_proposal_signature",
+      "instruction": "For isolated staging certification, execute exactly the named action type below.\naction_type=request_proposal_signature\nUse this exact JSON payload and do not select a different action:\n{\"proposalId\":\"a8000000-0000-4000-8000-000000000001\",\"signerName\":\"Certification Contact\",\"signerEmail\":\"certification@example.invalid\"}",
+      "tenant": "alpha",
+      "channel": "text",
+      "expectedTerminalStatus": "completed",
+      "confirmation": "approve",
+      "typedConfirmation": false
+    },
+    {
+      "actionType": "start_installation_workflow",
+      "instruction": "For isolated staging certification, execute exactly the named action type below.\naction_type=start_installation_workflow\nUse this exact JSON payload and do not select a different action:\n{\"quoteId\":\"a5000000-0000-4000-8000-000000000001\",\"householdId\":\"a1000000-0000-4000-8000-000000000001\",\"sku\":\"SOFT-48K-PRO\",\"quantity\":1,\"depositAmountUsd\":350}",
+      "tenant": "alpha",
+      "channel": "text",
+      "expectedTerminalStatus": "completed",
+      "confirmation": "approve",
+      "typedConfirmation": false
+    },
+    {
+      "actionType": "generate_quote",
+      "instruction": "For isolated staging certification, execute exactly the named action type below.\naction_type=generate_quote\nUse this exact JSON payload and do not select a different action:\n{\"householdId\":\"a1000000-0000-4000-8000-000000000001\",\"householdLabel\":\"Certification Household\",\"items\":[\"Sediment filter\"],\"notes\":\"Certification quote\"}",
+      "tenant": "alpha",
+      "channel": "text",
+      "expectedTerminalStatus": "completed",
+      "confirmation": "approve",
+      "typedConfirmation": false
+    },
+    {
+      "actionType": "size_equipment_for_household",
+      "instruction": "For isolated staging certification, execute exactly the named action type below.\naction_type=size_equipment_for_household\nUse this exact JSON payload and do not select a different action:\n{\"hardnessGpg\":14,\"ironPpm\":0.2,\"peopleInHousehold\":4,\"gallonsPerPersonPerDay\":75}",
+      "tenant": "alpha",
+      "channel": "text",
+      "expectedTerminalStatus": "completed",
+      "confirmation": "none",
+      "typedConfirmation": false
+    },
+    {
+      "actionType": "send_proposal",
+      "instruction": "For isolated staging certification, execute exactly the named action type below.\naction_type=send_proposal\nUse this exact JSON payload and do not select a different action:\n{\"proposalId\":\"a8000000-0000-4000-8000-000000000001\",\"channel\":\"email\",\"email\":\"certification@example.invalid\"}",
+      "tenant": "alpha",
+      "channel": "text",
+      "expectedTerminalStatus": "completed",
+      "confirmation": "approve",
+      "typedConfirmation": false
+    },
+    {
+      "actionType": "route_suggestion",
+      "instruction": "For isolated staging certification, execute exactly the named action type below.\naction_type=route_suggestion\nUse this exact JSON payload and do not select a different action:\n{\"technicianId\":\"a0100000-0000-4000-8000-000000000001\",\"date\":\"2026-08-10\"}",
+      "tenant": "alpha",
+      "channel": "text",
+      "expectedTerminalStatus": "completed",
+      "confirmation": "none",
+      "typedConfirmation": false
+    },
+    {
+      "actionType": "assign_technician_to_visit",
+      "instruction": "For isolated staging certification, execute exactly the named action type below.\naction_type=assign_technician_to_visit\nUse this exact JSON payload and do not select a different action:\n{\"visitId\":\"a7100000-0000-4000-8000-000000000001\",\"technicianId\":\"a0100000-0000-4000-8000-000000000001\"}",
+      "tenant": "alpha",
+      "channel": "text",
+      "expectedTerminalStatus": "completed",
+      "confirmation": "approve",
+      "typedConfirmation": false
+    },
+    {
+      "actionType": "check_technician_availability",
+      "instruction": "For isolated staging certification, execute exactly the named action type below.\naction_type=check_technician_availability\nUse this exact JSON payload and do not select a different action:\n{\"technicianId\":\"a0100000-0000-4000-8000-000000000001\",\"date\":\"2026-08-10\"}",
+      "tenant": "alpha",
+      "channel": "text",
+      "expectedTerminalStatus": "completed",
+      "confirmation": "none",
+      "typedConfirmation": false
+    },
+    {
+      "actionType": "reschedule_visit",
+      "instruction": "For isolated staging certification, execute exactly the named action type below.\naction_type=reschedule_visit\nUse this exact JSON payload and do not select a different action:\n{\"visitId\":\"a7100000-0000-4000-8000-000000000001\",\"newTime\":\"2026-08-11T10:00:00.000Z\",\"reason\":\"Certification reschedule\"}",
+      "tenant": "alpha",
+      "channel": "text",
+      "expectedTerminalStatus": "completed",
+      "confirmation": "approve",
+      "typedConfirmation": false
+    },
+    {
+      "actionType": "check_reminder_due",
+      "instruction": "For isolated staging certification, execute exactly the named action type below.\naction_type=check_reminder_due\nUse this exact JSON payload and do not select a different action:\n{\"equipmentType\":\"sediment_filter\",\"lastServicedAt\":\"2026-01-01T00:00:00.000Z\"}",
+      "tenant": "alpha",
+      "channel": "text",
+      "expectedTerminalStatus": "completed",
+      "confirmation": "none",
+      "typedConfirmation": false
+    },
+    {
+      "actionType": "log_visit_report",
+      "instruction": "For isolated staging certification, execute exactly the named action type below.\naction_type=log_visit_report\nUse this exact JSON payload and do not select a different action:\n{\"visitId\":\"a7100000-0000-4000-8000-000000000001\",\"householdId\":\"a1000000-0000-4000-8000-000000000001\",\"report\":\"Certification visit report\",\"markCompleted\":false}",
+      "tenant": "alpha",
+      "channel": "text",
+      "expectedTerminalStatus": "completed",
+      "confirmation": "approve",
+      "typedConfirmation": false
+    },
+    {
+      "actionType": "flag_visit_issue",
+      "instruction": "For isolated staging certification, execute exactly the named action type below.\naction_type=flag_visit_issue\nUse this exact JSON payload and do not select a different action:\n{\"visitId\":\"a7100000-0000-4000-8000-000000000001\",\"issue\":\"Certification visit issue\"}",
+      "tenant": "alpha",
+      "channel": "text",
+      "expectedTerminalStatus": "completed",
+      "confirmation": "approve",
+      "typedConfirmation": false
+    },
+    {
+      "actionType": "answer_water_question",
+      "instruction": "For isolated staging certification, execute exactly the named action type below.\naction_type=answer_water_question\nUse this exact JSON payload and do not select a different action:\n{\"topic\":\"hardness\"}",
+      "tenant": "alpha",
+      "channel": "text",
+      "expectedTerminalStatus": "completed",
+      "confirmation": "none",
+      "typedConfirmation": false
+    },
+    {
+      "actionType": "schedule_water_test",
+      "instruction": "For isolated staging certification, execute exactly the named action type below.\naction_type=schedule_water_test\nUse this exact JSON payload and do not select a different action:\n{\"householdId\":\"a1000000-0000-4000-8000-000000000001\",\"address\":\"Certification address\",\"contactPhone\":\"+15550000001\",\"contactName\":\"Certification Contact\",\"requestedAt\":\"2026-08-10T10:00:00.000Z\",\"technicianId\":\"a0100000-0000-4000-8000-000000000001\",\"notes\":\"Certification water test\"}",
+      "tenant": "alpha",
+      "channel": "text",
+      "expectedTerminalStatus": "completed",
+      "confirmation": "approve",
+      "typedConfirmation": false
+    },
+    {
+      "actionType": "search_web",
+      "instruction": "For isolated staging certification, execute exactly the named action type below.\naction_type=search_web\nUse this exact JSON payload and do not select a different action:\n{\"query\":\"water treatment certification\",\"numResults\":3}",
+      "tenant": "alpha",
+      "channel": "text",
+      "expectedTerminalStatus": "completed",
+      "confirmation": "none",
+      "typedConfirmation": false
+    },
+    {
+      "actionType": "scan_competitors",
+      "instruction": "For isolated staging certification, execute exactly the named action type below.\naction_type=scan_competitors\nUse this exact JSON payload and do not select a different action:\n{\"area\":\"Certification area\",\"focus\":\"pricing\",\"sources\":[]}",
+      "tenant": "alpha",
+      "channel": "text",
+      "expectedTerminalStatus": "completed",
+      "confirmation": "none",
+      "typedConfirmation": false
+    },
+    {
+      "actionType": "check_business_reviews",
+      "instruction": "For isolated staging certification, execute exactly the named action type below.\naction_type=check_business_reviews\nUse this exact JSON payload and do not select a different action:\n{\"businessName\":\"Certification Water Co\",\"area\":\"Certification area\"}",
+      "tenant": "alpha",
+      "channel": "text",
+      "expectedTerminalStatus": "completed",
+      "confirmation": "none",
+      "typedConfirmation": false
+    }
+  ]
+}

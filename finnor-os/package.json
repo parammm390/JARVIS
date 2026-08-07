@@ -39,7 +39,12 @@
     "release:contract": "tsx scripts/release/run-action-contract-matrix.ts",
     "release:chaos": "tsx scripts/release/run-chaos-matrix.ts",
     "release:bedrock-smoke": "tsx scripts/release/run-bedrock-live-smoke.ts",
-    "release:e2e": "tsx scripts/release/run-api-e2e-matrix.ts",
+    "release:e2e": "tsx scripts/release/run-known-action-e2e-matrix.ts",
+    "release:e2e:planner-legacy": "tsx scripts/release/run-api-e2e-matrix.ts",
+    "release:e2e:known": "tsx scripts/release/run-known-action-e2e-matrix.ts",
+    "release:e2e:failing-report": "tsx scripts/release/write-p3-t5-failing-row-report.ts",
+    "release:e2e:interrupted-report": "tsx scripts/release/write-p3-t5-known-action-interrupted-report.ts",
+    "release:planner-smoke": "tsx scripts/release/run-planner-smoke.ts",
     "release:live-smoke": "tsx scripts/release/run-live-binding-smoke.ts",
     "release:load": "tsx scripts/release/run-load-certification.ts",
     "release:certify": "tsx scripts/release/run-release-certification.ts"

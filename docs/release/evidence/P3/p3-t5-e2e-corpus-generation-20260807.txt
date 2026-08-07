@@ -1,0 +1,27 @@
+P3.T5 — fixed 44-action staging corpus generation
+Date: 2026-08-07
+
+The owner-provided P3_E2E_CASES_FILE was not present in the repository or staging
+environment. The runner remains fail-closed on an absent corpus. To preserve the
+fixed scope without inventing business cases, a local synthetic-only corpus was
+generated from the already committed fixed action specification and its shared
+P1 certification fixture builder:
+
+  source: finnor-os/scripts/release/action-hardening-spec.ts
+  fixture source: finnor-os/scripts/release/run-action-contract-matrix.ts#buildActionFixture
+  command: (cd finnor-os && npx --no-install tsx scripts/release/generate-p3-e2e-corpus.ts)
+  output: P3_E2E_CORPUS_PASS rows=44 tenants=3 output=docs/release/generated/p3-e2e-cases.json
+  exit: 0
+
+Machine verification of docs/release/generated/p3-e2e-cases.json:
+  rows=44
+  uniqueActionTypes=44
+  tenants=alpha,bravo,charlie
+  approval=approve:28,none:16
+  typedConfirmation=6
+  syntheticOnly=true
+
+The corpus uses the fixed certification IDs and reserved .invalid/synthetic
+fixture values. It does not contain owner-provided production data, provider
+credentials, or live-recipient data. This is recorded as a P3 deviation; it is
+not evidence that an owner-provided corpus was supplied.

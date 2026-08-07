@@ -1,0 +1,19 @@
+P3.T10 — staging observability drill preflight
+Date: 2026-08-07
+
+Read-only staging checks:
+  - read-only Railway variable inspection found SENTRY_DSN and RELEASE_SHA
+    present on both worker and orchestrator; secret values were not printed.
+  - no Sentry project/org/alert-destination configuration variables were
+    exposed by the service variable listings.
+  - API/worker/orchestrator health probes returned HTTP 200 and reported
+    environment=staging and release=
+    f4623cb15a496cc0d78aa5e8025ed1ba7281ce73.
+  - The observability source sets Sentry release from RELEASE_SHA before its
+    fallback, verified at finnor-os/packages/tools/src/observability.ts.
+
+Result: BLOCKED-CONFIG. A DSN presence check is not proof of project,
+environment, release ingestion, alert routing, trace correlation, or on-call
+visibility. No test exception/message/trace was sent because the owner has not
+supplied/confirmed a staging Sentry alert destination. The retained P2 sanitized test-context evidence at
+docs/release/chaos-results.md is not used as live staging proof.
