@@ -4,6 +4,7 @@ import Link from "next/link"
 import { useState } from "react"
 import { recoveryPresentation } from "../kernel/recovery"
 import type { RecoveryKind } from "../kernel/types"
+import { SIGNATURE_MOMENTS } from "../kernel/signature-moments"
 import { JARVIS_SETUP_HREF } from "./setup-link"
 
 /** §6.8's one visible recovery path for a failed step or receipt. The caller
@@ -42,7 +43,14 @@ export function RecoveryPanel({
       : null
 
   return (
-    <section className="rounded-xl border border-red-400/25 bg-red-400/5 p-3" aria-label={`Recovery: ${kind}`} data-liveframe-motion="LF-13" data-recovery-kind={kind}>
+    <section
+      className="rounded-xl border border-red-400/25 bg-red-400/5 p-3"
+      aria-label={`Recovery: ${kind}`}
+      data-liveframe-motion="LF-13"
+      data-recovery-kind={kind}
+      data-jarvis-signature-moment={onRecover ? "recover" : undefined}
+      data-jarvis-signature-source={onRecover ? SIGNATURE_MOMENTS.recover.source : undefined}
+    >
       <p className="j-fs-sm font-bold text-red-100">{recovery.copy}</p>
       {action && <div className="mt-2">{action}</div>}
       {recoverError && <p role="alert" className="mt-2 j-fs-micro text-red-100/80">{recoverError}</p>}

@@ -83,6 +83,7 @@ const API_PATHS = {
   policy: "/api/policies/{tenantId}/{actionType}",
   vitals: "/api/vitals",
   activity: "/api/activity",
+  workCases: "/api/read-models/{view}",
   dealerZeroTimeCompression: "/api/dealer-zero/time-compression",
   instruction: "/api/instructions/{id}",
   instructionEvents: "/api/instructions/{id}/events",
@@ -198,6 +199,161 @@ export interface ActivityPage {
   hasMore: boolean
 }
 
+// P2.T3 — exact household source shapes from resources/households and the existing
+// household-360 read model. The surface keeps these records typed without creating
+// a second customer source or a CRM-specific join.
+export interface HouseholdResource {
+  id: string
+  tenantId: string
+  address: string
+  contactInfo: Record<string, unknown>
+  waterProfile: Record<string, unknown>
+  marketingConsent: boolean
+  latitude: number | null
+  longitude: number | null
+  createdAt: string
+}
+
+export interface Household360Projection {
+  household: { id: string; address: string; contactInfo: Record<string, unknown>; marketingConsent: boolean; createdAt: string }
+  contacts: Array<{ id: string; name: string; role: string | null; methods: Array<{ methodType: string; value: string; consent: boolean }> }>
+  equipment: Array<{ id: string; type: string; model: string | null; installDate: string | null; source: string }>
+  leads: Array<{ id: string; name: string; status: string; source: string | null; createdAt: string }>
+  opportunities: Array<{ id: string; pipelineStage: string; expectedValueUsd: number | null; createdAt: string }>
+  quotes: Array<{ id: string; status: string; totalUsd: number | null; createdAt: string }>
+  invoices: Array<{ id: string; status: string; amountUsd: number; dueDate: string | null; payments: Array<{ amountUsd: number; method: string; status: string; receivedAt: string }> }>
+  workOrders: Array<{ id: string; type: string; status: string; technicianId: string | null; scheduledAt: string | null; completedAt: string | null }>
+  serviceVisits: Array<{ id: string; type: string; technicianId: string | null; scheduledAt: string | null; completedAt: string | null }>
+  appointments: Array<{ id: string; subjectType: string; status: string; scheduledAt: string; technicianId: string | null }>
+  conversations: Array<{ id: string; channel: string; status: string; lastActivityAt: string; messageCount: number }>
+  documents: Array<{ id: string; kind: string; title: string; createdAt: string }>
+  legacyCommunications: Array<{ id: string; channel: string; direction: string; content: string; timestamp: string }>
+  timeline: Array<{ entityType: string; entityId: string; eventType: string; occurredAt: string; payload: Record<string, unknown> }>
+  queryMs: number
+}
+
+export type InvoiceStatus = "draft" | "sent" | "paid" | "overdue" | "void"
+export interface InvoiceResource {
+  id: string
+  tenantId: string
+  householdId: string
+  amountUsd: number | string
+  status: InvoiceStatus
+  memo: string | null
+  dueDate: string | null
+  createdAt: string
+}
+
+// P2.T1/T2 — exact read-only Work contract. The server projection keeps the
+// durable rows authoritative; this client type only describes the already-shaped
+// causal record consumed by the Work surface.
+export type WorkCaseStatus = "Needs you" | "Working" | "Waiting" | "Completed" | "Failed" | "Blocked"
+export interface WorkEntityLink {
+  entityType: string
+  entityId: string
+  via: string
+}
+export interface WorkAction {
+  id: string
+  actionType: string
+  status: string
+  summary: string | null
+  instructionId: string | null
+  planId: string | null
+  dependsOn: string[]
+  payload: Record<string, unknown>
+  createdAt: string
+  updatedAt: string
+}
+export interface WorkApproval {
+  actionId: string
+  status: string
+  decidedBy: string | null
+  decidedAt: string | null
+  pendingConfirmationId: string | null
+}
+export interface WorkStep {
+  id: string
+  stepType: string
+  sequence: number
+  status: string
+  attempts: number
+  terminalReason: string | null
+  domainActionId: string | null
+  updatedAt: string
+}
+export interface WorkWorkflow {
+  id: string
+  commandId: string
+  workflowType: string
+  status: string
+  correlationId: string | null
+  createdAt: string
+  updatedAt: string
+  steps: WorkStep[]
+}
+export interface WorkReceipt {
+  id: string
+  workflowRunId: string | null
+  workflowStepId: string | null
+  domainActionId: string | null
+  objective: string
+  evidence: unknown
+  approval: unknown
+  expectedResult: unknown
+  actualResult: unknown
+  failure: unknown
+  correlationId: string | null
+  createdAt: string
+  finalizedAt: string | null
+}
+export interface WorkInstruction {
+  id: string
+  text: string
+  source: "typed" | "voice"
+  createdAt: string
+  lastPhase: string | null
+}
+export interface WorkCall {
+  id: string
+  conversationId: string | null
+  direction: "inbound" | "outbound"
+  externalId: string | null
+  sourceSystem: string | null
+  startedAt: string | null
+  endedAt: string | null
+  endedReason: string | null
+  householdId: string | null
+  agentKey: "jarvis" | "follow-up" | "service-reminder" | "win-back" | "payment-collector" | null
+}
+export interface WorkBusinessEvent {
+  id: string
+  entityType: string
+  entityId: string
+  eventType: string
+  occurredAt: string
+  source: string | null
+}
+export interface WorkCaseProjection {
+  id: string
+  root: { kind: string; id: string }
+  title: string
+  status: WorkCaseStatus
+  createdAt: string
+  updatedAt: string
+  source: { kind: string; id: string | null; channel: string | null }
+  instruction: WorkInstruction | null
+  actions: WorkAction[]
+  approvals: WorkApproval[]
+  workflows: WorkWorkflow[]
+  receipts: WorkReceipt[]
+  linkedEntities: WorkEntityLink[]
+  businessEvents: WorkBusinessEvent[]
+  calls: WorkCall[]
+  relatedActionIds: string[]
+  provenance: string[]
+}
+
 const READ_MODEL_VIEWS = {
   "pipeline-health": null as unknown as PipelineHealth,
   "technician-load": null as unknown as TechnicianLoad,
@@ -207,6 +363,7 @@ const READ_MODEL_VIEWS = {
   "sla-breaches": null as unknown as SlaBreaches,
   "follow-up-debt": null as unknown as FollowUpDebt,
   "data-quality": null as unknown as DataQuality,
+  "work-cases": null as unknown as WorkCaseProjection[],
   reliability: null as unknown as ReliabilityMetrics,
 }
 type ReadModelView = keyof typeof READ_MODEL_VIEWS
@@ -246,6 +403,13 @@ export const jarvisClient = {
   // Honestly loose — real per-kind row shapes weren't verified this session.
   resources: (kind: "households" | "inventory" | "invoices" | "technicians" | "visits" | "compliance-policy" | "workflows"): Promise<{ rows: unknown[] }> =>
     jarvisGet<{ rows: unknown[] }>(`resources/${kind}`),
+
+  households: (): Promise<{ rows: HouseholdResource[] }> => jarvisGet<{ rows: HouseholdResource[] }>("resources/households"),
+
+  invoices: (): Promise<{ rows: InvoiceResource[] }> => jarvisGet<{ rows: InvoiceResource[] }>("resources/invoices"),
+
+  household360: (householdId: string): Promise<{ view: "household-360"; data: Household360Projection }> =>
+    jarvisGet<{ view: "household-360"; data: Household360Projection }>("read-models/household-360", { householdId }),
 
   audit: (params?: { actionType?: string; status?: string; limit?: number; offset?: number }): Promise<{ entries: AuditEntry[]; limit: number; offset: number }> =>
     jarvisGet<{ entries: AuditEntry[]; limit: number; offset: number }>("audit", toStringParams(params)),
@@ -299,6 +463,12 @@ export const jarvisClient = {
 
   activity: (params?: { since?: string; limit?: number }): Promise<ActivityPage> =>
     jarvisGet<ActivityPage>("activity", toStringParams(params)),
+
+  workCases: (): Promise<{ view: "work-cases"; data: WorkCaseProjection[] }> =>
+    jarvisGet<{ view: "work-cases"; data: WorkCaseProjection[] }>("read-models/work-cases"),
+
+  cashCollections: (): Promise<{ view: "cash-collections"; data: CashCollections }> =>
+    jarvisGet<{ view: "cash-collections"; data: CashCollections }>("read-models/cash-collections"),
 
   dealerZeroTimeCompression: (body: { dateSeed: string; scenario: DealerZeroScenario; multiplier: number }): Promise<TimeCompressedDemo> =>
     jarvisPost<TimeCompressedDemo>("dealer-zero/time-compression", body),

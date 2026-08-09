@@ -1,0 +1,40 @@
+P4.T1 — template-smell and duplication purge
+Date: 2026-08-08
+
+Scope
+-----
+Audited the canonical JARVIS shell and the six fixed operational surfaces before
+touching the visual craft pass. The audit covered the public preview, shared
+command header, surface navigation, setup rail, and route-source duplication.
+
+Changes
+-------
+- Added one shared `surface-routes.ts` authority for Home, Work, Customers,
+  Schedule, Money, and Agents. Both the command header and the surface header
+  consume that source; the mobile list remains the deliberate four-item mobile
+  subset with Customers and Agents in More.
+- Expanded the command header to expose all six canonical surfaces and added
+  truthful active-page semantics (`aria-current` and `data-active`).
+- Scoped the preview-only shell correction to `data-jarvis-mode="preview"`:
+  the public entrance no longer inherits the 680px ambient orb or full-width
+  setup strip. Authenticated Command Canvas scene rules are unchanged.
+- Replaced the degraded setup rail's provider-like “Connection status” copy
+  with “Setup details are unavailable in this view.”
+
+Evidence
+--------
+- Browser DOM after hot reload at `http://127.0.0.1:3000/jarvis`:
+  `data-jarvis-mode=preview`; six surface links present; Home is active;
+  preview orb is 259×259px; setup rail is 720px wide; document scrollWidth is
+  1440px at a 1440px viewport.
+- Refreshed screenshot reviewed in the in-app browser: the public frame reads as
+  a restrained product entrance, with the orb centered and no clipped canvas.
+- `npx tsc --noEmit` — pass.
+- `npm run lint -- --no-cache` — pass, no ESLint warnings or errors.
+- `git diff --check` — pass.
+
+Defect disposition
+------------------
+No P4.T1 Sev-1/2 defect remains open. Small-type and spacing findings from the
+route audit are intentionally carried into P4.T2 as craft work, not hidden or
+counted as completed evidence.

@@ -139,8 +139,8 @@ export function buildScenario(input: ScenarioBuildInput): LifecycleScenario {
       id: "call",
       railLabel: "6:47 PM",
       timeLabel: "Day 0 — 6:47 PM",
-      title: "The call you would have missed.",
-      narration: `Tuesday, 6:47 PM in ${water.city}. Your crew is under a house. FINNOR answers on ring two.`,
+      title: "An instruction enters after hours.",
+      narration: `Tuesday, 6:47 PM in ${water.city}. A customer interaction becomes the first event on one traceable household work root.`,
       autoMs: 9000,
       scene: {
         kind: "call",
@@ -421,7 +421,7 @@ export function buildScenario(input: ScenarioBuildInput): LifecycleScenario {
       timeLabel: "Month 11 — 7:12 PM",
       title: "The review picks up the phone.",
       narration:
-        "A neighbor calls after hours and says the quiet part out loud. The memory logs where this lead actually came from — most shops never know.",
+        "A neighbor calls after hours. The household history preserves the source relationship so attribution stays attached to the new work.",
       autoMs: 10000,
       scene: {
         kind: "referral",
@@ -456,7 +456,7 @@ export function buildScenario(input: ScenarioBuildInput): LifecycleScenario {
       timeLabel: "Year 2 — Month 24",
       title: "Year two. The upsell that isn't a pitch.",
       narration:
-        "Three real signals, one specific offer. It lands because the system remembers everything that came before.",
+        "Three recorded signals support one specific offer. The proposal is grounded in the history of the household and installed system.",
       autoMs: 13000,
       scene: {
         kind: "upsell",
@@ -489,10 +489,8 @@ export function buildScenario(input: ScenarioBuildInput): LifecycleScenario {
       id: "ledger",
       railLabel: "Ledger",
       timeLabel: "Year 2 — the ledger",
-      title: `One remembered customer: ${money(ledger.grandTotal)}.`,
-      narration: `Every line below fired automatically from one continuous memory. The same lead handled by a shop with no memory: ${money(
-        ledger.noMemoryTotal
-      )}, one transaction, then silence.`,
+      title: `One connected work root: ${money(ledger.grandTotal)}.`,
+      narration: "Every simulated line below remains attached to one household history. The walkthrough does not monetize a fabricated counterfactual.",
       autoMs: 14000,
       scene: {
         kind: "ledger",
@@ -515,7 +513,7 @@ export function buildScenario(input: ScenarioBuildInput): LifecycleScenario {
             value: "2 years · 14 touches · 0 missed",
           },
         ],
-        events: [`24-month value closed at ${money(ledger.grandTotal)} — one customer, one memory`],
+        events: [`24-month simulated ledger closed at ${money(ledger.grandTotal)} — one customer, one work root`],
         nextAction: "Annual re-test — month 26",
         ltv: ledger.ltvAtStage.afterYear2,
         tag: "Repeat customer",

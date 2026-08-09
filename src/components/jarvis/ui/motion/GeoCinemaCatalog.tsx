@@ -20,11 +20,11 @@ const FIXTURE_MAP_DATA: MapData = {
   unplacedStops: 1,
   route: { naiveKm: 41.2, optimizedKm: 27.6, kmSaved: 13.6 },
   stops: [
-    { visitId: "f9-fixture-1", technicianId: "tech-1", technicianName: "R. Alvarez", householdId: "hh-1", address: "1200 Post Oak Blvd, Houston, TX", latitude: 29.7423, longitude: -95.4614, type: "water_test", scheduledAt: "2026-07-27T13:00:00.000Z", notes: null, optimized: { sequence: 1 } },
-    { visitId: "f9-fixture-2", technicianId: "tech-1", technicianName: "R. Alvarez", householdId: "hh-2", address: "5400 Westheimer Rd, Houston, TX", latitude: 29.7392, longitude: -95.4342, type: "install", scheduledAt: "2026-07-27T14:15:00.000Z", notes: null, optimized: { sequence: 2 } },
-    { visitId: "f9-fixture-3", technicianId: "tech-1", technicianName: "R. Alvarez", householdId: "hh-3", address: "2100 Travis St, Houston, TX", latitude: 29.7508, longitude: -95.3712, type: "repair", scheduledAt: "2026-07-27T15:30:00.000Z", notes: null, optimized: { sequence: 3 } },
-    { visitId: "f9-fixture-4", technicianId: "tech-1", technicianName: "R. Alvarez", householdId: "hh-4", address: "9400 Katy Fwy, Houston, TX", latitude: 29.7789, longitude: -95.5001, type: "delivery", scheduledAt: "2026-07-27T16:45:00.000Z", notes: null, optimized: { sequence: 4 } },
-    { visitId: "f9-fixture-5", technicianId: "tech-2", technicianName: "M. Chen", householdId: "hh-5", address: "unstored coordinate", latitude: null, longitude: null, type: "install", scheduledAt: "2026-07-27T17:00:00.000Z", notes: null, optimized: null },
+    { visitId: "f9-fixture-1", sourceKind: "service_visit", technicianId: "tech-1", technicianName: "R. Alvarez", householdId: "hh-1", address: "1200 Post Oak Blvd, Houston, TX", latitude: 29.7423, longitude: -95.4614, type: "water_test", scheduledAt: "2026-07-27T13:00:00.000Z", notes: null, optimized: { sequence: 1 } },
+    { visitId: "f9-fixture-2", sourceKind: "service_visit", technicianId: "tech-1", technicianName: "R. Alvarez", householdId: "hh-2", address: "5400 Westheimer Rd, Houston, TX", latitude: 29.7392, longitude: -95.4342, type: "install", scheduledAt: "2026-07-27T14:15:00.000Z", notes: null, optimized: { sequence: 2 } },
+    { visitId: "f9-fixture-3", sourceKind: "service_visit", technicianId: "tech-1", technicianName: "R. Alvarez", householdId: "hh-3", address: "2100 Travis St, Houston, TX", latitude: 29.7508, longitude: -95.3712, type: "repair", scheduledAt: "2026-07-27T15:30:00.000Z", notes: null, optimized: { sequence: 3 } },
+    { visitId: "f9-fixture-4", sourceKind: "service_visit", technicianId: "tech-1", technicianName: "R. Alvarez", householdId: "hh-4", address: "9400 Katy Fwy, Houston, TX", latitude: 29.7789, longitude: -95.5001, type: "delivery", scheduledAt: "2026-07-27T16:45:00.000Z", notes: null, optimized: { sequence: 4 } },
+    { visitId: "f9-fixture-5", sourceKind: "service_visit", technicianId: "tech-2", technicianName: "M. Chen", householdId: "hh-5", address: "unstored coordinate", latitude: null, longitude: null, type: "install", scheduledAt: "2026-07-27T17:00:00.000Z", notes: null, optimized: null },
   ],
 }
 

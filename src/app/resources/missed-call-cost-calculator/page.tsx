@@ -2,31 +2,31 @@ import type { Metadata } from "next";
 import { MissedCallCostCalculator } from "@/components/resources/MissedCallCostCalculator";
 
 export const metadata: Metadata = {
-  title: "Operations Impact Estimator",
+  title: "Operational Drag Estimator",
   description:
-    "Estimate the business value at risk from unexecuted workflows, delayed approvals, and stalled customer actions.",
+    "Estimate the labor and throughput tied up when water treatment work stalls between systems and requires manual reconciliation.",
   alternates: {
     canonical: "https://finnorai.com/resources/missed-call-cost-calculator",
   },
   openGraph: {
-    title: "Operations Impact Estimator | JARVIS",
+    title: "Operational Drag Estimator | FINNOR",
     description:
-      "Estimate the business value at risk from unexecuted workflows, delayed approvals, and stalled customer actions at your water-treatment company.",
+      "Measure coordination cost and value-in-motion without turning it into a fabricated revenue promise.",
     url: "https://finnorai.com/resources/missed-call-cost-calculator",
     images: [
       {
         url: "https://finnorai.com/og-image.svg",
         width: 1200,
         height: 630,
-        alt: "JARVIS operations impact estimator",
+        alt: "FINNOR operational drag estimator",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Operations Impact Estimator | JARVIS",
+    title: "Operational Drag Estimator | FINNOR",
     description:
-      "Estimate the business value at risk from unexecuted workflows and delayed actions.",
+      "Estimate the cost of manual coordination between operational systems.",
     images: ["https://finnorai.com/og-image.svg"],
   },
 };

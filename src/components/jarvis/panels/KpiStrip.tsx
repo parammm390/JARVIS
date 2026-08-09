@@ -53,7 +53,17 @@ interface Card {
   view: string
 }
 
-export function KpiStrip({ onNavigate }: { onNavigate?: (view: string) => void }) {
+export function KpiStrip({
+  onNavigate,
+  limit = 5,
+  compact = false,
+}: {
+  onNavigate?: (view: string) => void
+  /** Presentation cap only; the underlying selector set remains unchanged. */
+  limit?: number
+  /** Compact H0 Business Pulse treatment: labels/values stay Truth-gated. */
+  compact?: boolean
+}) {
   // Every displayed FACT comes from a selector. `lane` carries only presentation
   // state — session-local sparkline history, the session's new-pending counter, and
   // the slow lane's timestamp for the strip-wide fog. No number below is read from
@@ -136,6 +146,16 @@ export function KpiStrip({ onNavigate }: { onNavigate?: (view: string) => void }
       view: "Workflows",
     },
   ]
+  const displayedCards = cards.slice(0, Math.max(0, Math.floor(limit)))
+
+  const sourceTitle = (truth: Truth<number>): string => {
+    if (truth.status === "known" || truth.status === "stale" || truth.status === "partial") {
+      const ageMs = Math.max(0, lane.now - truth.atMs)
+      const age = ageMs < 1_000 ? "just now" : ageMs < 60_000 ? `${Math.floor(ageMs / 1_000)}s ago` : `${Math.floor(ageMs / 60_000)}m ago`
+      return `Source ${truth.source} · observed ${age}`
+    }
+    return `Source state: ${truth.status}`
+  }
 
   const cardRefs = useRef<Map<string, HTMLElement>>(new Map())
   const prevValues = useRef<Map<string, number | null>>(new Map())
@@ -143,13 +163,13 @@ export function KpiStrip({ onNavigate }: { onNavigate?: (view: string) => void }
   // Flash on a REAL change of a KNOWN number. A transition into or out of a veil is
   // not a value change and must not read as one.
   const knownValues = useMemo(
-    () => cards.map((c) => `${c.key}:${c.value.status === "known" ? c.value.value : "-"}`).join(","),
+    () => displayedCards.map((c) => `${c.key}:${c.value.status === "known" ? c.value.value : "-"}`).join(","),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [cards.map((c) => (c.value.status === "known" ? c.value.value : "-")).join(",")],
+    [displayedCards.map((c) => (c.value.status === "known" ? c.value.value : "-")).join(",")],
   )
 
   useEffect(() => {
-    for (const c of cards) {
+    for (const c of displayedCards) {
       const next = c.value.status === "known" ? c.value.value : null
       const prev = prevValues.current.get(c.key)
       if (prev !== undefined && prev !== null && next !== null && prev !== next) {
@@ -166,12 +186,12 @@ export function KpiStrip({ onNavigate }: { onNavigate?: (view: string) => void }
   // anything about Bridge's layout. A harmless no-op anywhere else this component
   // renders (legacy Shell) since nothing there ever reads these anchors.
   useEffect(() => {
-    const unregisters = cards.map((c) =>
+    const unregisters = displayedCards.map((c) =>
       registerAnchor(`kpi:${c.key}`, () => cardRefs.current.get(c.key)?.getBoundingClientRect() ?? null),
     )
     return () => unregisters.forEach((off) => off())
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cards.map((c) => c.key).join(",")])
+  }, [displayedCards.map((c) => c.key).join(",")])
 
   // F6.T2 — FLOW-92 StaleFog: most of these cards (cashCollections/pipelineHealth/
   // slaBreaches) are slow-lane read-models; the pending/runs cards are fast-lane and
@@ -180,8 +200,8 @@ export function KpiStrip({ onNavigate }: { onNavigate?: (view: string) => void }
   // per-card lane tracking, which no other panel in this codebase does either.
   return (
     <StaleFog ageMs={laneAgeMs(lane.slowLastSuccessMs, lane.now)} staleAfterMs={SLOW_LANE_STALE_MS}>
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-        {cards.map((c, i) => {
+      <div className={`${compact ? "grid grid-cols-2 gap-2 md:grid-cols-4" : "grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5"}`} data-jarvis-kpi-strip={compact ? "compact" : "default"}>
+        {displayedCards.map((c, i) => {
           const Card = onNavigate ? "button" : "div"
           return (
             <Card
@@ -194,8 +214,9 @@ export function KpiStrip({ onNavigate }: { onNavigate?: (view: string) => void }
               onMouseLeave={() => setLineageHover(null)}
               onFocus={() => setLineageHover(c.key)}
               onBlur={() => setLineageHover(null)}
+              title={compact ? sourceTitle(c.value) : undefined}
               style={{ animationDelay: `${i * 60}ms`, ["--rise-to" as string]: 1 }}
-              className={`jarvis-rise j-panel group relative min-h-[118px] overflow-hidden p-3.5 text-left transition-transform duration-150 ${onNavigate ? "hover:-translate-y-0.5" : ""}`}
+              className={`jarvis-rise j-panel group relative overflow-hidden text-left transition-transform duration-150 ${compact ? "min-h-[74px] p-2.5" : "min-h-[118px] p-3.5"} ${onNavigate ? "hover:-translate-y-0.5" : ""}`}
             >
               {/* accent glow seep, per-card color */}
               <div
@@ -207,9 +228,10 @@ export function KpiStrip({ onNavigate }: { onNavigate?: (view: string) => void }
                 value={c.value}
                 format={c.format}
                 delta={c.delta}
-                sparkline={c.spark}
+                sparkline={compact ? undefined : c.spark}
+                size={compact ? "sm" : "md"}
               />
-              {c.sub}
+              {!compact && c.sub}
             </Card>
           )
         })}

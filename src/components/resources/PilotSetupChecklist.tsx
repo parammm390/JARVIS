@@ -1,121 +1,64 @@
-"use client";
+import { ClipboardCheck } from "lucide-react";
 
-import { motion } from "framer-motion";
-import { CheckCircle2, ClipboardCheck, Route } from "lucide-react";
 import { ResourceFrame } from "./ResourceFrame";
 import { ResourceHero } from "./ResourceHero";
+import styles from "./PublicEditorial.module.css";
 
 const checklist = [
-  [
-    "Call forwarding rules",
-    "Decide when calls forward: missed, overflow, inbound, or a scoped test window.",
-  ],
-  [
-    "Inbound coverage window",
-    "Set the exact nights, weekends, holidays, or overflow conditions included in the pilot.",
-  ],
-  [
-    "Quote/form lead sources",
-    "List every inbound website form, Google/Facebook lead source, quote request, and old-inquiry queue in scope.",
-  ],
-  [
-    "Booking questions",
-    "Approve the first-pass questions Finnor should ask for water tests, service appointments, callbacks, and urgent routes.",
-  ],
-  [
-    "Urgency escalation path",
-    "Name the human path for no water, zero pressure, possible contamination, pump failure, or an immediate safety concern.",
-  ],
-  [
-    "SMS/email recipients",
-    "Choose the owner, CSR, dispatcher, or on-call technician who receives each structured alert.",
-  ],
-  [
-    "Recovery fields",
-    "Approve the call, lead, booking status, urgent route, recording, and recovered-opportunity fields your team needs to review.",
-  ],
-  [
-    "Call recording settings",
-    "Confirm whether recording is enabled, where it appears, and any applicable notice requirements.",
-  ],
-  [
-    "Route format",
-    "Approve the booking and urgent alert format your team can scan and act on quickly.",
-  ],
-  [
-    "7-day launch review",
-    "Schedule the scoped launch review to inspect calls, routes, unknowns, and workflow adjustments.",
-  ],
-  [
-    "Pilot success metrics",
-    "Track calls and leads answered, alerts delivered, response speed, executed business workflows, and recovered opportunities.",
-  ],
-];
+  ["Choose one consequential workflow", "Name the business outcome, trigger, current failure mode and why this workflow is valuable enough to certify end to end."],
+  ["Define the exact work root", "Identify the customer, work case, appointment, invoice or other object every action and receipt must reference."],
+  ["Name authoritative sources", "List the records and systems that constitute truth for identity, schedule, inventory, price, money and status."],
+  ["Map required context", "Separate facts that must be present from context that is merely helpful. Define how contradictions and unknowns are handled."],
+  ["Select action contracts", "Approve the exact bounded actions the planner may propose for this workflow. Anything outside the manifest remains unavailable."],
+  ["Order dependencies", "Write the causal sequence and preconditions. A later customer promise cannot run before the facts it depends on are valid."],
+  ["Encode authority", "Set what can run automatically, what requires typed confirmation, which role may approve and what must escalate or deny."],
+  ["Test policy simulation", "Run representative low-, medium- and high-risk proposals against versioned tenant policy before connecting live tools."],
+  ["Certify tool health", "Verify credentials, scopes, PII handling, rate limits, timeouts and error semantics for every native or external adapter."],
+  ["Prove idempotency", "Replay requests and retries without creating duplicate jobs, messages, reservations, invoices or payments."],
+  ["Exercise recovery", "Force timeouts, malformed responses, partial failure and provider unavailability. Confirm pause, retry, escalation, dead-letter and supported compensation paths."],
+  ["Define actual-outcome checks", "Specify which source-system states prove success and which mismatches keep the workflow open."],
+  ["Review the receipt", "Confirm the evidence artifact contains objective, proposal, policy, approval, expected result, actual result, exact IDs and source evidence."],
+  ["Set expansion gates", "Agree which reliability, quality and operator-trust evidence is required before adding more workflows, roles or automatic authority."],
+] as const;
+
+function PilotInstrument() {
+  return (
+    <div className={styles.instrument}>
+      <div className={styles.instrumentTop}><span>Certification run</span><span>1 workflow</span></div>
+      <div className={styles.instrumentBody}>
+        <span>Expansion rule</span>
+        <strong>Earn authority one chain at a time.</strong>
+        <p>Connect, govern, break, recover and verify one workflow before increasing scope.</p>
+        <div className={styles.instrumentRows}>
+          <div><i /><span>Happy path</span><small>passed</small></div>
+          <div><i /><span>Failure path</span><small>passed</small></div>
+          <div><i style={{ background: "#d86e35" }} /><span>Expansion</span><small>review</small></div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function PilotSetupChecklist() {
   return (
     <ResourceFrame>
       <ResourceHero
-        kicker="JARVIS deployment checklist"
-        title="JARVIS Deployment Setup Checklist"
-        copy="Use this checklist before JARVIS drafts real plans from real instructions. Define coverage, lead sources, approval rules, alerts, recovery fields, and human decisions before launch."
+        kicker="Governed deployment checklist"
+        title="Certify the chain before you widen it."
+        copy="A production checklist for moving one water treatment workflow from intent to verified change—with its sources, contracts, policies, failures and evidence made explicit."
         icon={ClipboardCheck}
-        aside={<PilotRouteCard />}
+        aside={<PilotInstrument />}
       />
-
-      <section className="healthcare-section pt-0">
-        <div className="container relative z-10 px-4 md:px-6">
-          <div className="ops-card overflow-hidden rounded-[2rem] p-5 md:p-7">
-            <div className="grid gap-4 md:grid-cols-2">
-              {checklist.map(([title, copy], index) => (
-                <motion.div
-                  key={title}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true, margin: "-70px" }}
-                  transition={{ delay: index * 0.035 }}
-                  className="rounded-2xl border border-slate-900/8 bg-white/78 p-5"
-                >
-                  <div className="flex gap-4">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-teal-50 text-teal-700">
-                      <CheckCircle2 className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">
-                        Item {String(index + 1).padStart(2, "0")}
-                      </p>
-                      <h2 className="mt-2 text-xl font-black tracking-tight text-slate-950">
-                        {title}
-                      </h2>
-                      <p className="mt-3 text-sm font-medium leading-relaxed text-slate-600">
-                        {copy}
-                      </p>
-                    </div>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          </div>
+      <section className={styles.content}>
+        <span className={styles.sectionLabel}>Fourteen deployment decisions</span>
+        <h2 className={styles.sectionTitle}>A pilot is an operating-system test, not a feature tour.</h2>
+        <p className={styles.sectionCopy}>The goal is not to see a clean demo. It is to prove that one real workflow remains grounded, governed, recoverable and verifiable when reality becomes inconvenient.</p>
+        <div className={styles.checklist}>
+          {checklist.map(([title, copy]) => (
+            <div className={styles.checkItem} key={title}><strong>{title}</strong><p>{copy}</p></div>
+          ))}
         </div>
       </section>
     </ResourceFrame>
-  );
-}
-
-function PilotRouteCard() {
-  return (
-    <div className="ops-card relative overflow-hidden rounded-[2rem] p-6">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-2 bg-gradient-to-r from-slate-950 via-sky-700 to-teal-600" />
-      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-950 text-white shadow-lg">
-        <Route className="h-5 w-5 text-teal-200" />
-      </div>
-      <p className="mt-6 text-xs font-black uppercase tracking-[0.22em] text-slate-600">
-        Pilot principle
-      </p>
-      <p className="mt-4 text-sm font-semibold leading-relaxed text-slate-600">
-        Start with one approved booking workflow, test every route, review edge
-        cases at day seven, then expand only when the team trusts the system.
-      </p>
-    </div>
   );
 }

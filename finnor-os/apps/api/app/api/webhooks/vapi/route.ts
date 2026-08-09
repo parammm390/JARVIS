@@ -17,7 +17,7 @@ import { adminDb, jobs, withTenant, domainActions, domainPolicies, actionLog, te
 import { persistCall } from "@finnor/data-platform";
 import { ensureSecretsLoaded } from "@finnor/security";
 import { parseSpokenDecision, diagnoseFailure, resolveProviderForPurpose } from "@finnor/orchestration";
-import { logWithTrace } from "@finnor/tools";
+import { VOICE_AGENT_KEYS, logWithTrace } from "@finnor/tools";
 import type { Role } from "@finnor/shared-types";
 import {
   resolveVoiceIdentity,
@@ -82,6 +82,49 @@ async function resolveTenantFromCall(call: { phoneNumberId?: string; phoneNumber
     "[vapi] no tenant_phone_numbers match — falling back to VAPI_DEFAULT_TENANT_ID",
   );
   return defaultTenant();
+}
+
+type SafeCallContext = {
+  direction?: "outbound";
+  agentKey?: (typeof VOICE_AGENT_KEYS)[number];
+  domainActionId?: string;
+  householdId?: string;
+  invoiceId?: string;
+  purpose?: string;
+};
+
+function nonEmptyString(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+/** Only values authored by Finnor's bounded call writers survive into the durable
+ * call row. Provider metadata is intentionally not copied wholesale. */
+function safeCallContext(metadata: unknown): SafeCallContext {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return {};
+  const source = metadata as Record<string, unknown>;
+  const agentKey = nonEmptyString(source.agentKey);
+  return {
+    ...(source.direction === "outbound" ? { direction: "outbound" } : {}),
+    ...(agentKey && VOICE_AGENT_KEYS.includes(agentKey as (typeof VOICE_AGENT_KEYS)[number])
+      ? { agentKey: agentKey as (typeof VOICE_AGENT_KEYS)[number] }
+      : {}),
+    ...(nonEmptyString(source.domainActionId) ? { domainActionId: nonEmptyString(source.domainActionId) } : {}),
+    ...(nonEmptyString(source.householdId) ? { householdId: nonEmptyString(source.householdId) } : {}),
+    ...(nonEmptyString(source.invoiceId) ? { invoiceId: nonEmptyString(source.invoiceId) } : {}),
+    ...(nonEmptyString(source.purpose) ? { purpose: nonEmptyString(source.purpose) } : {}),
+  };
+}
+
+function callContextRaw(context: SafeCallContext, type: string): Record<string, unknown> {
+  return {
+    type,
+    ...(context.direction ? { direction: context.direction } : {}),
+    ...(context.agentKey ? { agentKey: context.agentKey } : {}),
+    ...(context.domainActionId ? { domainActionId: context.domainActionId } : {}),
+    ...(context.householdId ? { householdId: context.householdId } : {}),
+    ...(context.invoiceId ? { invoiceId: context.invoiceId } : {}),
+    ...(context.purpose ? { purpose: context.purpose } : {}),
+  };
 }
 
 /**
@@ -178,7 +221,7 @@ async function describeExecutionOutput(actionSummary: string | null, out: Record
 
 async function handleToolCalls(message: Record<string, unknown>): Promise<Response> {
   const callMeta = message.call as
-    | { id?: string; phoneNumberId?: string; customer?: { number?: string }; phoneNumber?: { number?: string } }
+    | { id?: string; phoneNumberId?: string; customer?: { number?: string }; phoneNumber?: { number?: string }; metadata?: Record<string, unknown> }
     | undefined;
   const tenantId = await resolveTenantFromCall(callMeta);
   const callId = callMeta?.id ?? "unknown";
@@ -409,7 +452,7 @@ export async function POST(req: Request): Promise<Response> {
     type: string;
     transcript?: string;
     status?: string;
-    call?: { id?: string; phoneNumberId?: string; phoneNumber?: { number?: string }; metadata?: Record<string, unknown> };
+    call?: { id?: string; phoneNumberId?: string; customer?: { number?: string }; phoneNumber?: { number?: string }; metadata?: Record<string, unknown> };
   };
 
   // Replay protection, keyed by message shape — NOT bare call id: a single call
@@ -455,6 +498,7 @@ export async function POST(req: Request): Promise<Response> {
   if (msg.type === "end-of-call-report" && msg.transcript) {
     const tenantId = await resolveTenantFromCall(msg.call);
     const metadata = (msg.call?.metadata ?? {}) as Record<string, unknown>;
+    const callContext = safeCallContext(metadata);
 
     // 2. Outbound confirmation call ended — parse the spoken decision from the transcript.
     if (metadata.pendingActionId) {
@@ -481,16 +525,23 @@ export async function POST(req: Request): Promise<Response> {
     if (msg.call?.id) {
       const startedAt = typeof msg.startedAt === "string" ? new Date(msg.startedAt) : undefined;
       const endedAt = typeof msg.endedAt === "string" ? new Date(msg.endedAt) : undefined;
+      const inboundIdentity = !callContext.householdId && msg.call.customer?.number
+        ? await resolveVoiceIdentity(tenantId, msg.call.customer.number)
+        : null;
+      const householdId = callContext.householdId ?? inboundIdentity?.matchedHouseholdId ?? undefined;
       await withTenant(tenantId, (db) =>
         persistCall(db, {
           tenantId,
           provenance: { sourceSystem: "vapi", externalId: msg.call!.id! },
-          direction: "inbound",
+          direction: callContext.direction ?? "inbound",
           transcript: msg.transcript,
+          fromNumber: msg.call?.customer?.number,
+          toNumber: msg.call?.phoneNumber?.number,
           startedAt,
           endedAt,
           endedReason: typeof msg.endedReason === "string" ? msg.endedReason : undefined,
-          raw: { type: msg.type },
+          raw: callContextRaw(callContext, msg.type),
+          householdId,
         }),
       ).catch((err) => {
         // Never let call-persistence failure block the instruction from still reaching

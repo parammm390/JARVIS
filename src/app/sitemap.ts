@@ -5,7 +5,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "",
     "/demo",
     "/demo/lifecycle",
-    "/dashboard-demo",
     "/resources",
     "/resources/missed-call-cost-calculator",
     "/resources/pilot-setup-checklist",

@@ -26,13 +26,11 @@ export async function GET(req: Request): Promise<Response> {
   if (!OS_API) return Response.json({ error: "Jarvis proxy is not configured" }, { status: 500 })
 
   const incoming = new URL(req.url)
-  // A native browser EventSource cannot set custom request headers — same real
-  // limitation apps/worker/src/sse/gateway.ts's own header comment documents, and
-  // the same workaround: accept the token as a `?token=` query param too. The
-  // header path stays authoritative for fetch/curl-style callers (kept first).
   const headerAuth = req.headers.get("authorization")
-  const queryToken = incoming.searchParams.get("token")
-  const bearer = headerAuth?.startsWith("Bearer ") ? headerAuth.slice("Bearer ".length) : queryToken
+  // Tokens in URLs leak into access logs, browser history, telemetry, and referrer
+  // surfaces. The browser transport uses authenticated streaming fetch, so this
+  // relay accepts the Authorization header only.
+  const bearer = headerAuth?.startsWith("Bearer ") ? headerAuth.slice("Bearer ".length) : null
   if (!bearer) return Response.json({ error: "Sign in required" }, { status: 401 })
 
   const instructionId = incoming.searchParams.get("instructionId")

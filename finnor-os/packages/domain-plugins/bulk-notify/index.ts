@@ -17,7 +17,7 @@
 import type { DomainEnginePlugin } from "../shared/plugin-interface";
 import type { DraftAction, ExecutionResult, ValidationResult, DomainPolicy } from "@finnor/shared-types";
 import type { ToolRegistry } from "@finnor/tools";
-import { personaAssistantId, claimBudget, withCircuitBreaker, DAILY_VAPI_CALL_CAP } from "@finnor/tools";
+import { agentKeyForPersona, personaAssistantId, claimBudget, withCircuitBreaker, DAILY_VAPI_CALL_CAP } from "@finnor/tools";
 import { withTenant, households, communicationsLog, serviceVisits, equipment } from "@finnor/db";
 import { invoices, maintenanceAgreements } from "@finnor/db";
 import { churnRisk } from "@finnor/read-models";
@@ -252,6 +252,7 @@ export const bulkNotifyPlugin: DomainEnginePlugin = {
     // pick one explicitly — the assistant that's actually built for this moment.
     const voicePersona = draft.payload.voicePersona ? String(draft.payload.voicePersona) : discountPercent !== undefined ? "winback" : undefined;
     const assistantId = personaAssistantId(voicePersona);
+    const agentKey = agentKeyForPersona(voicePersona);
     if (targets.length === 0) return { status: "success", output: { sent: 0 }, expected: { sent: 0 } };
 
     let sent = 0;
@@ -276,6 +277,9 @@ export const bulkNotifyPlugin: DomainEnginePlugin = {
             tenantId,
             assistantId,
             purpose: voicePersona ?? "bulk_notify",
+            agentKey,
+            domainActionId: draft.domainActionId,
+            householdId: t.householdId,
           }),
         ).catch((err: unknown) => ({ ok: false as const, error: err instanceof Error ? err.message : String(err) }));
         call.ok ? sent++ : failures.push(`${t.label}: ${call.error}`);

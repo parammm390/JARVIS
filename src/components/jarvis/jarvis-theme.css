@@ -25,6 +25,679 @@
   --accent: var(--j-cyan);
   transition: background-color 0.6s ease;
 }
+
+/* --------------------------------------------------------------------------
+   P3.T2 — Agent Fleet
+
+   The Fleet is a rail + one selected operating stage. It is deliberately not a
+   five-card profile grid: channel identity is compact, role/authority is central,
+   and source-proven activity gets the only expandable inspector.
+   -------------------------------------------------------------------------- */
+.jarvis-agent-fleet-shell {
+  min-height: 100vh;
+  color: var(--j-text);
+  background:
+    radial-gradient(ellipse at 72% -20%, rgba(74, 99, 220, 0.17), transparent 43%),
+    radial-gradient(ellipse at 14% 12%, rgba(32, 182, 196, 0.08), transparent 36%),
+    linear-gradient(180deg, #050914 0%, #03070e 58%, #02050a 100%);
+}
+
+.jarvis-agent-fleet__intro,
+.jarvis-agent-fleet__provider-strip,
+.jarvis-agent-fleet__auth-note,
+.jarvis-agent-fleet__layout {
+  width: min(100% - 32px, 1700px);
+  margin-inline: auto;
+}
+
+.jarvis-agent-fleet__intro {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 33px 0 19px;
+}
+
+.jarvis-agent-fleet__eyebrow {
+  display: block;
+  color: #6fb5cb;
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: 0.14em;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+
+.jarvis-agent-fleet__intro h1 {
+  max-width: 760px;
+  margin: 7px 0 8px;
+  color: #eaf8ff;
+  font-size: clamp(27px, 3.1vw, 45px);
+  font-weight: 860;
+  letter-spacing: -0.045em;
+  line-height: 1.02;
+}
+
+.jarvis-agent-fleet__intro p {
+  max-width: 710px;
+  margin: 0;
+  color: #91afbe;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.jarvis-agent-fleet__intro-signal {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 13px;
+  border: 1px solid rgba(107, 218, 228, 0.2);
+  border-radius: 9px;
+  background: rgba(16, 43, 62, 0.46);
+  color: #8ce3ed;
+}
+
+.jarvis-agent-fleet__intro-signal span,
+.jarvis-agent-fleet__provider-copy {
+  display: grid;
+  gap: 3px;
+}
+
+.jarvis-agent-fleet__intro-signal strong,
+.jarvis-agent-fleet__provider-copy strong {
+  color: #d9f8fb;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.jarvis-agent-fleet__intro-signal small,
+.jarvis-agent-fleet__provider-copy small {
+  color: #7896a8;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.jarvis-agent-fleet__provider-strip {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-height: 52px;
+  padding: 9px 13px;
+  border: 1px solid rgba(116, 163, 198, 0.17);
+  border-radius: 8px;
+  background: rgba(9, 21, 36, 0.78);
+}
+
+.jarvis-agent-fleet__provider-mark {
+  display: grid;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 1px solid rgba(105, 177, 212, 0.3);
+  border-radius: 50%;
+  color: #79d4e5;
+}
+
+.jarvis-agent-fleet__provider-scope {
+  margin-left: auto;
+  color: #607c91;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.jarvis-agent-fleet__provider-strip[data-provider-status="verified"] .jarvis-agent-fleet__provider-mark {
+  border-color: rgba(72, 221, 190, 0.4);
+  color: #72ddc3;
+}
+
+.jarvis-agent-fleet__provider-strip[data-provider-status="unconfigured"] .jarvis-agent-fleet__provider-mark,
+.jarvis-agent-fleet__provider-strip[data-provider-status="unavailable"] .jarvis-agent-fleet__provider-mark {
+  border-color: rgba(242, 183, 103, 0.35);
+  color: #e1b271;
+}
+
+.jarvis-agent-fleet__auth-note {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 10px;
+  padding: 10px 13px;
+  border-left: 2px solid rgba(113, 191, 214, 0.5);
+  background: rgba(11, 28, 43, 0.55);
+  color: #9db9c6;
+  font-size: 12px;
+}
+
+.jarvis-agent-fleet__auth-note a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  color: #a6edf3;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.jarvis-agent-fleet__auth-note a:hover,
+.jarvis-agent-fleet__auth-note a:focus-visible {
+  color: #e2feff;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  outline: none;
+}
+
+.jarvis-agent-fleet__layout {
+  display: grid;
+  grid-template-columns: 248px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+  padding: 16px 0 56px;
+}
+
+.jarvis-agent-fleet-shell[data-inspector-state="open"] .jarvis-agent-fleet__layout {
+  grid-template-columns: 248px minmax(0, 1fr) 320px;
+}
+
+.jarvis-agent-fleet__rail,
+.jarvis-agent-fleet__stage,
+.jarvis-agent-fleet__inspector {
+  min-width: 0;
+  border: 1px solid rgba(125, 174, 212, 0.16);
+  background: rgba(7, 16, 29, 0.86);
+  box-shadow: 0 18px 48px rgba(0, 2, 10, 0.28);
+}
+
+.jarvis-agent-fleet__rail {
+  position: sticky;
+  top: 16px;
+  padding: 15px 10px 13px;
+}
+
+.jarvis-agent-fleet__rail-heading {
+  display: grid;
+  gap: 4px;
+  padding: 0 9px 12px;
+  border-bottom: 1px solid rgba(112, 177, 211, 0.12);
+}
+
+.jarvis-agent-fleet__rail-heading span {
+  color: #5c92a8;
+  font-size: 9px;
+  font-weight: 950;
+  letter-spacing: 0.15em;
+}
+
+.jarvis-agent-fleet__rail-heading strong {
+  color: #d8f4fc;
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.jarvis-agent-fleet__rail-list {
+  display: grid;
+  gap: 4px;
+  padding-top: 10px;
+}
+
+.jarvis-agent-fleet__rail-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 9px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: #7c9bae;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease;
+}
+
+.jarvis-agent-fleet__rail-row:hover,
+.jarvis-agent-fleet__rail-row:focus-visible,
+.jarvis-agent-fleet__rail-row[data-selected="true"] {
+  border-color: rgba(96, 219, 233, 0.28);
+  background: rgba(34, 173, 201, 0.1);
+  color: #e0fbff;
+  outline: none;
+}
+
+.jarvis-agent-fleet__rail-row[data-selected="true"] {
+  box-shadow: inset 2px 0 0 #67deed;
+}
+
+.jarvis-agent-fleet__glyph {
+  position: relative;
+  display: grid;
+  flex: 0 0 auto;
+  width: 31px;
+  height: 31px;
+  place-items: center;
+  border: 1px solid rgba(112, 192, 215, 0.3);
+  border-radius: 50%;
+  color: #7bdce9;
+}
+
+.jarvis-agent-fleet__glyph-ring {
+  position: absolute;
+  inset: -4px;
+  border: 1px solid rgba(101, 218, 224, 0.12);
+  border-radius: 50%;
+  transform: rotate(19deg) scaleX(0.78);
+}
+
+.jarvis-agent-fleet__glyph[data-glyph="payment-collector"] {
+  border-color: rgba(226, 183, 102, 0.36);
+  color: #e4ba76;
+}
+
+.jarvis-agent-fleet__glyph[data-glyph="win-back"] {
+  border-color: rgba(160, 143, 244, 0.36);
+  color: #b3a5f5;
+}
+
+.jarvis-agent-fleet__rail-row-copy {
+  display: grid;
+  min-width: 0;
+  flex: 1 1 auto;
+  gap: 3px;
+}
+
+.jarvis-agent-fleet__rail-row-copy strong {
+  overflow: hidden;
+  color: currentColor;
+  font-size: 11px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jarvis-agent-fleet__rail-row-copy small {
+  color: #5f8193;
+  font-size: 10px;
+  line-height: 1.25;
+}
+
+.jarvis-agent-fleet__rail-row-state {
+  flex: 0 0 auto;
+  color: #b18b55;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.jarvis-agent-fleet__rail-note {
+  margin: 14px 8px 0;
+  padding-top: 12px;
+  border-top: 1px solid rgba(112, 177, 211, 0.12);
+  color: #617e91;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.jarvis-agent-fleet__stage {
+  overflow: hidden;
+}
+
+.jarvis-agent-fleet__stage-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 20px 22px 18px;
+  border-bottom: 1px solid rgba(112, 177, 211, 0.15);
+}
+
+.jarvis-agent-fleet__stage-agent {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 13px;
+}
+
+.jarvis-agent-fleet__stage-agent .jarvis-agent-fleet__glyph {
+  width: 44px;
+  height: 44px;
+  color: #a5eff6;
+}
+
+.jarvis-agent-fleet__stage-agent h2 {
+  margin: 4px 0 0;
+  color: #effdff;
+  font-size: clamp(24px, 3vw, 38px);
+  font-weight: 850;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+.jarvis-agent-fleet__stage-state {
+  display: flex;
+  max-width: 360px;
+  align-items: center;
+  gap: 8px;
+  color: #c6a36a;
+  font-size: 11px;
+  line-height: 1.35;
+  text-align: right;
+}
+
+.jarvis-agent-fleet__state-dot {
+  display: block;
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border: 1px solid #d2a862;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.jarvis-agent-fleet__role-band {
+  padding: 18px 22px 20px;
+  background: linear-gradient(105deg, rgba(24, 75, 99, 0.25), rgba(23, 30, 66, 0.1) 66%, transparent);
+}
+
+.jarvis-agent-fleet__role-band p {
+  max-width: 850px;
+  margin: 9px 0 14px;
+  color: #deeff5;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.jarvis-agent-fleet__authority {
+  display: flex;
+  align-items: start;
+  gap: 8px;
+  color: #91dcca;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.jarvis-agent-fleet__authority svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.jarvis-agent-fleet__lanes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 24px;
+  padding: 0 22px;
+}
+
+.jarvis-agent-fleet__lane {
+  min-width: 0;
+  padding: 19px 0 20px;
+  border-top: 1px solid rgba(112, 177, 211, 0.14);
+}
+
+.jarvis-agent-fleet__lane:last-child {
+  grid-column: 1 / -1;
+}
+
+.jarvis-agent-fleet__lane-heading {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 12px;
+}
+
+.jarvis-agent-fleet__lane-icon {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 1px solid rgba(113, 188, 215, 0.24);
+  border-radius: 50%;
+  color: #7bd6e5;
+}
+
+.jarvis-agent-fleet__lane-heading > span:last-child {
+  display: grid;
+  gap: 3px;
+}
+
+.jarvis-agent-fleet__lane-heading strong {
+  color: #d8f3fa;
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.jarvis-agent-fleet__lane-body {
+  padding-left: 37px;
+}
+
+.jarvis-agent-fleet__lane-body p {
+  max-width: 670px;
+  margin: 0;
+  color: #7593a4;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.jarvis-agent-fleet__lane-body .jarvis-agent-fleet__empty-title {
+  margin-bottom: 5px;
+  color: #c4dce4;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.jarvis-agent-fleet__stage-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 20px;
+  margin: 0 22px;
+  padding: 12px 0 16px;
+  border-top: 1px solid rgba(112, 177, 211, 0.14);
+  color: #5e7a8e;
+  font-size: 10px;
+}
+
+.jarvis-agent-fleet__inspector {
+  position: sticky;
+  top: 16px;
+  padding: 17px;
+}
+
+.jarvis-agent-fleet__inspector header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid rgba(112, 177, 211, 0.14);
+}
+
+.jarvis-agent-fleet__inspector h2 {
+  margin: 5px 0 0;
+  color: #e9fbff;
+  font-size: 18px;
+  font-weight: 850;
+}
+
+.jarvis-agent-fleet__inspector button {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid rgba(112, 177, 211, 0.2);
+  border-radius: 6px;
+  background: transparent;
+  color: #8caebb;
+  cursor: pointer;
+}
+
+.jarvis-agent-fleet__inspector button:hover,
+.jarvis-agent-fleet__inspector button:focus-visible {
+  border-color: rgba(104, 224, 235, 0.44);
+  color: #e9fdff;
+  outline: none;
+}
+
+.jarvis-agent-fleet__inspector > p {
+  margin: 17px 0 0;
+  color: #94adba;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+@media (max-width: 1120px) {
+  .jarvis-agent-fleet-shell[data-inspector-state="open"] .jarvis-agent-fleet__layout {
+    grid-template-columns: 210px minmax(0, 1fr);
+  }
+
+  .jarvis-agent-fleet__inspector {
+    grid-column: 2;
+    position: static;
+  }
+
+  .jarvis-agent-fleet__layout {
+    grid-template-columns: 210px minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 760px) {
+  .jarvis-agent-fleet__intro,
+  .jarvis-agent-fleet__provider-strip,
+  .jarvis-agent-fleet__auth-note,
+  .jarvis-agent-fleet__layout {
+    width: min(100% - 22px, 1700px);
+  }
+
+  .jarvis-agent-fleet__intro {
+    align-items: start;
+    flex-direction: column;
+    gap: 15px;
+    padding-top: 23px;
+  }
+
+  .jarvis-agent-fleet__intro h1 {
+    font-size: 31px;
+  }
+
+  .jarvis-agent-fleet__intro p {
+    font-size: 13px;
+  }
+
+  .jarvis-agent-fleet__intro-signal {
+    width: 100%;
+  }
+
+  .jarvis-agent-fleet__provider-strip {
+    align-items: start;
+  }
+
+  .jarvis-agent-fleet__provider-scope {
+    display: none;
+  }
+
+  .jarvis-agent-fleet__auth-note {
+    align-items: start;
+    flex-direction: column;
+    gap: 7px;
+  }
+
+  .jarvis-agent-fleet__layout,
+  .jarvis-agent-fleet-shell[data-inspector-state="open"] .jarvis-agent-fleet__layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    padding-top: 11px;
+  }
+
+  .jarvis-agent-fleet__rail,
+  .jarvis-agent-fleet__inspector {
+    position: static;
+  }
+
+  .jarvis-agent-fleet__rail {
+    padding: 12px 8px 10px;
+  }
+
+  .jarvis-agent-fleet__rail-heading {
+    padding-inline: 7px;
+  }
+
+  .jarvis-agent-fleet__rail-list {
+    display: flex;
+    gap: 5px;
+    overflow-x: auto;
+    padding: 9px 1px 2px;
+    scrollbar-width: thin;
+  }
+
+  .jarvis-agent-fleet__rail-row {
+    flex: 0 0 144px;
+    align-items: start;
+    flex-direction: column;
+    gap: 7px;
+    min-height: 84px;
+    padding: 9px;
+  }
+
+  .jarvis-agent-fleet__rail-row-state {
+    position: absolute;
+    top: 9px;
+    right: 9px;
+  }
+
+  .jarvis-agent-fleet__rail-note {
+    margin: 8px 7px 0;
+    padding-top: 8px;
+  }
+
+  .jarvis-agent-fleet__stage-header {
+    align-items: start;
+    flex-direction: column;
+    padding: 17px 15px 15px;
+  }
+
+  .jarvis-agent-fleet__stage-state {
+    max-width: none;
+    text-align: left;
+  }
+
+  .jarvis-agent-fleet__role-band {
+    padding: 16px 15px 18px;
+  }
+
+  .jarvis-agent-fleet__role-band p {
+    font-size: 14px;
+  }
+
+  .jarvis-agent-fleet__lanes {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    padding-inline: 15px;
+  }
+
+  .jarvis-agent-fleet__lane:last-child {
+    grid-column: auto;
+  }
+
+  .jarvis-agent-fleet__lane-body {
+    padding-left: 37px;
+  }
+
+  .jarvis-agent-fleet__stage-footer {
+    margin-inline: 15px;
+  }
+
+  .jarvis-agent-fleet-shell[data-inspector-state="open"] .jarvis-agent-fleet__inspector {
+    grid-column: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jarvis-agent-fleet__rail-row {
+    transition: none;
+  }
+}
 .jarvis-root[data-mood="voice"] {
   --accent: var(--j-teal);
 }
@@ -147,6 +820,1240 @@ html[data-jarvis-tenant-accent="amber"] .jarvis-root { --accent: var(--j-amber);
   .j-thread-spine-node__header {
     transition: none;
   }
+}
+
+/* --------------------------------------------------------------------------
+   P2.T4 — Dispatch Field
+
+   Map Theater remains the existing DispatchMapCore. This shell gives it the
+   v6 geography/today/exceptions hierarchy and places exact stop continuity in
+   the day rail without introducing a second calendar or route source.
+   -------------------------------------------------------------------------- */
+.jarvis-dispatch-shell {
+  min-height: 100vh;
+  color: var(--j-text);
+  background:
+    radial-gradient(ellipse at 26% -14%, rgba(24, 153, 191, 0.14), transparent 42%),
+    linear-gradient(180deg, #05101a 0%, #03080f 48%, #02060b 100%);
+}
+
+.jarvis-dispatch-hero,
+.jarvis-dispatch-banner,
+.jarvis-dispatch-summary,
+.jarvis-dispatch-layout {
+  width: min(100% - 32px, 1700px);
+  margin-inline: auto;
+}
+
+.jarvis-dispatch-hero {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 27px 0 17px;
+}
+
+.jarvis-dispatch-eyebrow {
+  color: #70b7cb;
+  font-size: 9px;
+  font-weight: 950;
+  letter-spacing: 0.18em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.jarvis-dispatch-hero h1 {
+  margin: 6px 0 0;
+  color: #eafaff;
+  font-size: clamp(25px, 3vw, 39px);
+  font-weight: 900;
+  letter-spacing: -0.045em;
+  line-height: 1.02;
+}
+
+.jarvis-dispatch-hero p {
+  margin: 9px 0 0;
+  color: #8eb1bf;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.jarvis-dispatch-hero__controls {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 9px;
+}
+
+.jarvis-dispatch-hero__controls label {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 9px;
+  border: 1px solid rgba(118, 199, 225, 0.18);
+  border-radius: 7px;
+  color: #9ac7d4;
+  font-size: 10px;
+}
+
+.jarvis-dispatch-hero__controls input {
+  color: #dff8fd;
+  font: inherit;
+}
+
+.jarvis-dispatch-hero__controls button {
+  display: inline-grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 1px solid rgba(118, 199, 225, 0.2);
+  border-radius: 50%;
+  color: #9bcbd7;
+}
+
+.jarvis-dispatch-hero__controls button:hover,
+.jarvis-dispatch-hero__controls button:focus-visible {
+  border-color: rgba(81, 222, 250, 0.6);
+  background: rgba(38, 190, 224, 0.12);
+  color: #effcff;
+  outline: none;
+}
+
+.jarvis-dispatch-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #83a9b6;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.jarvis-dispatch-source > span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #f1ba59;
+  box-shadow: 0 0 9px rgba(241, 186, 89, 0.5);
+}
+
+.jarvis-dispatch-source[data-source-state="live"] > span {
+  background: #5de4be;
+  box-shadow: 0 0 9px rgba(93, 228, 190, 0.5);
+}
+
+.jarvis-dispatch-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 40px;
+  margin-bottom: 12px;
+  padding: 9px 12px;
+  border: 1px solid rgba(244, 190, 91, 0.26);
+  border-radius: 8px;
+  background: rgba(168, 107, 24, 0.08);
+  color: #f4d08d;
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.jarvis-dispatch-banner a {
+  color: #fff0bb;
+  font-weight: 950;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.jarvis-dispatch-banner--fixture {
+  border-color: rgba(112, 198, 225, 0.25);
+  background: rgba(26, 129, 161, 0.08);
+  color: #a6dce9;
+}
+
+.jarvis-dispatch-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 1px;
+  margin-bottom: 14px;
+  border: 1px solid rgba(118, 199, 225, 0.13);
+  background: rgba(118, 199, 225, 0.13);
+}
+
+.jarvis-dispatch-summary > div {
+  display: grid;
+  min-height: 64px;
+  align-content: center;
+  gap: 5px;
+  padding: 10px 12px;
+  background: rgba(3, 14, 23, 0.9);
+}
+
+.jarvis-dispatch-summary span {
+  color: #6c94a4;
+  font-size: 8px;
+  font-weight: 950;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.jarvis-dispatch-summary strong {
+  color: #dff8fd;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.jarvis-dispatch-summary strong.is-attention {
+  color: #f3cb82;
+}
+
+.jarvis-dispatch-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.82fr) minmax(300px, 0.68fr);
+  align-items: start;
+  gap: 16px;
+  padding-bottom: 50px;
+}
+
+.jarvis-dispatch-map-column,
+.jarvis-dispatch-day-rail {
+  min-width: 0;
+}
+
+.jarvis-dispatch-map-grid {
+  grid-template-columns: minmax(0, 1fr) 280px;
+}
+
+.jarvis-dispatch-map-core .jarvis-dispatch-map-grid > :first-child > div:first-child {
+  min-height: 500px;
+}
+
+.jarvis-dispatch-map-core .jarvis-dispatch-map-grid > aside {
+  border: 1px solid rgba(118, 199, 225, 0.14);
+  background: rgba(5, 19, 29, 0.78);
+}
+
+.jarvis-dispatch-route-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 11px;
+  border: 1px solid rgba(118, 199, 225, 0.13);
+  color: #789dab;
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.jarvis-dispatch-day-rail {
+  overflow: hidden;
+  border: 1px solid rgba(118, 199, 225, 0.15);
+  background: linear-gradient(180deg, rgba(8, 27, 39, 0.82), rgba(3, 11, 19, 0.82));
+}
+
+.jarvis-dispatch-day-rail__heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 15px 14px 12px;
+  border-bottom: 1px solid rgba(118, 199, 225, 0.11);
+}
+
+.jarvis-dispatch-day-rail__heading h2 {
+  margin: 4px 0 0;
+  color: #e3f8fd;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.jarvis-dispatch-day-rail__heading > span,
+.jarvis-dispatch-subheading > span:last-child {
+  color: #78a3b1;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+}
+
+.jarvis-dispatch-exceptions,
+.jarvis-dispatch-today {
+  padding: 12px;
+}
+
+.jarvis-dispatch-exceptions {
+  border-bottom: 1px solid rgba(244, 190, 91, 0.2);
+  background: rgba(168, 107, 24, 0.07);
+}
+
+.jarvis-dispatch-exceptions > div:first-child {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #f3cb82;
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.jarvis-dispatch-exceptions > p {
+  margin: 7px 0 8px;
+  color: #d7b879;
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.jarvis-dispatch-subheading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 8px;
+  color: #77a4b2;
+  font-size: 9px;
+  font-weight: 950;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.jarvis-dispatch-stop-row {
+  display: grid;
+  gap: 8px;
+  padding: 11px 0;
+  border-top: 1px solid rgba(118, 199, 225, 0.1);
+}
+
+.jarvis-dispatch-stop-row[data-focused="true"] {
+  border-radius: 8px;
+  background: linear-gradient(90deg, rgba(42, 211, 190, 0.1), transparent 78%);
+  box-shadow: inset 2px 0 0 #5eead4;
+}
+
+.jarvis-dispatch-focus {
+  display: flex;
+  width: min(100% - 32px, 1700px);
+  margin: 10px auto 0;
+  padding: 9px 11px;
+  border: 1px solid rgba(94, 234, 212, 0.24);
+  border-radius: 8px;
+  background: rgba(45, 183, 157, 0.08);
+  color: #a9f4e1;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.jarvis-dispatch-stop-row__main {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+}
+
+.jarvis-dispatch-stop-row__time {
+  color: #73d8e4;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.jarvis-dispatch-stop-row__main div,
+.jarvis-dispatch-stop-row__ids {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.jarvis-dispatch-stop-row__main strong {
+  overflow: hidden;
+  color: #e2f9fd;
+  font-size: 11px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.jarvis-dispatch-stop-row__main span {
+  overflow: hidden;
+  color: #769ba9;
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jarvis-dispatch-stop-row__ids span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #7095a3;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 8px;
+}
+
+.jarvis-dispatch-stop-row__ids .jarvis-dispatch-stop-row__linked {
+  color: #82dec7;
+}
+
+.jarvis-dispatch-stop-row__ids .jarvis-dispatch-stop-row__unlinked {
+  color: #a88361;
+}
+
+.jarvis-dispatch-stop-row__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.jarvis-dispatch-stop-row__links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 27px;
+  padding: 0 7px;
+  border: 1px solid rgba(81, 216, 234, 0.18);
+  border-radius: 5px;
+  color: #9bd9e4;
+  font-size: 8px;
+  font-weight: 850;
+  text-decoration: none;
+}
+
+.jarvis-dispatch-stop-row__links a:hover,
+.jarvis-dispatch-stop-row__links a:focus-visible {
+  border-color: rgba(81, 216, 234, 0.55);
+  background: rgba(38, 190, 224, 0.1);
+  color: #edfdff;
+  outline: none;
+}
+
+.jarvis-dispatch-empty-copy {
+  margin: 18px 0 5px;
+  color: #6f93a1;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.jarvis-dispatch-empty {
+  display: grid;
+  min-height: 420px;
+  place-items: center;
+  align-content: center;
+  gap: 10px;
+  width: min(100% - 32px, 760px);
+  margin: 80px auto;
+  padding: 34px;
+  border: 1px solid rgba(118, 199, 225, 0.15);
+  background: rgba(3, 12, 20, 0.68);
+  color: #86aebd;
+  text-align: center;
+}
+
+.jarvis-dispatch-empty h1 {
+  margin: 5px 0 0;
+  color: #e0f8fd;
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.jarvis-dispatch-empty p {
+  max-width: 430px;
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.jarvis-dispatch-empty a {
+  color: #f2d18c;
+  font-size: 10px;
+  font-weight: 950;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.jarvis-dispatch-technician {
+  width: min(100% - 32px, 760px);
+  margin-inline: auto;
+  padding: 25px 0 50px;
+}
+
+.jarvis-dispatch-technician > .jarvis-dispatch-hero {
+  width: 100%;
+  padding: 0 0 18px;
+}
+
+.jarvis-my-day-next-stop {
+  margin-bottom: 12px;
+  padding: 15px;
+  border: 1px solid rgba(81, 216, 234, 0.27);
+  border-left: 3px solid #55dce5;
+  background: linear-gradient(135deg, rgba(14, 53, 67, 0.78), rgba(4, 17, 27, 0.82));
+}
+
+@media (max-width: 1120px) {
+  .jarvis-dispatch-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .jarvis-dispatch-day-rail {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .jarvis-dispatch-day-rail__heading {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 780px) {
+  .jarvis-dispatch-hero,
+  .jarvis-dispatch-banner,
+  .jarvis-dispatch-summary,
+  .jarvis-dispatch-layout,
+  .jarvis-dispatch-technician {
+    width: min(100% - 22px, 1700px);
+  }
+
+  .jarvis-dispatch-hero {
+    align-items: start;
+    flex-direction: column;
+    gap: 13px;
+    padding-top: 21px;
+  }
+
+  .jarvis-dispatch-hero__controls {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .jarvis-dispatch-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .jarvis-dispatch-summary > div:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .jarvis-dispatch-map-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .jarvis-dispatch-map-core .jarvis-dispatch-map-grid > :first-child > div:first-child {
+    min-height: 390px;
+  }
+
+  .jarvis-dispatch-day-rail {
+    display: block;
+  }
+
+  .jarvis-dispatch-day-rail__heading {
+    display: flex;
+  }
+
+  .jarvis-dispatch-empty {
+    width: min(100% - 22px, 760px);
+    margin-top: 45px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jarvis-dispatch-hero__controls button,
+  .jarvis-dispatch-stop-row__links a { transition: none; }
+}
+
+/* --------------------------------------------------------------------------
+   P2.T5 — Cash Pressure Field
+
+   Due-date/amount aging is rendered only when every open invoice has usable
+   source fields. Otherwise this same surface becomes an honest invoice ledger;
+   it never fills missing dates with a forecast or a confident zero.
+   -------------------------------------------------------------------------- */
+.jarvis-money-shell {
+  min-height: 100vh;
+  color: var(--j-text);
+  background:
+    radial-gradient(ellipse at 72% -13%, rgba(184, 128, 42, 0.13), transparent 42%),
+    linear-gradient(180deg, #0c0d12 0%, #07080d 48%, #03060b 100%);
+}
+
+.jarvis-money-hero,
+.jarvis-money-banner,
+.jarvis-money-summary,
+.jarvis-money-layout,
+.jarvis-money-invoice-detail {
+  width: min(100% - 32px, 1700px);
+  margin-inline: auto;
+}
+
+.jarvis-money-hero {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 27px 0 18px;
+}
+
+.jarvis-money-eyebrow {
+  color: #c5a26b;
+  font-size: 9px;
+  font-weight: 950;
+  letter-spacing: 0.18em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.jarvis-money-hero h1 {
+  margin: 6px 0 0;
+  color: #fff6e2;
+  font-size: clamp(25px, 3vw, 39px);
+  font-weight: 900;
+  letter-spacing: -0.045em;
+  line-height: 1.02;
+}
+
+.jarvis-money-hero p {
+  margin: 9px 0 0;
+  color: #b5a992;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.jarvis-money-hero__controls {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.jarvis-money-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #ad9a78;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.jarvis-money-source > span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #f0bb5d;
+  box-shadow: 0 0 9px rgba(240, 187, 93, 0.45);
+}
+
+.jarvis-money-source[data-source-state="live"] > span {
+  background: #65ddbc;
+  box-shadow: 0 0 9px rgba(101, 221, 188, 0.5);
+}
+
+.jarvis-money-hero__controls button {
+  display: inline-grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 1px solid rgba(234, 199, 125, 0.24);
+  border-radius: 50%;
+  color: #d5bd8d;
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease;
+}
+
+.jarvis-money-hero__controls button:hover,
+.jarvis-money-hero__controls button:focus-visible {
+  border-color: rgba(247, 210, 131, 0.68);
+  background: rgba(219, 158, 49, 0.12);
+  color: #fff4d6;
+  outline: none;
+}
+
+.jarvis-money-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 40px;
+  margin-bottom: 12px;
+  padding: 9px 12px;
+  border: 1px solid rgba(244, 190, 91, 0.28);
+  border-radius: 8px;
+  background: rgba(168, 107, 24, 0.09);
+  color: #f4d08d;
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.jarvis-money-banner a {
+  color: #fff0bc;
+  font-weight: 950;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.jarvis-money-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  margin-bottom: 15px;
+  border: 1px solid rgba(234, 199, 125, 0.14);
+  background: rgba(234, 199, 125, 0.14);
+}
+
+.jarvis-money-summary > div {
+  display: grid;
+  min-height: 70px;
+  align-content: center;
+  gap: 5px;
+  padding: 10px 13px;
+  background: rgba(13, 14, 20, 0.94);
+}
+
+.jarvis-money-summary span {
+  color: #9d8d70;
+  font-size: 8px;
+  font-weight: 950;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.jarvis-money-summary strong {
+  overflow: hidden;
+  color: #fff0c9;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 16px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jarvis-money-summary strong.is-attention {
+  color: #f4bd72;
+}
+
+.jarvis-money-summary small {
+  overflow: hidden;
+  color: #806f56;
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jarvis-money-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(360px, 0.82fr);
+  align-items: start;
+  gap: 15px;
+  padding-bottom: 15px;
+}
+
+.jarvis-money-pressure-column {
+  display: grid;
+  gap: 15px;
+  min-width: 0;
+}
+
+.jarvis-money-pressure,
+.jarvis-money-collections,
+.jarvis-money-invoices,
+.jarvis-money-invoice-detail {
+  min-width: 0;
+  border: 1px solid rgba(234, 199, 125, 0.16);
+  background: linear-gradient(135deg, rgba(23, 21, 19, 0.84), rgba(8, 9, 14, 0.86));
+}
+
+.jarvis-money-section-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 15px 15px 12px;
+  border-bottom: 1px solid rgba(234, 199, 125, 0.1);
+}
+
+.jarvis-money-section-heading h2 {
+  margin: 4px 0 0;
+  color: #fff3d6;
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+}
+
+.jarvis-money-section-heading > span {
+  color: #9c8969;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 9px;
+}
+
+.jarvis-money-aging-bands {
+  display: grid;
+  gap: 0;
+  padding: 6px 15px 12px;
+}
+
+.jarvis-money-aging-band {
+  display: grid;
+  grid-template-columns: 72px 80px minmax(90px, 1fr) 130px;
+  gap: 10px;
+  align-items: center;
+  min-height: 58px;
+  border-bottom: 1px solid rgba(234, 199, 125, 0.08);
+}
+
+.jarvis-money-aging-band__label {
+  display: grid;
+  gap: 3px;
+}
+
+.jarvis-money-aging-band__label strong {
+  color: #f8e9c3;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.jarvis-money-aging-band__label span,
+.jarvis-money-aging-band__work {
+  color: #95836a;
+  font-size: 8px;
+}
+
+.jarvis-money-aging-band__amount {
+  color: #f2c777;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  font-weight: 900;
+  text-align: right;
+}
+
+.jarvis-money-aging-band__bar {
+  height: 9px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(234, 199, 125, 0.1);
+}
+
+.jarvis-money-aging-band__bar span {
+  display: block;
+  height: 100%;
+  min-width: 3px;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #a77e38, #f0c56d);
+}
+
+.jarvis-money-aging-band[data-aging-band="90+"] .jarvis-money-aging-band__bar span,
+.jarvis-money-aging-band[data-aging-band="61-90"] .jarvis-money-aging-band__bar span {
+  background: linear-gradient(90deg, #9a4c37, #f19b65);
+}
+
+.jarvis-money-aging-band__work {
+  text-align: right;
+}
+
+.jarvis-money-aging-band__work:not(:empty) {
+  color: #c6a76e;
+}
+
+.jarvis-money-fallback {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 9px;
+  align-items: start;
+  padding: 26px 15px 30px;
+  color: #eac986;
+}
+
+.jarvis-money-fallback p {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 850;
+  line-height: 1.45;
+}
+
+.jarvis-money-fallback span {
+  grid-column: 2;
+  color: #9c8969;
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.jarvis-money-collections {
+  overflow: hidden;
+}
+
+.jarvis-money-work-row {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-height: 64px;
+  padding: 9px 15px;
+  border-bottom: 1px solid rgba(234, 199, 125, 0.08);
+  color: #d9c7a7;
+  text-decoration: none;
+}
+
+.jarvis-money-work-row:hover,
+.jarvis-money-work-row:focus-visible {
+  background: rgba(219, 158, 49, 0.08);
+  outline: none;
+}
+
+.jarvis-money-work-row__status {
+  color: #8cd5c0;
+  font-size: 8px;
+  font-weight: 950;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.jarvis-money-work-row > span:nth-child(2) {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.jarvis-money-work-row strong {
+  overflow: hidden;
+  color: #f5e7c7;
+  font-size: 11px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jarvis-money-work-row small,
+.jarvis-money-work-row > span:last-child {
+  overflow: hidden;
+  color: #927f62;
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jarvis-money-work-row > span:last-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 160px;
+  color: #b59d73;
+}
+
+.jarvis-money-invoices {
+  overflow: hidden;
+}
+
+.jarvis-money-invoice-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 110px 64px;
+  gap: 8px;
+  width: 100%;
+  min-height: 69px;
+  align-items: center;
+  padding: 9px 15px;
+  border: 0;
+  border-bottom: 1px solid rgba(234, 199, 125, 0.09);
+  background: transparent;
+  color: #d8c7aa;
+  cursor: pointer;
+  text-align: left;
+}
+
+.jarvis-money-invoice-row:hover,
+.jarvis-money-invoice-row:focus-visible,
+.jarvis-money-invoice-row[data-selected="true"] {
+  background: rgba(219, 158, 49, 0.1);
+  outline: none;
+}
+
+.jarvis-money-invoice-row > span:first-child {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.jarvis-money-invoice-row strong {
+  color: #fff0ca;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.jarvis-money-invoice-row small,
+.jarvis-money-invoice-row__due {
+  overflow: hidden;
+  color: #927e60;
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jarvis-money-invoice-status {
+  justify-self: end;
+  padding: 5px 6px;
+  border: 1px solid rgba(210, 185, 126, 0.2);
+  border-radius: 4px;
+  color: #b59e77;
+  font-size: 8px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.jarvis-money-invoice-status--overdue {
+  border-color: rgba(244, 154, 100, 0.32);
+  color: #f1a977;
+}
+
+.jarvis-money-invoice-status--paid {
+  border-color: rgba(101, 221, 188, 0.3);
+  color: #8bdfc6;
+}
+
+.jarvis-money-invoice-status--void {
+  color: #6e6d70;
+}
+
+.jarvis-money-empty-copy {
+  padding: 24px 15px;
+  color: #8f7b60;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.jarvis-money-invoice-detail {
+  margin-bottom: 50px;
+}
+
+.jarvis-money-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  background: rgba(234, 199, 125, 0.11);
+}
+
+.jarvis-money-detail-grid > div {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-height: 105px;
+  padding: 13px;
+  background: rgba(13, 14, 20, 0.94);
+}
+
+.jarvis-money-detail-grid span {
+  color: #958263;
+  font-size: 8px;
+  font-weight: 950;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.jarvis-money-detail-grid strong {
+  overflow: hidden;
+  color: #f8e9c5;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jarvis-money-detail-grid small {
+  color: #927d5f;
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.jarvis-money-detail-grid a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #e1be72;
+  font-size: 9px;
+  font-weight: 850;
+  text-decoration: none;
+}
+
+.jarvis-money-detail-grid a:hover,
+.jarvis-money-detail-grid a:focus-visible {
+  color: #fff1c9;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  outline: none;
+}
+
+.jarvis-money-detail-note {
+  margin: 0;
+  padding: 11px 13px;
+  border-top: 1px solid rgba(234, 199, 125, 0.1);
+  color: #ad956c;
+  font-size: 9px;
+}
+
+.jarvis-money-detail-note--warning {
+  color: #f0bd76;
+}
+
+.jarvis-money-payment-facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 13px;
+  border-top: 1px solid rgba(234, 199, 125, 0.1);
+  color: #aa956f;
+  font-size: 9px;
+}
+
+.jarvis-money-payment-facts > div {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #d1b879;
+}
+
+.jarvis-money-payment-facts > span {
+  flex: 1 1 100%;
+  color: #806f56;
+}
+
+.jarvis-money-empty {
+  display: grid;
+  min-height: 420px;
+  place-items: center;
+  align-content: center;
+  gap: 10px;
+  width: min(100% - 32px, 760px);
+  margin: 80px auto;
+  padding: 34px;
+  border: 1px solid rgba(234, 199, 125, 0.16);
+  background: rgba(13, 14, 20, 0.72);
+  color: #ae986f;
+  text-align: center;
+}
+
+.jarvis-money-empty h1 {
+  margin: 5px 0 0;
+  color: #fff1d1;
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.jarvis-money-empty p {
+  max-width: 430px;
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.jarvis-money-empty a {
+  color: #f0ce83;
+  font-size: 10px;
+  font-weight: 950;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+@media (max-width: 1120px) {
+  .jarvis-money-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .jarvis-money-invoices {
+    max-width: 820px;
+  }
+}
+
+@media (max-width: 780px) {
+  .jarvis-money-hero,
+  .jarvis-money-banner,
+  .jarvis-money-summary,
+  .jarvis-money-layout,
+  .jarvis-money-invoice-detail {
+    width: min(100% - 22px, 1700px);
+  }
+
+  .jarvis-money-hero {
+    align-items: start;
+    flex-direction: column;
+    gap: 13px;
+    padding-top: 21px;
+  }
+
+  .jarvis-money-hero__controls {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .jarvis-money-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .jarvis-money-aging-band {
+    grid-template-columns: 68px 76px minmax(70px, 1fr);
+    gap: 7px;
+  }
+
+  .jarvis-money-aging-band__work {
+    grid-column: 1 / -1;
+    padding: 0 0 7px;
+    text-align: left;
+  }
+
+  .jarvis-money-work-row {
+    grid-template-columns: 70px minmax(0, 1fr);
+  }
+
+  .jarvis-money-work-row > span:last-child {
+    grid-column: 2;
+    max-width: none;
+  }
+
+  .jarvis-money-invoice-row {
+    grid-template-columns: minmax(0, 1fr) 94px 58px;
+    padding-inline: 12px;
+  }
+
+  .jarvis-money-detail-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .jarvis-money-empty {
+    width: min(100% - 22px, 760px);
+    margin-top: 45px;
+  }
+}
+
+@media (max-width: 420px) {
+  .jarvis-money-summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .jarvis-money-aging-band {
+    grid-template-columns: 62px 70px minmax(60px, 1fr);
+  }
+
+  .jarvis-money-invoice-row {
+    grid-template-columns: minmax(0, 1fr) 76px;
+  }
+
+  .jarvis-money-invoice-status {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .jarvis-money-detail-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jarvis-money-hero__controls button,
+  .jarvis-money-work-row,
+  .jarvis-money-invoice-row { transition: none; }
 }
 
 /* P3.T6 — history is a compact audit trail below the active causal document,
@@ -648,6 +2555,1659 @@ html[data-jarvis-tenant-accent="amber"] .jarvis-root { --accent: var(--j-amber);
   .jarvis-workflow-graph > [data-node][data-workflow-step-status="compensated"]::after {
     border-color: var(--j-amber);
   }
+}
+
+/* --------------------------------------------------------------------------
+   P4.T1 — public preview shell correction
+
+   Preview has no private operational deck, so it should read as a restrained
+   product entrance rather than a cropped dashboard canvas. This selector is
+   deliberately scoped to the preview mode marker emitted by ThreadBody; the
+   authenticated Command Canvas keeps its existing scene-specific sizing.
+   -------------------------------------------------------------------------- */
+.jarvis-root[data-jarvis-mode="preview"] .jarvis-rest-composition {
+  grid-template-columns: minmax(0, 760px);
+  grid-template-rows: auto auto;
+  min-height: 0;
+  align-content: start;
+  gap: 12px;
+}
+
+.jarvis-root[data-jarvis-mode="preview"] .jarvis-rest-composition .jarvis-presence-core {
+  min-height: clamp(260px, 32vw, 360px) !important;
+}
+
+.jarvis-root[data-jarvis-mode="preview"] .jarvis-rest-composition .jarvis-presence-core:not(.jarvis-presence-core--docked) .jarvis-presence-core__orb,
+.jarvis-root[data-jarvis-mode="preview"] .jarvis-rest-composition .jarvis-orb-surface,
+.jarvis-root[data-jarvis-mode="preview"] .jarvis-rest-composition [data-jarvis-ambient-orb] {
+  width: clamp(220px, 18vw, 260px) !important;
+  height: clamp(220px, 18vw, 260px) !important;
+  min-height: clamp(220px, 18vw, 260px) !important;
+}
+
+.jarvis-root[data-jarvis-mode="preview"] .jarvis-setup-region [data-jarvis-setup-rail] {
+  width: min(100%, 720px);
+  max-width: 720px !important;
+  margin-inline: auto;
+}
+
+.jarvis-operations-header__surface-link[data-active="true"] {
+  border-color: rgba(71, 225, 255, 0.58);
+  background: rgba(37, 202, 238, 0.12);
+  color: #e5fbff;
+  box-shadow: inset 0 1px 0 rgba(225, 253, 255, 0.1), 0 0 16px rgba(35, 218, 255, 0.08);
+}
+
+/* P3.T3 — source-linked activity rows. These stay deliberately quieter than the
+ * fleet rail: Work and Customer are the primary paths, while the inspector is a
+ * secondary inspection seam rather than a second dashboard. */
+.jarvis-agent-fleet__activity-list {
+  display: grid;
+  gap: 8px;
+}
+
+.jarvis-agent-fleet__activity-row {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(110, 129, 151, 0.18);
+}
+
+.jarvis-agent-fleet__activity-row:last-child {
+  border-bottom: 0;
+}
+
+.jarvis-agent-fleet__activity-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.jarvis-agent-fleet__activity-main:hover strong,
+.jarvis-agent-fleet__activity-main:focus-visible strong {
+  color: var(--j-blue-strong, #b9d5ff);
+}
+
+.jarvis-agent-fleet__activity-main > span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.jarvis-agent-fleet__activity-main strong,
+.jarvis-agent-fleet__activity-main small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jarvis-agent-fleet__activity-main strong {
+  color: rgba(239, 245, 255, 0.94);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.jarvis-agent-fleet__activity-main small {
+  color: rgba(164, 181, 204, 0.78);
+  font-size: 11px;
+}
+
+.jarvis-agent-fleet__activity-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  padding-left: 1px;
+}
+
+.jarvis-agent-fleet__activity-links a,
+.jarvis-agent-fleet__activity-links span {
+  color: rgba(142, 187, 255, 0.92);
+  font-size: 11px;
+  text-decoration: none;
+}
+
+.jarvis-agent-fleet__activity-links span {
+  color: rgba(164, 181, 204, 0.58);
+}
+
+.jarvis-agent-fleet__activity-links a:hover,
+.jarvis-agent-fleet__activity-links a:focus-visible {
+  color: #d8e8ff;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* --------------------------------------------------------------------------
+   P3.T4 — role landing density
+
+   The density value is the authenticated user's existing preference. It only
+   changes the spacing rhythm of the legacy preference override / technician
+   landing wrapper; the canonical Schedule and owner Home surfaces keep their
+   own source-owned geometry.
+   -------------------------------------------------------------------------- */
+.jarvis-role-landing__stage {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.jarvis-role-landing__stage[data-jarvis-density="compact"] {
+  gap: 12px;
+}
+
+/* --------------------------------------------------------------------------
+   P2.T3 — Household 360
+
+   The customer surface is a dense operational index with one continuous detail
+   record. It shares the JARVIS material language, but it does not reuse the old
+   card-grid CRM view or create a second customer source.
+   -------------------------------------------------------------------------- */
+.jarvis-surface-nav {
+  display: flex;
+  min-height: 64px;
+  align-items: center;
+  gap: 18px;
+  width: min(100% - 32px, 1700px);
+  margin-inline: auto;
+  border-bottom: 1px solid rgba(118, 199, 225, 0.14);
+}
+
+.jarvis-surface-nav__brand {
+  flex: 0 0 auto;
+  color: #effcff;
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: 0.13em;
+  text-decoration: none;
+}
+
+.jarvis-surface-nav__brand span {
+  color: #56d7ef;
+}
+
+.jarvis-surface-nav__links {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.jarvis-surface-nav__links::-webkit-scrollbar {
+  display: none;
+}
+
+.jarvis-surface-nav__mobile-links,
+.jarvis-surface-nav__more-sheet {
+  display: none;
+}
+
+.jarvis-surface-nav__link {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: #82a8ba;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-decoration: none;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.jarvis-surface-nav__link:hover,
+.jarvis-surface-nav__link:focus-visible,
+.jarvis-surface-nav__link[data-active="true"] {
+  border-color: rgba(73, 220, 247, 0.33);
+  background: rgba(38, 190, 224, 0.1);
+  color: #e7fbff;
+  outline: none;
+}
+
+.jarvis-context-capsule {
+  display: inline-flex;
+  min-width: 0;
+  flex: 0 0 auto;
+  align-items: baseline;
+  gap: 7px;
+  max-width: 320px;
+  padding: 7px 10px;
+  border: 1px solid rgba(93, 230, 191, 0.26);
+  border-radius: 8px;
+  background: rgba(47, 174, 140, 0.07);
+  color: #a7ecdb;
+  font-size: 10px;
+}
+
+.jarvis-context-capsule__eyebrow {
+  color: #5ddcb9;
+  font-size: 8px;
+  font-weight: 950;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.jarvis-context-capsule__label {
+  overflow: hidden;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jarvis-context-capsule__id {
+  color: #6bada7;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 9px;
+}
+
+.jarvis-household-shell {
+  min-height: 100vh;
+  color: var(--j-text);
+  background:
+    radial-gradient(ellipse at 80% -18%, rgba(20, 143, 172, 0.14), transparent 41%),
+    linear-gradient(180deg, #05101a 0%, #03080f 48%, #02060b 100%);
+}
+
+.jarvis-household-intro,
+.jarvis-household-banner,
+.jarvis-household-layout {
+  width: min(100% - 32px, 1700px);
+  margin-inline: auto;
+}
+
+.jarvis-household-intro {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 27px 0 19px;
+}
+
+.jarvis-household-eyebrow {
+  color: #70b7cb;
+  font-size: 9px;
+  font-weight: 950;
+  letter-spacing: 0.18em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.jarvis-household-intro h1 {
+  margin: 6px 0 0;
+  color: #eafaff;
+  font-size: clamp(25px, 3vw, 39px);
+  font-weight: 900;
+  letter-spacing: -0.045em;
+  line-height: 1.02;
+}
+
+.jarvis-household-intro__copy {
+  margin: 10px 0 0;
+  color: #8eb1bf;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.jarvis-household-intro__right {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.jarvis-household-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #83a9b6;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.jarvis-household-source > span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #f1ba59;
+  box-shadow: 0 0 9px rgba(241, 186, 89, 0.5);
+}
+
+.jarvis-household-source[data-source-state="live"] > span {
+  background: #5de4be;
+  box-shadow: 0 0 9px rgba(93, 228, 190, 0.5);
+}
+
+.jarvis-household-refresh {
+  display: inline-grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 1px solid rgba(121, 202, 226, 0.2);
+  border-radius: 50%;
+  color: #9dc7d5;
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease;
+}
+
+.jarvis-household-refresh:hover,
+.jarvis-household-refresh:focus-visible {
+  border-color: rgba(81, 222, 250, 0.56);
+  background: rgba(36, 196, 231, 0.12);
+  color: #effcff;
+  outline: none;
+}
+
+.jarvis-household-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 40px;
+  padding: 9px 12px;
+  border: 1px solid rgba(118, 199, 225, 0.13);
+  border-radius: 8px;
+  background: rgba(6, 19, 29, 0.74);
+  color: #7ea5b6;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.jarvis-household-banner a {
+  color: #f4d28c;
+  font-weight: 950;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.jarvis-household-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.36fr) minmax(430px, 0.84fr);
+  align-items: start;
+  gap: 18px;
+  padding: 18px 0 52px;
+}
+
+.jarvis-household-index-region,
+.jarvis-household-detail-region {
+  min-width: 0;
+}
+
+.jarvis-household-index-region {
+  border-right: 1px solid rgba(118, 199, 225, 0.13);
+  padding-right: 16px;
+}
+
+.jarvis-household-section-heading,
+.jarvis-household-band-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.jarvis-household-section-heading {
+  padding: 5px 2px 12px;
+}
+
+.jarvis-household-section-heading h2 {
+  margin: 4px 0 0;
+  color: #e7f9ff;
+  font-size: 21px;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+}
+
+.jarvis-household-count {
+  color: #7b9eae;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+
+.jarvis-household-index-table {
+  overflow-x: auto;
+  border-top: 1px solid rgba(118, 199, 225, 0.16);
+  scrollbar-color: rgba(85, 191, 218, 0.36) transparent;
+}
+
+.jarvis-household-index-head,
+.jarvis-household-index-row {
+  display: grid;
+  grid-template-columns: minmax(190px, 1.55fr) minmax(150px, 1.2fr) minmax(98px, 0.82fr) minmax(98px, 0.82fr) 52px 84px minmax(130px, 0.95fr);
+  min-width: 900px;
+  gap: 10px;
+  align-items: center;
+}
+
+.jarvis-household-index-head {
+  min-height: 35px;
+  padding: 0 10px;
+  border-bottom: 1px solid rgba(118, 199, 225, 0.11);
+  color: #6f9aac;
+  font-size: 8px;
+  font-weight: 950;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.jarvis-household-index-row {
+  width: 100%;
+  min-height: 76px;
+  padding: 9px 10px;
+  border: 0;
+  border-bottom: 1px solid rgba(118, 199, 225, 0.1);
+  background: transparent;
+  color: #b8d5de;
+  cursor: pointer;
+  font-size: 10px;
+  line-height: 1.35;
+  text-align: left;
+  transition: background 160ms ease, color 160ms ease;
+}
+
+.jarvis-household-index-row:hover,
+.jarvis-household-index-row:focus-visible,
+.jarvis-household-index-row[data-selected="true"] {
+  background: rgba(31, 156, 187, 0.1);
+  color: #e4faff;
+  outline: none;
+}
+
+.jarvis-household-index-primary {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.jarvis-household-index-primary strong {
+  overflow: hidden;
+  color: #e5faff;
+  font-size: 12px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jarvis-household-index-primary small,
+.jarvis-household-index-primary em {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+  color: #7598a8;
+  font-size: 9px;
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jarvis-household-index-primary em {
+  color: #547384;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 8px;
+}
+
+.jarvis-household-index-number {
+  color: #a5e6d8;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 900;
+}
+
+.jarvis-household-alert {
+  color: #f3c978;
+  font-weight: 850;
+}
+
+.jarvis-household-muted {
+  color: #668695;
+}
+
+.jarvis-household-empty {
+  padding: 48px 20px;
+  color: #6e91a0;
+  font-size: 11px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.jarvis-household-detail-empty {
+  display: grid;
+  min-height: 360px;
+  place-items: center;
+  align-content: center;
+  gap: 9px;
+  padding: 30px;
+  border: 1px solid rgba(118, 199, 225, 0.13);
+  background: rgba(3, 12, 20, 0.58);
+  color: #86aebd;
+  text-align: center;
+}
+
+.jarvis-household-detail-empty h2 {
+  margin: 4px 0 0;
+  color: #deF8ff;
+  font-size: 20px;
+  font-weight: 850;
+}
+
+.jarvis-household-detail-empty p {
+  max-width: 360px;
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.jarvis-household-error {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 14px;
+  border: 1px solid rgba(244, 190, 91, 0.28);
+  background: rgba(168, 107, 24, 0.08);
+  color: #f4d08d;
+  font-size: 11px;
+}
+
+.jarvis-household-detail {
+  display: grid;
+  gap: 13px;
+}
+
+.jarvis-household-band {
+  padding: 17px;
+  border: 1px solid rgba(118, 199, 225, 0.15);
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(8, 27, 39, 0.82), rgba(3, 11, 19, 0.78));
+}
+
+.jarvis-household-band-heading {
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(118, 199, 225, 0.1);
+}
+
+.jarvis-household-band-note,
+.jarvis-household-record-id {
+  color: #628b9d;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 8px;
+  letter-spacing: 0.04em;
+}
+
+.jarvis-household-record-id {
+  overflow: hidden;
+  max-width: 55%;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jarvis-household-identity-grid {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 15px 0 10px;
+}
+
+.jarvis-household-identity-grid h2 {
+  margin: 0;
+  color: #ecfbff;
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: -0.035em;
+}
+
+.jarvis-household-identity-grid p {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 6px 0 0;
+  color: #8fb9c7;
+  font-size: 11px;
+}
+
+.jarvis-household-consent {
+  padding: 7px 9px;
+  border: 1px solid rgba(93, 228, 190, 0.23);
+  border-radius: 999px;
+  color: #8ee6d2;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-align: right;
+  text-transform: uppercase;
+}
+
+.jarvis-household-consent[data-consent="false"] {
+  border-color: rgba(244, 127, 127, 0.26);
+  color: #f4a9a9;
+}
+
+.jarvis-household-contact-line {
+  display: grid;
+  gap: 5px;
+  padding: 10px 0;
+  border-top: 1px solid rgba(118, 199, 225, 0.1);
+  color: #a1c5d1;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.jarvis-household-contact-line strong {
+  color: #e1f7fc;
+}
+
+.jarvis-household-id-line {
+  color: #638897;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 8px;
+  line-height: 1.5;
+}
+
+.jarvis-household-equipment-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  padding: 14px 0;
+}
+
+.jarvis-household-equipment-strip > span {
+  display: inline-grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 3px 6px;
+  min-width: 150px;
+  padding: 8px 9px;
+  border: 1px solid rgba(118, 199, 225, 0.13);
+  border-radius: 7px;
+  background: rgba(6, 20, 29, 0.62);
+  color: #b8d7df;
+  font-size: 10px;
+}
+
+.jarvis-household-equipment-strip strong {
+  color: #e1f8fd;
+}
+
+.jarvis-household-equipment-strip small {
+  grid-column: 1 / -1;
+  color: #678b9a;
+  font-size: 8px;
+}
+
+.jarvis-household-timeline {
+  display: grid;
+  gap: 0;
+  border-top: 1px solid rgba(118, 199, 225, 0.1);
+}
+
+.jarvis-household-timeline-row {
+  display: grid;
+  grid-template-columns: 15px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  min-height: 46px;
+  border-bottom: 1px solid rgba(118, 199, 225, 0.08);
+  color: #c0dce3;
+  font-size: 10px;
+}
+
+.jarvis-household-timeline-marker {
+  width: 7px;
+  height: 7px;
+  border: 2px solid #5ad9dd;
+  border-radius: 50%;
+  box-shadow: 0 0 8px rgba(90, 217, 221, 0.4);
+}
+
+.jarvis-household-timeline-row span:not(.jarvis-household-timeline-marker) {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.jarvis-household-timeline-row strong {
+  overflow: hidden;
+  color: #d9f4f8;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jarvis-household-timeline-row small,
+.jarvis-household-timeline-row time {
+  color: #678b9a;
+  font-size: 8px;
+}
+
+.jarvis-household-state-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 14px 0;
+}
+
+.jarvis-household-state-grid > div {
+  display: grid;
+  min-height: 77px;
+  align-content: space-between;
+  gap: 5px;
+  padding: 10px;
+  border-left: 2px solid rgba(83, 211, 214, 0.48);
+  background: rgba(5, 19, 28, 0.55);
+}
+
+.jarvis-household-state-grid > div[data-alert="attention"] {
+  border-left-color: rgba(244, 190, 91, 0.72);
+}
+
+.jarvis-household-state-grid span {
+  color: #6e9aaa;
+  font-size: 8px;
+  font-weight: 950;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.jarvis-household-state-grid strong {
+  color: #e1f8fc;
+  font-size: 15px;
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.jarvis-household-state-grid > div[data-alert="attention"] strong {
+  color: #f3cf88;
+  font-size: 12px;
+}
+
+.jarvis-household-state-grid small {
+  overflow: hidden;
+  color: #678b9a;
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jarvis-household-business-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  padding: 12px 0;
+  border-top: 1px solid rgba(118, 199, 225, 0.1);
+}
+
+.jarvis-household-business-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid rgba(81, 216, 234, 0.22);
+  border-radius: 6px;
+  color: #a8e1ed;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+
+.jarvis-household-business-links a:hover,
+.jarvis-household-business-links a:focus-visible {
+  border-color: rgba(81, 216, 234, 0.62);
+  background: rgba(38, 190, 224, 0.1);
+  color: #ecfdff;
+  outline: none;
+}
+
+.jarvis-household-recent-line {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #7297a4;
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.jarvis-household-spin {
+  animation: jarvis-household-spin 1s linear infinite;
+}
+
+@keyframes jarvis-household-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 1120px) {
+  .jarvis-household-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .jarvis-household-index-region {
+    border-right: 0;
+    padding-right: 0;
+  }
+
+  .jarvis-household-detail-region {
+    max-width: 820px;
+  }
+}
+
+@media (max-width: 700px) {
+  .jarvis-surface-nav {
+    width: min(100% - 22px, 1700px);
+    gap: 8px;
+  }
+
+  .jarvis-surface-nav__links {
+    display: none;
+  }
+
+  .jarvis-surface-nav__mobile-links {
+    position: fixed;
+    z-index: 50;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 3px;
+    width: 100%;
+    min-height: 62px;
+    padding: 7px 9px max(7px, env(safe-area-inset-bottom));
+    border-top: 1px solid rgba(111, 203, 218, 0.22);
+    background: rgba(3, 9, 18, 0.96);
+    box-shadow: 0 -14px 34px rgba(0, 2, 9, 0.38);
+    backdrop-filter: blur(16px);
+  }
+
+  .jarvis-surface-nav__mobile-link {
+    display: inline-flex;
+    min-width: 0;
+    min-height: 46px;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 0 4px;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    background: transparent;
+    color: #7799aa;
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: 0.05em;
+    text-decoration: none;
+    text-transform: uppercase;
+  }
+
+  .jarvis-surface-nav__mobile-link:hover,
+  .jarvis-surface-nav__mobile-link:focus-visible,
+  .jarvis-surface-nav__mobile-link[data-active="true"] {
+    border-color: rgba(73, 220, 247, 0.33);
+    background: rgba(38, 190, 224, 0.1);
+    color: #e7fbff;
+    outline: none;
+  }
+
+  .jarvis-surface-nav__more-button {
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  .jarvis-surface-nav__more-sheet {
+    position: fixed;
+    z-index: 51;
+    right: 11px;
+    bottom: 72px;
+    display: grid;
+    gap: 3px;
+    width: min(220px, calc(100vw - 22px));
+    padding: 10px;
+    border: 1px solid rgba(111, 203, 218, 0.28);
+    border-radius: 10px;
+    background: rgba(7, 17, 30, 0.98);
+    box-shadow: 0 18px 44px rgba(0, 2, 9, 0.55);
+  }
+
+  .jarvis-surface-nav__more-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 2px 2px 8px;
+    border-bottom: 1px solid rgba(111, 203, 218, 0.15);
+    color: #68cadb;
+    font-size: 9px;
+    font-weight: 950;
+    letter-spacing: 0.14em;
+  }
+
+  .jarvis-surface-nav__more-heading button {
+    display: grid;
+    width: 27px;
+    height: 27px;
+    place-items: center;
+    border: 1px solid rgba(111, 203, 218, 0.18);
+    border-radius: 6px;
+    background: transparent;
+    color: #a8c5d0;
+    cursor: pointer;
+  }
+
+  .jarvis-surface-nav__more-sheet > a {
+    display: flex;
+    min-height: 39px;
+    align-items: center;
+    padding: 0 9px;
+    border-radius: 6px;
+    color: #c7e9ef;
+    font-size: 11px;
+    font-weight: 850;
+    text-decoration: none;
+  }
+
+  .jarvis-surface-nav__more-sheet > a:hover,
+  .jarvis-surface-nav__more-sheet > a:focus-visible {
+    background: rgba(38, 190, 224, 0.12);
+    color: #effeff;
+    outline: none;
+  }
+
+  .jarvis-agent-fleet-shell,
+  .jarvis-household-shell,
+  .jarvis-dispatch-shell,
+  .jarvis-money-shell,
+  .jarvis-work-shell {
+    padding-bottom: 76px;
+  }
+
+  .jarvis-surface-nav__brand {
+    font-size: 9px;
+  }
+
+  .jarvis-surface-nav__link {
+    min-height: 30px;
+    padding-inline: 7px;
+    font-size: 8px;
+  }
+
+  .jarvis-context-capsule {
+    display: none;
+  }
+
+  .jarvis-household-intro,
+  .jarvis-household-banner,
+  .jarvis-household-layout {
+    width: min(100% - 22px, 1700px);
+  }
+
+  .jarvis-household-intro {
+    align-items: start;
+    flex-direction: column;
+    gap: 13px;
+    padding-top: 21px;
+  }
+
+  .jarvis-household-intro h1 {
+    font-size: 28px;
+  }
+
+  .jarvis-household-intro__right {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .jarvis-household-banner {
+    align-items: start;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 9px;
+  }
+
+  .jarvis-household-layout {
+    padding-top: 12px;
+  }
+
+  .jarvis-household-index-table {
+    overflow-x: visible;
+  }
+
+  .jarvis-household-index-head {
+    display: none;
+  }
+
+  .jarvis-household-index-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    min-width: 0;
+    gap: 9px 12px;
+    padding: 12px 4px;
+  }
+
+  .jarvis-household-index-row > span {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+  }
+
+  .jarvis-household-index-row > span::before {
+    color: #5f8796;
+    content: attr(data-label);
+    font-size: 8px;
+    font-weight: 900;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .jarvis-household-index-row > span:nth-child(1)::before { content: "Household"; }
+  .jarvis-household-index-row > span:nth-child(2)::before { content: "System"; }
+  .jarvis-household-index-row > span:nth-child(3)::before { content: "Last service"; }
+  .jarvis-household-index-row > span:nth-child(4)::before { content: "Next service"; }
+  .jarvis-household-index-row > span:nth-child(5)::before { content: "Open Work"; }
+  .jarvis-household-index-row > span:nth-child(6)::before { content: "Balance"; }
+  .jarvis-household-index-row > span:nth-child(7)::before { content: "Alert"; }
+
+  .jarvis-household-index-row > span:nth-child(1) {
+    grid-column: 1 / -1;
+  }
+
+  .jarvis-household-index-row > span:nth-child(7) {
+    grid-column: 1 / -1;
+  }
+
+  .jarvis-household-band {
+    padding: 13px;
+  }
+
+  .jarvis-household-band-note {
+    max-width: 52%;
+    text-align: right;
+  }
+
+  .jarvis-household-identity-grid {
+    align-items: start;
+    flex-direction: column;
+  }
+
+  .jarvis-household-consent {
+    text-align: left;
+  }
+
+  .jarvis-household-record-id {
+    max-width: 50%;
+  }
+
+  .jarvis-household-state-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .jarvis-household-timeline-row {
+    grid-template-columns: 15px minmax(0, 1fr);
+  }
+
+  .jarvis-household-timeline-row time {
+    grid-column: 2;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jarvis-household-refresh,
+  .jarvis-household-index-row,
+  .jarvis-household-business-links a { transition: none; }
+  .jarvis-household-spin { animation: none; }
+}
+
+/* --------------------------------------------------------------------------
+   P2.T2 — Work / Causal Spine
+
+   This is a document-and-queue composition, not another dashboard card field.
+   The queue is a measured rail, the seven chapters are one continuous causal
+   line, and the inspector does not occupy space until a source is selected.
+   -------------------------------------------------------------------------- */
+.jarvis-operations-header__surface-link {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  padding: 0 10px;
+  border: 1px solid rgba(78, 207, 239, 0.24);
+  border-radius: 999px;
+  color: #a6d6e8;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.jarvis-operations-header__surface-nav {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.jarvis-operations-header__surface-nav::-webkit-scrollbar {
+  display: none;
+}
+
+.jarvis-operations-header__context {
+  flex: 0 0 auto;
+  color: #8ce6d0;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.jarvis-operations-header__surface-link:hover,
+.jarvis-operations-header__surface-link:focus-visible {
+  border-color: rgba(71, 225, 255, 0.58);
+  background: rgba(37, 202, 238, 0.12);
+  color: #e5fbff;
+  outline: none;
+}
+
+.jarvis-work-shell {
+  min-height: 100vh;
+  color: var(--j-text);
+  background:
+    radial-gradient(ellipse at 52% -12%, rgba(24, 151, 191, 0.14), transparent 40%),
+    linear-gradient(180deg, #05101a 0%, #03080f 48%, #02060b 100%);
+}
+
+.jarvis-work-topbar,
+.jarvis-work-intro,
+.jarvis-work-filterbar,
+.jarvis-work-layout {
+  width: min(100% - 32px, 1700px);
+  margin-inline: auto;
+}
+
+.jarvis-work-topbar {
+  display: flex;
+  min-height: 78px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border-bottom: 1px solid rgba(118, 199, 225, 0.13);
+}
+
+.jarvis-work-topbar__left,
+.jarvis-work-topbar__right,
+.jarvis-work-back,
+.jarvis-work-live,
+.jarvis-work-facts,
+.jarvis-work-owner-line,
+.jarvis-work-next-line,
+.jarvis-work-event-line,
+.jarvis-work-honest-warning,
+.jarvis-work-run__header,
+.jarvis-work-run__header > span,
+.jarvis-work-receipt-row,
+.jarvis-work-link,
+.jarvis-work-primary-button,
+.jarvis-work-secondary-button,
+.jarvis-work-queue-toggle {
+  display: inline-flex;
+  align-items: center;
+}
+
+.jarvis-work-topbar__left,
+.jarvis-work-topbar__right {
+  gap: 14px;
+}
+
+.jarvis-work-back {
+  min-height: 44px;
+  gap: 7px;
+  color: #9bc7d9;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.jarvis-work-back:hover,
+.jarvis-work-back:focus-visible {
+  color: #e5fbff;
+  outline: none;
+}
+
+.jarvis-work-topbar__divider {
+  width: 1px;
+  height: 28px;
+  background: rgba(126, 207, 231, 0.2);
+}
+
+.jarvis-work-topbar h1,
+.jarvis-work-queue__heading h2,
+.jarvis-work-inspector__header h2 {
+  margin: 2px 0 0;
+  color: #edfaff;
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+}
+
+.jarvis-work-eyebrow,
+.jarvis-work-inspector__eyebrow {
+  color: #72b5ce;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.jarvis-work-live {
+  gap: 7px;
+  color: #87b3c9;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.jarvis-work-live__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #f1ba59;
+  box-shadow: 0 0 10px rgba(241, 186, 89, 0.5);
+}
+
+.jarvis-work-live__dot[data-live="true"] {
+  background: #59e3bd;
+  box-shadow: 0 0 10px rgba(89, 227, 189, 0.55);
+}
+
+.jarvis-work-icon-button {
+  display: inline-grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border: 1px solid rgba(113, 199, 225, 0.2);
+  border-radius: 50%;
+  color: #9dc9da;
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease;
+}
+
+.jarvis-work-icon-button:hover,
+.jarvis-work-icon-button:focus-visible {
+  border-color: rgba(75, 223, 255, 0.58);
+  background: rgba(36, 196, 231, 0.12);
+  color: #ecfcff;
+  outline: none;
+}
+
+.jarvis-work-intro {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 22px 0 16px;
+}
+
+.jarvis-work-intro p {
+  margin: 0;
+  color: #d9f4fc;
+  font-size: clamp(18px, 1.7vw, 26px);
+  font-weight: 800;
+  letter-spacing: -0.035em;
+}
+
+.jarvis-work-intro span {
+  color: #6f9eb6;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.jarvis-work-filterbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 48px;
+  border-top: 1px solid rgba(118, 199, 225, 0.12);
+  border-bottom: 1px solid rgba(118, 199, 225, 0.14);
+}
+
+.jarvis-work-filters {
+  display: flex;
+  gap: 2px;
+  overflow-x: auto;
+}
+
+.jarvis-work-filter,
+.jarvis-work-queue-toggle {
+  min-height: 40px;
+  padding: 0 11px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: #789db2;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.jarvis-work-filter:hover,
+.jarvis-work-filter:focus-visible,
+.jarvis-work-filter[data-selected="true"] {
+  border-color: rgba(64, 210, 242, 0.26);
+  background: rgba(31, 173, 211, 0.1);
+  color: #d8f8ff;
+  outline: none;
+}
+
+.jarvis-work-queue-toggle {
+  display: none;
+  gap: 8px;
+  border-color: rgba(77, 205, 236, 0.26);
+  color: #b9eaf5;
+}
+
+.jarvis-work-queue-toggle span {
+  color: #70d8ed;
+}
+
+.jarvis-work-banner {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  width: min(100% - 32px, 1700px);
+  margin: 12px auto 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(244, 190, 91, 0.26);
+  border-radius: 9px;
+  background: rgba(168, 107, 24, 0.09);
+  color: #f5d18b;
+  font-size: 11px;
+}
+
+.jarvis-work-banner__link {
+  color: #fff2c7;
+  font-weight: 900;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.jarvis-work-layout {
+  display: grid;
+  grid-template-columns: 316px minmax(0, 1fr);
+  align-items: start;
+  gap: 18px;
+  padding: 18px 0 48px;
+}
+
+.jarvis-work-layout--inspector {
+  grid-template-columns: 316px minmax(0, 1fr) 348px;
+}
+
+.jarvis-work-queue,
+.jarvis-work-main,
+.jarvis-work-inspector {
+  min-width: 0;
+}
+
+.jarvis-work-queue {
+  border-right: 1px solid rgba(118, 199, 225, 0.13);
+  padding-right: 16px;
+}
+
+.jarvis-work-queue__heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 2px 10px;
+}
+
+.jarvis-work-queue__heading > span {
+  color: #5f8ca3;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.jarvis-work-queue__rows {
+  overflow: hidden;
+  border-top: 1px solid rgba(118, 199, 225, 0.15);
+}
+
+.jarvis-work-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto 18px;
+  gap: 8px;
+  width: 100%;
+  min-height: 70px;
+  align-items: center;
+  padding: 9px 2px 9px 7px;
+  border-bottom: 1px solid rgba(118, 199, 225, 0.11);
+  color: #b8d5e2;
+  text-align: left;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.jarvis-work-row:hover,
+.jarvis-work-row:focus-visible,
+.jarvis-work-row[data-selected="true"] {
+  background: linear-gradient(90deg, rgba(33, 173, 211, 0.13), transparent 92%);
+  border-bottom-color: rgba(66, 210, 241, 0.34);
+  color: #edfbff;
+  outline: none;
+}
+
+.jarvis-work-row[data-selected="true"]::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 2px;
+  background: #3dd8f6;
+  box-shadow: 0 0 12px rgba(61, 216, 246, 0.54);
+  content: "";
+}
+
+.jarvis-work-row__status {
+  display: inline-grid;
+  width: 17px;
+  height: 17px;
+  place-items: center;
+  border: 1px solid rgba(123, 196, 219, 0.26);
+  border-radius: 50%;
+  color: #8cb7c9;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.jarvis-work-row[data-status="needs-you"] .jarvis-work-row__status,
+.jarvis-work-status[data-status="needs-you"] { color: #f5cd70; border-color: rgba(245, 205, 112, 0.48); }
+.jarvis-work-row[data-status="working"] .jarvis-work-row__status,
+.jarvis-work-status[data-status="working"] { color: #62dcf4; border-color: rgba(98, 220, 244, 0.48); }
+.jarvis-work-row[data-status="failed"] .jarvis-work-row__status,
+.jarvis-work-row[data-status="blocked"] .jarvis-work-row__status,
+.jarvis-work-status[data-status="failed"],
+.jarvis-work-status[data-status="blocked"] { color: #f4898e; border-color: rgba(244, 137, 142, 0.48); }
+.jarvis-work-row[data-status="completed"] .jarvis-work-row__status,
+.jarvis-work-status[data-status="completed"] { color: #6ee5be; border-color: rgba(110, 229, 190, 0.42); }
+
+.jarvis-work-row__body,
+.jarvis-work-row__aside,
+.jarvis-work-action,
+.jarvis-work-run,
+.jarvis-work-inspector__action,
+.jarvis-work-inspector__entity {
+  display: grid;
+  min-width: 0;
+}
+
+.jarvis-work-row__body { gap: 3px; }
+.jarvis-work-row__title { overflow: hidden; color: #dff6fc; font-size: 11px; font-weight: 850; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
+.jarvis-work-row__meta,
+.jarvis-work-row__fact,
+.jarvis-work-row__source,
+.jarvis-work-row__age { overflow: hidden; color: #769cb1; font-size: 9px; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+.jarvis-work-row__fact { color: #a4c6d4; }
+.jarvis-work-row__aside { justify-items: end; gap: 4px; }
+.jarvis-work-row__source { color: #73c8df; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; }
+.jarvis-work-row__age { color: #648b9e; font-variant-numeric: tabular-nums; }
+.jarvis-work-row__chevron { color: #5a8da3; }
+
+.jarvis-work-queue__empty {
+  padding: 26px 8px;
+  text-align: center;
+}
+
+.jarvis-work-main { min-width: 0; }
+.jarvis-work-spine { min-width: 0; }
+.jarvis-work-spine__header { padding: 5px 2px 19px; border-bottom: 1px solid rgba(118, 199, 225, 0.16); }
+.jarvis-work-spine__eyebrow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.jarvis-work-status { display: inline-flex; align-items: center; gap: 5px; padding: 4px 7px; border: 1px solid rgba(118, 199, 225, 0.22); border-radius: 999px; color: #b9dae6; font-size: 9px; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; }
+.jarvis-work-status > span { font-size: 11px; }
+.jarvis-work-root { color: #6792a6; font-size: 10px; font-weight: 750; }
+.jarvis-work-spine__title { max-width: 840px; margin: 12px 0 5px; color: #f1fcff; font-size: clamp(21px, 2.3vw, 32px); font-weight: 900; letter-spacing: -0.045em; line-height: 1.08; }
+.jarvis-work-spine__subline { display: flex; flex-wrap: wrap; gap: 7px; color: #759caf; font-size: 10px; }
+
+.jarvis-work-spine__body { position: relative; padding-top: 12px; }
+.jarvis-work-spine__body::before { position: absolute; top: 23px; bottom: 23px; left: 17px; width: 1px; background: linear-gradient(#44d9f5, rgba(68, 217, 245, 0.22) 72%, transparent); content: ""; }
+.jarvis-work-chapter { position: relative; display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 12px; min-height: 84px; padding: 9px 0 13px; }
+.jarvis-work-chapter__rail { position: relative; z-index: 1; display: flex; justify-content: center; }
+.jarvis-work-chapter__node { display: inline-grid; width: 27px; height: 27px; place-items: center; border: 1px solid rgba(101, 195, 220, 0.37); border-radius: 50%; background: #06131e; color: #7fb8cc; font-size: 9px; font-weight: 900; letter-spacing: 0.06em; }
+.jarvis-work-chapter[data-active="true"] .jarvis-work-chapter__node { border-color: rgba(75, 226, 249, 0.82); background: #0a2634; color: #e3fbff; box-shadow: 0 0 16px rgba(55, 215, 241, 0.2); }
+.jarvis-work-chapter__content { min-width: 0; padding: 1px 0 11px; border-bottom: 1px solid rgba(118, 199, 225, 0.12); }
+.jarvis-work-chapter__heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: #9fc5d4; font-size: 10px; font-weight: 900; letter-spacing: 0.18em; line-height: 1.2; }
+.jarvis-work-chapter__signal { color: #61dbef; font-size: 8px; letter-spacing: 0.12em; text-transform: uppercase; }
+.jarvis-work-chapter__body { padding-top: 9px; }
+.jarvis-work-copy { margin: 0; color: #e2f5fa; font-size: 14px; line-height: 1.55; }
+.jarvis-work-muted { margin: 0; color: #7699ad; font-size: 11px; line-height: 1.55; }
+.jarvis-work-facts { flex-wrap: wrap; gap: 12px; margin-top: 9px; color: #7daabd; font-size: 10px; }
+.jarvis-work-facts span { display: inline-flex; align-items: center; gap: 5px; }
+.jarvis-work-link-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 11px; }
+.jarvis-work-entity-link { display: inline-flex; align-items: center; gap: 4px; }
+.jarvis-work-link { gap: 5px; min-height: 30px; padding: 0 8px; border: 1px solid rgba(88, 201, 231, 0.25); border-radius: 6px; background: rgba(19, 123, 155, 0.08); color: #9ad8e9; font-size: 10px; font-weight: 800; }
+.jarvis-work-link:hover,.jarvis-work-link:focus-visible { border-color: rgba(82, 224, 248, 0.62); background: rgba(24, 161, 198, 0.14); color: #effdff; outline: none; }
+
+.jarvis-work-action-list,.jarvis-work-execution-list,.jarvis-work-approval-list,.jarvis-work-receipt-list { display: grid; gap: 8px; }
+.jarvis-work-action { gap: 7px; padding: 9px 10px; border-left: 2px solid rgba(61, 212, 239, 0.5); background: linear-gradient(90deg, rgba(33, 164, 198, 0.08), transparent 75%); }
+.jarvis-work-action__topline { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.jarvis-work-action__name { min-width: 0; color: #e5f9fd; font-size: 12px; font-weight: 900; text-align: left; }
+.jarvis-work-action__name:hover,.jarvis-work-action__name:focus-visible { color: #73e7f9; outline: none; text-decoration: underline; text-underline-offset: 3px; }
+.jarvis-work-action__state { flex: 0 0 auto; color: #81b2c5; font-size: 9px; font-weight: 850; letter-spacing: 0.08em; text-transform: uppercase; }
+.jarvis-work-action__renderer { max-width: 620px; overflow: hidden; color: #c2dce5; }
+.jarvis-work-dependency { color: #729bab; font-size: 9px; }
+.jarvis-work-owner-line,.jarvis-work-next-line,.jarvis-work-event-line,.jarvis-work-honest-warning { flex-wrap: wrap; gap: 8px; color: #c1dce5; font-size: 11px; line-height: 1.45; }
+.jarvis-work-owner-line strong { color: #e7faff; }
+.jarvis-work-owner-line span { color: #7699ad; }
+.jarvis-work-approval-row { display: flex; align-items: center; gap: 8px; min-height: 38px; padding: 5px 0; }
+.jarvis-work-approval-dot { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; background: #7799a9; }
+.jarvis-work-approval-dot[data-approval-status="pending"] { background: #f4c96a; box-shadow: 0 0 10px rgba(244, 201, 106, 0.42); }
+.jarvis-work-approval-row span:last-child { display: grid; gap: 3px; }
+.jarvis-work-approval-row strong { color: #e5f8fc; font-size: 11px; }
+.jarvis-work-approval-row small { color: #769caf; font-size: 9px; }
+.jarvis-work-primary-button,.jarvis-work-secondary-button { justify-content: center; gap: 7px; min-height: 42px; margin-top: 11px; padding: 0 12px; border-radius: 7px; font-size: 10px; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; }
+.jarvis-work-primary-button { border: 1px solid rgba(247, 203, 102, 0.42); background: rgba(183, 123, 26, 0.13); color: #ffe3a1; }
+.jarvis-work-primary-button:hover,.jarvis-work-primary-button:focus-visible { border-color: rgba(247, 203, 102, 0.75); background: rgba(183, 123, 26, 0.22); outline: none; }
+.jarvis-work-secondary-button { border: 1px solid rgba(117, 195, 221, 0.23); background: rgba(24, 112, 143, 0.08); color: #b8d9e5; }
+.jarvis-work-secondary-button:hover,.jarvis-work-secondary-button:focus-visible { border-color: rgba(84, 221, 246, 0.62); color: #effdff; outline: none; }
+.jarvis-work-reused-cockpit { margin-top: 12px; overflow: hidden; border-top: 1px solid rgba(245, 203, 106, 0.2); padding-top: 12px; }
+.jarvis-work-run { gap: 4px; padding: 10px; border-left: 2px solid rgba(75, 219, 241, 0.48); background: rgba(18, 117, 146, 0.07); }
+.jarvis-work-run__header { justify-content: space-between; gap: 12px; color: #e1f7fb; font-size: 11px; font-weight: 900; }
+.jarvis-work-run__header > span { gap: 6px; }
+.jarvis-work-run__header strong { color: #77d6e7; font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; }
+.jarvis-work-run__id { color: #709bad; font-size: 9px; }
+.jarvis-work-step-list { display: grid; gap: 3px; margin: 8px 0 0; padding: 0; list-style: none; }
+.jarvis-work-step-list li { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 7px; align-items: center; min-height: 25px; color: #a9cbd6; font-size: 10px; }
+.jarvis-work-step-list li > span:first-child { display: inline-grid; width: 18px; height: 18px; place-items: center; border: 1px solid rgba(122, 190, 209, 0.24); border-radius: 50%; color: #7eafc0; font-size: 8px; }
+.jarvis-work-step-list small { color: #6c9bae; font-size: 9px; text-transform: uppercase; }
+.jarvis-work-step-list li[data-step-status="failed"] small { color: #ef9a9f; }
+.jarvis-work-step-list li[data-step-status="completed"] small { color: #75dcb7; }
+.jarvis-work-reused-theater { margin-top: 10px; }
+.jarvis-work-honest-warning { color: #f3c978; }
+.jarvis-work-failure-line { display: flex; gap: 8px; margin: 10px 0 0; color: #f19da2; font-size: 10px; line-height: 1.45; }
+.jarvis-work-event-line { margin-top: 10px; color: #78dcb8; }
+.jarvis-work-receipt-row { width: 100%; gap: 9px; min-height: 48px; padding: 6px 7px; border-bottom: 1px solid rgba(118, 199, 225, 0.1); color: #a9d3df; text-align: left; }
+.jarvis-work-receipt-row:hover,.jarvis-work-receipt-row:focus-visible { background: rgba(27, 165, 199, 0.1); color: #effdff; outline: none; }
+.jarvis-work-receipt-row > span { display: grid; min-width: 0; gap: 3px; }
+.jarvis-work-receipt-row strong { overflow: hidden; color: #e2f7fb; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.jarvis-work-receipt-row small { color: #769bac; font-size: 9px; }
+
+.jarvis-work-inspector { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow-y: auto; border-left: 1px solid rgba(118, 199, 225, 0.14); background: rgba(4, 15, 24, 0.54); }
+.jarvis-work-inspector__header { display: flex; align-items: start; justify-content: space-between; gap: 10px; padding: 13px 0 13px 15px; border-bottom: 1px solid rgba(118, 199, 225, 0.14); }
+.jarvis-work-inspector__header h2 { font-size: 16px; }
+.jarvis-work-inspector__receipt,.jarvis-work-inspector__action,.jarvis-work-inspector__entity { padding: 15px; }
+.jarvis-work-inspector__id { margin-bottom: 12px; color: #b5dbe7; font-size: 11px; font-weight: 900; }
+.jarvis-work-inspector__facts { display: grid; gap: 8px; margin: 16px 0 0; }
+.jarvis-work-inspector__facts div { display: flex; justify-content: space-between; gap: 12px; border-top: 1px solid rgba(118, 199, 225, 0.11); padding-top: 8px; }
+.jarvis-work-inspector__facts dt { color: #7399ac; font-size: 9px; text-transform: uppercase; }
+.jarvis-work-inspector__facts dd { max-width: 190px; overflow: hidden; color: #d7f1f7; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.jarvis-work-inspector__entity { gap: 9px; }
+.jarvis-work-inspector__entity h3 { margin: 0; color: #e2f8fc; font-size: 17px; }
+.jarvis-work-inspector__exact-id { margin: 0; overflow-wrap: anywhere; color: #75dbef; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; }
+.jarvis-work-inspector__provenance { margin: 10px 0 0; color: #769bad; font-size: 9px; line-height: 1.5; }
+.jarvis-work-inspector__provenance code { color: #afd9e5; overflow-wrap: anywhere; }
+.jarvis-work-inspector > .jarvis-work-secondary-button { width: calc(100% - 30px); margin: 0 15px 15px; }
+.jarvis-work-main__empty { display: grid; min-height: 360px; place-items: center; align-content: center; gap: 9px; padding: 36px; border-top: 1px solid rgba(118, 199, 225, 0.15); border-bottom: 1px solid rgba(118, 199, 225, 0.15); color: #6f9caf; text-align: center; }
+.jarvis-work-main__empty h2 { margin: 0; color: #d9f5fa; font-size: 18px; }
+.jarvis-work-main__empty p { max-width: 380px; margin: 0; font-size: 11px; line-height: 1.55; }
+
+@media (prefers-reduced-motion: reduce) {
+  .jarvis-work-row,.jarvis-work-filter,.jarvis-work-icon-button,.jarvis-work-link,.jarvis-work-primary-button,.jarvis-work-secondary-button { transition: none; }
+}
+
+@media (max-width: 1100px) {
+  .jarvis-work-queue-toggle { display: inline-flex; }
+  .jarvis-work-layout,.jarvis-work-layout--inspector { display: block; }
+  .jarvis-work-queue { position: fixed; z-index: 45; top: 132px; bottom: 12px; left: 16px; width: min(360px, calc(100vw - 32px)); overflow-y: auto; padding: 12px; border: 1px solid rgba(79, 206, 237, 0.28); background: rgba(3, 13, 22, 0.97); box-shadow: 0 24px 60px rgba(0, 0, 0, 0.52); transform: translateX(calc(-100% - 28px)); transition: transform 180ms ease; }
+  .jarvis-work-shell[data-queue-open="true"] .jarvis-work-queue { transform: translateX(0); }
+  .jarvis-work-main { width: 100%; }
+  .jarvis-work-inspector { position: fixed; z-index: 50; top: 132px; right: 16px; bottom: 12px; width: min(348px, calc(100vw - 32px)); border: 1px solid rgba(79, 206, 237, 0.28); background: rgba(3, 13, 22, 0.98); box-shadow: 0 24px 60px rgba(0, 0, 0, 0.52); }
+}
+
+@media (max-width: 640px) {
+  .jarvis-operations-header__surface-link { min-height: 30px; padding-inline: 8px; font-size: 9px; }
+  .jarvis-work-topbar,.jarvis-work-intro,.jarvis-work-filterbar,.jarvis-work-layout { width: min(100% - 22px, 1700px); }
+  .jarvis-work-topbar { min-height: 70px; }
+  .jarvis-work-topbar__right { gap: 7px; }
+  .jarvis-work-live { max-width: 92px; overflow: hidden; font-size: 8px; line-height: 1.3; text-align: right; }
+  .jarvis-work-intro { display: grid; gap: 6px; padding: 17px 0 13px; }
+  .jarvis-work-intro p { font-size: 20px; }
+  .jarvis-work-intro span { font-size: 8px; }
+  .jarvis-work-filterbar { min-height: 44px; }
+  .jarvis-work-filter { padding-inline: 8px; font-size: 8px; }
+  .jarvis-work-queue { top: 118px; left: 11px; width: calc(100vw - 22px); }
+  .jarvis-work-inspector { top: 118px; right: 11px; bottom: 11px; width: calc(100vw - 22px); }
+  .jarvis-work-spine__title { font-size: 24px; }
+  .jarvis-work-row { min-height: 72px; grid-template-columns: 18px minmax(0, 1fr) 18px; }
+  .jarvis-work-row__aside { display: none; }
+  .jarvis-work-chapter { grid-template-columns: 31px minmax(0, 1fr); gap: 9px; }
+  .jarvis-work-spine__body::before { left: 14px; }
+  .jarvis-work-chapter__node { width: 25px; height: 25px; }
+  .jarvis-work-action__topline { align-items: start; }
+  .jarvis-work-action__state { max-width: 82px; text-align: right; }
 }
 
 /* Public preview has no CommandRail; do not reserve the owner's fixed-dock
@@ -4153,5 +7713,846 @@ html[data-jarvis-tenant-accent="amber"] .jarvis-root { --accent: var(--j-amber);
   .jarvis-operations-list__row {
     min-height: 58px;
     padding: 9px 10px;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   P1.T2 — H0 Ready Command Canvas
+
+   This is a presentation projection over the existing Thread/Orb/rail/KPI
+   sources. Ready gets one presence stage, one right-side Now Rail, and one
+   compact Business Pulse. Active scenes retain their existing deck until the
+   Scene Director task recomposes them from the same LIVEFRAME facts.
+   -------------------------------------------------------------------------- */
+.jarvis-root .jarvis-command-deck.jarvis-command-deck--ready {
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 320px);
+  grid-template-areas:
+    "stage now"
+    "pulse pulse";
+  align-items: stretch;
+  gap: 16px;
+}
+
+.jarvis-root .jarvis-command-deck--ready > .jarvis-command-deck__stage {
+  grid-area: stage;
+  min-height: 500px;
+}
+
+.jarvis-root .jarvis-command-deck--ready > [data-jarvis-question-depth="operational-signals"] {
+  grid-area: now;
+  width: 100%;
+  min-width: 280px;
+  max-width: 320px;
+  justify-self: end;
+  align-self: start;
+}
+
+.jarvis-root .jarvis-command-deck--ready > .jarvis-command-deck__floor {
+  grid-area: pulse;
+  grid-column: auto;
+  width: 100%;
+  margin-top: 0;
+}
+
+.jarvis-root .jarvis-command-deck--ready .jarvis-now-rail {
+  position: sticky;
+  top: 88px;
+  width: 100%;
+  max-width: 320px;
+  gap: 8px;
+}
+
+.jarvis-root .jarvis-command-deck--ready .jarvis-rest-composition {
+  grid-template-columns: minmax(0, 1fr) !important;
+  grid-template-rows: minmax(360px, 1fr) auto !important;
+  align-items: center;
+  justify-items: center;
+  width: 100%;
+  min-height: 476px;
+  gap: 0;
+}
+
+.jarvis-root .jarvis-command-deck--ready .jarvis-rest-composition > [data-jarvis-question-depth="presence"] {
+  grid-column: 1;
+  grid-row: 1;
+  width: 100%;
+  align-self: center;
+}
+
+.jarvis-root .jarvis-command-deck--ready .jarvis-rest-composition > [data-liveframe-surface="action-spine"] {
+  grid-column: 1;
+  grid-row: 2;
+  width: min(100%, 720px);
+  margin-top: 0;
+  align-self: end;
+}
+
+.jarvis-root .jarvis-command-deck--ready .jarvis-presence-core {
+  min-height: 360px !important;
+  align-items: center;
+}
+
+.jarvis-root .jarvis-command-deck--ready .jarvis-presence-core__orb,
+.jarvis-root .jarvis-command-deck--ready .jarvis-orb-surface,
+.jarvis-root .jarvis-command-deck--ready [data-jarvis-ambient-orb] {
+  width: clamp(220px, 18vw, 260px) !important;
+  height: clamp(220px, 18vw, 260px) !important;
+  min-height: clamp(220px, 18vw, 260px) !important;
+}
+
+.jarvis-root .jarvis-command-deck--ready .jarvis-command-deck__stage > [data-jarvis-composition-region="controls"] {
+  margin-top: 6px;
+  padding-inline: 10px;
+}
+
+.jarvis-root .jarvis-command-deck--ready .jarvis-rest-prompt {
+  min-height: 70px;
+}
+
+.jarvis-root .jarvis-command-deck--ready .jarvis-business-pulse {
+  min-height: 74px;
+  height: 92px;
+}
+
+.jarvis-business-pulse {
+  display: grid;
+  grid-template-columns: minmax(132px, 0.22fr) minmax(0, 1fr);
+  min-width: 0;
+  align-items: stretch;
+  gap: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(83, 176, 210, 0.16);
+  border-radius: 12px;
+  padding: 8px 10px;
+  background:
+    linear-gradient(135deg, rgba(7, 31, 48, 0.78), rgba(2, 11, 21, 0.96) 58%, rgba(4, 18, 31, 0.88)),
+    var(--j-panel-solid);
+  box-shadow: inset 0 1px 0 rgba(225, 253, 255, 0.05), 0 12px 28px rgba(0, 0, 0, 0.2);
+}
+
+.jarvis-business-pulse__heading {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  border-right: 1px solid rgba(111, 197, 226, 0.1);
+  padding-inline: 2px 10px;
+}
+
+.jarvis-business-pulse__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #d9f7ff;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.13em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.jarvis-business-pulse__title svg {
+  color: #32ddff;
+}
+
+.jarvis-business-pulse__note {
+  color: #7295ae;
+  font-size: 9px;
+  line-height: 1.25;
+}
+
+.jarvis-business-pulse__metrics,
+.jarvis-business-pulse__metrics > div,
+.jarvis-business-pulse__metrics [data-jarvis-kpi-strip="compact"] {
+  min-width: 0;
+  height: 100%;
+}
+
+.jarvis-business-pulse__metrics [data-jarvis-kpi-strip="compact"] > .grid {
+  height: 100%;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.jarvis-business-pulse__metrics [data-jarvis-kpi-strip="compact"] .j-panel {
+  height: 74px;
+  min-height: 74px;
+  border-color: rgba(97, 187, 220, 0.15);
+  border-radius: 9px;
+  padding: 9px 10px;
+  background: linear-gradient(145deg, rgba(13, 47, 67, 0.58), rgba(3, 15, 26, 0.93) 58%, rgba(3, 12, 23, 0.88));
+  box-shadow: inset 0 1px 0 rgba(231, 254, 255, 0.05), 0 7px 18px rgba(0, 0, 0, 0.15);
+}
+
+.jarvis-business-pulse__metrics [data-jarvis-kpi-strip="compact"] .j-panel > div:last-child {
+  overflow: hidden;
+}
+
+/* Ready keeps the Orb's existing living material, but its ambient field is one
+   calm loop. The command mesh/halo/field descendants do not compete with the
+   status, dock, or real data deltas. */
+.jarvis-root[data-liveframe-mode="ready"] [data-jarvis-ambient-orb] *,
+.jarvis-root[data-liveframe-mode="ready"] [data-jarvis-ambient-orb] *::before,
+.jarvis-root[data-liveframe-mode="ready"] [data-jarvis-ambient-orb] *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+@media (max-width: 1179px) {
+  .jarvis-root .jarvis-command-deck.jarvis-command-deck--ready {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "stage"
+      "now"
+      "pulse";
+  }
+
+  .jarvis-root .jarvis-command-deck--ready > .jarvis-command-deck__stage {
+    min-height: 458px;
+  }
+
+  .jarvis-root .jarvis-command-deck--ready > [data-jarvis-question-depth="operational-signals"] {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    justify-self: stretch;
+  }
+
+  .jarvis-root .jarvis-command-deck--ready .jarvis-now-rail {
+    position: static;
+    max-width: none;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: start;
+  }
+
+  .jarvis-root .jarvis-command-deck--ready .jarvis-rest-composition {
+    min-height: 430px;
+  }
+
+  .jarvis-root .jarvis-command-deck--ready .jarvis-presence-core {
+    min-height: 328px !important;
+  }
+
+  .jarvis-root .jarvis-command-deck--ready .jarvis-presence-core__orb,
+  .jarvis-root .jarvis-command-deck--ready .jarvis-orb-surface,
+  .jarvis-root .jarvis-command-deck--ready [data-jarvis-ambient-orb] {
+    width: min(34vw, 260px) !important;
+    height: min(34vw, 260px) !important;
+    min-height: min(34vw, 260px) !important;
+  }
+
+  .jarvis-business-pulse {
+    height: auto;
+    min-height: 92px;
+  }
+}
+
+@media (max-width: 767px) {
+  .jarvis-root .jarvis-command-deck.jarvis-command-deck--ready {
+    gap: 10px;
+    padding-bottom: calc(132px + env(safe-area-inset-bottom));
+  }
+
+  .jarvis-root .jarvis-command-deck--ready > .jarvis-command-deck__stage {
+    min-height: 416px;
+    padding: 7px;
+  }
+
+  .jarvis-root .jarvis-command-deck--ready .jarvis-rest-composition {
+    grid-template-rows: minmax(300px, 1fr) auto !important;
+    min-height: 388px;
+  }
+
+  .jarvis-root .jarvis-command-deck--ready .jarvis-presence-core {
+    min-height: 300px !important;
+  }
+
+  .jarvis-root .jarvis-command-deck--ready .jarvis-presence-core__orb,
+  .jarvis-root .jarvis-command-deck--ready .jarvis-orb-surface,
+  .jarvis-root .jarvis-command-deck--ready [data-jarvis-ambient-orb] {
+    width: min(62vw, 240px) !important;
+    height: min(62vw, 240px) !important;
+    min-height: min(62vw, 240px) !important;
+  }
+
+  .jarvis-root .jarvis-command-deck--ready .jarvis-now-rail {
+    display: flex;
+  }
+
+  .jarvis-business-pulse {
+    display: block;
+    min-height: 0;
+    padding: 9px;
+  }
+
+  .jarvis-business-pulse__heading {
+    min-height: 30px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    border-right: 0;
+    border-bottom: 1px solid rgba(111, 197, 226, 0.1);
+    padding: 0 2px 7px;
+  }
+
+  .jarvis-business-pulse__metrics {
+    height: auto;
+    padding-top: 8px;
+  }
+
+  .jarvis-business-pulse__metrics [data-jarvis-kpi-strip="compact"] > .grid {
+    height: auto;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* --------------------------------------------------------------------------
+   P1.T3 — Scene Director spatial projection
+
+   The data attributes are emitted by the pure scene-director projection. These
+   rules only restage existing surfaces; they do not advance a business state
+   or create a timer-driven scene.
+   -------------------------------------------------------------------------- */
+.jarvis-business-pulse--quiet {
+  opacity: 0.68;
+  filter: saturate(0.78);
+}
+
+.jarvis-root .jarvis-command-deck[data-scene-business-pulse="hidden"] > .jarvis-command-deck__floor {
+  display: none;
+}
+
+.jarvis-root[data-command-canvas-scene="listening"] .jarvis-command-deck {
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 320px);
+  grid-template-areas:
+    "stage now"
+    "pulse pulse";
+  gap: 16px;
+}
+
+.jarvis-root[data-command-canvas-scene="listening"] .jarvis-command-deck > .jarvis-command-deck__stage {
+  grid-area: stage;
+  min-height: 500px;
+}
+
+.jarvis-root[data-command-canvas-scene="listening"] .jarvis-command-deck > [data-jarvis-question-depth="operational-signals"] {
+  grid-area: now;
+  min-width: 280px;
+  max-width: 320px;
+  justify-self: end;
+  opacity: 0.72;
+}
+
+.jarvis-root[data-command-canvas-scene="listening"] .jarvis-command-deck > .jarvis-command-deck__floor {
+  grid-area: pulse;
+  grid-column: auto;
+}
+
+.jarvis-root[data-command-canvas-scene="listening"] .jarvis-rest-composition {
+  grid-template-columns: minmax(0, 1fr) !important;
+  grid-template-rows: minmax(360px, 1fr) auto !important;
+  min-height: 476px;
+  align-items: center;
+  justify-items: center;
+}
+
+.jarvis-root[data-command-canvas-scene="listening"] .jarvis-rest-composition > [data-jarvis-question-depth="presence"] {
+  grid-column: 1;
+  grid-row: 1;
+  width: 100%;
+}
+
+.jarvis-root[data-command-canvas-scene="listening"] .jarvis-rest-composition > [data-liveframe-surface="action-spine"] {
+  grid-column: 1;
+  grid-row: 2;
+  width: min(100%, 720px);
+}
+
+.jarvis-root[data-command-canvas-scene="listening"] .jarvis-presence-core {
+  min-height: 360px !important;
+}
+
+.jarvis-root[data-command-canvas-scene="listening"] .jarvis-presence-core__orb,
+.jarvis-root[data-command-canvas-scene="listening"] .jarvis-orb-surface,
+.jarvis-root[data-command-canvas-scene="listening"] [data-jarvis-ambient-orb] {
+  width: clamp(220px, 18vw, 260px) !important;
+  height: clamp(220px, 18vw, 260px) !important;
+  min-height: clamp(220px, 18vw, 260px) !important;
+}
+
+.jarvis-root[data-command-canvas-scene="listening"] .jarvis-command-rail--embedded form > div {
+  min-height: 78px;
+  border-color: rgba(110, 238, 255, 0.72) !important;
+  box-shadow: inset 0 1px 0 rgba(229, 253, 255, 0.16), 0 14px 36px rgba(0, 0, 0, 0.4), 0 0 28px rgba(35, 218, 255, 0.16) !important;
+}
+
+.jarvis-root[data-command-canvas-scene="plan"] .jarvis-command-deck,
+.jarvis-root[data-command-canvas-scene="approval"] .jarvis-command-deck,
+.jarvis-root[data-command-canvas-scene="working"] .jarvis-command-deck,
+.jarvis-root[data-command-canvas-scene="outcome"] .jarvis-command-deck,
+.jarvis-root[data-command-canvas-scene="recovery"] .jarvis-command-deck {
+  grid-template-columns: minmax(180px, 0.64fr) minmax(680px, 1.55fr) minmax(240px, 0.76fr);
+  gap: 14px;
+}
+
+.jarvis-root[data-command-canvas-scene="plan"] .jarvis-live-layout--no-weave,
+.jarvis-root[data-command-canvas-scene="approval"] .jarvis-live-layout--no-weave,
+.jarvis-root[data-command-canvas-scene="outcome"] .jarvis-live-layout--no-weave,
+.jarvis-root[data-command-canvas-scene="recovery"] .jarvis-live-layout--no-weave {
+  grid-template-columns: minmax(96px, 0.2fr) minmax(0, 1fr);
+  gap: 14px;
+}
+
+.jarvis-root[data-command-canvas-scene="working"] .jarvis-live-layout--weave {
+  grid-template-columns: minmax(96px, 0.2fr) minmax(0, 1fr) minmax(240px, 0.72fr);
+  gap: 14px;
+}
+
+.jarvis-root[data-command-canvas-scene="plan"] .jarvis-presence-core--docked,
+.jarvis-root[data-command-canvas-scene="approval"] .jarvis-presence-core--docked,
+.jarvis-root[data-command-canvas-scene="working"] .jarvis-presence-core--docked,
+.jarvis-root[data-command-canvas-scene="outcome"] .jarvis-presence-core--docked,
+.jarvis-root[data-command-canvas-scene="recovery"] .jarvis-presence-core--docked {
+  min-height: 112px !important;
+}
+
+.jarvis-root[data-command-canvas-scene="plan"] .jarvis-presence-core--docked .jarvis-presence-core__orb,
+.jarvis-root[data-command-canvas-scene="approval"] .jarvis-presence-core--docked .jarvis-presence-core__orb,
+.jarvis-root[data-command-canvas-scene="working"] .jarvis-presence-core--docked .jarvis-presence-core__orb,
+.jarvis-root[data-command-canvas-scene="outcome"] .jarvis-presence-core--docked .jarvis-presence-core__orb,
+.jarvis-root[data-command-canvas-scene="recovery"] .jarvis-presence-core--docked .jarvis-presence-core__orb,
+.jarvis-root[data-command-canvas-scene="plan"] .jarvis-presence-core--docked .jarvis-orb-surface,
+.jarvis-root[data-command-canvas-scene="approval"] .jarvis-presence-core--docked .jarvis-orb-surface,
+.jarvis-root[data-command-canvas-scene="working"] .jarvis-presence-core--docked .jarvis-orb-surface,
+.jarvis-root[data-command-canvas-scene="outcome"] .jarvis-presence-core--docked .jarvis-orb-surface,
+.jarvis-root[data-command-canvas-scene="recovery"] .jarvis-presence-core--docked .jarvis-orb-surface,
+.jarvis-root[data-command-canvas-scene="plan"] .jarvis-presence-core--docked [data-jarvis-ambient-orb],
+.jarvis-root[data-command-canvas-scene="approval"] .jarvis-presence-core--docked [data-jarvis-ambient-orb],
+.jarvis-root[data-command-canvas-scene="working"] .jarvis-presence-core--docked [data-jarvis-ambient-orb],
+.jarvis-root[data-command-canvas-scene="outcome"] .jarvis-presence-core--docked [data-jarvis-ambient-orb],
+.jarvis-root[data-command-canvas-scene="recovery"] .jarvis-presence-core--docked [data-jarvis-ambient-orb] {
+  width: 88px !important;
+  height: 88px !important;
+  min-width: 88px !important;
+  min-height: 88px !important;
+}
+
+.jarvis-root[data-command-canvas-scene="plan"] [data-jarvis-operational-signals],
+.jarvis-root[data-command-canvas-scene="approval"] [data-jarvis-operational-signals] {
+  opacity: 0.62;
+}
+
+.jarvis-root[data-command-canvas-scene="working"] [data-jarvis-operational-signals],
+.jarvis-root[data-command-canvas-scene="outcome"] [data-jarvis-operational-signals] {
+  border-left: 1px solid rgba(69, 224, 255, 0.18);
+}
+
+.jarvis-root[data-command-canvas-scene="recovery"] [data-jarvis-operational-signals] {
+  border-left: 1px solid rgba(248, 113, 113, 0.28);
+}
+
+.jarvis-root[data-command-canvas-scene="approval"] .jarvis-approval-overlay {
+  background: rgba(1, 5, 11, 0.58);
+}
+
+.jarvis-root[data-command-canvas-scene="approval"] .jarvis-approval-stage {
+  position: relative;
+  z-index: 1;
+}
+
+.jarvis-root[data-command-canvas-scene="recovery"] .jarvis-command-rail--embedded form > div {
+  border-color: rgba(248, 113, 113, 0.46) !important;
+}
+
+@media (max-width: 1179px) {
+  .jarvis-root[data-command-canvas-scene="listening"] .jarvis-command-deck {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "stage"
+      "now"
+      "pulse";
+  }
+
+  .jarvis-root[data-command-canvas-scene="listening"] .jarvis-command-deck > [data-jarvis-question-depth="operational-signals"] {
+    min-width: 0;
+    max-width: none;
+    justify-self: stretch;
+  }
+
+  .jarvis-root[data-command-canvas-scene="listening"] .jarvis-command-deck > .jarvis-command-deck__floor {
+    grid-column: auto;
+  }
+
+  .jarvis-root[data-command-canvas-scene="plan"] .jarvis-command-deck,
+  .jarvis-root[data-command-canvas-scene="approval"] .jarvis-command-deck,
+  .jarvis-root[data-command-canvas-scene="working"] .jarvis-command-deck,
+  .jarvis-root[data-command-canvas-scene="outcome"] .jarvis-command-deck,
+  .jarvis-root[data-command-canvas-scene="recovery"] .jarvis-command-deck {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .jarvis-root[data-command-canvas-scene="plan"] .jarvis-live-layout--no-weave,
+  .jarvis-root[data-command-canvas-scene="approval"] .jarvis-live-layout--no-weave,
+  .jarvis-root[data-command-canvas-scene="working"] .jarvis-live-layout--weave,
+  .jarvis-root[data-command-canvas-scene="outcome"] .jarvis-live-layout--no-weave,
+  .jarvis-root[data-command-canvas-scene="recovery"] .jarvis-live-layout--no-weave {
+    grid-template-columns: minmax(96px, 0.22fr) minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 767px) {
+  .jarvis-root[data-command-canvas-scene="listening"] .jarvis-command-deck {
+    gap: 10px;
+  }
+
+  .jarvis-root[data-command-canvas-scene="listening"] .jarvis-command-deck > .jarvis-command-deck__stage {
+    min-height: 416px;
+  }
+
+  .jarvis-root[data-command-canvas-scene="listening"] .jarvis-rest-composition {
+    min-height: 388px;
+    grid-template-rows: minmax(300px, 1fr) auto !important;
+  }
+
+  .jarvis-root[data-command-canvas-scene="listening"] .jarvis-presence-core {
+    min-height: 300px !important;
+  }
+
+  .jarvis-root[data-command-canvas-scene="listening"] .jarvis-presence-core__orb,
+  .jarvis-root[data-command-canvas-scene="listening"] .jarvis-orb-surface,
+  .jarvis-root[data-command-canvas-scene="listening"] [data-jarvis-ambient-orb] {
+    width: min(62vw, 240px) !important;
+    height: min(62vw, 240px) !important;
+    min-height: min(62vw, 240px) !important;
+  }
+
+  .jarvis-root[data-command-canvas-scene="plan"] .jarvis-live-layout--no-weave,
+  .jarvis-root[data-command-canvas-scene="approval"] .jarvis-live-layout--no-weave,
+  .jarvis-root[data-command-canvas-scene="working"] .jarvis-live-layout--weave,
+  .jarvis-root[data-command-canvas-scene="outcome"] .jarvis-live-layout--no-weave,
+  .jarvis-root[data-command-canvas-scene="recovery"] .jarvis-live-layout--no-weave {
+    grid-template-columns: minmax(76px, 0.22fr) minmax(0, 1fr);
+  }
+
+  .jarvis-root[data-command-canvas-scene="plan"] .jarvis-presence-core--docked .jarvis-presence-core__orb,
+  .jarvis-root[data-command-canvas-scene="approval"] .jarvis-presence-core--docked .jarvis-presence-core__orb,
+  .jarvis-root[data-command-canvas-scene="working"] .jarvis-presence-core--docked .jarvis-presence-core__orb,
+  .jarvis-root[data-command-canvas-scene="outcome"] .jarvis-presence-core--docked .jarvis-presence-core__orb,
+  .jarvis-root[data-command-canvas-scene="recovery"] .jarvis-presence-core--docked .jarvis-presence-core__orb,
+  .jarvis-root[data-command-canvas-scene="plan"] .jarvis-presence-core--docked .jarvis-orb-surface,
+  .jarvis-root[data-command-canvas-scene="approval"] .jarvis-presence-core--docked .jarvis-orb-surface,
+  .jarvis-root[data-command-canvas-scene="working"] .jarvis-presence-core--docked .jarvis-orb-surface,
+  .jarvis-root[data-command-canvas-scene="outcome"] .jarvis-presence-core--docked .jarvis-orb-surface,
+  .jarvis-root[data-command-canvas-scene="recovery"] .jarvis-presence-core--docked .jarvis-orb-surface,
+  .jarvis-root[data-command-canvas-scene="plan"] .jarvis-presence-core--docked [data-jarvis-ambient-orb],
+  .jarvis-root[data-command-canvas-scene="approval"] .jarvis-presence-core--docked [data-jarvis-ambient-orb],
+  .jarvis-root[data-command-canvas-scene="working"] .jarvis-presence-core--docked [data-jarvis-ambient-orb],
+  .jarvis-root[data-command-canvas-scene="outcome"] .jarvis-presence-core--docked [data-jarvis-ambient-orb],
+  .jarvis-root[data-command-canvas-scene="recovery"] .jarvis-presence-core--docked [data-jarvis-ambient-orb] {
+    width: 76px !important;
+    height: 76px !important;
+    min-width: 76px !important;
+    min-height: 76px !important;
+  }
+}
+
+/* At the wide Command Canvas breakpoint, the plan document owns a causal
+   reading width of 680–760px after the sentinel Orb column. The context and
+   evidence rails stay bounded so the center does not collapse back into the
+   old three-card balance. Narrower viewports use the stacked rules above. */
+@media (min-width: 1340px) {
+  .jarvis-root[data-command-canvas-scene="plan"] .jarvis-command-deck,
+  .jarvis-root[data-command-canvas-scene="approval"] .jarvis-command-deck,
+  .jarvis-root[data-command-canvas-scene="working"] .jarvis-command-deck,
+  .jarvis-root[data-command-canvas-scene="outcome"] .jarvis-command-deck,
+  .jarvis-root[data-command-canvas-scene="recovery"] .jarvis-command-deck {
+    grid-template-columns: 200px minmax(760px, 1fr) 280px;
+  }
+
+  .jarvis-root[data-command-canvas-scene="plan"] .jarvis-live-layout--no-weave,
+  .jarvis-root[data-command-canvas-scene="approval"] .jarvis-live-layout--no-weave,
+  .jarvis-root[data-command-canvas-scene="outcome"] .jarvis-live-layout--no-weave,
+  .jarvis-root[data-command-canvas-scene="recovery"] .jarvis-live-layout--no-weave {
+    grid-template-columns: minmax(88px, 96px) minmax(680px, 1fr);
+  }
+}
+
+/* LIVEFRAME supplies the 1.06 listening scale. The individual `scale`
+   property composes with the Orb's existing Framer Motion translate instead
+   of replacing that source-coupled motion. */
+.jarvis-root[data-command-canvas-scene="listening"] [data-jarvis-ambient-orb] {
+  scale: 1.06;
+}
+
+/* Active scenes use the Orb as a sentinel beside the causal thread. Keep the
+   existing source-backed command core legible at that 72–96px scale without
+   letting its resting-size copy become a second headline over the thread. */
+.jarvis-root[data-command-canvas-scene="plan"] [data-jarvis-ambient-orb] [data-jarvis-orb-command-copy],
+.jarvis-root[data-command-canvas-scene="approval"] [data-jarvis-ambient-orb] [data-jarvis-orb-command-copy],
+.jarvis-root[data-command-canvas-scene="working"] [data-jarvis-ambient-orb] [data-jarvis-orb-command-copy],
+.jarvis-root[data-command-canvas-scene="outcome"] [data-jarvis-ambient-orb] [data-jarvis-orb-command-copy],
+.jarvis-root[data-command-canvas-scene="recovery"] [data-jarvis-ambient-orb] [data-jarvis-orb-command-copy] {
+  scale: 0.42;
+}
+
+.jarvis-root[data-command-canvas-scene="plan"] .jarvis-presence-core--docked .jarvis-orb-readout,
+.jarvis-root[data-command-canvas-scene="approval"] .jarvis-presence-core--docked .jarvis-orb-readout,
+.jarvis-root[data-command-canvas-scene="working"] .jarvis-presence-core--docked .jarvis-orb-readout,
+.jarvis-root[data-command-canvas-scene="outcome"] .jarvis-presence-core--docked .jarvis-orb-readout,
+.jarvis-root[data-command-canvas-scene="recovery"] .jarvis-presence-core--docked .jarvis-orb-readout {
+  display: none;
+}
+
+/* --------------------------------------------------------------------------
+   P1.T5 — Home craft pass
+
+   The Home composition already has its source-backed hierarchy. These late
+   token overrides finish the v6 type contract at the actual cascade points
+   owned by the Command Canvas: no meaningful rail/setup copy below 11px, one
+   readable human status, and compact labels that remain legible at 390px.
+   -------------------------------------------------------------------------- */
+.jarvis-root .jarvis-setup-region [data-jarvis-setup-rail] .j-fs-sm {
+  font-size: var(--j-fs-sm);
+  line-height: var(--j-lh-sm);
+}
+
+.jarvis-root .jarvis-setup-region [data-jarvis-setup-rail] .j-fs-micro,
+.jarvis-root .jarvis-ops-rail__heading,
+.jarvis-root .jarvis-ops-list__title,
+.jarvis-root .jarvis-ops-list__detail,
+.jarvis-root .jarvis-orb-readout__eyebrow,
+.jarvis-root .jarvis-orb-readout__connection,
+.jarvis-root .jarvis-orb-readout__satellite,
+.jarvis-root .jarvis-orb-readout__intent > span,
+.jarvis-root .jarvis-business-pulse__title,
+.jarvis-root .jarvis-business-pulse__note {
+  font-size: var(--j-fs-micro);
+  line-height: var(--j-lh-micro);
+}
+
+.jarvis-root .jarvis-orb-readout__state strong {
+  font-size: var(--j-fs-lg);
+  font-weight: 600;
+  line-height: var(--j-lh-lg);
+}
+
+.jarvis-root .jarvis-orb-readout__eyebrow {
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+}
+
+.jarvis-root .jarvis-orb-readout__satellite strong {
+  font-size: var(--j-fs-micro);
+  line-height: var(--j-lh-micro);
+}
+
+.jarvis-root .jarvis-orb-readout__intent p {
+  font-size: var(--j-fs-sm);
+  line-height: var(--j-lh-sm);
+}
+
+@media (max-width: 767px) {
+  .jarvis-root .jarvis-setup-region [data-jarvis-setup-rail] > .j-panel > div {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .jarvis-root .jarvis-setup-region [data-jarvis-setup-rail] > .j-panel > div > div:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .jarvis-root .jarvis-setup-region [data-jarvis-setup-rail] > .j-panel > div > a,
+  .jarvis-root .jarvis-setup-region [data-jarvis-setup-rail] > .j-panel > div > span,
+  .jarvis-root .jarvis-setup-region [data-jarvis-setup-rail] > .j-panel > div > details {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .jarvis-root .jarvis-command-deck--ready .jarvis-now-rail {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+    max-width: none;
+  }
+
+  .jarvis-root .jarvis-command-deck--ready .jarvis-now-rail > .jarvis-ops-panel {
+    width: 100%;
+  }
+
+  .jarvis-root .jarvis-command-deck--ready .jarvis-business-pulse {
+    height: auto;
+    min-height: 0;
+  }
+
+  .jarvis-root .jarvis-orb-readout__state strong {
+    font-size: var(--j-fs-base);
+  }
+
+  .jarvis-root .jarvis-business-pulse__note {
+    line-height: 1.3;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   P4.T2 — pixel-level micro-craft
+
+   The operational surfaces are already source-owned and intentionally quiet.
+   This final cascade pass only repairs interaction geometry, keyboard focus,
+   and the readable floor for human-facing operational copy. Exact IDs and
+   ambient HUD telemetry remain compact by design.
+   -------------------------------------------------------------------------- */
+.jarvis-surface-nav__link,
+.jarvis-operations-header__surface-link,
+.jarvis-work-filter,
+.jarvis-work-queue-toggle {
+  min-height: 44px;
+}
+
+.jarvis-household-refresh,
+.jarvis-dispatch-hero__controls button,
+.jarvis-money-hero__controls button,
+.jarvis-work-icon-button,
+.jarvis-agent-fleet__inspector button {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.jarvis-work-link,
+.jarvis-household-business-links a,
+.jarvis-dispatch-stop-row__links a {
+  min-height: 44px;
+}
+
+.jarvis-dispatch-shell .jarvis-dispatch-eyebrow,
+.jarvis-dispatch-shell .jarvis-dispatch-source,
+.jarvis-dispatch-shell .jarvis-dispatch-banner,
+.jarvis-dispatch-shell .jarvis-dispatch-summary span,
+.jarvis-dispatch-shell .jarvis-dispatch-route-note,
+.jarvis-dispatch-shell .jarvis-dispatch-day-rail__heading > span,
+.jarvis-dispatch-shell .jarvis-dispatch-exceptions > div:first-child,
+.jarvis-dispatch-shell .jarvis-dispatch-exceptions > p,
+.jarvis-dispatch-shell .jarvis-dispatch-subheading,
+.jarvis-dispatch-shell .jarvis-dispatch-stop-row__time,
+.jarvis-dispatch-shell .jarvis-dispatch-stop-row__main span,
+.jarvis-dispatch-shell .jarvis-dispatch-stop-row__links a,
+.jarvis-dispatch-shell .jarvis-dispatch-empty-copy,
+.jarvis-dispatch-shell .jarvis-dispatch-empty a,
+.jarvis-money-shell .jarvis-money-eyebrow,
+.jarvis-money-shell .jarvis-money-source,
+.jarvis-money-shell .jarvis-money-banner,
+.jarvis-money-shell .jarvis-money-summary span,
+.jarvis-money-shell .jarvis-money-summary small,
+.jarvis-money-shell .jarvis-money-section-heading > span,
+.jarvis-money-shell .jarvis-money-aging-band__label span,
+.jarvis-money-shell .jarvis-money-aging-band__work,
+.jarvis-money-shell .jarvis-money-work-row__status,
+.jarvis-money-shell .jarvis-money-work-row small,
+.jarvis-money-shell .jarvis-money-work-row > span:last-child,
+.jarvis-money-shell .jarvis-money-invoice-row small,
+.jarvis-money-shell .jarvis-money-invoice-row__due,
+.jarvis-money-shell .jarvis-money-invoice-status,
+.jarvis-money-shell .jarvis-money-empty-copy,
+.jarvis-money-shell .jarvis-money-detail-grid span,
+.jarvis-money-shell .jarvis-money-detail-grid small,
+.jarvis-money-shell .jarvis-money-detail-grid a,
+.jarvis-money-shell .jarvis-money-detail-note,
+.jarvis-money-shell .jarvis-money-payment-facts,
+.jarvis-household-shell .jarvis-household-eyebrow,
+.jarvis-household-shell .jarvis-household-source,
+.jarvis-household-shell .jarvis-household-banner,
+.jarvis-household-shell .jarvis-household-index-head,
+.jarvis-household-shell .jarvis-household-index-row,
+.jarvis-household-shell .jarvis-household-index-primary small,
+.jarvis-household-shell .jarvis-household-consent,
+.jarvis-household-shell .jarvis-household-contact-line,
+.jarvis-household-shell .jarvis-household-equipment-strip > span,
+.jarvis-household-shell .jarvis-household-timeline-row,
+.jarvis-household-shell .jarvis-household-timeline-row small,
+.jarvis-household-shell .jarvis-household-timeline-row time,
+.jarvis-household-shell .jarvis-household-state-grid span,
+.jarvis-household-shell .jarvis-household-state-grid small,
+.jarvis-household-shell .jarvis-household-business-links a,
+.jarvis-household-shell .jarvis-household-recent-line,
+.jarvis-work-shell .jarvis-work-eyebrow,
+.jarvis-work-shell .jarvis-work-live,
+.jarvis-work-shell .jarvis-work-intro span,
+.jarvis-work-shell .jarvis-work-filter,
+.jarvis-work-shell .jarvis-work-row__meta,
+.jarvis-work-shell .jarvis-work-row__fact,
+.jarvis-work-shell .jarvis-work-row__source,
+.jarvis-work-shell .jarvis-work-row__age,
+.jarvis-work-shell .jarvis-work-status,
+.jarvis-work-shell .jarvis-work-root,
+.jarvis-work-shell .jarvis-work-spine__subline,
+.jarvis-work-shell .jarvis-work-chapter__heading,
+.jarvis-work-shell .jarvis-work-chapter__signal,
+.jarvis-work-shell .jarvis-work-facts,
+.jarvis-work-shell .jarvis-work-link,
+.jarvis-work-shell .jarvis-work-action__state,
+.jarvis-work-shell .jarvis-work-dependency,
+.jarvis-work-shell .jarvis-work-approval-row small,
+.jarvis-work-shell .jarvis-work-primary-button,
+.jarvis-work-shell .jarvis-work-secondary-button,
+.jarvis-work-shell .jarvis-work-run__header strong,
+.jarvis-work-shell .jarvis-work-run__id,
+.jarvis-work-shell .jarvis-work-step-list li,
+.jarvis-work-shell .jarvis-work-step-list small,
+.jarvis-work-shell .jarvis-work-failure-line,
+.jarvis-work-shell .jarvis-work-receipt-row small,
+.jarvis-work-shell .jarvis-work-inspector__facts dt,
+.jarvis-work-shell .jarvis-work-inspector__facts dd,
+.jarvis-work-shell .jarvis-work-inspector__provenance,
+.jarvis-agent-fleet-shell .jarvis-agent-fleet__eyebrow,
+.jarvis-agent-fleet-shell .jarvis-agent-fleet__intro-signal small,
+.jarvis-agent-fleet-shell .jarvis-agent-fleet__provider-copy small,
+.jarvis-agent-fleet-shell .jarvis-agent-fleet__provider-scope,
+.jarvis-agent-fleet-shell .jarvis-agent-fleet__rail-heading span,
+.jarvis-agent-fleet-shell .jarvis-agent-fleet__rail-row-copy small,
+.jarvis-agent-fleet-shell .jarvis-agent-fleet__rail-note,
+.jarvis-agent-fleet-shell .jarvis-agent-fleet__stage-footer {
+  font-size: 11px;
+}
+
+.jarvis-surface-nav :is(a, button):focus-visible,
+.jarvis-operations-header :is(a, button):focus-visible,
+.jarvis-work-shell :is(a, button, input, summary):focus-visible,
+.jarvis-household-shell :is(a, button, input, summary):focus-visible,
+.jarvis-dispatch-shell :is(a, button, input, summary):focus-visible,
+.jarvis-money-shell :is(a, button, input, summary):focus-visible,
+.jarvis-agent-fleet-shell :is(a, button, input, summary):focus-visible {
+  outline: 2px solid #63e7f7 !important;
+  outline-offset: 3px;
+}
+
+@media (max-width: 700px) {
+  .jarvis-surface-nav__mobile-link {
+    min-height: 48px;
+  }
+
+  .jarvis-surface-nav__more-heading button {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .jarvis-surface-nav__more-sheet > a {
+    min-height: 48px;
+  }
+
+  .jarvis-household-refresh,
+  .jarvis-dispatch-hero__controls button,
+  .jarvis-money-hero__controls button,
+  .jarvis-work-icon-button,
+  .jarvis-agent-fleet__inspector button {
+    width: 48px;
+    height: 48px;
+    min-width: 48px;
+    min-height: 48px;
   }
 }

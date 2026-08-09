@@ -1,62 +1,30 @@
-import type { Metadata } from "next"
-import { Footer } from "@/components/sections/Footer"
+import type { Metadata } from "next";
+
+import { ResourceFrame } from "@/components/resources/ResourceFrame";
+import styles from "@/components/resources/PublicEditorial.module.css";
 
 export const metadata: Metadata = {
   title: "Terms",
-  description: "Terms overview for FINNOR website, demo previews, and consultation requests.",
+  description: "Terms overview for the FINNOR website, public demonstrations and separately agreed production deployments.",
   alternates: { canonical: "https://finnorai.com/terms" },
-  openGraph: {
-    title: "Terms | Finnor AI",
-    description: "Terms of use for the Finnor AI website, demo builder, and consultation requests.",
-    url: "https://finnorai.com/terms",
-    images: [
-      {
-        url: "https://finnorai.com/og-image.svg",
-        width: 1200,
-        height: 630,
-        alt: "Finnor AI terms of use",
-      },
-    ],
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "Terms | Finnor AI",
-    description: "Terms of use for the Finnor AI website, demo builder, and consultation requests.",
-    images: ["https://finnorai.com/og-image.svg"],
-  },
-}
+};
 
 export default function TermsPage() {
   return (
-    <>
-      <main className="min-h-screen bg-black px-4 py-24 text-white md:px-6">
-        <section className="container max-w-4xl">
-          <p className="mb-5 text-[10px] font-black uppercase tracking-[0.24em] text-cyan-100/65">
-            FINNOR
-          </p>
-          <h1 className="text-4xl font-black tracking-tight md:text-6xl">Terms</h1>
-          <div className="mt-10 space-y-6 text-base font-medium leading-relaxed text-white/58">
-            <p>
-              FINNOR website content and demo previews are provided for evaluation and discussion.
-              Demo artifacts are illustrative and should not be treated as repair, legal,
-              emergency, or operational advice.
-            </p>
-            <p>
-              Production use requires a separately agreed scope covering phone routing,
-              integrations, data handling, escalation procedures, vendor responsibilities, and any
-              operating boundaries.
-            </p>
-            <p>
-              To discuss deployment terms, contact{" "}
-              <a className="text-white underline underline-offset-4" href="mailto:param@finnorai.com">
-                param@finnorai.com
-              </a>
-              .
-            </p>
-          </div>
-        </section>
-      </main>
-      <Footer />
-    </>
-  )
+    <ResourceFrame>
+      <article className={styles.legal}>
+        <span className={styles.legalMeta}>FINNOR / Terms overview</span>
+        <h1>Terms</h1>
+        <div className={styles.legalBody}>
+          <section><h2>Website use</h2><p>This website and its materials are provided for evaluation, education and discussion. You may not misuse the site, interfere with its operation or attempt unauthorized access to connected systems.</p></section>
+          <section><h2>Public demonstrations</h2><p>Demo profiles, conversations, plans and receipts are illustrative unless explicitly identified as connected production data. Unknown information may remain unknown. Demo artifacts should not be treated as repair, emergency, legal, financial or operational advice.</p></section>
+          <section><h2>No production authorization</h2><p>Using the website or public demo does not authorize FINNOR or JARVIS to act in your business. Production execution requires a separately agreed scope, configured access, policies, authority boundaries and certification.</p></section>
+          <section><h2>Deployment terms</h2><p>Production agreements may cover integrations, data handling, retention, routing, vendor responsibilities, service levels, escalation, recovery, security and the company’s own operating policies.</p></section>
+          <section><h2>Your inputs</h2><p>You are responsible for having the right to provide any website, company or contact information submitted through the site. Do not submit sensitive customer or payment data through a public evaluation flow.</p></section>
+          <section><h2>Availability and changes</h2><p>Website and demo capabilities may change, be unavailable or differ from a configured production deployment. Product activation depends on the specific environment and agreements.</p></section>
+          <section><h2>Contact</h2><p>To discuss these terms or a production scope, contact <a href="mailto:param@finnorai.com">param@finnorai.com</a>.</p></section>
+        </div>
+      </article>
+    </ResourceFrame>
+  );
 }

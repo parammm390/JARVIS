@@ -1,8 +1,10 @@
 "use client"
 
 import { useEffect, useId, useRef, useState, type CSSProperties } from "react"
-import * as THREE from "three"
+import type * as THREE from "three"
 import styles from "./JarvisAmbientOrb.module.css"
+
+type ThreeRuntime = typeof import("three")
 
 /**
  * The ambient surface intentionally owns a structural copy of the visual-state
@@ -229,6 +231,10 @@ function finiteRunCount(value: number | undefined): number {
   return Math.max(0, Math.min(MAX_RUN_MARKS, Math.floor(value)))
 }
 
+function roundGeometry(value: number): number {
+  return Math.round(value * 10_000) / 10_000
+}
+
 /* Deterministic geometry jitter.  A fixed field gives every mounted orb the same
  * recognizable material and avoids presenting random motion as a live signal. */
 function hash(value: number): number {
@@ -254,10 +260,10 @@ function buildCommandCoreDots(): CommandCoreDot[] {
     const shimmer = hash(index * 8.37 + 2.1)
     const frontness = (depth + 1) * 0.5
     return {
-      x: 320 + Math.cos(longitude) * projectedRadius * 195,
-      y: 320 + Math.sin(latitude) * 195,
-      radius: 0.44 + shimmer * 1.04 + frontness * 1.02,
-      opacity: 0.11 + frontness * 0.55 + shimmer * 0.24,
+      x: roundGeometry(320 + Math.cos(longitude) * projectedRadius * 195),
+      y: roundGeometry(320 + Math.sin(latitude) * 195),
+      radius: roundGeometry(0.44 + shimmer * 1.04 + frontness * 1.02),
+      opacity: roundGeometry(0.11 + frontness * 0.55 + shimmer * 0.24),
       accent: (index % 29 === 0 && depth > -0.12) || (depth > 0.72 && index % 11 === 0),
       depth: depth > 0.08 ? "front" : "rear",
     }
@@ -287,8 +293,8 @@ function buildCommandCoreNetwork(): { nodes: CommandCoreNetworkNode[]; links: Co
     return { x, y, z }
   })
   const nodes = vectors.map((vector, index) => ({
-    x: 320 + vector.x * 191,
-    y: 320 + vector.y * 191,
+    x: roundGeometry(320 + vector.x * 191),
+    y: roundGeometry(320 + vector.y * 191),
     depth: vector.z > 0.08 ? "front" as const : "rear" as const,
     emphasis: vector.z > 0.35 && index % 7 === 0,
   }))
@@ -343,7 +349,7 @@ const COMMAND_CORE_LINKS = [
   { d: "M228 427C270 393 312 386 349 411S399 435 441 390", layer: "front" },
 ] as const
 
-function buildParticleGeometry(): THREE.BufferGeometry {
+function buildParticleGeometry(three: ThreeRuntime): THREE.BufferGeometry {
   const positions = new Float32Array(PARTICLE_COUNT * 3)
   const seeds = new Float32Array(PARTICLE_COUNT)
   const bands = new Float32Array(PARTICLE_COUNT)
@@ -373,11 +379,11 @@ function buildParticleGeometry(): THREE.BufferGeometry {
     layers[i] = layer
   }
 
-  const geometry = new THREE.BufferGeometry()
-  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3))
-  geometry.setAttribute("aSeed", new THREE.BufferAttribute(seeds, 1))
-  geometry.setAttribute("aBand", new THREE.BufferAttribute(bands, 1))
-  geometry.setAttribute("aLayer", new THREE.BufferAttribute(layers, 1))
+  const geometry = new three.BufferGeometry()
+  geometry.setAttribute("position", new three.BufferAttribute(positions, 3))
+  geometry.setAttribute("aSeed", new three.BufferAttribute(seeds, 1))
+  geometry.setAttribute("aBand", new three.BufferAttribute(bands, 1))
+  geometry.setAttribute("aLayer", new three.BufferAttribute(layers, 1))
   return geometry
 }
 
@@ -511,7 +517,7 @@ const PARTICLE_FRAGMENT_SHADER = /* glsl */ `
   }
 `
 
-function buildRingGeometry(radiusX: number, radiusY: number, depth: number): THREE.BufferGeometry {
+function buildRingGeometry(three: ThreeRuntime, radiusX: number, radiusY: number, depth: number): THREE.BufferGeometry {
   const segments = 96
   const positions = new Float32Array(segments * 3)
   for (let i = 0; i < segments; i += 1) {
@@ -520,12 +526,17 @@ function buildRingGeometry(radiusX: number, radiusY: number, depth: number): THR
     positions[i * 3 + 1] = Math.sin(angle) * radiusY
     positions[i * 3 + 2] = depth
   }
-  const geometry = new THREE.BufferGeometry()
-  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3))
+  const geometry = new three.BufferGeometry()
+  geometry.setAttribute("position", new three.BufferAttribute(positions, 3))
   return geometry
 }
 
 function isLowPowerDevice(): boolean {
+  // The CSS instrument is the deliberate mobile fallback: it preserves the
+  // state silhouette and labels while avoiding a 11k-particle WebGL scene on a
+  // constrained/touch viewport. This is presentation-only and never removes
+  // operational controls or source-backed copy.
+  if (window.matchMedia?.("(max-width: 600px), (pointer: coarse)").matches) return true
   const memory = (navigator as Navigator & { deviceMemory?: number }).deviceMemory
   return typeof memory === "number" && memory <= 2
 }
@@ -722,7 +733,7 @@ function CommandCoreOverlay({
         </g>
       </svg>
 
-      <span className={styles.commandCoreCopy}>
+      <span className={styles.commandCoreCopy} data-jarvis-orb-command-copy>
         <span className={styles.commandCoreCopyKicker}>FINNOR · ORCHESTRATION ENGINE</span>
         <span className={styles.commandCoreCopyName}>JARVIS</span>
         <span className={styles.commandCoreCopyState}>{COMMAND_STATE_LABEL[visualState]}</span>
@@ -771,35 +782,41 @@ export function JarvisAmbientOrb({
     const host = hostRef.current
     if (!host || staticMode) return
 
-    let disposed = false
-    let raf = 0
-    let frameQueued = false
-    let active = false
+    let cancelled = false
+    let cleanup: (() => void) | undefined
 
-    const rect = host.getBoundingClientRect()
-    active = rect.bottom > 0 && rect.top < window.innerHeight && rect.right > 0 && rect.left < window.innerWidth
+    void import("three").then((THREE) => {
+      if (cancelled) return
 
-    const scene = new THREE.Scene()
-    const camera = new THREE.PerspectiveCamera(43, 1, 0.1, 100)
-    camera.position.z = 4.45
+      let disposed = false
+      let raf = 0
+      let frameQueued = false
+      let active = false
 
-    let renderer: THREE.WebGLRenderer
-    try {
-      renderer = new THREE.WebGLRenderer({
-        alpha: true,
-        antialias: true,
-        powerPreference: "low-power",
-      })
-    } catch {
-      setWebglFailed(true)
-      return () => undefined
-    }
+      const rect = host.getBoundingClientRect()
+      active = rect.bottom > 0 && rect.top < window.innerHeight && rect.right > 0 && rect.left < window.innerWidth
+
+      const scene = new THREE.Scene()
+      const camera = new THREE.PerspectiveCamera(43, 1, 0.1, 100)
+      camera.position.z = 4.45
+
+      let renderer: THREE.WebGLRenderer
+      try {
+        renderer = new THREE.WebGLRenderer({
+          alpha: true,
+          antialias: true,
+          powerPreference: "low-power",
+        })
+      } catch {
+        setWebglFailed(true)
+        return
+      }
 
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
     renderer.domElement.className = styles.canvas
     host.appendChild(renderer.domElement)
 
-    const particleGeometry = buildParticleGeometry()
+    const particleGeometry = buildParticleGeometry(THREE)
     const material = new THREE.ShaderMaterial({
       vertexShader: PARTICLE_VERTEX_SHADER,
       fragmentShader: PARTICLE_FRAGMENT_SHADER,
@@ -831,7 +848,7 @@ export function JarvisAmbientOrb({
     ]
     const ringLines = ringSpecs.map(([radiusX, radiusY, depth]) => {
       const line = new THREE.LineLoop(
-        buildRingGeometry(radiusX, radiusY, depth),
+        buildRingGeometry(THREE, radiusX, radiusY, depth),
         new THREE.LineBasicMaterial({
           color: new THREE.Color(...profile.color),
           transparent: true,
@@ -1025,7 +1042,7 @@ export function JarvisAmbientOrb({
       raf = requestAnimationFrame(renderFrame)
     }
 
-    return () => {
+    cleanup = () => {
       disposed = true
       cancelAnimationFrame(raf)
       observer?.disconnect()
@@ -1046,6 +1063,13 @@ export function JarvisAmbientOrb({
       laneMaterial.dispose()
       renderer.dispose()
       if (renderer.domElement.parentNode === host) host.removeChild(renderer.domElement)
+    }
+    }).catch(() => {
+      if (!cancelled) setWebglFailed(true)
+    })
+    return () => {
+      cancelled = true
+      cleanup?.()
     }
     // The render loop reads live props through liveRef; rebuilding a GPU scene for
     // every energy or state update would create visible gaps and waste resources.

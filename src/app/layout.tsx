@@ -1,31 +1,44 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { IBM_Plex_Mono, Manrope, Outfit } from "next/font/google";
 import "./globals.css";
 
 import GlobalChrome from "@/components/layout/GlobalChrome";
 
-const inter = Inter({ subsets: ["latin"] });
+const outfit = Outfit({
+  subsets: ["latin"],
+  variable: "--font-outfit",
+  display: "swap",
+});
+
+const manrope = Manrope({
+  subsets: ["latin"],
+  variable: "--font-manrope",
+  display: "swap",
+});
+
+const plexMono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  variable: "--font-mono",
+  weight: "500",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://finnorai.com"),
   applicationName: "FINNOR",
   title: {
-    default:
-      "FINNOR JARVIS | Voice-Native AI Operations for Water Treatment Companies",
+    default: "FINNOR | Governed Execution for Water Treatment Companies",
     template: "%s | FINNOR",
   },
   description:
-    "Run calls, CRM, scheduling, proposals, invoices, inventory, technicians and campaigns by talking to JARVIS, the voice-native AI operations platform for water-treatment companies.",
+    "FINNOR turns intent into grounded context, an executable plan, governed action and permanent evidence for water treatment companies. JARVIS is the command surface.",
   keywords: [
-    "water-treatment operations",
-    "voice-native operations",
-    "customer operations",
-    "workflow automation",
-    "water-treatment operations operations platform",
-    "connected field operations",
-    "field-service workflow",
-    "inbound operations",
-    "voice-native AI operations platform",
+    "water treatment operations software",
+    "governed AI execution",
+    "water treatment workflow automation",
+    "field service operations",
+    "AI command surface",
+    "water treatment business software",
     "FINNOR",
     "JARVIS water treatment",
   ],
@@ -37,10 +50,9 @@ export const metadata: Metadata = {
     canonical: "https://finnorai.com/",
   },
   openGraph: {
-    title:
-      "FINNOR JARVIS | Voice-Native AI Operations for Water Treatment Companies",
+    title: "FINNOR | Governed Execution for Water Treatment Companies",
     description:
-      "Run calls, CRM, scheduling, proposals, invoices, inventory, technicians and campaigns by talking to JARVIS—the voice-native AI operations platform for water-treatment companies.",
+      "One instruction becomes grounded context, an executable plan, governed action and permanent evidence.",
     url: "https://finnorai.com/",
     siteName: "FINNOR",
     images: [
@@ -48,17 +60,16 @@ export const metadata: Metadata = {
         url: "/og-image.svg",
         width: 1200,
         height: 630,
-        alt: "JARVIS, the voice-native AI operations platform for water-treatment companies",
+        alt: "FINNOR governed execution system for water treatment companies",
       },
     ],
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title:
-      "FINNOR JARVIS | Voice-Native AI Operations for Water Treatment Companies",
+    title: "FINNOR | Governed Execution for Water Treatment Companies",
     description:
-      "Run calls, CRM, scheduling, proposals, invoices, inventory, technicians and campaigns by talking to JARVIS.",
+      "One instruction becomes grounded context, an executable plan, governed action and permanent evidence.",
     images: ["/og-image.svg"],
   },
   robots: {
@@ -81,8 +92,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${inter.className} antialiased`}>
+      <body className={`${manrope.variable} ${outfit.variable} ${plexMono.variable} ${manrope.className} antialiased`}>
         <script
+          id="finnor-structured-data"
           type="application/ld+json"
           dangerouslySetInnerHTML={{
             __html: JSON.stringify({
@@ -96,7 +108,7 @@ export default function RootLayout({
                   url: "https://finnorai.com",
                   email: "param@finnorai.com",
                   description:
-                    "FINNOR runs on JARVIS, an operations platform that drafts plans from an instruction, holds them for approval, executes, and files a receipt for water treatment leads, water-treatment emergencies, web inquiries, and speed-to-lead follow-up.",
+                    "FINNOR is a governed execution system for water treatment companies. It turns an instruction into grounded context, an executable plan, governed action and permanent evidence through JARVIS.",
                   sameAs: ["https://www.linkedin.com/in/param-dave16"],
                 },
                 {
@@ -112,9 +124,9 @@ export default function RootLayout({
                   "@type": "WebPage",
                   "@id": "https://finnorai.com/#webpage",
                   url: "https://finnorai.com",
-                  name: "FINNOR JARVIS | Voice-Native AI Operations for Water Treatment Companies",
+                  name: "FINNOR | Governed Execution for Water Treatment Companies",
                   description:
-                    "JARVIS plans and executes work across connected business systems, with approval boundaries defined by your operation.",
+                    "FINNOR plans and executes work across connected business systems, with authority boundaries defined by each operation.",
                   isPartOf: { "@id": "https://finnorai.com/#website" },
                   about: { "@id": "https://finnorai.com/#organization" },
                   inLanguage: "en-US",
@@ -126,7 +138,7 @@ export default function RootLayout({
                   operatingSystem: "Cloud",
                   url: "https://finnorai.com",
                   description:
-                    "A voice-native AI operations platform for water-treatment companies. Pricing depends on locations, usage, integrations and workflow complexity.",
+                    "The JARVIS command surface for FINNOR, a governed execution system for water treatment companies.",
                 },
               ],
             }),

@@ -2,12 +2,12 @@
 
 import type { ReactNode } from "react"
 import { usePathname } from "next/navigation"
-import CustomCursor from "@/components/ui/custom-cursor"
-import ParticleNetwork from "@/components/ui/particle-network"
-import ScrollProgress from "@/components/ui/scroll-progress"
-import GrainOverlay from "@/components/ui/grain-overlay"
-import SmoothScroll from "@/components/ui/smooth-scroll"
-import { FinnorAIConcierge } from "@/components/ai-concierge/FinnorAIConcierge"
+import dynamic from "next/dynamic"
+
+// Keep the marketing-only visual stack out of the operational JARVIS route
+// graph. The pathname guard below prevents it from rendering, but static imports
+// would still make the browser download those client chunks on /jarvis.
+const MarketingChrome = dynamic(() => import("./MarketingChrome").then((module) => module.MarketingChrome), { ssr: false })
 
 /** Marketing chrome owns the public site; JARVIS owns its own atmosphere,
  * scroll containers, and action surfaces. */
@@ -16,14 +16,5 @@ export default function GlobalChrome({ children }: { children: ReactNode }) {
 
   if (pathname?.startsWith("/jarvis")) return <>{children}</>
 
-  return (
-    <SmoothScroll>
-      <ParticleNetwork />
-      <CustomCursor />
-      <ScrollProgress />
-      <GrainOverlay />
-      {children}
-      <FinnorAIConcierge />
-    </SmoothScroll>
-  )
+  return <MarketingChrome>{children}</MarketingChrome>
 }

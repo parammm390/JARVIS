@@ -5,8 +5,9 @@
 // every row below is either a real record already held by data-core/kernel or an
 // explicit unavailable state. This keeps the command-center density honest.
 
-import type { ReactNode } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 import Link from "next/link"
+import { usePathname } from "next/navigation"
 import {
   Activity,
   AlertTriangle,
@@ -26,8 +27,10 @@ import { SystemConsole } from "../panels/SystemConsole"
 import type { Thread } from "../kernel/store"
 import type { Truth } from "../kernel/types"
 import type { LiveFrameProjection } from "../kernel/liveframe"
+import { deriveSceneDirector } from "../kernel/scene-director"
 import { useLanePresentation, useSelectorInput } from "../kernel/useSelectorInput"
-import { selectEventsToday, selectRunsInFlight } from "../kernel/selectors"
+import { selectEventsToday, selectRunsInFlight, type SelectorInput } from "../kernel/selectors"
+import { SURFACES, withHouseholdId } from "../surfaces/surface-routes"
 
 type OverdueInvoices = Truth<{ count: number; totalUsd: number }>
 
@@ -101,6 +104,22 @@ function safeAge(iso: string, now: number): string | null {
   return Number.isFinite(new Date(iso).getTime()) ? ageLabel(iso, now) : null
 }
 
+/** Review copy is a deterministic presentation of the source summary. It never
+ * asks a model to invent a friendlier question, and it never reads payload JSON
+ * to fill a missing label. */
+function reviewTitle(summary: string | null, actionType: string): string {
+  const source = summary?.trim()
+  if (!source) return humanize(actionType)
+  return /[_-]/.test(source) ? humanize(source) : source
+}
+
+function reviewStatusCopy(actionType: string, status: string): string {
+  if (actionType === "clarification_request") return "Needs one detail"
+  if (status === "pending" || status === "awaiting_approval") return "Needs your decision"
+  if (status === "blocked" || status === "needs_human_review" || status === "blocked_integration_unavailable") return "Needs attention"
+  return humanize(status)
+}
+
 function RailHeading({ icon, children, trailing }: { icon: ReactNode; children: ReactNode; trailing?: ReactNode }) {
   return (
     <div className="jarvis-ops-rail__heading">
@@ -119,13 +138,19 @@ function SourceBadge({ source }: { source: string }) {
  * same-page links to the live regions below—not a fabricated app navigation
  * model—so every control lands on a surface that is already present and backed
  * by the shared kernel/data providers. */
-export function OperationalCommandIndex() {
-  const sections = [
-    { href: "#jarvis-command-core", label: "Command core", icon: <CircleDot className="h-4 w-4" /> },
-    { href: "#jarvis-review-queue", label: "Review queue", icon: <ShieldCheck className="h-4 w-4" /> },
-    { href: "#jarvis-operator-context", label: "Operator context", icon: <Workflow className="h-4 w-4" /> },
-    { href: "#jarvis-operations-field", label: "Operations field", icon: <Radio className="h-4 w-4" /> },
-  ]
+export function OperationalCommandIndex({ ready = false }: { ready?: boolean }) {
+  const sections = ready
+    ? [
+        { href: "#jarvis-command-core", label: "Command core", icon: <CircleDot className="h-4 w-4" /> },
+        { href: "#jarvis-now-rail", label: "Now rail", icon: <ShieldCheck className="h-4 w-4" /> },
+        { href: "#jarvis-business-pulse", label: "Business pulse", icon: <Radio className="h-4 w-4" /> },
+      ]
+    : [
+        { href: "#jarvis-command-core", label: "Command core", icon: <CircleDot className="h-4 w-4" /> },
+        { href: "#jarvis-review-queue", label: "Review queue", icon: <ShieldCheck className="h-4 w-4" /> },
+        { href: "#jarvis-operator-context", label: "Operator context", icon: <Workflow className="h-4 w-4" /> },
+        { href: "#jarvis-operations-field", label: "Operations field", icon: <Radio className="h-4 w-4" /> },
+      ]
 
   return (
     <nav className="jarvis-command-index" aria-label="Command center sections">
@@ -136,6 +161,192 @@ export function OperationalCommandIndex() {
         </a>
       ))}
     </nav>
+  )
+}
+
+type NowRailAction = {
+  id: string
+  title: string
+  status: string
+  actionType: string
+  createdAt: string
+  count: number
+  current: boolean
+}
+
+type NowRailRun = {
+  id: string
+  title: string
+  detail: string
+  progress: number
+  updatedAt: string
+}
+
+type NowRailEvent = {
+  id: string
+  title: string
+  detail: string
+  occurredAt: string
+  count: number
+}
+
+/** H0's right rail. Every group is omitted unless the shared selector/data
+ * snapshot contains an observation for it. */
+function NowRail({
+  selector,
+  thread,
+  liveframe,
+  pendingApprovals,
+  eventsTruth,
+  fixtureLabel,
+  onReviewApprovals,
+}: {
+  selector: SelectorInput
+  thread: Thread | null
+  liveframe: LiveFrameProjection
+  pendingApprovals: Truth<number>
+  eventsTruth: Truth<number>
+  fixtureLabel?: string
+  onReviewApprovals?: () => void
+}) {
+  const approvals = knownTruth(pendingApprovals)
+  const currentActionIds = new Set(thread?.nodes.map((node) => node.id) ?? [])
+  const pendingActionRows = approvals !== null
+    ? [...selector.pendingActions]
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .sort((a, b) => Number(currentActionIds.has(b.id)) - Number(currentActionIds.has(a.id)))
+    : []
+  const needsYou = pendingActionRows.reduce<NowRailAction[]>((groups, action) => {
+    const title = reviewTitle(action.summary, action.actionType)
+    const key = `${action.status}\u0000${title}`
+    const match = groups.find((group) => `${group.status}\u0000${group.title}` === key)
+    if (match) {
+      match.count += 1
+      match.current ||= currentActionIds.has(action.id)
+      return groups
+    }
+    groups.push({
+      id: action.id,
+      title,
+      status: action.status,
+      actionType: action.actionType,
+      createdAt: action.createdAt,
+      count: 1,
+      current: currentActionIds.has(action.id),
+    })
+    return groups
+  }, []).slice(0, 3)
+
+  const runsTruth = selectRunsInFlight(selector)
+  const runs = knownTruth(runsTruth)
+  const inMotion: NowRailRun[] = runs !== null
+    ? [...selector.runs]
+        .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+        .slice(0, Math.max(0, 3 - needsYou.length))
+        .map((run) => {
+          const currentStep = runCurrentStep(run)
+          return {
+            id: run.id,
+            title: humanize(run.workflowType),
+            detail: currentStep ? humanize(currentStep.stepType) : humanize(run.status),
+            progress: runProgressPct(run),
+            updatedAt: run.updatedAt,
+          }
+        })
+    : []
+
+  const eventRows = knownTruth(eventsTruth) !== null
+    ? [...selector.events].sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime())
+    : []
+  const changedRecently = eventRows.reduce<NowRailEvent[]>((groups, event) => {
+    const title = humanize(event.eventType)
+    const detail = humanize(event.entityType)
+    const key = `${title}\u0000${detail}`
+    const match = groups.find((group) => `${group.title}\u0000${group.detail}` === key)
+    if (match) {
+      match.count += 1
+      return groups
+    }
+    groups.push({ id: event.id, title, detail, occurredAt: event.occurredAt, count: 1 })
+    return groups
+  }, []).slice(0, Math.max(0, 3 - needsYou.length - inMotion.length))
+
+  const hasNeedsYou = needsYou.length > 0 || (approvals !== null && approvals > 0)
+  const hasInMotion = inMotion.length > 0
+  const hasChangedRecently = changedRecently.length > 0
+  const sourceFor = (fallback: string) => fixtureLabel ? "fixture" : fallback
+
+  return (
+    <aside id="jarvis-now-rail" className="jarvis-ops-rail jarvis-ops-rail--signals jarvis-now-rail" aria-label="Now Rail" data-jarvis-now-rail data-liveframe-mode={liveframe.mode} data-scene-rail="full" data-command-canvas-scene="ready">
+      {hasNeedsYou ? (
+        <section className="jarvis-ops-panel jarvis-ops-panel--focus" data-now-group="needs-you">
+          <RailHeading icon={<ShieldCheck className="h-3.5 w-3.5" />} trailing={pendingActionRows.length > 0 ? <span className="jarvis-ops-rail__total" data-jarvis-fact data-source={sourceFor("api:actions-pending")}>{pendingActionRows.length} shown</span> : undefined}>Needs you</RailHeading>
+          {needsYou.length > 0 ? (
+            <ul className="jarvis-ops-list" data-source={sourceFor("api:actions-pending")}>
+              {needsYou.map((action) => (
+                <li key={action.id}>
+                <button type="button" onClick={onReviewApprovals} className={`${action.current ? "jarvis-ops-list__item jarvis-ops-list__item--current" : "jarvis-ops-list__item"} w-full text-left`} data-jarvis-fact data-source={sourceFor("api:actions-pending")} title={safeAge(action.createdAt, selector.now) ? `Observed ${safeAge(action.createdAt, selector.now)} ago` : undefined} aria-label={`Review approval: ${action.title}`}>
+                  <span className="jarvis-ops-list__dot" aria-hidden />
+                  <span className="min-w-0 flex-1">
+                    <span className="jarvis-ops-list__title">{action.title}{action.count > 1 ? <span className="jarvis-ops-list__repeat" aria-label={`${action.count} matching records`}>×{action.count}</span> : null}</span>
+                    <span className="jarvis-ops-list__detail">{reviewStatusCopy(action.actionType, action.status)}</span>
+                  </span>
+                  <ChevronRight className="h-3.5 w-3.5 shrink-0 text-[color:var(--j-text-faint)]" aria-hidden />
+                </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="jarvis-ops-panel__muted" data-jarvis-fact data-source={sourceFor("selectPendingApprovals")}>
+              {approvals === 1 ? "1 approval needs your decision." : `${approvals} approvals need your decision.`}
+            </p>
+          )}
+        </section>
+      ) : null}
+
+      {hasInMotion ? (
+        <section className="jarvis-ops-panel" data-now-group="in-motion">
+          <RailHeading icon={<Workflow className="h-3.5 w-3.5" />} trailing={<span className="jarvis-ops-rail__total" data-jarvis-fact data-source={sourceFor("api:workflow-runs")}>{runs} active</span>}>In motion</RailHeading>
+          <ul className="jarvis-ops-list" data-source={sourceFor("api:workflow-runs")}>
+            {inMotion.map((run) => (
+              <li key={run.id} className="jarvis-ops-list__item" data-jarvis-fact data-source={sourceFor("api:workflow-runs")} title={safeAge(run.updatedAt, selector.now) ? `Updated ${safeAge(run.updatedAt, selector.now)} ago` : undefined}>
+                <span className="jarvis-ops-list__dot jarvis-ops-list__dot--signal" aria-hidden />
+                <span className="min-w-0 flex-1">
+                  <span className="jarvis-ops-list__title">{run.title}</span>
+                  <span className="jarvis-ops-list__detail">{run.detail} · {run.progress}% complete</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {hasChangedRecently ? (
+        <section className="jarvis-ops-panel" data-now-group="changed-recently">
+          <RailHeading icon={<Activity className="h-3.5 w-3.5" />} trailing={<SourceBadge source={sourceFor("api:activity")} />}>Changed recently</RailHeading>
+          <ul className="jarvis-ops-list jarvis-ops-list--events" data-source={sourceFor("api:activity")}>
+            {changedRecently.map((event) => (
+              <li key={event.id} className="jarvis-ops-list__item" data-jarvis-fact data-source={sourceFor("api:activity")} title={safeAge(event.occurredAt, selector.now) ? `Observed ${safeAge(event.occurredAt, selector.now)} ago` : undefined}>
+                <span className="jarvis-ops-list__dot jarvis-ops-list__dot--signal" aria-hidden />
+                <span className="min-w-0 flex-1">
+                  <span className="jarvis-ops-list__title">{event.title}{event.count > 1 ? <span className="jarvis-ops-list__repeat" aria-label={`${event.count} matching events`}>×{event.count}</span> : null}</span>
+                  <span className="jarvis-ops-list__detail">{event.detail}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {!hasNeedsYou && !hasInMotion && !hasChangedRecently ? (
+        <section className="jarvis-ops-panel jarvis-ops-panel--empty" data-now-empty>
+          <RailHeading icon={<CircleDot className="h-3.5 w-3.5" />}>Now</RailHeading>
+          <p className="jarvis-ops-panel__muted">
+            {pendingApprovals.status === "denied" ? "Sign in to view current work." : "No current changes are observed."}
+          </p>
+        </section>
+      ) : null}
+    </aside>
   )
 }
 
@@ -154,6 +365,7 @@ export function OperationalContextRail({ thread, liveframe, pendingApprovals, ov
   const currentStep = currentRun ? runCurrentStep(currentRun) : undefined
   const approvals = knownTruth(pendingApprovals)
   const overdue = knownTruth(overdueInvoices)
+  const currentStatus = modeCopy(liveframe)
 
   return (
     <aside id="jarvis-operator-context" className="jarvis-ops-rail jarvis-ops-rail--context" aria-label="Operational context" data-jarvis-operational-context>
@@ -162,7 +374,7 @@ export function OperationalContextRail({ thread, liveframe, pendingApprovals, ov
         <div className="jarvis-operations-list">
           <div className="jarvis-operations-list__row" data-source="kernel.liveframe">
             <span className="jarvis-operations-list__label"><CircleDot className="h-3.5 w-3.5" aria-hidden /> Operator focus</span>
-            <strong>{modeCopy(liveframe)}</strong>
+            <strong data-primary-status={currentStatus}>{currentStatus}</strong>
             {thread ? (
               <p data-jarvis-fact data-source="kernel.thread.instructionText">{thread.instructionText}</p>
             ) : null}
@@ -219,9 +431,13 @@ export function OperationalContextRail({ thread, liveframe, pendingApprovals, ov
 /** The right rail is a compact, real queue + event log. It intentionally
  * disappears section-by-section when the backing source has no observation
  * rather than filling the rail with synthetic operational theatre. */
-export function OperationalSignalRail({ thread, liveframe, pendingApprovals, fixtureLabel }: Omit<OperationalConsoleProps, "overdueInvoices">) {
+export function OperationalSignalRail({ thread, liveframe, pendingApprovals, fixtureLabel, onReviewApprovals }: Omit<OperationalConsoleProps, "overdueInvoices"> & { onReviewApprovals?: () => void }) {
   const selector = useSelectorInput()
   const eventsTruth = selectEventsToday(selector)
+  const sceneDirector = deriveSceneDirector(liveframe)
+  if (sceneDirector.scene === "ready") {
+    return <NowRail selector={selector} thread={thread} liveframe={liveframe} pendingApprovals={pendingApprovals} eventsTruth={eventsTruth} fixtureLabel={fixtureLabel} onReviewApprovals={onReviewApprovals} />
+  }
   const approvals = knownTruth(pendingApprovals)
   const currentActionIds = new Set(thread?.nodes.map((node) => node.id) ?? [])
   const pendingActionRows = approvals !== null ? [...selector.pendingActions]
@@ -284,7 +500,7 @@ export function OperationalSignalRail({ thread, liveframe, pendingApprovals, fix
   }, []).slice(0, 4)
 
   return (
-    <aside id="jarvis-review-queue" className="jarvis-ops-rail jarvis-ops-rail--signals" aria-label="Operational signals" data-jarvis-operational-signals>
+    <aside id="jarvis-review-queue" className="jarvis-ops-rail jarvis-ops-rail--signals" aria-label="Operational signals" data-jarvis-operational-signals data-scene-rail={sceneDirector.nowRail} data-command-canvas-scene={sceneDirector.scene}>
       <section className="jarvis-ops-panel jarvis-ops-panel--queue" data-liveframe-mode={liveframe.mode}>
         <RailHeading
           icon={<ShieldCheck className="h-3.5 w-3.5" />}
@@ -293,13 +509,15 @@ export function OperationalSignalRail({ thread, liveframe, pendingApprovals, fix
         {queued.length > 0 ? (
           <ul className="jarvis-ops-list" data-source="api:actions-pending">
             {queued.map((action) => (
-              <li key={action.id} className={action.current ? "jarvis-ops-list__item jarvis-ops-list__item--current" : "jarvis-ops-list__item"} data-jarvis-fact data-source="api:actions-pending">
+              <li key={action.id}>
+              <button type="button" onClick={onReviewApprovals} className={`${action.current ? "jarvis-ops-list__item jarvis-ops-list__item--current" : "jarvis-ops-list__item"} w-full text-left`} data-jarvis-fact data-source="api:actions-pending" aria-label={`Review approval: ${action.title}`}>
                 <span className="jarvis-ops-list__dot" aria-hidden />
                 <span className="min-w-0 flex-1">
                   <span className="jarvis-ops-list__title">{action.title}{action.count > 1 ? <span className="jarvis-ops-list__repeat" aria-label={`${action.count} matching records`}>×{action.count}</span> : null}</span>
                   <span className="jarvis-ops-list__detail">{humanize(action.status)}{safeAge(action.createdAt, selector.now) ? ` · latest ${safeAge(action.createdAt, selector.now)} ago` : ""}</span>
                 </span>
                 <ChevronRight className="h-3.5 w-3.5 shrink-0 text-[color:var(--j-text-faint)]" aria-hidden />
+              </button>
               </li>
             ))}
           </ul>
@@ -346,7 +564,7 @@ export function OperationalSignalRail({ thread, liveframe, pendingApprovals, fix
  * decorative object. All callouts are grounded in the active instruction or
  * real data lanes; no callout is rendered merely to make the composition busy.
  */
-export function OrbIntelligenceReadout({ thread, liveframe, pendingApprovals, fixtureLabel }: Pick<OperationalConsoleProps, "thread" | "liveframe" | "pendingApprovals" | "fixtureLabel">) {
+export function OrbIntelligenceReadout({ thread, liveframe, pendingApprovals, fixtureLabel, primaryStatus }: Pick<OperationalConsoleProps, "thread" | "liveframe" | "pendingApprovals" | "fixtureLabel"> & { primaryStatus: string }) {
   const selector = useSelectorInput()
   const lane = useLanePresentation()
   const runsTruth = selectRunsInFlight(selector)
@@ -367,11 +585,12 @@ export function OrbIntelligenceReadout({ thread, liveframe, pendingApprovals, fi
 
   return (
     <div className="jarvis-orb-readout" data-orb-intelligence-surface data-liveframe-mode={liveframe.mode} data-liveframe-tone={modeTone}>
-      <div className="jarvis-orb-readout__state" data-source="kernel.liveframe">
-        <span className="jarvis-orb-readout__eyebrow">JARVIS intelligence</span>
-        <strong>{modeCopy(liveframe)}</strong>
-        <span className="jarvis-orb-readout__connection">{connectionCopy(liveframe.transportPosture)}</span>
-      </div>
+      {liveframe.mode === "ready" || liveframe.mode === "listening" ? (
+        <div className="jarvis-orb-readout__state" data-source="kernel.liveframe">
+          <span className="jarvis-orb-readout__eyebrow">JARVIS intelligence</span>
+          <strong data-primary-status={primaryStatus} role="status">{primaryStatus}</strong>
+        </div>
+      ) : null}
       {runs !== null ? (
         <div className="jarvis-orb-readout__satellite jarvis-orb-readout__satellite--workflow" data-jarvis-fact data-source={fixtureLabel ? "fixture.workflowRuns" : "api:workflow-runs"}>
           <Workflow className="h-3.5 w-3.5" aria-hidden />
@@ -498,6 +717,23 @@ export function OperationalFloor() {
   )
 }
 
+/** H0's compact pulse keeps the existing Truth-gated KPI facts but removes the
+ * legacy five-card operations floor from the Ready hierarchy. The four-item
+ * projection preserves the source strip's existing order and values. */
+export function BusinessPulse({ quiet = false }: { quiet?: boolean }) {
+  return (
+    <section id="jarvis-business-pulse" className={`jarvis-business-pulse${quiet ? " jarvis-business-pulse--quiet" : ""}`} aria-label="Business Pulse" data-jarvis-business-pulse data-business-pulse-mode={quiet ? "quiet" : "full"}>
+      <div className="jarvis-business-pulse__heading">
+        <span className="jarvis-business-pulse__title"><Radio className="h-3.5 w-3.5" aria-hidden /> Business Pulse</span>
+        <span className="jarvis-business-pulse__note">Current source-backed facts</span>
+      </div>
+      <div className="jarvis-business-pulse__metrics">
+        <KpiStrip limit={4} compact />
+      </div>
+    </section>
+  )
+}
+
 function latencyPath(values: number[]): string {
   if (values.length < 2) return ""
   const max = Math.max(...values)
@@ -523,18 +759,15 @@ function LatencySparkline({ values }: { values: number[] }) {
   )
 }
 
-/** Semantic top chrome. It consumes the exact same transport and latency data
- * as Diagnostics, but promotes only a human-readable connection posture; the
- * technical detail remains behind the supplied disclosure. */
+/** Semantic top chrome. The human status lives beside the Orb; technical
+ * connection/latency detail stays behind the supplied Diagnostics disclosure. */
 export function OperationsHeader({
   liveframe,
-  primaryStatus,
   diagnostics,
   environment,
   showSignIn = true,
 }: {
   liveframe: LiveFrameProjection
-  primaryStatus: string
   diagnostics?: ReactNode
   /** A truthful build/preview marker belongs in the header chrome, never as a
    * floating overlay that can cover an operational control. */
@@ -543,34 +776,48 @@ export function OperationsHeader({
    * action spine, so its header stays informational rather than duplicating it. */
   showSignIn?: boolean
 }) {
-  const lane = useLanePresentation()
   const auth = useJarvisAuth()
-  const latency = lane.apiLatencyMs
+  const pathname = usePathname()
   const account = auth.session?.user.email ?? null
+  const [contextHouseholdId, setContextHouseholdId] = useState<string | null>(null)
+
+  useEffect(() => {
+    setContextHouseholdId(new URLSearchParams(window.location.search).get("householdId"))
+  }, [])
+
+  const surfaceHref = (href: string): string => withHouseholdId(href, contextHouseholdId)
 
   return (
-    <header className="jarvis-operations-header" data-jarvis-command-header>
+    <header className="jarvis-operations-header" data-jarvis-command-header data-liveframe-mode={liveframe.mode}>
       <div className="jarvis-operations-header__inner">
-        <Link href="/jarvis" className="jarvis-operations-header__brand" aria-label="JARVIS command center">
+        <Link href={surfaceHref("/jarvis")} prefetch={false} className="jarvis-operations-header__brand" aria-label="JARVIS command center">
           <span className="jarvis-operations-header__mark" aria-hidden>J</span>
           <span className="min-w-0">
             <span className="jarvis-operations-header__name">JARVIS</span>
             <span className="jarvis-operations-header__sub">FINNOR operational intelligence</span>
           </span>
         </Link>
-
-        <div className="jarvis-operations-header__status" data-source="kernel.transport">
-          <span className="jarvis-operations-header__status-dot" data-liveframe-mode={liveframe.mode} aria-hidden />
-          <span>{connectionCopy(liveframe.transportPosture)}</span>
-          {latency !== null ? <span className="jarvis-operations-header__latency" data-jarvis-fact data-source="api:stats">{Math.round(latency)} ms</span> : null}
-          <LatencySparkline values={lane.latencyHistory} />
-        </div>
+        <nav className="jarvis-operations-header__surface-nav" aria-label="Operational surfaces">
+          {contextHouseholdId ? <span className="jarvis-operations-header__context" data-context-household-id={contextHouseholdId}>Context · {contextHouseholdId.slice(0, 8)}…</span> : null}
+          {SURFACES.map((surface) => {
+            const active = pathname === surface.href
+            return (
+              <Link
+                key={surface.key}
+                href={surfaceHref(surface.href)}
+                prefetch={false}
+                className="jarvis-operations-header__surface-link"
+                data-jarvis-surface-link={surface.key}
+                data-active={active ? "true" : "false"}
+                aria-current={active ? "page" : undefined}
+              >
+                {surface.label}
+              </Link>
+            )
+          })}
+        </nav>
 
         <div className="jarvis-operations-header__actions">
-          <span className="j-chip j-status" data-primary-status={primaryStatus} role="status">
-            <span className="h-1.5 w-1.5 rounded-full" aria-hidden />
-            {primaryStatus}
-          </span>
           {environment ? <span className="jarvis-operations-header__environment">{environment}</span> : null}
           {diagnostics}
           {account ? (
@@ -591,4 +838,6 @@ export const operationalConsole = {
   modeCopy,
   connectionCopy,
   latencyPath,
+  reviewTitle,
+  reviewStatusCopy,
 }

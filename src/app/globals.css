@@ -84,7 +84,8 @@
   }
   html, body {
     background: #f8faf9;
-    overflow-x: hidden;
+    overflow-x: clip;
+    overflow-y: visible;
   }
   body {
     background: #f8faf9;

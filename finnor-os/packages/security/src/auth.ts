@@ -11,7 +11,7 @@
 // apps/api/lib/auth.ts's requireContext(). Moved here rather than duplicated, which is
 // what "Read: packages/security (JWT verify)" implied should already be true.
 
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { getPool } from "@finnor/db";
 import type { TenantContext, Role } from "@finnor/shared-types";
 
@@ -26,6 +26,21 @@ export class AuthVerificationError extends Error {
 
 export type IdentityContext = Omit<TenantContext, "correlationId">;
 
+let authClient: SupabaseClient | null = null;
+let authClientConfig = "";
+
+function supabaseAuthClient(url: string, key: string): SupabaseClient {
+  // Reuse one client so auth-js can reuse its cached JWKS. Creating a client for
+  // every API read forced a remote /user verification for every Home poll and
+  // multiplied one browser session into dozens of auth round trips.
+  const config = `${url}\u0000${key}`;
+  if (!authClient || authClientConfig !== config) {
+    authClient = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
+    authClientConfig = config;
+  }
+  return authClient;
+}
+
 /** Verifies a Supabase-issued bearer token and returns the caller's email. Throws
  *  AuthVerificationError (never a bare Error) so every caller can map it to the right
  *  HTTP status without knowing anything about Supabase's own error shape. */
@@ -33,10 +48,14 @@ export async function verifyBearerToken(token: string): Promise<{ email: string 
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) throw new AuthVerificationError("Auth is not configured (SUPABASE_URL / key missing)", 500);
-  const supabase = createClient(url, key, { auth: { persistSession: false } });
-  const { data, error } = await supabase.auth.getUser(token);
-  if (error || !data.user?.email) throw new AuthVerificationError("Invalid or expired token", 401);
-  return { email: data.user.email };
+  const supabase = supabaseAuthClient(url, key);
+  // getClaims verifies asymmetric Supabase JWTs locally after a cached JWKS fetch;
+  // it still falls back to the Auth server for symmetric signing. Either path
+  // cryptographically validates expiry/signature—this is not decode-and-trust.
+  const { data, error } = await supabase.auth.getClaims(token);
+  const email = data?.claims.email;
+  if (error || typeof email !== "string" || !email) throw new AuthVerificationError("Invalid or expired token", 401);
+  return { email };
 }
 
 /** Identity → tenant lookup. Outside any withTenant() scope deliberately — tenant

@@ -1,125 +1,72 @@
-"use client";
+import { BookOpenText } from "lucide-react";
 
-import { motion } from "framer-motion";
-import { BookOpenText, Search } from "lucide-react";
 import { ResourceFrame } from "./ResourceFrame";
 import { ResourceHero } from "./ResourceHero";
+import styles from "./PublicEditorial.module.css";
 
 const terms = [
-  [
-    "Approval gate",
-    "The point where a drafted plan — a quote, a booking, an urgent route — waits for a human yes. Nothing executes before it, database-enforced, not a UI suggestion.",
-  ],
-  [
-    "Receipt",
-    "The record JARVIS files after a plan executes: what was proposed, what was approved, what happened, what it cost.",
-  ],
-  [
-    "Unworked lead recovery",
-    "Answering or following up fast enough to turn a voicemail-bound water lead into a booked next step.",
-  ],
-  [
-    "Water test booking",
-    "Moving a homeowner's water concern, source, system interest, timeline, address, and callback toward a booked water test or sales callback.",
-  ],
-  [
-    "No-water urgent route",
-    "A scoped workflow for routing urgent no-water context to the approved owner, dispatcher, or on-call technician.",
-  ],
-  [
-    "Quote form follow-up",
-    "Prompt follow-up on an inbound website quote request while the customer is still actively looking for help.",
-  ],
-  [
-    "Outbound speed-to-lead",
-    "Fast follow-up for inbound website forms, Google/Facebook leads, paid leads, quote requests, or old inquiries, not cold calling.",
-  ],
-  [
-    "Booking route",
-    "A clear next-step path that gives the owner, CSR, dispatcher, or on-call technician enough context to act without starting cold.",
-  ],
-  [
-    "Urgency routing",
-    "Flagging approved urgent language and sending the route to the configured human escalation path.",
-  ],
-  [
-    "Human-in-the-loop",
-    "A workflow where people remain responsible for repair decisions, quotes, ETAs, follow-up, and customer promises.",
-  ],
-  [
-    "Call recording",
-    "An audio record available for quality and opportunity review where recording is configured and permitted.",
-  ],
-  [
-    "Recovered job opportunity",
-    "A unworked lead or inbound lead Finnor helps move back into a booked appointment, service call, or human-owned next step.",
-  ],
-  [
-    "CRM/webhook route",
-    "Sending booking or urgency context into a CRM, workflow tool, or endpoint approved by the company.",
-  ],
-  [
-    "Recovery view",
-    "An account-specific view of calls, recordings, executed business workflows, and recovered opportunities for review.",
-  ],
-];
+  ["Instruction trace", "The durable identity that connects the original intent to context retrieval, planning, policy, approval, execution, recovery and the final receipt—regardless of whether the instruction arrived by text, voice, webhook or worker."],
+  ["Work root", "The exact operational object a workflow is allowed to change, such as a specific work case, household, appointment, invoice or campaign. Exact roots prevent evidence from drifting across lookalike records."],
+  ["Context graph", "The assembled operating picture around a work root: source records, relationships, policies, availability, inventory, price-book data, memory and citations."],
+  ["Structured memory", "Durable facts stored in explicit business fields and read models. FINNOR prefers structured truth before semantic recall when a decision can be grounded deterministically."],
+  ["Semantic memory", "Retrieved narrative context that may help interpret a situation. It is supplementary evidence—not a substitute for authoritative records."],
+  ["Action contract", "A typed, bounded capability the planner may propose, with defined inputs, domain ownership, risk posture and an execution path."],
+  ["Action manifest", "The fixed catalog of action contracts available to the planner. FINNOR’s current product manifest contains 44 contracts across 24 operational domains."],
+  ["Domain plugin", "The business-specific implementation behind a family of actions, such as scheduling, accounting, inventory, documents, communications or campaigns."],
+  ["Executable plan", "An ordered set of action contracts whose dependencies, expected changes, risks and authority requirements are known before execution begins."],
+  ["Dependency graph", "The causal order inside a plan. It ensures, for example, that availability is validated before rescheduling and inventory is reserved before a customer commitment."],
+  ["Clarification step", "A deliberate stop when required context is missing or contradictory. The system asks for a specific answer instead of fabricating certainty."],
+  ["Policy set", "Versioned tenant data that defines risk tiers, effective dates, role permissions, confirmation requirements and prohibited behavior."],
+  ["Authority boundary", "The point where policy changes the execution path from allowed to held, escalated or denied."],
+  ["Typed confirmation", "An approval attached to a specific actor, proposal, policy decision and scope. It cannot silently authorize a different action."],
+  ["Durable workflow", "Execution state that survives process restarts and external delays while preserving step history, retry posture and the original instruction."],
+  ["Idempotency", "Protection against performing the same consequential action twice when a request is retried or replayed."],
+  ["Dead-letter queue", "The controlled holding area for work that exhausted its normal retry policy. Operators can inspect, replay or discard it through an audited path."],
+  ["Compensation", "A supported reversal or counter-action used when later failure requires prior work to be undone or neutralized."],
+  ["Reconciliation", "The comparison between the expected operational change and the actual state reported by source systems."],
+  ["Decision receipt", "The evidence artifact that records the objective, proposed and actual outcomes, approval, policy, risk, correlation identifiers and source evidence."],
+  ["Read model", "A purpose-built operational projection such as Customers, Work, Schedule, Money or Agents. Read models make one causal state visible without forcing people to reconstruct it from event logs."],
+  ["Agent channel", "A bounded operating role—such as follow-up, service reminders, win-back or payment collection—whose work remains governed by the same policy and evidence chain."],
+  ["Tool health", "The current availability and configuration posture of a native or external execution adapter. A configured capability is not treated as healthy merely because code exists for it."],
+] as const;
+
+function GlossaryInstrument() {
+  return (
+    <div className={styles.instrument}>
+      <div className={styles.instrumentTop}><span>Contract lookup</span><span>manifest / 44</span></div>
+      <div className={styles.instrumentBody}>
+        <span>Selected term</span>
+        <strong>Decision receipt</strong>
+        <p>Evidence that closes the distance between “the agent said it ran” and “the operation actually changed.”</p>
+        <div className={styles.instrumentRows}>
+          <div><i /><span>Expected outcome</span><small>recorded</small></div>
+          <div><i /><span>Actual outcome</span><small>verified</small></div>
+          <div><i /><span>Exact work root</span><small>linked</small></div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function DispatchAiGlossary() {
   return (
     <ResourceFrame>
       <ResourceHero
-        kicker="Operator glossary"
-        title="JARVIS terms without the jargon."
-        copy="Short definitions for water treatment, water dealer, and water-treatment teams evaluating drafted plans, approval gates, receipts, and customer history records."
+        kicker="FINNOR operating glossary"
+        title="Language for accountable execution."
+        copy="The concepts behind FINNOR, written for operators. These definitions describe the actual product contract—not generic AI vocabulary."
         icon={BookOpenText}
-        aside={<GlossaryIndex />}
+        aside={<GlossaryInstrument />}
       />
-      <section className="healthcare-section pt-0">
-        <div className="container relative z-10 px-4 md:px-6">
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {terms.map(([term, definition], index) => (
-              <motion.div
-                key={term}
-                initial={{ opacity: 0, y: 22 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-70px" }}
-                transition={{ delay: index * 0.025 }}
-                className="ops-card ops-card-hover rounded-2xl p-6"
-                data-cursor="hover"
-              >
-                <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">
-                  {String(index + 1).padStart(2, "0")}
-                </p>
-                <h2 className="mt-3 text-2xl font-black tracking-tight text-slate-950">
-                  {term}
-                </h2>
-                <p className="mt-4 text-sm font-medium leading-relaxed text-slate-600">
-                  {definition}
-                </p>
-              </motion.div>
-            ))}
-          </div>
-        </div>
+      <section className={styles.content}>
+        <span className={styles.sectionLabel}>From intent to verified change</span>
+        <h2 className={styles.sectionTitle}>The words that make the chain inspectable.</h2>
+        <dl className={styles.termList}>
+          {terms.map(([term, definition]) => (
+            <div className={styles.term} key={term}><dt>{term}</dt><dd>{definition}</dd></div>
+          ))}
+        </dl>
       </section>
     </ResourceFrame>
-  );
-}
-
-function GlossaryIndex() {
-  return (
-    <div className="ops-card relative overflow-hidden rounded-[2rem] p-6">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-2 bg-gradient-to-r from-slate-950 via-sky-700 to-teal-600" />
-      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-950 text-white shadow-lg">
-        <Search className="h-5 w-5 text-teal-200" />
-      </div>
-      <p className="mt-6 text-xs font-black uppercase tracking-[0.22em] text-slate-600">
-        Built for operators
-      </p>
-      <p className="mt-4 text-sm font-semibold leading-relaxed text-slate-600">
-        These definitions keep the focus on executed business workflows, faster
-        lead response, approved escalation, and human-owned quotes, dispatch,
-        repair decisions, and promises.
-      </p>
-    </div>
   );
 }

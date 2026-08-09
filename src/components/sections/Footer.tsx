@@ -4,13 +4,12 @@ import { motion } from "framer-motion";
 import { siteConfig } from "@/config/site";
 
 const footerLinks = [
-  { href: "/#product", label: "Product" },
-  { href: "/#capabilities", label: "Capabilities" },
-  { href: "/#workflow", label: "How It Works" },
-  { href: "/#pricing", label: "Pricing" },
-  { href: "/#faq", label: "FAQ" },
+  { href: "/#story", label: "How It Works" },
+  { href: "/#surfaces", label: "Surfaces" },
+  { href: "/#evidence", label: "Evidence" },
+  { href: "/resources", label: "Field Notes" },
   { href: "/trust-safety", label: "Trust & Safety" },
-  { href: siteConfig.calendlyLink, label: "Book a JARVIS Demo" },
+  { href: siteConfig.calendlyLink, label: "Book an operating review" },
 ];
 
 export function Footer() {
@@ -34,9 +33,9 @@ export function Footer() {
               {siteConfig.name}
             </span>
             <p className="mt-3 text-base font-medium leading-relaxed text-slate-600">
-              FINNOR builds JARVIS, the voice-native AI operations platform for
-              water-treatment companies. It connects the systems your team
-              already uses and helps run the work from one command layer.
+              FINNOR is the governed execution system for water treatment
+              companies. JARVIS is the command surface where the operation is
+              understood, directed and verified.
             </p>
             <p className="mt-5 text-sm font-bold text-slate-600">
               Founder contact:{" "}

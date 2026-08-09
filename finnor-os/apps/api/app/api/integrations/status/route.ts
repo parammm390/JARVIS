@@ -9,6 +9,7 @@ import {
   testAdsConnections,
   testQuickBooksConnection,
   testVapiConnection,
+  testVapiAssistants,
   ghlIntegrationStatus,
   testStripeConnection,
   testDocusignConnection,
@@ -20,10 +21,11 @@ import { requireContext, errorResponse } from "../../../../lib/auth";
 export async function GET(req: Request): Promise<Response> {
   try {
     const ctx = await requireContext(req);
-    const [ads, quickbooks, vapi, stripe, docusign, bindingsReport] = await Promise.all([
+    const [ads, quickbooks, vapi, voiceAssistants, stripe, docusign, bindingsReport] = await Promise.all([
       testAdsConnections(),
       testQuickBooksConnection(),
       testVapiConnection(),
+      testVapiAssistants(),
       testStripeConnection(),
       testDocusignConnection(),
       resolveCapabilityBindingsForTenant(ctx.tenantId),
@@ -42,7 +44,7 @@ export async function GET(req: Request): Promise<Response> {
     // env -> default, the same resolveCapabilityBindingsForTenant() the worker uses to
     // pick the real binding — this report can't drift from what actually executes).
     const bindings = { payments: bindingsReport.payments.mode, esign: bindingsReport.esign.mode };
-    return Response.json({ ...all, bindings, summary }, { headers: { "cache-control": "no-store" } });
+    return Response.json({ ...all, voiceAssistants, bindings, summary }, { headers: { "cache-control": "no-store" } });
   } catch (err) {
     return errorResponse(err);
   }

@@ -29,7 +29,7 @@ const QUALIFY_SERVICES = [
   "RO drinking water",
   "Iron & sulfur treatment",
   "UV disinfection",
-  "Water-treatment operations",
+  "Pump & pressure service",
 ];
 import {
   getWorkflowDefinition,
@@ -70,9 +70,9 @@ type DemoSetupFormProps = {
 
 const fallbackLoadingSteps = [
   "Reading company profile",
-  "Mapping water treatment booking path",
-  "Preparing voice script",
-  "Building booking route preview",
+  "Mapping the selected instruction path",
+  "Preparing instruction ingress",
+  "Building governed handoff preview",
 ];
 
 export function DemoSetupForm({
@@ -166,11 +166,10 @@ export function DemoSetupForm({
 
   return (
     <div className="ops-card relative overflow-hidden rounded-[1.6rem] bg-white/88 p-5 shadow-[0_24px_70px_rgba(15,23,42,0.1)] md:p-7 lg:p-8">
-      <div className="pointer-events-none absolute right-0 top-0 h-72 w-72 rounded-full bg-sky-100/80 blur-[92px]" />
       <div className="relative z-10">
         <div className="mb-6 inline-flex items-center rounded-full border border-sky-100 bg-sky-50 px-4 py-1.5 text-[10px] font-black uppercase tracking-[0.2em] text-sky-800">
           <span className="mr-2 h-1.5 w-1.5 rounded-full bg-teal-500 shadow-[0_0_0_4px_rgba(20,184,166,0.12)]" />
-          Live demo builder
+          Public instruction demo
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6" data-demo-setup>
@@ -421,7 +420,7 @@ export function DemoSetupForm({
               </>
             ) : (
               <>
-                Generate Demo
+                Build Instruction Demo
                 <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
               </>
             )}

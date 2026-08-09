@@ -16,6 +16,7 @@ import { LF09_DECISION_WAVE_MS } from "../kernel/execution-choreography"
 import { onJarvisEvent, type JarvisEventType } from "../lib/data-core"
 import { getAnchorRect } from "../lib/pulse-bus"
 import { choreo } from "../ui/motion/choreo"
+import { SIGNATURE_MOMENTS } from "../kernel/signature-moments"
 
 type CueTone = "cyan" | "teal" | "green" | "amber" | "red" | "violet"
 type AtmosphereCue = { id: number; tone: CueTone; label: string; fault: boolean }
@@ -180,6 +181,8 @@ export function ThreadEventAtmosphere({ instructionState, transport }: { instruc
           <motion.div
             key={`relight-${relightId}`}
             aria-hidden
+            data-jarvis-signature-moment="recover"
+            data-jarvis-signature-source={SIGNATURE_MOMENTS.recover.source}
             className="pointer-events-none fixed inset-0 z-10"
             variants={relight}
             initial="initial"

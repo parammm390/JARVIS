@@ -37,7 +37,7 @@ export function RecordPanel({
           <div className="min-w-0">
             <p className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.2em] text-teal-700">
               <Brain className="h-3 w-3" />
-              Customer memory
+              Household work root
             </p>
             <p className="mt-0.5 truncate text-lg font-black tracking-tight text-slate-950">
               {scenario.customer.name}
@@ -159,7 +159,7 @@ export function RecordPanel({
 
       <div className="border-t border-slate-200 p-5">
         <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
-          Memory log
+          Operational history
         </p>
         <div
           data-lenis-prevent

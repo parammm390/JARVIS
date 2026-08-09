@@ -86,7 +86,7 @@ describe("JARVIS proxy route contract", () => {
     expect(arbitrary.status).toBe(404)
   })
 
-  it("keeps anonymous health truly anonymous while service-backed public aggregates still use the service token", async () => {
+  it("keeps anonymous health anonymous, uses service auth for anonymous aggregates, and preserves a real caller", async () => {
     await GET(request("GET", "health"), params("health"))
     const healthInit = fetchMock.mock.calls[0]?.[1] as RequestInit
     expect((healthInit.headers as Record<string, string>).authorization).toBeUndefined()
@@ -96,6 +96,11 @@ describe("JARVIS proxy route contract", () => {
     expect(getServiceTokenMock).toHaveBeenCalledTimes(1)
     const statsInit = fetchMock.mock.calls[1]?.[1] as RequestInit
     expect((statsInit.headers as Record<string, string>).authorization).toBe("Bearer service-token")
+
+    await GET(request("GET", "stats", { headers: AUTH }), params("stats"))
+    expect(getServiceTokenMock).toHaveBeenCalledTimes(1)
+    const authenticatedStatsInit = fetchMock.mock.calls[2]?.[1] as RequestInit
+    expect((authenticatedStatsInit.headers as Record<string, string>).authorization).toBe("Bearer caller-token")
   })
 
   it("bounds a hanging service-token lookup before forwarding a public aggregate", async () => {

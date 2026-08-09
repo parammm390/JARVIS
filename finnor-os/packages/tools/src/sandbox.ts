@@ -191,7 +191,11 @@ export function registerSandboxComms(registry: ToolRegistry): void {
           input.firstName ? String(input.firstName) : undefined,
           input.address ? String(input.address) : undefined,
         );
-        return { contactId: householdId, createdNew: created, simulated: true };
+        // `contactId` preserves the pre-canonical GHL-shaped contract. Expose the
+        // real native entity ID as well so receipts/read models can link the same
+        // execution to Household 360 without guessing that the two namespaces are
+        // interchangeable.
+        return { contactId: householdId, householdId, createdNew: created, simulated: true };
       },
     },
     {

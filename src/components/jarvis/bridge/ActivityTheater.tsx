@@ -12,7 +12,7 @@ import { useEffect, useMemo, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { jarvisClient, type ActivityItem, type ActivityPage } from "@/lib/jarvis-client"
 import { useLiveQuery } from "@/lib/jarvis/useLiveQuery"
-import { getCurrentAccessToken, useJarvisAuth } from "../lib/jarvis-auth"
+import { useJarvisAuth } from "../lib/jarvis-auth"
 import { requestReceiptScene } from "../lib/receipt-nav"
 import { flash } from "../lib/EventFX"
 import { Enter } from "../ui/motion/primitives"
@@ -46,14 +46,6 @@ function ageLabel(iso: string): string {
   return `${Math.round(seconds / 3600)}h ago`
 }
 
-function sseUrlFor(): string | undefined {
-  const base = process.env.NEXT_PUBLIC_JARVIS_SSE_URL
-  if (!base) return undefined
-  const token = getCurrentAccessToken()
-  if (!token) return undefined
-  return `${base}/events?token=${encodeURIComponent(token)}`
-}
-
 export function ActivityTheater() {
   const { session } = useJarvisAuth()
   const feedRef = useRef<HTMLDivElement | null>(null)
@@ -66,7 +58,10 @@ export function ActivityTheater() {
   useEffect(() => registerAnchor("activity-feed", () => feedRef.current?.getBoundingClientRect() ?? null), [])
 
   const { data, connection } = useLiveQuery<ActivityPage, string>({
-    sseUrl: sseUrlFor(),
+    // Native EventSource cannot carry Authorization and query-string bearer
+    // tokens leak through logs/history. Keep this general activity lane on its
+    // honest authenticated polling path until it shares the fetch-stream relay.
+    sseUrl: undefined,
     fetchPage: async (cursor) => {
       const page = await jarvisClient.activity({ since: cursor ?? undefined, limit: 30 })
       return { ...page, cursor: page.nextCursor }

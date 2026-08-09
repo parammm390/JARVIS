@@ -753,7 +753,7 @@ function UpsellScene({
             <Sparkles className="h-5 w-5" />
           </span>
           <p className="text-[10px] font-black uppercase tracking-widest text-sky-800">
-            Why now, three signals from memory
+            Why now, three signals from the record
           </p>
         </div>
         <div className="mt-4 space-y-2.5">
@@ -810,7 +810,7 @@ function LedgerScene({
                 24-month ledger
               </p>
               <p className="mt-0.5 text-sm font-black text-slate-950">
-                Every line fired from memory. No one at the shop kept a list
+                Every line remains tied to the same household work root
               </p>
             </div>
           </div>
@@ -900,23 +900,23 @@ function LedgerScene({
         className="flex flex-col rounded-[2rem] border border-orange-200 bg-orange-50 p-5 md:p-6"
       >
         <p className="text-sm font-black uppercase tracking-widest text-orange-800">
-          Same lead, no memory
+          Fragmented-record baseline
         </p>
         <p
           className="mt-6 text-4xl font-black tracking-tight text-slate-950"
           style={{ fontFamily: MONO }}
         >
-          {scene.noMemoryTotal}
+          Unverified
         </p>
         <p className="mt-2 text-sm font-bold text-slate-700">
-          One transaction. Then silence.
+          No defensible counterfactual value.
         </p>
         <div className="mt-6 space-y-2.5">
           {[
-            "No water data, quote came off a rate sheet",
-            "No review ask, the moment passed",
-            "No check-ins, customer buys salt at the hardware store",
-            "No referral attribution, the neighbor called someone else",
+            "Source context is not attached to later work",
+            "Customer events cannot be reconciled to one root",
+            "Follow-up ownership and authority are unclear",
+            "Attribution cannot be defended from evidence",
           ].map((line) => (
             <div key={line} className="flex items-start gap-2.5">
               <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-orange-500" />
@@ -927,8 +927,8 @@ function LedgerScene({
           ))}
         </div>
         <p className="mt-auto pt-6 text-xs font-semibold leading-relaxed text-slate-600">
-          The gap between these two numbers is what one continuous memory is
-          worth on a single phone call.
+          This walkthrough demonstrates continuity. It does not claim that
+          FINNOR created or recovered the simulated ledger value.
         </p>
       </motion.div>
     </div>

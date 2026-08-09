@@ -2,9 +2,9 @@ import type { Metadata } from "next"
 import PersonalizedHome from "@/components/jarvis/PersonalizedHome"
 
 export const metadata: Metadata = {
-  title: "FINNOR JARVIS — Live AI Command Center for Water Treatment",
+  title: "FINNOR JARVIS — Governed Command Surface",
   description:
-    "Speak to FINNOR. It plans real business actions — bookings, leads, inventory, invoices, research — reads them back for your approval, executes, and logs every step.",
+    "Give FINNOR an instruction. JARVIS assembles operating context, forms a plan, requests the right approvals, executes through connected systems, and records the evidence.",
 }
 
 export default function JarvisPage() {

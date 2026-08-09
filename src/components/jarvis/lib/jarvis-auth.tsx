@@ -74,7 +74,7 @@ export function JarvisAuthProvider({ children }: { children: React.ReactNode }) 
   // The signed-out command center is intentionally public and every private API is
   // still backend-gated. Rendering it while Supabase restores a session avoids a
   // blank full-screen LCP delay for every cold public visit.
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [authError, setAuthError] = useState<string | null>(null)
   const [authRetry, setAuthRetry] = useState(0)
   const [role, setRole] = useState<JarvisRole | null>(null)
@@ -99,7 +99,7 @@ export function JarvisAuthProvider({ children }: { children: React.ReactNode }) 
         const { data: sub } = supabaseBrowser.auth.onAuthStateChange((_event, next) => {
           if (!active) return
           currentSession = next
-          setSession(next)
+          setSession((previous) => previous?.user.id === next?.user.id && previous?.access_token === next?.access_token ? previous : next)
           setAuthError(null)
         })
         unsubscribe = () => sub.subscription.unsubscribe()

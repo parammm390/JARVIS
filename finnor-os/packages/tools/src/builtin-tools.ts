@@ -10,6 +10,7 @@ import { registerSandboxComms } from "./sandbox";
 import { sendEmail } from "./email";
 import { geocodeAddress, distanceMiles } from "./maps";
 import { placeVapiCall } from "./vapi-rest";
+import { VOICE_AGENT_KEYS } from "./voice-personas";
 import { exaSearch } from "./exa";
 import { firecrawlScrape } from "./firecrawl";
 import { getAdPerformance, adsProviderStatus } from "./ads";
@@ -131,16 +132,32 @@ function registerUniversalTools(registry: ToolRegistry, allowLiveVapi: boolean):
       description: "Place a REAL outbound call via the dealer's Vapi phone number, optionally with a specialized assistant persona",
       integration: "vapi",
       inputSchema: z
-        .object({ phoneNumber: z.string().min(7), instructions: z.string().optional(), assistantId: z.string().optional(), purpose: z.string().optional() })
+        .object({
+          phoneNumber: z.string().min(7),
+          instructions: z.string().optional(),
+          assistantId: z.string().optional(),
+          purpose: z.string().optional(),
+          agentKey: z.enum(VOICE_AGENT_KEYS).optional(),
+          domainActionId: z.string().min(1).optional(),
+          householdId: z.string().min(1).optional(),
+          invoiceId: z.string().min(1).optional(),
+        })
         .passthrough(),
-      piiAllowlist: ["phoneNumber", "instructions", "assistantId", "purpose", "tenantId"],
+      // These are causal/audit keys, not provider secrets. Keep the allowlist explicit
+      // so future planner payload fields never flow into Vapi metadata by accident.
+      piiAllowlist: ["phoneNumber", "instructions", "assistantId", "purpose", "tenantId", "agentKey", "domainActionId", "householdId", "invoiceId"],
       async run(input) {
         const r = await placeVapiCall({
           customerNumber: String(input.phoneNumber),
           firstMessage: String(input.instructions ?? "Hello! This is Finnor calling on behalf of your water treatment dealer."),
           metadata: {
+            direction: "outbound",
             ...(input.tenantId ? { tenantId: String(input.tenantId) } : {}),
             ...(input.purpose ? { purpose: String(input.purpose) } : {}),
+            ...(input.agentKey ? { agentKey: String(input.agentKey) } : {}),
+            ...(input.domainActionId ? { domainActionId: String(input.domainActionId) } : {}),
+            ...(input.householdId ? { householdId: String(input.householdId) } : {}),
+            ...(input.invoiceId ? { invoiceId: String(input.invoiceId) } : {}),
           },
           assistantId: input.assistantId ? String(input.assistantId) : undefined,
         });

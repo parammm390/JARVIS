@@ -142,6 +142,10 @@ export const accountingPlugin: DomainEnginePlugin = {
           tenantId,
           assistantId: VOICE_PERSONAS.payment_collector,
           purpose: "payment_reminder",
+          agentKey: "payment-collector",
+          domainActionId: draft.domainActionId,
+          householdId: inv.householdId,
+          invoiceId: inv.id,
         });
         if (call.ok) {
           called++;
@@ -186,6 +190,10 @@ export const accountingPlugin: DomainEnginePlugin = {
         tenantId,
         assistantId: VOICE_PERSONAS.payment_collector,
         purpose: "payment_reminder",
+        agentKey: "payment-collector",
+        domainActionId: draft.domainActionId,
+        householdId: inv.householdId,
+        invoiceId: inv.id,
       });
       sent = r.ok;
       channel = "call";

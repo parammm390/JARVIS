@@ -38,8 +38,14 @@ export class JarvisApiError extends Error {
   }
 }
 
-export const JARVIS_GET_TIMEOUT_MS = 5_000
-export const JARVIS_MUTATION_TIMEOUT_MS = 30_000
+// The server proxy owns a 10s upstream read budget. Give it enough time to return
+// either the real response or its stable 504; aborting at 5s manufactured SOURCE
+// UNAVAILABLE while the same request was still legitimately running upstream.
+export const JARVIS_GET_TIMEOUT_MS = 12_000
+// The proxy owns a 60s durable-write budget. The browser waits slightly longer so
+// it receives the proxy's authoritative response (including a stable 504) rather
+// than aborting an action that may already have committed.
+export const JARVIS_MUTATION_TIMEOUT_MS = 65_000
 
 // ---------------------------------------------------------------------------
 // Request telemetry — every REAL fetch this page makes is published here, so the

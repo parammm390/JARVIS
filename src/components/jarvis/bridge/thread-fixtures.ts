@@ -61,6 +61,14 @@ function stateFor(target: InstructionState) {
   return m
 }
 
+function recoveryState() {
+  let m = initialMachineState
+  m = transition(m, { type: "SUBMITTED" })
+  m = transition(m, { type: "ACK" })
+  m = transition(m, { type: "TRACE_planning" })
+  return transition(m, { type: "TRACE_failed" })
+}
+
 function baseThread(overrides: Partial<Thread>): Thread {
   return {
     id: "fixture-thread",
@@ -219,6 +227,11 @@ export const THREAD_FIXTURES: Record<string, Thread> = {
   understood: baseThread({ machine: stateFor("understanding"), nodes: goldenNodes(), contextChips: GOLDEN_CONTEXT_CHIPS }),
   "understood-midfill": baseThread({ machine: stateFor("understanding"), contextChips: GOLDEN_CONTEXT_CHIPS.slice(0, 2) }),
   "understood-complete": baseThread({ machine: stateFor("understanding"), nodes: goldenNodes(), contextChips: GOLDEN_CONTEXT_CHIPS }),
+  // P1.T4 journey seam: the same source-labelled instruction first exposes a
+  // planning boundary with no action_created rows, then the real fixture nodes
+  // arrive so Plan Draw can be asserted as an append edge rather than a page
+  // load animation.
+  "plan-empty": baseThread({ machine: stateFor("planning"), contextChips: GOLDEN_CONTEXT_CHIPS }),
   plan: baseThread({ machine: stateFor("planning"), nodes: goldenNodes(), contextChips: GOLDEN_CONTEXT_CHIPS }),
   clarify: baseThread({
     machine: (() => {
@@ -276,6 +289,9 @@ export const THREAD_FIXTURES: Record<string, Thread> = {
   execution: baseThread({ machine: stateFor("executing"), nodes: goldenNodes(), everExecuted: true }),
   verifying: baseThread({ machine: stateFor("verifying"), nodes: goldenNodes(), everExecuted: true }),
   receipt: baseThread({ machine: stateFor("completed"), nodes: goldenNodes(), terminalAtMs: Date.now(), everExecuted: true }),
+  // QA-only recovery projection: this is the existing kernel's planning →
+  // TRACE_failed transition, not a fabricated workflow run or backend result.
+  recovery: baseThread({ machine: recoveryState(), nodes: goldenNodes() }),
   "flagship-b-approval": baseThread({
     machine: stateFor("awaiting_approval"),
     instructionText: "Book a water test for the Hendersons this week and give it to whoever's closest",
@@ -337,8 +353,14 @@ export const THREAD_FIXTURES: Record<string, Thread> = {
 
 // `rest` intentionally has no Thread object: it exercises the same at-rest
 // ThreadBody branch used before an instruction exists, with the harness's
-// visibly labelled selector fixture values.
-export const FIXTURE_STATE_KEYS = ["rest", ...Object.keys(THREAD_FIXTURES)]
+// visibly labelled selector fixture values. `listening` is likewise a QA-only
+// frame input: the existing voice boundary reports mic-open, while the fixture
+// deliberately supplies no instruction or backend data.
+export const FIXTURE_FRAME_SIGNALS: Record<string, { micOpen: boolean; voiceSpeaking: boolean }> = {
+  listening: { micOpen: true, voiceSpeaking: false },
+}
+
+export const FIXTURE_STATE_KEYS = ["rest", ...Object.keys(FIXTURE_FRAME_SIGNALS), ...Object.keys(THREAD_FIXTURES)]
 
 // jarvis-v3 P5.T8 — thread stacking. A parallel, opt-in map (most fixture
 // keys have no history — an empty array, the honest default for a session

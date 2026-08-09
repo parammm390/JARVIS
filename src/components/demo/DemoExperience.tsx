@@ -3,14 +3,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
-  Activity,
-  ArrowLeft,
   CheckCircle2,
-  Database,
   FileText,
   LockKeyhole,
   Network,
-  ShieldCheck,
 } from "lucide-react";
 import type {
   DemoGenerationStage,
@@ -39,8 +35,8 @@ export function DemoExperience() {
     () => [
       "Reading company profile",
       getWorkflowDefinition(selectedWorkflow).loadingStep,
-      "Preparing voice script",
-      "Building booking route preview",
+      "Preparing instruction ingress",
+      "Building governed handoff preview",
     ],
     [selectedWorkflow],
   );
@@ -191,7 +187,7 @@ export function DemoExperience() {
   }, []);
 
   return (
-    <main className="healthcare-page relative min-h-screen w-full overflow-hidden selection:bg-teal-200/35">
+    <div className="relative min-h-screen w-full overflow-hidden bg-[#f1efe7] selection:bg-teal-200/35">
       <DemoHero
         stage={stage}
         statusText={statusText}
@@ -227,7 +223,7 @@ export function DemoExperience() {
       ) : isLimitReached ? null : (
         <EmptyStatePreview />
       )}
-    </main>
+    </div>
   );
 }
 
@@ -268,37 +264,18 @@ function DemoHero({
   loadingIndex: number;
 }) {
   return (
-    <section className="relative flex min-h-screen max-w-[100vw] items-center overflow-hidden px-0 py-24 md:py-28">
+    <section className="relative flex min-h-screen max-w-[100vw] items-center overflow-hidden px-0 pb-24 pt-40 md:pb-28 md:pt-44">
       <div className="absolute inset-0 z-0">
-        <div className="absolute inset-0 operational-grid opacity-70 [mask-image:radial-gradient(ellipse_80%_60%_at_50%_24%,#000_46%,transparent_100%)]" />
-        <div className="absolute left-1/2 top-[6%] h-[520px] w-[820px] -translate-x-1/2 rounded-full bg-sky-200/45 blur-[170px]" />
-        <div className="absolute bottom-0 right-0 h-[500px] w-[520px] rounded-full bg-teal-100/55 blur-[150px]" />
+        <div className="absolute inset-0 operational-grid opacity-25" />
       </div>
 
       <div className="container relative z-10 max-w-full overflow-hidden px-4 md:px-6">
-        <div className="mb-14 flex items-center justify-between gap-6">
-          <a
-            href="/"
-            className="group inline-flex items-center gap-3 text-sm font-black uppercase tracking-widest text-slate-500 transition-colors hover:text-slate-950"
-          >
-            <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
-            FINNOR
-          </a>
-          <a
-            href="#demo"
-            className="rounded-full bg-slate-950 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white shadow-[0_16px_34px_rgba(15,23,42,0.14)] transition hover:bg-slate-800 sm:inline-flex sm:px-5 sm:text-xs"
-          >
-            <span className="sm:hidden">Builder</span>
-            <span className="hidden sm:inline">Live demo builder</span>
-          </a>
-        </div>
-
         <div className="grid items-center gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:gap-16">
           <div className="min-w-0 max-w-full sm:max-w-4xl">
             <motion.div
               initial={false}
               animate={{ opacity: 1, y: 0 }}
-              className="mb-8 inline-flex max-w-full items-center rounded-full border border-slate-200 bg-white/72 px-5 py-2.5 text-sm font-bold tracking-wide text-slate-600 shadow-sm backdrop-blur-xl"
+              className="mb-8 inline-flex max-w-full items-center text-xs font-black uppercase tracking-[0.16em] text-sky-900"
             >
               <span className="relative mr-3 flex h-2 w-2">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-teal-500 opacity-35" />
@@ -307,7 +284,7 @@ function DemoHero({
               <span>
                 {result
                   ? getWorkflowDefinition(result.profile.workflowType).label
-                  : "Choose what you want JARVIS to accomplish"}
+                  : "One public instruction channel · not the FINNOR category"}
               </span>
             </motion.div>
 
@@ -317,7 +294,7 @@ function DemoHero({
               transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
               className="max-w-full break-words text-[2.45rem] font-black leading-[1.02] tracking-tight text-slate-950 sm:text-[2.75rem] md:text-7xl lg:text-[6.4rem]"
             >
-              <span className="block">See JARVIS operate your business.</span>
+              <span className="block">Put one interaction through the chain.</span>
               <span className="block"></span>
             </motion.h1>
 
@@ -327,26 +304,26 @@ function DemoHero({
               transition={{ delay: 0.15, duration: 0.7 }}
               className="mt-7 max-w-full break-words text-lg font-medium leading-relaxed text-slate-600 md:max-w-2xl md:text-xl lg:text-2xl"
             >
-              Enter your company and choose a business outcome. JARVIS builds a
-              clearly labelled demonstration using public website information
-              and the details you provide. Unknown information stays marked
-              unknown.
+              This public demo isolates voice as one way an instruction can
+              enter JARVIS. It uses public website information and the details
+              you provide to assemble context and produce a clearly labelled
+              handoff. It is not the full FINNOR execution system.
             </motion.p>
 
             <motion.div
               initial={false}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.25 }}
-              className="mt-9 hidden w-full min-w-0 max-w-full gap-3 sm:grid sm:grid-cols-3 md:max-w-2xl"
+              className="mt-9 hidden w-full min-w-0 max-w-full border-y border-slate-900/15 sm:grid sm:grid-cols-3 md:max-w-2xl"
             >
               {[
-                { icon: LockKeyhole, label: "Review public site information" },
-                { icon: Network, label: "Build workflow context" },
-                { icon: FileText, label: "Generate demo preview" },
+                { icon: LockKeyhole, label: "Read permitted public sources" },
+                { icon: Network, label: "Assemble scoped context" },
+                { icon: FileText, label: "Produce governed handoff" },
               ].map((item) => (
                 <div
                   key={item.label}
-                  className="min-w-0 rounded-xl border border-slate-200 bg-white/78 p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-sky-200 hover:bg-white"
+                  className="min-w-0 border-r border-slate-900/15 p-4 last:border-r-0"
                   data-cursor="hover"
                 >
                   <item.icon className="mb-4 h-5 w-5 text-sky-700" />
@@ -357,28 +334,6 @@ function DemoHero({
               ))}
             </motion.div>
 
-            <motion.div
-              initial={false}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.32 }}
-              className="mt-5 hidden w-full min-w-0 max-w-full gap-3 rounded-2xl border border-slate-200 bg-white/62 p-3 shadow-sm sm:grid sm:grid-cols-3 md:max-w-2xl"
-            >
-              {[
-                { icon: Activity, label: "Live generation state" },
-                { icon: Database, label: "Unknowns stay marked" },
-                { icon: ShieldCheck, label: "No fake service claims" },
-              ].map((item) => (
-                <div
-                  key={item.label}
-                  className="flex min-w-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2"
-                >
-                  <item.icon className="h-4 w-4 text-teal-700" />
-                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-                    {item.label}
-                  </span>
-                </div>
-              ))}
-            </motion.div>
           </div>
 
           <motion.div
@@ -518,10 +473,10 @@ function GenerationTheatre({
 
           <div className="grid gap-4 sm:grid-cols-2">
             {[
-              "Voice script",
-              "Response workflow",
-              "Handoff preview",
-              "Proof panels",
+              "Instruction ingress",
+              "Context sources",
+              "Governed handoff",
+              "Evidence preview",
             ].map((label, index) => (
               <motion.div
                 key={label}
@@ -560,10 +515,10 @@ function SkeletonShimmer() {
 
 function EmptyStatePreview() {
   const previews = [
-    { label: "Voice call preview", type: "waveform" },
-    { label: "Workflow pulse", type: "nodes" },
-    { label: "Recovered lead route", type: "phone" },
-    { label: "Booking route", type: "table" },
+    { label: "Instruction ingress", type: "waveform" },
+    { label: "Context assembly", type: "nodes" },
+    { label: "Proposed action", type: "phone" },
+    { label: "Evidence preview", type: "table" },
   ];
 
   return (

@@ -27,10 +27,10 @@ export default function ScrollProgress() {
   }, [])
 
   return (
-    <div className="pointer-events-none fixed left-0 top-0 z-[100] h-[2px] w-full bg-white/5">
+    <div className="pointer-events-none fixed left-0 top-0 z-[100] h-[2px] w-full bg-black/5">
       <div
         ref={barRef}
-        className="h-full origin-left bg-gradient-to-r from-white/40 via-white to-white/40 shadow-[0_0_10px_rgba(255,255,255,0.6)]"
+        className="h-full origin-left bg-[#146f91]"
         style={{ transform: "scaleX(0)" }}
       />
     </div>

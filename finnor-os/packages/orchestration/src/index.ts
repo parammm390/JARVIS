@@ -651,13 +651,20 @@ export class FinnorOrchestrator implements Orchestrator {
       // Best-effort: close a paused graph thread so it doesn't dangle waiting for a
       // resume that will never come. Never blocks the reject itself.
       await this.executor.close?.(actionId, tenantId, row.actionType).catch(() => undefined);
+      if (row.instructionId) await emitInstructionEvent(tenantId, row.instructionId, "cancelled", { actionId }).catch(() => undefined);
       return { status: "success", output: { rejected: true } };
     }
     if (decision === "escalate") {
       // Stays open for a human, no executor thread to close, nothing to run yet.
       return { status: "success", output: { escalated: true } };
     }
-    return this.runAction(actionId, tenantId, decidedBy);
+    if (row.instructionId) await emitInstructionEvent(tenantId, row.instructionId, "executing", { actionId }).catch(() => undefined);
+    const result = await this.runAction(actionId, tenantId, decidedBy);
+    if (row.instructionId) {
+      const phase = result.status === "success" ? "completed" : "failed";
+      await emitInstructionEvent(tenantId, row.instructionId, phase, { actionId, status: result.status }).catch(() => undefined);
+    }
+    return result;
   }
 
   private async actionTypeForDecision(actionId: string, tenantId: string): Promise<string | null> {

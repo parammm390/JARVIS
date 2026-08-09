@@ -1,0 +1,63 @@
+import { describe, expect, it } from "vitest"
+import { destinationForEntity, filterMatches, readWorkSurfaceQuery, stageFor, workCaseMatchesQuery, WORK_CHAPTERS } from "./WorkSurface"
+import type { WorkCaseProjection } from "@/lib/jarvis-client"
+
+function workCase(overrides: Partial<WorkCaseProjection> = {}): WorkCaseProjection {
+  return {
+    id: "instruction:case-1",
+    root: { kind: "instruction", id: "case-1" },
+    title: "Prepare the service",
+    status: "Waiting",
+    createdAt: "2026-08-08T00:00:00.000Z",
+    updatedAt: "2026-08-08T00:00:00.000Z",
+    source: { kind: "instruction", id: "case-1", channel: "typed" },
+    instruction: { id: "case-1", text: "Prepare the service", source: "typed", createdAt: "2026-08-08T00:00:00.000Z", lastPhase: "action_created" },
+    actions: [],
+    approvals: [],
+    workflows: [],
+    receipts: [],
+    linkedEntities: [],
+    businessEvents: [],
+    calls: [],
+    relatedActionIds: [],
+    provenance: [],
+    ...overrides,
+  }
+}
+
+describe("P2.T2 Work surface contract", () => {
+  it("keeps the exact seven Causal Spine chapters", () => {
+    expect(WORK_CHAPTERS).toEqual(["WHY", "PLAN", "OWNER", "APPROVAL", "EXECUTION", "EVIDENCE & OUTCOME", "NEXT ACTION"])
+  })
+
+  it("keeps Open and Done as explicit status lanes", () => {
+    expect(filterMatches(workCase({ status: "Working" }), "Open")).toBe(true)
+    expect(filterMatches(workCase({ status: "Completed" }), "Open")).toBe(false)
+    expect(filterMatches(workCase({ status: "Completed" }), "Done")).toBe(true)
+    expect(filterMatches(workCase({ status: "Failed" }), "Failed")).toBe(true)
+  })
+
+  it("derives the current chapter from exact observed records", () => {
+    expect(stageFor(workCase({ actions: [{ id: "a", actionType: "send_message", status: "pending", summary: "Ask", instructionId: "case-1", planId: null, dependsOn: [], payload: {}, createdAt: "2026-08-08T00:00:00.000Z", updatedAt: "2026-08-08T00:00:00.000Z" }] }))).toBe("Plan")
+    expect(stageFor(workCase({ status: "Needs you", approvals: [{ actionId: "a", status: "pending", decidedBy: null, decidedAt: null, pendingConfirmationId: "c" }] }))).toBe("Approval")
+    expect(stageFor(workCase({ status: "Completed", receipts: [{ id: "r", workflowRunId: null, workflowStepId: null, domainActionId: null, objective: "Done", evidence: [], approval: {}, expectedResult: null, actualResult: null, failure: null, correlationId: null, createdAt: "2026-08-08T00:00:00.000Z", finalizedAt: "2026-08-08T00:00:00.000Z" }] }))).toBe("Evidence & outcome")
+  })
+
+  it("round-trips only exact deep-link identifiers across operational surfaces", () => {
+    const linked = workCase({
+      id: "case-exact",
+      linkedEntities: [
+        { entityType: "household", entityId: "hh-1", via: "action.payload.householdId" },
+        { entityType: "invoice", entityId: "invoice-1", via: "action.payload.invoiceId" },
+        { entityType: "service_visit", entityId: "visit-1", via: "action.payload.serviceVisitId" },
+      ],
+    })
+    const query = readWorkSurfaceQuery("?workCaseId=case-exact&invoiceId=invoice-1&householdId=hh-1&serviceVisitId=visit-1")
+    expect(workCaseMatchesQuery(linked, readWorkSurfaceQuery(""))).toBe(true)
+    expect(workCaseMatchesQuery(linked, query)).toBe(true)
+    expect(workCaseMatchesQuery(workCase({ id: "case-other", linkedEntities: [{ entityType: "household", entityId: "hh-1", via: "action.payload.householdId" }] }), query)).toBe(false)
+    expect(destinationForEntity(linked.linkedEntities[0]!, linked)).toBe("/jarvis/customers?householdId=hh-1")
+    expect(destinationForEntity(linked.linkedEntities[1]!, linked)).toBe("/jarvis/money?invoiceId=invoice-1&householdId=hh-1")
+    expect(destinationForEntity(linked.linkedEntities[2]!, linked)).toBe("/jarvis/schedule?serviceVisitId=visit-1&householdId=hh-1")
+  })
+})

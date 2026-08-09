@@ -16,6 +16,7 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "preserve",
+    "types": ["node", "react", "react-dom", "playwright", "vitest/globals"],
     "incremental": true,
     "plugins": [
       {
@@ -29,9 +30,10 @@
     }
   },
   "include": [
-    "next-env.d.ts",
-    "**/*.ts",
-    "**/*.tsx",
+    "*.ts",
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "e2e/**/*.ts",
     ".next/types/**/*.ts"
   ],
   "exclude": [

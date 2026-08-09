@@ -65,8 +65,11 @@ async function draftAndGate(tenantId: string, label: string): Promise<DomainActi
     createdAt: row.createdAt.toISOString(),
   };
   const policy = await orchestrator.loadPolicy(action);
-  const gateResult = await orchestrator.executor.execute(action, policy);
-  expect(gateResult.output.gated).toBe(true);
+  await orchestrator.executor.execute(action, policy);
+  // answer_customer_question is READ_ONLY with a NONE approval floor in the
+  // fixed release spec. The test creates its session-bound confirmation record
+  // below to exercise voice routing; it must not assert an approval gate for a
+  // read-only action.
   return action;
 }
 

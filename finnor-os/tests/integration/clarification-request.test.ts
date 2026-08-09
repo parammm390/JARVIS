@@ -31,8 +31,12 @@ describe.skipIf(!available)("clarification request", () => {
     expect(action!.actionType).toBe("clarification_request");
     const policy: DomainPolicy = { id: "", tenantId: TENANT_ID, actionType: "clarification_request", policy: {}, requiresConfirmation: true, confirmationTemplate: null, version: 0 };
     const result = await new GatedExecutor(plugins, createDefaultRegistry()).execute(action!, policy);
-    expect(result.output).toMatchObject({ gated: true, pendingConfirmation: true, summary: "Which Henderson household should receive the quote?" });
+    // clarification_request is META_NO_SIDE_EFFECT with an explicit NONE approval
+    // floor in the fixed release spec. It must never enter the approval queue or
+    // present Answer/Skip/Cancel as Approve/Reject; the durable question is the
+    // completed, receipted action itself.
+    expect(result.output).toMatchObject({ clarificationRequested: true, question: "Which Henderson household should receive the quote?" });
     const [row] = await withTenant(TENANT_ID, (db) => db.select().from(domainActions).where(eq(domainActions.id, action!.id)));
-    expect(row).toMatchObject({ actionType: "clarification_request", status: "pending", summary: "Which Henderson household should receive the quote?", payload: { missingFields: ["householdId"] } });
+    expect(row).toMatchObject({ actionType: "clarification_request", status: "completed", payload: { missingFields: ["householdId"] } });
   });
 });

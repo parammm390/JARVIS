@@ -192,7 +192,7 @@ function Sidebar({ view, setView }: { view: string; setView: (v: string) => void
         <JarvisOrb size={34} voiceState="idle" degraded={!live} />
         <div>
           <div className="j-fs-base font-black tracking-tight text-[color:var(--j-text)]">JARVIS</div>
-          <div className="j-fs-micro font-bold uppercase tracking-[0.28em] text-[color:var(--j-text-faint)]">Finnor Voice AI OS</div>
+          <div className="j-fs-micro font-bold uppercase tracking-[0.28em] text-[color:var(--j-text-faint)]">Finnor Governed Execution</div>
         </div>
       </Link>
       <nav className="flex-1 space-y-0.5 overflow-y-auto px-3">

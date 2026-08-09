@@ -27,6 +27,7 @@ const READ_MODEL_VIEWS = new Set([
   "sla-breaches",
   "follow-up-debt",
   "data-quality",
+  "work-cases",
   "household-360",
   "reliability",
   "readiness",
@@ -277,6 +278,11 @@ export async function GET(req: NextRequest, { params }: { params: { path: string
   if (!isAllowedGet(segments)) return proxyError("Not found", 404);
 
   if (isPublicGet(segments)) {
+    // "Public" means an anonymous caller is allowed to fall back to the narrowly
+    // scoped service identity. It must not replace a real caller's identity: doing
+    // so made authenticated Home reads resolve under another role/tenant.
+    const callerAuth = hasBearer(req);
+    if (callerAuth) return doForward(req, segments, "GET", callerAuth);
     if (!checkRateLimit(clientIp(req))) return proxyError("Rate limit exceeded — slow down and try again shortly.", 429);
     return forwardPublic(req, segments);
   }

@@ -23,8 +23,8 @@ test.describe("P6.T1 — responsive collision and keyboard sweep", () => {
         const dialog = document.querySelector<HTMLElement>('[role="dialog"]')
         const canvas = document.querySelector<HTMLElement>(".jarvis-canvas")
         const deck = document.querySelector<HTMLElement>(".jarvis-command-deck")
-        const select = [...document.querySelectorAll<HTMLElement>("button")].find((button) => button.textContent?.trim() === "Select")
-        const rect = select?.getBoundingClientRect()
+        const planControl = document.querySelector<HTMLElement>("[data-thread-block='plan'] button")
+        const rect = planControl?.getBoundingClientRect()
         return {
           clientWidth: document.documentElement.clientWidth,
           scrollWidth: document.documentElement.scrollWidth,
@@ -49,14 +49,14 @@ test.describe("P6.T1 — responsive collision and keyboard sweep", () => {
       expect(metrics.selectRect!.x).toBeGreaterThanOrEqual(0)
       expect(metrics.selectRect!.x + metrics.selectRect!.width).toBeLessThanOrEqual(metrics.clientWidth)
 
-      const select = page.getByRole("button", { name: "Select" })
-      await select.focus()
-      expect(await select.evaluate((element) => document.activeElement === element)).toBe(true)
+      const planControl = page.locator("[data-thread-block='plan'] button")
+      await planControl.focus()
+      expect(await planControl.evaluate((element) => document.activeElement === element)).toBe(true)
       await page.keyboard.press("Enter")
-      // This labelled fixture truthfully withholds queued approval rows, so
-      // batch mode has no checkbox to select. The control's reachable state
-      // change is the real keyboard contract at every viewport.
-      await expect(page.getByRole("button", { name: "Done" })).toBeVisible()
+      // The active causal block is intentionally not collapsible: Enter is
+      // keyboard-safe and keeps the live approval plan visible rather than
+      // hiding the object that currently owns the decision.
+      await expect(page.locator("[data-thread-block='plan']")).toHaveAttribute("data-thread-block-collapsed", "false")
     })
   }
 })

@@ -50,7 +50,7 @@ export function SetupRail() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0 flex-1">
               <p className="j-fs-sm font-bold text-[color:var(--j-text)]">Finish setup to unlock every action.</p>
-              <p className="mt-1 j-fs-micro text-amber-100/80">Connection status is unavailable.</p>
+              <p className="mt-1 j-fs-micro text-amber-100/80">Setup details are unavailable in this view.</p>
             </div>
             <SetupAction>Review setup</SetupAction>
             <span className="inline-flex min-h-11 min-w-[8.5rem] shrink-0 items-center justify-center rounded-xl border border-white/10 px-3 j-fs-micro font-black text-[color:var(--j-text-faint)]" aria-label="Setup details unavailable">Details unavailable</span>

@@ -15,22 +15,22 @@ export function CalendlyCta({ compact = false }: { compact?: boolean }) {
       <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
         <div>
           <h3 className="text-xl font-black tracking-tight text-slate-950">
-            Book a JARVIS Demo
+            Book an operating review
           </h3>
           <p className="mt-2 max-w-2xl text-sm font-semibold leading-relaxed text-slate-600">
-            Bring your company&apos;s demo. We will scope the lead sources,
-            booking workflow, urgent routes, and human ownership boundaries for
-            a 7-day launch.
+            Bring one consequential workflow. We will trace its sources,
+            action contracts, authority line, recovery path and proof of actual
+            outcome in your environment.
           </p>
         </div>
         <a
           href={CALENDLY_URL}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-full bg-slate-950 px-6 text-sm font-black text-white shadow-[0_16px_34px_rgba(15,23,42,0.14)] transition hover:bg-slate-800"
+          className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-full bg-slate-950 px-6 text-sm font-black !text-white shadow-[0_16px_34px_rgba(15,23,42,0.14)] transition hover:bg-slate-800"
         >
           <CalendarDays className="h-4 w-4" />
-          Book a JARVIS Demo
+          Book an operating review
         </a>
       </div>
     </div>

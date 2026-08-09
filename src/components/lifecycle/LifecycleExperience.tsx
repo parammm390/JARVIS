@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
-  ArrowLeft,
   ArrowRight,
   ChevronLeft,
   ChevronRight,
@@ -65,10 +64,10 @@ export function LifecycleExperience({ sample }: { sample: LifecycleScenario }) {
       services: handoff.services,
       onWell: handoff.onWell,
       banner: handoff.customerName
-        ? `Continuing the record from your live call. ${handoff.customerName}${
+        ? `Continuing the work root from your instruction demo. ${handoff.customerName}${
             handoff.concern ? `, ${handoff.concern.toLowerCase()}` : ""
-          }. Same memory, next two years.`
-        : "Continuing the record from your live call. Same memory, next two years.",
+          }. Same context, next chapters.`
+        : "Continuing the work root from your instruction demo. Same context, next chapters.",
     });
     setView("setup");
   }, []);
@@ -148,31 +147,12 @@ export function LifecycleExperience({ sample }: { sample: LifecycleScenario }) {
   };
 
   return (
-    <main className="healthcare-page relative min-h-screen w-full overflow-hidden selection:bg-teal-200/35">
+    <div className="relative min-h-screen w-full overflow-hidden bg-[#f1efe7] selection:bg-teal-200/35">
       <div className="absolute inset-0 z-0">
-        <div className="absolute inset-0 operational-grid opacity-70 [mask-image:radial-gradient(ellipse_80%_60%_at_50%_18%,#000_46%,transparent_100%)]" />
-        <div className="absolute left-1/2 top-[4%] h-[480px] w-[780px] -translate-x-1/2 rounded-full bg-sky-200/45 blur-[170px]" />
-        <div className="absolute bottom-0 right-0 h-[460px] w-[500px] rounded-full bg-teal-100/55 blur-[150px]" />
+        <div className="absolute inset-0 operational-grid opacity-25" />
       </div>
 
-      <div className="container relative z-10 px-4 pb-20 pt-10 md:px-6">
-        <div className="mb-12 flex items-center justify-between gap-6">
-          <a
-            href="/"
-            className="group inline-flex items-center gap-3 text-sm font-black uppercase tracking-widest text-slate-500 transition-colors hover:text-slate-950"
-          >
-            <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
-            FINNOR
-          </a>
-          <a
-            href="/demo"
-            className="rounded-full bg-slate-950 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white shadow-[0_16px_34px_rgba(15,23,42,0.14)] transition hover:bg-slate-800 sm:px-5 sm:text-xs"
-          >
-            <span className="sm:hidden">Live call demo</span>
-            <span className="hidden sm:inline">Take the live call demo</span>
-          </a>
-        </div>
-
+      <div className="container relative z-10 px-4 pb-20 pt-40 md:px-6 md:pt-44">
         <div
           className={`grid grid-cols-1 items-start gap-10 ${
             view === "playing" ? "" : "lg:grid-cols-[1.02fr_0.98fr] lg:gap-14"
@@ -182,13 +162,13 @@ export function LifecycleExperience({ sample }: { sample: LifecycleScenario }) {
             <motion.div
               initial={false}
               animate={{ opacity: 1, y: 0 }}
-              className="mb-7 inline-flex items-center rounded-full border border-slate-200 bg-white/72 px-5 py-2.5 text-sm font-bold tracking-wide text-slate-600 shadow-sm backdrop-blur-xl"
+              className="mb-7 inline-flex items-center text-xs font-black uppercase tracking-[0.16em] text-sky-900"
             >
               <span className="relative mr-3 flex h-2 w-2">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-teal-500 opacity-35" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-teal-500" />
               </span>
-              Lifecycle demo, one continuous memory
+              One simulated work root · chaptered walkthrough
             </motion.div>
 
             <motion.h1
@@ -197,8 +177,8 @@ export function LifecycleExperience({ sample }: { sample: LifecycleScenario }) {
               transition={{ duration: 0.8, ease: EASE }}
               className="text-[2.35rem] font-black leading-[1.02] tracking-tight text-slate-950 sm:text-[2.75rem] md:text-6xl lg:text-7xl"
             >
-              <span className="block">The call was minute one.</span>
-              <span className="block">This is the next two years.</span>
+              <span className="block">Watch one household become</span>
+              <span className="block">an operating history.</span>
             </motion.h1>
 
             <motion.p
@@ -207,9 +187,10 @@ export function LifecycleExperience({ sample }: { sample: LifecycleScenario }) {
               transition={{ delay: 0.12, duration: 0.7 }}
               className="mt-6 max-w-3xl text-lg font-medium leading-relaxed text-slate-600 md:text-xl"
             >
-              Lead tools see the click. CRMs see the invoice. Review apps see
-              the star. JARVIS carries one memory of the customer through all of
-              it. Here it is for one household, compressed into two minutes.
+              This chapter isolates FINNOR&apos;s long-running context: one exact
+              household work root, projected across acquisition, installation,
+              service and follow-up. It is a simulation of one capability—not
+              the definition of the full product.
             </motion.p>
 
             <motion.p
@@ -234,14 +215,12 @@ export function LifecycleExperience({ sample }: { sample: LifecycleScenario }) {
                   The 15-second version
                 </p>
                 <p className="mt-2.5 text-sm font-semibold leading-relaxed text-slate-700">
-                  JARVIS drafts an answer to the call you missed, pulls the real
-                  water record for that address, sizes the system with math,
-                  gives a real range at your prices, books the visit by text,
-                  documents the job, asks for the review at the right moment,
-                  checks in on schedule, logs the referral it produced, and
-                  knows when the next offer actually makes sense — holding for
-                  your approval at every step. Two years, one memory. Everything
-                  below is that story on a timeline you can drive.
+                  The walkthrough assembles public water context, proposes the
+                  next action, holds customer commitments for approval, and
+                  keeps later installation, service and follow-up events linked
+                  to the same household. Every chapter is simulated and clearly
+                  identified; the timeline is a context demonstration, not a
+                  customer outcome claim.
                 </p>
               </motion.div>
             ) : null}
@@ -422,35 +401,33 @@ export function LifecycleExperience({ sample }: { sample: LifecycleScenario }) {
         <div className="container px-4 md:px-6">
           <div className="grid grid-cols-1 items-stretch gap-6 lg:grid-cols-[1.08fr_0.92fr]">
             <div className="ops-card rounded-[2rem] p-6 md:p-8">
-              <div className="section-kicker">Who this is actually for</div>
+              <div className="section-kicker">Where this capability matters</div>
               <h3 className="mt-5 text-3xl font-black tracking-tight text-slate-950 md:text-4xl">
-                This isn&apos;t for everyone.
+                Long-running work needs one accountable history.
               </h3>
               <p className="mt-5 text-base font-semibold leading-relaxed text-slate-700">
-                If you&apos;re a one-truck shop that answers every call yourself
-                and nothing you sell tops $1,500, keep your current workflow —
-                you don&apos;t need this.
+                The value is not “remembering a customer.” It is keeping every
+                later decision tied to the right household, system, work,
+                policy and evidence.
               </p>
               <p className="mt-4 text-base font-medium leading-relaxed text-slate-600">
-                It&apos;s built for dealers whose calls die in voicemail while
-                the crew is under a house, whose quotes still come off a rate
-                sheet instead of the water, and who lose the customer the day
-                the invoice is paid. If that&apos;s the shop, you just watched
-                two years of it run without anyone touching a thing.
+                Use this chapter to evaluate continuity. Use the main FINNOR
+                story to evaluate planning, authority, execution, recovery and
+                evidence across the rest of the operation.
               </p>
             </div>
             <div className="flex flex-col justify-between gap-5">
               <CalendlyCta />
               <div className="rounded-[1.35rem] border border-slate-200 bg-white/70 p-5">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-                  Haven&apos;t taken the call yet?
+                  Want to see instruction ingress?
                 </p>
                 <a
                   href="/demo"
                   className="mt-2 inline-flex items-center gap-2 text-sm font-black text-slate-950 transition hover:text-sky-800"
                   data-cursor="hover"
                 >
-                  Start with the live call demo. Your company, your calls
+                  Open the public instruction demo
                   <ArrowRight className="h-4 w-4" />
                 </a>
               </div>
@@ -458,7 +435,7 @@ export function LifecycleExperience({ sample }: { sample: LifecycleScenario }) {
           </div>
         </div>
       </section>
-    </main>
+    </div>
   );
 }
 

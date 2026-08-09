@@ -66,6 +66,7 @@ export function ThreadField({
   freezeMotion?: boolean
 }) {
   const reducedMotion = useReducedMotion()
+  const [motionReady, setMotionReady] = useState(false)
   const fieldRef = useRef<HTMLDivElement | null>(null)
   const [contextFlights, setContextFlights] = useState<ContextFlight[]>([])
   const knownContextKeysRef = useRef<Set<string>>(new Set(contextChips.map(contextKey)))
@@ -73,6 +74,7 @@ export function ThreadField({
   const shown = Math.min(count, MAX_POINTS)
   const points = Array.from({ length: shown }, (_, i) => deterministicOffset(i + 1))
 
+  useEffect(() => setMotionReady(true), [])
   useEffect(() => registerAnchor("signal-field", () => fieldRef.current?.getBoundingClientRect() ?? null), [])
 
   useEffect(() => {
@@ -116,7 +118,7 @@ export function ThreadField({
       {/* One compositor loop for the field, not one loop per invoice point. The
           points remain real count-driven content; the shared drift is the only
           ambient animation this layer owns. */}
-      <div className={`absolute inset-[-12px] ${reducedMotion || freezeMotion ? "" : "jarvis-field-drift"}`}>
+      <div className={`absolute inset-[-12px] ${motionReady && !reducedMotion && !freezeMotion ? "jarvis-field-drift" : ""}`}>
         <AnimatePresence>
           {points.map((p, i) => (
             <motion.span

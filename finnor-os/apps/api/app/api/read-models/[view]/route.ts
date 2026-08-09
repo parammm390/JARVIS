@@ -17,6 +17,7 @@ import {
   readinessTrend,
   readinessSloScorecard,
   failureInjectionLog,
+  workCases,
 } from "@finnor/read-models";
 import { getProjection } from "@finnor/projections";
 
@@ -46,6 +47,9 @@ const VIEWS: Record<string, (tenantId: string, searchParams: URLSearchParams) =>
     if (!householdId) throw new AuthError("householdId query param required", 400);
     return household360(tenantId, householdId);
   },
+  // P2.T1: derived only from exact instruction/action/workflow/receipt links;
+  // there is intentionally no persisted Work table or customer/time grouping.
+  "work-cases": (tenantId) => workCases(tenantId),
   // Phase 8 (§8.3): the 30-day certification trend the cockpit's scorecard panel reads.
   "readiness": (tenantId, searchParams) => {
     const days = Number(searchParams.get("days") ?? 30);

@@ -15,13 +15,15 @@ import {
   contextConstellationChipVariants,
   planDrawEdgeVariants,
   planDrawNodeVariants,
+  policyClampBracketVariants,
+  policyClampVariants,
   questionFocusQuestionVariants,
   receiptSealVariants,
   blastRadiusDotVariants,
   BLAST_RADIUS_DOT_CAP,
 } from "../kernel/choreography"
+import { SIGNATURE_MOMENTS } from "../kernel/signature-moments"
 import { sfx, stepCueThrottled } from "../sound"
-import { ApprovalCockpit } from "./ApprovalCockpit"
 import { useKernel } from "../kernel/store"
 import { jarvisGet } from "../lib/api"
 import { DecryptText } from "../ui/fx/DecryptText"
@@ -37,6 +39,7 @@ import { registerAnchor } from "../lib/pulse-bus"
 // receipt. Keep their existing implementations out of the initial Thread load.
 const WorkflowTheater = dynamic(() => import("../panels/WorkflowTheater").then((m) => m.WorkflowTheater), { ssr: false })
 const ReceiptContent = dynamic(() => import("../lib/ReceiptDrawer").then((m) => m.ReceiptContent), { ssr: false })
+const ApprovalCockpit = dynamic(() => import("./ApprovalCockpit").then((m) => m.ApprovalCockpit), { ssr: false })
 
 function formatUsd(n: number): string {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n)
@@ -58,10 +61,10 @@ function ThreadSignal({ children, tone = "cyan", role }: { children: React.React
     green: "border-emerald-300/20 bg-emerald-300/[.05] text-emerald-100",
   }[tone]
   return (
-    <p role={role} className={`mt-2 flex items-start gap-2 rounded-lg border px-3 py-2 j-fs-sm ${toneClass}`}>
+    <div role={role} className={`mt-2 flex items-start gap-2 rounded-lg border px-3 py-2 j-fs-sm ${toneClass}`}>
       <span aria-hidden className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-current" />
       <span>{children}</span>
-    </p>
+    </div>
   )
 }
 
@@ -237,6 +240,8 @@ function ContextConstellationChip({
       title={chip.source}
       data-jarvis-context-fact
       data-jarvis-fact
+      data-jarvis-signature-moment={entering ? "gather" : undefined}
+      data-jarvis-signature-source={entering ? SIGNATURE_MOMENTS.gather.source : undefined}
       data-context-index={index}
       data-source={`instruction_events.context_retrieved · ${chip.source}`}
     >
@@ -330,8 +335,9 @@ function PlanDependencyEdge({ edge, reducedMotion, entering }: { edge: PlanDepen
   )
 }
 
-export function ThreadPlan({ thread, reducedMotion }: { thread: Thread; reducedMotion: boolean }) {
+export function ThreadPlan({ thread, reducedMotion, restored = false }: { thread: Thread; reducedMotion: boolean; restored?: boolean }) {
   const state = thread.machine.instructionState
+  const clampActive = state === "awaiting_approval"
   const edges = useMemo(() => planDependencyEdges(thread.nodes), [thread.nodes])
   const initialNodeIdsRef = useRef<Set<string> | null>(null)
   const initialEdgeKeysRef = useRef<Set<string> | null>(null)
@@ -392,6 +398,8 @@ export function ThreadPlan({ thread, reducedMotion }: { thread: Thread; reducedM
                 data-jarvis-fact
                 data-jarvis-plan-node={n.id}
                 data-jarvis-plan-node-entering={entering ? "true" : "false"}
+                data-jarvis-signature-moment={entering ? "draw" : undefined}
+                data-jarvis-signature-source={entering ? SIGNATURE_MOMENTS.draw.source : undefined}
                 data-source="instruction_events.action_created · domain_actions"
               >
                 <span className="j-fs-base text-[color:var(--j-text)]">{planNodeLabel(n)}</span>
@@ -405,18 +413,16 @@ export function ThreadPlan({ thread, reducedMotion }: { thread: Thread; reducedM
         // M6 PolicyClamp (§5.3): a 2px amber bracket draws top->bottom, block
         // shifts right 4px, 300ms EASE_IO.
         <motion.div
+          {...policyClampVariants(reducedMotion, clampActive, restored)}
           className="relative mt-3 pl-3"
-          initial={reducedMotion ? { x: 0 } : { x: -4 }}
-          animate={{ x: 0 }}
-          transition={{ duration: 0.3, ease: [0.65, 0, 0.35, 1] }}
+          data-jarvis-policy-clamp={clampActive ? "active" : "settled"}
+          data-jarvis-policy-source={SIGNATURE_MOMENTS.clamp.source}
         >
           <motion.span
+            {...policyClampBracketVariants(reducedMotion, clampActive, restored)}
             aria-hidden
             className="absolute inset-y-0 left-0 w-[2px]"
             style={{ background: "var(--j-amber)", transformOrigin: "top" }}
-            initial={reducedMotion ? { scaleY: 1 } : { scaleY: 0 }}
-            animate={{ scaleY: 1 }}
-            transition={{ duration: 0.3, ease: [0.65, 0, 0.35, 1] }}
           />
           <p className="j-fs-sm text-[color:var(--j-text-dim)]" data-jarvis-fact data-source="thread.nodes[].policyVersion">{policyLine(thread.nodes, state)}</p>
         </motion.div>
@@ -620,12 +626,15 @@ export function ThreadApprovalCockpit({ thread, onClose, reducedMotion, escalate
     return () => window.cancelAnimationFrame(frame)
   }, [restored, thread.id])
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      data-thread-approval-motion={restored ? "settled" : "entering"}
-      role="dialog"
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        data-thread-approval-motion={restored ? "settled" : "entering"}
+        data-jarvis-approval-cockpit
+        data-jarvis-signature-moment={restored ? undefined : "clamp"}
+        data-jarvis-signature-source={restored ? undefined : SIGNATURE_MOMENTS.clamp.source}
+        role="dialog"
       aria-modal="true"
       aria-labelledby={`thread-${thread.id}-approval-heading`}
       data-liveframe-motion="LF-08"
@@ -913,7 +922,12 @@ export function ThreadReceipt({ thread, reducedMotion, onRetry, restored = false
   }
 
   return (
-    <motion.div {...receiptSealVariants(reducedMotion, restored)} data-thread-receipt-motion={restored ? "settled" : "entering"}>
+    <motion.div
+      {...receiptSealVariants(reducedMotion, restored)}
+      data-thread-receipt-motion={restored ? "settled" : "entering"}
+      data-jarvis-signature-moment={!restored && (state === "completed" || state === "partial") ? "settle" : undefined}
+      data-jarvis-signature-source={!restored && (state === "completed" || state === "partial") ? SIGNATURE_MOMENTS.settle.source : undefined}
+    >
       <div className="j-label mb-2">What actually happened</div>
       <p className="j-fs-base text-[color:var(--j-text)]" data-jarvis-fact data-source="thread.nodes">
         {outcome}

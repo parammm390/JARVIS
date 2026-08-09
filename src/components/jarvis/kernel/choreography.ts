@@ -10,6 +10,8 @@
 // own phase assignments — none of the 18 is invented here, all 18 specs exist so
 // later phases wire the rest from the SAME table rather than re-deriving values.
 
+import { SIGNATURE_MOMENTS, type SignatureMomentId } from "./signature-moments"
+
 export const EASE_OUT = [0.22, 1, 0.36, 1] as const
 export const EASE_SPRING = [0.34, 1.56, 0.64, 1] as const
 export const EASE_IO = [0.65, 0, 0.35, 1] as const
@@ -161,6 +163,43 @@ export function planDrawEdgeVariants(reduced: boolean, entering: boolean) {
     animate: { opacity: 1, scaleY: 1, borderColor: settledBorder },
     style: { transformOrigin: "top" },
     transition: reduced || !entering ? { duration: 0 } : { duration: PLAN_DRAW_EDGE_DURATION_MS / 1000, ease: [...EASE_IO] },
+  }
+}
+
+/** M6 PolicyClamp: only the real awaiting_approval edge gets the entrance
+ * motion. Planning/terminal snapshots keep the amber policy evidence settled;
+ * restored approval snapshots do not replay it. */
+export function policyClampVariants(reduced: boolean, active: boolean, restored = false) {
+  const spec = MOTION_SPECS.M6
+  const settled = reduced || !active || restored
+  return {
+    initial: settled ? { x: 0 } : { x: -4 },
+    animate: { x: 0 },
+    transition: settled ? { duration: 0 } : { duration: spec.durationMs / 1000, ease: spec.easing as number[] },
+  }
+}
+
+export function policyClampBracketVariants(reduced: boolean, active: boolean, restored = false) {
+  const spec = MOTION_SPECS.M6
+  const settled = reduced || !active || restored
+  return {
+    initial: settled ? { scaleY: 1 } : { scaleY: 0 },
+    animate: { scaleY: 1 },
+    transition: settled ? { duration: 0 } : { duration: spec.durationMs / 1000, ease: spec.easing as number[] },
+  }
+}
+
+/** A small one-shot cue used for the Ready → Listening wake edge. The
+ * source-specific surfaces use their existing motion variants; this helper
+ * supplies only the shared launch grammar for the presence ring. */
+export function signatureMomentRingVariants(moment: SignatureMomentId, reduced: boolean) {
+  const spec = SIGNATURE_MOMENTS[moment]
+  const durationMs = Math.round((spec.durationMs[0] + spec.durationMs[1]) / 2)
+  return {
+    initial: { opacity: 0, scale: 0.78 },
+    animate: reduced
+      ? { opacity: 0.72, scale: 1, transition: { duration: 0 } }
+      : { opacity: [0, 0.72, 0], scale: [0.78, 1.05, 1.28], transition: { duration: durationMs / 1000, ease: [...spec.easing] } },
   }
 }
 

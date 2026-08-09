@@ -1,0 +1,50 @@
+{
+  "snapshots": [
+    {
+      "viewport": 1440,
+      "rows": 5,
+      "selectedRows": 1,
+      "statusText": "Status unavailable — assistant configuration is not exposed to JARVIS yet.",
+      "providerScope": "Provider fact · not agent readiness",
+      "inspectorCount": 0,
+      "scrollWidth": 1440,
+      "layoutColumns": "248px 1146px",
+      "sourceLabels": [
+        "manifest:v6",
+        "api:integrations-status",
+        "truth-rule:assistant-configuration"
+      ]
+    },
+    {
+      "viewport": 768,
+      "rows": 5,
+      "selectedRows": 1,
+      "statusText": "Status unavailable — assistant configuration is not exposed to JARVIS yet.",
+      "providerScope": "Provider fact · not agent readiness",
+      "inspectorCount": 0,
+      "scrollWidth": 768,
+      "layoutColumns": "210px 512px",
+      "sourceLabels": [
+        "manifest:v6",
+        "api:integrations-status",
+        "truth-rule:assistant-configuration"
+      ]
+    },
+    {
+      "viewport": 390,
+      "rows": 5,
+      "selectedRows": 1,
+      "statusText": "Status unavailable — assistant configuration is not exposed to JARVIS yet.",
+      "providerScope": "Provider fact · not agent readiness",
+      "inspectorCount": 0,
+      "scrollWidth": 390,
+      "layoutColumns": "368px",
+      "sourceLabels": [
+        "manifest:v6",
+        "api:integrations-status",
+        "truth-rule:assistant-configuration"
+      ]
+    }
+  ],
+  "unexpectedErrors": []
+}

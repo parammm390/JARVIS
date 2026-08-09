@@ -2,31 +2,31 @@ import type { Metadata } from "next";
 import { PilotSetupChecklist } from "@/components/resources/PilotSetupChecklist";
 
 export const metadata: Metadata = {
-  title: "JARVIS Deployment Checklist",
+  title: "Governed Deployment Checklist",
   description:
-    "Checklist for approval rules, integration scope, user permissions, operational boundaries, and success criteria before JARVIS launch.",
+    "Certify one FINNOR workflow across sources, action contracts, authority, recovery and evidence before expanding production scope.",
   alternates: {
     canonical: "https://finnorai.com/resources/pilot-setup-checklist",
   },
   openGraph: {
-    title: "Deployment Checklist | JARVIS",
+    title: "Governed Deployment Checklist | FINNOR",
     description:
-      "Pre-launch checklist covering approval rules, integrations, permissions, boundaries, and success criteria before JARVIS deployment.",
+      "A production checklist for grounded, governed, recoverable and verifiable execution.",
     url: "https://finnorai.com/resources/pilot-setup-checklist",
     images: [
       {
         url: "https://finnorai.com/og-image.svg",
         width: 1200,
         height: 630,
-        alt: "JARVIS deployment checklist",
+        alt: "FINNOR governed deployment checklist",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Deployment Checklist | JARVIS",
+    title: "Governed Deployment Checklist | FINNOR",
     description:
-      "Pre-launch checklist for approval rules, integrations, and boundaries before JARVIS deployment.",
+      "Certify the execution chain before expanding it.",
     images: ["https://finnorai.com/og-image.svg"],
   },
 };

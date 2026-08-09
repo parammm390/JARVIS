@@ -47,6 +47,31 @@ describe("VapiWebhookSchema (call-object field preservation)", () => {
     expect(parsed.message.call.customer.name).toBe("Jane Caller");
   });
 
+  it("preserves the bounded causal envelope without requiring provider identifiers", () => {
+    const parsed = VapiWebhookSchema.parse({
+      message: {
+        type: "end-of-call-report",
+        call: {
+          id: "call-causal-1",
+          metadata: {
+            direction: "outbound",
+            agentKey: "payment-collector",
+            domainActionId: "action-causal-1",
+            householdId: "household-causal-1",
+            invoiceId: "invoice-causal-1",
+          },
+        },
+      },
+    });
+    expect(parsed.message.call?.metadata).toEqual({
+      direction: "outbound",
+      agentKey: "payment-collector",
+      domainActionId: "action-causal-1",
+      householdId: "household-causal-1",
+      invoiceId: "invoice-causal-1",
+    });
+  });
+
   it("still accepts a payload with no call object at all", () => {
     const parsed = VapiWebhookSchema.parse({ message: { type: "status-update" } });
     expect(parsed.message.call).toBeUndefined();

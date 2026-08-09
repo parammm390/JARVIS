@@ -94,7 +94,7 @@ describe.skipIf(!available)("sandbox mode: the complete workflow is REAL (§99%)
     expect(gated.output.gated).toBe(true);
 
     // Approve (voice or click — same path).
-    const result = await orchestrator.decide(action.id, SEED_TENANT_ID, "approve", "voice:sandbox-test");
+    const result = await orchestrator.decide(action.id, SEED_TENANT_ID, "approve", "voice:sandbox-test", { typedConfirmation: true });
     expect(result.status).toBe("success");
     expect(result.output.booking).toMatchObject({ booked: true, simulated: true });
 
@@ -140,7 +140,7 @@ describe.skipIf(!available)("sandbox mode: the complete workflow is REAL (§99%)
     });
     const policy = await orchestrator.loadPolicy(action);
     await orchestrator.executor.execute(action, policy);
-    const result = await orchestrator.decide(action.id, SEED_TENANT_ID, "approve", "voice:sandbox-test");
+    const result = await orchestrator.decide(action.id, SEED_TENANT_ID, "approve", "voice:sandbox-test", { typedConfirmation: true });
     expect(result.status).toBe("success");
 
     const [latest] = await withTenant(SEED_TENANT_ID, (db) =>
@@ -173,7 +173,7 @@ describe.skipIf(!available)("sandbox mode: the complete workflow is REAL (§99%)
     const policy = await orchestrator.loadPolicy(action);
     await orchestrator.executor.execute(action, policy);
     const before = await withTenant(SEED_TENANT_ID, (db) => db.select().from(sandboxOutbox));
-    const result = await orchestrator.decide(action.id, SEED_TENANT_ID, "approve", "voice:sandbox-test");
+    const result = await orchestrator.decide(action.id, SEED_TENANT_ID, "approve", "voice:sandbox-test", { typedConfirmation: true });
     expect(result.status).toBe("success");
     const after = await withTenant(SEED_TENANT_ID, (db) => db.select().from(sandboxOutbox));
     expect(after.length).toBeGreaterThan(before.length);

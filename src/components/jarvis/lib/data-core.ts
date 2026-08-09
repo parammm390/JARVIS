@@ -227,6 +227,11 @@ export interface ProviderHealth {
   healthy: boolean | null
   error?: string
 }
+export interface VoiceAssistantHealth extends ProviderHealth {
+  agentKey: "jarvis" | "follow-up" | "service-reminder" | "win-back" | "payment-collector"
+  personaKey: "main" | "install_followup" | "service_reminder" | "winback" | "payment_collector"
+  note?: string
+}
 /** Phase 15: real self-tests for every external integration (not just presence),
  *  from GET /api/integrations/status — includes the two new Phase 15 providers
  *  (Stripe, DocuSign) plus which binding is actually wired to serve each capability. */
@@ -252,6 +257,7 @@ export interface IntegrationsStatus {
   google_ads: ProviderHealth
   quickbooks: ProviderHealth
   vapi: ProviderHealth
+  voiceAssistants: VoiceAssistantHealth[]
   ghl: ProviderHealth
   stripe: ProviderHealth
   docusign: ProviderHealth

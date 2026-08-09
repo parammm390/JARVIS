@@ -53,6 +53,7 @@ export * from "./anomaly-detector";
 export * from "./churn-risk";
 export * from "./reorder-points";
 export * from "./failure-injection-calendar";
+export * from "./work-cases";
 
 export interface IntelligenceForecasts {
   cashCollections: ForecastPoint[] | null;

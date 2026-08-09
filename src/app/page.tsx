@@ -1,73 +1,40 @@
 import type { Metadata } from "next";
-import { Hero } from "@/components/sections/Hero";
-import { PersonalizedDemoBuilder } from "@/components/sections/PersonalizedDemoBuilder";
-import { Solution } from "@/components/sections/Solution";
-import { RevenueLeak } from "@/components/sections/RevenueLeak";
-import { LiveWorkflow } from "@/components/sections/LiveWorkflow";
-import { CommandBridgeProof } from "@/components/sections/jarvis-proof/CommandBridgeProof";
-import { Outcome } from "@/components/sections/Outcome";
-import { Pricing } from "@/components/sections/Pricing";
-import { FirstSevenDays } from "@/components/sections/FirstSevenDays";
-import { FAQ } from "@/components/sections/FAQ";
-import { Cta } from "@/components/sections/Cta";
-import { Footer } from "@/components/sections/Footer";
+
+import FinnorHome from "@/components/rebuild/FinnorHome";
 
 export const metadata: Metadata = {
   title: {
-    absolute:
-      "FINNOR JARVIS | Voice-Native AI Operations for Water Treatment Companies",
+    absolute: "FINNOR | Governed Execution for Water Treatment Companies",
   },
   description:
-    "Run calls, CRM, scheduling, proposals, invoices, inventory, technicians and campaigns by talking to JARVIS, the voice-native AI operations platform for water-treatment companies.",
+    "FINNOR turns an instruction into grounded context, an executable plan, governed action and permanent evidence for water treatment companies. JARVIS is the command surface.",
   alternates: {
     canonical: "https://finnorai.com/",
   },
   openGraph: {
-    title:
-      "FINNOR JARVIS | Voice-Native AI Operations for Water Treatment Companies",
+    title: "One instruction. The whole operation moves. | FINNOR",
     description:
-      "Run calls, CRM, scheduling, proposals, invoices, inventory, technicians and campaigns by talking to JARVIS.",
+      "See how FINNOR moves Customers, Work, Schedule and Money from one governed instruction—and proves what happened.",
     url: "https://finnorai.com/",
     images: [
       {
         url: "https://finnorai.com/og-image.svg",
         width: 1200,
         height: 630,
-        alt: "JARVIS, the voice-native AI operations platform for water-treatment companies",
+        alt: "FINNOR governed execution system for water treatment companies",
       },
     ],
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title:
-      "FINNOR JARVIS | Voice-Native AI Operations for Water Treatment Companies",
+    title: "One instruction. The whole operation moves. | FINNOR",
     description:
-      "Run calls, CRM, scheduling, proposals, invoices, inventory, technicians and campaigns by talking to JARVIS.",
-    images: [
-      {
-        url: "https://finnorai.com/og-image.svg",
-        alt: "JARVIS, the voice-native AI operations platform for water-treatment companies",
-      },
-    ],
+      "Grounded context, executable plans, governed action and permanent evidence for water treatment companies.",
+    images: ["https://finnorai.com/og-image.svg"],
   },
 };
 
 export default function Home() {
-  return (
-    <main className="healthcare-page flex min-h-screen w-full flex-col selection:bg-teal-200/40">
-      <Hero />
-      <RevenueLeak />
-      <LiveWorkflow />
-      <CommandBridgeProof />
-      <Solution />
-      <Outcome />
-      <PersonalizedDemoBuilder />
-      <Pricing />
-      <FirstSevenDays />
-      <FAQ />
-      <Cta />
-      <Footer />
-    </main>
-  );
+  return <FinnorHome />;
 }

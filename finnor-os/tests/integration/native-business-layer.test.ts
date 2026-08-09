@@ -67,7 +67,10 @@ async function runGated(actionType: string, payload: Record<string, unknown>) {
   // Read-only actions are ungated by policy and complete immediately; everything
   // else stops at the gate and needs the (voice) approval.
   if (!first.output.gated) return first;
-  return orchestrator.decide(action.id, SEED_TENANT_ID, "approve", "voice:native-test");
+  // The fixed hardening spec requires typed confirmation for financial, batch,
+  // and other typed-required actions. Supplying it here keeps this helper aligned
+  // with the production approval contract instead of weakening that floor.
+  return orchestrator.decide(action.id, SEED_TENANT_ID, "approve", "voice:native-test", { typedConfirmation: true });
 }
 
 describe.skipIf(!available)("native business layer — real, end to end, gated", () => {

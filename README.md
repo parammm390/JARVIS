@@ -1,11 +1,13 @@
-# FINNOR Agency Website
+# FINNOR
 
-A premium, modern, production-grade Next.js website for FINNOR, an AI automation agency focused on inbound call handling.
+FINNOR is a governed execution system for water treatment companies. It turns an instruction into grounded context, an executable plan, policy-scoped action, durable recovery and permanent evidence. JARVIS is the command surface through which the operation is understood, directed and verified.
+
+This repository contains the public product story and demos, the JARVIS command experience, and the `finnor-os` execution stack. Voice is one supported instruction channel; it is not the product category.
 
 ## Tech Stack
 - **Framework:** Next.js (App Router)
 - **Styling:** Tailwind CSS + shadcn/ui
-- **Animations:** Framer Motion
+- **Motion and spatial storytelling:** GSAP, Framer Motion, Three.js and React Three Fiber
 - **Icons:** lucide-react
 - **Database/Backend:** Supabase
 
@@ -47,14 +49,26 @@ Navigate to [http://localhost:3000](http://localhost:3000).
 3. Configure your API keys in the `.env.local` file.
 4. _(Optional but recommended)_ Setup Row Level Security (RLS) policies as commented in the schema.
 
-## Editing Content
-Brand information, copy, links, and text are managed centrally.
+## Product and positioning sources
+
+- **Product truth, live-site audit and positioning decision:** `docs/FINNOR-REBUILD-PRODUCT-TRUTH.md`
+- **Public product story:** `src/components/rebuild/`
+- **Editorial resources and trust:** `src/components/resources/`
+- **JARVIS product surface:** `src/components/jarvis/`
+- **Execution system:** `finnor-os/`
+- **Brand configuration and links:** `src/config/site.ts`
+
+## Editing supporting content
+
+Shared information and route-specific content are organized by surface.
 - **Brand name, tagline, email, links:** Edit `src/config/site.ts`.
-- **Page Sections:** Edit the individual components in `src/components/sections/`.
+- **Homepage:** Edit `src/components/rebuild/`.
+- **Field notes, trust, checklist, glossary and estimator:** Edit `src/components/resources/`.
 - **Contact Form:** Logic is handled in `src/app/api/contact/route.ts` and UI in `src/components/sections/ContactForm.tsx`.
 
-## Personalized Demo
-The premium dispatch demo is available at `/demo`.
+## Public instruction demo
+
+The demo at `/demo` isolates one instruction channel and produces a governed handoff preview. It is explicitly not a representation of FINNOR’s complete execution system.
 
 - **Route:** `src/app/demo/page.tsx`
 - **Client experience:** `src/components/demo/`
@@ -67,7 +81,7 @@ The premium dispatch demo is available at `/demo`.
 - **Backend readiness:** `src/app/api/health/route.ts`
 - **Voice webhook:** `src/app/api/voice/webhook/route.ts`
 
-The endpoint reads a company website with bounded timeouts, public-host guardrails, and a short list of likely dispatch pages. It marks unknown facts as unknown and falls back to a generic after-hours emergency dispatch workflow when scraping or LLM summarization is unavailable.
+The endpoint reads a company website with bounded timeouts and public-host guardrails. It marks unknown facts as unknown and falls back to a generic, clearly labelled workflow when scraping or model summarization is unavailable.
 
 For Vapi, use one reusable assistant and reference the dynamic variables passed by the browser call:
 - `{{ companyName }}`

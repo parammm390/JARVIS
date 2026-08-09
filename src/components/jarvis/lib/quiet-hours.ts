@@ -9,6 +9,7 @@
 
 import { useEffect, useState } from "react"
 import { jarvisGet } from "./api"
+import { useJarvisAuth } from "./jarvis-auth"
 
 /** "HH:MM" → minutes since midnight. Assumes the backend's own regex-validated
  *  format (`^[0-2][0-9]:[0-5][0-9]$`, `< 24:00`) — never re-validated here. */
@@ -41,16 +42,24 @@ const NOT_QUIET: QuietHoursState = { quiet: false, quietHoursStart: null, quietH
  *  standing rAF/CSS-infinite loop (hard rule F4's ≤2-ambient-loop budget is about
  *  visual loops, not JS timers recomputing a style value). */
 export function useQuietHours(): QuietHoursState {
+  const { session, role, roleLoading, roleError } = useJarvisAuth()
   const [bounds, setBounds] = useState<{ start: string | null; end: string | null } | null>(null)
   const [state, setState] = useState<QuietHoursState>(NOT_QUIET)
 
   useEffect(() => {
+    // Quiet-hours preferences are private user data. Do not probe the route from
+    // the public preview or while the authoritative role projection is pending.
+    if (!session || !role || roleLoading || roleError) {
+      setBounds(null)
+      setState(NOT_QUIET)
+      return
+    }
     let cancelled = false
     void jarvisGet<{ prefs: { quietHoursStart: string | null; quietHoursEnd: string | null } }>("user-prefs")
       .then(({ prefs }) => { if (!cancelled) setBounds({ start: prefs.quietHoursStart, end: prefs.quietHoursEnd }) })
       .catch(() => { if (!cancelled) setBounds({ start: null, end: null }) })
     return () => { cancelled = true }
-  }, [])
+  }, [session, role, roleLoading, roleError])
 
   useEffect(() => {
     if (!bounds) return

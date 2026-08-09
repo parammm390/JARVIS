@@ -1,11 +1,16 @@
 "use client"
 
 import { useState } from "react"
+import dynamic from "next/dynamic"
 import type { LiveFrameProjection } from "../kernel/liveframe"
 import type { OrbVisualState } from "./orb-visual-state"
 import { JarvisAmbientOrb } from "./JarvisAmbientOrb"
-import { JarvisImmersiveOrb } from "./JarvisImmersiveOrb"
 import styles from "./JarvisOrbSurface.module.css"
+
+const JarvisImmersiveOrb = dynamic(() => import("./JarvisImmersiveOrb").then((module) => module.JarvisImmersiveOrb), {
+  ssr: false,
+  loading: () => <span className="j-fs-micro text-cyan-100" role="status">Preparing immersive view…</span>,
+})
 
 type Props = {
   visualState: OrbVisualState

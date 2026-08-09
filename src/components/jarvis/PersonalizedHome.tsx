@@ -9,16 +9,16 @@
 import { useEffect, useState } from "react"
 import dynamic from "next/dynamic"
 import { Map, Wrench } from "lucide-react"
-import { JarvisAuthProvider, useJarvisAuth, type JarvisRole } from "./lib/jarvis-auth"
+import { JarvisAuthProvider, useJarvisAuth } from "./lib/jarvis-auth"
 import { JarvisDataProvider } from "./lib/data-core"
 import { jarvisGet } from "./lib/api"
+import { roleLandingFor, type SavedHomepage } from "./lib/role-landing"
 import { SinceYouWereAway } from "./SinceYouWereAway"
 import { PushOptIn } from "./PushOptIn"
+import DispatchFieldSurface from "./panels/DispatchFieldSurface"
+import { OperationalSurfaceNav } from "./surfaces/OperationalSurfaceNav"
 import "./jarvis-theme.css"
 
-// Dispatcher and technician-only scenes keep their existing components, but do
-// not belong in the owner/public Thread's initial route graph.
-const Bridge = dynamic(() => import("./bridge/Bridge").then((m) => m.Bridge), { ssr: false })
 // The canonical owner Thread is the dominant interaction surface, but it is
 // still a client-only graph. Keep it out of the initial `/jarvis` route bundle
 // so the shell can establish auth/public-preview posture before loading the
@@ -27,7 +27,6 @@ const Bridge = dynamic(() => import("./bridge/Bridge").then((m) => m.Bridge), { 
 const InstructionThreadBridge = dynamic(
   () => import("./bridge/ThreadBridge").then((m) => m.InstructionThreadBridge),
   {
-    ssr: false,
     loading: () => (
       <div className="flex min-h-screen items-center justify-center bg-[#04070f] px-6 text-center text-white">
         <div>
@@ -42,24 +41,24 @@ const ApprovalCockpit = dynamic(() => import("./bridge/ApprovalCockpit").then((m
 const DispatchMap = dynamic(() => import("./panels/DispatchMap").then((m) => m.DispatchMap), { ssr: false })
 const MyDay = dynamic(() => import("./panels/MyDay").then((m) => m.MyDay), { ssr: false })
 
-type Homepage = "bridge" | "map" | "my-day" | null
-type Prefs = { homepage: Homepage; accent: string | null }
-const DEFAULT_HOME: Record<JarvisRole, Exclude<Homepage, null>> = { owner: "bridge", dispatcher: "map", technician: "my-day" }
-const ALLOWED_HOME: Record<JarvisRole, Homepage[]> = { owner: ["bridge"], dispatcher: ["map"], technician: ["my-day"] }
+type Prefs = { homepage: SavedHomepage; density: "comfortable" | "compact"; accent: string | null }
 
-function SceneFrame({ children, accent }: { children: React.ReactNode; accent: string | null }) {
-  return <div className="jarvis-root min-h-screen bg-[var(--j-bg)] text-[color:var(--j-text)]" data-tenant-accent={accent ?? undefined}><div className="fixed right-3 top-3 z-50"><PushOptIn /></div>{children}</div>
+function SceneFrame({ children, accent, density, landing }: { children: React.ReactNode; accent: string | null; density: Prefs["density"]; landing: Exclude<ReturnType<typeof roleLandingFor>, "home" | "schedule"> }) {
+  return <div className="jarvis-root min-h-screen bg-[var(--j-bg)] text-[color:var(--j-text)]" data-tenant-accent={accent ?? undefined} data-jarvis-role-landing={landing} data-jarvis-density={density}><OperationalSurfaceNav active="schedule" /><div className="fixed right-3 top-3 z-50"><PushOptIn /></div>{children}</div>
 }
 
 function RoleLanding() {
   const { session, role, roleLoading, roleError, retryRole, authError, retryAuth } = useJarvisAuth()
   const [prefs, setPrefs] = useState<Prefs | null>(null)
   useEffect(() => {
-    if (!session) { setPrefs(null); return }
+    // Preferences are private user data. Wait for the same authenticated role
+    // projection that gates every role scene; session restoration alone is not a
+    // sufficient authority boundary for this request.
+    if (!session || !role || roleLoading || roleError) { setPrefs(null); return }
     let cancelled = false
-    void jarvisGet<{ prefs: Prefs }>("user-prefs").then((response) => { if (!cancelled) setPrefs(response.prefs) }).catch(() => { if (!cancelled) setPrefs({ homepage: null, accent: null }) })
+    void jarvisGet<{ prefs: Prefs }>("user-prefs").then((response) => { if (!cancelled) setPrefs(response.prefs) }).catch(() => { if (!cancelled) setPrefs({ homepage: null, density: "comfortable", accent: null }) })
     return () => { cancelled = true }
-  }, [session])
+  }, [session, role, roleLoading, roleError])
   useEffect(() => {
     const root = document.documentElement
     if (prefs?.accent) root.dataset.jarvisTenantAccent = prefs.accent
@@ -95,9 +94,15 @@ function RoleLanding() {
   // spatial shell. The older two-rail Bridge remains available at /jarvis/bridge
   // for its own explicit route and does not compete with this product surface.
   if (role === "owner") return <InstructionThreadBridge standalone={false} />
-  const selected = role && prefs && ALLOWED_HOME[role].includes(prefs.homepage) ? prefs.homepage! : DEFAULT_HOME[role!]
-  if (selected === "bridge") return <SceneFrame accent={prefs?.accent ?? null}><Bridge /></SceneFrame>
-  return <SceneFrame accent={prefs?.accent ?? null}><main className="mx-auto min-h-screen max-w-7xl space-y-5 p-5 md:p-8"><SinceYouWereAway />{selected === "map" ? <><header><div className="j-label flex items-center gap-2"><Map className="h-4 w-4" /> Dispatcher scene</div><h1 className="mt-1 text-2xl font-black">Dispatch and approvals</h1></header><DispatchMap /><ApprovalCockpit /></> : <><header><div className="j-label flex items-center gap-2"><Wrench className="h-4 w-4" /> Technician scene</div><h1 className="mt-1 text-2xl font-black">Your assigned day</h1></header><MyDay /></>}</main></SceneFrame>
+  const selected = roleLandingFor(role!, prefs?.homepage ?? null)
+  const density = prefs?.density ?? "comfortable"
+  if (selected === "schedule") {
+    return <div data-jarvis-role-landing="schedule" data-jarvis-density={density}><DispatchFieldSurface /></div>
+  }
+  if (selected === "dispatch-map") {
+    return <SceneFrame accent={prefs?.accent ?? null} density={density} landing={selected}><main className="jarvis-role-landing__stage mx-auto min-h-screen max-w-7xl p-5 md:p-8" data-jarvis-density={density}><SinceYouWereAway /><header><div className="j-label flex items-center gap-2"><Map className="h-4 w-4" /> Dispatcher scene</div><h1 className="mt-1 text-2xl font-black">Dispatch and approvals</h1></header><DispatchMap /><ApprovalCockpit /></main></SceneFrame>
+  }
+  return <SceneFrame accent={prefs?.accent ?? null} density={density} landing="my-day"><main className="jarvis-role-landing__stage mx-auto min-h-screen max-w-lg p-5 md:p-8" data-jarvis-density={density}><SinceYouWereAway /><header><div className="j-label flex items-center gap-2"><Wrench className="h-4 w-4" /> Technician scene</div><h1 className="mt-1 text-2xl font-black">Your assigned day</h1></header><MyDay /></main></SceneFrame>
 }
 
 export default function PersonalizedHome() {

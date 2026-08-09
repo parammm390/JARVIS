@@ -1,8 +1,3 @@
-// Plan v3 P3.T11 evidence: startInstructionTransport's real SSE-with-fallback
-// scheduling, unit tested by stubbing `EventSource`/`window`/auth token and
-// mocking `./instruction`'s startTracePoll (no DOM — same B-1 pattern as
-// instruction-trace-poll.test.ts's own jarvisGet mock).
-
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const startTracePollMock = vi.fn()
@@ -12,176 +7,120 @@ vi.mock("./instruction", async (importOriginal) => {
 })
 
 const getCurrentAccessTokenMock = vi.fn<() => string | null>()
-vi.mock("../lib/jarvis-auth", () => ({
-  getCurrentAccessToken: () => getCurrentAccessTokenMock(),
-}))
+vi.mock("../lib/jarvis-auth", () => ({ getCurrentAccessToken: () => getCurrentAccessTokenMock() }))
 
 import { startInstructionTransport } from "./transport"
 
-class FakeEventSource {
-  static instances: FakeEventSource[] = []
-  url: string
-  onopen: (() => void) | null = null
-  onmessage: ((ev: { data: string }) => void) | null = null
-  onerror: (() => void) | null = null
-  closed = false
-  constructor(url: string) {
-    this.url = url
-    FakeEventSource.instances.push(this)
-  }
-  close() {
-    this.closed = true
-  }
+const fetchMock = vi.fn<typeof fetch>()
+const ORIGINAL_ENV = process.env.NEXT_PUBLIC_JARVIS_SSE
+
+function responseWithFrames(frames: unknown[], keepOpen = false): Response {
+  const encoder = new TextEncoder()
+  return new Response(new ReadableStream({
+    start(controller) {
+      for (const frame of frames) controller.enqueue(encoder.encode(`data: ${typeof frame === "string" ? frame : JSON.stringify(frame)}\n\n`))
+      if (!keepOpen) controller.close()
+    },
+  }), { status: 200, headers: { "content-type": "text/event-stream" } })
 }
 
-const ORIGINAL_ENV = process.env.NEXT_PUBLIC_JARVIS_SSE
+async function settle(): Promise<void> {
+  for (let i = 0; i < 8; i += 1) await Promise.resolve()
+}
 
 beforeEach(() => {
   vi.useFakeTimers()
+  fetchMock.mockReset()
+  fetchMock.mockResolvedValue(responseWithFrames([], true))
+  vi.stubGlobal("fetch", fetchMock)
   startTracePollMock.mockReset()
   startTracePollMock.mockReturnValue({ stop: vi.fn() })
   getCurrentAccessTokenMock.mockReset()
   getCurrentAccessTokenMock.mockReturnValue("real-access-token")
-  FakeEventSource.instances = []
-  // @ts-expect-error test-only global stub
-  globalThis.EventSource = FakeEventSource
-  // @ts-expect-error test-only global stub
+  // @ts-expect-error test-only browser origin
   globalThis.window = { location: { origin: "http://localhost:3000" } }
 })
+
 afterEach(() => {
   vi.useRealTimers()
-  // @ts-expect-error test-only global stub cleanup
-  delete globalThis.EventSource
-  // @ts-expect-error test-only global stub cleanup
+  vi.unstubAllGlobals()
+  // @ts-expect-error test-only cleanup
   delete globalThis.window
   if (ORIGINAL_ENV === undefined) delete process.env.NEXT_PUBLIC_JARVIS_SSE
   else process.env.NEXT_PUBLIC_JARVIS_SSE = ORIGINAL_ENV
 })
 
-describe("kernel/transport — startInstructionTransport (P3.T11)", () => {
-  it("NEXT_PUBLIC_JARVIS_SSE unset -> SSE is enabled by default", () => {
+describe("kernel/transport — authenticated instruction stream", () => {
+  it("defaults to fetch-stream SSE and keeps the bearer token out of the URL", async () => {
     delete process.env.NEXT_PUBLIC_JARVIS_SSE
-    const onEvents = vi.fn()
-    const onHealthChange = vi.fn()
-    startInstructionTransport({ instructionId: "i1", onEvents, onHealthChange })
-    expect(FakeEventSource.instances).toHaveLength(1)
-    expect(startTracePollMock).not.toHaveBeenCalled()
-    expect(onHealthChange).not.toHaveBeenCalled()
-  })
-
-  it("NEXT_PUBLIC_JARVIS_SSE=0 -> polling immediately", () => {
-    process.env.NEXT_PUBLIC_JARVIS_SSE = "0"
-    const onEvents = vi.fn()
-    const onHealthChange = vi.fn()
-    startInstructionTransport({ instructionId: "i1", onEvents, onHealthChange })
-    expect(FakeEventSource.instances).toHaveLength(0)
-    expect(startTracePollMock).toHaveBeenCalledWith("i1", onEvents, 0, { onStatus: expect.any(Function) })
-    expect(onHealthChange).toHaveBeenCalledWith("polling")
-  })
-
-  it("flag enabled but no access token -> falls back to polling, never opens a connection", () => {
-    process.env.NEXT_PUBLIC_JARVIS_SSE = "1"
-    getCurrentAccessTokenMock.mockReturnValue(null)
     const onHealthChange = vi.fn()
     startInstructionTransport({ instructionId: "i1", onEvents: vi.fn(), onHealthChange })
-    expect(FakeEventSource.instances).toHaveLength(0)
+    await settle()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [rawUrl, init] = fetchMock.mock.calls[0]!
+    const url = new URL(String(rawUrl))
+    expect(url.pathname).toBe("/api/jarvis/stream")
+    expect(url.searchParams.get("instructionId")).toBe("i1")
+    expect(url.searchParams.has("token")).toBe(false)
+    expect((init?.headers as Record<string, string>).authorization).toBe("Bearer real-access-token")
+    expect(onHealthChange).toHaveBeenCalledWith("live")
+  })
+
+  it("uses polling immediately when SSE is deliberately disabled", () => {
+    process.env.NEXT_PUBLIC_JARVIS_SSE = "0"
+    const onHealthChange = vi.fn()
+    startInstructionTransport({ instructionId: "i1", onEvents: vi.fn(), onHealthChange })
+    expect(fetchMock).not.toHaveBeenCalled()
     expect(startTracePollMock).toHaveBeenCalledWith("i1", expect.any(Function), 0, { onStatus: expect.any(Function) })
     expect(onHealthChange).toHaveBeenCalledWith("polling")
   })
 
-  it("flag enabled with a token -> opens a real EventSource at /api/jarvis/stream with instructionId+token", () => {
-    process.env.NEXT_PUBLIC_JARVIS_SSE = "1"
-    startInstructionTransport({ instructionId: "i1", onEvents: vi.fn(), onHealthChange: vi.fn() })
-    expect(FakeEventSource.instances).toHaveLength(1)
-    const url = new URL(FakeEventSource.instances[0]!.url)
-    expect(url.pathname).toBe("/api/jarvis/stream")
-    expect(url.searchParams.get("instructionId")).toBe("i1")
-    expect(url.searchParams.get("token")).toBe("real-access-token")
-  })
-
-  it("onopen -> reports 'live'", () => {
-    process.env.NEXT_PUBLIC_JARVIS_SSE = "1"
+  it("falls back to authenticated polling when no session token exists", () => {
+    getCurrentAccessTokenMock.mockReturnValue(null)
     const onHealthChange = vi.fn()
     startInstructionTransport({ instructionId: "i1", onEvents: vi.fn(), onHealthChange })
-    FakeEventSource.instances[0]!.onopen?.()
-    expect(onHealthChange).toHaveBeenCalledWith("live")
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(startTracePollMock).toHaveBeenCalled()
+    expect(onHealthChange).toHaveBeenCalledWith("polling")
   })
 
-  it("onmessage -> parses the frame and delivers it to onEvents, tracking its seq", () => {
-    process.env.NEXT_PUBLIC_JARVIS_SSE = "1"
+  it("parses a real frame, deduplicates sequence, and stops at terminal", async () => {
+    const frame = { seq: 3, phase: "completed", payload: { actionId: "a1" }, createdAt: "t" }
+    fetchMock.mockResolvedValue(responseWithFrames([frame, frame]))
     const onEvents = vi.fn()
-    startInstructionTransport({ instructionId: "i1", onEvents, onHealthChange: vi.fn() })
-    const frame = { seq: 3, phase: "planning", payload: {}, createdAt: "t" }
-    FakeEventSource.instances[0]!.onmessage?.({ data: JSON.stringify(frame) })
+    const handle = startInstructionTransport({ instructionId: "i1", onEvents, onHealthChange: vi.fn() })
+    await settle()
+    expect(onEvents).toHaveBeenCalledTimes(1)
     expect(onEvents).toHaveBeenCalledWith([frame])
+    handle.stop()
   })
 
-  it("a malformed onmessage frame is a real no-op — never throws, never delivers a fabricated event", () => {
-    process.env.NEXT_PUBLIC_JARVIS_SSE = "1"
+  it("ignores malformed frames without inventing lifecycle state", async () => {
+    fetchMock.mockResolvedValue(responseWithFrames(["not json"], true))
     const onEvents = vi.fn()
     startInstructionTransport({ instructionId: "i1", onEvents, onHealthChange: vi.fn() })
-    expect(() => FakeEventSource.instances[0]!.onmessage?.({ data: "not json" })).not.toThrow()
+    await settle()
     expect(onEvents).not.toHaveBeenCalled()
   })
 
-  it("a terminal real frame closes the stream without opening a reconnect", async () => {
-    process.env.NEXT_PUBLIC_JARVIS_SSE = "1"
-    const onEvents = vi.fn()
-    const onHealthChange = vi.fn()
-    startInstructionTransport({ instructionId: "i1", onEvents, onHealthChange })
-    const es = FakeEventSource.instances[0]!
-    es.onmessage?.({ data: JSON.stringify({ seq: 9, phase: "completed", payload: {}, createdAt: "t" }) })
-
-    expect(es.closed).toBe(true)
-    expect(onEvents).toHaveBeenCalledTimes(1)
-    await vi.advanceTimersByTimeAsync(2_000)
-    expect(FakeEventSource.instances).toHaveLength(1)
-    expect(onHealthChange).not.toHaveBeenCalledWith("reconnecting")
-  })
-
-  it("first onerror -> 'reconnecting', closes the dead connection, does NOT fall back yet", () => {
-    process.env.NEXT_PUBLIC_JARVIS_SSE = "1"
+  it("falls back after two consecutive connection failures", async () => {
+    fetchMock.mockRejectedValue(new TypeError("offline"))
     const onHealthChange = vi.fn()
     startInstructionTransport({ instructionId: "i1", onEvents: vi.fn(), onHealthChange })
-    const first = FakeEventSource.instances[0]!
-    first.onerror?.()
-    expect(first.closed).toBe(true)
+    await settle()
     expect(onHealthChange).toHaveBeenCalledWith("reconnecting")
-    expect(startTracePollMock).not.toHaveBeenCalled()
-  })
-
-  it("a 2nd consecutive failure gives up to polling, resuming from the last seen seq", async () => {
-    process.env.NEXT_PUBLIC_JARVIS_SSE = "1"
-    const onEvents = vi.fn()
-    const onHealthChange = vi.fn()
-    startInstructionTransport({ instructionId: "i1", onEvents, onHealthChange })
-
-    FakeEventSource.instances[0]!.onmessage?.({ data: JSON.stringify({ seq: 5, phase: "planning", payload: {}, createdAt: "t" }) })
-    FakeEventSource.instances[0]!.onerror?.() // failure 1 -> reconnecting, schedules a retry
     await vi.advanceTimersByTimeAsync(500)
-    FakeEventSource.instances[1]!.onerror?.() // failure 2 -> gives up
-
+    await settle()
     expect(onHealthChange).toHaveBeenCalledWith("unavailable")
-    expect(startTracePollMock).toHaveBeenCalledWith("i1", onEvents, 5, { onStatus: expect.any(Function) })
+    expect(startTracePollMock).toHaveBeenCalledWith("i1", expect.any(Function), 0, { onStatus: expect.any(Function) })
   })
 
-  it("stop() closes the EventSource and clears any pending reconnect", () => {
-    process.env.NEXT_PUBLIC_JARVIS_SSE = "1"
+  it("stop aborts the authenticated stream", async () => {
     const handle = startInstructionTransport({ instructionId: "i1", onEvents: vi.fn(), onHealthChange: vi.fn() })
-    const es = FakeEventSource.instances[0]!
+    await settle()
+    const signal = fetchMock.mock.calls[0]?.[1]?.signal
+    expect(signal?.aborted).toBe(false)
     handle.stop()
-    expect(es.closed).toBe(true)
-  })
-
-  it("stop() after giving up to polling also stops the fallback poll", async () => {
-    process.env.NEXT_PUBLIC_JARVIS_SSE = "1"
-    const stopPollMock = vi.fn()
-    startTracePollMock.mockReturnValue({ stop: stopPollMock })
-    const handle = startInstructionTransport({ instructionId: "i1", onEvents: vi.fn(), onHealthChange: vi.fn() })
-    FakeEventSource.instances[0]!.onerror?.() // failure 1 -> schedules a retry
-    await vi.advanceTimersByTimeAsync(500)
-    FakeEventSource.instances[1]!.onerror?.() // failure 2 -> gives up, starts the fallback poll
-    handle.stop()
-    expect(stopPollMock).toHaveBeenCalled()
+    expect(signal?.aborted).toBe(true)
   })
 })

@@ -403,7 +403,7 @@ export function Thread({
           {key === "heard" && <ThreadHeard thread={thread} onCancel={onCancel} onRetry={onRetry} resuming={resuming} intentLaunch={launchHeard ? intentLaunch : null} />}
           {key === "understood" && <ThreadUnderstood thread={thread} reducedMotion={reducedMotion} />}
           {key === "answer" && <ThreadAnswer thread={thread} />}
-          {key === "plan" && (thread.clarification ? <ThreadClarify thread={thread} onAnswer={answerClarification} onSkip={onSkip} onCancel={onCancel} /> : <ThreadPlan thread={thread} reducedMotion={reducedMotion} />)}
+          {key === "plan" && (thread.clarification ? <ThreadClarify thread={thread} onAnswer={answerClarification} onSkip={onSkip} onCancel={onCancel} /> : <ThreadPlan thread={thread} reducedMotion={reducedMotion} restored={blockRestored} />)}
           {key === "execution" && <ThreadExecution thread={thread} restored={blockRestored} executionWeavePlacement={executionWeavePlacement} energy={executionEnergy} />}
           {key === "receipt" && <ThreadReceipt thread={thread} reducedMotion={reducedMotion} onRetry={onRetry} restored={blockRestored} />}
         </BlockShell>

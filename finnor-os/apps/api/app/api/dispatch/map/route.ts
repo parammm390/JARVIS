@@ -1,8 +1,8 @@
 // D5.T2 — dispatch data is sourced from stored coordinates and B3's completed route
 // receipt. Missing coordinates and absent optimizer evidence remain visible as such.
 
-import { decisionReceipts, domainActions, households, serviceVisits, technicians, tenantSettings, withTenant } from "@finnor/db";
-import { and, asc, desc, eq, gte, isNull, lt } from "drizzle-orm";
+import { appointments, decisionReceipts, domainActions, households, serviceVisits, technicians, tenantSettings, withTenant } from "@finnor/db";
+import { and, asc, desc, eq, gte, isNull, lt, or } from "drizzle-orm";
 import { AuthError, errorResponse, requireContext } from "../../../../lib/auth";
 
 function dayBounds(value: string): [Date, Date] {
@@ -25,7 +25,7 @@ export async function GET(req: Request): Promise<Response> {
         db.select({ isDealerZero: tenantSettings.isDealerZero }).from(tenantSettings).where(eq(tenantSettings.tenantId, ctx.tenantId)).limit(1),
         db.select({ id: technicians.id, name: technicians.name }).from(technicians).where(eq(technicians.tenantId, ctx.tenantId)).orderBy(asc(technicians.name)),
       ]);
-      const stops = await db.select({
+      const legacyStops = await db.select({
         visitId: serviceVisits.id,
         technicianId: technicians.id,
         technicianName: technicians.name,
@@ -39,14 +39,41 @@ export async function GET(req: Request): Promise<Response> {
       })
         .from(serviceVisits)
         .innerJoin(households, eq(households.id, serviceVisits.householdId))
-        .innerJoin(technicians, eq(technicians.id, serviceVisits.technicianId))
+        // Unassigned visits are the dispatcher's exception queue, not missing data.
+        // An inner join hid the exact visits this surface exists to assign.
+        .leftJoin(technicians, eq(technicians.id, serviceVisits.technicianId))
         .where(and(gte(serviceVisits.scheduledAt, start), lt(serviceVisits.scheduledAt, end), isNull(serviceVisits.completedAt)))
         .orderBy(asc(serviceVisits.scheduledAt));
+      const canonicalStops = await db.select({
+        visitId: appointments.id,
+        technicianId: technicians.id,
+        technicianName: technicians.name,
+        householdId: households.id,
+        address: households.address,
+        latitude: households.latitude,
+        longitude: households.longitude,
+        scheduledAt: appointments.scheduledAt,
+        notes: appointments.notes,
+      })
+        .from(appointments)
+        .innerJoin(households, eq(households.id, appointments.subjectId))
+        .leftJoin(technicians, eq(technicians.id, appointments.technicianId))
+        .where(and(
+          eq(appointments.subjectType, "household"),
+          gte(appointments.scheduledAt, start),
+          lt(appointments.scheduledAt, end),
+          or(eq(appointments.status, "hold"), eq(appointments.status, "confirmed")),
+        ))
+        .orderBy(asc(appointments.scheduledAt));
       const receiptRows = await db.select({ actualResult: decisionReceipts.actualResult, payload: domainActions.payload })
         .from(decisionReceipts)
         .innerJoin(domainActions, eq(domainActions.id, decisionReceipts.domainActionId))
         .where(and(eq(domainActions.tenantId, ctx.tenantId), eq(domainActions.actionType, "route_suggestion")))
         .orderBy(desc(decisionReceipts.createdAt));
+      const stops = [
+        ...legacyStops.map((stop) => ({ ...stop, sourceKind: "service_visit" as const, type: stop.type })),
+        ...canonicalStops.map((stop) => ({ ...stop, sourceKind: "appointment" as const, type: "appointment" })),
+      ].sort((a, b) => (a.scheduledAt?.getTime() ?? 0) - (b.scheduledAt?.getTime() ?? 0));
       return { isDealerZero: settings?.isDealerZero ?? false, stops, receiptRows, technicians: techniciansForTenant };
     });
     const optimized = new Map<string, { sequence: number; naiveKm: number | null; optimizedKm: number | null; kmSaved: number | null }>();
@@ -64,7 +91,11 @@ export async function GET(req: Request): Promise<Response> {
         if (typeof item.visitId === "string" && typeof item.sequence === "number" && !optimized.has(item.visitId)) optimized.set(item.visitId, { sequence: item.sequence, ...metrics });
       }
     }
-    const stops = data.stops.map((stop) => ({ ...stop, optimized: optimized.get(stop.visitId) ?? null }));
+    const stops = data.stops.map((stop) => ({
+      ...stop,
+      // B3 route receipts currently carry pre-canonical service-visit IDs.
+      optimized: stop.sourceKind === "service_visit" ? optimized.get(stop.visitId) ?? null : null,
+    }));
     const firstMetric = [...optimized.values()][0] ?? null;
     return Response.json({
       date,
@@ -83,15 +114,20 @@ export async function POST(req: Request): Promise<Response> {
   try {
     const ctx = await requireContext(req);
     if (ctx.role !== "owner" && ctx.role !== "dispatcher") throw new AuthError("Dispatch access required", 403);
-    const body = (await req.json().catch(() => null)) as { visitId?: unknown; technicianId?: unknown } | null;
+    const body = (await req.json().catch(() => null)) as { visitId?: unknown; technicianId?: unknown; sourceKind?: unknown } | null;
     if (!body || typeof body.visitId !== "string" || typeof body.technicianId !== "string") throw new AuthError("visitId and technicianId are required", 400);
+    const sourceKind = body.sourceKind === "appointment" ? "appointment" : "service_visit";
     const assigned = await withTenant(ctx.tenantId, async (db) => {
       const [technician] = await db.select({ id: technicians.id }).from(technicians).where(and(eq(technicians.id, body.technicianId as string), eq(technicians.tenantId, ctx.tenantId))).limit(1);
       if (!technician) return null;
+      if (sourceKind === "appointment") {
+        const [appointment] = await db.update(appointments).set({ technicianId: technician.id }).where(eq(appointments.id, body.visitId as string)).returning({ id: appointments.id, technicianId: appointments.technicianId });
+        return appointment ? { ...appointment, sourceKind } : null;
+      }
       const [visit] = await db.update(serviceVisits).set({ technicianId: technician.id }).where(eq(serviceVisits.id, body.visitId as string)).returning({ id: serviceVisits.id, technicianId: serviceVisits.technicianId });
-      return visit ?? null;
+      return visit ? { ...visit, sourceKind } : null;
     });
-    if (!assigned) throw new AuthError("Visit or technician was not found", 404);
+    if (!assigned) throw new AuthError("Schedule record or technician was not found", 404);
     return Response.json({ visit: assigned });
   } catch (err) {
     return errorResponse(err);

@@ -33,11 +33,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { CalendarDays, MapPinned, Route, X } from "lucide-react"
+import Link from "next/link"
 import { jarvisGet, jarvisPost } from "../lib/api"
 import { Drawer } from "../ui/primitives/Drawer"
 import { ErrorState } from "../ui/primitives/ErrorState"
 
-type Stop = { visitId: string; technicianId: string; technicianName: string; householdId: string; address: string; latitude: number | null; longitude: number | null; type: string; scheduledAt: string | null; notes: string | null; optimized: { sequence: number } | null }
+type Stop = { visitId: string; sourceKind: "service_visit" | "appointment"; technicianId: string | null; technicianName: string | null; householdId: string; address: string; latitude: number | null; longitude: number | null; type: string; scheduledAt: string | null; notes: string | null; optimized: { sequence: number } | null }
 type MapData = { date: string; synthetic: boolean; stops: Stop[]; technicians?: Array<{ id: string; name: string }>; unplacedStops: number; route: { naiveKm: number | null; optimizedKm: number | null; kmSaved: number | null } | null }
 type Household = { household: { address: string }; contacts: Array<{ name: string }>; equipment: Array<{ type: string; model: string | null }>; serviceVisits: unknown[] }
 
@@ -198,7 +199,7 @@ export function DispatchMapCore({ data, error, loading = false, onRetry = () => 
           const marker = document.createElement("button")
           marker.className = `flex h-8 w-8 items-center justify-center rounded-full border border-cyan-100/80 bg-cyan-300 j-fs-micro font-black text-slate-950 shadow-[0_0_18px_rgba(103,232,249,.8)] ${reduced ? "" : "jarvis-pin-drop"}`
           marker.textContent = String(stop.optimized?.sequence ?? "•")
-          marker.title = `${stop.technicianName}: ${stop.address}`
+          marker.title = `${stop.technicianName ?? "Unassigned"}: ${stop.address}`
           marker.onclick = () => {
             // FLOW-80 MapFocusDive — camera dives to the real stop coordinate in
             // sync with the household drawer opening.
@@ -256,7 +257,7 @@ export function DispatchMapCore({ data, error, loading = false, onRetry = () => 
     setAssigning(true)
     setAssignError(null)
     try {
-      await jarvisPost("dispatch/map", { visitId: selected.visitId, technicianId: assignee })
+      await jarvisPost("dispatch/map", { visitId: selected.visitId, sourceKind: selected.sourceKind, technicianId: assignee })
       setSelected(null)
       setAssignee("")
       onAssigned()
@@ -287,12 +288,12 @@ export function DispatchMapCore({ data, error, loading = false, onRetry = () => 
   }, [scrub])
 
   return (
-    <div className="space-y-4">
+    <div className="jarvis-dispatch-map-core space-y-4">
       {data?.synthetic && <div className="rounded-xl border border-amber-300/25 bg-amber-300/5 px-3 py-2 j-fs-micro text-amber-100">Dealer Zero — synthetic Houston-metro fixture data.</div>}
       {error && <ErrorState message={data ? `Showing the last successful route. ${error}` : error} onRetry={onRetry} />}
       {assignError && <ErrorState message={assignError} onRetry={() => void assignVisit()} />}
       {loading && !data && <div className="rounded-xl border border-white/8 bg-white/[0.02] p-4 j-fs-sm text-[color:var(--j-text-dim)]">Loading the real dispatch route…</div>}
-      <div className="grid gap-4 xl:grid-cols-[1fr_280px]">
+      <div className="jarvis-dispatch-map-grid grid gap-4 xl:grid-cols-[1fr_280px]">
         <div className="space-y-2">
           <div className="relative h-[58vh] min-h-[420px] overflow-hidden rounded-2xl border border-white/10 bg-[#0a1220]">
             <div ref={container} className="h-full w-full" />
@@ -349,6 +350,10 @@ export function DispatchMapCore({ data, error, loading = false, onRetry = () => 
               <div className="j-label">Stop</div>
               <div className="mt-1 font-bold">{selected.type.replaceAll("_", " ")}</div>
               <div className="text-white/60">{selected.address}</div>
+              <div className="mt-3 flex flex-wrap gap-2 j-fs-micro">
+                <Link className="rounded-lg border border-cyan-200/20 px-2.5 py-1.5 text-cyan-100" href={`/jarvis/customers?householdId=${encodeURIComponent(selected.householdId)}`}>Customer · {selected.householdId.slice(0, 8)}…</Link>
+                <Link className="rounded-lg border border-cyan-200/20 px-2.5 py-1.5 text-cyan-100" href={`/jarvis/work?householdId=${encodeURIComponent(selected.householdId)}&${selected.sourceKind === "appointment" ? "appointmentId" : "visitId"}=${encodeURIComponent(selected.visitId)}`}>Work · {selected.sourceKind === "appointment" ? "appointment" : "visit"} {selected.visitId.slice(0, 8)}…</Link>
+              </div>
             </div>
             <div className="rounded-xl border border-white/8 bg-white/[.025] p-3">
               <div className="j-label">Assign</div>

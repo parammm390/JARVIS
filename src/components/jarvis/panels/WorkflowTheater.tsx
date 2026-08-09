@@ -20,6 +20,7 @@ import { useJarvisAuth } from "../lib/jarvis-auth"
 import { getAnchorRect, onPulse, registerAnchor } from "../lib/pulse-bus"
 import { isSandboxStep, SANDBOX_LITERAL } from "../lib/sandbox-detection"
 import { LF10_WORKFLOW_IGNITION_MS, LF12_STEP_SPARK_MS, leasedFlowDurationMs, workflowFaultVariants } from "../kernel/execution-choreography"
+import { SIGNATURE_MOMENTS } from "../kernel/signature-moments"
 import { executionMetricTransitionKey, markExecutionPixelPainted } from "../kernel/execution-metrics"
 import { choreo } from "../ui/motion/choreo"
 import { runStatusPresentation, stepStatusPresentation } from "../kernel/workflow-presentation"
@@ -292,6 +293,8 @@ export function GraphNodeCard({ node, now, onSelect }: { node: GraphNode; now: n
         <motion.span
           key={ignitionKey}
           aria-hidden
+          data-jarvis-signature-moment="ignite"
+          data-jarvis-signature-source={SIGNATURE_MOMENTS.ignite.source}
           className="pointer-events-none absolute -inset-1 rounded-xl border-2"
           style={{ borderColor: "var(--j-cyan)" }}
           variants={reduced ? choreo.stepIgnition.reducedVariants : choreo.stepIgnition.variants}
@@ -991,7 +994,7 @@ export function WorkflowTheater({ actionIds, traceOutcomes, blockedActionIds = [
             {mode === "live" && <span className="j-chip bg-cyan-400/10 text-cyan-300">{runs.length} linked run{runs.length === 1 ? "" : "s"}</span>}
             {mode === "settled" && <span className="j-chip bg-emerald-400/10 text-emerald-300">{terminalRuns.length} linked run{terminalRuns.length === 1 ? "" : "s"} recorded</span>}
             {mode === "waiting" && <span className="j-chip bg-amber-300/10 text-amber-200">awaiting linked run</span>}
-            {ignitionKey > 0 && <motion.span key={ignitionKey} data-liveframe-impulse="LF-10" className="j-chip bg-cyan-300/15 text-cyan-100" initial={{ opacity: 0, scale: 0.9 }} animate={reduced ? { opacity: 1, scale: 1 } : { opacity: [0, 1, 0], scale: [0.9, 1, 1.04] }} transition={{ duration: reduced ? 0 : LF10_WORKFLOW_IGNITION_MS / 1000 }}>linked run observed</motion.span>}
+            {ignitionKey > 0 && <motion.span key={ignitionKey} data-liveframe-impulse="LF-10" data-jarvis-signature-moment="ignite" data-jarvis-signature-source={SIGNATURE_MOMENTS.ignite.source} className="j-chip bg-cyan-300/15 text-cyan-100" initial={{ opacity: 0, scale: 0.9 }} animate={reduced ? { opacity: 1, scale: 1 } : { opacity: [0, 1, 0], scale: [0.9, 1, 1.04] }} transition={{ duration: reduced ? 0 : LF10_WORKFLOW_IGNITION_MS / 1000 }}>linked run observed</motion.span>}
           </div>
           <span className="j-chip bg-white/5 text-[color:var(--j-text-dim)]">every consequential step is gated</span>
         </div>

@@ -119,7 +119,7 @@ export function startInstructionTransport(opts: InstructionTransportOpts): Instr
   }
 
   let stopped = false
-  let es: EventSource | null = null
+  let streamController: AbortController | null = null
   let failures = 0
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
   let activePoll: TracePollHandle | null = null
@@ -132,7 +132,28 @@ export function startInstructionTransport(opts: InstructionTransportOpts): Instr
     activePoll = fallbackToPolling({ ...opts, sinceSeq: lastSeq })
   }
 
-  function connect(): void {
+  function deliverFrame(raw: string): void {
+    try {
+      const parsed = JSON.parse(raw) as Partial<TraceEvent>
+      if (
+        typeof parsed.seq !== "number" || !Number.isInteger(parsed.seq) || parsed.seq < 0 ||
+        typeof parsed.phase !== "string" || !parsed.payload || typeof parsed.payload !== "object" || Array.isArray(parsed.payload) ||
+        typeof parsed.createdAt !== "string"
+      ) return
+      const event = parsed as TraceEvent
+      if (event.seq <= lastSeq) return
+      lastSeq = event.seq
+      opts.onEvents([event])
+      if (event.phase === "completed" || event.phase === "failed" || event.phase === "cancelled") {
+        terminalSeen = true
+        streamController?.abort()
+      }
+    } catch {
+      // A malformed frame is a real no-op — never fabricates lifecycle state.
+    }
+  }
+
+  async function connect(): Promise<void> {
     if (stopped) return
     const token = getCurrentAccessToken()
     if (!token) {
@@ -144,38 +165,46 @@ export function startInstructionTransport(opts: InstructionTransportOpts): Instr
     }
     const url = new URL("/api/jarvis/stream", window.location.origin)
     url.searchParams.set("instructionId", opts.instructionId)
-    url.searchParams.set("token", token)
-    es = new EventSource(url.toString())
-
-    es.onopen = () => {
+    const controller = new AbortController()
+    streamController = controller
+    try {
+      const response = await fetch(url.toString(), {
+        headers: {
+          authorization: `Bearer ${token}`,
+          accept: "text/event-stream",
+          ...(lastSeq > 0 ? { "last-event-id": String(lastSeq) } : {}),
+        },
+        cache: "no-store",
+        signal: controller.signal,
+      })
+      if (!response.ok || !response.body) throw new Error(`Instruction stream failed (${response.status})`)
       failures = 0
       opts.onHealthChange("live")
-    }
-    es.onmessage = (ev: MessageEvent<string>) => {
-      try {
-        const parsed = JSON.parse(ev.data) as Partial<TraceEvent>
-        if (
-          typeof parsed.seq !== "number" || !Number.isInteger(parsed.seq) || parsed.seq < 0 ||
-          typeof parsed.phase !== "string" || !parsed.payload || typeof parsed.payload !== "object" || Array.isArray(parsed.payload) ||
-          typeof parsed.createdAt !== "string"
-        ) return
-        const event = parsed as TraceEvent
-        if (event.seq <= lastSeq) return
-        lastSeq = event.seq
-        opts.onEvents([event])
-        if (event.phase === "completed" || event.phase === "failed" || event.phase === "cancelled") {
-          terminalSeen = true
-          es?.close()
-          es = null
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ""
+      let dataLines: string[] = []
+      while (!stopped && !terminalSeen) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        let newline = buffer.indexOf("\n")
+        while (newline >= 0) {
+          const line = buffer.slice(0, newline).replace(/\r$/, "")
+          buffer = buffer.slice(newline + 1)
+          if (line === "") {
+            if (dataLines.length > 0) deliverFrame(dataLines.join("\n"))
+            dataLines = []
+          } else if (line.startsWith("data:")) {
+            dataLines.push(line.slice(5).trimStart())
+          }
+          newline = buffer.indexOf("\n")
         }
-      } catch {
-        // A malformed frame is a real no-op — never crashes the connection,
-        // never fabricates an event.
       }
-    }
-    es.onerror = () => {
-      es?.close()
-      es = null
+      if (!terminalSeen && dataLines.length > 0) deliverFrame(dataLines.join("\n"))
+      if (stopped || terminalSeen) return
+      throw new Error("Instruction stream closed before a terminal event")
+    } catch {
       if (stopped || terminalSeen) return
       failures += 1
       if (failures >= MAX_SSE_FAILURES) {
@@ -184,17 +213,19 @@ export function startInstructionTransport(opts: InstructionTransportOpts): Instr
         return
       }
       opts.onHealthChange("reconnecting")
-      reconnectTimer = setTimeout(connect, SSE_RECONNECT_BASE_MS * 2 ** (failures - 1))
+      reconnectTimer = setTimeout(() => void connect(), SSE_RECONNECT_BASE_MS * 2 ** (failures - 1))
+    } finally {
+      if (streamController === controller) streamController = null
     }
   }
 
-  connect()
+  void connect()
 
   return {
     stop() {
       stopped = true
-      es?.close()
-      es = null
+      streamController?.abort()
+      streamController = null
       if (reconnectTimer !== null) clearTimeout(reconnectTimer)
       activePoll?.stop()
     },

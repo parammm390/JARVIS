@@ -1,14 +1,22 @@
 <svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="1200" height="630" fill="#000000"/>
-  <rect x="72" y="72" width="1056" height="486" rx="34" fill="#050707" stroke="rgba(103,232,249,0.28)"/>
-  <circle cx="930" cy="150" r="220" fill="rgba(103,232,249,0.12)"/>
-  <circle cx="280" cy="520" r="260" fill="rgba(255,255,255,0.06)"/>
-  <text x="116" y="154" fill="white" font-family="Inter, Arial, sans-serif" font-size="38" font-weight="900" letter-spacing="-1">FINNOR</text>
-  <text x="116" y="276" fill="white" font-family="Inter, Arial, sans-serif" font-size="72" font-weight="900" letter-spacing="-3">AI voice dispatch</text>
-  <text x="116" y="358" fill="white" fill-opacity="0.72" font-family="Inter, Arial, sans-serif" font-size="34" font-weight="600">After-hours no-water calls should not die in voicemail.</text>
-  <rect x="754" y="270" width="282" height="160" rx="26" fill="rgba(255,255,255,0.045)" stroke="rgba(255,255,255,0.12)"/>
-  <text x="784" y="318" fill="rgba(255,255,255,0.45)" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="900" letter-spacing="3">LIVE CALL</text>
-  <text x="784" y="362" fill="white" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="900">Sarah · 2:13 AM</text>
-  <text x="784" y="402" fill="rgba(255,255,255,0.7)" font-family="Inter, Arial, sans-serif" font-size="20" font-weight="700">No water - pump failure</text>
-  <circle cx="1000" cy="314" r="7" fill="#67E8F9"/>
+  <rect width="1200" height="630" fill="#F3F0E8"/>
+  <path d="M0 90H1200M0 540H1200" stroke="#D5D1C7"/>
+  <path d="M79 0V630M1121 0V630" stroke="#D5D1C7"/>
+  <rect x="78" y="88" width="1044" height="454" fill="#F8F6F0" stroke="#C8C4BA"/>
+  <rect x="882" y="88" width="240" height="454" fill="#112229"/>
+  <path d="M882 178H1122M882 362H1122" stroke="#30444B"/>
+  <text x="120" y="148" fill="#14272D" font-family="Arial, sans-serif" font-size="24" font-weight="800" letter-spacing="5">FINNOR</text>
+  <text x="120" y="272" fill="#14272D" font-family="Arial, sans-serif" font-size="72" font-weight="800" letter-spacing="-3">One instruction.</text>
+  <text x="120" y="350" fill="#14272D" font-family="Arial, sans-serif" font-size="72" font-weight="800" letter-spacing="-3">The operation moves.</text>
+  <text x="120" y="433" fill="#53666B" font-family="Arial, sans-serif" font-size="25" font-weight="500">Governed execution for water treatment companies.</text>
+  <text x="910" y="138" fill="#7FA6B3" font-family="monospace" font-size="13" font-weight="700" letter-spacing="2">JARVIS / LIVE TRACE</text>
+  <circle cx="920" cy="220" r="7" fill="#58AD78"/>
+  <text x="945" y="226" fill="#F4F4EF" font-family="Arial, sans-serif" font-size="19" font-weight="700">Context assembled</text>
+  <circle cx="920" cy="276" r="7" fill="#E47B3E"/>
+  <text x="945" y="282" fill="#F4F4EF" font-family="Arial, sans-serif" font-size="19" font-weight="700">Approval held</text>
+  <circle cx="920" cy="332" r="7" fill="#2490B8"/>
+  <text x="945" y="338" fill="#F4F4EF" font-family="Arial, sans-serif" font-size="19" font-weight="700">Plan ready</text>
+  <text x="910" y="411" fill="#7FA6B3" font-family="monospace" font-size="12" font-weight="700" letter-spacing="2">VERIFIED CHANGE</text>
+  <text x="910" y="455" fill="#F4F4EF" font-family="Arial, sans-serif" font-size="18" font-weight="700">Customers · Work</text>
+  <text x="910" y="485" fill="#F4F4EF" font-family="Arial, sans-serif" font-size="18" font-weight="700">Schedule · Money</text>
 </svg>
