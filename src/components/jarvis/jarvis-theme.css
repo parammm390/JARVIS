@@ -3665,6 +3665,538 @@ html[data-jarvis-tenant-accent="amber"] .jarvis-root { --accent: var(--j-amber);
   }
 }
 
+/* --------------------------------------------------------------------------
+   2026 operational product upgrade
+
+   Late, shared constraints turn every authenticated surface into one bounded
+   workspace. The source contracts and existing renderers stay unchanged;
+   density, selection, overflow, and state hierarchy are corrected here.
+   -------------------------------------------------------------------------- */
+.jarvis-root,
+.jarvis-work-shell,
+.jarvis-household-shell,
+.jarvis-dispatch-shell,
+.jarvis-money-shell,
+.jarvis-agent-fleet-shell {
+  --j-panel-raised: rgba(7, 18, 31, 0.94);
+  --j-line-strong: rgba(104, 216, 238, 0.22);
+  font-family: var(--font-geist-sans), Arial, sans-serif;
+}
+
+.jarvis-work-shell :is(.jarvis-work-row__age, .jarvis-work-root, .jarvis-work-run__id),
+.jarvis-household-shell :is(.jarvis-household-count, .jarvis-household-index-primary em, .jarvis-household-record-id),
+.jarvis-dispatch-shell :is(.jarvis-dispatch-day-rail__heading h2, .jarvis-dispatch-stop-row__time),
+.jarvis-money-shell :is(.jarvis-money-summary strong, .jarvis-money-aging-band__amount, .jarvis-money-invoice-row strong),
+.jarvis-agent-fleet-shell .jarvis-agent-fleet__contract-list span {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Home: an asymmetric, filled command instrument rather than a small orb in a
+   vacant field. The 8/4 desktop grid closes every row; mobile remains linear. */
+@media (min-width: 1180px) {
+  .jarvis-root .jarvis-command-deck.jarvis-command-deck--ready {
+    grid-template-columns: minmax(0, 8fr) minmax(320px, 4fr);
+    grid-template-areas:
+      "stage now"
+      "pulse pulse";
+    grid-auto-flow: dense;
+    gap: 14px;
+  }
+
+  .jarvis-root .jarvis-command-deck--ready > [data-jarvis-question-depth="operational-signals"],
+  .jarvis-root .jarvis-command-deck--ready .jarvis-now-rail {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+  }
+
+  .jarvis-root .jarvis-command-deck--ready > .jarvis-command-deck__stage {
+    min-height: 430px;
+  }
+
+  .jarvis-root .jarvis-command-deck--ready .jarvis-rest-composition {
+    grid-template-columns: minmax(260px, 5fr) minmax(360px, 7fr) !important;
+    grid-template-rows: minmax(330px, 1fr) !important;
+    min-height: 340px;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .jarvis-root .jarvis-command-deck--ready .jarvis-rest-composition > [data-jarvis-question-depth="presence"] {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .jarvis-root .jarvis-command-deck--ready .jarvis-rest-composition > [data-liveframe-surface="action-spine"] {
+    grid-column: 1;
+    grid-row: 1;
+    width: 100%;
+    align-self: center;
+    padding-inline: clamp(16px, 2vw, 28px);
+  }
+
+  .jarvis-root .jarvis-command-deck--ready .jarvis-presence-core {
+    min-height: 326px !important;
+  }
+
+  .jarvis-root .jarvis-command-deck--ready .jarvis-presence-core__orb,
+  .jarvis-root .jarvis-command-deck--ready .jarvis-orb-surface,
+  .jarvis-root .jarvis-command-deck--ready [data-jarvis-ambient-orb] {
+    width: clamp(250px, 20vw, 310px) !important;
+    height: clamp(250px, 20vw, 310px) !important;
+    min-height: clamp(250px, 20vw, 310px) !important;
+  }
+
+  .jarvis-root .jarvis-command-deck--ready .jarvis-rest-prompt {
+    min-height: 0;
+    padding: 22px 4px;
+    border-top: 0;
+    border-left: 2px solid rgba(71, 224, 246, 0.4);
+    background: linear-gradient(90deg, rgba(24, 160, 193, 0.08), transparent 80%);
+    text-align: left;
+  }
+
+  .jarvis-root .jarvis-command-deck--ready .jarvis-rest-prompt > p:first-child {
+    max-width: 25rem;
+    font-size: clamp(22px, 2vw, 31px);
+    line-height: 1.08;
+  }
+
+  .jarvis-root .jarvis-command-deck--ready .jarvis-rest-prompt > p:last-child {
+    max-width: 24rem;
+    margin-top: 9px;
+    font-size: 12px;
+    line-height: 1.55;
+  }
+}
+
+.jarvis-root .jarvis-command-deck__stage {
+  overflow: clip;
+  border-color: rgba(88, 210, 238, 0.2);
+  background:
+    radial-gradient(ellipse at 70% 35%, rgba(21, 166, 203, 0.15), transparent 42%),
+    linear-gradient(145deg, rgba(6, 27, 44, 0.9), rgba(2, 10, 19, 0.97) 64%);
+}
+
+.jarvis-root .jarvis-command-deck--ready .jarvis-now-rail {
+  max-height: 520px;
+  overflow: auto;
+  scrollbar-width: thin;
+}
+
+.jarvis-root .jarvis-orb-readout__satellite--actions {
+  max-width: 176px;
+}
+
+.jarvis-root .jarvis-orb-readout__satellite--actions strong {
+  white-space: normal;
+}
+
+/* Work: repeated source records collapse into expandable patterns and both
+   queue and spine scroll inside the viewport instead of creating a 15k page. */
+.jarvis-work-filterbar {
+  justify-content: flex-start;
+}
+
+.jarvis-work-filters {
+  flex: 1 1 auto;
+}
+
+.jarvis-work-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.jarvis-work-filter > span,
+.jarvis-work-row__count {
+  border: 1px solid rgba(100, 211, 235, 0.2);
+  border-radius: 999px;
+  padding: 2px 5px;
+  color: #87c7d6;
+  font-size: 9px;
+  line-height: 1;
+}
+
+.jarvis-work-search,
+.jarvis-household-search {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(100, 211, 235, 0.18);
+  border-radius: 8px;
+  background: rgba(4, 15, 25, 0.76);
+  color: #6ea2b5;
+}
+
+.jarvis-work-search {
+  width: min(240px, 24vw);
+  flex: 0 0 auto;
+  padding: 0 10px;
+}
+
+.jarvis-work-search input,
+.jarvis-household-search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: #e7faff;
+  outline: none;
+}
+
+.jarvis-work-search input::placeholder,
+.jarvis-household-search input::placeholder { color: #587a8b; }
+
+@media (min-width: 1020px) {
+  .jarvis-work-layout {
+    grid-template-columns: minmax(300px, 340px) minmax(0, 1fr);
+    min-height: calc(100dvh - 242px);
+    padding-bottom: 22px;
+  }
+
+  .jarvis-work-layout--inspector {
+    grid-template-columns: minmax(285px, 320px) minmax(0, 1fr) minmax(300px, 340px);
+  }
+
+  .jarvis-work-queue,
+  .jarvis-work-main,
+  .jarvis-work-inspector {
+    max-height: calc(100dvh - 250px);
+    overflow: auto;
+    scrollbar-width: thin;
+  }
+
+  .jarvis-work-queue,
+  .jarvis-work-inspector {
+    position: sticky;
+    top: 86px;
+  }
+
+  .jarvis-work-queue {
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100dvh - 250px);
+  }
+
+  .jarvis-work-queue__rows {
+    flex: 1 1 auto;
+    overflow-y: auto;
+  }
+}
+
+.jarvis-work-group {
+  border-bottom: 1px solid rgba(118, 199, 225, 0.08);
+}
+
+.jarvis-work-group > .jarvis-work-row { border-bottom: 0; }
+
+.jarvis-work-group__records {
+  border-left: 2px solid rgba(55, 207, 236, 0.24);
+  background: rgba(6, 23, 36, 0.66);
+}
+
+.jarvis-work-group__records summary {
+  display: flex;
+  min-height: 36px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px 0 35px;
+  color: #86b6c8;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 700;
+  list-style: none;
+}
+
+.jarvis-work-group__records summary::-webkit-details-marker { display: none; }
+.jarvis-work-group__records summary span { color: #557989; }
+
+.jarvis-work-group__records > div > button {
+  display: flex;
+  width: 100%;
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 10px 7px 35px;
+  border-top: 1px solid rgba(118, 199, 225, 0.07);
+  color: #9cc5d3;
+  text-align: left;
+}
+
+.jarvis-work-group__records > div > button:hover,
+.jarvis-work-group__records > div > button[data-selected="true"] { background: rgba(45, 190, 221, 0.09); }
+.jarvis-work-group__records > div > button > span { display: grid; gap: 2px; }
+.jarvis-work-group__records > div > button > span:last-child { display: inline-flex; align-items: center; }
+.jarvis-work-group__records strong { color: #d7f4fa; font-size: 10px; }
+.jarvis-work-group__records small { color: #668b9c; font-size: 9px; }
+.jarvis-work-row__aside { min-width: 72px; }
+.jarvis-work-row__count { color: #78dced; }
+
+/* Customers: the index now shows only facts present on the index resource;
+   Household 360 loads by default in a bounded, continuously visible pane. */
+.jarvis-household-search {
+  margin-bottom: 8px;
+  padding: 0 11px;
+}
+
+.jarvis-household-index-head,
+.jarvis-household-index-row {
+  grid-template-columns: minmax(230px, 1.8fr) minmax(90px, 0.62fr) minmax(88px, 0.58fr) minmax(110px, 0.72fr);
+  min-width: 0;
+}
+
+.jarvis-household-consent-state,
+.jarvis-household-location-state {
+  color: #7898a7;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.jarvis-household-consent-state.is-recorded,
+.jarvis-household-location-state.is-placed { color: #7edfc4; }
+
+.jarvis-household-record-action {
+  display: grid;
+  justify-items: end;
+  gap: 3px;
+}
+
+.jarvis-household-record-action strong { color: #91b5c3; font-size: 10px; }
+.jarvis-household-record-action small { display: inline-flex; align-items: center; gap: 4px; color: #6ed9e9; font-size: 10px; }
+
+@media (min-width: 1000px) {
+  .jarvis-household-layout {
+    grid-template-columns: minmax(500px, 0.92fr) minmax(500px, 1.08fr);
+    min-height: calc(100dvh - 210px);
+    padding-bottom: 22px;
+  }
+
+  .jarvis-household-index-region,
+  .jarvis-household-detail-region {
+    max-height: calc(100dvh - 210px);
+    overflow-y: auto;
+    scrollbar-width: thin;
+  }
+
+  .jarvis-household-detail-region {
+    position: sticky;
+    top: 86px;
+  }
+}
+
+/* Schedule: a no-stop day is a real operational state, not a blank map. */
+.jarvis-dispatch-map-state {
+  display: grid;
+  min-height: 500px;
+  place-items: center;
+  align-content: center;
+  gap: 9px;
+  overflow: hidden;
+  border: 1px solid rgba(94, 208, 234, 0.18);
+  background:
+    radial-gradient(circle at 50% 38%, rgba(31, 177, 205, 0.13), transparent 34%),
+    linear-gradient(145deg, rgba(6, 25, 39, 0.96), rgba(2, 9, 17, 0.98));
+  color: #7ddce9;
+  text-align: center;
+}
+
+.jarvis-dispatch-map-state > span {
+  color: #6bb7c8;
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.jarvis-dispatch-map-state h2 {
+  max-width: 34rem;
+  margin: 2px 0 0;
+  color: #e5fbff;
+  font-size: clamp(24px, 3vw, 38px);
+  font-weight: 620;
+  letter-spacing: -0.04em;
+}
+
+.jarvis-dispatch-map-state p {
+  max-width: 34rem;
+  margin: 0;
+  color: #7d9eae;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.jarvis-dispatch-map-state > div {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.jarvis-dispatch-map-state button {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 13px;
+  border: 1px solid rgba(100, 219, 239, 0.22);
+  border-radius: 8px;
+  color: #c8f5fb;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.jarvis-dispatch-map-state button:hover { background: rgba(55, 197, 222, 0.1); }
+.jarvis-dispatch-spin { animation: jarvis-household-spin 1s linear infinite; }
+
+/* Money: open pressure is the default decision view; history is available but
+   no longer expands the page by dozens of completed rows. */
+.jarvis-money-view-switch {
+  display: flex;
+  gap: 5px;
+  overflow-x: auto;
+  padding: 9px 12px;
+  border-bottom: 1px solid rgba(234, 199, 125, 0.09);
+}
+
+.jarvis-money-view-switch button {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 9px;
+  border: 1px solid rgba(234, 199, 125, 0.12);
+  border-radius: 7px;
+  color: #8f8067;
+  font-size: 10px;
+  font-weight: 750;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.jarvis-money-view-switch button[data-selected="true"] {
+  border-color: rgba(238, 193, 103, 0.36);
+  background: rgba(217, 158, 52, 0.1);
+  color: #f7dfaa;
+}
+
+.jarvis-money-view-switch button span { color: #b99b67; font-size: 9px; }
+.jarvis-money-work-list { max-height: 240px; overflow-y: auto; scrollbar-width: thin; }
+.jarvis-money-invoice-list { max-height: 330px; overflow-y: auto; scrollbar-width: thin; }
+
+.jarvis-money-invoices > .jarvis-money-invoice-detail {
+  margin: 0;
+  border: 0;
+  border-top: 1px solid rgba(234, 199, 125, 0.18);
+  background: rgba(11, 12, 17, 0.92);
+}
+
+.jarvis-money-invoices .jarvis-money-detail-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.jarvis-money-invoices .jarvis-money-detail-grid > div { min-height: 92px; }
+
+@media (min-width: 980px) {
+  .jarvis-money-layout { grid-template-columns: minmax(0, 1.22fr) minmax(410px, 0.78fr); }
+  .jarvis-money-invoices { position: sticky; top: 86px; max-height: calc(100dvh - 104px); overflow-y: auto; scrollbar-width: thin; }
+}
+
+/* Agents: nine compact authority rows and three equally weighted operating
+   lanes keep the complete action catalog visible without 44 agent tiles. */
+.jarvis-agent-fleet__layout { grid-template-columns: 284px minmax(0, 1fr); }
+.jarvis-agent-fleet-shell[data-inspector-state="open"] .jarvis-agent-fleet__layout { grid-template-columns: 270px minmax(0, 1fr) 320px; }
+.jarvis-agent-fleet__rail { max-height: calc(100dvh - 104px); overflow-y: auto; scrollbar-width: thin; }
+.jarvis-agent-fleet__rail-row { min-height: 54px; padding-block: 7px; }
+.jarvis-agent-fleet__rail-row-state { font-size: 12px; }
+
+.jarvis-agent-fleet__lanes {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  padding: 0 22px;
+}
+
+.jarvis-agent-fleet__lane,
+.jarvis-agent-fleet__lane:last-child {
+  grid-column: auto;
+  padding-inline: 14px;
+  border-right: 1px solid rgba(112, 177, 211, 0.11);
+}
+
+.jarvis-agent-fleet__lane:first-child { padding-left: 0; }
+.jarvis-agent-fleet__lane:last-child { padding-right: 0; border-right: 0; }
+.jarvis-agent-fleet__lane-body { padding-left: 0; }
+
+.jarvis-agent-fleet__contract-list,
+.jarvis-agent-fleet__channel-facts {
+  display: grid;
+  gap: 5px;
+}
+
+.jarvis-agent-fleet__contract-list > div {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  min-height: 38px;
+  padding: 5px 7px;
+  border: 1px solid rgba(108, 193, 216, 0.1);
+  background: rgba(7, 25, 38, 0.54);
+}
+
+.jarvis-agent-fleet__contract-list span { color: #557f90; font-size: 9px; }
+.jarvis-agent-fleet__contract-list strong { color: #b9d9e2; font-size: 10px; font-weight: 650; text-transform: capitalize; }
+
+.jarvis-agent-fleet__channel-facts > div {
+  display: grid;
+  gap: 3px;
+  padding: 9px;
+  border-left: 2px solid rgba(99, 214, 231, 0.26);
+  background: rgba(8, 28, 42, 0.6);
+}
+
+.jarvis-agent-fleet__channel-facts strong { color: #d8f5fa; font-size: 11px; text-transform: capitalize; }
+.jarvis-agent-fleet__channel-facts span { color: #86b6c4; font-size: 10px; }
+.jarvis-agent-fleet__channel-facts small { color: #617f8f; font-size: 9px; line-height: 1.45; }
+.jarvis-agent-fleet__activity-list--calls,
+.jarvis-agent-fleet__activity-list--exceptions { margin-top: 10px; }
+
+@media (max-width: 1180px) {
+  .jarvis-agent-fleet__lanes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .jarvis-agent-fleet__lane:last-child { grid-column: 1 / -1; padding-left: 0; }
+}
+
+@media (max-width: 999px) {
+  .jarvis-household-index-region,
+  .jarvis-household-detail-region,
+  .jarvis-work-queue,
+  .jarvis-work-main,
+  .jarvis-work-inspector { max-height: none; overflow: visible; }
+}
+
+@media (max-width: 760px) {
+  .jarvis-work-filterbar { flex-wrap: wrap; padding-block: 8px; }
+  .jarvis-work-filters { order: 3; width: 100%; }
+  .jarvis-work-search { width: min(100%, 260px); margin-left: auto; }
+  .jarvis-household-index-head { display: none; }
+  .jarvis-household-index-row { grid-template-columns: minmax(0, 1fr) auto; min-width: 0; gap: 8px; }
+  .jarvis-household-consent-state,
+  .jarvis-household-location-state { display: none; }
+  .jarvis-agent-fleet__lanes { grid-template-columns: minmax(0, 1fr); }
+  .jarvis-agent-fleet__lane,
+  .jarvis-agent-fleet__lane:last-child { grid-column: auto; padding-inline: 0; border-right: 0; }
+  .jarvis-dispatch-map-state { min-height: 390px; padding: 24px; }
+  .jarvis-dispatch-map-state > div { flex-direction: column; width: 100%; }
+  .jarvis-dispatch-map-state button { justify-content: center; }
+  .jarvis-money-invoices .jarvis-money-detail-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jarvis-dispatch-spin { animation: none; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .jarvis-household-refresh,
   .jarvis-household-index-row,
@@ -8554,5 +9086,37 @@ html[data-jarvis-tenant-accent="amber"] .jarvis-root { --accent: var(--j-amber);
     height: 48px;
     min-width: 48px;
     min-height: 48px;
+  }
+}
+
+/* 2026 authenticated journey QA — final cascade repairs. These live at the
+   physical end of the stylesheet so legacy surface rules cannot re-clip the
+   upgraded bounded workspaces. */
+@media (min-width: 1020px) {
+  .jarvis-work-shell .jarvis-work-queue {
+    display: flex;
+    max-height: calc(100dvh - 250px);
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .jarvis-work-shell .jarvis-work-queue__rows {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  }
+
+  .jarvis-dispatch-map-state h2 {
+    max-width: 44rem;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 1019px) {
+  .jarvis-dispatch-map-state h2 {
+    max-width: 36rem;
   }
 }

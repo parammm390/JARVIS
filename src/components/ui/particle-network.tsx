@@ -27,14 +27,15 @@ export default function ParticleNetwork() {
     const finePointer = window.matchMedia("(hover: hover) and (pointer: fine)").matches
     if (!finePointer) return
 
-    const dpr = Math.min(window.devicePixelRatio || 1, 1.5)
     let width = window.innerWidth
     let height = window.innerHeight
     let scrollY = window.scrollY
+    let dpr = 1
 
     const resize = () => {
       width = window.innerWidth
       height = window.innerHeight
+      dpr = Math.min(window.devicePixelRatio || 1, width * height > 1_000_000 ? 1.15 : 1.25)
       canvas.width = width * dpr
       canvas.height = height * dpr
       canvas.style.width = `${width}px`
@@ -57,8 +58,8 @@ export default function ParticleNetwork() {
 
     const buildParticles = () => {
       const count = Math.min(
-        Math.max(Math.floor((width * height) / 19000), 56),
-        118
+        Math.max(Math.floor((width * height) / 28000), 42),
+        72
       )
       particles = []
       for (let i = 0; i < count; i++) {
@@ -174,16 +175,18 @@ export default function ParticleNetwork() {
         }
       }
 
-      particles
-        .map((p) => {
+      if (mouse.x > -1000) {
+        const nearby = particles
+          .map((p) => {
           const dx = p.x - mouse.x
           const dy = p.y - mouse.y
           return { particle: p, distSq: dx * dx + dy * dy }
-        })
-        .filter(({ distSq }) => distSq < mouseRangeSq)
-        .sort((a, b) => a.distSq - b.distSq)
-        .slice(0, maxMouseLinks)
-        .forEach(({ particle, distSq }, index) => {
+          })
+          .filter(({ distSq }) => distSq < mouseRangeSq)
+          .sort((a, b) => a.distSq - b.distSq)
+          .slice(0, maxMouseLinks)
+
+        nearby.forEach(({ particle, distSq }, index) => {
           const dist = Math.sqrt(distSq)
           const op = (1 - dist / mouseRange) * (0.42 - index * 0.022)
           ctx.beginPath()
@@ -193,10 +196,11 @@ export default function ParticleNetwork() {
           ctx.lineWidth = 1
           ctx.stroke()
         })
+      }
     }
 
     const animate = (time: number) => {
-      if (!document.hidden && time - lastFrame >= 20) {
+      if (!document.hidden && time - lastFrame >= 33) {
         draw(time)
         lastFrame = time
       }

@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Mono, Manrope, Outfit } from "next/font/google";
+import localFont from "next/font/local";
+import { GeistSans } from "geist/font/sans";
+import { GeistMono } from "geist/font/mono";
 import "./globals.css";
 
 import GlobalChrome from "@/components/layout/GlobalChrome";
@@ -21,6 +24,17 @@ const plexMono = IBM_Plex_Mono({
   variable: "--font-mono",
   weight: "500",
   display: "swap",
+});
+
+const satoshi = localFont({
+  src: [
+    { path: "../../public/fonts/Satoshi-Regular.woff2", weight: "400", style: "normal" },
+    { path: "../../public/fonts/Satoshi-Medium.woff2", weight: "500", style: "normal" },
+    { path: "../../public/fonts/Satoshi-Bold.woff2", weight: "700", style: "normal" },
+  ],
+  variable: "--font-satoshi",
+  display: "swap",
+  fallback: ["Arial", "sans-serif"],
 });
 
 export const metadata: Metadata = {
@@ -92,7 +106,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${manrope.variable} ${outfit.variable} ${plexMono.variable} ${manrope.className} antialiased`}>
+      <body className={`${manrope.variable} ${outfit.variable} ${satoshi.variable} ${plexMono.variable} ${GeistSans.variable} ${GeistMono.variable} ${manrope.className} antialiased`}>
         <script
           id="finnor-structured-data"
           type="application/ld+json"

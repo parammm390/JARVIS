@@ -2,6 +2,10 @@
 
 import { ReactNode, useEffect } from "react"
 import Lenis from "lenis"
+import gsap from "gsap"
+import { ScrollTrigger } from "gsap/ScrollTrigger"
+
+gsap.registerPlugin(ScrollTrigger)
 
 export default function SmoothScroll({ children }: { children: ReactNode }) {
   useEffect(() => {
@@ -9,20 +13,24 @@ export default function SmoothScroll({ children }: { children: ReactNode }) {
     if (reducedMotion) return
 
     const lenis = new Lenis({
-      duration: 1.05,
-      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+      lerp: 0.1,
       smoothWheel: true,
       syncTouch: false,
-      wheelMultiplier: 1,
-      touchMultiplier: 1.2,
+      wheelMultiplier: 0.9,
+      touchMultiplier: 1,
+      overscroll: false,
       anchors: {
         offset: -84,
-        duration: 1,
+        duration: 0.9,
       },
       prevent: (node) =>
         node instanceof HTMLElement &&
         Boolean(node.closest("[data-lenis-prevent]")),
     })
+
+    const syncScrollTriggers = () => ScrollTrigger.update()
+    lenis.on("scroll", syncScrollTriggers)
+    ScrollTrigger.refresh()
 
     let rafId = 0
     function raf(time: number) {
@@ -33,6 +41,7 @@ export default function SmoothScroll({ children }: { children: ReactNode }) {
 
     return () => {
       cancelAnimationFrame(rafId)
+      lenis.off("scroll", syncScrollTriggers)
       lenis.destroy()
     }
   }, [])

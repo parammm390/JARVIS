@@ -4,7 +4,7 @@ import FinnorHome from "@/components/rebuild/FinnorHome";
 
 export const metadata: Metadata = {
   title: {
-    absolute: "FINNOR | Governed Execution for Water Treatment Companies",
+    absolute: "Run the Outcome. Not the Software. | FINNOR",
   },
   description:
     "FINNOR turns an instruction into grounded context, an executable plan, governed action and permanent evidence for water treatment companies. JARVIS is the command surface.",
