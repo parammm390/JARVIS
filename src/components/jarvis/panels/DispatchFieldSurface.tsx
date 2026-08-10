@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { AlertTriangle, ArrowUpRight, CalendarDays, CircleDot, MapPinned, RefreshCw, Route, Wrench } from "lucide-react"
+import { AlertTriangle, ArrowUpRight, CalendarDays, ChevronLeft, ChevronRight, CircleDot, MapPinned, RefreshCw, Route, Wrench } from "lucide-react"
 import { DispatchMapCore, type MapData, type Stop } from "./DispatchMap"
 import { MyDay } from "./MyDay"
 import { jarvisGet, JarvisApiError } from "../lib/api"
@@ -13,6 +13,14 @@ import "../jarvis-theme.css"
 
 function isoToday(): string {
   return new Date().toISOString().slice(0, 10)
+}
+
+export function shiftIsoDate(value: string, days: number): string {
+  const [year, month, day] = value.split("-").map(Number)
+  if (!year || !month || !day) return value
+  const date = new Date(Date.UTC(year, month - 1, day))
+  date.setUTCDate(date.getUTCDate() + days)
+  return date.toISOString().slice(0, 10)
 }
 
 function shortId(id: string): string {
@@ -189,8 +197,10 @@ export default function DispatchFieldSurface() {
       </section>
       <section className="jarvis-dispatch-layout" aria-label="Dispatcher map and day rail">
         <div className="jarvis-dispatch-map-column">
-          <DispatchMapCore data={data} error={error} loading={loading} onRetry={() => void load()} onAssigned={() => void load()} />
-          <div className="jarvis-dispatch-route-note"><Route size={14} aria-hidden /><span>{data?.route ? `B3 route receipt · ${data.route.naiveKm ?? "—"} km scheduled → ${data.route.optimizedKm ?? "—"} km optimized` : "No completed B3 route receipt for this day yet."}</span></div>
+          {loading && !data ? <div className="jarvis-dispatch-map-state" role="status"><RefreshCw className="jarvis-dispatch-spin" size={22} aria-hidden /><span>Reading stored coordinates</span><h2>Building the field view</h2><p>The map opens only after the exact dispatch source responds.</p></div>
+            : data && data.stops.length === 0 ? <div className="jarvis-dispatch-map-state jarvis-dispatch-map-state--quiet"><CalendarDays size={24} aria-hidden /><span>Quiet field day</span><h2>No route is required on {date}.</h2><p>No appointments or service visits were returned, so JARVIS is withholding an empty map and route claim.</p><div><button type="button" onClick={() => setDate((current) => shiftIsoDate(current, -1))}><ChevronLeft size={15} aria-hidden />Previous day</button><button type="button" onClick={() => setDate((current) => shiftIsoDate(current, 1))}>Next day<ChevronRight size={15} aria-hidden /></button></div></div>
+              : <DispatchMapCore data={data} error={error} loading={loading} onRetry={() => void load()} onAssigned={() => void load()} />}
+          <div className="jarvis-dispatch-route-note"><Route size={14} aria-hidden /><span>{data?.route ? `B3 route receipt · ${data.route.naiveKm ?? "—"} km scheduled → ${data.route.optimizedKm ?? "—"} km optimized` : data && data.stops.length === 0 ? "No stops · no route receipt expected for this day." : "Route evidence will appear after a completed route workflow."}</span></div>
         </div>
         <aside className="jarvis-dispatch-day-rail" aria-label="Dispatch day rail">
           <div className="jarvis-dispatch-day-rail__heading"><div><span className="jarvis-dispatch-eyebrow">FIELD RAIL</span><h2>{date}</h2></div><span>{data ? data.stops.length : "—"}</span></div>

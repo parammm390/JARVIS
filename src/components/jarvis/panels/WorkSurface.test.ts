@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { destinationForEntity, filterMatches, readWorkSurfaceQuery, stageFor, workCaseMatchesQuery, WORK_CHAPTERS } from "./WorkSurface"
+import { destinationForEntity, filterMatches, groupWorkCases, readWorkSurfaceQuery, stageFor, workCaseMatchesQuery, WORK_CHAPTERS } from "./WorkSurface"
 import type { WorkCaseProjection } from "@/lib/jarvis-client"
 
 function workCase(overrides: Partial<WorkCaseProjection> = {}): WorkCaseProjection {
@@ -59,5 +59,16 @@ describe("P2.T2 Work surface contract", () => {
     expect(destinationForEntity(linked.linkedEntities[0]!, linked)).toBe("/jarvis/customers?householdId=hh-1")
     expect(destinationForEntity(linked.linkedEntities[1]!, linked)).toBe("/jarvis/money?invoiceId=invoice-1&householdId=hh-1")
     expect(destinationForEntity(linked.linkedEntities[2]!, linked)).toBe("/jarvis/schedule?serviceVisitId=visit-1&householdId=hh-1")
+  })
+
+  it("groups repeated queue patterns without dropping their exact records", () => {
+    const first = workCase({ id: "case-1", title: "Get business overview", status: "Needs you" })
+    const second = workCase({ id: "case-2", title: "  Get   business overview ", status: "Needs you" })
+    const completed = workCase({ id: "case-3", title: "Get business overview", status: "Completed" })
+
+    const groups = groupWorkCases([first, second, completed])
+    expect(groups).toHaveLength(2)
+    expect(groups.find((group) => group.cases[0]?.status === "Needs you")?.cases.map((item) => item.id)).toEqual(["case-1", "case-2"])
+    expect(groups.flatMap((group) => group.cases)).toHaveLength(3)
   })
 })

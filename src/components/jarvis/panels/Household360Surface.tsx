@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { Activity, ArrowUpRight, CalendarDays, CircleAlert, CreditCard, House, MapPin, RefreshCw, Wrench } from "lucide-react"
+import { Activity, ArrowUpRight, CalendarDays, CircleAlert, CreditCard, House, MapPin, RefreshCw, Search, Wrench } from "lucide-react"
 import { JarvisApiError } from "../lib/api"
 import { useJarvisAuth } from "../lib/jarvis-auth"
 import { jarvisClient, type Household360Projection, type HouseholdResource, type WorkCaseProjection } from "@/lib/jarvis-client"
@@ -152,6 +152,7 @@ export default function Household360Surface() {
   const [loadingDetail, setLoadingDetail] = useState(false)
   const [detailError, setDetailError] = useState<string | null>(null)
   const [listError, setListError] = useState<string | null>(null)
+  const [search, setSearch] = useState("")
 
   const loadIndex = useCallback(async () => {
     if (!session) {
@@ -183,7 +184,14 @@ export default function Household360Surface() {
 
   useEffect(() => {
     const requestedId = new URLSearchParams(window.location.search).get("householdId")
-    if (requestedId && rows.some((row) => row.id === requestedId)) setSelectedId(requestedId)
+    if (requestedId && rows.some((row) => row.id === requestedId)) {
+      setSelectedId(requestedId)
+      return
+    }
+    setSelectedId((current) => {
+      if (current && rows.some((row) => row.id === current)) return current
+      return rows.find((row) => row.marketingConsent)?.id ?? rows[0]?.id ?? null
+    })
   }, [rows])
 
   useEffect(() => {
@@ -209,7 +217,11 @@ export default function Household360Surface() {
   const selectedProjection = selectedId ? projections[selectedId] ?? null : null
   const context = selectedRow ? rowContext(selectedRow, selectedProjection) : undefined
   const selectedSummary = selectedProjection ? summarizeHousehold(selectedProjection, workCases) : null
-  const indexRows = useMemo(() => rows.slice(0, 50), [rows])
+  const indexRows = useMemo(() => {
+    const query = search.trim().toLocaleLowerCase()
+    if (!query) return rows
+    return rows.filter((row) => [rowName(row), row.address, row.id].join(" ").toLocaleLowerCase().includes(query))
+  }, [rows, search])
 
   function selectHousehold(id: string) {
     setSelectedId(id)
@@ -241,19 +253,17 @@ export default function Household360Surface() {
         <div className="jarvis-household-index-region">
           <div className="jarvis-household-section-heading">
             <div><span className="jarvis-household-eyebrow">INDEX</span><h2>Households</h2></div>
-            <span className="jarvis-household-count">{indexRows.length}</span>
+            <span className="jarvis-household-count">{indexRows.length} / {rows.length}</span>
           </div>
+          <label className="jarvis-household-search"><Search size={15} aria-hidden /><span className="sr-only">Search households</span><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search name, address, or exact ID" /></label>
           <div className="jarvis-household-index-table" aria-label="Household operational index" tabIndex={0}>
             <div>
               <div className="jarvis-household-index-head">
-                <span>Household</span><span>System</span><span>Last service</span><span>Next service</span><span>Work</span><span>Balance</span><span>Alert</span>
+                <span>Household</span><span>Consent</span><span>Location</span><span>Exact record</span>
               </div>
             </div>
             <div>
-              {indexRows.map((row) => {
-                const projection = projections[row.id]
-                const summary = projection ? summarizeHousehold(projection, workCases) : null
-                return (
+              {indexRows.map((row) => (
                   <button
                     key={row.id}
                     type="button"
@@ -263,18 +273,14 @@ export default function Household360Surface() {
                     onClick={() => selectHousehold(row.id)}
                   >
                     <span className="jarvis-household-index-primary"><strong>{rowName(row)}</strong><small><MapPin size={11} aria-hidden />{row.address}</small><em>{shortId(row.id)}</em></span>
-                    <span>{summary?.equipment ?? "Select for equipment record"}</span>
-                    <span>{formatHouseholdDate(summary?.lastService ?? null)}</span>
-                    <span>{formatHouseholdDate(summary?.nextService ?? null)}</span>
-                    <span className="jarvis-household-index-number">{summary?.openWorkCount ?? "—"}</span>
-                    <span className="jarvis-household-index-number">{summary ? formatHouseholdUsd(summary.openBalanceUsd) : "—"}</span>
-                    <span className={summary?.alert && summary.alert !== "No alert recorded" ? "jarvis-household-alert" : "jarvis-household-muted"}>{summary?.alert ?? "Not yet observed"}</span>
+                    <span className={row.marketingConsent ? "jarvis-household-consent-state is-recorded" : "jarvis-household-consent-state"}>{row.marketingConsent ? "Recorded" : "Not recorded"}</span>
+                    <span className={row.latitude !== null && row.longitude !== null ? "jarvis-household-location-state is-placed" : "jarvis-household-location-state"}>{row.latitude !== null && row.longitude !== null ? "Mapped" : "Unplaced"}</span>
+                    <span className="jarvis-household-record-action"><strong>{shortId(row.id)}</strong><small>Open 360 <ArrowUpRight size={11} aria-hidden /></small></span>
                   </button>
-                )
-              })}
+              ))}
             </div>
             {source === "loading" && <div className="jarvis-household-empty">Reading exact household records…</div>}
-            {source !== "loading" && indexRows.length === 0 && <div className="jarvis-household-empty">No household records were returned. The surface did not invent an index row.</div>}
+            {source !== "loading" && indexRows.length === 0 && <div className="jarvis-household-empty">{rows.length === 0 ? "No household records were returned. The surface did not invent an index row." : "No household matches this search."}</div>}
           </div>
         </div>
 

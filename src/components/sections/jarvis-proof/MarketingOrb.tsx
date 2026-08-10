@@ -56,7 +56,7 @@ function hash(n: number): number {
   return x - Math.floor(x);
 }
 
-const PARTICLE_COUNT = 14000;
+const PARTICLE_COUNT = 10000;
 
 const VERT = /* glsl */ `
   uniform float uTime;
@@ -161,8 +161,12 @@ function StaticOrb({ state }: { state: OrbState }) {
 export function MarketingOrb({
   className = "h-[440px] w-[440px]",
   onStateChange,
+  deferMs = 0,
 }: {
   className?: string;
+  /** Keeps WebGL setup out of the first-paint critical path when the orb is
+   * used as a large hero asset. A fully styled static state remains visible. */
+  deferMs?: number;
   /** Fired whenever the orb's own idle/planning/executing script advances, so
    * surrounding UI (the Hero's step strip, status chips) can stay in lockstep
    * with what the sphere is actually doing instead of animating on its own
@@ -175,6 +179,7 @@ export function MarketingOrb({
   const [visible, setVisible] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [scriptIndex, setScriptIndex] = useState(0);
+  const [rendererReady, setRendererReady] = useState(deferMs === 0);
 
   const stateRef = useRef<OrbState>("idle");
   const currentState = SCRIPT[scriptIndex]!.state;
@@ -184,6 +189,15 @@ export function MarketingOrb({
     setMounted(true);
     setLowPower(isLowPowerDevice());
   }, []);
+
+  useEffect(() => {
+    if (deferMs <= 0) {
+      setRendererReady(true);
+      return;
+    }
+    const timer = window.setTimeout(() => setRendererReady(true), deferMs);
+    return () => window.clearTimeout(timer);
+  }, [deferMs]);
 
   useEffect(() => {
     onStateChange?.(SCRIPT[scriptIndex]!.state, scriptIndex);
@@ -226,8 +240,7 @@ export function MarketingOrb({
   }, [useStatic]);
 
   useEffect(() => {
-    if (useStatic || !visible || !containerRef.current) return;
-    console.log("[orb-debug] building renderer now");
+    if (useStatic || !rendererReady || !visible || !containerRef.current) return;
     const el = containerRef.current;
     const width = el.clientWidth || 320;
     const height = el.clientHeight || 320;
@@ -395,16 +408,16 @@ export function MarketingOrb({
       renderer.dispose();
       el.removeChild(renderer.domElement);
     };
-  }, [useStatic, visible]);
+  }, [rendererReady, useStatic, visible]);
 
   return (
     <div
       ref={containerRef}
       className={className}
       data-cursor="invert"
-      data-orb-mode={useStatic ? "static" : "webgl"}
+      data-orb-mode={useStatic ? "static" : rendererReady ? "webgl" : "deferred"}
     >
-      {useStatic && <StaticOrb state={currentState} />}
+      {(useStatic || !rendererReady) && <StaticOrb state={currentState} />}
     </div>
   );
 }

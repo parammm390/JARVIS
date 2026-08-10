@@ -190,7 +190,7 @@ function useThreadAtmosphere(
 const PRIMARY_STATUS_BY_MODE: Record<LiveFrameMode, string> = {
   ready: "Ready",
   listening: "Listening",
-  thinking: "Understanding / Building the plan",
+  thinking: "Checking records / Preparing actions",
   decision: "Needs your approval",
   working: "Working",
   verifying: "Verifying the outcome",
@@ -292,8 +292,6 @@ function PresenceCore({
   intentLaunch,
   reducedMotion,
   showVoiceControl = false,
-  orbExpanded = false,
-  onOrbExpandedChange,
   telemetry,
   wakeCueKey = 0,
 }: {
@@ -306,8 +304,6 @@ function PresenceCore({
   intentLaunch?: LiveFrameIntentLaunch | null
   reducedMotion: boolean
   showVoiceControl?: boolean
-  orbExpanded?: boolean
-  onOrbExpandedChange?: (expanded: boolean) => void
   /** Source-backed labels around the Orb. They belong to the same liveframe
    * projection and make the surface operational rather than decorative. */
   telemetry?: ReactNode
@@ -315,13 +311,12 @@ function PresenceCore({
 }) {
   return (
     <section
-      className={`jarvis-presence-core relative${docked ? " jarvis-presence-core--docked" : ""}${orbExpanded ? " jarvis-presence-core--immersive" : ""}`}
+      className={`jarvis-presence-core relative${docked ? " jarvis-presence-core--docked" : ""}`}
       data-liveframe-surface="presence-core"
       data-liveframe-mode={liveframe.mode}
       data-liveframe-focus={liveframe.focus}
       data-liveframe-energy={liveframe.energy}
-      data-jarvis-orb-expanded={orbExpanded ? "true" : "false"}
-      data-jarvis-orb-depth={orbExpanded ? "immersive" : "ambient"}
+      data-jarvis-orb-depth="ambient"
       data-intent-launch={intentLaunch ? "accepted" : undefined}
       aria-label="JARVIS Presence Core"
     >
@@ -332,7 +327,6 @@ function PresenceCore({
           forceLowPower={forceLowPower || deferWebgl}
           reducedMotion={reducedMotion}
           activeRunCount={liveframe.activeRunIds.length}
-          onExpandedChange={onOrbExpandedChange}
         />
         {!forceLowPower && <OrbAuraRipple />}
         {wakeCueKey > 0 && <SignatureMomentCue moment="wake" cueKey={wakeCueKey} reducedMotion={reducedMotion} />}
@@ -724,8 +718,6 @@ function ThreadBody({
   // Public preview stays deliberately sparse because it has no private source
   // observations to populate an operational surface with.
   const showOperationalDeck = role === "owner" && mode !== "preview"
-  const [orbExpanded, setOrbExpanded] = useState(false)
-  const onOrbExpandedChange = useCallback((expanded: boolean) => setOrbExpanded(expanded), [])
   const visualState = deriveOrbVisualState({
     instructionId: thread?.instructionId,
     instructionState: thread?.machine.instructionState,
@@ -756,7 +748,7 @@ function ThreadBody({
     }
     if (isRestComposition) {
       return (
-        <main className={`jarvis-canvas jarvis-rest-composition${mode === "preview" ? " jarvis-canvas--preview" : ""}${orbExpanded ? " jarvis-canvas--orb-expanded" : ""}`} data-liveframe-composition="rest" data-jarvis-composition-region="stage" data-jarvis-orb-composition={orbExpanded ? "immersive" : "ambient"}>
+        <main className={`jarvis-canvas jarvis-rest-composition${mode === "preview" ? " jarvis-canvas--preview" : ""}`} data-liveframe-composition="rest" data-jarvis-composition-region="stage" data-jarvis-orb-composition="ambient">
           <QuestionDepth surface="presence" focused={questionFocus} reducedMotion={reducedMotion} className="w-full min-w-0">
             <PresenceCore
               liveframe={liveframe}
@@ -766,8 +758,6 @@ function ThreadBody({
               intentLaunch={intentLaunch}
               reducedMotion={reducedMotion}
               showVoiceControl={showRail && !showOperationalDeck}
-              orbExpanded={orbExpanded}
-              onOrbExpandedChange={onOrbExpandedChange}
               wakeCueKey={wakeCueKey}
               telemetry={<OrbIntelligenceReadout thread={thread} liveframe={liveframe} pendingApprovals={pendingApprovals} fixtureLabel={fixtureLabel} primaryStatus={humanStatus} />}
             />
@@ -777,9 +767,9 @@ function ThreadBody({
       )
     }
     return (
-      <main className={`jarvis-canvas jarvis-live-layout ${showWeave ? "jarvis-live-layout--weave" : "jarvis-live-layout--no-weave"}${orbExpanded ? ` jarvis-canvas--orb-expanded ${orbSurfaceStyles.immersiveLayout}` : !showWeave ? ` ${orbSurfaceStyles.ambientLayout}` : ""}`} data-liveframe-composition="live" data-jarvis-composition-region="stage" data-jarvis-orb-composition={orbExpanded ? "immersive" : "ambient"}>
+      <main className={`jarvis-canvas jarvis-live-layout ${showWeave ? "jarvis-live-layout--weave" : "jarvis-live-layout--no-weave"}${!showWeave ? ` ${orbSurfaceStyles.ambientLayout}` : ""}`} data-liveframe-composition="live" data-jarvis-composition-region="stage" data-jarvis-orb-composition="ambient">
         <QuestionDepth surface="presence" focused={questionFocus} reducedMotion={reducedMotion} className="w-full min-w-0">
-          <aside className="jarvis-presence-rail" data-jarvis-orb-composition={orbExpanded ? "immersive" : "ambient"}>
+          <aside className="jarvis-presence-rail" data-jarvis-orb-composition="ambient">
             <PresenceCore
               liveframe={liveframe}
               visualState={visualState}
@@ -789,8 +779,6 @@ function ThreadBody({
               intentLaunch={intentLaunch}
               reducedMotion={reducedMotion}
               showVoiceControl={showRail && !showOperationalDeck}
-              orbExpanded={orbExpanded}
-              onOrbExpandedChange={onOrbExpandedChange}
               wakeCueKey={wakeCueKey}
               telemetry={<OrbIntelligenceReadout thread={thread} liveframe={liveframe} pendingApprovals={pendingApprovals} fixtureLabel={fixtureLabel} primaryStatus={humanStatus} />}
             />
@@ -841,9 +829,8 @@ function ThreadBody({
       data-scene-focus={sceneDirector.focus}
       data-scene-allowed-animations={sceneDirector.allowedAnimations.join(",")}
       data-liveframe-weave={showWeave ? "true" : undefined}
-      data-jarvis-orb-expanded={orbExpanded ? "true" : "false"}
-      data-jarvis-orb-depth={orbExpanded ? "immersive" : "ambient"}
-      data-jarvis-orb-composition={orbExpanded ? "immersive" : "ambient"}
+      data-jarvis-orb-depth="ambient"
+      data-jarvis-orb-composition="ambient"
       data-jarvis-question-focus={questionFocus ? "true" : "false"}
     >
       {atmosphere ? (
@@ -864,7 +851,7 @@ function ThreadBody({
       <QuestionDepth surface="field" focused={questionFocus} reducedMotion={reducedMotion}>
       <ThreadField overdueInvoices={overdueInvoices} contextChips={thread?.contextChips ?? []} freezeMotion={showWeave} />
       </QuestionDepth>
-      <div className={`${orbSurfaceStyles.consoleStack} relative z-[1] jarvis-console-stack`} data-jarvis-console-stack data-jarvis-orb-composition={orbExpanded ? "immersive" : "ambient"}>
+      <div className={`${orbSurfaceStyles.consoleStack} relative z-[1] jarvis-console-stack`} data-jarvis-console-stack data-jarvis-orb-composition="ambient">
         <OperationsHeader
           liveframe={liveframe}
           diagnostics={atmosphere ? <DiagnosticsDisclosure atmosphere={atmosphere} onRetry={onRetry} /> : undefined}

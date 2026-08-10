@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { WorkCaseProjection } from "@/lib/jarvis-client"
-import { AGENT_ACTIVITY_UNAVAILABLE, AGENT_FLEET, agentDefinition, assistantStatusCopy, exactAgentKeysForWork, projectAgentActivity, providerStatusCopy } from "./agent-fleet"
+import { AGENT_ACTIVITY_UNAVAILABLE, AGENT_FLEET, OPERATING_AGENTS, REGISTERED_AGENT_ACTIONS, REGISTERED_AGENT_ACTION_COUNT, agentDefinition, assistantStatusCopy, exactAgentKeysForWork, exactOperatingAgentKeysForWork, projectAgentActivity, projectOperatingAgentActivity, providerStatusCopy } from "./agent-fleet"
 
 function workCase(overrides: Partial<WorkCaseProjection> = {}): WorkCaseProjection {
   return {
@@ -96,5 +96,36 @@ describe("P3.T3 exact Agent → Work → Customer projection", () => {
   it("attributes instruction-rooted Work to JARVIS without claiming provider readiness", () => {
     const instruction = workCase({ root: { kind: "instruction", id: "instruction-1" }, source: { kind: "instruction", id: "instruction-1", channel: "typed" } })
     expect(exactAgentKeysForWork(instruction)).toContain("jarvis")
+  })
+})
+
+describe("operating control plane", () => {
+  it("curates nine named agents over all 44 registered action contracts exactly once", () => {
+    expect(OPERATING_AGENTS).toHaveLength(9)
+    expect(REGISTERED_AGENT_ACTION_COUNT).toBe(44)
+    expect(new Set(REGISTERED_AGENT_ACTIONS).size).toBe(44)
+    expect(OPERATING_AGENTS.map((agent) => agent.label)).toEqual([
+      "Command Authority",
+      "Customer Desk",
+      "Growth Desk",
+      "Cash Control",
+      "Field Control",
+      "Sales & Install",
+      "Stock Control",
+      "Water Quality",
+      "Market Watch",
+    ])
+  })
+
+  it("projects operating activity only from exact registered action types", () => {
+    const collection = workCase({
+      status: "Working",
+      actions: [{ actionType: "send_payment_reminder", payload: { channel: "email" }, id: "cash-action", status: "executing", summary: null, instructionId: null, planId: null, dependsOn: [], createdAt: "", updatedAt: "" }],
+    })
+    const decoy = workCase({ title: "Payment reminder without an action" })
+
+    expect(exactOperatingAgentKeysForWork(collection)).toEqual(["cash-control"])
+    expect(exactOperatingAgentKeysForWork(decoy)).toEqual([])
+    expect(projectOperatingAgentActivity([collection, decoy], "cash-control").workCases.map((item) => item.id)).toEqual([collection.id])
   })
 })
