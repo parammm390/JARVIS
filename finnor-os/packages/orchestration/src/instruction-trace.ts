@@ -7,7 +7,7 @@
 // break the real instruction it is only describing.
 
 import { withTenant, instructionSessions, instructionEvents } from "@finnor/db";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { getLogger } from "@finnor/tools";
 import { redactStructured, redactText } from "@finnor/security";
 import type { AnswerEnvelope } from "./fast-read-lane";
@@ -43,7 +43,7 @@ export interface InstructionTraceAnswerResult {
   display?: Record<string, unknown>;
   displaySummary?: string;
   facts?: Array<{ label: string; value: string; source?: string }>;
-  evidence?: Array<{ source: string; ref: string; timestamp: string }>;
+  evidence?: Array<{ source: string; ref: string; timestamp: string; title?: string }>;
   asOf?: string;
   freshness?: { status: "fresh" | "stale" | "unknown"; observedAt: string };
 }
@@ -75,7 +75,12 @@ export function isReadOnlyAnswerAction(actionType: string, expected: Record<stri
   return expected?.answered === true || READ_ONLY_ANSWER_ACTION_TYPES.has(actionType);
 }
 
-const MAX_TRACE_SPOKEN_SUMMARY_LENGTH = 1_200;
+// A substantive cited research answer regularly exceeds 1,200 characters. The old
+// cap cut production responses in the middle of a sentence and could delete the
+// requested third takeaway. This is still a bounded, PII-scrubbed user-facing field;
+// 4,000 characters is enough for a complete concise answer without turning the trace
+// into a raw execution-payload transport.
+const MAX_TRACE_SPOKEN_SUMMARY_LENGTH = 4_000;
 const MAX_TRACE_DISPLAY_DEPTH = 4;
 const MAX_TRACE_DISPLAY_ENTRIES = 20;
 const MAX_TRACE_DISPLAY_ITEMS = 12;
@@ -142,9 +147,27 @@ function fallbackSpokenSummary(output: Record<string, unknown>): string {
   return "The requested information is ready.";
 }
 
+function sanitizeOutputEvidence(output: Record<string, unknown>): NonNullable<InstructionTraceAnswerResult["evidence"]> {
+  if (!Array.isArray(output.citations)) return [];
+  return output.citations
+    .slice(0, MAX_TRACE_DISPLAY_ITEMS)
+    .map((candidate) => {
+      if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return null;
+      const citation = candidate as Record<string, unknown>;
+      const source = sanitizeSpokenSummary(citation.provider ?? citation.source ?? "source").slice(0, 120);
+      const ref = sanitizeSpokenSummary(citation.url ?? citation.ref ?? citation.citationId).slice(0, 500);
+      const timestamp = sanitizeSpokenSummary(citation.retrievedAt ?? citation.timestamp ?? citation.asOf).slice(0, 80);
+      const title = sanitizeSpokenSummary(citation.title).slice(0, 200);
+      if (!source || !ref) return null;
+      return { source, ref, timestamp: timestamp || new Date().toISOString(), ...(title ? { title } : {}) };
+    })
+    .filter((citation): citation is NonNullable<typeof citation> => Boolean(citation));
+}
+
 /** Builds the privacy-conscious payload for a successful read-only answer. */
 export function createInstructionTraceResultEnvelope(actionId: string, output: Record<string, unknown>): InstructionTraceResultEnvelope {
   const display = sanitizeInstructionTraceDisplay(output.displaySafe);
+  const evidence = sanitizeOutputEvidence(output);
   const spokenSummary =
     sanitizeSpokenSummary(output.spokenSummary) ||
     sanitizeSpokenSummary(output.answer) ||
@@ -156,6 +179,7 @@ export function createInstructionTraceResultEnvelope(actionId: string, output: R
       kind: "answer",
       spokenSummary,
       ...(display ? { display } : {}),
+      ...(evidence.length > 0 ? { evidence } : {}),
     },
   };
 }
@@ -258,6 +282,11 @@ export async function emitInstructionEvent(
   if (!instructionId) return;
   try {
     await withTenant(tenantId, async (db) => {
+      // Serialize every writer for one instruction before allocating the next
+      // sequence number. Cancellation is a separate HTTP request and can race a
+      // planning trace; locking the owning session makes the append-only ledger
+      // genuinely monotonic instead of relying on the old single-writer assumption.
+      await db.execute(sql`SELECT id FROM ${instructionSessions} WHERE ${instructionSessions.id} = ${instructionId} AND ${instructionSessions.tenantId} = ${tenantId} FOR UPDATE`);
       const [row] = await db
         .select({ maxSeq: sql<number>`coalesce(max(${instructionEvents.seq}), 0)::int` })
         .from(instructionEvents)
@@ -276,5 +305,30 @@ export async function emitInstructionEvent(
       { err: err instanceof Error ? err.message : String(err), instructionId, phase },
       "[instruction-trace] emitInstructionEvent failed (non-fatal — trace gap, real instruction unaffected)",
     );
+  }
+}
+
+export async function isInstructionCancelled(tenantId: string, instructionId: string | undefined): Promise<boolean> {
+  if (!instructionId) return false;
+  try {
+    const [row] = await withTenant(tenantId, (db) =>
+      db
+        .select({ id: instructionEvents.id })
+        .from(instructionEvents)
+        .where(and(eq(instructionEvents.instructionId, instructionId), eq(instructionEvents.phase, "cancelled")))
+        .limit(1),
+    );
+    return Boolean(row);
+  } catch (err) {
+    // The trace ledger is observability state, not an authorization gate. A
+    // temporarily unavailable or not-yet-migrated instruction_events table must
+    // not turn a valid planner result into a 500 or silently discard the action.
+    // Cancellation remains fail-closed at the explicit cancel endpoint; this
+    // best-effort read only answers whether a cancellation marker is present.
+    getLogger().warn(
+      { err: err instanceof Error ? err.message : String(err), instructionId },
+      "[instruction-trace] cancellation lookup failed; continuing as not cancelled",
+    );
+    return false;
   }
 }

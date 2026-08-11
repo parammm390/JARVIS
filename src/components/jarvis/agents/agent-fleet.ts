@@ -63,6 +63,152 @@ export const AGENT_FLEET = [
   },
 ] as const satisfies readonly AgentDefinition[]
 
+export type OperatingAgentKey =
+  | "command-authority"
+  | "customer-desk"
+  | "growth-desk"
+  | "cash-control"
+  | "field-control"
+  | "sales-install"
+  | "stock-control"
+  | "water-quality"
+  | "market-watch"
+
+export interface OperatingAgentDefinition {
+  key: OperatingAgentKey
+  label: string
+  shortLabel: string
+  mandate: string
+  authorityCopy: string
+  actionTypes: readonly string[]
+  voiceAgentKeys: readonly AgentKey[]
+  glyph: "command" | "customer" | "growth" | "cash" | "field" | "sales" | "stock" | "water" | "market"
+}
+
+/**
+ * A deliberately curated control plane over the 44 registered backend actions.
+ * These are not synthetic assistants or provider resources: each operating
+ * agent is a named authority boundary whose action catalog maps one-for-one to
+ * the existing domain contracts.
+ */
+export const OPERATING_AGENTS = [
+  {
+    key: "command-authority",
+    label: "Command Authority",
+    shortLabel: "Command",
+    mandate: "Turns an owner instruction into grounded business context, a bounded plan, and a clear decision boundary.",
+    authorityCopy: "May read and prepare work; consequential action still follows the existing approval contract.",
+    actionTypes: ["clarification_request", "get_business_overview", "answer_business_question", "manual_step_suggestion"],
+    voiceAgentKeys: ["jarvis"],
+    glyph: "command",
+  },
+  {
+    key: "customer-desk",
+    label: "Customer Desk",
+    shortLabel: "Customers",
+    mandate: "Owns lead intake, customer answers, conversations, assignments, and follow-up continuity.",
+    authorityCopy: "Works only against exact household, lead, and interaction records with recorded communication policy.",
+    actionTypes: ["create_lead", "update_lead_status", "log_interaction", "assign_lead_to_technician", "answer_customer_question", "send_customer_message", "send_follow_up"],
+    voiceAgentKeys: ["follow-up", "service-reminder"],
+    glyph: "customer",
+  },
+  {
+    key: "growth-desk",
+    label: "Growth Desk",
+    shortLabel: "Growth",
+    mandate: "Coordinates customer campaigns, ad performance, review requests, and recent-install proposals.",
+    authorityCopy: "Audience selection and outbound campaign execution remain governed by consent and approval records.",
+    actionTypes: ["bulk_notify_existing_customers", "summarize_ad_performance", "launch_ad_campaign", "create_review_request", "send_proposal_to_recent_installs"],
+    voiceAgentKeys: ["win-back", "follow-up"],
+    glyph: "growth",
+  },
+  {
+    key: "cash-control",
+    label: "Cash Control",
+    shortLabel: "Cash",
+    mandate: "Moves invoice work from creation through reminders, collection outreach, payment, and evidence.",
+    authorityCopy: "Collection outreach and payment changes use the current invoice-to-cash approval and receipt boundaries.",
+    actionTypes: ["create_invoice", "send_payment_reminder", "record_payment", "call_overdue_invoices", "start_invoice_to_cash_workflow"],
+    voiceAgentKeys: ["payment-collector"],
+    glyph: "cash",
+  },
+  {
+    key: "field-control",
+    label: "Field Control",
+    shortLabel: "Field",
+    mandate: "Owns route suggestions, technician capacity, visit assignment, rescheduling, reminders, and field exceptions.",
+    authorityCopy: "Scheduling changes stay bound to exact visit, technician, work-order, and appointment records.",
+    actionTypes: ["route_suggestion", "assign_technician_to_visit", "check_technician_availability", "reschedule_visit", "check_reminder_due", "log_visit_report", "flag_visit_issue"],
+    voiceAgentKeys: ["service-reminder"],
+    glyph: "field",
+  },
+  {
+    key: "sales-install",
+    label: "Sales & Install",
+    shortLabel: "Sales",
+    mandate: "Carries a household from sizing and quote through proposal, signature, installation, and maintenance renewal.",
+    authorityCopy: "Commercial terms, signatures, and installation starts use their existing explicit action boundaries.",
+    actionTypes: ["renew_maintenance_agreement", "request_proposal_signature", "start_installation_workflow", "generate_quote", "size_equipment_for_household", "send_proposal"],
+    voiceAgentKeys: ["follow-up"],
+    glyph: "sales",
+  },
+  {
+    key: "stock-control",
+    label: "Stock Control",
+    shortLabel: "Stock",
+    mandate: "Tracks service consumption, checks on-hand stock, and raises exact reorder exceptions.",
+    authorityCopy: "Inventory facts come from recorded items and visits; the control plane does not synthesize stock levels.",
+    actionTypes: ["check_stock_level", "flag_reorder_needed", "log_stock_used_on_visit"],
+    voiceAgentKeys: [],
+    glyph: "stock",
+  },
+  {
+    key: "water-quality",
+    label: "Water Quality",
+    shortLabel: "Water",
+    mandate: "Answers water questions, schedules and runs water-test work, and prepares compliance summaries.",
+    authorityCopy: "Water and compliance outputs remain tied to recorded samples, tests, households, and source evidence.",
+    actionTypes: ["generate_compliance_summary", "start_water_test_workflow", "answer_water_question", "schedule_water_test"],
+    voiceAgentKeys: [],
+    glyph: "water",
+  },
+  {
+    key: "market-watch",
+    label: "Market Watch",
+    shortLabel: "Market",
+    mandate: "Collects current web, competitor, and review signals for grounded market decisions.",
+    authorityCopy: "Research actions may observe external sources; they cannot silently turn findings into campaigns or outreach.",
+    actionTypes: ["search_web", "scan_competitors", "check_business_reviews"],
+    voiceAgentKeys: [],
+    glyph: "market",
+  },
+] as const satisfies readonly OperatingAgentDefinition[]
+
+export const REGISTERED_AGENT_ACTIONS = OPERATING_AGENTS.flatMap((agent) => agent.actionTypes)
+export const REGISTERED_AGENT_ACTION_COUNT = REGISTERED_AGENT_ACTIONS.length
+
+export function operatingAgentDefinition(key: OperatingAgentKey): OperatingAgentDefinition {
+  return OPERATING_AGENTS.find((agent) => agent.key === key) ?? OPERATING_AGENTS[0]
+}
+
+export function exactOperatingAgentKeysForWork(workCase: WorkCaseProjection): OperatingAgentKey[] {
+  const actionTypes = new Set(workCase.actions.map((action) => action.actionType))
+  return OPERATING_AGENTS
+    .filter((agent) => agent.actionTypes.some((actionType) => actionTypes.has(actionType)))
+    .map((agent) => agent.key)
+}
+
+export function projectOperatingAgentActivity(workCases: WorkCaseProjection[], key: OperatingAgentKey): AgentFleetActivity {
+  const agent = operatingAgentDefinition(key)
+  const matchingWorkCases = workCases.filter((workCase) => exactOperatingAgentKeysForWork(workCase).includes(key))
+  const voiceKeys = new Set<AgentKey>(agent.voiceAgentKeys)
+  const calls = matchingWorkCases.flatMap((workCase) => workCase.calls
+    .filter((call) => call.agentKey && voiceKeys.has(call.agentKey))
+    .map((call) => ({ workCase, call })))
+  const exceptions = matchingWorkCases.filter((workCase) => workCase.status === "Failed" || workCase.status === "Blocked")
+  return { workCases: matchingWorkCases, calls, exceptions }
+}
+
 export function agentDefinition(key: AgentKey): AgentDefinition {
   return AGENT_FLEET.find((agent) => agent.key === key) ?? AGENT_FLEET[0]
 }

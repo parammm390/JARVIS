@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { dispatchStopMatchesFocus, exactWorkCaseForStop, workEntityIds } from "./DispatchFieldSurface"
+import { dispatchStopMatchesFocus, exactWorkCaseForStop, shiftIsoDate, workEntityIds } from "./DispatchFieldSurface"
 import type { Stop } from "./DispatchMap"
 import type { WorkCaseProjection } from "@/lib/jarvis-client"
 
@@ -71,5 +71,11 @@ describe("P2.T4 Dispatch Field continuity contract", () => {
     ])
     expect(dispatchStopMatchesFocus(stop, linked, { householdId: "household-1", visitId: "visit-1", serviceVisitId: null, workOrderId: "work-order-1", appointmentId: "appointment-1" })).toBe(true)
     expect(dispatchStopMatchesFocus(stop, linked, { householdId: "household-1", visitId: "visit-2", serviceVisitId: null, workOrderId: "work-order-1", appointmentId: "appointment-1" })).toBe(false)
+  })
+
+  it("moves the quiet-day control across month boundaries deterministically", () => {
+    expect(shiftIsoDate("2026-08-01", -1)).toBe("2026-07-31")
+    expect(shiftIsoDate("2026-12-31", 1)).toBe("2027-01-01")
+    expect(shiftIsoDate("not-a-date", 1)).toBe("not-a-date")
   })
 })

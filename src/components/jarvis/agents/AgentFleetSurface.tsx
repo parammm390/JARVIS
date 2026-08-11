@@ -2,13 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { Activity, ArrowUpRight, Bot, CircleDot, CreditCard, MessageCircle, Phone, ShieldCheck, Waves, X } from "lucide-react"
+import { Activity, ArrowUpRight, Bot, CircleDot, CreditCard, Droplets, Handshake, MapPinned, Megaphone, PackageCheck, Phone, Radar, ShieldCheck, UsersRound, Waves, X } from "lucide-react"
 import { jarvisClient, type WorkCaseProjection } from "@/lib/jarvis-client"
 import type { IntegrationsStatus } from "../lib/data-core"
 import { JarvisApiError } from "../lib/api"
 import { useJarvisAuth } from "../lib/jarvis-auth"
 import { OperationalSurfaceNav } from "../surfaces/OperationalSurfaceNav"
-import { AGENT_ACTIVITY_UNAVAILABLE, AGENT_FLEET, agentDefinition, assistantStatusCopy, projectAgentActivity, providerStatusCopy, type AgentKey } from "./agent-fleet"
+import { OPERATING_AGENTS, REGISTERED_AGENT_ACTION_COUNT, assistantStatusCopy, operatingAgentDefinition, projectOperatingAgentActivity, providerStatusCopy, type AgentKey, type OperatingAgentKey } from "./agent-fleet"
 import "../jarvis-theme.css"
 
 type InspectorTarget = { title: string; detail: string }
@@ -63,8 +63,16 @@ function CallActivityRow({ workCase, call, onInspect }: { workCase: WorkCaseProj
   )
 }
 
-function AgentGlyph({ kind }: { kind: (typeof AGENT_FLEET)[number]["glyph"] }) {
-  const Icon = kind === "orb" ? Bot : kind === "payment-collector" ? CreditCard : kind === "follow-up" ? MessageCircle : kind === "service-reminder" ? CircleDot : Phone
+function AgentGlyph({ kind }: { kind: (typeof OPERATING_AGENTS)[number]["glyph"] }) {
+  const Icon = kind === "command" ? Bot
+    : kind === "customer" ? UsersRound
+      : kind === "growth" ? Megaphone
+        : kind === "cash" ? CreditCard
+          : kind === "field" ? MapPinned
+            : kind === "sales" ? Handshake
+              : kind === "stock" ? PackageCheck
+                : kind === "water" ? Droplets
+                  : Radar
   return (
     <span className="jarvis-agent-fleet__glyph" data-glyph={kind} aria-hidden>
       <Icon size={17} strokeWidth={1.7} />
@@ -105,7 +113,7 @@ function FleetLane({
 
 export default function AgentFleetSurface() {
   const { session } = useJarvisAuth()
-  const [selectedKey, setSelectedKey] = useState<AgentKey>("jarvis")
+  const [selectedKey, setSelectedKey] = useState<OperatingAgentKey>("command-authority")
   const [integrations, setIntegrations] = useState<IntegrationsStatus | null>(null)
   const [providerLoadState, setProviderLoadState] = useState<"idle" | "loading" | "live" | "unavailable">("idle")
   const [workCases, setWorkCases] = useState<WorkCaseProjection[]>([])
@@ -159,11 +167,13 @@ export default function AgentFleetSurface() {
     }
   }, [session])
 
-  const selected = useMemo(() => agentDefinition(selectedKey), [selectedKey])
-  const activity = useMemo(() => projectAgentActivity(workCases, selectedKey), [selectedKey, workCases])
+  const selected = useMemo(() => operatingAgentDefinition(selectedKey), [selectedKey])
+  const activityByAgent = useMemo(() => new Map(OPERATING_AGENTS.map((agent) => [agent.key, projectOperatingAgentActivity(workCases, agent.key)] as const)), [workCases])
+  const activity = activityByAgent.get(selectedKey)!
   const provider = providerStatusCopy(integrations?.vapi)
   const assistantStatus = (key: AgentKey) => assistantStatusCopy(integrations?.voiceAssistants?.find((assistant) => assistant.agentKey === key))
-  const selectedAssistant = assistantStatus(selectedKey)
+  const selectedAssistants = selected.voiceAgentKeys.map((key) => ({ key, status: assistantStatus(key) }))
+  const activeWork = activity.workCases.filter((workCase) => workCase.status !== "Completed")
   const authNote = session ? null : "Sign in to inspect tenant-linked calls and Work."
   const providerDetail = providerLoadState === "loading" ? "Reading the provider-level integration source…" : provider.detail
   const workSourceNote = workLoadState === "loading"
@@ -192,13 +202,13 @@ export default function AgentFleetSurface() {
 
       <section className="jarvis-agent-fleet__intro">
         <div>
-          <span className="jarvis-agent-fleet__eyebrow">AGENTS · GOVERNED FLEET</span>
-          <h1>Five channels. One authority boundary.</h1>
-          <p>Bounded operating channels share JARVIS truth, approval, and evidence. Select a channel to inspect what the source system can prove.</p>
+          <span className="jarvis-agent-fleet__eyebrow">AGENTS · OPERATING CONTROL PLANE</span>
+          <h1>Nine named agents. Forty-four exact actions.</h1>
+          <p>A curated operating layer over the existing backend—not one tile per workflow and not a phone-provider directory. Select an agent to inspect its mandate, action authority, Work, and handoffs.</p>
         </div>
-        <div className="jarvis-agent-fleet__intro-signal" data-source="manifest:v6">
+        <div className="jarvis-agent-fleet__intro-signal" data-source="registered-action-contracts">
           <Waves size={18} aria-hidden />
-          <span><strong>Fleet manifest</strong><small>Fixed v6 channels · source-bound status</small></span>
+          <span><strong>{REGISTERED_AGENT_ACTION_COUNT} registered actions</strong><small>24 backend plugins · 9 governed agents</small></span>
         </div>
       </section>
 
@@ -211,65 +221,75 @@ export default function AgentFleetSurface() {
       {authNote ? <div className="jarvis-agent-fleet__auth-note" role="status"><span>{authNote}</span><Link href="/jarvis/login">Sign in <ArrowUpRight size={13} aria-hidden /></Link></div> : null}
 
       <div className="jarvis-agent-fleet__layout">
-        <aside className="jarvis-agent-fleet__rail" aria-label="Agent fleet channels" data-agent-fleet-rail>
-          <div className="jarvis-agent-fleet__rail-heading"><span>CHANNELS</span><strong>Fleet rail</strong></div>
+        <aside className="jarvis-agent-fleet__rail" aria-label="Operating agents" data-agent-fleet-rail>
+          <div className="jarvis-agent-fleet__rail-heading"><span>OPERATING AGENTS</span><strong>Control rail</strong></div>
           <div className="jarvis-agent-fleet__rail-list">
-            {AGENT_FLEET.map((agent) => (
-              <button
-                key={agent.key}
-                type="button"
-                className="jarvis-agent-fleet__rail-row"
-                data-selected={selected.key === agent.key ? "true" : "false"}
-                data-agent-key={agent.key}
-                aria-pressed={selected.key === agent.key}
-                onClick={() => {
-                  setSelectedKey(agent.key)
-                  setInspector(null)
-                }}
-              >
-                <AgentGlyph kind={agent.glyph} />
-                <span className="jarvis-agent-fleet__rail-row-copy"><strong>{agent.label}</strong><small>{agent.key === "jarvis" ? "instruction" : "outbound channel"}</small></span>
-                <span className="jarvis-agent-fleet__rail-row-state" aria-label={assistantStatus(agent.key).label}>{assistantStatus(agent.key).tone === "verified" ? "✓" : assistantStatus(agent.key).tone === "unconfigured" ? "○" : "—"}</span>
-              </button>
-            ))}
+            {OPERATING_AGENTS.map((agent) => {
+              const observed = activityByAgent.get(agent.key)!
+              const open = observed.workCases.filter((workCase) => workCase.status !== "Completed").length
+              const stateLabel = observed.exceptions.length > 0 ? `${observed.exceptions.length} exceptions` : open > 0 ? `${open} open Work cases` : observed.workCases.length > 0 ? `${observed.workCases.length} observed outcomes` : "No observed Work"
+              return (
+                <button
+                  key={agent.key}
+                  type="button"
+                  className="jarvis-agent-fleet__rail-row"
+                  data-selected={selected.key === agent.key ? "true" : "false"}
+                  data-agent-key={agent.key}
+                  aria-pressed={selected.key === agent.key}
+                  onClick={() => {
+                    setSelectedKey(agent.key)
+                    setInspector(null)
+                  }}
+                >
+                  <AgentGlyph kind={agent.glyph} />
+                  <span className="jarvis-agent-fleet__rail-row-copy"><strong>{agent.label}</strong><small>{agent.actionTypes.length} actions · {stateLabel}</small></span>
+                  <span className="jarvis-agent-fleet__rail-row-state" aria-label={stateLabel}>{observed.exceptions.length > 0 ? "!" : open > 0 ? "●" : observed.workCases.length > 0 ? "✓" : "○"}</span>
+                </button>
+              )
+            })}
           </div>
-          <p className="jarvis-agent-fleet__rail-note">✓ verified assistant binding · ○ not configured · — unavailable</p>
+          <p className="jarvis-agent-fleet__rail-note">● open Work · ✓ observed outcome · ! exception · ○ no observed Work</p>
         </aside>
 
         <section className="jarvis-agent-fleet__stage" data-agent-fleet-stage aria-labelledby="selected-agent-title">
           <header className="jarvis-agent-fleet__stage-header">
             <div className="jarvis-agent-fleet__stage-agent">
               <AgentGlyph kind={selected.glyph} />
-              <div><span className="jarvis-agent-fleet__eyebrow">SELECTED CHANNEL</span><h2 id="selected-agent-title">{selected.label}</h2></div>
+              <div><span className="jarvis-agent-fleet__eyebrow">SELECTED OPERATING AGENT</span><h2 id="selected-agent-title">{selected.label}</h2></div>
             </div>
-            <div className="jarvis-agent-fleet__stage-state" data-agent-status={selectedAssistant.tone} data-source="api:integrations-status.voiceAssistants">
+            <div className="jarvis-agent-fleet__stage-state" data-agent-status={activity.exceptions.length > 0 ? "unavailable" : activeWork.length > 0 ? "verified" : "unconfigured"} data-source="api:work-cases">
               <span className="jarvis-agent-fleet__state-dot" aria-hidden />
-              <span>{selectedAssistant.label}</span>
+              <span>{activity.exceptions.length > 0 ? `${activity.exceptions.length} exception${activity.exceptions.length === 1 ? "" : "s"}` : activeWork.length > 0 ? `${activeWork.length} open Work case${activeWork.length === 1 ? "" : "s"}` : activity.workCases.length > 0 ? `${activity.workCases.length} recorded outcome${activity.workCases.length === 1 ? "" : "s"}` : "No observed Work"}</span>
             </div>
           </header>
 
           <div className="jarvis-agent-fleet__role-band">
             <span className="jarvis-agent-fleet__eyebrow">ROLE / AUTHORITY</span>
-            <p>{selected.roleCopy}</p>
+            <p>{selected.mandate}</p>
             <div className="jarvis-agent-fleet__authority"><ShieldCheck size={15} aria-hidden /><span>{selected.authorityCopy}</span></div>
-            <p>{selectedAssistant.detail}</p>
           </div>
 
           <div className="jarvis-agent-fleet__lanes">
-            <FleetLane eyebrow="WORK LANE" title="Linked Work" icon={<CircleDot size={16} />}>
-              {workSourceNote ? <p className="jarvis-agent-fleet__empty-title">{workSourceNote}</p> : activity.workCases.length === 0 ? <><p className="jarvis-agent-fleet__empty-title">{AGENT_ACTIVITY_UNAVAILABLE}</p><p>No Work record with an exact {selected.label} action or call edge is exposed yet.</p></> : <div className="jarvis-agent-fleet__activity-list">{activity.workCases.slice(0, 6).map((workCase) => <WorkActivityRow key={workCase.id} workCase={workCase} onInspect={() => inspectWork(workCase)} />)}</div>}
+            <FleetLane eyebrow="OPERATING LANE" title="Observed Work" icon={<CircleDot size={16} />}>
+              {workSourceNote ? <p className="jarvis-agent-fleet__empty-title">{workSourceNote}</p> : activity.workCases.length === 0 ? <><p className="jarvis-agent-fleet__empty-title">No exact {selected.label} Work is exposed yet.</p><p>This state is observational; it does not mean the registered actions are unavailable.</p></> : <div className="jarvis-agent-fleet__activity-list">{activity.workCases.slice(0, 8).map((workCase) => <WorkActivityRow key={workCase.id} workCase={workCase} onInspect={() => inspectWork(workCase)} />)}</div>}
             </FleetLane>
-            <FleetLane eyebrow="CALL LANE" title="Recent calls & outcomes" icon={<Phone size={16} />}>
-              {workSourceNote ? <p className="jarvis-agent-fleet__empty-title">{workSourceNote}</p> : activity.calls.length === 0 ? <><p className="jarvis-agent-fleet__empty-title">{AGENT_ACTIVITY_UNAVAILABLE}</p><p>No persisted call with an exact {selected.label} channel edge is exposed yet.</p></> : <div className="jarvis-agent-fleet__activity-list">{activity.calls.slice(0, 6).map(({ workCase, call }) => <CallActivityRow key={call.id} workCase={workCase} call={call} onInspect={() => inspectCall(workCase, call)} />)}</div>}
+            <FleetLane eyebrow="ACTION AUTHORITY" title={`${selected.actionTypes.length} registered actions`} icon={<ShieldCheck size={16} />}>
+              <div className="jarvis-agent-fleet__contract-list" aria-label={`${selected.label} action contracts`}>
+                {selected.actionTypes.map((actionType, index) => <div key={actionType}><span>{String(index + 1).padStart(2, "0")}</span><strong>{actionType.replaceAll("_", " ")}</strong></div>)}
+              </div>
             </FleetLane>
-            <FleetLane eyebrow="EXCEPTIONS" title="Failures & handoffs" icon={<Activity size={16} />}>
-              {workSourceNote ? <p className="jarvis-agent-fleet__empty-title">{workSourceNote}</p> : activity.exceptions.length === 0 ? <><p className="jarvis-agent-fleet__empty-title">No exact agent-scoped failure or handoff record is exposed yet.</p><p>Only Work statuses with an exact channel edge appear here; provider failures and handoffs are not widened by inference.</p></> : <div className="jarvis-agent-fleet__activity-list">{activity.exceptions.slice(0, 6).map((workCase) => <WorkActivityRow key={workCase.id} workCase={workCase} onInspect={() => inspectWork(workCase)} />)}</div>}
+            <FleetLane eyebrow="CHANNELS & HANDOFFS" title="Voice and exceptions" icon={<Phone size={16} />}>
+              <div className="jarvis-agent-fleet__channel-facts">
+                {selectedAssistants.length > 0 ? selectedAssistants.map(({ key, status }) => <div key={key} data-agent-status={status.tone}><strong>{key.replaceAll("-", " ")}</strong><span>{status.label}</span><small>{status.detail}</small></div>) : <div><strong>No dedicated phone channel</strong><span>Action-contract agent</span><small>This agent operates through registered domain actions and Work evidence, not a Vapi assistant.</small></div>}
+              </div>
+              {activity.calls.length > 0 ? <div className="jarvis-agent-fleet__activity-list jarvis-agent-fleet__activity-list--calls">{activity.calls.slice(0, 4).map(({ workCase, call }) => <CallActivityRow key={call.id} workCase={workCase} call={call} onInspect={() => inspectCall(workCase, call)} />)}</div> : null}
+              {activity.exceptions.length > 0 ? <div className="jarvis-agent-fleet__activity-list jarvis-agent-fleet__activity-list--exceptions">{activity.exceptions.slice(0, 4).map((workCase) => <WorkActivityRow key={workCase.id} workCase={workCase} onInspect={() => inspectWork(workCase)} />)}</div> : <p>No exact failures or blocked handoffs are recorded for this agent.</p>}
             </FleetLane>
           </div>
 
           <footer className="jarvis-agent-fleet__stage-footer">
-            <span>Selected channel: {selected.label}</span>
-            <span>Volume / queue: not exposed</span>
+            <span>{selected.label} owns {selected.actionTypes.length} of {REGISTERED_AGENT_ACTION_COUNT} registered actions</span>
+            <span>Activity is projected from exact Work action types</span>
           </footer>
         </section>
 

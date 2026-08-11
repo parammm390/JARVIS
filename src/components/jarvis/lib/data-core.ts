@@ -390,15 +390,15 @@ interface JarvisDataState {
   /** Phase 7 (§7.5, command bar): prepend freshly-planned actions into the
    *  Approval Inbox immediately, before the next poll confirms them. Best-effort —
    *  an action that turns out to have auto-run (ungated) rather than land as a
-   *  real pending row simply drops out on the next fast-lane poll (≤4s later),
+   *  real pending row simply drops out on the next fast-lane poll (≤10s later),
    *  which always replaces this list with the server's actual truth. Never a
    *  lasting inconsistency, just a brief optimistic guess. */
   injectOptimisticPending: (actions: PendingAction[]) => void
   /** jarvis-v3 P4.T5 — cross-surface invalidation: `cashCollections` (feeding
    *  `selectOverdueInvoices`/`selectCollectedUsd`, §6⑦'s "the Field cools")
-   *  lives on the 30s slow lane by default. The kernel calls this the instant
+   *  lives on the 90s slow lane by default. The kernel calls this the instant
    *  it notices a real `payment_recorded` business event relevant to the
-   *  active thread, so the consequence is visible in seconds, not up to 30s
+   *  active thread, so the consequence is visible in seconds, not up to 90s
    *  later — an extra out-of-band fetch, not a second poller: the lane's own
    *  scheduled timer is untouched and still fires on its normal cadence. */
   refetchSlowLaneNow: () => void
@@ -454,10 +454,14 @@ export function useJarvis(): JarvisDataState {
   return useContext(JarvisDataContext)
 }
 
-const FAST_LANE_MS = 4000
-const MEDIUM_LANE_MS = 8000
-const SLOW_LANE_MS = 30000
-const SANITY_LANE_MS = 60000
+// Keep the steady-state request budget comfortably below the API's tenant rate
+// limit. The previous 4s/8s/30s/60s mix exceeded 100 reads per minute before
+// one-off context requests, so an otherwise healthy Home tab periodically
+// degraded itself with 429 responses.
+const FAST_LANE_MS = 10000
+const MEDIUM_LANE_MS = 30000
+const SLOW_LANE_MS = 90000
+const SANITY_LANE_MS = 180000
 
 /** Each lane's own cadence — the delay used whenever the lane is healthy. */
 const LANE_BASE_MS: Record<LaneName, number> = {
@@ -897,12 +901,15 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
       })
     }
 
-    // Avoid mounting all four lanes simultaneously. Fast data makes the cockpit
-    // useful first; the lower-priority lanes follow without a connection spike.
-    runLane("fast", pollFast)
-    runLane("medium", pollMedium)
-    runLane("slow", pollSlow)
-    runLane("sanity", pollSanity)
+    // Fast data makes the cockpit useful first. Stagger lower-priority lanes so
+    // a mount does not create an eleven-request connection spike.
+    const startLanes = () => {
+      runLane("fast", pollFast)
+      timers.set("medium", window.setTimeout(() => runLane("medium", pollMedium), 1_000))
+      timers.set("slow", window.setTimeout(() => runLane("slow", pollSlow), 5_000))
+      timers.set("sanity", window.setTimeout(() => runLane("sanity", pollSanity), 10_000))
+    }
+    startLanes()
 
     // When a session appears, changes user, refreshes its token, or disappears,
     // clear the refusal and private snapshots. A role/token change must never show
@@ -925,10 +932,7 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
         refetchSlowLaneNow,
       }))
       if (!privateDataReady || !nextSessionKey) return
-      runLane("fast", pollFast)
-      runLane("medium", pollMedium)
-      runLane("slow", pollSlow)
-      runLane("sanity", pollSanity)
+      startLanes()
     }, 1000)
 
     const tTick = setInterval(() => setState((prev) => ({ ...prev, now: Date.now() })), 1000)

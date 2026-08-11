@@ -15,6 +15,7 @@ import { jarvisGet } from "./lib/api"
 import { roleLandingFor, type SavedHomepage } from "./lib/role-landing"
 import { SinceYouWereAway } from "./SinceYouWereAway"
 import { PushOptIn } from "./PushOptIn"
+import { CustomCursor } from "./CustomCursor"
 import DispatchFieldSurface from "./panels/DispatchFieldSurface"
 import { OperationalSurfaceNav } from "./surfaces/OperationalSurfaceNav"
 import "./jarvis-theme.css"
@@ -106,5 +107,14 @@ function RoleLanding() {
 }
 
 export default function PersonalizedHome() {
-  return <JarvisAuthProvider><JarvisDataProvider><RoleLanding /></JarvisDataProvider></JarvisAuthProvider>
+  return (
+    <div className="jarvis-cursor-zone min-h-screen">
+      <CustomCursor />
+      <JarvisAuthProvider>
+        <JarvisDataProvider>
+          <RoleLanding />
+        </JarvisDataProvider>
+      </JarvisAuthProvider>
+    </div>
+  )
 }

@@ -2,8 +2,8 @@ import type { Metadata } from "next"
 import { Bridge } from "@/components/jarvis/bridge/Bridge"
 
 export const metadata: Metadata = {
-  title: "FINNOR JARVIS — Command Bridge",
-  description: "D1: the Command Bridge — real vitals, real activity, one continuous space.",
+  title: "JARVIS — Command Bridge",
+  description: "The JARVIS command bridge: live vitals, activity, approvals, and evidence in one continuous space.",
 }
 
 export default function JarvisBridgePage() {

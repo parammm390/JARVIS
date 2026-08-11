@@ -608,10 +608,11 @@ function BridgeShell() {
   useEffect(() => {
     // Prefetch only actual authenticated APIs. A failure is deliberately ignored here:
     // the mounted panel retains its own honest loading/error state.
+    if (!session) return
     const likely = orderedScenes[0]
     if (likely === "overview") void jarvisClient.overview()
     if (likely === "pipeline") void jarvisClient.workflowRuns()
-  }, [orderedScenes])
+  }, [orderedScenes, session])
   const chooseScene = (next: SceneId) => {
     setScene(next)
     setLedger((current) => {

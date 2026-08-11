@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import dynamic from "next/dynamic"
 import Link from "next/link"
-import { Check, ChevronRight, CircleDot, Clock3, FileCheck2, Link2, RefreshCw, ShieldCheck, UserRound, Workflow, X } from "lucide-react"
+import { Check, ChevronRight, CircleDot, Clock3, FileCheck2, Link2, RefreshCw, Search, ShieldCheck, UserRound, Workflow, X } from "lucide-react"
 import { ActionRenderer } from "../ui/renderers/ActionRenderer"
 import { JarvisApiError } from "../lib/api"
 import { useJarvisAuth } from "../lib/jarvis-auth"
@@ -164,6 +164,39 @@ export function filterMatches(workCase: WorkCaseProjection, filter: WorkFilter):
   return workCase.status === filter
 }
 
+export interface WorkCaseGroup {
+  key: string
+  cases: WorkCaseProjection[]
+}
+
+export function groupWorkCases(workCases: WorkCaseProjection[]): WorkCaseGroup[] {
+  const groups = new Map<string, WorkCaseProjection[]>()
+  for (const workCase of workCases) {
+    const title = workCase.title.trim().toLocaleLowerCase().replace(/\s+/g, " ")
+    const actionFamily = workCase.actions[0]?.actionType ?? "no-action"
+    const entityType = primaryEntity(workCase)?.entityType ?? "no-entity"
+    const key = [workCase.status, stageFor(workCase), actionFamily, entityType, title].join("|")
+    const current = groups.get(key) ?? []
+    current.push(workCase)
+    groups.set(key, current)
+  }
+  return Array.from(groups, ([key, cases]) => ({ key, cases }))
+}
+
+function workCaseMatchesSearch(workCase: WorkCaseProjection, query: string): boolean {
+  if (!query) return true
+  const haystack = [
+    workCase.title,
+    workCase.status,
+    workCase.id,
+    workCase.source.channel,
+    workCase.source.kind,
+    ...workCase.actions.flatMap((action) => [action.actionType, action.summary]),
+    ...workCase.linkedEntities.flatMap((entity) => [entity.entityType, entity.entityId]),
+  ].filter(Boolean).join(" ").toLocaleLowerCase()
+  return haystack.includes(query.toLocaleLowerCase())
+}
+
 function approvalLabel(approval: WorkApproval): string {
   if (approval.status === "pending") return "Needs your decision"
   if (approval.status === "not_required") return "No approval required"
@@ -184,17 +217,32 @@ function useWorkCases() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [live, setLive] = useState(false)
+  const [stale, setStale] = useState(false)
+  const [denied, setDenied] = useState(false)
+  const hasLoadedRef = useRef(false)
 
   const reload = useCallback(async () => {
     if (!session) return
     try {
       const response = await jarvisClient.workCases()
       setCases(response.data)
+      hasLoadedRef.current = true
       setLive(true)
+      setStale(false)
+      setDenied(false)
       setError(null)
     } catch (cause) {
-      setLive(false)
-      setError(cause instanceof JarvisApiError && cause.status === 401 ? "Sign in to inspect tenant Work." : "Work is unavailable — the causal projection could not be read.")
+      const accessDenied = cause instanceof JarvisApiError && cause.status === 401
+      setDenied(accessDenied)
+      if (!accessDenied && hasLoadedRef.current) {
+        setLive(true)
+        setStale(true)
+        setError("Latest refresh was delayed. Showing the last verified Work projection.")
+      } else {
+        setLive(false)
+        setStale(false)
+        setError(accessDenied ? "Sign in to inspect tenant Work." : "Work is unavailable — the causal projection could not be read.")
+      }
     } finally {
       setLoading(false)
     }
@@ -206,22 +254,25 @@ function useWorkCases() {
       return
     }
     if (!session) {
+      hasLoadedRef.current = false
       setCases([])
       setLive(false)
+      setStale(false)
+      setDenied(true)
       setError("Sign in to inspect tenant Work.")
       setLoading(false)
       return
     }
     setLoading(true)
     void reload()
-    const interval = window.setInterval(() => void reload(), 8_000)
+    const interval = window.setInterval(() => void reload(), 30_000)
     return () => window.clearInterval(interval)
   }, [authLoading, reload, session])
 
-  return { cases, loading, error, live, reload }
+  return { cases, loading, error, live, stale, denied, reload }
 }
 
-function WorkRow({ workCase, selected, onSelect }: { workCase: WorkCaseProjection; selected: boolean; onSelect: () => void }) {
+function WorkRow({ workCase, selected, count = 1, onSelect }: { workCase: WorkCaseProjection; selected: boolean; count?: number; onSelect: () => void }) {
   const entity = primaryEntity(workCase)
   return (
     <button
@@ -243,11 +294,35 @@ function WorkRow({ workCase, selected, onSelect }: { workCase: WorkCaseProjectio
         <span className="jarvis-work-row__fact">{highValueFact(workCase)}</span>
       </span>
       <span className="jarvis-work-row__aside">
+        {count > 1 && <span className="jarvis-work-row__count">{count} related</span>}
         <span className="jarvis-work-row__source">{workCase.source.channel ?? workCase.source.kind}</span>
         <span className="jarvis-work-row__age">{ageLabel(workCase.updatedAt)}</span>
       </span>
       <ChevronRight className="jarvis-work-row__chevron h-4 w-4" aria-hidden />
     </button>
+  )
+}
+
+function WorkGroup({ group, selectedId, onSelect }: { group: WorkCaseGroup; selectedId: string | null; onSelect: (workCase: WorkCaseProjection) => void }) {
+  const representative = group.cases[0]!
+  const selected = group.cases.some((workCase) => workCase.id === selectedId)
+  return (
+    <div className="jarvis-work-group" data-group-size={group.cases.length}>
+      <WorkRow workCase={representative} selected={selected} count={group.cases.length} onSelect={() => onSelect(representative)} />
+      {group.cases.length > 1 && (
+        <details className="jarvis-work-group__records">
+          <summary>{group.cases.length} exact records <span>expand</span></summary>
+          <div>
+            {group.cases.map((workCase) => (
+              <button key={workCase.id} type="button" data-selected={workCase.id === selectedId ? "true" : undefined} onClick={() => onSelect(workCase)}>
+                <span><strong>{shortId(workCase.id)}</strong><small>{primaryEntity(workCase) ? entityLabel(primaryEntity(workCase)!) : "No linked entity"}</small></span>
+                <span>{ageLabel(workCase.updatedAt)}<ChevronRight className="h-3.5 w-3.5" aria-hidden /></span>
+              </button>
+            ))}
+          </div>
+        </details>
+      )}
+    </div>
   )
 }
 
@@ -436,8 +511,9 @@ function WorkInspector({ target, onClose }: { target: InspectorTarget; onClose: 
 }
 
 export function WorkSurface() {
-  const { cases, loading, error, live, reload } = useWorkCases()
+  const { cases, loading, error, live, stale, denied, reload } = useWorkCases()
   const [filter, setFilter] = useState<WorkFilter>("Open")
+  const [search, setSearch] = useState("")
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [inspector, setInspector] = useState<InspectorTarget | null>(null)
   const [queueOpen, setQueueOpen] = useState(false)
@@ -459,7 +535,8 @@ export function WorkSurface() {
   }, [inspector, queueOpen])
 
   const scopedCases = useMemo(() => hasExactTarget ? cases.filter((workCase) => workCaseMatchesQuery(workCase, surfaceQuery)) : cases, [cases, hasExactTarget, surfaceQuery])
-  const visibleCases = useMemo(() => scopedCases.filter((workCase) => filterMatches(workCase, filter)).sort((left, right) => STATUS_ORDER.indexOf(left.status) - STATUS_ORDER.indexOf(right.status) || right.updatedAt.localeCompare(left.updatedAt)), [filter, scopedCases])
+  const visibleCases = useMemo(() => scopedCases.filter((workCase) => filterMatches(workCase, filter) && workCaseMatchesSearch(workCase, search.trim())).sort((left, right) => STATUS_ORDER.indexOf(left.status) - STATUS_ORDER.indexOf(right.status) || right.updatedAt.localeCompare(left.updatedAt)), [filter, scopedCases, search])
+  const visibleGroups = useMemo(() => groupWorkCases(visibleCases), [visibleCases])
   const requestedCase = useMemo(() => cases.find((workCase) => workCaseMatchesQuery(workCase, surfaceQuery)) ?? null, [cases, surfaceQuery])
   const selectedCase = scopedCases.find((workCase) => workCase.id === selectedId) ?? requestedCase ?? (!hasExactTarget ? visibleCases[0] : null)
 
@@ -492,22 +569,22 @@ export function WorkSurface() {
       <OperationalSurfaceNav active="work" context={context} />
       <header className="jarvis-work-topbar">
         <div className="jarvis-work-topbar__left"><div><span className="jarvis-work-eyebrow">WORK · CAUSAL SPINE</span><h1>Work</h1></div></div>
-        <div className="jarvis-work-topbar__right"><span className="jarvis-work-live"><span className="jarvis-work-live__dot" data-live={live ? "true" : "false"} aria-hidden />{live ? `${cases.length} cases observed` : loading ? "Reading source…" : "Source unavailable"}</span><button type="button" onClick={() => void reload()} className="jarvis-work-icon-button" aria-label="Refresh Work projection" title="Refresh"><RefreshCw className="h-4 w-4" /></button></div>
+        <div className="jarvis-work-topbar__right"><span className="jarvis-work-live"><span className="jarvis-work-live__dot" data-live={live && !stale ? "true" : "false"} aria-hidden />{live ? stale ? `${cases.length} cases · refresh delayed` : `${cases.length} cases observed` : loading ? "Reading source…" : "Source unavailable"}</span><button type="button" onClick={() => void reload()} className="jarvis-work-icon-button" aria-label="Refresh Work projection" title="Refresh"><RefreshCw className="h-4 w-4" /></button></div>
       </header>
 
       <div className="jarvis-work-intro"><p>Durable operational records from instruction to proof.</p><span>Exact roots only · no customer or invoice merging</span></div>
 
-      <div className="jarvis-work-filterbar"><button ref={queueToggleRef} type="button" className="jarvis-work-queue-toggle" onClick={() => setQueueOpen((open) => !open)} aria-expanded={queueOpen} aria-controls="jarvis-work-queue"><Workflow className="h-4 w-4" /> Cases <span>{visibleCases.length}</span></button><div className="jarvis-work-filters" role="tablist" aria-label="Work cases filter">{FILTERS.map((item) => <button key={item} type="button" role="tab" aria-selected={filter === item} className="jarvis-work-filter" data-selected={filter === item ? "true" : undefined} onClick={() => { setFilter(item); setQueueOpen(false) }}>{item}</button>)}</div></div>
+      <div className="jarvis-work-filterbar"><button ref={queueToggleRef} type="button" className="jarvis-work-queue-toggle" onClick={() => setQueueOpen((open) => !open)} aria-expanded={queueOpen} aria-controls="jarvis-work-queue"><Workflow className="h-4 w-4" /> Cases <span>{visibleCases.length}</span></button><div className="jarvis-work-filters" role="tablist" aria-label="Work cases filter">{FILTERS.map((item) => <button key={item} type="button" role="tab" aria-selected={filter === item} className="jarvis-work-filter" data-selected={filter === item ? "true" : undefined} onClick={() => { setFilter(item); setQueueOpen(false) }}>{item}<span>{scopedCases.filter((workCase) => filterMatches(workCase, item)).length}</span></button>)}</div><label className="jarvis-work-search"><Search className="h-4 w-4" aria-hidden /><span className="sr-only">Search Work cases</span><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search Work" /></label></div>
 
-      {error && <div className="jarvis-work-banner" role="status"><span>{error}</span><Link href="/jarvis/login" className="jarvis-work-banner__link">Sign in</Link></div>}
+      {error && <div className="jarvis-work-banner" role="status"><span>{error}</span>{denied ? <Link href="/jarvis/login" className="jarvis-work-banner__link">Sign in</Link> : <button type="button" className="jarvis-work-banner__link" onClick={() => void reload()}>Retry now</button>}</div>}
 
       <main className={`jarvis-work-layout${inspector ? " jarvis-work-layout--inspector" : ""}`}>
         <section id="jarvis-work-queue" className="jarvis-work-queue" aria-label="Work cases">
-          <div className="jarvis-work-queue__heading"><div><span className="jarvis-work-eyebrow">Queue</span><h2>{filter}</h2></div><span>{visibleCases.length}</span></div>
+          <div className="jarvis-work-queue__heading"><div><span className="jarvis-work-eyebrow">Queue</span><h2>{filter}</h2></div><span>{visibleGroups.length} pattern{visibleGroups.length === 1 ? "" : "s"} · {visibleCases.length} case{visibleCases.length === 1 ? "" : "s"}</span></div>
           <div className="jarvis-work-queue__rows">
             {loading && cases.length === 0 && <p className="jarvis-work-muted jarvis-work-queue__empty">Reading exact Work roots…</p>}
             {!loading && visibleCases.length === 0 && <p className="jarvis-work-muted jarvis-work-queue__empty">No cases in this lane. The projection did not invent a zero-state record.</p>}
-            {visibleCases.map((workCase) => <WorkRow key={workCase.id} workCase={workCase} selected={selectedCase?.id === workCase.id} onSelect={() => selectCase(workCase)} />)}
+            {visibleGroups.map((group) => <WorkGroup key={group.key} group={group} selectedId={selectedCase?.id ?? null} onSelect={selectCase} />)}
           </div>
         </section>
 

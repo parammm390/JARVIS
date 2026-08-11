@@ -1,7 +1,7 @@
 // Orchestration core (§9): Planner → confirmation gate → Executor → Reflection.
 // This module is the single entry point the API, webhooks, and workers all use.
 
-import type { DomainAction, DomainPolicy, TenantContext, ExecutionResult } from "@finnor/shared-types";
+import type { DomainAction, DomainPolicy, TenantContext, ExecutionResult, MemorySnapshot } from "@finnor/shared-types";
 import { withTenant, domainActions, domainPolicies, domainPolicyRevisions, actionLog, decisionReceipts, planRepairs, enqueueJob } from "@finnor/db";
 import { buildMemorySnapshot, appendEpisode, appendShortTerm, mirrorTurnToZep } from "@finnor/memory";
 import { createDefaultRegistry, type ToolRegistry } from "@finnor/tools";
@@ -18,9 +18,11 @@ import { getCheckpointer } from "./graph/checkpointer";
 import { ensureSecretsLoaded, redactStructured, redactText } from "@finnor/security";
 import { isPlanActionReady, planIdForAction, readyPlanActions, recordPredictionDiff } from "./plan-dag";
 import { plannerMemoryEnabled } from "./planner-memory";
-import { createInstructionTraceAnswerEnvelope, createInstructionTraceResultEnvelope, ensureInstructionSession, emitInstructionEvent, isReadOnlyAnswerAction } from "./instruction-trace";
+import { createInstructionTraceAnswerEnvelope, createInstructionTraceResultEnvelope, ensureInstructionSession, emitInstructionEvent, isInstructionCancelled, isReadOnlyAnswerAction } from "./instruction-trace";
 import { defaultFastReadOnlyRouter, type AnswerEnvelope, type FastReadOnlyRouter } from "./fast-read-lane";
+import { isConversationalTurn, LLMConversationResponder, type ConversationResponder } from "./conversation";
 import { requiresTypedConfirmation } from "../../../scripts/release/action-hardening-spec";
+import { resolveHouseholdMention } from "@finnor/read-models";
 
 export * from "./llm";
 export * from "./planner";
@@ -43,6 +45,7 @@ export * from "./planner-memory";
 export * from "./policy-simulation";
 export * from "./instruction-trace";
 export * from "./fast-read-lane";
+export * from "./conversation";
 
 export interface InstructionResult {
   actions: DomainAction[];
@@ -91,6 +94,29 @@ export function defaultPolicy(tenantId: string, actionType: string): DomainPolic
   };
 }
 
+async function rememberAnswerTurn(
+  instruction: string,
+  answer: AnswerEnvelope,
+  ctx: TenantContext,
+  opts: InstructionOptions,
+): Promise<void> {
+  if (!opts.sessionId) return;
+  const turn = {
+    instruction,
+    answer: {
+      intent: answer.intent,
+      title: answer.display.title,
+      evidence: answer.evidence.slice(0, 5).map(({ source, ref }) => ({ source, ref })),
+    },
+    actions: [],
+    at: new Date().toISOString(),
+  };
+  await appendShortTerm(ctx.tenantId, opts.sessionId, turn).catch(() => undefined);
+  const zepInstruction = redactText(instruction).value;
+  const zepOutcome = JSON.stringify(redactStructured(turn.answer));
+  await mirrorTurnToZep(ctx.tenantId, opts.sessionId, `Instruction: ${zepInstruction}\nOutcome: ${zepOutcome}`).catch(() => undefined);
+}
+
 export class FinnorOrchestrator implements Orchestrator {
   readonly plugins: PluginRegistry;
   readonly tools: ToolRegistry;
@@ -98,6 +124,7 @@ export class FinnorOrchestrator implements Orchestrator {
   readonly executor: Executor;
   readonly reflection: Reflection;
   readonly fastReadOnlyRouter: FastReadOnlyRouter;
+  readonly conversationResponder: ConversationResponder;
 
   constructor(deps?: {
     plugins?: PluginRegistry;
@@ -106,12 +133,14 @@ export class FinnorOrchestrator implements Orchestrator {
     executor?: Executor;
     reflection?: Reflection;
     fastReadOnlyRouter?: FastReadOnlyRouter;
+    conversationResponder?: ConversationResponder;
   }) {
     this.plugins = deps?.plugins ?? createDefaultPluginRegistry();
     this.tools = deps?.tools ?? createDefaultRegistry();
     this.planner = deps?.planner ?? new LLMPlanner(this.plugins);
     this.reflection = deps?.reflection ?? new OutcomeReflection();
     this.fastReadOnlyRouter = deps?.fastReadOnlyRouter ?? defaultFastReadOnlyRouter;
+    this.conversationResponder = deps?.conversationResponder ?? new LLMConversationResponder();
     if (deps?.executor) {
       this.executor = deps.executor;
     } else {
@@ -137,6 +166,42 @@ export class FinnorOrchestrator implements Orchestrator {
   ): Promise<DomainAction[]> {
     const result = await this.handleInstructionResult(instruction, ctx, opts);
     return result.actions;
+  }
+
+  private async conversationalResult(
+    instruction: string,
+    ctx: TenantContext,
+    memory: MemorySnapshot,
+    opts: InstructionOptions,
+    route: "conversation" | "empty_plan_recovery",
+  ): Promise<InstructionResult> {
+    const instructionId = opts.instructionId;
+    try {
+      const answer = await this.conversationResponder.answer(instruction, ctx, memory, {
+        channel: opts.channel,
+        signal: opts.signal,
+        deadlineAt: opts.deadlineAt,
+        deadlineMs: opts.deadlineMs,
+        capabilityActionTypes: this.plugins.actionTypes(),
+      });
+      if (await isInstructionCancelled(ctx.tenantId, instructionId)) return { actions: [] };
+      if (instructionId) {
+        const answerId = `conversation:${instructionId}`;
+        await emitInstructionEvent(ctx.tenantId, instructionId, "plan_ready", { count: 1, route });
+        await emitInstructionEvent(ctx.tenantId, instructionId, "executing", { actionId: answerId, route });
+        await emitInstructionEvent(ctx.tenantId, instructionId, "completed", createInstructionTraceAnswerEnvelope(answerId, answer));
+      }
+      await rememberAnswerTurn(instruction, answer, ctx, opts);
+      return { actions: [], answer };
+    } catch (err) {
+      if (instructionId) {
+        await emitInstructionEvent(ctx.tenantId, instructionId, "failed", {
+          error: err instanceof Error ? err.message : "Conversational answer failed",
+          route,
+        });
+      }
+      throw err;
+    }
   }
 
   /** Same instruction path as handleInstruction, with an additive direct-answer
@@ -165,26 +230,49 @@ export class FinnorOrchestrator implements Orchestrator {
       if (instructionId) {
         const answerId = `fast-read:${instructionId}`;
         await emitInstructionEvent(ctx.tenantId, instructionId, "context_retrieved", {
-          chips: [fastAnswer.intent === "greeting"
-            ? { label: "assistant ready", source: "assistant:greeting" }
-            : { label: "cash collections read model", source: "read-model:cash-collections" }],
+          chips: [{ label: "cash collections read model", source: "read-model:cash-collections" }],
         });
         await emitInstructionEvent(ctx.tenantId, instructionId, "planning", { route: "fast_read_only" });
         await emitInstructionEvent(ctx.tenantId, instructionId, "plan_ready", { count: 1, route: "fast_read_only" });
         await emitInstructionEvent(ctx.tenantId, instructionId, "executing", { actionId: answerId, route: "fast_read_only" });
         await emitInstructionEvent(ctx.tenantId, instructionId, "completed", createInstructionTraceAnswerEnvelope(answerId, fastAnswer));
       }
+      await rememberAnswerTurn(instruction, fastAnswer, ctx, opts);
       return { actions: [], answer: fastAnswer };
+    }
+
+    // Greetings and capability turns are conversational by contract. Keep them
+    // off the household resolver, semantic retrieval, and planner path so a simple
+    // "hey" is fast, cannot inherit an unrelated customer/research context, and
+    // still produces the same explicit progress trace as every other turn.
+    if (isConversationalTurn(instruction)) {
+      await ensureSecretsLoaded();
+      if (instructionId) {
+        await emitInstructionEvent(ctx.tenantId, instructionId, "context_retrieved", { chips: [] });
+        await emitInstructionEvent(ctx.tenantId, instructionId, "planning", { route: "conversation" });
+      }
+      const emptyMemory: MemorySnapshot = {
+        shortTerm: null,
+        longTerm: null,
+        semantic: [],
+        episodic: [],
+        patterns: null,
+      };
+      return this.conversationalResult(instruction, ctx, emptyMemory, opts, "conversation");
     }
 
     // Secrets are needed by the existing planner/provider path only. Keeping boot
     // after the deterministic branch makes a fast read independent of Secrets
     // Manager latency or availability.
     await ensureSecretsLoaded();
+    const mentionedHousehold = opts.householdId
+      ? null
+      : await resolveHouseholdMention(ctx.tenantId, instruction).catch(() => null);
+    const resolvedHouseholdId = opts.householdId ?? mentionedHousehold?.householdId;
     const memory = await buildMemorySnapshot({
       tenantId: ctx.tenantId,
       sessionId: opts.sessionId,
-      householdId: opts.householdId,
+      householdId: resolvedHouseholdId,
       semanticQuery: plannerMemoryEnabled() ? instruction : undefined,
     });
     if (instructionId) {
@@ -215,6 +303,13 @@ export class FinnorOrchestrator implements Orchestrator {
         await emitInstructionEvent(ctx.tenantId, instructionId, "failed", { error: err instanceof Error ? err.message : "Planning failed" });
       }
       throw err;
+    }
+    if (await isInstructionCancelled(ctx.tenantId, instructionId)) {
+      await this.rejectCancelledDrafts(ctx.tenantId, instructionId);
+      return { actions: [] };
+    }
+    if (actions.length === 0) {
+      return this.conversationalResult(instruction, ctx, memory, opts, "empty_plan_recovery");
     }
     if (instructionId) {
       await emitInstructionEvent(ctx.tenantId, instructionId, "plan_ready", { count: actions.length });
@@ -249,6 +344,10 @@ export class FinnorOrchestrator implements Orchestrator {
     const readiness = await Promise.all(actions.map(async (action) => ({ action, ready: await isPlanActionReady(ctx.tenantId, action.id) })));
     await Promise.all(
       readiness.filter(({ ready }) => ready).map(async ({ action: rawAction }) => {
+        if (await isInstructionCancelled(ctx.tenantId, instructionId)) {
+          await this.rejectCancelledDrafts(ctx.tenantId, instructionId);
+          return;
+        }
         // Phase 16(e): tag this instruction's correlation id onto the action so the
         // executor's own enqueueJob calls (voice_confirm_request/voice_notify_failure)
         // can thread it through — in-memory only, never a DB column (see DomainAction.correlationId).
@@ -692,12 +791,48 @@ export class FinnorOrchestrator implements Orchestrator {
     }
   }
 
+  private async rejectCancelledDrafts(tenantId: string, instructionId: string | undefined): Promise<void> {
+    if (!instructionId) return;
+    await withTenant(tenantId, async (db) => {
+      const rows = await db
+        .update(domainActions)
+        .set({ status: "rejected" })
+        .where(and(eq(domainActions.tenantId, tenantId), eq(domainActions.instructionId, instructionId), eq(domainActions.status, "draft")))
+        .returning({ id: domainActions.id });
+      if (rows.length > 0) {
+        await db.insert(actionLog).values(rows.map((row) => ({
+          tenantId,
+          domainActionId: row.id,
+          step: "rejected",
+          input: { by: "instruction_cancel", instructionId },
+          output: { cancelledBeforeDispatch: true },
+        })));
+      }
+    });
+  }
+
+  private async instructionIdForPlan(tenantId: string, planId: string): Promise<string | null> {
+    const [row] = await withTenant(tenantId, (db) =>
+      db
+        .select({ instructionId: domainActions.instructionId })
+        .from(domainActions)
+        .where(and(eq(domainActions.tenantId, tenantId), eq(domainActions.planId, planId)))
+        .limit(1),
+    );
+    return row?.instructionId ?? null;
+  }
+
   /** Sends newly-unblocked DAG nodes through the ordinary validation/gate path. */
   private async dispatchReadyPlanActions(tenantId: string, planId: string | null): Promise<void> {
     if (!planId) return;
     // Each pass consumes one topological layer. Pending approvals leave no ready
     // drafts, while auto-approved completions can make the following layer ready.
     for (;;) {
+      const instructionId = await this.instructionIdForPlan(tenantId, planId);
+      if (await isInstructionCancelled(tenantId, instructionId ?? undefined)) {
+        await this.rejectCancelledDrafts(tenantId, instructionId ?? undefined);
+        return;
+      }
       const ready = await readyPlanActions(tenantId, planId);
       if (ready.length === 0) return;
       await Promise.all(

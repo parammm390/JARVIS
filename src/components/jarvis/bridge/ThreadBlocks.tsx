@@ -204,12 +204,11 @@ export function ThreadUnderstood({ thread, reducedMotion }: { thread: Thread; re
               <div
                 key={`grounded·${chip.label}·${chip.source}·${index}`}
                 className="j-chip min-w-0 flex-col items-start justify-center border border-white/10 bg-white/[.035] text-[color:var(--j-text-dim)]"
-                title={chip.source}
                 data-jarvis-fact
                 data-source={`planned_action.groundedPayload · ${chip.source}`}
               >
                 <span className="max-w-full truncate">{chip.label}</span>
-                <span className="j-fs-micro max-w-full truncate text-[color:var(--j-text-faint)]">{chip.source}</span>
+                <span className="j-fs-micro max-w-full truncate text-[color:var(--j-text-faint)]">Verified plan context</span>
               </div>
             ))}
           </div>
@@ -237,7 +236,6 @@ function ContextConstellationChip({
       ref={ref}
       {...contextConstellationChipVariants(index, reducedMotion, entering)}
       className="j-chip min-w-0 flex-col items-start justify-center border border-cyan-200/15 bg-cyan-300/[.045] text-[color:var(--j-text-dim)]"
-      title={chip.source}
       data-jarvis-context-fact
       data-jarvis-fact
       data-jarvis-signature-moment={entering ? "gather" : undefined}
@@ -246,7 +244,7 @@ function ContextConstellationChip({
       data-source={`instruction_events.context_retrieved · ${chip.source}`}
     >
       <span className="max-w-full truncate">{chip.label}</span>
-      <span className="j-fs-micro max-w-full truncate text-[color:var(--j-text-faint)]">{chip.source}</span>
+      <span className="j-fs-micro max-w-full truncate text-[color:var(--j-text-faint)]">Verified business context</span>
     </motion.div>
   )
 }
