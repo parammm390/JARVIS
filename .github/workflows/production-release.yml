@@ -39,11 +39,14 @@ jobs:
         run: npm install --global vercel@50.15.1
 
       - name: Install frontend dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Install API/workspace dependencies
         run: npm ci
         working-directory: finnor-os
+
+      - name: Verify dependency manifests remain source-locked
+        run: git diff --exit-code -- package.json package-lock.json finnor-os/package.json finnor-os/package-lock.json
 
       - name: Derive commit-locked release metadata
         run: |
@@ -95,4 +98,3 @@ jobs:
         run: |
           node scripts/release/verify-live-release.mjs "${{ steps.api.outputs.url }}" "$FINNOR_COMMIT_SHA" "$FINNOR_BUILD_ID" "$FINNOR_VERSION"
           node scripts/release/verify-live-release.mjs https://api-psi-brown-95.vercel.app "$FINNOR_COMMIT_SHA" "$FINNOR_BUILD_ID" "$FINNOR_VERSION"
-
