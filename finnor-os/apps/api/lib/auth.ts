@@ -109,9 +109,16 @@ export function errorResponse(err: unknown): Response {
   if (err instanceof AuthError) {
     return Response.json({ error: err.message }, { status: err.status, headers: err.headers });
   }
-  initObservability();
   const message = err instanceof Error ? redactText(err.message).value : "Unexpected route failure";
-  Sentry.captureException(new Error(message));
+  try {
+    initObservability();
+    Sentry.captureException(new Error(message));
+  } catch (observabilityError) {
+    // Observability is strictly best-effort. A missing Sentry/Axiom transport
+    // must never replace the original route failure or turn its response into a
+    // second, opaque 500.
+    console.error("[observability] capture failed", observabilityError instanceof Error ? observabilityError.message : String(observabilityError));
+  }
   // A2.T2: same correlation_id resolveCorrelationId() already tagged onto this
   // request's Sentry scope — reading it back here means this chokepoint (the one
   // every route's catch already flows through) needs no signature change anywhere.
@@ -125,7 +132,23 @@ export function errorResponse(err: unknown): Response {
   // only — the client-facing response below is unchanged) so the next one is
   // diagnosable from logs alone.
   const cause = err instanceof Error && err.cause instanceof Error ? redactText(err.cause.message).value : undefined;
-  logWithTrace({ traceId }).error({ err: message, cause }, "unhandled route failure");
+  try {
+    logWithTrace({ traceId }).error({ err: message, cause }, "unhandled route failure");
+  } catch (loggingError) {
+    console.error(
+      "[route-error] unhandled route failure",
+      JSON.stringify({ err: message, cause: cause ?? null, traceId: traceId ?? null, loggingError: loggingError instanceof Error ? loggingError.message : String(loggingError) }),
+    );
+  }
+  // Keep one transport-independent, redacted line in serverless logs. The Pino
+  // worker may be terminated with the function, so relying on its async flush can
+  // otherwise leave a production 500 with no actionable root cause.
+  if (process.env.NODE_ENV === "production") {
+    console.error("[route-error] unhandled route failure", JSON.stringify({ err: message, cause: cause ?? null, traceId: traceId ?? null }));
+  }
   // Plain language outward, details stay in server logs (§22).
-  return Response.json({ error: "Something went wrong on our side. Try again shortly." }, { status: 500 });
+  return Response.json(
+    { error: "Something went wrong on our side. Try again shortly." },
+    { status: 500, headers: traceId ? { "x-finnor-trace-id": traceId } : undefined },
+  );
 }
