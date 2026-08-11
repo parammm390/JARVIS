@@ -12,7 +12,7 @@ const APPS = {
   api: {
     project: "api",
     projectId: "prj_BoMZ2AXdLIJQXAAe6RqDGBveyq3n",
-    directory: "finnor-os/apps/api",
+    directory: "finnor-os",
   },
 }
 
