@@ -26,6 +26,8 @@ if (!app) {
   process.exit(2)
 }
 
+const repoRoot = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim()
+
 function git(args) {
   return execFileSync("git", args, { cwd: repoRoot, encoding: "utf8" }).trim()
 }
@@ -45,7 +47,6 @@ function run(command, args, cwd, env) {
   return result.stdout || ""
 }
 
-const repoRoot = git(["rev-parse", "--show-toplevel"])
 const commitSha = git(["rev-parse", "HEAD"]).toLowerCase()
 const dirty = git(["status", "--porcelain=v1", "--untracked-files=all"])
 const remoteMain = git(["ls-remote", "origin", "refs/heads/main"]).split(/\s+/)[0]
@@ -126,4 +127,3 @@ if (outputFile) {
 }
 console.log(`FINNOR_DEPLOYMENT_URL=${deploymentUrl}`)
 console.log(JSON.stringify(result, null, 2))
-
