@@ -34,6 +34,9 @@ import { withSentryConfig } from "@sentry/nextjs"
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Release builds provide a commit-derived value. Keeping the Next build ID
+  // deterministic makes the runtime release record independently checkable.
+  generateBuildId: async () => process.env.FINNOR_BUILD_ID || process.env.VERCEL_GIT_COMMIT_SHA || null,
   async redirects() {
     return [
       {

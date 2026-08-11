@@ -26,13 +26,14 @@ export function middleware(req: NextRequest) {
   const isWebhook =
     req.nextUrl.pathname.startsWith("/api/webhooks/") ||
     req.nextUrl.pathname.startsWith("/api/admin/"); // admin routes carry their own ADMIN_SECRET check
+  const isPublicRelease = req.nextUrl.pathname === "/api/release";
   const hasAuth =
     req.headers.has("authorization") ||
     // Same NODE_ENV gate as lib/auth.ts's requireContext(): a misconfigured prod deploy
     // that left AUTH_DEV_BYPASS=1 set must not accept forged x-tenant-id headers here
     // either — this shape check must not be laxer than the real auth it fronts.
     (process.env.AUTH_DEV_BYPASS === "1" && process.env.NODE_ENV !== "production" && req.headers.has("x-tenant-id"));
-  if (!isWebhook && !hasAuth) {
+  if (!isWebhook && !isPublicRelease && !hasAuth) {
     return NextResponse.json(
       { error: "Missing Authorization header" },
       { status: 401, headers: corsHeaders(origin) },

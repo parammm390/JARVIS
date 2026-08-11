@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 import { publicEnv, serverEnv } from "@/lib/env"
+import { getReleaseMetadata } from "@/lib/release"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 export async function GET() {
+  const release = getReleaseMetadata("finnor-frontend")
   const supabase = await checkSupabase()
   const services = {
     gemini_profile_generation: Boolean(serverEnv.geminiApiKey),
@@ -27,10 +29,10 @@ export async function GET() {
     readyForProduction,
     services,
     supabase,
+    release,
     checkedAt: new Date().toISOString(),
   })
 }
-
 async function checkSupabase() {
   const configured = Boolean(serverEnv.supabaseUrl && serverEnv.supabaseServiceRoleKey)
   if (!configured) {

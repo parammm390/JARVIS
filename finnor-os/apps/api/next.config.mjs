@@ -2,6 +2,9 @@
 import { fileURLToPath } from "node:url";
 
 const nextConfig = {
+  // Release builds provide a commit-derived value. Keeping the Next build ID
+  // deterministic makes the runtime release record independently checkable.
+  generateBuildId: async () => process.env.FINNOR_BUILD_ID || process.env.VERCEL_GIT_COMMIT_SHA || null,
   transpilePackages: [
     "@finnor/shared-types",
     "@finnor/policy-schema",

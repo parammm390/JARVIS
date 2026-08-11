@@ -1,0 +1,98 @@
+name: production-release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: finnor-production-release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    environment: production
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: team_TlTo8L6Rvgb0H7uJh0G5GLDD
+      FINNOR_RELEASE_SOURCE: github-actions
+      CI: "true"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            finnor-os/package-lock.json
+
+      - name: Install pinned Vercel CLI
+        run: npm install --global vercel@50.15.1
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Install API/workspace dependencies
+        run: npm ci
+        working-directory: finnor-os
+
+      - name: Derive commit-locked release metadata
+        run: |
+          sha="$(git rev-parse HEAD)"
+          short="${sha:0:12}"
+          echo "RELEASE_COMMIT_SHA=$sha" >> "$GITHUB_ENV"
+          echo "FINNOR_COMMIT_SHA=$sha" >> "$GITHUB_ENV"
+          echo "FINNOR_BUILD_ID=finnor-$short" >> "$GITHUB_ENV"
+          echo "FINNOR_VERSION=0.1.0+$short" >> "$GITHUB_ENV"
+          echo "FINNOR_ENVIRONMENT=production" >> "$GITHUB_ENV"
+
+      - name: Verify clean GitHub source and release metadata
+        run: node scripts/release/verify-release.mjs
+
+      - name: Frontend quality gate
+        run: |
+          npm run lint
+          npx tsc --noEmit -p tsconfig.json
+          npm run test:unit
+
+      - name: API typecheck gate
+        run: npm run typecheck
+        working-directory: finnor-os
+
+      - name: Build and deploy frontend
+        id: frontend
+        run: |
+          set -o pipefail
+          node scripts/release/deploy-production.mjs frontend --output-file "$RUNNER_TEMP/frontend-release.json" | tee "$RUNNER_TEMP/frontend-deploy.log"
+          url="$(sed -n 's/^FINNOR_DEPLOYMENT_URL=//p' "$RUNNER_TEMP/frontend-deploy.log" | tail -n 1)"
+          test -n "$url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Verify frontend deployment
+        run: |
+          node scripts/release/verify-live-release.mjs "${{ steps.frontend.outputs.url }}" "$FINNOR_COMMIT_SHA" "$FINNOR_BUILD_ID" "$FINNOR_VERSION"
+          node scripts/release/verify-live-release.mjs https://finnorai.com "$FINNOR_COMMIT_SHA" "$FINNOR_BUILD_ID" "$FINNOR_VERSION"
+
+      - name: Build and deploy API
+        id: api
+        run: |
+          set -o pipefail
+          node scripts/release/deploy-production.mjs api --output-file "$RUNNER_TEMP/api-release.json" | tee "$RUNNER_TEMP/api-deploy.log"
+          url="$(sed -n 's/^FINNOR_DEPLOYMENT_URL=//p' "$RUNNER_TEMP/api-deploy.log" | tail -n 1)"
+          test -n "$url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Verify API deployment
+        run: |
+          node scripts/release/verify-live-release.mjs "${{ steps.api.outputs.url }}" "$FINNOR_COMMIT_SHA" "$FINNOR_BUILD_ID" "$FINNOR_VERSION"
+          node scripts/release/verify-live-release.mjs https://api-psi-brown-95.vercel.app "$FINNOR_COMMIT_SHA" "$FINNOR_BUILD_ID" "$FINNOR_VERSION"
+

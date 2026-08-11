@@ -11,7 +11,8 @@
     "jarvis:realtime:verify": "node scripts/verify-jarvis-realtime-release.mjs",
     "test:unit": "vitest run",
     "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "release:verify": "node scripts/release/verify-release.mjs"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",
