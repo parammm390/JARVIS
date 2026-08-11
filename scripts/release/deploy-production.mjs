@@ -65,7 +65,6 @@ const appDir = resolve(repoRoot, app.directory)
 const tokenArgs = process.env.VERCEL_TOKEN ? ["--token", process.env.VERCEL_TOKEN] : []
 const env = {
   ...process.env,
-  VERCEL_ORG_ID: TEAM_ID,
   FINNOR_COMMIT_SHA: commitSha,
   FINNOR_BUILD_ID: buildId,
   FINNOR_VERSION: version,
