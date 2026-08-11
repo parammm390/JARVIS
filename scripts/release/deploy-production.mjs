@@ -66,7 +66,6 @@ const tokenArgs = process.env.VERCEL_TOKEN ? ["--token", process.env.VERCEL_TOKE
 const env = {
   ...process.env,
   VERCEL_ORG_ID: TEAM_ID,
-  VERCEL_PROJECT_ID: app.projectId,
   FINNOR_COMMIT_SHA: commitSha,
   FINNOR_BUILD_ID: buildId,
   FINNOR_VERSION: version,
