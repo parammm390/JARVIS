@@ -138,7 +138,8 @@ function serviceEquipmentTimeline(projection: Household360Projection): Array<{ i
   const visits = projection.serviceVisits
     .flatMap((visit) => {
       const at = visit.completedAt ?? visit.scheduledAt
-      return at ? [{ id: visit.id, at, label: `${visit.completedAt ? "Service completed" : "Service scheduled"} · ${humanize(visit.type)}`, source: "service visit", detail: visit.notes?.slice(0, 140) }] : []
+      const notes = "notes" in visit && typeof visit.notes === "string" ? visit.notes : null
+      return at ? [{ id: visit.id, at, label: `${visit.completedAt ? "Service completed" : "Service scheduled"} · ${humanize(visit.type)}`, source: "service visit", ...(notes ? { detail: notes.slice(0, 140) } : {}) }] : []
     })
   const events = projection.timeline.map((event) => ({ id: event.entityId, at: event.occurredAt, label: humanize(event.eventType), source: event.entityType }))
   return [...equipmentRows, ...visits, ...events].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime()).slice(0, 20)
