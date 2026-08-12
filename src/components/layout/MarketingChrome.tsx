@@ -7,6 +7,7 @@ import SmoothScroll from "@/components/ui/smooth-scroll"
 import CustomCursor from "@/components/ui/custom-cursor"
 import ParticleNetwork from "@/components/ui/particle-network"
 import GrainOverlay from "@/components/ui/grain-overlay"
+import MarketingPageTransition from "@/components/ui/marketing-page-transition"
 
 const FinnorAIConcierge = dynamic(
   () => import("@/components/ai-concierge/FinnorAIConcierge").then((module) => module.FinnorAIConcierge),
@@ -20,7 +21,7 @@ export function MarketingChrome({ children }: { children: ReactNode }) {
       <CustomCursor />
       <ScrollProgress />
       <GrainOverlay />
-      {children}
+      <MarketingPageTransition>{children}</MarketingPageTransition>
       <FinnorAIConcierge />
     </SmoothScroll>
   )

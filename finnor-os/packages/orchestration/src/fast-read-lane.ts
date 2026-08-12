@@ -1,9 +1,84 @@
-// Dedicated, deterministic read-only routing for high-confidence internal questions.
-// This module deliberately knows no planner/provider details: an uncertain question
-// returns null and the caller continues through the existing safe planner path.
+// Deterministic operational query plane.
+//
+// This module owns interpretation, compatibility formatting, and the execution
+// seam. Canonical tenant-scoped reads live in @finnor/read-models; SQL and
+// tenant fallback readers deliberately do not belong here.
 
-import type { TenantContext } from "@finnor/shared-types";
-import { cashCollections as loadCashCollections, type CashCollections } from "@finnor/read-models";
+import { createHash, randomUUID } from "node:crypto";
+import { performance } from "node:perf_hooks";
+import type {
+  CanonicalOperationalQueryIntent,
+  CanonicalOperationalQueryRequest,
+  OperationalLocalDateRange,
+  OperationalQueryPageRequest,
+  OperationalQueryResult as SharedOperationalQueryResult,
+  OperationalQuerySource,
+  TenantContext,
+} from "@finnor/shared-types";
+import {
+  executeOperationalQuery as canonicalExecuteOperationalQuery,
+  type CashCollections,
+  type OperationalQueryOptions,
+} from "@finnor/read-models";
+
+/** Keep the old public names, but make their public meaning canonical. */
+export type OperationalQueryIntent = CanonicalOperationalQueryIntent;
+export type OperationalQueryRequest = CanonicalOperationalQueryRequest;
+export type OperationalQueryResult = SharedOperationalQueryResult;
+
+type DraftOperationalQueryIntent = CanonicalOperationalQueryIntent;
+
+type DraftOperationalQueryRequest =
+  | { intent: "customer_lookup"; query: string }
+  | { intent: "customer_cohort"; minDaysInactive: number }
+  | { intent: "schedule_range"; localDateRange: OperationalLocalDateRange }
+  | { intent: "money_summary" }
+  | { intent: "work_list"; openOnly: boolean }
+  | { intent: "inventory_status"; lowStockOnly: boolean }
+  | { intent: "agent_activity"; localDateRange: OperationalLocalDateRange }
+  | { intent: "business_state" };
+
+type QueryDateValue = string | "today" | "tomorrow";
+type QueryResultStatus = "ok" | "ambiguous" | "not_found";
+
+export interface OperationalQueryDateRange {
+  timeZone: string;
+  startLocalDate: string;
+  endLocalDateInclusive: string;
+  /** Half-open UTC range: [startAt, endAt). */
+  startAt: string;
+  endAt: string;
+}
+
+export interface OperationalQueryMetadata {
+  /** Durable work_query_executions.id when Work context was supplied. */
+  queryId: string;
+  source: "postgresql";
+  durationMs: number;
+  startedAt: string;
+  completedAt: string;
+  timeZone?: string;
+  dateRange?: OperationalQueryDateRange;
+}
+
+export interface OperationalQueryExecution {
+  request: OperationalQueryRequest;
+  result: OperationalQueryResult;
+  metadata: OperationalQueryMetadata;
+}
+
+export interface OperationalQueryInterpretation {
+  route: "fast_read";
+  confidence: "high";
+  request: OperationalQueryRequest;
+}
+
+export interface PlannerReadFallback {
+  route: "planner";
+  reason: "not_question" | "mutation_or_advice" | "external_or_ambiguous" | "unsupported";
+}
+
+export type OperationalQueryDecision = OperationalQueryInterpretation | PlannerReadFallback;
 
 export interface AnswerDisplayFact {
   label: string;
@@ -26,52 +101,339 @@ export interface AnswerFreshness {
   observedAt: string;
 }
 
-/** Browser/voice-safe answer contract. It contains only a bounded display
- * projection and citation metadata; raw read-model rows never cross this seam. */
+/** Browser/voice-safe answer contract. Raw read-model rows do not cross this seam. */
 export interface AnswerEnvelope {
   kind: "answer";
-  intent: "cash_collections" | "greeting";
+  intent: OperationalQueryIntent | "cash_collections" | "conversation";
   readOnly: true;
   spokenSummary: string;
   display: AnswerDisplay;
   evidence: AnswerEvidence[];
   asOf: string;
   freshness: AnswerFreshness;
+  /** Additive typed metadata; existing cash/voice consumers may ignore it. */
+  query?: OperationalQueryExecution;
 }
 
 export type FastReadOnlyClassification =
   | { route: "fast_read"; intent: "cash_collections" }
-  | { route: "fast_read"; intent: "greeting" }
-  | { route: "planner"; reason: "not_question" | "mutation_or_advice" | "external_or_ambiguous" | "unsupported" };
+  | { route: "fast_read"; intent: OperationalQueryIntent }
+  | PlannerReadFallback;
 
-const QUESTION_PREFIX = /^(?:how|what|which|where|when|is|are|do|does|did|can|could|tell me|show me|give me)\b/i;
-const MUTATION_OR_ADVICE = /\b(?:create|send|record|update|change|delete|remove|approve|reject|schedule|book|call|text|email|pay|charge|reorder|restock|flag|mark|start|launch|assign|execute|run|prepare|draft|write|edit|improve|recommend|recommendation|advice|should|make)\b/i;
-const EXTERNAL_OR_AMBIGUOUS = /\b(?:quickbooks|stripe|google|meta|vapi|integration|connected account|why|forecast|predict|trend)\b/i;
-const CASH_COLLECTIONS = /\b(?:cash\s+collections?|collections?|payments?\s+collected|(?:cash|payments?)\s+collected|collected\s+(?:cash|payments?))\b/i;
-const GREETING = /^(?:hi|hello|hey|hiya|good\s+(?:morning|afternoon|evening))[!.?,\s]*$/i;
-
-/** Pure, fail-closed classification. It never returns an action type and therefore
- * cannot authorize a write, even if a caller accidentally treats the result as a
- * routing hint elsewhere. */
-export function classifyFastReadOnlyQuestion(instruction: string): FastReadOnlyClassification {
-  const normalized = instruction.trim().replace(/\s+/g, " ");
-  if (!normalized || normalized.length > 500) return { route: "planner", reason: "not_question" };
-  if (GREETING.test(normalized)) return { route: "fast_read", intent: "greeting" };
-  if (!QUESTION_PREFIX.test(normalized) && !/\?\s*$/.test(normalized)) return { route: "planner", reason: "not_question" };
-  if (MUTATION_OR_ADVICE.test(normalized)) return { route: "planner", reason: "mutation_or_advice" };
-  if (EXTERNAL_OR_AMBIGUOUS.test(normalized)) return { route: "planner", reason: "external_or_ambiguous" };
-  if (CASH_COLLECTIONS.test(normalized)) return { route: "fast_read", intent: "cash_collections" };
-  return { route: "planner", reason: "unsupported" };
-}
+/** Exactly the canonical read-model executor type, including its option seam. */
+export type ExecuteOperationalQuery = typeof canonicalExecuteOperationalQuery;
 
 export interface FastReadOnlyRouter {
   classify(instruction: string): FastReadOnlyClassification;
+  /** Existing seam: returns a browser/voice answer or null. */
   route(instruction: string, ctx: Pick<TenantContext, "tenantId">): Promise<AnswerEnvelope | null>;
+  /** Typed seams used by the orchestrator/API. Optional on injected legacy routers. */
+  interpret?(instruction: string): OperationalQueryDecision;
+  execute?(request: OperationalQueryRequest, ctx: Pick<TenantContext, "tenantId">, options?: OperationalQueryOptions): Promise<OperationalQueryExecution>;
+  answer?(execution: OperationalQueryExecution): AnswerEnvelope;
 }
 
 export interface FastReadOnlyRouterDeps {
+  /** Test seam for the canonical reader; production defaults to read-models. */
+  executeOperationalQuery?: ExecuteOperationalQuery;
+  /** Explicit legacy test seam. It is adapted to the canonical money result shape. */
   cashCollections?: (tenantId: string) => Promise<CashCollections>;
   now?: () => Date;
+}
+
+const QUESTION_PREFIX = /^(?:how|what|which|where|when|who|is|are|do|does|did|can|could|tell me|show|find|give me|list|list out|get|summarize|explain)\b/i;
+const MUTATION_OR_ADVICE = /\b(?:create|send|update|change|delete|remove|approve|reject|book|call|text|email|pay|charge|reorder|restock|flag|mark|start|launch|assign|execute|run|prepare|draft|write|edit|improve|recommend|recommendation|advice|should|make|reschedule|schedule\s+(?:an?|the)?\s*(?:appointment|visit|service|water\s*test|job))\b/i;
+const EXTERNAL_OR_AMBIGUOUS = /\b(?:quickbooks|stripe|google|meta|vapi|integration|connected account|external|online|web|research|look up|latest|current\s+(?:news|benchmark|market|source|industry)|why|forecast|predict|projection|trend|benchmark|cite|citation|source-backed)\b/i;
+const CASH_COLLECTIONS = /\b(?:cash\s+collections?|collections?|payments?\s+collected|collected\s+(?:cash|payments?)|cash\s+position|cash\b[\s\S]{0,40}\bcollected)\b/i;
+const ISO_DATE = /\b\d{4}-\d{2}-\d{2}\b/g;
+const DATE_WORD = /\b(?:today|tomorrow)\b/gi;
+const DATE_CONNECTOR = /\b(?:through|thru|to|until|and|between)\b/i;
+const DANGEROUS_LOOKUP_TEXT = /[;{}[\]<>=$`]/;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function normalizedInstruction(instruction: string): string {
+  return instruction.trim().replace(/\s+/g, " ");
+}
+
+function validLocalDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year!, month! - 1, day!));
+  return date.getUTCFullYear() === year && date.getUTCMonth() + 1 === month && date.getUTCDate() === day;
+}
+
+function parseDateTokens(instruction: string): QueryDateValue[] | null {
+  const normalized = normalizedInstruction(instruction);
+  // Only two relative words and explicit ISO local dates are supported. This
+  // deliberately rejects "next Friday" and server-locale date parsing.
+  if (/\b(?:next|last|this|coming|week|month|friday|monday|tuesday|wednesday|thursday|saturday|sunday)\b/i.test(normalized)) return null;
+  const matches = [
+    ...[...normalized.matchAll(ISO_DATE)].map((match) => ({ value: match[0] as QueryDateValue, index: match.index ?? 0 })),
+    ...[...normalized.matchAll(DATE_WORD)].map((match) => ({ value: match[0].toLowerCase() as QueryDateValue, index: match.index ?? 0 })),
+  ].sort((a, b) => a.index - b.index);
+  const values = matches.map((match) => match.value);
+  if (values.length === 0 || values.length > 2) return null;
+  if (values.some((value) => typeof value === "string" && value.includes("-") && !validLocalDate(value))) return null;
+  if (values.length === 2 && !DATE_CONNECTOR.test(normalized)) return null;
+  return values;
+}
+
+function queryParamString(value: string | undefined): string | undefined {
+  const result = value?.trim();
+  if (!result || result.length > 200 || DANGEROUS_LOOKUP_TEXT.test(result)) return undefined;
+  return result;
+}
+
+function extractCustomerQuery(instruction: string): string | undefined {
+  const normalized = normalizedInstruction(instruction);
+  const match = normalized.match(/\b(?:for|about|named|called|customer|household|client|account)\s+([A-Za-z][A-Za-z0-9 .,'&-]{1,100}?)(?:\?|$|\b(?:history|record|details|information|lookup|look-up)\b)/i);
+  const history = normalized.match(/\b(?:history|record|details|information)\s+for\s+([A-Za-z][A-Za-z0-9 .,'&-]{1,100})\??$/i);
+  const fallback = normalized.match(/\b(?:customer|household|client|account)\s+([A-Za-z][A-Za-z0-9 .,'&-]{1,100})\??$/i);
+  const candidate = queryParamString((match?.[1] ?? history?.[1] ?? fallback?.[1])
+    ?.replace(/^(?:record|history|details|information)\s+for\s+/i, "")
+    .replace(/[,.]+$/, ""));
+  if (!candidate) return undefined;
+  // A bare first name is deliberately ambiguous in the natural-language
+  // lane. Typed callers may still submit it and receive an ambiguous result.
+  const words = candidate.split(/\s+/).filter(Boolean);
+  return words.length >= 2 || /\d/.test(candidate) ? candidate : undefined;
+}
+
+function parseOperationalQuery(instruction: string): DraftOperationalQueryRequest | null {
+  const normalized = normalizedInstruction(instruction);
+  if (!normalized || normalized.length > 500) return null;
+
+  const scheduleMention = /\b(?:schedule|calendar|appointment|appointments|service\s+visit|service\s+visits|work\s+order|work\s+orders|everything)\b/i.test(normalized);
+  if (scheduleMention) {
+    const dates = parseDateTokens(normalized);
+    if (dates) return { intent: "schedule_range", localDateRange: { startDate: dates[0]!, ...(dates[1] ? { endDate: dates[1] } : {}) } };
+  }
+
+  if (/\b(?:inactive|inactivity|haven['’]?t\s+seen|not\s+(?:visited|heard\s+from)|no\s+(?:service|visit|activity))\b/i.test(normalized)) {
+    const days = normalized.match(/\b(\d{1,4})\s*days?\b/i)?.[1];
+    if (days) return { intent: "customer_cohort", minDaysInactive: Number(days) };
+    return null;
+  }
+
+  if (CASH_COLLECTIONS.test(normalized) || /\b(?:overdue|outstanding|invoice|invoices|money|revenue|payments?)\b/i.test(normalized)) return { intent: "money_summary" };
+
+  if (/\b(?:inventory|stock|sku|on\s+hand|low\s+stock|running\s+low|reorder\s+point)\b/i.test(normalized)) {
+    return { intent: "inventory_status", lowStockOnly: /\b(?:low|running\s+low|reorder)\b/i.test(normalized) };
+  }
+
+  if (/\b(?:agent\s+activity|agent\s+actions|what\s+(?:did|has)\s+(?:the\s+)?(?:agent|agents|jarvis)|recent\s+activity|activity\s+log)\b/i.test(normalized)) {
+    const dates = parseDateTokens(normalized);
+    if (!dates) return null;
+    return { intent: "agent_activity", localDateRange: { startDate: dates[0]!, ...(dates[1] ? { endDate: dates[1] } : {}) } };
+  }
+  if (/\b(?:business\s+state|business\s+health|operational\s+state|pipeline\s+health|business\s+overview|how\s+is\s+(?:the\s+)?business)\b/i.test(normalized)) return { intent: "business_state" };
+  if (/\b(?:work\s+orders?|work\b|jobs?|workflow|work\s+queue|backlog|in\s+progress)\b/i.test(normalized)) return { intent: "work_list", openOnly: /\b(?:open|pending|in\s+progress|backlog|queue)\b/i.test(normalized) };
+
+  if (/\b(?:customer|household|client|account|customer\s+record|household\s+history)\b/i.test(normalized)) {
+    const query = extractCustomerQuery(normalized);
+    if (!query) return null;
+    return { intent: "customer_lookup", query };
+  }
+  return null;
+}
+
+/** Map the private interpreter draft immediately to the canonical shared request. */
+function toCanonicalRequest(draft: DraftOperationalQueryRequest): OperationalQueryRequest {
+  switch (draft.intent) {
+    case "customer_lookup":
+      return { intent: "customer_lookup", query: draft.query };
+    case "customer_cohort":
+      return { intent: "customer_cohort", cohort: "inactive", minDaysInactive: draft.minDaysInactive };
+    case "schedule_range":
+      // The canonical reader resolves this local inclusive range through the
+      // tenant timezone and injected asOf clock. Never cast it to UTC here.
+      return { intent: "schedule_range", localDateRange: draft.localDateRange };
+    case "money_summary":
+      return { intent: "money_summary" };
+    case "work_list":
+      // The canonical reader applies openOnly independently to works,
+      // work_orders, and tasks; sharing one status vocabulary would silently
+      // omit draft/scheduled work orders or open tasks.
+      return draft.openOnly ? { intent: "work_list", openOnly: true } : { intent: "work_list" };
+    case "inventory_status":
+      return { intent: "inventory_status", lowStockOnly: draft.lowStockOnly };
+    case "agent_activity": {
+      // The data thread's canonical executor resolves local calendar ranges
+      // through tenants.timezone and the injected clock. Keep the token typed
+      // and explicit; never manufacture a server-locale UTC range here.
+      return { intent: "agent_activity", localDateRange: draft.localDateRange };
+    }
+    case "business_state":
+      return { intent: "business_state" };
+    default:
+      return assertNever(draft);
+  }
+}
+
+function assertNever(value: never): never {
+  throw new Error(`Unsupported operational query intent: ${String(value)}`);
+}
+
+/** Pure, fail-closed natural-language interpretation. */
+export function interpretOperationalQuery(instruction: string): OperationalQueryDecision {
+  const normalized = normalizedInstruction(instruction);
+  if (!normalized || normalized.length > 500 || (!QUESTION_PREFIX.test(normalized) && !/\?\s*$/.test(normalized))) return { route: "planner", reason: "not_question" };
+  if (MUTATION_OR_ADVICE.test(normalized)) return { route: "planner", reason: "mutation_or_advice" };
+  if (EXTERNAL_OR_AMBIGUOUS.test(normalized)) return { route: "planner", reason: "external_or_ambiguous" };
+  const draft = parseOperationalQuery(normalized);
+  return draft ? { route: "fast_read", confidence: "high", request: toCanonicalRequest(draft) } : { route: "planner", reason: "unsupported" };
+}
+
+function isPage(value: unknown): value is OperationalQueryPageRequest {
+  if (!isRecord(value)) return false;
+  if (value.limit !== undefined && (!Number.isInteger(value.limit) || (value.limit as number) < 1 || (value.limit as number) > 100)) return false;
+  return value.cursor === undefined || (typeof value.cursor === "string" && value.cursor.length <= 4096);
+}
+
+function isRange(value: unknown): value is { start: string; end: string } {
+  return isRecord(value) && typeof value.start === "string" && typeof value.end === "string" && !Number.isNaN(new Date(value.start).getTime()) && !Number.isNaN(new Date(value.end).getTime()) && new Date(value.start).getTime() < new Date(value.end).getTime();
+}
+
+function isLocalDateValue(value: unknown): value is QueryDateValue {
+  return typeof value === "string" && (value === "today" || value === "tomorrow" || validLocalDate(value));
+}
+
+function isLocalDateRange(value: unknown): value is OperationalLocalDateRange {
+  return isRecord(value) && isLocalDateValue(value.startDate) && (value.endDate === undefined || isLocalDateValue(value.endDate));
+}
+
+function paramsFor(input: Record<string, unknown>): { params: Record<string, unknown>; error?: string } {
+  const rawParams = input.params;
+  const direct = Object.fromEntries(Object.entries(input).filter(([key]) => key !== "intent" && key !== "params"));
+  if (rawParams !== undefined && !isRecord(rawParams)) return { params: {}, error: "Query params must be an object" };
+  if (rawParams !== undefined && Object.keys(direct).length > 0) return { params: {}, error: "Use either canonical fields or params, not both" };
+  return { params: isRecord(rawParams) ? rawParams : direct };
+}
+
+function unknownFields(params: Record<string, unknown>, allowed: string[]): string[] {
+  return Object.keys(params).filter((key) => !allowed.includes(key));
+}
+
+/**
+ * Validate/normalize a public typed request. Compatibility `params` input is
+ * accepted only as an adapter; the returned request is always canonical direct
+ * fields, so it can never fall through to the planner or a divergent executor.
+ */
+export function validateOperationalQueryRequest(input: unknown): { success: true; request: OperationalQueryRequest } | { success: false; error: string } {
+  if (!isRecord(input) || typeof input.intent !== "string") return { success: false, error: "A typed query intent is required" };
+  const intent = input.intent === "cash_collections" ? "money_summary" : input.intent;
+  const { params, error } = paramsFor(input);
+  if (error) return { success: false, error };
+
+  if (intent === "customer_lookup") {
+    const unknown = unknownFields(params, ["householdId", "query", "name", "address", "contact", "phone", "page", "limit"]);
+    if (unknown.length) return { success: false, error: `Unknown fields for customer_lookup: ${unknown.join(", ")}` };
+    const page = params.page ?? (params.limit === undefined ? undefined : { limit: params.limit });
+    if (page !== undefined && !isPage(page)) return { success: false, error: "Invalid page" };
+    const selectors = ["householdId", "query", "name", "address", "contact", "phone"] as const;
+    if (!selectors.some((key) => typeof params[key] === "string" && (params[key] as string).trim())) return { success: false, error: "customer_lookup requires a selector" };
+    if (params.householdId !== undefined && (typeof params.householdId !== "string" || !/^[0-9a-f-]{36}$/i.test(params.householdId))) return { success: false, error: "householdId must be a UUID" };
+    return { success: true, request: { intent: "customer_lookup", ...(params.householdId ? { householdId: params.householdId } : {}), ...(typeof params.query === "string" ? { query: params.query } : {}), ...(typeof params.name === "string" ? { name: params.name } : {}), ...(typeof params.address === "string" ? { address: params.address } : {}), ...(typeof (params.contact ?? params.phone) === "string" ? { contact: (params.contact ?? params.phone) as string } : {}), ...(page ? { page } : {}) } };
+  }
+
+  if (intent === "customer_cohort" || intent === "inactivity_cohort") {
+    const unknown = unknownFields(params, ["cohort", "minDaysInactive", "asOf", "page", "limit"]);
+    if (unknown.length) return { success: false, error: `Unknown fields for customer_cohort: ${unknown.join(", ")}` };
+    const days = Number(params.minDaysInactive);
+    const page = params.page ?? (params.limit === undefined ? undefined : { limit: params.limit });
+    if (!Number.isInteger(days) || days < 1 || days > 3650) return { success: false, error: "minDaysInactive must be an integer between 1 and 3650" };
+    if (page !== undefined && !isPage(page)) return { success: false, error: "Invalid page" };
+    if (params.cohort !== undefined && params.cohort !== "inactive") return { success: false, error: "cohort must be inactive" };
+    if (params.asOf !== undefined && (typeof params.asOf !== "string" || Number.isNaN(new Date(params.asOf).getTime()))) return { success: false, error: "asOf must be an ISO timestamp" };
+    return { success: true, request: { intent: "customer_cohort", cohort: "inactive", minDaysInactive: days, ...(typeof params.asOf === "string" ? { asOf: params.asOf } : {}), ...(page ? { page } : {}) } };
+  }
+
+  if (intent === "schedule_range") {
+    const unknown = unknownFields(params, ["range", "localDateRange", "startDate", "endDate", "page", "limit"]);
+    if (unknown.length) return { success: false, error: `Unknown fields for schedule_range: ${unknown.join(", ")}` };
+    const page = params.page ?? (params.limit === undefined ? undefined : { limit: params.limit });
+    if (page !== undefined && !isPage(page)) return { success: false, error: "Invalid page" };
+    const localDateRange = params.localDateRange ?? (params.startDate === undefined ? undefined : { startDate: params.startDate, ...(params.endDate === undefined ? {} : { endDate: params.endDate }) });
+    if (localDateRange !== undefined && !isLocalDateRange(localDateRange)) return { success: false, error: "localDateRange must contain ISO local dates, today, or tomorrow" };
+    if (params.range !== undefined && !isRange(params.range)) return { success: false, error: "range must be a valid half-open timestamp range" };
+    if (params.range !== undefined && localDateRange !== undefined) return { success: false, error: "Use either range or localDateRange" };
+    if (params.range === undefined && localDateRange === undefined) return { success: false, error: "schedule_range requires range or localDateRange" };
+    return { success: true, request: { intent: "schedule_range", ...(params.range ? { range: params.range } : {}), ...(localDateRange ? { localDateRange } : {}), ...(page ? { page } : {}) } };
+  }
+
+  if (intent === "money_summary" || intent === "money") {
+    const unknown = unknownFields(params, ["range", "start", "end", "page", "limit", "metric"]);
+    if (unknown.length) return { success: false, error: `Unknown fields for money_summary: ${unknown.join(", ")}` };
+    const page = params.page ?? (params.limit === undefined ? undefined : { limit: params.limit });
+    if (page !== undefined && !isPage(page)) return { success: false, error: "Invalid page" };
+    if (params.metric !== undefined && !["cash_collections", "invoices", "payments", "overdue"].includes(String(params.metric))) return { success: false, error: "Unknown money metric" };
+    if (params.range !== undefined && !isRange(params.range)) return { success: false, error: "range must be a valid half-open timestamp range" };
+    if (params.range !== undefined && (params.start !== undefined || params.end !== undefined)) return { success: false, error: "Use either range or start/end, not both" };
+    if ((params.start === undefined) !== (params.end === undefined)) return { success: false, error: "money_summary start and end must be supplied together" };
+    if (params.start !== undefined && (typeof params.start !== "string" || typeof params.end !== "string" || !isRange({ start: params.start, end: params.end }))) return { success: false, error: "start/end must be a valid half-open timestamp range" };
+    return { success: true, request: { intent: "money_summary", ...(params.range ? { range: params.range } : {}), ...(typeof params.start === "string" ? { start: params.start, end: params.end as string } : {}), ...(page ? { page } : {}) } };
+  }
+
+  if (intent === "work_list" || intent === "work") {
+    const unknown = unknownFields(params, ["section", "statuses", "status", "openOnly", "recordId", "page", "limit"]);
+    if (unknown.length) return { success: false, error: `Unknown fields for work_list: ${unknown.join(", ")}` };
+    const page = params.page ?? (params.limit === undefined ? undefined : { limit: params.limit });
+    if (page !== undefined && !isPage(page)) return { success: false, error: "Invalid page" };
+    if (params.recordId !== undefined && (typeof params.recordId !== "string" || !/^[0-9a-f-]{36}$/i.test(params.recordId))) return { success: false, error: "recordId must be a UUID" };
+    const statuses = Array.isArray(params.statuses) ? params.statuses : typeof params.status === "string" ? [params.status] : undefined;
+    if (statuses && (!statuses.every((value) => typeof value === "string" && value.length <= 80) || statuses.length > 20)) return { success: false, error: "statuses must be a bounded string array" };
+    if (params.section !== undefined && !["all", "works", "work_orders", "tasks"].includes(String(params.section))) return { success: false, error: "Unknown work section" };
+    if (params.openOnly !== undefined && typeof params.openOnly !== "boolean") return { success: false, error: "openOnly must be boolean" };
+    return { success: true, request: { intent: "work_list", ...(params.section ? { section: params.section as "all" | "works" | "work_orders" | "tasks" } : {}), ...(statuses ? { statuses } : {}), ...(params.openOnly === undefined ? {} : { openOnly: params.openOnly }), ...(params.recordId ? { recordId: params.recordId } : {}), ...(page ? { page } : {}) } };
+  }
+
+  if (intent === "inventory_status") {
+    const unknown = unknownFields(params, ["sku", "lowStockOnly", "includeOpenProcurement", "page", "limit"]);
+    if (unknown.length) return { success: false, error: `Unknown fields for inventory_status: ${unknown.join(", ")}` };
+    const page = params.page ?? (params.limit === undefined ? undefined : { limit: params.limit });
+    if (page !== undefined && !isPage(page)) return { success: false, error: "Invalid page" };
+    if (params.lowStockOnly !== undefined && typeof params.lowStockOnly !== "boolean") return { success: false, error: "lowStockOnly must be boolean" };
+    if (params.includeOpenProcurement !== undefined && typeof params.includeOpenProcurement !== "boolean") return { success: false, error: "includeOpenProcurement must be boolean" };
+    if (params.sku !== undefined && (typeof params.sku !== "string" || params.sku.length > 120)) return { success: false, error: "sku must be a bounded string" };
+    return { success: true, request: { intent: "inventory_status", ...(typeof params.sku === "string" ? { sku: params.sku } : {}), ...(params.lowStockOnly === undefined ? {} : { lowStockOnly: params.lowStockOnly }), ...(params.includeOpenProcurement === undefined ? {} : { includeOpenProcurement: params.includeOpenProcurement }), ...(page ? { page } : {}) } };
+  }
+
+  if (intent === "agent_activity") {
+    const unknown = unknownFields(params, ["range", "localDateRange", "page", "limit"]);
+    if (unknown.length) return { success: false, error: `Unknown fields for agent_activity: ${unknown.join(", ")}` };
+    const page = params.page ?? (params.limit === undefined ? undefined : { limit: params.limit });
+    if (page !== undefined && !isPage(page)) return { success: false, error: "Invalid page" };
+    if (params.localDateRange !== undefined) {
+      if (!isLocalDateRange(params.localDateRange)) return { success: false, error: "localDateRange must contain ISO local dates, today, or tomorrow" };
+      return { success: true, request: { intent: "agent_activity", localDateRange: params.localDateRange, ...(page ? { page } : {}) } };
+    }
+    if (!isRange(params.range)) return { success: false, error: "agent_activity requires a valid UTC range or localDateRange" };
+    return { success: true, request: { intent: "agent_activity", range: params.range, ...(page ? { page } : {}) } };
+  }
+
+  if (intent === "business_state") {
+    const unknown = unknownFields(params, ["page", "limit"]);
+    if (unknown.length) return { success: false, error: `Unknown fields for business_state: ${unknown.join(", ")}` };
+    const page = params.page ?? (params.limit === undefined ? undefined : { limit: params.limit });
+    if (page !== undefined && !isPage(page)) return { success: false, error: "Invalid page" };
+    return { success: true, request: { intent: "business_state", ...(page ? { page } : {}) } };
+  }
+  return { success: false, error: "Unknown operational query intent" };
+}
+
+function isLegacyCashQuestion(instruction: string): boolean {
+  return CASH_COLLECTIONS.test(normalizedInstruction(instruction));
+}
+
+/** Backward-compatible classifier. The typed interpreter remains canonical. */
+export function classifyFastReadOnlyQuestion(instruction: string): FastReadOnlyClassification {
+  const decision = interpretOperationalQuery(instruction);
+  if (decision.route !== "fast_read") return decision;
+  if (decision.request.intent === "money_summary" && isLegacyCashQuestion(instruction)) return { route: "fast_read", intent: "cash_collections" };
+  return { route: "fast_read", intent: decision.request.intent };
 }
 
 function money(value: number): string {
@@ -91,61 +453,223 @@ export function answerCashCollections(snapshot: CashCollections, asOf: string): 
   const paid = countFor(snapshot, "paid");
   const overdue = countFor(snapshot, "overdue");
   const links = snapshot.paymentLinksAwaitingPayment;
-  const spokenSummary =
-    `Cash collections are ${money(snapshot.totalCollected)} collected to date. ` +
-    `There are ${plural(paid.count, "paid invoice")} and ${plural(overdue.count, "overdue invoice")} totaling ${money(overdue.totalUsd)} overdue.` +
-    ` ${plural(links, "payment link")} ${links === 1 ? "is" : "are"} awaiting payment.`;
-
+  const spokenSummary = `Cash collections are ${money(snapshot.totalCollected)} collected to date. There are ${plural(paid.count, "paid invoice")} and ${plural(overdue.count, "overdue invoice")} totaling ${money(overdue.totalUsd)} overdue. ${plural(links, "payment link")} ${links === 1 ? "is" : "are"} awaiting payment.`;
   return {
     kind: "answer",
     intent: "cash_collections",
     readOnly: true,
     spokenSummary,
-    display: {
-      title: "Cash collections",
-      facts: [
-        { label: "Collected to date", value: money(snapshot.totalCollected) },
-        { label: "Paid invoices", value: String(paid.count) },
-        { label: "Overdue invoices", value: String(overdue.count) },
-        { label: "Overdue amount", value: money(overdue.totalUsd) },
-        { label: "Payment links awaiting payment", value: String(links) },
-      ],
-    },
+    display: { title: "Cash collections", facts: [
+      { label: "Collected to date", value: money(snapshot.totalCollected) },
+      { label: "Paid invoices", value: String(paid.count) },
+      { label: "Overdue invoices", value: String(overdue.count) },
+      { label: "Overdue amount", value: money(overdue.totalUsd) },
+      { label: "Payment links awaiting payment", value: String(links) },
+    ] },
     evidence: [{ source: "cash_collections_read_model", ref: "current", timestamp: asOf }],
     asOf,
     freshness: { status: "fresh", observedAt: asOf },
   };
 }
 
-export function answerGreeting(asOf: string): AnswerEnvelope {
+function sourceFor(intent: OperationalQueryIntent): OperationalQuerySource {
+  return { kind: "canonical_postgres", tables: [`operational_query:${intent}`] };
+}
+
+function stableExecutionKey(request: OperationalQueryRequest, workId?: string): string {
+  const digest = createHash("sha256").update(JSON.stringify(request)).digest("hex").slice(0, 32);
+  return `operational-query:${workId ?? "unbound"}:${digest}`;
+}
+
+function legacyCashResult(snapshot: CashCollections, asOf: string): OperationalQueryResult {
+  const page = { limit: 100, returned: snapshot.invoicesByStatus.length, totalCount: snapshot.invoicesByStatus.length, totalCountExact: true, hasMore: false, nextCursor: null, truncated: false } as const;
+  const source = sourceFor("money_summary");
+  return {
+    kind: "operational_query_result",
+    status: "ok",
+    data: snapshot as unknown as Record<string, unknown>,
+    version: 1,
+    intent: "money_summary",
+    source,
+    asOf,
+    count: page.returned,
+    truncated: false,
+    page,
+    meta: { version: 1, source, asOf },
+  } as unknown as OperationalQueryResult;
+}
+
+function canonicalizeResult(request: OperationalQueryRequest, raw: unknown, asOf: string): OperationalQueryResult {
+  const top = isRecord(raw) ? raw : {};
+  const candidate = isRecord(top.result) ? top.result : top;
+  const source = isRecord(candidate.source) ? candidate.source as unknown as OperationalQuerySource : sourceFor(request.intent);
+  const status: QueryResultStatus = candidate.status === "ambiguous" || candidate.status === "not_found" ? candidate.status : "ok";
+  const resultAsOf = typeof candidate.asOf === "string" ? candidate.asOf : asOf;
+  if (candidate.kind === "operational_query_result" && candidate.version === 1 && isRecord(candidate.page) && isRecord(candidate.meta)) return candidate as unknown as OperationalQueryResult;
+  const data = isRecord(candidate.data) ? candidate.data : {};
+  const page = isRecord(candidate.page)
+    ? candidate.page
+    : { limit: 100, returned: 0, totalCount: null, totalCountExact: false, hasMore: false, nextCursor: null, truncated: false };
+  return {
+    kind: "operational_query_result",
+    status,
+    data,
+    version: 1,
+    intent: request.intent,
+    source,
+    asOf: resultAsOf,
+    count: typeof candidate.count === "number" ? candidate.count : Number(page.returned ?? 0),
+    truncated: Boolean(candidate.truncated ?? page.truncated),
+    page: page as never,
+    meta: { version: 1, source, asOf: resultAsOf },
+    ...(isRecord(candidate.execution) ? { execution: candidate.execution as never } : {}),
+  } as unknown as OperationalQueryResult;
+}
+
+function dateRangeFromResult(result: OperationalQueryResult): { timeZone?: string; dateRange?: OperationalQueryDateRange } {
+  const value = result as unknown as Record<string, unknown>;
+  if (typeof value.timeZone !== "string" || !isRecord(value.range)) return {};
+  const range = value.range;
+  if (typeof range.start !== "string" || typeof range.end !== "string") return {};
+  const local = isRecord(value.localDateRange) ? value.localDateRange : undefined;
+  const startLocalDate = typeof local?.startDate === "string" ? local.startDate : range.start.slice(0, 10);
+  const endLocalDateInclusive = typeof local?.endDate === "string" ? local.endDate : startLocalDate;
+  return { timeZone: value.timeZone, dateRange: { timeZone: value.timeZone, startLocalDate, endLocalDateInclusive, startAt: range.start, endAt: range.end } };
+}
+
+function normalizeCanonicalExecution(request: OperationalQueryRequest, raw: unknown, startedAt: string, completedAt: string, durationMs: number): OperationalQueryExecution {
+  const result = canonicalizeResult(request, raw, completedAt);
+  const top = isRecord(raw) ? raw : {};
+  const metadata = isRecord(top.metadata) ? top.metadata : {};
+  const execution = isRecord(result.execution) ? result.execution : undefined;
+  const dates = dateRangeFromResult(result);
+  return {
+    request,
+    result,
+    metadata: {
+      queryId: typeof execution?.id === "string" ? execution.id : typeof metadata.queryId === "string" ? metadata.queryId : randomUUID(),
+      source: "postgresql",
+      durationMs,
+      startedAt,
+      completedAt,
+      ...(dates.timeZone ? { timeZone: dates.timeZone } : {}),
+      ...(dates.dateRange ? { dateRange: dates.dateRange } : {}),
+    },
+  };
+}
+
+function resultValue(result: OperationalQueryResult, key: string): unknown {
+  const root = result as unknown as Record<string, unknown>;
+  if (root[key] !== undefined) return root[key];
+  const data = isRecord(result.data) ? result.data : {};
+  return data[key];
+}
+
+function arrayLength(result: OperationalQueryResult, ...keys: string[]): number {
+  return keys.reduce((total, key) => total + (Array.isArray(resultValue(result, key)) ? (resultValue(result, key) as unknown[]).length : 0), 0);
+}
+
+function resultCount(result: OperationalQueryResult): number {
+  const value = resultValue(result, "count");
+  return typeof value === "number" ? value : 0;
+}
+
+function summarizeData(intent: OperationalQueryIntent, result: OperationalQueryResult): { title: string; spokenSummary: string; facts: AnswerDisplayFact[] } {
+  if (intent === "customer_lookup") {
+    const rows = arrayLength(result, "rows");
+    const resolution = resultValue(result, "resolution");
+    if (resolution === "ambiguous" || result.status === "ambiguous") return { title: "Customer lookup", spokenSummary: `I found ${rows} possible customer records. Which one should I use?`, facts: [{ label: "Possible matches", value: String(rows) }] };
+    if (resolution === "not_found" || result.status === "not_found") return { title: "Customer lookup", spokenSummary: "I couldn't find a matching customer record in this tenant.", facts: [{ label: "Matches", value: "0" }] };
+    return { title: "Customer lookup", spokenSummary: "I found the customer record in this tenant.", facts: [{ label: "Matches", value: String(rows) }] };
+  }
+  if (intent === "customer_cohort") return { title: "Inactivity cohort", spokenSummary: `I found ${resultCount(result)} customers at or beyond the inactivity threshold.`, facts: [{ label: "Customers", value: String(resultCount(result)) }, { label: "Minimum inactive days", value: String(resultValue(result, "minDaysInactive") ?? "configured") }] };
+  if (intent === "schedule_range") return { title: "Schedule range", spokenSummary: `I found ${arrayLength(result, "rows")} scheduled items across appointments, service visits, and work orders.`, facts: [{ label: "Total", value: String(arrayLength(result, "rows")) }, { label: "Sources", value: "Appointments, service visits, work orders" }] };
+  if (intent === "money_summary") {
+    const totals = isRecord(resultValue(result, "totals")) ? resultValue(result, "totals") as Record<string, unknown> : {};
+    return { title: "Money summary", spokenSummary: `I retrieved ${money(Number(totals.collectedUsd ?? 0))} in collected payments.`, facts: [{ label: "Collected", value: money(Number(totals.collectedUsd ?? 0)) }, { label: "Invoiced", value: money(Number(totals.invoicedUsd ?? 0)) }, { label: "Pending collection", value: money(Number(totals.pendingCollectionUsd ?? 0)) }] };
+  }
+  if (intent === "work_list") return { title: "Work", spokenSummary: `I found ${resultCount(result)} durable Work records or related operational items.`, facts: [{ label: "Records", value: String(resultCount(result)) }] };
+  if (intent === "inventory_status") return { title: "Inventory", spokenSummary: `I found ${resultCount(result)} inventory records matching the request.`, facts: [{ label: "Records", value: String(resultCount(result)) }] };
+  if (intent === "agent_activity") return { title: "Agent activity", spokenSummary: `I found ${resultCount(result)} recent agent activity records.`, facts: [{ label: "Records", value: String(resultCount(result)) }] };
+  return { title: "Business state", spokenSummary: "I retrieved the current business state from the tenant's operational records.", facts: [{ label: "Source", value: "Tenant operational database" }] };
+}
+
+function snapshotFromMoneyResult(result: OperationalQueryResult): CashCollections | null {
+  const data = isRecord(result.data) ? result.data : {};
+  if (Array.isArray(data.invoicesByStatus) && typeof data.totalCollected === "number" && typeof data.paymentLinksAwaitingPayment === "number") return data as unknown as CashCollections;
+  const root = result as unknown as Record<string, unknown>;
+  const invoices = Array.isArray(root.invoices) ? root.invoices : null;
+  const totals = isRecord(root.totals) ? root.totals : null;
+  if (!invoices || !totals || typeof totals.collectedUsd !== "number") return null;
+  const paymentLinks = typeof root.paymentLinksAwaitingPayment === "number"
+    ? root.paymentLinksAwaitingPayment
+    : typeof data.paymentLinksAwaitingPayment === "number"
+      ? data.paymentLinksAwaitingPayment
+      : Array.isArray(root.paymentLinksAwaitingPayment)
+        ? root.paymentLinksAwaitingPayment.length
+        : 0;
+  return {
+    invoicesByStatus: invoices.filter(isRecord).map((row) => ({
+      status: typeof row.status === "string" ? row.status : "unknown",
+      count: typeof row.count === "number" ? row.count : 0,
+      totalUsd: typeof row.totalUsd === "number" ? row.totalUsd : 0,
+    })),
+    totalCollected: totals.collectedUsd,
+    paymentLinksAwaitingPayment: paymentLinks,
+  };
+}
+
+function answerForExecution(execution: OperationalQueryExecution): AnswerEnvelope {
+  const legacySnapshot = execution.request.intent === "money_summary" ? snapshotFromMoneyResult(execution.result) : null;
+  if (legacySnapshot) return { ...answerCashCollections(legacySnapshot, execution.result.asOf), query: execution };
+  const summary = summarizeData(execution.request.intent, execution.result);
   return {
     kind: "answer",
-    intent: "greeting",
+    intent: execution.request.intent,
     readOnly: true,
-    spokenSummary: "Hi — I’m here and ready to help.",
-    display: { title: "JARVIS is ready", facts: [] },
-    evidence: [{ source: "jarvis_assistant", ref: "ready", timestamp: asOf }],
-    asOf,
-    freshness: { status: "fresh", observedAt: asOf },
+    spokenSummary: summary.spokenSummary,
+    display: { title: summary.title, facts: summary.facts.slice(0, 8) },
+    evidence: [{ source: `operational_query:${execution.request.intent}`, ref: execution.metadata.queryId, timestamp: execution.result.asOf }],
+    asOf: execution.result.asOf,
+    freshness: { status: "fresh", observedAt: execution.result.asOf },
+    query: execution,
   };
 }
 
 export function createFastReadOnlyRouter(deps: FastReadOnlyRouterDeps = {}): FastReadOnlyRouter {
-  const loadCash = deps.cashCollections ?? loadCashCollections;
-  const now = deps.now ?? (() => new Date());
-  return {
+  const clock = deps.now ?? (() => new Date());
+  const router: FastReadOnlyRouter = {
     classify: classifyFastReadOnlyQuestion,
-    async route(instruction, ctx) {
-      const classification = classifyFastReadOnlyQuestion(instruction);
-      if (classification.route !== "fast_read") return null;
-      const asOf = now().toISOString();
-      if (classification.intent === "greeting") return answerGreeting(asOf);
-      // The only tenant selector is the authenticated request context. The
-      // instruction text and classifier have no tenant/action/policy fields.
-      const snapshot = await loadCash(ctx.tenantId);
-      return answerCashCollections(snapshot, asOf);
+    interpret: interpretOperationalQuery,
+    async execute(request, ctx, options) {
+      const startedAtDate = typeof options?.now === "function" ? options.now() : options?.now ?? clock();
+      const startedAt = startedAtDate.toISOString();
+      const start = performance.now();
+      const executionOptions: OperationalQueryOptions = {
+        ...options,
+        // The canonical executor expects a function-valued clock. Keeping it
+        // stable makes replay and focused tests deterministic.
+        now: () => startedAtDate,
+        ...(options?.workId ? { executionKey: options.executionKey ?? stableExecutionKey(request, options.workId) } : {}),
+      };
+      let raw: unknown;
+      if (deps.cashCollections && request.intent === "money_summary") {
+        raw = legacyCashResult(await deps.cashCollections(ctx.tenantId), clock().toISOString());
+      } else {
+        raw = await (deps.executeOperationalQuery ?? canonicalExecuteOperationalQuery)(ctx.tenantId, request, executionOptions);
+      }
+      const completedAt = clock().toISOString();
+      return normalizeCanonicalExecution(request, raw, startedAt, completedAt, Math.max(0, Math.round(performance.now() - start)));
     },
+    async route(instruction, ctx) {
+      const decision = interpretOperationalQuery(instruction);
+      if (decision.route !== "fast_read") return null;
+      const execution = await router.execute!(decision.request, ctx);
+      return router.answer!(execution);
+    },
+    answer: answerForExecution,
   };
+  return router;
 }
 
 export const defaultFastReadOnlyRouter = createFastReadOnlyRouter();

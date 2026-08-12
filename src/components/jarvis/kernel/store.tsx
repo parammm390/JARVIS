@@ -33,7 +33,7 @@ import {
 import { initialMachineState, transition, type MachineState } from "./machine"
 import { derivePresence } from "./presence"
 import { deriveTransportHealth, startInstructionTransport, type InstructionTransportHandle, type SseHealth, type TransportHealth } from "./transport"
-import { jarvisGet } from "../lib/api"
+import { jarvisGet, jarvisPost, JarvisApiError } from "../lib/api"
 import {
   getOrCreateSessionId,
   fetchTraceEvents,
@@ -46,6 +46,7 @@ import {
 import { recordTraceEventReceived } from "./trace-metrics"
 import type { InstructionState, JarvisMode, Presence, Truth } from "./types"
 import { looksLikeFollowUpReference, UNRESOLVED_REFERENCE_MESSAGE, UNRESOLVED_REFERENCE_CONTEXT } from "./followup-reference"
+import { isOperationalQueryExecution, type OperationalQueryExecution } from "../workspaces/contracts"
 
 // ---------------------------------------------------------------------------
 // Thread shape
@@ -86,6 +87,13 @@ export interface AnswerFact {
   source?: string
 }
 
+export interface AnswerEvidence {
+  source: string
+  ref: string
+  timestamp?: string
+  title?: string
+}
+
 /** A read-only answer emitted by the backend's completed-event result envelope.
  *  `spokenSummary` is the only required, grounded string. Optional fields are
  *  accepted only when they are display-safe primitives already shaped by the
@@ -95,9 +103,14 @@ export interface AnswerResult {
   spokenSummary: string
   displaySummary?: string
   facts?: AnswerFact[]
+  evidence?: AnswerEvidence[]
+  /** The canonical typed Query Plane execution returned by POST /api/actions.
+   * Trace events intentionally keep only a bounded display projection; the
+   * durable Work response enriches this field after navigation or refresh. */
+  query?: OperationalQueryExecution
 }
 
-function parseAnswerEnvelope(candidate: unknown): AnswerResult | null {
+function parseAnswerEnvelope(candidate: unknown, queryCandidate?: unknown): AnswerResult | null {
   if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return null
   const result = candidate as Record<string, unknown>
   if (result.kind !== "answer" || typeof result.spokenSummary !== "string" || !result.spokenSummary.trim()) return null
@@ -123,20 +136,86 @@ function parseAnswerEnvelope(candidate: unknown): AnswerResult | null {
       : typeof display?.title === "string" && display.title.trim()
         ? display.title.trim()
         : undefined
+  const evidence = Array.isArray(result.evidence)
+    ? result.evidence
+        .map((item) => (item && typeof item === "object" && !Array.isArray(item) ? item as Record<string, unknown> : null))
+        .filter((item): item is Record<string, unknown> => Boolean(item))
+        .map((item): AnswerEvidence => ({
+          source: typeof item.source === "string" ? item.source.trim() : "",
+          ref: typeof item.ref === "string" ? item.ref.trim() : "",
+          ...(typeof item.timestamp === "string" && item.timestamp.trim() ? { timestamp: item.timestamp.trim() } : {}),
+          ...(typeof item.title === "string" && item.title.trim() ? { title: item.title.trim() } : {}),
+        }))
+        .filter((item) => Boolean(item.source && item.ref))
+    : undefined
   return {
     kind: "answer",
     spokenSummary: result.spokenSummary.trim(),
     ...(displaySummary ? { displaySummary } : {}),
     ...(facts && facts.length > 0 ? { facts } : {}),
+    ...(evidence && evidence.length > 0 ? { evidence } : {}),
+    ...(isOperationalQueryExecution(queryCandidate)
+      ? { query: queryCandidate }
+      : isOperationalQueryExecution(result.query)
+        ? { query: result.query }
+        : {}),
   }
 }
 
-export function parseSubmissionAnswer(value: unknown): AnswerResult | null {
-  return parseAnswerEnvelope(value)
+export function parseSubmissionAnswer(value: unknown, query?: unknown): AnswerResult | null {
+  return parseAnswerEnvelope(value, query)
 }
 
 export function parseAnswerResult(payload: Record<string, unknown>): AnswerResult | null {
   return parseAnswerEnvelope(payload.result)
+}
+
+function mergeAnswerResult(current: AnswerResult | null | undefined, incoming: AnswerResult | null): AnswerResult | null | undefined {
+  if (!incoming) return current
+  if (!current) return incoming
+  return {
+    ...current,
+    ...incoming,
+    facts: incoming.facts ?? current.facts,
+    evidence: incoming.evidence ?? current.evidence,
+    query: incoming.query ?? current.query,
+  }
+}
+
+interface DurableSubmissionSnapshot {
+  answer: AnswerResult | null
+  planned: PlannedActionResponse[]
+}
+
+function submissionFromWorkAggregate(value: unknown): DurableSubmissionSnapshot {
+  const empty = { answer: null, planned: [] }
+  if (!value || typeof value !== "object" || Array.isArray(value)) return empty
+  const envelope = value as Record<string, unknown>
+  const aggregate = envelope.work && typeof envelope.work === "object" && !Array.isArray(envelope.work)
+    ? envelope.work as Record<string, unknown>
+    : envelope
+  const workRow = aggregate.work && typeof aggregate.work === "object" && !Array.isArray(aggregate.work)
+    ? aggregate.work as Record<string, unknown>
+    : null
+  const finalOutcome = workRow?.finalOutcome && typeof workRow.finalOutcome === "object" && !Array.isArray(workRow.finalOutcome)
+    ? workRow.finalOutcome as Record<string, unknown>
+    : null
+  const response = finalOutcome?.response && typeof finalOutcome.response === "object" && !Array.isArray(finalOutcome.response)
+    ? finalOutcome.response as Record<string, unknown>
+    : null
+  if (!response) return empty
+  const planned = Array.isArray(response.planned)
+    ? response.planned.filter((row): row is PlannedActionResponse => {
+        if (!row || typeof row !== "object" || Array.isArray(row)) return false
+        const candidate = row as Record<string, unknown>
+        return typeof candidate.id === "string"
+          && typeof candidate.actionType === "string"
+          && candidate.payload !== null
+          && typeof candidate.payload === "object"
+          && !Array.isArray(candidate.payload)
+      })
+    : []
+  return { answer: parseSubmissionAnswer(response.answer, response.query), planned }
 }
 
 function eventInstructionId(event: TraceEvent): string | undefined {
@@ -188,6 +267,9 @@ export interface Thread {
    *  sent in POST /api/actions's body and polled via GET /api/instructions/:id/events.
    *  Null only for a thread this file's own unit tests construct without it. */
   instructionId: string | null
+  /** Upgrade 2: stable across clarification/follow-up turns while instructionId
+   * rotates per trace submission. Optional for older fixtures. */
+  workId?: string | null
   source: InstructionSource
   instructionText: string
   createdAtMs: number
@@ -222,6 +304,7 @@ export interface Thread {
   }
   clarification: ClarificationData | null
   submitError: string | null
+  cancelError?: string | null
   approvalWatch: ApprovalWatch | null
   runWatch: RunWatch | null
   /** Wall-clock ms the machine reached a terminal state, or null. Drives the 4s
@@ -375,6 +458,7 @@ export interface ActiveThreadPointer {
   id: string
   sessionId: string
   instructionId: string
+  workId?: string
   source: InstructionSource
   instructionText: string
   createdAtMs: number
@@ -596,7 +680,7 @@ export function applyTraceEvents(thread: Thread, events: TraceEvent[], approval:
         const actionId = typeof event.payload.actionId === "string" ? event.payload.actionId : undefined
         const answerResult = event.phase === "completed" ? parseAnswerResult(event.payload) : null
         if (answerResult) {
-          next = { ...next, answerResult: next.answerResult ?? answerResult }
+          next = { ...next, answerResult: mergeAnswerResult(next.answerResult, answerResult) }
         }
         if (actionId) {
           // A per-action terminal outcome (this action ran synchronously and
@@ -607,12 +691,21 @@ export function applyTraceEvents(thread: Thread, events: TraceEvent[], approval:
           // An answer result is a read-only completion. The reducer may have
           // traversed the legacy aggregate path to reach a terminal state, but
           // it must not leave behind an execution claim for the answer surface.
-          if (answerResult) next = { ...next, answerResult: next.answerResult ?? answerResult, everExecuted: false, approvalWatch: null, runWatch: null }
+          if (answerResult) next = { ...next, answerResult: mergeAnswerResult(next.answerResult, answerResult), everExecuted: false, approvalWatch: null, runWatch: null }
         } else if (event.phase === "failed") {
           // No actionId: the whole instruction failed before any action existed
           // (a real planner exception — orchestration/src/index.ts's own P3.T3
           // try/catch around this.planner.plan()).
-          next = { ...next, machine: transition(next.machine, { type: "TRACE_failed" }), terminalAtMs: Date.now() }
+          const providerTimedOut =
+            typeof event.payload.error === "string" && /(?:deadline|timed?\s*out|timeout)/i.test(event.payload.error)
+          next = {
+            ...next,
+            machine: transition(next.machine, { type: "TRACE_failed" }),
+            submitError: providerTimedOut
+              ? "Planning took too long. Nothing was executed; you can retry safely."
+              : "JARVIS could not prepare a safe plan. Nothing was executed; you can retry safely.",
+            terminalAtMs: Date.now(),
+          }
         }
         break
       }
@@ -620,7 +713,7 @@ export function applyTraceEvents(thread: Thread, events: TraceEvent[], approval:
       case "answer-result":
       case "answerResult": {
         const answerResult = parseAnswerResult(event.payload)
-        if (answerResult) next = { ...next, answerResult: next.answerResult ?? answerResult }
+        if (answerResult) next = { ...next, answerResult: mergeAnswerResult(next.answerResult, answerResult) }
         break
       }
       case "executing": {
@@ -647,6 +740,16 @@ export function applyTraceEvents(thread: Thread, events: TraceEvent[], approval:
       // no customer-visible state is invented for them here.
       default:
         break
+    }
+  }
+  if (next.answerResult) {
+    next = {
+      ...next,
+      machine: { instructionState: "completed" },
+      everExecuted: false,
+      approvalWatch: null,
+      runWatch: null,
+      terminalAtMs: next.terminalAtMs ?? Date.now(),
     }
   }
   return next
@@ -690,7 +793,7 @@ export interface KernelState {
   setVoiceIndicators: (next: { micOpen?: boolean; speaking?: boolean }) => void
   submit: (text: string, source: InstructionSource, sessionIdOverride?: string) => Promise<SubmissionOutcome>
   answerClarification: (text: string) => Promise<SubmissionOutcome>
-  cancelThread: () => void
+  cancelThread: () => Promise<void>
   retryThread: () => Promise<void>
   refetchSlowLaneNow: () => void
 }
@@ -745,6 +848,7 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
   const activeInstructionIdRef = useRef<string | null>(null)
   const traceQueueRef = useRef<Array<{ threadId: string; instructionId: string; event: TraceEvent }>>([])
   const traceQueueTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const cancelInFlightRef = useRef(false)
   const traceQueueWaitersRef = useRef<Set<() => void>>(new Set())
   const answerResultInstructionIdsRef = useRef<Set<string>>(new Set())
   const approvalRef = useRef({ approvalsThisSession: 0, rejectionsThisSession: 0 })
@@ -877,10 +981,23 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
     activeInstructionIdRef.current = pointer.instructionId
     void (async () => {
       try {
-        const sessionRes = await jarvisGet<{ instruction?: { id: string } }>(`instructions/${pointer.instructionId}`)
+        const [sessionRes, initialWorkRes] = await Promise.all([
+          jarvisGet<{ instruction?: { id: string; workId?: string | null } }>(`instructions/${pointer.instructionId}`),
+          pointer.workId ? jarvisGet<unknown>(`works/${pointer.workId}`).catch(() => null) : Promise.resolve(null),
+        ])
         if (!sessionRes.instruction) {
           clearActiveThreadPointer()
           return
+        }
+        const durableWorkId = sessionRes.instruction.workId ?? pointer.workId ?? pointer.instructionId
+        // A failed mutation may have created Work before the browser received
+        // its identifier. The instruction row is authoritative on refresh; retry
+        // the aggregate by that relationship if the optimistic id missed.
+        const workRes = initialWorkRes ?? (durableWorkId !== pointer.workId
+          ? await jarvisGet<unknown>(`works/${durableWorkId}`).catch(() => null)
+          : null)
+        if (durableWorkId !== pointer.workId) {
+          persistActiveThreadPointer({ ...pointer, workId: durableWorkId })
         }
         const eventsRes = await jarvisGet<{ events?: TraceEvent[] }>(`instructions/${pointer.instructionId}/events`, { after: "0" })
         const events = eventsRes.events ?? []
@@ -889,6 +1006,7 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
           id: pointer.id,
           sessionId: pointer.sessionId,
           instructionId: pointer.instructionId,
+          workId: durableWorkId,
           source: pointer.source,
           instructionText: pointer.instructionText,
           createdAtMs: pointer.createdAtMs,
@@ -904,10 +1022,17 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
           everExecuted: false,
           receiptRefreshTick: 0,
         }
-        const restored = applyTraceEvents(base, events, {
+        const traced = applyTraceEvents(base, events, {
           approvalsThisSession: data.approvalsThisSession,
           rejectionsThisSession: data.rejectionsThisSession,
         })
+        const durable = submissionFromWorkAggregate(workRes)
+        const enriched = durable.planned.length > 0
+          ? { ...traced, nodes: enrichNodesFromPlanned(traced.nodes, durable.planned) }
+          : traced
+        const restored = durable.answer
+          ? { ...enriched, machine: { instructionState: "completed" as const }, answerResult: mergeAnswerResult(enriched.answerResult, durable.answer), terminalAtMs: enriched.terminalAtMs ?? Date.now() }
+          : enriched
         // Restored rows are real authenticated instruction_events fetched above,
         // not a replay fixture. Record their browser receipt at the same seam as
         // streamed/polled rows so the next-paint audit does not silently omit the
@@ -917,9 +1042,7 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
         setRestoredTraceEventCount(events.length)
         setRestoredThreadPresentation({ threadId: restored.id, instructionState: restored.machine.instructionState })
         setThread(restored)
-        if (isTerminal(restored.machine.instructionState)) {
-          clearActiveThreadPointer()
-        } else {
+        if (!isTerminal(restored.machine.instructionState)) {
           const lastSeq = events.length > 0 ? events[events.length - 1]!.seq : 0
           traceCursorRef.current = lastSeq
           traceHandleRef.current = startInstructionTransport({
@@ -971,13 +1094,9 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [thread?.id, thread?.machine.instructionState, thread?.terminalAtMs])
 
-  // jarvis-v3 P3.T8: nothing left to resume once a thread reaches a terminal
-  // state — clear the restore pointer so a later refresh shows the real rest
-  // state, not a stale finished thread.
-  useEffect(() => {
-    if (thread && isTerminal(thread.machine.instructionState)) clearActiveThreadPointer()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [thread?.machine.instructionState])
+  // Upgrade 4: the active Work remains addressable after a terminal transition.
+  // A new top-level instruction replaces this pointer; navigation and refresh do
+  // not erase the person's current receipt, query result, or recovery surface.
 
   const presence = derivePresence({
     transport,
@@ -1145,6 +1264,7 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
         id,
         sessionId,
         instructionId,
+        workId: existing?.workId ?? existing?.instructionId ?? instructionId,
         source,
         instructionText: text,
         createdAtMs: nowMs,
@@ -1154,15 +1274,16 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
         traceGating: { expectedCount: null, resolvedActionIds: [], gatedActionIds: [] },
         clarification: null,
         submitError: null,
+        cancelError: null,
         approvalWatch: null,
         runWatch: null,
         terminalAtMs: null,
         everExecuted: existing?.everExecuted ?? false,
         receiptRefreshTick: existing ? existing.receiptRefreshTick : 0,
       })
-      // jarvis-v3 P3.T8: survive a refresh mid-flight — cleared the instant this
-      // thread reaches a terminal state (effect below) or is cancelled.
-      persistActiveThreadPointer({ id, sessionId, instructionId, source, instructionText: text, createdAtMs: nowMs })
+      // Survive navigation and refresh. A later response rebinds the optimistic
+      // instruction id below to the server-authored durable Work id.
+      persistActiveThreadPointer({ id, sessionId, instructionId, workId: existing?.workId ?? existing?.instructionId ?? instructionId, source, instructionText: text, createdAtMs: nowMs })
 
       // jarvis-v3 P3.T6/T7: the trace poll starts THE SAME INSTANT as the POST
       // below — both race the real backend from the same starting line
@@ -1185,14 +1306,43 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
 
       let result: Awaited<ReturnType<typeof submitInstruction>>
       try {
-        result = await submitInstruction(text, { source, sessionId, instructionId })
+        result = await submitInstruction(text, { source, sessionId, instructionId, workId: existing?.workId ?? existing?.instructionId ?? undefined })
       } catch (err) {
         if (activeInstructionIdRef.current !== instructionId) return "stale"
+        const errorEnvelope = err instanceof JarvisApiError && err.details && typeof err.details === "object" && !Array.isArray(err.details)
+          ? err.details as Record<string, unknown>
+          : null
+        const errorWorkId = typeof errorEnvelope?.workId === "string" ? errorEnvelope.workId : null
+        if (errorWorkId) {
+          persistActiveThreadPointer({ id, sessionId, instructionId, workId: errorWorkId, source, instructionText: text, createdAtMs: nowMs })
+          setThread((prev) => prev && prev.id === id && prev.instructionId === instructionId ? { ...prev, workId: errorWorkId } : prev)
+        }
+        // The backend records lifecycle facts before returning an error. Reconcile
+        // that durable terminal row before stopping transport, otherwise a POST
+        // failure that arrives after `planning` can strand the UI there forever.
+        // The same cursor/dedupe queue remains the sole event application path.
+        try {
+          enqueueTraceEvents(id, instructionId, await fetchTraceEvents(instructionId, traceCursorRef.current))
+          await drainTraceQueue(1_500)
+        } catch {
+          // If the trace boundary itself is unavailable, the bounded local failure
+          // below is the honest recovery surface.
+        }
         traceHandleRef.current?.stop()
         setSseHealth(null)
+        const timedOut = err instanceof Error && /(?:deadline|timed?\s*out|timeout)/i.test(err.message)
         setThread((prev) =>
           prev && prev.id === id && prev.instructionId === instructionId
-            ? { ...prev, machine: transition(prev.machine, { type: "SUBMIT_FAILED" }), submitError: err instanceof Error ? err.message : "I couldn't send that." }
+            ? isTerminal(prev.machine.instructionState)
+              ? prev
+              : {
+                  ...prev,
+                  machine: transition(prev.machine, { type: "SUBMIT_FAILED" }),
+                  submitError: timedOut
+                    ? "Planning took too long. Nothing was executed; you can retry safely."
+                    : "JARVIS could not reach the operating system. Nothing was executed; you can retry safely.",
+                  terminalAtMs: Date.now(),
+                }
             : prev,
         )
         return "failed"
@@ -1202,6 +1352,16 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
       // instruction has already replaced this turn. Its planned rows are no
       // longer authoritative for the visible thread or the optimistic inbox.
       if (activeInstructionIdRef.current !== instructionId) return "stale"
+
+      persistActiveThreadPointer({
+        id,
+        sessionId,
+        instructionId,
+        workId: result.workId ?? existing?.workId ?? instructionId,
+        source,
+        instructionText: text,
+        createdAtMs: nowMs,
+      })
 
       // ② UNDERSTOOD / ③ PLAN — the trace transport above may already have driven ACK,
       // TRACE_planning, TRACE_clarification and every action_created node by the
@@ -1216,7 +1376,7 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
       // scope decision (see `applyTraceEvents`'s own header) to keep that
       // coordination in one place rather than duplicating it.
       const planned = result.planned
-      const directAnswerResult = parseSubmissionAnswer(result.answer)
+      const directAnswerResult = parseSubmissionAnswer(result.answer, result.query)
       if (directAnswerResult) answerResultInstructionIdsRef.current.add(instructionId)
       const clarificationRow = planned.find((p) => p.actionType === "clarification_request")
 
@@ -1259,10 +1419,11 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
         if (directAnswerResult) {
           return {
             ...prev,
+            workId: result.workId,
             machine: { instructionState: "completed" },
             nodes: [],
             clarification: null,
-            answerResult: prev.answerResult ?? directAnswerResult,
+            answerResult: mergeAnswerResult(prev.answerResult, directAnswerResult),
             approvalWatch: null,
             runWatch: null,
             everExecuted: false,
@@ -1271,7 +1432,7 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
         }
         const enrichedNodes = enrichNodesFromPlanned(prev.nodes, planned, usePostFallback)
         const m = usePostFallback && prev.machine.instructionState === "captured" ? transition(prev.machine, { type: "ACK" }) : prev.machine
-        return { ...prev, machine: m, nodes: enrichedNodes }
+        return { ...prev, workId: result.workId, machine: m, nodes: enrichedNodes }
       })
 
       setThread((prev) => {
@@ -1364,10 +1525,10 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
   const retryThread = useCallback(async () => {
     const current = threadRef.current
     if (!current || current.machine.instructionState !== "failed") return
-    // A retry is a new real submission, so the failed attempt remains in the
-    // thread history and the new attempt gets its own trace id. This keeps the
-    // recovery visible without pretending the failed run was repaired in place.
-    await runSubmission(current.instructionText, current.source, null)
+    // A retry is a new durable input/trace turn on the SAME Work. The failed
+    // planner attempt remains immutable while receiveWork moves the Work through
+    // recovery and the new attempt gets its own instruction id/idempotency claim.
+    await runSubmission(current.instructionText, current.source, current)
   }, [runSubmission])
 
   const submit = useCallback((text: string, source: InstructionSource, sessionIdOverride?: string) => runSubmission(text, source, null, sessionIdOverride), [runSubmission])
@@ -1381,12 +1542,9 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
   const answerClarification = useCallback(
     async (text: string) => {
       // §4.4: "clarifying + ANSWERED -> captured (same thread, new turn)". The
-      // SAME thread object continues — no `parentInstructionId` field exists on
-      // `SubmitInstructionSchema` (verified: policy-schema/src/index.ts:51-61), so
-      // "the thread continues in place" is real because the frontend never spawns
-      // a second thread, not because of a backend link; continuity of BUSINESS
-      // context comes from resubmitting on the SAME sessionId, which is real
-      // (30-min-TTL short-term memory, orchestration/src/index.ts:163-168).
+      // The SAME presentation thread and durable Work continue. The new
+      // instruction id remains an independently traceable input while workId and
+      // sessionId preserve causal and conversational context.
       setThread((prev) => (prev ? { ...prev, machine: transition(prev.machine, { type: "ANSWERED" }) } : prev))
       const current = thread
       if (!current) return "failed"
@@ -1395,12 +1553,27 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
     [thread, runSubmission],
   )
 
-  const cancelThread = useCallback(() => {
-    activeInstructionIdRef.current = null
-    traceHandleRef.current?.stop()
-    setSseHealth(null)
-    clearActiveThreadPointer()
-    setThread((prev) => (prev ? { ...prev, machine: transition(prev.machine, { type: "USER_CANCELLED" }), terminalAtMs: Date.now() } : prev))
+  const cancelThread = useCallback(async () => {
+    const current = threadRef.current
+    if (!current || cancelInFlightRef.current) return
+    cancelInFlightRef.current = true
+    setThread((prev) => prev && prev.id === current.id ? { ...prev, cancelError: null } : prev)
+    try {
+      if (current.instructionId) {
+        await jarvisPost(`instructions/${current.instructionId}/cancel`, {})
+      }
+      if (threadRef.current?.id !== current.id) return
+      activeInstructionIdRef.current = null
+      traceHandleRef.current?.stop()
+      setSseHealth(null)
+      setThread((prev) => (prev && prev.id === current.id ? { ...prev, machine: transition(prev.machine, { type: "USER_CANCELLED" }), cancelError: null, terminalAtMs: Date.now() } : prev))
+    } catch (error) {
+      setThread((prev) => prev && prev.id === current.id
+        ? { ...prev, cancelError: error instanceof Error ? `Cancellation did not reach the server: ${error.message}` : "Cancellation did not reach the server. Try again." }
+        : prev)
+    } finally {
+      cancelInFlightRef.current = false
+    }
   }, [])
 
   const value = useMemo<KernelState>(

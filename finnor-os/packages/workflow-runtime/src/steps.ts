@@ -5,7 +5,7 @@
 // file's lease_expires_at is an additional, finer-grained atomic claim on top of the
 // job-level lease, not a second queue system.
 
-import { withTenant, enqueueJob, workflowSteps, workflowRuns, commands, integrationOperations, reconciliationCases, domainActions, domainPolicies } from "@finnor/db";
+import { withTenant, enqueueJob, workflowSteps, workflowRuns, commands, integrationOperations, reconciliationCases, domainActions, domainPolicies, reconcileWorkStatus, transitionWork } from "@finnor/db";
 import { and, eq, lt, sql, desc } from "drizzle-orm";
 import { maybeChaosKill } from "./chaos";
 import { openReconciliationCase } from "./reconciliation";
@@ -63,6 +63,7 @@ async function openReceiptForFirstClaim(tenantId: string, step: WorkflowStepRow)
       approval: { required: true, approvedBy: command?.requestedBy ?? undefined, at: command?.createdAt.toISOString() },
       correlationId: step.correlationId ?? undefined,
       domainActionId: step.domainActionId ?? undefined,
+      workId: run?.workId ?? undefined,
     });
   } catch (err) {
     console.error(`[decision_receipts] failed to open receipt for step ${step.id}`, err);
@@ -180,8 +181,19 @@ export async function failStep(
   // remain on the established recovery/retry path and do not consume a repair.
   if (errorKind === "terminal") {
     const [step] = await withTenant(tenantId, (db) =>
-      db.select({ domainActionId: workflowSteps.domainActionId }).from(workflowSteps).where(eq(workflowSteps.id, stepId)),
+      db.select({ domainActionId: workflowSteps.domainActionId, workId: workflowRuns.workId })
+        .from(workflowSteps)
+        .innerJoin(workflowRuns, eq(workflowRuns.id, workflowSteps.workflowRunId))
+        .where(eq(workflowSteps.id, stepId)),
     );
+    if (step?.workId) {
+      await transitionWork(tenantId, step.workId, "recovery", "workflow_step_failed", {
+        workflowStepId: stepId,
+        domainActionId: step.domainActionId,
+        errorKind,
+        message: terminalReason,
+      }, { recovery: { status: "queued", workflowStepId: stepId, domainActionId: step.domainActionId } });
+    }
     if (step?.domainActionId) {
       await enqueueJob(
         "repair_plan_after_terminal_failure",
@@ -239,6 +251,7 @@ export async function advanceWorkflow(tenantId: string, workflowRunId: string): 
     await withTenant(tenantId, (db) =>
       db.update(commands).set({ status: finalStatus, updatedAt: new Date() }).where(eq(commands.id, run.commandId)),
     );
+    if (run.workId) await reconcileWorkStatus(tenantId, run.workId);
   }
 }
 

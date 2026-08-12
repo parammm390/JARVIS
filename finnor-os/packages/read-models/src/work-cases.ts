@@ -1,10 +1,9 @@
-// P2.T1 — the read-only Work projection.
+// P2.T1 — the backward-compatible Work Case projection.
 //
-// A Work Case is a derived view over the durable records that already exist in
-// Finnor OS. It is deliberately not a new source-of-truth table: instruction
-// sessions, domain actions, workflow runs/steps, receipts, voice turns, and
-// business events remain authoritative. Every cross-surface link below is either
-// a foreign-key edge or an exact ID carried by one of those records.
+// Upgrade 2 makes `works` the canonical lifecycle root. This module keeps the old
+// Work Case response fields stable while grouping proven action/workflow/receipt
+// records through their durable Work foreign keys. Older rows without those links
+// retain the original deterministic projection fallback.
 
 import {
   actionLog,
@@ -22,11 +21,15 @@ import {
   withTenant,
   workflowRuns,
   workflowSteps,
+  works,
+  workInputs,
+  workPlannerAttempts,
 } from "@finnor/db";
 import { and, asc, desc, eq, or } from "drizzle-orm";
 
 export const WORK_STATUSES = ["Needs you", "Working", "Waiting", "Completed", "Failed", "Blocked"] as const;
 export type WorkStatus = (typeof WORK_STATUSES)[number];
+type DurableWorkRow = typeof works.$inferSelect;
 
 export type DomainActionStatus =
   | "draft"
@@ -58,7 +61,7 @@ export type InstructionPhase =
   | "failed"
   | "cancelled";
 
-export type WorkRootKind = "instruction" | "plan" | "trace" | "workflow_run" | "action";
+export type WorkRootKind = "work" | "instruction" | "plan" | "trace" | "workflow_run" | "action";
 export type WorkEntityType =
   | "household"
   | "invoice"
@@ -197,6 +200,20 @@ export interface WorkCaseProjection {
   relatedActionIds: string[];
   /** Source paths used to make the projection inspectable; not a user-facing raw-data dump. */
   provenance: string[];
+  /** Upgrade 2 canonical state. Older clients can keep consuming the unchanged
+   * title/status/actions/workflows/receipts fields above. */
+  durableWork?: {
+    id: string;
+    status: DurableWorkRow["status"];
+    sessionId: string | null;
+    channel: DurableWorkRow["initialChannel"];
+    activeContext: unknown;
+    finalOutcome: unknown;
+    failure: unknown;
+    recovery: unknown;
+  };
+  inputs?: Array<{ id: string; instructionId: string; channel: string; text: string; createdAt: string }>;
+  plannerAttempts?: Array<{ id: string; attempt: number; status: string; result: unknown; failure: unknown; startedAt: string; completedAt: string | null }>;
 }
 
 const ENTITY_KEYS: Record<string, WorkEntityType> = {
@@ -487,10 +504,11 @@ function mergeLinkMaps(target: Map<string, WorkEntityLink>, provenance: Set<stri
 }
 
 function findActionRoot(
-  action: { id: string; instructionId: string | null; planId: string | null },
+  action: { id: string; workId: string | null; instructionId: string | null; planId: string | null },
   instructionIds: Set<string>,
   instructionActionRoots: Map<string, string>,
 ): WorkRoot {
+  if (action.workId) return { kind: "work", id: action.workId };
   if (action.instructionId && instructionIds.has(action.instructionId)) return { kind: "instruction", id: action.instructionId };
   const eventInstructionId = instructionActionRoots.get(action.id);
   if (eventInstructionId) return { kind: "instruction", id: eventInstructionId };
@@ -551,19 +569,23 @@ function toWorkReceipt(row: typeof decisionReceipts.$inferSelect): WorkReceipt {
  */
 export async function workCases(tenantId: string): Promise<WorkCaseProjection[]> {
   return withTenant(tenantId, async (db) => {
-    const [instructionRows, instructionEventRows, actionRows, confirmationRows, commandRows, runRows, stepRows, receiptRows, logRows, voiceSessionRows, voiceTurnRows] = await Promise.all([
-      db.select().from(instructionSessions).where(eq(instructionSessions.tenantId, tenantId)).orderBy(desc(instructionSessions.updatedAt)),
-      db.select().from(instructionEvents).where(eq(instructionEvents.tenantId, tenantId)).orderBy(asc(instructionEvents.seq)),
-      db.select().from(domainActions).where(eq(domainActions.tenantId, tenantId)).orderBy(desc(domainActions.createdAt)),
-      db.select().from(pendingConfirmations).where(eq(pendingConfirmations.tenantId, tenantId)).orderBy(desc(pendingConfirmations.createdAt)),
-      db.select().from(commands).where(eq(commands.tenantId, tenantId)).orderBy(desc(commands.updatedAt)),
-      db.select().from(workflowRuns).where(eq(workflowRuns.tenantId, tenantId)).orderBy(desc(workflowRuns.updatedAt)),
-      db.select().from(workflowSteps).where(eq(workflowSteps.tenantId, tenantId)).orderBy(asc(workflowSteps.sequence)),
-      db.select().from(decisionReceipts).where(eq(decisionReceipts.tenantId, tenantId)).orderBy(desc(decisionReceipts.createdAt)),
-      db.select().from(actionLog).where(eq(actionLog.tenantId, tenantId)).orderBy(desc(actionLog.timestamp)),
-      db.select().from(voiceSessions).where(eq(voiceSessions.tenantId, tenantId)),
-      db.select().from(voiceTurns).where(eq(voiceTurns.tenantId, tenantId)).orderBy(asc(voiceTurns.sequence)),
-    ]);
+    // A tenant transaction is a single pg client. These queries were always
+    // serialized by the driver; spelling that out avoids pg@9's overlapping-
+    // query deprecation and keeps the projection deterministic.
+    const workRows = await db.select().from(works).where(eq(works.tenantId, tenantId)).orderBy(desc(works.updatedAt));
+    const workInputRows = await db.select().from(workInputs).where(eq(workInputs.tenantId, tenantId)).orderBy(asc(workInputs.createdAt));
+    const plannerAttemptRows = await db.select().from(workPlannerAttempts).where(eq(workPlannerAttempts.tenantId, tenantId)).orderBy(asc(workPlannerAttempts.attempt));
+    const instructionRows = await db.select().from(instructionSessions).where(eq(instructionSessions.tenantId, tenantId)).orderBy(desc(instructionSessions.updatedAt));
+    const instructionEventRows = await db.select().from(instructionEvents).where(eq(instructionEvents.tenantId, tenantId)).orderBy(asc(instructionEvents.seq));
+    const actionRows = await db.select().from(domainActions).where(eq(domainActions.tenantId, tenantId)).orderBy(desc(domainActions.createdAt));
+    const confirmationRows = await db.select().from(pendingConfirmations).where(eq(pendingConfirmations.tenantId, tenantId)).orderBy(desc(pendingConfirmations.createdAt));
+    const commandRows = await db.select().from(commands).where(eq(commands.tenantId, tenantId)).orderBy(desc(commands.updatedAt));
+    const runRows = await db.select().from(workflowRuns).where(eq(workflowRuns.tenantId, tenantId)).orderBy(desc(workflowRuns.updatedAt));
+    const stepRows = await db.select().from(workflowSteps).where(eq(workflowSteps.tenantId, tenantId)).orderBy(asc(workflowSteps.sequence));
+    const receiptRows = await db.select().from(decisionReceipts).where(eq(decisionReceipts.tenantId, tenantId)).orderBy(desc(decisionReceipts.createdAt));
+    const logRows = await db.select().from(actionLog).where(eq(actionLog.tenantId, tenantId)).orderBy(desc(actionLog.timestamp));
+    const voiceSessionRows = await db.select().from(voiceSessions).where(eq(voiceSessions.tenantId, tenantId));
+    const voiceTurnRows = await db.select().from(voiceTurns).where(eq(voiceTurns.tenantId, tenantId)).orderBy(asc(voiceTurns.sequence));
     const conversationRows = await db
       .select({ id: conversations.id, householdId: conversations.householdId })
       .from(conversations)
@@ -643,7 +665,11 @@ export async function workCases(tenantId: string): Promise<WorkCaseProjection[]>
     const instructionById = new Map(instructionRows.map((instruction) => [instruction.id, instruction]));
 
     const cases = new Map<string, WorkingCase>();
-    for (const instruction of instructionRows) ensureCase(cases, { kind: "instruction", id: instruction.id });
+    for (const work of workRows) ensureCase(cases, { kind: "work", id: work.id });
+    for (const instruction of instructionRows) {
+      const target = ensureCase(cases, instruction.workId ? { kind: "work", id: instruction.workId } : { kind: "instruction", id: instruction.id });
+      target.instructionId ??= instruction.id;
+    }
     const rootByAction = new Map<string, WorkRoot>();
     for (const action of actionRows) {
       const root = findActionRoot(action, new Set(instructionRows.map((instruction) => instruction.id)), instructionActionRoots);
@@ -660,7 +686,9 @@ export async function workCases(tenantId: string): Promise<WorkCaseProjection[]>
       const actionIds = [...new Set(steps.map((step) => step.domainActionId).filter((id): id is string => Boolean(id)))];
       const actionRoots = [...new Set(actionIds.map((id) => rootByAction.get(id)).filter((root): root is WorkRoot => Boolean(root)).map((root) => `${root.kind}:${root.id}`))];
       let root: WorkRoot;
-      if (actionRoots.length === 1) {
+      if (run.workId) {
+        root = { kind: "work", id: run.workId };
+      } else if (actionRoots.length === 1) {
         root = rootByAction.get(actionIds[0]!) ?? { kind: "workflow_run", id: run.id };
       } else if (actionRoots.length > 1) {
         root = { kind: "workflow_run", id: run.id };
@@ -778,7 +806,9 @@ export async function workCases(tenantId: string): Promise<WorkCaseProjection[]>
     }
 
     const output: WorkCaseProjection[] = [];
+    const workById = new Map(workRows.map((work) => [work.id, work]));
     for (const target of cases.values()) {
+      const durableWork = target.root.kind === "work" ? workById.get(target.root.id) : undefined;
       const instructionRow = target.instructionId ? instructionById.get(target.instructionId) : undefined;
       const actions = [...target.actionIds].map((id) => actionById.get(id)).filter((action): action is typeof actionRows[number] => Boolean(action)).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()).map(toWorkAction);
       const workflows = [...target.runIds].map((id) => {
@@ -826,7 +856,15 @@ export async function workCases(tenantId: string): Promise<WorkCaseProjection[]>
         ...workflows.flatMap((workflow) => [projectWorkflowRunStatus(workflow.status), ...workflow.steps.map((step) => projectWorkflowStepStatus(step.status))]),
       ];
       const lastPhase = instruction?.lastPhase ?? null;
-      const status = deriveWorkStatus(statusCandidates, lastPhase);
+      const status = durableWork
+        ? durableWork.status === "completed"
+          ? "Completed"
+          : durableWork.status === "failed"
+            ? "Failed"
+            : durableWork.status === "awaiting_approval" || durableWork.status === "recovery"
+              ? "Needs you"
+              : "Working"
+        : deriveWorkStatus(statusCandidates, lastPhase);
       const fallbackDate = instructionRow?.createdAt
         ?? actionRows.find((action) => target.actionIds.has(action.id))?.createdAt
         ?? runRows.find((run) => target.runIds.has(run.id))?.createdAt
@@ -859,6 +897,34 @@ export async function workCases(tenantId: string): Promise<WorkCaseProjection[]>
         calls: sourceCalls,
         relatedActionIds: [...target.relatedActionIds].sort(),
         provenance: [...target.provenance].sort(),
+        ...(durableWork ? {
+          durableWork: {
+            id: durableWork.id,
+            status: durableWork.status,
+            sessionId: durableWork.sessionId,
+            channel: durableWork.initialChannel,
+            activeContext: durableWork.activeContext,
+            finalOutcome: durableWork.finalOutcome,
+            failure: durableWork.failure,
+            recovery: durableWork.recovery,
+          },
+          inputs: workInputRows.filter((input) => input.workId === durableWork.id).map((input) => ({
+            id: input.id,
+            instructionId: input.instructionId,
+            channel: input.channel,
+            text: input.instructionText,
+            createdAt: input.createdAt.toISOString(),
+          })),
+          plannerAttempts: plannerAttemptRows.filter((attempt) => attempt.workId === durableWork.id).map((attempt) => ({
+            id: attempt.id,
+            attempt: attempt.attempt,
+            status: attempt.status,
+            result: attempt.plannerResult,
+            failure: attempt.failure,
+            startedAt: attempt.startedAt.toISOString(),
+            completedAt: iso(attempt.completedAt),
+          })),
+        } : {}),
       });
     }
     return output.sort(caseSort);

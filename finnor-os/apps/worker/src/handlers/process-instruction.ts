@@ -25,5 +25,11 @@ export const processInstruction: JobHandler = async (payload) => {
     userId: "00000000-0000-4000-8000-0000000000ee", // system principal for webhook-originated work
     role: "dispatcher",
     correlationId,
-  }, { channel: "voice" });
+  }, {
+    channel: "voice",
+    sessionId: typeof payload.callId === "string" ? `vapi:${payload.callId}` : undefined,
+    workId: typeof payload.workId === "string" ? payload.workId : undefined,
+    workInputId: typeof payload.workInputId === "string" ? payload.workInputId : undefined,
+    instructionId: typeof payload.instructionId === "string" ? payload.instructionId : undefined,
+  });
 };

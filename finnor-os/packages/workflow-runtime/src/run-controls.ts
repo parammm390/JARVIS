@@ -7,7 +7,7 @@
 // execution) so "who paused this and when" is answerable the same way any other
 // consequential action in this system is.
 
-import { withTenant, workflowRuns, workflowSteps } from "@finnor/db";
+import { withTenant, workflowRuns, workflowSteps, reconcileWorkStatus } from "@finnor/db";
 import { and, eq, sql, inArray } from "drizzle-orm";
 import { advanceWorkflow } from "./steps";
 import { openReceipt, finalizeReceipt } from "./receipts";
@@ -70,6 +70,7 @@ async function applyTransition(
 
   await openReceipt({
     tenantId,
+    workId: updated.workId ?? undefined,
     workflowRunId: runId,
     objective: `${spec.verb} workflow run ${runId}`,
     evidence: [{ source: "workflow_runs", ref: runId, timestamp: new Date().toISOString() }],
@@ -79,6 +80,8 @@ async function applyTransition(
     approval: { required: true, approvedBy: requestedBy, at: new Date().toISOString() },
     expectedResult: { status: spec.toStatus },
   }).then(({ receiptId }) => finalizeReceipt(tenantId, receiptId, { actualResult: { status: updated.status, version: updated.version } }));
+
+  if (updated.workId) await reconcileWorkStatus(tenantId, updated.workId);
 
   return { ok: true, run: updated };
 }

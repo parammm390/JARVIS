@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { buildAgingSummary, deriveAgingBand, filterCollectionWork } from "./CashPressureSurface"
+import { buildAgingSummary, collectionMatchesView, deriveAgingBand, filterCollectionWork, groupCollectionWork, invoiceMatchesView, safeBusinessLabel } from "./CashPressureSurface"
 import type { InvoiceResource, WorkCaseProjection } from "@/lib/jarvis-client"
 
 const now = new Date("2026-08-08T00:00:00.000Z")
@@ -79,5 +79,35 @@ describe("P2.T5 Cash Pressure Field contract", () => {
     const collection = workCase(["send_payment_reminder"])
     const unrelated = workCase(["schedule_service_visit"])
     expect(filterCollectionWork([collection, unrelated]).map((item) => item.id)).toEqual([collection.id])
+  })
+
+  it("keeps decision views explicit instead of rendering the full ledger by default", () => {
+    expect(invoiceMatchesView(invoice({ status: "overdue" }), "open")).toBe(true)
+    expect(invoiceMatchesView(invoice({ status: "paid" }), "open")).toBe(false)
+    expect(invoiceMatchesView(invoice({ status: "paid" }), "paid")).toBe(true)
+    expect(invoiceMatchesView(invoice({ status: "draft" }), "all")).toBe(true)
+
+    const active = workCase(["send_payment_reminder"])
+    const completed = { ...active, status: "Completed" as const }
+    expect(collectionMatchesView(active, "active")).toBe(true)
+    expect(collectionMatchesView(completed, "active")).toBe(false)
+    expect(collectionMatchesView(completed, "history")).toBe(true)
+  })
+
+  it("groups repeated collection projections while preserving every exact record", () => {
+    const first = { ...workCase(["send_payment_reminder"]), id: "case-one" }
+    const second = { ...workCase(["send_payment_reminder"]), id: "case-two" }
+    const paid = { ...workCase(["record_payment"]), id: "case-three", status: "Completed" as const }
+
+    const groups = groupCollectionWork([first, second, paid])
+
+    expect(groups).toHaveLength(2)
+    expect(groups.find((group) => group.cases.some((item) => item.id === "case-one"))?.cases.map((item) => item.id)).toEqual(["case-one", "case-two"])
+  })
+
+  it("never renders data placeholders as customer-facing labels", () => {
+    expect(safeBusinessLabel("Payment reminder for undefined", "Payment reminder")).toBe("Payment reminder")
+    expect(safeBusinessLabel("  ", "Memo not recorded")).toBe("Memo not recorded")
+    expect(safeBusinessLabel("Annual service", "Memo not recorded")).toBe("Annual service")
   })
 })

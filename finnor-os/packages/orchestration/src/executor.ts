@@ -4,7 +4,7 @@
 // the gate clears, on any path.
 
 import type { DomainAction, DomainPolicy, ExecutionResult } from "@finnor/shared-types";
-import { withTenant, domainActions, enqueueJob } from "@finnor/db";
+import { withTenant, domainActions, enqueueJob, reconcileWorkStatus, transitionWork } from "@finnor/db";
 import { appendEpisode } from "@finnor/memory";
 import { eq, and } from "drizzle-orm";
 import { ScopedToolRegistry, type ToolRegistry } from "@finnor/tools";
@@ -159,5 +159,12 @@ export class GatedExecutor implements Executor {
         })
         .where(and(eq(domainActions.id, action.id), eq(domainActions.tenantId, action.tenantId)));
     });
+    if (action.workId) {
+      if (status === "executing") {
+        await transitionWork(action.tenantId, action.workId, "executing", "action_execution_started", { actionId: action.id });
+      } else {
+        await reconcileWorkStatus(action.tenantId, action.workId);
+      }
+    }
   }
 }

@@ -5,11 +5,10 @@
 import { z } from "zod";
 import type { ToolRegistry, Tool } from "./registry";
 import { connectGhl, connectVapi, callMcpTool } from "./mcp-client";
-import { PLACEHOLDER_NEEDS_REAL_VALUE } from "@finnor/shared-types";
 import { registerSandboxComms } from "./sandbox";
 import { sendEmail } from "./email";
 import { geocodeAddress, distanceMiles } from "./maps";
-import { placeVapiCall } from "./vapi-rest";
+import { createVapiCampaign, placeVapiCall } from "./vapi-rest";
 import { VOICE_AGENT_KEYS } from "./voice-personas";
 import { exaSearch } from "./exa";
 import { firecrawlScrape } from "./firecrawl";
@@ -17,6 +16,8 @@ import { getAdPerformance, adsProviderStatus } from "./ads";
 import { syncInvoiceToQuickBooks } from "./quickbooks";
 import { launchAdCampaign, type CampaignLaunchInput } from "./ads-write";
 import { enqueueJob } from "@finnor/db";
+
+const DAILY_CAMPAIGN_CUSTOMER_LIMIT = 200;
 
 const ghlBacked = (name: string, description: string, mcpTool: string, inputSchema: z.ZodTypeAny, piiAllowlist?: readonly string[]): Tool => ({
   name,
@@ -98,34 +99,32 @@ export function registerBuiltinTools(registry: ToolRegistry): void {
     ),
   );
 
-  registry.register({
-    name: "vapi_place_call",
-    description: "Place an outbound call via Vapi",
-    integration: "vapi",
-    inputSchema: z.object({ phoneNumber: z.string(), assistantId: z.string().optional(), instructions: z.string().optional() }).passthrough(),
-    piiAllowlist: ["phoneNumber", "assistantId", "instructions", "tenantId"],
-    async run(input) {
-      const conn = await connectVapi();
-      try {
-        return await callMcpTool(conn, "vapi", "create_call", input);
-      } finally {
-        await conn.close().catch(() => undefined);
-      }
-    },
-  });
+  if (!registry.has("vapi_place_call")) {
+    registry.register({
+      name: "vapi_place_call",
+      description: "Place an outbound call via Vapi",
+      integration: "vapi",
+      inputSchema: z.object({ phoneNumber: z.string(), assistantId: z.string().optional(), instructions: z.string().optional() }).passthrough(),
+      piiAllowlist: ["phoneNumber", "assistantId", "instructions", "tenantId"],
+      async run(input) {
+        const conn = await connectVapi();
+        try {
+          return await callMcpTool(conn, "vapi", "create_call", input);
+        } finally {
+          await conn.close().catch(() => undefined);
+        }
+      },
+    });
+  }
 
-}
-
-function vapiPstnConfigured(): boolean {
-  return Boolean(
-    process.env.VAPI_API_KEY &&
-      process.env.VAPI_PHONE_NUMBER_ID &&
-      process.env.VAPI_PHONE_NUMBER_ID !== PLACEHOLDER_NEEDS_REAL_VALUE,
-  );
 }
 
 function registerUniversalTools(registry: ToolRegistry, allowLiveVapi: boolean): void {
-  if (allowLiveVapi && vapiPstnConfigured()) {
+  // Register the real adapters based on operating mode, not import-time secret
+  // visibility. ToolRegistry loads managed secrets immediately before execution;
+  // checking env here made a correctly configured Secrets Manager deployment omit
+  // the campaign tool for the lifetime of a warm process.
+  if (allowLiveVapi) {
     // REAL outbound phone calls — Vapi phone number is configured.
     registry.register({
       name: "vapi_place_call",
@@ -141,11 +140,12 @@ function registerUniversalTools(registry: ToolRegistry, allowLiveVapi: boolean):
           domainActionId: z.string().min(1).optional(),
           householdId: z.string().min(1).optional(),
           invoiceId: z.string().min(1).optional(),
+          variableValues: z.record(z.string()).optional(),
         })
         .passthrough(),
       // These are causal/audit keys, not provider secrets. Keep the allowlist explicit
       // so future planner payload fields never flow into Vapi metadata by accident.
-      piiAllowlist: ["phoneNumber", "instructions", "assistantId", "purpose", "tenantId", "agentKey", "domainActionId", "householdId", "invoiceId"],
+      piiAllowlist: ["phoneNumber", "instructions", "assistantId", "purpose", "tenantId", "agentKey", "domainActionId", "householdId", "invoiceId", "variableValues"],
       async run(input) {
         const r = await placeVapiCall({
           customerNumber: String(input.phoneNumber),
@@ -160,9 +160,42 @@ function registerUniversalTools(registry: ToolRegistry, allowLiveVapi: boolean):
             ...(input.invoiceId ? { invoiceId: String(input.invoiceId) } : {}),
           },
           assistantId: input.assistantId ? String(input.assistantId) : undefined,
+          variableValues: input.variableValues && typeof input.variableValues === "object"
+            ? Object.fromEntries(Object.entries(input.variableValues as Record<string, unknown>).map(([key, value]) => [key, String(value)]))
+            : undefined,
         });
         if (!r.ok) throw new Error(r.error ?? "Vapi call failed");
         return { ...r.output, live: true };
+      },
+    });
+    registry.register({
+      name: "vapi_create_campaign",
+      description: "Create a real provider-managed Vapi campaign with per-customer assistant context and a bounded calling window",
+      integration: "vapi",
+      inputSchema: z.object({
+        name: z.string().min(3).max(200),
+        assistantId: z.string().min(1),
+        schedulePlan: z.object({ earliestAt: z.string().datetime(), latestAt: z.string().datetime().optional() }),
+        customers: z.array(z.object({
+          number: z.string().min(7),
+          name: z.string().min(1).max(200),
+          externalId: z.string().min(1).max(200),
+          assistantOverrides: z.object({
+            firstMessage: z.string().min(1).max(1000),
+            variableValues: z.record(z.string()),
+            metadata: z.record(z.unknown()),
+            analysisPlan: z.record(z.unknown()).optional(),
+          }),
+        })).min(1).max(DAILY_CAMPAIGN_CUSTOMER_LIMIT),
+      }),
+      // This nested customer payload is deliberately forwarded: it is the approved
+      // campaign cohort and the minimum context the saved Vapi assistant needs.
+      piiAllowlist: ["name", "assistantId", "schedulePlan", "customers"],
+      retryPolicy: { attempts: 3, baseDelayMs: 500, timeoutMs: 25_000 },
+      async run(input) {
+        const result = await createVapiCampaign(input as unknown as Parameters<typeof createVapiCampaign>[0]);
+        if (!result.ok) throw new Error(result.error ?? "Vapi campaign creation failed");
+        return { ...result.output, live: true };
       },
     });
   }

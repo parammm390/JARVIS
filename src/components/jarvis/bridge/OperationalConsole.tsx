@@ -5,9 +5,12 @@
 // every row below is either a real record already held by data-core/kernel or an
 // explicit unavailable state. This keeps the command-center density honest.
 
-import { useEffect, useState, type ReactNode } from "react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { useGSAP } from "@gsap/react"
+import gsap from "gsap"
+import { ScrollTrigger } from "gsap/ScrollTrigger"
 import {
   Activity,
   AlertTriangle,
@@ -71,7 +74,7 @@ function modeCopy(liveframe: LiveFrameProjection): string {
   switch (liveframe.mode) {
     case "ready": return "Standing by"
     case "listening": return "Listening for intent"
-    case "thinking": return "Building the response"
+    case "thinking": return "Checking records and preparing actions"
     case "decision": return liveframe.focus === "clarification" ? "Waiting for one detail" : "Waiting for a decision"
     case "working": return "Execution in progress"
     case "verifying": return "Verifying recorded work"
@@ -98,6 +101,62 @@ function toneForMode(mode: LiveFrameProjection["mode"]): "cyan" | "violet" | "am
     case "fault": return "red"
     default: return "cyan"
   }
+}
+
+function useOperationalStackReveal(dependencies: readonly unknown[]) {
+  const scope = useRef<HTMLElement | null>(null)
+  useGSAP(() => {
+    if (!scope.current || typeof window === "undefined") return
+    gsap.registerPlugin(ScrollTrigger)
+    const media = gsap.matchMedia()
+    media.add("(min-width: 768px) and (prefers-reduced-motion: no-preference)", () => {
+      const panels = gsap.utils.toArray<HTMLElement>(":scope > .jarvis-ops-panel", scope.current)
+      if (panels.length < 2) return
+      gsap.fromTo(panels, {
+        autoAlpha: 0.68,
+        y: (index) => 12 + index * 7,
+      }, {
+        autoAlpha: 1,
+        y: 0,
+        stagger: 0.05,
+        ease: "none",
+        scrollTrigger: {
+          trigger: scope.current,
+          start: "top 96%",
+          end: "top 76%",
+          scrub: 0.35,
+        },
+      })
+    })
+    return () => media.revert()
+  }, { scope, dependencies: [...dependencies], revertOnUpdate: true })
+  return scope
+}
+
+function useBusinessPulseReveal(quiet: boolean) {
+  const scope = useRef<HTMLElement | null>(null)
+  useGSAP(() => {
+    if (!scope.current || typeof window === "undefined") return
+    gsap.registerPlugin(ScrollTrigger)
+    const media = gsap.matchMedia()
+    media.add("(min-width: 768px) and (prefers-reduced-motion: no-preference)", () => {
+      const targets = gsap.utils.toArray<HTMLElement>(".jarvis-business-pulse__heading, .jarvis-business-pulse__metrics .j-panel", scope.current)
+      gsap.fromTo(targets, { autoAlpha: 0.56, y: 10 }, {
+        autoAlpha: quiet ? 0.68 : 1,
+        y: 0,
+        stagger: 0.045,
+        ease: "none",
+        scrollTrigger: {
+          trigger: scope.current,
+          start: "top 98%",
+          end: "top 82%",
+          scrub: 0.3,
+        },
+      })
+    })
+    return () => media.revert()
+  }, { scope, dependencies: [quiet], revertOnUpdate: true })
+  return scope
 }
 
 function safeAge(iso: string, now: number): string | null {
@@ -242,7 +301,7 @@ function NowRail({
   const inMotion: NowRailRun[] = runs !== null
     ? [...selector.runs]
         .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-        .slice(0, Math.max(0, 3 - needsYou.length))
+        .slice(0, 2)
         .map((run) => {
           const currentStep = runCurrentStep(run)
           return {
@@ -269,15 +328,16 @@ function NowRail({
     }
     groups.push({ id: event.id, title, detail, occurredAt: event.occurredAt, count: 1 })
     return groups
-  }, []).slice(0, Math.max(0, 3 - needsYou.length - inMotion.length))
+  }, []).slice(0, 3)
 
   const hasNeedsYou = needsYou.length > 0 || (approvals !== null && approvals > 0)
   const hasInMotion = inMotion.length > 0
   const hasChangedRecently = changedRecently.length > 0
   const sourceFor = (fallback: string) => fixtureLabel ? "fixture" : fallback
+  const stackRef = useOperationalStackReveal([needsYou.length, inMotion.length, changedRecently.length])
 
   return (
-    <aside id="jarvis-now-rail" className="jarvis-ops-rail jarvis-ops-rail--signals jarvis-now-rail" aria-label="Now Rail" data-jarvis-now-rail data-liveframe-mode={liveframe.mode} data-scene-rail="full" data-command-canvas-scene="ready">
+    <aside ref={stackRef} id="jarvis-now-rail" className="jarvis-ops-rail jarvis-ops-rail--signals jarvis-now-rail" aria-label="Now Rail" data-jarvis-now-rail data-liveframe-mode={liveframe.mode} data-scene-rail="full" data-command-canvas-scene="ready">
       {hasNeedsYou ? (
         <section className="jarvis-ops-panel jarvis-ops-panel--focus" data-now-group="needs-you">
           <RailHeading icon={<ShieldCheck className="h-3.5 w-3.5" />} trailing={pendingActionRows.length > 0 ? <span className="jarvis-ops-rail__total" data-jarvis-fact data-source={sourceFor("api:actions-pending")}>{pendingActionRows.length} shown</span> : undefined}>Needs you</RailHeading>
@@ -580,6 +640,8 @@ export function OrbIntelligenceReadout({ thread, liveframe, pendingApprovals, fi
   // approval aggregate is zero, so the visual surface labels the record count
   // precisely instead of silently treating one as the other.
   const queuedActionRecords = approvals !== null ? selector.pendingActions.length : null
+  const clarificationRecords = queuedActionRecords === null ? null : selector.pendingActions.filter((action) => action.actionType === "clarification_request").length
+  const decisionRecords = queuedActionRecords === null || clarificationRecords === null ? null : Math.max(0, queuedActionRecords - clarificationRecords)
   const integrations = lane.integrationsStatus
   const modeTone = toneForMode(liveframe.mode)
 
@@ -601,8 +663,8 @@ export function OrbIntelligenceReadout({ thread, liveframe, pendingApprovals, fi
       {queuedActionRecords !== null ? (
         <div className="jarvis-orb-readout__satellite jarvis-orb-readout__satellite--actions" data-jarvis-fact data-source={fixtureLabel ? "fixture.pendingActions" : "api:actions-pending"}>
           <ShieldCheck className="h-3.5 w-3.5" aria-hidden />
-          <span>Action records</span>
-          <strong>{queuedActionRecords} queued</strong>
+          <span>Needs you</span>
+          <strong>{clarificationRecords && decisionRecords ? `${clarificationRecords} context · ${decisionRecords} decisions` : clarificationRecords ? `${clarificationRecords} context request${clarificationRecords === 1 ? "" : "s"}` : decisionRecords ? `${decisionRecords} decision${decisionRecords === 1 ? "" : "s"}` : "clear"}</strong>
         </div>
       ) : null}
       {integrations ? (
@@ -721,8 +783,9 @@ export function OperationalFloor() {
  * legacy five-card operations floor from the Ready hierarchy. The four-item
  * projection preserves the source strip's existing order and values. */
 export function BusinessPulse({ quiet = false }: { quiet?: boolean }) {
+  const pulseRef = useBusinessPulseReveal(quiet)
   return (
-    <section id="jarvis-business-pulse" className={`jarvis-business-pulse${quiet ? " jarvis-business-pulse--quiet" : ""}`} aria-label="Business Pulse" data-jarvis-business-pulse data-business-pulse-mode={quiet ? "quiet" : "full"}>
+    <section ref={pulseRef} id="jarvis-business-pulse" className={`jarvis-business-pulse${quiet ? " jarvis-business-pulse--quiet" : ""}`} aria-label="Business Pulse" data-jarvis-business-pulse data-business-pulse-mode={quiet ? "quiet" : "full"}>
       <div className="jarvis-business-pulse__heading">
         <span className="jarvis-business-pulse__title"><Radio className="h-3.5 w-3.5" aria-hidden /> Business Pulse</span>
         <span className="jarvis-business-pulse__note">Current source-backed facts</span>

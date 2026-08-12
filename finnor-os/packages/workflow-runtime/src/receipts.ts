@@ -11,6 +11,7 @@ export interface OpenReceiptParams {
   workflowRunId?: string;
   workflowStepId?: string;
   domainActionId?: string;
+  workId?: string;
   objective: string;
   evidence: ReceiptEvidence[];
   policyApplied: { id: string; version: number } | null;
@@ -39,6 +40,7 @@ export async function openReceipt(params: OpenReceiptParams): Promise<{ receiptI
         workflowRunId: params.workflowRunId ?? null,
         workflowStepId: params.workflowStepId ?? null,
         domainActionId: params.domainActionId ?? null,
+        workId: params.workId ?? null,
         objective: params.objective,
         evidence: params.evidence,
         policyApplied: params.policyApplied,

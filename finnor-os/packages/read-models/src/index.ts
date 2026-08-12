@@ -54,6 +54,7 @@ export * from "./churn-risk";
 export * from "./reorder-points";
 export * from "./failure-injection-calendar";
 export * from "./work-cases";
+export * from "./operational-queries";
 
 export interface IntelligenceForecasts {
   cashCollections: ForecastPoint[] | null;
@@ -67,12 +68,11 @@ export interface IntelligenceForecasts {
 export async function intelligenceForecasts(tenantId: string, historyDays = 56): Promise<IntelligenceForecasts> {
   const today = new Date();
   const start = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() - historyDays + 1));
-  const [paymentRows, visitRows] = await withTenant(tenantId, (db) =>
-    Promise.all([
-      db.select({ receivedAt: payments.receivedAt, amountUsd: payments.amountUsd }).from(payments).where(and(eq(payments.tenantId, tenantId), eq(payments.status, "succeeded"), gte(payments.receivedAt, start))),
-      db.select({ scheduledAt: serviceVisits.scheduledAt }).from(serviceVisits).innerJoin(households, eq(households.id, serviceVisits.householdId)).where(and(eq(households.tenantId, tenantId), gte(serviceVisits.scheduledAt, start))),
-    ]),
-  );
+  const { paymentRows, visitRows } = await withTenant(tenantId, async (db) => {
+    const paymentRows = await db.select({ receivedAt: payments.receivedAt, amountUsd: payments.amountUsd }).from(payments).where(and(eq(payments.tenantId, tenantId), eq(payments.status, "succeeded"), gte(payments.receivedAt, start)));
+    const visitRows = await db.select({ scheduledAt: serviceVisits.scheduledAt }).from(serviceVisits).innerJoin(households, eq(households.id, serviceVisits.householdId)).where(and(eq(households.tenantId, tenantId), gte(serviceVisits.scheduledAt, start)));
+    return { paymentRows, visitRows };
+  });
   const key = (date: Date) => date.toISOString().slice(0, 10);
   const cashByDay = new Map<string, number>();
   const visitsByDay = new Map<string, number>();
@@ -377,6 +377,120 @@ export async function dataQuality(tenantId: string): Promise<DataQualitySummary>
 // keep the token-budget blast radius at zero for this phase).
 // ---------------------------------------------------------------------------
 
+export interface HouseholdMentionMatch {
+  householdId: string;
+  label: string;
+  matchedAlias: string;
+  matchKind: "phone" | "name" | "address";
+  fuzzy?: boolean;
+  /** Normalized phrase found in the instruction when a typo-safe name match won. */
+  instructionAlias?: string;
+}
+
+function normalizeMention(value: string): string {
+  return value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
+}
+
+/** Placeholder labels are not identities. Matching an instruction such as
+ * "show the customer record for Daniel..." against a household literally named
+ * "Customer" silently loads the wrong person's history. Keep these values usable
+ * as display fallbacks, but never treat them as mention aliases. */
+function isPlaceholderHouseholdName(value: string): boolean {
+  const normalized = normalizeMention(value);
+  return /^(?:customer|unknown(?: customer)?|homeowner|resident|prospect|lead|contact|caller|guest|anonymous|walk in|test(?: customer)?)(?: \d+)?$/.test(normalized);
+}
+
+function editDistance(a: string, b: string): number {
+  const prior = Array.from({ length: b.length + 1 }, (_, index) => index);
+  for (let i = 1; i <= a.length; i++) {
+    const current = [i];
+    for (let j = 1; j <= b.length; j++) {
+      current[j] = Math.min(current[j - 1]! + 1, prior[j]! + 1, prior[j - 1]! + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+    prior.splice(0, prior.length, ...current);
+  }
+  return prior[b.length]!;
+}
+
+function closeNameMention(instruction: string, candidate: string): string | null {
+  const candidateTokens = candidate.split(" ").filter(Boolean);
+  const instructionTokens = instruction.split(" ").filter(Boolean);
+  if (candidateTokens.length < 2 || instructionTokens.length < candidateTokens.length || candidate.length < 8) return null;
+  for (let start = 0; start <= instructionTokens.length - candidateTokens.length; start++) {
+    const phraseTokens = instructionTokens.slice(start, start + candidateTokens.length);
+    if (phraseTokens[0] !== candidateTokens[0]) continue;
+    const phrase = phraseTokens.join(" ");
+    if (editDistance(phrase, candidate) <= 2) return phrase;
+  }
+  return null;
+}
+
+/** Resolve a customer explicitly named in an owner instruction. This is deliberately
+ * exact and fail-closed: the longest unique full name/address/phone wins; tied rows
+ * return null so JARVIS asks rather than loading the wrong household's memory. */
+export async function resolveHouseholdMention(tenantId: string, instruction: string): Promise<HouseholdMentionMatch | null> {
+  const normalizedInstruction = normalizeMention(instruction);
+  const instructionDigits = instruction.replace(/\D/g, "");
+  if (!normalizedInstruction && instructionDigits.length < 7) return null;
+  const candidates = await withTenant(tenantId, async (db) => {
+    // A tenant transaction owns one pg client; keep its queries sequential so pg@9
+    // does not rely on the deprecated concurrent-query queueing behavior.
+    const householdRows = await db.select({ id: households.id, address: households.address, contactInfo: households.contactInfo }).from(households).where(eq(households.tenantId, tenantId));
+    const contactRows = await db.select({ householdId: contacts.householdId, name: contacts.name }).from(contacts).where(and(eq(contacts.tenantId, tenantId), isNull(contacts.archivedAt)));
+    const contactsByHousehold = new Map<string, string[]>();
+    for (const contact of contactRows) {
+      if (!contact.householdId) continue;
+      const list = contactsByHousehold.get(contact.householdId) ?? [];
+      list.push(contact.name);
+      contactsByHousehold.set(contact.householdId, list);
+    }
+    return householdRows.map((row) => {
+      const info = (row.contactInfo ?? {}) as Record<string, unknown>;
+      const allNames = [typeof info.name === "string" ? info.name : undefined, ...(contactsByHousehold.get(row.id) ?? [])].filter((value): value is string => Boolean(value));
+      const names = allNames.filter((value) => !isPlaceholderHouseholdName(value));
+      return {
+        id: row.id,
+        label: allNames[0] ?? row.address,
+        aliases: [
+          ...names.map((value) => ({ value, kind: "name" as const, weight: 3000 })),
+          { value: row.address, kind: "address" as const, weight: 2000 },
+          ...(typeof info.phone === "string" ? [{ value: info.phone, kind: "phone" as const, weight: 4000 }] : []),
+        ],
+      };
+    });
+  });
+
+  const scored: Array<HouseholdMentionMatch & { score: number }> = [];
+  for (const candidate of candidates) {
+    for (const alias of candidate.aliases) {
+      const normalizedAlias = normalizeMention(alias.value);
+      const phoneDigits = alias.kind === "phone" ? alias.value.replace(/\D/g, "") : "";
+      const exact = alias.kind === "phone"
+        ? phoneDigits.length >= 7 && instructionDigits.includes(phoneDigits)
+        : normalizedAlias.length >= 3 && ` ${normalizedInstruction} `.includes(` ${normalizedAlias} `);
+      const fuzzyPhrase = !exact && alias.kind === "name" ? closeNameMention(normalizedInstruction, normalizedAlias) : null;
+      const fuzzy = Boolean(fuzzyPhrase);
+      if (!exact && !fuzzy) continue;
+      scored.push({
+        householdId: candidate.id,
+        label: candidate.label,
+        matchedAlias: alias.value,
+        matchKind: alias.kind,
+        fuzzy,
+        ...(fuzzyPhrase ? { instructionAlias: fuzzyPhrase } : {}),
+        score: alias.weight + (alias.kind === "phone" ? phoneDigits.length : normalizedAlias.length) - (fuzzy ? 500 : 0),
+      });
+    }
+  }
+  scored.sort((a, b) => b.score - a.score || a.householdId.localeCompare(b.householdId));
+  const best = scored[0];
+  if (!best) return null;
+  const tiedHousehold = scored.find((row) => row.score === best.score && row.householdId !== best.householdId);
+  if (tiedHousehold) return null;
+  const { score: _score, ...match } = best;
+  return match;
+}
+
 export interface Household360 {
   household: { id: string; address: string; contactInfo: Record<string, unknown>; marketingConsent: boolean; createdAt: string };
   contacts: Array<{ id: string; name: string; role: string | null; methods: Array<{ methodType: string; value: string; consent: boolean }> }>;
@@ -384,11 +498,12 @@ export interface Household360 {
   leads: Array<{ id: string; name: string; status: string; source: string | null; createdAt: string }>;
   opportunities: Array<{ id: string; pipelineStage: string; expectedValueUsd: number | null; createdAt: string }>;
   quotes: Array<{ id: string; status: string; totalUsd: number | null; createdAt: string }>;
-  invoices: Array<{ id: string; status: string; amountUsd: number; dueDate: string | null; payments: Array<{ amountUsd: number; method: string; status: string; receivedAt: string }> }>;
-  workOrders: Array<{ id: string; type: string; status: string; technicianId: string | null; scheduledAt: string | null; completedAt: string | null }>;
-  serviceVisits: Array<{ id: string; type: string; technicianId: string | null; scheduledAt: string | null; completedAt: string | null }>;
-  appointments: Array<{ id: string; subjectType: string; status: string; scheduledAt: string; technicianId: string | null }>;
-  conversations: Array<{ id: string; channel: string; status: string; lastActivityAt: string; messageCount: number }>;
+  invoices: Array<{ id: string; status: string; amountUsd: number; memo: string | null; createdAt: string; dueDate: string | null; payments: Array<{ amountUsd: number; method: string; status: string; receivedAt: string }> }>;
+  workOrders: Array<{ id: string; type: string; status: string; technicianId: string | null; depositAmountUsd: number | null; createdAt: string; scheduledAt: string | null; completedAt: string | null }>;
+  serviceVisits: Array<{ id: string; type: string; technicianId: string | null; scheduledAt: string | null; completedAt: string | null; notes: string | null }>;
+  appointments: Array<{ id: string; subjectType: string; status: string; scheduledAt: string; durationMinutes: number | null; technicianId: string | null; notes: string | null; createdAt: string }>;
+  conversations: Array<{ id: string; channel: string; status: string; createdAt: string; lastActivityAt: string; messageCount: number; recentMessages: Array<{ direction: string; channel: string; content: string; sentAt: string }> }>;
+  calls: Array<{ id: string; conversationId: string | null; direction: string; transcript: string | null; startedAt: string | null; endedAt: string | null; endedReason: string | null; raw: Record<string, unknown> }>;
   documents: Array<{ id: string; kind: string; title: string; createdAt: string }>;
   // communications_log (pre-canonical) is linked to a household by nothing but
   // householdId — it is NOT unified with canonical `conversations` (no shared key,
@@ -410,21 +525,21 @@ export async function household360(tenantId: string, householdId: string): Promi
       .where(and(eq(households.id, householdId), eq(households.tenantId, tenantId)));
     if (!hh) return null;
 
-    // Stage 1: direct children of the household — 11 parallel indexed selects.
-    const [contactRows, equipmentRows, leadRows, opportunityRows, quoteRows, invoiceRows, workOrderRows, serviceVisitRows, conversationRows, documentRows, legacyCommsRows] =
-      await Promise.all([
-        db.select().from(contacts).where(and(eq(contacts.tenantId, tenantId), eq(contacts.householdId, householdId))),
-        db.select().from(equipment).where(eq(equipment.householdId, householdId)),
-        db.select().from(leads).where(and(eq(leads.tenantId, tenantId), eq(leads.householdId, householdId))),
-        db.select().from(opportunities).where(and(eq(opportunities.tenantId, tenantId), eq(opportunities.householdId, householdId))),
-        db.select().from(quotes).where(and(eq(quotes.tenantId, tenantId), eq(quotes.householdId, householdId))),
-        db.select().from(invoices).where(and(eq(invoices.tenantId, tenantId), eq(invoices.householdId, householdId))),
-        db.select().from(workOrders).where(and(eq(workOrders.tenantId, tenantId), eq(workOrders.householdId, householdId))),
-        db.select().from(serviceVisits).where(eq(serviceVisits.householdId, householdId)),
-        db.select().from(conversations).where(and(eq(conversations.tenantId, tenantId), eq(conversations.householdId, householdId))),
-        db.select().from(documents).where(and(eq(documents.tenantId, tenantId), eq(documents.householdId, householdId))),
-        db.select().from(communicationsLog).where(eq(communicationsLog.householdId, householdId)),
-      ]);
+    // One transaction owns one pg client. Promise.all on that client does not make
+    // these queries parallel; pg queues them and pg@9 warns that the pattern will be
+    // removed. Keep the sequence explicit and deterministic until this traversal is
+    // projected into a single materialized read model.
+    const contactRows = await db.select().from(contacts).where(and(eq(contacts.tenantId, tenantId), eq(contacts.householdId, householdId)));
+    const equipmentRows = await db.select().from(equipment).where(eq(equipment.householdId, householdId));
+    const leadRows = await db.select().from(leads).where(and(eq(leads.tenantId, tenantId), eq(leads.householdId, householdId)));
+    const opportunityRows = await db.select().from(opportunities).where(and(eq(opportunities.tenantId, tenantId), eq(opportunities.householdId, householdId)));
+    const quoteRows = await db.select().from(quotes).where(and(eq(quotes.tenantId, tenantId), eq(quotes.householdId, householdId)));
+    const invoiceRows = await db.select().from(invoices).where(and(eq(invoices.tenantId, tenantId), eq(invoices.householdId, householdId)));
+    const workOrderRows = await db.select().from(workOrders).where(and(eq(workOrders.tenantId, tenantId), eq(workOrders.householdId, householdId)));
+    const serviceVisitRows = await db.select().from(serviceVisits).where(eq(serviceVisits.householdId, householdId));
+    const conversationRows = await db.select().from(conversations).where(and(eq(conversations.tenantId, tenantId), eq(conversations.householdId, householdId)));
+    const documentRows = await db.select().from(documents).where(and(eq(documents.tenantId, tenantId), eq(documents.householdId, householdId)));
+    const legacyCommsRows = await db.select().from(communicationsLog).where(eq(communicationsLog.householdId, householdId));
 
     const contactIds = contactRows.map((c) => c.id);
     const invoiceIds = invoiceRows.map((i) => i.id);
@@ -439,12 +554,11 @@ export async function household360(tenantId: string, householdId: string): Promi
     if (leadIds.length > 0) subjectConditions.push(and(eq(appointments.subjectType, "lead"), inArray(appointments.subjectId, leadIds)));
     if (workOrderIds.length > 0) subjectConditions.push(and(eq(appointments.subjectType, "work_order"), inArray(appointments.subjectId, workOrderIds)));
 
-    const [methodRows, paymentRows, messageRows, appointmentRows] = await Promise.all([
-      contactIds.length > 0 ? db.select().from(contactMethods).where(inArray(contactMethods.contactId, contactIds)) : Promise.resolve([]),
-      invoiceIds.length > 0 ? db.select().from(payments).where(inArray(payments.invoiceId, invoiceIds)) : Promise.resolve([]),
-      conversationIds.length > 0 ? db.select().from(messages).where(inArray(messages.conversationId, conversationIds)) : Promise.resolve([]),
-      db.select().from(appointments).where(and(eq(appointments.tenantId, tenantId), or(...subjectConditions))),
-    ]);
+    const methodRows = contactIds.length > 0 ? await db.select().from(contactMethods).where(inArray(contactMethods.contactId, contactIds)) : [];
+    const paymentRows = invoiceIds.length > 0 ? await db.select().from(payments).where(inArray(payments.invoiceId, invoiceIds)) : [];
+    const messageRows = conversationIds.length > 0 ? await db.select().from(messages).where(inArray(messages.conversationId, conversationIds)) : [];
+    const callRows = conversationIds.length > 0 ? await db.select().from(calls).where(and(eq(calls.tenantId, tenantId), inArray(calls.conversationId, conversationIds))) : [];
+    const appointmentRows = await db.select().from(appointments).where(and(eq(appointments.tenantId, tenantId), or(...subjectConditions)));
 
     // Timeline: business_events for the union of every entity collected above,
     // batched per entityType so each batch hits business_events_entity_idx.
@@ -457,16 +571,16 @@ export async function household360(tenantId: string, householdId: string): Promi
       ["invoice", invoiceIds],
       ["work_order", workOrderIds],
       ["appointment", appointmentRows.map((a) => a.id)],
+      ["call", callRows.map((call) => call.id)],
     ].filter(([, ids]) => (ids?.length ?? 0) > 0) as Array<[string, string[]]>;
 
-    const eventBatches = await Promise.all(
-      entityBatches.map(([entityType, ids]) =>
-        db
-          .select()
-          .from(businessEvents)
-          .where(and(eq(businessEvents.tenantId, tenantId), eq(businessEvents.entityType, entityType), inArray(businessEvents.entityId, ids))),
-      ),
-    );
+    const eventBatches = [] as Array<Array<typeof businessEvents.$inferSelect>>;
+    for (const [entityType, ids] of entityBatches) {
+      eventBatches.push(await db
+        .select()
+        .from(businessEvents)
+        .where(and(eq(businessEvents.tenantId, tenantId), eq(businessEvents.entityType, entityType), inArray(businessEvents.entityId, ids))));
+    }
     const timeline = eventBatches
       .flat()
       .sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime())
@@ -492,8 +606,14 @@ export async function household360(tenantId: string, householdId: string): Promi
       paymentsByInvoice.set(p.invoiceId, list);
     }
     const messageCountByConversation = new Map<string, number>();
+    const messagesByConversation = new Map<string, typeof messageRows>();
     for (const m of messageRows) {
       messageCountByConversation.set(m.conversationId!, (messageCountByConversation.get(m.conversationId!) ?? 0) + 1);
+      if (m.conversationId) {
+        const list = messagesByConversation.get(m.conversationId) ?? [];
+        list.push(m);
+        messagesByConversation.set(m.conversationId, list);
+      }
     }
 
     const household360Result: Household360 = {
@@ -529,6 +649,8 @@ export async function household360(tenantId: string, householdId: string): Promi
         id: i.id,
         status: i.status,
         amountUsd: Number(i.amountUsd),
+        memo: i.memo,
+        createdAt: i.createdAt.toISOString(),
         dueDate: i.dueDate ? i.dueDate.toISOString() : null,
         payments: (paymentsByInvoice.get(i.id) ?? []).map((p) => ({
           amountUsd: Number(p.amountUsd),
@@ -542,6 +664,8 @@ export async function household360(tenantId: string, householdId: string): Promi
         type: w.type,
         status: w.status,
         technicianId: w.technicianId,
+        depositAmountUsd: toNum(w.depositAmountUsd),
+        createdAt: w.createdAt.toISOString(),
         scheduledAt: w.scheduledAt ? w.scheduledAt.toISOString() : null,
         completedAt: w.completedAt ? w.completedAt.toISOString() : null,
       })),
@@ -551,21 +675,43 @@ export async function household360(tenantId: string, householdId: string): Promi
         technicianId: v.technicianId,
         scheduledAt: v.scheduledAt ? v.scheduledAt.toISOString() : null,
         completedAt: v.completedAt ? v.completedAt.toISOString() : null,
+        notes: v.notes,
       })),
       appointments: appointmentRows.map((a) => ({
         id: a.id,
         subjectType: a.subjectType,
         status: a.status,
         scheduledAt: a.scheduledAt.toISOString(),
+        durationMinutes: a.durationMinutes,
         technicianId: a.technicianId,
+        notes: a.notes,
+        createdAt: a.createdAt.toISOString(),
       })),
       conversations: conversationRows.map((c) => ({
         id: c.id,
         channel: c.channel,
         status: c.status,
+        createdAt: c.createdAt.toISOString(),
         lastActivityAt: c.lastActivityAt.toISOString(),
         messageCount: messageCountByConversation.get(c.id) ?? 0,
+        recentMessages: (messagesByConversation.get(c.id) ?? [])
+          .sort((a, b) => b.sentAt.getTime() - a.sentAt.getTime())
+          .slice(0, 20)
+          .map((message) => ({ direction: message.direction, channel: message.channel, content: message.content, sentAt: message.sentAt.toISOString() })),
       })),
+      calls: callRows
+        .sort((a, b) => (b.startedAt?.getTime() ?? b.createdAt.getTime()) - (a.startedAt?.getTime() ?? a.createdAt.getTime()))
+        .slice(0, 50)
+        .map((call) => ({
+          id: call.id,
+          conversationId: call.conversationId,
+          direction: call.direction,
+          transcript: call.transcript,
+          startedAt: call.startedAt?.toISOString() ?? null,
+          endedAt: call.endedAt?.toISOString() ?? null,
+          endedReason: call.endedReason,
+          raw: call.raw as Record<string, unknown>,
+        })),
       documents: documentRows.map((d) => ({ id: d.id, kind: d.kind, title: d.title, createdAt: d.createdAt.toISOString() })),
       legacyCommunications: legacyCommsRows.map((c) => ({
         id: c.id,
@@ -737,11 +883,9 @@ export interface ActivitySnapshot {
 // projection wants to cache for a fast first paint (packages/projections).
 export async function activitySnapshot(tenantId: string, limit = 50): Promise<ActivitySnapshot> {
   return withTenant(tenantId, async (db) => {
-    const [actionLogRows, stepRows, callRows] = await Promise.all([
-      db.select().from(actionLog).where(eq(actionLog.tenantId, tenantId)).orderBy(desc(actionLog.timestamp)).limit(limit),
-      db.select().from(workflowSteps).where(eq(workflowSteps.tenantId, tenantId)).orderBy(desc(workflowSteps.updatedAt)).limit(limit),
-      db.select().from(calls).where(eq(calls.tenantId, tenantId)).orderBy(desc(calls.createdAt)).limit(limit),
-    ]);
+    const actionLogRows = await db.select().from(actionLog).where(eq(actionLog.tenantId, tenantId)).orderBy(desc(actionLog.timestamp)).limit(limit);
+    const stepRows = await db.select().from(workflowSteps).where(eq(workflowSteps.tenantId, tenantId)).orderBy(desc(workflowSteps.updatedAt)).limit(limit);
+    const callRows = await db.select().from(calls).where(eq(calls.tenantId, tenantId)).orderBy(desc(calls.createdAt)).limit(limit);
     const items: ActivitySnapshotItem[] = [
       ...actionLogRows.map((r) => ({
         source: "action_log" as const,

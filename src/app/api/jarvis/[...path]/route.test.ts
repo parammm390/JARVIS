@@ -82,6 +82,12 @@ describe("JARVIS proxy route contract", () => {
     expect(putPolicy.status).toBe(200)
     expect(putPriceBook.status).toBe(200)
 
+    const typedQuery = await POST(request("POST", "queries", {
+      headers: AUTH,
+      body: { intent: "business_state" },
+    }), params("queries"))
+    expect(typedQuery.status).toBe(200)
+
     const arbitrary = await POST(request("POST", "dispatch/anything", { headers: AUTH, body: {} }), params("dispatch/anything"))
     expect(arbitrary.status).toBe(404)
   })

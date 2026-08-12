@@ -33,6 +33,9 @@ export default defineConfig({
       "@finnor/workflow-runtime": r("./packages/workflow-runtime/src/index.ts"),
       "@finnor/memory": r("./packages/memory/src/index.ts"),
       "@finnor/security": r("./packages/security/src/index.ts"),
+      "@finnor/tools/llm": r("./packages/tools/src/llm.ts"),
+      "@finnor/tools/registry": r("./packages/tools/src/registry.ts"),
+      "@finnor/tools/firecrawl": r("./packages/tools/src/firecrawl.ts"),
       "@finnor/tools": r("./packages/tools/src/index.ts"),
       "@finnor/orchestration": r("./packages/orchestration/src/index.ts"),
       "@finnor/voice-os": r("./packages/voice-os/src/index.ts"),
@@ -41,7 +44,7 @@ export default defineConfig({
     },
   },
   test: {
-    include: ["tests/**/*.test.ts"],
+    include: ["tests/**/*.test.ts", "packages/**/*.test.ts", "apps/**/*.test.ts"],
     testTimeout: 30_000,
     pool: "forks",
     // Integration tests share ONE real database (migrations, jobs table, tenant rows).

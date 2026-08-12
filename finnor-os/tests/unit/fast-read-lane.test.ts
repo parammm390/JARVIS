@@ -1,8 +1,53 @@
 import { describe, expect, it, vi } from "vitest";
 
+vi.mock("@finnor/db", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@finnor/db")>();
+  return {
+    ...actual,
+    receiveWork: vi.fn(async () => ({
+      workId: "00000000-0000-4000-8000-0000000000a1",
+      workInputId: "00000000-0000-4000-8000-0000000000a2",
+      instructionId: "00000000-0000-4000-8000-0000000000a3",
+      created: true,
+      duplicate: false,
+      status: "received",
+      finalOutcome: null,
+    })),
+    transitionWork: vi.fn(async () => undefined),
+    beginWorkPlannerAttempt: vi.fn(async () => ({ id: "00000000-0000-4000-8000-0000000000a4", attempt: 1, claimed: true, status: "planning" })),
+    finishWorkPlannerAttempt: vi.fn(async () => undefined),
+  };
+});
+
+vi.mock("../../packages/orchestration/src/instruction-trace", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../packages/orchestration/src/instruction-trace")>();
+  return {
+    ...actual,
+    ensureInstructionSession: vi.fn(async () => undefined),
+    emitInstructionEvent: vi.fn(async () => undefined),
+  };
+});
+
+vi.mock("@finnor/memory", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@finnor/memory")>();
+  return {
+    ...actual,
+    buildMemorySnapshot: vi.fn(),
+    appendShortTerm: vi.fn(),
+    mirrorTurnToZep: vi.fn(),
+  };
+});
+
+vi.mock("@finnor/security", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@finnor/security")>();
+  return { ...actual, ensureSecretsLoaded: vi.fn(async () => undefined) };
+});
+
 import { FinnorOrchestrator, type Planner } from "@finnor/orchestration";
 import type { Executor } from "../../packages/orchestration/src/executor";
-import { answerCashCollections, answerGreeting, classifyFastReadOnlyQuestion, createFastReadOnlyRouter } from "../../packages/orchestration/src/fast-read-lane";
+import { answerCashCollections, classifyFastReadOnlyQuestion, createFastReadOnlyRouter } from "../../packages/orchestration/src/fast-read-lane";
+import { buildMemorySnapshot } from "@finnor/memory";
+import { ensureSecretsLoaded } from "@finnor/security";
 
 const CASH_SNAPSHOT = {
   invoicesByStatus: [
@@ -18,8 +63,8 @@ describe("fast read-only lane", () => {
     expect(classifyFastReadOnlyQuestion("How are cash collections?")).toEqual({ route: "fast_read", intent: "cash_collections" });
   });
 
-  it.each(["hi", "Hello!", "good morning"])("routes a bounded greeting: %s", (instruction) => {
-    expect(classifyFastReadOnlyQuestion(instruction)).toEqual({ route: "fast_read", intent: "greeting" });
+  it.each(["hi", "Hello!", "good morning"])("keeps greetings out of the synthetic fast lane: %s", (instruction) => {
+    expect(classifyFastReadOnlyQuestion(instruction)).toEqual({ route: "planner", reason: "not_question" });
   });
 
   it.each([
@@ -81,16 +126,24 @@ describe("fast read-only lane", () => {
       role: "owner",
     });
 
-    expect(result).toEqual({ actions: [], answer });
+    expect(result).toEqual({
+      actions: [],
+      answer,
+      workId: "00000000-0000-4000-8000-0000000000a1",
+      workInputId: "00000000-0000-4000-8000-0000000000a2",
+      instructionId: "00000000-0000-4000-8000-0000000000a3",
+    });
     expect(planner.plan).not.toHaveBeenCalled();
+    expect(ensureSecretsLoaded).not.toHaveBeenCalled();
+    expect(buildMemorySnapshot).not.toHaveBeenCalled();
     vi.unstubAllEnvs();
   });
 
-  it("answers a greeting without touching the tenant read model", async () => {
+  it("does not answer a greeting from the fast router", async () => {
     const cashCollections = vi.fn(async () => CASH_SNAPSHOT);
     const router = createFastReadOnlyRouter({ cashCollections, now: () => new Date("2026-08-04T12:00:00.000Z") });
 
-    await expect(router.route("hi", { tenantId: "tenant-a" })).resolves.toEqual(answerGreeting("2026-08-04T12:00:00.000Z"));
+    await expect(router.route("hi", { tenantId: "tenant-a" })).resolves.toBeNull();
     expect(cashCollections).not.toHaveBeenCalled();
   });
 });

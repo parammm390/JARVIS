@@ -32,6 +32,9 @@ export class JarvisApiError extends Error {
     message: string,
     public readonly status: number,
     public readonly retryable = status === 0 || status >= 500,
+    /** Parsed upstream error envelope. Durable mutation routes can include
+     * identifiers (notably workId) even when the request ends in recovery. */
+    public readonly details?: unknown,
   ) {
     super(message)
     this.name = "JarvisApiError"
@@ -96,7 +99,7 @@ async function readJson<T>(res: Response, method: JarvisMethod, path: string): P
   }
   if (!res.ok) {
     const message = json && typeof json === "object" && "error" in json && typeof json.error === "string" ? json.error : `${method} ${path} failed (${res.status})`
-    throw new JarvisApiError(message, res.status)
+    throw new JarvisApiError(message, res.status, undefined, json)
   }
   return json as T
 }
