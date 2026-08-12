@@ -113,6 +113,90 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/objectives": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Accept responsibility for one persistent, governed Work objective and queue its first bounded iteration */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        objective: string;
+                        /**
+                         * @default text
+                         * @enum {string}
+                         */
+                        channel?: "voice" | "text" | "console";
+                        sessionId?: string;
+                        /** Format: uuid */
+                        instructionId?: string;
+                        /** Format: uuid */
+                        workId?: string;
+                        idempotencyKey?: string;
+                        activeContext?: {
+                            [key: string]: unknown;
+                        };
+                        budgets?: {
+                            maxSteps?: number;
+                            maxActions?: number;
+                            maxQueries?: number;
+                            maxPlannerFailures?: number;
+                            maxConsecutiveNoProgress?: number;
+                            /** Format: date-time */
+                            deadlineAt?: string;
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description Idempotent replay of an existing objective */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Objective persisted and queued */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid objective or budget */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Bad auth */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/queries": {
         parameters: {
             query?: never;
@@ -2150,6 +2234,119 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/works/{id}/objective": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Inspect one Work objective, its bounded iterations, observations, decisions, and planner attempts */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Durable objective-loop audit */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Bad auth */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Work objective not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        /** Continue, interrupt, or redirect the same persistent Work objective */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        command: "continue";
+                    } | {
+                        /** @constant */
+                        command: "interrupt";
+                    } | {
+                        /** @constant */
+                        command: "redirect";
+                        objective: string;
+                        /**
+                         * @default text
+                         * @enum {string}
+                         */
+                        channel?: "voice" | "text" | "console";
+                        /** Format: uuid */
+                        instructionId?: string;
+                        idempotencyKey?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Objective interrupted */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Continuation or redirect durably queued */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid control command */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Work objective not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;

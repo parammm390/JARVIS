@@ -13,6 +13,7 @@ import { diagnoseFailure, buildConfirmationScript } from "./voice";
 import { advanceWorkflowForAction } from "./workflow";
 import { executePluginViaRuntime } from "./runtime-bridge";
 import { approvalRequirementForAction } from "../../../scripts/release/action-hardening-spec";
+import { evaluateActionAuthorityBoundary } from "./authority-runtime";
 
 export interface Executor {
   execute(action: DomainAction, policy: DomainPolicy): Promise<ExecutionResult>;
@@ -58,11 +59,22 @@ export class GatedExecutor implements Executor {
     await appendEpisode(action.tenantId, action.id, "draft", {}, { summary: draft.summary });
 
     const approval = approvalRequirementForAction(action.actionType, policy.requiresConfirmation, draft.requiresConfirmation);
+    const authority = await evaluateActionAuthorityBoundary(action, policy, draft);
+    if (authority.decision.outcome === "denied" || ((action.status === "approved" || action.status === "executing") && authority.decision.outcome !== "allowed")) {
+      await this.setStatus(action, "failed");
+      await appendEpisode(action.tenantId, action.id, "authority_denied", { capability: authority.request.capability }, {
+        decisionId: authority.decision.id,
+        revision: authority.decision.authorityRevision,
+        reasonCode: authority.decision.reasonCode,
+      });
+      return { status: "failure", output: { authorityDecisionId: authority.decision.id }, error: `Authority denied: ${authority.decision.reasonCode}` };
+    }
+    const requiresAuthorityGate = authority.decision.outcome === "approval_required";
 
     // ---------------- THE CONFIRMATION GATE ----------------
     // The fixed release floor is authoritative: a plugin draft cannot lower a
     // required floor or turn a no-side-effect action into an approval item.
-    if (approval.requiresConfirmation && action.status !== "approved" && action.status !== "executing") {
+    if ((approval.requiresConfirmation || requiresAuthorityGate) && action.status !== "approved" && action.status !== "executing") {
       await withTenant(action.tenantId, async (db) => {
         await db
           .update(domainActions)
@@ -99,7 +111,7 @@ export class GatedExecutor implements Executor {
     // runtime bridge can distinguish this legitimate path from a forged SQL status.
     // Confirmation-required actions instead carry the `confirmed` episode written
     // by decide(), which the bridge validates independently.
-    if (!approval.requiresConfirmation) {
+    if (!approval.requiresConfirmation && !requiresAuthorityGate) {
       await appendEpisode(action.tenantId, action.id, "policy_ungated_authorized", { policyId: policy.id ?? null }, {
         actionType: action.actionType,
         approvalFloor: approval.approvalFloor,

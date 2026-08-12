@@ -54,6 +54,7 @@ describe("JARVIS proxy route contract", () => {
       "read-models/readiness-slo",
       "documents/document-1",
       "operations/operation-1",
+      "works/work-1/objective",
     ]
 
     for (const path of paths) {
@@ -73,9 +74,11 @@ describe("JARVIS proxy route contract", () => {
       "policies/tenant-1/schedule_water_test",
       "price-book/tenant-1",
       "operations/operation-1/retry",
+      "objectives",
+      "works/work-1/objective",
     ]
 
-    for (const path of [...paths.slice(0, 4), paths[6]!]) {
+    for (const path of [...paths.slice(0, 4), ...paths.slice(6)]) {
       const response = await POST(request("POST", path, { headers: AUTH, body: {} }), params(path))
       expect(response.status, path).toBe(200)
     }

@@ -7,7 +7,7 @@
 import { withTenant, domainActions } from "@finnor/db";
 import { ConfirmActionSchema } from "@finnor/policy-schema";
 import { and, eq } from "drizzle-orm";
-import { requireContext, canApprove, errorResponse } from "../../../../../lib/auth";
+import { requireContext, errorResponse } from "../../../../../lib/auth";
 import { getOrchestrator } from "../../../../../lib/orchestrator";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> {
@@ -25,9 +25,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return r;
     });
     if (!row) return Response.json({ error: "Action not found" }, { status: 404 });
-    if (!(await canApprove(ctx, row.actionType))) {
-      return Response.json({ error: `Your role (${ctx.role}) cannot approve ${row.actionType}` }, { status: 403 });
-    }
     if (row.status === "approved" || row.status === "executing" || row.status === "completed") {
       return Response.json({ status: row.status, idempotent: true }); // safe to call twice
     }
@@ -40,6 +37,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       note: body.data.note ?? null,
       typedConfirmation: body.data.typedConfirmation === true,
     });
+    if (result.status === "failure" && /authority/i.test(result.error ?? "")) return Response.json({ error: result.error, authority: result.output }, { status: 403 });
     return Response.json({ result });
   } catch (err) {
     return errorResponse(err);

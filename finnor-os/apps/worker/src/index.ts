@@ -41,6 +41,7 @@ import { dispatchBusinessOperation, executeBusinessOperationCallBatch, executeBu
 import { startScheduler, startGlobalScheduler, type ScheduledScan } from "./scheduler";
 import { startHeartbeat } from "./heartbeat";
 import { startSseServer } from "./sse-server";
+import { recoverObjectives, runObjectiveIteration } from "./handlers/run-objective-iteration";
 
 export function createWorker(): JobQueue {
   const queue = new JobQueue();
@@ -79,6 +80,8 @@ export function createWorker(): JobQueue {
   queue.register("dispatch_business_operation", dispatchBusinessOperation);
   queue.register("execute_business_operation_target", executeBusinessOperationTarget);
   queue.register("execute_business_operation_call_batch", executeBusinessOperationCallBatch);
+  queue.register("run_objective_iteration", runObjectiveIteration);
+  queue.register("recover_objectives", recoverObjectives);
   return queue;
 }
 
@@ -87,6 +90,9 @@ export function createWorker(): JobQueue {
 // promise of exact timing — the scheduler ticks every 15 min and only actually
 // enqueues once a scan's window has rolled over (see scheduler.ts's dateBucket()).
 const PROACTIVE_SCANS: ScheduledScan[] = [
+  // Upgrade 9 restart/approval/operation backstop. Normal continuations are event-
+  // driven and immediate; this scan only repairs a missed enqueue after a crash.
+  { type: "recover_objectives", intervalHours: 1 / 6, payload: (tenantId) => ({ tenantId }) },
   { type: "scheduled_reminder", intervalHours: 24, payload: (tenantId) => ({ tenantId, windowDays: 30 }) },
   { type: "scan_cold_leads", intervalHours: 24, payload: (tenantId) => ({ tenantId }) },
   { type: "scan_low_inventory", intervalHours: 24, payload: (tenantId) => ({ tenantId }) },

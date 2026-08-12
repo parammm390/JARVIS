@@ -1,0 +1,115 @@
+import type { AuthorityRequest, AuthorityResource, AuthorityRisk, DomainAction, DomainPolicy, DraftAction, TenantContext } from "@finnor/shared-types";
+import { evaluateAuthority, recordActionAuthority, revalidateActionExecution } from "@finnor/authority";
+import type { OperationalQueryRequest } from "./fast-read-lane";
+import { ACTION_HARDENING_SPEC_BY_ACTION, approvalRequirementForAction } from "../../../scripts/release/action-hardening-spec";
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const RESOURCE_KEYS: Record<string, string> = {
+  householdId: "household",
+  customerId: "household",
+  targetId: "household",
+  technicianId: "technician",
+  visitId: "service_visit",
+  serviceVisitId: "service_visit",
+  workOrderId: "work_order",
+  invoiceId: "invoice",
+  paymentId: "payment",
+  leadId: "lead",
+  opportunityId: "opportunity",
+  quoteId: "quote",
+  proposalId: "proposal",
+  appointmentId: "appointment",
+  workId: "work",
+  taskId: "task",
+};
+
+function walk(value: unknown, visit: (key: string, value: unknown) => void): void {
+  if (Array.isArray(value)) { for (const item of value) walk(item, visit); return; }
+  if (!value || typeof value !== "object") return;
+  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+    visit(key, child);
+    walk(child, visit);
+  }
+}
+
+export function authorityResourcesFromPayload(payload: Record<string, unknown>): AuthorityResource[] {
+  const resources: AuthorityResource[] = [];
+  walk(payload, (key, value) => {
+    const type = RESOURCE_KEYS[key] ?? (key.endsWith("Ids") ? RESOURCE_KEYS[`${key.slice(0, -3)}Id`] : undefined);
+    if (!type) return;
+    const ids = Array.isArray(value) ? value : [value];
+    for (const id of ids) if (typeof id === "string" && UUID.test(id)) resources.push({ type, id });
+  });
+  return [...new Map(resources.map((row) => [`${row.type}:${row.id}`, row])).values()];
+}
+
+export function authorityAmountFromPayload(payload: Record<string, unknown>): number | undefined {
+  const amounts: number[] = [];
+  walk(payload, (key, value) => {
+    if (!/(?:amount|total|price|spend|budget|cost)(?:Usd)?$/i.test(key)) return;
+    const number = typeof value === "number" ? value : typeof value === "string" && value.trim() ? Number(value) : NaN;
+    if (Number.isFinite(number) && number >= 0) amounts.push(number);
+  });
+  return amounts.length > 0 ? Math.max(...amounts) : undefined;
+}
+
+export function authorityRiskForAction(actionType: string): AuthorityRisk {
+  const spec = ACTION_HARDENING_SPEC_BY_ACTION.get(actionType);
+  if (!spec) return "high";
+  if (spec.profile === "READ_ONLY" || spec.profile === "META_NO_SIDE_EFFECT") return "low";
+  if (spec.external || spec.profile === "FINANCIAL_WRITE" || spec.profile === "DURABLE_WORKFLOW" || spec.profile === "BATCH_EXTERNAL") return "high";
+  return "medium";
+}
+
+export function actionAuthorityRequest(action: DomainAction, policy: DomainPolicy, draft: DraftAction): AuthorityRequest {
+  const approval = approvalRequirementForAction(action.actionType, policy.requiresConfirmation, draft.requiresConfirmation);
+  const alreadyApproved = action.status === "approved" || action.status === "executing";
+  return {
+    operation: alreadyApproved ? "execution" : "action",
+    capability: `action:${action.actionType}`,
+    resources: authorityResourcesFromPayload(draft.payload ?? action.payload),
+    amountUsd: authorityAmountFromPayload(draft.payload ?? action.payload),
+    risk: authorityRiskForAction(action.actionType),
+    policyRequiresApproval: approval.requiresConfirmation && !alreadyApproved,
+    workId: action.workId ?? undefined,
+    domainActionId: action.id,
+  };
+}
+
+export async function evaluateActionAuthorityBoundary(action: DomainAction, policy: DomainPolicy, draft: DraftAction) {
+  const ctx: TenantContext = action.initiatedBy
+    ? { tenantId: action.tenantId, userId: action.initiatedBy, employeeId: action.initiatedBy, role: "owner" }
+    : { tenantId: action.tenantId, userId: "system:orchestration", role: "owner" };
+  const request = actionAuthorityRequest(action, policy, draft);
+  if (action.status === "approved" || action.status === "executing") {
+    const decision = await revalidateActionExecution(action.tenantId, action.id);
+    return { request, decision };
+  }
+  const decision = await evaluateAuthority(ctx, request);
+  await recordActionAuthority({ ctx, actionId: action.id, request, decision });
+  return { request, decision };
+}
+
+export function queryAuthorityRequest(request: OperationalQueryRequest, workId?: string): AuthorityRequest {
+  const raw = request as unknown as Record<string, unknown>;
+  const params = raw.params && typeof raw.params === "object" ? raw.params as Record<string, unknown> : raw;
+  let resource: AuthorityResource = { type: "*" };
+  switch (request.intent) {
+    case "customer_lookup":
+    case "customer_cohort": resource = { type: "household", ...(typeof params.householdId === "string" ? { id: params.householdId } : {}) }; break;
+    case "schedule_range": resource = { type: "schedule", ...(typeof params.technicianId === "string" ? { id: params.technicianId } : {}) }; break;
+    case "money_summary": resource = { type: "financial_ledger" }; break;
+    case "work_list": resource = { type: "work", ...(typeof params.recordId === "string" ? { id: params.recordId } : {}) }; break;
+    case "inventory_status": resource = { type: "inventory" }; break;
+    case "agent_activity": resource = { type: "agent_activity" }; break;
+    case "business_state": resource = { type: "business_state" }; break;
+    case "company_context": {
+      const anchor = raw.anchor && typeof raw.anchor === "object" ? raw.anchor as Record<string, unknown> : null;
+      resource = anchor && typeof anchor.entityType === "string"
+        ? { type: anchor.entityType, ...(typeof anchor.entityId === "string" ? { id: anchor.entityId } : {}) }
+        : { type: "household", ...(typeof raw.householdId === "string" ? { id: raw.householdId } : {}) };
+      break;
+    }
+  }
+  return { operation: "query", capability: `query:${request.intent}`, resource, risk: "low", workId };
+}

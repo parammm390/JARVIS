@@ -31,6 +31,7 @@ import {
 } from "@finnor/tools";
 import type { ErrorKind } from "@finnor/shared-types";
 import { nextCallingWindow } from "@finnor/plugin-bulk-notify";
+import { revalidateActionExecution } from "@finnor/authority";
 import { and, asc, eq, inArray, lte, or, sql } from "drizzle-orm";
 
 const SMS_DISPATCH_SIZE = 50;
@@ -78,6 +79,26 @@ async function loadOperation(tenantId: string, operationId: string): Promise<Ope
   const [row] = await withTenant(tenantId, (db) => db.select().from(businessOperations)
     .where(and(eq(businessOperations.tenantId, tenantId), eq(businessOperations.id, operationId))).limit(1));
   return row ?? null;
+}
+
+async function operationAuthorityStillValid(operation: OperationRow): Promise<boolean> {
+  const decision = await revalidateActionExecution(operation.tenantId, operation.domainActionId, "durable_operation", operation.id);
+  if (decision.outcome === "allowed") {
+    await withTenant(operation.tenantId, (db) => db.update(businessOperations).set({ authorityDecisionId: decision.id, authorityRevision: decision.authorityRevision, updatedAt: new Date() }).where(eq(businessOperations.id, operation.id)));
+    return true;
+  }
+  await withTenant(operation.tenantId, async (db) => {
+    await db.update(businessOperations).set({
+      status: "needs_human_review",
+      authorityDecisionId: decision.id,
+      authorityRevision: decision.authorityRevision,
+      failure: { errorKind: "auth", message: `Authority no longer permits this operation: ${decision.reasonCode}`, authorityDecisionId: decision.id },
+      updatedAt: new Date(),
+    }).where(eq(businessOperations.id, operation.id));
+    await appendEventTx(db, { tenantId: operation.tenantId, operationId: operation.id, eventType: "authority_revalidation_failed", payload: { decisionId: decision.id, revision: decision.authorityRevision, reasonCode: decision.reasonCode } });
+  });
+  if (operation.workId) await reconcileWorkStatus(operation.tenantId, operation.workId);
+  return false;
 }
 
 async function safetyCheck(tenantId: string, target: TargetRow): Promise<
@@ -313,6 +334,7 @@ export async function dispatchBusinessOperation(payload: Record<string, unknown>
   const operationId = String(payload.operationId ?? "");
   const operation = await loadOperation(tenantId, operationId);
   if (!operation || !["queued", "running"].includes(operation.status)) return;
+  if (!(await operationAuthorityStillValid(operation))) return;
 
   // A worker that died after claiming an SMS target leaves a short lease. Reclaim it
   // under the same per-target external-operation prefix, which can safely replay a
@@ -447,6 +469,7 @@ export async function executeBusinessOperationTarget(payload: Record<string, unk
   const targetId = String(payload.targetId ?? "");
   const operation = await loadOperation(tenantId, operationId);
   if (!operation || !["queued", "running"].includes(operation.status)) return;
+  if (!(await operationAuthorityStillValid(operation))) return;
   const target = await claimTarget(tenantId, targetId);
   if (!target) return;
   const check = await safetyCheck(tenantId, target);
@@ -491,6 +514,7 @@ export async function executeBusinessOperationCallBatch(payload: Record<string, 
   const operationId = String(payload.operationId ?? "");
   const operation = await loadOperation(tenantId, operationId);
   if (!operation || !["queued", "running"].includes(operation.status)) return;
+  if (!(await operationAuthorityStillValid(operation))) return;
   const requestedIds = Array.isArray(payload.targetIds) ? payload.targetIds.filter((id): id is string => typeof id === "string") : [];
   const rows = requestedIds.length === 0 ? [] : await withTenant(tenantId, (db) => db.select().from(businessOperationTargets)
     .where(and(eq(businessOperationTargets.operationId, operationId), inArray(businessOperationTargets.id, requestedIds)))

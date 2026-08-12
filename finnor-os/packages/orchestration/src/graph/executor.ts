@@ -37,6 +37,7 @@ export class LangGraphExecutor implements Executor {
           policy,
           alreadyApproved: action.status === "approved" || action.status === "executing",
           correlationId: action.correlationId,
+          initiatedBy: action.initiatedBy ?? undefined,
         },
         config,
       );

@@ -508,6 +508,7 @@ export class LLMPlanner implements Planner {
             instructionId: opts.instructionId ?? null,
             workId: opts.workId ?? null,
             plannerAttemptId: opts.plannerAttemptId ?? null,
+            initiatedBy: tenantContext.employeeId ?? (/^[0-9a-f-]{36}$/i.test(tenantContext.userId) ? tenantContext.userId : null),
           })),
         )
         .returning();
@@ -601,6 +602,10 @@ export class LLMPlanner implements Planner {
       createdAt: row.createdAt.toISOString(),
       workId: row.workId,
       plannerAttemptId: row.plannerAttemptId,
+      initiatedBy: row.initiatedBy,
+      authorityDecisionId: row.authorityDecisionId,
+      authorityRevision: row.authorityRevision,
+      authorityContext: row.authorityContext as Record<string, unknown>,
       reasoning: valid[i]?.reasoning,
       groundedPayload: row.groundedPayload as DomainAction["groundedPayload"],
       compiledGraph: row.compiledGraph as DomainAction["compiledGraph"],

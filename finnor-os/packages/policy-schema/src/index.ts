@@ -69,6 +69,30 @@ export const SubmitInstructionSchema = z.object({
 });
 export type SubmitInstruction = z.infer<typeof SubmitInstructionSchema>;
 
+export const StartObjectiveSchema = z.object({
+  objective: z.string().min(1).max(10_000),
+  channel: z.enum(["voice", "text", "console"]).default("text"),
+  sessionId: z.string().max(500).optional(),
+  instructionId: z.string().uuid().optional(),
+  workId: z.string().uuid().optional(),
+  idempotencyKey: z.string().min(1).max(200).optional(),
+  activeContext: z.record(z.unknown()).optional(),
+  budgets: z.object({
+    maxSteps: z.number().int().min(1).max(50).optional(),
+    maxActions: z.number().int().min(0).max(25).optional(),
+    maxQueries: z.number().int().min(1).max(50).optional(),
+    maxPlannerFailures: z.number().int().min(1).max(10).optional(),
+    maxConsecutiveNoProgress: z.number().int().min(1).max(10).optional(),
+    deadlineAt: z.string().datetime().optional(),
+  }).optional(),
+});
+
+export const ControlObjectiveSchema = z.discriminatedUnion("command", [
+  z.object({ command: z.literal("continue") }),
+  z.object({ command: z.literal("interrupt") }),
+  z.object({ command: z.literal("redirect"), objective: z.string().min(1).max(10_000), channel: z.enum(["voice", "text", "console"]).default("text"), instructionId: z.string().uuid().optional(), idempotencyKey: z.string().min(1).max(200).optional() }),
+]);
+
 export const ConfirmActionSchema = z.object({
   note: z.string().max(2000).optional(),
   // TYPED_REQUIRED actions must carry an explicit confirmation signal. The

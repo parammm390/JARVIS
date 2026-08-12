@@ -3,12 +3,12 @@
 // AUTH_DEV_BYPASS=1 allows header-based identity for local dev and integration tests only.
 
 import { randomUUID } from "node:crypto";
-import { getPool } from "@finnor/db";
 import type { TenantContext, Role } from "@finnor/shared-types";
 import { ensureSecretsLoaded, resolveTenantFromBearerToken, AuthVerificationError } from "@finnor/security";
 import { initObservability, Sentry, logWithTrace } from "@finnor/tools";
 import { checkRateLimit, secondsUntilWindowReset } from "./rate-limit";
 import { redactText } from "@finnor/security";
+import { evaluateAuthority } from "@finnor/authority";
 
 export class AuthError extends Error {
   constructor(
@@ -95,14 +95,13 @@ export async function enforceRouteRateLimit(bucketKey: string, limitPerMinute: n
 
 /** RBAC (§18): can this role approve this action_type for this tenant? Config, not code. */
 export async function canApprove(ctx: TenantContext, actionType: string): Promise<boolean> {
-  const { rows } = await getPool().query(
-    `SELECT can_approve FROM role_permissions
-     WHERE tenant_id = $1 AND role = $2 AND (action_type = $3 OR action_type = '*')
-     ORDER BY action_type = $3 DESC LIMIT 1`,
-    [ctx.tenantId, ctx.role, actionType],
-  );
-  if (rows.length === 0) return ctx.role === "owner"; // safe default: only owners
-  return Boolean(rows[0].can_approve);
+  const decision = await evaluateAuthority(ctx, {
+    operation: "approval",
+    capability: `approve:${actionType}`,
+    resource: { type: "*" },
+    risk: "medium",
+  });
+  return decision.outcome === "allowed";
 }
 
 export function errorResponse(err: unknown): Response {

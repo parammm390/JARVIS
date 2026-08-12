@@ -13,7 +13,7 @@
 
 import { createHash, randomUUID } from "node:crypto";
 import { VapiWebhookSchema } from "@finnor/policy-schema";
-import { adminDb, jobs, withTenant, domainActions, domainPolicies, actionLog, tenantPhoneNumbers, getPool, households, communicationsLog, works, receiveWork } from "@finnor/db";
+import { adminDb, jobs, withTenant, domainActions, domainPolicies, actionLog, tenantPhoneNumbers, getPool, households, communicationsLog, works, receiveWork, users, workAggregate } from "@finnor/db";
 import { createTask, persistCall, recordBusinessEvent } from "@finnor/data-platform";
 import { ensureSecretsLoaded } from "@finnor/security";
 import { parseSpokenDecision, diagnoseFailure, resolveProviderForPurpose } from "@finnor/orchestration";
@@ -32,6 +32,8 @@ import { and, desc, eq, inArray, notInArray } from "drizzle-orm";
 import { getOrchestrator } from "../../../../lib/orchestrator";
 import { checkAndRecordReceipt } from "../../../../lib/webhook-replay";
 import { verifyTimestampedHmacSignature } from "../../../../lib/verify-hmac-signature";
+import { employeeAuthoritySnapshot } from "@finnor/authority";
+import { parseVoiceObjectiveCommand } from "../../../../lib/voice-objective-command";
 
 /**
  * HMAC-with-timestamp: header `x-vapi-signature: t=<unix>,v1=<hex hmac>` computed over
@@ -315,9 +317,12 @@ async function handleToolCalls(message: Record<string, unknown>): Promise<Respon
   // to owner trust; anything else (a customer, an unrecognized number, no caller-id
   // at all) never gets silently upgraded the way it used to.
   const identity = callMeta?.customer?.number ? await resolveVoiceIdentity(tenantId, callMeta.customer.number) : null;
-  const session = await openVoiceSession(tenantId, callId, identity?.id);
   const staffCtx: { userId: string; role: Role } | null =
-    identity?.role === "owner" ? { userId: identity.matchedUserId ?? identity.id, role: "owner" } : null;
+    identity?.matchedUserId && ["owner", "dispatcher", "technician"].includes(identity.role)
+      ? { userId: identity.matchedUserId, role: identity.role as Role }
+      : null;
+  const voiceAuthority = staffCtx ? await employeeAuthoritySnapshot({ tenantId, userId: staffCtx.userId, employeeId: staffCtx.userId, role: staffCtx.role }) : null;
+  const session = await openVoiceSession(tenantId, callId, identity?.id, staffCtx?.userId, voiceAuthority ?? undefined);
   // A2.T1: mint the trace id at the live-call intake, keyed by callId so every action
   // this call produces (one finnor_instruct tool-call per utterance) correlates under
   // the same id — same "vapi:<callId>" namespace the outbound-confirmation path below
@@ -355,9 +360,61 @@ async function handleToolCalls(message: Record<string, unknown>): Promise<Respon
           .where(and(eq(works.tenantId, tenantId), eq(works.sessionId, sessionId), notInArray(works.status, ["completed"])))
           .orderBy(desc(works.updatedAt))
           .limit(1));
+        const objectiveCommand = parseVoiceObjectiveCommand(instruction);
+        if (objectiveCommand) {
+          const orchestrator = getOrchestrator();
+          const activeAggregate = activeWork ? await workAggregate(tenantId, activeWork.id) : null;
+          const activeObjective = activeAggregate?.objectiveLoop;
+          let spoken: string;
+          if (objectiveCommand.command === "start") {
+            if (activeObjective && !["completed", "failed"].includes(activeObjective.state)) {
+              spoken = `There is already an active objective: ${activeObjective.objective}. Say redirect this objective to, followed by the revised outcome.`;
+            } else {
+              const started = await orchestrator.startObjective(
+                objectiveCommand.objective,
+                { tenantId, userId: staffCtx.userId, employeeId: staffCtx.userId, authorityRevision: voiceAuthority?.revision, authorityRoles: voiceAuthority?.roles, role: staffCtx.role, correlationId },
+                { sessionId, channel: "voice", workId: activeWork?.id, idempotencyKey: `vapi:${callId}:objective:${tc.id}` },
+              );
+              spoken = `I own that objective now. It is durable Work ${started.workId.slice(0, 8)}, and I will inspect current business state before choosing one bounded next step.`;
+            }
+          } else if (!activeWork || !activeObjective) {
+            spoken = "There is no active objective in this call to control.";
+          } else if (objectiveCommand.command === "inspect") {
+            spoken = `The objective is ${activeObjective.state.replaceAll("_", " ")}. I am trying to ${activeObjective.objective}. ${activeObjective.reason ?? "Canonical inspection will determine what happens next."}${activeObjective.nextStep ? ` Next: ${activeObjective.nextStep}` : ""}`;
+          } else {
+            if (objectiveCommand.command === "redirect") {
+              await receiveWork({
+                tenantId,
+                instruction: objectiveCommand.objective,
+                channel: "voice",
+                sessionId,
+                workId: activeWork.id,
+                userId: staffCtx.userId,
+                idempotencyKey: `vapi:${callId}:objective-redirect:${tc.id}`,
+                authorityContext: { employeeId: staffCtx.userId, revision: voiceAuthority?.revision ?? null, roles: voiceAuthority?.roles ?? [], principal: staffCtx.userId },
+              });
+            }
+            const controlled = await orchestrator.controlObjective({
+              tenantId,
+              workId: activeWork.id,
+              command: objectiveCommand.command,
+              actorId: staffCtx.userId,
+              objective: objectiveCommand.command === "redirect" ? objectiveCommand.objective : undefined,
+              correlationId,
+            });
+            spoken = objectiveCommand.command === "interrupt"
+              ? `I interrupted the objective durably. Completed progress is preserved, and it will not continue until you explicitly resume or redirect it.`
+              : objectiveCommand.command === "redirect"
+                ? `I redirected the same Work to: ${controlled.objective}. I will re-inspect canonical business state before the next step.`
+                : `I resumed the same objective. I will re-inspect canonical business state before choosing the next bounded step.`;
+          }
+          await appendVoiceTurn({ tenantId, voiceSessionId: session.id, role: "caller", transcriptText: instruction, resolvedActionIds: [] });
+          results.push({ toolCallId: tc.id, result: spoken });
+          continue;
+        }
         const instructionResult = await getOrchestrator().handleInstructionResult(
           instruction,
-          { tenantId, userId: staffCtx.userId, role: staffCtx.role, correlationId },
+          { tenantId, userId: staffCtx.userId, employeeId: staffCtx.userId, authorityRevision: voiceAuthority?.revision, authorityRoles: voiceAuthority?.roles, role: staffCtx.role, correlationId },
           {
             sessionId,
             channel: "voice",
@@ -485,7 +542,7 @@ async function handleToolCalls(message: Record<string, unknown>): Promise<Respon
         }
         // Independent decisions execute concurrently — the caller hears one answer.
         const outcomes = await Promise.all(
-          ids.map((id) => getOrchestrator().decide(id, tenantId, decision, `voice:${callId}`)),
+          ids.map((id) => getOrchestrator().decide(id, tenantId, decision, staffCtx.userId, { role: staffCtx.role, note: `voice:${callId}` })),
         );
         await markConfirmationsResolved(
           tenantId,
@@ -601,11 +658,17 @@ export async function POST(req: Request): Promise<Response> {
         // Fail closed: unclear speech never approves. The action stays pending in the queue.
         return Response.json({ received: true, decision: "unclear", note: "action left pending" });
       }
+      const approverEmployeeId = typeof metadata.approverEmployeeId === "string" ? metadata.approverEmployeeId : null;
+      const [approver] = approverEmployeeId ? await withTenant(String(metadata.tenantId ?? tenantId), (db) => db.select({ id: users.id, role: users.role, phoneNumber: users.phoneNumber, status: users.status }).from(users).where(and(eq(users.tenantId, String(metadata.tenantId ?? tenantId)), eq(users.id, approverEmployeeId))).limit(1)) : [];
+      if (!approver || approver.status !== "active" || !approver.phoneNumber || approver.phoneNumber !== msg.call?.customer?.number) {
+        return Response.json({ received: true, decision: "refused", note: "outbound approver identity could not be re-verified" });
+      }
       const result = await getOrchestrator().decide(
         String(metadata.pendingActionId),
         String(metadata.tenantId ?? tenantId),
         decision,
-        `voice:${msg.call?.id ?? "outbound"}`,
+        approver.id,
+        { role: approver.role, note: `voice:${msg.call?.id ?? "outbound"}` },
       );
       return Response.json({ received: true, decision, result: result.status });
     }

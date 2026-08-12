@@ -6,6 +6,8 @@ import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import {
   SubmitInstructionSchema,
+  StartObjectiveSchema,
+  ControlObjectiveSchema,
   ConfirmActionSchema,
   RejectActionSchema,
   EscalateActionSchema,
@@ -143,6 +145,13 @@ const doc = {
         summary: "Submit a new instruction (voice transcript or text)",
         requestBody: { content: { "application/json": { schema: s(SubmitInstructionSchema) } } },
         responses: { "201": { description: "Planned domain actions" }, "400": { description: "Invalid payload" }, "401": { description: "Bad auth" } },
+      },
+    },
+    "/api/objectives": {
+      post: {
+        summary: "Accept responsibility for one persistent, governed Work objective and queue its first bounded iteration",
+        requestBody: { content: { "application/json": { schema: s(StartObjectiveSchema) } } },
+        responses: { "202": { description: "Objective persisted and queued" }, "200": { description: "Idempotent replay of an existing objective" }, "400": { description: "Invalid objective or budget" }, "401": { description: "Bad auth" } },
       },
     },
     "/api/queries": {
@@ -426,6 +435,19 @@ const doc = {
         summary: "Read one Work with inputs, planner attempts, query executions, actions, approvals, workflow runs, receipts, recovery, and events",
         parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
         responses: { "200": { description: "Canonical durable Work aggregate" }, "401": { description: "Bad auth" }, "404": { description: "Work not found" } },
+      },
+    },
+    "/api/works/{id}/objective": {
+      get: {
+        summary: "Inspect one Work objective, its bounded iterations, observations, decisions, and planner attempts",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        responses: { "200": { description: "Durable objective-loop audit" }, "401": { description: "Bad auth" }, "404": { description: "Work objective not found" } },
+      },
+      post: {
+        summary: "Continue, interrupt, or redirect the same persistent Work objective",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        requestBody: { content: { "application/json": { schema: s(ControlObjectiveSchema) } } },
+        responses: { "202": { description: "Continuation or redirect durably queued" }, "200": { description: "Objective interrupted" }, "400": { description: "Invalid control command" }, "404": { description: "Work objective not found" } },
       },
     },
     "/api/works/{id}/retry": {

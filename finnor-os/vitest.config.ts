@@ -29,6 +29,7 @@ export default defineConfig({
       "@finnor/db/seed": r("./packages/db/seed.ts"),
       "@finnor/db/migrations-bundle": r("./packages/db/migrations-bundle.ts"),
       "@finnor/db": r("./packages/db/index.ts"),
+      "@finnor/authority": r("./packages/authority/src/index.ts"),
       "@finnor/data-platform": r("./packages/data-platform/src/index.ts"),
       "@finnor/workflow-runtime": r("./packages/workflow-runtime/src/index.ts"),
       "@finnor/memory": r("./packages/memory/src/index.ts"),

@@ -1,7 +1,8 @@
 import { businessOperationAggregate, domainActions, retryBusinessOperation, withTenant } from "@finnor/db";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
-import { canApprove, errorResponse, requireContext } from "../../../../../lib/auth";
+import { errorResponse, requireContext } from "../../../../../lib/auth";
+import { evaluateAuthority } from "@finnor/authority";
 
 const RetryOperationSchema = z.object({ recoveryKey: z.string().min(1).max(200) });
 
@@ -21,7 +22,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       eq(domainActions.id, operation.domainActionId),
     )).limit(1));
     if (!action) return Response.json({ error: "Business operation action not found" }, { status: 409 });
-    if (!(await canApprove(ctx, action.actionType))) return Response.json({ error: `Your role (${ctx.role}) cannot recover ${action.actionType}` }, { status: 403 });
+    const authority = await evaluateAuthority(ctx, { operation: "approval", capability: `approve:${action.actionType}`, resource: { type: "business_operation", id }, risk: "high", domainActionId: operation.domainActionId, operationId: id });
+    if (authority.outcome !== "allowed") return Response.json({ error: `Authority denied: ${authority.reasonCode}`, authority }, { status: 403 });
     const result = await retryBusinessOperation({
       tenantId: ctx.tenantId,
       operationId: id,

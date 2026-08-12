@@ -5,7 +5,7 @@
 import { withTenant, domainActions } from "@finnor/db";
 import { RejectActionSchema } from "@finnor/policy-schema";
 import { and, eq } from "drizzle-orm";
-import { requireContext, canApprove, errorResponse } from "../../../../../lib/auth";
+import { requireContext, errorResponse } from "../../../../../lib/auth";
 import { getOrchestrator } from "../../../../../lib/orchestrator";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> {
@@ -23,12 +23,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return r;
     });
     if (!row) return Response.json({ error: "Action not found" }, { status: 404 });
-    if (!(await canApprove(ctx, row.actionType))) {
-      return Response.json({ error: `Your role (${ctx.role}) cannot decide on ${row.actionType}` }, { status: 403 });
-    }
     if (row.status === "rejected") return Response.json({ status: "rejected", idempotent: true });
 
     const result = await getOrchestrator().decide(id, ctx.tenantId, "reject", ctx.userId, { role: ctx.role, reason: body.data.reason ?? null });
+    if (result.status === "failure" && /authority/i.test(result.error ?? "")) return Response.json({ error: result.error, authority: result.output }, { status: 403 });
     if (result.output.idempotent) return Response.json({ status: result.output.status, idempotent: true });
     return Response.json({ status: "rejected" });
   } catch (err) {

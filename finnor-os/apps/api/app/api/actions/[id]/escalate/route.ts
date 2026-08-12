@@ -6,8 +6,9 @@
 import { withTenant, domainActions } from "@finnor/db";
 import { EscalateActionSchema } from "@finnor/policy-schema";
 import { and, eq } from "drizzle-orm";
-import { requireContext, canApprove, errorResponse } from "../../../../../lib/auth";
+import { requireContext, errorResponse } from "../../../../../lib/auth";
 import { getOrchestrator } from "../../../../../lib/orchestrator";
+import { evaluateActionApproval } from "@finnor/authority";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> {
   try {
@@ -24,9 +25,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return r;
     });
     if (!row) return Response.json({ error: "Action not found" }, { status: 404 });
-    if (!(await canApprove(ctx, row.actionType))) {
-      return Response.json({ error: `Your role (${ctx.role}) cannot decide on ${row.actionType}` }, { status: 403 });
-    }
+    const authority = await evaluateActionApproval(ctx, id);
+    if (authority.outcome !== "allowed") return Response.json({ error: `Authority denied: ${authority.reasonCode}`, authority }, { status: 403 });
     if (row.status === "needs_human_review") return Response.json({ status: "needs_human_review", idempotent: true });
     if (row.status !== "pending") {
       return Response.json({ error: `Action is ${row.status}; only pending actions can be escalated` }, { status: 409 });

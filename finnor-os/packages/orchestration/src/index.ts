@@ -1,13 +1,15 @@
 // Orchestration core (§9): Planner → confirmation gate → Executor → Reflection.
 // This module is the single entry point the API, webhooks, and workers all use.
 
-import type { DomainAction, DomainPolicy, TenantContext, ExecutionResult, MemorySnapshot } from "@finnor/shared-types";
+import type { DomainAction, DomainPolicy, TenantContext, ExecutionResult, MemorySnapshot, Role } from "@finnor/shared-types";
 import {
   withTenant, domainActions, domainPolicies, domainPolicyRevisions, actionLog,
   decisionReceipts, planRepairs, enqueueJob, receiveWork, transitionWork,
   beginWorkPlannerAttempt, finishWorkPlannerAttempt, latestWorkInput, reconcileWorkStatus,
   authorizeBusinessOperationTx, businessOperations,
   attachWorkEntity,
+  authorityStates,
+  workObjectiveSteps,
 } from "@finnor/db";
 import { buildMemorySnapshot, appendEpisode, appendShortTerm, mirrorTurnToZep } from "@finnor/memory";
 import { createDefaultRegistry, type ToolRegistry } from "@finnor/tools";
@@ -36,6 +38,16 @@ import {
 import { isConversationalTurn, LLMConversationResponder, type ConversationResponder } from "./conversation";
 import { requiresTypedConfirmation } from "../../../scripts/release/action-hardening-spec";
 import { resolveHouseholdMention } from "@finnor/read-models";
+import { employeeAuthoritySnapshot, evaluateActionApproval, evaluateAuthority, finalizeApprovalAuthority, finalizeApprovalAuthorityTx, isFinalApprovalStep, revalidateActionExecution } from "@finnor/authority";
+import { queryAuthorityRequest } from "./authority-runtime";
+import {
+  controlWorkObjective,
+  ObjectiveLoopRuntime,
+  resumeObjectiveForAction,
+  startWorkObjective,
+  type ObjectiveDecisionPlanner,
+  type StartObjectiveOptions,
+} from "./objective-loop";
 
 export * from "./llm";
 export * from "./planner";
@@ -59,6 +71,8 @@ export * from "./policy-simulation";
 export * from "./instruction-trace";
 export * from "./fast-read-lane";
 export * from "./conversation";
+export * from "./authority-runtime";
+export * from "./objective-loop";
 
 export interface InstructionResult {
   actions: DomainAction[];
@@ -170,6 +184,17 @@ function workFailure(error: unknown, fallback: string): Record<string, unknown> 
   return { message, name, timeout, recoverable: true, at: new Date().toISOString() };
 }
 
+function canonicalPayload(value: unknown): string {
+  // Match PostgreSQL jsonb/JSON.stringify semantics exactly: undefined object
+  // properties are omitted and undefined array members become null. Several legacy
+  // deterministic actions intentionally pass optional properties as undefined.
+  if (value === undefined) return "undefined";
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map((entry) => entry === undefined ? "null" : canonicalPayload(entry)).join(",")}]`;
+  const row = value as Record<string, unknown>;
+  return `{${Object.keys(row).filter((key) => row[key] !== undefined).sort().map((key) => `${JSON.stringify(key)}:${canonicalPayload(row[key])}`).join(",")}}`;
+}
+
 export class PlannerAttemptAlreadyClaimedError extends Error {
   constructor(readonly workId: string, readonly attemptId: string) {
     super(`Planner attempt ${attemptId} for Work ${workId} is already claimed`);
@@ -179,6 +204,12 @@ export class PlannerAttemptAlreadyClaimedError extends Error {
 
 function requireFreshPlannerAttempt(workId: string, attempt: { id: string; claimed: boolean }): void {
   if (!attempt.claimed) throw new PlannerAttemptAlreadyClaimedError(workId, attempt.id);
+}
+
+async function authorityContextForWork(ctx: TenantContext): Promise<Record<string, unknown>> {
+  if (!ctx.employeeId) return { principal: ctx.userId, kind: "service" };
+  const snapshot = await employeeAuthoritySnapshot(ctx);
+  return { employeeId: snapshot.employeeId, revision: snapshot.revision, roles: snapshot.roles };
 }
 
 export class FinnorOrchestrator implements Orchestrator {
@@ -198,6 +229,7 @@ export class FinnorOrchestrator implements Orchestrator {
     reflection?: Reflection;
     fastReadOnlyRouter?: FastReadOnlyRouter;
     conversationResponder?: ConversationResponder;
+    objectiveDecisionPlanner?: ObjectiveDecisionPlanner;
   }) {
     this.plugins = deps?.plugins ?? createDefaultPluginRegistry();
     this.tools = deps?.tools ?? createDefaultRegistry();
@@ -212,6 +244,21 @@ export class FinnorOrchestrator implements Orchestrator {
       const graph = new LangGraphExecutor(buildGateGraph(this.plugins, this.tools, getCheckpointer()));
       this.executor = new AllowlistExecutor(legacy, graph);
     }
+    this.objectiveLoopRuntime = new ObjectiveLoopRuntime(this.plugins, this, deps?.objectiveDecisionPlanner);
+  }
+
+  private readonly objectiveLoopRuntime: ObjectiveLoopRuntime;
+
+  async startObjective(objective: string, ctx: TenantContext, options: StartObjectiveOptions = {}) {
+    return startWorkObjective(objective, ctx, options);
+  }
+
+  async runObjectiveIteration(params: { tenantId: string; workId: string; objectiveLoopId: string; expectedRevision?: number; expectedStepNumber?: number; signal?: AbortSignal }) {
+    return this.objectiveLoopRuntime.runIteration(params);
+  }
+
+  async controlObjective(params: { tenantId: string; workId: string; command: "continue" | "interrupt" | "redirect"; actorId: string; objective?: string; correlationId?: string }) {
+    return controlWorkObjective(params);
   }
 
   /** Instruction (voice transcript or text) → plan → gate-or-execute each action.
@@ -296,6 +343,14 @@ export class FinnorOrchestrator implements Orchestrator {
     });
     try {
       if (!this.fastReadOnlyRouter.execute) throw new Error("Operational query execution is unavailable");
+      const authority = await evaluateAuthority(ctx, queryAuthorityRequest(request, work.workId));
+      await transitionWork(ctx.tenantId, work.workId, "executing", "query_authority_evaluated", {
+        authorityDecisionId: authority.id,
+        authorityRevision: authority.authorityRevision,
+        outcome: authority.outcome,
+        reasonCode: authority.reasonCode,
+      });
+      if (authority.outcome !== "allowed") throw new Error(`Authority denied: ${authority.reasonCode}`);
       // The canonical read-model executor is the sole owner of
       // work_query_executions. Passing Work context here makes both NL and
       // explicit typed API reads use the same durable claim/finish path.
@@ -366,6 +421,7 @@ export class FinnorOrchestrator implements Orchestrator {
       userId: ctx.userId,
       idempotencyKey: opts.idempotencyKey,
       activeContext: opts.activeContext,
+      authorityContext: await authorityContextForWork(ctx),
     });
     if (received.duplicate) {
       const finalOutcome = received.finalOutcome && typeof received.finalOutcome === "object" ? received.finalOutcome as Record<string, unknown> : {};
@@ -427,6 +483,7 @@ export class FinnorOrchestrator implements Orchestrator {
           userId: ctx.userId,
           idempotencyKey: opts.idempotencyKey,
           activeContext: opts.activeContext,
+          authorityContext: await authorityContextForWork(ctx),
         });
     const workId = received.workId;
     const workInputId = received.workInputId;
@@ -719,13 +776,54 @@ export class FinnorOrchestrator implements Orchestrator {
     actionType: string,
     payload: Record<string, unknown>,
     tenantId: string,
-    opts: { source?: string } = {},
+    opts: {
+      source?: string;
+      actionId?: string;
+      workId?: string;
+      instructionId?: string | null;
+      initiatedBy?: string | null;
+      authorityContext?: Record<string, unknown>;
+      objectiveStepId?: string;
+    } = {},
   ): Promise<{ action: DomainAction; result: ExecutionResult }> {
     await ensureSecretsLoaded();
-    const [row] = await withTenant(tenantId, (db) =>
-      db.insert(domainActions).values({ tenantId, actionType, payload, status: "draft" }).returning(),
-    );
+    const row = await withTenant(tenantId, async (db) => {
+      const [created] = await db.insert(domainActions).values({
+        ...(opts.actionId ? { id: opts.actionId } : {}),
+        tenantId,
+        actionType,
+        payload,
+        status: "draft",
+        workId: opts.workId ?? null,
+        instructionId: opts.instructionId ?? null,
+        initiatedBy: opts.initiatedBy ?? null,
+        authorityContext: opts.authorityContext ?? {},
+        objectiveStepId: opts.objectiveStepId ?? null,
+      }).onConflictDoNothing().returning();
+      if (created) return created;
+      const [existing] = opts.objectiveStepId
+        ? await db.select().from(domainActions).where(and(eq(domainActions.tenantId, tenantId), eq(domainActions.objectiveStepId, opts.objectiveStepId))).limit(1)
+        : opts.actionId
+          ? await db.select().from(domainActions).where(and(eq(domainActions.tenantId, tenantId), eq(domainActions.id, opts.actionId))).limit(1)
+          : [];
+      return existing;
+    });
     if (!row) throw new Error("draftKnownAction: insert returned no row");
+    // PostgreSQL jsonb canonicalizes object key order. Compare semantic JSON so a
+    // crash/retry can safely reclaim the same objective step after the executor has
+    // read the row back in a different key order.
+    if (row.actionType !== actionType || canonicalPayload(row.payload) !== canonicalPayload(payload)) {
+      const [boundStep] = row.objectiveStepId
+        ? await withTenant(tenantId, (db) => db.select({ decision: workObjectiveSteps.decision }).from(workObjectiveSteps).where(and(eq(workObjectiveSteps.tenantId, tenantId), eq(workObjectiveSteps.id, row.objectiveStepId!))).limit(1))
+        : [];
+      const immutableDecision = boundStep?.decision && typeof boundStep.decision === "object" && !Array.isArray(boundStep.decision)
+        ? boundStep.decision as Record<string, unknown>
+        : null;
+      const matchesImmutableDecision = immutableDecision?.kind === "action"
+        && immutableDecision.actionType === actionType
+        && canonicalPayload(immutableDecision.payload) === canonicalPayload(payload);
+      if (!matchesImmutableDecision) throw new Error("Objective action idempotency key is already bound to a different typed action");
+    }
     const action: DomainAction = {
       id: row.id,
       tenantId: row.tenantId,
@@ -734,7 +832,24 @@ export class FinnorOrchestrator implements Orchestrator {
       policyId: row.policyId, policyVersion: row.policyVersion,
       status: row.status,
       createdAt: row.createdAt.toISOString(),
+      workId: row.workId,
+      plannerAttemptId: row.plannerAttemptId,
+      initiatedBy: row.initiatedBy,
+      authorityDecisionId: row.authorityDecisionId,
+      authorityRevision: row.authorityRevision,
+      authorityContext: row.authorityContext as Record<string, unknown>,
+      objectiveStepId: row.objectiveStepId,
     };
+    if (["pending", "approved", "completed", "rejected", "failed", "needs_human_review", "blocked_integration_unavailable"].includes(row.status)) {
+      return {
+        action,
+        result: row.status === "completed"
+          ? { status: "success", output: { idempotent: true, status: row.status } }
+          : row.status === "pending" || row.status === "needs_human_review" || row.status === "approved"
+            ? { status: "success", output: { idempotent: true, status: row.status, gated: row.status !== "approved", pendingConfirmation: row.status !== "approved" } }
+            : { status: "failure", output: { idempotent: true, status: row.status }, error: `Action is ${row.status}` },
+      };
+    }
     await appendEpisode(tenantId, action.id, "planned", { source: opts.source ?? "system_scan" }, { actionType });
     const policy = await this.loadPolicy(action);
     // Real bug found while building Phase 3's e2e proof test: unlike the LLM-planner
@@ -754,6 +869,28 @@ export class FinnorOrchestrator implements Orchestrator {
     const result = await this.executor.execute(action, policy);
     await this.reflectWithRetry(action, policy, result);
     return { action, result };
+  }
+
+  async draftObjectiveAction(params: {
+    tenantId: string;
+    actionType: string;
+    payload: Record<string, unknown>;
+    workId: string;
+    instructionId: string | null;
+    initiatedBy: string | null;
+    authorityContext: Record<string, unknown>;
+    objectiveStepId: string;
+    actionId: string;
+  }): Promise<{ action: DomainAction; result: ExecutionResult }> {
+    return this.draftKnownAction(params.actionType, params.payload, params.tenantId, {
+      source: "objective_loop",
+      actionId: params.actionId,
+      workId: params.workId,
+      instructionId: params.instructionId,
+      initiatedBy: params.initiatedBy,
+      authorityContext: params.authorityContext,
+      objectiveStepId: params.objectiveStepId,
+    });
   }
 
   /**
@@ -792,12 +929,21 @@ export class FinnorOrchestrator implements Orchestrator {
           error: `Action is ${row.current.status}, not approved — the confirmation gate has not cleared.`,
         };
       }
+      if (row.current.status === "completed") await resumeObjectiveForAction(tenantId, actionId).catch(() => false);
       return {
         status: "success",
         output: { idempotent: true, status: row.current.status },
       };
     }
     const claimed = row.claimed;
+    const freshAuthority = await revalidateActionExecution(tenantId, actionId);
+    if (freshAuthority.outcome !== "allowed") {
+      await withTenant(tenantId, (db) => db.update(domainActions).set({ status: "needs_human_review", executionStartedAt: null }).where(and(eq(domainActions.id, actionId), eq(domainActions.tenantId, tenantId), eq(domainActions.status, "executing"))));
+      await appendEpisode(tenantId, actionId, "execution_authority_denied", { priorApprover: approvedBy ?? null }, { decisionId: freshAuthority.id, revision: freshAuthority.authorityRevision, reasonCode: freshAuthority.reasonCode });
+      if (claimed.workId) await reconcileWorkStatus(tenantId, claimed.workId);
+      await resumeObjectiveForAction(tenantId, actionId).catch(() => false);
+      return { status: "failure", output: { authorityDecisionId: freshAuthority.id }, error: `Authority denied before execution: ${freshAuthority.reasonCode}` };
+    }
     if (claimed.workId) {
       await transitionWork(tenantId, claimed.workId, "executing", "action_execution_claimed", { actionId: claimed.id });
     }
@@ -811,6 +957,11 @@ export class FinnorOrchestrator implements Orchestrator {
       createdAt: claimed.createdAt.toISOString(),
       workId: claimed.workId,
       plannerAttemptId: claimed.plannerAttemptId,
+      initiatedBy: claimed.initiatedBy,
+      authorityDecisionId: claimed.authorityDecisionId,
+      authorityRevision: claimed.authorityRevision,
+      authorityContext: claimed.authorityContext as Record<string, unknown>,
+      objectiveStepId: claimed.objectiveStepId,
       approvedBy,
     };
     const policy = await this.loadPolicy(action);
@@ -818,6 +969,7 @@ export class FinnorOrchestrator implements Orchestrator {
     await this.reflectWithRetry(action, policy, result);
     await this.dispatchReadyPlanActions(tenantId, row.claimed.planId);
     if (claimed.workId) await reconcileWorkStatus(tenantId, claimed.workId);
+    await resumeObjectiveForAction(tenantId, actionId).catch(() => false);
     return result;
   }
 
@@ -1025,6 +1177,18 @@ export class FinnorOrchestrator implements Orchestrator {
     decidedBy: string,
     opts?: { role?: string; note?: string | null; reason?: string | null; typedConfirmation?: boolean },
   ): Promise<ExecutionResult> {
+    const humanDecision = decision === "approve" || decision === "reject";
+    const approverAuthority = humanDecision
+      ? await evaluateActionApproval({ tenantId, userId: decidedBy, employeeId: /^[0-9a-f-]{36}$/i.test(decidedBy) ? decidedBy : undefined, role: (opts?.role as Role | undefined) ?? "owner" }, actionId)
+      : null;
+    if (approverAuthority && approverAuthority.outcome !== "allowed") {
+      return { status: "failure", output: { authorityDecisionId: approverAuthority.id }, error: `Authority denied: ${approverAuthority.reasonCode}` };
+    }
+    if (decision === "approve" && approverAuthority && !(await isFinalApprovalStep(tenantId, actionId))) {
+      await finalizeApprovalAuthority({ tenantId, actionId, decision, approverId: decidedBy, authorityDecisionId: approverAuthority.id });
+      await appendEpisode(tenantId, actionId, "approval_chain_advanced", { by: decidedBy, authorityDecisionId: approverAuthority.id }, { awaitingNextApproval: true });
+      return { status: "success", output: { awaitingNextApproval: true, authorityDecisionId: approverAuthority.id } };
+    }
     if (decision === "approve" && requiresTypedConfirmation((await this.actionTypeForDecision(actionId, tenantId)) ?? "") && opts?.typedConfirmation !== true) {
       return {
         status: "failure",
@@ -1039,6 +1203,10 @@ export class FinnorOrchestrator implements Orchestrator {
     const fromStatuses = decision === "escalate" ? (["pending"] as const) : (["pending", "needs_human_review"] as const);
     const toStatus = decision === "approve" ? "approved" : decision === "reject" ? "rejected" : "needs_human_review";
     const transition = await withTenant(tenantId, async (db) => {
+      if (approverAuthority) {
+        const [state] = await db.select({ revision: authorityStates.revision }).from(authorityStates).where(eq(authorityStates.tenantId, tenantId)).limit(1);
+        if ((state?.revision ?? 1) !== approverAuthority.authorityRevision) return { claimed: null, current: null, staleAuthority: true as const };
+      }
       const [before] = await db.select().from(domainActions).where(and(eq(domainActions.id, actionId), eq(domainActions.tenantId, tenantId)));
       const [claimed] = await db
         .update(domainActions)
@@ -1083,11 +1251,16 @@ export class FinnorOrchestrator implements Orchestrator {
           ...(decision === "approve" ? { note: opts?.note ?? null, policyDrift } : decision === "reject" ? { reason: opts?.reason ?? null } : { note: opts?.note ?? null }),
         },
       });
+      if (approverAuthority && humanDecision) {
+        await finalizeApprovalAuthorityTx(db, { tenantId, actionId, decision, approverId: decidedBy, authorityDecisionId: approverAuthority.id });
+      }
       const durableOperation = decision === "approve"
         ? await authorizeBusinessOperationTx(db, {
             tenantId,
             domainActionId: actionId,
             approvedBy: decidedBy,
+            authorityDecisionId: approverAuthority?.id,
+            authorityRevision: approverAuthority?.authorityRevision,
           })
         : null;
       if (durableOperation) {
@@ -1111,8 +1284,11 @@ export class FinnorOrchestrator implements Orchestrator {
             .where(and(eq(decisionReceipts.tenantId, tenantId), eq(decisionReceipts.operationId, operation.id)));
         }
       }
-      return { claimed, current: claimed, durableOperation: null };
+      return { claimed, current: claimed, durableOperation: null, staleAuthority: false as const };
     });
+    if ("staleAuthority" in transition && transition.staleAuthority) {
+      return { status: "failure", output: { staleAuthority: true }, error: "Authority changed while the decision was being applied; review the request again." };
+    }
     if (!transition.current) return { status: "failure", output: {}, error: "Action not found" };
     if (!transition.claimed) {
       // For escalate specifically, an action already in needs_human_review is the
@@ -1132,6 +1308,7 @@ export class FinnorOrchestrator implements Orchestrator {
         }).catch(() => undefined);
       }
       if (row.workId) await reconcileWorkStatus(tenantId, row.workId);
+      await resumeObjectiveForAction(tenantId, actionId).catch(() => false);
       return {
         status: "success",
         output: {
@@ -1150,6 +1327,7 @@ export class FinnorOrchestrator implements Orchestrator {
       await this.executor.close?.(actionId, tenantId, row.actionType).catch(() => undefined);
       if (row.instructionId) await emitInstructionEvent(tenantId, row.instructionId, "cancelled", { actionId }).catch(() => undefined);
       if (row.workId) await reconcileWorkStatus(tenantId, row.workId);
+      await resumeObjectiveForAction(tenantId, actionId).catch(() => false);
       return { status: "success", output: { rejected: true } };
     }
     if (decision === "escalate") {

@@ -19,6 +19,7 @@ import { inArray, desc, eq, and } from "drizzle-orm";
 import { requireContext, errorResponse } from "../../../../lib/auth";
 import { extractPriceCandidates, buildPriceBookProvenance } from "../../../../lib/price-book-provenance";
 import { extractPredicted } from "../../../../lib/predicted-outcome";
+import { eligibleApproversForAction } from "@finnor/authority";
 
 type ReceiptSummary = {
   id: string;
@@ -116,10 +117,13 @@ export async function GET(req: Request): Promise<Response> {
           )
         : [];
 
+    const approversByAction = new Map(await Promise.all(rows.map(async (row) => [row.id, await eligibleApproversForAction(ctx.tenantId, row.id)] as const)));
     const actions = rows.map((r) => ({
       ...r,
       receipt: receiptByActionId.get(r.id) ?? null,
       critic: criticByActionId.get(r.id) ?? null,
+      eligibleApproverIds: approversByAction.get(r.id) ?? [],
+      canCurrentEmployeeApprove: (approversByAction.get(r.id) ?? []).includes(ctx.employeeId ?? ctx.userId),
       priceBookProvenance: buildPriceBookProvenance(candidatesByActionId.get(r.id) ?? [], priceBookRows),
       // jarvis-v3 P4.T1: the plugin's own simulate() prediction, normalized out of
       // the raw predictedReceipt column (already present on `r` via the `...r`

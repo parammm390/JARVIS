@@ -10,6 +10,7 @@
     "start:sse": "tsx src/sse-server.ts"
   },
   "dependencies": {
+    "@finnor/authority": "*",
     "@finnor/data-platform": "*",
     "@finnor/db": "*",
     "@finnor/memory": "*",

@@ -21,6 +21,10 @@ export const GateStateAnnotation = Annotation.Root({
   // enqueues can tag it too — optional, so existing checkpointed runs without it
   // (started before this field existed) simply resume with it undefined.
   correlationId: Annotation<string | undefined>,
+  initiatedBy: Annotation<string | undefined>,
+  authorityOutcome: Annotation<"allowed" | "denied" | "approval_required" | undefined>,
+  authorityDecisionId: Annotation<string | undefined>,
+  authorityReasonCode: Annotation<string | undefined>,
 });
 
 export type GateState = typeof GateStateAnnotation.State;

@@ -27,6 +27,9 @@ import {
   workInputs,
   workPlannerAttempts,
   workEntityLinks,
+  workObjectiveLoops,
+  workObjectiveSteps,
+  workObjectivePlannerAttempts,
 } from "@finnor/db";
 import { and, asc, desc, eq, or } from "drizzle-orm";
 
@@ -235,12 +238,40 @@ export interface WorkCaseProjection {
     sessionId: string | null;
     channel: DurableWorkRow["initialChannel"];
     activeContext: unknown;
+    initiatedBy: string | null;
+    currentOwnerId: string | null;
+    assignedTo: string | null;
+    authorityContext: unknown;
     finalOutcome: unknown;
     failure: unknown;
     recovery: unknown;
   };
   inputs?: Array<{ id: string; instructionId: string; channel: string; text: string; createdAt: string }>;
   plannerAttempts?: Array<{ id: string; attempt: number; status: string; result: unknown; failure: unknown; startedAt: string; completedAt: string | null }>;
+  objectiveLoop?: {
+    id: string;
+    objective: string;
+    state: "continue" | "awaiting_approval" | "waiting" | "blocked" | "completed" | "failed";
+    revision: number;
+    reason: string | null;
+    nextStep: string | null;
+    nextRunAt: string | null;
+    lastObservation: unknown;
+    budget: { steps: number; maxSteps: number; actions: number; maxActions: number; queries: number; maxQueries: number };
+    iterations: Array<{
+      id: string;
+      stepNumber: number;
+      phase: string;
+      decisionKind: string | null;
+      reason: string | null;
+      observation: unknown;
+      progressMade: boolean | null;
+      outcome: string | null;
+      scheduledFor: string | null;
+      completedAt: string | null;
+      plannerAttempts: Array<{ id: string; attempt: number; status: string; provider: string | null; failure: unknown }>;
+    }>;
+  };
 }
 
 const ENTITY_KEYS: Record<string, WorkEntityType> = {
@@ -603,6 +634,9 @@ export async function workCases(tenantId: string): Promise<WorkCaseProjection[]>
     const workInputRows = await db.select().from(workInputs).where(eq(workInputs.tenantId, tenantId)).orderBy(asc(workInputs.createdAt));
     const plannerAttemptRows = await db.select().from(workPlannerAttempts).where(eq(workPlannerAttempts.tenantId, tenantId)).orderBy(asc(workPlannerAttempts.attempt));
     const canonicalWorkLinks = await db.select().from(workEntityLinks).where(eq(workEntityLinks.tenantId, tenantId)).orderBy(asc(workEntityLinks.createdAt));
+    const objectiveLoopRows = await db.select().from(workObjectiveLoops).where(eq(workObjectiveLoops.tenantId, tenantId)).orderBy(desc(workObjectiveLoops.updatedAt));
+    const objectiveStepRows = await db.select().from(workObjectiveSteps).where(eq(workObjectiveSteps.tenantId, tenantId)).orderBy(asc(workObjectiveSteps.stepNumber));
+    const objectiveAttemptRows = await db.select().from(workObjectivePlannerAttempts).where(eq(workObjectivePlannerAttempts.tenantId, tenantId)).orderBy(asc(workObjectivePlannerAttempts.startedAt));
     const instructionRows = await db.select().from(instructionSessions).where(eq(instructionSessions.tenantId, tenantId)).orderBy(desc(instructionSessions.updatedAt));
     const instructionEventRows = await db.select().from(instructionEvents).where(eq(instructionEvents.tenantId, tenantId)).orderBy(asc(instructionEvents.seq));
     const actionRows = await db.select().from(domainActions).where(eq(domainActions.tenantId, tenantId)).orderBy(desc(domainActions.createdAt));
@@ -861,6 +895,7 @@ export async function workCases(tenantId: string): Promise<WorkCaseProjection[]>
     const workById = new Map(workRows.map((work) => [work.id, work]));
     for (const target of cases.values()) {
       const durableWork = target.root.kind === "work" ? workById.get(target.root.id) : undefined;
+      const objectiveLoop = durableWork ? objectiveLoopRows.find((loop) => loop.workId === durableWork.id) : undefined;
       const instructionRow = target.instructionId ? instructionById.get(target.instructionId) : undefined;
       const actions = [...target.actionIds].map((id) => actionById.get(id)).filter((action): action is typeof actionRows[number] => Boolean(action)).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()).map(toWorkAction);
       const workflows = [...target.runIds].map((id) => {
@@ -938,6 +973,10 @@ export async function workCases(tenantId: string): Promise<WorkCaseProjection[]>
           ? "Completed"
           : durableWork.status === "failed"
             ? "Failed"
+            : durableWork.status === "blocked"
+              ? "Blocked"
+              : durableWork.status === "waiting"
+                ? "Waiting"
             : durableWork.status === "awaiting_approval" || durableWork.status === "recovery"
               ? "Needs you"
               : "Working"
@@ -963,6 +1002,8 @@ export async function workCases(tenantId: string): Promise<WorkCaseProjection[]>
           ...[...target.runIds].map((id) => runById.get(id)?.updatedAt),
           ...receipts.map((receipt) => new Date(receipt.finalizedAt ?? receipt.createdAt)),
           ...operations.map((operation) => new Date(operation.updatedAt)),
+          objectiveLoop?.updatedAt,
+          ...objectiveStepRows.filter((step) => step.objectiveLoopId === objectiveLoop?.id).map((step) => step.completedAt ?? step.startedAt),
         ], fallbackDate),
         source: sourceForCase(instruction, actions, sourceCalls, target.root),
         instruction,
@@ -983,6 +1024,10 @@ export async function workCases(tenantId: string): Promise<WorkCaseProjection[]>
             sessionId: durableWork.sessionId,
             channel: durableWork.initialChannel,
             activeContext: durableWork.activeContext,
+            initiatedBy: durableWork.createdBy,
+            currentOwnerId: durableWork.currentOwnerId,
+            assignedTo: durableWork.assignedTo,
+            authorityContext: durableWork.authorityContext,
             finalOutcome: durableWork.finalOutcome,
             failure: durableWork.failure,
             recovery: durableWork.recovery,
@@ -1003,6 +1048,39 @@ export async function workCases(tenantId: string): Promise<WorkCaseProjection[]>
             startedAt: attempt.startedAt.toISOString(),
             completedAt: iso(attempt.completedAt),
           })),
+          ...(objectiveLoop ? {
+            objectiveLoop: {
+              id: objectiveLoop.id,
+              objective: objectiveLoop.objective,
+              state: objectiveLoop.state,
+              revision: objectiveLoop.revision,
+              reason: objectiveLoop.reason,
+              nextStep: objectiveLoop.nextStep,
+              nextRunAt: iso(objectiveLoop.nextRunAt),
+              lastObservation: objectiveLoop.lastObservation,
+              budget: {
+                steps: objectiveLoop.stepCount,
+                maxSteps: objectiveLoop.maxSteps,
+                actions: objectiveLoop.actionCount,
+                maxActions: objectiveLoop.maxActions,
+                queries: objectiveLoop.queryCount,
+                maxQueries: objectiveLoop.maxQueries,
+              },
+              iterations: objectiveStepRows.filter((step) => step.objectiveLoopId === objectiveLoop.id).map((step) => ({
+                id: step.id,
+                stepNumber: step.stepNumber,
+                phase: step.phase,
+                decisionKind: step.decisionKind,
+                reason: step.decisionReason,
+                observation: step.observation,
+                progressMade: step.progressMade,
+                outcome: step.iterationOutcome,
+                scheduledFor: iso(step.scheduledFor),
+                completedAt: iso(step.completedAt),
+                plannerAttempts: objectiveAttemptRows.filter((attempt) => attempt.objectiveStepId === step.id).map((attempt) => ({ id: attempt.id, attempt: attempt.attempt, status: attempt.status, provider: attempt.provider, failure: attempt.failure })),
+              })),
+            },
+          } : {}),
         } : {}),
       });
     }

@@ -14,6 +14,8 @@ import { diagnoseFailure, buildConfirmationScript } from "../voice";
 import { advanceWorkflowForAction } from "../workflow";
 import { executePluginViaRuntime } from "../runtime-bridge";
 import type { GateState } from "./state";
+import { evaluateActionAuthorityBoundary } from "../authority-runtime";
+import { revalidateActionExecution } from "@finnor/authority";
 
 async function setStatus(tenantId: string, actionId: string, status: DomainAction["status"]): Promise<void> {
   await withTenant(tenantId, async (db) => {
@@ -56,8 +58,24 @@ export function makeDraftNode(plugins: PluginRegistry) {
 
 export function makeGateNode() {
   return async (state: GateState): Promise<Partial<GateState>> => {
-    const needsGate = Boolean((state.policy.requiresConfirmation || state.draft!.requiresConfirmation) && !state.alreadyApproved);
-    if (!needsGate) return {};
+    const authority = await evaluateActionAuthorityBoundary({
+      id: state.actionId,
+      tenantId: state.tenantId,
+      actionType: state.actionType,
+      payload: state.payload,
+      policyId: state.policy.id,
+      policyVersion: state.policy.version,
+      status: state.alreadyApproved ? "approved" : "draft",
+      createdAt: new Date().toISOString(),
+      initiatedBy: state.initiatedBy ?? null,
+    }, state.policy, state.draft!);
+    if (authority.decision.outcome === "denied") return {
+      authorityOutcome: "denied",
+      authorityDecisionId: authority.decision.id,
+      authorityReasonCode: authority.decision.reasonCode,
+    };
+    const needsGate = Boolean((state.policy.requiresConfirmation || state.draft!.requiresConfirmation || authority.decision.outcome === "approval_required") && !state.alreadyApproved);
+    if (!needsGate) return { authorityOutcome: authority.decision.outcome, authorityDecisionId: authority.decision.id, authorityReasonCode: authority.decision.reasonCode };
     await withTenant(state.tenantId, async (db) => {
       await db
         .update(domainActions)
@@ -79,14 +97,15 @@ export function makeGateNode() {
         state.correlationId,
       ).catch(() => undefined);
     }
-    return {};
+    return { authorityOutcome: authority.decision.outcome, authorityDecisionId: authority.decision.id, authorityReasonCode: authority.decision.reasonCode };
   };
 }
 
 // Re-derives the same boolean gate() computed — never trusts a stored flag, exactly
 // matching GatedExecutor's own re-check pattern.
-export function routeAfterGate(state: GateState): "pause" | "execute" {
-  const needsGate = Boolean((state.policy.requiresConfirmation || state.draft!.requiresConfirmation) && !state.alreadyApproved);
+export function routeAfterGate(state: GateState): "pause" | "execute" | "failed" {
+  if (state.authorityOutcome === "denied") return "failed";
+  const needsGate = Boolean((state.policy.requiresConfirmation || state.draft!.requiresConfirmation || state.authorityOutcome === "approval_required") && !state.alreadyApproved);
   return needsGate ? "pause" : "execute";
 }
 
@@ -104,6 +123,11 @@ export function routeAfterPause(state: GateState): "execute" | "rejected" {
 
 export function makeExecuteNode(plugins: PluginRegistry, tools: ToolRegistry) {
   return async (state: GateState): Promise<Partial<GateState>> => {
+    const freshAuthority = await revalidateActionExecution(state.tenantId, state.actionId);
+    if (freshAuthority.outcome !== "allowed") {
+      await setStatus(state.tenantId, state.actionId, "failed");
+      return { result: { status: "failure", output: { authorityDecisionId: freshAuthority.id }, error: `Authority denied before execution: ${freshAuthority.reasonCode}` } };
+    }
     const plugin = plugins.resolve(state.actionType)!;
     await setStatus(state.tenantId, state.actionId, "executing");
     // Same idempotency scoping as the legacy GatedExecutor — see its comment.
@@ -149,7 +173,9 @@ export function makeFailedNode() {
       result: {
         status: "failure",
         output: {},
-        error: `This request is missing required details: ${(state.validation?.errors ?? []).join("; ")}`,
+        error: state.authorityOutcome === "denied"
+          ? `Authority denied: ${state.authorityReasonCode ?? "not authorized"}`
+          : `This request is missing required details: ${(state.validation?.errors ?? []).join("; ")}`,
       },
     };
   };

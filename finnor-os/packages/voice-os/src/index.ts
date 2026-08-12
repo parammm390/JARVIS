@@ -32,31 +32,35 @@ export async function resolveVoiceIdentity(tenantId: string, phoneNumber: string
       .from(voiceIdentities)
       .where(and(eq(voiceIdentities.tenantId, tenantId), eq(voiceIdentities.phoneNumber, phoneNumber)));
     if (existing) {
+      const [matchedEmployee] = existing.matchedUserId
+        ? await db.select({ id: users.id, role: users.role, status: users.status }).from(users).where(and(eq(users.tenantId, tenantId), eq(users.id, existing.matchedUserId))).limit(1)
+        : [];
+      const liveRole: VoiceRole = matchedEmployee?.status === "active"
+        ? matchedEmployee.role
+        : existing.matchedUserId
+          ? "unknown"
+          : existing.role as VoiceRole;
       await db.update(voiceIdentities).set({ lastSeenAt: new Date() }).where(eq(voiceIdentities.id, existing.id));
       return {
         id: existing.id,
         tenantId,
         phoneNumber,
         matchedHouseholdId: existing.matchedHouseholdId,
-        matchedUserId: existing.matchedUserId,
-        role: existing.role as VoiceRole,
+        matchedUserId: matchedEmployee?.status === "active" ? matchedEmployee.id : null,
+        role: liveRole,
       };
     }
 
-    // Only two identities are actually resolvable from real data today: the tenant's
-    // registered owner line (tenants.ownerPhone) and a known customer (households'
-    // phone). Staff (dispatcher/technician) callers aren't resolvable — `users` has
-    // no phone column, and `technicians` rows aren't linked to a `users` login — so
-    // matching them is out of scope this phase rather than guessed at.
+    const [phoneEmployee] = await db.select({ id: users.id, role: users.role }).from(users).where(and(eq(users.tenantId, tenantId), eq(users.phoneNumber, phoneNumber), eq(users.status, "active"))).limit(1);
     const [tenant] = await db.select({ ownerPhone: tenants.ownerPhone }).from(tenants).where(eq(tenants.id, tenantId));
     const isOwnerLine = Boolean(tenant?.ownerPhone) && tenant!.ownerPhone === phoneNumber;
-    let matchedUserId: string | null = null;
-    if (isOwnerLine) {
+    let matchedUserId: string | null = phoneEmployee?.id ?? null;
+    if (!matchedUserId && isOwnerLine) {
       const [ownerUser] = await db.select({ id: users.id }).from(users).where(and(eq(users.tenantId, tenantId), eq(users.role, "owner"))).limit(1);
       matchedUserId = ownerUser?.id ?? null;
     }
-    const household = isOwnerLine ? null : await findHousehold(tenantId, { phone: phoneNumber });
-    const role: VoiceRole = isOwnerLine ? "owner" : household ? "customer" : "unknown";
+    const household = matchedUserId || isOwnerLine ? null : await findHousehold(tenantId, { phone: phoneNumber });
+    const role: VoiceRole = phoneEmployee?.role ?? (isOwnerLine ? "owner" : household ? "customer" : "unknown");
     const [created] = await db
       .insert(voiceIdentities)
       .values({ tenantId, phoneNumber, matchedHouseholdId: household?.id ?? null, matchedUserId, role })
@@ -100,18 +104,20 @@ export async function openVoiceSession(
   tenantId: string,
   callExternalId: string,
   voiceIdentityId?: string,
+  employeeId?: string,
+  authorityContext?: Record<string, unknown>,
 ): Promise<VoiceSession> {
   return withTenant(tenantId, async (db) => {
     const [existing] = await db.select().from(voiceSessions).where(eq(voiceSessions.callExternalId, callExternalId));
     if (existing) {
       if (voiceIdentityId && !existing.voiceIdentityId) {
-        await db.update(voiceSessions).set({ voiceIdentityId }).where(eq(voiceSessions.id, existing.id));
+        await db.update(voiceSessions).set({ voiceIdentityId, employeeId: employeeId ?? existing.employeeId, authorityContext: authorityContext ?? existing.authorityContext }).where(eq(voiceSessions.id, existing.id));
       }
       return { id: existing.id, tenantId, voiceIdentityId: voiceIdentityId ?? existing.voiceIdentityId };
     }
     const [created] = await db
       .insert(voiceSessions)
-      .values({ tenantId, callExternalId, voiceIdentityId: voiceIdentityId ?? null })
+      .values({ tenantId, callExternalId, voiceIdentityId: voiceIdentityId ?? null, employeeId: employeeId ?? null, authorityContext: authorityContext ?? {} })
       .onConflictDoNothing({ target: voiceSessions.callExternalId })
       .returning();
     if (created) return { id: created.id, tenantId, voiceIdentityId: created.voiceIdentityId };

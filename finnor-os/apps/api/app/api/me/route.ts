@@ -5,11 +5,13 @@
 // new authority.
 
 import { requireContext, errorResponse } from "../../../lib/auth";
+import { employeeAuthoritySnapshot } from "@finnor/authority";
 
 export async function GET(req: Request): Promise<Response> {
   try {
     const ctx = await requireContext(req);
-    return Response.json({ userId: ctx.userId, tenantId: ctx.tenantId, role: ctx.role });
+    const authority = ctx.employeeId ? await employeeAuthoritySnapshot(ctx) : null;
+    return Response.json({ userId: ctx.userId, employeeId: ctx.employeeId ?? null, tenantId: ctx.tenantId, role: ctx.role, authority });
   } catch (err) {
     return errorResponse(err);
   }

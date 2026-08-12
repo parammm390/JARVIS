@@ -1,0 +1,13 @@
+{
+  "name": "@finnor/authority",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "@finnor/db": "*",
+    "@finnor/shared-types": "*",
+    "drizzle-orm": "^0.45.2"
+  }
+}

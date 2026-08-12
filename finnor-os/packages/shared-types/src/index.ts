@@ -13,11 +13,59 @@ export interface TenantContext {
   tenantId: string;
   userId: string;
   role: Role;
+  /** Canonical employee identity. Human sessions always set this to users.id;
+   * service principals deliberately leave it absent. */
+  employeeId?: string;
+  /** Snapshot only. Every execution boundary re-evaluates against the current
+   * tenant revision before producing an effect. */
+  authorityRevision?: number;
+  authorityRoles?: string[];
   /** Phase 16(e): per-request trace id, generated (or forwarded from an inbound
    *  `x-correlation-id` header) in requireContext. Threaded through enqueueJob's
    *  payload and worker breadcrumbs so one instruction's effects are greppable across
    *  process boundaries — not a DB column, never persisted on its own. */
   correlationId?: string;
+}
+
+export type AuthorityRisk = "low" | "medium" | "high";
+export type AuthorityOperation = "query" | "action" | "approval" | "execution" | "durable_operation";
+export type AuthorityOutcome = "allowed" | "denied" | "approval_required";
+
+export interface AuthorityResource {
+  type: string;
+  id?: string;
+}
+
+export interface AuthorityRequest {
+  operation: AuthorityOperation;
+  capability: string;
+  resource?: AuthorityResource;
+  /** Exact resources for a cohort/batch. Every member must be in scope. */
+  resources?: AuthorityResource[];
+  amountUsd?: number;
+  risk: AuthorityRisk;
+  policyRequiresApproval?: boolean;
+  workId?: string;
+  domainActionId?: string;
+  operationId?: string;
+}
+
+export interface AuthorityDecision {
+  id: string;
+  tenantId: string;
+  employeeId: string | null;
+  authorityRevision: number;
+  operation: AuthorityOperation;
+  capability: string;
+  resourceType: string;
+  resourceId: string | null;
+  amountUsd: number | null;
+  risk: AuthorityRisk;
+  outcome: AuthorityOutcome;
+  reasonCode: string;
+  approvalChainId: string | null;
+  eligibleApproverIds: string[];
+  evidence: Record<string, unknown>;
 }
 
 /** B1.T1: the shape of every 'jarvis_events' Postgres NOTIFY payload — IDs only, never
@@ -55,6 +103,12 @@ export interface DomainAction {
    * historical/system-authored actions that did not originate from a user Work. */
   workId?: string | null;
   plannerAttemptId?: string | null;
+  initiatedBy?: string | null;
+  authorityDecisionId?: string | null;
+  authorityRevision?: number | null;
+  authorityContext?: Record<string, unknown>;
+  /** Upgrade 9: the one bounded objective iteration that selected this action. */
+  objectiveStepId?: string | null;
   /** Why the LLM planner chose this action_type/payload — optional (only the LLM
    *  planner path sets it; draftKnownAction/system-originated actions have no LLM
    *  reasoning to report). Not a DB column — carried through to the "planned"

@@ -30,7 +30,7 @@ export function buildGateGraph(plugins: PluginRegistry, tools: ToolRegistry, che
     .addEdge(START, "validate")
     .addConditionalEdges("validate", routeAfterValidate, { draft: "draftAction", failed: "failed" })
     .addEdge("draftAction", "gate")
-    .addConditionalEdges("gate", routeAfterGate, { pause: "pause", execute: "execute" })
+    .addConditionalEdges("gate", routeAfterGate, { pause: "pause", execute: "execute", failed: "failed" })
     .addConditionalEdges("pause", routeAfterPause, { execute: "execute", rejected: "rejected" })
     .addEdge("execute", END)
     .addEdge("failed", END)

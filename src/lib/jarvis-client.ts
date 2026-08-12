@@ -53,6 +53,7 @@ export { JarvisApiError }
 const API_PATHS = {
   stats: "/api/stats",
   actionsSubmit: "/api/actions",
+  objectives: "/api/objectives",
   pendingActions: "/api/actions/pending",
   confirmAction: "/api/actions/{id}/confirm",
   rejectAction: "/api/actions/{id}/reject",
@@ -87,6 +88,7 @@ const API_PATHS = {
   dealerZeroTimeCompression: "/api/dealer-zero/time-compression",
   instruction: "/api/instructions/{id}",
   instructionEvents: "/api/instructions/{id}/events",
+  workObjective: "/api/works/{id}/objective",
 } as const satisfies Record<string, keyof paths>
 
 // ---------------------------------------------------------------------------
@@ -370,6 +372,55 @@ export interface WorkCaseProjection {
   calls: WorkCall[]
   relatedActionIds: string[]
   provenance: string[]
+  durableWork?: {
+    id: string
+    status: string
+    sessionId: string | null
+    channel: string
+    activeContext: unknown
+    initiatedBy: string | null
+    currentOwnerId: string | null
+    assignedTo: string | null
+    authorityContext: unknown
+    finalOutcome: unknown
+    failure: unknown
+    recovery: unknown
+  }
+  objectiveLoop?: {
+    id: string
+    objective: string
+    state: "continue" | "awaiting_approval" | "waiting" | "blocked" | "completed" | "failed"
+    revision: number
+    reason: string | null
+    nextStep: string | null
+    nextRunAt: string | null
+    lastObservation: unknown
+    budget: { steps: number; maxSteps: number; actions: number; maxActions: number; queries: number; maxQueries: number }
+    iterations: Array<{
+      id: string
+      stepNumber: number
+      phase: string
+      decisionKind: string | null
+      reason: string | null
+      observation: unknown
+      progressMade: boolean | null
+      outcome: string | null
+      scheduledFor: string | null
+      completedAt: string | null
+      plannerAttempts: Array<{ id: string; attempt: number; status: string; provider: string | null; failure: unknown }>
+    }>
+  }
+}
+
+export interface ObjectiveStartResponse {
+  objective: {
+    workId: string
+    workInputId: string
+    instructionId: string
+    objectiveLoopId: string
+    state: "continue" | "awaiting_approval" | "waiting" | "blocked" | "completed" | "failed"
+    duplicate: boolean
+  }
 }
 
 const READ_MODEL_VIEWS = {
@@ -456,6 +507,12 @@ export const jarvisClient = {
   // ---- POST ----
   submitAction: (body: { instruction: string; channel?: "voice" | "text" | "console"; sessionId?: string }): Promise<{ planned: unknown[] }> =>
     jarvisPost<{ planned: unknown[] }>("actions", body),
+
+  startObjective: (body: { objective: string; channel?: "voice" | "text" | "console"; idempotencyKey?: string; activeContext?: Record<string, unknown> }): Promise<ObjectiveStartResponse> =>
+    jarvisPost<ObjectiveStartResponse>("objectives", body),
+
+  controlObjective: (workId: string, body: { command: "continue" | "interrupt" } | { command: "redirect"; objective: string; channel?: "voice" | "text" | "console"; idempotencyKey?: string }): Promise<{ objective: WorkCaseProjection["objectiveLoop"] }> =>
+    jarvisPost<{ objective: WorkCaseProjection["objectiveLoop"] }>(`works/${workId}/objective`, body),
 
   confirmAction: (id: string, note?: string): Promise<unknown> => jarvisPost(`actions/${id}/confirm`, { note }),
 

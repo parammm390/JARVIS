@@ -66,13 +66,20 @@ export async function resolveTenantContextByEmail(email: string): Promise<Identi
   // RLS-empty. The migration's narrowly granted SECURITY DEFINER function returns
   // only this already Supabase-verified email's mapping.
   const { rows } = await getPool().query(
-    `SELECT user_id AS id, tenant_id, user_role AS role
+    `SELECT user_id AS id, tenant_id, user_role AS role, employee_status, authority_revision
      FROM finnor_os.resolve_authenticated_identity($1)`,
     [email],
   );
   const row = rows[0];
   if (!row) return null;
-  return { userId: row.id, tenantId: row.tenant_id, role: row.role as Role };
+  if (row.employee_status !== "active") throw new AuthVerificationError("Employee access is suspended", 403);
+  return {
+    userId: row.id,
+    employeeId: row.id,
+    tenantId: row.tenant_id,
+    role: row.role as Role,
+    authorityRevision: Number(row.authority_revision ?? 1),
+  };
 }
 
 /** Bearer token → tenant context in one call. No Next.js Request dependency, so any

@@ -920,10 +920,10 @@ export async function companyContext(
   snapshot.tasks.forEach((row) => add({ entityType: "task", entityId: row.id, label: row.title, status: row.status, occurredAt: row.dueAt }));
   snapshot.conversations.forEach((row) => {
     add({ entityType: "conversation", entityId: row.id, label: row.channel, status: row.status, occurredAt: row.lastActivityAt });
-    row.recentMessages.forEach((message) => add({ entityType: "message", entityId: message.id, label: message.channel, status: message.direction, occurredAt: message.sentAt }));
+    row.recentMessages.forEach((message) => add({ entityType: "message", entityId: message.id, label: message.content.slice(0, 240), status: message.direction, occurredAt: message.sentAt }));
   });
   snapshot.calls.forEach((row) => add({ entityType: "call", entityId: row.id, label: row.direction, status: row.endedReason, occurredAt: row.startedAt }));
-  snapshot.legacyCommunications.forEach((row) => add({ entityType: "communication", entityId: row.id, label: row.channel, status: row.direction, occurredAt: row.timestamp }));
+  snapshot.legacyCommunications.forEach((row) => add({ entityType: "communication", entityId: row.id, label: row.content.slice(0, 240), status: row.direction, occurredAt: row.timestamp }));
   snapshot.documents.forEach((row) => add({ entityType: "document", entityId: row.id, label: row.title, status: row.kind, occurredAt: row.createdAt }));
   snapshot.works.forEach((work) => {
     add({ entityType: "work", entityId: work.id, label: work.initialInstruction, status: work.status, occurredAt: work.updatedAt });

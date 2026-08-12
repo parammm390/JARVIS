@@ -11,7 +11,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import pg from "pg";
 import { migrate } from "../../packages/db/migrate";
-import { getPool, closePool, withTenant, tenants, domainActions, voiceSessions } from "@finnor/db";
+import { getPool, closePool, withTenant, tenants, domainActions, users, voiceSessions } from "@finnor/db";
 import { and, eq } from "drizzle-orm";
 import { createPendingConfirmation, openVoiceSession } from "@finnor/voice-os";
 import { getOrchestrator } from "../../apps/api/lib/orchestrator";
@@ -22,10 +22,12 @@ const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5
 
 const TENANT_E2 = "00000000-0000-4000-8000-0000000000e2";
 const TENANT_E3 = "00000000-0000-4000-8000-0000000000e3";
+const OWNER_E2 = "00000000-0000-4000-8000-0000000002e2";
+const OWNER_E3 = "00000000-0000-4000-8000-0000000002e3";
 
 const T = {
-  e2: { id: TENANT_E2, name: "Routing Test Tenant E2", ownerPhone: "+15551112000", vapiPhoneNumberId: "phone-e2", dialedNumber: "+15550002000" },
-  e3: { id: TENANT_E3, name: "Routing Test Tenant E3", ownerPhone: "+15551113000", vapiPhoneNumberId: "phone-e3", dialedNumber: "+15550003000" },
+  e2: { id: TENANT_E2, ownerId: OWNER_E2, name: "Routing Test Tenant E2", ownerPhone: "+15551112000", vapiPhoneNumberId: "phone-e2", dialedNumber: "+15550002000" },
+  e3: { id: TENANT_E3, ownerId: OWNER_E3, name: "Routing Test Tenant E3", ownerPhone: "+15551113000", vapiPhoneNumberId: "phone-e3", dialedNumber: "+15550003000" },
 };
 
 async function dbUp(): Promise<boolean> {
@@ -97,6 +99,14 @@ describe.skipIf(!available)("POST /api/webhooks/vapi — tenant-by-phone routing
     for (const t of [T.e2, T.e3]) {
       await getPool().query(`INSERT INTO tenants (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING`, [t.id, t.name]);
       await withTenant(t.id, (db) => db.update(tenants).set({ ownerPhone: t.ownerPhone }).where(eq(tenants.id, t.id)));
+      await withTenant(t.id, (db) => db.insert(users).values({
+        id: t.ownerId,
+        tenantId: t.id,
+        email: `voice-owner-${t.id}@example.test`,
+        role: "owner",
+        displayName: `${t.name} owner`,
+        phoneNumber: t.ownerPhone,
+      }).onConflictDoUpdate({ target: users.id, set: { phoneNumber: t.ownerPhone, status: "active" } }));
       await getPool().query(
         `INSERT INTO tenant_phone_numbers (tenant_id, phone_number, vapi_phone_number_id)
          SELECT $1, $2, $3 WHERE NOT EXISTS (SELECT 1 FROM tenant_phone_numbers WHERE vapi_phone_number_id = $3)`,

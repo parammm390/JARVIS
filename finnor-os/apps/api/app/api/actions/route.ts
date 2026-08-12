@@ -6,6 +6,7 @@ import { getOrchestrator } from "../../../lib/orchestrator";
 import { enforceBatchBackpressure } from "../../../lib/backpressure";
 import { receiveWork, recordWorkResponse, transitionWork, workAggregate } from "@finnor/db";
 import { interpretOperationalQuery } from "@finnor/orchestration";
+import { employeeAuthoritySnapshot } from "@finnor/authority";
 
 export async function POST(req: Request): Promise<Response> {
   try {
@@ -40,6 +41,7 @@ export async function POST(req: Request): Promise<Response> {
       userId: ctx.userId,
       idempotencyKey: body.data.idempotencyKey,
       activeContext: body.data.activeContext,
+      authorityContext: ctx.employeeId ? await employeeAuthoritySnapshot(ctx) : { principal: ctx.userId, kind: "service" },
     });
     if (received.duplicate) {
       const aggregate = await workAggregate(ctx.tenantId, received.workId);
