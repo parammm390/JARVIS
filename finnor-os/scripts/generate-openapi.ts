@@ -24,6 +24,7 @@ const s = (schema: Parameters<typeof zodToJsonSchema>[0]) =>
 const RunControlBodySchema = z.object({ expectedVersion: z.number().int().nonnegative() });
 const SubmitCorrectionBodySchema = z.object({ receiptId: z.string().uuid(), correctedFact: z.string().min(1).max(2000) });
 const RetryWorkBodySchema = z.object({ idempotencyKey: z.string().min(1).max(200) });
+const RetryOperationBodySchema = z.object({ recoveryKey: z.string().min(1).max(200) });
 
 // Upgrade 3: the typed operational-query request is intentionally mirrored here
 // as a strict discriminated union. Tenant identity is never part of this schema;
@@ -161,13 +162,36 @@ const doc = {
     },
     "/api/actions/{id}/confirm": {
       post: {
-        summary: "Approve a pending action — clears the confirmation gate and executes",
+        summary: "Approve a pending action — executes bounded work or durably queues an associated business operation",
         requestBody: { content: { "application/json": { schema: s(ConfirmActionSchema) } } },
         responses: {
           "200": { description: "{result} or {status, idempotent:true} if already decided" },
           "403": { description: "Role cannot approve" },
           "404": { description: "Action not found" },
           "409": { description: "Not pending/needs_human_review" },
+        },
+      },
+    },
+    "/api/operations/{id}": {
+      get: {
+        summary: "Inspect a durable business operation, its frozen targets, per-target execution state, events, and receipt",
+        responses: {
+          "200": { description: "{operation: {operation, targets, events, receipt}}" },
+          "401": { description: "Bad auth" },
+          "404": { description: "Operation not found" },
+        },
+      },
+    },
+    "/api/operations/{id}/retry": {
+      post: {
+        summary: "Recover retryable, configuration, or human-review targets without replaying successful or policy-skipped targets",
+        requestBody: { content: { "application/json": { schema: s(RetryOperationBodySchema) } } },
+        responses: {
+          "202": { description: "{result: {operationId, retried, duplicate, queued}, operation}" },
+          "400": { description: "Invalid recovery key" },
+          "403": { description: "Role cannot approve recovery" },
+          "404": { description: "Operation not found" },
+          "409": { description: "Operation has no recoverable targets or cannot be retried in its current state" },
         },
       },
     },

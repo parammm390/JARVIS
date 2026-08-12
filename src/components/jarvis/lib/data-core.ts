@@ -1,18 +1,21 @@
 "use client"
 
-// One provider owns ALL polling — panels only useJarvis(), never fetch for themselves.
-// Fast lane (4s): stats, pending/blocked actions, running workflow runs.
-// Medium lane (8s): events, comms.
-// Slow lane (30s): all read-models, insights.
-// Sanity lane (60s): setup/status.
+// Compatibility adapter over the shared BusinessProjectionCache. Legacy panels keep
+// using useJarvis(), while every lane and migrated deep surface resolves the same
+// canonical keys/in-flight requests. Freshness and cadence now belong to projection
+// definitions rather than page-local polling islands.
 // A ring buffer of the last 30 fast-lane snapshots (~2min) powers session deltas and
 // change detection; a typed emitter fires on real state transitions so panels can
 // pulse/sound honestly — every flash traces to an actual diff, never a fake tick.
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react"
-import { jarvisGet, JarvisApiError } from "./api"
+import { JarvisApiError } from "./api"
 import { getCurrentSessionKey, hasActiveSession, useJarvisAuth } from "./jarvis-auth"
 import { executionMetricTransitionKey, recordExecutionEventReceived } from "../kernel/execution-metrics"
+import { useBusinessProjectionClient } from "./business-projections"
+import { businessProjections } from "./projection-definitions"
+import { businessEventProjectionTags, onBusinessInvalidation } from "./business-invalidation"
+import type { ProjectionTag } from "./business-projection-cache"
 
 // ---------------------------------------------------------------------------
 // Types (§4 endpoint shapes, verified against the live API)
@@ -539,6 +542,7 @@ const RING_BUFFER_SIZE = 30
 
 export function JarvisDataProvider({ children }: { children: React.ReactNode }): React.ReactElement {
   const auth = useJarvisAuth()
+  const projectionClient = useBusinessProjectionClient()
   const privateDataReady = Boolean(auth.session && auth.role && !auth.roleLoading && !auth.roleError)
   const [state, setState] = useState<JarvisDataState>(EMPTY_STATE)
   const visibleRef = useRef(true)
@@ -615,17 +619,17 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
     if (!visibleRef.current) return
     const started = performance.now()
     const [statsRes, pendingRes, blockedRes, runsRes] = await Promise.allSettled([
-      jarvisGet<StatsResponse>("stats"),
-      jarvisGet<{ actions: PendingAction[] }>("actions/pending", { filter: "pending" }),
-      jarvisGet<{ actions: PendingAction[] }>("actions/pending", { filter: "blocked" }),
-      jarvisGet<{ runs: WorkflowRun[] }>("workflows/runs", { status: "running" }),
+      projectionClient.fetch(businessProjections.stats()),
+      projectionClient.fetch(businessProjections.pendingActions("pending")),
+      projectionClient.fetch(businessProjections.pendingActions("blocked")),
+      projectionClient.fetch(businessProjections.workflowRuns("running")),
     ])
     noteLaneOutcome("fast", [statsRes, pendingRes, blockedRes, runsRes])
     const latency = Math.round(performance.now() - started)
     const nowTs = Date.now()
 
-    const pendingActions = pendingRes.status === "fulfilled" ? pendingRes.value.actions : null
-    const runs = runsRes.status === "fulfilled" ? runsRes.value.runs : null
+    const pendingActions = pendingRes.status === "fulfilled" ? pendingRes.value : null
+    const runs = runsRes.status === "fulfilled" ? runsRes.value : null
 
     if (pendingActions) {
       const ids = new Set(pendingActions.map((a) => a.id))
@@ -677,7 +681,7 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
       stats: statsRes.status === "fulfilled" ? statsRes.value : prev.stats,
       statsDegraded: statsRes.status === "rejected",
       pendingActions: pendingActions ?? prev.pendingActions,
-      blockedActions: blockedRes.status === "fulfilled" ? blockedRes.value.actions : prev.blockedActions,
+      blockedActions: blockedRes.status === "fulfilled" && blockedRes.value ? blockedRes.value : prev.blockedActions,
       pendingDegraded: pendingRes.status === "rejected" || blockedRes.status === "rejected",
       runs: runs ?? prev.runs,
       runsDegraded: runsRes.status === "rejected",
@@ -687,14 +691,14 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
       newPendingSinceOpen: pendingActions && firstPendingIdsRef.current ? Math.max(0, pendingActions.filter((a) => !firstPendingIdsRef.current!.has(a.id)).length) : prev.newPendingSinceOpen,
       metricHistory: {
         ...prev.metricHistory,
-        ...(statsRes.status === "fulfilled" ? { pending: [...(prev.metricHistory.pending ?? []), statsRes.value.pending].slice(-40) } : {}),
+        ...(statsRes.status === "fulfilled" && statsRes.value ? { pending: [...(prev.metricHistory.pending ?? []), statsRes.value.pending].slice(-40) } : {}),
         ...(runs ? { runs: [...(prev.metricHistory.runs ?? []), runs.length].slice(-40) } : {}),
       },
     }))
-    if (statsRes.status === "fulfilled") emit("poll-landed", { latency })
+    if (statsRes.status === "fulfilled" && statsRes.value) emit("poll-landed", { latency })
     // Poll failures surface as degraded/SIMULATION badges in the UI (§2, §9) — never
     // console.error here, so a kill-the-API pass stays console-clean by construction.
-  }, [emitStatusTransition, noteLaneOutcome])
+  }, [emitStatusTransition, noteLaneOutcome, projectionClient])
 
   // ---- medium lane ----
   const prevEventIdsRef = useRef<Set<string>>(new Set())
@@ -705,23 +709,24 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
   const pollMedium = useCallback(async () => {
     if (!visibleRef.current) return
     const [eventsRes, commsRes, allRunsRes] = await Promise.allSettled([
-      jarvisGet<{ events: EventRow[] }>("events"),
-      jarvisGet<{
-        outbox: Array<{ id: string; channel: string; toNumber: string; content: string; simulated: boolean; createdAt: string }>
-        communications: Array<{ id: string; channel: string; direction: string; content: string; timestamp: string; household: string }>
-      }>("comms"),
-      jarvisGet<{ runs: WorkflowRun[] }>("workflows/runs"),
+      projectionClient.fetch(businessProjections.events()),
+      projectionClient.fetch(businessProjections.comms()),
+      projectionClient.fetch(businessProjections.workflowRuns()),
     ])
     noteLaneOutcome("medium", [eventsRes, commsRes, allRunsRes])
     if (eventsRes.status === "fulfilled") {
-      const ids = new Set(eventsRes.value.events.map((e) => e.id))
-      for (const e of eventsRes.value.events) {
-        if (!prevEventIdsRef.current.has(e.id) && prevEventIdsRef.current.size > 0) emit("new-business-event", e)
+      const events = eventsRes.value ?? []
+      const ids = new Set(events.map((e) => e.id))
+      for (const e of events) {
+        if (!prevEventIdsRef.current.has(e.id) && prevEventIdsRef.current.size > 0) {
+          emit("new-business-event", e)
+          projectionClient.invalidate(businessEventProjectionTags(e.eventType, e.entityType), "business-event")
+        }
       }
       prevEventIdsRef.current = ids
     }
     if (allRunsRes.status === "fulfilled") {
-      for (const run of allRunsRes.value.runs) {
+      for (const run of allRunsRes.value ?? []) {
         const previousRunStatus = observedRunStatusRef.current.get(run.id)
         if (run.status === "failed") {
           emitStatusTransition("run-failed", run.id, previousRunStatus, run.status, { runId: run.id })
@@ -736,25 +741,19 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
         }
       }
     }
-    const merged: CommsRow[] | null =
-      commsRes.status === "fulfilled"
-        ? [
-            ...commsRes.value.outbox.map((o) => ({ id: o.id, channel: o.channel, content: o.content, createdAt: o.createdAt, toNumber: o.toNumber, simulated: o.simulated })),
-            ...commsRes.value.communications.map((c) => ({ id: c.id, channel: c.channel, content: c.content, createdAt: c.timestamp, direction: c.direction, household: c.household })),
-          ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-        : null
+    const merged = commsRes.status === "fulfilled" ? commsRes.value : null
     setState((prev) => ({
       ...prev,
-      events: eventsRes.status === "fulfilled" ? eventsRes.value.events : prev.events,
+      events: eventsRes.status === "fulfilled" && eventsRes.value ? eventsRes.value : prev.events,
       eventsDegraded: eventsRes.status === "rejected",
       comms: merged ?? prev.comms,
       commsDegraded: commsRes.status === "rejected",
       terminalRuns:
         allRunsRes.status === "fulfilled"
-          ? allRunsRes.value.runs.filter((r) => r.status !== "running")
+          ? (allRunsRes.value ?? []).filter((r) => r.status !== "running")
           : prev.terminalRuns,
     }))
-  }, [emitStatusTransition, noteLaneOutcome])
+  }, [emitStatusTransition, noteLaneOutcome, projectionClient])
 
   // ---- slow lane ----
   const pollSlow = useCallback(async () => {
@@ -765,24 +764,24 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
     // width: the screen still refreshes every slow-lane cycle, while the API has
     // room for approvals and instruction planning.
     const [pipeline, cash] = await Promise.allSettled([
-      jarvisGet<{ data: PipelineHealth }>("read-models/pipeline-health"),
-      jarvisGet<{ data: CashCollections }>("read-models/cash-collections"),
+      projectionClient.fetch(businessProjections.pipelineHealth()),
+      projectionClient.fetch(businessProjections.cashCollections()),
     ])
     const [sla, stock] = await Promise.allSettled([
-      jarvisGet<{ data: SlaBreaches }>("read-models/sla-breaches"),
-      jarvisGet<{ data: StockRisk }>("read-models/stock-risk"),
+      projectionClient.fetch(businessProjections.slaBreaches()),
+      projectionClient.fetch(businessProjections.stockRisk()),
     ])
     const [followUp, techLoad] = await Promise.allSettled([
-      jarvisGet<{ data: FollowUpDebt }>("read-models/follow-up-debt"),
-      jarvisGet<{ data: TechnicianLoad }>("read-models/technician-load"),
+      projectionClient.fetch(businessProjections.followUpDebt()),
+      projectionClient.fetch(businessProjections.technicianLoad()),
     ])
     const [serviceDue, dataQuality] = await Promise.allSettled([
-      jarvisGet<{ data: ServiceDue }>("read-models/service-due"),
-      jarvisGet<{ data: DataQuality }>("read-models/data-quality"),
+      projectionClient.fetch(businessProjections.serviceDue()),
+      projectionClient.fetch(businessProjections.dataQuality()),
     ])
     const [insights, reliability] = await Promise.allSettled([
-      jarvisGet<Insights>("insights"),
-      jarvisGet<{ data: ReliabilityMetrics }>("read-models/reliability"),
+      projectionClient.fetch(businessProjections.insights()),
+      projectionClient.fetch(businessProjections.reliability()),
     ])
     noteLaneOutcome("slow", [pipeline, cash, sla, stock, followUp, techLoad, serviceDue, dataQuality, insights, reliability])
     const slowResults = [pipeline, cash, sla, stock, followUp, techLoad, serviceDue, dataQuality, insights, reliability]
@@ -792,38 +791,39 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
     setState((prev) => ({
       ...prev,
       slowLastSuccessMs: anySucceeded ? nowTs : prev.slowLastSuccessMs,
-      pipelineHealth: pipeline.status === "fulfilled" ? pipeline.value.data : prev.pipelineHealth,
-      cashCollections: cash.status === "fulfilled" ? cash.value.data : prev.cashCollections,
-      slaBreaches: sla.status === "fulfilled" ? sla.value.data : prev.slaBreaches,
-      stockRisk: stock.status === "fulfilled" ? stock.value.data : prev.stockRisk,
-      followUpDebt: followUp.status === "fulfilled" ? followUp.value.data : prev.followUpDebt,
-      technicianLoad: techLoad.status === "fulfilled" ? techLoad.value.data : prev.technicianLoad,
-      serviceDue: serviceDue.status === "fulfilled" ? serviceDue.value.data : prev.serviceDue,
-      dataQuality: dataQuality.status === "fulfilled" ? dataQuality.value.data : prev.dataQuality,
+      pipelineHealth: pipeline.status === "fulfilled" && pipeline.value ? pipeline.value : prev.pipelineHealth,
+      cashCollections: cash.status === "fulfilled" && cash.value ? cash.value : prev.cashCollections,
+      slaBreaches: sla.status === "fulfilled" && sla.value ? sla.value : prev.slaBreaches,
+      stockRisk: stock.status === "fulfilled" && stock.value ? stock.value : prev.stockRisk,
+      followUpDebt: followUp.status === "fulfilled" && followUp.value ? followUp.value : prev.followUpDebt,
+      technicianLoad: techLoad.status === "fulfilled" && techLoad.value ? techLoad.value : prev.technicianLoad,
+      serviceDue: serviceDue.status === "fulfilled" && serviceDue.value ? serviceDue.value : prev.serviceDue,
+      dataQuality: dataQuality.status === "fulfilled" && dataQuality.value ? dataQuality.value : prev.dataQuality,
       insights: insights.status === "fulfilled" ? insights.value : prev.insights,
-      reliability: reliability.status === "fulfilled" ? reliability.value.data : prev.reliability,
+      reliability: reliability.status === "fulfilled" && reliability.value ? reliability.value : prev.reliability,
       readModelsDegraded: anyDegraded,
       metricHistory: {
         ...prev.metricHistory,
-        ...(cash.status === "fulfilled"
+        ...(cash.status === "fulfilled" && cash.value
           ? {
-              overdueUsd: [...(prev.metricHistory.overdueUsd ?? []), cash.value.data.invoicesByStatus.find((s) => s.status === "overdue")?.totalUsd ?? 0].slice(-40),
-              collectedUsd: [...(prev.metricHistory.collectedUsd ?? []), cash.value.data.totalCollected].slice(-40),
+              overdueUsd: [...(prev.metricHistory.overdueUsd ?? []), cash.value.invoicesByStatus.find((s) => s.status === "overdue")?.totalUsd ?? 0].slice(-40),
+              collectedUsd: [...(prev.metricHistory.collectedUsd ?? []), cash.value.totalCollected].slice(-40),
             }
           : {}),
-        ...(pipeline.status === "fulfilled"
-          ? { leadsOpen: [...(prev.metricHistory.leadsOpen ?? []), pipeline.value.data.leadsByStatus.reduce((s, r) => s + r.count, 0)].slice(-40) }
+        ...(pipeline.status === "fulfilled" && pipeline.value
+          ? { leadsOpen: [...(prev.metricHistory.leadsOpen ?? []), pipeline.value.leadsByStatus.reduce((s, r) => s + r.count, 0)].slice(-40) }
           : {}),
       },
     }))
-  }, [noteLaneOutcome])
+  }, [noteLaneOutcome, projectionClient])
 
   // jarvis-v3 P4.T5 — an out-of-band slow-lane fetch, never a second poller:
   // the scheduled `runLane("slow", pollSlow)` timer below is completely
   // unaffected by calling `pollSlow()` directly here.
   const refetchSlowLaneNow = useCallback(() => {
-    void pollSlow()
-  }, [pollSlow])
+    projectionClient.invalidate(["money", "customers", "work", "queries"], "manual")
+    void projectionClient.fetch(businessProjections.cashCollections(), true).catch(() => undefined)
+  }, [projectionClient])
 
   // ---- sanity lane ----
   const pollSanity = useCallback(async () => {
@@ -832,8 +832,8 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
     // threw away the status code, which is the one thing needed to tell "we were
     // refused" (stop) from "it broke" (back off).
     const [setupRes, integrationsRes] = await Promise.allSettled([
-      jarvisGet<SetupStatus>("setup/status"),
-      jarvisGet<IntegrationsStatus>("integrations/status"),
+      projectionClient.fetch(businessProjections.setupStatus()),
+      projectionClient.fetch(businessProjections.integrationsStatus()),
     ])
     noteLaneOutcome("sanity", [setupRes, integrationsRes])
     const res = setupRes.status === "fulfilled" ? setupRes.value : null
@@ -845,7 +845,42 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
       integrationsStatus: integrations ?? prev.integrationsStatus,
       integrationsDegraded: integrations === null,
     }))
-  }, [noteLaneOutcome])
+  }, [noteLaneOutcome, projectionClient])
+
+  const refreshSlowTags = useCallback(async (tags: Set<ProjectionTag>) => {
+    const wantsCustomers = tags.has("customers")
+    const wantsSchedule = tags.has("schedule")
+    const [cash, pipeline, followUp, serviceDue, techLoad] = await Promise.allSettled([
+      tags.has("money") ? projectionClient.fetch(businessProjections.cashCollections()) : Promise.resolve(null),
+      wantsCustomers ? projectionClient.fetch(businessProjections.pipelineHealth()) : Promise.resolve(null),
+      wantsCustomers ? projectionClient.fetch(businessProjections.followUpDebt()) : Promise.resolve(null),
+      wantsCustomers || wantsSchedule ? projectionClient.fetch(businessProjections.serviceDue()) : Promise.resolve(null),
+      wantsSchedule ? projectionClient.fetch(businessProjections.technicianLoad()) : Promise.resolve(null),
+    ])
+    setState((previous) => ({
+      ...previous,
+      cashCollections: cash.status === "fulfilled" && cash.value ? cash.value : previous.cashCollections,
+      pipelineHealth: pipeline.status === "fulfilled" && pipeline.value ? pipeline.value : previous.pipelineHealth,
+      followUpDebt: followUp.status === "fulfilled" && followUp.value ? followUp.value : previous.followUpDebt,
+      serviceDue: serviceDue.status === "fulfilled" && serviceDue.value ? serviceDue.value : previous.serviceDue,
+      technicianLoad: techLoad.status === "fulfilled" && techLoad.value ? techLoad.value : previous.technicianLoad,
+      slowLastSuccessMs: [cash, pipeline, followUp, serviceDue, techLoad].some((result) => result.status === "fulfilled" && result.value) ? Date.now() : previous.slowLastSuccessMs,
+    }))
+  }, [projectionClient])
+
+  // Mutations and active-instruction SSE frames invalidate the shared cache first.
+  // This compatibility context then refreshes the matching legacy lanes immediately;
+  // any mounted deep surface has already started the same canonical request, so the
+  // cache deduplicates this call instead of producing a second network island.
+  useEffect(() => onBusinessInvalidation((signal) => {
+    if (signal.source === "business-event" || signal.source === "manual") return
+    const tags = new Set(signal.tags)
+    const includesAny = (candidates: ProjectionTag[]) => candidates.some((tag) => tags.has(tag))
+    if (includesAny(["actions", "approvals", "workflows"])) void pollFast()
+    if (includesAny(["events", "comms", "activity"])) void pollMedium()
+    if (includesAny(["customers", "money", "schedule"])) void refreshSlowTags(tags)
+    if (includesAny(["agents", "system"])) void pollSanity()
+  }), [pollFast, pollMedium, pollSanity, refreshSlowTags])
 
   useEffect(() => {
     setState((prev) => ({

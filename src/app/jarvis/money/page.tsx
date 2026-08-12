@@ -1,6 +1,5 @@
 import type { Metadata } from "next"
 import CashPressureSurface from "@/components/jarvis/panels/CashPressureSurface"
-import { JarvisAuthProvider } from "@/components/jarvis/lib/jarvis-auth"
 
 export const metadata: Metadata = {
   title: "JARVIS — Money",
@@ -8,9 +7,5 @@ export const metadata: Metadata = {
 }
 
 export default function MoneyPage() {
-  return (
-    <JarvisAuthProvider>
-      <CashPressureSurface />
-    </JarvisAuthProvider>
-  )
+  return <CashPressureSurface />
 }

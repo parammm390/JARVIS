@@ -2,6 +2,8 @@
 // tenant-A and tenant-B household read models on each supplied environment; UUID rows
 // may never overlap. Tokens are GitHub secrets and are never printed.
 
+export {};
+
 const environments = [
   { name: "staging", url: process.env.STAGING_API_URL },
   { name: "production", url: process.env.PRODUCTION_API_URL },

@@ -2,9 +2,9 @@
 
 // JARVIS kernel — the store (plan v3 P2.T1/§4.1).
 //
-// "The kernel wraps lib/data-core.ts; it never replaces it." This file is the
-// strangler seam: it mounts the SAME `JarvisDataProvider`/`JarvisAuthProvider`
-// P1 already gates every private lane through, and layers the instruction
+// "The kernel wraps lib/data-core.ts; it never replaces it." The persistent
+// `/jarvis` layout owns auth, live projections, and the data-core adapter; this
+// seam layers the instruction
 // machine + presence derivation + (P2-scope, polling-only) transport health on
 // top, all built from the pure functions in `machine.ts`/`presence.ts`/
 // `transport.ts` so the actual decision logic stays unit-testable without a DOM
@@ -20,8 +20,8 @@
 // Every place this matters is commented at the point it happens, not just here.
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react"
-import { JarvisAuthProvider, useJarvisAuth } from "../lib/jarvis-auth"
-import { JarvisDataProvider, useJarvis, type EventRow, type WorkflowRun } from "../lib/data-core"
+import { useJarvisAuth } from "../lib/jarvis-auth"
+import { useJarvis, type EventRow, type WorkflowRun } from "../lib/data-core"
 import { useSelectorInput, useLanePresentation, type LanePresentation } from "./useSelectorInput"
 import type { SelectorInput } from "./selectors"
 import {
@@ -34,6 +34,7 @@ import { initialMachineState, transition, type MachineState } from "./machine"
 import { derivePresence } from "./presence"
 import { deriveTransportHealth, startInstructionTransport, type InstructionTransportHandle, type SseHealth, type TransportHealth } from "./transport"
 import { jarvisGet, jarvisPost, JarvisApiError } from "../lib/api"
+import { publishBusinessInvalidation } from "../lib/business-invalidation"
 import {
   getOrCreateSessionId,
   fetchTraceEvents,
@@ -892,6 +893,16 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
       .sort((a, b) => a.seq - b.seq)
     if (fresh.length === 0) return
     traceCursorRef.current = fresh[fresh.length - 1]!.seq
+    const phases = new Set(fresh.map((event) => event.phase))
+    if (["action_created", "action_gated", "action_executing", "completed", "failed", "cancelled"].some((phase) => phases.has(phase))) {
+      publishBusinessInvalidation({
+        source: "trace",
+        tags: phases.has("completed") || phases.has("failed")
+          ? ["work", "actions", "approvals", "workflows", "receipts", "activity", "events", "customers", "schedule", "money", "agents", "queries"]
+          : ["work", "actions", "approvals", "activity", "events"],
+        path: `instructions/${instructionId}/events`,
+      })
+    }
     for (const event of fresh) {
       // The queue is keyed by the local Thread id, but the paint-measurement
       // bus is read by the rendered instruction id. Keep those identifiers
@@ -1606,9 +1617,6 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
   return <KernelContext.Provider value={value}>{children}</KernelContext.Provider>
 }
 
-/** Mounts the full provider stack: auth -> data -> kernel. Explicit legacy
- *  routes retain their own provider ownership; the canonical `/jarvis` landing
- *  mounts auth/data once and uses `KernelSurface` below. */
 /** Adds the instruction kernel to an already-mounted auth/data context. This is
  * the shared seam used by the canonical role landing so a route does not create
  * a second polling/auth stack just to render the Thread. */
@@ -1617,11 +1625,5 @@ export function KernelSurface({ children, mode }: { children: React.ReactNode; m
 }
 
 export function KernelProvider({ children, mode }: { children: React.ReactNode; mode?: JarvisMode }) {
-  return (
-    <JarvisAuthProvider>
-      <JarvisDataProvider>
-        <KernelSurface mode={mode}>{children}</KernelSurface>
-      </JarvisDataProvider>
-    </JarvisAuthProvider>
-  )
+  return <KernelSurface mode={mode}>{children}</KernelSurface>
 }

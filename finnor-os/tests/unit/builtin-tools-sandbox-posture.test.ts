@@ -43,4 +43,19 @@ describe("builtin outbound-call registration", () => {
     expect(callTool?.integration).toBe("sandbox");
     expect(callTool?.description).toMatch(/^SANDBOX:/);
   });
+
+  it("registers the real campaign adapter from operating mode even before managed secrets are loaded", () => {
+    setEnv("COMMS_MODE", "real");
+    setEnv("GOHIGHLEVEL_API_KEY", undefined);
+    setEnv("VAPI_API_KEY", undefined);
+    setEnv("VAPI_PHONE_NUMBER_ID", undefined);
+    setEnv("VAPI_ASSISTANT_ID", undefined);
+
+    const registry = new RecordingRegistry();
+    registerBuiltinTools(registry);
+
+    expect(registry.has("vapi_place_call")).toBe(true);
+    expect(registry.has("vapi_create_campaign")).toBe(true);
+    expect(registry.registered.filter((tool) => tool.name === "vapi_place_call")).toHaveLength(1);
+  });
 });

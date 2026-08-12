@@ -43,10 +43,18 @@ export class GatedExecutor implements Executor {
       };
     }
 
-    const draft = await plugin.draft(action.actionType, action.payload, policy);
+    let draft = await plugin.draft(action.actionType, action.payload, policy);
     draft.correlationId = action.correlationId;
     draft.approvedBy = action.approvedBy;
     draft.domainActionId = action.id;
+    if (plugin.prepareDurableOperation) {
+      draft = await plugin.prepareDurableOperation(draft, action, policy);
+      // Hooks return a draft so they can add the durable operation id. Re-stamp the
+      // immutable executor context in case an implementation rebuilt the object.
+      draft.correlationId = action.correlationId;
+      draft.approvedBy = action.approvedBy;
+      draft.domainActionId = action.id;
+    }
     await appendEpisode(action.tenantId, action.id, "draft", {}, { summary: draft.summary });
 
     const approval = approvalRequirementForAction(action.actionType, policy.requiresConfirmation, draft.requiresConfirmation);

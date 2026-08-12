@@ -7,24 +7,49 @@ import Redis from "ioredis";
 
 const DEFAULT_LIMIT_PER_MINUTE = 120;
 const WINDOW_MS = 60_000;
-type RedisCounter = { incr(key: string): Promise<number>; pexpire(key: string, ms: number): Promise<unknown> };
+type RedisCounter = {
+  incr(key: string): Promise<number>;
+  pexpire(key: string, ms: number): Promise<unknown>;
+  connect?: () => Promise<unknown>;
+  status?: string;
+};
 let redis: RedisCounter | null | undefined;
 let redisOverride: RedisCounter | null | undefined;
+let redisConnectPromise: Promise<unknown> | null = null;
+let redisUnavailableUntil = 0;
 const memoryCounts = new Map<string, { count: number; expiresAt: number }>();
+const REDIS_RECOVERY_WINDOW_MS = 60_000;
 
-/** Test seam + explicit resilience behavior: Redis is preferred whenever REDIS_URL is
- * configured. A connection/command failure falls back to process-local counting and
- * emits an alerting console error; an outage therefore narrows distributed accuracy,
- * never availability. */
-export function setRateLimitRedisForTesting(value: RedisCounter | null | undefined): void { redisOverride = value; redis = undefined; }
+/** Test seam + explicit resilience behavior. The transactional Postgres counter is
+ * the production default: opening one Redis socket from every independently scaled
+ * API route exhausts small Redis plans under normal dashboard polling. Redis remains
+ * an explicit opt-in (`RATE_LIMIT_BACKEND=redis`) and a test seam. */
+export function setRateLimitRedisForTesting(value: RedisCounter | null | undefined): void {
+  redisOverride = value;
+  redis = undefined;
+  redisConnectPromise = null;
+  redisUnavailableUntil = 0;
+}
 
 function redisClient(): RedisCounter | null {
   if (redisOverride !== undefined) return redisOverride;
   if (redis !== undefined) return redis;
+  if (process.env.RATE_LIMIT_BACKEND !== "redis") return (redis = null);
   if (!process.env.REDIS_URL) return (redis = null);
   const client = new Redis(process.env.REDIS_URL, { lazyConnect: true, maxRetriesPerRequest: 0, enableOfflineQueue: false, connectTimeout: 1_000 });
   client.on("error", () => undefined); // failure is handled at the call boundary below
   return (redis = client);
+}
+
+async function ensureRedisReady(client: RedisCounter): Promise<void> {
+  if (!client.connect || client.status === "ready") return;
+  if (!redisConnectPromise) {
+    redisConnectPromise = client.connect().catch((error) => {
+      redisConnectPromise = null;
+      throw error;
+    });
+  }
+  await redisConnectPromise;
 }
 
 function memoryCheck(key: string, limit: number): boolean {
@@ -39,12 +64,18 @@ export async function checkRateLimit(bucketKey: string, limit = Number(process.e
   const windowStartedAt = new Date(Math.floor(Date.now() / WINDOW_MS) * WINDOW_MS);
   const key = `rate:${bucketKey}:${windowStartedAt.toISOString()}`;
   const client = redisClient();
-  if (client) {
+  if (client && Date.now() >= redisUnavailableUntil) {
     try {
+      // `enableOfflineQueue:false` is important for bounded serverless latency,
+      // but a lazy ioredis client must be connected before its first command.
+      // Without this handshake every cold start rejected INCR as "not writeable"
+      // even when Redis itself was healthy.
+      await ensureRedisReady(client);
       const count = await client.incr(key);
       if (count === 1) await client.pexpire(key, WINDOW_MS);
       return count <= limit;
     } catch (error) {
+      redisUnavailableUntil = Date.now() + REDIS_RECOVERY_WINDOW_MS;
       console.error("[rate-limit] Redis unavailable; using in-memory fallback", error instanceof Error ? error.message : error);
       return memoryCheck(key, limit);
     }

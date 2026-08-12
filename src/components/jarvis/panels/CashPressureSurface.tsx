@@ -5,8 +5,10 @@ import Link from "next/link"
 import { ArrowUpRight, ChevronDown, CircleAlert, CreditCard, FileCheck2, RefreshCw, ShieldCheck, WalletCards } from "lucide-react"
 import { JarvisApiError } from "../lib/api"
 import { useJarvisAuth } from "../lib/jarvis-auth"
-import { jarvisClient, type Household360Projection, type InvoiceResource, type WorkCaseProjection } from "@/lib/jarvis-client"
+import { type Household360Projection, type InvoiceResource, type WorkCaseProjection } from "@/lib/jarvis-client"
 import type { CashCollections } from "../lib/data-core"
+import { useBusinessProjection } from "../lib/business-projections"
+import { businessProjections } from "../lib/projection-definitions"
 import { OperationalSurfaceNav, type HouseholdContext } from "../surfaces/OperationalSurfaceNav"
 import "../jarvis-theme.css"
 
@@ -167,43 +169,27 @@ function workCaseHref(workCase: WorkCaseProjection): string {
 
 export default function CashPressureSurface() {
   const { session, loading: authLoading } = useJarvisAuth()
-  const [invoices, setInvoices] = useState<InvoiceResource[]>([])
-  const [cash, setCash] = useState<CashCollections | null>(null)
-  const [workCases, setWorkCases] = useState<WorkCaseProjection[]>([])
-  const [source, setSource] = useState<"loading" | "live" | "denied" | "unavailable">("loading")
-  const [error, setError] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [householdDetail, setHouseholdDetail] = useState<Household360Projection | null>(null)
-  const [detailError, setDetailError] = useState<string | null>(null)
-  const [loadingDetail, setLoadingDetail] = useState(false)
   const [invoiceView, setInvoiceView] = useState<InvoiceView>("open")
   const [collectionView, setCollectionView] = useState<CollectionView>("active")
   const [surfaceQuery] = useState(() => new URLSearchParams(typeof window === "undefined" ? "" : window.location.search))
   const requestedInvoiceId = surfaceQuery.get("invoiceId")
   const requestedHouseholdId = surfaceQuery.get("householdId")
-
-  const load = useCallback(async () => {
-    setSource("loading")
-    setError(null)
-    try {
-      const [invoiceResult, cashResult, workResult] = await Promise.allSettled([jarvisClient.invoices(), jarvisClient.cashCollections(), jarvisClient.workCases()])
-      if (invoiceResult.status === "rejected") throw invoiceResult.reason
-      setInvoices(invoiceResult.value.rows)
-      setCash(cashResult.status === "fulfilled" ? cashResult.value.data : null)
-      setWorkCases(workResult.status === "fulfilled" ? workResult.value.data : [])
-      setSource("live")
-    } catch (cause) {
-      setSource(cause instanceof JarvisApiError && cause.status === 401 ? "denied" : "unavailable")
-      setError(sourceError(cause))
-      setInvoices([])
-      setCash(null)
-      setWorkCases([])
-    }
-  }, [])
-
-  useEffect(() => {
-    if (session) void load()
-  }, [load, session])
+  const invoiceProjection = useBusinessProjection(businessProjections.invoices(), { enabled: Boolean(session) })
+  const cashProjection = useBusinessProjection(businessProjections.cashCollections(), { enabled: Boolean(session) })
+  const workProjection = useBusinessProjection(businessProjections.workCases(), { enabled: Boolean(session) })
+  const invoices = useMemo<InvoiceResource[]>(() => invoiceProjection.data ?? [], [invoiceProjection.data])
+  const cash: CashCollections | null = cashProjection.data
+  const workCases = useMemo<WorkCaseProjection[]>(() => workProjection.data ?? [], [workProjection.data])
+  const source = authLoading || (session && invoiceProjection.data === null && invoiceProjection.status !== "error")
+    ? "loading"
+    : !session || (invoiceProjection.error instanceof JarvisApiError && invoiceProjection.error.status === 401)
+      ? "denied"
+      : invoiceProjection.error && invoiceProjection.data === null
+        ? "unavailable"
+        : "live"
+  const error = source === "denied" ? "Sign in to inspect tenant money." : source === "unavailable" ? sourceError(invoiceProjection.error) : null
+  const load = () => { void Promise.allSettled([invoiceProjection.refresh(), cashProjection.refresh(), workProjection.refresh()]) }
 
   const sortedInvoices = useMemo(() => [...invoices].sort((a, b) => {
     const order: Record<string, number> = { overdue: 0, sent: 1, draft: 2, paid: 3, void: 4 }
@@ -215,6 +201,10 @@ export default function CashPressureSurface() {
   const visibleCollectionWork = useMemo(() => collectionWork.filter((workCase) => collectionMatchesView(workCase, collectionView)), [collectionView, collectionWork])
   const visibleCollectionGroups = useMemo(() => groupCollectionWork(visibleCollectionWork), [visibleCollectionWork])
   const selectedInvoice = invoices.find((invoice) => invoice.id === selectedId) ?? null
+  const householdProjection = useBusinessProjection(businessProjections.household360(selectedInvoice?.householdId ?? "unselected"), { enabled: Boolean(session && selectedInvoice) })
+  const householdDetail: Household360Projection | null = householdProjection.data
+  const detailError = householdProjection.error ? sourceError(householdProjection.error) : null
+  const loadingDetail = Boolean(selectedInvoice && householdProjection.data === null && householdProjection.status !== "error")
   const selectedWork = selectedInvoice ? collectionWork.filter((workCase) => workInvoiceId(workCase) === selectedInvoice.id) : []
   const context = selectedInvoice
     ? invoiceContext(selectedInvoice, householdDetail)
@@ -228,16 +218,7 @@ export default function CashPressureSurface() {
 
   const selectInvoice = useCallback((invoice: InvoiceResource) => {
     setSelectedId(invoice.id)
-    setHouseholdDetail(null)
-    setDetailError(null)
-    setLoadingDetail(true)
     window.history.replaceState(null, "", `/jarvis/money?invoiceId=${encodeURIComponent(invoice.id)}&householdId=${encodeURIComponent(invoice.householdId)}`)
-    void jarvisClient.household360(invoice.householdId)
-      .then((result) => {
-        setHouseholdDetail(result.data)
-      })
-      .catch((cause) => setDetailError(sourceError(cause)))
-      .finally(() => setLoadingDetail(false))
   }, [])
 
   useEffect(() => {
@@ -260,8 +241,6 @@ export default function CashPressureSurface() {
       return
     }
     setSelectedId(null)
-    setHouseholdDetail(null)
-    setDetailError(null)
     window.history.replaceState(null, "", "/jarvis/money")
   }, [selectInvoice, selectedId, visibleInvoices])
 

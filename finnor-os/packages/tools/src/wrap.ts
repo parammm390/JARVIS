@@ -2,12 +2,14 @@
 // Reflection evaluates the structured result — no tool is called "bare".
 
 import { IntegrationError, IntegrationTimeoutError } from "./errors";
+import type { ErrorKind } from "@finnor/shared-types";
 
 export interface ToolCallResult {
   ok: boolean;
   output: Record<string, unknown>;
   error?: string;
   integrationUnavailable?: boolean;
+  errorKind?: ErrorKind;
 }
 
 export interface RetryPolicy {
@@ -53,5 +55,6 @@ export async function wrappedCall(
     error: lastError?.message ?? "unknown integration failure",
     // Continued failure → caller sets domain_action status blocked_integration_unavailable (§30).
     integrationUnavailable: true,
+    errorKind: lastError instanceof IntegrationError ? lastError.kind : "retryable",
   };
 }

@@ -19,11 +19,11 @@
 // endpoint (verified from source), so this scene filters the returned stops
 // to this technician client-side rather than inventing a server change.
 
-import { useEffect, useState } from "react"
 import { Route } from "lucide-react"
 import { Panel } from "../../primitives/Panel"
-import { jarvisGet } from "../../../lib/api"
 import { DispatchMapCore, type MapData } from "../../../panels/DispatchMap"
+import { useBusinessProjection } from "../../../lib/business-projections"
+import { businessProjections } from "../../../lib/projection-definitions"
 import type { ActionRendererProps } from "../types"
 
 interface RouteSuggestionPayload {
@@ -32,35 +32,9 @@ interface RouteSuggestionPayload {
 }
 
 function useTechnicianDayMap(technicianId: string | undefined, date: string | undefined) {
-  const [data, setData] = useState<MapData | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    if (!technicianId || !date) {
-      setLoading(false)
-      return
-    }
-    let cancelled = false
-    setLoading(true)
-    jarvisGet<MapData>("dispatch/map", { date })
-      .then((full) => {
-        if (cancelled) return
-        setData({ ...full, stops: full.stops.filter((s) => s.technicianId === technicianId) })
-        setError(null)
-      })
-      .catch((e) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : "Couldn't load the route map.")
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [technicianId, date])
-
-  return { data, error, loading }
+  const projection = useBusinessProjection(businessProjections.dispatchMap(date ?? "unselected"), { enabled: Boolean(technicianId && date) })
+  const data: MapData | null = projection.data && technicianId ? { ...projection.data, stops: projection.data.stops.filter((stop) => stop.technicianId === technicianId) } : null
+  return { data, error: projection.error?.message ?? null, loading: Boolean(technicianId && date && data === null && projection.status !== "error") }
 }
 
 export function RouteScene({ payload, compact }: ActionRendererProps) {

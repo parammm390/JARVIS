@@ -129,7 +129,11 @@ export async function releaseBudget(
       const released = Math.min(amount, marker.rows[0]?.count ?? 0);
       if (released > 0) {
         await client.query("UPDATE api_rate_limits SET count = greatest(0, count - $3) WHERE bucket_key = $1 AND window_started_at = $2", [key, windowStartedAt, released]);
-        await client.query("DELETE FROM api_rate_limits WHERE bucket_key = $1 AND window_started_at = $2", [markerKey, windowStartedAt]);
+        if (released >= (marker.rows[0]?.count ?? 0)) {
+          await client.query("DELETE FROM api_rate_limits WHERE bucket_key = $1 AND window_started_at = $2", [markerKey, windowStartedAt]);
+        } else {
+          await client.query("UPDATE api_rate_limits SET count = count - $3 WHERE bucket_key = $1 AND window_started_at = $2", [markerKey, windowStartedAt, released]);
+        }
       }
       const aggregate = await client.query<{ count: number }>(
         "SELECT count FROM api_rate_limits WHERE bucket_key = $1 AND window_started_at = $2",

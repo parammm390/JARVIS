@@ -6,6 +6,7 @@ import {
   withTenant, domainActions, domainPolicies, domainPolicyRevisions, actionLog,
   decisionReceipts, planRepairs, enqueueJob, receiveWork, transitionWork,
   beginWorkPlannerAttempt, finishWorkPlannerAttempt, latestWorkInput, reconcileWorkStatus,
+  authorizeBusinessOperationTx, businessOperations,
 } from "@finnor/db";
 import { buildMemorySnapshot, appendEpisode, appendShortTerm, mirrorTurnToZep } from "@finnor/memory";
 import { createDefaultRegistry, type ToolRegistry } from "@finnor/tools";
@@ -1076,7 +1077,35 @@ export class FinnorOrchestrator implements Orchestrator {
           ...(decision === "approve" ? { note: opts?.note ?? null, policyDrift } : decision === "reject" ? { reason: opts?.reason ?? null } : { note: opts?.note ?? null }),
         },
       });
-      return { claimed, current: claimed };
+      const durableOperation = decision === "approve"
+        ? await authorizeBusinessOperationTx(db, {
+            tenantId,
+            domainActionId: actionId,
+            approvedBy: decidedBy,
+          })
+        : null;
+      if (durableOperation) {
+        await db.update(domainActions).set({ status: "executing", executionStartedAt: new Date() })
+          .where(and(eq(domainActions.id, actionId), eq(domainActions.tenantId, tenantId)));
+        await db.insert(actionLog).values({
+          tenantId,
+          domainActionId: actionId,
+          step: "operation_authorized",
+          input: { by: decidedBy, operationId: durableOperation.id },
+          output: { status: durableOperation.status, queued: durableOperation.authorized },
+        });
+        return { claimed: { ...claimed, status: "executing" as const, executionStartedAt: new Date() }, current: claimed, durableOperation };
+      }
+      if (decision === "reject") {
+        const [operation] = await db.update(businessOperations).set({ status: "cancelled", completedAt: new Date(), updatedAt: new Date(), finalOutcome: { rejected: true, decidedBy } })
+          .where(and(eq(businessOperations.tenantId, tenantId), eq(businessOperations.domainActionId, actionId), eq(businessOperations.status, "awaiting_approval")))
+          .returning({ id: businessOperations.id });
+        if (operation) {
+          await db.update(decisionReceipts).set({ actualResult: { rejected: true }, finalizedAt: new Date() })
+            .where(and(eq(decisionReceipts.tenantId, tenantId), eq(decisionReceipts.operationId, operation.id)));
+        }
+      }
+      return { claimed, current: claimed, durableOperation: null };
     });
     if (!transition.current) return { status: "failure", output: {}, error: "Action not found" };
     if (!transition.claimed) {
@@ -1088,6 +1117,27 @@ export class FinnorOrchestrator implements Orchestrator {
       return { status: "success", output: { idempotent: true, status: transition.current.status } };
     }
     const row = transition.claimed;
+    if (transition.durableOperation) {
+      if (row.instructionId) {
+        await emitInstructionEvent(tenantId, row.instructionId, "executing", {
+          actionId,
+          operationId: transition.durableOperation.id,
+          durable: true,
+        }).catch(() => undefined);
+      }
+      if (row.workId) await reconcileWorkStatus(tenantId, row.workId);
+      return {
+        status: "success",
+        output: {
+          authorized: true,
+          durable: true,
+          operationId: transition.durableOperation.id,
+          operationStatus: transition.durableOperation.status,
+          queued: transition.durableOperation.authorized,
+        },
+        expected: { durableWorkerExecution: true },
+      };
+    }
     if (decision === "reject") {
       // Best-effort: close a paused graph thread so it doesn't dangle waiting for a
       // resume that will never come. Never blocks the reject itself.

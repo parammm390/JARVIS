@@ -19,8 +19,8 @@ import { AnimatePresence, motion, useReducedMotion, type TargetAndTransition } f
 import { LayoutGrid, Volume2, VolumeX, Workflow as WorkflowIcon } from "lucide-react"
 import "../jarvis-theme.css"
 import { ConsoleAtmosphere, LiveDot } from "../atmosphere"
-import { JarvisDataProvider, useJarvis } from "../lib/data-core"
-import { JarvisAuthProvider, useJarvisAuth } from "../lib/jarvis-auth"
+import { useJarvis } from "../lib/data-core"
+import { useJarvisAuth } from "../lib/jarvis-auth"
 import { useVapiSession } from "../lib/useVapiSession"
 import { derivePresence } from "../kernel/presence"
 import { deriveTransportHealth } from "../kernel/transport"
@@ -745,11 +745,5 @@ function BridgeShell() {
 }
 
 export function Bridge() {
-  return (
-    <JarvisAuthProvider>
-      <JarvisDataProvider>
-        <BridgeShell />
-      </JarvisDataProvider>
-    </JarvisAuthProvider>
-  )
+  return <BridgeShell />
 }

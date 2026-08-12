@@ -9,8 +9,7 @@
 import { useEffect, useState } from "react"
 import dynamic from "next/dynamic"
 import { Map, Wrench } from "lucide-react"
-import { JarvisAuthProvider, useJarvisAuth } from "./lib/jarvis-auth"
-import { JarvisDataProvider } from "./lib/data-core"
+import { useJarvisAuth } from "./lib/jarvis-auth"
 import { jarvisGet } from "./lib/api"
 import { roleLandingFor, type SavedHomepage } from "./lib/role-landing"
 import { SinceYouWereAway } from "./SinceYouWereAway"
@@ -112,11 +111,7 @@ export default function PersonalizedHome() {
   return (
     <div className="jarvis-cursor-zone min-h-screen">
       <CustomCursor />
-      <JarvisAuthProvider>
-        <JarvisDataProvider>
-          <RoleLanding />
-        </JarvisDataProvider>
-      </JarvisAuthProvider>
+      <RoleLanding />
     </div>
   )
 }

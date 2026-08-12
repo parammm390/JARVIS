@@ -16,6 +16,7 @@ import { getAdPerformance, adsProviderStatus } from "./ads";
 import { syncInvoiceToQuickBooks } from "./quickbooks";
 import { launchAdCampaign, type CampaignLaunchInput } from "./ads-write";
 import { enqueueJob } from "@finnor/db";
+import { IntegrationError } from "./errors";
 
 const DAILY_CAMPAIGN_CUSTOMER_LIMIT = 200;
 
@@ -194,7 +195,10 @@ function registerUniversalTools(registry: ToolRegistry, allowLiveVapi: boolean):
       retryPolicy: { attempts: 3, baseDelayMs: 500, timeoutMs: 25_000 },
       async run(input) {
         const result = await createVapiCampaign(input as unknown as Parameters<typeof createVapiCampaign>[0]);
-        if (!result.ok) throw new Error(result.error ?? "Vapi campaign creation failed");
+        if (!result.ok) {
+          const kind = result.errorKind ?? "provider_down";
+          throw new IntegrationError("vapi", result.error ?? "Vapi campaign creation failed", kind === "retryable" || kind === "provider_down", kind);
+        }
         return { ...result.output, live: true };
       },
     });

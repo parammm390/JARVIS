@@ -85,29 +85,4 @@ ALTER TABLE public.demo_generation_locks ADD COLUMN IF NOT EXISTS ip_hash text;
 ALTER TABLE public.demo_generation_locks ADD COLUMN IF NOT EXISTS user_agent_hash text;
 ALTER TABLE public.demo_generation_locks ADD COLUMN IF NOT EXISTS account_id text;
 ALTER TABLE public.demo_generation_locks ADD COLUMN IF NOT EXISTS browser_fingerprint_hash text;
-ALTER TABLE public.demo_generation_locks ADD COLUMN IF NOT EXISTS lead_id text;
-
-CREATE INDEX IF NOT EXISTS demo_leads_normalized_domain_idx
-  ON public.demo_leads (normalized_domain);
-
-CREATE INDEX IF NOT EXISTS demo_leads_domain_company_idx
-  ON public.demo_leads (normalized_domain, normalized_company_name);
-
-CREATE INDEX IF NOT EXISTS demo_generation_locks_normalized_domain_idx
-  ON public.demo_generation_locks (normalized_domain);
-
-CREATE INDEX IF NOT EXISTS demo_generation_locks_domain_company_idx
-  ON public.demo_generation_locks (normalized_domain, normalized_company_name);
-
-ALTER TABLE public.leads ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.demo_leads ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.demo_generation_locks ENABLE ROW LEVEL SECURITY;
-
-REVOKE ALL ON TABLE public.leads FROM anon, authenticated;
-REVOKE ALL ON TABLE public.demo_leads FROM anon, authenticated;
-REVOKE ALL ON TABLE public.demo_generation_locks FROM anon, authenticated;
-
-GRANT USAGE ON SCHEMA public TO service_role;
-GRANT SELECT, INSERT, UPDATE ON TABLE public.leads TO service_role;
-GRANT SELECT, INSERT, UPDATE ON TABLE public.demo_leads TO service_role;
-GRANT SELECT, INSERT, UPDATE ON TABLE public.demo_generation_locks TO service_role;
+ALTER TABLE public.demo_generati

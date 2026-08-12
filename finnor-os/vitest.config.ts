@@ -44,6 +44,9 @@ export default defineConfig({
     },
   },
   test: {
+    // Keep package-local contract tests in the default suite. Restricting discovery
+    // to tests/ silently skipped the orchestration trace sanitizer and ops-overview
+    // plugin tests even though `npm test` appeared green.
     include: ["tests/**/*.test.ts", "packages/**/*.test.ts", "apps/**/*.test.ts"],
     testTimeout: 30_000,
     pool: "forks",

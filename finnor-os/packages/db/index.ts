@@ -216,6 +216,264 @@ export async function enqueueJob(
 }
 
 // ---------------------------------------------------------------------------
+// Upgrade 6: additive durable business-operation primitives. Approval code uses the
+// in-transaction authorizer below so an approved cohort and its first worker job can
+// never be separated by a process crash.
+// ---------------------------------------------------------------------------
+
+export interface FrozenBusinessOperationTarget {
+  targetId: string;
+  frozenSnapshot: Record<string, unknown>;
+  preparedPayload: Record<string, unknown>;
+}
+
+export interface CreateBusinessOperationParams {
+  tenantId: string;
+  workId?: string | null;
+  domainActionId: string;
+  operationType: "customer_winback";
+  configuration: Record<string, unknown>;
+  cohortDefinition: Record<string, unknown>;
+  targets: FrozenBusinessOperationTarget[];
+  summary: string;
+  policyApplied: { id: string; version: number } | null;
+  correlationId?: string | null;
+}
+
+async function appendBusinessOperationEventTx(
+  db: Db,
+  params: { tenantId: string; operationId: string; targetId?: string | null; eventType: string; payload?: Record<string, unknown> },
+): Promise<void> {
+  await db.execute(sql`SELECT id FROM ${schema.businessOperations} WHERE ${schema.businessOperations.id} = ${params.operationId} FOR UPDATE`);
+  const [latest] = await db
+    .select({ maxSequence: sql<number>`coalesce(max(${schema.businessOperationEvents.sequence}), 0)::int` })
+    .from(schema.businessOperationEvents)
+    .where(eq(schema.businessOperationEvents.operationId, params.operationId));
+  await db.insert(schema.businessOperationEvents).values({
+    tenantId: params.tenantId,
+    operationId: params.operationId,
+    targetId: params.targetId ?? null,
+    sequence: (latest?.maxSequence ?? 0) + 1,
+    eventType: params.eventType,
+    payload: params.payload ?? {},
+  });
+}
+
+/** Freeze the exact proposal cohort once. Re-drafting an already-pending action is
+ * idempotent and can never replace its approved targets with a freshly queried set. */
+export async function createBusinessOperation(params: CreateBusinessOperationParams): Promise<{ id: string; created: boolean; status: string }> {
+  return withTenant(params.tenantId, async (db) => {
+    const [action] = await db.select({ id: schema.domainActions.id, workId: schema.domainActions.workId })
+      .from(schema.domainActions)
+      .where(and(eq(schema.domainActions.id, params.domainActionId), eq(schema.domainActions.tenantId, params.tenantId)))
+      .limit(1);
+    if (!action) throw new Error("Cannot prepare a durable operation for an unknown action");
+    if ((params.workId ?? null) !== (action.workId ?? null)) throw new Error("Durable operation Work does not match its action");
+
+    const [existing] = await db.select().from(schema.businessOperations)
+      .where(and(eq(schema.businessOperations.tenantId, params.tenantId), eq(schema.businessOperations.domainActionId, params.domainActionId)))
+      .limit(1);
+    if (existing) {
+      const rows = await db.select({ targetId: schema.businessOperationTargets.targetId })
+        .from(schema.businessOperationTargets)
+        .where(eq(schema.businessOperationTargets.operationId, existing.id))
+        .orderBy(asc(schema.businessOperationTargets.ordinal));
+      const frozen = rows.map((row) => row.targetId);
+      const proposed = params.targets.map((target) => target.targetId);
+      if (canonicalJson(frozen) !== canonicalJson(proposed)) {
+        throw new Error("Durable operation cohort is already frozen and cannot be replaced");
+      }
+      return { id: existing.id, created: false, status: existing.status };
+    }
+
+    const [operation] = await db.insert(schema.businessOperations).values({
+      tenantId: params.tenantId,
+      workId: params.workId ?? null,
+      domainActionId: params.domainActionId,
+      operationType: params.operationType,
+      status: "awaiting_approval",
+      configuration: params.configuration,
+      cohortDefinition: params.cohortDefinition,
+      targetCount: params.targets.length,
+      pendingCount: params.targets.length,
+    }).returning();
+    if (!operation) throw new Error("Failed to create durable business operation");
+
+    if (params.targets.length > 0) {
+      await db.insert(schema.businessOperationTargets).values(params.targets.map((target, ordinal) => ({
+        tenantId: params.tenantId,
+        operationId: operation.id,
+        targetId: target.targetId,
+        ordinal,
+        frozenSnapshot: target.frozenSnapshot,
+        preparedPayload: target.preparedPayload,
+        idempotencyKey: `${operation.id}:target:${target.targetId}`,
+      })));
+    }
+    await appendBusinessOperationEventTx(db, {
+      tenantId: params.tenantId,
+      operationId: operation.id,
+      eventType: "cohort_frozen",
+      payload: { targetCount: params.targets.length, domainActionId: params.domainActionId },
+    });
+    await db.insert(schema.decisionReceipts).values({
+      tenantId: params.tenantId,
+      workId: params.workId ?? null,
+      domainActionId: params.domainActionId,
+      operationId: operation.id,
+      objective: params.summary,
+      evidence: params.targets.map((target) => ({ source: "households", ref: target.targetId, timestamp: operation.cohortFrozenAt.toISOString() })),
+      policyApplied: params.policyApplied,
+      riskTier: "high",
+      proposedAction: {
+        operationId: operation.id,
+        operationType: params.operationType,
+        configuration: params.configuration,
+        cohortDefinition: params.cohortDefinition,
+        frozenTargetIds: params.targets.map((target) => target.targetId),
+      },
+      approval: { required: true },
+      expectedResult: { targetCount: params.targets.length, perTargetState: true, durableWorkerExecution: true },
+      correlationId: params.correlationId ?? null,
+    });
+    return { id: operation.id, created: true, status: operation.status };
+  });
+}
+
+export interface AuthorizedBusinessOperation {
+  id: string;
+  status: string;
+  authorized: boolean;
+}
+
+/** Must be called inside the same transaction that writes the immutable approval
+ * episode. It moves the operation to queued and inserts the first dispatcher job as
+ * one atomic commit. */
+export async function authorizeBusinessOperationTx(
+  db: Db,
+  params: { tenantId: string; domainActionId: string; approvedBy: string; correlationId?: string | null },
+): Promise<AuthorizedBusinessOperation | null> {
+  const [operation] = await db.select().from(schema.businessOperations)
+    .where(and(eq(schema.businessOperations.tenantId, params.tenantId), eq(schema.businessOperations.domainActionId, params.domainActionId)))
+    .limit(1);
+  if (!operation) return null;
+  if (operation.status !== "awaiting_approval") return { id: operation.id, status: operation.status, authorized: false };
+  const now = new Date();
+  const [queued] = await db.update(schema.businessOperations).set({
+    status: "queued",
+    approvedBy: params.approvedBy,
+    approvedAt: now,
+    updatedAt: now,
+  }).where(and(eq(schema.businessOperations.id, operation.id), eq(schema.businessOperations.status, "awaiting_approval"))).returning();
+  if (!queued) {
+    const [raced] = await db.select().from(schema.businessOperations).where(eq(schema.businessOperations.id, operation.id)).limit(1);
+    return raced ? { id: raced.id, status: raced.status, authorized: false } : null;
+  }
+  await db.update(schema.decisionReceipts).set({ approval: { required: true, approvedBy: params.approvedBy, at: now.toISOString() } })
+    .where(and(eq(schema.decisionReceipts.tenantId, params.tenantId), eq(schema.decisionReceipts.operationId, operation.id)));
+  await appendBusinessOperationEventTx(db, {
+    tenantId: params.tenantId,
+    operationId: operation.id,
+    eventType: "execution_authorized",
+    payload: { approvedBy: params.approvedBy, domainActionId: params.domainActionId },
+  });
+  await db.insert(schema.jobs).values({
+    type: "dispatch_business_operation",
+    payload: {
+      tenantId: params.tenantId,
+      operationId: operation.id,
+      actionId: params.domainActionId,
+      ...(params.correlationId ? { _correlationId: params.correlationId } : {}),
+    },
+    idempotencyKey: `business-operation:${operation.id}:dispatch:authorized`,
+    lane: "batch",
+    priority: 10,
+  }).onConflictDoNothing({ target: schema.jobs.idempotencyKey });
+  return { id: queued.id, status: queued.status, authorized: true };
+}
+
+export async function businessOperationAggregate(tenantId: string, operationId: string): Promise<Record<string, unknown> | null> {
+  return withTenant(tenantId, async (db) => {
+    const [operation] = await db.select().from(schema.businessOperations)
+      .where(and(eq(schema.businessOperations.tenantId, tenantId), eq(schema.businessOperations.id, operationId))).limit(1);
+    if (!operation) return null;
+    const targets = await db.select().from(schema.businessOperationTargets)
+      .where(and(eq(schema.businessOperationTargets.tenantId, tenantId), eq(schema.businessOperationTargets.operationId, operationId)))
+      .orderBy(asc(schema.businessOperationTargets.ordinal));
+    const events = await db.select().from(schema.businessOperationEvents)
+      .where(and(eq(schema.businessOperationEvents.tenantId, tenantId), eq(schema.businessOperationEvents.operationId, operationId)))
+      .orderBy(asc(schema.businessOperationEvents.sequence));
+    const [receipt] = await db.select().from(schema.decisionReceipts)
+      .where(and(eq(schema.decisionReceipts.tenantId, tenantId), eq(schema.decisionReceipts.operationId, operationId))).limit(1);
+    return { operation, targets, events, receipt: receipt ?? null };
+  });
+}
+
+export async function retryBusinessOperation(params: {
+  tenantId: string;
+  operationId: string;
+  requestedBy: string;
+  recoveryKey: string;
+}): Promise<{ retried: number; duplicate: boolean; workId: string | null; actionType: string }> {
+  if (!params.recoveryKey.trim() || params.recoveryKey.length > 200) throw new Error("recoveryKey must be non-empty and at most 200 characters");
+  return withTenant(params.tenantId, async (db) => {
+    const [operation] = await db.select().from(schema.businessOperations).where(and(
+      eq(schema.businessOperations.tenantId, params.tenantId),
+      eq(schema.businessOperations.id, params.operationId),
+    )).limit(1);
+    if (!operation) throw new Error("Business operation not found");
+    const [action] = await db.select({ actionType: schema.domainActions.actionType }).from(schema.domainActions).where(and(
+      eq(schema.domainActions.tenantId, params.tenantId),
+      eq(schema.domainActions.id, operation.domainActionId),
+    )).limit(1);
+    if (!action) throw new Error("Business operation action not found");
+    const jobKey = `business-operation:${operation.id}:manual-retry:${params.recoveryKey}`;
+    const [existingJob] = await db.select({ id: schema.jobs.id }).from(schema.jobs).where(eq(schema.jobs.idempotencyKey, jobKey)).limit(1);
+    if (existingJob) return { retried: 0, duplicate: true, workId: operation.workId, actionType: action.actionType };
+    if (!["needs_human_review", "completed_with_failures", "failed"].includes(operation.status)) {
+      throw new Error(`Business operation is ${operation.status}; it is not recoverable`);
+    }
+    const targets = await db.update(schema.businessOperationTargets).set({
+      status: "retry",
+      attempts: 0,
+      jobKey: null,
+      nextAttemptAt: new Date(),
+      leaseExpiresAt: null,
+      failureClass: "retryable",
+      errorKind: "retryable",
+      lastError: "A human authorized recovery after reviewing the prior failure.",
+      completedAt: null,
+      updatedAt: new Date(),
+    }).where(and(
+      eq(schema.businessOperationTargets.operationId, operation.id),
+      eq(schema.businessOperationTargets.status, "failed"),
+      inArray(schema.businessOperationTargets.failureClass, ["retryable", "configuration", "human_review"]),
+    )).returning({ id: schema.businessOperationTargets.id });
+    if (targets.length === 0) throw new Error("Business operation has no retryable or reviewable failed targets");
+    await db.update(schema.businessOperations).set({ status: "queued", completedAt: null, failure: null, updatedAt: new Date() })
+      .where(eq(schema.businessOperations.id, operation.id));
+    await db.update(schema.domainActions).set({ status: "executing", executionStartedAt: new Date() })
+      .where(eq(schema.domainActions.id, operation.domainActionId));
+    await db.update(schema.decisionReceipts).set({ failure: null, finalizedAt: null })
+      .where(and(eq(schema.decisionReceipts.tenantId, params.tenantId), eq(schema.decisionReceipts.operationId, operation.id)));
+    await appendBusinessOperationEventTx(db, {
+      tenantId: params.tenantId,
+      operationId: operation.id,
+      eventType: "recovery_authorized",
+      payload: { requestedBy: params.requestedBy, recoveryKey: params.recoveryKey, targetCount: targets.length },
+    });
+    await db.insert(schema.jobs).values({
+      type: "dispatch_business_operation",
+      payload: { tenantId: params.tenantId, operationId: operation.id, actionId: operation.domainActionId },
+      idempotencyKey: jobKey,
+      lane: "batch",
+      priority: 10,
+    });
+    return { retried: targets.length, duplicate: false, workId: operation.workId, actionType: action.actionType };
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Upgrade 2: durable Work kernel. These primitives live beside withTenant so the
 // API, orchestrator, voice intake, and workflow runtime can share one transactional
 // lifecycle implementation without creating package dependency cycles.
@@ -496,26 +754,29 @@ export async function reconcileWorkStatus(tenantId: string, workId: string): Pro
     const actions = await db.select({ id: schema.domainActions.id, status: schema.domainActions.status }).from(schema.domainActions).where(and(eq(schema.domainActions.tenantId, tenantId), eq(schema.domainActions.workId, workId)));
     const runs = await db.select({ id: schema.workflowRuns.id, status: schema.workflowRuns.status }).from(schema.workflowRuns).where(and(eq(schema.workflowRuns.tenantId, tenantId), eq(schema.workflowRuns.workId, workId)));
     const repairs = await db.select({ id: schema.planRepairs.id, status: schema.planRepairs.status }).from(schema.planRepairs).where(and(eq(schema.planRepairs.tenantId, tenantId), eq(schema.planRepairs.workId, workId)));
+    const operations = await db.select({ id: schema.businessOperations.id, status: schema.businessOperations.status }).from(schema.businessOperations).where(and(eq(schema.businessOperations.tenantId, tenantId), eq(schema.businessOperations.workId, workId)));
     const [work] = await db.select().from(schema.works).where(and(eq(schema.works.tenantId, tenantId), eq(schema.works.id, workId))).limit(1);
-    return { actions, runs, repairs, work };
+    return { actions, runs, repairs, operations, work };
   });
   if (!snapshot.work) throw new Error("Work not found");
   if (snapshot.actions.length === 0 && snapshot.runs.length === 0) return snapshot.work.status;
 
   const actionStatuses = snapshot.actions.map((row) => row.status);
   const runStatuses = snapshot.runs.map((row) => row.status);
+  const operationStatuses = snapshot.operations.map((row) => row.status);
   let status: WorkStatus;
-  if (snapshot.repairs.some((row) => row.status === "planning" || row.status === "proposed")) status = "recovery";
-  else if (runStatuses.some((value) => ["running", "compensating"].includes(value)) || actionStatuses.some((value) => value === "approved" || value === "executing")) status = "executing";
+  if (snapshot.repairs.some((row) => row.status === "planning" || row.status === "proposed") || operationStatuses.some((value) => value === "needs_human_review")) status = "recovery";
+  else if (operationStatuses.some((value) => ["queued", "running"].includes(value)) || runStatuses.some((value) => ["running", "compensating"].includes(value)) || actionStatuses.some((value) => value === "approved" || value === "executing")) status = "executing";
   else if (actionStatuses.some((value) => value === "pending" || value === "needs_human_review") || runStatuses.some((value) => value === "paused" || value === "escalated")) status = "awaiting_approval";
   else if (actionStatuses.some((value) => value === "draft")) status = "actionable";
-  else if (actionStatuses.some((value) => value === "failed" || value === "blocked_integration_unavailable") || runStatuses.some((value) => value === "failed")) status = "failed";
-  else if (actionStatuses.length > 0 && actionStatuses.every((value) => value === "completed" || value === "rejected") && runStatuses.every((value) => ["completed", "compensated", "cancelled"].includes(value))) status = "completed";
+  else if (actionStatuses.some((value) => value === "failed" || value === "blocked_integration_unavailable") || runStatuses.some((value) => value === "failed") || operationStatuses.some((value) => value === "failed")) status = "failed";
+  else if (actionStatuses.length > 0 && actionStatuses.every((value) => value === "completed" || value === "rejected") && runStatuses.every((value) => ["completed", "compensated", "cancelled"].includes(value)) && operationStatuses.every((value) => ["completed", "completed_with_failures", "cancelled"].includes(value))) status = "completed";
   else status = snapshot.work.status;
 
   const counts = {
     actions: actionStatuses.reduce<Record<string, number>>((acc, value) => ({ ...acc, [value]: (acc[value] ?? 0) + 1 }), {}),
     workflows: runStatuses.reduce<Record<string, number>>((acc, value) => ({ ...acc, [value]: (acc[value] ?? 0) + 1 }), {}),
+    operations: operationStatuses.reduce<Record<string, number>>((acc, value) => ({ ...acc, [value]: (acc[value] ?? 0) + 1 }), {}),
   };
   if (status !== snapshot.work.status) {
     await transitionWork(tenantId, workId, status, "children_reconciled", counts, status === "completed" ? { finalOutcome: counts } : status === "failed" ? { failure: counts } : {});
@@ -525,6 +786,9 @@ export async function reconcileWorkStatus(tenantId: string, workId: string): Pro
 
 export type WorkAggregate = Record<string, unknown> & {
   queryExecutions: Array<typeof schema.workQueryExecutions.$inferSelect>;
+  operations: Array<typeof schema.businessOperations.$inferSelect>;
+  operationTargets: Array<typeof schema.businessOperationTargets.$inferSelect>;
+  operationEvents: Array<typeof schema.businessOperationEvents.$inferSelect>;
 };
 
 export async function workAggregate(tenantId: string, workId: string): Promise<WorkAggregate | null> {
@@ -546,7 +810,11 @@ export async function workAggregate(tenantId: string, workId: string): Promise<W
       eq(schema.workQueryExecutions.tenantId, tenantId),
       eq(schema.workQueryExecutions.workId, workId),
     )).orderBy(asc(schema.workQueryExecutions.startedAt));
-    return { work, inputs, plannerAttempts, actions, approvals, workflowRuns, workflowSteps, receipts, repairs, events, queryExecutions };
+    const operations = await db.select().from(schema.businessOperations).where(and(eq(schema.businessOperations.tenantId, tenantId), eq(schema.businessOperations.workId, workId))).orderBy(asc(schema.businessOperations.createdAt));
+    const operationIds = operations.map((operation) => operation.id);
+    const operationTargets = operationIds.length === 0 ? [] : await db.select().from(schema.businessOperationTargets).where(and(eq(schema.businessOperationTargets.tenantId, tenantId), inArray(schema.businessOperationTargets.operationId, operationIds))).orderBy(asc(schema.businessOperationTargets.ordinal));
+    const operationEvents = operationIds.length === 0 ? [] : await db.select().from(schema.businessOperationEvents).where(and(eq(schema.businessOperationEvents.tenantId, tenantId), inArray(schema.businessOperationEvents.operationId, operationIds))).orderBy(asc(schema.businessOperationEvents.sequence));
+    return { work, inputs, plannerAttempts, actions, approvals, workflowRuns, workflowSteps, receipts, repairs, events, queryExecutions, operations, operationTargets, operationEvents };
   });
 }
 

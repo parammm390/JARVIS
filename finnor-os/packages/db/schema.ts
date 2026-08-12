@@ -624,6 +624,103 @@ export const jobs = pgTable(
   (t) => [index("jobs_status_run_at_idx").on(t.status, t.runAt)],
 );
 
+// Upgrade 6: the minimum durable business-operation envelope for work that cannot
+// safely complete inside one approval request. Domain actions remain the authority
+// boundary; an operation is the recoverable execution child authorized by that
+// action. The first production use is customer win-back/bulk outreach.
+export const businessOperations = pgTable(
+  "business_operations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    workId: uuid("work_id").references(() => works.id),
+    domainActionId: uuid("domain_action_id").notNull().references(() => domainActions.id),
+    operationType: text("operation_type", { enum: ["customer_winback"] }).notNull(),
+    status: text("status", {
+      enum: ["awaiting_approval", "queued", "running", "completed", "completed_with_failures", "needs_human_review", "failed", "cancelled"],
+    }).notNull().default("awaiting_approval"),
+    configuration: jsonb("configuration").notNull().default({}),
+    cohortDefinition: jsonb("cohort_definition").notNull().default({}),
+    cohortFrozenAt: timestamp("cohort_frozen_at", { withTimezone: true }).notNull().defaultNow(),
+    targetCount: integer("target_count").notNull().default(0),
+    pendingCount: integer("pending_count").notNull().default(0),
+    runningCount: integer("running_count").notNull().default(0),
+    succeededCount: integer("succeeded_count").notNull().default(0),
+    failedCount: integer("failed_count").notNull().default(0),
+    skippedCount: integer("skipped_count").notNull().default(0),
+    retryCount: integer("retry_count").notNull().default(0),
+    nextBatchSequence: integer("next_batch_sequence").notNull().default(0),
+    approvedBy: text("approved_by"),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    finalOutcome: jsonb("final_outcome"),
+    failure: jsonb("failure"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("business_operations_action_idx").on(t.domainActionId),
+    index("business_operations_tenant_work_idx").on(t.tenantId, t.workId),
+    index("business_operations_tenant_status_idx").on(t.tenantId, t.status),
+  ],
+);
+
+export const businessOperationTargets = pgTable(
+  "business_operation_targets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    operationId: uuid("operation_id").notNull().references(() => businessOperations.id),
+    targetType: text("target_type", { enum: ["household"] }).notNull().default("household"),
+    targetId: uuid("target_id").notNull().references(() => households.id),
+    ordinal: integer("ordinal").notNull(),
+    status: text("status", { enum: ["pending", "running", "succeeded", "failed", "skipped", "retry"] }).notNull().default("pending"),
+    frozenSnapshot: jsonb("frozen_snapshot").notNull().default({}),
+    preparedPayload: jsonb("prepared_payload").notNull().default({}),
+    idempotencyKey: text("idempotency_key").notNull(),
+    jobKey: text("job_key"),
+    attempts: integer("attempts").notNull().default(0),
+    maxAttempts: integer("max_attempts").notNull().default(3),
+    nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).notNull().defaultNow(),
+    leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
+    failureClass: text("failure_class", { enum: ["retryable", "policy", "configuration", "invalid_input", "human_review"] }),
+    errorKind: text("error_kind", { enum: ["retryable", "terminal", "conflict", "auth", "validation", "provider_down", "needs_human", "config"] }),
+    lastError: text("last_error"),
+    providerRef: text("provider_ref"),
+    evidence: jsonb("evidence").notNull().default([]),
+    result: jsonb("result"),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("business_operation_targets_operation_target_idx").on(t.operationId, t.targetId),
+    unique("business_operation_targets_idempotency_idx").on(t.idempotencyKey),
+    index("business_operation_targets_operation_status_idx").on(t.operationId, t.status, t.nextAttemptAt),
+    index("business_operation_targets_tenant_target_idx").on(t.tenantId, t.targetId),
+  ],
+);
+
+export const businessOperationEvents = pgTable(
+  "business_operation_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    operationId: uuid("operation_id").notNull().references(() => businessOperations.id),
+    targetId: uuid("target_id").references(() => businessOperationTargets.id),
+    sequence: integer("sequence").notNull(),
+    eventType: text("event_type").notNull(),
+    payload: jsonb("payload").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("business_operation_events_operation_sequence_idx").on(t.operationId, t.sequence),
+    index("business_operation_events_tenant_operation_idx").on(t.tenantId, t.operationId, t.sequence),
+  ],
+);
+
 // Phase 4 (§4.4): durable per-provider circuit-breaker state — global per provider,
 // not tenant-scoped, since a provider's own uptime doesn't vary by tenant. See
 // migration 0026 for why this can't be in-memory (serverless invocations don't share
@@ -1336,6 +1433,7 @@ export const decisionReceipts = pgTable(
     workflowRunId: uuid("workflow_run_id").references(() => workflowRuns.id),
     workflowStepId: uuid("workflow_step_id").references(() => workflowSteps.id),
     domainActionId: uuid("domain_action_id").references(() => domainActions.id),
+    operationId: uuid("operation_id").references(() => businessOperations.id),
     workId: uuid("work_id").references(() => works.id),
     objective: text("objective").notNull(),
     evidence: jsonb("evidence").notNull().default([]),
@@ -1355,6 +1453,7 @@ export const decisionReceipts = pgTable(
     unique("decision_receipts_step_idx").on(t.workflowStepId),
     index("decision_receipts_tenant_created_idx").on(t.tenantId, t.createdAt),
     index("decision_receipts_domain_action_idx").on(t.domainActionId),
+    unique("decision_receipts_operation_idx").on(t.operationId),
   ],
 );
 

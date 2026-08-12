@@ -1,11 +1,13 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { Activity, ArrowUpRight, CalendarDays, CircleAlert, CreditCard, House, MapPin, RefreshCw, Search, Wrench } from "lucide-react"
 import { JarvisApiError } from "../lib/api"
 import { useJarvisAuth } from "../lib/jarvis-auth"
-import { jarvisClient, type Household360Projection, type HouseholdResource, type WorkCaseProjection } from "@/lib/jarvis-client"
+import { type Household360Projection, type HouseholdResource, type WorkCaseProjection } from "@/lib/jarvis-client"
+import { useBusinessProjection } from "../lib/business-projections"
+import { businessProjections } from "../lib/projection-definitions"
 import { OperationalSurfaceNav, type HouseholdContext } from "../surfaces/OperationalSurfaceNav"
 import "../jarvis-theme.css"
 
@@ -138,8 +140,7 @@ function serviceEquipmentTimeline(projection: Household360Projection): Array<{ i
   const visits = projection.serviceVisits
     .flatMap((visit) => {
       const at = visit.completedAt ?? visit.scheduledAt
-      const notes = "notes" in visit && typeof visit.notes === "string" ? visit.notes : null
-      return at ? [{ id: visit.id, at, label: `${visit.completedAt ? "Service completed" : "Service scheduled"} · ${humanize(visit.type)}`, source: "service visit", ...(notes ? { detail: notes.slice(0, 140) } : {}) }] : []
+      return at ? [{ id: visit.id, at, label: `${visit.completedAt ? "Service completed" : "Service scheduled"} · ${humanize(visit.type)}`, source: "service visit", detail: visit.notes?.slice(0, 140) }] : []
     })
   const events = projection.timeline.map((event) => ({ id: event.entityId, at: event.occurredAt, label: humanize(event.eventType), source: event.entityType }))
   return [...equipmentRows, ...visits, ...events].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime()).slice(0, 20)
@@ -154,43 +155,27 @@ function callOutcome(call: Household360Projection["calls"][number]): string {
 
 export default function Household360Surface() {
   const { session, loading: authLoading } = useJarvisAuth()
-  const [rows, setRows] = useState<HouseholdResource[]>([])
-  const [workCases, setWorkCases] = useState<WorkCaseProjection[] | null>(null)
-  const [source, setSource] = useState<SourceState>("loading")
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [projections, setProjections] = useState<Record<string, Household360Projection>>({})
-  const [loadingDetail, setLoadingDetail] = useState(false)
-  const [detailError, setDetailError] = useState<string | null>(null)
-  const [listError, setListError] = useState<string | null>(null)
   const [search, setSearch] = useState("")
+  const householdIndex = useBusinessProjection(businessProjections.households(), { enabled: Boolean(session) })
+  const workProjection = useBusinessProjection(businessProjections.workCases(), { enabled: Boolean(session) })
+  const detailProjection = useBusinessProjection(businessProjections.household360(selectedId ?? "unselected"), { enabled: Boolean(session && selectedId) })
+  const rows = useMemo<HouseholdResource[]>(() => householdIndex.data ?? [], [householdIndex.data])
+  const workCases: WorkCaseProjection[] | null = workProjection.data
+  const source: SourceState = authLoading || (session && householdIndex.data === null && householdIndex.status !== "error")
+    ? "loading"
+    : !session || (householdIndex.error instanceof JarvisApiError && householdIndex.error.status === 401)
+      ? "denied"
+      : householdIndex.error && householdIndex.data === null
+        ? "unavailable"
+        : "live"
+  const listError = source === "denied" ? "Sign in to inspect the tenant Household 360." : source === "unavailable" ? errorCopy(householdIndex.error) : null
+  const loadingDetail = Boolean(selectedId && detailProjection.data === null && detailProjection.status !== "error")
+  const detailError = detailProjection.error ? errorCopy(detailProjection.error) : null
 
-  const loadIndex = useCallback(async () => {
-    if (!session) {
-      setSource(authLoading ? "loading" : "denied")
-      setListError(authLoading ? null : "Sign in to inspect the tenant Household 360.")
-      setRows([])
-      setWorkCases(null)
-      return
-    }
-    setSource("loading")
-    setListError(null)
-    try {
-      const [householdResult, workResult] = await Promise.allSettled([jarvisClient.households(), jarvisClient.workCases()])
-      if (householdResult.status === "rejected") throw householdResult.reason
-      setRows(householdResult.value.rows)
-      setSource("live")
-      setWorkCases(workResult.status === "fulfilled" ? workResult.value.data : null)
-    } catch (error) {
-      setSource(error instanceof JarvisApiError && error.status === 401 ? "denied" : "unavailable")
-      setListError(errorCopy(error))
-      setRows([])
-      setWorkCases(null)
-    }
-  }, [authLoading, session])
-
-  useEffect(() => {
-    void loadIndex()
-  }, [loadIndex])
+  const loadIndex = () => {
+    void Promise.allSettled([householdIndex.refresh(), workProjection.refresh()])
+  }
 
   useEffect(() => {
     const requestedId = new URLSearchParams(window.location.search).get("householdId")
@@ -204,27 +189,8 @@ export default function Household360Surface() {
     })
   }, [rows])
 
-  useEffect(() => {
-    if (!selectedId) return
-    let active = true
-    setLoadingDetail(true)
-    setDetailError(null)
-    jarvisClient.household360(selectedId)
-      .then((result) => {
-        if (!active) return
-        setProjections((current) => ({ ...current, [selectedId]: result.data }))
-      })
-      .catch((error) => {
-        if (active) setDetailError(errorCopy(error))
-      })
-      .finally(() => {
-        if (active) setLoadingDetail(false)
-      })
-    return () => { active = false }
-  }, [selectedId])
-
   const selectedRow = rows.find((row) => row.id === selectedId) ?? null
-  const selectedProjection = selectedId ? projections[selectedId] ?? null : null
+  const selectedProjection = selectedId ? detailProjection.data : null
   const context = selectedRow ? rowContext(selectedRow, selectedProjection) : undefined
   const selectedSummary = selectedProjection ? summarizeHousehold(selectedProjection, workCases) : null
   const indexRows = useMemo(() => {

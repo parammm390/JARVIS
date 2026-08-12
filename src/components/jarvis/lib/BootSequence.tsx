@@ -7,7 +7,8 @@
 import { useEffect, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { JarvisOrb } from "../panels/JarvisOrb"
-import { jarvisGet } from "./api"
+import { useBusinessProjectionClient } from "./business-projections"
+import { businessProjections } from "./projection-definitions"
 import { sfx } from "../sound"
 
 type LineState = "pending" | "settling" | "online" | "standalone"
@@ -29,6 +30,7 @@ const SESSION_KEY = "jarvis_boot_shown"
 const HARD_CAP_MS = 2500
 
 export function BootSequence({ onDone }: { onDone: () => void }) {
+  const projections = useBusinessProjectionClient()
   const [lines, setLines] = useState<Line[]>(INITIAL_LINES)
   const [released, setReleased] = useState(false)
 
@@ -41,10 +43,10 @@ export function BootSequence({ onDone }: { onDone: () => void }) {
     }
     setLines((ls) => ls.map((l) => ({ ...l, state: "settling" })))
 
-    jarvisGet("health").then(() => settle("core", true), () => settle("core", false))
-    jarvisGet("read-models/pipeline-health").then(() => settle("models", true), () => settle("models", false))
-    jarvisGet("events").then(() => settle("events", true), () => settle("events", false))
-    jarvisGet("actions/pending", { filter: "pending" }).then(() => settle("gate", true), () => settle("gate", false))
+    projections.fetch(businessProjections.health()).then(() => settle("core", true), () => settle("core", false))
+    projections.fetch(businessProjections.pipelineHealth()).then(() => settle("models", true), () => settle("models", false))
+    projections.fetch(businessProjections.events()).then(() => settle("events", true), () => settle("events", false))
+    projections.fetch(businessProjections.pendingActions("pending")).then(() => settle("gate", true), () => settle("gate", false))
     // Voice configuration is known at build time; loading the browser SDK itself is
     // intentionally deferred until the user starts a voice session (D9 perf).
     settle("voice", true)
@@ -59,7 +61,7 @@ export function BootSequence({ onDone }: { onDone: () => void }) {
       cancelled = true
       clearTimeout(cap)
     }
-  }, [])
+  }, [projections])
 
   useEffect(() => {
     if (lines.every((l) => l.state === "online" || l.state === "standalone")) {

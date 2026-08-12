@@ -8,6 +8,8 @@
 import {
   actionLog,
   businessEvents,
+  businessOperations,
+  businessOperationTargets,
   calls,
   commands,
   conversations,
@@ -158,6 +160,23 @@ export interface WorkReceipt {
   finalizedAt: string | null;
 }
 
+export interface WorkOperation {
+  id: string;
+  operationType: string;
+  status: string;
+  configuration: unknown;
+  cohortDefinition: unknown;
+  cohortFrozenAt: string;
+  targetCount: number;
+  counts: { pending: number; running: number; succeeded: number; failed: number; skipped: number; retry: number };
+  finalOutcome: unknown;
+  failure: unknown;
+  approvedBy: string | null;
+  approvedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface WorkBusinessEvent {
   id: string;
   entityType: string;
@@ -193,6 +212,7 @@ export interface WorkCaseProjection {
   approvals: WorkApproval[];
   workflows: WorkWorkflow[];
   receipts: WorkReceipt[];
+  operations?: WorkOperation[];
   linkedEntities: WorkEntityLink[];
   businessEvents: WorkBusinessEvent[];
   calls: WorkCall[];
@@ -583,6 +603,8 @@ export async function workCases(tenantId: string): Promise<WorkCaseProjection[]>
     const runRows = await db.select().from(workflowRuns).where(eq(workflowRuns.tenantId, tenantId)).orderBy(desc(workflowRuns.updatedAt));
     const stepRows = await db.select().from(workflowSteps).where(eq(workflowSteps.tenantId, tenantId)).orderBy(asc(workflowSteps.sequence));
     const receiptRows = await db.select().from(decisionReceipts).where(eq(decisionReceipts.tenantId, tenantId)).orderBy(desc(decisionReceipts.createdAt));
+    const operationRows = await db.select().from(businessOperations).where(eq(businessOperations.tenantId, tenantId)).orderBy(desc(businessOperations.updatedAt));
+    const operationTargetRows = await db.select().from(businessOperationTargets).where(eq(businessOperationTargets.tenantId, tenantId)).orderBy(asc(businessOperationTargets.ordinal));
     const logRows = await db.select().from(actionLog).where(eq(actionLog.tenantId, tenantId)).orderBy(desc(actionLog.timestamp));
     const voiceSessionRows = await db.select().from(voiceSessions).where(eq(voiceSessions.tenantId, tenantId));
     const voiceTurnRows = await db.select().from(voiceTurns).where(eq(voiceTurns.tenantId, tenantId)).orderBy(asc(voiceTurns.sequence));
@@ -612,6 +634,13 @@ export async function workCases(tenantId: string): Promise<WorkCaseProjection[]>
       const target = linksForAction(action.id);
       collectEntityLinks(action.payload, `domain_actions(${action.id}).payload`, target.links);
       target.links.forEach((link) => target.provenance.add(link.via));
+    }
+    for (const target of operationTargetRows) {
+      const operation = operationRows.find((row) => row.id === target.operationId);
+      if (!operation) continue;
+      const actionTarget = linksForAction(operation.domainActionId);
+      addLink(actionTarget.links, "household", target.targetId, `business_operation_targets(${target.id}).target_id`);
+      actionTarget.provenance.add(`business_operation_targets(${target.id}).target_id`);
     }
     for (const log of logRows) {
       const target = linksForAction(log.domainActionId);
@@ -835,6 +864,31 @@ export async function workCases(tenantId: string): Promise<WorkCaseProjection[]>
         logRows.filter((log) => log.domainActionId === action.id).map((log) => ({ step: log.step, input: log.input, output: log.output, timestamp: log.timestamp })),
       ));
       const receipts = [...(receiptByCase.get(target) ?? [])].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).map(toWorkReceipt);
+      const operations = operationRows
+        .filter((operation) => operation.workId === durableWork?.id || target.actionIds.has(operation.domainActionId))
+        .map((operation) => ({
+          id: operation.id,
+          operationType: operation.operationType,
+          status: operation.status,
+          configuration: operation.configuration,
+          cohortDefinition: operation.cohortDefinition,
+          cohortFrozenAt: operation.cohortFrozenAt.toISOString(),
+          targetCount: operation.targetCount,
+          counts: {
+            pending: operation.pendingCount,
+            running: operation.runningCount,
+            succeeded: operation.succeededCount,
+            failed: operation.failedCount,
+            skipped: operation.skippedCount,
+            retry: operation.retryCount,
+          },
+          finalOutcome: operation.finalOutcome,
+          failure: operation.failure,
+          approvedBy: operation.approvedBy,
+          approvedAt: iso(operation.approvedAt),
+          createdAt: operation.createdAt.toISOString(),
+          updatedAt: operation.updatedAt.toISOString(),
+        }));
       const linkedEntities = [...target.links.values()].sort((a, b) => a.entityType.localeCompare(b.entityType) || a.entityId.localeCompare(b.entityId));
       const businessEventList = linkedEntities.flatMap((link) => eventsByEntity.get(`${link.entityType}:${link.entityId}`) ?? []).map((event) => ({ id: event.id, entityType: event.entityType, entityId: event.entityId, eventType: event.eventType, occurredAt: event.occurredAt.toISOString(), source: event.source }));
       const callsForCase = callRows
@@ -885,6 +939,7 @@ export async function workCases(tenantId: string): Promise<WorkCaseProjection[]>
           ...[...target.actionIds].map((id) => actionById.get(id)?.createdAt),
           ...[...target.runIds].map((id) => runById.get(id)?.updatedAt),
           ...receipts.map((receipt) => new Date(receipt.finalizedAt ?? receipt.createdAt)),
+          ...operations.map((operation) => new Date(operation.updatedAt)),
         ], fallbackDate),
         source: sourceForCase(instruction, actions, sourceCalls, target.root),
         instruction,
@@ -892,6 +947,7 @@ export async function workCases(tenantId: string): Promise<WorkCaseProjection[]>
         approvals,
         workflows,
         receipts,
+        operations,
         linkedEntities,
         businessEvents: businessEventList.sort((a, b) => b.occurredAt.localeCompare(a.occurredAt)),
         calls: sourceCalls,

@@ -8,10 +8,9 @@ import { requireContext, errorResponse } from "../../../lib/auth";
 export async function GET(req: Request): Promise<Response> {
   try {
     const ctx = await requireContext(req);
-    const [outbox, comms] = await withTenant(ctx.tenantId, async (db) =>
-      Promise.all([
-        db.select().from(sandboxOutbox).orderBy(desc(sandboxOutbox.createdAt)).limit(100),
-        db
+    const { outbox, comms } = await withTenant(ctx.tenantId, async (db) => {
+      const outbox = await db.select().from(sandboxOutbox).orderBy(desc(sandboxOutbox.createdAt)).limit(100);
+      const comms = await db
           .select({
             id: communicationsLog.id,
             channel: communicationsLog.channel,
@@ -24,9 +23,9 @@ export async function GET(req: Request): Promise<Response> {
           .from(communicationsLog)
           .innerJoin(households, eq(communicationsLog.householdId, households.id))
           .orderBy(desc(communicationsLog.timestamp))
-          .limit(100),
-      ]),
-    );
+          .limit(100);
+      return { outbox, comms };
+    });
     return Response.json({ outbox, communications: comms });
   } catch (err) {
     return errorResponse(err);

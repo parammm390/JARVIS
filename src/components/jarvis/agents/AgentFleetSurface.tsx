@@ -1,12 +1,13 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import Link from "next/link"
 import { Activity, ArrowUpRight, Bot, CircleDot, CreditCard, Droplets, Handshake, MapPinned, Megaphone, PackageCheck, Phone, Radar, ShieldCheck, UsersRound, Waves, X } from "lucide-react"
-import { jarvisClient, type WorkCaseProjection } from "@/lib/jarvis-client"
+import type { WorkCaseProjection } from "@/lib/jarvis-client"
 import type { IntegrationsStatus } from "../lib/data-core"
-import { JarvisApiError } from "../lib/api"
 import { useJarvisAuth } from "../lib/jarvis-auth"
+import { useBusinessProjection } from "../lib/business-projections"
+import { businessProjections } from "../lib/projection-definitions"
 import { OperationalSurfaceNav } from "../surfaces/OperationalSurfaceNav"
 import { AGENT_FLEET, CAPABILITY_DOMAINS, REGISTERED_BACKEND_ACTION_COUNT, assistantStatusCopy, capabilityDomainDefinition, groupCapabilityWork, projectAgentActivity, projectCapabilityDomainActivity, providerStatusCopy, type AgentKey, type CapabilityDomainKey } from "./agent-fleet"
 import "../jarvis-theme.css"
@@ -81,11 +82,6 @@ function DomainGlyph({ kind }: { kind: (typeof CAPABILITY_DOMAINS)[number]["glyp
   )
 }
 
-function sourceStatus(error: unknown): "loading" | "live" | "unavailable" {
-  if (error instanceof JarvisApiError && error.status === 401) return "unavailable"
-  return "unavailable"
-}
-
 function FleetLane({
   eyebrow,
   title,
@@ -114,58 +110,13 @@ function FleetLane({
 export default function AgentFleetSurface() {
   const { session } = useJarvisAuth()
   const [selectedKey, setSelectedKey] = useState<CapabilityDomainKey>("command-authority")
-  const [integrations, setIntegrations] = useState<IntegrationsStatus | null>(null)
-  const [providerLoadState, setProviderLoadState] = useState<"idle" | "loading" | "live" | "unavailable">("idle")
-  const [workCases, setWorkCases] = useState<WorkCaseProjection[]>([])
-  const [workLoadState, setWorkLoadState] = useState<"idle" | "loading" | "live" | "unavailable">("idle")
   const [inspector, setInspector] = useState<InspectorTarget | null>(null)
-
-  useEffect(() => {
-    if (!session) {
-      setIntegrations(null)
-      setProviderLoadState("idle")
-      return
-    }
-    let active = true
-    setProviderLoadState("loading")
-    void jarvisClient.integrationsStatus()
-      .then((result) => {
-        if (!active) return
-        setIntegrations(result)
-        setProviderLoadState("live")
-      })
-      .catch((error: unknown) => {
-        if (!active) return
-        setProviderLoadState(sourceStatus(error))
-      })
-    return () => {
-      active = false
-    }
-  }, [session])
-
-  useEffect(() => {
-    if (!session) {
-      setWorkCases([])
-      setWorkLoadState("idle")
-      return
-    }
-    let active = true
-    setWorkLoadState("loading")
-    void jarvisClient.workCases()
-      .then((result) => {
-        if (!active) return
-        setWorkCases(result.data)
-        setWorkLoadState("live")
-      })
-      .catch(() => {
-        if (!active) return
-        setWorkCases([])
-        setWorkLoadState("unavailable")
-      })
-    return () => {
-      active = false
-    }
-  }, [session])
+  const integrationsProjection = useBusinessProjection(businessProjections.integrationsStatus(), { enabled: Boolean(session) })
+  const workProjection = useBusinessProjection(businessProjections.workCases(), { enabled: Boolean(session) })
+  const integrations: IntegrationsStatus | null = integrationsProjection.data
+  const workCases = useMemo<WorkCaseProjection[]>(() => workProjection.data ?? [], [workProjection.data])
+  const providerLoadState = !session ? "idle" : integrationsProjection.data ? "live" : integrationsProjection.status === "error" ? "unavailable" : "loading"
+  const workLoadState = !session ? "idle" : workProjection.data ? "live" : workProjection.status === "error" ? "unavailable" : "loading"
 
   const selected = useMemo(() => capabilityDomainDefinition(selectedKey), [selectedKey])
   const activityByDomain = useMemo(() => new Map(CAPABILITY_DOMAINS.map((domain) => [domain.key, projectCapabilityDomainActivity(workCases, domain.key)] as const)), [workCases])

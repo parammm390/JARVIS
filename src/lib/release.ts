@@ -48,4 +48,3 @@ export function getReleaseMetadata(service: string): ReleaseMetadata {
       source !== "unknown",
   }
 }
-

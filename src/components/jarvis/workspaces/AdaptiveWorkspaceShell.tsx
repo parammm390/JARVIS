@@ -28,6 +28,8 @@ import { ActionRenderer } from "../ui/renderers/ActionRenderer"
 import { ApprovalCockpit } from "../bridge/ApprovalCockpit"
 import { ThreadClarify, ThreadExecution, ThreadReceipt } from "../bridge/ThreadBlocks"
 import { projectThreadWorkspace } from "./projector"
+import { useBusinessProjection } from "../lib/business-projections"
+import { businessProjections } from "../lib/projection-definitions"
 import type {
   AgentActivityResult,
   BusinessStateResult,
@@ -39,6 +41,7 @@ import type {
   ScheduleRangeResult,
   WorkListResult,
   WorkspaceProjection,
+  OperationalQueryExecution,
 } from "./contracts"
 
 gsap.registerPlugin(useGSAP)
@@ -53,6 +56,25 @@ const NAV = [
   { href: "/jarvis/money", label: "Money", icon: CircleDollarSign },
   { href: "/jarvis/agents", label: "Agents", icon: Workflow },
 ] as const
+
+const EMPTY_QUERY_EXECUTION: OperationalQueryExecution = {
+  request: { intent: "business_state" },
+  result: {
+    kind: "operational_query_result",
+    version: 1,
+    intent: "business_state",
+    status: "not_found",
+    source: { kind: "canonical_postgres", tables: [] },
+    asOf: "1970-01-01T00:00:00.000Z",
+    count: 0,
+    truncated: false,
+    page: { limit: 0, returned: 0, totalCount: null, totalCountExact: false, hasMore: false, nextCursor: null, truncated: false },
+    data: {},
+    pipeline: {},
+    operations: {},
+  },
+  metadata: { queryId: "unselected", source: "none", durationMs: 0, startedAt: "1970-01-01T00:00:00.000Z", completedAt: "1970-01-01T00:00:00.000Z" },
+}
 
 function humanize(value: string): string {
   return value.replaceAll("_", " ").replace(/\b\w/g, (character) => character.toUpperCase())
@@ -421,7 +443,21 @@ export function AdaptiveWorkspaceShell({
   onRetry: () => void | Promise<void>
 }) {
   const shellRef = useRef<HTMLDivElement | null>(null)
-  const projection = useMemo(() => thread ? projectThreadWorkspace(thread) : null, [thread])
+  const projectedThread = useMemo(() => thread ? projectThreadWorkspace(thread) : null, [thread])
+  const initialQuery = projectedThread?.query ?? null
+  const liveQuery = useBusinessProjection(businessProjections.operationalQuery(initialQuery ?? EMPTY_QUERY_EXECUTION), {
+    enabled: initialQuery !== null,
+    ...(initialQuery ? { initialData: initialQuery, initialUpdatedAt: new Date(initialQuery.metadata.completedAt).getTime() } : {}),
+  })
+  const projection = useMemo(() => {
+    if (!projectedThread || !projectedThread.query || !liveQuery.data) return projectedThread
+    return {
+      ...projectedThread,
+      query: liveQuery.data,
+      answer: projectedThread.answer ? { ...projectedThread.answer, query: liveQuery.data } : projectedThread.answer,
+      updatedAtMs: liveQuery.updatedAt ?? projectedThread.updatedAtMs,
+    }
+  }, [liveQuery.data, liveQuery.updatedAt, projectedThread])
   const [inspector, setInspector] = useState<InspectorItem[]>([])
 
   useEffect(() => {

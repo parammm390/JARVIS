@@ -12,7 +12,7 @@ const APPS = {
   api: {
     project: "api",
     projectId: "prj_BoMZ2AXdLIJQXAAe6RqDGBveyq3n",
-    directory: "finnor-os",
+    directory: "finnor-os/apps/api",
   },
 }
 
@@ -25,8 +25,6 @@ if (!app) {
   console.error("Usage: node scripts/release/deploy-production.mjs <frontend|api> [--output-file path]")
   process.exit(2)
 }
-
-const repoRoot = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim()
 
 function git(args) {
   return execFileSync("git", args, { cwd: repoRoot, encoding: "utf8" }).trim()
@@ -47,6 +45,7 @@ function run(command, args, cwd, env) {
   return result.stdout || ""
 }
 
+const repoRoot = git(["rev-parse", "--show-toplevel"])
 const commitSha = git(["rev-parse", "HEAD"]).toLowerCase()
 const dirty = git(["status", "--porcelain=v1", "--untracked-files=all"])
 const remoteMain = git(["ls-remote", "origin", "refs/heads/main"]).split(/\s+/)[0]
@@ -65,6 +64,8 @@ const appDir = resolve(repoRoot, app.directory)
 const tokenArgs = process.env.VERCEL_TOKEN ? ["--token", process.env.VERCEL_TOKEN] : []
 const env = {
   ...process.env,
+  VERCEL_ORG_ID: TEAM_ID,
+  VERCEL_PROJECT_ID: app.projectId,
   FINNOR_COMMIT_SHA: commitSha,
   FINNOR_BUILD_ID: buildId,
   FINNOR_VERSION: version,

@@ -308,6 +308,22 @@ export interface WorkReceipt {
   createdAt: string
   finalizedAt: string | null
 }
+export interface WorkOperation {
+  id: string
+  operationType: string
+  status: string
+  configuration: unknown
+  cohortDefinition: unknown
+  cohortFrozenAt: string
+  targetCount: number
+  counts: { pending: number; running: number; succeeded: number; failed: number; skipped: number; retry: number }
+  finalOutcome: unknown
+  failure: unknown
+  approvedBy: string | null
+  approvedAt: string | null
+  createdAt: string
+  updatedAt: string
+}
 export interface WorkInstruction {
   id: string
   text: string
@@ -348,6 +364,7 @@ export interface WorkCaseProjection {
   approvals: WorkApproval[]
   workflows: WorkWorkflow[]
   receipts: WorkReceipt[]
+  operations?: WorkOperation[]
   linkedEntities: WorkEntityLink[]
   businessEvents: WorkBusinessEvent[]
   calls: WorkCall[]

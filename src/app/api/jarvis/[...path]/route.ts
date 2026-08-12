@@ -94,6 +94,7 @@ function isAllowedGet(segments: string[]): boolean {
   if (segments.length === 3 && a === "instructions" && c === "events") return true
   if (segments.length === 1 && a === "works") return true
   if (segments.length === 2 && a === "works") return true
+  if (segments.length === 2 && a === "operations") return true
   return false
 }
 
@@ -105,6 +106,7 @@ function isAllowedPost(segments: string[]): boolean {
   if (segments.length === 3 && a === "actions" && (c === "confirm" || c === "reject" || c === "escalate" || c === "revert")) return true
   if (segments.length === 3 && a === "instructions" && c === "cancel") return true
   if (segments.length === 3 && a === "works" && c === "retry") return true
+  if (segments.length === 3 && a === "operations" && c === "retry") return true
   // Phase 7: run controls (owner-only server-side via canApprove) and DLQ replay/
   // discard (owner-only) both need the frontend to reach them at all first.
   if (segments.length === 4 && a === "workflows" && b === "runs" && RUN_CONTROL_VERBS.has(d!)) return true

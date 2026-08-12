@@ -7,7 +7,7 @@ import { z } from "zod";
 import pg from "pg";
 import { migrate } from "../../packages/db/migrate";
 import { seed, SEED_TENANT_ID } from "../../packages/db/seed";
-import { withTenant, closePool, domainActions, domainPolicies, households, proposals, actionLog } from "@finnor/db";
+import { withTenant, closePool, domainActions, domainPolicies, households, proposals, actionLog, businessOperations, jobs } from "@finnor/db";
 import { FinnorOrchestrator, parseSpokenDecision } from "@finnor/orchestration";
 import { findConsentedTargets } from "../../packages/domain-plugins/bulk-notify/index";
 import { ToolRegistry } from "@finnor/tools";
@@ -107,7 +107,7 @@ describe.skipIf(!available)("consent filter on bulk_notify (TCPA)", () => {
     expect(row!.summary).toMatch(/sample/i);
   });
 
-  it("execute sends only to the consented list", async () => {
+  it("approval atomically authorizes durable worker execution without synchronous sends", async () => {
     const { reg, calls } = mockTools();
     const orchestrator = new FinnorOrchestrator({ tools: reg });
     const action = await createDraftAction("bulk_notify_existing_customers", {
@@ -120,7 +120,13 @@ describe.skipIf(!available)("consent filter on bulk_notify (TCPA)", () => {
     expect(result.status).toBe("success");
     const smsSends = calls.filter((c) => c.tool === "ghl_send_sms");
     const consented = await findConsentedTargets(SEED_TENANT_ID);
-    expect(smsSends.length).toBe(consented.length);
+    expect(smsSends).toHaveLength(0);
+    expect(result.output.durable).toBe(true);
+    const [operation] = await withTenant(SEED_TENANT_ID, (db) => db.select().from(businessOperations).where(eq(businessOperations.domainActionId, action.id)));
+    expect(operation?.status).toBe("queued");
+    expect(operation?.targetCount).toBe(consented.length);
+    const queued = await withTenant(SEED_TENANT_ID, (db) => db.select().from(jobs).where(eq(jobs.idempotencyKey, `business-operation:${operation!.id}:dispatch:authorized`)));
+    expect(queued).toHaveLength(1);
   });
 });
 

@@ -6,6 +6,7 @@ import type {
   DraftAction,
   ExecutionResult,
   DomainPolicy,
+  DomainAction,
 } from "@finnor/shared-types";
 import type { ToolRegistry } from "@finnor/tools";
 
@@ -21,6 +22,11 @@ export interface DomainEnginePlugin {
   // Async allowed: batch plugins read tenant data (read-only!) to build the spoken
   // summary. Side effects still belong exclusively in execute().
   draft(actionType: string, payload: unknown, policy: DomainPolicy): DraftAction | Promise<DraftAction>;
+  /** Upgrade 6: optional proposal-time hook for the small set of actions whose
+   * approved work must outlive the approval request. It freezes an inspectable
+   * operation/cohort before the gate and returns the operation id in the draft.
+   * Ordinary actions never implement this and retain their existing path. */
+  prepareDurableOperation?(draft: DraftAction, action: DomainAction, policy: DomainPolicy): Promise<DraftAction>;
   /** Optional domain-specific no-write forecast. Registry fallback is a labeled
    * schema-level prediction, so every plugin remains simulatable. */
   simulate?(actionType: string, payload: unknown, policy: DomainPolicy): import("@finnor/shared-types").SimulationResult | Promise<import("@finnor/shared-types").SimulationResult>;

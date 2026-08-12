@@ -18,7 +18,7 @@ import { useState } from "react"
 import dynamic from "next/dynamic"
 import Link from "next/link"
 import "./jarvis-theme.css"
-import { JarvisAuthProvider, useJarvisAuth } from "./lib/jarvis-auth"
+import { useJarvisAuth } from "./lib/jarvis-auth"
 import { useLiveQuery, type LiveQueryConnection } from "@/lib/jarvis/useLiveQuery"
 import { FlowCatalogSection } from "./ui/motion/FlowCatalog"
 import { FlowCatalogAmbientSection } from "./ui/motion/FlowCatalogAmbient"
@@ -242,9 +242,5 @@ function StageContent() {
 }
 
 export function Stage() {
-  return (
-    <JarvisAuthProvider>
-      <StageContent />
-    </JarvisAuthProvider>
-  )
+  return <StageContent />
 }

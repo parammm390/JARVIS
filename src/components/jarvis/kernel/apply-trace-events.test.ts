@@ -206,6 +206,18 @@ describe("kernel/store — applyTraceEvents (P3.T7)", () => {
     expect(t.terminalAtMs).not.toBeNull()
   })
 
+  it("turns a planner deadline into a terminal, retryable failure without exposing the provider error", () => {
+    const t = applyTraceEvents(
+      planningThread(),
+      [ev(4, "failed", { error: "Planner LLM call failed: LLM call deadline exceeded" })],
+      NO_DECISIONS,
+    )
+    expect(t.machine.instructionState).toBe("failed")
+    expect(t.submitError).toBe("Planning took too long. Nothing was executed; you can retry safely.")
+    expect(t.submitError).not.toContain("LLM")
+    expect(t.terminalAtMs).not.toBeNull()
+  })
+
   // jarvis-v3 P5.T5 (V8) — a real live test this session
   // (e2e/jarvis-p5-followup-real.spec.ts) found the backend re-asking the
   // exact same clarifying question for a real follow-up instruction, never

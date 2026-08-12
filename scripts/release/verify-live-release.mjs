@@ -32,4 +32,3 @@ if (Object.values(checks).some((value) => !value)) {
 }
 
 console.log(JSON.stringify({ ok: true, url, checks, release: body }, null, 2))
-

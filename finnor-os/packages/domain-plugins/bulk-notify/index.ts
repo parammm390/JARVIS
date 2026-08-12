@@ -15,15 +15,16 @@
 // this is what gives it something real to say instead.
 
 import type { DomainEnginePlugin } from "../shared/plugin-interface";
-import type { DraftAction, ExecutionResult, ValidationResult, DomainPolicy } from "@finnor/shared-types";
+import type { DraftAction, ExecutionResult, ValidationResult, DomainPolicy, DomainAction } from "@finnor/shared-types";
 import type { ToolRegistry } from "@finnor/tools";
 import { agentKeyForPersona, personaAssistantId, reserveBudget, releaseBudget, DAILY_VAPI_CALL_CAP } from "@finnor/tools";
-import { withTenant, households, communicationsLog, serviceVisits, equipment, tenants } from "@finnor/db";
+import { withTenant, households, communicationsLog, serviceVisits, equipment, tenants, createBusinessOperation } from "@finnor/db";
 import { invoices, maintenanceAgreements } from "@finnor/db";
 import { churnRisk } from "@finnor/read-models";
 import { eq, sql, desc, and, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { nextCallingWindow } from "../shared/time";
+export { nextCallingWindow } from "../shared/time";
 
 const ACTION = "bulk_notify_existing_customers";
 
@@ -53,6 +54,10 @@ export const BulkNotifyPayloadSchema = z
     // (typed or spoken), never invented downstream. Omit for a non-discount check-in.
     discountPercent: opt(z.number().min(0).max(100)),
   })
+  // Executor-owned frozen-cohort metadata is preserved on the second parse. User
+  // input is still validated field-by-field above; these extra fields are created by
+  // the trusted draft/operation path, never consumed as authority on their own.
+  .passthrough()
   .refine((p) => Boolean(p.offerScript) || p.discountPercent !== undefined, {
     message: "Provide either offerScript or discountPercent — a campaign needs real content, not a blank call.",
   })
@@ -295,7 +300,6 @@ export async function findConsentedTargets(tenantId: string, window?: Inactivity
           riskFactors: risk.factors,
         };
       })
-      .filter((t) => t.phone.length > 0)
       .sort((a, b) => (b.riskScore ?? 0) - (a.riskScore ?? 0) || a.label.localeCompare(b.label));
   });
 }
@@ -323,7 +327,7 @@ const WINBACK_ANALYSIS_PLAN: Record<string, unknown> = {
   },
 };
 
-function campaignCustomer(
+export function campaignCustomer(
   target: ConsentedTarget,
   draft: DraftAction,
   offerScript: string | undefined,
@@ -361,6 +365,91 @@ function campaignCustomer(
         householdId: target.householdId,
       },
       analysisPlan: WINBACK_ANALYSIS_PLAN,
+    },
+  };
+}
+
+async function prepareWinbackOperation(draft: DraftAction, action: DomainAction, policy: DomainPolicy): Promise<DraftAction> {
+  const targetIds = Array.isArray(draft.payload.targetHouseholdIds)
+    ? draft.payload.targetHouseholdIds.filter((id): id is string => typeof id === "string")
+    : [];
+  // draft() passes its exact evaluated cohort through this in-memory-only field so
+  // no consent/contact change between the two steps can silently alter who appears
+  // in the approval. It is stripped before the domain action is persisted. The
+  // fallback exists only for callers that construct a DraftAction themselves.
+  const preparationTargets = Array.isArray(draft.payload._operationPreparationTargets)
+    ? (draft.payload._operationPreparationTargets as ConsentedTarget[])
+    : await findConsentedTargets(action.tenantId);
+  const byId = new Map(preparationTargets.map((target) => [target.householdId, target]));
+  const targets = targetIds.map((id) => byId.get(id)).filter((target): target is ConsentedTarget => Boolean(target));
+  const channel = String(draft.payload.channel ?? "sms") === "call" ? "call" : "sms";
+  const offerScript = typeof draft.payload.offerScript === "string" ? draft.payload.offerScript : undefined;
+  const discountPercent = typeof draft.payload.discountPercent === "number" ? draft.payload.discountPercent : undefined;
+  const voicePersona = typeof draft.payload.voicePersona === "string" ? draft.payload.voicePersona : "winback";
+  const agentKey = agentKeyForPersona(voicePersona);
+  const operation = await createBusinessOperation({
+    tenantId: action.tenantId,
+    workId: action.workId ?? null,
+    domainActionId: action.id,
+    operationType: "customer_winback",
+    configuration: {
+      channel,
+      offerScript: offerScript ?? null,
+      discountPercent: discountPercent ?? null,
+      voicePersona,
+      agentKey: agentKey ?? null,
+      dailyCallCap: channel === "call" ? DAILY_VAPI_CALL_CAP : null,
+    },
+    cohortDefinition: {
+      kind: "inactive_customers_with_marketing_consent",
+      minMonthsInactive: draft.payload.minMonthsInactive ?? null,
+      maxMonthsInactive: draft.payload.maxMonthsInactive ?? null,
+      minDaysInactive: draft.payload.minDaysInactive ?? null,
+      maxDaysInactive: draft.payload.maxDaysInactive ?? null,
+      frozenTargetIds: targetIds,
+    },
+    targets: targets.map((target) => ({
+      targetId: target.householdId,
+      frozenSnapshot: {
+        householdId: target.householdId,
+        label: target.label,
+        phone: target.phone,
+        equipmentSummary: target.equipmentSummary ?? null,
+        equipmentModel: target.equipmentModel ?? null,
+        installedAt: target.installedAt ?? null,
+        lastInteractionAt: target.lastInteractionAt ?? null,
+        daysInactive: target.daysInactive ?? null,
+        dealerName: target.dealerName ?? null,
+        dealerTimezone: target.dealerTimezone ?? null,
+        riskScore: target.riskScore ?? null,
+        riskFactors: target.riskFactors ?? [],
+      },
+      preparedPayload: channel === "call"
+        ? {
+            channel,
+            customer: campaignCustomer(target, draft, offerScript, discountPercent, agentKey),
+            opening: composeCallOpening(target, offerScript),
+          }
+        : {
+            channel,
+            phone: target.phone,
+            label: target.label,
+            message: composeMessage(target, offerScript, discountPercent),
+          },
+    })),
+    summary: draft.summary,
+    policyApplied: { id: policy.id, version: policy.version },
+    correlationId: action.correlationId ?? null,
+  });
+  const { _operationPreparationTargets: _discardedPreparationTargets, ...persistedPayload } = draft.payload;
+  void _discardedPreparationTargets;
+  return {
+    ...draft,
+    payload: {
+      ...persistedPayload,
+      operationId: operation.id,
+      durableOperation: true,
+      frozenTargetCount: targets.length,
     },
   };
 }
@@ -419,6 +508,9 @@ export const bulkNotifyPlugin: DomainEnginePlugin = {
         ...p,
         tenantId: policy.tenantId,
         targetHouseholdIds: targets.map((target) => target.householdId),
+        // Executor-only bridge to prepareDurableOperation. This exact evaluated
+        // cohort is removed before the draft is written to domain_actions.
+        _operationPreparationTargets: targets,
         approvedTargetCount: targets.length,
         preview: targets.slice(0, 3).map((target) => ({
           householdId: target.householdId,
@@ -456,6 +548,8 @@ export const bulkNotifyPlugin: DomainEnginePlugin = {
       },
     };
   },
+
+  prepareDurableOperation: prepareWinbackOperation,
 
   async execute(draft: DraftAction, tools: ToolRegistry): Promise<ExecutionResult> {
     const offerScript = draft.payload.offerScript ? String(draft.payload.offerScript) : undefined;
