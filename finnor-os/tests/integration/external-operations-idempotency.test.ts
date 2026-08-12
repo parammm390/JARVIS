@@ -11,6 +11,7 @@
 // Postgres, not mocked.
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { randomUUID } from "node:crypto";
 import pg from "pg";
 import { z } from "zod";
 import { migrate } from "../../packages/db/migrate";
@@ -73,6 +74,32 @@ describe.skipIf(!available)("ScopedToolRegistry — external_operations idempote
     const second = await attempt2.call("spy_tool", { x: 1 });
     expect(calls).toBe(1);
     expect(second).toEqual(first);
+  });
+
+  it("preserves opaque provider IDs needed by a resumed multi-step effect while still redacting direct PII", async () => {
+    let calls = 0;
+    const contactId = randomUUID();
+    const base = new ToolRegistry();
+    base.register({
+      name: "contact_upsert_replay",
+      description: "",
+      integration: "test",
+      inputSchema: z.object({}).passthrough(),
+      async run() {
+        calls++;
+        return { contactId, phone: "+15550109999", email: "private@example.test" };
+      },
+    });
+    const actionId = await makeAction();
+    const firstRegistry = new ScopedToolRegistry(base, { tenantId: SEED_TENANT_ID, domainActionId: actionId });
+    await firstRegistry.call("contact_upsert_replay", { phone: "+15550109999" });
+
+    const resumedRegistry = new ScopedToolRegistry(base, { tenantId: SEED_TENANT_ID, domainActionId: actionId });
+    const resumed = await resumedRegistry.call("contact_upsert_replay", { phone: "+15550109999" });
+    expect(calls).toBe(1);
+    expect(resumed).toMatchObject({ ok: true, output: { contactId } });
+    expect(resumed.output.phone).toBe("[REDACTED]");
+    expect(resumed.output.email).toBe("[REDACTED]");
   });
 
   it("a fresh instance replaying an already-FAILED call actually re-runs it — reflection retries are never blocked", async () => {

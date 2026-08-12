@@ -9,7 +9,7 @@ import { migrate } from "../../packages/db/migrate";
 import { seed, SEED_TENANT_ID } from "../../packages/db/seed";
 import { closePool } from "@finnor/db";
 import { writeSemantic, querySemantic, appendEpisode, readEpisodes, DeterministicLocalEmbedder } from "@finnor/memory";
-import { withTenant, households, domainActions } from "@finnor/db";
+import { withTenant, households, domainActions, receiveWork, works } from "@finnor/db";
 
 const SUPER_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
 // Swap credentials for the RLS-subject role created by migration 0001 (local/CI only).
@@ -89,6 +89,24 @@ describe.skipIf(!available)("tenant isolation via RLS (§32.2, §32.4, §32.9)",
     expect(`${(rejected as Error).message}\n${databaseCause instanceof Error ? databaseCause.message : String(databaseCause)}`).toMatch(
       /row-level security/,
     );
+  });
+
+  it("the canonical Work root is invisible across tenants and rejects forged tenant writes", async () => {
+    const received = await receiveWork({
+      tenantId: SEED_TENANT_ID,
+      instruction: "RLS Work isolation probe",
+      channel: "console",
+    });
+    const visibleToA = await withTenant(SEED_TENANT_ID, (db) => db.select().from(works));
+    expect(visibleToA.some((work) => work.id === received.workId)).toBe(true);
+    const visibleToB = await withTenant(TENANT_B, (db) => db.select().from(works));
+    expect(visibleToB.some((work) => work.id === received.workId)).toBe(false);
+
+    await expect(withTenant(TENANT_B, (db) => db.insert(works).values({
+      tenantId: SEED_TENANT_ID,
+      initialChannel: "console",
+      initialInstruction: "forged Work",
+    }))).rejects.toThrow();
   });
 
   it("semantic memory round-trips within a tenant and never leaks across (§32.4, §32.9)", async () => {

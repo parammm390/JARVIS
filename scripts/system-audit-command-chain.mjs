@@ -30,6 +30,7 @@ const context = await browser.newContext({ viewport: { width: 1440, height: 1000
 const page = await context.newPage()
 page.setDefaultNavigationTimeout(90_000)
 const consoleErrors = []
+const requestVolume = {}
 let observedBearer = null
 page.on("console", (message) => {
   if (message.type() === "error") consoleErrors.push({ url: page.url(), message: message.text() })
@@ -38,6 +39,8 @@ page.on("request", (request) => {
   const requestUrl = new URL(request.url())
   const appOrigin = new URL(baseURL).origin
   if (requestUrl.origin !== appOrigin || !requestUrl.pathname.startsWith("/api/jarvis/")) return
+  const requestKey = `${request.method()} ${requestUrl.pathname}`
+  requestVolume[requestKey] = (requestVolume[requestKey] ?? 0) + 1
   const authorization = request.headers()["authorization"]
   if (authorization?.startsWith("Bearer ")) observedBearer = authorization
 })
@@ -48,6 +51,12 @@ await page.getByPlaceholder(/•+/i).pressSequentially(password, { delay: 5 })
 await page.getByRole("button", { name: /sign in/i }).click()
 await page.waitForURL("**/jarvis", { timeout: 30_000 })
 await page.goto(`${baseURL}/jarvis/next`, { waitUntil: "domcontentloaded" })
+
+async function projectionMetrics() {
+  return page.evaluate(() => window.__JARVIS_PROJECTION_METRICS__ ?? null)
+}
+
+const metricsBeforeOperation = await projectionMetrics()
 
 for (let attempt = 0; attempt < 40 && !observedBearer; attempt += 1) await page.waitForTimeout(250)
 let bearer = observedBearer
@@ -133,6 +142,7 @@ if (!alreadyCompleted) {
 
 await page.getByText("WHAT ACTUALLY HAPPENED").waitFor({ state: "visible", timeout: 90_000 }).catch(() => {})
 await page.screenshot({ path: `${outputDir}/03-execution-receipt.png`, fullPage: true })
+const metricsAfterOperation = await projectionMetrics()
 
 let workCase = null
 let workResponse = null
@@ -167,10 +177,12 @@ const surfacePaths = [
   ["07-agent", `/jarvis/agents?instructionId=${encodeURIComponent(workCase.root.id)}&actionId=${encodeURIComponent(action.id)}`],
 ]
 const visible = {}
+const surfaceMetrics = {}
 for (const [name, path] of surfacePaths) {
   await page.goto(`${baseURL}${path}`, { waitUntil: "domcontentloaded" })
   await page.waitForTimeout(2_500)
   visible[name] = (await page.locator("body").innerText()).slice(0, 20_000)
+  surfaceMetrics[name] = await projectionMetrics()
   await page.screenshot({ path: `${outputDir}/${name}.png`, fullPage: true })
 }
 
@@ -187,6 +199,7 @@ const artifact = {
   receipt,
   exactIds: { actionId: action.id, workCaseId: workCase.id, instructionId: workCase.root.id, householdId, serviceVisitId, receiptIds: receipt.body.receipts.map((item) => item.id) },
   visible,
+  projectionEvidence: { metricsBeforeOperation, metricsAfterOperation, surfaceMetrics, requestVolume },
   consoleErrors,
 }
 writeFileSync(`${outputDir}/chain.json`, JSON.stringify(artifact, null, 2))
@@ -200,6 +213,8 @@ console.log(JSON.stringify({
   scheduledStop: Boolean(scheduledStop),
   receiptIds: artifact.exactIds.receiptIds,
   workStatus: workCase.status,
+  projectionMetrics: metricsAfterOperation,
+  requestVolume,
   consoleErrors: consoleErrors.length,
   outputDir,
 }, null, 2))

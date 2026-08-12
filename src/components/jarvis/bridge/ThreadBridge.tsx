@@ -22,7 +22,6 @@ import { ThreadApprovalCockpit, ThreadExecutionWeave } from "./ThreadBlocks"
 import { ApprovalCockpit } from "./ApprovalCockpit"
 import type { ExecutionWeavePlacement } from "./ThreadBlocks"
 import { CommandRail, MicControlButton } from "./CommandRail"
-import { SetupRail } from "./FirstRunScene"
 import { ModeChip } from "./ModeChip"
 import type { JarvisRole } from "../lib/jarvis-auth"
 import { derivePresence } from "../kernel/presence"
@@ -59,6 +58,7 @@ import {
   resetTracePixelMeasurements,
   type TracePixelMeasurement,
 } from "../kernel/trace-metrics"
+import { AdaptiveWorkspaceShell } from "../workspaces/AdaptiveWorkspaceShell"
 
 
 const ReceiptContent = dynamic(() => import("../lib/ReceiptDrawer").then((m) => m.ReceiptContent), { ssr: false })
@@ -231,7 +231,7 @@ function DiagnosticsDisclosure({
 }) {
   const { diagnostics } = atmosphere
   return (
-    <details className="relative" data-jarvis-diagnostics>
+    <details id="jarvis-diagnostics" className="relative scroll-mt-20" data-jarvis-diagnostics>
       <summary className="j-chip min-h-11 cursor-pointer list-none border border-white/10 bg-white/[.035] px-3 text-[color:var(--j-text-dim)] hover:text-cyan-100">Diagnostics</summary>
       <div className="fixed left-2 right-2 top-[6.75rem] z-40 w-auto rounded-2xl border border-white/10 bg-[#07101d]/[.98] p-3 text-left shadow-[0_16px_48px_rgba(0,0,0,0.45)] backdrop-blur-xl sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-[min(22rem,calc(100vw-2rem))]">
         <dl className="grid gap-2 j-fs-micro text-[color:var(--j-text-dim)]">
@@ -700,7 +700,7 @@ function ThreadBody({
   const isRestComposition = role !== "technician" && !thread && !showWeave
   const sceneDirector = deriveSceneDirector(liveframe)
   const readyScene = sceneDirector.scene === "ready" && isRestComposition
-  const showOperationalContext = !readyScene && sceneDirector.scene !== "listening"
+  const showOperationalContext = sceneDirector.scene !== "listening"
   const presenceDocked = Boolean(thread && liveframe.mode !== "ready" && liveframe.mode !== "listening")
   const questionFocus = liveframe.focus === "clarification"
   const humanStatus = primaryStatus(liveframe)
@@ -717,7 +717,34 @@ function ThreadBody({
   // The rails are an owner-facing projection of the same kernel/data state.
   // Public preview stays deliberately sparse because it has no private source
   // observations to populate an operational surface with.
-  const showOperationalDeck = role === "owner" && mode !== "preview"
+  const showOperationalDeck = role === "owner"
+  if (showOperationalDeck) {
+    return (
+      <div
+        className="jarvis-root min-h-screen overflow-x-hidden bg-[#04070f] text-[color:var(--j-text)]"
+        data-jarvis-thread
+        data-jarvis-mode={mode}
+        data-liveframe-mode={liveframe.mode}
+        data-liveframe-focus={liveframe.focus}
+        data-liveframe-posture={liveframe.transportPosture}
+        data-jarvis-adaptive-runtime
+      >
+        <ThreadField overdueInvoices={overdueInvoices} contextChips={thread?.contextChips ?? []} freezeMotion />
+        <AdaptiveWorkspaceShell
+          thread={thread}
+          threadHistory={threadHistory}
+          liveframe={liveframe}
+          role={role}
+          reducedMotion={reducedMotion}
+          onAnswer={onAnswer}
+          onCancel={onCancel}
+          onRetry={onRetryThread ?? (() => {})}
+          composer={showRail ? <CommandRail liveframe={liveframe} intentLaunch={intentLaunch} onIntentAccepted={onIntentAccepted} embedded /> : null}
+        />
+        <IntentLaunchTrail event={intentLaunch} reducedMotion={reducedMotion} onComplete={onIntentLaunchComplete} />
+      </div>
+    )
+  }
   const visualState = deriveOrbVisualState({
     instructionId: thread?.instructionId,
     instructionState: thread?.machine.instructionState,
@@ -859,11 +886,6 @@ function ThreadBody({
           showSignIn={mode !== "preview"}
         />
         {showOperationalDeck ? <OperationalCommandIndex ready={readyScene} /> : null}
-        {role === "owner" && (
-          <QuestionDepth surface="setup" focused={questionFocus} reducedMotion={reducedMotion}>
-            <div id="jarvis-setup" className="jarvis-setup-region" data-jarvis-composition-region="context" data-jarvis-orb-secondary="true"><SetupRail /></div>
-          </QuestionDepth>
-        )}
         {showOperationalDeck ? (
           <div className={`jarvis-command-deck${readyScene ? " jarvis-command-deck--ready" : ""}`} data-liveframe-scene={sceneDirector.scene} data-command-canvas-scene={sceneDirector.scene} data-scene-business-pulse={sceneDirector.businessPulse} data-liveframe-weave={showWeave ? "true" : undefined}>
             {showOperationalContext ? (

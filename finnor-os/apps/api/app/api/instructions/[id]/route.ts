@@ -17,6 +17,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     return Response.json({
       instruction: {
         id: row.id,
+        workId: row.workId,
         sessionId: row.sessionId,
         instructionText: row.instructionText,
         source: row.source,

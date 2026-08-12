@@ -6,7 +6,7 @@
 // calls already use (`.catch(() => undefined)`): a trace-recording failure must never
 // break the real instruction it is only describing.
 
-import { withTenant, instructionSessions, instructionEvents } from "@finnor/db";
+import { withTenant, instructionSessions, instructionEvents, receiveWork } from "@finnor/db";
 import { and, eq, sql } from "drizzle-orm";
 import { getLogger } from "@finnor/tools";
 import { redactStructured, redactText } from "@finnor/security";
@@ -226,6 +226,11 @@ export interface EnsureInstructionSessionOpts {
   sessionId?: string;
   userId?: string;
   source?: "typed" | "voice";
+  workId?: string;
+}
+
+function nullableUuid(value: string | undefined): string | null {
+  return value && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value) ? value : null;
 }
 
 /** Idempotent — a second call for the same (tenantId, instructionId) is a no-op (the
@@ -239,14 +244,29 @@ export async function ensureInstructionSession(
   opts: EnsureInstructionSessionOpts = {},
 ): Promise<void> {
   try {
+    // Compatibility callers that only know the legacy instruction trace API still
+    // get a first-class Work. receiveWork writes the trace projection itself and is
+    // idempotent on instructionId, so no old entry point can create an orphan.
+    if (!opts.workId) {
+      await receiveWork({
+        tenantId,
+        instruction: instructionText,
+        instructionId,
+        sessionId: opts.sessionId,
+        userId: opts.userId,
+        channel: opts.source === "voice" ? "voice" : "text",
+      });
+      return;
+    }
     await withTenant(tenantId, (db) =>
       db
         .insert(instructionSessions)
         .values({
           id: instructionId,
           tenantId,
+          workId: opts.workId ?? null,
           sessionId: opts.sessionId ?? null,
-          userId: opts.userId ?? null,
+          userId: nullableUuid(opts.userId),
           instructionText,
           source: opts.source ?? "typed",
         })

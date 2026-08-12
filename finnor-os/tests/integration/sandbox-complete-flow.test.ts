@@ -18,11 +18,14 @@ import {
   workflowStates,
   communicationsLog,
   households,
+  businessOperations,
+  businessOperationTargets,
 } from "@finnor/db";
 import { FinnorOrchestrator } from "@finnor/orchestration";
 import { createDefaultRegistry, commsMode } from "@finnor/tools";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import type { DomainAction } from "@finnor/shared-types";
+import { dispatchBusinessOperation, executeBusinessOperationTarget } from "../../apps/worker/src/handlers/business-operation";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
 
@@ -106,13 +109,14 @@ describe.skipIf(!available)("sandbox mode: the complete workflow is REAL (§99%)
 
     // 1. A household was created for the new caller.
     const [hh] = await withTenant(SEED_TENANT_ID, (db) =>
-      db.select().from(households).where(eq(households.tenantId, SEED_TENANT_ID)),
-    ).then(async () => {
-      return withTenant(SEED_TENANT_ID, async (db) => {
-        const rows = await db.select().from(households);
-        return rows.filter((h) => (h.contactInfo as Record<string, unknown>).phone === phone);
-      });
-    });
+      db
+        .select()
+        .from(households)
+        .where(and(
+          eq(households.tenantId, SEED_TENANT_ID),
+          sql`${households.contactInfo} ->> 'phone' = ${phone}`,
+        )),
+    );
     expect(hh).toBeTruthy();
 
     // 2. A real service visit was booked.
@@ -164,7 +168,7 @@ describe.skipIf(!available)("sandbox mode: the complete workflow is REAL (§99%)
     expect(row!.status).toBe("completed");
   });
 
-  it("bulk notify completes against the consented list with real outbox records", async () => {
+  it("bulk notify completes through durable worker targets with real outbox records", async () => {
     const orchestrator = new FinnorOrchestrator({ tools: createDefaultRegistry() });
     const action = await createDraftAction("bulk_notify_existing_customers", {
       offerScript: "Fall tune-up special: free hardness re-test with any filter change this month.",
@@ -175,6 +179,12 @@ describe.skipIf(!available)("sandbox mode: the complete workflow is REAL (§99%)
     const before = await withTenant(SEED_TENANT_ID, (db) => db.select().from(sandboxOutbox));
     const result = await orchestrator.decide(action.id, SEED_TENANT_ID, "approve", "voice:sandbox-test", { typedConfirmation: true });
     expect(result.status).toBe("success");
+    const [operation] = await withTenant(SEED_TENANT_ID, (db) => db.select().from(businessOperations).where(eq(businessOperations.domainActionId, action.id)));
+    await dispatchBusinessOperation({ tenantId: SEED_TENANT_ID, operationId: operation!.id, actionId: action.id });
+    const targets = await withTenant(SEED_TENANT_ID, (db) => db.select().from(businessOperationTargets).where(eq(businessOperationTargets.operationId, operation!.id)));
+    for (const target of targets.filter((candidate) => candidate.status === "pending" && candidate.jobKey)) {
+      await executeBusinessOperationTarget({ tenantId: SEED_TENANT_ID, operationId: operation!.id, targetId: target.id, actionId: action.id });
+    }
     const after = await withTenant(SEED_TENANT_ID, (db) => db.select().from(sandboxOutbox));
     expect(after.length).toBeGreaterThan(before.length);
     const [row] = await withTenant(SEED_TENANT_ID, (db) =>

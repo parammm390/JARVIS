@@ -103,7 +103,7 @@ function blockStatus(key: BlockKey, thread: ThreadData, resuming: boolean): stri
       if (state === "captured") return "Waiting for acknowledgement"
       return "Context used"
     case "answer":
-      return thread.answerResult ? "Grounded answer" : "Answer"
+      return thread.answerResult ? "Response" : "Answer"
     case "plan":
       if (state === "planning") return thread.nodes.length > 0 ? "Growing live" : "Drafting"
       if (state === "clarifying") return "Needs one detail"

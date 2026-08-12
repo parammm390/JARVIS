@@ -190,4 +190,30 @@ describe.skipIf(!available)("LLMPlanner repair pass", () => {
     const planner = new LLMPlanner(createDefaultPluginRegistry(), stubPlannerProvider("create_invoice", {}));
     await expect(planner.plan("Create an invoice.", tenantContext(), emptyMemory())).rejects.toThrow(/Schema repair failed for create_invoice after one attempt/);
   });
+
+  it("9. safely routes read-only research when the planning provider times out", async () => {
+    const unavailableProvider: LLMProvider = {
+      name: "timed-out-planner",
+      async complete() {
+        throw new Error("LLM call deadline exceeded");
+      },
+    };
+    const planner = new LLMPlanner(createDefaultPluginRegistry(), unavailableProvider);
+    const instruction = "Research the latest U.S. residential water softener market and cite three sources.";
+    const [result] = await planner.plan(instruction, tenantContext(), emptyMemory());
+    expect(result).toMatchObject({ actionType: "search_web", payload: { query: instruction } });
+  });
+
+  it("10. still fails closed for a mutation when the planning provider times out", async () => {
+    const unavailableProvider: LLMProvider = {
+      name: "timed-out-planner",
+      async complete() {
+        throw new Error("LLM call deadline exceeded");
+      },
+    };
+    const planner = new LLMPlanner(createDefaultPluginRegistry(), unavailableProvider);
+    await expect(
+      planner.plan("Call every inactive customer with a discount.", tenantContext(), emptyMemory()),
+    ).rejects.toThrow("Planner LLM call failed: LLM call deadline exceeded");
+  });
 });

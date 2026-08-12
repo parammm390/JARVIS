@@ -31,10 +31,12 @@
 // re-probed against real source per Start Ritual step 2, not assumed from the plan's
 // wording).
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { CalendarDays, MapPinned, Route, X } from "lucide-react"
 import Link from "next/link"
-import { jarvisGet, jarvisPost } from "../lib/api"
+import { jarvisPost } from "../lib/api"
+import { useBusinessProjection } from "../lib/business-projections"
+import { businessProjections } from "../lib/projection-definitions"
 import { Drawer } from "../ui/primitives/Drawer"
 import { ErrorState } from "../ui/primitives/ErrorState"
 
@@ -126,8 +128,9 @@ export function DispatchMapCore({ data, error, loading = false, onRetry = () => 
   const cometMarkers = useRef<import("maplibre-gl").Marker[]>([])
   const zoneRaf = useRef<number | null>(null)
   const [selected, setSelected] = useState<Stop | null>(null)
-  const [household, setHousehold] = useState<Household | null>(null)
-  const [householdError, setHouseholdError] = useState<string | null>(null)
+  const householdProjection = useBusinessProjection(businessProjections.household360(selected?.householdId ?? "unselected"), { enabled: selected !== null })
+  const household = householdProjection.data as Household | null
+  const householdError = householdProjection.error?.message ?? null
   const [scrub, setScrub] = useState(0)
   const [scrubbing, setScrubbing] = useState(false)
   const [assignee, setAssignee] = useState("")
@@ -242,15 +245,6 @@ export function DispatchMapCore({ data, error, loading = false, onRetry = () => 
       })
     })
   }, [scrub, scrubbing, ordered])
-
-  useEffect(() => {
-    if (!selected) return
-    setHousehold(null)
-    setHouseholdError(null)
-    void jarvisGet<{ data: Household }>("read-models/household-360", { householdId: selected.householdId })
-      .then((r) => setHousehold(r.data))
-      .catch((cause) => setHouseholdError(cause instanceof Error ? cause.message : "Couldn’t load the household record."))
-  }, [selected])
 
   async function assignVisit(): Promise<void> {
     if (!selected || !assignee || assigning) return
@@ -379,12 +373,7 @@ export function DispatchMapCore({ data, error, loading = false, onRetry = () => 
                 </div>
               </>
             ) : householdError ? (
-              <ErrorState message={householdError} onRetry={() => {
-                setHouseholdError(null)
-                void jarvisGet<{ data: Household }>("read-models/household-360", { householdId: selected.householdId })
-                  .then((r) => setHousehold(r.data))
-                  .catch((cause) => setHouseholdError(cause instanceof Error ? cause.message : "Couldn’t load the household record."))
-              }} />
+              <ErrorState message={householdError} onRetry={() => { void householdProjection.refresh().catch(() => undefined) }} />
             ) : (
               <div className="text-white/50">Loading real household record…</div>
             )}
@@ -397,23 +386,11 @@ export function DispatchMapCore({ data, error, loading = false, onRetry = () => 
 
 export function DispatchMap() {
   const [date, setDate] = useState(isoToday)
-  const [data, setData] = useState<MapData | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
-
-  const load = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      setData(await jarvisGet<MapData>("dispatch/map", { date }))
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Couldn’t load dispatch.")
-    } finally {
-      setLoading(false)
-    }
-  }, [date])
-
-  useEffect(() => { void load() }, [load])
+  const projection = useBusinessProjection(businessProjections.dispatchMap(date))
+  const data = projection.data
+  const error = projection.error?.message ?? null
+  const loading = data === null && projection.status !== "error"
+  const load = () => { void projection.refresh().catch(() => undefined) }
 
   return (
     <div className="space-y-4">

@@ -47,7 +47,7 @@ export interface Planner {
     instruction: string,
     tenantContext: TenantContext,
     memory: MemorySnapshot,
-    opts?: { instructionId?: string; channel?: LLMChannel; signal?: AbortSignal; deadlineAt?: number; deadlineMs?: number },
+    opts?: { instructionId?: string; workId?: string; plannerAttemptId?: string; channel?: LLMChannel; signal?: AbortSignal; deadlineAt?: number; deadlineMs?: number },
   ): Promise<DomainAction[]>;
 }
 
@@ -111,7 +111,7 @@ export class LLMPlanner implements Planner {
     instruction: string,
     tenantContext: TenantContext,
     memory: MemorySnapshot,
-    opts: { instructionId?: string; channel?: LLMChannel; signal?: AbortSignal; deadlineAt?: number; deadlineMs?: number } = {},
+    opts: { instructionId?: string; workId?: string; plannerAttemptId?: string; channel?: LLMChannel; signal?: AbortSignal; deadlineAt?: number; deadlineMs?: number } = {},
   ): Promise<DomainAction[]> {
     const actionTypes = this.plugins.actionTypes();
     const system = this.systemPrompt();
@@ -506,6 +506,8 @@ export class LLMPlanner implements Planner {
             dependsOn: dependencyIndexes[i]!.map((dependency) => planActionIds[dependency]!),
             predictedReceipt: predictedReceipts[i]!,
             instructionId: opts.instructionId ?? null,
+            workId: opts.workId ?? null,
+            plannerAttemptId: opts.plannerAttemptId ?? null,
           })),
         )
         .returning();
@@ -597,6 +599,8 @@ export class LLMPlanner implements Planner {
       policyId: row.policyId,
       status: row.status,
       createdAt: row.createdAt.toISOString(),
+      workId: row.workId,
+      plannerAttemptId: row.plannerAttemptId,
       reasoning: valid[i]?.reasoning,
       groundedPayload: row.groundedPayload as DomainAction["groundedPayload"],
       compiledGraph: row.compiledGraph as DomainAction["compiledGraph"],

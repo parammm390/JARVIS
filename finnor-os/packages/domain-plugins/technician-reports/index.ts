@@ -83,7 +83,10 @@ export const technicianReportsPlugin: DomainEnginePlugin = {
           .returning();
         await recordBusinessEvent(db, {
           tenantId,
-          entityType: "service_visit",
+          // No visit id means the real entity is the newly-created review action.
+          // The old fallback mislabeled a domain_actions.id as a service_visit id,
+          // producing an unresolvable timeline edge.
+          entityType: visitId ? "service_visit" : "domain_action",
           entityId: visitId ?? row!.id,
           eventType: "issue_flagged",
           payload: { issue, reviewCardId: row!.id },

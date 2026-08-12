@@ -2,11 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { ArrowUpRight, CircleAlert, CreditCard, FileCheck2, RefreshCw, ShieldCheck, WalletCards } from "lucide-react"
+import { ArrowUpRight, ChevronDown, CircleAlert, CreditCard, FileCheck2, RefreshCw, ShieldCheck, WalletCards } from "lucide-react"
 import { JarvisApiError } from "../lib/api"
 import { useJarvisAuth } from "../lib/jarvis-auth"
-import { jarvisClient, type Household360Projection, type InvoiceResource, type WorkCaseProjection } from "@/lib/jarvis-client"
+import { type Household360Projection, type InvoiceResource, type WorkCaseProjection } from "@/lib/jarvis-client"
 import type { CashCollections } from "../lib/data-core"
+import { useBusinessProjection } from "../lib/business-projections"
+import { businessProjections } from "../lib/projection-definitions"
 import { OperationalSurfaceNav, type HouseholdContext } from "../surfaces/OperationalSurfaceNav"
 import "../jarvis-theme.css"
 
@@ -35,6 +37,17 @@ export interface AgingSummary {
   eligible: boolean
   reason: string | null
   bands: AgingBandSummary[]
+}
+
+export interface CollectionWorkGroup {
+  key: string
+  cases: WorkCaseProjection[]
+}
+
+export function safeBusinessLabel(value: string | null | undefined, fallback: string): string {
+  const normalized = value?.trim()
+  if (!normalized || /\b(?:undefined|null|nan)\b/i.test(normalized)) return fallback
+  return normalized
 }
 
 function invoiceAmount(invoice: InvoiceResource): number | null {
@@ -79,6 +92,19 @@ export function filterCollectionWork(workCases: WorkCaseProjection[]): WorkCaseP
   return workCases.filter((workCase) => workCase.actions.some((action) => COLLECTION_ACTION_TYPES.includes(action.actionType as (typeof COLLECTION_ACTION_TYPES)[number])))
 }
 
+export function groupCollectionWork(workCases: WorkCaseProjection[]): CollectionWorkGroup[] {
+  const groups = new Map<string, WorkCaseProjection[]>()
+  for (const workCase of workCases) {
+    const actionFamily = [...new Set(workCase.actions.map((action) => action.actionType))].sort().join(",") || "no-action"
+    const title = safeBusinessLabel(workCase.title, actionFamily).toLocaleLowerCase().replace(/\s+/g, " ")
+    const key = [workCase.status, actionFamily, title].join("|")
+    const group = groups.get(key) ?? []
+    group.push(workCase)
+    groups.set(key, group)
+  }
+  return Array.from(groups, ([key, cases]) => ({ key, cases }))
+}
+
 export function invoiceMatchesView(invoice: InvoiceResource, view: InvoiceView): boolean {
   if (view === "open") return invoice.status === "sent" || invoice.status === "overdue"
   if (view === "overdue") return invoice.status === "overdue"
@@ -116,7 +142,12 @@ function sourceError(error: unknown): string {
 }
 
 function invoiceContext(invoice: InvoiceResource, detail: Household360Projection | null): HouseholdContext {
-  return { id: invoice.householdId, label: detail?.household.address ?? `Household ${shortId(invoice.householdId)}` }
+  return { id: invoice.householdId, label: safeBusinessLabel(detail?.household.address, `Household ${shortId(invoice.householdId)}`) }
+}
+
+function collectionWorkTitle(workCase: WorkCaseProjection): string {
+  const fallback = workCase.actions.map((action) => action.actionType.replaceAll("_", " ")).join(" · ") || "Collection work"
+  return safeBusinessLabel(workCase.title, fallback)
 }
 
 function collectionsForBand(band: AgingBandSummary, collectionWork: WorkCaseProjection[]): WorkCaseProjection[] {
@@ -138,43 +169,27 @@ function workCaseHref(workCase: WorkCaseProjection): string {
 
 export default function CashPressureSurface() {
   const { session, loading: authLoading } = useJarvisAuth()
-  const [invoices, setInvoices] = useState<InvoiceResource[]>([])
-  const [cash, setCash] = useState<CashCollections | null>(null)
-  const [workCases, setWorkCases] = useState<WorkCaseProjection[]>([])
-  const [source, setSource] = useState<"loading" | "live" | "denied" | "unavailable">("loading")
-  const [error, setError] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [householdDetail, setHouseholdDetail] = useState<Household360Projection | null>(null)
-  const [detailError, setDetailError] = useState<string | null>(null)
-  const [loadingDetail, setLoadingDetail] = useState(false)
   const [invoiceView, setInvoiceView] = useState<InvoiceView>("open")
   const [collectionView, setCollectionView] = useState<CollectionView>("active")
   const [surfaceQuery] = useState(() => new URLSearchParams(typeof window === "undefined" ? "" : window.location.search))
   const requestedInvoiceId = surfaceQuery.get("invoiceId")
   const requestedHouseholdId = surfaceQuery.get("householdId")
-
-  const load = useCallback(async () => {
-    setSource("loading")
-    setError(null)
-    try {
-      const [invoiceResult, cashResult, workResult] = await Promise.allSettled([jarvisClient.invoices(), jarvisClient.cashCollections(), jarvisClient.workCases()])
-      if (invoiceResult.status === "rejected") throw invoiceResult.reason
-      setInvoices(invoiceResult.value.rows)
-      setCash(cashResult.status === "fulfilled" ? cashResult.value.data : null)
-      setWorkCases(workResult.status === "fulfilled" ? workResult.value.data : [])
-      setSource("live")
-    } catch (cause) {
-      setSource(cause instanceof JarvisApiError && cause.status === 401 ? "denied" : "unavailable")
-      setError(sourceError(cause))
-      setInvoices([])
-      setCash(null)
-      setWorkCases([])
-    }
-  }, [])
-
-  useEffect(() => {
-    if (session) void load()
-  }, [load, session])
+  const invoiceProjection = useBusinessProjection(businessProjections.invoices(), { enabled: Boolean(session) })
+  const cashProjection = useBusinessProjection(businessProjections.cashCollections(), { enabled: Boolean(session) })
+  const workProjection = useBusinessProjection(businessProjections.workCases(), { enabled: Boolean(session) })
+  const invoices = useMemo<InvoiceResource[]>(() => invoiceProjection.data ?? [], [invoiceProjection.data])
+  const cash: CashCollections | null = cashProjection.data
+  const workCases = useMemo<WorkCaseProjection[]>(() => workProjection.data ?? [], [workProjection.data])
+  const source = authLoading || (session && invoiceProjection.data === null && invoiceProjection.status !== "error")
+    ? "loading"
+    : !session || (invoiceProjection.error instanceof JarvisApiError && invoiceProjection.error.status === 401)
+      ? "denied"
+      : invoiceProjection.error && invoiceProjection.data === null
+        ? "unavailable"
+        : "live"
+  const error = source === "denied" ? "Sign in to inspect tenant money." : source === "unavailable" ? sourceError(invoiceProjection.error) : null
+  const load = () => { void Promise.allSettled([invoiceProjection.refresh(), cashProjection.refresh(), workProjection.refresh()]) }
 
   const sortedInvoices = useMemo(() => [...invoices].sort((a, b) => {
     const order: Record<string, number> = { overdue: 0, sent: 1, draft: 2, paid: 3, void: 4 }
@@ -184,7 +199,12 @@ export default function CashPressureSurface() {
   const collectionWork = useMemo(() => filterCollectionWork(workCases), [workCases])
   const visibleInvoices = useMemo(() => sortedInvoices.filter((invoice) => invoiceMatchesView(invoice, invoiceView)), [invoiceView, sortedInvoices])
   const visibleCollectionWork = useMemo(() => collectionWork.filter((workCase) => collectionMatchesView(workCase, collectionView)), [collectionView, collectionWork])
+  const visibleCollectionGroups = useMemo(() => groupCollectionWork(visibleCollectionWork), [visibleCollectionWork])
   const selectedInvoice = invoices.find((invoice) => invoice.id === selectedId) ?? null
+  const householdProjection = useBusinessProjection(businessProjections.household360(selectedInvoice?.householdId ?? "unselected"), { enabled: Boolean(session && selectedInvoice) })
+  const householdDetail: Household360Projection | null = householdProjection.data
+  const detailError = householdProjection.error ? sourceError(householdProjection.error) : null
+  const loadingDetail = Boolean(selectedInvoice && householdProjection.data === null && householdProjection.status !== "error")
   const selectedWork = selectedInvoice ? collectionWork.filter((workCase) => workInvoiceId(workCase) === selectedInvoice.id) : []
   const context = selectedInvoice
     ? invoiceContext(selectedInvoice, householdDetail)
@@ -198,16 +218,7 @@ export default function CashPressureSurface() {
 
   const selectInvoice = useCallback((invoice: InvoiceResource) => {
     setSelectedId(invoice.id)
-    setHouseholdDetail(null)
-    setDetailError(null)
-    setLoadingDetail(true)
     window.history.replaceState(null, "", `/jarvis/money?invoiceId=${encodeURIComponent(invoice.id)}&householdId=${encodeURIComponent(invoice.householdId)}`)
-    void jarvisClient.household360(invoice.householdId)
-      .then((result) => {
-        setHouseholdDetail(result.data)
-      })
-      .catch((cause) => setDetailError(sourceError(cause)))
-      .finally(() => setLoadingDetail(false))
   }, [])
 
   useEffect(() => {
@@ -230,8 +241,6 @@ export default function CashPressureSurface() {
       return
     }
     setSelectedId(null)
-    setHouseholdDetail(null)
-    setDetailError(null)
     window.history.replaceState(null, "", "/jarvis/money")
   }, [selectInvoice, selectedId, visibleInvoices])
 
@@ -272,22 +281,26 @@ export default function CashPressureSurface() {
           </section>
 
           <section className="jarvis-money-collections" aria-label="Collections Work">
-            <div className="jarvis-money-section-heading"><div><span className="jarvis-money-eyebrow">COLLECTIONS WORK</span><h2>{collectionView === "active" ? "Active interventions" : "Recorded outcomes"}</h2></div><span>{visibleCollectionWork.length} of {collectionWork.length}</span></div>
+            <div className="jarvis-money-section-heading"><div><span className="jarvis-money-eyebrow">COLLECTIONS WORK</span><h2>{collectionView === "active" ? "Active interventions" : "Recorded outcomes"}</h2></div><span>{visibleCollectionWork.length} records · {visibleCollectionGroups.length} groups</span></div>
             <div className="jarvis-money-view-switch" role="tablist" aria-label="Collections Work view"><button type="button" role="tab" aria-selected={collectionView === "active"} data-selected={collectionView === "active" ? "true" : undefined} onClick={() => setCollectionView("active")}>Active <span>{collectionWork.filter((workCase) => collectionMatchesView(workCase, "active")).length}</span></button><button type="button" role="tab" aria-selected={collectionView === "history"} data-selected={collectionView === "history" ? "true" : undefined} onClick={() => setCollectionView("history")}>History <span>{collectionWork.filter((workCase) => collectionMatchesView(workCase, "history")).length}</span></button></div>
-            <div className="jarvis-money-work-list">{visibleCollectionWork.length > 0 ? visibleCollectionWork.map((workCase) => <Link key={workCase.id} className="jarvis-money-work-row" href={workCaseHref(workCase)}><span className="jarvis-money-work-row__status">{workCase.status}</span><span><strong>{workCase.title}</strong><small>{workCase.actions.map((action) => action.actionType.replaceAll("_", " ")).join(" · ")}</small></span><span>{workInvoiceId(workCase) ? `Invoice · ${shortId(workInvoiceId(workCase)!)}` : "Invoice ID not recorded"}<ArrowUpRight size={13} aria-hidden /></span></Link>) : <p className="jarvis-money-empty-copy">{collectionView === "active" && collectionWork.length > 0 ? "No collection intervention is active. Recorded outcomes remain available in History." : "No invoice-to-cash Work cases were returned for this view."}</p>}</div>
+            <div className="jarvis-money-work-list">{visibleCollectionGroups.length > 0 ? visibleCollectionGroups.map((group) => {
+              const primary = group.cases[0]!
+              if (group.cases.length === 1) return <Link key={group.key} className="jarvis-money-work-row" href={workCaseHref(primary)}><span className="jarvis-money-work-row__status">{primary.status}</span><span><strong>{collectionWorkTitle(primary)}</strong><small>{primary.actions.map((action) => action.actionType.replaceAll("_", " ")).join(" · ")}</small></span><span>{workInvoiceId(primary) ? `Invoice · ${shortId(workInvoiceId(primary)!)}` : "Invoice ID not recorded"}<ArrowUpRight size={13} aria-hidden /></span></Link>
+              return <details key={group.key} className="jarvis-money-work-group"><summary className="jarvis-money-work-row"><span className="jarvis-money-work-row__status">{primary.status}</span><span><strong>{collectionWorkTitle(primary)}</strong><small>{primary.actions.map((action) => action.actionType.replaceAll("_", " ")).join(" · ")}</small></span><span>{group.cases.length} exact records<ChevronDown size={13} aria-hidden /></span></summary><div className="jarvis-money-work-group__records">{group.cases.map((workCase) => <Link key={workCase.id} href={workCaseHref(workCase)}><span>{workInvoiceId(workCase) ? `Invoice · ${shortId(workInvoiceId(workCase)!)}` : `Work · ${shortId(workCase.id)}`}</span><span>Open exact record <ArrowUpRight size={13} aria-hidden /></span></Link>)}</div></details>
+            }) : <p className="jarvis-money-empty-copy">{collectionView === "active" && collectionWork.length > 0 ? "No collection intervention is active. Recorded outcomes remain available in History." : "No invoice-to-cash Work cases were returned for this view."}</p>}</div>
           </section>
         </div>
 
         <aside className="jarvis-money-invoices" aria-label="Invoice ledger">
           <div className="jarvis-money-section-heading"><div><span className="jarvis-money-eyebrow">INVOICES</span><h2>Decision ledger</h2></div><span>{visibleInvoices.length} of {invoices.length}</span></div>
           <div className="jarvis-money-view-switch" role="tablist" aria-label="Invoice ledger view">{(["open", "overdue", "paid", "all"] as const).map((view) => <button key={view} type="button" role="tab" aria-selected={invoiceView === view} data-selected={invoiceView === view ? "true" : undefined} onClick={() => setInvoiceView(view)}>{view[0]!.toUpperCase() + view.slice(1)} <span>{sortedInvoices.filter((invoice) => invoiceMatchesView(invoice, view)).length}</span></button>)}</div>
-          <div className="jarvis-money-invoice-list">{visibleInvoices.length > 0 ? visibleInvoices.map((invoice) => <button key={invoice.id} type="button" className="jarvis-money-invoice-row" data-selected={invoice.id === selectedId ? "true" : "false"} onClick={() => selectInvoice(invoice)}><span><strong>{formatMoney(invoiceAmount(invoice))}</strong><small>{invoice.memo || "Memo not recorded"}</small></span><span className="jarvis-money-invoice-row__due">{formatDate(invoice.dueDate)}</span><span className={`jarvis-money-invoice-status jarvis-money-invoice-status--${invoice.status}`}>{invoice.status}</span></button>) : <p className="jarvis-money-empty-copy">No invoice records match this view.</p>}</div>
+          <div className="jarvis-money-invoice-list">{visibleInvoices.length > 0 ? visibleInvoices.map((invoice) => <button key={invoice.id} type="button" className="jarvis-money-invoice-row" data-selected={invoice.id === selectedId ? "true" : "false"} onClick={() => selectInvoice(invoice)}><span><strong>{formatMoney(invoiceAmount(invoice))}</strong><small>{safeBusinessLabel(invoice.memo, "Memo not recorded")}</small></span><span className="jarvis-money-invoice-row__due">{formatDate(invoice.dueDate)}</span><span className={`jarvis-money-invoice-status jarvis-money-invoice-status--${invoice.status}`}>{invoice.status}</span></button>) : <p className="jarvis-money-empty-copy">No invoice records match this view.</p>}</div>
           {selectedInvoice && <section className="jarvis-money-invoice-detail" aria-label="Selected invoice detail" data-invoice-id={selectedInvoice.id}>
             <div className="jarvis-money-section-heading"><div><span className="jarvis-money-eyebrow">SELECTED INVOICE</span><h2>{formatMoney(invoiceAmount(selectedInvoice))} · {selectedInvoice.status}</h2></div><span>{shortId(selectedInvoice.id)}</span></div>
             <div className="jarvis-money-detail-grid">
               <div><span>Customer ID</span><strong>{shortId(selectedInvoice.householdId)}</strong><Link href={`/jarvis/customers?householdId=${encodeURIComponent(selectedInvoice.householdId)}`}>Open Household 360 <ArrowUpRight size={13} aria-hidden /></Link></div>
               <div><span>Due</span><strong>{formatDate(selectedInvoice.dueDate)}</strong><small>Created {formatDate(selectedInvoice.createdAt)}</small></div>
-              <div><span>Related Work</span>{selectedWork.length > 0 ? selectedWork.map((workCase) => <Link key={workCase.id} href={workCaseHref(workCase)}>{workCase.title} · {shortId(workCase.id)} <ArrowUpRight size={13} aria-hidden /></Link>) : <small>No exact invoice-linked Work case recorded.</small>}</div>
+              <div><span>Related Work</span>{selectedWork.length > 0 ? selectedWork.map((workCase) => <Link key={workCase.id} href={workCaseHref(workCase)}>{collectionWorkTitle(workCase)} · {shortId(workCase.id)} <ArrowUpRight size={13} aria-hidden /></Link>) : <small>No exact invoice-linked Work case recorded.</small>}</div>
               <div><span>Evidence</span>{selectedWork.flatMap((workCase) => workCase.receipts).length > 0 ? selectedWork.flatMap((workCase) => workCase.receipts).map((receipt) => {
                 const owningCase = selectedWork.find((workCase) => workCase.receipts.some((candidate) => candidate.id === receipt.id))
                 return <Link key={receipt.id} href={owningCase ? `${workCaseHref(owningCase)}&receiptId=${encodeURIComponent(receipt.id)}` : `/jarvis/work?receiptId=${encodeURIComponent(receipt.id)}`}><FileCheck2 size={13} aria-hidden />Receipt · {shortId(receipt.id)} <ArrowUpRight size={13} aria-hidden /></Link>

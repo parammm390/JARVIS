@@ -301,7 +301,7 @@ function NowRail({
   const inMotion: NowRailRun[] = runs !== null
     ? [...selector.runs]
         .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-        .slice(0, Math.max(0, 3 - needsYou.length))
+        .slice(0, 2)
         .map((run) => {
           const currentStep = runCurrentStep(run)
           return {
@@ -328,7 +328,7 @@ function NowRail({
     }
     groups.push({ id: event.id, title, detail, occurredAt: event.occurredAt, count: 1 })
     return groups
-  }, []).slice(0, Math.max(0, 3 - needsYou.length - inMotion.length))
+  }, []).slice(0, 3)
 
   const hasNeedsYou = needsYou.length > 0 || (approvals !== null && approvals > 0)
   const hasInMotion = inMotion.length > 0

@@ -44,6 +44,7 @@
 
 .jarvis-agent-fleet__intro,
 .jarvis-agent-fleet__provider-strip,
+.jarvis-calling-agents,
 .jarvis-agent-fleet__auth-note,
 .jarvis-agent-fleet__layout {
   width: min(100% - 32px, 1700px);
@@ -158,6 +159,47 @@
   border-color: rgba(242, 183, 103, 0.35);
   color: #e1b271;
 }
+
+.jarvis-calling-agents {
+  margin-top: 10px;
+  border: 1px solid rgba(116, 163, 198, 0.17);
+  background: rgba(7, 16, 29, 0.76);
+}
+
+.jarvis-calling-agents > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 13px;
+  border-bottom: 1px solid rgba(116, 163, 198, 0.14);
+  color: #b9dbe7;
+  font-size: 11px;
+}
+
+.jarvis-calling-agents > div {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.jarvis-calling-agents article {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 9px;
+  align-items: start;
+  min-width: 0;
+  min-height: 104px;
+  padding: 12px;
+  border-right: 1px solid rgba(116, 163, 198, 0.12);
+}
+
+.jarvis-calling-agents article:last-child { border-right: 0; }
+.jarvis-calling-agents article > div { display: grid; gap: 5px; min-width: 0; }
+.jarvis-calling-agents article > div strong { color: #e0f4fb; font-size: 12px; }
+.jarvis-calling-agents article > div small { display: -webkit-box; overflow: hidden; color: #7896a8; font-size: 10px; line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+.jarvis-calling-agents article > span:last-child { display: flex; grid-column: 1 / -1; align-items: center; justify-content: space-between; gap: 7px; padding-top: 8px; border-top: 1px solid rgba(116, 163, 198, 0.1); color: #a7d9e3; font-size: 10px; font-weight: 850; text-align: left; }
+.jarvis-calling-agents article > span:last-child small { color: #607c91; font-size: 9px; font-weight: 700; }
 
 .jarvis-agent-fleet__auth-note {
   display: flex;
@@ -564,6 +606,7 @@
 @media (max-width: 760px) {
   .jarvis-agent-fleet__intro,
   .jarvis-agent-fleet__provider-strip,
+  .jarvis-calling-agents,
   .jarvis-agent-fleet__auth-note,
   .jarvis-agent-fleet__layout {
     width: min(100% - 22px, 1700px);
@@ -591,6 +634,11 @@
   .jarvis-agent-fleet__provider-strip {
     align-items: start;
   }
+
+  .jarvis-calling-agents > header { align-items: flex-start; flex-direction: column; gap: 4px; }
+  .jarvis-calling-agents > div { grid-template-columns: minmax(0, 1fr); }
+  .jarvis-calling-agents article { min-height: 0; border-right: 0; border-bottom: 1px solid rgba(116, 163, 198, 0.12); }
+  .jarvis-calling-agents article:last-child { border-bottom: 0; }
 
   .jarvis-agent-fleet__provider-scope {
     display: none;
@@ -1743,6 +1791,58 @@ html[data-jarvis-tenant-accent="amber"] .jarvis-root { --accent: var(--j-amber);
   color: #b59d73;
 }
 
+.jarvis-money-work-group {
+  border-bottom: 1px solid rgba(234, 199, 125, 0.08);
+}
+
+.jarvis-money-work-group > summary {
+  cursor: pointer;
+  border-bottom: 0;
+  list-style: none;
+}
+
+.jarvis-money-work-group > summary::-webkit-details-marker {
+  display: none;
+}
+
+.jarvis-money-work-group > summary svg {
+  transition: transform 160ms ease;
+}
+
+.jarvis-money-work-group[open] > summary svg {
+  transform: rotate(180deg);
+}
+
+.jarvis-money-work-group__records {
+  display: grid;
+  padding: 0 14px 10px 101px;
+}
+
+.jarvis-money-work-group__records a {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid rgba(234, 199, 125, 0.07);
+  color: #a99066;
+  font-size: 9px;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.jarvis-money-work-group__records a:hover,
+.jarvis-money-work-group__records a:focus-visible {
+  color: #f4d99f;
+  outline: none;
+}
+
+.jarvis-money-work-group__records a > span:last-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .jarvis-money-invoices {
   overflow: hidden;
 }
@@ -2010,6 +2110,10 @@ html[data-jarvis-tenant-accent="amber"] .jarvis-root { --accent: var(--j-amber);
   .jarvis-money-work-row > span:last-child {
     grid-column: 2;
     max-width: none;
+  }
+
+  .jarvis-money-work-group__records {
+    padding-left: 92px;
   }
 
   .jarvis-money-invoice-row {
@@ -3345,6 +3449,83 @@ html[data-jarvis-tenant-accent="amber"] .jarvis-root { --accent: var(--j-amber);
   white-space: nowrap;
 }
 
+.jarvis-household-evidence-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 4px 0 14px;
+}
+
+.jarvis-household-evidence-grid > section {
+  min-width: 0;
+  border: 1px solid rgba(108, 197, 220, 0.12);
+  border-radius: 8px;
+  background: rgba(4, 14, 23, 0.56);
+  overflow: hidden;
+}
+
+.jarvis-household-evidence-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 10px;
+  border-bottom: 1px solid rgba(108, 197, 220, 0.1);
+}
+
+.jarvis-household-evidence-heading span {
+  color: #8edce8;
+  font-size: 8px;
+  font-weight: 950;
+  letter-spacing: 0.13em;
+}
+
+.jarvis-household-evidence-heading small {
+  color: #557b8a;
+  font-size: 8px;
+  text-align: right;
+}
+
+.jarvis-household-evidence-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  padding: 9px 10px;
+  border-bottom: 1px solid rgba(108, 197, 220, 0.07);
+}
+
+.jarvis-household-evidence-row:last-child {
+  border-bottom: 0;
+}
+
+.jarvis-household-evidence-row > span:first-child {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.jarvis-household-evidence-row strong {
+  color: #d8f2f7;
+  font-size: 9px;
+  font-weight: 850;
+}
+
+.jarvis-household-evidence-row small,
+.jarvis-household-evidence-row > span:last-child,
+.jarvis-household-evidence-row time {
+  color: #678b9a;
+  font-size: 8px;
+  line-height: 1.45;
+}
+
+.jarvis-household-evidence-row small {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
 .jarvis-household-business-links {
   display: flex;
   flex-wrap: wrap;
@@ -3653,6 +3834,10 @@ html[data-jarvis-tenant-accent="amber"] .jarvis-root { --accent: var(--j-amber);
   }
 
   .jarvis-household-state-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .jarvis-household-evidence-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -9118,5 +9303,630 @@ html[data-jarvis-tenant-accent="amber"] .jarvis-root { --accent: var(--j-amber);
 @media (max-width: 1019px) {
   .jarvis-dispatch-map-state h2 {
     max-width: 36rem;
+  }
+}
+
+/* 2026 owner command center — dense, source-backed three-column canvas. */
+@media (min-width: 1180px) {
+  .jarvis-root .jarvis-command-deck.jarvis-command-deck--ready {
+    grid-template-columns: minmax(194px, 218px) minmax(0, 1fr) minmax(270px, 304px);
+    grid-template-areas:
+      "context stage now"
+      "pulse pulse pulse";
+    gap: 10px;
+    padding-top: 10px;
+  }
+
+  .jarvis-root .jarvis-command-deck--ready > [data-jarvis-question-depth="operational-context"] {
+    grid-area: context;
+    min-width: 0;
+    align-self: stretch;
+  }
+
+  .jarvis-root .jarvis-command-deck--ready > .jarvis-command-deck__stage {
+    min-height: 426px;
+  }
+
+  .jarvis-root .jarvis-command-deck--ready > .jarvis-command-deck__floor {
+    grid-column: 1 / -1;
+  }
+
+  .jarvis-root .jarvis-command-deck--ready > [data-jarvis-question-depth="operational-signals"] {
+    min-width: 270px;
+    max-width: 304px;
+    align-self: stretch;
+  }
+
+  .jarvis-root .jarvis-command-deck--ready .jarvis-ops-rail--context,
+  .jarvis-root .jarvis-command-deck--ready .jarvis-now-rail {
+    position: static;
+    max-width: none;
+  }
+
+  .jarvis-root .jarvis-command-deck--ready .jarvis-rest-composition {
+    grid-template-rows: minmax(248px, 1fr) auto !important;
+    min-height: 344px;
+  }
+
+  .jarvis-root .jarvis-command-deck--ready .jarvis-presence-core {
+    min-height: 248px !important;
+  }
+
+  .jarvis-root .jarvis-command-deck--ready .jarvis-presence-core__orb,
+  .jarvis-root .jarvis-command-deck--ready .jarvis-orb-surface,
+  .jarvis-root .jarvis-command-deck--ready [data-jarvis-ambient-orb] {
+    width: clamp(194px, 16vw, 226px) !important;
+    height: clamp(194px, 16vw, 226px) !important;
+    min-height: clamp(194px, 16vw, 226px) !important;
+  }
+
+  .jarvis-root .jarvis-command-deck--ready .jarvis-orb-readout__satellite {
+    display: none;
+  }
+
+  .jarvis-root .jarvis-command-deck--ready .jarvis-rest-prompt {
+    min-height: 58px;
+    padding-block: 6px;
+  }
+
+  .jarvis-root .jarvis-command-deck--ready .jarvis-operations-list__row {
+    min-height: 56px;
+    padding: 8px 10px 9px;
+  }
+
+  .jarvis-root .jarvis-command-deck--ready .jarvis-business-pulse {
+    height: 88px;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Authenticated command-center certification pass
+
+   These rules sit at the final cascade boundary on purpose. The legacy JARVIS
+   styles accumulated several lower-contrast and short-stage overrides that
+   made a real instruction look like a thin demo strip inside a mostly empty
+   page. Keep every source-backed surface, but restore a readable causal plane,
+   persistent operating context, and an unmistakable setup posture.
+   -------------------------------------------------------------------------- */
+.jarvis-root {
+  --j-text-dim: #adc8dc;
+  --j-text-faint: #789bb6;
+  font-family: var(--font-satoshi), var(--font-geist-sans), Arial, sans-serif;
+}
+
+.jarvis-root .jarvis-setup-region {
+  opacity: 1;
+}
+
+.jarvis-root .jarvis-setup-region [data-jarvis-setup-rail][data-setup-state="attention"] > .j-panel {
+  position: relative;
+  overflow: visible;
+  border-color: rgba(255, 195, 60, 0.34);
+  background:
+    linear-gradient(90deg, rgba(91, 59, 10, 0.3), rgba(5, 19, 31, 0.97) 34%, rgba(3, 13, 24, 0.94));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 241, 190, 0.08),
+    inset 3px 0 0 rgba(255, 195, 60, 0.72),
+    0 10px 26px rgba(0, 0, 0, 0.24);
+}
+
+.jarvis-root .jarvis-setup-region [data-jarvis-setup-rail][data-setup-state="attention"] p:first-child {
+  color: #f4fbff;
+}
+
+.jarvis-root .jarvis-setup-region [data-jarvis-setup-rail][data-setup-state="attention"] p:last-child {
+  color: #bbcfdd;
+}
+
+/* --------------------------------------------------------------------------
+   Upgrade 4 — adaptive workspace runtime
+
+   The shell is deliberately quiet: one compact navigation rail, one dominant
+   operational workspace, one contextual inspector, and one persistent command
+   dock. Existing deep views remain destinations for exact record inspection.
+   -------------------------------------------------------------------------- */
+.jarvis-adaptive-shell {
+  --workspace-line: rgba(139, 191, 216, 0.15);
+  --workspace-panel: rgba(7, 17, 29, 0.88);
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr) minmax(248px, 292px);
+  min-height: 100dvh;
+  background:
+    radial-gradient(circle at 44% 0%, rgba(32, 155, 187, 0.09), transparent 32rem),
+    linear-gradient(135deg, rgba(3, 10, 18, 0.98), rgba(4, 13, 23, 0.96));
+  font-family: "Cabinet Grotesk", var(--font-satoshi), var(--font-geist-sans), sans-serif;
+}
+
+.jarvis-adaptive-nav {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  display: flex;
+  height: 100dvh;
+  flex-direction: column;
+  align-items: center;
+  border-right: 1px solid var(--workspace-line);
+  background: rgba(3, 10, 18, 0.86);
+  backdrop-filter: blur(18px);
+}
+
+.jarvis-adaptive-nav__brand {
+  display: flex;
+  min-height: 72px;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  color: #f2fbff;
+}
+
+.jarvis-adaptive-nav__brand > span {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid rgba(116, 230, 247, 0.34);
+  border-radius: 10px;
+  background: linear-gradient(145deg, rgba(77, 217, 240, 0.15), rgba(112, 96, 241, 0.08));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 8px 24px rgba(0, 0, 0, 0.28);
+  font-weight: 800;
+}
+
+.jarvis-adaptive-nav__brand > strong { display: none; }
+
+.jarvis-adaptive-nav nav {
+  display: flex;
+  width: 100%;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 16px 10px;
+}
+
+.jarvis-adaptive-nav nav a {
+  position: relative;
+  display: flex;
+  width: 48px;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  color: #7699b1;
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.jarvis-adaptive-nav nav a span {
+  pointer-events: none;
+  position: absolute;
+  left: 56px;
+  z-index: 20;
+  width: max-content;
+  max-width: 180px;
+  padding: 6px 9px;
+  border: 1px solid rgba(139, 205, 229, 0.18);
+  border-radius: 7px;
+  background: rgba(4, 14, 24, 0.97);
+  color: #d8edf6;
+  font-size: 11px;
+  opacity: 0;
+  transform: translateX(-4px);
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+.jarvis-adaptive-nav nav a:hover span,
+.jarvis-adaptive-nav nav a:focus-visible span { opacity: 1; transform: translateX(0); }
+.jarvis-adaptive-nav nav a:hover { border-color: rgba(111, 221, 241, 0.18); background: rgba(91, 202, 229, 0.07); color: #d7f8ff; transform: translateY(-1px); }
+.jarvis-adaptive-nav nav a[aria-current="page"] { border-color: rgba(112, 226, 244, 0.27); background: rgba(74, 204, 229, 0.11); color: #8beaf8; }
+.jarvis-adaptive-nav nav a[aria-current="page"]::before { content: ""; position: absolute; left: -11px; width: 2px; height: 20px; border-radius: 2px; background: #65e5f5; box-shadow: 0 0 14px rgba(74, 222, 240, 0.7); }
+
+.jarvis-adaptive-nav__status {
+  display: flex;
+  min-height: 70px;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  border-top: 1px solid var(--workspace-line);
+}
+
+.jarvis-adaptive-nav__status i { width: 8px; height: 8px; border-radius: 50%; background: #56dcb0; box-shadow: 0 0 12px rgba(86, 220, 176, 0.55); }
+.jarvis-adaptive-nav__status span { display: none; }
+
+.jarvis-adaptive-main {
+  display: grid;
+  min-width: 0;
+  min-height: 100dvh;
+  grid-template-rows: auto minmax(420px, 1fr) auto auto;
+  padding: 0 18px;
+}
+
+.jarvis-adaptive-header {
+  display: flex;
+  min-height: 88px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border-bottom: 1px solid var(--workspace-line);
+}
+
+.jarvis-adaptive-header > div:first-child { min-width: 0; }
+.jarvis-adaptive-header span { color: #78a2b9; font-size: 10px; font-weight: 800; letter-spacing: 0.15em; text-transform: uppercase; }
+.jarvis-adaptive-header h1 { max-width: 64rem; overflow: hidden; color: #f1f9fc; font-size: clamp(24px, 2.3vw, 36px); font-weight: 650; letter-spacing: -0.035em; line-height: 1.05; text-overflow: ellipsis; white-space: nowrap; }
+
+.jarvis-adaptive-header__state {
+  display: flex;
+  min-height: 34px;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border: 1px solid rgba(116, 193, 219, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.025);
+  color: #b7d0dd;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.jarvis-adaptive-header__state i { width: 6px; height: 6px; border-radius: 50%; background: #66d9ed; box-shadow: 0 0 10px rgba(102, 217, 237, 0.55); }
+.jarvis-adaptive-header__state[data-state="awaiting_approval"] { border-color: rgba(250, 190, 67, 0.24); color: #ffe0a2; }
+.jarvis-adaptive-header__state[data-state="awaiting_approval"] i { background: #f6bd4b; box-shadow: 0 0 10px rgba(246, 189, 75, 0.55); }
+.jarvis-adaptive-header__state[data-state="failed"] { border-color: rgba(250, 105, 112, 0.24); color: #ffc2c5; }
+.jarvis-adaptive-header__state[data-state="failed"] i { background: #f36f78; }
+.jarvis-adaptive-header__state[data-state="completed"] i { background: #5ad5a5; }
+
+.jarvis-adaptive-stage {
+  min-width: 0;
+  padding: 16px 0;
+}
+
+.jarvis-adaptive-stage > * {
+  min-height: min(62dvh, 680px);
+  border: 1px solid rgba(127, 190, 214, 0.16);
+  border-radius: 16px;
+  background:
+    linear-gradient(145deg, rgba(9, 24, 38, 0.92), rgba(3, 12, 21, 0.96)),
+    radial-gradient(circle at 76% 10%, rgba(71, 210, 234, 0.07), transparent 34%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025), 0 20px 60px rgba(0, 0, 0, 0.16);
+}
+
+.jarvis-workspace-empty {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(260px, 0.65fr);
+  align-items: center;
+  gap: 34px;
+  padding: clamp(28px, 6vw, 82px);
+}
+
+.jarvis-workspace-empty__line { display: block; width: 46px; height: 2px; margin-bottom: 18px; background: #62dced; box-shadow: 0 0 16px rgba(98, 220, 237, 0.45); }
+.jarvis-workspace-empty p:first-of-type { color: #8db1c3; font-size: 12px; font-weight: 700; }
+.jarvis-workspace-empty h1 { max-width: 56rem; margin-top: 8px; color: #f5fbfd; font-size: clamp(36px, 5vw, 68px); font-weight: 600; letter-spacing: -0.055em; line-height: 0.96; }
+.jarvis-workspace-empty__copy { max-width: 42rem; margin-top: 20px; color: #9cb9c9; font-size: 15px; line-height: 1.65; }
+.jarvis-workspace-empty__examples { display: flex; flex-direction: column; border-left: 1px solid var(--workspace-line); }
+.jarvis-workspace-empty__examples span { padding: 14px 18px; border-bottom: 1px solid var(--workspace-line); color: #b5cbd6; font-size: 12px; line-height: 1.4; }
+
+.jarvis-workspace-sourcebar {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 16px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--workspace-line);
+  color: #7699ac;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10px;
+}
+.jarvis-workspace-sourcebar span { display: inline-flex; align-items: center; gap: 5px; }
+.jarvis-workspace-sourcebar span:first-child { color: #84d9c1; }
+.jarvis-workspace-sourcebar__warn { color: #f2c06a !important; }
+
+.jarvis-record-list { display: flex; flex-direction: column; padding: 12px; }
+.jarvis-record-list > button { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 12px; min-height: 66px; padding: 10px 12px; border: 1px solid transparent; border-bottom-color: var(--workspace-line); text-align: left; transition: background 150ms ease, border-color 150ms ease; }
+.jarvis-record-list > button:hover, .jarvis-record-list > button[data-selected="true"] { border-color: rgba(95, 218, 238, 0.2); border-radius: 10px; background: rgba(82, 207, 228, 0.055); }
+.jarvis-record-list__glyph { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 10px; background: rgba(80, 211, 231, 0.08); color: #8de5f1; font-size: 12px; font-weight: 800; }
+.jarvis-record-list strong { display: block; color: #e7f2f6; font-size: 13px; }
+.jarvis-record-list small { display: block; margin-top: 3px; color: #7e9dad; font-size: 11px; }
+.jarvis-record-list__meta { display: flex; align-items: center; gap: 8px; color: #7899aa; font-size: 10px; }
+
+.jarvis-cohort-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-bottom: 1px solid var(--workspace-line); }
+.jarvis-cohort-summary > div { padding: 18px; border-right: 1px solid var(--workspace-line); }
+.jarvis-cohort-summary > div:last-child { border-right: 0; }
+.jarvis-cohort-summary strong { display: block; color: #edf8fb; font-family: var(--font-geist-mono), monospace; font-size: clamp(18px, 2vw, 28px); font-weight: 500; }
+.jarvis-cohort-summary span { display: block; margin-top: 4px; color: #7595a7; font-size: 10px; }
+.jarvis-cohort-table { padding: 8px 12px 14px; }
+.jarvis-cohort-table__head, .jarvis-cohort-table > button { display: grid; grid-template-columns: minmax(140px, 1.1fr) minmax(170px, 1.4fr) minmax(130px, 0.9fr) minmax(110px, 0.7fr); align-items: center; gap: 10px; }
+.jarvis-cohort-table__head { min-height: 36px; padding: 0 10px; color: #63869a; font-size: 9px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
+.jarvis-cohort-table > button { width: 100%; min-height: 54px; padding: 9px 10px; border: 1px solid transparent; border-top-color: var(--workspace-line); color: #91adbb; font-size: 11px; text-align: left; }
+.jarvis-cohort-table > button strong { color: #e3eff4; font-size: 12px; }
+.jarvis-cohort-table > button:hover, .jarvis-cohort-table > button[data-selected="true"] { border-color: rgba(92, 218, 237, 0.2); border-radius: 8px; background: rgba(79, 207, 228, 0.05); }
+
+.jarvis-schedule-range { display: flex; align-items: center; gap: 8px; min-height: 50px; padding: 0 17px; border-bottom: 1px solid var(--workspace-line); color: #cbe1e9; font-size: 12px; }
+.jarvis-schedule-range small { margin-left: auto; color: #6e91a3; font-family: var(--font-geist-mono), monospace; font-size: 9px; }
+.jarvis-operational-timeline { padding: 12px 16px 22px; }
+.jarvis-operational-timeline section > header { display: flex; align-items: center; justify-content: space-between; min-height: 42px; color: #dcebf0; font-size: 11px; }
+.jarvis-operational-timeline section > header span { color: #68899b; font-size: 10px; }
+.jarvis-operational-timeline section > button { display: grid; width: 100%; grid-template-columns: 68px 14px minmax(180px, 1fr) minmax(100px, 0.45fr) auto; align-items: center; gap: 10px; min-height: 58px; padding: 8px 10px; border: 1px solid transparent; color: #809eae; text-align: left; }
+.jarvis-operational-timeline section > button:hover, .jarvis-operational-timeline section > button[data-selected="true"] { border-color: rgba(94, 217, 237, 0.19); border-radius: 9px; background: rgba(69, 196, 220, 0.05); }
+.jarvis-operational-timeline time { color: #9bdcea; font-family: var(--font-geist-mono), monospace; font-size: 10px; }
+.jarvis-operational-timeline__rail { position: relative; display: block; width: 8px; height: 8px; border: 2px solid #51cde1; border-radius: 50%; }
+.jarvis-operational-timeline__rail::after { content: ""; position: absolute; top: 9px; left: 2px; width: 1px; height: 38px; background: rgba(81, 205, 225, 0.2); }
+.jarvis-operational-timeline button:last-child .jarvis-operational-timeline__rail::after { display: none; }
+.jarvis-operational-timeline button strong { display: block; color: #e5f0f4; font-size: 12px; }
+.jarvis-operational-timeline button small { display: block; margin-top: 3px; color: #718e9e; font-size: 10px; }
+.jarvis-operational-timeline__owner, .jarvis-operational-timeline__status { font-size: 10px; }
+.jarvis-operational-timeline__status { padding: 5px 7px; border: 1px solid var(--workspace-line); border-radius: 999px; color: #a9c3ce; }
+
+.jarvis-money-ledger { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-bottom: 1px solid var(--workspace-line); }
+.jarvis-money-ledger button { position: relative; min-height: 118px; overflow: hidden; padding: 20px; border-right: 1px solid var(--workspace-line); text-align: left; }
+.jarvis-money-ledger button:last-child { border-right: 0; }
+.jarvis-money-ledger span { color: #7696a7; font-size: 10px; font-weight: 700; text-transform: uppercase; }
+.jarvis-money-ledger strong { display: block; margin-top: 9px; color: #edf8fb; font-family: var(--font-geist-mono), monospace; font-size: clamp(20px, 2.2vw, 30px); font-weight: 500; }
+.jarvis-money-ledger i { position: absolute; bottom: 0; left: 0; height: 2px; background: #5cd9ec; }
+.jarvis-money-ledger i[data-tone="green"] { background: #57d6a7; }
+.jarvis-money-ledger i[data-tone="amber"] { background: #f2bd58; }
+.jarvis-money-status-grid { display: grid; grid-auto-flow: dense; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; padding: 1px; background: var(--workspace-line); }
+.jarvis-money-status-grid button { display: grid; grid-template-columns: 84px minmax(0, 1fr) auto; align-items: center; min-height: 60px; gap: 12px; padding: 12px 16px; background: #07121e; text-align: left; }
+.jarvis-money-status-grid button:hover { background: #0a1a29; }
+.jarvis-money-status-grid span { color: #6f91a4; font-size: 9px; text-transform: uppercase; }
+.jarvis-money-status-grid strong { color: #dcebf0; font-size: 11px; }
+.jarvis-money-status-grid em { color: #93afbd; font-family: var(--font-geist-mono), monospace; font-size: 10px; font-style: normal; }
+
+.jarvis-research-workspace { padding: 18px; }
+.jarvis-research-result { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 12px; padding: clamp(18px, 3vw, 34px); border-bottom: 1px solid var(--workspace-line); }
+.jarvis-research-result > svg { margin-top: 5px; color: #76ddec; }
+.jarvis-research-result span { color: #72a2b5; font-size: 10px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
+.jarvis-research-result p { max-width: 68rem; margin-top: 8px; color: #e3f0f4; font-size: clamp(15px, 1.4vw, 20px); line-height: 1.65; }
+.jarvis-research-facts { display: grid; grid-auto-flow: dense; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin-top: 1px; background: var(--workspace-line); }
+.jarvis-research-facts button { min-height: 66px; padding: 12px 16px; background: #07131f; text-align: left; }
+.jarvis-research-facts span { display: block; color: #718fa0; font-size: 9px; text-transform: uppercase; }
+.jarvis-research-facts strong { display: block; margin-top: 5px; color: #dcebf0; font-size: 12px; }
+.jarvis-research-sources { margin-top: 18px; border: 1px solid var(--workspace-line); border-radius: 10px; overflow: hidden; }
+.jarvis-research-sources > header { display: flex; min-height: 44px; align-items: center; justify-content: space-between; padding: 0 14px; border-bottom: 1px solid var(--workspace-line); }
+.jarvis-research-sources header strong { color: #d5e8ef; font-size: 11px; }
+.jarvis-research-sources header span, .jarvis-research-sources > p { color: #6e8d9d; font-size: 10px; }
+.jarvis-research-sources > p { padding: 16px; }
+.jarvis-research-sources > button { display: grid; width: 100%; grid-template-columns: 30px minmax(0, 1fr) 18px; align-items: center; gap: 10px; min-height: 56px; padding: 9px 12px; border-bottom: 1px solid var(--workspace-line); text-align: left; }
+.jarvis-research-sources > button:hover { background: rgba(86, 211, 232, 0.045); }
+.jarvis-research-sources > button > span:first-child { color: #5c8295; font-family: var(--font-geist-mono), monospace; font-size: 9px; }
+.jarvis-research-sources strong { display: block; color: #dceaf0; font-size: 11px; }
+.jarvis-research-sources small { display: block; overflow: hidden; margin-top: 3px; color: #6f8c9c; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.jarvis-research-sources svg { color: #6bcfe0; }
+
+.jarvis-action-workspace { padding: 18px; }
+.jarvis-action-sequence { display: flex; flex-direction: column; gap: 8px; }
+.jarvis-action-sequence > button { display: grid; grid-template-columns: 34px minmax(0, 1fr) 20px; align-items: center; gap: 10px; width: 100%; min-height: 70px; padding: 8px 12px; border: 1px solid var(--workspace-line); border-radius: 10px; background: rgba(255, 255, 255, 0.018); text-align: left; transition: transform 160ms ease, border-color 160ms ease, background 160ms ease; }
+.jarvis-action-sequence > button:hover { border-color: rgba(91, 218, 238, 0.27); background: rgba(74, 202, 225, 0.045); transform: translateY(-1px); }
+.jarvis-action-sequence__index { color: #5f8395; font-family: var(--font-geist-mono), monospace; font-size: 9px; }
+.jarvis-action-sequence__card { min-width: 0; }
+.jarvis-action-sequence > button > svg { color: #6f99aa; }
+
+.jarvis-embedded-approval { padding: 14px; }
+.jarvis-embedded-approval > section, .jarvis-embedded-approval [data-jarvis-approval-cockpit] { position: static !important; min-height: 0 !important; }
+.jarvis-execution-workspace, .jarvis-receipt-workspace, .jarvis-recovery-workspace, .jarvis-clarification-workspace { padding: clamp(16px, 3vw, 28px); }
+.jarvis-execution-workspace .j-panel, .jarvis-receipt-workspace .j-panel, .jarvis-recovery-workspace .j-panel { background: rgba(2, 10, 18, 0.72); }
+.jarvis-recovery-workspace__lead { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 12px; margin-bottom: 18px; padding: 16px; border: 1px solid rgba(244, 103, 112, 0.23); border-radius: 10px; background: rgba(110, 25, 32, 0.12); }
+.jarvis-recovery-workspace__lead svg { color: #f4858c; }
+.jarvis-recovery-workspace__lead strong { color: #ffe4e6; font-size: 13px; }
+.jarvis-recovery-workspace__lead p { margin-top: 5px; color: #caaeb3; font-size: 11px; line-height: 1.55; }
+
+.jarvis-query-operations, .jarvis-query-plan-workspace { min-height: inherit; }
+.jarvis-operational-rows { padding: 10px 12px; }
+.jarvis-operational-rows > button { display: grid; width: 100%; grid-template-columns: minmax(150px, 1fr) 110px 130px 18px; align-items: center; gap: 10px; min-height: 54px; padding: 8px 10px; border-top: 1px solid var(--workspace-line); text-align: left; }
+.jarvis-operational-rows > button:hover { background: rgba(77, 201, 223, 0.045); }
+.jarvis-operational-rows strong { display: block; color: #dcebf0; font-size: 11px; }
+.jarvis-operational-rows small, .jarvis-operational-rows span, .jarvis-operational-rows time { color: #7392a2; font-size: 9px; }
+.jarvis-operational-rows svg { color: #6f9aac; }
+.jarvis-inventory-grid, .jarvis-business-state-grid { display: grid; grid-auto-flow: dense; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; padding: 1px; background: var(--workspace-line); }
+.jarvis-inventory-grid button, .jarvis-business-state-grid button { min-height: 100px; padding: 16px; background: #07131f; text-align: left; }
+.jarvis-inventory-grid button:hover, .jarvis-business-state-grid button:hover { background: #0a1a29; }
+.jarvis-inventory-grid button[data-alert="true"] { box-shadow: inset 2px 0 #f1b957; }
+.jarvis-inventory-grid span { color: #6d8c9d; font-family: var(--font-geist-mono), monospace; font-size: 9px; }
+.jarvis-inventory-grid strong, .jarvis-business-state-grid strong { display: block; margin-top: 7px; color: #dcebf0; font-size: 12px; }
+.jarvis-inventory-grid em { display: block; margin-top: 5px; color: #8eabb9; font-size: 10px; font-style: normal; }
+.jarvis-business-state-grid span { display: block; margin-top: 8px; color: #8ae0ec; font-family: var(--font-geist-mono), monospace; font-size: 22px; }
+.jarvis-business-state-grid small { display: block; margin-top: 6px; color: #708e9e; font-size: 9px; line-height: 1.5; }
+
+.jarvis-workspace-zero { display: flex; min-height: 300px; flex-direction: column; align-items: center; justify-content: center; padding: 30px; text-align: center; }
+.jarvis-workspace-zero svg { color: #5ecfe1; }
+.jarvis-workspace-zero strong { margin-top: 12px; color: #dcebf0; font-size: 14px; }
+.jarvis-workspace-zero p { max-width: 32rem; margin-top: 7px; color: #7897a7; font-size: 11px; line-height: 1.55; }
+
+.jarvis-conversation-layer {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  padding: 10px 0 12px;
+  border-top: 1px solid var(--workspace-line);
+}
+.jarvis-conversation-layer > div:first-child { display: flex; align-items: center; gap: 7px; min-height: 34px; color: #7294a5; font-size: 10px; }
+.jarvis-conversation-layer__items { display: flex; min-width: 0; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.jarvis-conversation-layer__items > span { display: grid; min-width: 220px; max-width: 330px; min-height: 38px; grid-template-columns: 50px minmax(0, 1fr); align-items: center; gap: 7px; padding: 7px 9px; border: 1px solid var(--workspace-line); border-radius: 8px; color: #7897a7; font-size: 9px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jarvis-conversation-layer__items > span[data-active] { border-color: rgba(85, 214, 235, 0.24); color: #b2ccd7; }
+.jarvis-conversation-layer__items strong { color: #6d91a3; font-family: var(--font-geist-mono), monospace; font-size: 8px; }
+
+.jarvis-adaptive-composer {
+  position: sticky;
+  bottom: 0;
+  z-index: 8;
+  padding: 0 0 max(12px, env(safe-area-inset-bottom));
+  background: linear-gradient(180deg, transparent, #040d17 26%);
+}
+.jarvis-adaptive-composer [data-jarvis-command-rail] { position: relative !important; inset: auto !important; width: 100% !important; max-width: none !important; transform: none !important; }
+.jarvis-adaptive-composer form { box-shadow: 0 16px 50px rgba(0, 0, 0, 0.34) !important; }
+.jarvis-adaptive-signin { display: flex; min-height: 54px; align-items: center; justify-content: center; gap: 8px; border: 1px solid rgba(105, 224, 241, 0.24); border-radius: 13px; background: rgba(7, 23, 36, 0.96); color: #bff5fb; font-size: 12px; font-weight: 800; box-shadow: 0 16px 50px rgba(0, 0, 0, 0.34); }
+.jarvis-adaptive-signin:hover { background: rgba(11, 35, 50, 0.98); color: #effdff; }
+
+.jarvis-adaptive-inspector {
+  min-width: 0;
+  border-left: 1px solid var(--workspace-line);
+  background: rgba(3, 11, 19, 0.74);
+}
+.jarvis-adaptive-inspector__inner { position: sticky; top: 0; max-height: 100dvh; overflow-y: auto; padding: 24px 18px; scrollbar-width: thin; }
+.jarvis-adaptive-inspector header { padding-bottom: 14px; border-bottom: 1px solid var(--workspace-line); }
+.jarvis-adaptive-inspector header span { display: block; color: #66899c; font-size: 9px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; }
+.jarvis-adaptive-inspector header strong { display: block; margin-top: 5px; color: #dcebf0; font-size: 14px; }
+.jarvis-adaptive-inspector dl > div { padding: 13px 0; border-bottom: 1px solid var(--workspace-line); }
+.jarvis-adaptive-inspector dt { color: #66899b; font-size: 9px; font-weight: 700; text-transform: uppercase; }
+.jarvis-adaptive-inspector dd { overflow-wrap: anywhere; margin-top: 5px; color: #a9c1cd; font-size: 11px; line-height: 1.5; }
+.jarvis-adaptive-inspector dd a { display: inline-flex; align-items: center; gap: 6px; color: #82dfec; text-decoration: underline; text-decoration-color: rgba(130, 223, 236, 0.28); text-underline-offset: 3px; }
+.jarvis-adaptive-inspector__provenance { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 8px; margin-top: 16px; padding: 12px; border: 1px solid rgba(85, 208, 173, 0.17); border-radius: 9px; background: rgba(64, 184, 150, 0.045); color: #6fcfad; }
+.jarvis-adaptive-inspector__provenance strong, .jarvis-adaptive-inspector__provenance span { display: block; }
+.jarvis-adaptive-inspector__provenance strong { color: #a9dbc9; font-size: 10px; }
+.jarvis-adaptive-inspector__provenance span { overflow-wrap: anywhere; margin-top: 2px; color: #6f9c91; font-family: var(--font-geist-mono), monospace; font-size: 8px; line-height: 1.5; }
+.jarvis-adaptive-inspector__open { display: flex; min-height: 42px; align-items: center; justify-content: space-between; margin-top: 10px; padding: 0 12px; border: 1px solid rgba(93, 214, 233, 0.19); border-radius: 9px; color: #9addE7; font-size: 10px; font-weight: 800; }
+.jarvis-adaptive-inspector__open:hover { background: rgba(78, 203, 224, 0.06); color: #d4f8fc; }
+
+@media (max-width: 1120px) {
+  .jarvis-adaptive-shell { grid-template-columns: 68px minmax(0, 1fr); }
+  .jarvis-adaptive-inspector { grid-column: 2; border-top: 1px solid var(--workspace-line); border-left: 0; }
+  .jarvis-adaptive-inspector__inner { position: static; display: grid; max-height: none; grid-template-columns: 160px minmax(0, 1fr); gap: 14px; padding: 16px 18px; }
+  .jarvis-adaptive-inspector dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 16px; }
+  .jarvis-adaptive-inspector__provenance, .jarvis-adaptive-inspector__open { grid-column: 1 / -1; }
+}
+
+@media (max-width: 760px) {
+  .jarvis-adaptive-shell { display: block; padding-bottom: 64px; }
+  .jarvis-adaptive-nav { position: fixed; top: auto; right: 0; bottom: 0; left: 0; z-index: 30; display: grid; width: 100%; height: calc(62px + env(safe-area-inset-bottom)); grid-template-columns: repeat(6, 1fr); padding-bottom: env(safe-area-inset-bottom); border-top: 1px solid var(--workspace-line); border-right: 0; }
+  .jarvis-adaptive-nav__brand, .jarvis-adaptive-nav__status { display: none; }
+  .jarvis-adaptive-nav nav { display: contents; }
+  .jarvis-adaptive-nav nav a { width: auto; min-height: 60px; border: 0; border-radius: 0; }
+  .jarvis-adaptive-nav nav a span { position: static; display: block; width: auto; max-width: 62px; padding: 0; border: 0; background: transparent; font-size: 8px; opacity: 1; transform: none; }
+  .jarvis-adaptive-nav nav a { flex-direction: column; gap: 4px; }
+  .jarvis-adaptive-nav nav a[aria-current="page"]::before { top: 0; left: 50%; width: 22px; height: 2px; transform: translateX(-50%); }
+  .jarvis-adaptive-main { min-height: calc(100dvh - 62px); grid-template-rows: auto minmax(360px, 1fr) auto auto; padding: 0 10px; }
+  .jarvis-adaptive-header { min-height: 72px; }
+  .jarvis-adaptive-header h1 { max-width: 19rem; font-size: 24px; }
+  .jarvis-adaptive-header__state { max-width: 120px; padding: 0 9px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .jarvis-adaptive-stage { padding: 10px 0; }
+  .jarvis-adaptive-stage > * { min-height: 56dvh; border-radius: 12px; }
+  .jarvis-workspace-empty { grid-template-columns: 1fr; gap: 26px; padding: 28px 22px; }
+  .jarvis-workspace-empty h1 { font-size: 42px; }
+  .jarvis-workspace-empty__examples { border-top: 1px solid var(--workspace-line); border-left: 0; }
+  .jarvis-workspace-sourcebar { gap: 8px; overflow-x: auto; white-space: nowrap; }
+  .jarvis-cohort-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .jarvis-cohort-summary > div:nth-child(3) { grid-column: 1 / -1; border-top: 1px solid var(--workspace-line); }
+  .jarvis-cohort-table__head { display: none; }
+  .jarvis-cohort-table > button { grid-template-columns: minmax(0, 1fr) auto; }
+  .jarvis-cohort-table > button span:nth-child(2) { grid-column: 1 / -1; }
+  .jarvis-cohort-table > button span:nth-child(3) { grid-column: 1; }
+  .jarvis-operational-timeline section > button { grid-template-columns: 58px 12px minmax(0, 1fr); }
+  .jarvis-operational-timeline__owner, .jarvis-operational-timeline__status { grid-column: 3; }
+  .jarvis-money-ledger { grid-template-columns: 1fr; }
+  .jarvis-money-ledger button { min-height: 86px; border-right: 0; border-bottom: 1px solid var(--workspace-line); }
+  .jarvis-money-status-grid, .jarvis-research-facts, .jarvis-inventory-grid, .jarvis-business-state-grid { grid-template-columns: 1fr; }
+  .jarvis-money-status-grid button { grid-template-columns: 70px minmax(0, 1fr); }
+  .jarvis-money-status-grid em { grid-column: 2; }
+  .jarvis-operational-rows > button { grid-template-columns: minmax(0, 1fr) auto 16px; }
+  .jarvis-operational-rows time { grid-column: 1 / -1; }
+  .jarvis-conversation-layer { grid-template-columns: 1fr; }
+  .jarvis-conversation-layer > div:first-child { min-height: 22px; }
+  .jarvis-adaptive-inspector { display: none; }
+  .jarvis-adaptive-composer { bottom: 62px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jarvis-adaptive-shell *, .jarvis-adaptive-shell *::before, .jarvis-adaptive-shell *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+}
+
+.jarvis-root .jarvis-setup-region [data-jarvis-setup-rail][data-setup-state="attention"] a {
+  border-color: rgba(255, 195, 60, 0.34);
+  background: rgba(255, 195, 60, 0.1);
+  color: #ffe6a0;
+}
+
+.jarvis-root .jarvis-command-deck:not(.jarvis-command-deck--ready) > .jarvis-command-deck__stage {
+  min-height: min(780px, calc(100svh - 190px));
+  border-color: rgba(82, 204, 238, 0.22);
+  background:
+    radial-gradient(ellipse at 48% 10%, rgba(21, 164, 210, 0.13), transparent 45%),
+    linear-gradient(180deg, rgba(5, 23, 40, 0.96), rgba(2, 11, 21, 0.98) 72%, rgba(3, 16, 29, 0.96));
+  box-shadow:
+    inset 0 1px 0 rgba(225, 253, 255, 0.06),
+    0 18px 48px rgba(0, 0, 0, 0.3);
+}
+
+.jarvis-root .jarvis-command-deck .jarvis-live-layout--no-weave [data-thread-document] {
+  min-height: min(700px, calc(100svh - 238px));
+  border: 1px solid rgba(73, 198, 232, 0.2);
+  border-left-color: rgba(65, 221, 255, 0.5);
+  border-radius: 12px;
+  background:
+    linear-gradient(90deg, rgba(22, 139, 174, 0.1), transparent 34%),
+    linear-gradient(180deg, rgba(7, 28, 46, 0.94), rgba(3, 15, 27, 0.9));
+  box-shadow:
+    inset 0 1px 0 rgba(229, 253, 255, 0.055),
+    0 18px 38px rgba(0, 0, 0, 0.22);
+}
+
+.jarvis-root .jarvis-command-deck .jarvis-live-layout--no-weave [data-thread-block] {
+  border-color: rgba(118, 196, 221, 0.08);
+  background: rgba(4, 17, 29, 0.46);
+}
+
+.jarvis-root .jarvis-command-deck .jarvis-live-layout--no-weave [data-thread-block-active="true"] {
+  border-color: rgba(60, 221, 255, 0.54);
+  background:
+    radial-gradient(circle at 92% 0, rgba(48, 216, 255, 0.14), transparent 44%),
+    linear-gradient(135deg, rgba(8, 47, 68, 0.94), rgba(3, 17, 30, 0.98));
+  box-shadow:
+    inset 0 1px 0 rgba(234, 254, 255, 0.09),
+    0 14px 32px rgba(0, 0, 0, 0.3),
+    0 0 34px rgba(31, 197, 237, 0.07);
+}
+
+.jarvis-root .jarvis-ops-panel {
+  border-color: rgba(90, 190, 221, 0.24);
+  background:
+    linear-gradient(135deg, rgba(12, 48, 66, 0.76), rgba(3, 15, 27, 0.98) 48%, rgba(2, 11, 20, 0.97)),
+    var(--j-panel-solid);
+}
+
+.jarvis-root .jarvis-ops-panel--focus {
+  border-color: color-mix(in srgb, var(--accent) 38%, rgba(123, 211, 235, 0.2));
+}
+
+@media (min-width: 1180px) {
+  .jarvis-root .jarvis-command-deck:not(.jarvis-command-deck--ready) > [data-jarvis-question-depth="operational-context"],
+  .jarvis-root .jarvis-command-deck:not(.jarvis-command-deck--ready) > [data-jarvis-question-depth="operational-signals"] {
+    position: sticky;
+    top: 84px;
+    max-height: calc(100dvh - 100px);
+    align-self: start;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-color: rgba(77, 196, 228, 0.3) transparent;
+    scrollbar-width: thin;
+  }
+
+  .jarvis-root .jarvis-command-deck.jarvis-command-deck--ready > .jarvis-command-deck__stage {
+    min-height: clamp(560px, calc(100svh - 280px), 780px);
+  }
+
+  .jarvis-root .jarvis-command-deck--ready .jarvis-rest-composition {
+    min-height: clamp(474px, calc(100svh - 366px), 690px);
+    grid-template-rows: minmax(358px, 1fr) auto !important;
+  }
+
+  .jarvis-root .jarvis-command-deck--ready .jarvis-presence-core {
+    min-height: 358px !important;
+  }
+
+  .jarvis-root .jarvis-command-deck--ready .jarvis-presence-core__orb,
+  .jarvis-root .jarvis-command-deck--ready .jarvis-orb-surface,
+  .jarvis-root .jarvis-command-deck--ready [data-jarvis-ambient-orb] {
+    width: clamp(238px, 18vw, 292px) !important;
+    height: clamp(238px, 18vw, 292px) !important;
+    min-height: clamp(238px, 18vw, 292px) !important;
+  }
+}
+
+@media (max-width: 1179px) {
+  .jarvis-root .jarvis-command-deck:not(.jarvis-command-deck--ready) > .jarvis-command-deck__stage,
+  .jarvis-root .jarvis-command-deck .jarvis-live-layout--no-weave [data-thread-document] {
+    min-height: 0;
   }
 }

@@ -110,7 +110,10 @@ export async function upsertHouseholdByPhone(
     const [existing] = await db
       .select({ id: households.id })
       .from(households)
-      .where(sql`${households.contactInfo} ->> 'phone' = ${phone}`);
+      // RLS plus an explicit tenant predicate, always. Test/maintenance connections
+      // can be table owners and therefore bypass RLS; omitting this predicate let a
+      // same-phone household in tenant A become tenant B's sandbox contact.
+      .where(and(eq(households.tenantId, tenantId), sql`${households.contactInfo} ->> 'phone' = ${phone}`));
     if (existing) return { householdId: existing.id, created: false };
     const [created] = await db
       .insert(households)
@@ -258,6 +261,36 @@ export function registerSandboxComms(registry: ToolRegistry): void {
         );
         await recordOutbound(tenantId, hh?.id ?? null, "call", String(input.phoneNumber), String(input.instructions ?? "(assistant call)"));
         return { callQueued: true, simulated: true };
+      },
+    },
+    {
+      name: "vapi_create_campaign",
+      description: "SANDBOX: record a provider-managed campaign as native outbox work without claiming PSTN delivery",
+      integration: "sandbox",
+      inputSchema: z.object({
+        tenantId: TenantIdSchema,
+        name: z.string().min(3),
+        schedulePlan: z.object({ earliestAt: z.string(), latestAt: z.string().optional() }),
+        customers: z.array(z.object({
+          number: z.string().min(7),
+          externalId: z.string().uuid(),
+          assistantOverrides: z.object({ firstMessage: z.string().min(1) }).passthrough(),
+        }).passthrough()).min(1),
+      }).passthrough(),
+      piiAllowlist: ["tenantId", "name", "schedulePlan", "customers"],
+      async run(input) {
+        const tenantId = String(input.tenantId);
+        const customers = input.customers as Array<{ number: string; externalId: string; assistantOverrides: { firstMessage: string } }>;
+        for (const customer of customers) {
+          await recordOutbound(tenantId, customer.externalId, "call", customer.number, customer.assistantOverrides.firstMessage);
+        }
+        return {
+          id: `sandbox:${String(input.name)}`,
+          simulated: true,
+          providerAccepted: false,
+          recordedTargets: customers.length,
+          schedulePlan: input.schedulePlan,
+        };
       },
     },
   ];

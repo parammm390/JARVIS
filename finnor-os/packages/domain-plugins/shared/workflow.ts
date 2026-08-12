@@ -24,7 +24,10 @@ async function householdByPhone(tenantId: string, phone: string): Promise<string
     db
       .select({ id: households.id })
       .from(households)
-      .where(sql`${households.contactInfo} ->> 'phone' = ${phone}`),
+      .where(and(
+        eq(households.tenantId, tenantId),
+        sql`${households.contactInfo} ->> 'phone' = ${phone}`,
+      )),
   );
   return row?.id ?? null;
 }
@@ -123,7 +126,12 @@ export async function advanceWorkflowForAction(
     let householdId = payload.householdId ? String(payload.householdId) : null;
     let toState = "test_completed";
     if (visitId) {
-      const [visit] = await withTenant(tenantId, (db) => db.select().from(serviceVisits).where(eq(serviceVisits.id, visitId)));
+      const [visit] = await withTenant(tenantId, (db) =>
+        db
+          .select()
+          .from(serviceVisits)
+          .where(and(eq(serviceVisits.tenantId, tenantId), eq(serviceVisits.id, visitId))),
+      );
       if (visit) {
         householdId = householdId ?? visit.householdId;
         if (visit.type.toLowerCase().includes("install")) toState = "installed";

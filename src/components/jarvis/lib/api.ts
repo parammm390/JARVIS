@@ -8,6 +8,7 @@
 // is disabled unless NEXT_PUBLIC_JARVIS_TEST_MODE=1.
 
 import { getCurrentAccessToken } from "./jarvis-auth"
+import { mutationProjectionTags, publishBusinessInvalidation } from "./business-invalidation"
 
 const TEST_KEY_STORAGE = "jarvis_admin_key"
 const TEST_MODE = process.env.NEXT_PUBLIC_JARVIS_TEST_MODE === "1"
@@ -32,6 +33,9 @@ export class JarvisApiError extends Error {
     message: string,
     public readonly status: number,
     public readonly retryable = status === 0 || status >= 500,
+    /** Parsed upstream error envelope. Durable mutation routes can include
+     * identifiers (notably workId) even when the request ends in recovery. */
+    public readonly details?: unknown,
   ) {
     super(message)
     this.name = "JarvisApiError"
@@ -96,7 +100,7 @@ async function readJson<T>(res: Response, method: JarvisMethod, path: string): P
   }
   if (!res.ok) {
     const message = json && typeof json === "object" && "error" in json && typeof json.error === "string" ? json.error : `${method} ${path} failed (${res.status})`
-    throw new JarvisApiError(message, res.status)
+    throw new JarvisApiError(message, res.status, undefined, json)
   }
   return json as T
 }
@@ -125,7 +129,11 @@ async function jarvisRequest<T>(method: JarvisMethod, path: string, body?: unkno
       signal: controller.signal,
     })
     status = res.status
-    return await readJson<T>(res, method, path)
+    const value = await readJson<T>(res, method, path)
+    if (method !== "GET") {
+      publishBusinessInvalidation({ tags: mutationProjectionTags(path), source: "mutation", path })
+    }
+    return value
   } catch (error) {
     if (isAbortError(error)) {
       status = 504

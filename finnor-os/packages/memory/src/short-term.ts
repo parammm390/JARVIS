@@ -11,6 +11,10 @@ function getRedis(): Redis {
     const url = process.env.REDIS_URL;
     if (!url) throw new Error("REDIS_URL is not set");
     redis = new Redis(url, { maxRetriesPerRequest: 2, lazyConnect: false });
+    // Callers already treat short-term memory as best-effort and fall back to
+    // durable memory. Consume connection errors here so ioredis does not emit an
+    // unhandled-error warning for every serverless invocation during an outage.
+    redis.on("error", () => undefined);
   }
   return redis;
 }

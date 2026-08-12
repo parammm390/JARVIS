@@ -82,6 +82,9 @@ const VOYAGE_MODEL = "voyage-3.5";
 const VOYAGE_BATCH_SIZE = 128;
 const VOYAGE_TIMEOUT_MS = 20_000;
 const VOYAGE_MAX_RETRIES = 3;
+const VOYAGE_429_MAX_RETRIES = 1;
+const VOYAGE_RATE_LIMIT_COOLDOWN_MS = 60_000;
+let voyageRateLimitedUntil = 0;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -92,6 +95,15 @@ function sleep(ms: number): Promise<void> {
 function jitteredBackoffMs(attempt: number): number {
   const cap = Math.min(1000 * 2 ** attempt, 8000);
   return Math.floor(Math.random() * cap);
+}
+
+function retryAfterMs(response: Response): number | null {
+  const raw = response.headers?.get?.("retry-after");
+  if (!raw) return null;
+  const seconds = Number(raw);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+  const at = new Date(raw).getTime();
+  return Number.isFinite(at) ? Math.max(0, at - Date.now()) : null;
 }
 
 /**
@@ -129,6 +141,9 @@ export class VoyageEmbedder implements EmbeddingProvider {
   }
 
   private async embedBatchOnce(batch: string[], attempt = 0): Promise<number[][]> {
+    if (Date.now() < voyageRateLimitedUntil) {
+      throw new Error(`Voyage embeddings are cooling down after a provider rate limit until ${new Date(voyageRateLimitedUntil).toISOString()}`);
+    }
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), VOYAGE_TIMEOUT_MS);
     try {
@@ -145,8 +160,21 @@ export class VoyageEmbedder implements EmbeddingProvider {
       });
       if (!res.ok) {
         const body = await res.text().catch(() => "");
-        const retryable = res.status === 429 || res.status >= 500;
-        if (retryable && attempt < VOYAGE_MAX_RETRIES) {
+        if (res.status === 429) {
+          const providerDelay = retryAfterMs(res);
+          // Voyage's low-volume tier commonly asks callers to wait tens of
+          // seconds. Retrying three times inside one overview request only burns
+          // more quota and log volume, so respect a meaningful Retry-After with
+          // a module-level circuit. A missing/very short header gets one retry for
+          // transient edge throttles and preserves the existing bounded behavior.
+          if ((providerDelay === null || providerDelay <= 2_000) && attempt < VOYAGE_429_MAX_RETRIES) {
+            await sleep(providerDelay ?? jitteredBackoffMs(attempt));
+            return this.embedBatchOnce(batch, attempt + 1);
+          }
+          voyageRateLimitedUntil = Date.now() + Math.max(providerDelay ?? 0, VOYAGE_RATE_LIMIT_COOLDOWN_MS);
+          throw new Error(`Voyage embeddings API error (429): ${body.slice(0, 300)}`);
+        }
+        if (res.status >= 500 && attempt < VOYAGE_MAX_RETRIES) {
           await sleep(jitteredBackoffMs(attempt));
           return this.embedBatchOnce(batch, attempt + 1);
         }

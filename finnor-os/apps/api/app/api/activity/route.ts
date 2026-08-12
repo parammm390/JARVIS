@@ -74,27 +74,26 @@ export async function GET(req: Request): Promise<Response> {
     const cursor = parsed.data.since ? decodeCursor(parsed.data.since) : null;
     const { limit } = parsed.data;
 
-    const [actionLogRows, stepRows, callRows] = await withTenant(ctx.tenantId, async (db) => {
-      return Promise.all([
-        db
+    const { actionLogRows, stepRows, callRows } = await withTenant(ctx.tenantId, async (db) => {
+      const actionLogRows = await db
           .select()
           .from(actionLog)
           .where(and(eq(actionLog.tenantId, ctx.tenantId), afterCursor(actionLog.timestamp, actionLog.id, cursor)))
           .orderBy(asc(actionLog.timestamp), asc(actionLog.id))
-          .limit(limit),
-        db
+          .limit(limit);
+      const stepRows = await db
           .select()
           .from(workflowSteps)
           .where(and(eq(workflowSteps.tenantId, ctx.tenantId), afterCursor(workflowSteps.updatedAt, workflowSteps.id, cursor)))
           .orderBy(asc(workflowSteps.updatedAt), asc(workflowSteps.id))
-          .limit(limit),
-        db
+          .limit(limit);
+      const callRows = await db
           .select()
           .from(calls)
           .where(and(eq(calls.tenantId, ctx.tenantId), afterCursor(calls.createdAt, calls.id, cursor)))
           .orderBy(asc(calls.createdAt), asc(calls.id))
-          .limit(limit),
-      ]);
+          .limit(limit);
+      return { actionLogRows, stepRows, callRows };
     });
 
     // D3.T1: the renderer registry (root src/) dispatches on actionType + payload —

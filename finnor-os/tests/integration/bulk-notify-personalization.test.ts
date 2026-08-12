@@ -140,17 +140,17 @@ describe.skipIf(!available)("bulk_notify_existing_customers — personalization 
     expect(msg).toBe("Hi Alex, checking in on your water softener — 15% off this month!");
   });
 
-  it("execute(): each target's real outbound call gets its OWN personalized instructions, never the other's equipment", async () => {
+  it("execute(): queues a provider campaign where every customer gets only their OWN relationship context", async () => {
     const registry = new ToolRegistry();
-    const placedCalls: { phoneNumber: string; instructions: string }[] = [];
+    const campaigns: Array<Record<string, unknown>> = [];
     registry.register({
-      name: "vapi_place_call",
+      name: "vapi_create_campaign",
       description: "test double",
       integration: "vapi",
       inputSchema: PASSTHROUGH_SCHEMA,
       async run(input: Record<string, unknown>) {
-        placedCalls.push({ phoneNumber: String(input.phoneNumber), instructions: String(input.instructions) });
-        return { id: "fake-call-id" };
+        campaigns.push(input);
+        return { id: `fake-campaign-${campaigns.length}` };
       },
     });
 
@@ -159,22 +159,27 @@ describe.skipIf(!available)("bulk_notify_existing_customers — personalization 
       { channel: "call", discountPercent: 15, minMonthsInactive: 0 },
       fakePolicy(),
     );
+    draft.domainActionId = "bulk-context-test-action";
     expect(draft.requiresConfirmation).toBe(true);
     const result = await bulkNotifyPlugin.execute(draft, registry);
 
     expect(result.status).toBe("success");
-    expect(placedCalls).toHaveLength(2);
-    const softenerCall = placedCalls.find((c) => c.phoneNumber === "+15550001001");
-    const filtrationCall = placedCalls.find((c) => c.phoneNumber === "+15550001002");
-    expect(softenerCall?.instructions).toContain("water softener");
-    expect(softenerCall?.instructions).not.toContain("whole-house filtration");
-    expect(filtrationCall?.instructions).toContain("whole-house filtration");
-    expect(filtrationCall?.instructions).not.toContain("water softener");
-    // The exact discount number appears — never a different or invented number.
-    expect(softenerCall?.instructions).toContain("15%");
+    expect(result.output.queued).toBe(2);
+    expect(campaigns).toHaveLength(1);
+    const customers = campaigns[0]!.customers as Array<{ number: string; assistantOverrides: { firstMessage: string; variableValues: Record<string, string>; metadata: Record<string, unknown> } }>;
+    const softenerCall = customers.find((customer) => customer.number === "+15550001001");
+    const filtrationCall = customers.find((customer) => customer.number === "+15550001002");
+    expect(softenerCall?.assistantOverrides.firstMessage).toContain("water softener");
+    expect(softenerCall?.assistantOverrides.variableValues.relationshipContext).toContain("water softener");
+    expect(softenerCall?.assistantOverrides.variableValues.relationshipContext).not.toContain("whole-house filtration");
+    expect(filtrationCall?.assistantOverrides.variableValues.relationshipContext).toContain("whole-house filtration");
+    expect(filtrationCall?.assistantOverrides.variableValues.relationshipContext).not.toContain("water softener");
+    expect(softenerCall?.assistantOverrides.variableValues.offerDetails).toContain("15%");
+    expect(softenerCall?.assistantOverrides.metadata.direction).toBe("outbound");
+    expect(softenerCall?.assistantOverrides.metadata.householdId).toBe(softenerHouseholdId);
   });
 
-  it("execute(): the real per-tenant daily Vapi call cap stops a campaign before exceeding it", async () => {
+  it("execute(): the daily cap moves the remainder into a real following-day campaign instead of dropping it", async () => {
     // Pre-seed today's bucket to 199/200 so the FIRST claim in this test (200) is
     // still allowed, and the SECOND (201) is correctly refused — proving the bulk
     // path shares the exact same cap every other dial-out path enforces, not a
@@ -187,15 +192,15 @@ describe.skipIf(!available)("bulk_notify_existing_customers — personalization 
     );
 
     const registry = new ToolRegistry();
-    let calls = 0;
+    const campaigns: Array<Record<string, unknown>> = [];
     registry.register({
-      name: "vapi_place_call",
+      name: "vapi_create_campaign",
       description: "test double",
       integration: "vapi",
       inputSchema: PASSTHROUGH_SCHEMA,
-      async run() {
-        calls++;
-        return { id: "fake-call-id" };
+      async run(input) {
+        campaigns.push(input);
+        return { id: `fake-campaign-${campaigns.length}` };
       },
     });
 
@@ -204,10 +209,15 @@ describe.skipIf(!available)("bulk_notify_existing_customers — personalization 
       { channel: "call", discountPercent: 15, minMonthsInactive: 0 },
       fakePolicy(),
     );
+    draft.domainActionId = "bulk-cap-test-action";
     const result = await bulkNotifyPlugin.execute(draft, registry);
 
-    expect(calls).toBe(1); // the 200th call goes through
-    expect(result.output.sent).toBe(1);
-    expect(result.output.capped).toBe(1); // the 2nd target is correctly withheld, not silently dropped
+    expect(result.status).toBe("success");
+    expect(result.output.queued).toBe(2);
+    expect(campaigns).toHaveLength(2);
+    expect((campaigns[0]!.customers as unknown[])).toHaveLength(1); // today's final available slot
+    expect((campaigns[1]!.customers as unknown[])).toHaveLength(1); // remainder is genuinely scheduled next weekday
+    expect((campaigns[0]!.schedulePlan as { earliestAt: string }).earliestAt.slice(0, 10)).not.toBe("");
+    expect((campaigns[1]!.schedulePlan as { earliestAt: string }).earliestAt).not.toBe((campaigns[0]!.schedulePlan as { earliestAt: string }).earliestAt);
   });
 });

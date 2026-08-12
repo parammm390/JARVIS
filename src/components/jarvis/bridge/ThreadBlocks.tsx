@@ -124,6 +124,16 @@ export function ThreadHeard({
             </Press>
           </ThreadSignal>
         )}
+        {thread.cancelError && (
+          <ThreadSignal tone="red" role="alert">
+            {thread.cancelError}{" "}
+            <Press className="inline-flex rounded-full">
+              <button type="button" className="inline-flex min-h-11 items-center underline" onClick={() => void onCancel()}>
+                Try cancellation again
+              </button>
+            </Press>
+          </ThreadSignal>
+        )}
       </div>
       <span className="j-chip shrink-0 border border-white/10 bg-white/[.035] text-[color:var(--j-text-dim)]">{thread.source === "voice" ? "VOICE" : "TYPED"}</span>
       {canCancel && (
@@ -258,9 +268,12 @@ export function ThreadAnswer({ thread }: { thread: Thread }) {
   if (!answer) return null
   return (
     <div data-jarvis-answer data-source="instruction_events.completed.result">
-      <div className="j-label mb-2">Answer</div>
+      <div className="j-label mb-2">JARVIS</div>
+      {answer.displaySummary && answer.displaySummary !== answer.spokenSummary && answer.displaySummary !== "JARVIS" && (
+        <h3 className="j-fs-sm mb-2 font-semibold text-[color:var(--j-text-dim)]">{answer.displaySummary}</h3>
+      )}
       <p className="j-fs-lg leading-relaxed text-[color:var(--j-text)]" data-jarvis-fact data-source="instruction_events.completed.result.spokenSummary">
-        {answer.displaySummary ?? answer.spokenSummary}
+        {answer.spokenSummary}
       </p>
       {answer.facts && answer.facts.length > 0 && (
         <dl className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -271,6 +284,23 @@ export function ThreadAnswer({ thread }: { thread: Thread }) {
             </div>
           ))}
         </dl>
+      )}
+      {answer.evidence && answer.evidence.length > 0 && (
+        <div className="mt-4 border-t border-white/10 pt-3" data-jarvis-answer-evidence>
+          <div className="j-fs-micro mb-2 uppercase tracking-[0.14em] text-[color:var(--j-text-faint)]">Sources</div>
+          <ul className="grid gap-2">
+            {answer.evidence.map((item) => {
+              const isWebLink = /^https?:\/\//i.test(item.ref)
+              const label = item.title ?? item.source.replaceAll("_", " ")
+              return (
+                <li key={`${item.source}:${item.ref}`} className="j-fs-sm flex min-w-0 items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[.025] px-3 py-2">
+                  {isWebLink ? <a className="min-w-0 truncate text-cyan-200 underline decoration-cyan-300/30 underline-offset-4 hover:text-cyan-100" href={item.ref} target="_blank" rel="noreferrer">{label}</a> : <span className="min-w-0 truncate text-[color:var(--j-text-dim)]">{label}</span>}
+                  <span className="shrink-0 j-fs-micro text-[color:var(--j-text-faint)]">{item.source}</span>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
       )}
     </div>
   )
@@ -893,7 +923,7 @@ export function ThreadReceipt({ thread, reducedMotion, onRetry, restored = false
   const outcome = receiptOutcome(progress)
 
   async function copyReceipt(receiptId: string, node: ThreadNode) {
-    const href = new URL(`/jarvis/next${receiptHash(receiptId)}`, window.location.origin).toString()
+    const href = new URL(`/jarvis${receiptHash(receiptId)}`, window.location.origin).toString()
     const status = actionStatusLabel(progress.actionStates[node.id] ?? "unobserved")
     const text = receiptCopyText({ receiptId, objective: actionLabel(node), outcome: status, href })
     try {
@@ -953,7 +983,7 @@ export function ThreadReceipt({ thread, reducedMotion, onRetry, restored = false
                   {actionLabel(n)} · {actionStatusLabel(progress.actionStates[n.id] ?? "unobserved")}
                 </span>
                 <span className="flex items-center gap-2">
-                  <a href={`/jarvis/next${receiptHash(receiptIds[n.id])}`} className="inline-flex min-h-11 items-center j-fs-micro font-black text-cyan-200 underline hover:text-cyan-100">
+                  <a href={`/jarvis${receiptHash(receiptIds[n.id])}`} className="inline-flex min-h-11 items-center j-fs-micro font-black text-cyan-200 underline hover:text-cyan-100">
                     Open receipt
                   </a>
                   <button

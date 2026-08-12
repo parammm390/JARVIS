@@ -74,6 +74,8 @@ export class ToolRegistry {
 export interface ToolCallContext {
   tenantId: string;
   domainActionId: string;
+  /** Deterministic namespace for independently queued targets/batches of one action. */
+  operationKeyPrefix?: string;
 }
 
 /**
@@ -119,7 +121,7 @@ export class ScopedToolRegistry extends ToolRegistry {
   }
 
   override async call(name: string, input: Record<string, unknown>): Promise<ToolCallResult> {
-    const operationKey = `${name}:${this.callIndex++}`;
+    const operationKey = `${this.ctx.operationKeyPrefix ? `${this.ctx.operationKeyPrefix}:` : ""}${name}:${this.callIndex++}`;
     const requestHash = hashInput(input);
     const claim = await claimExternalOperation(this.ctx.tenantId, this.ctx.domainActionId, operationKey, requestHash);
     if (!claim.claimed) {
@@ -128,6 +130,7 @@ export class ScopedToolRegistry extends ToolRegistry {
           ok: false,
           output: {},
           error: `Idempotency conflict: ${name} already ran for this action with different input — refusing to re-run with new input`,
+          errorKind: "conflict",
         };
       }
       // The winner of the claim race may still be mid-call — wait for it to settle
@@ -137,7 +140,7 @@ export class ScopedToolRegistry extends ToolRegistry {
       // only ever present on a failure, never as an explicit `false` on success.
       return settled.status === "succeeded"
         ? { ok: true, output: (settled.response ?? {}) as Record<string, unknown> }
-        : { ok: false, output: (settled.response ?? {}) as Record<string, unknown>, integrationUnavailable: true };
+        : { ok: false, output: (settled.response ?? {}) as Record<string, unknown>, integrationUnavailable: true, errorKind: "retryable" };
     }
     const result = await this.base.call(name, input);
     await recordExternalOperationResult(this.ctx.tenantId, this.ctx.domainActionId, operationKey, result.ok ? "succeeded" : "failed", result.output);

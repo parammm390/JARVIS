@@ -288,7 +288,7 @@ export function ReceiptContent({
 
   async function copyReceipt() {
     if (!receipt) return
-    const href = new URL(`/jarvis/next${receiptHash(receipt.id)}`, window.location.origin).toString()
+    const href = new URL(`/jarvis${receiptHash(receipt.id)}`, window.location.origin).toString()
     const text = receiptCopyText({ receiptId: receipt.id, objective: receipt.objective, outcome: receiptOutcomeLabel(receipt), href })
     try {
       if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(text)

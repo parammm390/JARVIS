@@ -10,9 +10,9 @@
 
 import { useEffect, useRef, useState } from "react"
 import { motion, useReducedMotion } from "framer-motion"
-import { jarvisClient, type Vitals } from "@/lib/jarvis-client"
-import { useLiveQuery } from "@/lib/jarvis/useLiveQuery"
 import { useJarvisAuth } from "../lib/jarvis-auth"
+import { useBusinessProjection } from "../lib/business-projections"
+import { businessProjections } from "../lib/projection-definitions"
 import { StatusDot } from "../ui/primitives/StatusDot"
 import { choreo } from "../ui/motion/choreo"
 import { Ticker } from "../ui/motion/primitives"
@@ -128,16 +128,10 @@ export function PulseBar({ compact = false }: { compact?: boolean }) {
   // KPI cards (see ConstellationLink.tsx's hand-authored lineage map).
   useEffect(() => registerAnchor("pulse-bar", () => rootRef.current?.getBoundingClientRect() ?? null), [])
 
-  const { data, connection, error } = useLiveQuery<Vitals & { cursor: null }, null>({
-    fetchPage: async () => {
-      const v = await jarvisClient.vitals()
-      return { ...v, cursor: null }
-    },
-    reduce: (_prev, next) => next,
-    visibleIntervalMs: 4000,
-    blurredIntervalMs: 25000,
-    enabled: !!session,
-  })
+  const projection = useBusinessProjection(businessProjections.vitals(), { enabled: Boolean(session) })
+  const data = projection.data
+  const connection = projection.online ? "polling" : "connecting"
+  const error = projection.error?.message ?? null
 
   useEffect(() => {
     if (!data) return
@@ -155,9 +149,9 @@ export function PulseBar({ compact = false }: { compact?: boolean }) {
 
   if (!data) {
     // F6.T3 — FLOW-89 ErrorFracture: a genuine poll failure (not merely "still
-    // loading" — useLiveQuery's own `error` distinguishes the two) surfaces the real
+    // loading" — the shared projection's `error` distinguishes the two) surfaces the real
     // message instead of the generic "Reading pulse…" forever. No onRetry here: the
-    // hook already retries on its own visibleIntervalMs cadence — a fake retry button
+    // cache already retries on its own visible cadence — a fake retry button
     // would just be theater on top of behavior that already happens.
     if (error) {
       return (

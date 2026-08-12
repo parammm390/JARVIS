@@ -63,7 +63,7 @@ export const AGENT_FLEET = [
   },
 ] as const satisfies readonly AgentDefinition[]
 
-export type OperatingAgentKey =
+export type CapabilityDomainKey =
   | "command-authority"
   | "customer-desk"
   | "growth-desk"
@@ -74,8 +74,8 @@ export type OperatingAgentKey =
   | "water-quality"
   | "market-watch"
 
-export interface OperatingAgentDefinition {
-  key: OperatingAgentKey
+export interface CapabilityDomainDefinition {
+  key: CapabilityDomainKey
   label: string
   shortLabel: string
   mandate: string
@@ -88,10 +88,10 @@ export interface OperatingAgentDefinition {
 /**
  * A deliberately curated control plane over the 44 registered backend actions.
  * These are not synthetic assistants or provider resources: each operating
- * agent is a named authority boundary whose action catalog maps one-for-one to
+ * domain is a named authority boundary whose action catalog maps one-for-one to
  * the existing domain contracts.
  */
-export const OPERATING_AGENTS = [
+export const CAPABILITY_DOMAINS = [
   {
     key: "command-authority",
     label: "Command Authority",
@@ -182,31 +182,49 @@ export const OPERATING_AGENTS = [
     voiceAgentKeys: [],
     glyph: "market",
   },
-] as const satisfies readonly OperatingAgentDefinition[]
+] as const satisfies readonly CapabilityDomainDefinition[]
 
-export const REGISTERED_AGENT_ACTIONS = OPERATING_AGENTS.flatMap((agent) => agent.actionTypes)
-export const REGISTERED_AGENT_ACTION_COUNT = REGISTERED_AGENT_ACTIONS.length
+export const REGISTERED_BACKEND_ACTIONS = CAPABILITY_DOMAINS.flatMap((domain) => domain.actionTypes)
+export const REGISTERED_BACKEND_ACTION_COUNT = REGISTERED_BACKEND_ACTIONS.length
 
-export function operatingAgentDefinition(key: OperatingAgentKey): OperatingAgentDefinition {
-  return OPERATING_AGENTS.find((agent) => agent.key === key) ?? OPERATING_AGENTS[0]
+export function capabilityDomainDefinition(key: CapabilityDomainKey): CapabilityDomainDefinition {
+  return CAPABILITY_DOMAINS.find((domain) => domain.key === key) ?? CAPABILITY_DOMAINS[0]
 }
 
-export function exactOperatingAgentKeysForWork(workCase: WorkCaseProjection): OperatingAgentKey[] {
+export function exactCapabilityDomainKeysForWork(workCase: WorkCaseProjection): CapabilityDomainKey[] {
   const actionTypes = new Set(workCase.actions.map((action) => action.actionType))
-  return OPERATING_AGENTS
-    .filter((agent) => agent.actionTypes.some((actionType) => actionTypes.has(actionType)))
-    .map((agent) => agent.key)
+  return CAPABILITY_DOMAINS
+    .filter((domain) => domain.actionTypes.some((actionType) => actionTypes.has(actionType)))
+    .map((domain) => domain.key)
 }
 
-export function projectOperatingAgentActivity(workCases: WorkCaseProjection[], key: OperatingAgentKey): AgentFleetActivity {
-  const agent = operatingAgentDefinition(key)
-  const matchingWorkCases = workCases.filter((workCase) => exactOperatingAgentKeysForWork(workCase).includes(key))
-  const voiceKeys = new Set<AgentKey>(agent.voiceAgentKeys)
+export function projectCapabilityDomainActivity(workCases: WorkCaseProjection[], key: CapabilityDomainKey): AgentFleetActivity {
+  const domain = capabilityDomainDefinition(key)
+  const matchingWorkCases = workCases.filter((workCase) => exactCapabilityDomainKeysForWork(workCase).includes(key))
+  const voiceKeys = new Set<AgentKey>(domain.voiceAgentKeys)
   const calls = matchingWorkCases.flatMap((workCase) => workCase.calls
     .filter((call) => call.agentKey && voiceKeys.has(call.agentKey))
     .map((call) => ({ workCase, call })))
   const exceptions = matchingWorkCases.filter((workCase) => workCase.status === "Failed" || workCase.status === "Blocked")
   return { workCases: matchingWorkCases, calls, exceptions }
+}
+
+export interface CapabilityWorkGroup {
+  key: string
+  cases: WorkCaseProjection[]
+}
+
+export function groupCapabilityWork(workCases: WorkCaseProjection[]): CapabilityWorkGroup[] {
+  const groups = new Map<string, WorkCaseProjection[]>()
+  for (const workCase of workCases) {
+    const title = workCase.title.trim().toLocaleLowerCase().replace(/\s+/g, " ")
+    const actionTypes = [...new Set(workCase.actions.map((action) => action.actionType))].sort().join(",") || "no-action"
+    const key = [workCase.status, actionTypes, title].join("|")
+    const group = groups.get(key) ?? []
+    group.push(workCase)
+    groups.set(key, group)
+  }
+  return Array.from(groups, ([key, cases]) => ({ key, cases }))
 }
 
 export function agentDefinition(key: AgentKey): AgentDefinition {

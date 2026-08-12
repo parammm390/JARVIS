@@ -27,7 +27,7 @@ import {
   documents,
   businessEvents,
 } from "@finnor/db";
-import { household360 } from "@finnor/read-models";
+import { household360, resolveHouseholdMention } from "@finnor/read-models";
 import { GET } from "../../apps/api/app/api/read-models/[view]/route";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
@@ -74,7 +74,7 @@ describe.skipIf(!available)("household360 (Phase 11)", () => {
     await withTenant(TENANT_ID, async (db) => {
       const [household] = await db.insert(households).values({ tenantId: TENANT_ID, address: "1 Traversal Ave", marketingConsent: true }).returning();
       householdId = household!.id;
-      const [decoy] = await db.insert(households).values({ tenantId: TENANT_ID, address: "2 Decoy Ave" }).returning();
+      const [decoy] = await db.insert(households).values({ tenantId: TENANT_ID, address: "2 Decoy Ave", contactInfo: { name: "Customer" } }).returning();
       decoyHouseholdId = decoy!.id;
 
       // 2 contacts, 3 methods total.
@@ -247,6 +247,12 @@ describe.skipIf(!available)("household360 (Phase 11)", () => {
   it("5. unknown household id returns null", async () => {
     const result = await household360(TENANT_ID, "00000000-0000-4000-8000-00000000dead");
     expect(result).toBeNull();
+  });
+
+  it("does not mistake a placeholder name for the word customer in a named request", async () => {
+    const result = await resolveHouseholdMention(TENANT_ID, "Show the customer record for Pat Owmer");
+    expect(result).toMatchObject({ householdId, matchedAlias: "Pat Owner", matchKind: "name", fuzzy: true });
+    expect(result?.householdId).not.toBe(decoyHouseholdId);
   });
 
   it("6. GET /api/read-models/household-360 requires householdId (400 without it)", async () => {

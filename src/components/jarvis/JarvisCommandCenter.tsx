@@ -14,8 +14,8 @@ import "./jarvis-theme.css"
 import { ConsoleAtmosphere, LiveDot } from "./atmosphere"
 import { CustomCursor } from "./CustomCursor"
 import { setMuted, sfx } from "./sound"
-import { JarvisDataProvider, useJarvis } from "./lib/data-core"
-import { JarvisAuthProvider, useJarvisAuth } from "./lib/jarvis-auth"
+import { useJarvis } from "./lib/data-core"
+import { useJarvisAuth } from "./lib/jarvis-auth"
 import { useVapiSession } from "./lib/useVapiSession"
 import { deriveMood } from "./lib/mood"
 import { EventFXLayer } from "./lib/EventFX"
@@ -389,11 +389,7 @@ function Shell() {
 export default function JarvisCommandCenter() {
   return (
     <MotionConfig reducedMotion="user">
-      <JarvisAuthProvider>
-        <JarvisDataProvider>
-          <Shell />
-        </JarvisDataProvider>
-      </JarvisAuthProvider>
+      <Shell />
     </MotionConfig>
   )
 }

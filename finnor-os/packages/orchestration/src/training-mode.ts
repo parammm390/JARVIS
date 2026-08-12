@@ -4,11 +4,14 @@
 import { randomUUID } from "node:crypto";
 import { domainPolicies, inventoryItems, priceBookItems, tenantSettings, tenants, withTenant } from "@finnor/db";
 import { DEALER_ZERO_TENANT_ID } from "@finnor/shared-types";
+import { eq } from "drizzle-orm";
 
 export async function bootstrapTrainingTenant(name: string): Promise<{ tenantId: string; policies: number; inventoryItems: number; priceBookItems: number }> {
   const tenantId = randomUUID();
   const source = await withTenant(DEALER_ZERO_TENANT_ID, async (db) => ({
-    policies: await db.select().from(domainPolicies), inventory: await db.select().from(inventoryItems), prices: await db.select().from(priceBookItems),
+    policies: await db.select().from(domainPolicies).where(eq(domainPolicies.tenantId, DEALER_ZERO_TENANT_ID)),
+    inventory: await db.select().from(inventoryItems).where(eq(inventoryItems.tenantId, DEALER_ZERO_TENANT_ID)),
+    prices: await db.select().from(priceBookItems).where(eq(priceBookItems.tenantId, DEALER_ZERO_TENANT_ID)),
   }));
   // Dealer Zero's development history can contain superseded duplicate SKUs. The
   // target price-book constraint is the authoritative truth: retain the last source

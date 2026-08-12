@@ -4,14 +4,16 @@
 // the exact P2.T1 projection and composes the existing action, approval, workflow,
 // and receipt renderers. It does not create a second instruction state machine.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import dynamic from "next/dynamic"
 import Link from "next/link"
 import { Check, ChevronRight, CircleDot, Clock3, FileCheck2, Link2, RefreshCw, Search, ShieldCheck, UserRound, Workflow, X } from "lucide-react"
 import { ActionRenderer } from "../ui/renderers/ActionRenderer"
 import { JarvisApiError } from "../lib/api"
 import { useJarvisAuth } from "../lib/jarvis-auth"
-import { jarvisClient, type WorkAction, type WorkApproval, type WorkCaseProjection, type WorkCaseStatus, type WorkEntityLink, type WorkReceipt } from "@/lib/jarvis-client"
+import { type WorkAction, type WorkApproval, type WorkCaseProjection, type WorkCaseStatus, type WorkEntityLink, type WorkReceipt } from "@/lib/jarvis-client"
+import { useBusinessProjection } from "../lib/business-projections"
+import { businessProjections } from "../lib/projection-definitions"
 import { OperationalSurfaceNav, type HouseholdContext } from "../surfaces/OperationalSurfaceNav"
 import "../jarvis-theme.css"
 
@@ -142,7 +144,7 @@ export function destinationForEntity(entity: WorkEntityLink, workCase: WorkCaseP
 export function stageFor(workCase: WorkCaseProjection): string {
   if (workCase.status === "Failed" || workCase.status === "Blocked") return "Evidence & outcome"
   if (workCase.approvals.some((approval) => approval.status === "pending")) return "Approval"
-  if (workCase.workflows.some((workflow) => ["running", "compensating"].includes(workflow.status))) return "Execution"
+  if (workCase.operations?.some((operation) => ["queued", "running"].includes(operation.status)) || workCase.workflows.some((workflow) => ["running", "compensating"].includes(workflow.status))) return "Execution"
   if (workCase.receipts.length > 0 || workCase.status === "Completed") return "Evidence & outcome"
   if (workCase.actions.length > 0) return "Plan"
   return "Why"
@@ -213,63 +215,26 @@ function workflowStatusLabel(status: string): string {
 
 function useWorkCases() {
   const { session, loading: authLoading } = useJarvisAuth()
-  const [cases, setCases] = useState<WorkCaseProjection[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [live, setLive] = useState(false)
-  const [stale, setStale] = useState(false)
-  const [denied, setDenied] = useState(false)
-  const hasLoadedRef = useRef(false)
-
-  const reload = useCallback(async () => {
-    if (!session) return
-    try {
-      const response = await jarvisClient.workCases()
-      setCases(response.data)
-      hasLoadedRef.current = true
-      setLive(true)
-      setStale(false)
-      setDenied(false)
-      setError(null)
-    } catch (cause) {
-      const accessDenied = cause instanceof JarvisApiError && cause.status === 401
-      setDenied(accessDenied)
-      if (!accessDenied && hasLoadedRef.current) {
-        setLive(true)
-        setStale(true)
-        setError("Latest refresh was delayed. Showing the last verified Work projection.")
-      } else {
-        setLive(false)
-        setStale(false)
-        setError(accessDenied ? "Sign in to inspect tenant Work." : "Work is unavailable — the causal projection could not be read.")
-      }
-    } finally {
-      setLoading(false)
-    }
-  }, [session])
-
-  useEffect(() => {
-    if (authLoading) {
-      setLoading(true)
-      return
-    }
-    if (!session) {
-      hasLoadedRef.current = false
-      setCases([])
-      setLive(false)
-      setStale(false)
-      setDenied(true)
-      setError("Sign in to inspect tenant Work.")
-      setLoading(false)
-      return
-    }
-    setLoading(true)
-    void reload()
-    const interval = window.setInterval(() => void reload(), 30_000)
-    return () => window.clearInterval(interval)
-  }, [authLoading, reload, session])
-
-  return { cases, loading, error, live, stale, denied, reload }
+  const projection = useBusinessProjection(businessProjections.workCases(), { enabled: Boolean(session) })
+  const denied = !authLoading && (!session || (projection.error instanceof JarvisApiError && projection.error.status === 401))
+  const live = projection.data !== null
+  const stale = live && (projection.stale || projection.status === "error")
+  const error = denied
+    ? "Sign in to inspect tenant Work."
+    : projection.error
+      ? live
+        ? "Latest refresh was delayed. Showing the last verified Work projection."
+        : "Work is unavailable — the causal projection could not be read."
+      : null
+  return {
+    cases: projection.data ?? [],
+    loading: authLoading || (Boolean(session) && projection.data === null && (projection.status === "idle" || projection.status === "loading")),
+    error,
+    live,
+    stale,
+    denied,
+    reload: () => { void projection.refresh().catch(() => undefined) },
+  }
 }
 
 function WorkRow({ workCase, selected, count = 1, onSelect }: { workCase: WorkCaseProjection; selected: boolean; count?: number; onSelect: () => void }) {
@@ -453,8 +418,24 @@ function WorkSpine({
         </Chapter>
 
         <Chapter number="05" title="EXECUTION" active={stageFor(workCase) === "Execution"}>
-          {workCase.workflows.length === 0 ? <p className="jarvis-work-muted">No workflow run is linked. The case has not been promoted into execution.</p> : (
+          {workCase.workflows.length === 0 && !workCase.operations?.length ? <p className="jarvis-work-muted">No workflow run or durable operation is linked. The case has not been promoted into execution.</p> : (
             <div className="jarvis-work-execution-list">
+              {(workCase.operations ?? []).map((operation) => {
+                const resolved = operation.counts.succeeded + operation.counts.failed + operation.counts.skipped
+                return (
+                  <div key={operation.id} className="jarvis-work-run" data-operation-status={operation.status}>
+                    <div className="jarvis-work-run__header"><span><Workflow className="h-4 w-4" aria-hidden />{humanize(operation.operationType)}</span><strong>{humanize(operation.status)}</strong></div>
+                    <div className="jarvis-work-run__id">operation {shortId(operation.id)} · frozen cohort {operation.targetCount}</div>
+                    <div className="jarvis-work-facts">
+                      <span>{resolved}/{operation.targetCount} resolved</span>
+                      <span>{operation.counts.succeeded} succeeded</span>
+                      <span>{operation.counts.retry} retry</span>
+                      <span>{operation.counts.failed} failed</span>
+                      <span>{operation.counts.skipped} skipped</span>
+                    </div>
+                  </div>
+                )
+              })}
               {workCase.workflows.map((workflow) => (
                 <div key={workflow.id} className="jarvis-work-run">
                   <div className="jarvis-work-run__header"><span><Workflow className="h-4 w-4" aria-hidden />{humanize(workflow.workflowType)}</span><strong>{workflowStatusLabel(workflow.status)}</strong></div>

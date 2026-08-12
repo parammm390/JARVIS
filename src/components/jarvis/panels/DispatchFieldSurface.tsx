@@ -1,13 +1,15 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import Link from "next/link"
 import { AlertTriangle, ArrowUpRight, CalendarDays, ChevronLeft, ChevronRight, CircleDot, MapPinned, RefreshCw, Route, Wrench } from "lucide-react"
 import { DispatchMapCore, type MapData, type Stop } from "./DispatchMap"
 import { MyDay } from "./MyDay"
-import { jarvisGet, JarvisApiError } from "../lib/api"
+import { JarvisApiError } from "../lib/api"
 import { useJarvisAuth } from "../lib/jarvis-auth"
-import { jarvisClient, type WorkCaseProjection } from "@/lib/jarvis-client"
+import type { WorkCaseProjection } from "@/lib/jarvis-client"
+import { useBusinessProjection } from "../lib/business-projections"
+import { businessProjections } from "../lib/projection-definitions"
 import { OperationalSurfaceNav, type HouseholdContext } from "../surfaces/OperationalSurfaceNav"
 import "../jarvis-theme.css"
 
@@ -120,10 +122,13 @@ function UnauthenticatedSchedule() {
 export default function DispatchFieldSurface() {
   const { session, role, loading: authLoading } = useJarvisAuth()
   const [date, setDate] = useState(isoToday)
-  const [data, setData] = useState<MapData | null>(null)
-  const [workCases, setWorkCases] = useState<WorkCaseProjection[]>([])
-  const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
+  const canReadDispatch = role === "owner" || role === "dispatcher"
+  const mapProjection = useBusinessProjection(businessProjections.dispatchMap(date), { enabled: canReadDispatch })
+  const workProjection = useBusinessProjection(businessProjections.workCases(), { enabled: canReadDispatch })
+  const data: MapData | null = mapProjection.data
+  const workCases = useMemo<WorkCaseProjection[]>(() => workProjection.data ?? [], [workProjection.data])
+  const error = mapProjection.error ? dispatchErrorCopy(mapProjection.error) : null
+  const loading = canReadDispatch && mapProjection.data === null && mapProjection.status !== "error"
   const [surfaceQuery] = useState(() => new URLSearchParams(typeof window === "undefined" ? "" : window.location.search))
   const focus: DispatchFocusQuery = {
     householdId: surfaceQuery.get("householdId"),
@@ -134,26 +139,9 @@ export default function DispatchFieldSurface() {
   }
   const hasFocus = Object.values(focus).some(Boolean)
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const [mapResult, workResult] = await Promise.allSettled([jarvisGet<MapData>("dispatch/map", { date }), jarvisClient.workCases()])
-      if (mapResult.status === "rejected") throw mapResult.reason
-      setData(mapResult.value)
-      setWorkCases(workResult.status === "fulfilled" ? workResult.value.data : [])
-    } catch (cause) {
-      setError(dispatchErrorCopy(cause))
-      setData(null)
-      setWorkCases([])
-    } finally {
-      setLoading(false)
-    }
-  }, [date])
-
-  useEffect(() => {
-    if (role === "owner" || role === "dispatcher") void load()
-  }, [load, role])
+  const load = () => {
+    void Promise.allSettled([mapProjection.refresh(), workProjection.refresh()])
+  }
 
   const requestedHouseholdId = focus.householdId
   const contextStop = data?.stops.find((stop) => stop.householdId === requestedHouseholdId) ?? null

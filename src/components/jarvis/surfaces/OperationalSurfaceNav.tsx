@@ -79,7 +79,7 @@ export function OperationalSurfaceNav({ active, context }: { active: Operational
           <div className="jarvis-surface-nav__more-heading"><span>MORE</span><button ref={moreCloseRef} type="button" onClick={() => setMoreOpen(false)} aria-label="Close more surfaces"><X size={15} /></button></div>
           <Link href={withHouseholdContext("/jarvis/customers", context)} prefetch={false} onClick={() => setMoreOpen(false)}>Customers</Link>
           <Link href={withHouseholdContext("/jarvis/agents", context)} prefetch={false} onClick={() => setMoreOpen(false)}>Agents</Link>
-          <Link href="/jarvis/bridge" prefetch={false} onClick={() => setMoreOpen(false)}>Diagnostics</Link>
+          <Link href="/jarvis#jarvis-diagnostics" prefetch={false} onClick={() => setMoreOpen(false)}>Diagnostics</Link>
         </div>
       ) : null}
       {context ? (

@@ -19,10 +19,10 @@ describe("receipt deep links", () => {
       receiptId: "receipt-1",
       objective: "Check stock",
       outcome: "Recorded",
-      href: "https://finnorai.com/jarvis/next#receipt-receipt-1",
+      href: "https://finnorai.com/jarvis#receipt-receipt-1",
     })
     expect(copied).toContain("Check stock")
     expect(copied).toContain("Outcome: Recorded")
-    expect(copied).toContain("https://finnorai.com/jarvis/next#receipt-receipt-1")
+    expect(copied).toContain("https://finnorai.com/jarvis#receipt-receipt-1")
   })
 })

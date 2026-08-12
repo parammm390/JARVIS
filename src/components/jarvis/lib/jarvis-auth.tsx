@@ -6,7 +6,7 @@
 // which forwards it to the finnor-os backend's own requireContext/RBAC — no new
 // authorization logic lives here or in the proxy, only session plumbing.
 
-import { createContext, useCallback, useContext, useEffect, useState } from "react"
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react"
 import type { Session } from "@supabase/supabase-js"
 import { getSupabaseBrowser } from "@/lib/jarvis/supabase-browser"
 import { jarvisGet } from "./api"
@@ -81,6 +81,7 @@ export function JarvisAuthProvider({ children }: { children: React.ReactNode }) 
   const [roleLoading, setRoleLoading] = useState(false)
   const [roleError, setRoleError] = useState<string | null>(null)
   const [roleRetry, setRoleRetry] = useState(0)
+  const resolvedRoleUserIdRef = useRef<string | null>(null)
 
   useEffect(() => {
     let active = true
@@ -120,13 +121,19 @@ export function JarvisAuthProvider({ children }: { children: React.ReactNode }) 
 
   useEffect(() => {
     if (!session) {
+      resolvedRoleUserIdRef.current = null
       setRole(null)
       setRoleLoading(false)
       setRoleError(null)
       return
     }
     let cancelled = false
-    setRole(null)
+    // Supabase emits TOKEN_REFRESHED with a new Session/access-token object.
+    // Clearing an already-resolved role here unmounted the entire instruction
+    // kernel mid-request, making long research/action turns disappear. Retain the
+    // role only for the same authenticated user while `/api/me` revalidates it.
+    const sameResolvedUser = resolvedRoleUserIdRef.current === session.user.id
+    if (!sameResolvedUser) setRole(null)
     setRoleLoading(true)
     setRoleError(null)
     jarvisGet<{ role: JarvisRole }>("me")
@@ -136,12 +143,13 @@ export function JarvisAuthProvider({ children }: { children: React.ReactNode }) 
             setRoleError("JARVIS returned an unknown workspace role. Retry connection or contact an administrator.")
             return
           }
+          resolvedRoleUserIdRef.current = session.user.id
           setRole(r.role)
         }
       })
       .catch((error) => {
         if (!cancelled) {
-          setRole(null)
+          if (!sameResolvedUser) setRole(null)
           setRoleError(error instanceof Error ? error.message : "JARVIS could not load your role.")
         }
       })

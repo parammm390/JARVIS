@@ -62,6 +62,10 @@ export const SubmitInstructionSchema = z.object({
   // GET /api/instructions/:id/events poll can trace this exact call's real phases
   // while it's still in flight — additive, optional, response shape unchanged.
   instructionId: z.string().uuid().optional(),
+  // Upgrade 2: an explicit continuation appends a new input to this active Work.
+  // Omitting it creates a new Work (whose id equals instructionId when supplied).
+  workId: z.string().uuid().optional(),
+  activeContext: z.record(z.unknown()).optional(),
 });
 export type SubmitInstruction = z.infer<typeof SubmitInstructionSchema>;
 

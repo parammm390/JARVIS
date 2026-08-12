@@ -28,15 +28,14 @@ export const scanEwmaReorder: JobHandler = async (payload) => {
 
   const today = new Date();
   const start = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() - HISTORY_DAYS + 1));
-  const [items, usageEvents, policies] = await withTenant(tenantId, (db) =>
-    Promise.all([
-      db.select().from(inventoryItems).where(eq(inventoryItems.tenantId, tenantId)),
-      db.select({ entityId: businessEvents.entityId, payload: businessEvents.payload, occurredAt: businessEvents.occurredAt })
+  const { items, usageEvents, policies } = await withTenant(tenantId, async (db) => {
+      const items = await db.select().from(inventoryItems).where(eq(inventoryItems.tenantId, tenantId));
+      const usageEvents = await db.select({ entityId: businessEvents.entityId, payload: businessEvents.payload, occurredAt: businessEvents.occurredAt })
         .from(businessEvents)
-        .where(and(eq(businessEvents.tenantId, tenantId), eq(businessEvents.entityType, "inventory_item"), eq(businessEvents.eventType, "stock_used_on_visit"), gte(businessEvents.occurredAt, start))),
-      db.select().from(domainPolicies).where(and(eq(domainPolicies.tenantId, tenantId), eq(domainPolicies.actionType, "flag_reorder_needed"))).limit(1),
-    ]),
-  );
+        .where(and(eq(businessEvents.tenantId, tenantId), eq(businessEvents.entityType, "inventory_item"), eq(businessEvents.eventType, "stock_used_on_visit"), gte(businessEvents.occurredAt, start)));
+      const policies = await db.select().from(domainPolicies).where(and(eq(domainPolicies.tenantId, tenantId), eq(domainPolicies.actionType, "flag_reorder_needed"))).limit(1);
+      return { items, usageEvents, policies };
+    });
   const usageByItemDay = new Map<string, Map<string, number>>();
   for (const event of usageEvents) {
     const quantity = Number((event.payload as Record<string, unknown>).quantity);

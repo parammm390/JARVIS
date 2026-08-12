@@ -13,7 +13,54 @@ permissions:
   contents: read
 
 jobs:
+  canonical-graph-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: finnor
+          POSTGRES_PASSWORD: finnor
+          POSTGRES_DB: finnor
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U finnor" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgres://finnor:finnor@localhost:5432/finnor
+      FINNOR_CHAOS_TEST_CONTEXT: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: finnor-os/package-lock.json
+
+      - name: Install API/workspace dependencies
+        run: npm ci
+        working-directory: finnor-os
+
+      - name: Verify migration bundle parity
+        run: |
+          npm run db:bundle
+          git diff --exit-code packages/db/migrations-bundle.ts
+        working-directory: finnor-os
+
+      - name: Apply schema and checkpointer migrations
+        run: |
+          npm run db:migrate
+          npm run setup:langgraph
+        working-directory: finnor-os
+
+      - name: Verify canonical traversal and tenant isolation
+        run: npm test -- --run tests/integration/canonical-company-graph.test.ts tests/integration/tenant-isolation.test.ts
+        working-directory: finnor-os
+
   release:
+    needs: canonical-graph-gate
     runs-on: ubuntu-latest
     timeout-minutes: 35
     environment: production
@@ -76,6 +123,18 @@ jobs:
 
       - name: API typecheck gate
         run: npm run typecheck
+        working-directory: finnor-os
+
+      - name: Pull protected production database configuration
+        env:
+          VERCEL_PROJECT_ID: prj_BoMZ2AXdLIJQXAAe6RqDGBveyq3n
+        run: |
+          vercel link --project api --scope "$VERCEL_ORG_ID" --yes --token "$VERCEL_TOKEN"
+          vercel pull --yes --environment=production --scope "$VERCEL_ORG_ID" --token "$VERCEL_TOKEN"
+        working-directory: finnor-os/apps/api
+
+      - name: Migrate production database
+        run: npm run release:migrate:production -- apps/api/.vercel/.env.production.local
         working-directory: finnor-os
 
       - name: Build and deploy frontend

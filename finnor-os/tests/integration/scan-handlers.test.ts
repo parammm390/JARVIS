@@ -312,13 +312,16 @@ describe.skipIf(!available)("proactive scan handlers", () => {
 
   it("scan_data_quality flags overlapping appointments for the same technician", async () => {
     await withTenant(TENANT_ID, (db) => db.delete(dataQualityFindings).where(and(eq(dataQualityFindings.tenantId, TENANT_ID), eq(dataQualityFindings.findingType, "contradiction"))));
+    const [household] = await withTenant(TENANT_ID, (db) =>
+      db.insert(households).values({ tenantId: TENANT_ID, address: "9 Appointment Overlap Ln", contactInfo: {} }).returning(),
+    );
     const [tech] = await withTenant(TENANT_ID, (db) => db.insert(technicians).values({ tenantId: TENANT_ID, name: "Overlap Tech" }).returning());
     const start1 = new Date("2026-08-01T09:00:00Z");
     const start2 = new Date("2026-08-01T09:30:00Z"); // starts 30 min into a 60-min-default first appointment
     await withTenant(TENANT_ID, (db) =>
       db.insert(appointments).values([
-        { tenantId: TENANT_ID, subjectType: "household", subjectId: TENANT_ID, technicianId: tech!.id, status: "confirmed", scheduledAt: start1 },
-        { tenantId: TENANT_ID, subjectType: "household", subjectId: TENANT_ID, technicianId: tech!.id, status: "confirmed", scheduledAt: start2 },
+        { tenantId: TENANT_ID, subjectType: "household", subjectId: household!.id, technicianId: tech!.id, status: "confirmed", scheduledAt: start1 },
+        { tenantId: TENANT_ID, subjectType: "household", subjectId: household!.id, technicianId: tech!.id, status: "confirmed", scheduledAt: start2 },
       ]),
     );
     await scanDataQuality({ tenantId: TENANT_ID });
@@ -333,11 +336,14 @@ describe.skipIf(!available)("proactive scan handlers", () => {
 
   it("scan_data_quality never flags non-overlapping appointments for the same technician", async () => {
     await withTenant(TENANT_ID, (db) => db.delete(dataQualityFindings).where(and(eq(dataQualityFindings.tenantId, TENANT_ID), eq(dataQualityFindings.findingType, "contradiction"))));
+    const [household] = await withTenant(TENANT_ID, (db) =>
+      db.insert(households).values({ tenantId: TENANT_ID, address: "10 Appointment Control Ln", contactInfo: {} }).returning(),
+    );
     const [tech] = await withTenant(TENANT_ID, (db) => db.insert(technicians).values({ tenantId: TENANT_ID, name: "No Overlap Tech" }).returning());
     await withTenant(TENANT_ID, (db) =>
       db.insert(appointments).values([
-        { tenantId: TENANT_ID, subjectType: "household", subjectId: TENANT_ID, technicianId: tech!.id, status: "confirmed", scheduledAt: new Date("2026-08-02T09:00:00Z"), durationMinutes: 30 },
-        { tenantId: TENANT_ID, subjectType: "household", subjectId: TENANT_ID, technicianId: tech!.id, status: "confirmed", scheduledAt: new Date("2026-08-02T10:00:00Z"), durationMinutes: 30 },
+        { tenantId: TENANT_ID, subjectType: "household", subjectId: household!.id, technicianId: tech!.id, status: "confirmed", scheduledAt: new Date("2026-08-02T09:00:00Z"), durationMinutes: 30 },
+        { tenantId: TENANT_ID, subjectType: "household", subjectId: household!.id, technicianId: tech!.id, status: "confirmed", scheduledAt: new Date("2026-08-02T10:00:00Z"), durationMinutes: 30 },
       ]),
     );
     await scanDataQuality({ tenantId: TENANT_ID });

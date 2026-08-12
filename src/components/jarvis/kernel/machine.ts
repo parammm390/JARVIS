@@ -35,6 +35,7 @@ function nextState(from: InstructionState, event: InstructionEvent): Instruction
 
     case "understanding":
       if (event.type === "TRACE_planning") return "planning"
+      if (event.type === "SUBMIT_FAILED") return "failed"
       return null
 
     case "planning":
@@ -42,6 +43,7 @@ function nextState(from: InstructionState, event: InstructionEvent): Instruction
       if (event.type === "ACTION_pending" && event.count >= 1) return "awaiting_approval"
       if (event.type === "ACTION_executing" && event.gatedCount === 0) return "executing"
       if (event.type === "TRACE_failed") return "failed"
+      if (event.type === "SUBMIT_FAILED") return "failed"
       if (event.type === "PLAN_EMPTY") return "failed"
       return null
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { WorkCaseProjection } from "@/lib/jarvis-client"
-import { AGENT_ACTIVITY_UNAVAILABLE, AGENT_FLEET, OPERATING_AGENTS, REGISTERED_AGENT_ACTIONS, REGISTERED_AGENT_ACTION_COUNT, agentDefinition, assistantStatusCopy, exactAgentKeysForWork, exactOperatingAgentKeysForWork, projectAgentActivity, projectOperatingAgentActivity, providerStatusCopy } from "./agent-fleet"
+import { AGENT_ACTIVITY_UNAVAILABLE, AGENT_FLEET, CAPABILITY_DOMAINS, REGISTERED_BACKEND_ACTIONS, REGISTERED_BACKEND_ACTION_COUNT, agentDefinition, assistantStatusCopy, exactAgentKeysForWork, exactCapabilityDomainKeysForWork, groupCapabilityWork, projectAgentActivity, projectCapabilityDomainActivity, providerStatusCopy } from "./agent-fleet"
 
 function workCase(overrides: Partial<WorkCaseProjection> = {}): WorkCaseProjection {
   return {
@@ -99,12 +99,12 @@ describe("P3.T3 exact Agent → Work → Customer projection", () => {
   })
 })
 
-describe("operating control plane", () => {
-  it("curates nine named agents over all 44 registered action contracts exactly once", () => {
-    expect(OPERATING_AGENTS).toHaveLength(9)
-    expect(REGISTERED_AGENT_ACTION_COUNT).toBe(44)
-    expect(new Set(REGISTERED_AGENT_ACTIONS).size).toBe(44)
-    expect(OPERATING_AGENTS.map((agent) => agent.label)).toEqual([
+describe("backend capability control plane", () => {
+  it("curates nine capability domains over all 44 registered action contracts exactly once", () => {
+    expect(CAPABILITY_DOMAINS).toHaveLength(9)
+    expect(REGISTERED_BACKEND_ACTION_COUNT).toBe(44)
+    expect(new Set(REGISTERED_BACKEND_ACTIONS).size).toBe(44)
+    expect(CAPABILITY_DOMAINS.map((domain) => domain.label)).toEqual([
       "Command Authority",
       "Customer Desk",
       "Growth Desk",
@@ -124,8 +124,18 @@ describe("operating control plane", () => {
     })
     const decoy = workCase({ title: "Payment reminder without an action" })
 
-    expect(exactOperatingAgentKeysForWork(collection)).toEqual(["cash-control"])
-    expect(exactOperatingAgentKeysForWork(decoy)).toEqual([])
-    expect(projectOperatingAgentActivity([collection, decoy], "cash-control").workCases.map((item) => item.id)).toEqual([collection.id])
+    expect(exactCapabilityDomainKeysForWork(collection)).toEqual(["cash-control"])
+    expect(exactCapabilityDomainKeysForWork(decoy)).toEqual([])
+    expect(projectCapabilityDomainActivity([collection, decoy], "cash-control").workCases.map((item) => item.id)).toEqual([collection.id])
+  })
+
+  it("groups repeated domain activity without dropping exact Work records", () => {
+    const first = workCase({ id: "work-one", title: "Get business overview", actions: [{ actionType: "get_business_overview", payload: {}, id: "a", status: "completed", summary: null, instructionId: null, planId: null, dependsOn: [], createdAt: "", updatedAt: "" }] })
+    const second = workCase({ id: "work-two", title: "Get business overview", actions: [{ actionType: "get_business_overview", payload: {}, id: "b", status: "completed", summary: null, instructionId: null, planId: null, dependsOn: [], createdAt: "", updatedAt: "" }] })
+
+    const groups = groupCapabilityWork([first, second])
+
+    expect(groups).toHaveLength(1)
+    expect(groups[0]?.cases.map((item) => item.id)).toEqual(["work-one", "work-two"])
   })
 })

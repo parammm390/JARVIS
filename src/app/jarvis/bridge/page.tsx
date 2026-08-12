@@ -1,11 +1,5 @@
-import type { Metadata } from "next"
-import { Bridge } from "@/components/jarvis/bridge/Bridge"
-
-export const metadata: Metadata = {
-  title: "JARVIS — Command Bridge",
-  description: "The JARVIS command bridge: live vitals, activity, approvals, and evidence in one continuous space.",
-}
+import { redirect } from "next/navigation"
 
 export default function JarvisBridgePage() {
-  return <Bridge />
+  redirect("/jarvis")
 }
