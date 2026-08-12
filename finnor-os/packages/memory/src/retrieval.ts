@@ -67,7 +67,13 @@ export async function hybridRetrieve(params: HybridRetrieveParams): Promise<Hybr
   // break an answer that structured facts alone can already ground — same
   // graceful-degradation convention buildMemorySnapshot already applies.
   const [semanticHits, correction] = await Promise.all([
-    querySemantic(params.tenantId, params.query, params.semanticLimit ?? DEFAULT_SEMANTIC_LIMIT).catch(() => [] as SemanticHit[]),
+    // Callers with a complete exact read model can explicitly disable approximate
+    // semantic recall. This prevents unrelated same-tenant snippets from bleeding
+    // into identity-critical answers and avoids paying for an embedding that cannot
+    // improve the result.
+    params.semanticLimit === 0
+      ? Promise.resolve([] as SemanticHit[])
+      : querySemantic(params.tenantId, params.query, params.semanticLimit ?? DEFAULT_SEMANTIC_LIMIT).catch(() => [] as SemanticHit[]),
     // §5.6: a human correction always wins — checked BEFORE anything else so it lands
     // first in `structured` (and therefore first in `citations`), ahead of every other
     // structured fact a caller supplied, not just ahead of semantic hits.

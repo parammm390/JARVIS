@@ -20,7 +20,11 @@ export function PushOptIn() {
     // even though a registered service worker can subscribe successfully.
     if (!session || !key || !("serviceWorker" in navigator)) { setState("unavailable"); return }
     try {
-      const registration = await navigator.serviceWorker.register("/jarvis-push-sw.js", { scope: "/" });
+      // The script is served below /jarvis, so its legal default scope is the
+      // canonical product subtree. Asking for site-root scope without a
+      // Service-Worker-Allowed header makes Chrome reject registration with the
+      // opaque "Invalid scope" warning and leaves opt-in permanently broken.
+      const registration = await navigator.serviceWorker.register("/jarvis-push-sw.js", { scope: "/jarvis/" });
       if (!registration.pushManager) { setState("unavailable"); return }
       const permission = await Notification.requestPermission();
       if (permission !== "granted") { setState("unavailable"); return }

@@ -1,6 +1,5 @@
 import type { Metadata } from "next"
 import DispatchFieldSurface from "@/components/jarvis/panels/DispatchFieldSurface"
-import { JarvisAuthProvider } from "@/components/jarvis/lib/jarvis-auth"
 
 export const metadata: Metadata = {
   title: "JARVIS — Schedule",
@@ -8,9 +7,5 @@ export const metadata: Metadata = {
 }
 
 export default function SchedulePage() {
-  return (
-    <JarvisAuthProvider>
-      <DispatchFieldSurface />
-    </JarvisAuthProvider>
-  )
+  return <DispatchFieldSurface />
 }

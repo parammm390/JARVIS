@@ -33,12 +33,11 @@ export const routeOptimizationPlugin: DomainEnginePlugin = {
   async draft(_actionType, payload, policy: DomainPolicy): Promise<DraftAction> {
     const input = RouteSuggestionSchema.parse(payload);
     const [start, end] = dayBounds(input.date);
-    const [tech, visits] = await withTenant(policy.tenantId, async (db) =>
-      Promise.all([
-        db.select({ name: technicians.name }).from(technicians).where(and(eq(technicians.id, input.technicianId), eq(technicians.tenantId, policy.tenantId))).limit(1),
-        db.select({ id: serviceVisits.id }).from(serviceVisits).where(and(eq(serviceVisits.technicianId, input.technicianId), gte(serviceVisits.scheduledAt, start), lt(serviceVisits.scheduledAt, end), isNull(serviceVisits.completedAt))).orderBy(asc(serviceVisits.scheduledAt)),
-      ]),
-    );
+    const { tech, visits } = await withTenant(policy.tenantId, async (db) => {
+      const tech = await db.select({ name: technicians.name }).from(technicians).where(and(eq(technicians.id, input.technicianId), eq(technicians.tenantId, policy.tenantId))).limit(1);
+      const visits = await db.select({ id: serviceVisits.id }).from(serviceVisits).where(and(eq(serviceVisits.technicianId, input.technicianId), gte(serviceVisits.scheduledAt, start), lt(serviceVisits.scheduledAt, end), isNull(serviceVisits.completedAt))).orderBy(asc(serviceVisits.scheduledAt));
+      return { tech, visits };
+    });
     return {
       actionType: ROUTE_SUGGESTION_ACTION,
       summary: `Review the ${input.date} route suggestion for ${tech[0]?.name ?? "the selected technician"} (${visits.length} scheduled stop${visits.length === 1 ? "" : "s"}).`,

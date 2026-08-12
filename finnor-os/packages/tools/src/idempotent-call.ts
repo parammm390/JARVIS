@@ -91,13 +91,23 @@ export async function recordExternalOperationResult(
   status: "succeeded" | "failed",
   response: Record<string, unknown>,
 ): Promise<void> {
+  const redacted = redactStructured(response) as Record<string, unknown>;
+  // Provider/native record identifiers are required to resume a multi-step effect
+  // after a crash (for example: replay a successful contact upsert, then send the
+  // SMS to that contact). They are opaque operational keys, not message content or
+  // phone/email PII. Preserve only this small allowlist after structural redaction;
+  // without it the cached replay returned "[REDACTED]" as contactId and made a safe
+  // retry fail before the send.
+  for (const key of ["id", "contactId", "householdId", "messageId", "campaignId", "visitId", "appointmentId"]) {
+    if (typeof response[key] === "string") redacted[key] = response[key];
+  }
   await withTenant(tenantId, (db) =>
     db
       .update(externalOperations)
       // Cached results are replayed internally, but they are still durable customer
       // data. Keep only the minimum structured result and redact direct identifiers
       // before persisting the ledger.
-      .set({ status, response: redactStructured(response), updatedAt: new Date() })
+      .set({ status, response: redacted, updatedAt: new Date() })
       .where(and(eq(externalOperations.domainActionId, domainActionId), eq(externalOperations.operationKey, operationKey))),
   );
 }

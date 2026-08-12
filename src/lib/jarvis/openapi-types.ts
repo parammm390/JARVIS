@@ -75,6 +75,11 @@ export interface paths {
                         idempotencyKey?: string;
                         /** Format: uuid */
                         instructionId?: string;
+                        /** Format: uuid */
+                        workId?: string;
+                        activeContext?: {
+                            [key: string]: unknown;
+                        };
                     };
                 };
             };
@@ -87,6 +92,197 @@ export interface paths {
                     content?: never;
                 };
                 /** @description Invalid payload */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Bad auth */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/queries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Execute one bounded deterministic operational query without invoking the planner */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        intent: "customer_lookup";
+                        /** Format: uuid */
+                        householdId?: string;
+                        query?: string;
+                        name?: string;
+                        address?: string;
+                        contact?: string;
+                        phone?: string;
+                        page?: {
+                            limit?: number;
+                            cursor?: string;
+                        };
+                        /** Format: uuid */
+                        workId?: string;
+                        executionKey?: string;
+                        idempotencyKey?: string;
+                    } | {
+                        /** @constant */
+                        intent: "customer_cohort";
+                        /** @constant */
+                        cohort: "inactive";
+                        minDaysInactive: number;
+                        /** Format: date-time */
+                        asOf?: string;
+                        page?: {
+                            limit?: number;
+                            cursor?: string;
+                        };
+                        /** Format: uuid */
+                        workId?: string;
+                        executionKey?: string;
+                        idempotencyKey?: string;
+                    } | {
+                        /** @constant */
+                        intent: "schedule_range";
+                        range?: {
+                            /** Format: date-time */
+                            start: string;
+                            /** Format: date-time */
+                            end: string;
+                        };
+                        localDateRange?: {
+                            startDate: string;
+                            endDate?: string;
+                        };
+                        page?: {
+                            limit?: number;
+                            cursor?: string;
+                        };
+                        /** Format: uuid */
+                        workId?: string;
+                        executionKey?: string;
+                        idempotencyKey?: string;
+                    } | {
+                        /** @constant */
+                        intent: "money_summary";
+                        range?: {
+                            /** Format: date-time */
+                            start: string;
+                            /** Format: date-time */
+                            end: string;
+                        };
+                        /** Format: date-time */
+                        start?: string;
+                        /** Format: date-time */
+                        end?: string;
+                        page?: {
+                            limit?: number;
+                            cursor?: string;
+                        };
+                        /** Format: uuid */
+                        workId?: string;
+                        executionKey?: string;
+                        idempotencyKey?: string;
+                    } | {
+                        /** @constant */
+                        intent: "work_list";
+                        /** @enum {string} */
+                        section?: "all" | "works" | "work_orders" | "tasks";
+                        openOnly?: boolean;
+                        statuses?: string[];
+                        /** Format: uuid */
+                        recordId?: string;
+                        page?: {
+                            limit?: number;
+                            cursor?: string;
+                        };
+                        /** Format: uuid */
+                        workId?: string;
+                        executionKey?: string;
+                        idempotencyKey?: string;
+                    } | {
+                        /** @constant */
+                        intent: "inventory_status";
+                        sku?: string;
+                        lowStockOnly?: boolean;
+                        includeOpenProcurement?: boolean;
+                        page?: {
+                            limit?: number;
+                            cursor?: string;
+                        };
+                        /** Format: uuid */
+                        workId?: string;
+                        executionKey?: string;
+                        idempotencyKey?: string;
+                    } | {
+                        /** @constant */
+                        intent: "agent_activity";
+                        range?: {
+                            /** Format: date-time */
+                            start: string;
+                            /** Format: date-time */
+                            end: string;
+                        };
+                        localDateRange?: {
+                            startDate: string;
+                            endDate?: string;
+                        };
+                        page?: {
+                            limit?: number;
+                            cursor?: string;
+                        };
+                        /** Format: uuid */
+                        workId?: string;
+                        executionKey?: string;
+                        idempotencyKey?: string;
+                    } | {
+                        /** @constant */
+                        intent: "business_state";
+                        page?: {
+                            limit?: number;
+                            cursor?: string;
+                        };
+                        /** Format: uuid */
+                        workId?: string;
+                        executionKey?: string;
+                        idempotencyKey?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Typed canonical PostgreSQL result with Work/execution metadata */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid or mismatched typed query request */
                 400: {
                     headers: {
                         [name: string]: unknown;
@@ -201,7 +397,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Approve a pending action — clears the confirmation gate and executes */
+        /** Approve a pending action — executes bounded work or durably queues an associated business operation */
         post: {
             parameters: {
                 query?: never;
@@ -213,6 +409,8 @@ export interface paths {
                 content: {
                     "application/json": {
                         note?: string;
+                        /** @constant */
+                        typedConfirmation?: true;
                     };
                 };
             };
@@ -239,6 +437,122 @@ export interface paths {
                     content?: never;
                 };
                 /** @description Not pending/needs_human_review */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/operations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Inspect a durable business operation, its frozen targets, per-target execution state, events, and receipt */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description {operation: {operation, targets, events, receipt}} */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Bad auth */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Operation not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/operations/{id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Recover retryable, configuration, or human-review targets without replaying successful or policy-skipped targets */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        recoveryKey: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description {result: {operationId, retried, duplicate, queued}, operation} */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid recovery key */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Role cannot approve recovery */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Operation not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Operation has no recoverable targets or cannot be retried in its current state */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -1726,6 +2040,156 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/works": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List durable Work, optionally by session or active state */
+        get: {
+            parameters: {
+                query?: {
+                    sessionId?: string;
+                    active?: boolean;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description {works: Work[]} */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Bad auth */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/works/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read one Work with inputs, planner attempts, query executions, actions, approvals, workflow runs, receipts, recovery, and events */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Canonical durable Work aggregate */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Bad auth */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Work not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/works/{id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retry failed Work through the ordinary planner with an idempotent recovery claim */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        idempotencyKey: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Recovery planner result */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Duplicate retry still planning */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Work is not retryable */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;

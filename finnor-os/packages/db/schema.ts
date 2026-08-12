@@ -58,6 +58,151 @@ export const users = pgTable("users", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+// Upgrade 2: the durable envelope around every human instruction. Existing action,
+// approval, workflow, and receipt tables remain the execution sources of truth; a
+// Work row gives them one stable parent that exists before planning begins.
+export const works = pgTable(
+  "works",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    status: text("status", {
+      enum: [
+        "received", "understanding", "planning", "ready", "actionable",
+        "awaiting_approval", "executing", "completed", "failed", "recovery",
+      ],
+    }).notNull().default("received"),
+    sessionId: text("session_id"),
+    initialChannel: text("initial_channel", { enum: ["voice", "text", "console"] }).notNull(),
+    initialInstruction: text("initial_instruction").notNull(),
+    createdBy: uuid("created_by").references(() => users.id),
+    activeContext: jsonb("active_context").notNull().default({}),
+    idempotencyKey: text("idempotency_key"),
+    finalOutcome: jsonb("final_outcome"),
+    failure: jsonb("failure"),
+    recovery: jsonb("recovery"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("works_tenant_idempotency_idx").on(t.tenantId, t.idempotencyKey),
+    index("works_tenant_status_idx").on(t.tenantId, t.status),
+    index("works_tenant_session_idx").on(t.tenantId, t.sessionId),
+  ],
+);
+
+export const workInputs = pgTable(
+  "work_inputs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    workId: uuid("work_id").notNull().references(() => works.id),
+    instructionId: uuid("instruction_id").notNull(),
+    channel: text("channel", { enum: ["voice", "text", "console"] }).notNull(),
+    sessionId: text("session_id"),
+    instructionText: text("instruction_text").notNull(),
+    createdBy: uuid("created_by").references(() => users.id),
+    idempotencyKey: text("idempotency_key"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("work_inputs_tenant_instruction_idx").on(t.tenantId, t.instructionId),
+    unique("work_inputs_work_idempotency_idx").on(t.workId, t.idempotencyKey),
+    index("work_inputs_work_created_idx").on(t.workId, t.createdAt),
+  ],
+);
+
+export const workPlannerAttempts = pgTable(
+  "work_planner_attempts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    workId: uuid("work_id").notNull().references(() => works.id),
+    workInputId: uuid("work_input_id").references(() => workInputs.id),
+    attempt: integer("attempt").notNull(),
+    attemptKey: text("attempt_key").notNull(),
+    status: text("status", { enum: ["planning", "succeeded", "failed", "timed_out"] }).notNull().default("planning"),
+    plannerResult: jsonb("planner_result"),
+    failure: jsonb("failure"),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (t) => [
+    unique("work_planner_attempts_work_attempt_idx").on(t.workId, t.attempt),
+    unique("work_planner_attempts_work_key_idx").on(t.workId, t.attemptKey),
+    index("work_planner_attempts_tenant_work_idx").on(t.tenantId, t.workId),
+  ],
+);
+
+export const workEvents = pgTable(
+  "work_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    workId: uuid("work_id").notNull().references(() => works.id),
+    seq: integer("seq").notNull(),
+    eventType: text("event_type").notNull(),
+    fromStatus: text("from_status", {
+      enum: [
+        "received", "understanding", "planning", "ready", "actionable",
+        "awaiting_approval", "executing", "completed", "failed", "recovery",
+      ],
+    }),
+    toStatus: text("to_status", {
+      enum: [
+        "received", "understanding", "planning", "ready", "actionable",
+        "awaiting_approval", "executing", "completed", "failed", "recovery",
+      ],
+    }).notNull(),
+    payload: jsonb("payload").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("work_events_work_seq_idx").on(t.workId, t.seq),
+    index("work_events_tenant_work_idx").on(t.tenantId, t.workId),
+  ],
+);
+
+// Upgrade 3: deterministic operational reads are durable Work children, but are
+// not planner attempts. Only a bounded summary is persisted; the canonical result
+// rows are always read afresh from the tenant tables and are never copied here.
+export const workQueryExecutions = pgTable(
+  "work_query_executions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    workId: uuid("work_id").notNull().references(() => works.id),
+    workInputId: uuid("work_input_id").references(() => workInputs.id),
+    intent: text("intent", {
+      enum: [
+        "customer_lookup",
+        "customer_cohort",
+        "schedule_range",
+        "money_summary",
+        "work_list",
+        "inventory_status",
+        "agent_activity",
+        "business_state",
+      ],
+    }).notNull(),
+    request: jsonb("request").notNull().default({}),
+    executionKey: text("execution_key").notNull(),
+    status: text("status", { enum: ["running", "succeeded", "failed"] }).notNull().default("running"),
+    resultSummary: jsonb("result_summary"),
+    rowCount: integer("row_count").notNull().default(0),
+    durationMs: integer("duration_ms"),
+    failure: jsonb("failure"),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (t) => [
+    unique("work_query_executions_work_key_idx").on(t.workId, t.executionKey),
+    index("work_query_executions_tenant_work_started_idx").on(t.tenantId, t.workId, t.startedAt),
+    index("work_query_executions_tenant_status_started_idx").on(t.tenantId, t.status, t.startedAt),
+    index("work_query_executions_tenant_input_idx").on(t.tenantId, t.workInputId),
+  ],
+);
+
 export const households = pgTable("households", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
@@ -226,10 +371,13 @@ export const domainActions = pgTable(
     // this action, when the caller supplied one — nullable (draftKnownAction and every
     // pre-P3 row have none).
     instructionId: uuid("instruction_id"),
+    workId: uuid("work_id").references(() => works.id),
+    plannerAttemptId: uuid("planner_attempt_id").references(() => workPlannerAttempts.id),
   },
   (t) => [
     index("domain_actions_tenant_status_idx").on(t.tenantId, t.status),
     index("domain_actions_tenant_plan_idx").on(t.tenantId, t.planId),
+    index("domain_actions_work_idx").on(t.workId),
   ],
 );
 
@@ -239,6 +387,7 @@ export const planRepairs = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
     failedDomainActionId: uuid("failed_domain_action_id").notNull().references(() => domainActions.id),
+    workId: uuid("work_id").references(() => works.id),
     sourcePlanId: uuid("source_plan_id").notNull(),
     repairPlanId: uuid("repair_plan_id"),
     terminalReceipt: jsonb("terminal_receipt").notNull(),
@@ -473,6 +622,103 @@ export const jobs = pgTable(
     idempotencyKey: text("idempotency_key").unique(),
   },
   (t) => [index("jobs_status_run_at_idx").on(t.status, t.runAt)],
+);
+
+// Upgrade 6: the minimum durable business-operation envelope for work that cannot
+// safely complete inside one approval request. Domain actions remain the authority
+// boundary; an operation is the recoverable execution child authorized by that
+// action. The first production use is customer win-back/bulk outreach.
+export const businessOperations = pgTable(
+  "business_operations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    workId: uuid("work_id").references(() => works.id),
+    domainActionId: uuid("domain_action_id").notNull().references(() => domainActions.id),
+    operationType: text("operation_type", { enum: ["customer_winback"] }).notNull(),
+    status: text("status", {
+      enum: ["awaiting_approval", "queued", "running", "completed", "completed_with_failures", "needs_human_review", "failed", "cancelled"],
+    }).notNull().default("awaiting_approval"),
+    configuration: jsonb("configuration").notNull().default({}),
+    cohortDefinition: jsonb("cohort_definition").notNull().default({}),
+    cohortFrozenAt: timestamp("cohort_frozen_at", { withTimezone: true }).notNull().defaultNow(),
+    targetCount: integer("target_count").notNull().default(0),
+    pendingCount: integer("pending_count").notNull().default(0),
+    runningCount: integer("running_count").notNull().default(0),
+    succeededCount: integer("succeeded_count").notNull().default(0),
+    failedCount: integer("failed_count").notNull().default(0),
+    skippedCount: integer("skipped_count").notNull().default(0),
+    retryCount: integer("retry_count").notNull().default(0),
+    nextBatchSequence: integer("next_batch_sequence").notNull().default(0),
+    approvedBy: text("approved_by"),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    finalOutcome: jsonb("final_outcome"),
+    failure: jsonb("failure"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("business_operations_action_idx").on(t.domainActionId),
+    index("business_operations_tenant_work_idx").on(t.tenantId, t.workId),
+    index("business_operations_tenant_status_idx").on(t.tenantId, t.status),
+  ],
+);
+
+export const businessOperationTargets = pgTable(
+  "business_operation_targets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    operationId: uuid("operation_id").notNull().references(() => businessOperations.id),
+    targetType: text("target_type", { enum: ["household"] }).notNull().default("household"),
+    targetId: uuid("target_id").notNull().references(() => households.id),
+    ordinal: integer("ordinal").notNull(),
+    status: text("status", { enum: ["pending", "running", "succeeded", "failed", "skipped", "retry"] }).notNull().default("pending"),
+    frozenSnapshot: jsonb("frozen_snapshot").notNull().default({}),
+    preparedPayload: jsonb("prepared_payload").notNull().default({}),
+    idempotencyKey: text("idempotency_key").notNull(),
+    jobKey: text("job_key"),
+    attempts: integer("attempts").notNull().default(0),
+    maxAttempts: integer("max_attempts").notNull().default(3),
+    nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).notNull().defaultNow(),
+    leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
+    failureClass: text("failure_class", { enum: ["retryable", "policy", "configuration", "invalid_input", "human_review"] }),
+    errorKind: text("error_kind", { enum: ["retryable", "terminal", "conflict", "auth", "validation", "provider_down", "needs_human", "config"] }),
+    lastError: text("last_error"),
+    providerRef: text("provider_ref"),
+    evidence: jsonb("evidence").notNull().default([]),
+    result: jsonb("result"),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("business_operation_targets_operation_target_idx").on(t.operationId, t.targetId),
+    unique("business_operation_targets_idempotency_idx").on(t.idempotencyKey),
+    index("business_operation_targets_operation_status_idx").on(t.operationId, t.status, t.nextAttemptAt),
+    index("business_operation_targets_tenant_target_idx").on(t.tenantId, t.targetId),
+  ],
+);
+
+export const businessOperationEvents = pgTable(
+  "business_operation_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    operationId: uuid("operation_id").notNull().references(() => businessOperations.id),
+    targetId: uuid("target_id").references(() => businessOperationTargets.id),
+    sequence: integer("sequence").notNull(),
+    eventType: text("event_type").notNull(),
+    payload: jsonb("payload").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("business_operation_events_operation_sequence_idx").on(t.operationId, t.sequence),
+    index("business_operation_events_tenant_operation_idx").on(t.tenantId, t.operationId, t.sequence),
+  ],
 );
 
 // Phase 4 (§4.4): durable per-provider circuit-breaker state — global per provider,
@@ -1033,6 +1279,7 @@ export const workflowRuns = pgTable("workflow_runs", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
   commandId: uuid("command_id").notNull().references(() => commands.id),
+  workId: uuid("work_id").references(() => works.id),
   workflowType: text("workflow_type").notNull(),
   status: text("status", {
     enum: ["running", "completed", "failed", "compensating", "compensated", "paused", "cancelled", "escalated"],
@@ -1186,6 +1433,8 @@ export const decisionReceipts = pgTable(
     workflowRunId: uuid("workflow_run_id").references(() => workflowRuns.id),
     workflowStepId: uuid("workflow_step_id").references(() => workflowSteps.id),
     domainActionId: uuid("domain_action_id").references(() => domainActions.id),
+    operationId: uuid("operation_id").references(() => businessOperations.id),
+    workId: uuid("work_id").references(() => works.id),
     objective: text("objective").notNull(),
     evidence: jsonb("evidence").notNull().default([]),
     policyApplied: jsonb("policy_applied"),
@@ -1204,6 +1453,7 @@ export const decisionReceipts = pgTable(
     unique("decision_receipts_step_idx").on(t.workflowStepId),
     index("decision_receipts_tenant_created_idx").on(t.tenantId, t.createdAt),
     index("decision_receipts_domain_action_idx").on(t.domainActionId),
+    unique("decision_receipts_operation_idx").on(t.operationId),
   ],
 );
 
@@ -1556,6 +1806,7 @@ export const instructionSessions = pgTable(
   {
     id: uuid("id").primaryKey(),
     tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    workId: uuid("work_id").references(() => works.id),
     sessionId: text("session_id"),
     userId: uuid("user_id").references(() => users.id),
     instructionText: text("instruction_text").notNull(),

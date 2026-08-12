@@ -33,6 +33,7 @@ export async function GET() {
     checkedAt: new Date().toISOString(),
   })
 }
+
 async function checkSupabase() {
   const configured = Boolean(serverEnv.supabaseUrl && serverEnv.supabaseServiceRoleKey)
   if (!configured) {

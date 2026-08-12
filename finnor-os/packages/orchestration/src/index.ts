@@ -1,8 +1,13 @@
 // Orchestration core (§9): Planner → confirmation gate → Executor → Reflection.
 // This module is the single entry point the API, webhooks, and workers all use.
 
-import type { DomainAction, DomainPolicy, TenantContext, ExecutionResult } from "@finnor/shared-types";
-import { withTenant, domainActions, domainPolicies, domainPolicyRevisions, actionLog, decisionReceipts, planRepairs, enqueueJob } from "@finnor/db";
+import type { DomainAction, DomainPolicy, TenantContext, ExecutionResult, MemorySnapshot } from "@finnor/shared-types";
+import {
+  withTenant, domainActions, domainPolicies, domainPolicyRevisions, actionLog,
+  decisionReceipts, planRepairs, enqueueJob, receiveWork, transitionWork,
+  beginWorkPlannerAttempt, finishWorkPlannerAttempt, latestWorkInput, reconcileWorkStatus,
+  authorizeBusinessOperationTx, businessOperations,
+} from "@finnor/db";
 import { buildMemorySnapshot, appendEpisode, appendShortTerm, mirrorTurnToZep } from "@finnor/memory";
 import { createDefaultRegistry, type ToolRegistry } from "@finnor/tools";
 import { and, desc, eq, inArray, lte } from "drizzle-orm";
@@ -18,9 +23,18 @@ import { getCheckpointer } from "./graph/checkpointer";
 import { ensureSecretsLoaded, redactStructured, redactText } from "@finnor/security";
 import { isPlanActionReady, planIdForAction, readyPlanActions, recordPredictionDiff } from "./plan-dag";
 import { plannerMemoryEnabled } from "./planner-memory";
-import { createInstructionTraceAnswerEnvelope, createInstructionTraceResultEnvelope, ensureInstructionSession, emitInstructionEvent, isReadOnlyAnswerAction } from "./instruction-trace";
-import { defaultFastReadOnlyRouter, type AnswerEnvelope, type FastReadOnlyRouter } from "./fast-read-lane";
+import { createInstructionTraceAnswerEnvelope, createInstructionTraceResultEnvelope, ensureInstructionSession, emitInstructionEvent, isInstructionCancelled, isReadOnlyAnswerAction } from "./instruction-trace";
+import {
+  defaultFastReadOnlyRouter,
+  type AnswerEnvelope,
+  type FastReadOnlyRouter,
+  type OperationalQueryDecision,
+  type OperationalQueryExecution,
+  type OperationalQueryRequest,
+} from "./fast-read-lane";
+import { isConversationalTurn, LLMConversationResponder, type ConversationResponder } from "./conversation";
 import { requiresTypedConfirmation } from "../../../scripts/release/action-hardening-spec";
+import { resolveHouseholdMention } from "@finnor/read-models";
 
 export * from "./llm";
 export * from "./planner";
@@ -43,20 +57,54 @@ export * from "./planner-memory";
 export * from "./policy-simulation";
 export * from "./instruction-trace";
 export * from "./fast-read-lane";
+export * from "./conversation";
 
 export interface InstructionResult {
   actions: DomainAction[];
   answer?: AnswerEnvelope;
+  query?: OperationalQueryExecution;
+  workId?: string;
+  workInputId?: string;
+  instructionId?: string;
 }
 
 export interface InstructionOptions {
   sessionId?: string;
   householdId?: string;
   instructionId?: string;
+  workId?: string;
+  workInputId?: string;
+  idempotencyKey?: string;
+  /** Optional deterministic key for the durable work_query_executions receipt. */
+  executionKey?: string;
+  plannerAttemptKey?: string;
+  activeContext?: Record<string, unknown>;
   channel?: "voice" | "text" | "console";
   signal?: AbortSignal;
   deadlineAt?: number;
   deadlineMs?: number;
+  /** Set by an API boundary that already performed the pure read classification. */
+  fastReadDecision?: OperationalQueryDecision;
+  /** Skip the legacy router classification entirely after a planner decision. */
+  skipFastReadClassification?: boolean;
+}
+
+export interface OperationalQueryOptions {
+  sessionId?: string;
+  instructionId?: string;
+  workId?: string;
+  idempotencyKey?: string;
+  executionKey?: string;
+  activeContext?: Record<string, unknown>;
+  channel?: "voice" | "text" | "console";
+}
+
+export interface OperationalQueryRun extends OperationalQueryExecution {
+  workId: string;
+  workInputId: string;
+  instructionId: string;
+  duplicate?: boolean;
+  answer?: AnswerEnvelope;
 }
 
 export interface Orchestrator {
@@ -91,6 +139,47 @@ export function defaultPolicy(tenantId: string, actionType: string): DomainPolic
   };
 }
 
+async function rememberAnswerTurn(
+  instruction: string,
+  answer: AnswerEnvelope,
+  ctx: TenantContext,
+  opts: InstructionOptions,
+): Promise<void> {
+  if (!opts.sessionId) return;
+  const turn = {
+    instruction,
+    answer: {
+      intent: answer.intent,
+      title: answer.display.title,
+      evidence: answer.evidence.slice(0, 5).map(({ source, ref }) => ({ source, ref })),
+    },
+    actions: [],
+    at: new Date().toISOString(),
+  };
+  await appendShortTerm(ctx.tenantId, opts.sessionId, turn).catch(() => undefined);
+  const zepInstruction = redactText(instruction).value;
+  const zepOutcome = JSON.stringify(redactStructured(turn.answer));
+  await mirrorTurnToZep(ctx.tenantId, opts.sessionId, `Instruction: ${zepInstruction}\nOutcome: ${zepOutcome}`).catch(() => undefined);
+}
+
+function workFailure(error: unknown, fallback: string): Record<string, unknown> & { message: string; timeout: boolean } {
+  const message = error instanceof Error ? error.message : fallback;
+  const name = error instanceof Error ? error.name : "Error";
+  const timeout = name === "AbortError" || /\b(?:timeout|timed out|deadline|aborted?)\b/i.test(message);
+  return { message, name, timeout, recoverable: true, at: new Date().toISOString() };
+}
+
+export class PlannerAttemptAlreadyClaimedError extends Error {
+  constructor(readonly workId: string, readonly attemptId: string) {
+    super(`Planner attempt ${attemptId} for Work ${workId} is already claimed`);
+    this.name = "PlannerAttemptAlreadyClaimedError";
+  }
+}
+
+function requireFreshPlannerAttempt(workId: string, attempt: { id: string; claimed: boolean }): void {
+  if (!attempt.claimed) throw new PlannerAttemptAlreadyClaimedError(workId, attempt.id);
+}
+
 export class FinnorOrchestrator implements Orchestrator {
   readonly plugins: PluginRegistry;
   readonly tools: ToolRegistry;
@@ -98,6 +187,7 @@ export class FinnorOrchestrator implements Orchestrator {
   readonly executor: Executor;
   readonly reflection: Reflection;
   readonly fastReadOnlyRouter: FastReadOnlyRouter;
+  readonly conversationResponder: ConversationResponder;
 
   constructor(deps?: {
     plugins?: PluginRegistry;
@@ -106,12 +196,14 @@ export class FinnorOrchestrator implements Orchestrator {
     executor?: Executor;
     reflection?: Reflection;
     fastReadOnlyRouter?: FastReadOnlyRouter;
+    conversationResponder?: ConversationResponder;
   }) {
     this.plugins = deps?.plugins ?? createDefaultPluginRegistry();
     this.tools = deps?.tools ?? createDefaultRegistry();
     this.planner = deps?.planner ?? new LLMPlanner(this.plugins);
     this.reflection = deps?.reflection ?? new OutcomeReflection();
     this.fastReadOnlyRouter = deps?.fastReadOnlyRouter ?? defaultFastReadOnlyRouter;
+    this.conversationResponder = deps?.conversationResponder ?? new LLMConversationResponder();
     if (deps?.executor) {
       this.executor = deps.executor;
     } else {
@@ -139,6 +231,177 @@ export class FinnorOrchestrator implements Orchestrator {
     return result.actions;
   }
 
+  private async conversationalResult(
+    instruction: string,
+    ctx: TenantContext,
+    memory: MemorySnapshot,
+    opts: InstructionOptions,
+    route: "conversation" | "empty_plan_recovery",
+    work: { workId: string; workInputId: string; instructionId: string; plannerAttemptId: string },
+  ): Promise<InstructionResult> {
+    const instructionId = work.instructionId;
+    try {
+      const answer = await this.conversationResponder.answer(instruction, ctx, memory, {
+        channel: opts.channel,
+        signal: opts.signal,
+        deadlineAt: opts.deadlineAt,
+        deadlineMs: opts.deadlineMs,
+        capabilityActionTypes: this.plugins.actionTypes(),
+      });
+      if (await isInstructionCancelled(ctx.tenantId, instructionId)) return { actions: [] };
+      await finishWorkPlannerAttempt({
+        tenantId: ctx.tenantId,
+        attemptId: work.plannerAttemptId,
+        status: "succeeded",
+        plannerResult: { route, kind: "answer", actionCount: 0 },
+      });
+      await transitionWork(ctx.tenantId, work.workId, "ready", "planner_succeeded", { route, plannerAttemptId: work.plannerAttemptId });
+      await transitionWork(ctx.tenantId, work.workId, "executing", "answer_started", { route });
+      if (instructionId) {
+        const answerId = `conversation:${instructionId}`;
+        await emitInstructionEvent(ctx.tenantId, instructionId, "plan_ready", { count: 1, route });
+        await emitInstructionEvent(ctx.tenantId, instructionId, "executing", { actionId: answerId, route });
+        await emitInstructionEvent(ctx.tenantId, instructionId, "completed", createInstructionTraceAnswerEnvelope(answerId, answer));
+      }
+      await rememberAnswerTurn(instruction, answer, ctx, opts);
+      await transitionWork(ctx.tenantId, work.workId, "completed", "answer_completed", { route }, {
+        finalOutcome: { kind: "answer", route, spokenSummary: answer.spokenSummary },
+      });
+      return { actions: [], answer, workId: work.workId, workInputId: work.workInputId, instructionId };
+    } catch (err) {
+      const failure = workFailure(err, "Conversational answer failed");
+      await finishWorkPlannerAttempt({ tenantId: ctx.tenantId, attemptId: work.plannerAttemptId, status: failure.timeout ? "timed_out" : "failed", failure });
+      await transitionWork(ctx.tenantId, work.workId, "failed", "understanding_failed", failure, { failure });
+      if (instructionId) {
+        await emitInstructionEvent(ctx.tenantId, instructionId, "failed", {
+          error: err instanceof Error ? err.message : "Conversational answer failed",
+          route,
+        });
+      }
+      throw err;
+    }
+  }
+
+  private async executeFastOperationalQuery(
+    request: OperationalQueryRequest,
+    ctx: TenantContext,
+    work: { workId: string; workInputId: string; instructionId: string },
+    opts: { emitTrace?: boolean; executionKey?: string } = {},
+  ): Promise<{ execution: OperationalQueryExecution; answer?: AnswerEnvelope }> {
+    const start = Date.now();
+    await transitionWork(ctx.tenantId, work.workId, "executing", "query_execution_started", {
+      intent: request.intent,
+      workInputId: work.workInputId,
+    });
+    try {
+      if (!this.fastReadOnlyRouter.execute) throw new Error("Operational query execution is unavailable");
+      // The canonical read-model executor is the sole owner of
+      // work_query_executions. Passing Work context here makes both NL and
+      // explicit typed API reads use the same durable claim/finish path.
+      const execution = await this.fastReadOnlyRouter.execute(request, ctx, {
+        workId: work.workId,
+        workInputId: work.workInputId,
+        executionKey: opts.executionKey ?? work.instructionId,
+      });
+      const durationMs = Math.max(0, Date.now() - start);
+      const queryId = execution.result.execution?.id ?? execution.metadata.queryId;
+      const completedAt = execution.metadata.completedAt;
+      const normalizedExecution: OperationalQueryExecution = {
+        ...execution,
+        metadata: {
+          ...execution.metadata,
+          queryId,
+          durationMs,
+          completedAt,
+        },
+      };
+      const answer = this.fastReadOnlyRouter.answer?.(normalizedExecution);
+      if (opts.emitTrace !== false) {
+        await emitInstructionEvent(ctx.tenantId, work.instructionId, "context_retrieved", {
+          chips: [{ label: `${request.intent} operational query`, source: `read-model:${request.intent}` }],
+        });
+        await emitInstructionEvent(ctx.tenantId, work.instructionId, "executing", {
+          queryId,
+          intent: request.intent,
+        });
+        await emitInstructionEvent(ctx.tenantId, work.instructionId, "completed", answer
+          ? createInstructionTraceAnswerEnvelope(queryId, answer)
+          : { queryId, intent: request.intent, durationMs });
+      }
+      await transitionWork(ctx.tenantId, work.workId, "completed", "query_execution_completed", {
+        queryId,
+        intent: request.intent,
+        durationMs,
+      }, {
+        finalOutcome: { kind: "operational_query", query: normalizedExecution },
+      });
+      return { execution: normalizedExecution, ...(answer ? { answer } : {}) };
+    } catch (err) {
+      const failure = workFailure(err, "Operational query failed");
+      await transitionWork(ctx.tenantId, work.workId, "failed", "query_execution_failed", {
+        intent: request.intent,
+        message: failure.message,
+        durationMs: Math.max(0, Date.now() - start),
+      }, { failure }).catch(() => undefined);
+      if (opts.emitTrace !== false) await emitInstructionEvent(ctx.tenantId, work.instructionId, "failed", { error: failure.message, intent: request.intent, recoverable: true });
+      throw err;
+    }
+  }
+
+  /** Execute a typed operational request without natural-language planning. */
+  async handleOperationalQuery(
+    request: OperationalQueryRequest,
+    ctx: TenantContext,
+    opts: OperationalQueryOptions = {},
+  ): Promise<OperationalQueryRun> {
+    const instruction = `Typed operational query: ${request.intent}`;
+    const received = await receiveWork({
+      tenantId: ctx.tenantId,
+      instruction,
+      channel: opts.channel ?? "console",
+      sessionId: opts.sessionId,
+      instructionId: opts.instructionId,
+      workId: opts.workId,
+      userId: ctx.userId,
+      idempotencyKey: opts.idempotencyKey,
+      activeContext: opts.activeContext,
+    });
+    if (received.duplicate) {
+      const finalOutcome = received.finalOutcome && typeof received.finalOutcome === "object" ? received.finalOutcome as Record<string, unknown> : {};
+      const stored = finalOutcome.query && typeof finalOutcome.query === "object"
+        ? finalOutcome.query as Record<string, unknown>
+        : finalOutcome.response && typeof finalOutcome.response === "object" && (finalOutcome.response as Record<string, unknown>).query && typeof (finalOutcome.response as Record<string, unknown>).query === "object"
+          ? (finalOutcome.response as Record<string, unknown>).query as Record<string, unknown>
+          : null;
+      if (stored && stored.result && stored.metadata) {
+        const execution = stored as unknown as OperationalQueryExecution;
+        const answer = this.fastReadOnlyRouter.answer?.(execution);
+        return { ...execution, workId: received.workId, workInputId: received.workInputId, instructionId: received.instructionId, duplicate: true, ...(answer ? { answer } : {}) };
+      }
+      throw new Error("Duplicate operational query has no durable result to replay");
+    }
+    await ensureInstructionSession(ctx.tenantId, received.instructionId, instruction, {
+      sessionId: opts.sessionId,
+      userId: ctx.userId,
+      source: opts.channel === "voice" ? "voice" : "typed",
+      workId: received.workId,
+    });
+    await emitInstructionEvent(ctx.tenantId, received.instructionId, "received", { workId: received.workId, queryIntent: request.intent });
+    await transitionWork(ctx.tenantId, received.workId, "understanding", "query_understanding_started", { queryIntent: request.intent, workInputId: received.workInputId });
+    const result = await this.executeFastOperationalQuery(request, ctx, {
+      workId: received.workId,
+      workInputId: received.workInputId,
+      instructionId: received.instructionId,
+    }, { executionKey: opts.executionKey ?? opts.idempotencyKey ?? received.instructionId });
+    return {
+      ...result.execution,
+      workId: received.workId,
+      workInputId: received.workInputId,
+      instructionId: received.instructionId,
+      ...(result.answer ? { answer: result.answer } : {}),
+    };
+  }
+
   /** Same instruction path as handleInstruction, with an additive direct-answer
    * result for callers that can render read-only answers immediately. Existing
    * callers should keep using handleInstruction when they only need action rows. */
@@ -147,47 +410,133 @@ export class FinnorOrchestrator implements Orchestrator {
     ctx: TenantContext,
     opts: InstructionOptions = {},
   ): Promise<InstructionResult> {
-    const instructionId = opts.instructionId;
-    if (instructionId) {
-      await ensureInstructionSession(ctx.tenantId, instructionId, instruction, {
+    const received = opts.workId && opts.workInputId && opts.instructionId
+      ? {
+          workId: opts.workId,
+          workInputId: opts.workInputId,
+          instructionId: opts.instructionId,
+        }
+      : await receiveWork({
+          tenantId: ctx.tenantId,
+          instruction,
+          channel: opts.channel ?? "console",
+          sessionId: opts.sessionId,
+          instructionId: opts.instructionId,
+          workId: opts.workId,
+          userId: ctx.userId,
+          idempotencyKey: opts.idempotencyKey,
+          activeContext: opts.activeContext,
+        });
+    const workId = received.workId;
+    const workInputId = received.workInputId;
+    const instructionId = received.instructionId;
+    const effectiveOpts: InstructionOptions = { ...opts, workId, workInputId, instructionId };
+    await ensureInstructionSession(ctx.tenantId, instructionId, instruction, {
         sessionId: opts.sessionId,
         userId: ctx.userId,
         source: opts.channel === "voice" ? "voice" : "typed",
+        workId,
       });
-      await emitInstructionEvent(ctx.tenantId, instructionId, "received");
-    }
+    await emitInstructionEvent(ctx.tenantId, instructionId, "received", { workId });
+    await transitionWork(ctx.tenantId, workId, "understanding", "understanding_started", { instructionId, workInputId });
 
     // This branch is intentionally before memory retrieval and planner invocation.
-    // Classification is read-only and can only produce an AnswerEnvelope; it never
-    // selects an action type, policy, or write capability.
-    const fastAnswer = await this.fastReadOnlyRouter.route(instruction, ctx);
-    if (fastAnswer) {
-      if (instructionId) {
-        const answerId = `fast-read:${instructionId}`;
-        await emitInstructionEvent(ctx.tenantId, instructionId, "context_retrieved", {
-          chips: [fastAnswer.intent === "greeting"
-            ? { label: "assistant ready", source: "assistant:greeting" }
-            : { label: "cash collections read model", source: "read-model:cash-collections" }],
-        });
-        await emitInstructionEvent(ctx.tenantId, instructionId, "planning", { route: "fast_read_only" });
-        await emitInstructionEvent(ctx.tenantId, instructionId, "plan_ready", { count: 1, route: "fast_read_only" });
-        await emitInstructionEvent(ctx.tenantId, instructionId, "executing", { actionId: answerId, route: "fast_read_only" });
-        await emitInstructionEvent(ctx.tenantId, instructionId, "completed", createInstructionTraceAnswerEnvelope(answerId, fastAnswer));
+    // Classification is read-only and can only produce a typed query; it never
+    // selects an action type, policy, or write capability. When an API boundary has
+    // already classified the instruction, it passes the decision so writes are not
+    // classified a second time.
+    let fastAnswer: AnswerEnvelope | null = null;
+    let fastQuery: OperationalQueryExecution | undefined;
+    const suppliedDecision = opts.fastReadDecision;
+    const shouldClassify = !opts.skipFastReadClassification && suppliedDecision === undefined;
+    let fastDecision: OperationalQueryDecision | undefined = suppliedDecision;
+    try {
+      if (shouldClassify) fastDecision = this.fastReadOnlyRouter.interpret?.(instruction);
+      if (fastDecision?.route === "fast_read" && this.fastReadOnlyRouter.execute) {
+        const result = await this.executeFastOperationalQuery(fastDecision.request, ctx, { workId, workInputId, instructionId }, { executionKey: opts.executionKey ?? opts.idempotencyKey ?? instructionId });
+        fastQuery = result.execution;
+        fastAnswer = result.answer ?? null;
+      } else if (!opts.skipFastReadClassification && fastDecision === undefined) {
+        // Legacy injected routers predate the typed seam. Keep their answer contract
+        // intact, but never create a planner attempt for the read branch.
+        fastAnswer = await this.fastReadOnlyRouter.route(instruction, ctx);
       }
-      return { actions: [], answer: fastAnswer };
+    } catch (err) {
+      const failure = workFailure(err, "Instruction classification failed");
+      await transitionWork(ctx.tenantId, workId, "failed", "understanding_failed", failure, { failure }).catch(() => undefined);
+      await emitInstructionEvent(ctx.tenantId, instructionId, "failed", { error: failure.message, workId, recoverable: true });
+      throw err;
+    }
+    if (fastQuery) return { actions: [], ...(fastAnswer ? { answer: fastAnswer } : {}), query: fastQuery, workId, workInputId, instructionId };
+    if (fastAnswer) {
+      await transitionWork(ctx.tenantId, workId, "executing", "answer_started", { route: "fast_read_only" });
+      await emitInstructionEvent(ctx.tenantId, instructionId, "executing", { actionId: `fast-read:${instructionId}`, route: "fast_read_only" });
+      await emitInstructionEvent(ctx.tenantId, instructionId, "completed", createInstructionTraceAnswerEnvelope(`fast-read:${instructionId}`, fastAnswer));
+      await transitionWork(ctx.tenantId, workId, "completed", "answer_completed", { route: "fast_read_only" }, {
+        finalOutcome: { kind: "answer", route: "fast_read_only", spokenSummary: fastAnswer.spokenSummary },
+      });
+      return { actions: [], answer: fastAnswer, workId, workInputId, instructionId };
+    }
+
+    // Greetings and capability turns are conversational by contract. Keep them
+    // off the household resolver, semantic retrieval, and planner path so a simple
+    // "hey" is fast, cannot inherit an unrelated customer/research context, and
+    // still produces the same explicit progress trace as every other turn.
+    if (isConversationalTurn(instruction)) {
+      try {
+        await ensureSecretsLoaded();
+      } catch (err) {
+        const failure = workFailure(err, "Provider initialization failed");
+        await transitionWork(ctx.tenantId, workId, "failed", "understanding_failed", failure, { failure });
+        await emitInstructionEvent(ctx.tenantId, instructionId, "failed", { error: failure.message, workId, recoverable: true });
+        throw err;
+      }
+      {
+        await emitInstructionEvent(ctx.tenantId, instructionId, "context_retrieved", { chips: [] });
+        await emitInstructionEvent(ctx.tenantId, instructionId, "planning", { route: "conversation" });
+      }
+      const emptyMemory: MemorySnapshot = {
+        shortTerm: null,
+        longTerm: null,
+        semantic: [],
+        episodic: [],
+        patterns: null,
+      };
+      const attempt = await beginWorkPlannerAttempt({ tenantId: ctx.tenantId, workId, workInputId, attemptKey: opts.plannerAttemptKey ?? `input:${workInputId}` });
+      requireFreshPlannerAttempt(workId, attempt);
+      await transitionWork(ctx.tenantId, workId, "planning", "planning_started", { plannerAttemptId: attempt.id, route: "conversation" });
+      return this.conversationalResult(instruction, ctx, emptyMemory, effectiveOpts, "conversation", { workId, workInputId, instructionId, plannerAttemptId: attempt.id });
     }
 
     // Secrets are needed by the existing planner/provider path only. Keeping boot
     // after the deterministic branch makes a fast read independent of Secrets
     // Manager latency or availability.
-    await ensureSecretsLoaded();
-    const memory = await buildMemorySnapshot({
-      tenantId: ctx.tenantId,
-      sessionId: opts.sessionId,
-      householdId: opts.householdId,
-      semanticQuery: plannerMemoryEnabled() ? instruction : undefined,
-    });
-    if (instructionId) {
+    let mentionedHousehold: Awaited<ReturnType<typeof resolveHouseholdMention>> | null = null;
+    let resolvedHouseholdId: string | undefined;
+    let memory: MemorySnapshot;
+    try {
+      await ensureSecretsLoaded();
+      mentionedHousehold = opts.householdId
+        ? null
+        : await resolveHouseholdMention(ctx.tenantId, instruction).catch(() => null);
+      resolvedHouseholdId = opts.householdId ?? mentionedHousehold?.householdId;
+      await transitionWork(ctx.tenantId, workId, "understanding", "context_resolved", {
+        householdId: resolvedHouseholdId ?? null,
+        mentionedHousehold: mentionedHousehold?.label ?? null,
+      }, resolvedHouseholdId ? { activeContext: { householdId: resolvedHouseholdId } } : {});
+      memory = await buildMemorySnapshot({
+        tenantId: ctx.tenantId,
+        sessionId: opts.sessionId,
+        householdId: resolvedHouseholdId,
+        semanticQuery: plannerMemoryEnabled() ? instruction : undefined,
+      });
+    } catch (err) {
+      const failure = workFailure(err, "Context retrieval failed");
+      await transitionWork(ctx.tenantId, workId, "failed", "understanding_failed", failure, { failure });
+      await emitInstructionEvent(ctx.tenantId, instructionId, "failed", { error: failure.message, workId, recoverable: true });
+      throw err;
+    }
+    {
       // Real counts from what handleInstruction actually retrieved before planning —
       // never the memory CONTENTS (this session's own binding rule). shortTerm/
       // longTerm are single facts (present or not, hence count 0|1); episodic/
@@ -201,22 +550,42 @@ export class FinnorOrchestrator implements Orchestrator {
       await emitInstructionEvent(ctx.tenantId, instructionId, "context_retrieved", { chips: contextChips });
       await emitInstructionEvent(ctx.tenantId, instructionId, "planning");
     }
+    const plannerAttempt = await beginWorkPlannerAttempt({ tenantId: ctx.tenantId, workId, workInputId, attemptKey: opts.plannerAttemptKey ?? `input:${workInputId}` });
+    requireFreshPlannerAttempt(workId, plannerAttempt);
+    await transitionWork(ctx.tenantId, workId, "planning", "planning_started", { plannerAttemptId: plannerAttempt.id });
     let actions: DomainAction[];
     try {
       actions = await this.planner.plan(instruction, ctx, memory, {
         instructionId,
+        workId,
+        plannerAttemptId: plannerAttempt.id,
         channel: opts.channel,
         signal: opts.signal,
         deadlineAt: opts.deadlineAt,
         deadlineMs: opts.deadlineMs,
       });
     } catch (err) {
-      if (instructionId) {
-        await emitInstructionEvent(ctx.tenantId, instructionId, "failed", { error: err instanceof Error ? err.message : "Planning failed" });
-      }
+      const failure = workFailure(err, "Planning failed");
+      await finishWorkPlannerAttempt({ tenantId: ctx.tenantId, attemptId: plannerAttempt.id, status: failure.timeout ? "timed_out" : "failed", failure });
+      await transitionWork(ctx.tenantId, workId, "failed", "planning_failed", failure, { failure });
+      await emitInstructionEvent(ctx.tenantId, instructionId, "failed", { error: failure.message, workId, recoverable: true });
       throw err;
     }
-    if (instructionId) {
+    if (await isInstructionCancelled(ctx.tenantId, instructionId)) {
+      await this.rejectCancelledDrafts(ctx.tenantId, instructionId);
+      return { actions: [] };
+    }
+    if (actions.length === 0) {
+      return this.conversationalResult(instruction, ctx, memory, effectiveOpts, "empty_plan_recovery", { workId, workInputId, instructionId, plannerAttemptId: plannerAttempt.id });
+    }
+    await finishWorkPlannerAttempt({
+      tenantId: ctx.tenantId,
+      attemptId: plannerAttempt.id,
+      status: "succeeded",
+      plannerResult: { actionCount: actions.length, actionIds: actions.map((action) => action.id), actionTypes: actions.map((action) => action.actionType) },
+    });
+    await transitionWork(ctx.tenantId, workId, "ready", "planner_succeeded", { plannerAttemptId: plannerAttempt.id, actionCount: actions.length });
+    {
       await emitInstructionEvent(ctx.tenantId, instructionId, "plan_ready", { count: actions.length });
       for (const action of actions) {
         await emitInstructionEvent(ctx.tenantId, instructionId, "action_created", {
@@ -234,6 +603,7 @@ export class FinnorOrchestrator implements Orchestrator {
         }
       }
     }
+    await transitionWork(ctx.tenantId, workId, "actionable", "actions_created", { actionIds: actions.map((action) => action.id) });
     // Record every planned node before dispatching anything. Dependent nodes stay as
     // durable drafts until their prerequisite actions genuinely complete.
     const turnResults: Array<{
@@ -249,6 +619,10 @@ export class FinnorOrchestrator implements Orchestrator {
     const readiness = await Promise.all(actions.map(async (action) => ({ action, ready: await isPlanActionReady(ctx.tenantId, action.id) })));
     await Promise.all(
       readiness.filter(({ ready }) => ready).map(async ({ action: rawAction }) => {
+        if (await isInstructionCancelled(ctx.tenantId, instructionId)) {
+          await this.rejectCancelledDrafts(ctx.tenantId, instructionId);
+          return;
+        }
         // Phase 16(e): tag this instruction's correlation id onto the action so the
         // executor's own enqueueJob calls (voice_confirm_request/voice_notify_failure)
         // can thread it through — in-memory only, never a DB column (see DomainAction.correlationId).
@@ -322,7 +696,8 @@ export class FinnorOrchestrator implements Orchestrator {
         () => undefined,
       );
     }
-    return { actions };
+    await reconcileWorkStatus(ctx.tenantId, workId);
+    return { actions, workId, workInputId, instructionId };
   }
 
   /**
@@ -417,6 +792,9 @@ export class FinnorOrchestrator implements Orchestrator {
       };
     }
     const claimed = row.claimed;
+    if (claimed.workId) {
+      await transitionWork(tenantId, claimed.workId, "executing", "action_execution_claimed", { actionId: claimed.id });
+    }
     const action: DomainAction = {
       id: claimed.id,
       tenantId: claimed.tenantId,
@@ -425,12 +803,15 @@ export class FinnorOrchestrator implements Orchestrator {
       policyId: claimed.policyId, policyVersion: claimed.policyVersion,
       status: claimed.status,
       createdAt: claimed.createdAt.toISOString(),
+      workId: claimed.workId,
+      plannerAttemptId: claimed.plannerAttemptId,
       approvedBy,
     };
     const policy = await this.loadPolicy(action);
     const result = await this.executor.execute(action, policy);
     await this.reflectWithRetry(action, policy, result);
     await this.dispatchReadyPlanActions(tenantId, row.claimed.planId);
+    if (claimed.workId) await reconcileWorkStatus(tenantId, claimed.workId);
     return result;
   }
 
@@ -469,6 +850,7 @@ export class FinnorOrchestrator implements Orchestrator {
         .insert(planRepairs)
         .values({
           tenantId,
+          workId: sourceAction.workId,
           failedDomainActionId: domainActionId,
           sourcePlanId: sourceAction.planId!,
           terminalReceipt,
@@ -478,7 +860,15 @@ export class FinnorOrchestrator implements Orchestrator {
         .returning(),
     );
     if (!claim) return;
+    if (sourceAction.workId) {
+      await transitionWork(tenantId, sourceAction.workId, "recovery", "recovery_started", {
+        planRepairId: claim.id,
+        failedDomainActionId: domainActionId,
+        workflowStepId,
+      }, { recovery: { status: "planning", planRepairId: claim.id, failedDomainActionId: domainActionId } });
+    }
 
+    let repairPlannerAttemptId: string | null = null;
     try {
       const remainder = await withTenant(tenantId, (db) =>
         db
@@ -489,6 +879,12 @@ export class FinnorOrchestrator implements Orchestrator {
       if (remainder.length === 0) {
         await withTenant(tenantId, (db) => db.update(planRepairs).set({ status: "no_remainder", proposedAt: new Date() }).where(eq(planRepairs.id, claim.id)));
         await appendEpisode(tenantId, domainActionId, "plan_repair", { receipt: terminalReceipt }, { status: "no_remainder", sourcePlanId: sourceAction.planId });
+        if (sourceAction.workId) {
+          await transitionWork(tenantId, sourceAction.workId, "failed", "recovery_exhausted", {
+            planRepairId: claim.id,
+            reason: "no_remainder",
+          }, { recovery: { status: "no_remainder", planRepairId: claim.id } });
+        }
         return;
       }
       const repairInput = {
@@ -501,7 +897,32 @@ export class FinnorOrchestrator implements Orchestrator {
       };
       const instruction = JSON.stringify(repairInput);
       const memory = await buildMemorySnapshot({ tenantId, semanticQuery: plannerMemoryEnabled() ? instruction : undefined });
-      const repaired = await this.planner.plan(instruction, { tenantId, userId: "system:plan-repair", role: "owner" }, memory);
+      if (sourceAction.workId) {
+        const input = await latestWorkInput(tenantId, sourceAction.workId);
+        if (input) {
+          const attempt = await beginWorkPlannerAttempt({
+            tenantId,
+            workId: sourceAction.workId,
+            workInputId: input.id,
+            attemptKey: `repair:${claim.id}`,
+          });
+          requireFreshPlannerAttempt(sourceAction.workId, attempt);
+          repairPlannerAttemptId = attempt.id;
+        }
+      }
+      const repaired = await this.planner.plan(instruction, { tenantId, userId: "system:plan-repair", role: "owner" }, memory, {
+        instructionId: sourceAction.instructionId ?? undefined,
+        workId: sourceAction.workId ?? undefined,
+        plannerAttemptId: repairPlannerAttemptId ?? undefined,
+      });
+      if (repairPlannerAttemptId) {
+        await finishWorkPlannerAttempt({
+          tenantId,
+          attemptId: repairPlannerAttemptId,
+          status: "succeeded",
+          plannerResult: { route: "recovery", actionCount: repaired.length, actionIds: repaired.map((action) => action.id) },
+        });
+      }
       const repairPlanId = repaired.length > 0 ? await planIdForAction(tenantId, repaired[0]!.id) : null;
       if (repairPlanId) {
         await withTenant(tenantId, (db) =>
@@ -513,8 +934,29 @@ export class FinnorOrchestrator implements Orchestrator {
       );
       await appendEpisode(tenantId, domainActionId, "plan_repair", { receipt: terminalReceipt, unfinishedRemainder: remainder }, { sourcePlanId: sourceAction.planId, repairPlanId, actionIds: repaired.map((action) => action.id) });
       if (repairPlanId) await this.dispatchReadyPlanActions(tenantId, repairPlanId);
+      if (sourceAction.workId) {
+        await transitionWork(tenantId, sourceAction.workId, "recovery", "recovery_planned", {
+          planRepairId: claim.id,
+          repairPlanId,
+          actionIds: repaired.map((action) => action.id),
+        }, { recovery: { status: repaired.length > 0 ? "proposed" : "no_remainder", planRepairId: claim.id, repairPlanId } });
+        await reconcileWorkStatus(tenantId, sourceAction.workId);
+      }
     } catch (err) {
       await withTenant(tenantId, (db) => db.update(planRepairs).set({ status: "failed" }).where(eq(planRepairs.id, claim.id))).catch(() => undefined);
+      if (repairPlannerAttemptId) {
+        const plannerFailure = workFailure(err, "Recovery planning failed");
+        await finishWorkPlannerAttempt({
+          tenantId,
+          attemptId: repairPlannerAttemptId,
+          status: plannerFailure.timeout ? "timed_out" : "failed",
+          failure: plannerFailure,
+        }).catch(() => undefined);
+      }
+      if (sourceAction.workId) {
+        const failure = workFailure(err, "Recovery planning failed");
+        await transitionWork(tenantId, sourceAction.workId, "failed", "recovery_failed", failure, { failure, recovery: { status: "failed", planRepairId: claim.id } }).catch(() => undefined);
+      }
       throw err;
     }
   }
@@ -635,7 +1077,35 @@ export class FinnorOrchestrator implements Orchestrator {
           ...(decision === "approve" ? { note: opts?.note ?? null, policyDrift } : decision === "reject" ? { reason: opts?.reason ?? null } : { note: opts?.note ?? null }),
         },
       });
-      return { claimed, current: claimed };
+      const durableOperation = decision === "approve"
+        ? await authorizeBusinessOperationTx(db, {
+            tenantId,
+            domainActionId: actionId,
+            approvedBy: decidedBy,
+          })
+        : null;
+      if (durableOperation) {
+        await db.update(domainActions).set({ status: "executing", executionStartedAt: new Date() })
+          .where(and(eq(domainActions.id, actionId), eq(domainActions.tenantId, tenantId)));
+        await db.insert(actionLog).values({
+          tenantId,
+          domainActionId: actionId,
+          step: "operation_authorized",
+          input: { by: decidedBy, operationId: durableOperation.id },
+          output: { status: durableOperation.status, queued: durableOperation.authorized },
+        });
+        return { claimed: { ...claimed, status: "executing" as const, executionStartedAt: new Date() }, current: claimed, durableOperation };
+      }
+      if (decision === "reject") {
+        const [operation] = await db.update(businessOperations).set({ status: "cancelled", completedAt: new Date(), updatedAt: new Date(), finalOutcome: { rejected: true, decidedBy } })
+          .where(and(eq(businessOperations.tenantId, tenantId), eq(businessOperations.domainActionId, actionId), eq(businessOperations.status, "awaiting_approval")))
+          .returning({ id: businessOperations.id });
+        if (operation) {
+          await db.update(decisionReceipts).set({ actualResult: { rejected: true }, finalizedAt: new Date() })
+            .where(and(eq(decisionReceipts.tenantId, tenantId), eq(decisionReceipts.operationId, operation.id)));
+        }
+      }
+      return { claimed, current: claimed, durableOperation: null };
     });
     if (!transition.current) return { status: "failure", output: {}, error: "Action not found" };
     if (!transition.claimed) {
@@ -647,15 +1117,38 @@ export class FinnorOrchestrator implements Orchestrator {
       return { status: "success", output: { idempotent: true, status: transition.current.status } };
     }
     const row = transition.claimed;
+    if (transition.durableOperation) {
+      if (row.instructionId) {
+        await emitInstructionEvent(tenantId, row.instructionId, "executing", {
+          actionId,
+          operationId: transition.durableOperation.id,
+          durable: true,
+        }).catch(() => undefined);
+      }
+      if (row.workId) await reconcileWorkStatus(tenantId, row.workId);
+      return {
+        status: "success",
+        output: {
+          authorized: true,
+          durable: true,
+          operationId: transition.durableOperation.id,
+          operationStatus: transition.durableOperation.status,
+          queued: transition.durableOperation.authorized,
+        },
+        expected: { durableWorkerExecution: true },
+      };
+    }
     if (decision === "reject") {
       // Best-effort: close a paused graph thread so it doesn't dangle waiting for a
       // resume that will never come. Never blocks the reject itself.
       await this.executor.close?.(actionId, tenantId, row.actionType).catch(() => undefined);
       if (row.instructionId) await emitInstructionEvent(tenantId, row.instructionId, "cancelled", { actionId }).catch(() => undefined);
+      if (row.workId) await reconcileWorkStatus(tenantId, row.workId);
       return { status: "success", output: { rejected: true } };
     }
     if (decision === "escalate") {
       // Stays open for a human, no executor thread to close, nothing to run yet.
+      if (row.workId) await reconcileWorkStatus(tenantId, row.workId);
       return { status: "success", output: { escalated: true } };
     }
     if (row.instructionId) await emitInstructionEvent(tenantId, row.instructionId, "executing", { actionId }).catch(() => undefined);
@@ -664,6 +1157,7 @@ export class FinnorOrchestrator implements Orchestrator {
       const phase = result.status === "success" ? "completed" : "failed";
       await emitInstructionEvent(tenantId, row.instructionId, phase, { actionId, status: result.status }).catch(() => undefined);
     }
+    if (row.workId) await reconcileWorkStatus(tenantId, row.workId);
     return result;
   }
 
@@ -692,12 +1186,48 @@ export class FinnorOrchestrator implements Orchestrator {
     }
   }
 
+  private async rejectCancelledDrafts(tenantId: string, instructionId: string | undefined): Promise<void> {
+    if (!instructionId) return;
+    await withTenant(tenantId, async (db) => {
+      const rows = await db
+        .update(domainActions)
+        .set({ status: "rejected" })
+        .where(and(eq(domainActions.tenantId, tenantId), eq(domainActions.instructionId, instructionId), eq(domainActions.status, "draft")))
+        .returning({ id: domainActions.id });
+      if (rows.length > 0) {
+        await db.insert(actionLog).values(rows.map((row) => ({
+          tenantId,
+          domainActionId: row.id,
+          step: "rejected",
+          input: { by: "instruction_cancel", instructionId },
+          output: { cancelledBeforeDispatch: true },
+        })));
+      }
+    });
+  }
+
+  private async instructionIdForPlan(tenantId: string, planId: string): Promise<string | null> {
+    const [row] = await withTenant(tenantId, (db) =>
+      db
+        .select({ instructionId: domainActions.instructionId })
+        .from(domainActions)
+        .where(and(eq(domainActions.tenantId, tenantId), eq(domainActions.planId, planId)))
+        .limit(1),
+    );
+    return row?.instructionId ?? null;
+  }
+
   /** Sends newly-unblocked DAG nodes through the ordinary validation/gate path. */
   private async dispatchReadyPlanActions(tenantId: string, planId: string | null): Promise<void> {
     if (!planId) return;
     // Each pass consumes one topological layer. Pending approvals leave no ready
     // drafts, while auto-approved completions can make the following layer ready.
     for (;;) {
+      const instructionId = await this.instructionIdForPlan(tenantId, planId);
+      if (await isInstructionCancelled(tenantId, instructionId ?? undefined)) {
+        await this.rejectCancelledDrafts(tenantId, instructionId ?? undefined);
+        return;
+      }
       const ready = await readyPlanActions(tenantId, planId);
       if (ready.length === 0) return;
       await Promise.all(
@@ -705,6 +1235,7 @@ export class FinnorOrchestrator implements Orchestrator {
           const policy = await this.loadPolicy(action);
           const result = await this.executor.execute(action, policy);
           await this.reflectWithRetry(action, policy, result);
+          if (action.workId) await reconcileWorkStatus(tenantId, action.workId);
         }),
       );
     }

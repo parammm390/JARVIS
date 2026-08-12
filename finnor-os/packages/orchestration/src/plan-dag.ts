@@ -38,6 +38,8 @@ function toDomainAction(row: typeof domainActions.$inferSelect): DomainAction {
     policyId: row.policyId,
     status: row.status,
     createdAt: row.createdAt.toISOString(),
+    workId: row.workId,
+    plannerAttemptId: row.plannerAttemptId,
   };
 }
 

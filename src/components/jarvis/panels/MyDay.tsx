@@ -1,10 +1,12 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { CheckCircle2, ClipboardList, Flag, MapPin, Navigation, Play, Send } from "lucide-react"
-import { jarvisGet, jarvisPost } from "../lib/api"
+import { jarvisPost } from "../lib/api"
 import { useJarvisAuth } from "../lib/jarvis-auth"
+import { useBusinessProjection } from "../lib/business-projections"
+import { businessProjections } from "../lib/projection-definitions"
 import { ErrorState } from "../ui/primitives/ErrorState"
 
 type WorkOrder = { id: string; type: string; status: "draft" | "scheduled" | "in_progress" | "completed" | "canceled"; scheduledAt: string | null; address: string; householdId: string }
@@ -12,10 +14,12 @@ type Visit = { id: string; type: string; scheduledAt: string | null; completedAt
 
 export function MyDay() {
   const { role } = useJarvisAuth()
-  const [workOrders, setWorkOrders] = useState<WorkOrder[] | null>(null)
-  const [visits, setVisits] = useState<Visit[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
+  const projection = useBusinessProjection(businessProjections.technicianDay(), { enabled: role === "technician" })
+  const workOrders: WorkOrder[] | null = projection.data?.workOrders ?? null
+  const visits: Visit[] | null = projection.data?.visits ?? null
+  const [mutationError, setMutationError] = useState<string | null>(null)
+  const error = mutationError ?? projection.error?.message ?? null
+  const loading = role === "technician" && projection.data === null && projection.status !== "error"
   const [actionId, setActionId] = useState<string | null>(null)
   const [report, setReport] = useState<Record<string, string>>({})
   const [issue, setIssue] = useState<Record<string, string>>({})
@@ -29,37 +33,23 @@ export function MyDay() {
   }, [visits, workOrders])
 
   const load = useCallback(async (): Promise<boolean> => {
-    setLoading(true)
-    setError(null)
+    setMutationError(null)
     try {
-      const response = await jarvisGet<{ workOrders: WorkOrder[]; visits: Visit[] }>("technician/my-day")
-      setWorkOrders(response.workOrders)
-      setVisits(response.visits)
+      await projection.refresh()
       retryRef.current = null
       return true
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Couldn’t load your day.")
+      setMutationError(cause instanceof Error ? cause.message : "Couldn’t load your day.")
       retryRef.current = () => { void load() }
       return false
-    } finally {
-      setLoading(false)
     }
-  }, [])
-
-  useEffect(() => {
-    if (role === "technician") void load()
-    else {
-      setWorkOrders(null)
-      setVisits(null)
-      setError(null)
-    }
-  }, [role, load])
+  }, [projection])
 
   async function act(workOrderId: string, action: "arrive" | "report" | "flag" | "done"): Promise<void> {
     if (actionId) return
     const retryableAction = async () => {
       setActionId(`${workOrderId}:${action}`)
-      setError(null)
+      setMutationError(null)
       try {
         await jarvisPost("technician/my-day", {
           workOrderId,
@@ -71,7 +61,7 @@ export function MyDay() {
         if (refreshed) retryRef.current = null
         else retryRef.current = () => { void load() }
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : "Couldn’t update the work order.")
+        setMutationError(cause instanceof Error ? cause.message : "Couldn’t update the work order.")
         retryRef.current = () => { void retryableAction() }
       } finally {
         setActionId(null)

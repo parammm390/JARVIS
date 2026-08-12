@@ -4,6 +4,7 @@
 export * from "./dealer-zero-fixtures";
 export * from "./dealer-zero-scenarios";
 export * from "./dealer-zero-time-compression";
+export * from "./operational-queries";
 
 export type Role = "owner" | "dispatcher" | "technician";
 
@@ -49,6 +50,10 @@ export interface DomainAction {
   policyVersion?: number | null;
   status: DomainActionStatus;
   createdAt: string;
+  /** Upgrade 2: stable parent for the complete instruction lifecycle. Nullable on
+   * historical/system-authored actions that did not originate from a user Work. */
+  workId?: string | null;
+  plannerAttemptId?: string | null;
   /** Why the LLM planner chose this action_type/payload — optional (only the LLM
    *  planner path sets it; draftKnownAction/system-originated actions have no LLM
    *  reasoning to report). Not a DB column — carried through to the "planned"

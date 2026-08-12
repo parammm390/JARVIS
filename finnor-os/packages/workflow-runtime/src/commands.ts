@@ -2,7 +2,7 @@
 // created already-approved (approval happens upstream, e.g. an existing domain_action
 // gate) — this table exists to give every workflow_run a stable, idempotent parent.
 
-import { commands, workflowRuns, workflowSteps, type Db } from "@finnor/db";
+import { commands, workflowRuns, workflowSteps, domainActions, type Db } from "@finnor/db";
 import { and, eq } from "drizzle-orm";
 
 export interface StepDefinition {
@@ -27,6 +27,7 @@ export interface SubmitCommandParams {
    *  by domain_action_id, not just workflow_step_id. Left undefined for genuine
    *  multi-step workflow-kind commands, which have no single originating action. */
   domainActionId?: string;
+  workId?: string;
 }
 
 export interface SubmitCommandResult {
@@ -37,6 +38,10 @@ export interface SubmitCommandResult {
 }
 
 export async function submitCommand(db: Db, params: SubmitCommandParams): Promise<SubmitCommandResult> {
+  const [originAction] = !params.workId && params.domainActionId
+    ? await db.select({ workId: domainActions.workId }).from(domainActions).where(and(eq(domainActions.tenantId, params.tenantId), eq(domainActions.id, params.domainActionId))).limit(1)
+    : [];
+  const workId = params.workId ?? originAction?.workId ?? null;
   if (params.idempotencyKey) {
     const [existingCommand] = await db
       .select()
@@ -44,6 +49,7 @@ export async function submitCommand(db: Db, params: SubmitCommandParams): Promis
       .where(and(eq(commands.tenantId, params.tenantId), eq(commands.idempotencyKey, params.idempotencyKey)));
     if (existingCommand) {
       const [run] = await db.select().from(workflowRuns).where(eq(workflowRuns.commandId, existingCommand.id));
+      if (run && workId && !run.workId) await db.update(workflowRuns).set({ workId }).where(eq(workflowRuns.id, run.id));
       const steps = run ? await db.select().from(workflowSteps).where(eq(workflowSteps.workflowRunId, run.id)) : [];
       return {
         commandId: existingCommand.id,
@@ -69,7 +75,7 @@ export async function submitCommand(db: Db, params: SubmitCommandParams): Promis
 
   const [run] = await db
     .insert(workflowRuns)
-    .values({ tenantId: params.tenantId, commandId: command!.id, workflowType: params.workflowType, status: "running" })
+    .values({ tenantId: params.tenantId, commandId: command!.id, workId, workflowType: params.workflowType, status: "running" })
     .returning();
 
   const stepRows = await db

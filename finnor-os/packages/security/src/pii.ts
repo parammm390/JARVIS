@@ -6,6 +6,7 @@
 const EMAIL = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
 const PHONE = /(?<!\w)(?:\+?\d[\d .()\-]{7,}\d)(?!\w)/g;
 const CARD = /\b(?:\d[ -]*?){13,19}\b/g;
+const UUID = /\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi;
 const SSN = /\b\d{3}-\d{2}-\d{4}\b/g;
 const STREET_ADDRESS = /\b\d{1,6}\s+[A-Za-z0-9.'-]+(?:\s+[A-Za-z0-9.'-]+){0,4}\s+(?:street|st\.?|avenue|ave\.?|road|rd\.?|drive|dr\.?|lane|ln\.?|boulevard|blvd\.?|court|ct\.?|way|place|pl\.?|parkway|pkwy\.?)(?:\s*,?\s*[A-Za-z .'-]+)?(?:\s*,?\s*[A-Z]{2}\s+\d{5}(?:-\d{4})?)?\b/gi;
 const SENSITIVE_KEY = /(?:email|e_mail|phone|mobile|contact|address|street|postal|zip|ssn|social.?security|card|payment|token|secret|password|api.?key)/i;
@@ -22,13 +23,55 @@ function nextToken(tokens: Map<string, string>, kind: string, raw: string): stri
   return token;
 }
 
+function luhnValid(raw: string): boolean {
+  const digits = raw.replace(/\D/g, "");
+  if (digits.length < 13 || digits.length > 19) return false;
+  let sum = 0;
+  let double = false;
+  for (let index = digits.length - 1; index >= 0; index -= 1) {
+    let digit = Number(digits[index]);
+    if (double) {
+      digit *= 2;
+      if (digit > 9) digit -= 9;
+    }
+    sum += digit;
+    double = !double;
+  }
+  return sum % 10 === 0;
+}
+
+function overlapsUuid(value: string, start: number, length: number): boolean {
+  const end = start + length;
+  UUID.lastIndex = 0;
+  for (const match of value.matchAll(UUID)) {
+    const matchStart = match.index;
+    const matchEnd = matchStart + match[0].length;
+    if (start < matchEnd && end > matchStart) return true;
+  }
+  return false;
+}
+
 export function redactText(value: string): RedactionResult {
   const tokens = new Map<string, string>();
   let redacted = value.replace(EMAIL, (raw) => nextToken(tokens, "EMAIL", raw));
   redacted = redacted.replace(STREET_ADDRESS, (raw) => nextToken(tokens, "ADDRESS", raw));
   redacted = redacted.replace(SSN, (raw) => nextToken(tokens, "SSN", raw));
-  redacted = redacted.replace(CARD, (raw) => nextToken(tokens, "CARD", raw));
-  redacted = redacted.replace(PHONE, (raw) => nextToken(tokens, "PHONE", raw));
+  // UUIDs and receipt identifiers can contain 13–19 digits separated by hyphens,
+  // which the old matcher mistook for payment cards in user-facing evidence.
+  // Real card PANs satisfy Luhn; preserve non-card identifiers and redact only a
+  // valid PAN that is not embedded in a UUID.
+  redacted = redacted.replace(CARD, (raw, offset: number, source: string) =>
+    luhnValid(raw) && !overlapsUuid(source, offset, raw.length) ? nextToken(tokens, "CARD", raw) : raw,
+  );
+  // The broad punctuation-friendly matcher also sees year ranges such as
+  // "2025-2032". A real phone value in this U.S.-operating product has at least
+  // ten digits; preserve shorter numeric ranges so research titles, dates, and
+  // forecasts do not become bogus [PHONE_n] tokens.
+  redacted = redacted.replace(PHONE, (raw, offset: number, source: string) =>
+    raw.replace(/\D/g, "").length >= 10 && !overlapsUuid(source, offset, raw.length)
+      ? nextToken(tokens, "PHONE", raw)
+      : raw,
+  );
   return { value: redacted, tokens };
 }
 

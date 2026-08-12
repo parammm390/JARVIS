@@ -23,6 +23,93 @@ const s = (schema: Parameters<typeof zodToJsonSchema>[0]) =>
 // existing convention of route-local validation for narrow, single-use bodies.
 const RunControlBodySchema = z.object({ expectedVersion: z.number().int().nonnegative() });
 const SubmitCorrectionBodySchema = z.object({ receiptId: z.string().uuid(), correctedFact: z.string().min(1).max(2000) });
+const RetryWorkBodySchema = z.object({ idempotencyKey: z.string().min(1).max(200) });
+const RetryOperationBodySchema = z.object({ recoveryKey: z.string().min(1).max(200) });
+
+// Upgrade 3: the typed operational-query request is intentionally mirrored here
+// as a strict discriminated union. Tenant identity is never part of this schema;
+// the authenticated request context supplies it to the canonical executor.
+const OperationalQueryPageSchema = z.object({
+  limit: z.number().int().min(1).max(100).optional(),
+  cursor: z.string().min(1).max(4096).optional(),
+}).strict();
+const OperationalQueryRangeSchema = z.object({
+  start: z.string().datetime({ offset: true }),
+  end: z.string().datetime({ offset: true }),
+}).strict();
+const OperationalQueryWorkSchema = z.object({
+  workId: z.string().uuid().optional(),
+  executionKey: z.string().min(1).max(200).optional(),
+  idempotencyKey: z.string().min(1).max(200).optional(),
+}).strict();
+const OperationalQueryRequestSchema = z.discriminatedUnion("intent", [
+  z.object({
+    intent: z.literal("customer_lookup"),
+    householdId: z.string().uuid().optional(),
+    query: z.string().trim().min(1).max(200).optional(),
+    name: z.string().trim().min(1).max(200).optional(),
+    address: z.string().trim().min(1).max(300).optional(),
+    contact: z.string().trim().min(1).max(200).optional(),
+    phone: z.string().trim().min(1).max(200).optional(),
+    page: OperationalQueryPageSchema.optional(),
+  }).merge(OperationalQueryWorkSchema),
+  z.object({
+    intent: z.literal("customer_cohort"),
+    cohort: z.literal("inactive"),
+    minDaysInactive: z.number().int().min(1).max(3650),
+    asOf: z.string().datetime({ offset: true }).optional(),
+    page: OperationalQueryPageSchema.optional(),
+  }).merge(OperationalQueryWorkSchema),
+  z.object({
+    intent: z.literal("schedule_range"),
+    range: OperationalQueryRangeSchema.optional(),
+    localDateRange: z.object({
+      startDate: z.string().regex(/^(?:today|tomorrow|\d{4}-\d{2}-\d{2})$/),
+      endDate: z.string().regex(/^(?:today|tomorrow|\d{4}-\d{2}-\d{2})$/).optional(),
+    }).strict().optional(),
+    page: OperationalQueryPageSchema.optional(),
+  }).merge(OperationalQueryWorkSchema),
+  z.object({
+    intent: z.literal("money_summary"),
+    range: OperationalQueryRangeSchema.optional(),
+    start: z.string().datetime({ offset: true }).optional(),
+    end: z.string().datetime({ offset: true }).optional(),
+    page: OperationalQueryPageSchema.optional(),
+  }).merge(OperationalQueryWorkSchema),
+  z.object({
+    intent: z.literal("work_list"),
+    section: z.enum(["all", "works", "work_orders", "tasks"]).optional(),
+    openOnly: z.boolean().optional(),
+    statuses: z.array(z.string().min(1).max(80)).max(20).optional(),
+    recordId: z.string().uuid().optional(),
+    page: OperationalQueryPageSchema.optional(),
+  }).merge(OperationalQueryWorkSchema),
+  z.object({
+    intent: z.literal("inventory_status"),
+    sku: z.string().trim().min(1).max(120).optional(),
+    lowStockOnly: z.boolean().optional(),
+    includeOpenProcurement: z.boolean().optional(),
+    page: OperationalQueryPageSchema.optional(),
+  }).merge(OperationalQueryWorkSchema),
+  z.object({
+    intent: z.literal("agent_activity"),
+    range: OperationalQueryRangeSchema.optional(),
+    localDateRange: z.object({
+      startDate: z.string().regex(/^(?:today|tomorrow|\d{4}-\d{2}-\d{2})$/),
+      endDate: z.string().regex(/^(?:today|tomorrow|\d{4}-\d{2}-\d{2})$/).optional(),
+    }).strict().optional(),
+    page: OperationalQueryPageSchema.optional(),
+  }).merge(OperationalQueryWorkSchema),
+  z.object({
+    intent: z.literal("business_state"),
+    page: OperationalQueryPageSchema.optional(),
+  }).merge(OperationalQueryWorkSchema),
+]);
+// Each discriminated-union branch owns the strict Work metadata fields. An
+// intersection of two strict object schemas would emit an unsatisfiable
+// allOf/additionalProperties:false contract because each side rejects the
+// other's fields.
+const OperationalQueryBodySchema = OperationalQueryRequestSchema;
 
 const doc = {
   openapi: "3.1.0",
@@ -49,6 +136,17 @@ const doc = {
         responses: { "201": { description: "Planned domain actions" }, "400": { description: "Invalid payload" }, "401": { description: "Bad auth" } },
       },
     },
+    "/api/queries": {
+      post: {
+        summary: "Execute one bounded deterministic operational query without invoking the planner",
+        requestBody: { content: { "application/json": { schema: s(OperationalQueryBodySchema) } } },
+        responses: {
+          "200": { description: "Typed canonical PostgreSQL result with Work/execution metadata" },
+          "400": { description: "Invalid or mismatched typed query request" },
+          "401": { description: "Bad auth" },
+        },
+      },
+    },
     "/api/dealer-zero/time-compression": {
       post: {
         summary: "Read-only, explicitly synthetic Dealer Zero time-compression script (owner-only)",
@@ -64,13 +162,36 @@ const doc = {
     },
     "/api/actions/{id}/confirm": {
       post: {
-        summary: "Approve a pending action — clears the confirmation gate and executes",
+        summary: "Approve a pending action — executes bounded work or durably queues an associated business operation",
         requestBody: { content: { "application/json": { schema: s(ConfirmActionSchema) } } },
         responses: {
           "200": { description: "{result} or {status, idempotent:true} if already decided" },
           "403": { description: "Role cannot approve" },
           "404": { description: "Action not found" },
           "409": { description: "Not pending/needs_human_review" },
+        },
+      },
+    },
+    "/api/operations/{id}": {
+      get: {
+        summary: "Inspect a durable business operation, its frozen targets, per-target execution state, events, and receipt",
+        responses: {
+          "200": { description: "{operation: {operation, targets, events, receipt}}" },
+          "401": { description: "Bad auth" },
+          "404": { description: "Operation not found" },
+        },
+      },
+    },
+    "/api/operations/{id}/retry": {
+      post: {
+        summary: "Recover retryable, configuration, or human-review targets without replaying successful or policy-skipped targets",
+        requestBody: { content: { "application/json": { schema: s(RetryOperationBodySchema) } } },
+        responses: {
+          "202": { description: "{result: {operationId, retried, duplicate, queued}, operation}" },
+          "400": { description: "Invalid recovery key" },
+          "403": { description: "Role cannot approve recovery" },
+          "404": { description: "Operation not found" },
+          "409": { description: "Operation has no recoverable targets or cannot be retried in its current state" },
         },
       },
     },
@@ -279,6 +400,31 @@ const doc = {
           { name: "after", in: "query", schema: { type: "integer", minimum: 0, default: 0 } },
         ],
         responses: { "200": { description: "Ordered instruction trace events" }, "400": { description: "Invalid after cursor" }, "401": { description: "Bad auth" }, "404": { description: "Instruction not found" } },
+      },
+    },
+    "/api/works": {
+      get: {
+        summary: "List durable Work, optionally by session or active state",
+        parameters: [
+          { name: "sessionId", in: "query", schema: { type: "string" } },
+          { name: "active", in: "query", schema: { type: "boolean" } },
+        ],
+        responses: { "200": { description: "{works: Work[]}" }, "401": { description: "Bad auth" } },
+      },
+    },
+    "/api/works/{id}": {
+      get: {
+        summary: "Read one Work with inputs, planner attempts, query executions, actions, approvals, workflow runs, receipts, recovery, and events",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        responses: { "200": { description: "Canonical durable Work aggregate" }, "401": { description: "Bad auth" }, "404": { description: "Work not found" } },
+      },
+    },
+    "/api/works/{id}/retry": {
+      post: {
+        summary: "Retry failed Work through the ordinary planner with an idempotent recovery claim",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        requestBody: { content: { "application/json": { schema: s(RetryWorkBodySchema) } } },
+        responses: { "201": { description: "Recovery planner result" }, "202": { description: "Duplicate retry still planning" }, "409": { description: "Work is not retryable" } },
       },
     },
     "/api/stream": {

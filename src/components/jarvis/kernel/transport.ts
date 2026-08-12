@@ -1,6 +1,6 @@
 // JARVIS kernel — transport health (plan v3 §7.1).
 //
-// P2 scope was polling-only: data-core's fast lane (4s poll) was the only
+// P2 scope was polling-only: data-core's fast lane (10s poll) was the only
 // transport that existed, so "live" was not a reachable value. P3.T11 makes
 // "live" real — a genuine SSE connection for the ACTIVE thread's own
 // instruction_events (src/app/api/jarvis/stream/route.ts + finnor-os's real
@@ -16,7 +16,7 @@ import { startTracePoll, type TraceEvent, type TracePollHandle, type TracePollFa
 
 export type TransportHealth = "live" | "polling" | "reconnecting" | "offline" | "unavailable"
 
-const FAST_LANE_MS = 4000
+const FAST_LANE_MS = 10000
 export const OFFLINE_AFTER_MS = FAST_LANE_MS * 2
 
 /** The active thread's own real-time delivery health, when one exists — `null`

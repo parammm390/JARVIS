@@ -28,7 +28,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (!(await canApprove(ctx, row.actionType))) {
       return Response.json({ error: `Your role (${ctx.role}) cannot approve ${row.actionType}` }, { status: 403 });
     }
-    if (row.status === "approved" || row.status === "completed") {
+    if (row.status === "approved" || row.status === "executing" || row.status === "completed") {
       return Response.json({ status: row.status, idempotent: true }); // safe to call twice
     }
     if (row.status !== "pending" && row.status !== "needs_human_review") {

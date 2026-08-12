@@ -10,11 +10,10 @@
 // technicianId column on users, or an invite-linked mapping table) — a genuine
 // backend decision, not something to invent unilaterally in a frontend pass.
 
-import { useEffect, useState } from "react"
 import { Wrench, RefreshCw, AlertTriangle } from "lucide-react"
 import { useJarvisAuth } from "../lib/jarvis-auth"
-import { jarvisGet } from "../lib/api"
-import { hasActiveSession } from "../lib/jarvis-auth"
+import { useBusinessProjection } from "../lib/business-projections"
+import { businessProjections } from "../lib/projection-definitions"
 import { ErrorState } from "../ui/primitives/ErrorState"
 
 interface Visit {
@@ -28,19 +27,11 @@ interface Visit {
 
 export function TechnicianBoard() {
   const { role } = useJarvisAuth()
-  const [visits, setVisits] = useState<Visit[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  function load() {
-    jarvisGet<{ rows: Visit[] }>("resources/visits")
-      .then((r) => setVisits(r.rows))
-      .catch((e) => setError(e instanceof Error ? e.message : "Couldn't load visits."))
-  }
-
-  useEffect(() => {
-    if (!hasActiveSession() || (role !== "technician" && role !== "owner")) return
-    load()
-  }, [role])
+  const allowed = role === "technician" || role === "owner"
+  const projection = useBusinessProjection(businessProjections.resource("visits"), { enabled: allowed })
+  const visits = projection.data as Visit[] | null
+  const error = projection.error?.message ?? null
+  const load = () => { void projection.refresh().catch(() => undefined) }
 
   if (role !== "technician" && role !== "owner") return null
 

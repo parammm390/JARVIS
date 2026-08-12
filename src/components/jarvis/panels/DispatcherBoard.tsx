@@ -6,12 +6,11 @@
 // allowlist). Gated to dispatcher/owner — the server's own canApprove RBAC is the
 // real authorizer for any action taken from here; this is the read surface.
 
-import { useCallback, useEffect, useState } from "react"
 import { CalendarClock, Users, RefreshCw } from "lucide-react"
 import { useJarvis, ageLabel } from "../lib/data-core"
 import { useJarvisAuth } from "../lib/jarvis-auth"
-import { jarvisGet } from "../lib/api"
-import { hasActiveSession } from "../lib/jarvis-auth"
+import { useBusinessProjection } from "../lib/business-projections"
+import { businessProjections } from "../lib/projection-definitions"
 import { ErrorState } from "../ui/primitives/ErrorState"
 
 interface Visit {
@@ -26,21 +25,11 @@ interface Visit {
 export function DispatcherBoard() {
   const { role } = useJarvisAuth()
   const data = useJarvis()
-  const [visits, setVisits] = useState<Visit[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  const load = useCallback(async () => {
-    if (!hasActiveSession() || (role !== "dispatcher" && role !== "owner")) return
-    setError(null)
-    try {
-      const response = await jarvisGet<{ rows: Visit[] }>("resources/visits")
-      setVisits(response.rows)
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Couldn’t load visits.")
-    }
-  }, [role])
-
-  useEffect(() => { void load() }, [load])
+  const allowed = role === "dispatcher" || role === "owner"
+  const projection = useBusinessProjection(businessProjections.resource("visits"), { enabled: allowed })
+  const visits = projection.data as Visit[] | null
+  const error = projection.error?.message ?? null
+  const load = () => { void projection.refresh().catch(() => undefined) }
 
   if (role !== "dispatcher" && role !== "owner") return null
 

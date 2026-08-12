@@ -19,8 +19,8 @@ import { AnimatePresence, motion, useReducedMotion, type TargetAndTransition } f
 import { LayoutGrid, Volume2, VolumeX, Workflow as WorkflowIcon } from "lucide-react"
 import "../jarvis-theme.css"
 import { ConsoleAtmosphere, LiveDot } from "../atmosphere"
-import { JarvisDataProvider, useJarvis } from "../lib/data-core"
-import { JarvisAuthProvider, useJarvisAuth } from "../lib/jarvis-auth"
+import { useJarvis } from "../lib/data-core"
+import { useJarvisAuth } from "../lib/jarvis-auth"
 import { useVapiSession } from "../lib/useVapiSession"
 import { derivePresence } from "../kernel/presence"
 import { deriveTransportHealth } from "../kernel/transport"
@@ -608,10 +608,11 @@ function BridgeShell() {
   useEffect(() => {
     // Prefetch only actual authenticated APIs. A failure is deliberately ignored here:
     // the mounted panel retains its own honest loading/error state.
+    if (!session) return
     const likely = orderedScenes[0]
     if (likely === "overview") void jarvisClient.overview()
     if (likely === "pipeline") void jarvisClient.workflowRuns()
-  }, [orderedScenes])
+  }, [orderedScenes, session])
   const chooseScene = (next: SceneId) => {
     setScene(next)
     setLedger((current) => {
@@ -744,11 +745,5 @@ function BridgeShell() {
 }
 
 export function Bridge() {
-  return (
-    <JarvisAuthProvider>
-      <JarvisDataProvider>
-        <BridgeShell />
-      </JarvisDataProvider>
-    </JarvisAuthProvider>
-  )
+  return <BridgeShell />
 }

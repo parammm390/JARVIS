@@ -248,7 +248,7 @@ The page should feel like an industrial control narrative built for the physical
 - Use GSAP pinning and scrubbing for chapter progression, plan construction, approval gates, and the four operational surface changes.
 - Use Motion for local interaction and state transitions, not competing page-level scroll systems.
 - Consider one CanvasUI-derived particle assembly only at the context threshold, with a static fallback and reduced-motion path; no site-wide effect layer.
-- Remove the generic particle network, global custom cursor, random glow fields, pill-label dependence, and feature-card cemetery.
+- Preserve the live site's cursor-reactive network and product-presence cues as quiet connective tissue, while making the JARVIS sphere, command surface, operational topology, approvals, agents, and receipts carry specific narrative meaning. Avoid decorative glow fields and the feature-card cemetery.
 - Keep the hero heading to two lines on desktop and no more than three on narrow mobile.
 - Treat empty space as pacing, not as decoration. Each chapter must introduce a new spatial relationship, not repeat a left-copy/right-card layout.
 

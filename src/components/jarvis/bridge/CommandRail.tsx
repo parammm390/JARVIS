@@ -16,6 +16,7 @@ import { sfx } from "../sound"
 import { CommandPaletteV2, useCommandPaletteV2 } from "../lib/CommandPaletteV2"
 import { registerAnchor } from "../lib/pulse-bus"
 import { deriveVoiceStateCopy } from "../lib/voice-state"
+import { nextVoiceFinalIntent } from "../lib/voice-final-intent"
 import { OpsPanel } from "./OpsPanel"
 import { RecentThreadsPanel } from "./RecentThreadsPanel"
 import { sessionIdForVoiceCall } from "../kernel/instruction"
@@ -241,6 +242,9 @@ export function CommandRail({
   const dockRef = useRef<HTMLFormElement>(null)
   const spaceHeldRef = useRef(false)
   const reducedMotion = useReducedMotion() ?? false
+  const voiceSessionBaselineRef = useRef(transcript.length)
+  const processedVoiceFinalRef = useRef<string | null>(null)
+  const previousVoiceStateRef = useRef(voice.voiceState)
 
   useEffect(() => {
     // LF-04's flight reads the real Dock rect after the layout has mounted;
@@ -279,6 +283,17 @@ export function CommandRail({
   useEffect(() => {
     if (voiceRetrying && voice.voiceState !== "connecting") setVoiceRetrying(false)
   }, [voice.voiceState, voiceRetrying])
+
+  useEffect(() => {
+    const previous = previousVoiceStateRef.current
+    const next = voice.voiceState
+    const sessionStarted = (previous === "idle" || previous === "error") && next === "connecting"
+    if (sessionStarted) {
+      voiceSessionBaselineRef.current = transcript.length
+      processedVoiceFinalRef.current = null
+    }
+    previousVoiceStateRef.current = next
+  }, [transcript.length, voice.voiceState])
 
   const retryVoice = useCallback(() => {
     setVoiceRetrying(true)
@@ -369,40 +384,27 @@ export function CommandRail({
   // On a final transcript, submit exactly like a typed Enter. Voice and typed
   // work instructions stay on the same authenticated kernel path; Vapi is only
   // the browser microphone/transcription transport.
-  const lastFinalRef = useRef<string | null>(null)
-  const finalTranscriptSessionRef = useRef<string | null>(null)
   useEffect(() => {
-    const last = transcript[transcript.length - 1]
-    if (!last || last.role !== "you") return
-    const sessionKey = voiceSessionId ?? "unscoped"
-    const finalKey = `${sessionKey}:${transcript.length}:${last.text}`
-
-    // The rendered transcript intentionally survives a component remount and a
-    // call boundary. Establish the current final as a baseline for each new
-    // voice session, so historical words can never become a fresh instruction.
-    if (finalTranscriptSessionRef.current !== sessionKey) {
-      finalTranscriptSessionRef.current = sessionKey
-      lastFinalRef.current = finalKey
-      return
-    }
-    if (lastFinalRef.current === finalKey) return
-    lastFinalRef.current = finalKey
-    // A final heard while an approval or another submission owns the input is
-    // deliberately consumed. Re-enabling the rail must not replay it later.
+    const pending = nextVoiceFinalIntent(transcript, voiceSessionBaselineRef.current, processedVoiceFinalRef.current)
+    if (!pending) return
+    // Do not mark this final as processed while another transition owns the
+    // command rail. Once the current action releases the lock, this effect runs
+    // again and submits the exact phrase instead of silently discarding it.
     if (inputDisabled) return
+    processedVoiceFinalRef.current = pending.key
     sfx.commit()
     // Keep the final heard phrase visible while the authenticated kernel path
     // starts. Clearing it before this request resolves made voice feel like it
     // had been dropped, especially on a mobile network.
-    setValue(last.text)
-    setTranscriptInk({ text: last.text, phase: "final" })
+    setValue(pending.text)
+    setTranscriptInk({ text: pending.text, phase: "final" })
     setCommitting(true)
     void (async () => {
       let outcome: SubmissionOutcome = "failed"
       try {
         outcome = threadState === "clarifying"
-          ? await kernel.answerClarification(last.text)
-          : await kernel.submit(last.text, "voice", voiceSessionId ?? undefined)
+          ? await kernel.answerClarification(pending.text)
+          : await kernel.submit(pending.text, "voice", voiceSessionId ?? undefined)
       } catch {
         // The kernel reports normal transport failures as "failed"; this catch
         // keeps the same editable retry behavior for an unexpected rejection.

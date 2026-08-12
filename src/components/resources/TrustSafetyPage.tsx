@@ -3,6 +3,7 @@ import { ShieldCheck } from "lucide-react";
 import { ResourceFrame } from "./ResourceFrame";
 import { ResourceHero } from "./ResourceHero";
 import styles from "./PublicEditorial.module.css";
+import { TrustControlLab } from "./EditorialLiveSystems";
 
 const controls = [
   ["Grounding", "The planner resolves the exact customer, work root, source records, policy and relevant memory before proposing action. Unknown information remains unknown, and citations and confidence can travel with the plan."],
@@ -44,14 +45,16 @@ export function TrustSafetyPage() {
         aside={<AuthorityInstrument />}
       />
 
-      <section className={styles.content}>
+      <TrustControlLab />
+
+      <section className={styles.content} data-editorial-reveal>
         <span className={styles.sectionLabel}>Eight parts of one control system</span>
         <h2 className={styles.sectionTitle}>Safety lives inside the execution chain.</h2>
         <p className={styles.sectionCopy}>A warning banner cannot govern an operation. Grounding, contracts, policy, approval, tool control, verification, recovery and evidence have to agree.</p>
 
         <div className={styles.controlList}>
           {controls.map(([title, copy], index) => (
-            <div className={styles.controlRow} key={title}>
+            <div className={styles.controlRow} key={title} data-editorial-stack>
               <span>{String(index + 1).padStart(2, "0")}</span>
               <strong>{title}</strong>
               <p>{copy}</p>

@@ -23,7 +23,7 @@ describe("ops-overview answer actions", () => {
     expect(draft.requiresConfirmation).toBe(false);
     expect(result).toMatchObject({ status: "success", expected: { answered: true } });
     expect(result.output).toMatchObject({
-      spokenSummary: expect.stringContaining("live business overview"),
+      spokenSummary: expect.stringContaining("live business records"),
       displaySafe: { topic: "capabilities" },
     });
     expect(result.output).not.toHaveProperty("groundedOn");

@@ -4,6 +4,7 @@ import { ArrowUpRight, BookOpenText } from "lucide-react";
 import { ResourceFrame } from "./ResourceFrame";
 import { ResourceHero } from "./ResourceHero";
 import styles from "./PublicEditorial.module.css";
+import { ResourcesLiveLibrary } from "./EditorialLiveSystems";
 
 const resources = [
   {
@@ -57,14 +58,16 @@ export function ResourcesHub() {
         aside={<OperatingTrace />}
       />
 
-      <section className={styles.content}>
+      <ResourcesLiveLibrary />
+
+      <section className={styles.content} data-editorial-reveal>
         <span className={styles.sectionLabel}>Start with the control model</span>
         <h2 className={styles.sectionTitle}>The useful questions begin after “what can the AI do?”</h2>
         <p className={styles.sectionCopy}>Ask what data supported the decision, which contract authorizes the action, where approval enters, how failure recovers and what evidence closes the chain.</p>
 
         <div className={styles.indexList}>
           {resources.map((resource, index) => (
-            <Link className={styles.indexItem} href={resource.href} key={resource.href}>
+            <Link className={styles.indexItem} href={resource.href} key={resource.href} data-editorial-stack>
               <span>{String(index + 1).padStart(2, "0")}</span>
               <strong>{resource.title}</strong>
               <p>{resource.copy}</p>

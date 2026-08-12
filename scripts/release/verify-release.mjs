@@ -44,4 +44,3 @@ console.log(JSON.stringify({
   remoteMain,
   dirty: false,
 }, null, 2))
-

@@ -1,18 +1,17 @@
 "use client"
 
-// D1.T3 — the activity theater: real GET /api/activity (A2.T6) via useLiveQuery
-// (C1.T2), SSE-first (B1's gateway, real token from the caller's own signed-in
-// session — no service account minted) with the honest polling fallback documented
-// in useLiveQuery.ts's own header. FLOW-02 CascadeStagger on new items, FLOW-03
+// D1.T3 — the activity theater: real GET /api/activity (A2.T6) through the shared
+// tenant projection cache. FLOW-02 CascadeStagger on new items, FLOW-03
 // OdometerTicker not applicable here (no single rolling number), click → real
 // DecisionReceipt via ReceiptDrawer for the two sources that have one
 // (action_log/workflow_step — calls don't carry a receipt, so they're inert).
 
 import { useEffect, useMemo, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { jarvisClient, type ActivityItem, type ActivityPage } from "@/lib/jarvis-client"
-import { useLiveQuery } from "@/lib/jarvis/useLiveQuery"
+import { jarvisClient, type ActivityItem } from "@/lib/jarvis-client"
 import { useJarvisAuth } from "../lib/jarvis-auth"
+import { useBusinessProjection } from "../lib/business-projections"
+import { businessProjections } from "../lib/projection-definitions"
 import { requestReceiptScene } from "../lib/receipt-nav"
 import { flash } from "../lib/EventFX"
 import { Enter } from "../ui/motion/primitives"
@@ -57,24 +56,9 @@ export function ActivityTheater() {
   // component knowing the other's DOM.
   useEffect(() => registerAnchor("activity-feed", () => feedRef.current?.getBoundingClientRect() ?? null), [])
 
-  const { data, connection } = useLiveQuery<ActivityPage, string>({
-    // Native EventSource cannot carry Authorization and query-string bearer
-    // tokens leak through logs/history. Keep this general activity lane on its
-    // honest authenticated polling path until it shares the fetch-stream relay.
-    sseUrl: undefined,
-    fetchPage: async (cursor) => {
-      const page = await jarvisClient.activity({ since: cursor ?? undefined, limit: 30 })
-      return { ...page, cursor: page.nextCursor }
-    },
-    reduce: (prev, next) => ({
-      items: [...next.items, ...(prev?.items ?? [])].slice(0, 40),
-      nextCursor: next.nextCursor,
-      hasMore: next.hasMore,
-    }),
-    visibleIntervalMs: 3000,
-    blurredIntervalMs: 20000,
-    enabled: !!session,
-  })
+  const projection = useBusinessProjection(businessProjections.activity(), { enabled: Boolean(session) })
+  const data = projection.data
+  const connection = projection.online ? "polling" : "connecting"
 
   const items = useMemo(() => data?.items ?? [], [data])
 
@@ -136,7 +120,7 @@ export function ActivityTheater() {
     <div className="j-panel flex h-full flex-col">
       <div className="flex items-center justify-between border-b border-white/6 px-4 py-2.5">
         <span className="j-label">Activity Theater</span>
-        <span className={`j-chip ${connection === "sse" ? "bg-cyan-400/12 text-cyan-300" : connection === "polling" ? "bg-white/6 text-[color:var(--j-text-faint)]" : "bg-white/4 text-[color:var(--j-text-faint)]"}`}>
+        <span className={`j-chip ${connection === "polling" ? "bg-white/6 text-[color:var(--j-text-faint)]" : "bg-white/4 text-[color:var(--j-text-faint)]"}`}>
           {connection}
         </span>
       </div>

@@ -12,26 +12,18 @@ import { Glass } from "./atmosphere"
 import { sfx } from "./sound"
 import { jarvisGet, jarvisPost, JarvisApiError } from "./lib/api"
 import { useJarvis, ageLabel, type BindingResolution } from "./lib/data-core"
+import { useBusinessProjection } from "./lib/business-projections"
+import { businessProjections } from "./lib/projection-definitions"
 
 type Row = Record<string, unknown>
 
 function useResource(kind: string, sample: Row[]): { rows: Row[]; live: boolean; reload: () => void } {
-  const [rows, setRows] = useState<Row[]>(sample)
-  const [live, setLive] = useState(false)
-  const reload = useCallback(() => {
-    jarvisGet<{ rows: Row[] }>(`resources/${kind}`)
-      .then((d) => {
-        setRows(d.rows)
-        setLive(true)
-      })
-      .catch(() => setLive(false))
-  }, [kind])
-  useEffect(() => {
-    reload()
-    const t = setInterval(reload, 8000)
-    return () => clearInterval(t)
-  }, [reload])
-  return { rows, live, reload }
+  const projection = useBusinessProjection(businessProjections.resource(kind))
+  return {
+    rows: projection.data ?? sample,
+    live: projection.data !== null,
+    reload: () => { void projection.refresh().catch(() => undefined) },
+  }
 }
 
 /** Run an instruction through the real planner pipeline; returns a speakable outcome. */
@@ -191,24 +183,14 @@ function relTime(iso: string): string {
 export function CustomersView() {
   const { rows, live } = useResource("households", SAMPLE_LEADS)
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [detail, setDetail] = useState<Household360 | null>(null)
-  const [loadingDetail, setLoadingDetail] = useState(false)
-  const [detailError, setDetailError] = useState<string | null>(null)
+  const detailProjection = useBusinessProjection(businessProjections.household360(selectedId ?? "unselected"), { enabled: selectedId !== null })
+  const detail = detailProjection.data as Household360 | null
+  const loadingDetail = selectedId !== null && detail === null && detailProjection.status !== "error"
+  const detailError = detailProjection.error?.message ?? null
 
-  async function select(id: string) {
+  function select(id: string) {
     setSelectedId(id)
-    setLoadingDetail(true)
-    setDetailError(null)
-    setDetail(null)
-    try {
-      const res = await jarvisGet<{ data: Household360 }>("read-models/household-360", { householdId: id })
-      setDetail(res.data)
-      sfx.tick()
-    } catch (e) {
-      setDetailError(e instanceof JarvisApiError ? e.message : "Couldn't load this household.")
-    } finally {
-      setLoadingDetail(false)
-    }
+    sfx.tick()
   }
 
   const openLeads = detail?.leads.filter((l) => l.status !== "converted" && l.status !== "disqualified").length ?? 0

@@ -187,28 +187,27 @@ export interface LearningDigest {
  *  job and GET /api/insights call, so there's exactly one place this logic lives. */
 export async function computeLearningDigest(tenantId: string, windowDays = 90): Promise<LearningDigest> {
   const since = new Date(Date.now() - windowDays * 24 * 3600 * 1000);
-  const [actionRows, criticRows, scanFindingRows, resolvedConfirmations, policyRow] = await withTenant(tenantId, (db) =>
-    Promise.all([
-      db
+  const { actionRows, criticRows, scanFindingRows, resolvedConfirmations, policyRow } = await withTenant(tenantId, async (db) => {
+      const actionRows = await db
         .select({ actionType: domainActions.actionType, status: domainActions.status })
         .from(domainActions)
-        .where(and(eq(domainActions.tenantId, tenantId), gte(domainActions.createdAt, since))),
-      db
+        .where(and(eq(domainActions.tenantId, tenantId), gte(domainActions.createdAt, since)));
+      const criticRows = await db
         .select({ domainActionId: actionLog.domainActionId, actionType: domainActions.actionType, output: actionLog.output, timestamp: actionLog.timestamp })
         .from(actionLog)
         .innerJoin(domainActions, eq(actionLog.domainActionId, domainActions.id))
         .where(and(eq(actionLog.tenantId, tenantId), eq(actionLog.step, "critic_review"), gte(actionLog.timestamp, since)))
         .orderBy(desc(actionLog.timestamp))
-        .limit(100),
-      db
+        .limit(100);
+      const scanFindingRows = await db
         .select({ createdAt: scanFindings.createdAt, digestedAt: scanFindings.digestedAt })
         .from(scanFindings)
-        .where(and(eq(scanFindings.tenantId, tenantId), gte(scanFindings.createdAt, since), isNotNull(scanFindings.digestedAt))),
+        .where(and(eq(scanFindings.tenantId, tenantId), gte(scanFindings.createdAt, since), isNotNull(scanFindings.digestedAt)));
       // Two-stage traversal (same pattern as household360): direct rows first, then
       // the caller turns that hang off their session ids — a JOIN would work too, but
       // this mirrors the established convention for this kind of "children of a set
       // of parent ids" query in this codebase.
-      db
+      const resolvedConfirmations = await db
         .select({ voiceSessionId: pendingConfirmations.voiceSessionId })
         .from(pendingConfirmations)
         .where(
@@ -217,10 +216,10 @@ export async function computeLearningDigest(tenantId: string, windowDays = 90): 
             inArray(pendingConfirmations.status, ["confirmed", "rejected"]),
             gte(pendingConfirmations.resolvedAt, since),
           ),
-        ),
-      db.select({ policy: domainPolicies.policy }).from(domainPolicies).where(eq(domainPolicies.actionType, "voice_confirmation")),
-    ]),
-  );
+        );
+      const policyRow = await db.select({ policy: domainPolicies.policy }).from(domainPolicies).where(eq(domainPolicies.actionType, "voice_confirmation"));
+      return { actionRows, criticRows, scanFindingRows, resolvedConfirmations, policyRow };
+    });
 
   const resolvedSessionIds = [...new Set(resolvedConfirmations.map((r) => r.voiceSessionId))];
   const callerTurns =

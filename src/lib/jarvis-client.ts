@@ -221,11 +221,12 @@ export interface Household360Projection {
   leads: Array<{ id: string; name: string; status: string; source: string | null; createdAt: string }>
   opportunities: Array<{ id: string; pipelineStage: string; expectedValueUsd: number | null; createdAt: string }>
   quotes: Array<{ id: string; status: string; totalUsd: number | null; createdAt: string }>
-  invoices: Array<{ id: string; status: string; amountUsd: number; dueDate: string | null; payments: Array<{ amountUsd: number; method: string; status: string; receivedAt: string }> }>
-  workOrders: Array<{ id: string; type: string; status: string; technicianId: string | null; scheduledAt: string | null; completedAt: string | null }>
-  serviceVisits: Array<{ id: string; type: string; technicianId: string | null; scheduledAt: string | null; completedAt: string | null }>
-  appointments: Array<{ id: string; subjectType: string; status: string; scheduledAt: string; technicianId: string | null }>
-  conversations: Array<{ id: string; channel: string; status: string; lastActivityAt: string; messageCount: number }>
+  invoices: Array<{ id: string; status: string; amountUsd: number; memo: string | null; createdAt: string; dueDate: string | null; payments: Array<{ amountUsd: number; method: string; status: string; receivedAt: string }> }>
+  workOrders: Array<{ id: string; type: string; status: string; technicianId: string | null; depositAmountUsd: number | null; createdAt: string; scheduledAt: string | null; completedAt: string | null }>
+  serviceVisits: Array<{ id: string; type: string; technicianId: string | null; scheduledAt: string | null; completedAt: string | null; notes: string | null }>
+  appointments: Array<{ id: string; subjectType: string; status: string; scheduledAt: string; durationMinutes: number | null; technicianId: string | null; notes: string | null; createdAt: string }>
+  conversations: Array<{ id: string; channel: string; status: string; createdAt: string; lastActivityAt: string; messageCount: number; recentMessages: Array<{ direction: string; channel: string; content: string; sentAt: string }> }>
+  calls: Array<{ id: string; conversationId: string | null; direction: string; transcript: string | null; startedAt: string | null; endedAt: string | null; endedReason: string | null; raw: Record<string, unknown> }>
   documents: Array<{ id: string; kind: string; title: string; createdAt: string }>
   legacyCommunications: Array<{ id: string; channel: string; direction: string; content: string; timestamp: string }>
   timeline: Array<{ entityType: string; entityId: string; eventType: string; occurredAt: string; payload: Record<string, unknown> }>
@@ -307,6 +308,22 @@ export interface WorkReceipt {
   createdAt: string
   finalizedAt: string | null
 }
+export interface WorkOperation {
+  id: string
+  operationType: string
+  status: string
+  configuration: unknown
+  cohortDefinition: unknown
+  cohortFrozenAt: string
+  targetCount: number
+  counts: { pending: number; running: number; succeeded: number; failed: number; skipped: number; retry: number }
+  finalOutcome: unknown
+  failure: unknown
+  approvedBy: string | null
+  approvedAt: string | null
+  createdAt: string
+  updatedAt: string
+}
 export interface WorkInstruction {
   id: string
   text: string
@@ -347,6 +364,7 @@ export interface WorkCaseProjection {
   approvals: WorkApproval[]
   workflows: WorkWorkflow[]
   receipts: WorkReceipt[]
+  operations?: WorkOperation[]
   linkedEntities: WorkEntityLink[]
   businessEvents: WorkBusinessEvent[]
   calls: WorkCall[]

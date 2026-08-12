@@ -1,18 +1,28 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import Link from "next/link"
-import { AlertTriangle, ArrowUpRight, CalendarDays, CircleDot, MapPinned, RefreshCw, Route, Wrench } from "lucide-react"
+import { AlertTriangle, ArrowUpRight, CalendarDays, ChevronLeft, ChevronRight, CircleDot, MapPinned, RefreshCw, Route, Wrench } from "lucide-react"
 import { DispatchMapCore, type MapData, type Stop } from "./DispatchMap"
 import { MyDay } from "./MyDay"
-import { jarvisGet, JarvisApiError } from "../lib/api"
+import { JarvisApiError } from "../lib/api"
 import { useJarvisAuth } from "../lib/jarvis-auth"
-import { jarvisClient, type WorkCaseProjection } from "@/lib/jarvis-client"
+import type { WorkCaseProjection } from "@/lib/jarvis-client"
+import { useBusinessProjection } from "../lib/business-projections"
+import { businessProjections } from "../lib/projection-definitions"
 import { OperationalSurfaceNav, type HouseholdContext } from "../surfaces/OperationalSurfaceNav"
 import "../jarvis-theme.css"
 
 function isoToday(): string {
   return new Date().toISOString().slice(0, 10)
+}
+
+export function shiftIsoDate(value: string, days: number): string {
+  const [year, month, day] = value.split("-").map(Number)
+  if (!year || !month || !day) return value
+  const date = new Date(Date.UTC(year, month - 1, day))
+  date.setUTCDate(date.getUTCDate() + days)
+  return date.toISOString().slice(0, 10)
 }
 
 function shortId(id: string): string {
@@ -112,10 +122,13 @@ function UnauthenticatedSchedule() {
 export default function DispatchFieldSurface() {
   const { session, role, loading: authLoading } = useJarvisAuth()
   const [date, setDate] = useState(isoToday)
-  const [data, setData] = useState<MapData | null>(null)
-  const [workCases, setWorkCases] = useState<WorkCaseProjection[]>([])
-  const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
+  const canReadDispatch = role === "owner" || role === "dispatcher"
+  const mapProjection = useBusinessProjection(businessProjections.dispatchMap(date), { enabled: canReadDispatch })
+  const workProjection = useBusinessProjection(businessProjections.workCases(), { enabled: canReadDispatch })
+  const data: MapData | null = mapProjection.data
+  const workCases = useMemo<WorkCaseProjection[]>(() => workProjection.data ?? [], [workProjection.data])
+  const error = mapProjection.error ? dispatchErrorCopy(mapProjection.error) : null
+  const loading = canReadDispatch && mapProjection.data === null && mapProjection.status !== "error"
   const [surfaceQuery] = useState(() => new URLSearchParams(typeof window === "undefined" ? "" : window.location.search))
   const focus: DispatchFocusQuery = {
     householdId: surfaceQuery.get("householdId"),
@@ -126,26 +139,9 @@ export default function DispatchFieldSurface() {
   }
   const hasFocus = Object.values(focus).some(Boolean)
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const [mapResult, workResult] = await Promise.allSettled([jarvisGet<MapData>("dispatch/map", { date }), jarvisClient.workCases()])
-      if (mapResult.status === "rejected") throw mapResult.reason
-      setData(mapResult.value)
-      setWorkCases(workResult.status === "fulfilled" ? workResult.value.data : [])
-    } catch (cause) {
-      setError(dispatchErrorCopy(cause))
-      setData(null)
-      setWorkCases([])
-    } finally {
-      setLoading(false)
-    }
-  }, [date])
-
-  useEffect(() => {
-    if (role === "owner" || role === "dispatcher") void load()
-  }, [load, role])
+  const load = () => {
+    void Promise.allSettled([mapProjection.refresh(), workProjection.refresh()])
+  }
 
   const requestedHouseholdId = focus.householdId
   const contextStop = data?.stops.find((stop) => stop.householdId === requestedHouseholdId) ?? null
@@ -189,8 +185,10 @@ export default function DispatchFieldSurface() {
       </section>
       <section className="jarvis-dispatch-layout" aria-label="Dispatcher map and day rail">
         <div className="jarvis-dispatch-map-column">
-          <DispatchMapCore data={data} error={error} loading={loading} onRetry={() => void load()} onAssigned={() => void load()} />
-          <div className="jarvis-dispatch-route-note"><Route size={14} aria-hidden /><span>{data?.route ? `B3 route receipt · ${data.route.naiveKm ?? "—"} km scheduled → ${data.route.optimizedKm ?? "—"} km optimized` : "No completed B3 route receipt for this day yet."}</span></div>
+          {loading && !data ? <div className="jarvis-dispatch-map-state" role="status"><RefreshCw className="jarvis-dispatch-spin" size={22} aria-hidden /><span>Reading stored coordinates</span><h2>Building the field view</h2><p>The map opens only after the exact dispatch source responds.</p></div>
+            : data && data.stops.length === 0 ? <div className="jarvis-dispatch-map-state jarvis-dispatch-map-state--quiet"><CalendarDays size={24} aria-hidden /><span>Quiet field day</span><h2>No route is required on {date}.</h2><p>No appointments or service visits were returned, so JARVIS is withholding an empty map and route claim.</p><div><button type="button" onClick={() => setDate((current) => shiftIsoDate(current, -1))}><ChevronLeft size={15} aria-hidden />Previous day</button><button type="button" onClick={() => setDate((current) => shiftIsoDate(current, 1))}>Next day<ChevronRight size={15} aria-hidden /></button></div></div>
+              : <DispatchMapCore data={data} error={error} loading={loading} onRetry={() => void load()} onAssigned={() => void load()} />}
+          <div className="jarvis-dispatch-route-note"><Route size={14} aria-hidden /><span>{data?.route ? `B3 route receipt · ${data.route.naiveKm ?? "—"} km scheduled → ${data.route.optimizedKm ?? "—"} km optimized` : data && data.stops.length === 0 ? "No stops · no route receipt expected for this day." : "Route evidence will appear after a completed route workflow."}</span></div>
         </div>
         <aside className="jarvis-dispatch-day-rail" aria-label="Dispatch day rail">
           <div className="jarvis-dispatch-day-rail__heading"><div><span className="jarvis-dispatch-eyebrow">FIELD RAIL</span><h2>{date}</h2></div><span>{data ? data.stops.length : "—"}</span></div>

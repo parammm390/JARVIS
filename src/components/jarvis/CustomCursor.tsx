@@ -1,7 +1,7 @@
 "use client"
 
-// High-contrast cursor for the JARVIS console. It stays white so it remains visible
-// over the console's dark materials instead of inverting to black and disappearing.
+// High-contrast cursor for the JARVIS console. It shares the same electric-blue
+// treatment as the public site so the pointer never changes identity between routes.
 // Grows over interactive elements; native cursor stays hidden only while inside the page.
 
 import { useEffect, useRef, useState } from "react"
@@ -53,7 +53,8 @@ export function CustomCursor() {
       {/* outer ring */}
       <motion.div
         aria-hidden
-        className="pointer-events-none fixed left-0 top-0 z-[9999] rounded-full border-2 border-white"
+        data-finnor-cursor="ring"
+        className="pointer-events-none fixed left-0 top-0 z-[9999] rounded-full border-2 border-[#2477ff] shadow-[0_0_0_1px_rgba(255,255,255,0.92),0_0_24px_rgba(36,119,255,0.58)]"
         style={{
           x: springX,
           y: springY,
@@ -67,7 +68,8 @@ export function CustomCursor() {
       {/* center dot — instant, no spring, so precision never suffers */}
       <motion.div
         aria-hidden
-        className="pointer-events-none fixed left-0 top-0 z-[9999] rounded-full bg-white"
+        data-finnor-cursor="dot"
+        className="pointer-events-none fixed left-0 top-0 z-[9999] rounded-full bg-[#2477ff] ring-1 ring-white shadow-[0_0_18px_rgba(36,119,255,0.75)]"
         style={{
           x,
           y,

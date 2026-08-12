@@ -21,6 +21,8 @@ function routes(dir = API_ROOT): string[] {
 const EXPLICIT_BOUNDARIES: Record<string, RegExp> = {
   "admin/migrate/route.ts": /ADMIN_SECRET/,
   "health/route.ts": /export async function GET/,
+  // Public deployment metadata only; contains no tenant or user data.
+  "release/route.ts": /getReleaseMetadata/,
   "webhooks/esign/route.ts": /verifyDocusignSignature/,
   "webhooks/ghl/route.ts": /verifySignature/,
   "webhooks/marketing/route.ts": /verifyMarketingWebhookSecret/,

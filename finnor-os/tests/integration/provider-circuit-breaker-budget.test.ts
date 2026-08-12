@@ -130,12 +130,12 @@ describe.skipIf(!available)("Phase 4 §4.4: durable circuit breaker + per-tenant
     expect(second).toEqual({ allowed: true, used: 2, cap: 2 });
     const third = await claimBudget(TEST_TENANT, TEST_PROVIDER, "call", 2);
     expect(third.allowed).toBe(false);
-    expect(third.used).toBe(3);
+    expect(third.used).toBe(2); // refused capacity is never consumed
 
     // A different metric on the same provider+tenant has its own independent cap.
     const otherMetric = await claimBudget(TEST_TENANT, TEST_PROVIDER, "sms", 5);
     expect(otherMetric).toEqual({ allowed: true, used: 1, cap: 5 });
 
-    expect(await budgetUsage(TEST_TENANT, TEST_PROVIDER, "call")).toBe(3);
+    expect(await budgetUsage(TEST_TENANT, TEST_PROVIDER, "call")).toBe(2);
   });
 });

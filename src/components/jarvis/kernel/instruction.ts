@@ -14,6 +14,7 @@
 // unedited per this session's binding: "read, not edited").
 
 import { jarvisGet, jarvisPost } from "../lib/api"
+import type { OperationalQueryExecution } from "../workspaces/contracts"
 
 export type InstructionSource = "voice" | "typed"
 
@@ -107,6 +108,8 @@ export interface SubmitInstructionOpts {
    *  poll and the POST's own (possibly slower) resolution describe the same real
    *  server-side work. Optional only so this file's own unit tests can omit it. */
   instructionId?: string
+  /** Existing durable Work for a clarification/follow-up continuation. */
+  workId?: string
 }
 
 /** The shape `POST /api/actions` returns for each planned `DomainAction` — the
@@ -147,12 +150,16 @@ export interface AnswerResponse {
     title?: string
     facts?: AnswerResponseFact[]
   }
+  query?: OperationalQueryExecution
 }
 
 export interface SubmitInstructionResult {
   planned: PlannedActionResponse[]
   answer?: AnswerResponse
+  query?: OperationalQueryExecution
   sessionId: string
+  workId: string | null
+  instructionId: string | null
 }
 
 /** The one path an instruction (typed or spoken) enters the system by (§3.2:
@@ -160,13 +167,21 @@ export interface SubmitInstructionResult {
  *  sends it in the POST body — the single change that closes V8's frontend gap. */
 export async function submitInstruction(text: string, opts: SubmitInstructionOpts): Promise<SubmitInstructionResult> {
   const sessionId = opts.sessionId ?? getOrCreateSessionId(opts.source)
-  const body = await jarvisPost<{ planned?: PlannedActionResponse[]; answer?: AnswerResponse }>("actions", {
+  const body = await jarvisPost<{ planned?: PlannedActionResponse[]; answer?: AnswerResponse; query?: OperationalQueryExecution; workId?: string; instructionId?: string }>("actions", {
     instruction: text,
     channel: opts.source === "voice" ? "voice" : "text",
     sessionId,
     instructionId: opts.instructionId,
+    workId: opts.workId,
   })
-  return { planned: body.planned ?? [], ...(body.answer ? { answer: body.answer } : {}), sessionId }
+  return {
+    planned: body.planned ?? [],
+    ...(body.answer ? { answer: body.answer } : {}),
+    ...(body.query ? { query: body.query } : {}),
+    sessionId,
+    workId: body.workId ?? opts.workId ?? opts.instructionId ?? null,
+    instructionId: body.instructionId ?? opts.instructionId ?? null,
+  }
 }
 
 // ---------------------------------------------------------------------------

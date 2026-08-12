@@ -42,4 +42,12 @@ describe("instruction trace answer envelope", () => {
     expect(isReadOnlyAnswerAction("answer_customer_question", { answered: true }, true)).toBe(false);
     expect(isReadOnlyAnswerAction("answer_customer_question", { answered: true }, false)).toBe(true);
   });
+
+  it("preserves year ranges and a complete substantive research answer", () => {
+    const substantive = `Forecast (2025-2032). ${"A".repeat(2_400)}`;
+    const envelope = createInstructionTraceResultEnvelope("research-action", { spokenSummary: substantive });
+
+    expect(envelope.result.spokenSummary).toBe(substantive);
+    expect(envelope.result.spokenSummary).not.toContain("[PHONE_");
+  });
 });

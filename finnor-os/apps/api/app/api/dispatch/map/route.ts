@@ -21,10 +21,8 @@ export async function GET(req: Request): Promise<Response> {
     const date = new URL(req.url).searchParams.get("date") ?? new Date().toISOString().slice(0, 10);
     const [start, end] = dayBounds(date);
     const data = await withTenant(ctx.tenantId, async (db) => {
-      const [[settings], techniciansForTenant] = await Promise.all([
-        db.select({ isDealerZero: tenantSettings.isDealerZero }).from(tenantSettings).where(eq(tenantSettings.tenantId, ctx.tenantId)).limit(1),
-        db.select({ id: technicians.id, name: technicians.name }).from(technicians).where(eq(technicians.tenantId, ctx.tenantId)).orderBy(asc(technicians.name)),
-      ]);
+      const [settings] = await db.select({ isDealerZero: tenantSettings.isDealerZero }).from(tenantSettings).where(eq(tenantSettings.tenantId, ctx.tenantId)).limit(1);
+      const techniciansForTenant = await db.select({ id: technicians.id, name: technicians.name }).from(technicians).where(eq(technicians.tenantId, ctx.tenantId)).orderBy(asc(technicians.name));
       const legacyStops = await db.select({
         visitId: serviceVisits.id,
         technicianId: technicians.id,

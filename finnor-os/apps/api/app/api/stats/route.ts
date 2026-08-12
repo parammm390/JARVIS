@@ -17,38 +17,38 @@ export async function GET(req: Request): Promise<Response> {
   try {
     const ctx = await requireContext(req);
     const data = await withTenant(ctx.tenantId, async (db) => {
-      const [pending, blocked, recentActions, recentAudit, outbox, inventory, workflows, invoiceRows] =
-        await Promise.all([
-          db.select({ n: sql<number>`count(*)::int` }).from(domainActions).where(eq(domainActions.status, "pending")),
-          db
-            .select({ n: sql<number>`count(*)::int` })
-            .from(domainActions)
-            .where(inArray(domainActions.status, ["needs_human_review", "blocked_integration_unavailable"])),
-          db
-            .select({
-              id: domainActions.id,
-              actionType: domainActions.actionType,
-              status: domainActions.status,
-              summary: domainActions.summary,
-              createdAt: domainActions.createdAt,
-            })
-            .from(domainActions)
-            .orderBy(desc(domainActions.createdAt))
-            .limit(8),
-          db
-            .select({ step: actionLog.step, timestamp: actionLog.timestamp, domainActionId: actionLog.domainActionId })
-            .from(actionLog)
-            .orderBy(desc(actionLog.timestamp))
-            .limit(30),
-          db.select().from(sandboxOutbox).orderBy(desc(sandboxOutbox.createdAt)).limit(8),
-          db.select().from(inventoryItems).limit(12),
-          db.select().from(workflowStates).orderBy(desc(workflowStates.updatedAt)).limit(8),
-          db
-            .select({ amountUsd: invoices.amountUsd, status: invoices.status, createdAt: invoices.createdAt })
-            .from(invoices)
-            .orderBy(desc(invoices.createdAt))
-            .limit(50),
-        ]);
+      // One tenant transaction owns one pg client. pg@9 no longer permits
+      // overlapping client.query calls; these were always queued, never truly
+      // parallel, so make the sequence explicit and future-safe.
+      const pending = await db.select({ n: sql<number>`count(*)::int` }).from(domainActions).where(eq(domainActions.status, "pending"));
+      const blocked = await db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(domainActions)
+        .where(inArray(domainActions.status, ["needs_human_review", "blocked_integration_unavailable"]));
+      const recentActions = await db
+        .select({
+          id: domainActions.id,
+          actionType: domainActions.actionType,
+          status: domainActions.status,
+          summary: domainActions.summary,
+          createdAt: domainActions.createdAt,
+        })
+        .from(domainActions)
+        .orderBy(desc(domainActions.createdAt))
+        .limit(8);
+      const recentAudit = await db
+        .select({ step: actionLog.step, timestamp: actionLog.timestamp, domainActionId: actionLog.domainActionId })
+        .from(actionLog)
+        .orderBy(desc(actionLog.timestamp))
+        .limit(30);
+      const outbox = await db.select().from(sandboxOutbox).orderBy(desc(sandboxOutbox.createdAt)).limit(8);
+      const inventory = await db.select().from(inventoryItems).limit(12);
+      const workflows = await db.select().from(workflowStates).orderBy(desc(workflowStates.updatedAt)).limit(8);
+      const invoiceRows = await db
+        .select({ amountUsd: invoices.amountUsd, status: invoices.status, createdAt: invoices.createdAt })
+        .from(invoices)
+        .orderBy(desc(invoices.createdAt))
+        .limit(50);
       return {
         pending: pending[0]?.n ?? 0,
         blocked: blocked[0]?.n ?? 0,

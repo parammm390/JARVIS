@@ -4,7 +4,7 @@
 // the gate clears, on any path.
 
 import type { DomainAction, DomainPolicy, ExecutionResult } from "@finnor/shared-types";
-import { withTenant, domainActions, enqueueJob } from "@finnor/db";
+import { withTenant, domainActions, enqueueJob, reconcileWorkStatus, transitionWork } from "@finnor/db";
 import { appendEpisode } from "@finnor/memory";
 import { eq, and } from "drizzle-orm";
 import { ScopedToolRegistry, type ToolRegistry } from "@finnor/tools";
@@ -43,10 +43,18 @@ export class GatedExecutor implements Executor {
       };
     }
 
-    const draft = await plugin.draft(action.actionType, action.payload, policy);
+    let draft = await plugin.draft(action.actionType, action.payload, policy);
     draft.correlationId = action.correlationId;
     draft.approvedBy = action.approvedBy;
     draft.domainActionId = action.id;
+    if (plugin.prepareDurableOperation) {
+      draft = await plugin.prepareDurableOperation(draft, action, policy);
+      // Hooks return a draft so they can add the durable operation id. Re-stamp the
+      // immutable executor context in case an implementation rebuilt the object.
+      draft.correlationId = action.correlationId;
+      draft.approvedBy = action.approvedBy;
+      draft.domainActionId = action.id;
+    }
     await appendEpisode(action.tenantId, action.id, "draft", {}, { summary: draft.summary });
 
     const approval = approvalRequirementForAction(action.actionType, policy.requiresConfirmation, draft.requiresConfirmation);
@@ -159,5 +167,12 @@ export class GatedExecutor implements Executor {
         })
         .where(and(eq(domainActions.id, action.id), eq(domainActions.tenantId, action.tenantId)));
     });
+    if (action.workId) {
+      if (status === "executing") {
+        await transitionWork(action.tenantId, action.workId, "executing", "action_execution_started", { actionId: action.id });
+      } else {
+        await reconcileWorkStatus(action.tenantId, action.workId);
+      }
+    }
   }
 }

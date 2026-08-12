@@ -55,7 +55,7 @@ export function SinceYouWereAwayView({
             return (
               <Link
                 key={item.id}
-                href="/jarvis/bridge#approval-cockpit"
+                href="/jarvis#approval-cockpit"
                 className="j-chip block max-w-full border border-white/10 bg-white/[.035] text-cyan-100"
               >
                 {live ? <ActionRenderer actionType={live.actionType} payload={live.payload} compact /> : (item.summary ?? item.actionType.replaceAll("_", " "))}

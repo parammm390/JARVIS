@@ -35,25 +35,15 @@ jobs:
             package-lock.json
             finnor-os/package-lock.json
 
-      - name: Require Vercel deployment credential
-        run: |
-          test -n "${VERCEL_TOKEN:-}" || {
-            echo "::error::The production GitHub Actions environment must provide VERCEL_TOKEN."
-            exit 1
-          }
-
       - name: Install pinned Vercel CLI
         run: npm install --global vercel@50.15.1
 
       - name: Install frontend dependencies
-        run: npm install --no-package-lock --no-audit --no-fund
+        run: npm ci
 
       - name: Install API/workspace dependencies
         run: npm ci
         working-directory: finnor-os
-
-      - name: Verify dependency manifests remain source-locked
-        run: git diff --exit-code -- package.json package-lock.json finnor-os/package.json finnor-os/package-lock.json
 
       - name: Derive commit-locked release metadata
         run: |

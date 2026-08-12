@@ -23,6 +23,10 @@ describe("kernel/machine — §4.4 legal transitions", () => {
     expect(transition(at("captured"), { type: "SUBMIT_FAILED" })).toEqual(at("failed"))
   })
 
+  it.each(["understanding", "planning"] as const)("%s + SUBMIT_FAILED -> failed", (state) => {
+    expect(transition(at(state), { type: "SUBMIT_FAILED" })).toEqual(at("failed"))
+  })
+
   it("understanding + TRACE_planning -> planning", () => {
     expect(transition(at("understanding"), { type: "TRACE_planning" })).toEqual(at("planning"))
   })

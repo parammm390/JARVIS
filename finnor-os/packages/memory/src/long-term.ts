@@ -43,53 +43,51 @@ export async function readHouseholdMemory(
   householdId: string,
 ): Promise<HouseholdMemory | null> {
   return withTenant(tenantId, async (db) => {
-    const [hh] = await db.select().from(households).where(eq(households.id, householdId));
+    const [hh] = await db.select().from(households).where(and(eq(households.id, householdId), eq(households.tenantId, tenantId)));
     if (!hh) return null;
-    const [eq_, visits, agmts, comms, openLeadsRow, openQuotesRow, unpaidRow, lastWorkOrderRow, openTasksRow] = await Promise.all([
-      db.select().from(equipment).where(eq(equipment.householdId, householdId)),
-      db
+    const eq_ = await db.select().from(equipment).where(eq(equipment.householdId, householdId));
+    const visits = await db
         .select()
         .from(serviceVisits)
         .where(eq(serviceVisits.householdId, householdId))
         .orderBy(desc(serviceVisits.scheduledAt))
-        .limit(10),
-      db
+        .limit(10);
+    const agmts = await db
         .select()
         .from(maintenanceAgreements)
-        .where(eq(maintenanceAgreements.householdId, householdId)),
-      db
+        .where(eq(maintenanceAgreements.householdId, householdId));
+    const comms = await db
         .select()
         .from(communicationsLog)
         .where(eq(communicationsLog.householdId, householdId))
         .orderBy(desc(communicationsLog.timestamp))
-        .limit(20),
-      db
+        .limit(20);
+    const openLeadsRow = await db
         .select({ count: sql<number>`count(*)::int` })
         .from(leads)
-        .where(and(eq(leads.tenantId, tenantId), eq(leads.householdId, householdId), inArray(leads.status, ["new", "contacted", "qualified"]))),
-      db
+        .where(and(eq(leads.tenantId, tenantId), eq(leads.householdId, householdId), inArray(leads.status, ["new", "contacted", "qualified"])));
+    const openQuotesRow = await db
         .select({ count: sql<number>`count(*)::int` })
         .from(quotes)
-        .where(and(eq(quotes.tenantId, tenantId), eq(quotes.householdId, householdId), eq(quotes.status, "sent"))),
-      db
+        .where(and(eq(quotes.tenantId, tenantId), eq(quotes.householdId, householdId), eq(quotes.status, "sent")));
+    const unpaidRow = await db
         .select({ total: sql<number>`coalesce(sum(${invoices.amountUsd}), 0)::float` })
         .from(invoices)
-        .where(and(eq(invoices.tenantId, tenantId), eq(invoices.householdId, householdId), inArray(invoices.status, ["sent", "overdue"]))),
-      db
+        .where(and(eq(invoices.tenantId, tenantId), eq(invoices.householdId, householdId), inArray(invoices.status, ["sent", "overdue"])));
+    const lastWorkOrderRow = await db
         .select({ type: workOrders.type, status: workOrders.status })
         .from(workOrders)
         .where(and(eq(workOrders.tenantId, tenantId), eq(workOrders.householdId, householdId)))
         .orderBy(desc(workOrders.createdAt))
-        .limit(1),
+        .limit(1);
       // tasks is polymorphic (subjectType/subjectId, no householdId) — this counts
       // only tasks whose subject IS the household directly, not the full
       // household360-style traversal through its leads/work orders/etc. Honest,
       // bounded scope; a task hung off a lead won't be counted here.
-      db
+    const openTasksRow = await db
         .select({ count: sql<number>`count(*)::int` })
         .from(tasks)
-        .where(and(eq(tasks.tenantId, tenantId), eq(tasks.subjectType, "household"), eq(tasks.subjectId, householdId), eq(tasks.status, "open"))),
-    ]);
+        .where(and(eq(tasks.tenantId, tenantId), eq(tasks.subjectType, "household"), eq(tasks.subjectId, householdId), eq(tasks.status, "open")));
     return {
       household: hh as Record<string, unknown>,
       equipment: eq_ as Array<Record<string, unknown>>,

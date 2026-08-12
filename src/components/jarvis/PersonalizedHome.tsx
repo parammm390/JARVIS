@@ -9,12 +9,12 @@
 import { useEffect, useState } from "react"
 import dynamic from "next/dynamic"
 import { Map, Wrench } from "lucide-react"
-import { JarvisAuthProvider, useJarvisAuth } from "./lib/jarvis-auth"
-import { JarvisDataProvider } from "./lib/data-core"
+import { useJarvisAuth } from "./lib/jarvis-auth"
 import { jarvisGet } from "./lib/api"
 import { roleLandingFor, type SavedHomepage } from "./lib/role-landing"
 import { SinceYouWereAway } from "./SinceYouWereAway"
 import { PushOptIn } from "./PushOptIn"
+import { CustomCursor } from "./CustomCursor"
 import DispatchFieldSurface from "./panels/DispatchFieldSurface"
 import { OperationalSurfaceNav } from "./surfaces/OperationalSurfaceNav"
 import "./jarvis-theme.css"
@@ -78,7 +78,7 @@ function RoleLanding() {
       </div>
     )
   }
-  if (session && roleError) {
+  if (session && roleError && !role) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-[#04070f] px-6 text-center">
         <h1 className="text-lg font-black text-white">JARVIS could not load your workspace</h1>
@@ -87,7 +87,9 @@ function RoleLanding() {
       </div>
     )
   }
-  if (session && (roleLoading || !role)) return <div className="flex min-h-screen items-center justify-center bg-[#04070f] text-white">Waking JARVIS…</div>
+  // Keep an already-authorized surface mounted during same-user token refreshes;
+  // roleLoading is background revalidation once `role` is known.
+  if (session && !role) return <div className="flex min-h-screen items-center justify-center bg-[#04070f] text-white">Waking JARVIS…</div>
   if (!session) return <InstructionThreadBridge standalone={false} />
   // The owner lands in the canonical Instruction Thread: the same kernel owns
   // realtime traces, scoped approvals, execution state, voice handoff, and the
@@ -106,5 +108,10 @@ function RoleLanding() {
 }
 
 export default function PersonalizedHome() {
-  return <JarvisAuthProvider><JarvisDataProvider><RoleLanding /></JarvisDataProvider></JarvisAuthProvider>
+  return (
+    <div className="jarvis-cursor-zone min-h-screen">
+      <CustomCursor />
+      <RoleLanding />
+    </div>
+  )
 }
