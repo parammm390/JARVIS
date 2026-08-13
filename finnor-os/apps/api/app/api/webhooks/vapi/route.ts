@@ -50,20 +50,17 @@ function verifySignature(req: Request, rawBody: string): boolean {
   });
 }
 
-function defaultTenant(): string {
-  return process.env.VAPI_DEFAULT_TENANT_ID ?? "PLACEHOLDER_NEEDS_REAL_VALUE";
-}
-
 /**
  * Resolves which tenant a call belongs to from the DIALED number — replaces the
  * previous hardcoded defaultTenant() everywhere, which routed every call on every
  * deployed line to the same single tenant regardless of who was actually dialed.
  * Match order: (1) Vapi's own phoneNumberId (preferred — stable across number
- * changes), (2) the dialed number in E.164, (3) env default with a loud warning so
- * misrouting is visible instead of silent. `tenant_phone_numbers` has no RLS (like
- * `jobs`) because tenant_id is exactly what's unknown at this point.
+ * changes), then (2) the dialed number in E.164. An unmapped line fails closed;
+ * choosing a default tenant would turn a provider/configuration error into a
+ * cross-tenant data write. `tenant_phone_numbers` has no RLS (like `jobs`) because
+ * tenant_id is exactly what's unknown at this point.
  */
-async function resolveTenantFromCall(call: { phoneNumberId?: string; phoneNumber?: { number?: string } } | undefined): Promise<string> {
+async function resolveTenantFromCall(call: { phoneNumberId?: string; phoneNumber?: { number?: string } } | undefined): Promise<string | null> {
   if (call?.phoneNumberId) {
     const [byVapiId] = await adminDb()
       .select({ tenantId: tenantPhoneNumbers.tenantId })
@@ -79,11 +76,11 @@ async function resolveTenantFromCall(call: { phoneNumberId?: string; phoneNumber
       .where(eq(tenantPhoneNumbers.phoneNumber, dialedNumber));
     if (byNumber) return byNumber.tenantId;
   }
-  logWithTrace({}).warn(
-    { phoneNumberId: call?.phoneNumberId, dialedNumber },
-    "[vapi] no tenant_phone_numbers match — falling back to VAPI_DEFAULT_TENANT_ID",
+  logWithTrace({}).error(
+    { phoneNumberId: call?.phoneNumberId, hasDialedNumber: Boolean(dialedNumber) },
+    "[vapi] tenant line is unmapped — webhook rejected before replay claim",
   );
-  return defaultTenant();
+  return null;
 }
 
 type SafeCallContext = {
@@ -302,11 +299,10 @@ async function describeExecutionOutput(actionSummary: string | null, out: Record
   return actionSummary ? `${actionSummary} — done.` : "Done, but nothing specific to report.";
 }
 
-async function handleToolCalls(message: Record<string, unknown>): Promise<Response> {
+async function handleToolCalls(message: Record<string, unknown>, tenantId: string): Promise<Response> {
   const callMeta = message.call as
     | { id?: string; phoneNumberId?: string; customer?: { number?: string }; phoneNumber?: { number?: string }; metadata?: Record<string, unknown> }
     | undefined;
-  const tenantId = await resolveTenantFromCall(callMeta);
   const callId = callMeta?.id ?? "unknown";
   const list = (message.toolCallList ?? message.toolCalls ?? []) as VapiToolCall[];
   const results: Array<{ toolCallId: string; result: string }> = [];
@@ -605,6 +601,17 @@ export async function POST(req: Request): Promise<Response> {
     call?: { id?: string; phoneNumberId?: string; customer?: { number?: string }; phoneNumber?: { number?: string }; metadata?: Record<string, unknown> };
   };
 
+  // Resolve the tenant before claiming the provider replay receipt. If a line is
+  // configured after an initial failed delivery, Vapi can retry the identical event
+  // and continue safely; an unmapped attempt must not poison its idempotency key.
+  const tenantId = await resolveTenantFromCall(msg.call);
+  if (!tenantId) {
+    return Response.json(
+      { error: "Unmapped Vapi line; no tenant-scoped work was accepted" },
+      { status: 503, headers: { "retry-after": "60" } },
+    );
+  }
+
   // Replay protection, keyed by message shape — NOT bare call id: a single call
   // fires many "tool-calls" messages (one per utterance) AND many "status-update"
   // messages (queued/ringing/in-progress/forwarding/ended), all sharing the same
@@ -628,7 +635,7 @@ export async function POST(req: Request): Promise<Response> {
 
   // 1. Live-call tools: plan + spoken confirmation inside the same call.
   if (msg.type === "tool-calls") {
-    return handleToolCalls(msg);
+    return handleToolCalls(msg, tenantId);
   }
 
   // B1.T4: in-progress call status → NOTIFY → SSE, so the cockpit sees a call
@@ -638,7 +645,6 @@ export async function POST(req: Request): Promise<Response> {
   // migration 0037's calls_notify trigger covers that half already). A direct
   // pg_notify from here, not a trigger, since there is no table write to hang one off.
   if (msg.type === "status-update" && callId) {
-    const tenantId = await resolveTenantFromCall(msg.call);
     await getPool().query("SELECT pg_notify('jarvis_events', $1)", [
       JSON.stringify({ tenantId, kind: "call_status", id: callId, ts: new Date().toISOString(), status: msg.status ?? "unknown" }),
     ]);
@@ -646,7 +652,6 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   if (msg.type === "end-of-call-report") {
-    const tenantId = await resolveTenantFromCall(msg.call);
     const metadata = (msg.call?.metadata ?? {}) as Record<string, unknown>;
     const callContext = safeCallContext(metadata);
     const transcript = msg.transcript ?? "";

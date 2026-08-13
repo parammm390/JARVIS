@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
+import { performance } from "node:perf_hooks";
 import pg from "pg";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
@@ -280,6 +281,7 @@ describe.skipIf(!available)("Upgrade 9 governed agentic objective loop", () => {
     expect((afterFailure!.actions as Array<typeof domainActions.$inferSelect>)[0]).toMatchObject({ id: action.id, status: "needs_human_review" });
     expect(await orchestrator.runObjectiveIteration({ tenantId, workId: started.workId, objectiveLoopId: started.objectiveLoopId })).toBe("awaiting_approval");
 
+    const recoveryStarted = performance.now();
     providerAvailable = true;
     expect((await orchestrator.decide(action.id, tenantId, "approve", ownerId, { role: "owner" })).status).toBe("success");
     expect(await orchestrator.runObjectiveIteration({ tenantId, workId: started.workId, objectiveLoopId: started.objectiveLoopId })).toBe("completed");
@@ -289,6 +291,13 @@ describe.skipIf(!available)("Upgrade 9 governed agentic objective loop", () => {
     expect(providerAttempts).toBe(3); // initial call + one bounded reflection retry + authorized recovery
     const delivered = await withTenant(tenantId, (db) => db.select().from(sandboxOutbox).where(and(eq(sandboxOutbox.tenantId, tenantId), eq(sandboxOutbox.content, "Hi Avery Objective! Just following up about provider recovery proof — reply here or call us if you need anything."))));
     expect(delivered).toHaveLength(1);
+    console.info(`[upgrade10-metric] ${JSON.stringify({
+      name: "provider_failure_safe_recovery",
+      recoveryMs: Math.round(performance.now() - recoveryStarted),
+      providerAttempts,
+      duplicateSideEffects: delivered.length - 1,
+      objectiveCompletionCorrect: recovered!.objectiveLoop?.state === "completed",
+    })}`);
   });
 
   it("blocks before planning when the owning employee cannot inspect canonical state", async () => {

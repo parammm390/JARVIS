@@ -32,6 +32,7 @@ import {
 import type { ErrorKind } from "@finnor/shared-types";
 import { nextCallingWindow } from "@finnor/plugin-bulk-notify";
 import { revalidateActionExecution } from "@finnor/authority";
+import { resumeObjectiveForAction } from "@finnor/orchestration";
 import { and, asc, eq, inArray, lte, or, sql } from "drizzle-orm";
 
 const SMS_DISPATCH_SIZE = 50;
@@ -238,11 +239,14 @@ async function finishTarget(params: {
 
 async function refreshOperation(tenantId: string, operationId: string): Promise<void> {
   let workId: string | null = null;
+  let objectiveActionId: string | null = null;
+  let objectiveWakeDue = false;
   await withTenant(tenantId, async (db) => {
     const [operation] = await db.select().from(businessOperations)
       .where(and(eq(businessOperations.tenantId, tenantId), eq(businessOperations.id, operationId))).limit(1);
     if (!operation) return;
     workId = operation.workId;
+    objectiveActionId = operation.domainActionId;
     const rows = await db.select({ status: businessOperationTargets.status, count: sql<number>`count(*)::int` })
       .from(businessOperationTargets).where(eq(businessOperationTargets.operationId, operationId)).groupBy(businessOperationTargets.status);
     const counts = Object.fromEntries(rows.map((row) => [row.status, row.count])) as Record<string, number>;
@@ -300,9 +304,11 @@ async function refreshOperation(tenantId: string, operationId: string): Promise<
       await db.update(domainActions).set({ status: actionStatus, executionStartedAt: null })
         .where(and(eq(domainActions.tenantId, tenantId), eq(domainActions.id, operation.domainActionId)));
       if (operation.status !== status) await appendEventTx(db, { tenantId, operationId, eventType: `operation_${status}`, payload: outcome });
+      objectiveWakeDue = operation.status !== status;
     }
   });
   if (workId) await reconcileWorkStatus(tenantId, workId);
+  if (objectiveWakeDue && objectiveActionId) await resumeObjectiveForAction(tenantId, objectiveActionId).catch(() => false);
 }
 
 async function scheduleDispatcher(tenantId: string, operation: OperationRow, suffix: string, runAt: Date): Promise<void> {

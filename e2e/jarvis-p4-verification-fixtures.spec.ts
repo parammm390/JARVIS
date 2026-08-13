@@ -51,32 +51,28 @@ const FIXTURE_RECEIPT = {
 // partial synthetic response makes the actual Thread crash before the receipt
 // can render, which would test fixture shape rather than P4.T6 behavior.
 async function fulfillFixtureSetupStatus(route: Route): Promise<void> {
-  const response = await route.fetch()
-  const payload = await response.json() as Record<string, unknown>
-  const existingEnvironment = payload.environment && typeof payload.environment === "object"
-    ? payload.environment as Record<string, unknown>
-    : {}
-  const existingBindings = existingEnvironment.bindings && typeof existingEnvironment.bindings === "object"
-    ? existingEnvironment.bindings as Record<string, unknown>
-    : {}
+  // This is a labelled receipt fixture. Return the complete setup envelope
+  // synchronously so the receipt's sandbox label does not depend on the live
+  // tenant's 10-second sanity-lane schedule or its rate limiter.
   await route.fulfill({
-    status: response.status(),
-    headers: {
-      ...Object.fromEntries(Object.entries(response.headers()).filter(([key]) => !["content-length", "content-encoding", "transfer-encoding"].includes(key))),
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      ...payload,
+    json: {
+      actionTypes: [],
       environment: {
-        ...existingEnvironment,
         nodeEnv: "test",
+        secretProvider: { provider: "env", loaded: true, loadedAt: new Date().toISOString() },
         bindings: {
-          ...existingBindings,
+          scheduling: { mode: "native", source: "default" },
+          communications: { mode: "native", source: "default" },
+          documents: { mode: "native", source: "default" },
+          esign: { mode: "native", source: "default" },
+          inventory: { mode: "native", source: "default" },
+          accounting: { mode: "native", source: "default" },
           payments: { mode: "emulator", source: "default" },
           crm: { mode: "native", source: "default" },
+          marketing: { mode: "native", source: "default" },
         },
       },
-    }),
+    },
   })
 }
 
@@ -93,6 +89,7 @@ const password = process.env.TEST_OWNER_PASSWORD
 test.describe.configure({ mode: "serial" })
 
 test.describe("P4.T3/T6 — ThreadVerification + sandbox honesty, FIXTURE harness", () => {
+  test.setTimeout(120_000)
   // jarvis-v3 finding while building this evidence: data-core.ts's own lanes
   // (P1.T9/C-15's own fix — "no session -> no request", verified at
   // runLane()) include the sanity lane that fetches setup/status, so an
@@ -119,11 +116,9 @@ test.describe("P4.T3/T6 — ThreadVerification + sandbox honesty, FIXTURE harnes
 
     await page.setViewportSize({ width: 1440, height: 900 })
     await page.goto("/jarvis/login", { waitUntil: "domcontentloaded" })
-    await page.getByPlaceholder(/you@example.com/i).click()
-    await page.getByPlaceholder(/you@example.com/i).pressSequentially(email!, { delay: 15 })
-    await page.getByPlaceholder(/•+/i).click()
-    await page.getByPlaceholder(/•+/i).pressSequentially(password!, { delay: 15 })
-    await expect(page.getByRole("button", { name: /sign in/i })).toBeEnabled({ timeout: 5_000 })
+    await page.getByPlaceholder(/you@example.com/i).fill(email!)
+    await page.getByPlaceholder(/•+/i).fill(password!)
+    await expect(page.getByRole("button", { name: /sign in/i })).toBeEnabled({ timeout: 20_000 })
     await page.getByRole("button", { name: /sign in/i }).click()
     await page.waitForURL("**/jarvis", { timeout: 20_000 })
 
@@ -134,10 +129,10 @@ test.describe("P4.T3/T6 — ThreadVerification + sandbox honesty, FIXTURE harnes
     // Real, correct duplication: the diff table's own row AND the (now
     // JSON-free) "Actual result" FieldList section both surface the same real
     // field — not a bug, both are honest projections of the same actualResult.
-    await expect(page.getByText("amountPaidUsd").first()).toBeVisible()
+    await expect(page.locator("span:visible", { hasText: "amountPaidUsd" }).first()).toBeVisible()
     // P4.T6: this receipt's own step (send_message) resolved to "native" (not
     // ghl) — the literal sandbox string must render, never disguised.
-    await expect(page.getByText(SANDBOX_LITERAL)).toBeVisible()
+    await expect(page.getByText(SANDBOX_LITERAL)).toBeVisible({ timeout: 25_000 })
     await page.screenshot({ path: `${OUT_DIR}/verification-diff-1440.png`, fullPage: true })
 
     await page.setViewportSize({ width: 390, height: 844 })
@@ -149,6 +144,7 @@ test.describe("P4.T3/T6 — ThreadVerification + sandbox honesty, FIXTURE harnes
   })
 
   test("no prediction recorded renders the exact literal, never hidden", async ({ page }) => {
+    test.skip(test.info().project.name !== "desktop-chromium", "single explicit viewport")
     mkdirSync(OUT_DIR, { recursive: true })
     await page.route("**/api/jarvis/receipts?domainActionId=*", (route) => route.fulfill({ json: { receipts: [{ id: "fixture-receipt-no-prediction" }] } }))
     await page.route("**/api/jarvis/receipts/fixture-receipt-no-prediction", (route) =>
@@ -177,11 +173,9 @@ test.describe("P4.T3/T6 — ThreadVerification + sandbox honesty, FIXTURE harnes
     mkdirSync(OUT_DIR, { recursive: true })
     await page.setViewportSize({ width: 1440, height: 900 })
     await page.goto("/jarvis/login", { waitUntil: "domcontentloaded" })
-    await page.getByPlaceholder(/you@example.com/i).click()
-    await page.getByPlaceholder(/you@example.com/i).pressSequentially(email!, { delay: 15 })
-    await page.getByPlaceholder(/•+/i).click()
-    await page.getByPlaceholder(/•+/i).pressSequentially(password!, { delay: 15 })
-    await expect(page.getByRole("button", { name: /sign in/i })).toBeEnabled({ timeout: 5_000 })
+    await page.getByPlaceholder(/you@example.com/i).fill(email!)
+    await page.getByPlaceholder(/•+/i).fill(password!)
+    await expect(page.getByRole("button", { name: /sign in/i })).toBeEnabled({ timeout: 20_000 })
     await page.getByRole("button", { name: /sign in/i }).click()
     await page.waitForURL("**/jarvis", { timeout: 20_000 })
 
@@ -202,10 +196,11 @@ test.describe("P4.T3/T6 — ThreadVerification + sandbox honesty, FIXTURE harnes
     // Never a route — the same /jarvis/next URL, just an overlay on top of it.
     expect(page.url()).toBe(urlBefore)
     await expect(page.getByRole("dialog", { name: "Ops" })).toBeVisible({ timeout: 5_000 })
-    await expect(page.getByText("Overdue invoices")).toBeVisible()
-    await expect(page.getByText("Collected")).toBeVisible()
-    await expect(page.getByText("Pending approvals")).toBeVisible()
-    await expect(page.getByText("Runs in flight")).toBeVisible()
+    const ops = page.getByRole("dialog", { name: "Ops" })
+    await expect(ops.getByText("Overdue invoices", { exact: true })).toBeVisible()
+    await expect(ops.getByText("Collected", { exact: true })).toBeVisible()
+    await expect(ops.getByText("Pending approvals", { exact: true })).toBeVisible()
+    await expect(ops.getByText("Runs in flight", { exact: true })).toBeVisible()
     await page.waitForTimeout(2000) // let the fast/slow lanes land a real value instead of a loading skeleton
     await page.screenshot({ path: `${OUT_DIR}/ops-panel-1440.png` })
 
@@ -228,24 +223,24 @@ test.describe("P4.T3/T6 — ThreadVerification + sandbox honesty, FIXTURE harnes
       priceBookProvenance: [],
       predicted: { invoiceId: "fixture-invoice-0", invoiceFound: true, amountUsd: 890, steps: ["create_payment_link", "send_message", "sync_invoice"] },
     }
-    await page.route("**/api/jarvis/actions/pending?filter=pending", (route) => route.fulfill({ json: { actions: [fixtureAction] } }))
-    await page.route("**/api/jarvis/actions/pending?filter=blocked", (route) => route.fulfill({ json: { actions: [] } }))
+    await page.route("**/api/jarvis/actions/pending*", (route) => {
+      const filter = new URL(route.request().url()).searchParams.get("filter")
+      return route.fulfill({ json: { actions: filter === "blocked" ? [] : [fixtureAction] } })
+    })
 
     await page.setViewportSize({ width: 1440, height: 900 })
     await page.goto("/jarvis/login", { waitUntil: "domcontentloaded" })
-    await page.getByPlaceholder(/you@example.com/i).click()
-    await page.getByPlaceholder(/you@example.com/i).pressSequentially(email!, { delay: 15 })
-    await page.getByPlaceholder(/•+/i).click()
-    await page.getByPlaceholder(/•+/i).pressSequentially(password!, { delay: 15 })
-    await expect(page.getByRole("button", { name: /sign in/i })).toBeEnabled({ timeout: 5_000 })
+    await page.getByPlaceholder(/you@example.com/i).fill(email!)
+    await page.getByPlaceholder(/•+/i).fill(password!)
+    await expect(page.getByRole("button", { name: /sign in/i })).toBeEnabled({ timeout: 20_000 })
     await page.getByRole("button", { name: /sign in/i }).click()
     await page.waitForURL("**/jarvis", { timeout: 20_000 })
 
     await page.goto("/jarvis/next?fixture=approval", { waitUntil: "domcontentloaded" })
-    await page.waitForTimeout(5_000) // let the fast lane's real actions/pending poll (intercepted above) land
+    await page.waitForTimeout(10_000) // let the authenticated fast lane's pending poll (intercepted above) land under the full matrix load
 
     const predictedChip = page.getByRole("button", { name: "predicted outcome" })
-    await expect(predictedChip).toBeVisible({ timeout: 10_000 })
+    await expect(predictedChip).toBeVisible({ timeout: 45_000 })
     await predictedChip.click()
     await expect(page.getByText("amountUsd")).toBeVisible()
     // "890" appears twice, honestly: ActionRenderer's own real payload chip

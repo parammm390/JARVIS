@@ -69,11 +69,9 @@ test.describe("P5.T3 — Flagship C, driven for real, never approving a real out
     const token0 = await (async () => {
       await page.setViewportSize({ width: 1440, height: 900 })
       await page.goto("/jarvis/login", { waitUntil: "domcontentloaded" })
-      await page.getByPlaceholder(/you@example.com/i).click()
-      await page.getByPlaceholder(/you@example.com/i).pressSequentially(email!, { delay: 15 })
-      await page.getByPlaceholder(/•+/i).click()
-      await page.getByPlaceholder(/•+/i).pressSequentially(password!, { delay: 15 })
-      await expect(page.getByRole("button", { name: /sign in/i })).toBeEnabled({ timeout: 5_000 })
+      await page.getByPlaceholder(/you@example.com/i).fill(email!)
+      await page.getByPlaceholder(/•+/i).fill(password!)
+      await expect(page.getByRole("button", { name: /sign in/i })).toBeEnabled({ timeout: 20_000 })
       await page.getByRole("button", { name: /sign in/i }).click()
       await page.waitForURL("**/jarvis", { timeout: 20_000 })
       return getRealAccessToken(page)
@@ -84,15 +82,18 @@ test.describe("P5.T3 — Flagship C, driven for real, never approving a real out
     await page.waitForTimeout(1500)
 
     const rail = page.getByPlaceholder("Tell JARVIS what you need")
-    await expect(rail).toBeVisible({ timeout: 15_000 })
+    await expect(rail).toBeVisible({ timeout: 45_000 })
     await rail.click()
     await rail.fill("Tell every customer on a softener plan that we're doing free hardness checks next month")
     await rail.press("Enter")
 
-    await expect(page.getByText("Tell every customer on a softener plan that we're doing free hardness checks next month")).toBeVisible({ timeout: 10_000 })
-    await expect(
-      page.getByText(/what i.ll do|i need one thing|awaiting your approval|customers will be texted|what actually happened/i).first(),
-    ).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByText("Tell every customer on a softener plan that we're doing free hardness checks next month").first()).toBeVisible({ timeout: 10_000 })
+    // The adaptive workspace can still truthfully say "Preparing workspace"
+    // after the planning response has arrived. Prove the real plan from the
+    // response that the channel gate consumes, then assert its canonical
+    // campaign workspace instead of waiting on one transient copy variant.
+    await expect.poll(() => plannedActions.length, { timeout: 30_000 }).toBeGreaterThan(0)
+    await expect(page.getByRole("heading", { name: /campaign workspace|execution workspace/i })).toBeVisible()
     await page.waitForTimeout(1500)
 
     await page.screenshot({ path: `${OUT_DIR}/flagship-c-00-plan-1440.png`, fullPage: true })

@@ -8,6 +8,7 @@ import {
   SubmitInstructionSchema,
   StartObjectiveSchema,
   ControlObjectiveSchema,
+  HandoffWorkSchema,
   ConfirmActionSchema,
   RejectActionSchema,
   EscalateActionSchema,
@@ -152,6 +153,15 @@ const doc = {
         summary: "Accept responsibility for one persistent, governed Work objective and queue its first bounded iteration",
         requestBody: { content: { "application/json": { schema: s(StartObjectiveSchema) } } },
         responses: { "202": { description: "Objective persisted and queued" }, "200": { description: "Idempotent replay of an existing objective" }, "400": { description: "Invalid objective or budget" }, "401": { description: "Bad auth" } },
+      },
+    },
+    "/api/employees": {
+      get: {
+        summary: "List the authenticated tenant's employee directory for governed Work ownership and handoff",
+        responses: {
+          "200": { description: "{employees: [{id, displayName, status, roles, legacyRole}]}" },
+          "401": { description: "Bad auth" },
+        },
       },
     },
     "/api/queries": {
@@ -448,6 +458,21 @@ const doc = {
         parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
         requestBody: { content: { "application/json": { schema: s(ControlObjectiveSchema) } } },
         responses: { "202": { description: "Continuation or redirect durably queued" }, "200": { description: "Objective interrupted" }, "400": { description: "Invalid control command" }, "404": { description: "Work objective not found" } },
+      },
+    },
+    "/api/works/{id}/handoff": {
+      post: {
+        summary: "Transfer responsibility for the same durable Work to an active employee in the same tenant",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        requestBody: { content: { "application/json": { schema: s(HandoffWorkSchema) } } },
+        responses: {
+          "202": { description: "Work owner and authority context updated; employee_handoff event appended" },
+          "200": { description: "Idempotent handoff to the existing owner" },
+          "400": { description: "Inactive, missing, or foreign-tenant target employee" },
+          "403": { description: "Only the current owner may hand off this Work" },
+          "404": { description: "Work not found" },
+          "409": { description: "Concurrent ownership change" },
+        },
       },
     },
     "/api/works/{id}/retry": {

@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { errorResponse, requireContext } from "../../../../../lib/auth";
 import { evaluateAuthority } from "@finnor/authority";
+import { resumeObjectiveForAction } from "@finnor/orchestration";
 
 const RetryOperationSchema = z.object({ recoveryKey: z.string().min(1).max(200) });
 
@@ -30,6 +31,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       requestedBy: ctx.userId,
       recoveryKey: body.data.recoveryKey,
     });
+    if (!result.duplicate) await resumeObjectiveForAction(ctx.tenantId, operation.domainActionId).catch(() => false);
     return Response.json({ result, operation: await businessOperationAggregate(ctx.tenantId, id) }, { status: result.duplicate ? 200 : 202 });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Business operation recovery failed";

@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 1,
+  "upgrade": 10,
+  "status": "PASS",
+  "startedAt": "2026-08-12T23:26:48.976Z",
+  "completedAt": "2026-08-12T23:27:01.387Z",
+  "sourceCommit": "459688ed7749030cdc99c8a99e655b5792090572",
+  "environment": {
+    "databaseHost": "localhost",
+    "disposableDatabasePrefix": "finnor_upgrade10_",
+    "cleanDatabaseCreated": true,
+    "cleanDatabaseRemoved": true,
+    "restrictedRuntimeRoleReady": true,
+    "providerMode": "sandbox"
+  },
+  "commands": {
+    "migration": {
+      "exitCode": 0,
+      "signal": null,
+      "durationMs": 1106
+    },
+    "journeys": {
+      "exitCode": 0,
+      "signal": null,
+      "durationMs": 11030,
+      "files": [
+        "tests/integration/whole-system-integration.test.ts",
+        "tests/integration/agentic-objective-loop.test.ts",
+        "tests/integration/employee-authority-runtime.test.ts",
+        "tests/integration/tenant-isolation.test.ts"
+      ]
+    }
+  },
+  "journeys": [
+    {
+      "id": 1,
+      "name": "voice customer issue through verified completion",
+      "evidence": "whole-system-integration: voice-started customer objective"
+    },
+    {
+      "id": 2,
+      "name": "cross-employee approval and Work handoff",
+      "evidence": "whole-system-integration: handoff plus owner approval"
+    },
+    {
+      "id": 3,
+      "name": "durable bulk operation partial failure and recovery",
+      "evidence": "whole-system-integration: frozen cohort recovery"
+    },
+    {
+      "id": 4,
+      "name": "waiting objective survives process restart",
+      "evidence": "whole-system-integration: persisted timer and recovery scan"
+    },
+    {
+      "id": 5,
+      "name": "provider failure and idempotent recovery",
+      "evidence": "agentic-objective-loop: provider outage recovery"
+    },
+    {
+      "id": 6,
+      "name": "fresh business state changes the plan",
+      "evidence": "whole-system-integration: external resolution stops send"
+    },
+    {
+      "id": 7,
+      "name": "cross-projection convergence",
+      "evidence": "whole-system-integration: Work, Customer, Schedule, Agents, workspace"
+    },
+    {
+      "id": 8,
+      "name": "tenant and authority isolation",
+      "evidence": "whole-system, employee-authority-runtime, and tenant-isolation"
+    }
+  ],
+  "metrics": [
+    {
+      "name": "provider_failure_safe_recovery",
+      "recoveryMs": 149,
+      "providerAttempts": 3,
+      "duplicateSideEffects": 0,
+      "objectiveCompletionCorrect": true
+    },
+    {
+      "name": "voice_text_handoff_approval_completion",
+      "latencyMs": 620,
+      "staleStateConvergenceMs": 54,
+      "canonicalQueryExecutions": 7,
+      "duplicateSideEffects": 0,
+      "objectiveCompletionCorrect": true
+    },
+    {
+      "name": "durable_operation_partial_failure_recovery",
+      "recoveryMs": 81,
+      "targetCount": 2,
+      "duplicateRecoveryRequests": 1,
+      "duplicateSideEffects": 0,
+      "objectiveCompletionCorrect": true
+    },
+    {
+      "name": "waiting_restart_resume",
+      "recoveryMs": 88,
+      "recoveryScanEnqueues": 1,
+      "duplicateContinuationJobs": 0,
+      "objectiveCompletionCorrect": true
+    },
+    {
+      "name": "cross_projection_business_change",
+      "staleStateConvergenceMs": 59,
+      "relevantProjectionsChecked": 5,
+      "duplicateSideEffects": 0,
+      "objectiveCompletionCorrect": true
+    }
+  ],
+  "invariants": {
+    "requiredMetricsPresent": true,
+    "duplicateSideEffects": 0,
+    "objectiveCompletionCorrect": true,
+    "noSkippedTests": true
+  },
+  "failure": null
+}

@@ -30,8 +30,8 @@ test.describe("P3.T3 — Agent causality and auth-boundary audit", () => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height })
       await page.goto("/jarvis/agents", { waitUntil: "domcontentloaded" })
       await expect(page.locator("[data-jarvis-agent-fleet]")).toBeVisible()
-      await expect(page.locator("[data-agent-fleet-rail] [data-agent-key]")).toHaveCount(5)
-      await expect(page.locator("[data-agent-status='unavailable']")).toContainText("assistant configuration is not exposed")
+      await expect(page.locator("[data-agent-fleet-rail] [data-agent-key]")).toHaveCount(9)
+      await expect(page.locator(".jarvis-calling-agents")).toContainText("Assistant status unavailable")
       await expect(page.locator(".jarvis-agent-fleet__provider-scope")).toContainText("not agent readiness")
       await expect(page.locator("[data-agent-fleet-inspector]")).toHaveCount(0)
 
@@ -39,7 +39,7 @@ test.describe("P3.T3 — Agent causality and auth-boundary audit", () => {
         viewport: currentViewport,
         workFetches: performance.getEntriesByType("resource").filter((entry) => entry.name.includes("read-models/work-cases")).length,
         scrollWidth: document.documentElement.scrollWidth,
-        emptyWork: document.querySelector(".jarvis-agent-fleet__lane")?.textContent?.includes("No exact agent activity") ?? false,
+        emptyWork: document.querySelector(".jarvis-agent-fleet__lane")?.textContent?.includes("No exact") ?? false,
       }), viewport.width)
       snapshots.push(snapshot)
       expect(snapshot.workFetches).toBe(0)

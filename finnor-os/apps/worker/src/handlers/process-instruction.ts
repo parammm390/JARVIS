@@ -11,7 +11,7 @@ export const processInstruction: JobHandler = async (payload) => {
   const tenantId = String(payload.tenantId ?? "");
   const instruction = String(payload.instruction ?? "");
   if (!tenantId || tenantId === PLACEHOLDER_NEEDS_REAL_VALUE) {
-    throw new Error("process_instruction: tenantId not mapped — set VAPI_DEFAULT_TENANT_ID");
+    throw new Error("process_instruction: tenantId is missing from the durable Work/job payload");
   }
   if (!instruction) throw new Error("process_instruction requires an instruction");
   orchestrator ??= new FinnorOrchestrator();

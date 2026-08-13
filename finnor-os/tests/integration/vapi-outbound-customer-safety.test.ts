@@ -9,6 +9,7 @@ import {
   closePool,
   communicationsLog,
   households,
+  getPool,
   jobs,
   tasks,
   withTenant,
@@ -18,6 +19,8 @@ import { seed, SEED_TENANT_ID } from "../../packages/db/seed";
 import { POST } from "../../apps/api/app/api/webhooks/vapi/route";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
+const PHONE_NUMBER_ID = "phone-outbound-safety-test";
+const DIALED_NUMBER = "+15550009992";
 
 async function dbUp(): Promise<boolean> {
   const client = new pg.Client({ connectionString: DB_URL, connectionTimeoutMillis: 2000 });
@@ -46,8 +49,9 @@ function reportRequest(callId: string, householdId: string, structuredData: Reco
         analysis: { structuredData },
         call: {
           id: callId,
+          phoneNumberId: PHONE_NUMBER_ID,
           customer: { number: "+15550009991" },
-          phoneNumber: { number: "+15550009992" },
+          phoneNumber: { number: DIALED_NUMBER },
           metadata: {
             direction: "outbound",
             agentKey: "win-back",
@@ -68,9 +72,14 @@ describe.skipIf(!available)("Vapi outbound customer safety", () => {
   beforeAll(async () => {
     process.env.DATABASE_URL = DB_URL;
     process.env.VAPI_WEBHOOK_SECRET = "";
-    process.env.VAPI_DEFAULT_TENANT_ID = SEED_TENANT_ID;
     await migrate(DB_URL);
     await seed(DB_URL);
+    await getPool().query(
+      `INSERT INTO tenant_phone_numbers (tenant_id, phone_number, vapi_phone_number_id)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (vapi_phone_number_id) DO UPDATE SET tenant_id = EXCLUDED.tenant_id, phone_number = EXCLUDED.phone_number`,
+      [SEED_TENANT_ID, DIALED_NUMBER, PHONE_NUMBER_ID],
+    );
     const [household] = await withTenant(SEED_TENANT_ID, (db) => db.insert(households).values({
       tenantId: SEED_TENANT_ID,
       address: "991 Safety Test Lane",

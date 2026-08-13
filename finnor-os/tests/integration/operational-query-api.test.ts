@@ -8,6 +8,7 @@ import {
   households,
   receiveWork,
   tenants,
+  users,
   withTenant,
   workPlannerAttempts,
   workQueryExecutions,
@@ -17,6 +18,7 @@ import { POST as queriesPOST } from "../../apps/api/app/api/queries/route";
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
 const TENANT_ID = randomUUID();
 const HOUSEHOLD_ID = randomUUID();
+const USER_ID = "00000000-0000-4000-8000-0000000000aa";
 
 async function dbUp(): Promise<boolean> {
   const client = new pg.Client({ connectionString: DB_URL, connectionTimeoutMillis: 2_000 });
@@ -37,6 +39,7 @@ function request(body?: unknown, tenantId = TENANT_ID): Request {
     headers: {
       "content-type": "application/json",
       "x-tenant-id": tenantId,
+      "x-user-id": USER_ID,
       "x-user-role": "owner",
     },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -59,6 +62,13 @@ describe.skipIf(!available)("POST /api/queries typed contract", () => {
     await migrate(DB_URL);
     await withTenant(TENANT_ID, async (db) => {
       await db.insert(tenants).values({ id: TENANT_ID, name: "Operational Query API Tenant", timezone: "UTC" }).onConflictDoNothing();
+      await db.insert(users).values({
+        id: USER_ID,
+        tenantId: TENANT_ID,
+        email: `query-owner-${TENANT_ID}@example.test`,
+        role: "owner",
+        displayName: "Operational Query Owner",
+      }).onConflictDoNothing();
       await db.insert(households).values({
         id: HOUSEHOLD_ID,
         tenantId: TENANT_ID,

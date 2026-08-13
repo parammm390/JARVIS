@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { buildAgingSummary, collectionMatchesView, deriveAgingBand, filterCollectionWork, groupCollectionWork, invoiceMatchesView, safeBusinessLabel } from "./CashPressureSurface"
+import { buildAgingSummary, collectionMatchesView, deriveAgingBand, filterCollectionWork, groupCollectionWork, invoiceMatchesView, safeBusinessLabel } from "./cash-pressure-model"
 import type { InvoiceResource, WorkCaseProjection } from "@/lib/jarvis-client"
 
 const now = new Date("2026-08-08T00:00:00.000Z")

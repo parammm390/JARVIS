@@ -104,7 +104,7 @@ test.describe("P3.T8 — restore-after-refresh mid-flight (real browser, real re
     await page.reload({ waitUntil: "domcontentloaded" })
 
     // Real restore: the instruction text reappears without a fresh submission.
-    await expect(page.getByText(instructionText)).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText(instructionText).first()).toBeVisible({ timeout: 10_000 })
     // Real restore reaching awaiting_approval from the trace alone (P3.T7/T8's
     // own gating aggregation) — the Approval Cockpit's real BlastRadius header.
     await expect(page.getByText(/2 actions/i).first()).toBeVisible({ timeout: 10_000 })

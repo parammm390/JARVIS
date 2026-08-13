@@ -4609,7 +4609,8 @@ html[data-jarvis-tenant-accent="amber"] .jarvis-root { --accent: var(--j-amber);
 }
 
 .jarvis-work-objective-intake input,
-.jarvis-work-redirect input {
+.jarvis-work-redirect input,
+.jarvis-work-redirect select {
   min-height: 42px;
   border: 1px solid rgba(113, 199, 225, 0.22);
   border-radius: 7px;
@@ -4621,7 +4622,8 @@ html[data-jarvis-tenant-accent="amber"] .jarvis-root { --accent: var(--j-amber);
 }
 
 .jarvis-work-objective-intake input:focus,
-.jarvis-work-redirect input:focus { border-color: rgba(84, 221, 246, 0.62); }
+.jarvis-work-redirect input:focus,
+.jarvis-work-redirect select:focus { border-color: rgba(84, 221, 246, 0.62); }
 .jarvis-work-objective-intake input::placeholder,
 .jarvis-work-redirect input::placeholder { color: #628598; }
 .jarvis-work-objective-intake button {
@@ -4643,6 +4645,7 @@ html[data-jarvis-tenant-accent="amber"] .jarvis-root { --accent: var(--j-amber);
 .jarvis-work-redirect label { color: #79a9bc; font-size: 9px; font-weight: 850; letter-spacing: 0.08em; text-transform: uppercase; }
 .jarvis-work-redirect > div { display: flex; align-items: center; gap: 7px; }
 .jarvis-work-redirect input { width: min(100%, 520px); }
+.jarvis-work-redirect select { width: min(100%, 320px); }
 .jarvis-work-redirect .jarvis-work-secondary-button { margin-top: 0; }
 
 .jarvis-work-filterbar {
@@ -4960,7 +4963,7 @@ html[data-jarvis-tenant-accent="amber"] .jarvis-root { --accent: var(--j-amber);
   .jarvis-work-objective-intake { width: 100%; grid-template-columns: 1fr; }
   .jarvis-work-objective-intake button { width: 100%; }
   .jarvis-work-redirect > div { align-items: stretch; flex-direction: column; }
-  .jarvis-work-redirect input,.jarvis-work-redirect .jarvis-work-secondary-button { width: 100%; }
+  .jarvis-work-redirect input,.jarvis-work-redirect select,.jarvis-work-redirect .jarvis-work-secondary-button { width: 100%; }
   .jarvis-work-filterbar { min-height: 44px; }
   .jarvis-work-filter { padding-inline: 8px; font-size: 8px; }
   .jarvis-work-queue { top: 118px; left: 11px; width: calc(100vw - 22px); }

@@ -29,15 +29,14 @@ test.describe("P5.T5 — unresolved follow-up reference, FIXTURE harness (real c
     await page.goto("/jarvis/login", { waitUntil: "domcontentloaded" })
     await page.waitForTimeout(750) // wait for the client login form to hydrate before filling controlled inputs
     await page.getByPlaceholder(/you@example.com/i).fill(email!)
-    await page.getByPlaceholder(/•+/i).click()
-    await page.getByPlaceholder(/•+/i).pressSequentially(password!, { delay: 15 })
-    await expect(page.getByRole("button", { name: /sign in/i })).toBeEnabled({ timeout: 5_000 })
+    await page.getByPlaceholder(/•+/i).fill(password!)
+    await expect(page.getByRole("button", { name: /sign in/i })).toBeEnabled({ timeout: 20_000 })
     await page.getByRole("button", { name: /sign in/i }).click()
     await page.waitForURL("**/jarvis", { timeout: 20_000 })
 
     await page.goto("/jarvis/next?fixture=unresolved-reference", { waitUntil: "domcontentloaded" })
 
-    await expect(page.getByText("Actually, make that Thursday instead")).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByRole("button", { name: /Heard Actually, make that Thursday instead/ })).toBeVisible({ timeout: 10_000 })
     await expect(page.getByText("I need one thing")).toBeVisible()
     await expect(page.getByText("I'm not sure which one you mean.")).toBeVisible()
     // Real, answerable clarification — Answer/Skip/Cancel, never a fabricated

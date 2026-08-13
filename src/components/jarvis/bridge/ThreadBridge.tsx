@@ -717,7 +717,11 @@ function ThreadBody({
   // The rails are an owner-facing projection of the same kernel/data state.
   // Public preview stays deliberately sparse because it has no private source
   // observations to populate an operational surface with.
-  const showOperationalDeck = role === "owner"
+  // The labelled, non-production fixture harness intentionally exercises the
+  // historical ThreadBody composition used by its visual regression pack.
+  // Real owner sessions—including every Upgrade 10 journey—always use the
+  // canonical adaptive workspace above; fixtureLabel is never supplied there.
+  const showOperationalDeck = role === "owner" && !fixtureLabel
   if (showOperationalDeck) {
     return (
       <div
@@ -727,6 +731,8 @@ function ThreadBody({
         data-liveframe-mode={liveframe.mode}
         data-liveframe-focus={liveframe.focus}
         data-liveframe-posture={liveframe.transportPosture}
+        data-command-canvas-scene={sceneDirector.scene}
+        data-source={fixtureLabel ? "fixture" : undefined}
         data-jarvis-adaptive-runtime
       >
         <ThreadField overdueInvoices={overdueInvoices} contextChips={thread?.contextChips ?? []} freezeMotion />
@@ -739,6 +745,10 @@ function ThreadBody({
           onAnswer={onAnswer}
           onCancel={onCancel}
           onRetry={onRetryThread ?? (() => {})}
+          fixtureLabel={fixtureLabel}
+          publicPreview={mode === "preview"}
+          threadRestored={threadRestored}
+          restoredTraceEventCount={restoredTraceEventCount}
           composer={showRail ? <CommandRail liveframe={liveframe} intentLaunch={intentLaunch} onIntentAccepted={onIntentAccepted} embedded /> : null}
         />
         <IntentLaunchTrail event={intentLaunch} reducedMotion={reducedMotion} onComplete={onIntentLaunchComplete} />
@@ -793,8 +803,12 @@ function ThreadBody({
         </main>
       )
     }
+    // The live composition owns its two-column no-weave geometry in the
+    // canonical command-canvas stylesheet. Do not also apply the old ambient
+    // layout module here: it collapses all children into grid column one and
+    // shrinks the real Thread to its min-content width.
     return (
-      <main className={`jarvis-canvas jarvis-live-layout ${showWeave ? "jarvis-live-layout--weave" : "jarvis-live-layout--no-weave"}${!showWeave ? ` ${orbSurfaceStyles.ambientLayout}` : ""}`} data-liveframe-composition="live" data-jarvis-composition-region="stage" data-jarvis-orb-composition="ambient">
+      <main className={`jarvis-canvas jarvis-live-layout ${showWeave ? "jarvis-live-layout--weave" : "jarvis-live-layout--no-weave"}`} data-liveframe-composition="live" data-jarvis-composition-region="stage" data-jarvis-orb-composition="ambient">
         <QuestionDepth surface="presence" focused={questionFocus} reducedMotion={reducedMotion} className="w-full min-w-0">
           <aside className="jarvis-presence-rail" data-jarvis-orb-composition="ambient">
             <PresenceCore

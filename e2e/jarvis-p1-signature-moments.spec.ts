@@ -105,7 +105,7 @@ test.describe("P1.T4 — seven signature moments, labelled source edges", () => 
     await context.clearCookies()
     for (const [fixture, moment] of [["listening", "wake"], ["plan", "draw"], ["approval", "clamp"], ["receipt", "settle"]] as const) {
       await page.goto(`/jarvis/next?fixture=${fixture}&restore=1`, { waitUntil: "domcontentloaded" })
-      await expect(page.locator("[data-jarvis-thread][data-source='fixture']")).toBeVisible()
+      await expect(page.locator("[data-jarvis-thread][data-source='fixture']")).toBeVisible({ timeout: 20_000 })
       await page.waitForTimeout(350)
       expect(await page.locator(`[data-jarvis-signature-moment="${moment}"]`).count(), `${fixture} replayed ${moment}`).toBe(0)
     }

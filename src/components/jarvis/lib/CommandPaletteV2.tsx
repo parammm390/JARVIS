@@ -17,8 +17,14 @@ type Mode = "navigate" | "search" | "instruct"
 
 export function useCommandPaletteV2() {
   const [open, setOpen] = useState(false)
-  useEffect(() => { const onKey = (event: KeyboardEvent) => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); setOpen((v) => !v) } }; window.addEventListener("keydown", onKey); return () => window.removeEventListener("keydown", onKey) }, [])
-  return { open, setOpen }
+  const [ready, setReady] = useState(false)
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); setOpen((v) => !v) } }
+    window.addEventListener("keydown", onKey)
+    setReady(true)
+    return () => { setReady(false); window.removeEventListener("keydown", onKey) }
+  }, [])
+  return { open, setOpen, ready }
 }
 
 export function CommandPaletteV2({

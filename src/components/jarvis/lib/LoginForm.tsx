@@ -4,7 +4,7 @@
 // library-managed (supabaseBrowser client, persistSession+autoRefreshToken) — this
 // component only calls signInWithPassword and reacts to the result.
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Lock } from "lucide-react"
@@ -17,6 +17,17 @@ export function LoginForm() {
   const [password, setPassword] = useState("")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const emailRef = useRef<HTMLInputElement>(null)
+  const passwordRef = useRef<HTMLInputElement>(null)
+
+  // Password managers—and very fast users on a cold JavaScript load—can fill
+  // these native controls before React attaches its change handlers. Reconcile
+  // the actual DOM values once hydrated so a visibly complete form never stays
+  // disabled with stale component state.
+  useEffect(() => {
+    if (emailRef.current?.value) setEmail(emailRef.current.value)
+    if (passwordRef.current?.value) setPassword(passwordRef.current.value)
+  }, [])
 
   async function submit(e: React.FormEvent): Promise<void> {
     e.preventDefault()
@@ -47,6 +58,7 @@ export function LoginForm() {
             </label>
             <input
               id="jarvis-login-email"
+              ref={emailRef}
               type="email"
               required
               autoFocus
@@ -62,6 +74,7 @@ export function LoginForm() {
             </label>
             <input
               id="jarvis-login-password"
+              ref={passwordRef}
               type="password"
               required
               value={password}

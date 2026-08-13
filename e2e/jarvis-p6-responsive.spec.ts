@@ -30,7 +30,13 @@ test.describe("P6.T1 — responsive collision and keyboard sweep", () => {
           scrollWidth: document.documentElement.scrollWidth,
           rootPresent: root !== null,
           canvasPresent: canvas !== null,
-          deckPaddingBottom: deck ? Number.parseFloat(getComputedStyle(deck).paddingBottom) : 0,
+          // Fixture mode intentionally omits the owner-only command deck; the
+          // shared canvas owns the same bottom safe-area clearance there.
+          deckPaddingBottom: deck
+            ? Number.parseFloat(getComputedStyle(deck).paddingBottom)
+            : canvas
+              ? Number.parseFloat(getComputedStyle(canvas).paddingBottom)
+              : 0,
           dialogPaddingBottom: dialog ? Number.parseFloat(getComputedStyle(dialog).paddingBottom) : 0,
           selectRect: rect ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height } : null,
         }

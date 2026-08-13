@@ -326,7 +326,8 @@ async function workerContext(tenantId: string, workId: string): Promise<{ ctx: T
   return withTenant(tenantId, async (db) => {
     const [work] = await db.select().from(works).where(and(eq(works.tenantId, tenantId), eq(works.id, workId))).limit(1);
     if (!work) throw new Error("Objective Work not found");
-    const [employee] = work.createdBy ? await db.select({ id: users.id, role: users.role }).from(users).where(and(eq(users.tenantId, tenantId), eq(users.id, work.createdBy))).limit(1) : [];
+    const responsibleEmployeeId = work.currentOwnerId ?? work.createdBy;
+    const [employee] = responsibleEmployeeId ? await db.select({ id: users.id, role: users.role }).from(users).where(and(eq(users.tenantId, tenantId), eq(users.id, responsibleEmployeeId))).limit(1) : [];
     return {
       work,
       ctx: employee
@@ -754,7 +755,7 @@ export class ObjectiveLoopRuntime {
         payload: decision.payload,
         workId: params.workId,
         instructionId: null,
-        initiatedBy: work.createdBy,
+        initiatedBy: work.currentOwnerId ?? work.createdBy,
         authorityContext: isRecord(work.authorityContext) ? work.authorityContext : {},
         objectiveStepId: step.id,
         actionId,

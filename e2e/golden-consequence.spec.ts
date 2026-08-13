@@ -85,10 +85,9 @@ test.describe("P4 — the golden consequence graph, driven for real", () => {
 
     await page.setViewportSize({ width: 1440, height: 900 })
     await page.goto("/jarvis/login", { waitUntil: "domcontentloaded" })
-    await page.getByPlaceholder(/you@example.com/i).click()
-    await page.getByPlaceholder(/you@example.com/i).pressSequentially(email!, { delay: 15 })
-    await page.getByPlaceholder(/•+/i).click()
-    await page.getByPlaceholder(/•+/i).pressSequentially(password!, { delay: 15 })
+    await page.waitForLoadState("networkidle")
+    await page.getByPlaceholder(/you@example.com/i).fill(email!)
+    await page.getByPlaceholder(/•+/i).fill(password!)
     await expect(page.getByRole("button", { name: /sign in/i })).toBeEnabled({ timeout: 5_000 })
     await page.getByRole("button", { name: /sign in/i }).click()
     await page.waitForURL("**/jarvis", { timeout: 20_000 })
@@ -120,7 +119,7 @@ test.describe("P4 — the golden consequence graph, driven for real", () => {
     const cashBefore = await (await page.request.get("/api/jarvis/read-models/cash-collections", { headers: authHeaders })).json().catch(() => null)
     console.log("REAL cash-collections BEFORE:", JSON.stringify(cashBefore))
 
-    await page.goto("/jarvis/next", { waitUntil: "domcontentloaded" })
+    await page.goto("/jarvis", { waitUntil: "domcontentloaded" })
     await page.waitForTimeout(1500)
 
     const rail = page.getByPlaceholder("Tell JARVIS what you need")
@@ -129,16 +128,18 @@ test.describe("P4 — the golden consequence graph, driven for real", () => {
     await rail.fill("Chase everyone more than thirty days overdue")
     await rail.press("Enter")
 
-    await expect(page.getByText("Chase everyone more than thirty days overdue")).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText("Chase everyone more than thirty days overdue").first()).toBeVisible({ timeout: 10_000 })
     // The live planner is non-deterministic (verified repeatedly this session
     // and in P2/P3): a real run may produce a real plan (awaiting approval), a
     // real clarification, OR a genuine 0-action plan that skips straight to
     // the terminal "what actually happened" state (§6③'s own designed empty-
     // plan path) — every one of these is a real, honest outcome, never faked
     // to force this test down the approve branch.
-    await expect(
-      page.getByText(/what i.ll do|i need one thing|actions? .* will be texted|awaiting your approval|what actually happened/i).first(),
-    ).toBeVisible({ timeout: 15_000 })
+    // The adaptive workspace may truthfully produce a plan, clarification,
+    // grounded research answer, or receipt. What matters here is that the
+    // submitted instruction left Ready and resolved into an observed workspace;
+    // the typed action check below remains the authority gate for any approval.
+    await expect(page.locator("[data-active-workspace]")).not.toHaveAttribute("data-active-workspace", "ready", { timeout: 15_000 })
     await page.waitForTimeout(1500) // let the POST /api/actions response (captured above) land
 
     await page.screenshot({ path: `${OUT_DIR}/consequence-00-plan-1440.png`, fullPage: true })

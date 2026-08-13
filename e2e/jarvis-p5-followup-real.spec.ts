@@ -31,11 +31,9 @@ test.describe("P5.T5 — follow-up references, real session, research only", () 
 
     await page.setViewportSize({ width: 1440, height: 900 })
     await page.goto("/jarvis/login", { waitUntil: "domcontentloaded" })
-    await page.getByPlaceholder(/you@example.com/i).click()
-    await page.getByPlaceholder(/you@example.com/i).pressSequentially(email!, { delay: 15 })
-    await page.getByPlaceholder(/•+/i).click()
-    await page.getByPlaceholder(/•+/i).pressSequentially(password!, { delay: 15 })
-    await expect(page.getByRole("button", { name: /sign in/i })).toBeEnabled({ timeout: 5_000 })
+    await page.getByPlaceholder(/you@example.com/i).fill(email!)
+    await page.getByPlaceholder(/•+/i).fill(password!)
+    await expect(page.getByRole("button", { name: /sign in/i })).toBeEnabled({ timeout: 20_000 })
     await page.getByRole("button", { name: /sign in/i }).click()
     await page.waitForURL("**/jarvis", { timeout: 20_000 })
 
@@ -47,7 +45,7 @@ test.describe("P5.T5 — follow-up references, real session, research only", () 
     await rail.click()
     await rail.fill("Book a water test for the Hendersons this week")
     await rail.press("Enter")
-    await expect(page.getByText("Book a water test for the Hendersons this week")).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText("Book a water test for the Hendersons this week").first()).toBeVisible({ timeout: 10_000 })
     await page.waitForTimeout(4000)
     await page.screenshot({ path: `${OUT_DIR}/followup-00-first-turn-1440.png`, fullPage: true })
 
@@ -59,25 +57,33 @@ test.describe("P5.T5 — follow-up references, real session, research only", () 
     )
     console.log(`REAL sessionStorage session keys after turn 1: ${sessionIdAfterFirst}`)
 
-    // Real, honest finding: turn 1 itself came back as a real clarification
-    // ("What is the phone number or household ID of the Hendersons?") — the
-    // rail's placeholder changes to "Answer above, or ask something else"
-    // (§6④), but the SAME rail (stable aria-label, not the placeholder) stays
-    // usable. Cancel this clarification (a clean, real, in-session state) so
-    // the second submission below is unambiguously a NEW instruction the
-    // planner must resolve "that" against turn 1's own memory, not an
-    // in-progress answer to it.
+    // The real planner may either ask for the missing household identity or
+    // produce an approval-gated booking plan when that context is already in
+    // memory. Resolve either outcome without executing it: cancel a
+    // clarification or reject every pending action. The follow-up below then
+    // remains a new, referential turn in the same authenticated session.
     const cancelButton = page.getByRole("button", { name: "Cancel" })
-    if (await cancelButton.isVisible({ timeout: 3_000 }).catch(() => false)) {
-      await cancelButton.click()
-      await page.waitForTimeout(1000)
+    const rejectButtons = page.getByRole("button", { name: "Reject" })
+    await expect.poll(async () => {
+      if (await rail.isEditable().catch(() => false)) return "ready"
+      if (await cancelButton.first().isVisible().catch(() => false)) return "cancel"
+      if (await rejectButtons.first().isVisible().catch(() => false)) return "reject"
+      return "waiting"
+    }, { timeout: 30_000 }).not.toBe("waiting")
+
+    if (await cancelButton.first().isVisible().catch(() => false)) {
+      await cancelButton.first().click()
+    } else {
+      while (await rejectButtons.first().isVisible().catch(() => false)) {
+        await rejectButtons.first().click()
+      }
     }
 
-    await expect(rail).toBeEditable({ timeout: 15_000 })
+    await expect(rail).toBeEditable({ timeout: 30_000 })
     await rail.click()
     await rail.fill("Actually, make that Thursday instead")
     await rail.press("Enter")
-    await expect(page.getByText("Actually, make that Thursday instead")).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText("Actually, make that Thursday instead").first()).toBeVisible({ timeout: 10_000 })
     await page.waitForTimeout(4000)
     await page.screenshot({ path: `${OUT_DIR}/followup-01-second-turn-1440.png`, fullPage: true })
 

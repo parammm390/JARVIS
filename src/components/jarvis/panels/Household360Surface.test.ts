@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { HOUSEHOLD_BANDS, householdDisplayName, summarizeHousehold } from "./Household360Surface"
+import { HOUSEHOLD_BANDS, householdDisplayName, summarizeHousehold } from "./household360-model"
 import type { Household360Projection, WorkCaseProjection } from "@/lib/jarvis-client"
 
 const household: Household360Projection = {

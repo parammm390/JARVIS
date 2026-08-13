@@ -71,11 +71,9 @@ test.describe("P5.T1 — Flagship B, driven for real, never approving a real out
 
     await page.setViewportSize({ width: 1440, height: 900 })
     await page.goto("/jarvis/login", { waitUntil: "domcontentloaded" })
-    await page.getByPlaceholder(/you@example.com/i).click()
-    await page.getByPlaceholder(/you@example.com/i).pressSequentially(email!, { delay: 15 })
-    await page.getByPlaceholder(/•+/i).click()
-    await page.getByPlaceholder(/•+/i).pressSequentially(password!, { delay: 15 })
-    await expect(page.getByRole("button", { name: /sign in/i })).toBeEnabled({ timeout: 5_000 })
+    await page.getByPlaceholder(/you@example.com/i).fill(email!)
+    await page.getByPlaceholder(/•+/i).fill(password!)
+    await expect(page.getByRole("button", { name: /sign in/i })).toBeEnabled({ timeout: 20_000 })
     await page.getByRole("button", { name: /sign in/i }).click()
     await page.waitForURL("**/jarvis", { timeout: 20_000 })
 
@@ -91,10 +89,9 @@ test.describe("P5.T1 — Flagship B, driven for real, never approving a real out
     await rail.fill("Book a water test for the Hendersons this week and give it to whoever's closest")
     await rail.press("Enter")
 
-    await expect(page.getByText("Book a water test for the Hendersons this week and give it to whoever's closest")).toBeVisible({ timeout: 10_000 })
-    await expect(
-      page.getByText(/what i.ll do|i need one thing|awaiting your approval|what actually happened/i).first(),
-    ).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByText("Book a water test for the Hendersons this week and give it to whoever's closest").first()).toBeVisible({ timeout: 10_000 })
+    await expect.poll(() => plannedActions.length, { timeout: 30_000 }).toBeGreaterThan(0)
+    await expect(page.getByRole("heading", { name: /schedule workspace|execution workspace|plan and action/i })).toBeVisible()
     await page.waitForTimeout(1500)
 
     await page.screenshot({ path: `${OUT_DIR}/flagship-b-00-plan-1440.png`, fullPage: true })

@@ -93,7 +93,11 @@ export function nextCallingWindow(timeZone: string, from: Date, weekdayOffset: n
   const current = localDateParts(from, timeZone);
   let localDate = isoLocalDate(current);
   let daysToAdvance = 0;
-  if (weekdayOffset === 0 && (current.hour > 16 || (current.hour === 16 && current.minute > 57))) daysToAdvance = 1;
+  // Establish one shared base date before applying the requested weekday offset.
+  // Otherwise offset 0 advanced after hours while offset 1 started counting from
+  // the already-closed current day, causing both offsets to resolve to the same
+  // provider window and silently merge separately capped campaigns.
+  if (current.hour > 16 || (current.hour === 16 && current.minute > 57)) daysToAdvance = 1;
   localDate = addCalendarDays(localDate, daysToAdvance);
 
   let acceptedWeekdays = 0;

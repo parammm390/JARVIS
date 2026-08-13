@@ -17,6 +17,12 @@ test.describe("Upgrade 5 — shared live business projections", () => {
     test.skip(test.info().project.name !== "desktop-chromium", "single authenticated browser journey")
     test.setTimeout(90_000)
 
+    const browserErrors: string[] = []
+    page.on("pageerror", (error) => browserErrors.push(error.stack ?? error.message))
+    page.on("console", (message) => {
+      if (message.type() === "error") browserErrors.push(message.text())
+    })
+
     let completed = false
     let workCaseRequests = 0
     let confirmRequests = 0
@@ -75,7 +81,7 @@ test.describe("Upgrade 5 — shared live business projections", () => {
       longitude: -92.44,
       createdAt: NOW,
     }
-    const household360 = {
+    const household360 = () => ({
       household: { id: HOUSEHOLD_ID, address: household.address, contactInfo: household.contactInfo, marketingConsent: true, createdAt: NOW },
       contacts: [], equipment: [], leads: [], opportunities: [], quotes: [],
       invoices: completed ? [{ id: INVOICE_ID, status: "sent", amountUsd: 275, memo: "Upgrade 5 projection invoice", createdAt: NOW, dueDate: `${today}T00:00:00.000Z`, payments: [] }] : [],
@@ -84,7 +90,7 @@ test.describe("Upgrade 5 — shared live business projections", () => {
       appointments: [], conversations: [], calls: [], documents: [], legacyCommunications: [],
       timeline: completed ? [{ entityType: "service_visit", entityId: VISIT_ID, eventType: "service_visit_scheduled", occurredAt: NOW, payload: {} }] : [],
       queryMs: 1,
-    }
+    })
 
     await page.route("**/api/jarvis/**", async (route) => {
       const request = route.request()
@@ -112,7 +118,7 @@ test.describe("Upgrade 5 — shared live business projections", () => {
         return
       }
       if (url.pathname === "/api/jarvis/read-models/household-360") {
-        await route.fulfill({ json: { data: household360 } })
+        await route.fulfill({ json: { data: household360() } })
         return
       }
       if (url.pathname === "/api/jarvis/resources/invoices") {
@@ -125,6 +131,8 @@ test.describe("Upgrade 5 — shared live business projections", () => {
       }
       if (url.pathname === "/api/jarvis/stats") { await route.fulfill({ json: { pending: completed ? 0 : 1, blocked: 0, recentActions: [] } }); return }
       if (url.pathname === "/api/jarvis/me") { await route.fulfill({ json: { userId: "fixture-owner", tenantId: "fixture-tenant", role: "owner" } }); return }
+      if (url.pathname === "/api/jarvis/employees") { await route.fulfill({ json: { employees: [{ id: "fixture-owner", displayName: "Fixture Owner", status: "active", roles: ["owner"], legacyRole: "owner" }] } }); return }
+      if (url.pathname === "/api/jarvis/user-prefs") { await route.fulfill({ json: { prefs: { homepage: null, density: "comfortable", accent: null } } }); return }
       if (url.pathname === "/api/jarvis/workflows/runs") { await route.fulfill({ json: { runs: [] } }); return }
       if (url.pathname === "/api/jarvis/events") { await route.fulfill({ json: { events: [] } }); return }
       if (url.pathname === "/api/jarvis/comms") { await route.fulfill({ json: { outbox: [], communications: [] } }); return }
@@ -146,7 +154,7 @@ test.describe("Upgrade 5 — shared live business projections", () => {
       if (url.pathname === "/api/jarvis/read-models/reliability") { await route.fulfill({ json: { data: { tenantId: "fixture-tenant", windowDays: 30, workflowSuccessRate: null, stepLatencyMs: { p50: null, p95: null, sampleSize: 0 }, retryRate: null, humanInterventionRate: null, reconciliationBacklog: 0, dlqDepth: 0, receiptCompleteness: null, asOf: NOW } } }); return }
       if (url.pathname.startsWith("/api/jarvis/read-models/")) { await route.fulfill({ json: { data: {} } }); return }
       if (url.pathname.startsWith("/api/jarvis/resources/")) { await route.fulfill({ json: { rows: [] } }); return }
-      await route.fulfill({ json: {} })
+      await route.continue()
     })
 
     await page.goto("/jarvis/login", { waitUntil: "domcontentloaded" })
@@ -160,6 +168,7 @@ test.describe("Upgrade 5 — shared live business projections", () => {
     await page.getByRole("link", { name: "Work", exact: true }).click()
 
     await expect(page.getByText("Upgrade 5 cross-surface operation awaiting approval").first()).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByRole("button", { name: "Open approval controls" })).toBeVisible()
     await page.getByRole("button", { name: "Open approval controls" }).click()
     await page.getByLabel(/schedule water test/i).first().getByRole("button", { name: /^Approve$/ }).click()
     await expect(page.getByText("Upgrade 5 cross-surface operation completed").first()).toBeVisible({ timeout: 20_000 })
@@ -167,12 +176,16 @@ test.describe("Upgrade 5 — shared live business projections", () => {
     expect(workCaseRequests).toBe(2)
 
     await page.getByLabel("Operational surfaces", { exact: true }).getByRole("link", { name: "Customers", exact: true }).click()
+    await expect(page).toHaveURL(/\/jarvis\/customers/, { timeout: 20_000 })
     await expect(page.getByText("Projection Household").first()).toBeVisible()
     await page.getByLabel("Operational surfaces", { exact: true }).getByRole("link", { name: "Schedule", exact: true }).click()
+    await expect(page).toHaveURL(/\/jarvis\/schedule/, { timeout: 20_000 })
     await expect(page.getByText(household.address).first()).toBeVisible()
     await page.getByLabel("Operational surfaces", { exact: true }).getByRole("link", { name: "Money", exact: true }).click()
+    await expect(page).toHaveURL(/\/jarvis\/money/, { timeout: 20_000 })
     await expect(page.getByText("Upgrade 5 projection invoice").first()).toBeVisible()
     await page.getByLabel("Operational surfaces", { exact: true }).getByRole("link", { name: "Agents", exact: true }).click()
+    await expect(page).toHaveURL(/\/jarvis\/agents/, { timeout: 20_000 })
     await page.getByRole("button", { name: /Water Quality/ }).click()
     await expect(page.getByText("Upgrade 5 cross-surface operation completed").first()).toBeVisible()
 
@@ -181,6 +194,7 @@ test.describe("Upgrade 5 — shared live business projections", () => {
     expect(metrics?.invalidations).toBeGreaterThan(0)
     expect(metrics?.requestsCompleted).toBeGreaterThan(0)
     expect(metrics?.lastRefreshLatencyMs).not.toBeNull()
+    expect(browserErrors, browserErrors.join("\n\n")).toEqual([])
 
     mkdirSync("evidence/upgrade5-live-projection", { recursive: true })
     await page.screenshot({ path: "evidence/upgrade5-live-projection/08-shared-agents-state.png", fullPage: true })

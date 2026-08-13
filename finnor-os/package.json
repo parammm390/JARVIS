@@ -48,6 +48,7 @@
     "release:live-smoke": "tsx scripts/release/run-live-binding-smoke.ts",
     "release:load": "tsx scripts/release/run-load-certification.ts",
     "release:query-latency": "tsx scripts/release/certify-operational-query-latency.ts",
+    "release:upgrade10": "tsx scripts/release/run-upgrade10-certification.ts",
     "release:migrate:production": "tsx scripts/release/migrate-production.ts",
     "release:certify": "tsx scripts/release/run-release-certification.ts"
   },

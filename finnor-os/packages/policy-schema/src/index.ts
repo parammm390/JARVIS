@@ -93,6 +93,11 @@ export const ControlObjectiveSchema = z.discriminatedUnion("command", [
   z.object({ command: z.literal("redirect"), objective: z.string().min(1).max(10_000), channel: z.enum(["voice", "text", "console"]).default("text"), instructionId: z.string().uuid().optional(), idempotencyKey: z.string().min(1).max(200).optional() }),
 ]);
 
+export const HandoffWorkSchema = z.object({
+  targetEmployeeId: z.string().uuid(),
+  note: z.string().trim().min(1).max(2_000).optional(),
+});
+
 export const ConfirmActionSchema = z.object({
   note: z.string().max(2000).optional(),
   // TYPED_REQUIRED actions must carry an explicit confirmation signal. The

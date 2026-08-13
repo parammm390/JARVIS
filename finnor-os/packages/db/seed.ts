@@ -143,7 +143,7 @@ export async function seed(databaseUrl = process.env.DATABASE_URL): Promise<void
     // Vapi assistant's dialed-number id) when the env var is present, so the tenant
     // resolver's preferred match key (vapi_phone_number_id) works out of the box in
     // any environment carrying that env var — single-tenant deploys don't need this
-    // row (resolveTenantFromCall falls back to VAPI_DEFAULT_TENANT_ID).
+    // row. Production voice intake fails closed when no line mapping exists.
     if (process.env.VAPI_PHONE_NUMBER_ID) {
       await client.query(
         `INSERT INTO tenant_phone_numbers (tenant_id, phone_number, vapi_phone_number_id, label)

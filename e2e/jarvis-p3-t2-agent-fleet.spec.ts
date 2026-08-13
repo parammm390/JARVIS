@@ -31,7 +31,7 @@ async function readSnapshot(page: Page, viewport: number): Promise<FleetSnapshot
       viewport: currentViewport,
       rows: document.querySelectorAll("[data-agent-fleet-rail] [data-agent-key]").length,
       selectedRows: document.querySelectorAll("[data-agent-fleet-rail] [data-selected='true']").length,
-      statusText: document.querySelector("[data-agent-status='unavailable']")?.textContent?.replace(/\s+/g, " ").trim() ?? "",
+      statusText: document.querySelector(".jarvis-calling-agents")?.textContent?.replace(/\s+/g, " ").trim() ?? "",
       providerScope: document.querySelector(".jarvis-agent-fleet__provider-scope")?.textContent?.replace(/\s+/g, " ").trim() ?? "",
       inspectorCount: document.querySelectorAll("[data-agent-fleet-inspector]").length,
       scrollWidth: document.documentElement.scrollWidth,
@@ -62,19 +62,19 @@ test.describe("P3.T2 — Agent Fleet source-bound responsive audit", () => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height })
       await page.goto("/jarvis/agents", { waitUntil: "domcontentloaded" })
       await expect(page.locator("[data-jarvis-agent-fleet]")).toBeVisible()
-      await expect(page.locator("[data-agent-fleet-rail] [data-agent-key]")).toHaveCount(5)
-      await expect(page.locator("[data-agent-status='unavailable']")).toContainText("Status unavailable")
+      await expect(page.locator("[data-agent-fleet-rail] [data-agent-key]")).toHaveCount(9)
+      await expect(page.locator(".jarvis-calling-agents")).toContainText("Assistant status unavailable")
 
       const snapshot = await readSnapshot(page, viewport.width)
       snapshots.push(snapshot)
-      expect(snapshot.rows).toBe(5)
+      expect(snapshot.rows).toBe(9)
       expect(snapshot.selectedRows).toBe(1)
       expect(snapshot.inspectorCount).toBe(0)
-      expect(snapshot.statusText).toContain("assistant configuration is not exposed")
+      expect(snapshot.statusText).toContain("Assistant status unavailable")
       expect(snapshot.providerScope).toContain("not agent readiness")
       expect(snapshot.scrollWidth).toBe(viewport.width)
-      expect(snapshot.sourceLabels).toContain("manifest:v6")
-      expect(snapshot.sourceLabels).toContain("truth-rule:assistant-configuration")
+      expect(snapshot.sourceLabels).toContain("registered-action-contracts")
+      expect(snapshot.sourceLabels).toContain("api:integrations-status")
       await page.screenshot({ path: `${OUT_DIR}/fleet-${viewport.width}x${viewport.height}.png`, fullPage: true })
     }
 

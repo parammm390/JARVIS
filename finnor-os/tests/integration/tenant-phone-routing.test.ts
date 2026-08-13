@@ -24,6 +24,8 @@ const TENANT_E2 = "00000000-0000-4000-8000-0000000000e2";
 const TENANT_E3 = "00000000-0000-4000-8000-0000000000e3";
 const OWNER_E2 = "00000000-0000-4000-8000-0000000002e2";
 const OWNER_E3 = "00000000-0000-4000-8000-0000000002e3";
+const RECOVERY_PHONE_ID = "phone-routing-recovery-e2";
+const RECOVERY_DIALED_NUMBER = "+15550002444";
 
 const T = {
   e2: { id: TENANT_E2, ownerId: OWNER_E2, name: "Routing Test Tenant E2", ownerPhone: "+15551112000", vapiPhoneNumberId: "phone-e2", dialedNumber: "+15550002000" },
@@ -168,5 +170,32 @@ describe.skipIf(!available)("POST /api/webhooks/vapi — tenant-by-phone routing
     const res = await POST(toolCallsRequest(crossCallId, T.e2.vapiPhoneNumberId, T.e3.ownerPhone));
     const body = (await res.json()) as { results: Array<{ result: string }> };
     expect(body.results[0]!.result).toMatch(/can't verify this line/);
+  });
+
+  it("rejects an unmapped line before the replay claim, then safely accepts the identical webhook after mapping recovery", async () => {
+    await getPool().query(
+      `DELETE FROM tenant_phone_numbers WHERE vapi_phone_number_id = $1 OR phone_number = $2`,
+      [RECOVERY_PHONE_ID, RECOVERY_DIALED_NUMBER],
+    );
+    const callId = `call-routing-recovery-${randomUUID()}`;
+    const action = await draftAndGate(T.e2.id, "mapping recovery");
+    const session = await openVoiceSession(T.e2.id, callId);
+    await createPendingConfirmation({ tenantId: T.e2.id, voiceSessionId: session.id, domainActionId: action.id, promptText: "mapping recovery" });
+
+    const rejected = await POST(toolCallsRequest(callId, RECOVERY_PHONE_ID, T.e2.ownerPhone));
+    expect(rejected.status).toBe(503);
+    expect(await rejected.json()).toMatchObject({ error: expect.stringContaining("Unmapped Vapi line") });
+
+    await getPool().query(
+      `INSERT INTO tenant_phone_numbers (tenant_id, phone_number, vapi_phone_number_id) VALUES ($1, $2, $3)`,
+      [T.e2.id, RECOVERY_DIALED_NUMBER, RECOVERY_PHONE_ID],
+    );
+    const recovered = await POST(toolCallsRequest(callId, RECOVERY_PHONE_ID, T.e2.ownerPhone));
+    expect(recovered.status).toBe(200);
+    const body = (await recovered.json()) as { results?: Array<{ result: string }>; duplicate?: boolean };
+    expect(body.duplicate).not.toBe(true);
+    expect(body.results?.[0]?.result).toMatch(/Approved and done/);
+    const [completed] = await withTenant(T.e2.id, (db) => db.select().from(domainActions).where(eq(domainActions.id, action.id)));
+    expect(completed!.status).toBe("completed");
   });
 });

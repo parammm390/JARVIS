@@ -67,7 +67,7 @@ test.describe("public /jarvis page", () => {
 
     await page.goto("/jarvis")
     await expect(page.getByText("PUBLIC PREVIEW", { exact: true })).toBeVisible()
-    await expect(page.getByText("Tell JARVIS what you need.")).toBeVisible()
+    await expect(page.getByRole("heading", { name: "What needs to move?" })).toBeVisible()
     await expect(page.locator('[data-jarvis-mode="preview"]')).toBeVisible()
 
     expect(unexpected, `unexpected console errors on /jarvis: ${unexpected.join("\n")}`).toEqual([])
@@ -94,7 +94,7 @@ test.describe("public preview mobile viewport (375px)", () => {
   test("public preview renders with no horizontal overflow", async ({ page }) => {
     await page.goto("/jarvis")
     await expect(page.getByText("PUBLIC PREVIEW", { exact: true })).toBeVisible()
-    await expect(page.getByText("Tell JARVIS what you need.")).toBeVisible()
+    await expect(page.getByRole("heading", { name: "What needs to move?" })).toBeVisible()
     const hasHorizontalScroll = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1)
     expect(hasHorizontalScroll).toBe(false)
   })

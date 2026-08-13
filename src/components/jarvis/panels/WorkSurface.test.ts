@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { destinationForEntity, filterMatches, groupWorkCases, readWorkSurfaceQuery, stageFor, workCaseMatchesQuery, WORK_CHAPTERS } from "./WorkSurface"
+import { destinationForEntity, filterMatches, groupWorkCases, readWorkSurfaceQuery, stageFor, workCaseMatchesQuery, WORK_CHAPTERS } from "./work-surface-model"
 import type { WorkCaseProjection } from "@/lib/jarvis-client"
 
 function workCase(overrides: Partial<WorkCaseProjection> = {}): WorkCaseProjection {

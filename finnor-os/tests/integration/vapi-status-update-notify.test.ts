@@ -8,10 +8,12 @@ import { randomUUID } from "node:crypto";
 import pg from "pg";
 import { migrate } from "../../packages/db/migrate";
 import { seed, SEED_TENANT_ID } from "../../packages/db/seed";
-import { closePool } from "@finnor/db";
+import { closePool, getPool } from "@finnor/db";
 import { POST } from "../../apps/api/app/api/webhooks/vapi/route";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
+const PHONE_NUMBER_ID = "phone-status-update-test";
+const DIALED_NUMBER = "+15555550102";
 
 async function dbUp(): Promise<boolean> {
   const c = new pg.Client({ connectionString: DB_URL, connectionTimeoutMillis: 2000 });
@@ -26,7 +28,7 @@ async function dbUp(): Promise<boolean> {
 const available = await dbUp();
 
 function statusUpdateRequest(callId: string, status: string): Request {
-  const body = { message: { type: "status-update", status, call: { id: callId } } };
+  const body = { message: { type: "status-update", status, call: { id: callId, phoneNumberId: PHONE_NUMBER_ID, phoneNumber: { number: DIALED_NUMBER } } } };
   return new Request("http://localhost/api/webhooks/vapi", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -41,9 +43,14 @@ describe.skipIf(!available)("POST /api/webhooks/vapi — status-update notifies 
   beforeAll(async () => {
     process.env.DATABASE_URL = DB_URL;
     process.env.VAPI_WEBHOOK_SECRET = "";
-    process.env.VAPI_DEFAULT_TENANT_ID = SEED_TENANT_ID;
     await migrate(DB_URL);
     await seed(DB_URL);
+    await getPool().query(
+      `INSERT INTO tenant_phone_numbers (tenant_id, phone_number, vapi_phone_number_id)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (vapi_phone_number_id) DO UPDATE SET tenant_id = EXCLUDED.tenant_id, phone_number = EXCLUDED.phone_number`,
+      [SEED_TENANT_ID, DIALED_NUMBER, PHONE_NUMBER_ID],
+    );
 
     listener = new pg.Client({ connectionString: DB_URL });
     await listener.connect();

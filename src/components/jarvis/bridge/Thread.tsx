@@ -17,27 +17,9 @@ import { ThreadAnswer, ThreadClarify, ThreadExecution, ThreadHeard, ThreadPlan, 
 import type { InstructionState } from "../kernel/types"
 import type { LiveFrameIntentLaunch } from "../kernel/liveframe"
 import { getTracePixelMeasurements, markTraceStagePainted, onTracePixelMeasurement, type TracePixelStage, type TracePixelMeasurement } from "../kernel/trace-metrics"
+import { shouldHandoffThreadFocus } from "./thread-presentation"
 
 type BlockKey = "heard" | "understood" | "answer" | "plan" | "execution" | "receipt"
-
-export interface ThreadFocusHandoffInput {
-  focusIsInteractive: boolean
-  focusIsInsideCollapsingBody: boolean
-  commandRailOwnsFocus: boolean
-  clarificationOwnsFocus: boolean
-}
-
-/** Keep a person-operated control in charge, except when its Thread body is
- *  about to become hidden. Passive focus follows the new causal block. */
-export function shouldHandoffThreadFocus({
-  focusIsInteractive,
-  focusIsInsideCollapsingBody,
-  commandRailOwnsFocus,
-  clarificationOwnsFocus,
-}: ThreadFocusHandoffInput): boolean {
-  if (commandRailOwnsFocus || clarificationOwnsFocus) return false
-  return !focusIsInteractive || focusIsInsideCollapsingBody
-}
 
 const BLOCK_ORDER: BlockKey[] = ["heard", "understood", "answer", "plan", "execution", "receipt"]
 

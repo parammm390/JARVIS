@@ -7,11 +7,12 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { eq, and } from "drizzle-orm";
 import { z } from "zod";
+import { randomUUID } from "node:crypto";
 import pg from "pg";
 import { migrate } from "../../packages/db/migrate";
 import { getPool, closePool, withTenant, households, equipment, apiRateLimits, adminDb, providerCircuitState } from "@finnor/db";
 import { ToolRegistry } from "@finnor/tools";
-import { findConsentedTargets, composeMessage, bulkNotifyPlugin } from "../../packages/domain-plugins/bulk-notify/index";
+import { findConsentedTargets, composeMessage, bulkNotifyPlugin, nextCallingWindow } from "../../packages/domain-plugins/bulk-notify/index";
 import type { DomainPolicy } from "@finnor/shared-types";
 
 // A real permissive schema — ToolRegistry.call() genuinely runs
@@ -100,7 +101,7 @@ describe.skipIf(!available)("bulk_notify_existing_customers — personalization 
       await db.delete(equipment).where(eq(equipment.householdId, filtrationHouseholdId));
       await db.delete(households).where(eq(households.tenantId, TENANT_ID));
     });
-    await getPool().query(`DELETE FROM api_rate_limits WHERE bucket_key LIKE $1`, [`budget:${TENANT_ID}:%`]);
+    await getPool().query(`DELETE FROM api_rate_limits WHERE bucket_key LIKE $1 OR bucket_key LIKE $2`, [`budget:${TENANT_ID}:%`, `budget-reservation:${TENANT_ID}:%`]);
     if (originalVapiBreakerState) {
       await adminDb()
         .update(providerCircuitState)
@@ -159,7 +160,7 @@ describe.skipIf(!available)("bulk_notify_existing_customers — personalization 
       { channel: "call", discountPercent: 15, minMonthsInactive: 0 },
       fakePolicy(),
     );
-    draft.domainActionId = "bulk-context-test-action";
+    draft.domainActionId = `bulk-context-test-action:${randomUUID()}`;
     expect(draft.requiresConfirmation).toBe(true);
     const result = await bulkNotifyPlugin.execute(draft, registry);
 
@@ -184,7 +185,10 @@ describe.skipIf(!available)("bulk_notify_existing_customers — personalization 
     // still allowed, and the SECOND (201) is correctly refused — proving the bulk
     // path shares the exact same cap every other dial-out path enforces, not a
     // separate, forgettable one.
-    const today = new Date().toISOString().slice(0, 10);
+    // The first permitted provider window may be tomorrow when this test runs after
+    // dealer-local calling hours. Seed the exact calendar bucket the implementation
+    // will reserve, not the runner machine's UTC date.
+    const today = nextCallingWindow("America/Chicago", new Date(), 0).earliestAt.toISOString().slice(0, 10);
     await getPool().query(
       `INSERT INTO api_rate_limits (bucket_key, window_started_at, count) VALUES ($1, $2, 199)
        ON CONFLICT (bucket_key, window_started_at) DO UPDATE SET count = 199`,
@@ -209,7 +213,7 @@ describe.skipIf(!available)("bulk_notify_existing_customers — personalization 
       { channel: "call", discountPercent: 15, minMonthsInactive: 0 },
       fakePolicy(),
     );
-    draft.domainActionId = "bulk-cap-test-action";
+    draft.domainActionId = `bulk-cap-test-action:${randomUUID()}`;
     const result = await bulkNotifyPlugin.execute(draft, registry);
 
     expect(result.status).toBe("success");

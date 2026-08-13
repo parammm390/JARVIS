@@ -33,6 +33,7 @@ const FIXTURE_MAP_DATA = {
 test.describe.configure({ mode: "serial" })
 
 test.describe("P5.T2 — RouteScene, FIXTURE harness (real component tree)", () => {
+  test.setTimeout(120_000)
   test.skip(!email || !password, "TEST_OWNER_EMAIL/TEST_OWNER_PASSWORD not set")
 
   test("route_suggestion renders the real DispatchMap, scoped to this technician's stops only", async ({ page }) => {
@@ -59,9 +60,8 @@ test.describe("P5.T2 — RouteScene, FIXTURE harness (real component tree)", () 
     await page.goto("/jarvis/login", { waitUntil: "domcontentloaded" })
     await page.waitForTimeout(750) // wait for the client login form to hydrate before filling controlled inputs
     await page.getByPlaceholder(/you@example.com/i).fill(email!)
-    await page.getByPlaceholder(/•+/i).click()
-    await page.getByPlaceholder(/•+/i).pressSequentially(password!, { delay: 15 })
-    await expect(page.getByRole("button", { name: /sign in/i })).toBeEnabled({ timeout: 5_000 })
+    await page.getByPlaceholder(/•+/i).fill(password!)
+    await expect(page.getByRole("button", { name: /sign in/i })).toBeEnabled({ timeout: 20_000 })
     await page.getByRole("button", { name: /sign in/i }).click()
     await page.waitForURL("**/jarvis", { timeout: 20_000 })
 
@@ -112,9 +112,8 @@ test.describe("P5.T2 — RouteScene, FIXTURE harness (real component tree)", () 
     await page.goto("/jarvis/login", { waitUntil: "domcontentloaded" })
     await page.waitForTimeout(750) // wait for the client login form to hydrate before filling controlled inputs
     await page.getByPlaceholder(/you@example.com/i).fill(email!)
-    await page.getByPlaceholder(/•+/i).click()
-    await page.getByPlaceholder(/•+/i).pressSequentially(password!, { delay: 15 })
-    await expect(page.getByRole("button", { name: /sign in/i })).toBeEnabled({ timeout: 5_000 })
+    await page.getByPlaceholder(/•+/i).fill(password!)
+    await expect(page.getByRole("button", { name: /sign in/i })).toBeEnabled({ timeout: 20_000 })
     await page.getByRole("button", { name: /sign in/i }).click()
     await page.waitForURL("**/jarvis", { timeout: 20_000 })
 

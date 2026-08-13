@@ -34,6 +34,7 @@ import { deriveSceneDirector } from "../kernel/scene-director"
 import { useLanePresentation, useSelectorInput } from "../kernel/useSelectorInput"
 import { selectEventsToday, selectRunsInFlight, type SelectorInput } from "../kernel/selectors"
 import { SURFACES, withHouseholdId } from "../surfaces/surface-routes"
+import { humanize, reviewStatusCopy, reviewTitle } from "./operational-console-copy"
 
 type OverdueInvoices = Truth<{ count: number; totalUsd: number }>
 
@@ -43,16 +44,6 @@ export type OperationalConsoleProps = {
   pendingApprovals: Truth<number>
   overdueInvoices: OverdueInvoices
   fixtureLabel?: string
-}
-
-function humanize(value: string): string {
-  return value
-    .replaceAll("_", " ")
-    .replaceAll("-", " ")
-    .split(" ")
-    .filter(Boolean)
-    .map((word) => `${word.charAt(0).toUpperCase()}${word.slice(1).toLowerCase()}`)
-    .join(" ")
 }
 
 function formatUsd(value: number): string {
@@ -161,22 +152,6 @@ function useBusinessPulseReveal(quiet: boolean) {
 
 function safeAge(iso: string, now: number): string | null {
   return Number.isFinite(new Date(iso).getTime()) ? ageLabel(iso, now) : null
-}
-
-/** Review copy is a deterministic presentation of the source summary. It never
- * asks a model to invent a friendlier question, and it never reads payload JSON
- * to fill a missing label. */
-function reviewTitle(summary: string | null, actionType: string): string {
-  const source = summary?.trim()
-  if (!source) return humanize(actionType)
-  return /[_-]/.test(source) ? humanize(source) : source
-}
-
-function reviewStatusCopy(actionType: string, status: string): string {
-  if (actionType === "clarification_request") return "Needs one detail"
-  if (status === "pending" || status === "awaiting_approval") return "Needs your decision"
-  if (status === "blocked" || status === "needs_human_review" || status === "blocked_integration_unavailable") return "Needs attention"
-  return humanize(status)
 }
 
 function RailHeading({ icon, children, trailing }: { icon: ReactNode; children: ReactNode; trailing?: ReactNode }) {

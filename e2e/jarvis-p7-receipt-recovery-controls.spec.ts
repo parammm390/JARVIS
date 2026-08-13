@@ -47,11 +47,9 @@ const CORRECTION_RECEIPT = {
 
 async function signInOwner(page: import("@playwright/test").Page) {
   await page.goto("/jarvis/login", { waitUntil: "domcontentloaded" })
-  await page.getByPlaceholder(/you@example.com/i).click()
-  await page.getByPlaceholder(/you@example.com/i).pressSequentially(email!, { delay: 15 })
-  await page.getByPlaceholder(/•+/i).click()
-  await page.getByPlaceholder(/•+/i).pressSequentially(password!, { delay: 15 })
-  await expect(page.getByRole("button", { name: /sign in/i })).toBeEnabled({ timeout: 5_000 })
+  await page.getByPlaceholder(/you@example.com/i).fill(email!)
+  await page.getByPlaceholder(/•+/i).fill(password!)
+  await expect(page.getByRole("button", { name: /sign in/i })).toBeEnabled({ timeout: 20_000 })
   await page.getByRole("button", { name: /sign in/i }).click()
   await page.waitForURL("**/jarvis", { timeout: 20_000 })
 }
@@ -76,7 +74,7 @@ test("P7 receipt Retry binds the real run id and current version", async ({ page
 
   await page.goto("/jarvis/next?fixture=receipt", { waitUntil: "domcontentloaded" })
   await expect(page.getByText("FIXTURE · receipt")).toBeVisible({ timeout: 10_000 })
-  const retry = page.getByLabel("Recovery: transient").getByRole("button", { name: "Retry" })
+  const retry = page.getByLabel("Recovery: tool_error").getByRole("button", { name: "Retry" })
   await expect(retry).toBeVisible()
   const request = page.waitForRequest(`**/api/jarvis/workflows/runs/${RUN_ID}/retry`)
   await retry.click()

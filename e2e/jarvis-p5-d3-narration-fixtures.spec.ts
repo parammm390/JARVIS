@@ -15,7 +15,7 @@ const password = process.env.TEST_OWNER_PASSWORD
 
 test.describe("P5.T7 — D3 narration pilot, FIXTURE harness (real timer/effect)", () => {
   test.skip(!email || !password, "TEST_OWNER_EMAIL/TEST_OWNER_PASSWORD not set")
-  test.setTimeout(30_000)
+  test.setTimeout(60_000)
 
   test("the real D3 effect fires past its own delay for an executing thread, with zero console errors", async ({ page }) => {
     test.skip(test.info().project.name !== "desktop-chromium", "single real-session run")
@@ -36,9 +36,8 @@ test.describe("P5.T7 — D3 narration pilot, FIXTURE harness (real timer/effect)
     await page.goto("/jarvis/login", { waitUntil: "domcontentloaded" })
     await page.waitForTimeout(750) // wait for the client login form to hydrate before filling controlled inputs
     await page.getByPlaceholder(/you@example.com/i).fill(email!)
-    await page.getByPlaceholder(/•+/i).click()
-    await page.getByPlaceholder(/•+/i).pressSequentially(password!, { delay: 15 })
-    await expect(page.getByRole("button", { name: /sign in/i })).toBeEnabled({ timeout: 5_000 })
+    await page.getByPlaceholder(/•+/i).fill(password!)
+    await expect(page.getByRole("button", { name: /sign in/i })).toBeEnabled({ timeout: 20_000 })
     await page.getByRole("button", { name: /sign in/i }).click()
     await page.waitForURL("**/jarvis", { timeout: 20_000 })
 

@@ -31,16 +31,15 @@ test.describe("P5.T8 — thread stacking, FIXTURE harness (real component tree)"
     await page.goto("/jarvis/login", { waitUntil: "domcontentloaded" })
     await page.waitForTimeout(750) // wait for the client login form to hydrate before filling controlled inputs
     await page.getByPlaceholder(/you@example.com/i).fill(email!)
-    await page.getByPlaceholder(/•+/i).click()
-    await page.getByPlaceholder(/•+/i).pressSequentially(password!, { delay: 15 })
-    await expect(page.getByRole("button", { name: /sign in/i })).toBeEnabled({ timeout: 5_000 })
+    await page.getByPlaceholder(/•+/i).fill(password!)
+    await expect(page.getByRole("button", { name: /sign in/i })).toBeEnabled({ timeout: 20_000 })
     await page.getByRole("button", { name: /sign in/i }).click()
     await page.waitForURL("**/jarvis", { timeout: 20_000 })
 
     await page.goto("/jarvis/next?fixture=stacked-approval", { waitUntil: "domcontentloaded" })
 
     // The active (newest) thread renders fully expanded, at the top.
-    await expect(page.getByText("Chase everyone more than thirty days overdue")).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByRole("button", { name: /Heard Chase everyone more than thirty days overdue/ })).toBeVisible({ timeout: 10_000 })
     await expect(page.getByText("AWAITING YOUR APPROVAL")).toBeVisible()
 
     // 3 real, distinct collapsed rows below it, each with its own honest outcome.
@@ -66,8 +65,13 @@ test.describe("P5.T8 — thread stacking, FIXTURE harness (real component tree)"
     // event, no coordinate-based hit-testing) exercises the row's own real
     // onClick handler directly instead.
     await doneRow.evaluate((el) => (el as HTMLElement).click())
-    await expect(page.getByText("Collapse")).toBeVisible()
-    await expect(page.getByText("WHAT ACTUALLY HAPPENED")).toBeVisible()
+    const expandedDone = page.locator("[data-thread-history-id='fixture-history-done'][data-thread-history-state='expanded']")
+    await expect(expandedDone).toBeVisible()
+    await expect(expandedDone.getByRole("button", { name: "Collapse", exact: true })).toBeVisible()
+    const expandedReceipt = expandedDone.locator("[data-thread-block='receipt']")
+    await expect(expandedReceipt).toHaveAttribute("data-thread-block-collapsed", "false")
+    await expect(expandedReceipt.locator("[data-thread-block-body='receipt']")).toHaveAttribute("data-thread-block-body-collapsed", "false")
+    await expect(expandedReceipt.getByText("What actually happened")).toBeVisible()
     await page.screenshot({ path: `${OUT_DIR}/thread-stacking-fixture-expanded-1440.png`, fullPage: true })
 
     await page.setViewportSize({ width: 390, height: 1800 })
@@ -90,17 +94,16 @@ test.describe("P5.T8 — thread stacking, FIXTURE harness (real component tree)"
     await page.goto("/jarvis/login", { waitUntil: "domcontentloaded" })
     await page.waitForTimeout(750) // wait for the client login form to hydrate before filling controlled inputs
     await page.getByPlaceholder(/you@example.com/i).fill(email!)
-    await page.getByPlaceholder(/•+/i).click()
-    await page.getByPlaceholder(/•+/i).pressSequentially(password!, { delay: 15 })
-    await expect(page.getByRole("button", { name: /sign in/i })).toBeEnabled({ timeout: 5_000 })
+    await page.getByPlaceholder(/•+/i).fill(password!)
+    await expect(page.getByRole("button", { name: /sign in/i })).toBeEnabled({ timeout: 20_000 })
     await page.getByRole("button", { name: /sign in/i }).click()
     await page.waitForURL("**/jarvis", { timeout: 20_000 })
 
     await page.goto("/jarvis/next", { waitUntil: "domcontentloaded" })
-    await page.waitForTimeout(1500)
+    await expect(page.locator("[data-jarvis-command-rail]")).toHaveAttribute("data-command-palette-ready", "true", { timeout: 15_000 })
 
     await page.keyboard.press("Meta+k")
-    await expect(page.getByRole("dialog", { name: "Command palette" })).toBeVisible({ timeout: 5_000 })
+    await expect(page.getByRole("dialog", { name: "Command palette" })).toBeVisible({ timeout: 10_000 })
     await expect(page.getByRole("button", { name: /^Recent threads$/ })).toBeVisible()
     await page.getByRole("button", { name: /^Recent threads$/ }).click()
 

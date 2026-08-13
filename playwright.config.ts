@@ -15,7 +15,7 @@ export default defineConfig({
   // running just one project passed reliably, running the whole suite together
   // started missing the default 5s expect timeout. Fewer workers keeps the server
   // from being the bottleneck; a slightly longer expect timeout absorbs the rest.
-  workers: process.env.CI ? 2 : undefined,
+  workers: 2,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: [["html", { open: "never" }]],

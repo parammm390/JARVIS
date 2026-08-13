@@ -15,34 +15,13 @@ import { AnimatePresence, motion, type TargetAndTransition } from "framer-motion
 import type { Thread as ThreadData } from "../kernel/store"
 import { Thread } from "./Thread"
 import type { ExecutionWeavePlacement } from "./ThreadBlocks"
-import type { InstructionState } from "../kernel/types"
 import type { LiveFrameIntentLaunch } from "../kernel/liveframe"
 import { choreo } from "../ui/motion/choreo"
+import { summarizeThreadOutcome, threadRowElementId } from "./thread-presentation"
 
 /** jarvis-v3 P5.T8 — the stable id `RecentThreadsPanel.tsx`'s "select to
  *  jump" scrolls to; kept here (not duplicated in that file) since this file
  *  owns where each thread's own row actually renders. */
-export function threadRowElementId(threadId: string): string {
-  return `thread-row-${threadId}`
-}
-
-/** Pure — directly unit-testable (BLOCKER B-1 means the component around it
- *  isn't). Never claims "Done" for a thread abandoned mid-flight. */
-export function summarizeThreadOutcome(state: InstructionState): string {
-  switch (state) {
-    case "completed":
-      return "Done"
-    case "partial":
-      return "Partial"
-    case "failed":
-      return "Failed"
-    case "cancelled":
-      return "Cancelled"
-    default:
-      return "Left in progress"
-  }
-}
-
 function CollapsedThread({ thread }: { thread: ThreadData }) {
   const [expanded, setExpanded] = useState(false)
   const outcome = summarizeThreadOutcome(thread.machine.instructionState)

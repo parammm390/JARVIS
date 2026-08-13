@@ -54,6 +54,7 @@ const API_PATHS = {
   stats: "/api/stats",
   actionsSubmit: "/api/actions",
   objectives: "/api/objectives",
+  employees: "/api/employees",
   pendingActions: "/api/actions/pending",
   confirmAction: "/api/actions/{id}/confirm",
   rejectAction: "/api/actions/{id}/reject",
@@ -89,6 +90,7 @@ const API_PATHS = {
   instruction: "/api/instructions/{id}",
   instructionEvents: "/api/instructions/{id}/events",
   workObjective: "/api/works/{id}/objective",
+  workHandoff: "/api/works/{id}/handoff",
 } as const satisfies Record<string, keyof paths>
 
 // ---------------------------------------------------------------------------
@@ -353,6 +355,13 @@ export interface WorkBusinessEvent {
   occurredAt: string
   source: string | null
 }
+export interface EmployeeDirectoryEntry {
+  id: string
+  displayName: string | null
+  status: "active" | "suspended"
+  roles: string[]
+  legacyRole: string
+}
 export interface WorkCaseProjection {
   id: string
   root: { kind: string; id: string }
@@ -385,6 +394,15 @@ export interface WorkCaseProjection {
     finalOutcome: unknown
     failure: unknown
     recovery: unknown
+    handoffs?: Array<{
+      sequence: number
+      fromEmployeeId: string | null
+      toEmployeeId: string | null
+      actorId: string | null
+      note: string | null
+      authorityRevision: number | null
+      createdAt: string
+    }>
   }
   objectiveLoop?: {
     id: string
@@ -490,6 +508,9 @@ export const jarvisClient = {
 
   me: (): Promise<{ userId: string; tenantId: string; role: string }> => jarvisGet<{ userId: string; tenantId: string; role: string }>("me"),
 
+  employees: (): Promise<{ employees: EmployeeDirectoryEntry[] }> =>
+    jarvisGet<{ employees: EmployeeDirectoryEntry[] }>("employees"),
+
   overview: (refresh?: boolean): Promise<{ domainActionId: string; receiptId?: string; cached: boolean; [key: string]: unknown }> =>
     jarvisGet("overview", refresh ? { refresh: "1" } : undefined),
 
@@ -513,6 +534,9 @@ export const jarvisClient = {
 
   controlObjective: (workId: string, body: { command: "continue" | "interrupt" } | { command: "redirect"; objective: string; channel?: "voice" | "text" | "console"; idempotencyKey?: string }): Promise<{ objective: WorkCaseProjection["objectiveLoop"] }> =>
     jarvisPost<{ objective: WorkCaseProjection["objectiveLoop"] }>(`works/${workId}/objective`, body),
+
+  handoffWork: (workId: string, body: { targetEmployeeId: string; note?: string }): Promise<{ handoff: { previousOwnerId: string | null; currentOwnerId: string; duplicate: boolean } }> =>
+    jarvisPost(`works/${workId}/handoff`, body),
 
   confirmAction: (id: string, note?: string): Promise<unknown> => jarvisPost(`actions/${id}/confirm`, { note }),
 

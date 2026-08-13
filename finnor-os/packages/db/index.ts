@@ -558,6 +558,24 @@ export interface ReceivedWork {
   finalOutcome: unknown;
 }
 
+export interface HandoffWorkParams {
+  tenantId: string;
+  workId: string;
+  actorId: string;
+  targetEmployeeId: string;
+  authorityContext: Record<string, unknown>;
+  expectedOwnerId?: string;
+  note?: string;
+}
+
+export interface HandoffWorkResult {
+  workId: string;
+  previousOwnerId: string | null;
+  currentOwnerId: string;
+  eventSequence: number | null;
+  duplicate: boolean;
+}
+
 function jsonObject(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
@@ -769,6 +787,74 @@ export async function receiveWork(params: ReceiveWorkParams): Promise<ReceivedWo
     }
 
     return { workId: work.id, workInputId: input.id, instructionId: desiredInstructionId, created, duplicate: false, status: currentStatus, finalOutcome: work.finalOutcome };
+  });
+}
+
+/** Transfer responsibility for an existing Work without replacing its objective,
+ * inputs, causal history, active context, or durable children. The current owner is
+ * the only employee who may hand it off; the row lock and optional expected owner
+ * make two concurrent handoffs deterministic. The target's fresh authority snapshot
+ * is persisted so a restarted objective worker continues as that employee. */
+export async function handoffWork(params: HandoffWorkParams): Promise<HandoffWorkResult> {
+  return withTenant(params.tenantId, async (db) => {
+    await db.execute(sql`SELECT id FROM ${schema.works} WHERE ${schema.works.id}=${params.workId} AND ${schema.works.tenantId}=${params.tenantId} FOR UPDATE`);
+    const [work] = await db.select().from(schema.works).where(and(
+      eq(schema.works.tenantId, params.tenantId),
+      eq(schema.works.id, params.workId),
+    )).limit(1);
+    if (!work) throw new Error("Work not found");
+
+    const employeeIds = [...new Set([params.actorId, params.targetEmployeeId])];
+    const employees = await db.select({ id: schema.users.id, status: schema.users.status }).from(schema.users).where(and(
+      eq(schema.users.tenantId, params.tenantId),
+      inArray(schema.users.id, employeeIds),
+    ));
+    const actor = employees.find((employee) => employee.id === params.actorId);
+    const target = employees.find((employee) => employee.id === params.targetEmployeeId);
+    if (!actor || actor.status !== "active") throw new Error("The current Work owner is not an active employee in this tenant");
+    if (!target || target.status !== "active") throw new Error("The handoff target is not an active employee in this tenant");
+
+    const previousOwnerId = work.currentOwnerId ?? work.createdBy;
+    if (params.expectedOwnerId && previousOwnerId !== params.expectedOwnerId) {
+      throw new Error("Work owner changed before the handoff could be applied");
+    }
+    if (previousOwnerId !== params.actorId) throw new Error("Only the current Work owner may hand off responsibility");
+    if (previousOwnerId === params.targetEmployeeId) {
+      return { workId: work.id, previousOwnerId, currentOwnerId: params.targetEmployeeId, eventSequence: null, duplicate: true };
+    }
+
+    const [latest] = await db.select({ maxSeq: sql<number>`coalesce(max(${schema.workEvents.seq}), 0)::int` })
+      .from(schema.workEvents).where(eq(schema.workEvents.workId, work.id));
+    const eventSequence = (latest?.maxSeq ?? 0) + 1;
+    await db.update(schema.works).set({
+      currentOwnerId: params.targetEmployeeId,
+      assignedTo: params.targetEmployeeId,
+      authorityContext: params.authorityContext,
+      updatedAt: new Date(),
+    }).where(and(eq(schema.works.tenantId, params.tenantId), eq(schema.works.id, work.id)));
+    await attachWorkEntityTx(db, {
+      tenantId: params.tenantId,
+      workId: work.id,
+      entity: { entityType: "user", entityId: params.targetEmployeeId, relationship: "target", source: "work_handoff" },
+    });
+    await db.insert(schema.workEvents).values({
+      tenantId: params.tenantId,
+      workId: work.id,
+      seq: eventSequence,
+      eventType: "employee_handoff",
+      fromStatus: work.status,
+      toStatus: work.status,
+      payload: {
+        fromEmployeeId: previousOwnerId,
+        toEmployeeId: params.targetEmployeeId,
+        actorId: params.actorId,
+        note: params.note ?? null,
+        priorAuthorityRevision: jsonObject(work.authorityContext).revision ?? null,
+        authorityRevision: params.authorityContext.revision ?? null,
+        authorityRoles: params.authorityContext.roles ?? [],
+      },
+    });
+    return { workId: work.id, previousOwnerId, currentOwnerId: params.targetEmployeeId, eventSequence, duplicate: false };
   });
 }
 

@@ -429,7 +429,13 @@ interface WorkspaceBodyProps {
 function WorkspaceBody({ projection, thread, role, reducedMotion, onInspect, onAnswer, onCancel, onRetry }: WorkspaceBodyProps & { thread: Thread; role: JarvisRole; reducedMotion: boolean; onAnswer: (text: string) => void; onCancel: () => void; onRetry: () => void | Promise<void> }) {
   if (thread.machine.instructionState === "clarifying") return <div className="jarvis-clarification-workspace"><ThreadClarify thread={thread} onAnswer={onAnswer} onSkip={onCancel} onCancel={onCancel} /></div>
   if (thread.machine.instructionState === "awaiting_approval" && !thread.everExecuted) {
-    return <div className="jarvis-embedded-approval"><ApprovalCockpit escalateOnly={role === "dispatcher"} scopeActionIds={thread.nodes.map((node) => node.id)} scopeInstructionId={thread.instructionId} restored={false} /></div>
+    return <div className="jarvis-embedded-approval">
+      <ApprovalCockpit escalateOnly={role === "dispatcher"} scopeActionIds={thread.nodes.map((node) => node.id)} scopeInstructionId={thread.instructionId} restored={false} />
+      <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2">
+        <p className="j-fs-sm text-[color:var(--j-text-dim)]">You can stop this instruction safely before approving anything.</p>
+        <button type="button" className="min-h-11 shrink-0 rounded-lg border border-white/15 px-3 j-fs-sm font-bold text-[color:var(--j-text)]" onClick={() => void onCancel()}>Cancel instruction</button>
+      </div>
+    </div>
   }
   if (projection.kind === "customer") return projection.query?.result.intent === "company_context"
     ? <CompanyContextWorkspace projection={projection} onInspect={onInspect} />
@@ -458,6 +464,10 @@ export function AdaptiveWorkspaceShell({
   onAnswer,
   onCancel,
   onRetry,
+  fixtureLabel,
+  publicPreview = false,
+  threadRestored = false,
+  restoredTraceEventCount = 0,
 }: {
   thread: Thread | null
   threadHistory: Thread[]
@@ -468,6 +478,10 @@ export function AdaptiveWorkspaceShell({
   onAnswer: (text: string) => void
   onCancel: () => void
   onRetry: () => void | Promise<void>
+  fixtureLabel?: string
+  publicPreview?: boolean
+  threadRestored?: boolean
+  restoredTraceEventCount?: number
 }) {
   const shellRef = useRef<HTMLDivElement | null>(null)
   const projectedThread = useMemo(() => thread ? projectThreadWorkspace(thread) : null, [thread])
@@ -507,7 +521,18 @@ export function AdaptiveWorkspaceShell({
   }, { scope: shellRef, dependencies: [projection?.key, projection?.kind, reducedMotion], revertOnUpdate: true })
 
   return (
-    <div ref={shellRef} className="jarvis-adaptive-shell" data-active-workspace={projection?.kind ?? "ready"}>
+    <div
+      ref={shellRef}
+      className="jarvis-adaptive-shell"
+      data-active-workspace={projection?.kind ?? "ready"}
+      data-thread-document
+      data-thread-restored={threadRestored ? "true" : "false"}
+      data-jarvis-restored-event-count={threadRestored ? restoredTraceEventCount : undefined}
+      data-jarvis-instruction-id={thread?.instructionId ?? undefined}
+      data-source={fixtureLabel ? "fixture.adaptiveWorkspace" : undefined}
+    >
+      {fixtureLabel && <div className="fixed left-1/2 top-2 z-[100] -translate-x-1/2"><span className="j-chip border border-violet-300/40 bg-violet-400/15 text-violet-200">FIXTURE · {fixtureLabel}</span></div>}
+      {publicPreview && <div className="fixed left-1/2 top-2 z-[100] -translate-x-1/2"><span className="j-chip border border-cyan-300/30 bg-cyan-300/10 text-cyan-100">PUBLIC PREVIEW</span></div>}
       <aside className="jarvis-adaptive-nav" aria-label="JARVIS navigation">
         <Link href="/jarvis" className="jarvis-adaptive-nav__brand"><span>F</span><strong>JARVIS</strong></Link>
         <nav>{NAV.map(({ href, label, icon: Icon }) => <Link key={href} href={href} aria-current={href === "/jarvis" ? "page" : undefined} title={label}><Icon size={17} /><span>{label}</span></Link>)}</nav>

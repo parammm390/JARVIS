@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { dispatchStopMatchesFocus, exactWorkCaseForStop, shiftIsoDate, workEntityIds } from "./DispatchFieldSurface"
+import { dispatchStopMatchesFocus, exactWorkCaseForStop, shiftIsoDate, workEntityIds } from "./dispatch-field-model"
 import type { Stop } from "./DispatchMap"
 import type { WorkCaseProjection } from "@/lib/jarvis-client"
 

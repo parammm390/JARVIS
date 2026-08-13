@@ -24,6 +24,7 @@ import {
   workflowRuns,
   workflowSteps,
   works,
+  workEvents,
   workInputs,
   workPlannerAttempts,
   workEntityLinks,
@@ -245,6 +246,15 @@ export interface WorkCaseProjection {
     finalOutcome: unknown;
     failure: unknown;
     recovery: unknown;
+    handoffs: Array<{
+      sequence: number;
+      fromEmployeeId: string | null;
+      toEmployeeId: string | null;
+      actorId: string | null;
+      note: string | null;
+      authorityRevision: number | null;
+      createdAt: string;
+    }>;
   };
   inputs?: Array<{ id: string; instructionId: string; channel: string; text: string; createdAt: string }>;
   plannerAttempts?: Array<{ id: string; attempt: number; status: string; result: unknown; failure: unknown; startedAt: string; completedAt: string | null }>;
@@ -278,7 +288,9 @@ const ENTITY_KEYS: Record<string, WorkEntityType> = {
   householdId: "household",
   invoiceId: "invoice",
   invoiceIds: "invoice",
-  visitId: "visit",
+  // service_visits is the canonical table and Company Graph entity. `visitId` is
+  // the long-standing action payload field, not a second entity kind.
+  visitId: "service_visit",
   serviceVisitId: "service_visit",
   appointmentId: "appointment",
   workOrderId: "work_order",
@@ -631,6 +643,7 @@ export async function workCases(tenantId: string): Promise<WorkCaseProjection[]>
     // serialized by the driver; spelling that out avoids pg@9's overlapping-
     // query deprecation and keeps the projection deterministic.
     const workRows = await db.select().from(works).where(eq(works.tenantId, tenantId)).orderBy(desc(works.updatedAt));
+    const workEventRows = await db.select().from(workEvents).where(eq(workEvents.tenantId, tenantId)).orderBy(asc(workEvents.seq));
     const workInputRows = await db.select().from(workInputs).where(eq(workInputs.tenantId, tenantId)).orderBy(asc(workInputs.createdAt));
     const plannerAttemptRows = await db.select().from(workPlannerAttempts).where(eq(workPlannerAttempts.tenantId, tenantId)).orderBy(asc(workPlannerAttempts.attempt));
     const canonicalWorkLinks = await db.select().from(workEntityLinks).where(eq(workEntityLinks.tenantId, tenantId)).orderBy(asc(workEntityLinks.createdAt));
@@ -1031,6 +1044,18 @@ export async function workCases(tenantId: string): Promise<WorkCaseProjection[]>
             finalOutcome: durableWork.finalOutcome,
             failure: durableWork.failure,
             recovery: durableWork.recovery,
+            handoffs: workEventRows.filter((event) => event.workId === durableWork.id && event.eventType === "employee_handoff").map((event) => {
+              const payload = record(event.payload) ?? {};
+              return {
+                sequence: event.seq,
+                fromEmployeeId: stringValue(payload.fromEmployeeId),
+                toEmployeeId: stringValue(payload.toEmployeeId),
+                actorId: stringValue(payload.actorId),
+                note: stringValue(payload.note),
+                authorityRevision: typeof payload.authorityRevision === "number" ? payload.authorityRevision : null,
+                createdAt: event.createdAt.toISOString(),
+              };
+            }),
           },
           inputs: workInputRows.filter((input) => input.workId === durableWork.id).map((input) => ({
             id: input.id,

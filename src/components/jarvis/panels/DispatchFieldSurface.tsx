@@ -11,18 +11,11 @@ import type { WorkCaseProjection } from "@/lib/jarvis-client"
 import { useBusinessProjection } from "../lib/business-projections"
 import { businessProjections } from "../lib/projection-definitions"
 import { OperationalSurfaceNav, type HouseholdContext } from "../surfaces/OperationalSurfaceNav"
+import { dispatchStopMatchesFocus, exactWorkCaseForStop, shiftIsoDate, workEntityIds, type DispatchFocusQuery } from "./dispatch-field-model"
 import "../jarvis-theme.css"
 
 function isoToday(): string {
   return new Date().toISOString().slice(0, 10)
-}
-
-export function shiftIsoDate(value: string, days: number): string {
-  const [year, month, day] = value.split("-").map(Number)
-  if (!year || !month || !day) return value
-  const date = new Date(Date.UTC(year, month - 1, day))
-  date.setUTCDate(date.getUTCDate() + days)
-  return date.toISOString().slice(0, 10)
 }
 
 function shortId(id: string): string {
@@ -36,34 +29,8 @@ function stopTime(value: string | null): string {
   return new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" }).format(date)
 }
 
-export function exactWorkCaseForStop(stop: Stop, cases: WorkCaseProjection[]): WorkCaseProjection | null {
-  const entityTypes = stop.sourceKind === "appointment" ? ["appointment"] : ["visit", "service_visit"]
-  return cases.find((workCase) => workCase.linkedEntities.some((entity) => entityTypes.includes(entity.entityType) && entity.entityId === stop.visitId)) ?? null
-}
-
-export function workEntityIds(workCase: WorkCaseProjection | null, entityType: string): string[] {
-  return workCase?.linkedEntities.filter((entity) => entity.entityType === entityType).map((entity) => entity.entityId) ?? []
-}
-
 function stopContext(stop: Stop | null): HouseholdContext | undefined {
   return stop ? { id: stop.householdId, label: stop.address } : undefined
-}
-
-export interface DispatchFocusQuery {
-  householdId: string | null
-  visitId: string | null
-  serviceVisitId: string | null
-  workOrderId: string | null
-  appointmentId: string | null
-}
-
-export function dispatchStopMatchesFocus(stop: Stop, workCase: WorkCaseProjection | null, focus: DispatchFocusQuery): boolean {
-  if (focus.householdId && stop.householdId !== focus.householdId) return false
-  if (focus.visitId && stop.visitId !== focus.visitId) return false
-  if (focus.serviceVisitId && (stop.sourceKind !== "service_visit" || stop.visitId !== focus.serviceVisitId)) return false
-  if (focus.workOrderId && !workEntityIds(workCase, "work_order").includes(focus.workOrderId)) return false
-  if (focus.appointmentId && !workEntityIds(workCase, "appointment").includes(focus.appointmentId)) return false
-  return true
 }
 
 function dispatchErrorCopy(error: unknown): string {

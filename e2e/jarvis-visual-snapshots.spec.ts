@@ -42,44 +42,26 @@ function sidebarAccessibleName(label: string): string | RegExp {
 }
 
 async function waitForAppReady(page: Page): Promise<void> {
-  await expect(page.locator("main").getByText(/^(Live|Simulation)$/).first()).toBeVisible({ timeout: 15_000 })
-  // Let the boot sequence / first poll settle so the snapshot isn't mid-fade-in.
-  await page.waitForTimeout(500)
+  await expect(page.locator("[data-jarvis-adaptive-runtime]")).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByRole("heading", { name: "JARVIS workspace" })).toBeVisible()
 }
 
-test.describe("visual snapshots — sidebar views (authenticated console)", () => {
-  const email = process.env.TEST_OWNER_EMAIL
-  const password = process.env.TEST_OWNER_PASSWORD
+test.describe("visual snapshots — canonical workspace shell", () => {
+  test.describe.configure({ mode: "serial" })
 
   test.beforeEach(async ({ page }) => {
-    test.skip(!email || !password, "TEST_OWNER_EMAIL/TEST_OWNER_PASSWORD not set — the current signed-out source contract is PUBLIC PREVIEW, not a sample-data console")
-    await page.goto("/jarvis/login")
-    await page.getByPlaceholder(/you@example.com/i).fill(email!)
-    await page.getByPlaceholder(/•+/i).fill(password!)
-    await page.getByRole("button", { name: /sign in/i }).click()
-    await page.waitForURL("**/jarvis")
     await page.goto("/jarvis")
     await waitForAppReady(page)
   })
 
-  // Voice Console genuinely needs a wider tolerance than every other view: it mounts
-  // ParticleField + LiveCallPanel (dynamic-imported canvas/SVG animation, JarvisOrb-
-  // adjacent), which `animations: "disabled"` can't freeze the way it does CSS
-  // transitions. Measured for real, not guessed: a plain back-to-back rerun against
-  // its own freshly-written baseline (no code change in between) diffed ~6% of
-  // pixels — every other view diffed 0% at the default 5% tolerance. Widening only
-  // this one view keeps the other 10 at the tight default instead of hiding a real
-  // regression behind a blanket loose threshold.
-  const PER_VIEW_TOLERANCE: Record<string, number> = { "Voice Console": 0.12 }
-
   for (const label of SIDEBAR_VIEWS) {
     test(`${label} view`, async ({ page }) => {
-      if (label !== "Command Center") {
-        await page.getByRole("button", { name: sidebarAccessibleName(label) }).first().click()
-        await page.waitForTimeout(300) // view-switch transition settle
-      }
-      const opts = PER_VIEW_TOLERANCE[label] ? { ...SCREENSHOT_OPTS, maxDiffPixelRatio: PER_VIEW_TOLERANCE[label] } : SCREENSHOT_OPTS
-      await expect(page).toHaveScreenshot(`view-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.png`, opts)
+      // These labels belonged to the retired multi-panel console. Each case
+      // remains an explicit guard against a stale island returning under an old
+      // label; the canonical adaptive workspace is now the only owner surface.
+      await expect(page.locator("[data-jarvis-adaptive-runtime]")).toBeVisible()
+      await expect(page.getByRole("heading", { name: "JARVIS workspace" })).toBeVisible()
+      await expect(page.getByRole("button", { name: sidebarAccessibleName(label) })).toHaveCount(0)
     })
   }
 })
@@ -87,23 +69,16 @@ test.describe("visual snapshots — sidebar views (authenticated console)", () =
 test.describe("visual snapshots — /jarvis/stage", () => {
   test("logged-out gate screen", async ({ page }) => {
     await page.goto("/jarvis/stage")
-    await expect(page.getByText("Owner access required")).toBeVisible()
-    await expect(page).toHaveScreenshot("stage-signed-out-gate.png", SCREENSHOT_OPTS)
+    await expect(page).toHaveURL(/\/jarvis$/)
+    await expect(page.locator("[data-jarvis-adaptive-runtime]")).toBeVisible()
+    await expect(page.getByText("PUBLIC PREVIEW", { exact: true })).toBeVisible()
   })
 
-  const email = process.env.TEST_OWNER_EMAIL
-  const password = process.env.TEST_OWNER_PASSWORD
   test("owner content — useLiveQuery fixture section", async ({ page }) => {
-    test.skip(!email || !password, "TEST_OWNER_EMAIL/TEST_OWNER_PASSWORD not set — see e2e/jarvis-authenticated.spec.ts's header for why this isn't faked")
-    await page.goto("/jarvis/login")
-    await page.getByPlaceholder(/you@example.com/i).fill(email!)
-    await page.getByPlaceholder(/•+/i).fill(password!)
-    await page.getByRole("button", { name: /sign in/i }).click()
-    await page.waitForURL("**/jarvis")
     await page.goto("/jarvis/stage")
-    await expect(page.getByText("useLiveQuery")).toBeVisible()
-    await page.waitForTimeout(3_000) // let at least one fixture poll land
-    await expect(page).toHaveScreenshot("stage-owner-content.png", SCREENSHOT_OPTS)
+    await expect(page).toHaveURL(/\/jarvis$/)
+    await expect(page.locator("[data-jarvis-adaptive-runtime]")).toBeVisible()
+    await expect(page.getByRole("heading", { name: "JARVIS workspace" })).toBeVisible()
   })
 })
 
@@ -115,30 +90,24 @@ test.describe("visual snapshots — /jarvis/bridge (D1 Command Bridge + D2 Appro
   // reachable without one.
   test("logged-out gate screen", async ({ page }) => {
     await page.goto("/jarvis/bridge")
-    await expect(page.getByText("Sign in required")).toBeVisible()
-    await expect(page).toHaveScreenshot("bridge-signed-out-gate.png", SCREENSHOT_OPTS)
+    await expect(page).toHaveURL(/\/jarvis$/)
+    await expect(page.locator("[data-jarvis-adaptive-runtime]")).toBeVisible()
+    await expect(page.getByText("PUBLIC PREVIEW", { exact: true })).toBeVisible()
   })
 
-  const email = process.env.TEST_OWNER_EMAIL
-  const password = process.env.TEST_OWNER_PASSWORD
   test("owner content — Bridge with live Orb/PulseBar/ApprovalCockpit", async ({ page }) => {
-    test.skip(!email || !password, "TEST_OWNER_EMAIL/TEST_OWNER_PASSWORD not set — see e2e/jarvis-authenticated.spec.ts's header for why this isn't faked")
-    await page.goto("/jarvis/login")
-    await page.getByPlaceholder(/you@example.com/i).fill(email!)
-    await page.getByPlaceholder(/•+/i).fill(password!)
-    await page.getByRole("button", { name: /sign in/i }).click()
-    await page.waitForURL("**/jarvis")
     await page.goto("/jarvis/bridge")
-    await expect(page.getByText("Awaiting Your Approval")).toBeVisible()
-    await page.waitForTimeout(3_000) // let at least one fast-lane poll land
-    await expect(page).toHaveScreenshot("bridge-owner-content.png", SCREENSHOT_OPTS)
+    await expect(page).toHaveURL(/\/jarvis$/)
+    await expect(page.locator("[data-jarvis-adaptive-runtime]")).toBeVisible()
+    await expect(page.getByRole("heading", { name: "JARVIS workspace" })).toBeVisible()
   })
 })
 
 test.describe("/jarvis/showtime (D8)", () => {
   test("keeps the Dealer Zero demo behind the honest signed-in gate", async ({ page }) => {
     await page.goto("/jarvis/showtime")
-    await expect(page.getByText("Sign in required")).toBeVisible()
-    await expect(page.getByText(/Showtime is available only to the labeled Dealer Zero demo tenant/i)).toBeVisible()
+    await expect(page).toHaveURL(/\/jarvis$/)
+    await expect(page.locator("[data-jarvis-adaptive-runtime]")).toBeVisible()
+    await expect(page.getByText("PUBLIC PREVIEW", { exact: true })).toBeVisible()
   })
 })

@@ -57,6 +57,7 @@ describe("customer cohort and campaign contracts", () => {
     const fridayAfterHours = new Date("2026-08-07T23:30:00.000Z");
     const window = nextCallingWindow("America/Chicago", fridayAfterHours, 0);
     expect(window.localDate).toBe("2026-08-10");
+    expect(nextCallingWindow("America/Chicago", fridayAfterHours, 1).localDate).toBe("2026-08-11");
     expect(nextCallingWindow("America/Chicago", monday, 1).localDate).toBe("2026-08-11");
   });
 });

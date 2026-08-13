@@ -441,7 +441,7 @@ export function CommandRail({
   const canSend = Boolean(value.trim()) && !inputDisabled && !showingPartial
 
   return (
-    <div className={`pointer-events-none z-30 flex flex-col items-center gap-1.5 ${embedded ? "jarvis-command-rail--embedded relative w-full px-0 pb-0" : "fixed inset-x-0 bottom-0 px-3 pb-[max(env(safe-area-inset-bottom),12px)]"}`} data-jarvis-command-rail data-jarvis-command-rail-embedded={embedded || undefined} data-intent-feedback={committing ? "pending" : intentLaunch ? "accepted" : "idle"}>
+    <div className={`pointer-events-none z-30 flex flex-col items-center gap-1.5 ${embedded ? "jarvis-command-rail--embedded relative w-full px-0 pb-0" : "fixed inset-x-0 bottom-0 px-3 pb-[max(env(safe-area-inset-bottom),12px)]"}`} data-jarvis-command-rail data-jarvis-command-rail-embedded={embedded || undefined} data-command-palette-ready={palette.ready ? "true" : "false"} data-intent-feedback={committing ? "pending" : intentLaunch ? "accepted" : "idle"}>
       <form
         ref={dockRef}
         onSubmit={(event) => {

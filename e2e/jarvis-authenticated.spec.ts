@@ -1,8 +1,7 @@
 import { test, expect } from "@playwright/test"
 
-// Phase 7 MAESTRO PACK §7.10 — the full authenticated flow (login → briefing →
-// approve an action → watch its timeline complete → open "Why?" → submit a
-// correction) needs a real Supabase account's email+password. This repo's session
+// Authenticated canonical-workspace smoke coverage needs a real Supabase
+// account's email+password. This repo's session
 // has no safe way to obtain one (creating or resetting a real production account,
 // or reading its password, isn't something to do unilaterally). Matching this
 // codebase's own established pattern for exactly this class of gap (finnor-os's
@@ -14,41 +13,45 @@ const email = process.env.TEST_OWNER_EMAIL
 const password = process.env.TEST_OWNER_PASSWORD
 
 test.describe("authenticated cockpit flow", () => {
+  test.describe.configure({ mode: "serial" })
+  test.setTimeout(120_000)
   test.skip(!email || !password, "TEST_OWNER_EMAIL/TEST_OWNER_PASSWORD not set — see file header for why this isn't faked")
 
   test.beforeEach(async ({ page }) => {
     await page.goto("/jarvis/login")
     await page.getByPlaceholder(/you@example.com/i).fill(email!)
     await page.getByPlaceholder(/•+/i).fill(password!)
-    await page.getByRole("button", { name: /sign in/i }).click()
-    await page.waitForURL("**/jarvis")
+    const signIn = page.getByRole("button", { name: /sign in/i })
+    await expect(signIn).toBeEnabled({ timeout: 30_000 })
+    await signIn.click()
+    await page.waitForURL("**/jarvis", { timeout: 60_000 })
   })
 
-  test("daily briefing renders real numbers and a Why? link works", async ({ page }) => {
-    await expect(page.getByText("Daily Briefing")).toBeVisible({ timeout: 15_000 })
-    const whyButton = page.getByRole("button", { name: /^why\?/i }).first()
-    await whyButton.click()
-    await expect(page.getByText("Objective")).toBeVisible({ timeout: 10_000 })
+  test("the authenticated adaptive workspace exposes the real command surface", async ({ page }) => {
+    test.skip(test.info().project.name !== "desktop-chromium", "responsive public/private shell coverage is certified separately")
+    await expect(page.locator("[data-jarvis-adaptive-runtime]")).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByRole("heading", { name: "JARVIS workspace" })).toBeVisible()
+    await expect(page.getByPlaceholder("Tell JARVIS what you need")).toBeVisible()
+    await expect(page.getByText("PUBLIC PREVIEW", { exact: true })).toHaveCount(0)
   })
 
-  test("approving a pending action removes it from the inbox", async ({ page }) => {
-    const dock = page.locator("#approval-dock")
-    await expect(dock).toBeVisible()
-    const firstApprove = dock.getByRole("button", { name: /approve/i }).first()
-    if (await firstApprove.count() === 0) {
-      test.skip(true, "no pending actions in the queue right now to approve")
-    }
-    await firstApprove.click()
-    await expect(firstApprove).toHaveCount(0, { timeout: 10_000 })
+  test("the same employee session opens the live durable Work projection", async ({ page }) => {
+    test.skip(test.info().project.name !== "desktop-chromium", "responsive public/private shell coverage is certified separately")
+    await page.getByRole("link", { name: "Work", exact: true }).click()
+    await expect(page).toHaveURL(/\/jarvis\/work$/)
+    await expect(page.locator("[data-jarvis-work]")).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByRole("heading", { name: "Work", exact: true })).toBeVisible()
+    await expect(page.getByText(/cases observed/i)).toBeVisible({ timeout: 15_000 })
   })
 
-  test("a live workflow run's drawer opens and shows its steps", async ({ page }) => {
-    const runRow = page.getByText(/running/i).first()
-    if (await runRow.count() === 0) {
-      test.skip(true, "no live workflow runs in flight right now")
-    }
-    await runRow.click()
-    await expect(page.getByRole("button", { name: /close/i })).toBeVisible()
+  test("one authenticated session crosses Customer and Money projections without a stale island", async ({ page }) => {
+    test.skip(test.info().project.name !== "desktop-chromium", "responsive public/private shell coverage is certified separately")
+    await page.getByRole("link", { name: "Customers", exact: true }).click()
+    await expect(page.locator("[data-jarvis-household-360]")).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByRole("heading", { name: "One household, one operational record." })).toBeVisible()
+    await page.getByLabel("Operational surfaces", { exact: true }).getByRole("link", { name: "Money", exact: true }).click()
+    await expect(page.locator("[data-jarvis-cash-pressure]")).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByRole("heading", { name: "Where cash is stuck." })).toBeVisible()
   })
 })
 

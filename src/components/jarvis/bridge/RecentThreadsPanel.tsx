@@ -12,7 +12,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
 import { useEffect, useRef } from "react"
 import { X } from "lucide-react"
 import type { Thread as ThreadData } from "../kernel/store"
-import { summarizeThreadOutcome, threadRowElementId } from "./ThreadStack"
+import { summarizeThreadOutcome, threadRowElementId } from "./thread-presentation"
 
 function scrollToThread(threadId: string, reducedMotion: boolean) {
   const target = document.getElementById(threadRowElementId(threadId))

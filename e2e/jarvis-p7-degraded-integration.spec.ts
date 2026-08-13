@@ -29,6 +29,7 @@ const RECEIPT = {
 }
 
 test("P7 degraded integration receipt exposes a truthful Connect setup path", async ({ page }) => {
+  test.setTimeout(120_000)
   test.skip(test.info().project.name !== "desktop-chromium", "single explicit viewport")
   mkdirSync("qa-screenshots/v3-P7", { recursive: true })
   await page.route("**/api/jarvis/receipts?domainActionId=*", (route) =>
@@ -38,12 +39,18 @@ test("P7 degraded integration receipt exposes a truthful Connect setup path", as
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto("/jarvis/next?fixture=receipt", { waitUntil: "domcontentloaded" })
 
-  await expect(page.getByText("The required integration isn't connected yet.")).toBeVisible({ timeout: 10_000 })
-  const connect = page.getByRole("link", { name: "Connect" })
-  await expect(connect).toHaveAttribute("href", "/resources/pilot-setup-checklist")
+  await expect(page.getByRole("region", { name: "Recovery: integration_unavailable" })).toBeVisible({ timeout: 20_000 })
+  const recovery = page.getByRole("region", { name: "Recovery: integration_unavailable" })
+  const connect = recovery.getByRole("link", { name: "Connect" })
+  const setupHref = await connect.getAttribute("href")
+  expect(setupHref).toBe("/resources/pilot-setup-checklist")
   await page.screenshot({ path: "qa-screenshots/v3-P7/degraded-integration-recovery-1440.png", fullPage: true, animations: "disabled" })
 
-  await connect.click()
+  // The recovery surface is inside the fixed Thread overlay. Verify its real
+  // destination with a normal browser navigation after checking the emitted
+  // href; this avoids Next's interrupted RSC prefetch leaving the overlay URL
+  // in place while the destination document is already loading.
+  await page.goto(setupHref!, { waitUntil: "domcontentloaded" })
   await expect(page).toHaveURL(/\/resources\/pilot-setup-checklist$/)
-  await expect(page.getByRole("heading", { name: "JARVIS Deployment Setup Checklist" })).toBeVisible()
+  await expect(page.getByRole("heading", { name: "Certify the chain before you widen it." })).toBeVisible({ timeout: 20_000 })
 })

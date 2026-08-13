@@ -73,6 +73,7 @@ test.describe("P5.T3 — Flagship C, FIXTURE harness (real component tree)", () 
   })
 
   test("an unknown recipient count reads the literal header and forces high risk + typed confirm", async ({ page }) => {
+    test.skip(test.info().project.name !== "desktop-chromium", "single real-session run")
     mkdirSync(OUT_DIR, { recursive: true })
     const action = {
       id: "fixture-action-bulk-unknown",
@@ -111,6 +112,7 @@ test.describe("P5.T3 — Flagship C, FIXTURE harness (real component tree)", () 
   })
 
   test("active quiet hours render the honest per-user banner, never implying customers are protected", async ({ page }) => {
+    test.skip(test.info().project.name !== "desktop-chromium", "single real-session run")
     mkdirSync(OUT_DIR, { recursive: true })
     const action = {
       id: "fixture-action-bulk-known",

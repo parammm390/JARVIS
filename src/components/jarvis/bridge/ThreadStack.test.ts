@@ -3,8 +3,7 @@
 // rendered in this environment).
 
 import { describe, it, expect } from "vitest"
-import { summarizeThreadOutcome } from "./ThreadStack"
-import { shouldHandoffThreadFocus } from "./Thread"
+import { shouldHandoffThreadFocus, summarizeThreadOutcome } from "./thread-presentation"
 
 describe("summarizeThreadOutcome", () => {
   it("real terminal states get their own honest label", () => {

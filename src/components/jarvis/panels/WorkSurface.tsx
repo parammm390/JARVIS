@@ -4,24 +4,24 @@
 // the exact P2.T1 projection and composes the existing action, approval, workflow,
 // and receipt renderers. It does not create a second instruction state machine.
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react"
 import dynamic from "next/dynamic"
 import Link from "next/link"
 import { Check, ChevronRight, CircleDot, Clock3, FileCheck2, Link2, RefreshCw, Search, ShieldCheck, UserRound, Workflow, X } from "lucide-react"
 import { ActionRenderer } from "../ui/renderers/ActionRenderer"
 import { JarvisApiError } from "../lib/api"
 import { useJarvisAuth } from "../lib/jarvis-auth"
-import { jarvisClient, type WorkAction, type WorkApproval, type WorkCaseProjection, type WorkCaseStatus, type WorkEntityLink, type WorkReceipt } from "@/lib/jarvis-client"
+import { jarvisClient, type EmployeeDirectoryEntry, type WorkAction, type WorkApproval, type WorkCaseProjection, type WorkCaseStatus, type WorkEntityLink, type WorkReceipt } from "@/lib/jarvis-client"
 import { useBusinessProjection } from "../lib/business-projections"
 import { businessProjections } from "../lib/projection-definitions"
 import { OperationalSurfaceNav, type HouseholdContext } from "../surfaces/OperationalSurfaceNav"
+import { destinationForEntity, filterMatches, groupWorkCases, primaryEntity, readWorkSurfaceQuery, stageFor, workCaseMatchesQuery, WORK_CHAPTERS, type WorkCaseGroup, type WorkFilter, type WorkSurfaceQuery } from "./work-surface-model"
 import "../jarvis-theme.css"
 
 const ApprovalCockpit = dynamic(() => import("../bridge/ApprovalCockpit").then((module) => module.ApprovalCockpit), { ssr: false })
 const WorkflowTheater = dynamic(() => import("./WorkflowTheater").then((module) => module.WorkflowTheater), { ssr: false })
 const ReceiptContent = dynamic(() => import("../lib/ReceiptDrawer").then((module) => module.ReceiptContent), { ssr: false })
 
-type WorkFilter = "Open" | "Needs you" | "Working" | "Waiting" | "Done" | "Failed"
 type InspectorTarget =
   | { kind: "action"; action: WorkAction }
   | { kind: "receipt"; receipt: WorkReceipt }
@@ -29,7 +29,6 @@ type InspectorTarget =
 
 const FILTERS: WorkFilter[] = ["Open", "Needs you", "Working", "Waiting", "Done", "Failed"]
 const STATUS_ORDER: WorkCaseStatus[] = ["Needs you", "Working", "Waiting", "Failed", "Blocked", "Completed"]
-export const WORK_CHAPTERS = ["WHY", "PLAN", "OWNER", "APPROVAL", "EXECUTION", "EVIDENCE & OUTCOME", "NEXT ACTION"] as const
 
 function humanize(value: string): string {
   return value.replaceAll("_", " ").replace(/\b\w/g, (character) => character.toUpperCase())
@@ -59,59 +58,8 @@ function entityLabel(entity: WorkEntityLink): string {
   return `${humanize(entity.entityType)} · ${shortId(entity.entityId)}`
 }
 
-function primaryEntity(workCase: WorkCaseProjection): WorkEntityLink | null {
-  return workCase.linkedEntities.find((entity) => entity.entityType === "household")
-    ?? workCase.linkedEntities.find((entity) => entity.entityType === "invoice")
-    ?? workCase.linkedEntities[0]
-    ?? null
-}
-
-export interface WorkSurfaceQuery {
-  workCaseId: string | null
-  householdId: string | null
-  invoiceId: string | null
-  visitId: string | null
-  serviceVisitId: string | null
-  workOrderId: string | null
-  appointmentId: string | null
-  receiptId: string | null
-}
-
-export function readWorkSurfaceQuery(search: string): WorkSurfaceQuery {
-  const params = new URLSearchParams(search)
-  return {
-    workCaseId: params.get("workCaseId"),
-    householdId: params.get("householdId"),
-    invoiceId: params.get("invoiceId"),
-    visitId: params.get("visitId"),
-    serviceVisitId: params.get("serviceVisitId"),
-    workOrderId: params.get("workOrderId"),
-    appointmentId: params.get("appointmentId"),
-    receiptId: params.get("receiptId"),
-  }
-}
-
 function queryHasExactTarget(query: WorkSurfaceQuery): boolean {
   return Object.values(query).some(Boolean)
-}
-
-function hasEntity(workCase: WorkCaseProjection, entityTypes: string[], entityId: string | null): boolean {
-  return entityId === null || workCase.linkedEntities.some((entity) => entityTypes.includes(entity.entityType) && entity.entityId === entityId)
-}
-
-export function workCaseMatchesQuery(workCase: WorkCaseProjection, query: WorkSurfaceQuery): boolean {
-  // Projection case ids are namespaced (`work:<uuid>`), while APIs and several
-  // existing deep links expose the durable root UUID. Accept either exact identity;
-  // never use a fuzzy/suffix match that could select another root kind.
-  if (query.workCaseId && workCase.id !== query.workCaseId && workCase.root.id !== query.workCaseId) return false
-  if (!hasEntity(workCase, ["household"], query.householdId)) return false
-  if (!hasEntity(workCase, ["invoice"], query.invoiceId)) return false
-  if (!hasEntity(workCase, ["visit", "service_visit"], query.visitId)) return false
-  if (!hasEntity(workCase, ["visit", "service_visit"], query.serviceVisitId)) return false
-  if (!hasEntity(workCase, ["work_order"], query.workOrderId)) return false
-  if (!hasEntity(workCase, ["appointment"], query.appointmentId)) return false
-  if (query.receiptId && !workCase.receipts.some((receipt) => receipt.id === query.receiptId)) return false
-  return true
 }
 
 function queryForWorkCase(workCase: WorkCaseProjection): string {
@@ -133,26 +81,6 @@ function queryForWorkCase(workCase: WorkCaseProjection): string {
   return params.toString()
 }
 
-export function destinationForEntity(entity: WorkEntityLink, workCase: WorkCaseProjection): string | null {
-  const householdId = workCase.linkedEntities.find((candidate) => candidate.entityType === "household")?.entityId
-  const context = householdId ? `&householdId=${encodeURIComponent(householdId)}` : ""
-  if (entity.entityType === "household") return `/jarvis/customers?householdId=${encodeURIComponent(entity.entityId)}`
-  if (entity.entityType === "invoice") return `/jarvis/money?invoiceId=${encodeURIComponent(entity.entityId)}${context}`
-  if (entity.entityType === "visit" || entity.entityType === "service_visit") return `/jarvis/schedule?${entity.entityType === "visit" ? "visitId" : "serviceVisitId"}=${encodeURIComponent(entity.entityId)}${context}`
-  if (entity.entityType === "work_order") return `/jarvis/schedule?workOrderId=${encodeURIComponent(entity.entityId)}${context}`
-  if (entity.entityType === "appointment") return `/jarvis/schedule?appointmentId=${encodeURIComponent(entity.entityId)}${context}`
-  return null
-}
-
-export function stageFor(workCase: WorkCaseProjection): string {
-  if (workCase.status === "Failed" || workCase.status === "Blocked") return "Evidence & outcome"
-  if (workCase.approvals.some((approval) => approval.status === "pending")) return "Approval"
-  if (workCase.operations?.some((operation) => ["queued", "running"].includes(operation.status)) || workCase.workflows.some((workflow) => ["running", "compensating"].includes(workflow.status))) return "Execution"
-  if (workCase.receipts.length > 0 || workCase.status === "Completed") return "Evidence & outcome"
-  if (workCase.actions.length > 0) return "Plan"
-  return "Why"
-}
-
 function highValueFact(workCase: WorkCaseProjection): string {
   const invoice = workCase.linkedEntities.find((entity) => entity.entityType === "invoice")
   if (invoice) return `Invoice ${shortId(invoice.entityId)}`
@@ -161,31 +89,6 @@ function highValueFact(workCase: WorkCaseProjection): string {
   const action = workCase.actions[0]
   if (action?.summary) return action.summary
   return workCase.source.channel ? humanize(workCase.source.channel) : humanize(workCase.source.kind)
-}
-
-export function filterMatches(workCase: WorkCaseProjection, filter: WorkFilter): boolean {
-  if (filter === "Open") return workCase.status !== "Completed"
-  if (filter === "Done") return workCase.status === "Completed"
-  return workCase.status === filter
-}
-
-export interface WorkCaseGroup {
-  key: string
-  cases: WorkCaseProjection[]
-}
-
-export function groupWorkCases(workCases: WorkCaseProjection[]): WorkCaseGroup[] {
-  const groups = new Map<string, WorkCaseProjection[]>()
-  for (const workCase of workCases) {
-    const title = workCase.title.trim().toLocaleLowerCase().replace(/\s+/g, " ")
-    const actionFamily = workCase.actions[0]?.actionType ?? "no-action"
-    const entityType = primaryEntity(workCase)?.entityType ?? "no-entity"
-    const key = [workCase.status, stageFor(workCase), actionFamily, entityType, title].join("|")
-    const current = groups.get(key) ?? []
-    current.push(workCase)
-    groups.set(key, current)
-  }
-  return Array.from(groups, ([key, cases]) => ({ key, cases }))
 }
 
 function workCaseMatchesSearch(workCase: WorkCaseProjection, query: string): boolean {
@@ -363,12 +266,38 @@ function WorkSpine({
   const [objectiveBusy, setObjectiveBusy] = useState<"continue" | "interrupt" | "redirect" | null>(null)
   const [objectiveError, setObjectiveError] = useState<string | null>(null)
   const [redirectObjective, setRedirectObjective] = useState("")
+  const [employees, setEmployees] = useState<EmployeeDirectoryEntry[]>([])
+  const [viewerUserId, setViewerUserId] = useState<string | null>(null)
+  const [directoryError, setDirectoryError] = useState<string | null>(null)
+  const [handoffTarget, setHandoffTarget] = useState("")
+  const [handoffNote, setHandoffNote] = useState("")
+  const [handoffBusy, setHandoffBusy] = useState(false)
+  const [handoffError, setHandoffError] = useState<string | null>(null)
   const entity = primaryEntity(workCase)
   const actionIds = workCase.actions.map((action) => action.id)
   const pendingApprovals = workCase.approvals.filter((approval) => approval.status === "pending")
   const failedReceipt = workCase.receipts.find((receipt) => receipt.failure !== null)
   const objective = workCase.objectiveLoop
   const latestIteration = objective?.iterations.at(-1)
+  const currentOwnerId = workCase.durableWork?.assignedTo ?? workCase.durableWork?.currentOwnerId ?? workCase.durableWork?.initiatedBy ?? null
+  const currentOwner = employees.find((employee) => employee.id === currentOwnerId)
+  const activeHandoffTargets = employees.filter((employee) => employee.status === "active" && employee.id !== currentOwnerId)
+  const canHandoff = Boolean(workCase.durableWork && viewerUserId && viewerUserId === currentOwnerId)
+
+  useEffect(() => {
+    let cancelled = false
+    setDirectoryError(null)
+    Promise.all([jarvisClient.employees(), jarvisClient.me()])
+      .then(([directory, me]) => {
+        if (cancelled) return
+        setEmployees(directory.employees)
+        setViewerUserId(me.userId)
+      })
+      .catch((error) => {
+        if (!cancelled) setDirectoryError(error instanceof Error ? error.message : "Employee directory unavailable")
+      })
+    return () => { cancelled = true }
+  }, [workCase.durableWork?.id])
 
   const controlObjective = async (command: "continue" | "interrupt" | "redirect") => {
     setObjectiveBusy(command)
@@ -383,6 +312,23 @@ function WorkSpine({
       setObjectiveError(error instanceof Error ? error.message : "Objective control failed")
     } finally {
       setObjectiveBusy(null)
+    }
+  }
+
+  const submitHandoff = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!workCase.durableWork || !handoffTarget || handoffBusy) return
+    setHandoffBusy(true)
+    setHandoffError(null)
+    try {
+      await jarvisClient.handoffWork(workCase.durableWork.id, { targetEmployeeId: handoffTarget, ...(handoffNote.trim() ? { note: handoffNote.trim() } : {}) })
+      setHandoffTarget("")
+      setHandoffNote("")
+      onRefresh()
+    } catch (error) {
+      setHandoffError(error instanceof Error ? error.message : "Work handoff failed")
+    } finally {
+      setHandoffBusy(false)
     }
   }
 
@@ -433,7 +379,16 @@ function WorkSpine({
         </Chapter>
 
         <Chapter number="03" title="OWNER">
-          <div className="jarvis-work-owner-line"><UserRound className="h-4 w-4" aria-hidden /><strong>{workCase.durableWork?.assignedTo ?? workCase.durableWork?.currentOwnerId ?? workCase.durableWork?.initiatedBy ?? "Not recorded"}</strong><span>{workCase.durableWork?.authorityContext ? "Employee identity and authority context are attached; every effect is re-evaluated at execution." : "No authoritative assignee is present on this Work Case."}</span></div>
+          <div className="jarvis-work-owner-line"><UserRound className="h-4 w-4" aria-hidden /><strong>{currentOwner?.displayName ?? (currentOwnerId ? shortId(currentOwnerId) : "Not recorded")}</strong>{currentOwner && <span>{currentOwner.roles.map(humanize).join(" · ") || humanize(currentOwner.legacyRole)}</span>}<span>{workCase.durableWork?.authorityContext ? "Employee identity and authority context are attached; every later inspection and effect is re-evaluated for the current owner." : "No authoritative assignee is present on this Work Case."}</span></div>
+          {(workCase.durableWork?.handoffs ?? []).map((handoff) => {
+            const from = employees.find((employee) => employee.id === handoff.fromEmployeeId)
+            const to = employees.find((employee) => employee.id === handoff.toEmployeeId)
+            return <p key={handoff.sequence} className="jarvis-work-muted">Handoff {handoff.sequence} · {from?.displayName ?? (handoff.fromEmployeeId ? shortId(handoff.fromEmployeeId) : "unassigned")} → {to?.displayName ?? (handoff.toEmployeeId ? shortId(handoff.toEmployeeId) : "unassigned")} · {ageLabel(handoff.createdAt)}{handoff.note ? ` · ${handoff.note}` : ""}</p>
+          })}
+          {canHandoff && activeHandoffTargets.length > 0 && <form className="jarvis-work-redirect jarvis-work-handoff" onSubmit={submitHandoff}><label htmlFor={`handoff-owner-${workCase.id}`}>Hand off this same Work</label><div><select id={`handoff-owner-${workCase.id}`} value={handoffTarget} onChange={(event) => setHandoffTarget(event.target.value)}><option value="">Choose an active employee</option>{activeHandoffTargets.map((employee) => <option key={employee.id} value={employee.id}>{employee.displayName ?? shortId(employee.id)} · {employee.roles.map(humanize).join(" / ") || humanize(employee.legacyRole)}</option>)}</select><input value={handoffNote} onChange={(event) => setHandoffNote(event.target.value)} placeholder="Optional handoff note" maxLength={2_000} /><button type="submit" className="jarvis-work-secondary-button" disabled={handoffBusy || !handoffTarget}>{handoffBusy ? "Handing off…" : "Hand off"}</button></div></form>}
+          {!directoryError && workCase.durableWork && viewerUserId && !canHandoff && <p className="jarvis-work-muted">Only the current owner can transfer responsibility; approvals remain available to other authorized employees.</p>}
+          {directoryError && <p className="jarvis-work-honest-warning">{directoryError}</p>}
+          {handoffError && <p className="jarvis-work-honest-warning">{handoffError}</p>}
         </Chapter>
 
         <Chapter number="04" title="APPROVAL" active={stageFor(workCase) === "Approval"}>
@@ -542,9 +497,12 @@ export function WorkSurface() {
   const [objectiveDraft, setObjectiveDraft] = useState("")
   const [objectiveStarting, setObjectiveStarting] = useState(false)
   const [objectiveStartError, setObjectiveStartError] = useState<string | null>(null)
+  const [interactiveReady, setInteractiveReady] = useState(false)
   const queueToggleRef = useRef<HTMLButtonElement>(null)
-  const [surfaceQuery] = useState<WorkSurfaceQuery>(() => readWorkSurfaceQuery(typeof window === "undefined" ? "" : window.location.search))
+  const [surfaceQuery, setSurfaceQuery] = useState<WorkSurfaceQuery>(() => readWorkSurfaceQuery(typeof window === "undefined" ? "" : window.location.search))
   const hasExactTarget = queryHasExactTarget(surfaceQuery)
+
+  useEffect(() => setInteractiveReady(true), [])
 
   useEffect(() => {
     if (!queueOpen && !inspector) return
@@ -582,7 +540,7 @@ export function WorkSurface() {
     window.history.replaceState(null, "", `/jarvis/work?${queryForWorkCase(workCase)}`)
   }
 
-  const assignObjective = async (event: React.FormEvent<HTMLFormElement>) => {
+  const assignObjective = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const objective = objectiveDraft.trim()
     if (!objective || objectiveStarting) return
@@ -597,7 +555,9 @@ export function WorkSurface() {
       setObjectiveDraft("")
       setFilter("Open")
       setSelectedId(result.objective.workId)
-      window.history.replaceState(null, "", `/jarvis/work?workCaseId=${encodeURIComponent(result.objective.workId)}`)
+      const objectiveQuery = `?workCaseId=${encodeURIComponent(result.objective.workId)}`
+      setSurfaceQuery(readWorkSurfaceQuery(objectiveQuery))
+      window.history.replaceState(null, "", `/jarvis/work${objectiveQuery}`)
       reload()
     } catch (error) {
       setObjectiveStartError(error instanceof Error ? error.message : "JARVIS could not accept the objective")
@@ -614,7 +574,7 @@ export function WorkSurface() {
     : undefined
 
   return (
-    <div className="jarvis-work-shell" data-jarvis-work data-queue-open={queueOpen ? "true" : "false"}>
+    <div className="jarvis-work-shell" data-jarvis-work data-work-interactive-ready={interactiveReady ? "true" : "false"} data-queue-open={queueOpen ? "true" : "false"}>
       <OperationalSurfaceNav active="work" context={context} />
       <header className="jarvis-work-topbar">
         <div className="jarvis-work-topbar__left"><div><span className="jarvis-work-eyebrow">WORK · CAUSAL SPINE</span><h1>Work</h1></div></div>

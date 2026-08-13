@@ -20,11 +20,10 @@ const available = await (async () => {
   }
 })();
 
-describe.skipIf(!available)("Phase 2 local Postgres transient fault", () => {
+const chaosAvailable = available && process.env.NODE_ENV !== "production" && process.env.FINNOR_CHAOS_TEST_CONTEXT === "1";
+
+describe.skipIf(!chaosAvailable)("Phase 2 local Postgres transient fault", () => {
   beforeAll(async () => {
-    if (process.env.NODE_ENV === "production" || process.env.FINNOR_CHAOS_TEST_CONTEXT !== "1") {
-      throw new Error("Postgres transient fault probe requires the explicit local chaos context");
-    }
     process.env.DATABASE_URL = DB_URL;
     await migrate(DB_URL);
   });

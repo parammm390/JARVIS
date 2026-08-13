@@ -36,6 +36,10 @@ describe.skipIf(!available)("Upgrade 8 employee authority runtime", () => {
   const technicianA = randomUUID();
   const ownerB = randomUUID();
   const otherCustomer = randomUUID();
+  const ownerAEmail = `owner-a-${ownerA}@example.test`;
+  const dispatcherAEmail = `dispatch-a-${dispatcherA}@example.test`;
+  const technicianAEmail = `tech-a-${technicianA}@example.test`;
+  const ownerBEmail = `owner-b-${ownerB}@example.test`;
   let dispatchRole: string;
   let ownerRole: string;
   let technicianRole: string;
@@ -46,7 +50,7 @@ describe.skipIf(!available)("Upgrade 8 employee authority runtime", () => {
     const admin = new pg.Client({ connectionString: SUPER_URL });
     await admin.connect();
     await admin.query("INSERT INTO finnor_os.tenants(id,name) VALUES ($1,'Authority A'),($2,'Authority B')", [tenantA, tenantB]);
-    await admin.query("INSERT INTO finnor_os.users(id,tenant_id,email,role,display_name,phone_number) VALUES ($1,$4,'owner-a@example.test','owner','Owner A','+15551000001'),($2,$4,'dispatch-a@example.test','dispatcher','Dispatch A','+15551000002'),($3,$4,'tech-a@example.test','technician','Tech A','+15551000003'),($5,$6,'owner-b@example.test','owner','Owner B','+15551000004')", [ownerA, dispatcherA, technicianA, tenantA, ownerB, tenantB]);
+    await admin.query("INSERT INTO finnor_os.users(id,tenant_id,email,role,display_name,phone_number) VALUES ($1,$4,$7,'owner','Owner A','+15551000001'),($2,$4,$8,'dispatcher','Dispatch A','+15551000002'),($3,$4,$9,'technician','Tech A','+15551000003'),($5,$6,$10,'owner','Owner B','+15551000004')", [ownerA, dispatcherA, technicianA, tenantA, ownerB, tenantB, ownerAEmail, dispatcherAEmail, technicianAEmail, ownerBEmail]);
     await admin.query("INSERT INTO finnor_os.households(id,tenant_id,address) VALUES ($1,$2,'Out of scope')", [otherCustomer, tenantA]);
     await admin.end();
     process.env.DATABASE_URL = APP_URL;
