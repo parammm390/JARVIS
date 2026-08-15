@@ -1,15 +1,15 @@
 export const siteConfig = {
   name: "FINNOR",
-  tagline: "Governed execution for water treatment companies.",
+  tagline: "Customized AI operating and execution systems for water treatment companies.",
   description:
-    "FINNOR turns an instruction into grounded context, an executable plan, governed action and permanent evidence. JARVIS is the command surface through which the operation is understood, directed and verified.",
+    "FINNOR is configured around how a water treatment company actually operates. It coordinates customers, work, schedule, inventory, quotes, communication, money, research and agents; JARVIS is the command and work surface.",
   contactEmail: "param@finnorai.com",
   ctaLink: "https://calendly.com/pdave9807",
   demoLink: "/demo",
   calendlyLink: "https://calendly.com/pdave9807",
   calendlyCta: "Book an operating review",
   calendlySupport:
-    "Bring one consequential workflow. We will trace its sources, action contracts, authority line, recovery path and proof of actual outcome.",
+    "Map the company deployment, then certify the first operating chain across sources, systems, authority, recovery and evidence.",
   links: {
     twitter: "https://twitter.com/finnor",
     github: "https://github.com/finnor",

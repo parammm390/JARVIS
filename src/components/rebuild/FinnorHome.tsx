@@ -38,9 +38,9 @@ import {
 } from "lucide-react";
 
 import { siteConfig } from "@/config/site";
-import { ParticleScroll } from "@/components/canvasui/ParticleScroll";
 import { FinnorMark } from "./FinnorMark";
 import FinnorNavigation from "./FinnorNavigation";
+import { DEPLOYMENT_START_USD, operatingAreas } from "@/content/commercial-truth";
 import styles from "./FinnorHome.module.css";
 
 gsap.registerPlugin(ScrollTrigger, useGSAP);
@@ -267,7 +267,7 @@ function HeroOperatingModel() {
       </div>
       <div className={styles.modelGrid} aria-hidden="true" />
       <div className={styles.modelTopline}>
-        <span>JARVIS / REPRESENTATIVE OPERATING MODEL</span>
+        <span>JARVIS / REPRESENTATIVE FIRST OPERATING CHAIN</span>
         <b data-running={running}><i />{running ? "EXECUTING" : phase === 6 ? "VERIFIED" : "READY"}</b>
       </div>
       <div className={styles.modelModules} aria-hidden="true">
@@ -543,9 +543,35 @@ function CapabilityMarquee() {
   );
 }
 
+function CompanyDeploymentMap() {
+  return (
+    <section className={styles.companyScopeSection} id="company-scope">
+      <div className={styles.sectionHeading} data-reveal>
+        <span>FINNOR / COMPANY OPERATING SCOPE</span>
+        <h2>The operating layer is configured around the company.</h2>
+        <p>Workflows, records, systems, locations, roles, authority, AI policy, channels, agents and workspaces can differ by deployment. FINNOR coordinates only the areas that are mapped, configured and activated.</p>
+      </div>
+      <div className={styles.companyScopeGrid} data-reveal>
+        {operatingAreas.map((area, index) => (
+          <article key={area.name}>
+            <span>{String(index + 1).padStart(2, "0")}</span>
+            <h3>{area.name}</h3>
+            <strong>{area.verb}</strong>
+            <p>{area.copy}</p>
+          </article>
+        ))}
+      </div>
+      <div className={styles.companyConfigBand} data-reveal>
+        <div><span>Company configuration</span><p>Integrations · locations · roles · authority · approvals · AI policy · channels · agent scope · workspaces</p></div>
+        <div><span>Production deployment</span><p>Operating review · mapping · recovery testing · onboarding · activation · ongoing support</p></div>
+        <strong>Starting around ${DEPLOYMENT_START_USD.toLocaleString("en-US")}</strong>
+      </div>
+    </section>
+  );
+}
+
 export default function FinnorHome() {
   const root = useRef<HTMLElement>(null);
-  const [phase, setPhase] = useState(0);
 
   useGSAP(
     () => {
@@ -600,16 +626,6 @@ export default function FinnorHome() {
         );
       });
 
-      gsap.utils.toArray<HTMLElement>("[data-system-chapter]").forEach((chapter, index) => {
-        ScrollTrigger.create({
-          trigger: chapter,
-          start: "top 56%",
-          end: "bottom 44%",
-          onEnter: () => setPhase(index),
-          onEnterBack: () => setPhase(index),
-        });
-      });
-
       // The stage is already pinned by CSS sticky. A second GSAP pin races with
       // post-hydration layout changes and can make the scene lock before the
       // story reaches the viewport.
@@ -638,20 +654,20 @@ export default function FinnorHome() {
         <div className={styles.heroGrid} aria-hidden="true" />
         <div className={styles.heroNoise} aria-hidden="true" />
         <div className={styles.heroCopy} data-hero-copy>
-          <p className={styles.heroEyebrow} data-hero-enter><span />JARVIS / GOVERNED EXECUTION FOR WATER TREATMENT</p>
+          <p className={styles.heroEyebrow} data-hero-enter><span />FINNOR / CUSTOMIZED OPERATING + EXECUTION SYSTEM</p>
           <h1>
-            <span><span data-hero-word>ONE INSTRUCTION.</span></span>
+            <span><span data-hero-word>BUILT AROUND HOW</span></span>
             <span className={styles.heroAccent}>
-              <span className={styles.heroDesktopPhrase} data-hero-word>THE OPERATION MOVES.</span>
-              <span className={styles.heroMobilePhrase} data-hero-word>OPERATION MOVES.</span>
+              <span className={styles.heroDesktopPhrase} data-hero-word>YOUR COMPANY OPERATES.</span>
+              <span className={styles.heroMobilePhrase} data-hero-word>YOUR COMPANY RUNS.</span>
             </span>
           </h1>
           <p className={styles.heroBody} data-hero-enter>
-            JARVIS assembles customer, work, schedule, dispatch, inventory, proposals and money into one governed plan. FINNOR executes inside your authority, recovers when reality resists and proves the result.
+            FINNOR is the AI operating and execution layer configured across your customers, work, schedule, inventory, quotes, communication, money, research and agents. JARVIS is where your team directs, approves and inspects that work.
           </p>
           <div className={styles.heroActions} data-hero-enter>
             <a className={styles.primaryCta} href={siteConfig.calendlyLink} target="_blank" rel="noreferrer">Plan your deployment <ArrowUpRight size={16} /></a>
-            <a className={styles.secondaryCta} href="#system-story">Watch one instruction <ArrowDown size={16} /></a>
+            <a className={styles.secondaryCta} href="#company-scope">See what gets configured <ArrowDown size={16} /></a>
           </div>
         </div>
         <div className={styles.heroVisual} data-hero-model><HeroOperatingModel /></div>
@@ -659,69 +675,34 @@ export default function FinnorHome() {
 
       <section className={styles.thesis}>
         <div className={styles.thesisTop} data-reveal>
-          <p>Software keeps records. Assistants answer questions.</p>
-          <h2>FINNOR changes the operating state of the business.</h2>
+          <p>A company deployment—not a chatbot, voice agent or generic SaaS subscription.</p>
+          <h2>FINNOR runs the operating layer behind the work.</h2>
         </div>
         <div className={styles.inlineStatement} data-reveal>
-          <span>One instruction enters.</span>
+          <span>JARVIS is the command and work surface.</span>
           <span className={styles.inlineInstrument} aria-label="Live JARVIS workflow preview"><i /><i /><i /><i /><b>LIVE</b></span>
-          <span>The whole operation answers.</span>
+          <span>FINNOR is the execution layer.</span>
         </div>
-        <LiveWorkflow />
       </section>
+
+      <CompanyDeploymentMap />
 
       <OperationsPulse />
-
-      <section className={styles.systemIntro} id="system">
-        <div data-reveal>
-          <span>THE OPERATING SYSTEM UNDER THE COMMAND</span>
-          <ParticleScroll
-            className={styles.contextParticle}
-            point={0.72}
-            band={340}
-            density={3}
-            spread={150}
-            gravity={0.18}
-            drift={0.42}
-            swirl={34}
-            fade={0.72}
-          >
-            <div className={styles.contextCopy}>
-              <h2>Business complexity becomes executable structure.</h2>
-              <p>One representative installation moves through the same product mechanics the source implements: grounded context, bounded plans, policy, approval, durable execution, recovery and evidence.</p>
-            </div>
-          </ParticleScroll>
-        </div>
-      </section>
-
-      <section className={styles.systemStory} id="system-story" data-system-story>
-        <SystemStage phase={phase} />
-        <div className={styles.chapterRail}>
-          {systemChapters.map((chapter, index) => (
-            <article key={chapter.key} data-system-chapter data-current={phase === index}>
-              <span>{chapter.eyebrow}</span>
-              <h3>{chapter.title}</h3>
-              <p>{chapter.body}</p>
-              <b>{chapter.signal}</b>
-            </article>
-          ))}
-        </div>
-      </section>
 
       <section className={styles.jarvisSection} id="jarvis">
         <div className={styles.sectionHeading} data-reveal>
           <span>JARVIS / THE COMMAND SURFACE</span>
           <h2>Understand the work before you authorize the change.</h2>
-          <p>JARVIS keeps the instruction, supporting records, plan, authority, execution and proof in one causal surface. It is not a chatbot pasted over disconnected software.</p>
+          <p>JARVIS is where operators understand the business, direct work, review plans, grant scoped authority, follow execution and inspect recovery and evidence. FINNOR is the operating layer doing the coordinated work behind it.</p>
         </div>
         <JarvisSurface />
       </section>
 
       <section className={styles.outcomesSection} id="outcomes">
         <div className={styles.sectionHeading} data-reveal>
-          <span>AFTER APPROVAL</span>
-          <h2>The conversation disappears. Four operating surfaces agree.</h2>
-          <p>The command is complete only when Customers, Work, Schedule and Money show the right new state—and every change points back to the same exact work root.</p>
+          <span>FOUR EXAMPLE OPERATING SURFACES</span>
+          <h2>The instruction disappears. The company state changes.</h2>
+          <p>This representative chain closes only when Customers, Work, Schedule and Money show the right new state. Inventory, Quotes, Communication, Research and Agents can join the same operating scope where configured.</p>
         </div>
         <OutcomeGrid />
       </section>
@@ -729,8 +710,8 @@ export default function FinnorHome() {
       <section className={styles.agentsSection} id="agents">
         <div className={styles.agentsHeading} data-reveal>
           <span>THE BOUNDED AGENT FLEET</span>
-          <h2>Five channels. One authority boundary.</h2>
-          <p>Each channel has a defined operating scope. JARVIS keeps their work attached to shared records, policy and evidence instead of multiplying disconnected conversations.</p>
+          <h2>Every activated agent gets a bounded job.</h2>
+          <p>These five channels are representative. Agent scope, tools, text or voice channels, workspaces and escalation paths are selected for the company and governed by the same records, policy and evidence.</p>
         </div>
         <AgentAccordion />
       </section>
@@ -768,15 +749,15 @@ export default function FinnorHome() {
       <section className={styles.finalCta}>
         <div className={styles.finalWorld} aria-hidden="true"><IndustrialExecutionWorld phase={6} variant="final" /></div>
         <div className={styles.finalCopy} data-reveal>
-          <span>YOUR OPERATION / INSIDE JARVIS</span>
-          <h2>Bring the workflow that keeps crossing desks.</h2>
-          <p>We’ll trace the real customer, work, schedule, equipment, money, authority, recovery and proof behind it—then show the whole chain inside JARVIS.</p>
+          <span>PRODUCTION DEPLOYMENTS / FROM AROUND $30,000</span>
+          <h2>Map the company. Certify the first chain.</h2>
+          <p>We’ll scope the broader operating deployment, configure the required systems and boundaries, then use the first certified chain to prove how FINNOR should expand inside the company.</p>
           <div><a href={siteConfig.calendlyLink} target="_blank" rel="noreferrer">Plan your deployment <ArrowUpRight size={16} /></a><Link href="/demo">Open the public demo <ArrowRight size={16} /></Link></div>
         </div>
       </section>
 
       <footer className={styles.footer}>
-        <div className={styles.footerLead}><Link href="/" aria-label="FINNOR home"><FinnorMark /><span>FINNOR</span></Link><p>Governed execution for water treatment companies.</p></div>
+        <div className={styles.footerLead}><Link href="/" aria-label="FINNOR home"><FinnorMark /><span>FINNOR</span></Link><p>Customized AI operating and execution systems for water treatment companies.</p></div>
         <div className={styles.footerGrid}>
           <div><span>Product</span><Link href="/product">Product</Link><Link href="/capabilities">Capabilities</Link><Link href="/how-it-works">How it works</Link></div>
           <div><span>Explore</span><Link href="/resources">Resources</Link><Link href="/trust-safety">Trust &amp; safety</Link><Link href="/faq">FAQ</Link></div>

@@ -4,6 +4,8 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   ArrowUpRight,
   Boxes,
+  BrainCircuit,
+  Building2,
   CalendarClock,
   Check,
   CheckCircle2,
@@ -15,6 +17,7 @@ import {
   PackageCheck,
   Pause,
   Play,
+  Radio,
   RefreshCcw,
   Route,
   ShieldCheck,
@@ -24,9 +27,17 @@ import {
   Wrench,
   Zap,
 } from "lucide-react";
-import { useEffect, useState, type ComponentType, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type ComponentType } from "react";
 
 import { siteConfig } from "@/config/site";
+import {
+  advancedIntelligenceNote,
+  intelligencePolicies,
+  interactionModes,
+  operatingAreas,
+  type IntelligencePolicy,
+  type InteractionMode,
+} from "@/content/commercial-truth";
 import styles from "./MarketingLiveSystems.module.css";
 
 type RouteName = "product" | "capabilities" | "how-it-works" | "pricing" | "faq";
@@ -67,7 +78,7 @@ function ProductLab() {
 
   return (
     <section className={`${styles.lab} ${styles.productLab}`} id="product-live" aria-labelledby="product-live-title">
-      <LabHeading id="product-live-title" eyebrow="ONE WORK ROOT / FOUR SURFACES" title="The interface changes shape around the work." copy="Choose a surface and watch the same instruction resolve into the exact record, state and authority an operator needs next." dark />
+      <LabHeading id="product-live-title" eyebrow="JARVIS / COMMAND AND WORK SURFACE" title="One operating layer, presented for the work at hand." copy="This representative chain shows four JARVIS views. A company deployment can include the broader FINNOR operating scope described on this page." dark />
       <div className={styles.productConsole} data-scale-reveal>
         <aside className={styles.productRail}>
           <div><Sparkles size={17} /><span>JARVIS</span></div>
@@ -161,28 +172,187 @@ function HowLab() {
   );
 }
 
-const scopeItems = [
-  { key: "crm", label: "Customer / CRM", group: "Operating surfaces", icon: UsersRound },
-  { key: "quotes", label: "Quotes & proposals", group: "Operating surfaces", icon: FileCheck2 },
-  { key: "schedule", label: "Scheduling & dispatch", group: "Operating surfaces", icon: CalendarClock },
-  { key: "work", label: "Work & field service", group: "Operating surfaces", icon: Wrench },
-  { key: "inventory", label: "Inventory", group: "Operating surfaces", icon: PackageCheck },
-  { key: "money", label: "Invoices & collections", group: "Operating surfaces", icon: CircleDollarSign },
-  { key: "authority", label: "Agents, policy & approval", group: "Control layer", icon: ShieldCheck },
-  { key: "recovery", label: "Recovery & evidence", group: "Control layer", icon: RefreshCcw },
-  { key: "onboarding", label: "Onboarding & integrations", group: "Deployment", icon: Boxes },
-] as const;
+const coverageIcons = [UsersRound, Wrench, CalendarClock, PackageCheck, FileCheck2, Command, CircleDollarSign, Sparkles, Waypoints] as const;
+
+type ScopeChoice = {
+  label: string;
+  detail: string;
+  uplift: readonly [number, number];
+};
+
+const scopeLevers = {
+  workflows: {
+    label: "Workflow boundary",
+    icon: Route,
+    choices: {
+      core: { label: "1 core workflow", detail: "One certified operating chain", uplift: [0, 0] },
+      connected: { label: "Several connected workflows", detail: "Shared state and handoffs", uplift: [8, 14] },
+      portfolio: { label: "Company-wide workflow portfolio", detail: "Multiple teams and dependencies", uplift: [18, 30] },
+    },
+  },
+  integrations: {
+    label: "Systems and sources",
+    icon: Database,
+    choices: {
+      standard: { label: "1–2 source systems", detail: "Focused source mapping", uplift: [0, 0] },
+      connected: { label: "3–5 connected systems", detail: "More adapters and reconciliation", uplift: [6, 11] },
+      estate: { label: "6+ or complex system estate", detail: "Broader integration engineering", uplift: [14, 24] },
+    },
+  },
+  locations: {
+    label: "Operating entities",
+    icon: Building2,
+    choices: {
+      one: { label: "One location / entity", detail: "One operating boundary", uplift: [0, 0] },
+      multi: { label: "Several locations", detail: "Location-specific roles and rules", uplift: [5, 9] },
+      group: { label: "Multi-entity group", detail: "Shared and separate operating policy", uplift: [10, 17] },
+    },
+  },
+  authority: {
+    label: "Approval and authority",
+    icon: ShieldCheck,
+    choices: {
+      standard: { label: "Standard owner approvals", detail: "Clear prepare / approve boundary", uplift: [0, 0] },
+      layered: { label: "Layered role approvals", detail: "Several roles or risk tiers", uplift: [4, 8] },
+      complex: { label: "Complex policy requirements", detail: "Detailed limits and escalations", uplift: [8, 14] },
+    },
+  },
+  agents: {
+    label: "Agent channels",
+    icon: Radio,
+    choices: {
+      none: { label: "No separate agent channels", detail: "JARVIS and system channels only", uplift: [0, 0] },
+      one: { label: "One bounded agent channel", detail: "One role, channel and escalation path", uplift: [5, 9] },
+      multi: { label: "Multiple agent channels", detail: "Several roles, tools and channels", uplift: [11, 18] },
+    },
+  },
+  workspace: {
+    label: "Workspace engineering",
+    icon: Boxes,
+    choices: {
+      configured: { label: "Configured FINNOR workspace", detail: "Adaptive workspaces for included scope", uplift: [0, 0] },
+      custom: { label: "Custom workflow / UI design", detail: "Company-specific interaction design", uplift: [9, 16] },
+      multi: { label: "Multiple custom role surfaces", detail: "Distinct tools for several teams", uplift: [16, 28] },
+    },
+  },
+  support: {
+    label: "Reliability and support",
+    icon: RefreshCcw,
+    choices: {
+      standard: { label: "Production activation support", detail: "Recovery testing and launch support", uplift: [0, 0] },
+      assured: { label: "Enhanced operating assurance", detail: "Tighter support and reliability needs", uplift: [6, 10] },
+      critical: { label: "Business-critical coverage", detail: "Stronger response and resilience scope", uplift: [12, 20] },
+    },
+  },
+} as const;
+
+type LeverKey = keyof typeof scopeLevers;
+type LeverSelection = { [K in LeverKey]: keyof (typeof scopeLevers)[K]["choices"] };
+
+const initialLeverSelection: LeverSelection = {
+  workflows: "core",
+  integrations: "standard",
+  locations: "one",
+  authority: "standard",
+  agents: "none",
+  workspace: "configured",
+  support: "standard",
+};
+
+function formatUsd(value: number) {
+  return `$${value.toLocaleString("en-US")}`;
+}
 
 function PricingLab() {
-  const [selected, setSelected] = useState<Set<string>>(() => new Set(scopeItems.map((item) => item.key)));
-  const groups = new Set(scopeItems.filter((item) => selected.has(item.key)).map((item) => item.group)).size;
-  const toggle = (key: string) => setSelected((current) => { const next = new Set(current); if (next.has(key)) next.delete(key); else next.add(key); return next; });
+  const [interaction, setInteraction] = useState<InteractionMode>("text");
+  const [intelligence, setIntelligence] = useState<IntelligencePolicy>("balanced");
+  const [coverage, setCoverage] = useState<Set<string>>(() => new Set(operatingAreas.slice(0, 6).map((item) => item.name)));
+  const [levers, setLevers] = useState<LeverSelection>(initialLeverSelection);
+
+  const estimate = useMemo(() => {
+    let low = 30;
+    let high = 38;
+    if (interaction === "voice") { low += 6; high += 10; }
+    if (intelligence === "frontier") { low += 5; high += 10; }
+    if (intelligence === "efficient") high -= 2;
+    const additionalAreas = Math.max(0, coverage.size - 4);
+    low += additionalAreas * 2;
+    high += additionalAreas * 3;
+    (Object.keys(scopeLevers) as LeverKey[]).forEach((key) => {
+      const choice = scopeLevers[key].choices[levers[key] as never] as ScopeChoice;
+      low += choice.uplift[0];
+      high += choice.uplift[1];
+    });
+    return { low: low * 1000, high: high * 1000 };
+  }, [coverage.size, intelligence, interaction, levers]);
+
+  const includedAreas = operatingAreas.filter((item) => coverage.has(item.name));
+  const excludedAreas = operatingAreas.filter((item) => !coverage.has(item.name));
+  const band = estimate.high <= 50_000 ? "Focused production" : estimate.high <= 75_000 ? "Connected operations" : "Extended deployment";
+  const selectedIntelligence = intelligencePolicies.find((policy) => policy.key === intelligence) ?? intelligencePolicies[1];
+  const selectedInteraction = interactionModes.find((mode) => mode.key === interaction) ?? interactionModes[0];
+  const scopeSummary = `${selectedInteraction.name}; ${selectedIntelligence.name} intelligence; ${includedAreas.map((item) => item.name).join(", ")}; indicative implementation ${formatUsd(estimate.low)}–${formatUsd(estimate.high)}.`;
+  const mailHref = `mailto:${siteConfig.contactEmail}?subject=${encodeURIComponent("FINNOR deployment scope")}&body=${encodeURIComponent(`I would like to review this indicative FINNOR scope:\n\n${scopeSummary}\n\nThis is an indicative planning range, not a quote.`)}`;
+
+  const toggleCoverage = (name: string) => setCoverage((current) => {
+    const next = new Set(current);
+    if (next.has(name)) {
+      if (next.size > 1) next.delete(name);
+    } else {
+      next.add(name);
+    }
+    return next;
+  });
+
+  const updateLever = (key: LeverKey, value: string) => {
+    setLevers((current) => ({ ...current, [key]: value } as LeverSelection));
+  };
+
   return (
     <section className={`${styles.lab} ${styles.pricingLab}`} id="pricing-live" aria-labelledby="pricing-live-title">
-      <LabHeading id="pricing-live-title" eyebrow="LIVE SCOPE COMPOSER / NO SEAT MATH" title="Shape the deployment around the operation." copy="Toggle the boundaries that belong in the first deployment. The output is a defensible scope for a conversation—not a pretend shelf price." dark />
-      <div className={styles.scopeComposer} data-scale-reveal>
-        <div className={styles.scopeOptions}><header><span>DEPLOYMENT BOUNDARY</span><b>{selected.size} included</b></header><div>{scopeItems.map((item) => { const Icon = item.icon; const checked = selected.has(item.key); return <button type="button" key={item.key} data-selected={checked} onClick={() => toggle(item.key)} aria-pressed={checked}><span><Icon size={15} /></span><p><b>{item.label}</b><small>{item.group}</small></p><i>{checked ? <Check size={13} /> : null}</i></button>; })}</div></div>
-        <aside className={styles.scopeOutput} aria-live="polite"><header><span>SCOPED OUTCOME</span><b><i />READY FOR REVIEW</b></header><div className={styles.scopeDial} style={{ "--scope-progress": `${Math.max(8, (selected.size / scopeItems.length) * 100)}%` } as CSSProperties}><strong>{selected.size}</strong><span>boundaries</span></div><div className={styles.scopeSummary}><div><span>Coverage</span><b>{groups} operating layers</b></div><div><span>Commercial model</span><b>Contact for pricing</b></div><div><span>Next step</span><b>Operating review</b></div></div><a href={`mailto:${siteConfig.contactEmail}?subject=FINNOR deployment scope`}><span>Bring this scope to FINNOR</span><ArrowUpRight size={15} /></a></aside>
+      <LabHeading id="pricing-live-title" eyebrow="DEPLOYMENT CONFIGURATOR / PRODUCTION FROM $30,000" title="Shape the boundary. See what moves the quote." copy="Choose the interaction, intelligence and operational scope the company actually needs. The range is directional; the operating review turns it into a deployment quote." dark />
+      <div className={styles.deploymentComposer} data-scale-reveal>
+        <div className={styles.composerMain}>
+          <section className={styles.composerSection} aria-labelledby="interaction-heading">
+            <header><span>01</span><div><h3 id="interaction-heading">How should the team interact?</h3><p>Voice is an added operating channel, not a different product.</p></div></header>
+            <div className={styles.choiceCards}>
+              {interactionModes.map((mode) => <button type="button" key={mode.key} data-selected={interaction === mode.key} onClick={() => setInteraction(mode.key)} aria-pressed={interaction === mode.key}><span>{mode.key === "voice" ? <Radio size={17} /> : <Command size={17} />}</span><strong>{mode.name}</strong><p>{mode.summary}</p><small>{mode.scopeEffect}</small></button>)}
+            </div>
+          </section>
+
+          <section className={styles.composerSection} aria-labelledby="intelligence-heading">
+            <header><span>02</span><div><h3 id="intelligence-heading">How much reasoning should the work use?</h3><p>Choose a policy in business language. FINNOR handles task-level routing behind it.</p></div></header>
+            <div className={`${styles.choiceCards} ${styles.intelligenceCards}`}>
+              {intelligencePolicies.map((policy) => <button type="button" key={policy.key} data-selected={intelligence === policy.key} onClick={() => setIntelligence(policy.key)} aria-pressed={intelligence === policy.key}><span><BrainCircuit size={17} /></span><strong>{policy.name}</strong><p>{policy.summary}</p><small>{policy.bestFor}</small></button>)}
+            </div>
+            <details className={styles.advancedPolicy}><summary>Advanced provider preferences</summary><p>{advancedIntelligenceNote}</p></details>
+          </section>
+
+          <section className={styles.composerSection} aria-labelledby="coverage-heading">
+            <header><span>03</span><div><h3 id="coverage-heading">Where should FINNOR operate?</h3><p>Include only the areas that need to share live operating state. Excluding an area reduces scope.</p></div></header>
+            <div className={styles.coverageGrid}>
+              {operatingAreas.map((area, index) => { const Icon = coverageIcons[index]; const selected = coverage.has(area.name); return <button type="button" key={area.name} data-selected={selected} onClick={() => toggleCoverage(area.name)} aria-pressed={selected}><span><Icon size={15} /></span><strong>{area.name}</strong><i>{selected ? <Check size={12} /> : null}</i></button>; })}
+            </div>
+          </section>
+
+          <section className={styles.composerSection} aria-labelledby="implementation-heading">
+            <header><span>04</span><div><h3 id="implementation-heading">What makes the implementation more complex?</h3><p>These decisions define the engineering, policy, reliability and support boundary.</p></div></header>
+            <div className={styles.leverGrid}>
+              {(Object.keys(scopeLevers) as LeverKey[]).map((key) => { const lever = scopeLevers[key]; const Icon = lever.icon; return <label key={key}><span><Icon size={14} />{lever.label}</span><select value={String(levers[key])} onChange={(event) => updateLever(key, event.target.value)}>{Object.entries(lever.choices).map(([value, choice]) => <option value={value} key={value}>{choice.label}</option>)}</select><small>{(lever.choices[levers[key] as never] as ScopeChoice).detail}</small></label>; })}
+            </div>
+          </section>
+        </div>
+
+        <aside className={styles.deploymentSummary} aria-live="polite">
+          <header><span>INDICATIVE IMPLEMENTATION</span><b><i />{band}</b></header>
+          <div className={styles.priceRange}><small>Planning range</small><strong>{formatUsd(estimate.low)}–{formatUsd(estimate.high)}</strong><p>Production deployments start around $30,000. Final pricing follows the operating review and confirmed implementation boundary.</p></div>
+          <div className={styles.summaryBlock}><span>Included foundation</span><ul><li><Check size={12} />Operating and source review</li><li><Check size={12} />Work Kernel and live operational projections</li><li><Check size={12} />Action contracts, policy and approvals</li><li><Check size={12} />Workflow runtime, recovery and evidence</li><li><Check size={12} />First certified production chain</li></ul></div>
+          <div className={styles.summaryBlock}><span>Your configured boundary</span><dl><div><dt>Interaction</dt><dd>{selectedInteraction.name}</dd></div><div><dt>Intelligence</dt><dd>{selectedIntelligence.name}</dd></div><div><dt>Coverage</dt><dd>{includedAreas.length} of {operatingAreas.length} areas</dd></div></dl></div>
+          <div className={styles.summaryBlock}><span>Excluded to reduce scope</span><p>{excludedAreas.length ? excludedAreas.map((item) => item.name).join(" · ") : "No operating areas excluded"}{interaction === "text" ? " · Live voice" : ""}{levers.agents === "none" ? " · Separate agent channels" : ""}</p></div>
+          <div className={styles.scopeExplanation}><strong>Why the range moves</strong><p>Voice adds channel engineering and testing. Frontier intelligence adds stronger reasoning capacity. More workflows, systems, locations, approval layers, agents, custom workspace design and reliability requirements add implementation work.</p></div>
+          <a href={mailHref}><span>Review this scope with FINNOR</span><ArrowUpRight size={15} /></a>
+          <small className={styles.estimateNote}>Indicative planning range, not a quote. Ongoing operating and support requirements are confirmed separately.</small>
+        </aside>
       </div>
     </section>
   );

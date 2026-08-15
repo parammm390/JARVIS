@@ -167,7 +167,7 @@ export function DemoExperience() {
               : stage === "ending"
                 ? "Ending call"
                 : stage === "extracting_handoff"
-                  ? "Extracting booking route"
+                ? "Extracting structured handoff"
                   : stage === "ended"
                     ? "Call ended"
                     : stage === "checking_duplicate" ||
@@ -284,7 +284,7 @@ function DemoHero({
               <span>
                 {result
                   ? getWorkflowDefinition(result.profile.workflowType).label
-                  : "One public instruction channel · not the FINNOR category"}
+                  : "Optional voice-enabled scope · not the FINNOR category"}
               </span>
             </motion.div>
 
@@ -294,7 +294,7 @@ function DemoHero({
               transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
               className="max-w-full break-words text-[2.45rem] font-black leading-[1.02] tracking-tight text-slate-950 sm:text-[2.75rem] md:text-7xl lg:text-[6.4rem]"
             >
-              <span className="block">Put one interaction through the chain.</span>
+              <span className="block">Preview one optional instruction channel.</span>
               <span className="block"></span>
             </motion.h1>
 
@@ -304,10 +304,10 @@ function DemoHero({
               transition={{ delay: 0.15, duration: 0.7 }}
               className="mt-7 max-w-full break-words text-lg font-medium leading-relaxed text-slate-600 md:max-w-2xl md:text-xl lg:text-2xl"
             >
-              This public demo isolates voice as one way an instruction can
-              enter JARVIS. It uses public website information and the details
-              you provide to assemble context and produce a clearly labelled
-              handoff. It is not the full FINNOR execution system.
+              A FINNOR deployment can be text-only or voice-enabled. This public
+              preview isolates one voice-enabled intake path, uses public website
+              information and the details you provide, then produces a clearly
+              labelled JARVIS handoff. It is not the full company operating system.
             </motion.p>
 
             <motion.div

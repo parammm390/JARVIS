@@ -3,15 +3,15 @@ import { DemoExperience } from "@/components/demo/DemoExperience";
 import { ResourceFrame } from "@/components/resources/ResourceFrame";
 
 export const metadata: Metadata = {
-  title: "JARVIS Instruction Demo",
-  description: "Put one customer interaction through a clearly labelled JARVIS instruction, context and handoff demonstration.",
+  title: "Optional Voice-Enabled Workflow Preview",
+  description: "Preview one optional voice-enabled instruction channel and governed handoff inside JARVIS. This is not the full FINNOR company deployment.",
   alternates: {
     canonical: "https://finnorai.com/demo",
   },
   openGraph: {
-    title: "Follow One Instruction Through JARVIS",
+    title: "Optional Voice-Enabled Workflow Preview | FINNOR",
     description:
-      "A public voice-ingress demonstration of context assembly and governed handoff—not a representation of the full FINNOR product.",
+      "A public preview of one optional channel—not a representation of the full FINNOR operating and execution system.",
     url: "https://finnorai.com/demo",
     images: [
       {
@@ -24,8 +24,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Follow One Instruction Through JARVIS",
-    description: "See one public instruction channel assemble context and produce a governed handoff.",
+    title: "Optional Voice-Enabled Workflow Preview | FINNOR",
+    description: "See one optional channel assemble context and produce a governed handoff inside JARVIS.",
     images: ["https://finnorai.com/og-image.svg"],
   },
 };

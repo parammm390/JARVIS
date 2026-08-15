@@ -59,9 +59,10 @@ describe("P2.T2 Work surface contract", () => {
     const durable = workCase({ id: "work:work-1", root: { kind: "work", id: "work-1" } })
     expect(workCaseMatchesQuery(durable, readWorkSurfaceQuery("?workCaseId=work-1"))).toBe(true)
     expect(workCaseMatchesQuery(durable, readWorkSurfaceQuery("?workCaseId=work:work-1"))).toBe(true)
-    expect(destinationForEntity(linked.linkedEntities[0]!, linked)).toBe("/jarvis/customers?householdId=hh-1")
-    expect(destinationForEntity(linked.linkedEntities[1]!, linked)).toBe("/jarvis/money?invoiceId=invoice-1&householdId=hh-1")
-    expect(destinationForEntity(linked.linkedEntities[2]!, linked)).toBe("/jarvis/schedule?serviceVisitId=visit-1&householdId=hh-1")
+    expect(workCaseMatchesQuery(linked, readWorkSurfaceQuery("?workCaseId=case-1&householdId=unrelated"))).toBe(true)
+    expect(destinationForEntity(linked.linkedEntities[0]!, linked)).toBe("/jarvis/customers?workCaseId=case-exact&householdId=hh-1")
+    expect(destinationForEntity(linked.linkedEntities[1]!, linked)).toBe("/jarvis/money?workCaseId=case-exact&householdId=hh-1&invoiceId=invoice-1")
+    expect(destinationForEntity(linked.linkedEntities[2]!, linked)).toBe("/jarvis/schedule?workCaseId=case-exact&householdId=hh-1&serviceVisitId=visit-1")
   })
 
   it("groups repeated queue patterns without dropping their exact records", () => {

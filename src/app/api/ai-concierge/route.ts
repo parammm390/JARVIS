@@ -79,9 +79,9 @@ function normalizeCollectedFields(
 
 function normalizePlan(value: unknown): ConciergeCollectedFields["suggestedPlan"] {
   const plan = cleanString(value, 40).toLowerCase()
-  if (plan.includes("core")) return "Core"
-  if (plan.includes("growth")) return "Growth"
-  if (plan.includes("custom")) return "Custom"
+  if (plan.includes("first") || plan.includes("chain")) return "First certified chain"
+  if (plan.includes("multi")) return "Multi-location deployment"
+  if (plan.includes("company") || plan.includes("deployment")) return "Company deployment"
   return "Not enough detail"
 }
 
