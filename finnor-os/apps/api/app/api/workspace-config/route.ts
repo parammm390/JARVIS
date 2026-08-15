@@ -6,7 +6,7 @@ import { errorResponse, requireContext } from "../../../lib/auth";
 const SurfaceSchema = z.enum(["home", "work", "customers", "schedule", "money", "agents"]);
 const allSurfaces = SurfaceSchema.options;
 
-export const WorkspaceConfigSchema = z.object({
+const WorkspaceConfigSchema = z.object({
   enabledSurfaces: z.array(SurfaceSchema).min(1).max(allSurfaces.length),
   terminology: z.object({
     home: z.string().trim().min(1).max(24),
@@ -30,9 +30,9 @@ export const WorkspaceConfigSchema = z.object({
   if (new Set(value.navigationPriority).size !== allSurfaces.length) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["navigationPriority"], message: "Navigation priority must contain each surface exactly once" });
 });
 
-export type WorkspaceConfig = z.infer<typeof WorkspaceConfigSchema>;
+type WorkspaceConfig = z.infer<typeof WorkspaceConfigSchema>;
 
-export const DEFAULT_WORKSPACE_CONFIG: WorkspaceConfig = {
+const DEFAULT_WORKSPACE_CONFIG: WorkspaceConfig = {
   enabledSurfaces: [...allSurfaces],
   terminology: { home: "Home", work: "Work", customers: "Customers", schedule: "Schedule", money: "Money", agents: "Agents" },
   voiceEnabled: true,
