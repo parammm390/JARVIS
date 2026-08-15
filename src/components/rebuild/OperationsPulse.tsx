@@ -59,9 +59,9 @@ export default function OperationsPulse() {
     <section className={styles.section} id="operations-pulse" aria-labelledby="operations-pulse-title">
       <div className={styles.ambient} aria-hidden="true" />
       <div className={styles.heading} data-reveal>
-        <span>LIVE OPERATION / WRK-81A2</span>
-        <h2 id="operations-pulse-title">Watch the business answer in real time.</h2>
-        <p>Not another feature list. One work root moves through dispatch, stock, authority, money and proof while every surface reports back to the same instruction.</p>
+        <span>FIRST CERTIFIED OPERATING CHAIN / WRK-81A2</span>
+        <h2 id="operations-pulse-title">Prove one chain inside the broader deployment.</h2>
+        <p>This representative work root moves through schedule, inventory, authority, money and evidence. It demonstrates how the configured operating layer executes; it is not the limit of the FINNOR deployment.</p>
       </div>
 
       <div className={styles.board} data-scale-reveal>

@@ -11,17 +11,19 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/demo",
     "/demo/lifecycle",
     "/resources",
-    "/resources/missed-call-cost-calculator",
-    "/resources/pilot-setup-checklist",
-    "/resources/dispatch-ai-glossary",
+    "/resources/operational-drag-estimator",
+    "/resources/deployment-readiness-checklist",
+    "/resources/operating-glossary",
     "/trust-safety",
     "/privacy",
     "/terms",
   ]
 
+  const lastModified = new Date("2026-08-15T00:00:00.000Z")
+
   return routes.map((route, index) => ({
     url: `https://finnorai.com${route}`,
-    lastModified: new Date(),
+    lastModified,
     changeFrequency: index < 2 ? "weekly" : "monthly",
     priority: index === 0 ? 1 : index === 1 ? 0.9 : 0.7,
   }))

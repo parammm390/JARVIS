@@ -41,20 +41,19 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://finnorai.com"),
   applicationName: "FINNOR",
   title: {
-    default: "FINNOR | Governed Execution for Water Treatment Companies",
+    default: "FINNOR | AI Operating & Execution System for Water Treatment",
     template: "%s | FINNOR",
   },
   description:
-    "FINNOR turns intent into grounded context, an executable plan, governed action and permanent evidence for water treatment companies. JARVIS is the command surface.",
+    "FINNOR is a customized AI operating and execution system for water treatment companies. JARVIS is the command surface for coordinated work, approvals, recovery and evidence.",
   keywords: [
-    "water treatment operations software",
-    "governed AI execution",
-    "water treatment workflow automation",
-    "field service operations",
-    "AI command surface",
-    "water treatment business software",
+    "water treatment operating system",
+    "AI execution system",
+    "custom water treatment operations system",
+    "water treatment company operations",
+    "governed AI operations",
+    "JARVIS command surface",
     "FINNOR",
-    "JARVIS water treatment",
   ],
   authors: [{ name: "FINNOR", url: "https://finnorai.com" }],
   creator: "FINNOR",
@@ -64,9 +63,9 @@ export const metadata: Metadata = {
     canonical: "https://finnorai.com/",
   },
   openGraph: {
-    title: "FINNOR | Governed Execution for Water Treatment Companies",
+    title: "FINNOR | Built Around How Your Company Operates",
     description:
-      "One instruction becomes grounded context, an executable plan, governed action and permanent evidence.",
+      "A customized AI operating and execution system for water treatment companies. Production deployments start around $30,000.",
     url: "https://finnorai.com/",
     siteName: "FINNOR",
     images: [
@@ -74,16 +73,16 @@ export const metadata: Metadata = {
         url: "/og-image.svg",
         width: 1200,
         height: 630,
-        alt: "FINNOR governed execution system for water treatment companies",
+        alt: "FINNOR customized AI operating and execution system for water treatment companies",
       },
     ],
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "FINNOR | Governed Execution for Water Treatment Companies",
+    title: "FINNOR | Built Around How Your Company Operates",
     description:
-      "One instruction becomes grounded context, an executable plan, governed action and permanent evidence.",
+      "Customized AI operating and execution systems for water treatment companies. Deployments start around $30,000.",
     images: ["/og-image.svg"],
   },
   robots: {
@@ -122,7 +121,7 @@ export default function RootLayout({
                   url: "https://finnorai.com",
                   email: "param@finnorai.com",
                   description:
-                    "FINNOR is a governed execution system for water treatment companies. It turns an instruction into grounded context, an executable plan, governed action and permanent evidence through JARVIS.",
+                    "FINNOR configures and deploys customized AI operating and execution systems for water treatment companies.",
                   sameAs: ["https://www.linkedin.com/in/param-dave16"],
                 },
                 {
@@ -138,21 +137,44 @@ export default function RootLayout({
                   "@type": "WebPage",
                   "@id": "https://finnorai.com/#webpage",
                   url: "https://finnorai.com",
-                  name: "FINNOR | Governed Execution for Water Treatment Companies",
+                  name: "FINNOR | AI Operating & Execution System for Water Treatment",
                   description:
-                    "FINNOR plans and executes work across connected business systems, with authority boundaries defined by each operation.",
+                    "FINNOR is configured around a water treatment company's workflows, systems, locations, roles, authority policies, channels and operating surfaces.",
                   isPartOf: { "@id": "https://finnorai.com/#website" },
                   about: { "@id": "https://finnorai.com/#organization" },
                   inLanguage: "en-US",
                 },
                 {
+                  "@type": "Product",
+                  "@id": "https://finnorai.com/#product",
+                  name: "FINNOR",
+                  category: "Customized AI operating and execution system for water treatment companies",
+                  description:
+                    "A company-specific operating and execution layer coordinating customers, work, schedule, inventory, quotes, communication, money, research, agents, approvals, recovery and evidence where configured.",
+                  brand: { "@id": "https://finnorai.com/#organization" },
+                  audience: {
+                    "@type": "BusinessAudience",
+                    audienceType: "Water treatment company owners and operators",
+                  },
+                  offers: {
+                    "@type": "Offer",
+                    priceCurrency: "USD",
+                    price: "30000",
+                    description: "Production deployments start around $30,000; final pricing depends on implementation scope and ongoing operating and support requirements.",
+                    url: "https://finnorai.com/pricing",
+                    availability: "https://schema.org/InStock",
+                  },
+                },
+                {
                   "@type": "SoftwareApplication",
+                  "@id": "https://finnorai.com/#jarvis",
                   name: "JARVIS",
                   applicationCategory: "BusinessApplication",
                   operatingSystem: "Cloud",
                   url: "https://finnorai.com",
                   description:
-                    "The JARVIS command surface for FINNOR, a governed execution system for water treatment companies.",
+                    "The command and work surface for FINNOR deployments, used to understand, direct, approve and inspect operational work.",
+                  isPartOf: { "@id": "https://finnorai.com/#product" },
                 },
               ],
             }),

@@ -3,13 +3,13 @@ import type { Metadata } from "next";
 import FinnorMarketingPage from "@/components/marketing/FinnorMarketingPage";
 
 export const metadata: Metadata = {
-  title: "How It Works | Instruction to Evidence",
+  title: "How It Works | From Operating Review to Production",
   description:
-    "See FINNOR's seven-stage governed execution flow: Instruction, Context, Plan, Authority, Execution, Recovery and Evidence.",
+    "See how FINNOR maps a company, configures systems and authority, certifies the first operating chain, activates production and supports expansion.",
   alternates: { canonical: "https://finnorai.com/how-it-works" },
   openGraph: {
     title: "How It Works | FINNOR",
-    description: "Instruction → Context → Plan → Authority → Execution → Recovery → Evidence.",
+    description: "Operating review, configuration, certification, production activation and governed execution inside JARVIS.",
     url: "https://finnorai.com/how-it-works",
     images: [{ url: "https://finnorai.com/og-image.svg", width: 1200, height: 630, alt: "FINNOR governed execution flow" }],
   },

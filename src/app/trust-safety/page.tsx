@@ -4,7 +4,7 @@ import { TrustSafetyPage } from "@/components/resources/TrustSafetyPage";
 export const metadata: Metadata = {
   title: "Trust & Safety",
   description:
-    "How FINNOR grounds decisions, applies versioned policy, scopes approval, recovers durable workflows and records permanent evidence.",
+    "How a FINNOR deployment configures data, roles, AI policy, approval, execution, recovery and evidence for a specific water treatment company.",
   alternates: {
     canonical: "https://finnorai.com/trust-safety",
   },

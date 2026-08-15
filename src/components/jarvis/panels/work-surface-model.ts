@@ -35,7 +35,13 @@ function hasEntity(workCase: WorkCaseProjection, entityTypes: string[], entityId
 }
 
 export function workCaseMatchesQuery(workCase: WorkCaseProjection, query: WorkSurfaceQuery): boolean {
-  if (query.workCaseId && workCase.id !== query.workCaseId && workCase.root.id !== query.workCaseId) return false
+  // A durable Work ID is the authoritative cross-surface identity. Entity params
+  // alongside it are navigation context, not extra filters that can accidentally
+  // hide the exact Work after a user inspects a different customer or invoice.
+  if (query.workCaseId) {
+    if (workCase.id !== query.workCaseId && workCase.root.id !== query.workCaseId) return false
+    return query.receiptId === null || workCase.receipts.some((receipt) => receipt.id === query.receiptId)
+  }
   if (!hasEntity(workCase, ["household"], query.householdId)) return false
   if (!hasEntity(workCase, ["invoice"], query.invoiceId)) return false
   if (!hasEntity(workCase, ["visit", "service_visit"], query.visitId)) return false
@@ -48,12 +54,28 @@ export function workCaseMatchesQuery(workCase: WorkCaseProjection, query: WorkSu
 
 export function destinationForEntity(entity: WorkEntityLink, workCase: WorkCaseProjection): string | null {
   const householdId = workCase.linkedEntities.find((candidate) => candidate.entityType === "household")?.entityId
-  const context = householdId ? `&householdId=${encodeURIComponent(householdId)}` : ""
-  if (entity.entityType === "household") return `/jarvis/customers?householdId=${encodeURIComponent(entity.entityId)}`
-  if (entity.entityType === "invoice") return `/jarvis/money?invoiceId=${encodeURIComponent(entity.entityId)}${context}`
-  if (entity.entityType === "visit" || entity.entityType === "service_visit") return `/jarvis/schedule?${entity.entityType === "visit" ? "visitId" : "serviceVisitId"}=${encodeURIComponent(entity.entityId)}${context}`
-  if (entity.entityType === "work_order") return `/jarvis/schedule?workOrderId=${encodeURIComponent(entity.entityId)}${context}`
-  if (entity.entityType === "appointment") return `/jarvis/schedule?appointmentId=${encodeURIComponent(entity.entityId)}${context}`
+  const params = new URLSearchParams({ workCaseId: workCase.id })
+  if (householdId) params.set("householdId", householdId)
+  if (entity.entityType === "household") {
+    params.set("householdId", entity.entityId)
+    return `/jarvis/customers?${params.toString()}`
+  }
+  if (entity.entityType === "invoice") {
+    params.set("invoiceId", entity.entityId)
+    return `/jarvis/money?${params.toString()}`
+  }
+  if (entity.entityType === "visit" || entity.entityType === "service_visit") {
+    params.set(entity.entityType === "visit" ? "visitId" : "serviceVisitId", entity.entityId)
+    return `/jarvis/schedule?${params.toString()}`
+  }
+  if (entity.entityType === "work_order") {
+    params.set("workOrderId", entity.entityId)
+    return `/jarvis/schedule?${params.toString()}`
+  }
+  if (entity.entityType === "appointment") {
+    params.set("appointmentId", entity.entityId)
+    return `/jarvis/schedule?${params.toString()}`
+  }
   return null
 }
 

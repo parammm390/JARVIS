@@ -16,7 +16,7 @@ export function ResourceFrame({ children }: { children: ReactNode }) {
       <footer className={styles.footer}>
         <div className={styles.footerLead}>
           <Link href="/" aria-label="FINNOR home"><FinnorMark /><span>FINNOR</span></Link>
-          <p>Governed execution for water treatment companies.</p>
+          <p>Customized AI operating and execution systems for water treatment companies.</p>
         </div>
         <div className={styles.footerGrid}>
           <div><span>Product</span><Link href="/product">Product</Link><Link href="/capabilities">Capabilities</Link><Link href="/how-it-works">How it works</Link></div>

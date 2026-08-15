@@ -4,14 +4,14 @@ import { ResourcesHub } from "@/components/resources/ResourcesHub";
 export const metadata: Metadata = {
   title: "FINNOR Field Notes",
   description:
-    "Practical explanations of FINNOR context, planning, authority, recovery and evidence for water treatment operators.",
+    "Practical guidance for evaluating, configuring and deploying a FINNOR operating and execution system inside a water treatment company.",
   alternates: {
     canonical: "https://finnorai.com/resources",
   },
   openGraph: {
     title: "FINNOR Field Notes",
     description:
-      "Understand the governed execution chain behind the FINNOR and JARVIS product.",
+      "Understand the company deployment, operating scope and control model behind FINNOR and JARVIS.",
     url: "https://finnorai.com/resources",
     images: [
       {
@@ -26,7 +26,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "FINNOR Field Notes",
     description:
-      "Context, planning, authority, recovery and evidence for water treatment operators.",
+      "Company deployment, operating scope, authority, recovery and evidence for water treatment operators.",
     images: ["https://finnorai.com/og-image.svg"],
   },
 };

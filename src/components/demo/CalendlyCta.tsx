@@ -18,9 +18,9 @@ export function CalendlyCta({ compact = false }: { compact?: boolean }) {
             Book an operating review
           </h3>
           <p className="mt-2 max-w-2xl text-sm font-semibold leading-relaxed text-slate-600">
-            Bring one consequential workflow. We will trace its sources,
-            action contracts, authority line, recovery path and proof of actual
-            outcome in your environment.
+            We will map the broader company deployment, then identify the first
+            operating chain to certify across sources, systems, authority,
+            recovery and evidence.
           </p>
         </div>
         <a

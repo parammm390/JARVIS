@@ -23,6 +23,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { siteConfig } from "@/config/site";
+import { faqItems, operatingAreas } from "@/content/commercial-truth";
 import { FinnorMark } from "@/components/rebuild/FinnorMark";
 import FinnorNavigation from "@/components/rebuild/FinnorNavigation";
 
@@ -45,32 +46,8 @@ type ActionLinkProps = {
   external?: boolean;
 };
 
-const surfaceItems = [
-  {
-    name: "Customers",
-    verb: "Keep the promise attached",
-    copy: "Identity, conversation, history and the next commitment stay connected to the same work root.",
-    accent: "electric",
-  },
-  {
-    name: "Work",
-    verb: "Turn intent into a job",
-    copy: "Requests become bounded work with owners, dependencies, status and a clear definition of done.",
-    accent: "blue",
-  },
-  {
-    name: "Schedule",
-    verb: "Make the day executable",
-    copy: "Availability, route, technician and customer timing are planned together instead of reconciled later.",
-    accent: "violet",
-  },
-  {
-    name: "Money",
-    verb: "Close the commercial loop",
-    copy: "Quotes, invoices, payments and collections remain downstream of the work and its authority boundary.",
-    accent: "orange",
-  },
-] as const;
+const surfaceItems = operatingAreas;
+const primarySurfaceItems = surfaceItems.filter((item) => ["Customers", "Work", "Schedule / dispatch", "Money"].includes(item.name));
 
 const productTrace = [
   ["Context", "Customer, work, schedule, equipment and policy resolved", "grounded"],
@@ -192,76 +169,55 @@ const flowStages = [
 
 const deliverableGroups = [
   {
-    title: "Operating surfaces",
-    copy: "The business objects that need to agree for a customer promise to be real.",
+    title: "Review and mapping",
+    copy: "The company-specific operating picture that has to be understood before anything is activated.",
     items: [
-      "Customer / CRM and communication",
-      "Quotes and proposals",
-      "Scheduling",
-      "Dispatch",
-      "Work orders",
-      "Field / service",
-      "Inventory",
-      "Invoices, payments and collections",
+      "Operating review",
+      "Workflow mapping",
+      "Source and system mapping",
+      "Locations, roles and operating surfaces",
+      "First certified operating chain",
     ],
   },
   {
-    title: "Governed execution",
-    copy: "The control layer that decides what can happen and proves what did.",
-    items: ["Agents", "Policy and approval control", "Recovery", "Evidence"],
+    title: "Configuration and build",
+    copy: "The operating and execution layer configured around the company rather than a generic feature tier.",
+    items: [
+      "Configured integrations",
+      "Policy, authority and approvals",
+      "Efficient, Balanced or Frontier intelligence policy",
+      "Text or voice channel scope",
+      "Agent scopes and workspaces",
+    ],
   },
   {
-    title: "Deployment support",
-    copy: "The work required to make one consequential workflow trustworthy in production.",
-    items: ["Onboarding", "Configured integrations", "Deployment support"],
+    title: "Activation and operation",
+    copy: "The work required to make the configured system trustworthy in production and support it after launch.",
+    items: [
+      "Recovery and failure-path testing",
+      "Team onboarding",
+      "Production activation",
+      "Operating support",
+      "Evidence-led expansion",
+    ],
   },
 ] as const;
 
-const faqItems = [
+const deploymentPhases = [
   {
-    question: "What is FINNOR?",
-    answer:
-      "FINNOR is the governed execution layer for water-treatment companies. It turns an instruction into grounded context, an executable plan, an authority decision, controlled action, recovery when reality resists and evidence of the actual result.",
+    label: "01 / Map the company",
+    title: "Understand how work really moves.",
+    copy: "The operating review maps workflows, source records, systems, locations, roles, handoffs and the surfaces that must agree.",
   },
   {
-    question: "What is JARVIS?",
-    answer:
-      "JARVIS is FINNOR’s command surface. It is where operators can state an outcome, inspect the context and proposed plan, see what policy allows, authorize held actions and follow the work through execution and evidence. It is not a chatbot pasted over disconnected software.",
+    label: "02 / Configure and certify",
+    title: "Build the company boundary.",
+    copy: "Integrations, workspaces, authority, approvals, AI policy, channels and agent scope are configured. The first operating chain is tested through normal and failure paths.",
   },
   {
-    question: "Is FINNOR a CRM, ERP or field-service replacement?",
-    answer:
-      "No. FINNOR coordinates the operating state across the configured records and systems that a water-treatment company already relies on. The exact source of truth for customers, work, schedule, inventory and money is defined during deployment; FINNOR does not invent an integration list or assume every system is authoritative.",
-  },
-  {
-    question: "How does an instruction become a real action?",
-    answer:
-      "The execution chain is Instruction → Context → Plan → Authority → Execution → Recovery → Evidence. The instruction is fixed to a work trace, relevant records are resolved, a causal plan is proposed, policy and approval are checked, typed actions run, failures remain recoverable and the final state is reconciled against evidence.",
-  },
-  {
-    question: "Can FINNOR contact customers or move money automatically?",
-    answer:
-      "Only when the deployment’s authority policy permits the specific action. Customer contact, invoices, payments and collections can cross a confirmation boundary. Missing authority resolves to a hold or escalation; the interface does not turn a prompt into unlimited permission.",
-  },
-  {
-    question: "What happens when a connected system fails?",
-    answer:
-      "A tool acknowledgement is not treated as success. FINNOR preserves the original instruction and recovery state while it handles retry, backoff, pause, escalation, dead-letter or supported compensation. The workflow stays open until the actual operating state is known.",
-  },
-  {
-    question: "How does FINNOR handle unknown or conflicting information?",
-    answer:
-      "Unknown information remains unknown, and contradictions are surfaced as part of context and planning. The system can hold the work for an operator or require a source decision rather than quietly guessing and turning that guess into a customer or financial action.",
-  },
-  {
-    question: "What does the evidence record contain?",
-    answer:
-      "A decision receipt can connect the objective, source records, proposed plan, policy version, risk, approval, tool outcomes, recovery state, exact identifiers and actual result. The important test is whether the source systems show the expected change—not whether a message says ‘done.’",
-  },
-  {
-    question: "How is pricing determined?",
-    answer:
-      "FINNOR does not publish a numeric price because deployment scope changes with the workflow, source data, authority boundaries, configured systems, recovery requirements, onboarding and support. Contact us for a scoped deployment conversation and a quote tied to the operation you want to govern.",
+    label: "03 / Activate and expand",
+    title: "Move into production with evidence.",
+    copy: "Teams are onboarded, production is activated and the operating/support model begins. Expansion follows proof from the first certified chain.",
   },
 ] as const;
 
@@ -332,7 +288,7 @@ function MarketingFooter() {
       <div className={styles.footerInner}>
         <div className={styles.footerLead}>
           <Link href="/" className={styles.footerWordmark} aria-label="FINNOR home"><FinnorMark /><span>FINNOR</span></Link>
-          <p>Governed execution for water-treatment companies.<br />The work behind clean water, made inspectable.</p>
+          <p>Customized AI operating and execution systems.<br />Built around the work behind clean water.</p>
         </div>
         <div className={styles.footerColumns}>
           <div>
@@ -362,7 +318,7 @@ function MarketingFooter() {
         </div>
         <div className={styles.footerBase}>
           <span>© {new Date().getFullYear()} FINNOR</span>
-          <span>One operating chain from instruction to verified change.</span>
+          <span>Company-specific configuration. Governed execution. Verifiable work.</span>
         </div>
       </div>
     </footer>
@@ -377,14 +333,14 @@ function ProductPage() {
         <div className={styles.heroGlow} aria-hidden="true" />
         <div className={styles.heroInner}>
           <div className={styles.heroCopy}>
-            <Eyebrow tone="dark">The governed execution layer</Eyebrow>
-            <h1>Run the outcome.<br /><em>Not the software.</em></h1>
-            <p>FINNOR is built for water-treatment companies whose customer promise crosses people, field work, schedules, inventory, invoices and policy. JARVIS is the command surface that assembles the context, plans the change, checks authority, activates the work and leaves evidence.</p>
+            <Eyebrow tone="dark">The company operating and execution layer</Eyebrow>
+            <h1>Built around how<br /><em>your company operates.</em></h1>
+            <p>FINNOR is configured across the customers, work, schedule and dispatch, inventory, quotes and proposals, communications, money, research and agents your water-treatment company chooses to include. JARVIS is the command and work surface where your team directs that operation.</p>
             <div className={styles.heroActions}>
               <ActionLink href={siteConfig.calendlyLink} external>Plan your deployment</ActionLink>
               <ActionLink href="/how-it-works" variant="secondary">See how it works</ActionLink>
             </div>
-            <div className={styles.heroNote}><span />One instruction can stay attached to the whole operating chain.</div>
+            <div className={styles.heroNote}><span />Not a generic subscription. A company-specific operating deployment.</div>
           </div>
           <div className={styles.heroVisual}><CommandSurface /></div>
         </div>
@@ -394,12 +350,12 @@ function ProductPage() {
 
       <section className={`${styles.section} ${styles.productSection}`}>
         <div className={styles.sectionHeader} data-reveal>
-          <Eyebrow>The operating model</Eyebrow>
-          <h2>One command surface.<br /><span>Four surfaces of work.</span></h2>
-          <p>JARVIS keeps the customer promise, the work, the day and the commercial outcome in one causal context. FINNOR changes the state of the operation, not just the words around it.</p>
+          <Eyebrow>What the company is buying</Eyebrow>
+          <h2>One operating layer.<br /><span>Configured across the company.</span></h2>
+          <p>JARVIS gives the team one command and work surface. FINNOR coordinates the operating areas behind it, with the exact records, systems and boundaries defined during deployment.</p>
         </div>
         <div className={styles.surfaceRail} data-reveal>
-          {surfaceItems.map((item, index) => (
+          {primarySurfaceItems.map((item, index) => (
             <article className={styles.surfaceRailItem} data-accent={item.accent} key={item.name}>
               <span className={styles.surfaceRailIndex}>0{index + 1}</span>
               <h3>{item.name}</h3>
@@ -413,9 +369,9 @@ function ProductPage() {
       <section className={`${styles.section} ${styles.productTraceSection}`}>
         <div className={styles.splitSection}>
           <div className={styles.splitIntro} data-reveal>
-            <Eyebrow>What FINNOR actually does</Eyebrow>
-            <h2>Context becomes a plan before it becomes a click.</h2>
-            <p>Each action remains tied to the records, policy and authority that make it legitimate. JARVIS is the place to understand the change before you authorize it.</p>
+            <Eyebrow>Company-specific configuration</Eyebrow>
+            <h2>Your workflows, systems and authority define the deployment.</h2>
+            <p>Locations, roles, operating surfaces, integrations, AI policy, text or voice channels, agent scope and workspace requirements can differ by company. The execution chain is how FINNOR keeps that configuration accountable after activation.</p>
             <Link className={styles.textLink} href="/trust-safety">Read the authority model <ArrowRight size={15} /></Link>
           </div>
           <div className={styles.tracePanel} data-reveal>
@@ -437,7 +393,7 @@ function ProductPage() {
       <section className={styles.statementBand} data-reveal>
         <div className={styles.statementBandInner}>
           <Sparkles size={23} aria-hidden="true" />
-          <p>JARVIS is the command surface.<br /><strong>FINNOR is the governed execution layer.</strong></p>
+          <p>JARVIS is the command and work surface.<br /><strong>FINNOR is the operating and execution layer.</strong></p>
           <Link href="/capabilities">Explore the capabilities <ArrowUpRight size={15} /></Link>
         </div>
       </section>
@@ -445,11 +401,11 @@ function ProductPage() {
       <section className={`${styles.section} ${styles.productCtaSection}`} data-reveal>
         <div className={styles.ctaPanel}>
           <div>
-            <Eyebrow tone="dark">Bring the consequential workflow</Eyebrow>
-            <h2>Make the chain visible before you widen it.</h2>
+            <Eyebrow tone="dark">Map the company deployment</Eyebrow>
+            <h2>Certify the first chain. Then expand with evidence.</h2>
           </div>
           <div>
-            <p>Start with one customer promise that keeps crossing desks. We will trace its sources, actions, authority boundary, recovery path and proof of outcome.</p>
+            <p>The first workflow is the first certified operating chain inside a broader company deployment; it proves the deployment model without defining the product boundary. We map the broader company, then certify that chain across sources, actions, authority, recovery and evidence.</p>
             <ActionLink href={siteConfig.calendlyLink} external>Plan your deployment</ActionLink>
           </div>
         </div>
@@ -500,9 +456,9 @@ function CapabilitiesPage() {
         <div className={styles.paperGrid} aria-hidden="true" />
         <div className={styles.heroInner}>
           <div className={styles.heroCopy}>
-            <Eyebrow>Capabilities follow the operating chain</Eyebrow>
-            <h1>Make the whole operation <em>executable.</em></h1>
-            <p>FINNOR gives water-treatment companies a governed way to move from instruction to operating change. Each capability exists to keep the next decision grounded, authorized and recoverable.</p>
+            <Eyebrow>Capabilities follow the company</Eyebrow>
+            <h1>Coordinate the operation.<br /><em>Control the execution.</em></h1>
+            <p>FINNOR combines company operating surfaces with the controls required to act across them. What is activated depends on the workflows, systems, locations, roles and authority configured for the deployment.</p>
             <div className={styles.heroActions}>
               <ActionLink href="/how-it-works">Walk the execution chain</ActionLink>
               <ActionLink href="/pricing" variant="secondary">Scope a deployment</ActionLink>
@@ -518,21 +474,19 @@ function CapabilitiesPage() {
         </div>
       </section>
 
-      <MarketingLiveSystem route="capabilities" />
-
       <section className={`${styles.section} ${styles.capabilitiesSection}`}>
         <div className={styles.sectionHeader} data-reveal>
-          <Eyebrow>Where the control lives</Eyebrow>
-          <h2>Six capabilities.<br /><span>One accountable chain.</span></h2>
-          <p>Open a capability to see the operational promise and the proof that makes it more than an interface feature.</p>
+          <Eyebrow>The control layer behind the work</Eyebrow>
+          <h2>Six control functions.<br /><span>Applied across the configured scope.</span></h2>
+          <p>Grounding, planning, authority, execution, recovery and evidence explain how FINNOR acts responsibly. They support the product; they are not the whole product story.</p>
         </div>
         <CapabilityAccordion />
       </section>
 
       <section className={`${styles.section} ${styles.surfaceMatrixSection}`}>
         <div className={styles.matrixHeader} data-reveal>
-          <div><Eyebrow>The operating surfaces</Eyebrow><h2>Coordination stays attached to the thing that matters.</h2></div>
-          <p>Customers, Work, Schedule and Money are not isolated modules in the execution model. They are different views of the same promise and its outcome.</p>
+          <div><Eyebrow>The operating scope</Eyebrow><h2>FINNOR coordinates the company where it is configured to operate.</h2></div>
+          <p>Each area can connect native records and configured systems. Activation depends on the company’s sources, integration health, roles, policy and production scope.</p>
         </div>
         <div className={styles.surfaceMatrix} data-reveal>
           <div className={styles.surfaceMatrixHead}><span>Surface</span><span>FINNOR keeps aligned</span><span>Operator can inspect</span></div>
@@ -546,8 +500,8 @@ function CapabilitiesPage() {
         </div>
       </section>
 
-      <section className={styles.marqueeSection} aria-label="Ways to state an instruction" data-reveal>
-        <div className={styles.marqueeIntro}><span>One chain, many entry points</span><p>Typed instructions, voice, webhooks and workers enter the same governed model.</p></div>
+      <section className={styles.marqueeSection} aria-label="Configured operating inputs" data-reveal>
+        <div className={styles.marqueeIntro}><span>Channel scope is a deployment choice</span><p>Typed instructions, text, voice, webhooks and workers can enter the same operating model where configured.</p></div>
         <div className={styles.marquee}>
           <div className={styles.marqueeTrack}>
             {["Typed instruction", "Voice", "Webhook", "Worker", "Context", "Policy", "Recovery", "Evidence", "Typed instruction", "Voice", "Webhook", "Worker"].map((item, index) => <span key={`${item}-${index}`}>{item}<i /></span>)}
@@ -649,24 +603,29 @@ function HowItWorksPage() {
         <div className={styles.heroGlow} aria-hidden="true" />
         <div className={styles.heroInner}>
           <div className={styles.heroCopy}>
-            <Eyebrow tone="dark">The execution chain</Eyebrow>
-            <h1>Instruction <span>→</span> evidence.<br /><em>Authority in the middle.</em></h1>
-            <p>FINNOR does not jump from a prompt to a side effect. It moves through a visible chain that keeps context, policy, recovery and proof attached to the work.</p>
-            <div className={styles.heroActions}><ActionLink href="#flow-lab">Run the chain</ActionLink><ActionLink href="/trust-safety" variant="secondary">See the control model</ActionLink></div>
+            <Eyebrow tone="dark">From operating review to production</Eyebrow>
+            <h1>Map the company.<br /><em>Then make it executable.</em></h1>
+            <p>A FINNOR deployment starts by understanding how the business actually runs. The team maps workflows and sources, configures systems and authority, certifies the first operating chain, activates production and supports expansion.</p>
+            <div className={styles.heroActions}><ActionLink href="#deployment-path">See the deployment path</ActionLink><ActionLink href="#flow-lab" variant="secondary">Inspect live execution</ActionLink></div>
           </div>
           <div className={styles.heroStageLine} data-reveal>
-            {flowStages.map((stage, index) => <span key={stage.key} data-accent={stage.color}><i>{String(index + 1).padStart(2, "0")}</i>{stage.title}</span>)}
+            {deploymentPhases.map((stage, index) => <span key={stage.label} data-accent={["electric", "orange", "violet"][index]}><i>{String(index + 1).padStart(2, "0")}</i>{stage.label.split(" / ")[1]}</span>)}
           </div>
         </div>
       </section>
 
-      <MarketingLiveSystem route="how-it-works" />
+      <section className={`${styles.section} ${styles.pricingStepsSection}`} id="deployment-path">
+        <div className={styles.pricingStepsHeader} data-reveal><Eyebrow>The deployment path</Eyebrow><h2>The operating system is configured, tested and activated with the company.</h2><p>The first certified chain proves the implementation boundary inside a broader deployment. It is the starting point for expansion, not the entire FINNOR product.</p></div>
+        <div className={styles.pricingSteps} data-reveal>
+          {deploymentPhases.map((phase) => <article key={phase.label}><span>{phase.label}</span><h3>{phase.title}</h3><p>{phase.copy}</p></article>)}
+        </div>
+      </section>
 
       <section className={`${styles.section} ${styles.howSection}`} id="flow-lab">
         <div className={styles.sectionHeader} data-reveal>
-          <Eyebrow>Follow one consequential instruction</Eyebrow>
-          <h2>Every stage earns the next one.</h2>
-          <p>The live trace is illustrative, but the mechanics are the product truth: facts before plans, authority before action, actual state before completion.</p>
+          <Eyebrow>How live work runs after activation</Eyebrow>
+          <h2>The execution chain is proof of how FINNOR operates.</h2>
+          <p>The live trace is illustrative, but the mechanics are the product truth: facts before plans, authority before action, recovery when systems disagree and actual state before completion.</p>
         </div>
         <FlowLab />
       </section>
@@ -683,7 +642,7 @@ function HowItWorksPage() {
 
       <section className={`${styles.section} ${styles.howCtaSection}`} data-reveal>
         <div className={styles.darkCta}>
-          <div><Eyebrow tone="dark">One workflow is enough to start</Eyebrow><h2>Trace the work before you automate more of it.</h2></div>
+          <div><Eyebrow tone="dark">The first certified operating chain</Eyebrow><h2>Prove the boundary, activate production, then expand.</h2></div>
           <ActionLink href={siteConfig.calendlyLink} external>Plan your deployment</ActionLink>
         </div>
       </section>
@@ -694,14 +653,14 @@ function HowItWorksPage() {
 function DeploymentScopeBoard() {
   return (
     <div className={styles.scopeBoard} data-reveal>
-      <div className={styles.scopeBoardHeader}><span>Deployment scope</span><b>QUOTE AFTER OPERATING REVIEW</b></div>
+      <div className={styles.scopeBoardHeader}><span>Production deployment</span><b>STARTING AROUND $30,000</b></div>
       <div className={styles.scopeBoardBody}>
-        <div className={styles.scopeLine}><span>Outcome</span><strong>One consequential workflow, end to end</strong></div>
-        <div className={styles.scopeLine}><span>Authority</span><strong>What may run, what must wait, what escalates</strong></div>
-        <div className={styles.scopeLine}><span>Evidence</span><strong>Which source states prove the work is complete</strong></div>
-        <div className={styles.scopeLine}><span>Support</span><strong>Onboarding, configured integrations and deployment guidance</strong></div>
+        <div className={styles.scopeLine}><span>Coverage</span><strong>Choose the workflows and operating areas FINNOR should coordinate</strong></div>
+        <div className={styles.scopeLine}><span>Interaction</span><strong>Text-native or text + voice-native, with bounded agent channels where needed</strong></div>
+        <div className={styles.scopeLine}><span>Intelligence</span><strong>Efficient, Balanced or Frontier reasoning policy—without buying model names</strong></div>
+        <div className={styles.scopeLine}><span>Delivery</span><strong>Integrations, locations, authority, workspaces, reliability and support shape the quote</strong></div>
       </div>
-      <div className={styles.scopeBoardFooter}><ShieldCheck size={14} /><span>Pricing follows the boundary you want to govern.</span></div>
+      <div className={styles.scopeBoardFooter}><ShieldCheck size={14} /><span>Final pricing follows implementation scope and ongoing operating support.</span></div>
     </div>
   );
 }
@@ -713,11 +672,11 @@ function PricingPage() {
         <div className={styles.paperGrid} aria-hidden="true" />
         <div className={styles.heroInner}>
           <div className={styles.heroCopy}>
-            <Eyebrow>Scoped deployment pricing</Eyebrow>
-            <h1>Price the scope of the operation.<br /><em>Not a seat count.</em></h1>
-            <p>FINNOR is deployed around a real water-treatment workflow, its source records, authority boundaries, recovery requirements and proof of outcome. Contact us for pricing tied to the chain you want to make executable.</p>
+            <Eyebrow>Production deployments start around $30,000</Eyebrow>
+            <h1>A company implementation.<br /><em>Not another subscription.</em></h1>
+            <p>FINNOR is configured around how the company operates. A focused production implementation commonly sits in the $30,000–$50,000 range. Voice, stronger intelligence, broader operational coverage, connected workflows, integrations, locations, approval layers, agents, custom workspaces and support requirements shape the final quote.</p>
             <div className={styles.heroActions}>
-              <ActionLink href={`mailto:${siteConfig.contactEmail}?subject=FINNOR deployment pricing`}>Contact for pricing</ActionLink>
+              <ActionLink href={`mailto:${siteConfig.contactEmail}?subject=FINNOR deployment pricing`}>Scope the deployment</ActionLink>
               <ActionLink href={siteConfig.calendlyLink} external variant="secondary">Plan your deployment</ActionLink>
             </div>
           </div>
@@ -730,8 +689,8 @@ function PricingPage() {
       <section className={`${styles.section} ${styles.pricingSection}`}>
         <div className={styles.sectionHeader} data-reveal>
           <Eyebrow>What a deployment includes</Eyebrow>
-          <h2>Make the deliverables explicit before the quote.</h2>
-          <p>Pricing follows the work that must become trustworthy. The scope conversation names the operating surfaces, control layer and support required for the specific company.</p>
+          <h2>The implementation work is part of the product.</h2>
+          <p>Pricing follows the work required to make FINNOR trustworthy in a specific company. The configured boundary shows what is included, what can be excluded, and which choices add engineering, policy, testing or support work.</p>
         </div>
         <div className={styles.deliverableGroups} data-reveal>
           {deliverableGroups.map((group) => (
@@ -747,18 +706,18 @@ function PricingPage() {
       </section>
 
       <section className={`${styles.section} ${styles.pricingStepsSection}`}>
-        <div className={styles.pricingStepsHeader} data-reveal><Eyebrow>How the scope gets set</Eyebrow><h2>The quote follows decisions, not vague usage.</h2></div>
+        <div className={styles.pricingStepsHeader} data-reveal><Eyebrow>How the scope gets set</Eyebrow><h2>Two companies can receive different quotes for honest reasons.</h2><p>A focused text deployment and a multi-location voice deployment with complex reasoning, layered approvals, several agents and custom workspaces are materially different implementations.</p></div>
         <div className={styles.pricingSteps} data-reveal>
-          <article><span>Operating review</span><h3>Choose the workflow.</h3><p>We trace the outcome, current failure mode, work root and business surfaces involved.</p></article>
-          <article><span>Boundary design</span><h3>Define authority and proof.</h3><p>We identify what may run, where approval enters, how failure recovers and which source states prove completion.</p></article>
-          <article><span>Deployment scope</span><h3>Support the change.</h3><p>Onboarding, configured integrations and deployment support are included in the scope that makes the chain production-ready.</p></article>
+          <article><span>Operating review</span><h3>Map the company.</h3><p>We trace workflows, systems, sources, roles, locations, handoffs and the first operating chain to certify.</p></article>
+          <article><span>Configuration</span><h3>Build and test the boundary.</h3><p>We configure integrations, authority, approvals, AI policy, channels, agents and workspaces, then exercise recovery.</p></article>
+          <article><span>Activation</span><h3>Operate the deployment.</h3><p>Onboarding, production activation and the ongoing operating/support requirements become part of the final scope.</p></article>
         </div>
       </section>
 
       <section className={`${styles.section} ${styles.pricingCtaSection}`} data-reveal>
         <div className={styles.outlineCta}>
-          <div><Eyebrow>Contact for pricing</Eyebrow><h2>Bring one workflow. Leave with a boundary you can defend.</h2></div>
-          <ActionLink href={`mailto:${siteConfig.contactEmail}?subject=FINNOR deployment pricing`}>Contact for pricing</ActionLink>
+          <div><Eyebrow>Starting around $30,000</Eyebrow><h2>Map the company. Price the implementation honestly.</h2></div>
+          <ActionLink href={`mailto:${siteConfig.contactEmail}?subject=FINNOR deployment pricing`}>Scope the deployment</ActionLink>
         </div>
       </section>
     </>
@@ -799,9 +758,9 @@ function FaqPage() {
         <div className={styles.paperGrid} aria-hidden="true" />
         <div className={styles.heroInner}>
           <div className={styles.heroCopy}>
-            <Eyebrow>Questions worth answering before activation</Eyebrow>
+            <Eyebrow>Questions worth answering before a company deployment</Eyebrow>
             <h1>Direct answers for the work behind the interface.</h1>
-            <p>FINNOR is designed for consequential operating work. These answers cover the product truth, authority model, recovery behavior, evidence and deployment scope that matter before a company widens automation.</p>
+            <p>These answers cover the product category, company-specific configuration, text and voice scope, intelligence policies, authority, recovery, implementation work and production pricing.</p>
             <div className={styles.heroActions}><ActionLink href="/trust-safety">Read trust &amp; safety</ActionLink><ActionLink href={siteConfig.calendlyLink} external variant="secondary">Plan your deployment</ActionLink></div>
           </div>
           <div className={styles.faqHeroAside} data-reveal>
@@ -816,7 +775,7 @@ function FaqPage() {
 
       <section className={`${styles.section} ${styles.faqSection}`}>
         <div className={styles.faqLayout}>
-          <div className={styles.faqIntro} data-reveal><Eyebrow>FINNOR, plainly</Eyebrow><h2>Ask what happens when the work gets real.</h2><p>Use the answers below as a starting point for a deployment conversation. The exact source records, action contracts and policies are scoped with each company.</p><Link className={styles.textLink} href="/resources">Read the field notes <ArrowRight size={15} /></Link></div>
+          <div className={styles.faqIntro} data-reveal><Eyebrow>FINNOR, plainly</Eyebrow><h2>Understand what the company is actually buying.</h2><p>The exact workflows, source records, systems, locations, roles, channels, agent scopes, workspaces and policies are defined with each company.</p><Link className={styles.textLink} href="/resources">Read the field notes <ArrowRight size={15} /></Link></div>
           <FaqList />
         </div>
       </section>

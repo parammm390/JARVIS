@@ -277,7 +277,7 @@ export function DemoSetupForm({
 
           <fieldset className="space-y-4 rounded-2xl border border-teal-100 bg-teal-50/40 p-4">
             <legend className="px-1 text-[10px] font-black uppercase tracking-[0.2em] text-teal-700">
-              Pricing setup, so FINNOR gives a real range
+              Demo quote assumptions for the customer workflow
             </legend>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -503,9 +503,9 @@ export function DemoSetupForm({
             <Info className="h-3.5 w-3.5" />
             Operationally scoped workflow
             <span className="pointer-events-none absolute left-0 top-full z-20 mt-3 hidden w-[min(320px,80vw)] rounded-2xl border border-slate-200 bg-white p-4 text-left text-xs normal-case tracking-normal text-slate-600 shadow-2xl group-hover:block group-focus:block">
-              Finnor helps book the next step or route urgent service context.
-              Repair decisions, quotes, ETAs, and customer promises remain with
-              your human team.
+              This optional channel structures an intake handoff inside JARVIS.
+              Repair decisions, final quotes, ETAs, and customer promises remain
+              with your human team unless a production policy explicitly governs them.
             </span>
           </div>
 

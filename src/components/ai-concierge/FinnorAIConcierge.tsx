@@ -16,7 +16,7 @@ import { siteConfig } from "@/config/site";
 import { cn } from "@/lib/utils";
 
 type ChatRole = "assistant" | "user";
-type ConciergePlan = "Core" | "Growth" | "Custom" | "Not enough detail";
+type ConciergePlan = "First certified chain" | "Company deployment" | "Multi-location deployment" | "Not enough detail";
 
 type CollectedFields = {
   name: string;
@@ -39,7 +39,7 @@ type LeadSummary = {
   role: string;
   mainPain: string;
   suggestedPlan: ConciergePlan;
-  nextStep: "Book a JARVIS Demo";
+  nextStep: "Book an operating review";
 };
 
 type ConciergeApiReply = {
@@ -47,7 +47,7 @@ type ConciergeApiReply = {
   suggestedPlan?: ConciergePlan;
   leadSummary?: LeadSummary;
   cta?: {
-    label: "Book a JARVIS Demo";
+    label: "Book an operating review";
     url: string;
   };
 };
@@ -62,9 +62,9 @@ type ChatMessage = {
 
 const quickActions = [
   "What does Finnor do?",
-  "Compare workflows",
+  "What gets configured?",
   "Check my fit",
-  "Book a JARVIS Demo",
+  "Book an operating review",
 ];
 
 const THINKING_DELAY_MS = 1000;
@@ -74,7 +74,7 @@ const initialMessages: ChatMessage[] = [
     id: "assistant-initial",
     role: "assistant",
     content:
-      "FINNOR runs on JARVIS — it drafts a plan from your instruction and holds it for your approval before anything executes. For water treatment dealers, water companies, and water-treatment operations teams, that means unworked leads, inbound inquiries, overflow, and slow web leads become drafted water tests, service appointments, or urgent routes, never booked without your yes. I can explain the system, compare workflows, or check your fit.",
+      "FINNOR is a customized AI operating and execution system for water treatment companies. It is configured around the company’s workflows, systems, roles and authority; JARVIS is the command and work surface. I can explain the system, show what gets configured or help scope an operating review.",
   },
 ];
 
@@ -224,9 +224,9 @@ export function FinnorAIConcierge() {
           id: createMessageId("assistant"),
           role: "assistant",
           content:
-            "I'm having trouble reaching the concierge model. You can still apply for the JARVIS deployment and bring the booking or lead recovery workflow you want fixed.",
+            "I'm having trouble reaching the concierge model. You can still book an operating review to map the company deployment and its first certified operating chain.",
           cta: {
-            label: "Book a JARVIS Demo",
+            label: "Book an operating review",
             url: siteConfig.calendlyLink,
           },
         },
@@ -253,7 +253,7 @@ export function FinnorAIConcierge() {
       await waitForThinkingDelay();
       addAssistantMessage({
         content:
-          "FINNOR runs on JARVIS: every unworked lead, inbound inquiry, overflow lead, or slow web lead becomes a drafted water test, service appointment, or urgent route — held for your approval before anything books. Nothing executes without your yes.",
+          "FINNOR is the operating and execution layer configured across the parts of a water treatment company that need to work together. JARVIS is where the team understands, directs, approves and inspects that work.",
       });
       setActiveField(null);
       setIsFitFlow(false);
@@ -261,11 +261,11 @@ export function FinnorAIConcierge() {
       return;
     }
 
-    if (action === "Compare workflows") {
+    if (action === "What gets configured?") {
       await waitForThinkingDelay();
       addAssistantMessage({
         content:
-          "Most teams start with one workflow: lead follow-up, inbound coverage, overflow support, web/form speed-to-lead, or urgent water-treatment routing. The pilot call scopes the right workflow, coverage window, booking questions, urgent routes, and human ownership boundaries.",
+          "A deployment can configure workflows, sources, systems, locations, roles, integrations, authority, approvals, AI policy, text or voice channels, agent scope, JARVIS workspaces, recovery, production activation and ongoing support. The first workflow is the first certified chain inside that broader company scope.",
       });
       setActiveField(null);
       setIsFitFlow(false);
@@ -281,7 +281,7 @@ export function FinnorAIConcierge() {
       addAssistantMessage({
         content:
           nextQuestion?.question ||
-          "I have the basics. The next move is a pilot review so we can map the actual booking or urgent-route path.",
+          "I have the basics. The next move is an operating review so we can map the company and define the first certified chain.",
         leadSummary: nextQuestion
           ? undefined
           : buildLeadSummary(applySuggestedPlan(collectedFields)),
@@ -291,7 +291,7 @@ export function FinnorAIConcierge() {
       return;
     }
 
-    if (action === "Book a JARVIS Demo") {
+    if (action === "Book an operating review") {
       await waitForThinkingDelay();
       addAssistantMessage(buildBookReply());
       setActiveField(null);
@@ -368,7 +368,7 @@ export function FinnorAIConcierge() {
                       <div className="mt-1 inline-flex max-w-full items-center gap-2 rounded-full border border-emerald-300/20 bg-emerald-300/10 px-2.5 py-1 text-[11px] font-bold text-emerald-100">
                         <span className="h-1.5 w-1.5 rounded-full bg-emerald-300 shadow-[0_0_12px_rgba(110,231,183,0.9)]" />
                         <span className="truncate">
-                          Online · Booking workflow assistant
+                          Online · Deployment scope assistant
                         </span>
                       </div>
                     </div>
@@ -388,7 +388,7 @@ export function FinnorAIConcierge() {
                 <div className="mt-4 flex items-center justify-between gap-3">
                   <Waveform />
                   <span className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-100/70">
-                    Booking workflow fit
+                    Operating deployment fit
                   </span>
                 </div>
               </header>
@@ -434,7 +434,7 @@ export function FinnorAIConcierge() {
                     onKeyDown={handleKeyDown}
                     rows={1}
                     maxLength={700}
-                    placeholder="Ask about fit or workflows..."
+                    placeholder="Ask about the product or deployment..."
                     className="max-h-28 min-h-10 flex-1 resize-none bg-transparent px-2 py-2 text-sm font-semibold leading-5 text-white outline-none placeholder:text-slate-400"
                   />
                   <button
@@ -512,12 +512,12 @@ function waitForThinkingDelay() {
 }
 
 const fitQuestions: Record<FitFieldKey, string> = {
-  pain: "What are you trying to fix first: unworked leads, inbound calls, overflow, website leads, slow follow-up, or urgent water-treatment routing?",
+  pain: "Which cross-company outcome is hardest to execute today: customer follow-through, work, schedule, inventory, quotes, communication, money, research or agent coordination?",
   locations: "How many locations do you operate?",
   currentSetup:
-    "How are calls handled today: internal human team, answering service, voicemail, or mixed?",
+    "Which systems and teams currently own that work?",
   desiredSystem:
-    "Do you need call coverage only, or call coverage plus web/form speed-to-lead?",
+    "Should the first scope be text-only, voice-enabled, or decided during the operating review?",
 };
 
 function collectFieldsFromUserText(
@@ -656,30 +656,9 @@ function recommendPlan(fields: CollectedFields): ConciergePlan {
 
   const locationCount = Number(fields.locations.match(/\d+/)?.[0] || 0);
 
-  if (
-    locationCount > 1 ||
-    /\b(crm|outbound|integration|integrations|multi-location|routing|custom|complex|booking|calendar)\b/.test(
-      signal,
-    )
-  ) {
-    return "Custom";
-  }
-
-  if (
-    /\b(web|website|chat|form|follow-up|follow up|callback|lead-follow-up|unworked lead recovery|routing|booking|appointment)\b/.test(
-      signal,
-    )
-  ) {
-    return "Growth";
-  }
-
-  if (
-    /\b(voice only|voice-only|calls?|missed|inbound|after hours|overflow|voicemail)\b/.test(
-      signal,
-    )
-  ) {
-    return "Core";
-  }
+  if (locationCount > 1 || /\b(multi-location|multiple locations|business units|branches)\b/.test(signal)) return "Multi-location deployment";
+  if (/\b(integration|integrations|crm|accounting|inventory|workspace|workspaces|agents?|authority|approvals?|voice|multiple workflows|company-wide)\b/.test(signal)) return "Company deployment";
+  if (fields.pain && fields.currentSetup) return "First certified chain";
 
   return fields.suggestedPlan || "Not enough detail";
 }
@@ -688,16 +667,16 @@ function buildFitRecommendation(fields: CollectedFields) {
   const plan = fields.suggestedPlan;
   const summary = buildLeadSummary(fields);
   const planLine =
-    plan === "Custom"
-      ? "This looks like a custom booking and recovery workflow. Multi-location, client-specific routing, integrations, or more complex booking paths should be scoped first."
-      : plan === "Growth"
-        ? "This looks like call coverage plus web/form speed-to-lead. Calls and web leads both need fast response and a booked next step."
-        : plan === "Core"
-          ? "This looks like lead-follow-up and inbound recovery. The main job is answering quickly and moving the lead toward a booking or urgent route."
+    plan === "Multi-location deployment"
+      ? "This needs a multi-location deployment review so workflows, systems, roles and authority can be separated where the operating model differs."
+      : plan === "Company deployment"
+        ? "This needs a company deployment scope across the operating surfaces, integrations, roles, channels and workspaces involved."
+        : plan === "First certified chain"
+          ? "This is a strong candidate for the first certified operating chain inside a broader company deployment."
           : "I need one more operational detail before I would call the plan.";
 
   return {
-    content: `${planLine} The clean next step is a JARVIS deployment review.`,
+    content: `${planLine} The clean next step is an operating review. Production deployments start around $30,000; final pricing follows implementation and ongoing support scope.`,
     leadSummary: summary,
     cta: workflowReviewCta(),
   };
@@ -706,7 +685,7 @@ function buildFitRecommendation(fields: CollectedFields) {
 function buildBookReply() {
   return {
     content:
-      "Best next step is a JARVIS deployment review. Bring the lead-follow-up, inbound, overflow, web lead, or urgent water-treatment workflow you want fixed.",
+      "Best next step is an operating review. Bring the company workflow that keeps crossing systems and teams; we will map the broader deployment and identify the first chain to certify.",
     cta: workflowReviewCta(),
   };
 }
@@ -718,13 +697,13 @@ function buildLeadSummary(fields: CollectedFields): LeadSummary {
     role: fields.role,
     mainPain: fields.pain,
     suggestedPlan: fields.suggestedPlan,
-    nextStep: "Book a JARVIS Demo",
+    nextStep: "Book an operating review",
   };
 }
 
 function workflowReviewCta() {
   return {
-    label: "Book a JARVIS Demo" as const,
+    label: "Book an operating review" as const,
     url: siteConfig.calendlyLink,
   };
 }
@@ -913,7 +892,7 @@ function LeadSummaryCard({
         <ConciergeCta
           cta={
             cta || {
-              label: "Book a JARVIS Demo",
+              label: "Book an operating review",
               url: siteConfig.calendlyLink,
             }
           }

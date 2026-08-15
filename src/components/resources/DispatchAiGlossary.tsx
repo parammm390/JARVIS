@@ -5,6 +5,11 @@ import { ResourceHero } from "./ResourceHero";
 import styles from "./PublicEditorial.module.css";
 
 const terms = [
+  ["FINNOR", "The customized AI operating and execution layer configured around a water treatment company’s workflows, systems, roles, authority, channels and workspaces."],
+  ["JARVIS", "The command and work surface for a FINNOR deployment. Operators use it to understand, direct, approve, monitor and inspect operating work."],
+  ["Operating surface", "A business area FINNOR coordinates where configured, such as Customers, Work, Schedule, Inventory, Quotes, Communication, Money, Research or Agents."],
+  ["Company deployment", "The mapped, configured, tested and supported FINNOR implementation for a specific company. It can span multiple operating areas even when activation begins with one certified chain."],
+  ["Model route", "A configured policy that selects models or providers by task purpose, channel, latency, cost, reasoning need and availability. It is an internal execution choice, not a model marketplace."],
   ["Instruction trace", "The durable identity that connects the original intent to context retrieval, planning, policy, approval, execution, recovery and the final receipt—regardless of whether the instruction arrived by text, voice, webhook or worker."],
   ["Work root", "The exact operational object a workflow is allowed to change, such as a specific work case, household, appointment, invoice or campaign. Exact roots prevent evidence from drifting across lookalike records."],
   ["Context graph", "The assembled operating picture around a work root: source records, relationships, policies, availability, inventory, price-book data, memory and citations."],
@@ -59,8 +64,8 @@ export function DispatchAiGlossary() {
         aside={<GlossaryInstrument />}
       />
       <section className={styles.content}>
-        <span className={styles.sectionLabel}>From intent to verified change</span>
-        <h2 className={styles.sectionTitle}>The words that make the chain inspectable.</h2>
+        <span className={styles.sectionLabel}>From company deployment to verified work</span>
+        <h2 className={styles.sectionTitle}>The words that make the operating layer understandable.</h2>
         <dl className={styles.termList}>
           {terms.map(([term, definition]) => (
             <div className={styles.term} key={term}><dt>{term}</dt><dd>{definition}</dd></div>

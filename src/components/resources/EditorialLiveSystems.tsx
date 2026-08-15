@@ -37,10 +37,10 @@ export function EditorialMotion() {
 }
 
 const resourceSignals = [
-  { title: "Operating glossary", detail: "Understand work roots, action contracts and decision receipts.", proof: "18 product terms", href: "/resources/dispatch-ai-glossary", icon: BookOpenText },
-  { title: "Deployment checklist", detail: "Make authority, recovery and source truth explicit before activation.", proof: "12 boundary decisions", href: "/resources/pilot-setup-checklist", icon: ClipboardCheck },
-  { title: "Operational drag", detail: "Model the cost of work that waits between disconnected systems.", proof: "live estimator", href: "/resources/missed-call-cost-calculator", icon: Calculator },
-  { title: "Trust model", detail: "Inspect how grounding, policy, recovery and evidence stay together.", proof: "8 control layers", href: "/trust-safety", icon: ShieldCheck },
+  { title: "Operating glossary", detail: "Understand company deployments, operating surfaces and decision receipts.", proof: "product terms", href: "/resources/operating-glossary", icon: BookOpenText },
+  { title: "Deployment checklist", detail: "Make mapping, configuration, recovery, activation and support explicit.", proof: "deployment decisions", href: "/resources/deployment-readiness-checklist", icon: ClipboardCheck },
+  { title: "Operational drag", detail: "Model the cost of work that waits between disconnected systems.", proof: "live estimator", href: "/resources/operational-drag-estimator", icon: Calculator },
+  { title: "Trust model", detail: "Inspect how company configuration, AI policy, authority, recovery and evidence stay together.", proof: "10 control layers", href: "/trust-safety", icon: ShieldCheck },
 ] as const;
 
 export function ResourcesLiveLibrary() {

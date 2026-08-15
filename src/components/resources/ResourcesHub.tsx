@@ -8,17 +8,17 @@ import { ResourcesLiveLibrary } from "./EditorialLiveSystems";
 
 const resources = [
   {
-    href: "/resources/dispatch-ai-glossary",
+    href: "/resources/operating-glossary",
     title: "The FINNOR operating glossary",
     copy: "Plain-language definitions for work roots, action contracts, authority boundaries, receipts, compensation and the context graph.",
   },
   {
-    href: "/resources/pilot-setup-checklist",
-    title: "Governed deployment checklist",
-    copy: "The decisions that must be explicit before one consequential workflow is allowed to run in production.",
+    href: "/resources/deployment-readiness-checklist",
+    title: "Deployment readiness checklist",
+    copy: "The company mapping, configuration, testing, activation and support decisions that must be explicit before production.",
   },
   {
-    href: "/resources/missed-call-cost-calculator",
+    href: "/resources/operational-drag-estimator",
     title: "Operational drag estimator",
     copy: "Model the cost of work that stalls between systems, waits for reconciliation or depends on manual coordination.",
   },
@@ -52,8 +52,8 @@ export function ResourcesHub() {
     <ResourceFrame>
       <ResourceHero
         kicker="FINNOR field notes"
-        title="Understand the operation behind the interface."
-        copy="A practical library for water treatment operators evaluating how FINNOR understands context, forms plans, applies authority, recovers from failure and proves the result."
+        title="Understand the company deployment behind the interface."
+        copy="A practical library for water treatment operators evaluating what FINNOR coordinates, what gets configured, how production is activated and how execution remains governed."
         icon={BookOpenText}
         aside={<OperatingTrace />}
       />
@@ -61,9 +61,9 @@ export function ResourcesHub() {
       <ResourcesLiveLibrary />
 
       <section className={styles.content} data-editorial-reveal>
-        <span className={styles.sectionLabel}>Start with the control model</span>
-        <h2 className={styles.sectionTitle}>The useful questions begin after “what can the AI do?”</h2>
-        <p className={styles.sectionCopy}>Ask what data supported the decision, which contract authorizes the action, where approval enters, how failure recovers and what evidence closes the chain.</p>
+        <span className={styles.sectionLabel}>Start with the company operating model</span>
+        <h2 className={styles.sectionTitle}>The useful questions begin with “how will this fit our company?”</h2>
+        <p className={styles.sectionCopy}>Ask which workflows, sources, systems, roles, channels and workspaces are included—then ask how authority, failure recovery and evidence work inside that scope.</p>
 
         <div className={styles.indexList}>
           {resources.map((resource, index) => (
@@ -78,14 +78,14 @@ export function ResourcesHub() {
 
         <div className={styles.splitStory}>
           <article>
-            <span>Not an answering service</span>
-            <h2>Conversation is only one way intent enters.</h2>
-            <p>FINNOR is not defined by phone coverage, message taking or voice. Typed instructions, voice, webhooks and workers enter the same governed execution chain.</p>
+            <span>Channels follow the deployment</span>
+            <h2>Conversation is an input, not the product.</h2>
+            <p>A deployment can be text-only or voice-enabled. Typed instructions, text, voice, webhooks and workers enter the same configured operating and execution layer.</p>
           </article>
           <article>
-            <span>Not generic automation</span>
-            <h2>The operation stays causal and accountable.</h2>
-            <p>Every step remains tied to source records, policy, approval, tool health, recovery state and an outcome receipt. “Done” is a verified operational state, not a sentence in a chat.</p>
+            <span>The operating layer remains accountable</span>
+            <h2>Execution stays tied to company truth.</h2>
+            <p>Every step remains tied to source records, policy, approval, tool health, recovery state and an outcome receipt. Completion means the configured operating state actually changed.</p>
           </article>
         </div>
       </section>
