@@ -9,7 +9,7 @@ import { type Household360Projection, type InvoiceResource, type WorkCaseProject
 import type { CashCollections } from "../lib/data-core"
 import { useBusinessProjection } from "../lib/business-projections"
 import { businessProjections } from "../lib/projection-definitions"
-import { OperationalSurfaceNav, type HouseholdContext } from "../surfaces/OperationalSurfaceNav"
+import { OperationalSurfaceNav, withOperationalContext, type HouseholdContext } from "../surfaces/OperationalSurfaceNav"
 import { AGE_BANDS, buildAgingSummary, collectionMatchesView, filterCollectionWork, groupCollectionWork, invoiceAmount, invoiceMatchesView, safeBusinessLabel, type AgingBandSummary, type CollectionView, type InvoiceView } from "./cash-pressure-model"
 import "../jarvis-theme.css"
 
@@ -69,15 +69,18 @@ export default function CashPressureSurface() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [invoiceView, setInvoiceView] = useState<InvoiceView>("open")
   const [collectionView, setCollectionView] = useState<CollectionView>("active")
-  const [surfaceQuery] = useState(() => new URLSearchParams(typeof window === "undefined" ? "" : window.location.search))
-  const requestedInvoiceId = surfaceQuery.get("invoiceId")
-  const requestedHouseholdId = surfaceQuery.get("householdId")
+  const [surfaceSearch, setSurfaceSearch] = useState("")
+  const surfaceQuery = useMemo(() => new URLSearchParams(surfaceSearch), [surfaceSearch])
   const invoiceProjection = useBusinessProjection(businessProjections.invoices(), { enabled: Boolean(session) })
   const cashProjection = useBusinessProjection(businessProjections.cashCollections(), { enabled: Boolean(session) })
   const workProjection = useBusinessProjection(businessProjections.workCases(), { enabled: Boolean(session) })
   const invoices = useMemo<InvoiceResource[]>(() => invoiceProjection.data ?? [], [invoiceProjection.data])
   const cash: CashCollections | null = cashProjection.data
   const workCases = useMemo<WorkCaseProjection[]>(() => workProjection.data ?? [], [workProjection.data])
+  const requestedWorkCaseId = surfaceQuery.get("workCaseId")
+  const requestedWorkCase = requestedWorkCaseId ? workCases.find((workCase) => workCase.id === requestedWorkCaseId || workCase.root.id === requestedWorkCaseId) ?? null : null
+  const requestedInvoiceId = surfaceQuery.get("invoiceId") ?? requestedWorkCase?.linkedEntities.find((entity) => entity.entityType === "invoice")?.entityId ?? null
+  const requestedHouseholdId = surfaceQuery.get("householdId") ?? requestedWorkCase?.linkedEntities.find((entity) => entity.entityType === "household")?.entityId ?? null
   const source = authLoading || (session && invoiceProjection.data === null && invoiceProjection.status !== "error")
     ? "loading"
     : !session || (invoiceProjection.error instanceof JarvisApiError && invoiceProjection.error.status === 401)
@@ -115,20 +118,35 @@ export default function CashPressureSurface() {
 
   const selectInvoice = useCallback((invoice: InvoiceResource) => {
     setSelectedId(invoice.id)
-    window.history.replaceState(null, "", `/jarvis/money?invoiceId=${encodeURIComponent(invoice.id)}&householdId=${encodeURIComponent(invoice.householdId)}`)
+    const next = withOperationalContext(`/jarvis/money?invoiceId=${encodeURIComponent(invoice.id)}`, { id: invoice.householdId, label: "" }, requestedWorkCaseId)
+    window.history.replaceState(null, "", next)
+    setSurfaceSearch(new URL(next, window.location.origin).search)
+  }, [requestedWorkCaseId])
+
+  useEffect(() => {
+    const syncSurfaceSearch = () => setSurfaceSearch(window.location.search)
+    syncSurfaceSearch()
+    window.addEventListener("popstate", syncSurfaceSearch)
+    return () => window.removeEventListener("popstate", syncSurfaceSearch)
   }, [])
 
   useEffect(() => {
-    if (selectedId || sortedInvoices.length === 0) return
+    if (sortedInvoices.length === 0) return
+    if (requestedWorkCaseId && workProjection.data === null) return
     const requestedInvoice = requestedInvoiceId ? sortedInvoices.find((invoice) => invoice.id === requestedInvoiceId) : null
     if (requestedInvoice) {
       if (!invoiceMatchesView(requestedInvoice, invoiceView)) setInvoiceView("all")
-      selectInvoice(requestedInvoice)
+      if (selectedId !== requestedInvoice.id) selectInvoice(requestedInvoice)
       return
     }
+    if (requestedWorkCaseId) {
+      setSelectedId(null)
+      return
+    }
+    if (selectedId) return
     const initialInvoice = visibleInvoices[0]
     if (initialInvoice) selectInvoice(initialInvoice)
-  }, [invoiceView, requestedInvoiceId, selectInvoice, selectedId, sortedInvoices, visibleInvoices])
+  }, [invoiceView, requestedInvoiceId, requestedWorkCaseId, selectInvoice, selectedId, sortedInvoices, visibleInvoices, workProjection.data])
 
   useEffect(() => {
     if (!selectedId || visibleInvoices.some((invoice) => invoice.id === selectedId)) return
@@ -138,8 +156,10 @@ export default function CashPressureSurface() {
       return
     }
     setSelectedId(null)
-    window.history.replaceState(null, "", "/jarvis/money")
-  }, [selectInvoice, selectedId, visibleInvoices])
+    const next = withOperationalContext("/jarvis/money", requestedHouseholdId ? { id: requestedHouseholdId, label: "" } : undefined, requestedWorkCaseId)
+    window.history.replaceState(null, "", next)
+    setSurfaceSearch(new URL(next, window.location.origin).search)
+  }, [requestedHouseholdId, requestedWorkCaseId, selectInvoice, selectedId, visibleInvoices])
 
   if (authLoading || !session) {
     return (
@@ -152,7 +172,7 @@ export default function CashPressureSurface() {
 
   return (
     <main className="jarvis-money-shell" data-jarvis-cash-pressure>
-      <OperationalSurfaceNav active="money" context={context} />
+      <OperationalSurfaceNav active="money" context={context} workCaseId={requestedWorkCaseId} />
       <section className="jarvis-money-hero">
         <div><span className="jarvis-money-eyebrow">MONEY · CASH PRESSURE FIELD</span><h1>Where cash is stuck.</h1><p>Due-date and amount truth first. Collections Work shows what JARVIS is doing about it.</p></div>
         <div className="jarvis-money-hero__controls"><span className="jarvis-money-source" data-source-state={source}><span aria-hidden />{source === "live" ? "Source live" : source === "loading" ? "Reading ledger" : "Source unavailable"}</span><button type="button" onClick={() => void load()} aria-label="Refresh cash pressure"><RefreshCw size={15} aria-hidden /></button></div>

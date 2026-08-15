@@ -44,6 +44,17 @@ export const tenantSettings = pgTable("tenant_settings", {
   isDealerZero: boolean("is_dealer_zero").notNull().default(false),
   simulatorEnabled: boolean("simulator_enabled").notNull().default(false),
   trainingMode: boolean("training_mode").notNull().default(false),
+  // Minimal tenant-wide JARVIS presentation controls. This deliberately stays
+  // on the existing tenant settings aggregate rather than creating a second
+  // configuration source or mixing company vocabulary into per-user prefs.
+  workspaceConfig: jsonb("workspace_config").notNull().default({
+    enabledSurfaces: ["home", "work", "customers", "schedule", "money", "agents"],
+    terminology: { home: "Home", work: "Work", customers: "Customers", schedule: "Schedule", money: "Money", agents: "Agents" },
+    voiceEnabled: true,
+    navigationPriority: ["home", "work", "customers", "schedule", "money", "agents"],
+    brand: { accent: "cyan", radius: "soft", mark: "F" },
+    visibility: { policy: true, authority: true },
+  }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

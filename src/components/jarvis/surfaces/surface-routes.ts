@@ -17,8 +17,18 @@ export const SURFACES: Array<{ key: OperationalSurface; label: string; href: str
 export const MOBILE_SURFACES = SURFACES.filter((surface) => surface.key !== "customers" && surface.key !== "agents")
 
 export function withHouseholdContext(href: string, context: HouseholdContext | undefined): string {
-  if (!context) return href
-  return `${href}?householdId=${encodeURIComponent(context.id)}`
+  return withOperationalContext(href, context)
+}
+
+export function withOperationalContext(href: string, context?: HouseholdContext, workCaseId?: string | null): string {
+  if (!context && !workCaseId) return href
+  const [withoutHash, hash] = href.split("#", 2)
+  const [path, query] = withoutHash!.split("?", 2)
+  const params = new URLSearchParams(query ?? "")
+  if (context) params.set("householdId", context.id)
+  if (workCaseId) params.set("workCaseId", workCaseId)
+  const suffix = params.size > 0 ? `?${params.toString()}` : ""
+  return `${path}${suffix}${hash ? `#${hash}` : ""}`
 }
 
 export function withHouseholdId(href: string, householdId: string | null): string {

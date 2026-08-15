@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import Link from "next/link"
 import { useGSAP } from "@gsap/react"
 import gsap from "gsap"
@@ -44,18 +44,23 @@ import type {
   WorkspaceProjection,
   OperationalQueryExecution,
 } from "./contracts"
+import { projectRestingAttention, type RestingAttentionItem } from "./resting-attention"
+import { withOperationalContext } from "../surfaces/surface-routes"
+import { buildWorkspaceInspector, type WorkspaceInspectorItem } from "./workspace-inspector"
+import { WorkspaceSettingsButton, useWorkspaceConfig } from "../WorkspaceConfigProvider"
+import { inspectorFieldVisible, orderedWorkspaceItems } from "../lib/workspace-config"
 
 gsap.registerPlugin(useGSAP)
 
-type InspectorItem = { label: string; value: string; href?: string }
+type InspectorItem = WorkspaceInspectorItem
 
 const NAV = [
-  { href: "/jarvis", label: "Workspace", icon: Sparkles },
-  { href: "/jarvis/work", label: "Work", icon: Wrench },
-  { href: "/jarvis/customers", label: "Customers", icon: UsersRound },
-  { href: "/jarvis/schedule", label: "Schedule", icon: CalendarDays },
-  { href: "/jarvis/money", label: "Money", icon: CircleDollarSign },
-  { href: "/jarvis/agents", label: "Agents", icon: Workflow },
+  { key: "home", href: "/jarvis", icon: Sparkles },
+  { key: "work", href: "/jarvis/work", icon: Wrench },
+  { key: "customers", href: "/jarvis/customers", icon: UsersRound },
+  { key: "schedule", href: "/jarvis/schedule", icon: CalendarDays },
+  { key: "money", href: "/jarvis/money", icon: CircleDollarSign },
+  { key: "agents", href: "/jarvis/agents", icon: Workflow },
 ] as const
 
 const EMPTY_QUERY_EXECUTION: OperationalQueryExecution = {
@@ -129,6 +134,93 @@ function EmptyWorkspace() {
         <span>What is on tomorrow&apos;s schedule?</span>
         <span>Collect the overdue invoices</span>
       </div>
+    </section>
+  )
+}
+
+function attentionInspector(item: RestingAttentionItem): InspectorItem[] {
+  return [
+    { label: "What you are looking at", value: `${item.eyebrow} · ${item.workCase.title}` },
+    { label: "Why now", value: item.reason },
+    { label: "Next permitted action", value: item.nextAction },
+    { label: "Expected change", value: item.expectedChange },
+    { label: "Authority", value: item.authority },
+    { label: "Closing evidence", value: item.evidence },
+    { label: "Supporting sources", value: item.source },
+    { label: "Updated", value: dateTime(item.workCase.updatedAt) },
+    { label: "Durable Work", value: item.workCase.id, href: item.href },
+  ]
+}
+
+function RestingWorkspace({
+  items,
+  loading,
+  error,
+  stale,
+  onRetry,
+  onInspect,
+}: {
+  items: RestingAttentionItem[]
+  loading: boolean
+  error: string | null
+  stale: boolean
+  onRetry: () => void
+  onInspect: (items: InspectorItem[]) => void
+}) {
+  const [selectedId, setSelectedId] = useState<string | null>(items[0]?.workCase.id ?? null)
+  const selected = items.find((item) => item.workCase.id === selectedId) ?? items[0] ?? null
+
+  useEffect(() => {
+    if (!selected) return
+    if (selectedId !== selected.workCase.id) setSelectedId(selected.workCase.id)
+    onInspect(attentionInspector(selected))
+  }, [onInspect, selected, selectedId])
+
+  return (
+    <section className="jarvis-resting-workspace" aria-labelledby="jarvis-attention-title" data-resting-attention-count={items.length}>
+      <header className="jarvis-resting-workspace__header">
+        <div>
+          <span className="jarvis-resting-workspace__eyebrow"><i aria-hidden /> Operational attention</span>
+          <h2 id="jarvis-attention-title">{loading && items.length === 0 ? "Reading what needs attention…" : items.length > 0 ? `${items.length} ${items.length === 1 ? "thing needs" : "things need"} attention now` : "No urgent Work is waiting"}</h2>
+          <p>{items.length > 0 ? "Only the highest-priority conditions from canonical Work are shown here." : "JARVIS found no blocked, failed, approval-bound, overdue-continuation, or employee-assigned Work requiring action."}</p>
+        </div>
+        <div className="jarvis-resting-workspace__truth">
+          <CheckCircle2 size={14} aria-hidden />
+          <span><strong>Canonical Work</strong>{stale ? "Last verified projection" : "Live projection"}</span>
+        </div>
+      </header>
+
+      {error && <div className="jarvis-resting-workspace__notice" role="status"><span>{error}</span><button type="button" onClick={onRetry}>Retry</button></div>}
+
+      {loading && items.length === 0 ? (
+        <div className="jarvis-resting-workspace__loading" aria-label="Loading operational attention">
+          {[0, 1, 2].map((row) => <span key={row} className="jarvis-skeleton-tide" />)}
+        </div>
+      ) : items.length > 0 ? (
+        <div className="jarvis-attention-list" role="list" aria-label="Highest-priority Work">
+          {items.map((item, index) => (
+            <article key={item.workCase.id} role="listitem" className="jarvis-attention-item" data-tone={item.tone} data-selected={selected?.workCase.id === item.workCase.id ? "true" : undefined}>
+              <button type="button" className="jarvis-attention-item__inspect" onClick={() => { setSelectedId(item.workCase.id); onInspect(attentionInspector(item)) }} aria-label={`Inspect ${item.workCase.title}`}>
+                <span className="jarvis-attention-item__index">{String(index + 1).padStart(2, "0")}</span>
+                <span className="jarvis-attention-item__body">
+                  <span className="jarvis-attention-item__eyebrow">{item.eyebrow}</span>
+                  <strong>{item.workCase.title}</strong>
+                  <span className="jarvis-attention-item__reason">{item.reason}</span>
+                  <span className="jarvis-attention-item__meta"><span>{item.evidence}</span><span>Updated {dateTime(item.workCase.updatedAt)}</span></span>
+                </span>
+              </button>
+              <Link className="jarvis-attention-item__action" href={item.href} aria-label={`${item.nextAction}: ${item.workCase.title}`}>
+                <span>{item.nextAction}</span><ArrowUpRight size={15} aria-hidden />
+              </Link>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <div className="jarvis-resting-workspace__clear">
+          <CheckCircle2 size={24} aria-hidden />
+          <div><strong>The operating queue is clear.</strong><p>Conversation remains available below for a customer query or a new business objective.</p></div>
+        </div>
+      )}
     </section>
   )
 }
@@ -483,6 +575,7 @@ export function AdaptiveWorkspaceShell({
   threadRestored?: boolean
   restoredTraceEventCount?: number
 }) {
+  const { config: workspaceConfig } = useWorkspaceConfig()
   const shellRef = useRef<HTMLDivElement | null>(null)
   const projectedThread = useMemo(() => thread ? projectThreadWorkspace(thread) : null, [thread])
   const initialQuery = projectedThread?.query ?? null
@@ -499,20 +592,33 @@ export function AdaptiveWorkspaceShell({
       updatedAtMs: liveQuery.updatedAt ?? projectedThread.updatedAtMs,
     }
   }, [liveQuery.data, liveQuery.updatedAt, projectedThread])
+  const restingWork = useBusinessProjection(businessProjections.workCases(), { enabled: thread === null && !publicPreview })
+  const restingAttention = useMemo(() => projectRestingAttention(restingWork.data ?? []), [restingWork.data])
   const [inspector, setInspector] = useState<InspectorItem[]>([])
+  const activeInspector = useMemo(() => thread && projection ? buildWorkspaceInspector(thread, projection, role) : [], [projection, role, thread])
+  const inspectActive = useCallback((items: InspectorItem[]) => {
+    const contextualLabels = new Set(items.map((item) => item.label))
+    setInspector([...items, ...activeInspector.filter((item) => !contextualLabels.has(item.label))])
+  }, [activeInspector])
 
   useEffect(() => {
     if (!projection) {
       setInspector([])
       return
     }
-    setInspector([
-      { label: "Work", value: projection.workId ?? "Pending durable ID", ...(projection.workId ? { href: `/jarvis/work?workCaseId=${encodeURIComponent(projection.workId)}` } : {}) },
-      { label: "State", value: stateLabel(projection.state) },
-      { label: "Instruction", value: projection.instruction },
-      ...(projection.query ? [{ label: "Query", value: projection.query.metadata.queryId }, { label: "Duration", value: `${projection.query.metadata.durationMs} ms` }] : []),
-    ])
-  }, [projection])
+    setInspector(activeInspector)
+  }, [activeInspector, projection])
+
+  const restingError = restingWork.error
+    ? restingWork.data
+      ? "The latest refresh was delayed. Showing the last verified Work projection."
+      : "Operational attention is unavailable because canonical Work could not be read."
+    : null
+  const restingLoading = !publicPreview && thread === null && restingWork.data === null && (restingWork.status === "idle" || restingWork.status === "loading")
+  const restingState = restingAttention[0]?.tone === "critical" ? "failed" : restingAttention[0]?.tone === "decision" ? "awaiting_approval" : "idle"
+  const restingStateLabel = restingLoading ? "Reading Work" : restingAttention.length > 0 ? `${restingAttention.length} need attention` : "Current"
+  const navItems = orderedWorkspaceItems([...NAV], workspaceConfig)
+  const visibleInspector = inspector.filter((item) => inspectorFieldVisible(item.label, workspaceConfig))
 
   useGSAP(() => {
     if (reducedMotion || !projection) return
@@ -534,21 +640,23 @@ export function AdaptiveWorkspaceShell({
       {fixtureLabel && <div className="fixed left-1/2 top-2 z-[100] -translate-x-1/2"><span className="j-chip border border-violet-300/40 bg-violet-400/15 text-violet-200">FIXTURE · {fixtureLabel}</span></div>}
       {publicPreview && <div className="fixed left-1/2 top-2 z-[100] -translate-x-1/2"><span className="j-chip border border-cyan-300/30 bg-cyan-300/10 text-cyan-100">PUBLIC PREVIEW</span></div>}
       <aside className="jarvis-adaptive-nav" aria-label="JARVIS navigation">
-        <Link href="/jarvis" className="jarvis-adaptive-nav__brand"><span>F</span><strong>JARVIS</strong></Link>
-        <nav>{NAV.map(({ href, label, icon: Icon }) => <Link key={href} href={href} aria-current={href === "/jarvis" ? "page" : undefined} title={label}><Icon size={17} /><span>{label}</span></Link>)}</nav>
+        <Link href={withOperationalContext("/jarvis", undefined, projection?.workId)} className="jarvis-adaptive-nav__brand"><span>{workspaceConfig.brand.mark}</span><strong>JARVIS</strong></Link>
+        <nav>{navItems.map(({ key, href, icon: Icon }) => <Link key={href} href={withOperationalContext(href, undefined, projection?.workId)} aria-current={href === "/jarvis" ? "page" : undefined} title={workspaceConfig.terminology[key]}><Icon size={17} /><span>{workspaceConfig.terminology[key]}</span></Link>)}</nav>
         <div className="jarvis-adaptive-nav__status" data-state={liveframe.mode}><i /><span>{stateLabel(projection?.state ?? "idle")}</span></div>
       </aside>
 
       <main className="jarvis-adaptive-main">
         <header className="jarvis-adaptive-header">
-          <div>
-            <span>{projection?.eyebrow ?? "Adaptive workspace"}</span>
-            <h1>{projection?.title ?? "JARVIS workspace"}</h1>
+        <div>
+            <span>{projection?.eyebrow ?? (publicPreview ? "Adaptive workspace" : "Operational focus")}</span>
+            <h1>{projection?.title ?? (publicPreview ? "JARVIS workspace" : "What needs attention now")}</h1>
           </div>
-          <div className="jarvis-adaptive-header__state" data-state={projection?.state ?? "idle"}><i />{stateLabel(projection?.state ?? "idle")}</div>
+          <div className="jarvis-adaptive-header__controls"><WorkspaceSettingsButton compact /><div className="jarvis-adaptive-header__state" data-state={projection?.state ?? restingState}><i />{projection ? stateLabel(projection.state) : publicPreview ? "Ready" : restingStateLabel}</div></div>
         </header>
         <div className="jarvis-adaptive-stage" data-adaptive-workspace-body>
-          {thread && projection ? <WorkspaceBody projection={projection} thread={thread} role={role} reducedMotion={reducedMotion} onInspect={setInspector} onAnswer={onAnswer} onCancel={onCancel} onRetry={onRetry} /> : <EmptyWorkspace />}
+          {thread && projection ? <WorkspaceBody projection={projection} thread={thread} role={role} reducedMotion={reducedMotion} onInspect={inspectActive} onAnswer={onAnswer} onCancel={onCancel} onRetry={onRetry} />
+            : publicPreview ? <EmptyWorkspace />
+              : <RestingWorkspace items={restingAttention} loading={restingLoading} error={restingError} stale={Boolean(restingWork.data) && (restingWork.stale || restingWork.status === "error")} onRetry={() => { void restingWork.refresh().catch(() => undefined) }} onInspect={setInspector} />}
         </div>
         <section className="jarvis-conversation-layer" aria-label="Command history">
           <div><History size={14} /><strong>Command history</strong></div>
@@ -563,8 +671,8 @@ export function AdaptiveWorkspaceShell({
 
       <aside className="jarvis-adaptive-inspector" data-adaptive-inspector aria-label="Contextual inspector">
         <div className="jarvis-adaptive-inspector__inner">
-          <header><span>Inspector</span><strong>{projection ? humanize(projection.kind) : "Ready"}</strong></header>
-          <dl>{inspector.map((item, index) => <div key={`${item.label}:${index}`}><dt>{item.label}</dt><dd>{item.href ? <Link href={item.href}>{item.value}<ArrowUpRight size={12} /></Link> : item.value}</dd></div>)}</dl>
+          <header><span>Inspector</span><strong>{projection ? humanize(projection.kind) : publicPreview ? "Ready" : "Operational attention"}</strong></header>
+          <dl>{visibleInspector.map((item, index) => <div key={`${item.label}:${index}`} data-inspector-field={item.label.toLocaleLowerCase().replace(/[^a-z0-9]+/g, "-")}><dt>{item.label}</dt><dd>{item.href ? <Link href={item.href}>{item.value}<ArrowUpRight size={12} /></Link> : item.value}</dd></div>)}</dl>
           {projection?.query && <div className="jarvis-adaptive-inspector__provenance"><CheckCircle2 size={14} /><span><strong>Verified source</strong>{projection.query.result.source.tables.join(" · ")}</span></div>}
           {projection?.workId && <Link className="jarvis-adaptive-inspector__open" href={`/jarvis/work?workCaseId=${encodeURIComponent(projection.workId)}`}>Open durable Work <ArrowUpRight size={14} /></Link>}
         </div>

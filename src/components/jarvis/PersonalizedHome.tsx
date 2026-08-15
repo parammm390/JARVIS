@@ -59,13 +59,6 @@ function RoleLanding() {
     void jarvisGet<{ prefs: Prefs }>("user-prefs").then((response) => { if (!cancelled) setPrefs(response.prefs) }).catch(() => { if (!cancelled) setPrefs({ homepage: null, density: "comfortable", accent: null }) })
     return () => { cancelled = true }
   }, [session, role, roleLoading, roleError])
-  useEffect(() => {
-    const root = document.documentElement
-    if (prefs?.accent) root.dataset.jarvisTenantAccent = prefs.accent
-    else delete root.dataset.jarvisTenantAccent
-    return () => { delete root.dataset.jarvisTenantAccent }
-  }, [prefs?.accent])
-
   // A public JARVIS Thread is safe before session restoration; private requests
   // keep failing closed until the bearer is present. Only wait for a role once a
   // real session has been restored, avoiding an avoidable blank first paint.

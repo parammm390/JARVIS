@@ -8,7 +8,7 @@ import { useJarvisAuth } from "../lib/jarvis-auth"
 import { type Household360Projection, type HouseholdResource, type WorkCaseProjection } from "@/lib/jarvis-client"
 import { useBusinessProjection } from "../lib/business-projections"
 import { businessProjections } from "../lib/projection-definitions"
-import { OperationalSurfaceNav, type HouseholdContext } from "../surfaces/OperationalSurfaceNav"
+import { OperationalSurfaceNav, withOperationalContext, type HouseholdContext } from "../surfaces/OperationalSurfaceNav"
 import { HOUSEHOLD_BANDS, formatHouseholdDate, formatHouseholdDateTime, formatHouseholdUsd, householdDisplayName, summarizeHousehold } from "./household360-model"
 import "../jarvis-theme.css"
 
@@ -66,11 +66,14 @@ export default function Household360Surface() {
   const { session, loading: authLoading } = useJarvisAuth()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [search, setSearch] = useState("")
+  const [surfaceSearch, setSurfaceSearch] = useState("")
   const householdIndex = useBusinessProjection(businessProjections.households(), { enabled: Boolean(session) })
   const workProjection = useBusinessProjection(businessProjections.workCases(), { enabled: Boolean(session) })
   const detailProjection = useBusinessProjection(businessProjections.household360(selectedId ?? "unselected"), { enabled: Boolean(session && selectedId) })
   const rows = useMemo<HouseholdResource[]>(() => householdIndex.data ?? [], [householdIndex.data])
   const workCases: WorkCaseProjection[] | null = workProjection.data
+  const surfaceQuery = useMemo(() => new URLSearchParams(surfaceSearch), [surfaceSearch])
+  const requestedWorkCaseId = surfaceQuery.get("workCaseId")
   const source: SourceState = authLoading || (session && householdIndex.data === null && householdIndex.status !== "error")
     ? "loading"
     : !session || (householdIndex.error instanceof JarvisApiError && householdIndex.error.status === 401)
@@ -87,16 +90,29 @@ export default function Household360Surface() {
   }
 
   useEffect(() => {
-    const requestedId = new URLSearchParams(window.location.search).get("householdId")
+    const syncSurfaceSearch = () => setSurfaceSearch(window.location.search)
+    syncSurfaceSearch()
+    window.addEventListener("popstate", syncSurfaceSearch)
+    return () => window.removeEventListener("popstate", syncSurfaceSearch)
+  }, [])
+
+  useEffect(() => {
+    if (requestedWorkCaseId && workProjection.data === null) return
+    const requestedCase = requestedWorkCaseId ? workCases?.find((workCase) => workCase.id === requestedWorkCaseId || workCase.root.id === requestedWorkCaseId) : null
+    const requestedId = surfaceQuery.get("householdId") ?? requestedCase?.linkedEntities.find((entity) => entity.entityType === "household")?.entityId ?? null
     if (requestedId && rows.some((row) => row.id === requestedId)) {
       setSelectedId(requestedId)
+      return
+    }
+    if (requestedWorkCaseId) {
+      setSelectedId(null)
       return
     }
     setSelectedId((current) => {
       if (current && rows.some((row) => row.id === current)) return current
       return rows.find((row) => row.marketingConsent)?.id ?? rows[0]?.id ?? null
     })
-  }, [rows])
+  }, [requestedWorkCaseId, rows, surfaceQuery, workCases, workProjection.data])
 
   const selectedRow = rows.find((row) => row.id === selectedId) ?? null
   const selectedProjection = selectedId ? detailProjection.data : null
@@ -110,12 +126,14 @@ export default function Household360Surface() {
 
   function selectHousehold(id: string) {
     setSelectedId(id)
-    window.history.replaceState(null, "", `/jarvis/customers?householdId=${encodeURIComponent(id)}`)
+    const next = withOperationalContext("/jarvis/customers", { id, label: "" }, requestedWorkCaseId)
+    window.history.replaceState(null, "", next)
+    setSurfaceSearch(new URL(next, window.location.origin).search)
   }
 
   return (
     <main className="jarvis-household-shell" data-jarvis-household-360>
-      <OperationalSurfaceNav active="customers" context={context} />
+      <OperationalSurfaceNav active="customers" context={context} workCaseId={requestedWorkCaseId} />
       <section className="jarvis-household-intro">
         <div>
           <p className="jarvis-household-eyebrow">CUSTOMERS · HOUSEHOLD 360</p>
@@ -232,9 +250,9 @@ export default function Household360Surface() {
                   </section>
                 </div>
                 <div className="jarvis-household-business-links" aria-label="Household operational destinations">
-                  <Link href={`/jarvis/work?householdId=${encodeURIComponent(selectedProjection.household.id)}`}><Wrench size={14} aria-hidden />Work<ArrowUpRight size={13} aria-hidden /></Link>
-                  <Link href={`/jarvis/schedule?householdId=${encodeURIComponent(selectedProjection.household.id)}`}><CalendarDays size={14} aria-hidden />Schedule<ArrowUpRight size={13} aria-hidden /></Link>
-                  <Link href={`/jarvis/money?householdId=${encodeURIComponent(selectedProjection.household.id)}`}><CreditCard size={14} aria-hidden />Money<ArrowUpRight size={13} aria-hidden /></Link>
+                  <Link href={withOperationalContext("/jarvis/work", { id: selectedProjection.household.id, label: "" }, requestedWorkCaseId)}><Wrench size={14} aria-hidden />Work<ArrowUpRight size={13} aria-hidden /></Link>
+                  <Link href={withOperationalContext("/jarvis/schedule", { id: selectedProjection.household.id, label: "" }, requestedWorkCaseId)}><CalendarDays size={14} aria-hidden />Schedule<ArrowUpRight size={13} aria-hidden /></Link>
+                  <Link href={withOperationalContext("/jarvis/money", { id: selectedProjection.household.id, label: "" }, requestedWorkCaseId)}><CreditCard size={14} aria-hidden />Money<ArrowUpRight size={13} aria-hidden /></Link>
                 </div>
                 <div className="jarvis-household-recent-line"><Activity size={14} aria-hidden /><span>{selectedProjection.calls.length} call record{selectedProjection.calls.length === 1 ? "" : "s"} · {selectedProjection.conversations.length} conversation record{selectedProjection.conversations.length === 1 ? "" : "s"} · {selectedProjection.documents.length} document record{selectedProjection.documents.length === 1 ? "" : "s"} · {selectedProjection.legacyCommunications.length} legacy communication record{selectedProjection.legacyCommunications.length === 1 ? "" : "s"}</span></div>
               </section>

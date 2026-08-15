@@ -78,6 +78,7 @@ function isAllowedGet(segments: string[]): boolean {
   if (segments.length === 1 && a === "vitals") return true
   if (segments.length === 1 && a === "activity") return true
   if (segments.length === 1 && a === "user-prefs") return true
+  if (segments.length === 1 && a === "workspace-config") return true
   if (segments.length === 2 && a === "user-prefs" && b === "digest") return true
   if (segments.length === 2 && a === "data-quality" && b === "findings") return true
   if (segments.length === 2 && a === "dispatch" && b === "map") return true
@@ -323,7 +324,7 @@ function isUserPrefs(segments: string[]): boolean {
 }
 
 function isAllowedPut(segments: string[]): boolean {
-  return isUserPrefs(segments) || (segments.length === 3 && segments[0] === "policies") || (segments.length === 2 && segments[0] === "price-book");
+  return isUserPrefs(segments) || (segments.length === 1 && segments[0] === "workspace-config") || (segments.length === 3 && segments[0] === "policies") || (segments.length === 2 && segments[0] === "price-book");
 }
 
 export async function PUT(req: NextRequest, { params }: { params: { path: string[] } }): Promise<Response> {
