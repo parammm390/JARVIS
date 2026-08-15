@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { AlertTriangle, ArrowUpRight, CalendarDays, ChevronLeft, ChevronRight, CircleDot, MapPinned, RefreshCw, Route, Wrench } from "lucide-react"
 import { DispatchMapCore, type MapData, type Stop } from "./DispatchMap"
@@ -10,7 +10,7 @@ import { useJarvisAuth } from "../lib/jarvis-auth"
 import type { WorkCaseProjection } from "@/lib/jarvis-client"
 import { useBusinessProjection } from "../lib/business-projections"
 import { businessProjections } from "../lib/projection-definitions"
-import { OperationalSurfaceNav, type HouseholdContext } from "../surfaces/OperationalSurfaceNav"
+import { OperationalSurfaceNav, withOperationalContext, type HouseholdContext } from "../surfaces/OperationalSurfaceNav"
 import { dispatchStopMatchesFocus, exactWorkCaseForStop, shiftIsoDate, workEntityIds, type DispatchFocusQuery } from "./dispatch-field-model"
 import "../jarvis-theme.css"
 
@@ -42,11 +42,12 @@ function dispatchErrorCopy(error: unknown): string {
 function linksForStop(stop: Stop, workCase: WorkCaseProjection | null): Array<{ href: string; label: string }> {
   const workOrderId = workEntityIds(workCase, "work_order")[0]
   const appointmentId = workEntityIds(workCase, "appointment")[0]
+  const context = { id: stop.householdId, label: stop.address }
   return [
-    { href: `/jarvis/customers?householdId=${encodeURIComponent(stop.householdId)}`, label: `Customer · ${shortId(stop.householdId)}` },
-    { href: `/jarvis/work?householdId=${encodeURIComponent(stop.householdId)}&${stop.sourceKind === "appointment" ? "appointmentId" : "visitId"}=${encodeURIComponent(stop.visitId)}`, label: `Work · ${stop.sourceKind === "appointment" ? "appointment" : "visit"} ${shortId(stop.visitId)}` },
-    ...(workOrderId ? [{ href: `/jarvis/work?householdId=${encodeURIComponent(stop.householdId)}&workOrderId=${encodeURIComponent(workOrderId)}`, label: `Job · ${shortId(workOrderId)}` }] : []),
-    ...(appointmentId ? [{ href: `/jarvis/work?householdId=${encodeURIComponent(stop.householdId)}&appointmentId=${encodeURIComponent(appointmentId)}`, label: `Appointment · ${shortId(appointmentId)}` }] : []),
+    { href: withOperationalContext("/jarvis/customers", context, workCase?.id), label: `Customer · ${shortId(stop.householdId)}` },
+    { href: withOperationalContext(`/jarvis/work?${stop.sourceKind === "appointment" ? "appointmentId" : "visitId"}=${encodeURIComponent(stop.visitId)}`, context, workCase?.id), label: `Work · ${stop.sourceKind === "appointment" ? "appointment" : "visit"} ${shortId(stop.visitId)}` },
+    ...(workOrderId ? [{ href: withOperationalContext(`/jarvis/work?workOrderId=${encodeURIComponent(workOrderId)}`, context, workCase?.id), label: `Job · ${shortId(workOrderId)}` }] : []),
+    ...(appointmentId ? [{ href: withOperationalContext(`/jarvis/work?appointmentId=${encodeURIComponent(appointmentId)}`, context, workCase?.id), label: `Appointment · ${shortId(appointmentId)}` }] : []),
   ]
 }
 
@@ -96,19 +97,29 @@ export default function DispatchFieldSurface() {
   const workCases = useMemo<WorkCaseProjection[]>(() => workProjection.data ?? [], [workProjection.data])
   const error = mapProjection.error ? dispatchErrorCopy(mapProjection.error) : null
   const loading = canReadDispatch && mapProjection.data === null && mapProjection.status !== "error"
-  const [surfaceQuery] = useState(() => new URLSearchParams(typeof window === "undefined" ? "" : window.location.search))
+  const [surfaceSearch, setSurfaceSearch] = useState("")
+  const surfaceQuery = useMemo(() => new URLSearchParams(surfaceSearch), [surfaceSearch])
+  const requestedWorkCaseId = surfaceQuery.get("workCaseId")
+  const requestedWorkCase = requestedWorkCaseId ? workCases.find((workCase) => workCase.id === requestedWorkCaseId || workCase.root.id === requestedWorkCaseId) ?? null : null
   const focus: DispatchFocusQuery = {
-    householdId: surfaceQuery.get("householdId"),
-    visitId: surfaceQuery.get("visitId"),
-    serviceVisitId: surfaceQuery.get("serviceVisitId"),
-    workOrderId: surfaceQuery.get("workOrderId"),
-    appointmentId: surfaceQuery.get("appointmentId"),
+    householdId: surfaceQuery.get("householdId") ?? workEntityIds(requestedWorkCase, "household")[0] ?? null,
+    visitId: surfaceQuery.get("visitId") ?? workEntityIds(requestedWorkCase, "visit")[0] ?? null,
+    serviceVisitId: surfaceQuery.get("serviceVisitId") ?? workEntityIds(requestedWorkCase, "service_visit")[0] ?? null,
+    workOrderId: surfaceQuery.get("workOrderId") ?? workEntityIds(requestedWorkCase, "work_order")[0] ?? null,
+    appointmentId: surfaceQuery.get("appointmentId") ?? workEntityIds(requestedWorkCase, "appointment")[0] ?? null,
   }
   const hasFocus = Object.values(focus).some(Boolean)
 
   const load = () => {
     void Promise.allSettled([mapProjection.refresh(), workProjection.refresh()])
   }
+
+  useEffect(() => {
+    const syncSurfaceSearch = () => setSurfaceSearch(window.location.search)
+    syncSurfaceSearch()
+    window.addEventListener("popstate", syncSurfaceSearch)
+    return () => window.removeEventListener("popstate", syncSurfaceSearch)
+  }, [])
 
   const requestedHouseholdId = focus.householdId
   const contextStop = data?.stops.find((stop) => stop.householdId === requestedHouseholdId) ?? null
@@ -121,7 +132,7 @@ export default function DispatchFieldSurface() {
   if (role === "technician") {
     return (
       <main className="jarvis-dispatch-shell" data-jarvis-dispatch-field data-dispatch-role="technician">
-        <OperationalSurfaceNav active="schedule" context={requestedHouseholdId ? { id: requestedHouseholdId, label: `Household ${shortId(requestedHouseholdId)}` } : undefined} />
+        <OperationalSurfaceNav active="schedule" context={requestedHouseholdId ? { id: requestedHouseholdId, label: `Household ${shortId(requestedHouseholdId)}` } : undefined} workCaseId={requestedWorkCaseId} />
         <section className="jarvis-dispatch-technician">
           <div className="jarvis-dispatch-hero">
             <div><span className="jarvis-dispatch-eyebrow">SCHEDULE · MY DAY</span><h1>Your field day, in order.</h1><p>Assigned work orders and visits from your linked technician record.</p></div>
@@ -135,7 +146,7 @@ export default function DispatchFieldSurface() {
 
   return (
     <main className="jarvis-dispatch-shell" data-jarvis-dispatch-field data-dispatch-role={role ?? "unknown"}>
-      <OperationalSurfaceNav active="schedule" context={context} />
+      <OperationalSurfaceNav active="schedule" context={context} workCaseId={requestedWorkCaseId} />
       <section className="jarvis-dispatch-hero">
         <div><span className="jarvis-dispatch-eyebrow">SCHEDULE · DISPATCH FIELD</span><h1>Geography, today, exceptions.</h1><p>Stored coordinates and exact operational records; no calendar grid rebuilt here.</p></div>
         <div className="jarvis-dispatch-hero__controls"><span className="jarvis-dispatch-source" data-source-state={data ? "live" : "unavailable"}><span aria-hidden />{data ? "Source live" : "Source unavailable"}</span><label><CalendarDays size={14} aria-hidden /><span className="sr-only">Dispatch day</span><input aria-label="Dispatch day" type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label><button type="button" onClick={() => void load()} aria-label="Refresh Dispatch Field"><RefreshCw size={15} aria-hidden /></button></div>

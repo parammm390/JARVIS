@@ -16,6 +16,9 @@ import { useBusinessProjection } from "../lib/business-projections"
 import { businessProjections } from "../lib/projection-definitions"
 import { OperationalSurfaceNav, type HouseholdContext } from "../surfaces/OperationalSurfaceNav"
 import { destinationForEntity, filterMatches, groupWorkCases, primaryEntity, readWorkSurfaceQuery, stageFor, workCaseMatchesQuery, WORK_CHAPTERS, type WorkCaseGroup, type WorkFilter, type WorkSurfaceQuery } from "./work-surface-model"
+import { buildWorkInspectorFacts } from "./work-inspector"
+import { useWorkspaceConfig } from "../WorkspaceConfigProvider"
+import { inspectorFieldVisible } from "../lib/workspace-config"
 import "../jarvis-theme.css"
 
 const ApprovalCockpit = dynamic(() => import("../bridge/ApprovalCockpit").then((module) => module.ApprovalCockpit), { ssr: false })
@@ -475,13 +478,19 @@ function WorkSpine({
   )
 }
 
-function WorkInspector({ target, onClose }: { target: InspectorTarget; onClose: () => void }) {
+function WorkInspector({ target, workCase, onClose }: { target: InspectorTarget; workCase: WorkCaseProjection; onClose: () => void }) {
+  const { config } = useWorkspaceConfig()
+  const context = buildWorkInspectorFacts(workCase).filter((fact) => inspectorFieldVisible(fact.label, config))
   return (
     <aside className="jarvis-work-inspector" aria-label="Work inspector">
       <header className="jarvis-work-inspector__header"><div><span className="jarvis-work-inspector__eyebrow">Source inspector</span><h2>{target.kind === "receipt" ? "Receipt evidence" : target.kind === "action" ? "Action record" : "Exact entity link"}</h2></div><button type="button" onClick={onClose} className="jarvis-work-icon-button" aria-label="Close inspector"><X className="h-4 w-4" /></button></header>
       {target.kind === "receipt" && <div className="jarvis-work-inspector__receipt"><ReceiptContent receiptId={target.receipt.id} /></div>}
       {target.kind === "action" && <div className="jarvis-work-inspector__action"><div className="jarvis-work-inspector__id">{humanize(target.action.actionType)} · {shortId(target.action.id)}</div><ActionRenderer actionType={target.action.actionType} payload={target.action.payload} /><dl className="jarvis-work-inspector__facts"><div><dt>Status</dt><dd>{humanize(target.action.status)}</dd></div><div><dt>Instruction</dt><dd>{target.action.instructionId ? shortId(target.action.instructionId) : "Not recorded"}</dd></div><div><dt>Plan</dt><dd>{target.action.planId ? shortId(target.action.planId) : "Not recorded"}</dd></div></dl></div>}
       {target.kind === "entity" && <div className="jarvis-work-inspector__entity"><Link2 className="h-5 w-5 text-cyan-200" aria-hidden /><h3>{humanize(target.entity.entityType)}</h3><p className="jarvis-work-inspector__exact-id">{target.entity.entityId}</p><p className="jarvis-work-muted">This identifier is exact and source-backed. Use the Open link in the Spine to follow it into the matching operational surface.</p><p className="jarvis-work-inspector__provenance">Source path<br /><code>{target.entity.via}</code></p></div>}
+      <section className="jarvis-work-inspector__context" aria-label="Operational context">
+        <span className="jarvis-work-inspector__eyebrow">Operational context</span>
+        <dl className="jarvis-work-inspector__facts">{context.map((fact) => <div key={fact.label}><dt>{fact.label}</dt><dd>{fact.value}</dd></div>)}</dl>
+      </section>
       <button type="button" onClick={onClose} className="jarvis-work-secondary-button">Close inspector</button>
     </aside>
   )
@@ -502,7 +511,18 @@ export function WorkSurface() {
   const [surfaceQuery, setSurfaceQuery] = useState<WorkSurfaceQuery>(() => readWorkSurfaceQuery(typeof window === "undefined" ? "" : window.location.search))
   const hasExactTarget = queryHasExactTarget(surfaceQuery)
 
-  useEffect(() => setInteractiveReady(true), [])
+  useEffect(() => {
+    // Client components still participate in server rendering, so the state
+    // initializer above intentionally starts from an empty search string on the
+    // server. Re-read the real address after hydration (and on history travel),
+    // otherwise a direct Work link silently opens the first queue case instead
+    // of the exact durable Work named by the URL.
+    const syncSurfaceQuery = () => setSurfaceQuery(readWorkSurfaceQuery(window.location.search))
+    setInteractiveReady(true)
+    syncSurfaceQuery()
+    window.addEventListener("popstate", syncSurfaceQuery)
+    return () => window.removeEventListener("popstate", syncSurfaceQuery)
+  }, [])
 
   useEffect(() => {
     if (!queueOpen && !inspector) return
@@ -575,7 +595,7 @@ export function WorkSurface() {
 
   return (
     <div className="jarvis-work-shell" data-jarvis-work data-work-interactive-ready={interactiveReady ? "true" : "false"} data-queue-open={queueOpen ? "true" : "false"}>
-      <OperationalSurfaceNav active="work" context={context} />
+      <OperationalSurfaceNav active="work" context={context} workCaseId={selectedCase?.id ?? surfaceQuery.workCaseId} />
       <header className="jarvis-work-topbar">
         <div className="jarvis-work-topbar__left"><div><span className="jarvis-work-eyebrow">WORK · CAUSAL SPINE</span><h1>Work</h1></div></div>
         <div className="jarvis-work-topbar__right"><span className="jarvis-work-live"><span className="jarvis-work-live__dot" data-live={live && !stale ? "true" : "false"} aria-hidden />{live ? stale ? `${cases.length} cases · refresh delayed` : `${cases.length} cases observed` : loading ? "Reading source…" : "Source unavailable"}</span><button type="button" onClick={() => void reload()} className="jarvis-work-icon-button" aria-label="Refresh Work projection" title="Refresh"><RefreshCw className="h-4 w-4" /></button></div>
@@ -601,7 +621,7 @@ export function WorkSurface() {
           {selectedCase ? <WorkSpine workCase={selectedCase} onInspect={setInspector} onRefresh={reload} /> : <div className="jarvis-work-main__empty"><CircleDot className="h-6 w-6" aria-hidden /><h2>Choose a Work Case</h2><p>The seven-chapter causal record opens here when the tenant projection returns an exact root.</p></div>}
         </section>
 
-        {inspector && <WorkInspector target={inspector} onClose={() => setInspector(null)} />}
+        {inspector && selectedCase && <WorkInspector target={inspector} workCase={selectedCase} onClose={() => setInspector(null)} />}
       </main>
     </div>
   )

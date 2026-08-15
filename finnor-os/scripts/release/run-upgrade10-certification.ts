@@ -97,6 +97,12 @@ function commitSha(): string | null {
   return result.status === 0 ? result.stdout.trim() || null : null;
 }
 
+function failureMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message.trim()) return error.message;
+  const rendered = String(error).trim();
+  return rendered && rendered !== "Error" ? rendered : fallback;
+}
+
 async function main(): Promise<void> {
   const disposable = disposableDatabase(BASE_DATABASE_URL);
   const admin = new pg.Client({ connectionString: disposable.adminUrl, connectionTimeoutMillis: 3_000 });
@@ -158,13 +164,13 @@ async function main(): Promise<void> {
     if (tests.exitCode !== 0) throw new Error("Upgrade 10 journey certification failed");
     if (/\bskipped\b|\bskip\b/i.test(tests.output)) throw new Error("Upgrade 10 journey certification contained skipped tests");
   } catch (error) {
-    failure = error instanceof Error ? error.message : String(error);
+    failure = failureMessage(error, "Upgrade 10 database setup or journey execution failed");
   } finally {
     try {
       await admin.query(`DROP DATABASE IF EXISTS "${disposable.database}" WITH (FORCE)`);
       cleanupSucceeded = true;
     } catch (error) {
-      failure ??= `Disposable database cleanup failed: ${error instanceof Error ? error.message : String(error)}`;
+      failure ??= `Disposable database cleanup failed: ${failureMessage(error, "unknown cleanup error")}`;
     }
     await admin.end().catch(() => undefined);
   }
@@ -173,7 +179,7 @@ async function main(): Promise<void> {
   try {
     metrics = tests ? metricsFrom(tests.output) : [];
   } catch (error) {
-    failure ??= error instanceof Error ? error.message : String(error);
+    failure ??= failureMessage(error, "Upgrade 10 metric parsing failed");
   }
   const metricNames = new Set(metrics.map((metric) => metric.name));
   const missingMetrics = REQUIRED_METRICS.filter((name) => !metricNames.has(name));

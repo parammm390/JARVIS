@@ -793,6 +793,7 @@ export interface KernelState {
   voiceSpeaking: boolean
   setVoiceIndicators: (next: { micOpen?: boolean; speaking?: boolean }) => void
   submit: (text: string, source: InstructionSource, sessionIdOverride?: string) => Promise<SubmissionOutcome>
+  continueWork: (text: string, source: InstructionSource, sessionIdOverride?: string) => Promise<SubmissionOutcome>
   answerClarification: (text: string) => Promise<SubmissionOutcome>
   cancelThread: () => Promise<void>
   retryThread: () => Promise<void>
@@ -804,6 +805,20 @@ export interface KernelState {
  *  this session's own reasoned choice, recorded as a deviation). Oldest
  *  history entries drop first — the ACTIVE thread is never capped. */
 const THREAD_HISTORY_CAP = 50
+
+export function canContinueWork(thread: Pick<Thread, "workId" | "machine"> | null): boolean {
+  return Boolean(thread?.workId && isTerminal(thread.machine.instructionState))
+}
+
+export function continuationIdentity(
+  existing: Pick<Thread, "sessionId" | "workId" | "instructionId"> | null,
+  fallbackSessionId: string,
+): { sessionId: string; workId: string | null } {
+  return {
+    sessionId: existing?.sessionId ?? fallbackSessionId,
+    workId: existing?.workId ?? existing?.instructionId ?? null,
+  }
+}
 
 const KernelContext = createContext<KernelState | null>(null)
 
@@ -1243,7 +1258,13 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
 
   const runSubmission = useCallback(
     async (text: string, source: InstructionSource, existing: Thread | null, sessionIdOverride?: string) => {
-      const sessionId = existing?.sessionId ?? sessionIdOverride ?? getOrCreateSessionId(source)
+      // A voice or text continuation inherits the active Work's session and
+      // durable Work identity. Only a genuinely new Work consults the source-
+      // specific browser session. This is the backend identity seam; the UI does
+      // not merely look continuous while submitting an unrelated Work.
+      const fallbackSessionId = existing ? existing.sessionId : sessionIdOverride ?? getOrCreateSessionId(source)
+      const identity = continuationIdentity(existing, fallbackSessionId)
+      const sessionId = identity.sessionId
       const id = existing?.id ?? newId()
       // jarvis-v3 P3.T6: always freshly minted, never reused across turns — this
       // exact submission's own instruction_events trace, distinct from sessionId
@@ -1275,7 +1296,7 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
         id,
         sessionId,
         instructionId,
-        workId: existing?.workId ?? existing?.instructionId ?? instructionId,
+        workId: identity.workId ?? instructionId,
         source,
         instructionText: text,
         createdAtMs: nowMs,
@@ -1294,7 +1315,7 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
       })
       // Survive navigation and refresh. A later response rebinds the optimistic
       // instruction id below to the server-authored durable Work id.
-      persistActiveThreadPointer({ id, sessionId, instructionId, workId: existing?.workId ?? existing?.instructionId ?? instructionId, source, instructionText: text, createdAtMs: nowMs })
+      persistActiveThreadPointer({ id, sessionId, instructionId, workId: identity.workId ?? instructionId, source, instructionText: text, createdAtMs: nowMs })
 
       // jarvis-v3 P3.T6/T7: the trace poll starts THE SAME INSTANT as the POST
       // below — both race the real backend from the same starting line
@@ -1317,7 +1338,7 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
 
       let result: Awaited<ReturnType<typeof submitInstruction>>
       try {
-        result = await submitInstruction(text, { source, sessionId, instructionId, workId: existing?.workId ?? existing?.instructionId ?? undefined })
+        result = await submitInstruction(text, { source, sessionId, instructionId, workId: identity.workId ?? undefined })
       } catch (err) {
         if (activeInstructionIdRef.current !== instructionId) return "stale"
         const errorEnvelope = err instanceof JarvisApiError && err.details && typeof err.details === "object" && !Array.isArray(err.details)
@@ -1544,6 +1565,12 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
 
   const submit = useCallback((text: string, source: InstructionSource, sessionIdOverride?: string) => runSubmission(text, source, null, sessionIdOverride), [runSubmission])
 
+  const continueWork = useCallback((text: string, source: InstructionSource, sessionIdOverride?: string) => {
+    const current = threadRef.current
+    if (!canContinueWork(current)) return Promise.resolve<SubmissionOutcome>("failed")
+    return runSubmission(text, source, current, sessionIdOverride)
+  }, [runSubmission])
+
   const threadRestored = Boolean(
     thread &&
     restoredThreadPresentation?.threadId === thread.id &&
@@ -1606,12 +1633,13 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
       voiceSpeaking,
       setVoiceIndicators,
       submit,
+      continueWork,
       answerClarification,
       cancelThread,
       retryThread,
       refetchSlowLaneNow: data.refetchSlowLaneNow,
     }),
-    [effectiveMode, thread, threadRestored, restoredTraceEventCount, threadHistory, presence, transport, selectorInput, lane, micOpen, voiceSpeaking, setVoiceIndicators, submit, answerClarification, cancelThread, retryThread, data.refetchSlowLaneNow],
+    [effectiveMode, thread, threadRestored, restoredTraceEventCount, threadHistory, presence, transport, selectorInput, lane, micOpen, voiceSpeaking, setVoiceIndicators, submit, continueWork, answerClarification, cancelThread, retryThread, data.refetchSlowLaneNow],
   )
 
   return <KernelContext.Provider value={value}>{children}</KernelContext.Provider>

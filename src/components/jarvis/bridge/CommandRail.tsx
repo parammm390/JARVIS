@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react"
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
 import { LoaderCircle, Mic, Send, Square } from "lucide-react"
-import { useKernel, type SubmissionOutcome } from "../kernel/store"
+import { canContinueWork, useKernel, type SubmissionOutcome } from "../kernel/store"
 import { useVapiSession, VAPI_WEB_ASSISTANT_ID } from "../lib/useVapiSession"
 import { intentLaunchVariants, railCommitVariants, transcriptInkVariants } from "../kernel/choreography"
 import { sfx } from "../sound"
@@ -22,6 +22,7 @@ import { RecentThreadsPanel } from "./RecentThreadsPanel"
 import { sessionIdForVoiceCall } from "../kernel/instruction"
 import type { InstructionState } from "../kernel/types"
 import type { LiveFrameIntentLaunch, LiveFrameProjection } from "../kernel/liveframe"
+import { useWorkspaceConfig } from "../WorkspaceConfigProvider"
 
 const HOLD_TO_TALK_MS = 360
 
@@ -77,6 +78,7 @@ export function MicControlButton({
   className?: string
 }) {
   const kernel = useKernel()
+  const { config: workspaceConfig } = useWorkspaceConfig()
   const voice = useVapiSession()
   const { startVoice, stopVoice, toggleVoice } = voice
   const reducedMotion = useReducedMotion() ?? false
@@ -87,7 +89,7 @@ export function MicControlButton({
   // dedicated assistant id exists; the visible availability/error row remains
   // the truthful feedback surface.
   const dedicatedVoiceConfigured = Boolean(VAPI_WEB_ASSISTANT_ID) && (voice.configured || Boolean(voice.lastError) || voice.voiceState === "connecting")
-  const voiceControlDisabled = (inputDisabled && !voiceActive) || !dedicatedVoiceConfigured
+  const voiceControlDisabled = !workspaceConfig.voiceEnabled || (inputDisabled && !voiceActive) || !dedicatedVoiceConfigured
   const voiceHoldTimerRef = useRef<number | null>(null)
   const voiceHoldActiveRef = useRef(false)
   const voicePointerIdRef = useRef<number | null>(null)
@@ -172,7 +174,9 @@ export function MicControlButton({
     }
   }, [cancelVoicePointer])
 
-  const label = voice.voiceState === "connecting"
+  const label = !workspaceConfig.voiceEnabled
+    ? "Voice is disabled for this tenant workspace"
+    : voice.voiceState === "connecting"
     ? "Connecting microphone"
     : voiceActive
       ? "End voice session"
@@ -200,7 +204,7 @@ export function MicControlButton({
       aria-pressed={voiceActive}
       aria-busy={voice.voiceState === "connecting"}
       aria-label={label}
-      title={voiceActive ? "End voice session" : "Tap to talk · hold and release to push to talk"}
+      title={!workspaceConfig.voiceEnabled ? "Voice is disabled for this tenant workspace" : voiceActive ? "End voice session" : "Tap to talk · hold and release to push to talk"}
       disabled={voiceControlDisabled}
       onPointerDown={onVoicePointerDown}
       onPointerUp={finishVoicePointer}
@@ -229,6 +233,7 @@ export function CommandRail({
   embedded?: boolean
 }) {
   const kernel = useKernel()
+  const { config: workspaceConfig } = useWorkspaceConfig()
   const voice = useVapiSession()
   const { startVoice, stopVoice, transcript } = voice
   const palette = useCommandPaletteV2()
@@ -238,6 +243,7 @@ export function CommandRail({
   const [committing, setCommitting] = useState(false)
   const [transcriptInk, setTranscriptInk] = useState<TranscriptInk | null>(null)
   const [voiceRetrying, setVoiceRetrying] = useState(false)
+  const [startNewWork, setStartNewWork] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const dockRef = useRef<HTMLFormElement>(null)
   const spaceHeldRef = useRef(false)
@@ -253,6 +259,8 @@ export function CommandRail({
   }, [])
 
   const threadState = kernel.thread?.machine.instructionState ?? null
+  const continuableWorkId = canContinueWork(kernel.thread) ? kernel.thread?.workId ?? null : null
+  const continuingWork = Boolean(continuableWorkId) && !startNewWork
   const busy = railBusy(threadState)
   const inputDisabled = busy.disabled || committing
   const voiceActive = voice.voiceState === "connecting" || voice.voiceState === "live" || voice.voiceState === "speaking"
@@ -266,7 +274,7 @@ export function CommandRail({
   // when the dedicated assistant id exists; `voice.configured` remains visible
   // below as truthful availability feedback instead of making Retry inert.
   const dedicatedVoiceConfigured = Boolean(VAPI_WEB_ASSISTANT_ID) && (voice.configured || Boolean(voice.lastError) || voice.voiceState === "connecting")
-  const voiceCopy = deriveVoiceStateCopy({
+  const derivedVoiceCopy = deriveVoiceStateCopy({
     available: dedicatedVoiceConfigured,
     voiceState: voice.voiceState,
     userSpeaking: voice.userSpeaking,
@@ -274,11 +282,16 @@ export function CommandRail({
     lastError: voice.lastError,
     retrying: voiceRetrying,
   })
+  const voiceCopy = workspaceConfig.voiceEnabled ? derivedVoiceCopy : { state: "unavailable" as const, label: "Voice off", detail: "Disabled for this tenant workspace.", retryable: false }
   const voiceSessionId = sessionIdForVoiceCall(
     typeof voice.voiceSessionId === "string" && voice.voiceSessionId.trim()
       ? voice.voiceSessionId
       : readProviderCallId(voice),
   )
+
+  useEffect(() => {
+    if (!continuableWorkId) setStartNewWork(false)
+  }, [continuableWorkId])
 
   useEffect(() => {
     if (voiceRetrying && voice.voiceState !== "connecting") setVoiceRetrying(false)
@@ -310,7 +323,9 @@ export function CommandRail({
     try {
       outcome = threadState === "clarifying"
         ? await kernel.answerClarification(text)
-        : await kernel.submit(text, "typed")
+        : continuingWork
+          ? await kernel.continueWork(text, "typed")
+          : await kernel.submit(text, "typed")
     } catch {
       outcome = "failed"
     } finally {
@@ -321,7 +336,7 @@ export function CommandRail({
       if (outcome === "failed") setValue(text)
       if (outcome === "accepted") onIntentAccepted?.()
     }
-  }, [value, inputDisabled, threadState, kernel, onIntentAccepted])
+  }, [value, inputDisabled, threadState, continuingWork, kernel, onIntentAccepted])
 
   // `/` focuses the rail from anywhere except while already typing in a field.
   // `⌘K` is NOT handled here — `useCommandPaletteV2()` already owns that
@@ -342,7 +357,7 @@ export function CommandRail({
       if (target?.closest("[data-voice-control]")) return
       // Hold-Space push-to-talk (§3.4 point 1) — never while typing (a normal
       // space keystroke in the input must stay a space, not start a call).
-      if (e.code === "Space" && !typing && !spaceHeldRef.current && !inputDisabled && !voiceActive && dedicatedVoiceConfigured) {
+      if (e.code === "Space" && !typing && !spaceHeldRef.current && !inputDisabled && !voiceActive && dedicatedVoiceConfigured && workspaceConfig.voiceEnabled) {
         e.preventDefault()
         spaceHeldRef.current = true
         void startVoice(VAPI_WEB_ASSISTANT_ID ?? null)
@@ -367,7 +382,7 @@ export function CommandRail({
       window.removeEventListener("keyup", onKeyUp)
       window.removeEventListener("blur", onWindowBlur)
     }
-  }, [dedicatedVoiceConfigured, inputDisabled, startVoice, stopVoice, voiceActive])
+  }, [dedicatedVoiceConfigured, inputDisabled, startVoice, stopVoice, voiceActive, workspaceConfig.voiceEnabled])
 
   // LF-03: each real Vapi partial replaces the visible ink. The final event
   // clears the partial state in the voice provider, but this local final ink
@@ -404,7 +419,9 @@ export function CommandRail({
       try {
         outcome = threadState === "clarifying"
           ? await kernel.answerClarification(pending.text)
-          : await kernel.submit(pending.text, "voice", voiceSessionId ?? undefined)
+          : continuingWork
+            ? await kernel.continueWork(pending.text, "voice", voiceSessionId ?? undefined)
+            : await kernel.submit(pending.text, "voice", voiceSessionId ?? undefined)
       } catch {
         // The kernel reports normal transport failures as "failed"; this catch
         // keeps the same editable retry behavior for an unexpected rejection.
@@ -421,7 +438,7 @@ export function CommandRail({
       }
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [transcript, inputDisabled, threadState, kernel, voiceSessionId])
+  }, [transcript, inputDisabled, threadState, continuingWork, kernel, voiceSessionId])
 
   useEffect(() => {
     // jarvis-v3 P5.T6 (V4 barge-in) — real, live fix: §4.5's own rule is
@@ -435,6 +452,11 @@ export function CommandRail({
     // was a moment ago.
     kernel.setVoiceIndicators({ micOpen: voice.voiceState === "live" || voice.voiceState === "speaking", speaking: voice.userSpeaking })
   }, [voice.voiceState, voice.userSpeaking, kernel])
+
+  useEffect(() => {
+    if (workspaceConfig.voiceEnabled || !voiceActive) return
+    void stopVoice()
+  }, [stopVoice, voiceActive, workspaceConfig.voiceEnabled])
 
   const showingPartial = Boolean(voice.partialTranscript)
   const commitVariants = railCommitVariants(reducedMotion)
@@ -450,6 +472,12 @@ export function CommandRail({
         }}
         className="pointer-events-auto relative w-full max-w-[720px]"
       >
+        {continuableWorkId && (
+          <aside className="jarvis-command-work-context" data-command-work-id={continuableWorkId} data-command-work-mode={startNewWork ? "new" : "continue"} aria-label="Command Work context">
+            <span><strong>{startNewWork ? "New Work" : "Continuing Work"}</strong><span>{startNewWork ? "The next instruction will open a separate durable objective." : `${continuableWorkId.slice(0, 12)}… · text and voice stay on this context`}</span></span>
+            <button type="button" onClick={() => setStartNewWork((current) => !current)}>{startNewWork ? "Keep current Work" : "Start new Work"}</button>
+          </aside>
+        )}
         <motion.div
           initial={false}
           animate={committing ? commitVariants.animate : commitVariants.initial}
@@ -554,8 +582,8 @@ export function CommandRail({
         </div>
       </form>
       <div className="pointer-events-none j-fs-micro text-center text-[color:var(--j-text-faint)]">
-        <span className="sm:hidden">Tap mic to talk · Enter to send</span>
-        <span className="hidden sm:inline">/ to type · tap mic to talk · hold mic or Space, then release · ⌘K for anything else</span>
+        <span className="sm:hidden">{workspaceConfig.voiceEnabled ? "Tap mic to talk · Enter to send" : "Enter to send · voice is off"}</span>
+        <span className="hidden sm:inline">{workspaceConfig.voiceEnabled ? "/ to type · tap mic to talk · hold mic or Space, then release · ⌘K for anything else" : "/ to type · Enter to send · voice is disabled for this workspace · ⌘K for anything else"}</span>
       </div>
       {palette.open && (
         // P4.T7: the real "⌘K → Ops" destination opens OpsPanel below — a
