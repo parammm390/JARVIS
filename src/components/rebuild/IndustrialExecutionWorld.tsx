@@ -506,7 +506,14 @@ export default function IndustrialExecutionWorld({ phase, variant = "story", onC
   }, []);
 
   return (
-    <div ref={containerRef} className={styles.worldMount} aria-hidden="true">
+    <div
+      ref={containerRef}
+      className={styles.worldMount}
+      data-world-phase={phase}
+      data-world-variant={variant}
+      data-world-ready={canvasReady}
+      aria-hidden="true"
+    >
       {mounted ? (
         <Canvas
           camera={{ position: [0, 0, variant === "hero" ? 10.5 : 10.9], fov: variant === "hero" ? 46 : 43, near: 0.1, far: 50 }}

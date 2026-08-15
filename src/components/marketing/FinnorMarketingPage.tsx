@@ -474,6 +474,8 @@ function CapabilitiesPage() {
         </div>
       </section>
 
+      <MarketingLiveSystem route="capabilities" />
+
       <section className={`${styles.section} ${styles.capabilitiesSection}`}>
         <div className={styles.sectionHeader} data-reveal>
           <Eyebrow>The control layer behind the work</Eyebrow>
@@ -613,6 +615,8 @@ function HowItWorksPage() {
           </div>
         </div>
       </section>
+
+      <MarketingLiveSystem route="how-it-works" />
 
       <section className={`${styles.section} ${styles.pricingStepsSection}`} id="deployment-path">
         <div className={styles.pricingStepsHeader} data-reveal><Eyebrow>The deployment path</Eyebrow><h2>The operating system is configured, tested and activated with the company.</h2><p>The first certified chain proves the implementation boundary inside a broader deployment. It is the starting point for expansion, not the entire FINNOR product.</p></div>

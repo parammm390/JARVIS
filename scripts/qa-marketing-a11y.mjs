@@ -4,7 +4,21 @@ import { chromium } from "playwright";
 const require = createRequire(import.meta.url);
 const axePath = require.resolve("axe-core");
 const baseUrl = process.env.FINNOR_QA_URL ?? "http://127.0.0.1:3200";
-const routes = ["/", "/product", "/capabilities", "/how-it-works", "/pricing", "/faq", "/resources", "/trust-safety"];
+const routes = [
+  "/",
+  "/product",
+  "/capabilities",
+  "/how-it-works",
+  "/pricing",
+  "/faq",
+  "/resources",
+  "/resources/operating-glossary",
+  "/resources/operational-drag-estimator",
+  "/resources/deployment-readiness-checklist",
+  "/trust-safety",
+  "/privacy",
+  "/terms",
+];
 const viewports = [
   { label: "desktop", width: 1440, height: 900 },
   { label: "mobile", width: 390, height: 844 },

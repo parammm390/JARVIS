@@ -9,6 +9,7 @@ import { getSupabaseServiceClient } from "@/lib/leads/supabase"
 import { finalizeRecord } from "@/lib/memory/household"
 import { saveHouseholdRecord } from "@/lib/memory/store"
 import { TIER_DEFINITIONS } from "@/lib/lifecycle/pricing"
+import { requireInternalDemoAccess } from "@/lib/demo/internal-access"
 
 export const runtime = "nodejs"
 export const maxDuration = 60
@@ -24,6 +25,9 @@ type DiagnoseRequest = {
 }
 
 export async function POST(request: Request) {
+  const unavailable = requireInternalDemoAccess(request)
+  if (unavailable) return unavailable
+
   try {
     const limited = rateLimit(request, { name: "lifecycle-diagnose", limit: 12, windowMs: 10 * 60 * 1000 })
     if (limited) return limited

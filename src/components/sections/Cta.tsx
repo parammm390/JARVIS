@@ -56,7 +56,7 @@ export function Cta() {
               </Magnetic>
               <Magnetic strength={0.16}>
                 <a
-                  href={siteConfig.demoLink}
+                  href={siteConfig.calendlyLink}
                   data-cursor="hover"
                   className="cta-secondary inline-flex h-14 items-center justify-center gap-2 rounded-full border border-slate-900/12 bg-white px-7 text-sm font-black text-slate-900 transition hover:-translate-y-0.5 hover:border-slate-900/24"
                 >

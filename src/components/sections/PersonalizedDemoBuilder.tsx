@@ -95,7 +95,7 @@ export function PersonalizedDemoBuilder() {
         >
           <Magnetic strength={0.14}>
             <a
-              href={siteConfig.demoLink}
+              href={siteConfig.calendlyLink}
               data-cursor="hover"
               className="inline-flex min-h-16 items-center justify-center gap-2 rounded-full bg-slate-950 px-9 py-4 text-sm font-black text-white shadow-[0_18px_48px_rgba(15,35,54,0.18)] transition hover:-translate-y-0.5 hover:bg-slate-800"
             >

@@ -64,13 +64,19 @@ await recoverCapability.click();
 record("capability accordion opens recovery", (await recoverCapability.getAttribute("aria-expanded")) === "true", "Capability detail is keyboard and pointer addressable.");
 
 await marketingPage.goto(`${baseUrl}/faq`, { waitUntil: "domcontentloaded", timeout: 30_000 });
-const failureQuestion = marketingPage.getByRole("button", { name: "What happens when a connected system fails?" });
+const failureQuestion = marketingPage.getByRole("button", { name: "What happens when a configured system fails?" });
 await failureQuestion.click();
 record("FAQ exposes failure answer", (await failureQuestion.getAttribute("aria-expanded")) === "true", "FAQ answer opens with an explicit accessible state.");
 
 await marketingPage.goto(`${baseUrl}/pricing`, { waitUntil: "domcontentloaded", timeout: 30_000 });
-await marketingPage.getByRole("heading", { name: /Price the scope of the operation/i }).waitFor();
-record("pricing shows full deployment scope", await marketingPage.getByText("Quotes and proposals", { exact: true }).isVisible() && await marketingPage.getByText("Dispatch", { exact: true }).isVisible(), "Pricing names consequential operating deliverables without numeric shelf pricing.");
+await marketingPage.getByRole("heading", { name: /Map the company\. Price the implementation honestly/i }).waitFor();
+record(
+  "pricing shows substantial deployment scope",
+  await marketingPage.getByText("Starting around $30,000", { exact: true }).isVisible()
+    && await marketingPage.getByText("Operating review", { exact: true }).first().isVisible()
+    && await marketingPage.getByText("Production activation", { exact: true }).first().isVisible(),
+  "Pricing names the starting deployment value and the work required to activate it.",
+);
 await marketing.close();
 
 await browser.close();

@@ -24,6 +24,7 @@ import { isDemoMockMode } from "@/lib/env"
 import { ApiRequestError, cleanString, readJsonBody } from "@/lib/api/request"
 import { rateLimit } from "@/lib/api/rate-limit"
 import { isDemoWorkflowType } from "@/lib/demo/workflows"
+import { requireInternalDemoAccess } from "@/lib/demo/internal-access"
 import {
   createGenerationLock,
   finalizeGenerationLock,
@@ -38,6 +39,9 @@ export const maxDuration = 60
 const DEMO_LOCK_COOKIE = "finnor_demo_locks"
 
 export async function POST(request: Request) {
+  const unavailable = requireInternalDemoAccess(request)
+  if (unavailable) return unavailable
+
   try {
     const limited = rateLimit(request, { name: "generate-demo", limit: 8, windowMs: 10 * 60 * 1000 })
     if (limited) return limited

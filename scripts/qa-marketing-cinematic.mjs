@@ -28,6 +28,7 @@ async function capture(name, viewport, anchor, route = "/") {
 
 const results = [];
 results.push(await capture("cinematic-desktop-hero", { width: 1440, height: 900 }));
+results.push(await capture("cinematic-desktop-company-scope", { width: 1440, height: 900 }, "#company-scope"));
 results.push(await capture("cinematic-desktop-context", { width: 1440, height: 900 }, "#system"));
 results.push(await capture("cinematic-desktop-system", { width: 1440, height: 900 }, "#system-story"));
 results.push(await capture("cinematic-desktop-jarvis", { width: 1440, height: 900 }, "#jarvis-surface"));

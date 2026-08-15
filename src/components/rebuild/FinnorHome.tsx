@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 
 import { siteConfig } from "@/config/site";
+import { ParticleScroll } from "@/components/canvasui/ParticleScroll";
 import { FinnorMark } from "./FinnorMark";
 import FinnorNavigation from "./FinnorNavigation";
 import { DEPLOYMENT_START_USD, operatingAreas } from "@/content/commercial-truth";
@@ -336,7 +337,7 @@ function LiveWorkflow() {
 function SystemStage({ phase }: { phase: number }) {
   const chapter = systemChapters[phase] ?? systemChapters[0];
   return (
-    <div className={styles.systemStage} data-system-stage>
+    <div className={styles.systemStage} data-system-stage data-system-phase={phase}>
       <div className={styles.systemCanvas}><IndustrialExecutionWorld phase={phase} variant="story" /></div>
       <div className={styles.systemTopline}><span>FINNOR / EXECUTION ENGINE</span><b><i />{phase === 6 ? "CHAIN CLOSED" : "TRACE LIVE"}</b></div>
       <div className={styles.systemLabels} aria-hidden="true">
@@ -572,6 +573,7 @@ function CompanyDeploymentMap() {
 
 export default function FinnorHome() {
   const root = useRef<HTMLElement>(null);
+  const [phase, setPhase] = useState(0);
 
   useGSAP(
     () => {
@@ -624,6 +626,16 @@ export default function FinnorHome() {
             scrollTrigger: { trigger: element, start: "top 92%", end: "top 55%", scrub: 0.8 },
           },
         );
+      });
+
+      gsap.utils.toArray<HTMLElement>("[data-system-chapter]").forEach((chapter, index) => {
+        ScrollTrigger.create({
+          trigger: chapter,
+          start: "top 56%",
+          end: "bottom 44%",
+          onEnter: () => setPhase(index),
+          onEnterBack: () => setPhase(index),
+        });
       });
 
       // The stage is already pinned by CSS sticky. A second GSAP pin races with
@@ -683,11 +695,48 @@ export default function FinnorHome() {
           <span className={styles.inlineInstrument} aria-label="Live JARVIS workflow preview"><i /><i /><i /><i /><b>LIVE</b></span>
           <span>FINNOR is the execution layer.</span>
         </div>
+        <LiveWorkflow />
       </section>
+
+      <OperationsPulse />
 
       <CompanyDeploymentMap />
 
-      <OperationsPulse />
+      <section className={styles.systemIntro} id="system">
+        <div data-reveal>
+          <span>THE OPERATING SYSTEM UNDER THE COMMAND</span>
+          <ParticleScroll
+            className={styles.contextParticle}
+            point={0.72}
+            band={340}
+            density={3}
+            spread={150}
+            gravity={0.18}
+            drift={0.42}
+            swirl={34}
+            fade={0.72}
+          >
+            <div className={styles.contextCopy}>
+              <h2>Business complexity becomes executable structure.</h2>
+              <p>The first certified operating chain makes the broader deployment visible: grounded context, bounded plans, company policy, approval, durable execution, recovery and evidence.</p>
+            </div>
+          </ParticleScroll>
+        </div>
+      </section>
+
+      <section className={styles.systemStory} id="system-story" data-system-story>
+        <SystemStage phase={phase} />
+        <div className={styles.chapterRail}>
+          {systemChapters.map((chapter, index) => (
+            <article key={chapter.key} data-system-chapter data-current={phase === index}>
+              <span>{chapter.eyebrow}</span>
+              <h3>{chapter.title}</h3>
+              <p>{chapter.body}</p>
+              <b>{chapter.signal}</b>
+            </article>
+          ))}
+        </div>
+      </section>
 
       <section className={styles.jarvisSection} id="jarvis">
         <div className={styles.sectionHeading} data-reveal>
@@ -752,7 +801,7 @@ export default function FinnorHome() {
           <span>PRODUCTION DEPLOYMENTS / FROM AROUND $30,000</span>
           <h2>Map the company. Certify the first chain.</h2>
           <p>We’ll scope the broader operating deployment, configure the required systems and boundaries, then use the first certified chain to prove how FINNOR should expand inside the company.</p>
-          <div><a href={siteConfig.calendlyLink} target="_blank" rel="noreferrer">Plan your deployment <ArrowUpRight size={16} /></a><Link href="/demo">Open the public demo <ArrowRight size={16} /></Link></div>
+          <div><a href={siteConfig.calendlyLink} target="_blank" rel="noreferrer">Plan your deployment <ArrowUpRight size={16} /></a><Link href="/how-it-works">Review the deployment path <ArrowRight size={16} /></Link></div>
         </div>
       </section>
 

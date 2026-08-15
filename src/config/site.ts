@@ -5,7 +5,6 @@ export const siteConfig = {
     "FINNOR is configured around how a water treatment company actually operates. It coordinates customers, work, schedule, inventory, quotes, communication, money, research and agents; JARVIS is the command and work surface.",
   contactEmail: "param@finnorai.com",
   ctaLink: "https://calendly.com/pdave9807",
-  demoLink: "/demo",
   calendlyLink: "https://calendly.com/pdave9807",
   calendlyCta: "Book an operating review",
   calendlySupport:
