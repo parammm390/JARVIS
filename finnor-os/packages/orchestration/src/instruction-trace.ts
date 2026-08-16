@@ -11,6 +11,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { getLogger } from "@finnor/tools";
 import { redactStructured, redactText } from "@finnor/security";
 import type { AnswerEnvelope } from "./fast-read-lane";
+import type { OperatingEvidenceKind } from "@finnor/shared-types";
 
 // 15 values, verbatim from this session's own binding list — see migration 0062's own
 // comment on the "14 vs 15" discrepancy between that list's stated count and its
@@ -43,7 +44,7 @@ export interface InstructionTraceAnswerResult {
   display?: Record<string, unknown>;
   displaySummary?: string;
   facts?: Array<{ label: string; value: string; source?: string }>;
-  evidence?: Array<{ source: string; ref: string; timestamp: string; title?: string }>;
+  evidence?: Array<{ source: string; ref: string; timestamp: string; title?: string; kind?: OperatingEvidenceKind }>;
   asOf?: string;
   freshness?: { status: "fresh" | "stale" | "unknown"; observedAt: string };
 }
@@ -158,8 +159,15 @@ function sanitizeOutputEvidence(output: Record<string, unknown>): NonNullable<In
       const ref = sanitizeSpokenSummary(citation.url ?? citation.ref ?? citation.citationId).slice(0, 500);
       const timestamp = sanitizeSpokenSummary(citation.retrievedAt ?? citation.timestamp ?? citation.asOf).slice(0, 80);
       const title = sanitizeSpokenSummary(citation.title).slice(0, 200);
+      const explicitKind = citation.evidenceKind ?? citation.kind;
+      const kind: OperatingEvidenceKind | undefined = explicitKind === "CANONICAL" || explicitKind === "WORK" || explicitKind === "PROFILE" || explicitKind === "SESSION" || explicitKind === "MEMORY" || explicitKind === "WEB"
+        ? explicitKind
+        : /^(?:exa|firecrawl|web|research)/i.test(source) || /^https?:\/\//i.test(ref) ? "WEB"
+          : /semantic|memory|correction/i.test(source) ? "MEMORY"
+            : /(?:postgres|structured|snapshot|business.state|ops.overview|household|customer|lead|invoice|payment|appointment|service.visit|work.order|schedule|inventory|quote|proposal|read.model)/i.test(source) ? "CANONICAL"
+              : undefined;
       if (!source || !ref) return null;
-      return { source, ref, timestamp: timestamp || new Date().toISOString(), ...(title ? { title } : {}) };
+      return { source, ref, timestamp: timestamp || new Date().toISOString(), ...(title ? { title } : {}), ...(kind ? { kind } : {}) };
     })
     .filter((citation): citation is NonNullable<typeof citation> => Boolean(citation));
 }
@@ -202,6 +210,7 @@ export function createInstructionTraceAnswerEnvelope(actionId: string, answer: A
       source: sanitizeSpokenSummary(citation.source).slice(0, 120),
       ref: sanitizeSpokenSummary(citation.ref).slice(0, 240),
       timestamp: sanitizeSpokenSummary(citation.timestamp).slice(0, 80),
+      ...(citation.kind ? { kind: citation.kind } : {}),
     }))
     .filter((citation) => Boolean(citation.source && citation.ref && citation.timestamp));
   return {

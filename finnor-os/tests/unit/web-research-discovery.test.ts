@@ -113,7 +113,7 @@ describe("web-research discovery verification", () => {
       unverified: 3,
       boundedAt: 3,
     });
-    expect(output.citations).toEqual([verified.citation]);
+    expect(output.citations).toEqual([{ ...verified.citation, evidenceKind: "WEB" }]);
     expect(output.verifiedSnapshots).toEqual([verified.snapshot]);
     expect(output.citedResults).toHaveLength(1);
     expect(output.results[0]?.verificationStatus).toBe("verified");

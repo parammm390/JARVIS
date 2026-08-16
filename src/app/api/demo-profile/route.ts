@@ -5,11 +5,15 @@ import { toVoiceDemoProfile } from "@/lib/demo/voice-profile"
 import { ApiRequestError, cleanString, readJsonBody } from "@/lib/api/request"
 import { rateLimit } from "@/lib/api/rate-limit"
 import { isDemoWorkflowType } from "@/lib/demo/workflows"
+import { requireInternalDemoAccess } from "@/lib/demo/internal-access"
 
 export const runtime = "nodejs"
 export const maxDuration = 60
 
 export async function POST(request: Request) {
+  const unavailable = requireInternalDemoAccess(request)
+  if (unavailable) return unavailable
+
   try {
     const limited = rateLimit(request, { name: "demo-profile", limit: 12, windowMs: 10 * 60 * 1000 })
     if (limited) return limited

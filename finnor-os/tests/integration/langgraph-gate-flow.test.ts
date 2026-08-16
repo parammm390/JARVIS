@@ -21,7 +21,7 @@ import {
   createDefaultPluginRegistry,
 } from "@finnor/orchestration";
 import { ToolRegistry } from "@finnor/tools";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { DomainAction } from "@finnor/shared-types";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
@@ -75,7 +75,7 @@ function freshGraphOrchestrator(tools: ToolRegistry): FinnorOrchestrator {
 
 async function createDraftAction(actionType: string, payload: Record<string, unknown>): Promise<DomainAction> {
   return withTenant(SEED_TENANT_ID, async (db) => {
-    const [policy] = await db.select().from(domainPolicies).where(eq(domainPolicies.actionType, actionType)).limit(1);
+    const [policy] = await db.select().from(domainPolicies).where(and(eq(domainPolicies.tenantId, SEED_TENANT_ID), eq(domainPolicies.actionType, actionType))).limit(1);
     const [row] = await db
       .insert(domainActions)
       .values({ tenantId: SEED_TENANT_ID, actionType, payload, policyId: policy?.id ?? null, status: "draft" })

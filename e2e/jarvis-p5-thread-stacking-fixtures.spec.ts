@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test"
+import { test, expect, type Page } from "@playwright/test"
 import { mkdirSync } from "node:fs"
 
 // jarvis-v3 P5.T8 exit-gate evidence — a labelled FIXTURE (§0.2 rule 3).
@@ -13,6 +13,24 @@ const OUT_DIR = "qa-screenshots/v3-P5"
 
 const email = process.env.TEST_OWNER_EMAIL
 const password = process.env.TEST_OWNER_PASSWORD
+
+async function waitForCommandRailThroughRateLimit(page: Page) {
+  const rail = page.locator("[data-jarvis-command-rail]")
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    if (await rail.getAttribute("data-command-palette-ready").catch(() => null) === "true") return
+    const retry = page.getByRole("button", { name: "Retry connection" })
+    if (await retry.isVisible().catch(() => false)) {
+      // The local proxy intentionally allows 60 requests per one-minute
+      // window. A full-suite run can land this fixture on the honest 429
+      // gate; exercise its real recovery affordance after a bounded backoff.
+      await page.waitForTimeout(10_000)
+      await retry.click()
+    } else {
+      await page.waitForTimeout(2_000)
+    }
+  }
+  await expect(rail).toHaveAttribute("data-command-palette-ready", "true", { timeout: 15_000 })
+}
 
 // Real finding from this phase's own full-suite run: two real sign-ins in
 // the same file race each other under full parallelism (the same cause
@@ -88,6 +106,7 @@ test.describe("P5.T8 — thread stacking, FIXTURE harness (real component tree)"
 
   test("⌘K → Recent threads lists all real threads and jumps to the selected one", async ({ page }) => {
     test.skip(test.info().project.name !== "desktop-chromium", "single real-session run")
+    test.setTimeout(150_000)
     mkdirSync(OUT_DIR, { recursive: true })
 
     await page.setViewportSize({ width: 1440, height: 1400 })
@@ -100,7 +119,7 @@ test.describe("P5.T8 — thread stacking, FIXTURE harness (real component tree)"
     await page.waitForURL("**/jarvis", { timeout: 20_000 })
 
     await page.goto("/jarvis/next", { waitUntil: "domcontentloaded" })
-    await expect(page.locator("[data-jarvis-command-rail]")).toHaveAttribute("data-command-palette-ready", "true", { timeout: 15_000 })
+    await waitForCommandRailThroughRateLimit(page)
 
     await page.keyboard.press("Meta+k")
     await expect(page.getByRole("dialog", { name: "Command palette" })).toBeVisible({ timeout: 10_000 })

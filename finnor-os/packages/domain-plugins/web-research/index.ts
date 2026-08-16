@@ -30,6 +30,7 @@ async function synthesizeVerifiedResearch(
   sources: Array<{ title: string; url: string; excerpt: string }>,
   channel: LLMChannel,
   tenantId: string,
+  researchContext?: Record<string, unknown>,
 ): Promise<string> {
   const provider = resolveProviderForPurpose("answer", channel);
   const excerptLimit = channel === "voice" ? 520 : 1_500;
@@ -43,12 +44,15 @@ async function synthesizeVerifiedResearch(
       "Use only the supplied sources. Separate what the sources establish from any inference, and never turn an unverified search snippet into fact.",
       "Lead with the direct answer, then the most decision-useful findings. Mention source titles naturally; the product renders their links separately.",
       "When the user asks for a comparison, state the requested values with their source and explain whether they are actually comparable (industry, date, network, and methodology).",
+      "For competitor research, name actual companies supported by the supplied excerpts. Generic market or industry statistics are not competitor candidates and must never substitute for missing company evidence.",
+      "Never infer a private company's revenue/ARR, founder age, or performance. If a requested company-level constraint is not established by a source, label it unavailable and do not claim that candidate satisfies it.",
+      "Treat researchContext as authenticated PROFILE context for resolving the user's company and requested comparison only. It is not WEB evidence about a candidate, and WEB claims must still cite supplied sources.",
       "When the user asks for a specific number of decisions, give exactly that many numbered, concrete decisions. Tie each decision to an observed metric or an explicit measurement threshold; generic advice such as 'improve targeting' is not sufficient.",
       "If an excerpt does not contain the requested number or methodology, say that clearly instead of inventing it.",
       channel === "voice" ? "Keep the answer to four or five concise spoken sentences." : "Keep the answer concise but substantive, normally six to twelve sentences.",
       "Do not expose hidden reasoning or chain-of-thought. Return only the user-facing answer.",
     ].join("\n"),
-    user: JSON.stringify({ query, verifiedSources: sourceProjection }),
+    user: JSON.stringify({ query, ...(researchContext ? { researchContext } : {}), verifiedSources: sourceProjection }),
     tenantId,
     purpose: "answer",
     channel,
@@ -208,6 +212,29 @@ export const WebSearchSchema = z.object({
   query: z.string().min(2).max(400),
   numResults: opt(z.number().int().min(1).max(10)),
   responseChannel: ResponseChannelSchema.optional(),
+  researchContext: z.object({
+    companyName: z.string().min(1).max(200),
+    industry: z.string().min(1).max(200),
+    niche: z.string().min(1).max(200).optional(),
+    geographies: z.array(z.string().min(1).max(120)).min(1).max(10),
+    idealCustomerProfile: z.record(z.unknown()),
+    comparison: z.object({
+      founderAge: z.number().int().min(18).max(100).optional(),
+      ageToleranceYears: z.number().int().min(0).max(20).optional(),
+      founderAgeMin: z.number().int().min(18).max(100).optional(),
+      founderAgeMax: z.number().int().min(18).max(100).optional(),
+      scaleMetric: z.string().min(1).max(100).optional(),
+      minScaleUsd: z.number().nonnegative().optional(),
+      maxScaleUsd: z.number().positive().optional(),
+      performanceMetric: z.string().min(1).max(120).optional(),
+      companyBaseline: z.union([z.string().max(100), z.number()]).optional(),
+    }).superRefine((value, ctx) => {
+      if (value.founderAgeMin !== undefined && value.founderAgeMax !== undefined && value.founderAgeMin > value.founderAgeMax) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["founderAgeMax"], message: "founderAgeMax must be at least founderAgeMin" });
+      }
+    }),
+    sourceKinds: z.tuple([z.literal("PROFILE"), z.literal("WEB")]),
+  }).optional(),
 });
 export const CompetitorScanSchema = z.object({
   area: z.string().min(2).max(200), // "Cedar Falls Iowa"
@@ -299,7 +326,7 @@ export const webResearchPlugin: DomainEnginePlugin = {
       const sourceProjection = scraped.map((result) => ({ title: result.title, url: result.url, excerpt: result.excerpt }));
       let spokenSummary = `Read ${scraped.length} verified competitor source snapshot${scraped.length === 1 ? "" : "s"}; review the cited pages for exact details.`;
       try {
-        spokenSummary = await synthesizeVerifiedResearch(query, sourceProjection, responseChannel, tenantId);
+        spokenSummary = await synthesizeVerifiedResearch(query, sourceProjection, responseChannel, tenantId, p.researchContext as Record<string, unknown> | undefined);
       } catch (error) {
         console.warn("[web-research] source synthesis unavailable", {
           name: error instanceof Error ? error.name : "UnknownError",
@@ -321,11 +348,12 @@ export const webResearchPlugin: DomainEnginePlugin = {
             citation: result.citation,
             snapshot: result.snapshot,
           })),
-          citations,
+          citations: citations.map((citation) => ({ ...citation, evidenceKind: "WEB" })),
           failedSources,
           spokenSummary,
           displaySafe: {
             title: "Verified research",
+            evidenceKind: "WEB",
             sourceCount: scraped.length,
             sources: sourceProjection.map(({ title, url }) => ({ title, url })),
           },
@@ -352,6 +380,7 @@ export const webResearchPlugin: DomainEnginePlugin = {
           verification.citedResults.map((result) => ({ title: result.title, url: result.url, excerpt: result.excerpt })),
           responseChannel,
           tenantId,
+          p.researchContext as Record<string, unknown> | undefined,
         );
       } catch (error) {
         console.warn("[web-research] source synthesis unavailable", {
@@ -368,13 +397,14 @@ export const webResearchPlugin: DomainEnginePlugin = {
         query,
         results: verification.labeledResults,
         citedResults: verification.citedResults,
-        citations: verification.citations,
+        citations: verification.citations.map((citation) => ({ ...citation, evidenceKind: "WEB" })),
         verifiedSnapshots: verification.verifiedSnapshots,
         unverifiedDiscovery: verification.unverifiedDiscovery,
         verification: verification.verification,
         spokenSummary,
         displaySafe: {
           title: "Verified research",
+          evidenceKind: "WEB",
           sourceCount: verification.citedResults.length,
           sources: verification.citedResults.map((result) => ({ title: result.title, url: result.url })),
         },

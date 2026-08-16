@@ -88,7 +88,13 @@ export async function ingestPublicReferencePdf(params: {
       organization: params.source.organization,
       sha256: actualHash,
     }],
-  }).map((chunk, index) => ({ ...chunk, documentId, sourceDocId: `${params.source.url}#chunk=${index + 1}` }));
+  }).map((chunk, index) => ({
+    ...chunk,
+    documentId,
+    sourceDocId: `${params.source.url}#chunk=${index + 1}`,
+    sourceKind: "reference_document",
+    provenance: { documentId, sourceUrl: params.source.url, organization: params.source.organization, sha256: actualHash },
+  }));
   const chunksWritten = await writeSemantic(params.tenantId, params.source.url, chunks, params.embedder ?? defaultEmbedder());
   return { documentId, chunks: chunksWritten, alreadyIngested: false };
 }

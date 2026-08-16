@@ -73,6 +73,17 @@ describe("kernel/store — applyTraceEvents (P3.T7)", () => {
     expect(t.contextChips).toHaveLength(1)
   })
 
+  it("projects only genuine backend progress and verification events", () => {
+    let t = applyTraceEvents(baseThread(), [ev(1, "step_progress", { stage: "resolving_context", sourceKind: "PROFILE" })], NO_DECISIONS)
+    expect(t.progress).toEqual({ stage: "resolving_context", observedAt: new Date(1).toISOString() })
+
+    t = applyTraceEvents(t, [ev(2, "step_progress", { stage: "querying_business", sourceKind: "CANONICAL" })], NO_DECISIONS)
+    expect(t.progress).toMatchObject({ stage: "querying_business", sourceKind: "CANONICAL" })
+
+    t = applyTraceEvents(t, [ev(3, "verified", { sourceKind: "CANONICAL" })], NO_DECISIONS)
+    expect(t.progress).toMatchObject({ stage: "verified", sourceKind: "CANONICAL" })
+  })
+
   it("'planning' moves understanding -> planning, only from understanding", () => {
     const understanding = baseThread({ machine: transition(transition(initialMachineState, { type: "SUBMITTED" }), { type: "ACK" }) })
     const t = applyTraceEvents(understanding, [ev(1, "planning")], NO_DECISIONS)
@@ -145,7 +156,7 @@ describe("kernel/store — applyTraceEvents (P3.T7)", () => {
     t = applyTraceEvents(t, [ev(1, "plan_ready", { count: 1 }), ev(2, "action_created", { actionId: "answer-1", actionType: "lookup_invoice_status" })], NO_DECISIONS)
     t = applyTraceEvents(
       t,
-      [ev(3, "completed", { actionId: "answer-1", result: { kind: "answer", spokenSummary: "Invoice 42 is paid.", displaySummary: "Invoice 42 is paid.", facts: [{ label: "Status", value: "Paid", source: "invoice" }] } })],
+      [ev(3, "completed", { actionId: "answer-1", result: { kind: "answer", spokenSummary: "Invoice 42 is paid.", displaySummary: "Invoice 42 is paid.", facts: [{ label: "Status", value: "Paid", source: "invoice" }], evidence: [{ source: "invoice", ref: "invoice-42", kind: "CANONICAL" }] } })],
       NO_DECISIONS,
     )
     expect(t.answerResult).toEqual({
@@ -153,6 +164,7 @@ describe("kernel/store — applyTraceEvents (P3.T7)", () => {
       spokenSummary: "Invoice 42 is paid.",
       displaySummary: "Invoice 42 is paid.",
       facts: [{ label: "Status", value: "Paid", source: "invoice" }],
+      evidence: [{ source: "invoice", ref: "invoice-42", kind: "CANONICAL" }],
     })
     expect(t.machine.instructionState).toBe("completed")
     expect(t.everExecuted).toBe(false)

@@ -2,11 +2,15 @@ import { NextResponse } from "next/server"
 import { ApiRequestError, cleanString, readJsonBody } from "@/lib/api/request"
 import { rateLimit } from "@/lib/api/rate-limit"
 import { lookupWater, WaterLookupError } from "@/lib/lifecycle/water-data"
+import { requireInternalDemoAccess } from "@/lib/demo/internal-access"
 
 export const runtime = "nodejs"
 export const maxDuration = 60
 
 export async function POST(request: Request) {
+  const unavailable = requireInternalDemoAccess(request)
+  if (unavailable) return unavailable
+
   const requestId = Math.random().toString(36).slice(2, 9)
   const startTime = Date.now()
   try {

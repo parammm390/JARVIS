@@ -16,5 +16,5 @@ test("retired Dealer Zero route resolves to the canonical workspace", async ({ p
   await page.goto("/jarvis/showtime")
   await expect(page).toHaveURL(/\/jarvis$/)
   await expect(page.locator("[data-jarvis-adaptive-runtime]")).toBeVisible()
-  await expect(page.getByRole("heading", { name: "JARVIS workspace" })).toBeVisible()
+  await expect(page.getByRole("heading", { name: "What needs attention now" })).toBeVisible()
 })

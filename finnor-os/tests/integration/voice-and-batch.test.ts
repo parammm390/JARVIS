@@ -11,7 +11,7 @@ import { withTenant, closePool, domainActions, domainPolicies, households, propo
 import { FinnorOrchestrator, parseSpokenDecision } from "@finnor/orchestration";
 import { findConsentedTargets } from "../../packages/domain-plugins/bulk-notify/index";
 import { ToolRegistry } from "@finnor/tools";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import type { DomainAction } from "@finnor/shared-types";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
@@ -51,7 +51,7 @@ async function createDraftAction(actionType: string, payload: Record<string, unk
     const [policy] = await db
       .select()
       .from(domainPolicies)
-      .where(eq(domainPolicies.actionType, actionType))
+      .where(and(eq(domainPolicies.tenantId, SEED_TENANT_ID), eq(domainPolicies.actionType, actionType)))
       .limit(1);
     const [row] = await db
       .insert(domainActions)

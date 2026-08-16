@@ -61,7 +61,7 @@ async function createDraftAction(actionType: string, payload: Record<string, unk
     const [policy] = await db
       .select()
       .from(domainPolicies)
-      .where(eq(domainPolicies.actionType, actionType))
+      .where(and(eq(domainPolicies.tenantId, SEED_TENANT_ID), eq(domainPolicies.actionType, actionType)))
       .limit(1);
     const [row] = await db
       .insert(domainActions)

@@ -6,6 +6,7 @@ export type WorkspaceKind =
   | "schedule"
   | "money"
   | "research"
+  | "answer"
   | "plan"
   | "campaign"
   | "execution"
@@ -203,7 +204,7 @@ export interface WorkspaceAnswer {
   spokenSummary: string
   displaySummary?: string
   facts?: Array<{ label: string; value: string; source?: string }>
-  evidence?: Array<{ source: string; ref: string; timestamp?: string; title?: string }>
+  evidence?: Array<{ source: string; ref: string; timestamp?: string; title?: string; kind?: "CANONICAL" | "WORK" | "PROFILE" | "SESSION" | "MEMORY" | "WEB" }>
   query?: OperationalQueryExecution
 }
 

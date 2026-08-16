@@ -3,10 +3,14 @@ import type { DemoLeadUpdate } from "@/lib/demo/types"
 import { updateDemoLead } from "@/lib/leads/supabase"
 import { ApiRequestError, cleanString, readJsonBody } from "@/lib/api/request"
 import { rateLimit } from "@/lib/api/rate-limit"
+import { requireInternalDemoAccess } from "@/lib/demo/internal-access"
 
 export const runtime = "nodejs"
 
 export async function POST(request: Request) {
+  const unavailable = requireInternalDemoAccess(request)
+  if (unavailable) return unavailable
+
   try {
     const limited = rateLimit(request, { name: "demo-leads-update", limit: 80, windowMs: 10 * 60 * 1000 })
     if (limited) return limited

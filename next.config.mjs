@@ -40,8 +40,38 @@ const nextConfig = {
   async redirects() {
     return [
       {
+        source: "/demo",
+        destination: "/product",
+        permanent: true,
+      },
+      {
+        source: "/demo/:path*",
+        destination: "/product",
+        permanent: true,
+      },
+      {
+        source: "/dashboard-demo",
+        destination: "/product",
+        permanent: true,
+      },
+      {
         source: "/resources/admissions-ai-glossary",
-        destination: "/resources/dispatch-ai-glossary",
+        destination: "/resources/operating-glossary",
+        permanent: true,
+      },
+      {
+        source: "/resources/dispatch-ai-glossary",
+        destination: "/resources/operating-glossary",
+        permanent: true,
+      },
+      {
+        source: "/resources/missed-call-cost-calculator",
+        destination: "/resources/operational-drag-estimator",
+        permanent: true,
+      },
+      {
+        source: "/resources/pilot-setup-checklist",
+        destination: "/resources/deployment-readiness-checklist",
         permanent: true,
       },
     ]

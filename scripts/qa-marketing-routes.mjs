@@ -2,42 +2,54 @@ import { chromium } from "playwright";
 
 const baseUrl = process.env.FINNOR_QA_URL ?? "http://127.0.0.1:3200";
 const routes = [
-  "/",
-  "/product",
-  "/capabilities",
-  "/how-it-works",
-  "/pricing",
-  "/faq",
-  "/resources",
-  "/resources/dispatch-ai-glossary",
-  "/resources/admissions-ai-glossary",
-  "/resources/missed-call-cost-calculator",
-  "/resources/pilot-setup-checklist",
-  "/trust-safety",
-  "/privacy",
-  "/terms",
-  "/demo",
-  "/demo/lifecycle",
-  "/demo/legacy",
-  "/jarvis",
-  "/jarvis/login",
-  "/jarvis/reset-password",
-  "/jarvis/work",
-  "/jarvis/customers",
-  "/jarvis/schedule",
-  "/jarvis/money",
-  "/jarvis/agents",
-  "/jarvis/bridge",
-  "/jarvis/classic",
-  "/jarvis/next",
-  "/jarvis/showtime",
+  { path: "/" },
+  { path: "/product" },
+  { path: "/capabilities" },
+  { path: "/how-it-works" },
+  { path: "/pricing" },
+  { path: "/faq" },
+  { path: "/resources" },
+  { path: "/resources/operating-glossary" },
+  { path: "/resources/operational-drag-estimator" },
+  { path: "/resources/deployment-readiness-checklist" },
+  { path: "/resources/dispatch-ai-glossary", finalPath: "/resources/operating-glossary" },
+  { path: "/resources/admissions-ai-glossary", finalPath: "/resources/operating-glossary" },
+  { path: "/resources/missed-call-cost-calculator", finalPath: "/resources/operational-drag-estimator" },
+  { path: "/resources/pilot-setup-checklist", finalPath: "/resources/deployment-readiness-checklist" },
+  { path: "/trust-safety" },
+  { path: "/privacy" },
+  { path: "/terms" },
+  { path: "/demo", finalPath: "/product" },
+  { path: "/demo/lifecycle", finalPath: "/product" },
+  { path: "/demo/legacy", finalPath: "/product" },
+  { path: "/dashboard-demo", finalPath: "/product" },
+  { path: "/jarvis" },
+  { path: "/jarvis/login" },
+  { path: "/jarvis/reset-password" },
+  { path: "/jarvis/work" },
+  { path: "/jarvis/customers" },
+  { path: "/jarvis/schedule" },
+  { path: "/jarvis/money" },
+  { path: "/jarvis/agents" },
+  { path: "/jarvis/bridge", finalPath: "/jarvis", allowedStatus: [200, 307] },
+  { path: "/jarvis/classic", finalPath: "/jarvis", allowedStatus: [200, 307] },
+  { path: "/jarvis/next", finalPath: "/jarvis", allowedStatus: [200, 307, 404] },
+  { path: "/jarvis/showtime", finalPath: "/jarvis", allowedStatus: [200, 307] },
+  { path: "/jarvis/stage", finalPath: "/jarvis", allowedStatus: [200, 307] },
+];
+
+const viewports = [
+  { label: "desktop", width: 1280, height: 800 },
+  { label: "mobile", width: 390, height: 844 },
 ];
 
 const browser = await chromium.launch({ headless: true });
-const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce" });
 const results = [];
 
-for (const route of routes) {
+for (const viewport of viewports) {
+ const context = await browser.newContext({ viewport, reducedMotion: "reduce" });
+ for (const routeConfig of routes) {
+  const route = routeConfig.path;
   const page = await context.newPage();
   const runtimeErrors = [];
   const expectedAuthDenials = [];
@@ -63,9 +75,10 @@ for (const route of routes) {
       overlay: Boolean(document.querySelector("[data-nextjs-dialog], #webpack-dev-server-client-overlay")),
       horizontalOverflow: Math.max(0, document.documentElement.scrollWidth - document.documentElement.clientWidth),
     }));
-    const allowedStatus = route === "/jarvis/next" ? [200, 404] : [200];
+    const allowedStatus = routeConfig.allowedStatus ?? [200];
     const minimumBodyLength = route.startsWith("/jarvis") || status === 404 ? 10 : 120;
     results.push({
+      viewport: viewport.label,
       route,
       finalPath: new URL(page.url()).pathname,
       status,
@@ -74,6 +87,7 @@ for (const route of routes) {
       expectedAuthDenials,
       passed:
         allowedStatus.includes(status) &&
+        new URL(page.url()).pathname === (routeConfig.finalPath ?? route) &&
         !metrics.overlay &&
         metrics.bodyLength > minimumBodyLength &&
         metrics.horizontalOverflow <= 2 &&
@@ -84,11 +98,15 @@ for (const route of routes) {
   }
 
   await page.close();
+ }
+ await context.close();
 }
 
-await context.close();
 await browser.close();
 
 const failed = results.filter((result) => !result.passed);
-console.log(JSON.stringify({ routeCount: results.length, failedCount: failed.length, results }, null, 2));
+const report = process.env.FINNOR_QA_VERBOSE === "1"
+  ? { routeCount: results.length, failedCount: failed.length, results }
+  : { routeCount: results.length, failedCount: failed.length, failed };
+console.log(JSON.stringify(report, null, 2));
 if (failed.length) process.exitCode = 1;

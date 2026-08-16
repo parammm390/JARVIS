@@ -109,8 +109,8 @@ async function seedFixture(tenantId: string): Promise<void> {
     [tenantId, SEED_HOUSEHOLDS],
   );
   await pool.query(
-    `INSERT INTO finnor_os.communications_log (id, household_id, channel, direction, content, "timestamp")
-     SELECT md5($1::text || ':communication:' || n)::uuid,
+    `INSERT INTO finnor_os.communications_log (id, tenant_id, household_id, channel, direction, content, "timestamp")
+     SELECT md5($1::text || ':communication:' || n)::uuid, $1::uuid,
        md5($1::text || ':household:' || n)::uuid, 'email', 'inbound', 'certification activity',
        now() - interval '120 days'
      FROM generate_series(1, $2::int) AS n
@@ -119,8 +119,8 @@ async function seedFixture(tenantId: string): Promise<void> {
     [tenantId, SEED_HOUSEHOLDS],
   );
   await pool.query(
-    `INSERT INTO finnor_os.service_visits (id, household_id, technician_id, type, scheduled_at, completed_at, notes)
-     SELECT md5($1::text || ':visit:' || n)::uuid,
+    `INSERT INTO finnor_os.service_visits (id, tenant_id, household_id, technician_id, type, scheduled_at, completed_at, notes)
+     SELECT md5($1::text || ':visit:' || n)::uuid, $1::uuid,
        md5($1::text || ':household:' || n)::uuid,
        md5($1::text || ':tech:' || ((n % 5) + 1))::uuid,
        'maintenance', now() - interval '120 days', now() - interval '120 days', NULL

@@ -87,7 +87,14 @@ export default function IndustrialExecutionWorldLoader({ phase, variant = "story
   }, []);
 
   return (
-    <div ref={root} className={styles.worldMount} aria-hidden="true">
+    <div
+      ref={root}
+      className={styles.worldMount}
+      data-world-phase={phase}
+      data-world-variant={variant}
+      data-world-mode={canvasReady ? "accelerated" : capable && mounted ? "accelerating" : "static"}
+      aria-hidden="true"
+    >
       <StaticIndustrialWorld phase={phase} faded={canvasReady} />
       {capable && mounted ? (
         <div style={{ position: "absolute", inset: 0 }}>

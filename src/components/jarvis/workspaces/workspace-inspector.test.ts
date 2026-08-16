@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import type { Thread } from "../kernel/store"
 import type { WorkspaceProjection } from "./contracts"
-import { buildWorkspaceInspector } from "./workspace-inspector"
+import { buildWorkspaceInspector, groupWorkspaceInspector } from "./workspace-inspector"
 
 function thread(overrides: Partial<Thread> = {}): Thread {
   return {
@@ -40,5 +40,14 @@ describe("contextual workspace inspector", () => {
     expect(rendered).toContain("Policy collections · v3")
     expect(rendered).toContain("recorded human decision is required")
     expect(rendered).not.toContain("private planner trace")
+  })
+
+  it("keeps Work state, authority, and source evidence as the primary lens", () => {
+    const items = buildWorkspaceInspector(thread({ answerResult: { kind: "answer", spokenSummary: "Three operating queues are open.", evidence: [{ source: "business_state", ref: "query-1" }] } }), projection(), "owner")
+    const groups = groupWorkspaceInspector(items)
+    expect(groups.primary.map((item) => item.label)).toEqual(["Work state", "Authority", "Source evidence"])
+    expect(groups.primary.find((item) => item.label === "Source evidence")?.value).toContain("business_state")
+    expect(groups.advanced.map((item) => item.label)).toContain("Policy / permission")
+    expect(groups.durableWork?.href).toContain("work-1")
   })
 })

@@ -788,6 +788,15 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
     const anyDegraded = slowResults.some((r) => r.status === "rejected")
     const anySucceeded = slowResults.some((r) => r.status === "fulfilled")
     const nowTs = Date.now()
+    const cashValue = cash.status === "fulfilled" ? cash.value : null
+    const overdueSample = cashValue && Array.isArray(cashValue.invoicesByStatus)
+      ? cashValue.invoicesByStatus.find((row) => row.status === "overdue")?.totalUsd ?? 0
+      : null
+    const collectedSample = cashValue && typeof cashValue.totalCollected === "number" ? cashValue.totalCollected : null
+    const pipelineValue = pipeline.status === "fulfilled" ? pipeline.value : null
+    const leadsOpenSample = pipelineValue && Array.isArray(pipelineValue.leadsByStatus)
+      ? pipelineValue.leadsByStatus.reduce((sum, row) => sum + row.count, 0)
+      : null
     setState((prev) => ({
       ...prev,
       slowLastSuccessMs: anySucceeded ? nowTs : prev.slowLastSuccessMs,
@@ -804,15 +813,9 @@ export function JarvisDataProvider({ children }: { children: React.ReactNode }):
       readModelsDegraded: anyDegraded,
       metricHistory: {
         ...prev.metricHistory,
-        ...(cash.status === "fulfilled" && cash.value
-          ? {
-              overdueUsd: [...(prev.metricHistory.overdueUsd ?? []), cash.value.invoicesByStatus.find((s) => s.status === "overdue")?.totalUsd ?? 0].slice(-40),
-              collectedUsd: [...(prev.metricHistory.collectedUsd ?? []), cash.value.totalCollected].slice(-40),
-            }
-          : {}),
-        ...(pipeline.status === "fulfilled" && pipeline.value
-          ? { leadsOpen: [...(prev.metricHistory.leadsOpen ?? []), pipeline.value.leadsByStatus.reduce((s, r) => s + r.count, 0)].slice(-40) }
-          : {}),
+        ...(overdueSample !== null ? { overdueUsd: [...(prev.metricHistory.overdueUsd ?? []), overdueSample].slice(-40) } : {}),
+        ...(collectedSample !== null ? { collectedUsd: [...(prev.metricHistory.collectedUsd ?? []), collectedSample].slice(-40) } : {}),
+        ...(leadsOpenSample !== null ? { leadsOpen: [...(prev.metricHistory.leadsOpen ?? []), leadsOpenSample].slice(-40) } : {}),
       },
     }))
   }, [noteLaneOutcome, projectionClient])

@@ -10151,3 +10151,305 @@ html[data-jarvis-workspace-radius="precise"] .jarvis-command-rail--embedded form
     min-height: 0;
   }
 }
+
+/* --------------------------------------------------------------------------
+   Bounded JARVIS bridge evolution
+
+   The adaptive workspace is the owner-facing bridge. Keep the shell dark and
+   source-led, but let the work surface own the available width. Context is an
+   on-demand lens; progress and records stay in the canvas.
+   -------------------------------------------------------------------------- */
+.jarvis-adaptive-shell {
+  grid-template-columns: 76px minmax(0, 1fr);
+}
+
+.jarvis-adaptive-shell[data-inspector-state="open"] {
+  grid-template-columns: 76px minmax(0, 1fr) minmax(268px, 320px);
+}
+
+.jarvis-adaptive-main {
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+}
+
+.jarvis-adaptive-stage {
+  padding-block: 12px;
+}
+
+.jarvis-adaptive-stage > * {
+  min-height: 0;
+}
+
+.jarvis-adaptive-stage > .jarvis-resting-workspace {
+  min-height: min(52dvh, 520px);
+}
+
+.jarvis-adaptive-inspector-toggle {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 10px;
+  border: 1px solid rgba(116, 193, 219, 0.16);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.025);
+  color: #9ebdcc;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.jarvis-adaptive-inspector-toggle:hover,
+.jarvis-adaptive-inspector-toggle:focus-visible {
+  border-color: rgba(104, 222, 241, 0.4);
+  color: #e0fbff;
+  outline: none;
+}
+
+.jarvis-workspace-progress {
+  min-height: 0;
+  padding: clamp(16px, 2.4vw, 26px);
+  border: 1px solid rgba(107, 205, 229, 0.2);
+  border-radius: 13px;
+  background:
+    linear-gradient(145deg, rgba(10, 35, 50, 0.82), rgba(4, 15, 26, 0.96)),
+    var(--workspace-panel);
+}
+
+.jarvis-workspace-progress > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--workspace-line);
+}
+
+.jarvis-workspace-progress__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #7acbdd;
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.jarvis-workspace-progress__eyebrow i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #66d9ed;
+  box-shadow: 0 0 10px rgba(102, 217, 237, 0.55);
+}
+
+.jarvis-workspace-progress h2 {
+  margin-top: 6px;
+  color: #effbfe;
+  font-size: clamp(20px, 2.1vw, 30px);
+  font-weight: 680;
+  letter-spacing: -0.035em;
+  line-height: 1.05;
+}
+
+.jarvis-workspace-progress p {
+  max-width: 48rem;
+  margin-top: 7px;
+  color: #91afbe;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.jarvis-workspace-progress__work-id {
+  flex: 0 0 auto;
+  color: #6f9aaa;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.jarvis-workspace-progress > ol {
+  display: grid;
+  grid-auto-flow: dense;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.jarvis-workspace-progress > ol li {
+  display: flex;
+  min-width: 0;
+  min-height: 32px;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 1px solid rgba(139, 191, 216, 0.11);
+  border-radius: 8px;
+  color: #5e8193;
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.jarvis-workspace-progress > ol li[data-progress-status="complete"] {
+  border-color: rgba(87, 213, 170, 0.2);
+  color: #a5d9c8;
+}
+
+.jarvis-workspace-progress > ol li[data-progress-status="active"] {
+  border-color: rgba(91, 215, 236, 0.32);
+  background: rgba(66, 190, 218, 0.08);
+  color: #e0f9fc;
+}
+
+.jarvis-workspace-progress > ol li[data-progress-status="not-applicable"] {
+  opacity: 0.48;
+}
+
+.jarvis-workspace-progress__step-dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+}
+
+.jarvis-workspace-progress li[data-progress-status="complete"] .jarvis-workspace-progress__step-dot {
+  border-color: #67d5af;
+  background: #67d5af;
+}
+
+.jarvis-workspace-progress li[data-progress-status="active"] .jarvis-workspace-progress__step-dot {
+  border-color: #83e8f4;
+  background: #83e8f4;
+  box-shadow: 0 0 10px rgba(131, 232, 244, 0.56);
+}
+
+.jarvis-planning-workspace {
+  display: grid;
+  gap: 10px;
+}
+
+.jarvis-planning-workspace .jarvis-action-workspace {
+  padding-top: 4px;
+}
+
+.jarvis-schedule-zero {
+  display: grid;
+  min-height: 238px;
+  align-content: center;
+  justify-items: center;
+  gap: 8px;
+  padding: 28px;
+  text-align: center;
+}
+
+.jarvis-schedule-zero > svg { color: #69d6bd; }
+.jarvis-schedule-zero strong { max-width: 42rem; color: #e1f5f3; font-size: 17px; font-weight: 700; letter-spacing: -0.02em; }
+.jarvis-schedule-zero p { max-width: 38rem; color: #82a4ae; font-size: 11px; line-height: 1.55; }
+.jarvis-schedule-zero span { color: #5d8b86; font-family: var(--font-geist-mono), monospace; font-size: 9px; }
+
+.jarvis-work-timeline-workspace { min-height: 0; }
+.jarvis-work-timeline-workspace__header { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; padding: 14px 16px; border-bottom: 1px solid var(--workspace-line); }
+.jarvis-work-timeline-workspace__header div { display: grid; gap: 4px; }
+.jarvis-work-timeline-workspace__header span { color: #6f9bad; font-size: 9px; font-weight: 800; letter-spacing: 0.11em; text-transform: uppercase; }
+.jarvis-work-timeline-workspace__header strong { color: #dff1f5; font-size: 15px; }
+.jarvis-work-timeline-workspace__header > span { color: #6f8f9d; font-size: 10px; }
+.jarvis-work-timeline { display: grid; gap: 0; margin: 0; padding: 14px 16px 18px 28px; list-style: none; }
+.jarvis-work-timeline > li { position: relative; min-width: 0; padding: 0 0 8px 18px; border-left: 1px solid rgba(87, 208, 230, 0.2); }
+.jarvis-work-timeline > li:last-child { padding-bottom: 0; border-left-color: transparent; }
+.jarvis-work-timeline__dot { position: absolute; top: 16px; left: -5px; width: 9px; height: 9px; border: 2px solid #62d9eb; border-radius: 50%; background: #061522; }
+.jarvis-work-timeline button { display: grid; width: 100%; grid-template-columns: minmax(0, 1fr) auto 16px; align-items: center; gap: 12px; min-height: 58px; padding: 10px 12px; border: 1px solid transparent; border-radius: 9px; text-align: left; }
+.jarvis-work-timeline button:hover, .jarvis-work-timeline button:focus-visible { border-color: rgba(91, 215, 236, 0.23); background: rgba(66, 190, 218, 0.055); outline: none; }
+.jarvis-work-timeline strong { display: block; overflow: hidden; color: #e2f0f4; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.jarvis-work-timeline small { display: block; margin-top: 4px; color: #7192a2; font-size: 10px; }
+.jarvis-work-timeline time { color: #8bb9c8; font-family: var(--font-geist-mono), monospace; font-size: 9px; white-space: nowrap; }
+.jarvis-work-timeline svg { color: #70cbdc; }
+
+.jarvis-research-result h2 { margin-top: 5px; color: #e8f6f8; font-size: 18px; font-weight: 680; letter-spacing: -0.025em; }
+.jarvis-research-narrative { display: grid; gap: 10px; margin-top: 12px; }
+.jarvis-research-narrative p { max-width: 70rem; color: #d3e5ea; font-size: clamp(13px, 1.15vw, 17px); line-height: 1.62; }
+
+.jarvis-conversation-layer { display: block; padding-block: 5px 8px; }
+.jarvis-current-request { display: grid; grid-template-columns: minmax(130px, 0.24fr) minmax(0, 1fr); align-items: center; gap: 12px; min-height: 44px; padding: 7px 10px; border: 1px solid rgba(85, 214, 235, 0.22); border-radius: 9px; background: rgba(70, 196, 219, 0.045); }
+.jarvis-current-request > span { display: flex; min-width: 0; align-items: center; gap: 8px; }
+.jarvis-current-request strong { color: #a9e7ee; font-size: 9px; font-weight: 850; letter-spacing: 0.1em; text-transform: uppercase; }
+.jarvis-current-request em { padding: 3px 6px; border: 1px solid rgba(111, 203, 219, 0.16); border-radius: 999px; color: #759daa; font-family: var(--font-geist-mono), monospace; font-size: 8px; font-style: normal; white-space: nowrap; }
+.jarvis-current-request p { overflow: hidden; color: #c4dce3; font-size: 11px; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
+.jarvis-current-request[data-current-request-empty] { border-color: rgba(139, 191, 216, 0.12); background: rgba(255, 255, 255, 0.016); }
+.jarvis-current-request[data-current-request-empty] strong, .jarvis-current-request[data-current-request-empty] p { color: #7596a5; }
+.jarvis-history-drawer { border-top: 0; }
+.jarvis-history-drawer > summary { display: flex; min-height: 34px; align-items: center; justify-content: space-between; gap: 12px; padding: 0 2px; color: #7294a5; cursor: pointer; font-size: 10px; list-style: none; }
+.jarvis-history-drawer > summary::-webkit-details-marker { display: none; }
+.jarvis-history-drawer > summary > span { display: inline-flex; align-items: center; gap: 7px; }
+.jarvis-history-drawer > summary > span:last-child { color: #5f8293; font-family: var(--font-geist-mono), monospace; font-size: 9px; }
+.jarvis-history-drawer[open] > summary { color: #c2e8ee; }
+.jarvis-history-drawer[open] > summary > span:last-child svg { transform: rotate(180deg); }
+.jarvis-history-timeline { display: grid; gap: 0; margin: 4px 0 0; padding: 0 0 0 6px; list-style: none; }
+.jarvis-history-timeline > li { position: relative; display: grid; grid-template-columns: 13px minmax(0, 1fr); gap: 9px; padding: 7px 0 7px 3px; border-left: 1px solid rgba(139, 191, 216, 0.18); }
+.jarvis-history-timeline > li:last-child { border-left-color: transparent; }
+.jarvis-history-timeline__dot { width: 7px; height: 7px; margin-left: -7px; margin-top: 4px; border: 1px solid #66d9ed; border-radius: 50%; background: #061522; }
+.jarvis-history-timeline > li[data-history-current] .jarvis-history-timeline__dot { background: #66d9ed; box-shadow: 0 0 10px rgba(102, 217, 237, 0.45); }
+.jarvis-history-timeline strong { color: #9ec0cc; font-family: var(--font-geist-mono), monospace; font-size: 9px; }
+.jarvis-history-timeline p { overflow: hidden; margin-top: 2px; color: #7898a7; font-size: 10px; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
+
+.jarvis-adaptive-inspector[hidden] { display: none; }
+.jarvis-adaptive-inspector__inner { padding: 18px 14px; }
+.jarvis-adaptive-inspector__primary { display: grid; gap: 7px; margin-top: 12px; }
+.jarvis-adaptive-inspector__primary > div { padding: 10px 9px; border: 1px solid rgba(139, 191, 216, 0.12); border-radius: 8px; background: rgba(255, 255, 255, 0.018); }
+.jarvis-adaptive-inspector__primary dt { color: #6f9baa; font-size: 8px; font-weight: 850; letter-spacing: 0.1em; text-transform: uppercase; }
+.jarvis-adaptive-inspector__primary dd { margin-top: 4px; color: #bad2db; font-size: 10px; line-height: 1.45; }
+.jarvis-adaptive-inspector__advanced { margin-top: 12px; border-top: 1px solid var(--workspace-line); }
+.jarvis-adaptive-inspector__advanced > summary { display: flex; min-height: 36px; align-items: center; justify-content: space-between; gap: 8px; color: #7898a9; cursor: pointer; font-size: 9px; font-weight: 850; letter-spacing: 0.06em; list-style: none; text-transform: uppercase; }
+.jarvis-adaptive-inspector__advanced > summary::-webkit-details-marker { display: none; }
+.jarvis-adaptive-inspector__advanced[open] > summary { color: #bee6ed; }
+.jarvis-adaptive-inspector__advanced[open] > summary svg { transform: rotate(180deg); }
+.jarvis-adaptive-inspector__advanced dl > div { padding: 9px 0; }
+.jarvis-adaptive-inspector__advanced dt { color: #66899b; font-size: 8px; font-weight: 700; text-transform: uppercase; }
+.jarvis-adaptive-inspector__advanced dd { margin-top: 4px; color: #91abb8; font-size: 10px; line-height: 1.45; }
+
+.jarvis-command-work-context { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; }
+.jarvis-command-work-context__copy { display: grid; min-width: 0; gap: 2px; }
+.jarvis-command-work-context__copy > span { color: #668da0; font-size: 8px; font-weight: 850; letter-spacing: 0.12em; text-transform: uppercase; }
+.jarvis-command-work-context__copy strong { overflow: hidden; color: #d8f4f7; font-size: 10px; letter-spacing: 0.03em; text-overflow: ellipsis; white-space: nowrap; }
+.jarvis-command-work-context__copy small { overflow: hidden; color: #7799a9; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.jarvis-command-work-context__switch { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
+.jarvis-command-work-context__switch button { min-height: 30px; padding-inline: 8px; border: 1px solid rgba(121, 194, 218, 0.18); border-radius: 6px; color: #86a9b8; font-size: 8px; font-weight: 850; white-space: nowrap; }
+.jarvis-command-work-context__switch button:hover, .jarvis-command-work-context__switch button:focus-visible { border-color: rgba(107, 218, 235, 0.38); color: #d1f5fa; outline: none; }
+.jarvis-command-work-context__switch button[aria-pressed="true"] { border-color: rgba(96, 220, 236, 0.4); background: rgba(72, 198, 220, 0.11); color: #bff4f6; }
+.jarvis-command-work-context[data-command-work-mode="new"] .jarvis-command-work-context__switch button[data-work-mode="new"] { border-color: rgba(238, 190, 97, 0.4); background: rgba(238, 190, 97, 0.1); color: #f5d18c; }
+.jarvis-command-work-context[data-command-work-empty] .jarvis-command-work-context__switch button:disabled { cursor: not-allowed; opacity: 0.42; }
+.jarvis-command-status { min-height: 52px !important; border-color: rgba(110, 197, 221, 0.16) !important; }
+
+@media (max-width: 1120px) {
+  .jarvis-adaptive-shell,
+  .jarvis-adaptive-shell[data-inspector-state="open"] { grid-template-columns: 68px minmax(0, 1fr); }
+  .jarvis-adaptive-inspector:not([hidden]) { grid-column: 2; border-top: 1px solid var(--workspace-line); border-left: 0; }
+  .jarvis-adaptive-inspector__inner { position: static; max-height: none; }
+}
+
+@media (max-width: 760px) {
+  .jarvis-adaptive-main { height: calc(100dvh - 62px); min-height: 0; overflow: hidden; }
+  .jarvis-adaptive-header { height: 108px; min-height: 108px; align-items: flex-start; overflow: hidden; padding-block: 14px; }
+  .jarvis-adaptive-header__controls { flex-wrap: wrap; justify-content: flex-end; }
+  .jarvis-adaptive-header h1 { max-width: 15rem; font-size: 23px; white-space: normal; }
+  .jarvis-adaptive-inspector:not([hidden]) { position: fixed; inset: 10px 10px calc(72px + env(safe-area-inset-bottom)); z-index: 50; overflow: hidden; border: 1px solid rgba(108, 211, 232, 0.26); border-radius: 12px; background: rgba(3, 12, 21, 0.98); box-shadow: 0 24px 80px rgba(0, 0, 0, 0.58); }
+  .jarvis-adaptive-inspector:not([hidden]) .jarvis-adaptive-inspector__inner { max-height: 100%; overflow-y: auto; }
+  .jarvis-workspace-progress > header { display: block; }
+  .jarvis-workspace-progress__work-id { display: block; margin-top: 10px; }
+  .jarvis-workspace-progress > ol { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .jarvis-work-timeline-workspace__header { display: block; }
+  .jarvis-work-timeline-workspace__header > span { display: block; margin-top: 6px; }
+  .jarvis-work-timeline button { grid-template-columns: minmax(0, 1fr) 16px; }
+  .jarvis-work-timeline time { grid-column: 1; grid-row: 2; }
+  .jarvis-command-work-context { grid-template-columns: 1fr; gap: 8px; }
+  .jarvis-command-work-context__switch { width: 100%; }
+  .jarvis-command-work-context__switch button { min-height: 34px; }
+  .jarvis-current-request { grid-template-columns: 1fr; gap: 3px; }
+  .jarvis-adaptive-stage { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+}
+
+@media (max-width: 430px) {
+  .jarvis-workspace-progress > ol { grid-template-columns: 1fr; }
+  .jarvis-workspace-progress { padding: 14px; }
+}

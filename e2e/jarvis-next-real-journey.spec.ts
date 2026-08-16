@@ -101,14 +101,15 @@ test.describe("P2 — the REAL golden journey (real tenant, real data, real back
       await rejectButtons.first().click()
     }
 
-    // Real terminal outcome — whatever it honestly is.
-    await expect(page.getByText(/WHAT ACTUALLY HAPPENED|Grounded result/i).first()).toBeVisible({ timeout: 20_000 })
+    // Real terminal outcome — a verified receipt/recovery when work was attempted,
+    // or a direct answer when the planner truthfully chose not to create actions.
+    await expect(page.locator('[data-active-workspace="receipt"], [data-active-workspace="recovery"], [data-active-workspace="answer"]').first()).toBeVisible({ timeout: 20_000 })
     await page.waitForTimeout(600)
     await page.screenshot({ path: `${OUT_DIR}/real-04-receipt-1440.png`, fullPage: true })
 
     const receiptText = await page.locator("body").innerText()
-    const outcomeMarker = receiptText.indexOf("WHAT ACTUALLY HAPPENED")
-    console.log("REAL RECEIPT TEXT >>>", outcomeMarker >= 0 ? receiptText.slice(outcomeMarker) : receiptText.slice(-2000))
+    const outcomeMarker = receiptText.search(/WHAT ACTUALLY HAPPENED|Direct answer/i)
+    console.log("REAL OUTCOME TEXT >>>", outcomeMarker >= 0 ? receiptText.slice(outcomeMarker) : receiptText.slice(-2000))
     console.log(`REAL trace-poll 404s against this undeployed-P3 backend: ${instructionTrace404s.length} (expected — see this test's own comment)`)
 
     expect(errors, `unexpected console errors: ${errors.join(" | ")}`).toEqual([])

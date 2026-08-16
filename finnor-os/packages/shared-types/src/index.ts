@@ -6,6 +6,7 @@ export * from "./dealer-zero-scenarios";
 export * from "./dealer-zero-time-compression";
 export * from "./operational-queries";
 export * from "./company-graph";
+export * from "./operating-context";
 
 export type Role = "owner" | "dispatcher" | "technician";
 
@@ -257,7 +258,17 @@ export interface PatternContext {
 export interface MemorySnapshot {
   shortTerm: Record<string, unknown> | null;
   longTerm: Record<string, unknown> | null;
-  semantic: Array<{ chunk: string; sourceDocId: string | null; similarity: number }>;
+  semantic: Array<{
+    id?: string;
+    chunk: string;
+    sourceDocId: string | null;
+    similarity: number;
+    relevanceScore?: number;
+    sourceKind?: string;
+    occurredAt?: string;
+    entityRefs?: unknown[];
+    provenance?: Record<string, unknown>;
+  }>;
   episodic: Array<Record<string, unknown>>;
   patterns: PatternContext | null;
 }

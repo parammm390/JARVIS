@@ -15,7 +15,8 @@ import {
 } from "@finnor/db";
 import { eq } from "drizzle-orm";
 import { migrate } from "../../packages/db/migrate";
-import { DEFAULT_WORKSPACE_CONFIG, GET, PUT } from "../../apps/api/app/api/workspace-config/route";
+import { GET, PUT } from "../../apps/api/app/api/workspace-config/route";
+import { DEFAULT_WORKSPACE_CONFIG } from "../../apps/api/lib/workspace-config";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
 const TENANT = "00000000-0000-4000-8000-000000007601";

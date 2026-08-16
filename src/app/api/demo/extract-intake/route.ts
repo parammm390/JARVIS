@@ -9,6 +9,7 @@ import { isDemoMockMode, serverEnv } from "@/lib/env"
 import { groqConfigured, groqGenerateJson } from "@/lib/llm/groq"
 import { ApiRequestError, readJsonBody } from "@/lib/api/request"
 import { rateLimit } from "@/lib/api/rate-limit"
+import { requireInternalDemoAccess } from "@/lib/demo/internal-access"
 import {
   finalizeRecord,
   mergeIntakeIntoRecord,
@@ -43,6 +44,9 @@ const FALLBACK_GEMINI_MODELS = [
 ]
 
 export async function POST(request: Request) {
+  const unavailable = requireInternalDemoAccess(request)
+  if (unavailable) return unavailable
+
   try {
     const limited = rateLimit(request, { name: "extract-intake", limit: 40, windowMs: 10 * 60 * 1000 })
     if (limited) return limited

@@ -88,6 +88,10 @@ function gate(input: SelectorInput, degraded: boolean, data: unknown): Truth<nev
   return null
 }
 
+function malformedReadModel(input: SelectorInput): Truth<never> {
+  return { status: "unavailable", reason: "network", sinceMs: input.degradedSinceMs }
+}
+
 /** Wrap a readable value as `known`, downgrading to `stale` when the lane that
  *  produced it is past its SLA. */
 function fresh<T>(value: T, source: TruthSource, input: SelectorInput, lastSuccessMs: number | null): Truth<T> {
@@ -132,6 +136,7 @@ export interface OverdueInvoices {
 export function selectOverdueInvoices(input: SelectorInput): Truth<OverdueInvoices> {
   const blocked = gate(input, input.readModelsDegraded, input.cashCollections)
   if (blocked) return blocked
+  if (!Array.isArray(input.cashCollections!.invoicesByStatus)) return malformedReadModel(input)
   const row = input.cashCollections!.invoicesByStatus.find((s) => s.status === "overdue")
   // No overdue row is a real, knowable answer — the read-model succeeded and simply
   // reported no overdue bucket, which means nothing is overdue. Written as an explicit
@@ -147,6 +152,7 @@ export function selectOverdueInvoices(input: SelectorInput): Truth<OverdueInvoic
 export function selectCollectedUsd(input: SelectorInput): Truth<number> {
   const blocked = gate(input, input.readModelsDegraded, input.cashCollections)
   if (blocked) return blocked
+  if (typeof input.cashCollections!.totalCollected !== "number") return malformedReadModel(input)
   return fresh(input.cashCollections!.totalCollected, "api:read-model", input, input.slowLastSuccessMs)
 }
 
@@ -275,6 +281,7 @@ export function selectFirstName(user: IdentityLike | null | undefined): string |
 export function selectPaymentLinksOpen(input: SelectorInput): Truth<number> {
   const blocked = gate(input, input.readModelsDegraded, input.cashCollections)
   if (blocked) return blocked
+  if (typeof input.cashCollections!.paymentLinksAwaitingPayment !== "number") return malformedReadModel(input)
   return fresh(input.cashCollections!.paymentLinksAwaitingPayment, "api:read-model", input, input.slowLastSuccessMs)
 }
 
@@ -282,6 +289,7 @@ export function selectPaymentLinksOpen(input: SelectorInput): Truth<number> {
 export function selectOpenLeads(input: SelectorInput): Truth<number> {
   const blocked = gate(input, input.readModelsDegraded, input.pipelineHealth)
   if (blocked) return blocked
+  if (!Array.isArray(input.pipelineHealth!.leadsByStatus)) return malformedReadModel(input)
   const total = input.pipelineHealth!.leadsByStatus.reduce((sum, r) => sum + r.count, 0)
   return fresh(total, "api:read-model", input, input.slowLastSuccessMs)
 }
@@ -290,6 +298,7 @@ export function selectOpenLeads(input: SelectorInput): Truth<number> {
 export function selectQuotesSent(input: SelectorInput): Truth<number> {
   const blocked = gate(input, input.readModelsDegraded, input.pipelineHealth)
   if (blocked) return blocked
+  if (!Array.isArray(input.pipelineHealth!.quotesByStatus)) return malformedReadModel(input)
   const row = input.pipelineHealth!.quotesByStatus.find((q) => q.status === "sent")
   return fresh(row ? row.count : 0, "api:read-model", input, input.slowLastSuccessMs)
 }
@@ -298,6 +307,7 @@ export function selectQuotesSent(input: SelectorInput): Truth<number> {
 export function selectStuckRuns(input: SelectorInput): Truth<number> {
   const blocked = gate(input, input.readModelsDegraded, input.slaBreaches)
   if (blocked) return blocked
+  if (typeof input.slaBreaches!.stuckWorkflowRuns !== "number") return malformedReadModel(input)
   return fresh(input.slaBreaches!.stuckWorkflowRuns, "api:read-model", input, input.slowLastSuccessMs)
 }
 
@@ -305,5 +315,6 @@ export function selectStuckRuns(input: SelectorInput): Truth<number> {
 export function selectOpenReconciliation(input: SelectorInput): Truth<number> {
   const blocked = gate(input, input.readModelsDegraded, input.slaBreaches)
   if (blocked) return blocked
+  if (typeof input.slaBreaches!.openReconciliationCases !== "number") return malformedReadModel(input)
   return fresh(input.slaBreaches!.openReconciliationCases, "api:read-model", input, input.slowLastSuccessMs)
 }

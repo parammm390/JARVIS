@@ -47,11 +47,14 @@ function WorkspaceSettingsDrawer() {
   const [draft, setDraft] = useState(config)
   const [saved, setSaved] = useState(false)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
+  const wasOpenRef = useRef(false)
 
   useEffect(() => {
-    if (!settingsOpen) return
-    setDraft(config)
-    setSaved(false)
+    if (settingsOpen && !wasOpenRef.current) {
+      setDraft(config)
+      setSaved(false)
+    }
+    wasOpenRef.current = settingsOpen
   }, [config, settingsOpen])
 
   useEffect(() => {
