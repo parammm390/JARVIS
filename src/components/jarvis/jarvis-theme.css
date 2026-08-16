@@ -9697,8 +9697,13 @@ html[data-jarvis-workspace-radius="precise"] .jarvis-command-rail--embedded form
   display: grid;
   min-width: 0;
   min-height: 100dvh;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(420px, 1fr) auto auto;
   padding: 0 18px;
+}
+
+.jarvis-adaptive-main > * {
+  min-width: 0;
 }
 
 .jarvis-adaptive-header {
@@ -9951,11 +9956,12 @@ html[data-jarvis-workspace-radius="precise"] .jarvis-command-rail--embedded form
   position: sticky;
   bottom: 0;
   z-index: 8;
+  min-width: 0;
   padding: 0 0 max(12px, env(safe-area-inset-bottom));
   background: linear-gradient(180deg, transparent, #040d17 26%);
 }
 .jarvis-adaptive-composer [data-jarvis-command-rail] { position: relative !important; inset: auto !important; width: 100% !important; max-width: none !important; transform: none !important; }
-.jarvis-adaptive-composer form { box-shadow: 0 16px 50px rgba(0, 0, 0, 0.34) !important; }
+.jarvis-adaptive-composer form { min-width: 0; max-width: 100% !important; box-shadow: 0 16px 50px rgba(0, 0, 0, 0.34) !important; }
 .jarvis-command-work-context { pointer-events: auto; display: flex; min-height: 36px; align-items: center; justify-content: space-between; gap: 12px; margin: 0 8px -1px; padding: 6px 10px 7px; border: 1px solid rgba(105, 213, 231, 0.17); border-bottom: 0; border-radius: 9px 9px 0 0; background: rgba(5, 19, 31, 0.96); color: #7296a8; }
 .jarvis-command-work-context > span { display: flex; min-width: 0; align-items: center; gap: 8px; overflow: hidden; font-size: 9px; white-space: nowrap; }
 .jarvis-command-work-context strong { flex: 0 0 auto; color: #9fe4ed; font-size: 9px; letter-spacing: 0.07em; text-transform: uppercase; }
@@ -10430,9 +10436,9 @@ html[data-jarvis-workspace-radius="precise"] .jarvis-command-rail--embedded form
 
 @media (max-width: 760px) {
   .jarvis-adaptive-main { height: calc(100dvh - 62px); min-height: 0; overflow: hidden; }
-  .jarvis-adaptive-header { height: 108px; min-height: 108px; align-items: flex-start; overflow: hidden; padding-block: 14px; }
-  .jarvis-adaptive-header__controls { flex-wrap: wrap; justify-content: flex-end; }
-  .jarvis-adaptive-header h1 { max-width: 15rem; font-size: 23px; white-space: normal; }
+  .jarvis-adaptive-header { display: grid; height: auto; min-height: 132px; grid-template-columns: minmax(0, 1fr); align-content: center; align-items: start; gap: 10px; overflow: visible; padding-block: 12px; }
+  .jarvis-adaptive-header__controls { min-width: 0; flex-wrap: nowrap; justify-content: flex-start; }
+  .jarvis-adaptive-header h1 { max-width: none; font-size: 23px; white-space: normal; }
   .jarvis-adaptive-inspector:not([hidden]) { position: fixed; inset: 10px 10px calc(72px + env(safe-area-inset-bottom)); z-index: 50; overflow: hidden; border: 1px solid rgba(108, 211, 232, 0.26); border-radius: 12px; background: rgba(3, 12, 21, 0.98); box-shadow: 0 24px 80px rgba(0, 0, 0, 0.58); }
   .jarvis-adaptive-inspector:not([hidden]) .jarvis-adaptive-inspector__inner { max-height: 100%; overflow-y: auto; }
   .jarvis-workspace-progress > header { display: block; }
@@ -10447,6 +10453,8 @@ html[data-jarvis-workspace-radius="precise"] .jarvis-command-rail--embedded form
   .jarvis-command-work-context__switch button { min-height: 34px; }
   .jarvis-current-request { grid-template-columns: 1fr; gap: 3px; }
   .jarvis-adaptive-stage { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+  .jarvis-clarification-workspace, .jarvis-clarification-workspace [data-jarvis-clarification] { min-width: 0; max-width: 100%; }
+  .jarvis-clarification-workspace [data-jarvis-clarification-question] { overflow-wrap: anywhere; }
 }
 
 @media (max-width: 430px) {
