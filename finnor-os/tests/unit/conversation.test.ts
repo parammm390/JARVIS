@@ -11,12 +11,12 @@ const memory = {
 };
 
 describe("real conversational lane", () => {
-  it.each(["hey", "Hello!", "how are you?", "What can you help me accomplish across my business?"])(
+  it.each(["hey", "Hello!", "how are you?", "What can you help me accomplish across my business?", "hey what all can you do ?", "What all do you handle?"])(
     "recognizes a real conversational turn: %s",
     (instruction) => expect(isConversationalTurn(instruction)).toBe(true),
   );
 
-  it.each(["Create an invoice for Acme", "Research current water-treatment ad trends", "How much cash is overdue?"])(
+  it.each(["Create an invoice for Acme", "Research current water-treatment ad trends", "How much cash is overdue?", "What can you tell me about our leads?"])(
     "keeps business reads and actions on the planner stack: %s",
     (instruction) => expect(isConversationalTurn(instruction)).toBe(false),
   );
