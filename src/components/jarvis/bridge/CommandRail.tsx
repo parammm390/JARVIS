@@ -26,19 +26,22 @@ import { useWorkspaceConfig } from "../WorkspaceConfigProvider"
 
 const HOLD_TO_TALK_MS = 360
 
-function railBusy(state: InstructionState | null): { disabled: boolean; placeholder?: string } {
+function railBusy(state: InstructionState | null): { disabled: boolean; placeholder?: string; cancelable: boolean } {
   switch (state) {
+    case "captured":
+      return { disabled: true, placeholder: "JARVIS is accepting…", cancelable: true }
     case "understanding":
+      return { disabled: true, placeholder: "JARVIS is resolving context…", cancelable: true }
     case "planning":
-      return { disabled: true, placeholder: "JARVIS is planning…" }
+      return { disabled: true, placeholder: "JARVIS is planning…", cancelable: true }
     case "clarifying":
-      return { disabled: false, placeholder: "Answer above, or ask something else" }
+      return { disabled: false, placeholder: "Answer above, or ask something else", cancelable: true }
     case "awaiting_approval":
     case "executing":
     case "verifying":
-      return { disabled: true }
+      return { disabled: true, cancelable: true }
     default:
-      return { disabled: false }
+      return { disabled: false, cancelable: false }
   }
 }
 
@@ -283,6 +286,10 @@ export function CommandRail({
     retrying: voiceRetrying,
   })
   const voiceCopy = workspaceConfig.voiceEnabled ? derivedVoiceCopy : { state: "unavailable" as const, label: "Voice off", detail: "Disabled for this tenant workspace.", retryable: false }
+  const cancelInstruction = useCallback(() => {
+    if (committing) return
+    void kernel.cancelThread()
+  }, [committing, kernel])
   const voiceSessionId = sessionIdForVoiceCall(
     typeof voice.voiceSessionId === "string" && voice.voiceSessionId.trim()
       ? voice.voiceSessionId
@@ -461,6 +468,7 @@ export function CommandRail({
   const showingPartial = Boolean(voice.partialTranscript)
   const commitVariants = railCommitVariants(reducedMotion)
   const canSend = Boolean(value.trim()) && !inputDisabled && !showingPartial
+  const showVoiceStatus = committing || busy.cancelable || voiceCopy.state !== "stopped" || voiceCopy.retryable
 
   return (
     <div className={`pointer-events-none z-30 flex flex-col items-center gap-1.5 ${embedded ? "jarvis-command-rail--embedded relative w-full px-0 pb-0" : "fixed inset-x-0 bottom-0 px-3 pb-[max(env(safe-area-inset-bottom),12px)]"}`} data-jarvis-command-rail data-jarvis-command-rail-embedded={embedded || undefined} data-command-palette-ready={palette.ready ? "true" : "false"} data-intent-feedback={committing ? "pending" : intentLaunch ? "accepted" : "idle"}>
@@ -474,8 +482,20 @@ export function CommandRail({
       >
         {continuableWorkId && (
           <aside className="jarvis-command-work-context" data-command-work-id={continuableWorkId} data-command-work-mode={startNewWork ? "new" : "continue"} aria-label="Command Work context">
-            <span><strong>{startNewWork ? "New Work" : "Continuing Work"}</strong><span>{startNewWork ? "The next instruction will open a separate durable objective." : `${continuableWorkId.slice(0, 12)}… · text and voice stay on this context`}</span></span>
-            <button type="button" onClick={() => setStartNewWork((current) => !current)}>{startNewWork ? "Keep current Work" : "Start new Work"}</button>
+            <div className="jarvis-command-work-context__copy"><span>Work mode</span><strong>{startNewWork ? "Start New Work" : "Continuing Work"}</strong><small>{startNewWork ? "Open a separate durable objective." : `${continuableWorkId.slice(0, 12)}… · text and voice stay on this Work.`}</small></div>
+            <div className="jarvis-command-work-context__switch" role="group" aria-label="Choose Work mode">
+              <button type="button" data-work-mode="continue" aria-pressed={!startNewWork} onClick={() => setStartNewWork(false)}>Continuing Work</button>
+              <button type="button" data-work-mode="new" aria-pressed={startNewWork} onClick={() => setStartNewWork(true)}>Start New Work</button>
+            </div>
+          </aside>
+        )}
+        {!continuableWorkId && (
+          <aside className="jarvis-command-work-context" data-command-work-mode="new" data-command-work-empty aria-label="Command Work context">
+            <div className="jarvis-command-work-context__copy"><span>Work mode</span><strong>Start New Work</strong><small>Your next instruction opens a separate durable objective.</small></div>
+            <div className="jarvis-command-work-context__switch" role="group" aria-label="Choose Work mode">
+              <button type="button" data-work-mode="continue" aria-pressed="false" disabled>Continuing Work</button>
+              <button type="button" data-work-mode="new" aria-pressed="true">Start New Work</button>
+            </div>
           </aside>
         )}
         <motion.div
@@ -560,19 +580,21 @@ export function CommandRail({
           />
         )}
         <div
-          className="mt-1.5 flex min-h-11 flex-wrap items-center justify-between gap-2 rounded-xl border border-white/10 bg-[#05090f]/95 px-3 py-2 j-fs-micro text-[color:var(--j-text-dim)] shadow-[0_8px_24px_rgba(0,0,0,0.25)] backdrop-blur-xl"
+          className="jarvis-command-status mt-1.5 flex min-h-10 flex-wrap items-center justify-between gap-2 rounded-xl border border-white/10 bg-[#05090f]/95 px-3 py-2 j-fs-micro text-[color:var(--j-text-dim)] shadow-[0_8px_24px_rgba(0,0,0,0.25)] backdrop-blur-xl"
           data-voice-state={voiceCopy.state}
+          data-command-status-active={showVoiceStatus ? "true" : "false"}
           role="status"
           aria-live="polite"
         >
           <span className="min-w-0 flex-1">
-            <span className="font-black text-[color:var(--j-text)]" data-voice-state-label>{voiceCopy.label}</span>
-            <span className="ml-2" data-voice-state-detail>{voiceCopy.detail}</span>
+            <span className="font-black text-[color:var(--j-text)]" data-voice-state-label>{committing ? "Instruction accepted" : busy.cancelable ? (busy.placeholder ?? "Work in progress") : showVoiceStatus ? voiceCopy.label : "Ready"}</span>
+            <span className="ml-2" data-voice-state-detail>{committing ? "Live Work state is updating." : busy.cancelable && voiceCopy.state === "stopped" ? "Cancel remains available here." : showVoiceStatus ? voiceCopy.detail : "No instruction is in flight."}</span>
           </span>
+          {busy.cancelable && <button type="button" className="min-h-9 shrink-0 rounded-lg border border-white/15 px-2.5 font-bold text-[color:var(--j-text)] hover:border-cyan-200/40 hover:text-cyan-100" onClick={cancelInstruction} disabled={committing}>Cancel</button>}
           {voiceCopy.retryable && (
             <button
               type="button"
-              className="min-h-11 shrink-0 rounded-lg px-2 text-cyan-100 underline disabled:cursor-wait disabled:opacity-60"
+              className="min-h-9 shrink-0 rounded-lg px-2 text-cyan-100 underline disabled:cursor-wait disabled:opacity-60"
               onClick={retryVoice}
               disabled={voiceRetrying}
             >

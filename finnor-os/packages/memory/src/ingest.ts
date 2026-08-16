@@ -13,6 +13,8 @@ export interface IngestMemoryParams {
   text: string;
   entityRefs?: unknown[];
   occurredAt?: Date;
+  sourceKind?: string;
+  provenance?: Record<string, unknown>;
 }
 
 /** Best-effort — matches the existing "receipts are logged, never able to break the
@@ -22,7 +24,11 @@ export interface IngestMemoryParams {
 export async function ingestMemory(params: IngestMemoryParams): Promise<number> {
   if (!params.text.trim()) return 0;
   try {
-    const chunks = chunkSource({ text: params.text, entityRefs: params.entityRefs, occurredAt: params.occurredAt });
+    const chunks = chunkSource({ text: params.text, entityRefs: params.entityRefs, occurredAt: params.occurredAt }).map((chunk) => ({
+      ...chunk,
+      sourceKind: params.sourceKind ?? "runtime_artifact",
+      provenance: { sourceDocId: params.sourceDocId, ...(params.provenance ?? {}) },
+    }));
     if (chunks.length === 0) return 0;
     return await writeSemantic(params.tenantId, params.sourceDocId, chunks);
   } catch (err) {

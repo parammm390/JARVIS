@@ -57,4 +57,19 @@ describe("projectThreadWorkspace", () => {
       nodes: [{ id: "a-1", actionType: "bulk_notify_existing_customers", amountUsd: null, targetLabel: null, policyId: null, policyVersion: 1, groundedPayload: [], payload: { recipientCount: 12 } }],
     })).kind).toBe("campaign")
   })
+
+  it("keeps a non-research answer out of the research workspace", () => {
+    const projected = projectThreadWorkspace(thread({
+      answerResult: { kind: "answer", spokenSummary: "The canonical answer is ready.", evidence: [{ source: "business_state", ref: "query-1" }] },
+    }))
+    expect(projected.kind).toBe("answer")
+    expect(projected.title).toBe("Direct answer")
+  })
+
+  it("distinguishes internal answer actions from external research actions", () => {
+    const answerNode = { id: "a-1", actionType: "answer_business_question", amountUsd: null, targetLabel: null, policyId: null, policyVersion: 1, groundedPayload: [], payload: {} }
+    const webNode = { ...answerNode, id: "a-2", actionType: "search_web" }
+    expect(projectThreadWorkspace(thread({ nodes: [answerNode], answerResult: { kind: "answer", spokenSummary: "Canonical answer." } })).kind).toBe("answer")
+    expect(projectThreadWorkspace(thread({ nodes: [webNode], answerResult: { kind: "answer", spokenSummary: "Cited research." } })).kind).toBe("research")
+  })
 })

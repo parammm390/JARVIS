@@ -93,6 +93,7 @@ export interface AnswerEvidence {
   ref: string
   timestamp?: string
   title?: string
+  kind?: "CANONICAL" | "WORK" | "PROFILE" | "SESSION" | "MEMORY" | "WEB"
 }
 
 /** A read-only answer emitted by the backend's completed-event result envelope.
@@ -109,6 +110,22 @@ export interface AnswerResult {
    * Trace events intentionally keep only a bounded display projection; the
    * durable Work response enriches this field after navigation or refresh. */
   query?: OperationalQueryExecution
+}
+
+/** A bounded projection of the backend's real `step_progress`/verification
+ * events. This is presentation state only: it cannot advance Work, authorize an
+ * action, or manufacture completion. */
+export interface ThreadProgress {
+  stage:
+    | "resolving_context"
+    | "querying_business"
+    | "querying_grounded_sources"
+    | "researching_verified_external_sources"
+    | "verifying"
+    | "verified"
+  sourceKind?: "CANONICAL" | "MEMORY" | "WEB"
+  actionId?: string
+  observedAt?: string
 }
 
 function parseAnswerEnvelope(candidate: unknown, queryCandidate?: unknown): AnswerResult | null {
@@ -146,6 +163,7 @@ function parseAnswerEnvelope(candidate: unknown, queryCandidate?: unknown): Answ
           ref: typeof item.ref === "string" ? item.ref.trim() : "",
           ...(typeof item.timestamp === "string" && item.timestamp.trim() ? { timestamp: item.timestamp.trim() } : {}),
           ...(typeof item.title === "string" && item.title.trim() ? { title: item.title.trim() } : {}),
+          ...(item.kind === "CANONICAL" || item.kind === "WORK" || item.kind === "PROFILE" || item.kind === "SESSION" || item.kind === "MEMORY" || item.kind === "WEB" ? { kind: item.kind } : {}),
         }))
         .filter((item) => Boolean(item.source && item.ref))
     : undefined
@@ -280,6 +298,9 @@ export interface Thread {
    *  as they arrive (M4 ContextGather) — additive to (never replacing) the
    *  groundedPayload-derived chips `ThreadUnderstood` already rendered in P2. */
   contextChips: ContextChip[]
+  /** Latest genuine backend progress event. Optional for legacy fixtures and
+   * restored rows written before progressive trace projection shipped. */
+  progress?: ThreadProgress | null
   /** Present only when a completed event carries the backend's read-only answer
    *  envelope. Its presence changes the document into an Answer surface; it is
    *  never inferred from an action type or an empty plan. */
@@ -718,9 +739,10 @@ export function applyTraceEvents(thread: Thread, events: TraceEvent[], approval:
         break
       }
       case "executing": {
-        // The backend emits this only after an ungated action has genuinely
-        // executed. Consume it as its own renderable transition so a batch of
-        // real rows can still paint the Execution block before its terminal row.
+        // The backend emits this at the real executor boundary, after dispatch
+        // and immediately before an ungated action invokes its implementation.
+        // Consume it as its own renderable transition so the active Work paints
+        // while execution is genuinely in flight, before its terminal row.
         if (next.machine.instructionState === "planning") {
           next = {
             ...next,
@@ -732,10 +754,59 @@ export function applyTraceEvents(thread: Thread, events: TraceEvent[], approval:
         break
       }
       case "verifying": {
-        if (next.machine.instructionState === "executing") next = { ...next, machine: transition(next.machine, { type: "TRACE_verifying" }) }
+        const sourceKind = event.payload.sourceKind === "CANONICAL" || event.payload.sourceKind === "MEMORY" || event.payload.sourceKind === "WEB"
+          ? event.payload.sourceKind
+          : undefined
+        next = {
+          ...next,
+          ...(next.machine.instructionState === "executing" ? { machine: transition(next.machine, { type: "TRACE_verifying" }) } : {}),
+          progress: {
+            stage: "verifying",
+            ...(sourceKind ? { sourceKind } : {}),
+            ...(typeof event.payload.actionId === "string" ? { actionId: event.payload.actionId } : {}),
+            observedAt: event.createdAt,
+          },
+        }
         break
       }
-      // `dispatched`, `step_progress`, `verified`, and `cancelled` remain
+      case "step_progress": {
+        const stage = event.payload.stage
+        if (
+          stage !== "resolving_context"
+          && stage !== "querying_business"
+          && stage !== "querying_grounded_sources"
+          && stage !== "researching_verified_external_sources"
+        ) break
+        const sourceKind = event.payload.sourceKind === "CANONICAL" || event.payload.sourceKind === "MEMORY" || event.payload.sourceKind === "WEB"
+          ? event.payload.sourceKind
+          : undefined
+        next = {
+          ...next,
+          progress: {
+            stage,
+            ...(sourceKind ? { sourceKind } : {}),
+            ...(typeof event.payload.actionId === "string" ? { actionId: event.payload.actionId } : {}),
+            observedAt: event.createdAt,
+          },
+        }
+        break
+      }
+      case "verified": {
+        const sourceKind = event.payload.sourceKind === "CANONICAL" || event.payload.sourceKind === "MEMORY" || event.payload.sourceKind === "WEB"
+          ? event.payload.sourceKind
+          : next.progress?.sourceKind
+        next = {
+          ...next,
+          progress: {
+            stage: "verified",
+            ...(sourceKind ? { sourceKind } : {}),
+            ...(typeof event.payload.actionId === "string" ? { actionId: event.payload.actionId } : {}),
+            observedAt: event.createdAt,
+          },
+        }
+        break
+      }
+      // `dispatched` and `cancelled` remain
       // real trace facts even when this aggregate machine has no distinct state
       // for them. The row is still measured and retained in the transport cursor;
       // no customer-visible state is invented for them here.
@@ -1039,6 +1110,7 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
           machine: transition(initialMachineState, { type: "SUBMITTED" }),
           nodes: [],
           contextChips: [],
+          progress: null,
           traceGating: { expectedCount: null, resolvedActionIds: [], gatedActionIds: [] },
           clarification: null,
           submitError: null,
@@ -1303,6 +1375,7 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
         machine: transition(initialMachineState, { type: "SUBMITTED" }),
         nodes: continuity.nodes,
         contextChips: continuity.contextChips,
+        progress: null,
         traceGating: { expectedCount: null, resolvedActionIds: [], gatedActionIds: [] },
         clarification: null,
         submitError: null,

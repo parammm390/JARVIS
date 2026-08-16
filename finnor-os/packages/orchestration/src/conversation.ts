@@ -81,7 +81,7 @@ export class LLMConversationResponder implements ConversationResponder {
       readOnly: true,
       spokenSummary,
       display: { title: "JARVIS", facts: [] },
-      evidence: [{ source: "conversation_model", ref: provider.selectedProviderName ?? provider.name, timestamp: asOf }],
+      evidence: [{ source: "conversation_model", ref: provider.selectedProviderName ?? provider.name, timestamp: asOf, kind: "SESSION" }],
       asOf,
       freshness: { status: "fresh", observedAt: asOf },
     };

@@ -30,7 +30,7 @@ test.describe("authenticated cockpit flow", () => {
   test("the authenticated adaptive workspace exposes the real command surface", async ({ page }) => {
     test.skip(test.info().project.name !== "desktop-chromium", "responsive public/private shell coverage is certified separately")
     await expect(page.locator("[data-jarvis-adaptive-runtime]")).toBeVisible({ timeout: 15_000 })
-    await expect(page.getByRole("heading", { name: "JARVIS workspace" })).toBeVisible()
+    await expect(page.getByRole("heading", { name: "What needs attention now" })).toBeVisible()
     await expect(page.getByPlaceholder("Tell JARVIS what you need")).toBeVisible()
     await expect(page.getByText("PUBLIC PREVIEW", { exact: true })).toHaveCount(0)
   })

@@ -59,6 +59,24 @@ export const tenantSettings = pgTable("tenant_settings", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+// Stable company configuration is deliberately separate from live operating
+// state and from semantic memory.  These are operator-authored facts used to
+// resolve "us/our/company" before planning or research; an absent value remains
+// null and therefore produces a clarification instead of a runtime guess.
+export const tenantOperatingProfiles = pgTable("tenant_operating_profiles", {
+  tenantId: uuid("tenant_id").primaryKey().references(() => tenants.id),
+  industry: text("industry"),
+  niche: text("niche"),
+  description: text("description"),
+  primaryGeographies: jsonb("primary_geographies").notNull().default([]),
+  foundedYear: integer("founded_year"),
+  idealCustomerProfile: jsonb("ideal_customer_profile").notNull().default({}),
+  businessFacts: jsonb("business_facts").notNull().default({}),
+  comparisonDefaults: jsonb("comparison_defaults").notNull().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
@@ -73,6 +91,22 @@ export const users = pgTable("users", {
   technicianId: uuid("technician_id").references(() => technicians.id),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// Authenticated-person profile facts (for example title or an explicitly
+// configured age/birth date) are not inferred from conversations.  Keeping them
+// user-scoped prevents one employee's "me/my" binding from leaking to another.
+export const userOperatingProfiles = pgTable(
+  "user_operating_profiles",
+  {
+    userId: uuid("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    title: text("title"),
+    profileFacts: jsonb("profile_facts").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("user_operating_profiles_tenant_idx").on(t.tenantId)],
+);
 
 // Upgrade 8: users remain the canonical employee identities. These additive tables
 // extend the legacy single role into composable, tenant-scoped authority without
@@ -739,10 +773,19 @@ export const embeddings = pgTable(
     // embedded) so hybrid retrieval can reason about recency and supersession.
     entityRefs: jsonb("entity_refs").notNull().default([]),
     occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
+    // Exact-content identity and provenance belong on the memory row, not only
+    // in the embedding cache.  Active rows are deduplicated by the migration's
+    // partial unique index; corrected/replaced rows remain inspectable.
+    contentHash: text("content_hash").notNull(),
+    sourceKind: text("source_kind").notNull().default("semantic_history"),
+    provenance: jsonb("provenance").notNull().default({}),
+    supersedesId: uuid("supersedes_id"),
+    supersededAt: timestamp("superseded_at", { withTimezone: true }),
   },
   (t) => [
     index("embeddings_tenant_idx").on(t.tenantId),
     index("embeddings_tenant_occurred_idx").on(t.tenantId, t.occurredAt),
+    index("embeddings_tenant_active_idx").on(t.tenantId, t.sourceDocId, t.supersededAt),
   ],
 );
 
@@ -891,9 +934,14 @@ export const memoryCorrections = pgTable(
     wrongAnswer: text("wrong_answer").notNull(),
     correctedFact: text("corrected_fact").notNull(),
     correctedBy: text("corrected_by").notNull(),
+    supersedesId: uuid("supersedes_id"),
+    supersededAt: timestamp("superseded_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("memory_corrections_tenant_idx").on(t.tenantId)],
+  (t) => [
+    index("memory_corrections_tenant_idx").on(t.tenantId),
+    index("memory_corrections_active_idx").on(t.tenantId, t.supersededAt),
+  ],
 );
 
 // RBAC permission matrix — which roles can approve which action_types, per tenant (§18).

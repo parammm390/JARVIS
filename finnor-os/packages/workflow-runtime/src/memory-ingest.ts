@@ -37,7 +37,15 @@ export async function ingestReceipt(tenantId: string, receipt: {
     receipt.domainActionId ? { type: "domain_action", id: receipt.domainActionId } : null,
     receipt.workflowRunId ? { type: "workflow_run", id: receipt.workflowRunId } : null,
   ].filter(Boolean);
-  return ingestMemory({ tenantId, sourceDocId: `receipt:${receipt.id}`, text, entityRefs, occurredAt: receipt.finalizedAt });
+  return ingestMemory({
+    tenantId,
+    sourceDocId: `receipt:${receipt.id}`,
+    text,
+    entityRefs,
+    occurredAt: receipt.finalizedAt,
+    sourceKind: "decision_receipt",
+    provenance: { receiptId: receipt.id, domainActionId: receipt.domainActionId, workflowRunId: receipt.workflowRunId },
+  });
 }
 
 /** Looks up a receipt by id and ingests it — the one lookup+ingest path both the live

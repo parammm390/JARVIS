@@ -8,12 +8,14 @@ import {
   ArrowUpRight,
   CalendarDays,
   CheckCircle2,
+  ChevronDown,
   CircleDollarSign,
   Clock3,
   ExternalLink,
   FileCheck2,
   History,
   ListFilter,
+  PanelRight,
   Search,
   ShieldAlert,
   Sparkles,
@@ -46,7 +48,8 @@ import type {
 } from "./contracts"
 import { projectRestingAttention, type RestingAttentionItem } from "./resting-attention"
 import { withOperationalContext } from "../surfaces/surface-routes"
-import { buildWorkspaceInspector, type WorkspaceInspectorItem } from "./workspace-inspector"
+import { buildWorkspaceInspector, groupWorkspaceInspector, type WorkspaceInspectorItem } from "./workspace-inspector"
+import { deriveWorkspaceProgress, splitResearchNarrative } from "./presentation"
 import { WorkspaceSettingsButton, useWorkspaceConfig } from "../WorkspaceConfigProvider"
 import { inspectorFieldVisible, orderedWorkspaceItems } from "../lib/workspace-config"
 
@@ -134,6 +137,41 @@ function EmptyWorkspace() {
         <span>What is on tomorrow&apos;s schedule?</span>
         <span>Collect the overdue invoices</span>
       </div>
+    </section>
+  )
+}
+
+function WorkspaceProgress({ thread, liveframe }: { thread: Thread; liveframe: LiveFrameProjection }) {
+  const model = deriveWorkspaceProgress({
+    state: thread.machine.instructionState,
+    actionCount: thread.nodes.length,
+    expectedActionCount: thread.traceGating.expectedCount,
+    contextCount: thread.contextChips.length,
+    hasCanonicalQuery: Boolean(thread.answerResult?.query),
+    hasExternalEvidence: thread.progress?.sourceKind === "WEB" || Boolean(thread.answerResult?.evidence?.some((item) => /^https?:\/\//i.test(item.ref) || /web|research/i.test(item.source))),
+    progress: thread.progress,
+    transportPosture: liveframe.transportPosture,
+  })
+  const statusText = liveframe.transportPosture === "healthy" ? "Live trace" : liveframe.transportPosture === "degraded" ? "Trace delayed" : "Trace offline"
+
+  return (
+    <section className="jarvis-workspace-progress" data-workspace-progress data-progress-stage={model.activeStage} data-progress-transport={liveframe.transportPosture} aria-live="polite">
+      <header>
+        <div>
+          <span className="jarvis-workspace-progress__eyebrow"><i aria-hidden /> {statusText}</span>
+          <h2>{model.activeLabel}</h2>
+          <p>{model.detail}</p>
+        </div>
+        <span className="jarvis-workspace-progress__work-id">Work {thread.workId ? `${thread.workId.slice(0, 12)}…` : "pending"}</span>
+      </header>
+      <ol aria-label="Live Work progress">
+        {model.steps.map((step) => (
+          <li key={step.key} data-progress-status={step.status}>
+            <span className="jarvis-workspace-progress__step-dot" aria-hidden />
+            <span>{step.label}</span>
+          </li>
+        ))}
+      </ol>
     </section>
   )
 }
@@ -365,7 +403,14 @@ function ScheduleWorkspace({ projection, onInspect }: WorkspaceBodyProps) {
     <div className="jarvis-schedule-workspace">
       <SourceBar result={result} />
       <div className="jarvis-schedule-range"><Clock3 size={15} /><span>{dateOnly(result.range.start, result.timeZone)} — {dateOnly(new Date(new Date(result.range.end).getTime() - 1).toISOString(), result.timeZone)}</span><small>{result.timeZone}</small></div>
-      {result.rows.length === 0 ? <WorkspaceEmptyResult title="The range is clear" copy="No appointments, service visits, or work orders were scheduled in this range." /> : (
+      {result.rows.length === 0 ? (
+        <div className="jarvis-schedule-zero" data-schedule-zero-evidence>
+          <CheckCircle2 size={22} aria-hidden />
+          <strong>0 appointments found for {dateOnly(result.range.start, result.timeZone)} as of {dateTime(result.asOf, result.timeZone)}</strong>
+          <p>The canonical schedule read returned no appointments, service visits, or work orders in this tenant-local range.</p>
+          <span>Source: canonical PostgreSQL · {result.source.tables.join(" · ") || "schedule read model"}</span>
+        </div>
+      ) : (
         <div className="jarvis-operational-timeline">
           {Object.entries(days).map(([day, rows]) => (
             <section key={day}>
@@ -417,14 +462,21 @@ function MoneyWorkspace({ projection, onInspect }: WorkspaceBodyProps) {
   )
 }
 
-function ResearchWorkspace({ projection, onInspect }: WorkspaceBodyProps) {
+function NarrativeWorkspace({ projection, onInspect, research }: WorkspaceBodyProps & { research: boolean }) {
   const answer = projection.answer
   const evidence = answer?.evidence ?? []
+  const narrative = splitResearchNarrative(answer?.spokenSummary ?? projection.description)
   return (
-    <div className="jarvis-research-workspace">
+    <div className="jarvis-research-workspace" data-narrative-kind={research ? "research" : "answer"}>
       <div className="jarvis-research-result">
         <Search size={18} />
-        <div><span>Grounded result</span><p>{answer?.spokenSummary ?? projection.description}</p></div>
+        <div>
+          <span>{research ? "Evidence-backed narrative" : "Direct answer"}</span>
+          <h2>{projection.title}</h2>
+          <div className="jarvis-research-narrative" data-source={research ? "web-research" : "instruction_events.completed.result.spokenSummary"}>
+            {narrative.map((paragraph, index) => <p key={`${index}:${paragraph}`}>{paragraph}</p>)}
+          </div>
+        </div>
       </div>
       {answer?.facts && answer.facts.length > 0 && (
         <div className="jarvis-research-facts">
@@ -432,13 +484,13 @@ function ResearchWorkspace({ projection, onInspect }: WorkspaceBodyProps) {
         </div>
       )}
       <section className="jarvis-research-sources">
-        <header><strong>Sources and citations</strong><span>{evidence.length} attached</span></header>
+        <header><strong>{research ? "Sources and citations" : "Evidence attached"}</strong><span>{evidence.length} attached</span></header>
         {evidence.length === 0 ? <p>No citation records were attached to this backend result.</p> : evidence.map((source, index) => {
           const linked = /^https?:\/\//i.test(source.ref)
           return (
-            <button key={`${source.source}:${source.ref}`} type="button" onClick={() => onInspect([{ label: "Source", value: source.source }, { label: "Reference", value: source.ref, ...(linked ? { href: source.ref } : {}) }, ...(source.timestamp ? [{ label: "Retrieved", value: dateTime(source.timestamp) }] : [])])}>
+            <button key={`${source.source}:${source.ref}`} type="button" onClick={() => onInspect([{ label: "Evidence class", value: source.kind ?? "Unclassified" }, { label: "Source", value: source.source }, { label: "Reference", value: source.ref, ...(linked ? { href: source.ref } : {}) }, ...(source.timestamp ? [{ label: "Retrieved", value: dateTime(source.timestamp) }] : [])])}>
               <span>{String(index + 1).padStart(2, "0")}</span>
-              <span><strong>{source.title ?? humanize(source.source)}</strong><small>{source.ref}</small></span>
+              <span><strong>{source.title ?? humanize(source.source)}</strong><small>{source.kind ?? "UNCLASSIFIED"} · {source.ref}</small></span>
               {linked ? <ExternalLink size={14} /> : <FileCheck2 size={14} />}
             </button>
           )
@@ -446,6 +498,14 @@ function ResearchWorkspace({ projection, onInspect }: WorkspaceBodyProps) {
       </section>
     </div>
   )
+}
+
+function ResearchWorkspace({ projection, onInspect }: WorkspaceBodyProps) {
+  return <NarrativeWorkspace projection={projection} onInspect={onInspect} research />
+}
+
+function AnswerWorkspace({ projection, onInspect }: WorkspaceBodyProps) {
+  return <NarrativeWorkspace projection={projection} onInspect={onInspect} research={false} />
 }
 
 function ActionPlan({ projection, onInspect }: WorkspaceBodyProps) {
@@ -471,6 +531,40 @@ function ActionPlan({ projection, onInspect }: WorkspaceBodyProps) {
   )
 }
 
+function WorkTimelineWorkspace({
+  result,
+  rows,
+  onInspect,
+}: {
+  result: OperationalQueryResult
+  rows: Array<{ id: string; title: string; type: string; status: string; at: string; href: string }>
+  onInspect: (items: InspectorItem[]) => void
+}) {
+  return (
+    <div className="jarvis-work-timeline-workspace">
+      <SourceBar result={result} />
+      <header className="jarvis-work-timeline-workspace__header">
+        <div><span>Durable operating record</span><strong>{rows.length} live Work records</strong></div>
+        <span>Ordered by latest observed activity</span>
+      </header>
+      {rows.length === 0 ? <WorkspaceEmptyResult title="No Work records found" copy="The canonical Work read returned no records for this request." /> : (
+        <ol className="jarvis-work-timeline" aria-label="Work timeline">
+          {rows.map((row) => (
+            <li key={`${row.type}:${row.id}`}>
+              <span className="jarvis-work-timeline__dot" aria-hidden />
+              <button type="button" onClick={() => onInspect([{ label: "Record", value: row.title }, { label: "Type", value: row.type }, { label: "Status", value: humanize(row.status) }, { label: "Updated", value: dateTime(row.at) }, { label: "Open Work", value: row.id, href: row.href }])}>
+                <span><strong>{row.title}</strong><small>{row.type} · {humanize(row.status)}</small></span>
+                <time>{dateTime(row.at)}</time>
+                <ArrowUpRight size={14} aria-hidden />
+              </button>
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  )
+}
+
 function QueryOperationsWorkspace({ projection, onInspect }: WorkspaceBodyProps) {
   const result = projection.query!.result
   if (result.intent === "work_list") {
@@ -480,7 +574,7 @@ function QueryOperationsWorkspace({ projection, onInspect }: WorkspaceBodyProps)
       ...work.workOrders.map((row) => ({ id: row.id, title: row.household?.displayName ?? humanize(row.type), type: "Work order", status: row.status, at: row.scheduledAt ?? row.createdAt, href: `/jarvis/schedule?workOrderId=${encodeURIComponent(row.id)}` })),
       ...work.tasks.map((row) => ({ id: row.id, title: row.title, type: "Task", status: row.status, at: row.dueAt ?? row.createdAt, href: "/jarvis/work" })),
     ]
-    return <OperationalRows result={result} rows={rows} onInspect={onInspect} />
+    return <WorkTimelineWorkspace result={result} rows={rows} onInspect={onInspect} />
   }
   if (result.intent === "agent_activity") {
     const activity = result as AgentActivityResult
@@ -518,15 +612,18 @@ interface WorkspaceBodyProps {
   onInspect: (items: InspectorItem[]) => void
 }
 
-function WorkspaceBody({ projection, thread, role, reducedMotion, onInspect, onAnswer, onCancel, onRetry }: WorkspaceBodyProps & { thread: Thread; role: JarvisRole; reducedMotion: boolean; onAnswer: (text: string) => void; onCancel: () => void; onRetry: () => void | Promise<void> }) {
+function WorkspaceBody({ projection, thread, role, reducedMotion, liveframe, onInspect, onAnswer, onCancel, onRetry }: WorkspaceBodyProps & { thread: Thread; role: JarvisRole; reducedMotion: boolean; liveframe: LiveFrameProjection; onAnswer: (text: string) => void; onCancel: () => void; onRetry: () => void | Promise<void> }) {
+  if (["captured", "understanding", "planning"].includes(thread.machine.instructionState)) {
+    const progress = <WorkspaceProgress thread={thread} liveframe={liveframe} />
+    return thread.machine.instructionState === "planning" && projection.actions.length > 0
+      ? <div className="jarvis-planning-workspace">{progress}<ActionPlan projection={projection} onInspect={onInspect} /></div>
+      : progress
+  }
   if (thread.machine.instructionState === "clarifying") return <div className="jarvis-clarification-workspace"><ThreadClarify thread={thread} onAnswer={onAnswer} onSkip={onCancel} onCancel={onCancel} /></div>
   if (thread.machine.instructionState === "awaiting_approval" && !thread.everExecuted) {
     return <div className="jarvis-embedded-approval">
       <ApprovalCockpit escalateOnly={role === "dispatcher"} scopeActionIds={thread.nodes.map((node) => node.id)} scopeInstructionId={thread.instructionId} restored={false} />
-      <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2">
-        <p className="j-fs-sm text-[color:var(--j-text-dim)]">You can stop this instruction safely before approving anything.</p>
-        <button type="button" className="min-h-11 shrink-0 rounded-lg border border-white/15 px-3 j-fs-sm font-bold text-[color:var(--j-text)]" onClick={() => void onCancel()}>Cancel instruction</button>
-      </div>
+      <p className="jarvis-embedded-approval__note">Review the recorded actions above. Cancel remains available in the command composer until a decision is made.</p>
     </div>
   }
   if (projection.kind === "customer") return projection.query?.result.intent === "company_context"
@@ -536,9 +633,10 @@ function WorkspaceBody({ projection, thread, role, reducedMotion, onInspect, onA
   if (projection.kind === "schedule") return <ScheduleWorkspace projection={projection} onInspect={onInspect} />
   if (projection.kind === "money") return <MoneyWorkspace projection={projection} onInspect={onInspect} />
   if (projection.kind === "research") return <ResearchWorkspace projection={projection} onInspect={onInspect} />
+  if (projection.kind === "answer") return <AnswerWorkspace projection={projection} onInspect={onInspect} />
   if (projection.kind === "execution") {
     if (projection.query) return <QueryOperationsWorkspace projection={projection} onInspect={onInspect} />
-    return <div className="jarvis-execution-workspace"><ThreadExecution thread={thread} restored={false} executionWeavePlacement="document" energy={0.7} /></div>
+    return <div className="jarvis-execution-workspace"><WorkspaceProgress thread={thread} liveframe={liveframe} /><ThreadExecution thread={thread} restored={false} executionWeavePlacement="document" energy={0.7} /></div>
   }
   if (projection.kind === "receipt") return <div className="jarvis-receipt-workspace"><ThreadReceipt thread={thread} reducedMotion={reducedMotion} onRetry={onRetry} restored={false} /></div>
   if (projection.kind === "recovery") return <div className="jarvis-recovery-workspace"><div className="jarvis-recovery-workspace__lead"><ShieldAlert size={22} /><div><strong>Work stopped safely</strong><p>{thread.submitError ?? "The durable Work record is available for retry and inspection. No unverified success is being shown."}</p></div></div><ThreadReceipt thread={thread} reducedMotion={reducedMotion} onRetry={onRetry} restored={false} /></div>
@@ -595,6 +693,8 @@ export function AdaptiveWorkspaceShell({
   const restingWork = useBusinessProjection(businessProjections.workCases(), { enabled: thread === null && !publicPreview })
   const restingAttention = useMemo(() => projectRestingAttention(restingWork.data ?? []), [restingWork.data])
   const [inspector, setInspector] = useState<InspectorItem[]>([])
+  const [inspectorOpen, setInspectorOpen] = useState(false)
+  const [advancedInspectorOpen, setAdvancedInspectorOpen] = useState(false)
   const activeInspector = useMemo(() => thread && projection ? buildWorkspaceInspector(thread, projection, role) : [], [projection, role, thread])
   const inspectActive = useCallback((items: InspectorItem[]) => {
     const contextualLabels = new Set(items.map((item) => item.label))
@@ -609,6 +709,20 @@ export function AdaptiveWorkspaceShell({
     setInspector(activeInspector)
   }, [activeInspector, projection])
 
+  useEffect(() => {
+    setInspectorOpen(false)
+    setAdvancedInspectorOpen(false)
+  }, [projection?.key])
+
+  useEffect(() => {
+    if (!inspectorOpen) return
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setInspectorOpen(false)
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [inspectorOpen])
+
   const restingError = restingWork.error
     ? restingWork.data
       ? "The latest refresh was delayed. Showing the last verified Work projection."
@@ -619,6 +733,7 @@ export function AdaptiveWorkspaceShell({
   const restingStateLabel = restingLoading ? "Reading Work" : restingAttention.length > 0 ? `${restingAttention.length} need attention` : "Current"
   const navItems = orderedWorkspaceItems([...NAV], workspaceConfig)
   const visibleInspector = inspector.filter((item) => inspectorFieldVisible(item.label, workspaceConfig))
+  const inspectorGroups = useMemo(() => groupWorkspaceInspector(visibleInspector), [visibleInspector])
 
   useGSAP(() => {
     if (reducedMotion || !projection) return
@@ -630,6 +745,7 @@ export function AdaptiveWorkspaceShell({
     <div
       ref={shellRef}
       className="jarvis-adaptive-shell"
+      data-inspector-state={inspectorOpen ? "open" : "closed"}
       data-active-workspace={projection?.kind ?? "ready"}
       data-thread-document
       data-thread-restored={threadRestored ? "true" : "false"}
@@ -651,30 +767,53 @@ export function AdaptiveWorkspaceShell({
             <span>{projection?.eyebrow ?? (publicPreview ? "Adaptive workspace" : "Operational focus")}</span>
             <h1>{projection?.title ?? (publicPreview ? "JARVIS workspace" : "What needs attention now")}</h1>
           </div>
-          <div className="jarvis-adaptive-header__controls"><WorkspaceSettingsButton compact /><div className="jarvis-adaptive-header__state" data-state={projection?.state ?? restingState}><i />{projection ? stateLabel(projection.state) : publicPreview ? "Ready" : restingStateLabel}</div></div>
+          <div className="jarvis-adaptive-header__controls">
+            {!publicPreview && <WorkspaceSettingsButton compact />}
+            {!publicPreview && <button type="button" className="jarvis-adaptive-inspector-toggle" onClick={() => setInspectorOpen((open) => !open)} aria-expanded={inspectorOpen} aria-controls="jarvis-context-inspector">
+              <PanelRight size={15} aria-hidden /> <span>{inspectorOpen ? "Hide context" : "Context"}</span>
+            </button>}
+            <div className="jarvis-adaptive-header__state" data-state={projection?.state ?? restingState}><i />{projection ? stateLabel(projection.state) : publicPreview ? "Ready" : restingStateLabel}</div>
+          </div>
         </header>
         <div className="jarvis-adaptive-stage" data-adaptive-workspace-body>
-          {thread && projection ? <WorkspaceBody projection={projection} thread={thread} role={role} reducedMotion={reducedMotion} onInspect={inspectActive} onAnswer={onAnswer} onCancel={onCancel} onRetry={onRetry} />
+          {thread && projection ? <WorkspaceBody projection={projection} thread={thread} role={role} reducedMotion={reducedMotion} liveframe={liveframe} onInspect={inspectActive} onAnswer={onAnswer} onCancel={onCancel} onRetry={onRetry} />
             : publicPreview ? <EmptyWorkspace />
               : <RestingWorkspace items={restingAttention} loading={restingLoading} error={restingError} stale={Boolean(restingWork.data) && (restingWork.stale || restingWork.status === "error")} onRetry={() => { void restingWork.refresh().catch(() => undefined) }} onInspect={setInspector} />}
         </div>
         <section className="jarvis-conversation-layer" aria-label="Command history">
-          <div><History size={14} /><strong>Command history</strong></div>
-          <div className="jarvis-conversation-layer__items">
-            {thread && <span data-active><strong>Now</strong>{thread.instructionText}</span>}
-            {threadHistory.slice(0, 4).map((item) => <span key={item.id}><strong>{dateTime(new Date(item.createdAtMs).toISOString())}</strong>{item.instructionText}</span>)}
-            {!thread && threadHistory.length === 0 && <span><strong>Ready</strong>Your commands and outcomes stay attached to Work.</span>}
-          </div>
+          {thread && <div className="jarvis-current-request" data-history-current>
+            <span><strong>Current request</strong><em>{stateLabel(thread.machine.instructionState)}</em></span>
+            <p>{thread.instructionText}</p>
+          </div>}
+          {!thread && !publicPreview && <div className="jarvis-current-request" data-current-request-empty>
+            <span><strong>Current request</strong><em>Ready</em></span>
+            <p>No active instruction. Start new Work or continue an existing case.</p>
+          </div>}
+          <details className="jarvis-history-drawer">
+            <summary><span><History size={14} aria-hidden /><strong>{thread ? "Previous commands" : "Command history"}</strong></span><span>{threadHistory.length} {threadHistory.length === 1 ? "instruction" : "instructions"}<ChevronDown size={14} aria-hidden /></span></summary>
+            <ol className="jarvis-history-timeline">
+              {threadHistory.slice(0, 6).map((item) => <li key={item.id}><span className="jarvis-history-timeline__dot" aria-hidden /><div><strong>{dateTime(new Date(item.createdAtMs).toISOString())} · {stateLabel(item.machine.instructionState)}</strong><p>{item.instructionText}</p></div></li>)}
+              {!thread && threadHistory.length === 0 && <li><span className="jarvis-history-timeline__dot" aria-hidden /><div><strong>Ready</strong><p>Your instructions and outcomes stay attached to durable Work.</p></div></li>}
+            </ol>
+          </details>
         </section>
         <div className="jarvis-adaptive-composer">{composer ?? <Link className="jarvis-adaptive-signin" href="/jarvis/login">Sign in to direct live Work <ArrowUpRight size={14} /></Link>}</div>
       </main>
 
-      <aside className="jarvis-adaptive-inspector" data-adaptive-inspector aria-label="Contextual inspector">
+      <aside id="jarvis-context-inspector" className="jarvis-adaptive-inspector" data-adaptive-inspector aria-label="Contextual inspector" hidden={!inspectorOpen}>
         <div className="jarvis-adaptive-inspector__inner">
-          <header><span>Inspector</span><strong>{projection ? humanize(projection.kind) : publicPreview ? "Ready" : "Operational attention"}</strong></header>
-          <dl>{visibleInspector.map((item, index) => <div key={`${item.label}:${index}`} data-inspector-field={item.label.toLocaleLowerCase().replace(/[^a-z0-9]+/g, "-")}><dt>{item.label}</dt><dd>{item.href ? <Link href={item.href}>{item.value}<ArrowUpRight size={12} /></Link> : item.value}</dd></div>)}</dl>
+          <header><span>Context inspector</span><strong>{projection ? humanize(projection.kind) : publicPreview ? "Ready" : "Operational attention"}</strong></header>
+          <dl className="jarvis-adaptive-inspector__primary">
+            {inspectorGroups.primary.map((item, index) => <div key={`${item.label}:${index}`} data-inspector-field={item.label.toLocaleLowerCase().replace(/[^a-z0-9]+/g, "-")}><dt>{item.label}</dt><dd>{item.href ? <Link href={item.href}>{item.value}<ArrowUpRight size={12} /></Link> : item.value}</dd></div>)}
+          </dl>
+          {inspectorGroups.advanced.length > 0 && (
+            <details className="jarvis-adaptive-inspector__advanced" open={advancedInspectorOpen} onToggle={(event) => setAdvancedInspectorOpen(event.currentTarget.open)}>
+              <summary>Advanced policy and debug <ChevronDown size={14} aria-hidden /></summary>
+              <dl>{inspectorGroups.advanced.map((item, index) => <div key={`${item.label}:${index}`} data-inspector-field={item.label.toLocaleLowerCase().replace(/[^a-z0-9]+/g, "-")}><dt>{item.label}</dt><dd>{item.href ? <Link href={item.href}>{item.value}<ArrowUpRight size={12} /></Link> : item.value}</dd></div>)}</dl>
+            </details>
+          )}
           {projection?.query && <div className="jarvis-adaptive-inspector__provenance"><CheckCircle2 size={14} /><span><strong>Verified source</strong>{projection.query.result.source.tables.join(" · ")}</span></div>}
-          {projection?.workId && <Link className="jarvis-adaptive-inspector__open" href={`/jarvis/work?workCaseId=${encodeURIComponent(projection.workId)}`}>Open durable Work <ArrowUpRight size={14} /></Link>}
+          {inspectorGroups.durableWork?.href ? <Link className="jarvis-adaptive-inspector__open" href={inspectorGroups.durableWork.href}>Open durable Work <ArrowUpRight size={14} /></Link> : projection?.workId ? <Link className="jarvis-adaptive-inspector__open" href={`/jarvis/work?workCaseId=${encodeURIComponent(projection.workId)}`}>Open durable Work <ArrowUpRight size={14} /></Link> : null}
         </div>
       </aside>
     </div>

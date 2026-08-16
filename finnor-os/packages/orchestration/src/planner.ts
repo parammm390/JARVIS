@@ -1,7 +1,7 @@
 // Planner (§9): instruction + tenant policy context (RAG) + memory → DomainAction[].
 // Only registered action_types are ever planned; unknown intents surface as such.
 
-import type { TenantContext, MemorySnapshot, DomainAction, DomainPolicy } from "@finnor/shared-types";
+import type { TenantContext, MemorySnapshot, DomainAction, DomainPolicy, OperatingContext } from "@finnor/shared-types";
 import { withTenant, domainActions, domainPolicyRevisions } from "@finnor/db";
 import { and, desc, eq, inArray, lte } from "drizzle-orm";
 import type { LLMChannel, LLMProvider } from "./llm";
@@ -20,6 +20,7 @@ import { validateDependencyIndexes } from "./plan-dag";
 import { buildPlanningHealthContext, manualStepForUnavailableIntegration } from "./planning-health";
 import { plannerContinuationInstruction, plannerMemoryContext, plannerShortTermContext } from "./planner-memory";
 import { clarificationContinuationAction, enforceExternalResearchRoute, enforceSchedulingMutationRoute, safeReadFallbackForInstruction, schedulingClarificationFallbackForInstruction } from "./read-routing";
+import { resolveCompetitorResearch } from "./research-context";
 
 export { clarificationContinuationAction, enforceExternalResearchRoute, enforceSchedulingMutationRoute, safeReadFallbackForInstruction, schedulingClarificationFallbackForInstruction } from "./read-routing";
 
@@ -47,8 +48,37 @@ export interface Planner {
     instruction: string,
     tenantContext: TenantContext,
     memory: MemorySnapshot,
-    opts?: { instructionId?: string; workId?: string; plannerAttemptId?: string; channel?: LLMChannel; signal?: AbortSignal; deadlineAt?: number; deadlineMs?: number },
+    opts?: PlannerOptions,
   ): Promise<DomainAction[]>;
+}
+
+export interface PlannerOptions {
+  instructionId?: string;
+  workId?: string;
+  plannerAttemptId?: string;
+  channel?: LLMChannel;
+  signal?: AbortSignal;
+  deadlineAt?: number;
+  deadlineMs?: number;
+  operatingContext?: OperatingContext;
+}
+
+function plannerOperatingContext(context: OperatingContext | undefined): Record<string, unknown> | null {
+  if (!context) return null;
+  return redactStructured({
+    version: context.version,
+    assembledAt: context.assembledAt,
+    truthPrecedence: context.truthPrecedence,
+    tenant: context.tenant,
+    employee: context.employee,
+    activeWork: context.activeWork,
+    referencedEntities: context.referencedEntities,
+    canonicalSummaries: context.canonicalSummaries,
+    integrationHealth: context.integrationHealth,
+    authority: context.authority,
+    sources: context.sources.map(({ kind, source, asOf, role }) => ({ kind, source, asOf, role })),
+    health: { status: context.health.status, missing: context.health.missing },
+  }) as Record<string, unknown>;
 }
 
 export class LLMPlanner implements Planner {
@@ -80,6 +110,8 @@ export class LLMPlanner implements Planner {
     const prompt = [
       "You are the planning core of Finnor, an AI operating system for water treatment dealers.",
       "Translate the dealer instruction into zero or more domain actions.",
+      "Truth precedence is strict: CANONICAL live operational records > durable WORK/actions/receipts > configured PROFILE > current SESSION > SEMANTIC MEMORY > external WEB. A lower source may enrich but never replace or contradict a higher one.",
+      "Resolve me/my against operatingContext.employee and us/our/the company against operatingContext.tenant before choosing an action. Missing profile facts remain missing; never infer identity, age, industry, geography, revenue, ARR, or company performance from semantic memory.",
       `The ONLY valid action_type values are: ${actionTypes.join(", ")}.`,
       "Each action_type has a REQUIRED payload JSON schema. Follow it exactly — field names matter:",
       this.plugins.payloadSpecJson(),
@@ -90,6 +122,7 @@ export class LLMPlanner implements Planner {
       "CRITICAL: a prior turn with awaitingApproval:true has NOT actually happened yet — it is a draft sitting in the confirmation queue, nothing was created, and it has no real id of its own kind (e.g. a pending create_invoice has no real invoice id — only a domain_action id, which is a different thing and must never be used as an invoiceId/visitId/etc.). If the current instruction depends on something from a turn that was awaitingApproval:true (e.g. \"remind him about that invoice\" when the invoice draft is still pending), do NOT invent or reuse an id — instead route to answer_business_question explaining that the prior action needs approval first, or ask for the missing identifier some other real way (phone/name lookup).",
       "If the instruction is a QUESTION about the business (revenue, financial totals, a specific customer's history, trends, anything informational) and no narrower action_type fits exactly, route it to answer_business_question with the verbatim question as payload — that action queries real data across every domain (invoices, leads, inventory, visits, communications history) and answers honestly from whatever is actually there, including saying so when a specific figure isn't tracked. Prefer it over returning empty for any business QUESTION.",
       "If the instruction asks for web research, online/current/latest information, competitors, market benchmarks, sources, or citations, route it to search_web with the verbatim request as query. Never answer that kind of request with answer_business_question because tenant records are not current web evidence.",
+      "Competitor research must return actual source-backed companies. Generic market statistics are not substitute competitors. Never decide what 'better/worse' or a dollar bracket means; use configured comparison defaults or ask exactly one clarification containing every essential missing dimension.",
       "For a READ-ONLY count/list of customers who have not interacted for a stated period, use answer_business_question with the verbatim question. For REAL outreach to that cohort, use bulk_notify_existing_customers: preserve an exact day threshold in minDaysInactive (for example, 'more than 90 days' means 90, not 3 months), set channel to call or sms exactly as requested, and carry the owner's exact discountPercent. Never use bulk outreach merely to count a cohort, and never omit the inactivity threshold when a recent turn supplied it.",
       "For 'show/list/give me the schedule or appointments from X through Y' with no named technician, use check_technician_availability with date and inclusive endDate and omit technician fields. A single-day full-team schedule uses date only. Only include address+slaDueAt when the user asks for ranked dispatch recommendations.",
       "Only return an empty actions array when the instruction is not a business question or action at all (chit-chat, out of scope, or something no plugin could ever plausibly do) — never because the exact phrasing didn't match a narrower action_type.",
@@ -111,7 +144,7 @@ export class LLMPlanner implements Planner {
     instruction: string,
     tenantContext: TenantContext,
     memory: MemorySnapshot,
-    opts: { instructionId?: string; workId?: string; plannerAttemptId?: string; channel?: LLMChannel; signal?: AbortSignal; deadlineAt?: number; deadlineMs?: number } = {},
+    opts: PlannerOptions = {},
   ): Promise<DomainAction[]> {
     const actionTypes = this.plugins.actionTypes();
     const system = this.systemPrompt();
@@ -121,9 +154,13 @@ export class LLMPlanner implements Planner {
     // Health failures are not silently ignored: if the planner cannot inspect the
     // guard that prevents a known-open circuit from being planned through, it fails
     // before creating any action rather than guessing that the provider is healthy.
-    const integrationHealth = await buildPlanningHealthContext(tenantContext.tenantId);
+    const operatingHealth = opts.operatingContext?.integrationHealth;
+    const integrationHealth = operatingHealth && Object.keys(operatingHealth).length > 0
+      ? operatingHealth as unknown as Awaited<ReturnType<typeof buildPlanningHealthContext>>
+      : await buildPlanningHealthContext(tenantContext.tenantId);
     const user = JSON.stringify({
       instruction: redactedInstruction.value,
+      operatingContext: plannerOperatingContext(opts.operatingContext),
       integrationHealth,
       memory: {
         shortTerm: plannerShortTermContext(instruction, memory.shortTerm),
@@ -137,8 +174,13 @@ export class LLMPlanner implements Planner {
     const channel = opts.channel ?? "text";
     let raw: string;
     const continuationAction = clarificationContinuationAction(instruction, planningInstruction, memory, actionTypes);
+    const contextualResearch = opts.operatingContext
+      ? resolveCompetitorResearch(planningInstruction, opts.operatingContext)
+      : { route: "not_research" as const };
     if (continuationAction) {
       raw = JSON.stringify({ actions: [continuationAction] });
+    } else if (contextualResearch.route === "clarification" || contextualResearch.route === "resolved") {
+      raw = JSON.stringify({ actions: [contextualResearch.action] });
     } else try {
       const provider = this.provider ?? this.routedProviders.get(channel) ?? resolveProviderForPurpose("planning", channel);
       if (!this.provider) this.routedProviders.set(channel, provider);
@@ -288,14 +330,19 @@ export class LLMPlanner implements Planner {
       const requiresConfirmation = policy?.requiresConfirmation ?? true;
       const compiledGraph = buildCommandGraph(a.action_type, requiresConfirmation);
       const amountThresholdUsd = (policy?.policy as { riskThresholds?: { amountUsd?: number } } | undefined)?.riskThresholds?.amountUsd;
-      const tier: ReasoningTier = classifyReasoningTier({
-        requiresConfirmation,
-        compiledGraph,
-        payload: schemaRepair[i]!.candidate.payload,
-        amountThresholdUsd,
-        actionType: a.action_type,
-        openScanSignals: memory.patterns?.scanSignals ?? [],
-      });
+      // Contextual competitor resolution is already a pure, fail-closed compile:
+      // either one schema-valid clarification or one schema-valid read action. A
+      // second model pass must not rewrite its missing fields or reintroduce guesses.
+      const tier: ReasoningTier = contextualResearch.route !== "not_research" && valid.length === 1
+        ? "low"
+        : classifyReasoningTier({
+            requiresConfirmation,
+            compiledGraph,
+            payload: schemaRepair[i]!.candidate.payload,
+            amountThresholdUsd,
+            actionType: a.action_type,
+            openScanSignals: memory.patterns?.scanSignals ?? [],
+          });
       return { tier, requiresConfirmation };
     });
 

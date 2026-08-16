@@ -18,7 +18,7 @@ import pg from "pg";
 import { migrate } from "../../packages/db/migrate";
 import { seed, SEED_TENANT_ID } from "../../packages/db/seed";
 import { withTenant, closePool, domainActions, domainPolicies, actionLog, commands, workflowRuns, workflowSteps, decisionReceipts } from "@finnor/db";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { FinnorOrchestrator, createDefaultPluginRegistry } from "@finnor/orchestration";
 import { executePluginViaRuntime } from "../../packages/orchestration/src/runtime-bridge";
 import { ToolRegistry } from "@finnor/tools";
@@ -57,7 +57,7 @@ function mockTools() {
 
 async function createDraftAction(payload: Record<string, unknown>): Promise<DomainAction> {
   return withTenant(SEED_TENANT_ID, async (db) => {
-    const [policy] = await db.select().from(domainPolicies).where(eq(domainPolicies.actionType, ACTION_TYPE)).limit(1);
+    const [policy] = await db.select().from(domainPolicies).where(and(eq(domainPolicies.tenantId, SEED_TENANT_ID), eq(domainPolicies.actionType, ACTION_TYPE))).limit(1);
     const [row] = await db
       .insert(domainActions)
       .values({ tenantId: SEED_TENANT_ID, actionType: ACTION_TYPE, payload, policyId: policy?.id ?? null, status: "approved" })
@@ -192,7 +192,7 @@ describe.skipIf(!available)("single-action execution via the runtime bridge (§2
 
   it("a forged approved SQL status cannot claim execution without the audited confirmation", async () => {
     const orchestrator = new FinnorOrchestrator({ tools: mockTools() });
-    const [policy] = await withTenant(SEED_TENANT_ID, (db) => db.select().from(domainPolicies).where(eq(domainPolicies.actionType, ACTION_TYPE)).limit(1));
+    const [policy] = await withTenant(SEED_TENANT_ID, (db) => db.select().from(domainPolicies).where(and(eq(domainPolicies.tenantId, SEED_TENANT_ID), eq(domainPolicies.actionType, ACTION_TYPE))).limit(1));
     const [forged] = await withTenant(SEED_TENANT_ID, (db) =>
       db.insert(domainActions).values({
         tenantId: SEED_TENANT_ID,

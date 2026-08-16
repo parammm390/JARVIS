@@ -15,6 +15,7 @@ import {
   type OperationalQueryPageRequest,
   type OperationalQueryResult as SharedOperationalQueryResult,
   type OperationalQuerySource,
+  type OperatingEvidenceKind,
   type TenantContext,
 } from "@finnor/shared-types";
 import {
@@ -97,6 +98,7 @@ export interface AnswerEvidence {
   source: string;
   ref: string;
   timestamp: string;
+  kind?: OperatingEvidenceKind;
 }
 
 export interface AnswerFreshness {
@@ -146,7 +148,7 @@ export interface FastReadOnlyRouterDeps {
 
 const QUESTION_PREFIX = /^(?:how|what|which|where|when|who|is|are|do|does|did|can|could|tell me|show|find|give me|list|list out|get|summarize|explain)\b/i;
 const MUTATION_OR_ADVICE = /\b(?:create|send|update|change|delete|remove|approve|reject|book|call|text|email|pay|charge|reorder|restock|flag|mark|start|launch|assign|execute|run|prepare|draft|write|edit|improve|recommend|recommendation|advice|should|make|reschedule|schedule\s+(?:an?|the)?\s*(?:appointment|visit|service|water\s*test|job))\b/i;
-const EXTERNAL_OR_AMBIGUOUS = /\b(?:quickbooks|stripe|google|meta|vapi|integration|connected account|external|online|web|research|look up|latest|current\s+(?:news|benchmark|market|source|industry)|why|forecast|predict|projection|trend|benchmark|cite|citation|source-backed)\b/i;
+const EXTERNAL_OR_AMBIGUOUS = /\b(?:quickbooks|stripe|google|meta|vapi|integration|connected account|external|online|web|research|look up|competitors?|comparable compan(?:y|ies)|peer compan(?:y|ies)|latest|current\s+(?:news|benchmark|market|source|industry)|why|forecast|predict|projection|trend|benchmark|cite|citation|source-backed)\b/i;
 const CASH_COLLECTIONS = /\b(?:cash\s+collections?|collections?|payments?\s+collected|collected\s+(?:cash|payments?)|cash\s+position|cash\b[\s\S]{0,40}\bcollected)\b/i;
 const ISO_DATE = /\b\d{4}-\d{2}-\d{2}\b/g;
 const DATE_WORD = /\b(?:today|tomorrow)\b/gi;
@@ -209,7 +211,7 @@ function parseOperationalQuery(instruction: string): DraftOperationalQueryReques
   const normalized = normalizedInstruction(instruction);
   if (!normalized || normalized.length > 500) return null;
 
-  const scheduleMention = /\b(?:schedule|calendar|appointment|appointments|service\s+visit|service\s+visits|work\s+order|work\s+orders|everything)\b/i.test(normalized);
+  const scheduleMention = /\b(?:schedule|calendar|appointment|appointments|service\s+visit|service\s+visits|work\s+order|work\s+orders|technician\s+availability|everything)\b/i.test(normalized);
   if (scheduleMention) {
     const dates = parseDateTokens(normalized);
     if (dates) return { intent: "schedule_range", localDateRange: { startDate: dates[0]!, ...(dates[1] ? { endDate: dates[1] } : {}) } };
@@ -233,6 +235,7 @@ function parseOperationalQuery(instruction: string): DraftOperationalQueryReques
     return { intent: "agent_activity", localDateRange: { startDate: dates[0]!, ...(dates[1] ? { endDate: dates[1] } : {}) } };
   }
   if (/\b(?:business\s+state|business\s+health|operational\s+state|pipeline\s+health|business\s+overview|how\s+is\s+(?:the\s+)?business)\b/i.test(normalized)) return { intent: "business_state" };
+  if (/\b(?:how\s+many|count|status|pipeline|overview|summary)\b/i.test(normalized) && /\b(?:quotes?|proposals?|opportunities)\b/i.test(normalized)) return { intent: "business_state" };
   if (/\b(?:full\s+context|connected\s+context|customer\s+360|household\s+360|service\s+history|customer\s+history|household\s+history|complete\s+(?:record|history))\b/i.test(normalized)) {
     const query = extractCustomerQuery(normalized);
     if (!query) return null;
@@ -496,7 +499,7 @@ export function answerCashCollections(snapshot: CashCollections, asOf: string): 
       { label: "Overdue amount", value: money(overdue.totalUsd) },
       { label: "Payment links awaiting payment", value: String(links) },
     ] },
-    evidence: [{ source: "cash_collections_read_model", ref: "current", timestamp: asOf }],
+    evidence: [{ source: "cash_collections_read_model", ref: "current", timestamp: asOf, kind: "CANONICAL" }],
     asOf,
     freshness: { status: "fresh", observedAt: asOf },
   };
@@ -613,7 +616,47 @@ function summarizeData(intent: OperationalQueryIntent, result: OperationalQueryR
     return { title: "Customer lookup", spokenSummary: "I found the customer record in this tenant.", facts: [{ label: "Matches", value: String(rows) }] };
   }
   if (intent === "customer_cohort") return { title: "Inactivity cohort", spokenSummary: `I found ${resultCount(result)} customers at or beyond the inactivity threshold.`, facts: [{ label: "Customers", value: String(resultCount(result)) }, { label: "Minimum inactive days", value: String(resultValue(result, "minDaysInactive") ?? "configured") }] };
-  if (intent === "schedule_range") return { title: "Schedule range", spokenSummary: `I found ${arrayLength(result, "rows")} scheduled items across appointments, service visits, and work orders.`, facts: [{ label: "Total", value: String(arrayLength(result, "rows")) }, { label: "Sources", value: "Appointments, service visits, work orders" }] };
+  if (intent === "schedule_range") {
+    const count = arrayLength(result, "rows");
+    const localRange = isRecord(resultValue(result, "localDateRange")) ? resultValue(result, "localDateRange") as Record<string, unknown> : {};
+    const range = isRecord(resultValue(result, "range")) ? resultValue(result, "range") as Record<string, unknown> : {};
+    const timeZone = typeof resultValue(result, "timeZone") === "string" ? String(resultValue(result, "timeZone")) : "UTC";
+    const localDateAt = (value: string): string => {
+      try {
+        const parts = new Intl.DateTimeFormat("en-US", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date(value));
+        const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((candidate) => candidate.type === type)?.value;
+        const year = part("year");
+        const month = part("month");
+        const day = part("day");
+        return year && month && day ? `${year}-${month}-${day}` : value.slice(0, 10);
+      } catch {
+        return value.slice(0, 10);
+      }
+    };
+    const requestedDate = typeof localRange.startDate === "string" && localRange.startDate !== "tomorrow"
+      ? localRange.startDate
+      : typeof range.start === "string"
+        ? localDateAt(range.start)
+        : "the requested date";
+    const asOfTime = (() => {
+      try {
+        return new Intl.DateTimeFormat("en-US", { timeZone, hour: "2-digit", minute: "2-digit", hour12: false, timeZoneName: "short" }).format(new Date(result.asOf));
+      } catch {
+        return result.asOf;
+      }
+    })();
+    return count === 0
+      ? {
+          title: "Schedule",
+          spokenSummary: `0 appointments found for ${requestedDate} as of ${asOfTime}. This is a canonical schedule result.`,
+          facts: [{ label: "Appointments", value: "0" }, { label: "Date", value: requestedDate }, { label: "As of", value: `${asOfTime} (${timeZone})` }],
+        }
+      : {
+          title: "Schedule",
+          spokenSummary: `${count} appointments and scheduled work items found for ${requestedDate} as of ${asOfTime}.`,
+          facts: [{ label: "Appointments and work", value: String(count) }, { label: "Date", value: requestedDate }, { label: "Sources", value: "Appointments, service visits, work orders" }],
+        };
+  }
   if (intent === "money_summary") {
     const totals = isRecord(resultValue(result, "totals")) ? resultValue(result, "totals") as Record<string, unknown> : {};
     return { title: "Money summary", spokenSummary: `I retrieved ${money(Number(totals.collectedUsd ?? 0))} in collected payments.`, facts: [{ label: "Collected", value: money(Number(totals.collectedUsd ?? 0)) }, { label: "Invoiced", value: money(Number(totals.invoicedUsd ?? 0)) }, { label: "Pending collection", value: money(Number(totals.pendingCollectionUsd ?? 0)) }] };
@@ -666,7 +709,7 @@ function answerForExecution(execution: OperationalQueryExecution): AnswerEnvelop
     readOnly: true,
     spokenSummary: summary.spokenSummary,
     display: { title: summary.title, facts: summary.facts.slice(0, 8) },
-    evidence: [{ source: `operational_query:${execution.request.intent}`, ref: execution.metadata.queryId, timestamp: execution.result.asOf }],
+    evidence: [{ source: `operational_query:${execution.request.intent}`, ref: execution.metadata.queryId, timestamp: execution.result.asOf, kind: "CANONICAL" }],
     asOf: execution.result.asOf,
     freshness: { status: "fresh", observedAt: execution.result.asOf },
     query: execution,

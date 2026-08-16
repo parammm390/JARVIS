@@ -151,7 +151,14 @@ export async function ingestCallTranscript(tenantId: string, sessionId: string):
   );
   if (turns.length === 0) return 0;
   const text = turns.map((t) => `${t.role}: ${t.transcriptText}`).join("\n");
-  return ingestMemory({ tenantId, sourceDocId: `voice_session:${sessionId}`, text, entityRefs: [{ type: "voice_session", id: sessionId }] });
+  return ingestMemory({
+    tenantId,
+    sourceDocId: `voice_session:${sessionId}`,
+    text,
+    entityRefs: [{ type: "voice_session", id: sessionId }],
+    sourceKind: "voice_transcript",
+    provenance: { voiceSessionId: sessionId },
+  });
 }
 
 export async function appendVoiceTurn(params: {

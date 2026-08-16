@@ -1,7 +1,7 @@
 // Orchestration core (§9): Planner → confirmation gate → Executor → Reflection.
 // This module is the single entry point the API, webhooks, and workers all use.
 
-import type { DomainAction, DomainPolicy, TenantContext, ExecutionResult, MemorySnapshot, Role } from "@finnor/shared-types";
+import type { DomainAction, DomainPolicy, TenantContext, ExecutionResult, MemorySnapshot, OperatingContext, Role } from "@finnor/shared-types";
 import {
   withTenant, domainActions, domainPolicies, domainPolicyRevisions, actionLog,
   decisionReceipts, planRepairs, enqueueJob, receiveWork, transitionWork,
@@ -37,7 +37,7 @@ import {
 } from "./fast-read-lane";
 import { isConversationalTurn, LLMConversationResponder, type ConversationResponder } from "./conversation";
 import { requiresTypedConfirmation } from "../../../scripts/release/action-hardening-spec";
-import { resolveHouseholdMention } from "@finnor/read-models";
+import { assembleOperatingContext } from "./operating-context";
 import { employeeAuthoritySnapshot, evaluateActionApproval, evaluateAuthority, finalizeApprovalAuthority, finalizeApprovalAuthorityTx, isFinalApprovalStep, revalidateActionExecution } from "@finnor/authority";
 import { queryAuthorityRequest } from "./authority-runtime";
 import {
@@ -73,6 +73,10 @@ export * from "./fast-read-lane";
 export * from "./conversation";
 export * from "./authority-runtime";
 export * from "./objective-loop";
+export * from "./operating-context";
+export * from "./research-context";
+
+const EXTERNAL_RESEARCH_ACTION_TYPES = new Set(["search_web", "scan_competitors", "check_business_reviews"]);
 
 export interface InstructionResult {
   actions: DomainAction[];
@@ -351,6 +355,20 @@ export class FinnorOrchestrator implements Orchestrator {
         reasonCode: authority.reasonCode,
       });
       if (authority.outcome !== "allowed") throw new Error(`Authority denied: ${authority.reasonCode}`);
+      if (opts.emitTrace !== false) {
+        await emitInstructionEvent(ctx.tenantId, work.instructionId, "context_retrieved", {
+          chips: [{ label: `${request.intent} canonical query selected`, source: `read-model:${request.intent}`, kind: "CANONICAL", role: "answer_evidence" }],
+        });
+        await emitInstructionEvent(ctx.tenantId, work.instructionId, "step_progress", {
+          stage: "querying_business",
+          intent: request.intent,
+          sourceKind: "CANONICAL",
+        });
+        await emitInstructionEvent(ctx.tenantId, work.instructionId, "executing", {
+          intent: request.intent,
+          sourceKind: "CANONICAL",
+        });
+      }
       // The canonical read-model executor is the sole owner of
       // work_query_executions. Passing Work context here makes both NL and
       // explicit typed API reads use the same durable claim/finish path.
@@ -373,12 +391,16 @@ export class FinnorOrchestrator implements Orchestrator {
       };
       const answer = this.fastReadOnlyRouter.answer?.(normalizedExecution);
       if (opts.emitTrace !== false) {
-        await emitInstructionEvent(ctx.tenantId, work.instructionId, "context_retrieved", {
-          chips: [{ label: `${request.intent} operational query`, source: `read-model:${request.intent}` }],
-        });
-        await emitInstructionEvent(ctx.tenantId, work.instructionId, "executing", {
+        await emitInstructionEvent(ctx.tenantId, work.instructionId, "verifying", {
           queryId,
           intent: request.intent,
+          sourceKind: "CANONICAL",
+        });
+        await emitInstructionEvent(ctx.tenantId, work.instructionId, "verified", {
+          queryId,
+          intent: request.intent,
+          rowCount: normalizedExecution.result.count,
+          sourceKind: "CANONICAL",
         });
         await emitInstructionEvent(ctx.tenantId, work.instructionId, "completed", answer
           ? createInstructionTraceAnswerEnvelope(queryId, answer)
@@ -393,7 +415,10 @@ export class FinnorOrchestrator implements Orchestrator {
       });
       return { execution: normalizedExecution, ...(answer ? { answer } : {}) };
     } catch (err) {
-      const failure = workFailure(err, "Operational query failed");
+      const publicMessage = request.intent === "schedule_range"
+        ? "The canonical schedule could not be queried, so appointments cannot be verified."
+        : `The canonical ${request.intent.replaceAll("_", " ")} read could not be queried, so the result cannot be verified.`;
+      const failure = { ...workFailure(err, publicMessage), message: publicMessage, cause: err instanceof Error ? err.message.slice(0, 300) : "query unavailable" };
       await transitionWork(ctx.tenantId, work.workId, "failed", "query_execution_failed", {
         intent: request.intent,
         message: failure.message,
@@ -505,12 +530,22 @@ export class FinnorOrchestrator implements Orchestrator {
     // classified a second time.
     let fastAnswer: AnswerEnvelope | null = null;
     let fastQuery: OperationalQueryExecution | undefined;
+    let operatingContext: OperatingContext | undefined;
     const suppliedDecision = opts.fastReadDecision;
     const shouldClassify = !opts.skipFastReadClassification && suppliedDecision === undefined;
     let fastDecision: OperationalQueryDecision | undefined = suppliedDecision;
     try {
       if (shouldClassify) fastDecision = this.fastReadOnlyRouter.interpret?.(instruction);
       if (fastDecision?.route === "fast_read" && this.fastReadOnlyRouter.execute) {
+        await emitInstructionEvent(ctx.tenantId, instructionId, "step_progress", { stage: "resolving_context", sourceKind: "PROFILE" });
+        operatingContext = (await assembleOperatingContext(ctx, {
+          instruction,
+          workId,
+          sessionId: opts.sessionId,
+          activeContext: opts.activeContext,
+          includeMemory: false,
+          includeCanonicalBusinessState: false,
+        })).context;
         const result = await this.executeFastOperationalQuery(fastDecision.request, ctx, { workId, workInputId, instructionId }, { executionKey: opts.executionKey ?? opts.idempotencyKey ?? instructionId });
         fastQuery = result.execution;
         fastAnswer = result.answer ?? null;
@@ -569,29 +604,35 @@ export class FinnorOrchestrator implements Orchestrator {
     // Secrets are needed by the existing planner/provider path only. Keeping boot
     // after the deterministic branch makes a fast read independent of Secrets
     // Manager latency or availability.
-    let mentionedHousehold: Awaited<ReturnType<typeof resolveHouseholdMention>> | null = null;
+    let mentionedHousehold: { householdId: string; label: string } | null = null;
     let resolvedHouseholdId: string | undefined;
     let memory: MemorySnapshot;
     try {
       await ensureSecretsLoaded();
-      mentionedHousehold = opts.householdId
-        ? null
-        : await resolveHouseholdMention(ctx.tenantId, instruction).catch(() => null);
-      resolvedHouseholdId = opts.householdId ?? mentionedHousehold?.householdId;
+      await emitInstructionEvent(ctx.tenantId, instructionId, "step_progress", { stage: "resolving_context" });
+      const assembled = await assembleOperatingContext(ctx, {
+        instruction,
+        workId,
+        sessionId: opts.sessionId,
+        householdId: opts.householdId,
+        activeContext: opts.activeContext,
+        includeMemory: true,
+        includeSemanticMemory: plannerMemoryEnabled(),
+        includeCanonicalBusinessState: true,
+      });
+      operatingContext = assembled.context;
+      memory = assembled.memory;
+      mentionedHousehold = assembled.mentionedHousehold;
+      resolvedHouseholdId = assembled.resolvedHouseholdId;
       await transitionWork(ctx.tenantId, workId, "understanding", "context_resolved", {
         householdId: resolvedHouseholdId ?? null,
         mentionedHousehold: mentionedHousehold?.label ?? null,
+        operatingContextHealth: operatingContext.health.status,
       }, resolvedHouseholdId ? { activeContext: { householdId: resolvedHouseholdId } } : {});
       if (resolvedHouseholdId) await attachWorkEntity(ctx.tenantId, workId, {
         entityType: "household",
         entityId: resolvedHouseholdId,
         source: "orchestrator.context_resolved",
-      });
-      memory = await buildMemorySnapshot({
-        tenantId: ctx.tenantId,
-        sessionId: opts.sessionId,
-        householdId: resolvedHouseholdId,
-        semanticQuery: plannerMemoryEnabled() ? instruction : undefined,
       });
     } catch (err) {
       const failure = workFailure(err, "Context retrieval failed");
@@ -605,10 +646,13 @@ export class FinnorOrchestrator implements Orchestrator {
       // longTerm are single facts (present or not, hence count 0|1); episodic/
       // semantic/patterns are real arrays already built above.
       const contextChips = [
-        { label: "prior turns this session", count: memory.shortTerm ? 1 : 0, source: "memory:short-term" },
-        { label: "household history", count: memory.longTerm ? 1 : 0, source: "memory:long-term" },
-        { label: "related past instructions", count: memory.semantic.length, source: "memory:semantic" },
-        { label: "recent business activity", count: memory.episodic.length, source: "memory:episodic" },
+        { label: "authenticated company profile", count: operatingContext?.tenant.companyName ? 1 : 0, source: "profile:tenant", kind: "PROFILE", role: "context_only" },
+        { label: "current Work", count: operatingContext?.activeWork ? 1 : 0, source: "work:active", kind: "WORK", role: "context_only" },
+        { label: "canonical business state", count: operatingContext?.canonicalSummaries.length ?? 0, source: "operational:business-state", kind: "CANONICAL", role: "context_only" },
+        { label: "prior turns this session", count: memory.shortTerm ? 1 : 0, source: "memory:short-term", kind: "SESSION", role: "context_only" },
+        { label: "household history", count: memory.longTerm ? 1 : 0, source: "memory:long-term", kind: "MEMORY", role: "context_only" },
+        { label: "related past instructions", count: memory.semantic.length, source: "memory:semantic", kind: "MEMORY", role: "context_only" },
+        { label: "recent execution history", count: memory.episodic.length, source: "memory:episodic", kind: "WORK", role: "context_only" },
       ].filter((c) => c.count > 0);
       await emitInstructionEvent(ctx.tenantId, instructionId, "context_retrieved", { chips: contextChips });
       await emitInstructionEvent(ctx.tenantId, instructionId, "planning");
@@ -626,6 +670,7 @@ export class FinnorOrchestrator implements Orchestrator {
         signal: opts.signal,
         deadlineAt: opts.deadlineAt,
         deadlineMs: opts.deadlineMs,
+        operatingContext,
       });
     } catch (err) {
       const failure = workFailure(err, "Planning failed");
@@ -691,6 +736,16 @@ export class FinnorOrchestrator implements Orchestrator {
         // can thread it through — in-memory only, never a DB column (see DomainAction.correlationId).
         const action: DomainAction = ctx.correlationId ? { ...rawAction, correlationId: ctx.correlationId } : rawAction;
         const policy = await this.loadPolicy(action);
+        const readOnlyAnswer = isReadOnlyAnswerAction(action.actionType, undefined, false) && !policy.requiresConfirmation;
+        if (instructionId && readOnlyAnswer) {
+          await emitInstructionEvent(ctx.tenantId, instructionId, "dispatched", { actionId: action.id, actionType: action.actionType });
+          await emitInstructionEvent(ctx.tenantId, instructionId, "executing", { actionId: action.id, actionType: action.actionType });
+          await emitInstructionEvent(ctx.tenantId, instructionId, "step_progress", {
+            actionId: action.id,
+            stage: EXTERNAL_RESEARCH_ACTION_TYPES.has(action.actionType) ? "researching_verified_external_sources" : "querying_grounded_sources",
+            sourceKind: EXTERNAL_RESEARCH_ACTION_TYPES.has(action.actionType) ? "WEB" : "CANONICAL",
+          });
+        }
         const result = await this.executor.execute(action, policy);
         await this.reflectWithRetry(action, policy, result);
         // result.status is "success" even for a merely-GATED action (it succeeded at
@@ -708,7 +763,20 @@ export class FinnorOrchestrator implements Orchestrator {
             // this same synchronous call — genuinely reachable from handleInstruction
             // itself (unlike a GATED action's later approve/execute, which happens in
             // a separate request via decide()/runAction(), untouched this phase).
-            await emitInstructionEvent(ctx.tenantId, instructionId, "executing", { actionId: action.id });
+            if (!readOnlyAnswer) await emitInstructionEvent(ctx.tenantId, instructionId, "executing", { actionId: action.id });
+            await emitInstructionEvent(ctx.tenantId, instructionId, "verifying", {
+              actionId: action.id,
+              actionType: action.actionType,
+              sourceKind: EXTERNAL_RESEARCH_ACTION_TYPES.has(action.actionType) ? "WEB" : "CANONICAL",
+            });
+            if (result.status === "success") {
+              await emitInstructionEvent(ctx.tenantId, instructionId, "verified", {
+                actionId: action.id,
+                actionType: action.actionType,
+                evidenceCount: Array.isArray(result.output.citations) ? result.output.citations.length : 0,
+                sourceKind: EXTERNAL_RESEARCH_ACTION_TYPES.has(action.actionType) ? "WEB" : "CANONICAL",
+              });
+            }
             await emitInstructionEvent(
               ctx.tenantId,
               instructionId,

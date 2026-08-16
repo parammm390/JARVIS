@@ -8,6 +8,26 @@ export interface WorkspaceInspectorItem {
   href?: string
 }
 
+export interface WorkspaceInspectorGroups {
+  primary: WorkspaceInspectorItem[]
+  advanced: WorkspaceInspectorItem[]
+  durableWork: WorkspaceInspectorItem | null
+}
+
+const READ_ONLY_ACTIONS = new Set([
+  "answer_business_question",
+  "get_business_overview",
+  "check_stock_level",
+  "answer_water_question",
+  "answer_customer_question",
+  "check_reminder_due",
+  "check_technician_availability",
+  "summarize_ad_performance",
+  "search_web",
+  "scan_competitors",
+  "check_business_reviews",
+])
+
 function humanize(value: string): string {
   return value.replaceAll("_", " ").replace(/\b\w/g, (character) => character.toUpperCase())
 }
@@ -30,9 +50,10 @@ function nextAction(thread: Thread): string {
 
 export function buildWorkspaceInspector(thread: Thread, projection: WorkspaceProjection, role: JarvisRole): WorkspaceInspectorItem[] {
   const sourceLabels = new Set<string>()
+  const contextLabels = new Set<string>()
   for (const table of projection.query?.result.source.tables ?? []) sourceLabels.add(table)
-  for (const evidence of thread.answerResult?.evidence ?? []) sourceLabels.add(evidence.title ?? evidence.source)
-  for (const chip of thread.contextChips) sourceLabels.add(`${chip.label} · ${chip.source}`)
+  for (const evidence of thread.answerResult?.evidence ?? []) sourceLabels.add(`${evidence.kind ?? "UNCLASSIFIED"} · ${evidence.title ?? evidence.source}`)
+  for (const chip of thread.contextChips) contextLabels.add(`${chip.label} · ${chip.source}`)
   const verifiedFields = thread.nodes.flatMap((node) => node.groundedPayload.filter((field) => field.status === "verified").map((field) => field.field))
   if (verifiedFields.length > 0) sourceLabels.add(`Verified fields · ${Array.from(new Set(verifiedFields)).join(", ")}`)
 
@@ -45,7 +66,7 @@ export function buildWorkspaceInspector(thread: Thread, projection: WorkspacePro
     return `${humanize(action.actionType)}${detail ? ` (${detail})` : ""}`
   })
   const state = thread.machine.instructionState
-  const readOnly = projection.actions.length === 0
+  const readOnly = projection.actions.length === 0 || projection.actions.every((action) => READ_ONLY_ACTIONS.has(action.actionType))
   const outcome = thread.submitError
     ? compact(thread.submitError)
     : thread.answerResult?.spokenSummary
@@ -65,6 +86,7 @@ export function buildWorkspaceInspector(thread: Thread, projection: WorkspacePro
     { label: "What you are looking at", value: `${projection.title} · ${humanize(state)}` },
     { label: "Why now", value: compact(thread.instructionText) },
     { label: "Supporting sources", value: sourceLabels.size > 0 ? Array.from(sourceLabels).join(" · ") : "No source record has been attached yet." },
+    { label: "Context inputs", value: contextLabels.size > 0 ? Array.from(contextLabels).join(" · ") : "No optional context input is attached." },
     { label: "Policy / permission", value: readOnly ? "Read-only result; no consequential permission was exercised." : policies.length > 0 ? policies.join(" · ") : "Policy resolution is not recorded yet." },
     { label: "Expected change", value: readOnly ? "No business-state change. This Work reads or explains existing evidence." : actions.join(" → ") },
     { label: "Authority boundary", value: state === "awaiting_approval" ? `${humanize(role ?? "unknown")} session · a recorded human decision is required before execution.` : readOnly ? `${humanize(role ?? "unknown")} session · read authority only for this result.` : `${humanize(role ?? "unknown")} session · actions remain bounded by recorded policy and approval state.` },
@@ -73,4 +95,30 @@ export function buildWorkspaceInspector(thread: Thread, projection: WorkspacePro
     { label: "Next permitted action", value: nextAction(thread) },
     { label: "Durable Work", value: projection.workId ?? "Pending durable ID", ...(projection.workId ? { href: `/jarvis/work?workCaseId=${encodeURIComponent(projection.workId)}` } : {}) },
   ]
+}
+
+/**
+ * The Inspector is a contextual lens, not a second transcript. Keep the three
+ * facts needed to orient a human in the open and move policy/debug detail
+ * behind disclosure. The source item deliberately combines both source lists
+ * so a collapsed canvas never loses the evidence boundary.
+ */
+export function groupWorkspaceInspector(items: WorkspaceInspectorItem[]): WorkspaceInspectorGroups {
+  const find = (label: string) => items.find((item) => item.label === label) ?? null
+  const state = find("What you are looking at")
+  const authority = find("Authority boundary")
+  const supporting = find("Supporting sources")
+  const closure = find("Evidence / closure")
+  const durableWork = find("Durable Work")
+  const sourceParts = [supporting?.value, closure?.value].filter((value): value is string => Boolean(value))
+
+  return {
+    primary: [
+      state ? { ...state, label: "Work state" } : { label: "Work state", value: "No Work state is selected." },
+      authority ? { ...authority, label: "Authority" } : { label: "Authority", value: "Authority context is not attached yet." },
+      { label: "Source evidence", value: sourceParts.length > 0 ? sourceParts.join(" · ") : "No source evidence is attached yet." },
+    ],
+    advanced: items.filter((item) => !["What you are looking at", "Authority boundary", "Supporting sources", "Evidence / closure", "Durable Work"].includes(item.label)),
+    durableWork,
+  }
 }

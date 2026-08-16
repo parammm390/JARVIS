@@ -86,6 +86,9 @@ export async function queryConsolidatedFacts(tenantId: string, query: string, li
       chunk: edge.fact,
       sourceDocId: edge.uuid ?? null,
       similarity: edge.score ?? edge.relevance ?? 0,
+      relevanceScore: edge.score ?? edge.relevance ?? 0,
+      sourceKind: "zep_consolidated_fact",
+      provenance: { provider: "zep", graphEdgeId: edge.uuid ?? null },
     }));
   } catch {
     return [];

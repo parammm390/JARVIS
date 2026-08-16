@@ -6,7 +6,7 @@
 
 import { withTenant, decisionReceipts, memoryCorrections } from "@finnor/db";
 import { recordCorrection } from "@finnor/memory";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { requireContext, canApprove, errorResponse } from "../../../lib/auth";
 
@@ -55,6 +55,7 @@ export async function POST(req: Request): Promise<Response> {
 
 const ListQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
+  includeSuperseded: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
 });
 
 export async function GET(req: Request): Promise<Response> {
@@ -64,14 +65,17 @@ export async function GET(req: Request): Promise<Response> {
       return Response.json({ error: `Your role (${ctx.role}) cannot view corrections` }, { status: 403 });
     }
     const url = new URL(req.url);
-    const parsed = ListQuerySchema.safeParse({ limit: url.searchParams.get("limit") ?? undefined });
+    const parsed = ListQuerySchema.safeParse({
+      limit: url.searchParams.get("limit") ?? undefined,
+      includeSuperseded: url.searchParams.get("includeSuperseded") ?? undefined,
+    });
     if (!parsed.success) return Response.json({ error: "Invalid query" }, { status: 400 });
 
     const rows = await withTenant(ctx.tenantId, (db) =>
       db
         .select()
         .from(memoryCorrections)
-        .where(and(eq(memoryCorrections.tenantId, ctx.tenantId)))
+        .where(and(eq(memoryCorrections.tenantId, ctx.tenantId), ...(parsed.data.includeSuperseded ? [] : [isNull(memoryCorrections.supersededAt)])))
         .orderBy(desc(memoryCorrections.createdAt))
         .limit(parsed.data.limit),
     );

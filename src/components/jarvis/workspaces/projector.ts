@@ -4,7 +4,7 @@ import type { WorkspaceKind, WorkspaceProjection } from "./contracts"
 const SCHEDULE_ACTIONS = new Set(["schedule_water_test", "assign_technician_to_visit", "check_technician_availability", "reschedule_visit", "route_suggestion"])
 const MONEY_ACTIONS = new Set(["create_invoice", "send_payment_reminder", "record_payment", "call_overdue_invoices", "start_invoice_to_cash_workflow"])
 const CUSTOMER_ACTIONS = new Set(["create_lead", "update_lead_status", "log_interaction", "assign_lead_to_technician", "send_customer_message", "send_follow_up", "answer_customer_question"])
-const RESEARCH_ACTIONS = new Set(["search_web", "scan_competitors", "check_business_reviews", "answer_water_question", "answer_business_question", "get_business_overview"])
+const RESEARCH_ACTIONS = new Set(["search_web", "scan_competitors", "check_business_reviews"])
 const CAMPAIGN_ACTIONS = new Set(["bulk_notify_existing_customers", "send_proposal_to_recent_installs", "launch_ad_campaign", "create_review_request"])
 
 function queryWorkspace(intent: string): WorkspaceKind {
@@ -36,7 +36,8 @@ function titleFor(kind: WorkspaceKind, thread: Thread): string {
   if (query?.intent === "agent_activity") return "Execution activity"
   if (query?.intent === "business_state") return "Business operating state"
   if (query?.intent === "company_context") return "Connected customer context"
-  if (kind === "research") return thread.answerResult?.displaySummary ?? "Research result"
+  if (kind === "research") return thread.answerResult?.displaySummary ?? "Evidence-backed research"
+  if (kind === "answer") return thread.answerResult?.displaySummary ?? "Direct answer"
   if (kind === "campaign") return "Campaign workspace"
   if (kind === "execution") return "Execution workspace"
   if (kind === "receipt") return "Work receipt"
@@ -52,7 +53,7 @@ export function projectThreadWorkspace(thread: Thread): WorkspaceProjection {
   const actionTypes = thread.nodes.map((node) => node.actionType)
   let kind: WorkspaceKind
   if (thread.answerResult?.query) kind = queryWorkspace(thread.answerResult.query.result.intent)
-  else if (thread.answerResult) kind = "research"
+  else if (thread.answerResult) kind = actionTypes.some((type) => RESEARCH_ACTIONS.has(type)) ? "research" : "answer"
   else if (state === "failed") kind = "recovery"
   else if (state === "completed" || state === "partial" || state === "cancelled") kind = "receipt"
   else if (state === "executing" || state === "verifying" || (state === "awaiting_approval" && thread.everExecuted)) kind = "execution"

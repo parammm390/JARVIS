@@ -4,7 +4,7 @@
 // free-floating claim.
 
 import { withTenant, memoryCorrections } from "@finnor/db";
-import { eq } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { defaultEmbedder, embedManyCached, type EmbeddingProvider } from "./semantic";
 
 export interface RecordCorrectionParams {
@@ -17,8 +17,21 @@ export interface RecordCorrectionParams {
 }
 
 export async function recordCorrection(params: RecordCorrectionParams): Promise<{ id: string }> {
-  const [row] = await withTenant(params.tenantId, (db) =>
-    db
+  const row = await withTenant(params.tenantId, async (db) => {
+    // Serialize corrections for the same tenant/question so concurrent operators
+    // cannot leave two active "latest" facts. The partial unique index is the
+    // final invariant; this lock preserves a clean supersession chain.
+    await db.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`${params.tenantId}:${params.question}`}))`);
+    const [prior] = await db
+      .select({ id: memoryCorrections.id })
+      .from(memoryCorrections)
+      .where(and(eq(memoryCorrections.tenantId, params.tenantId), eq(memoryCorrections.question, params.question), isNull(memoryCorrections.supersededAt)))
+      .orderBy(desc(memoryCorrections.createdAt))
+      .limit(1);
+    if (prior) {
+      await db.update(memoryCorrections).set({ supersededAt: new Date() }).where(eq(memoryCorrections.id, prior.id));
+    }
+    const [inserted] = await db
       .insert(memoryCorrections)
       .values({
         tenantId: params.tenantId,
@@ -27,9 +40,11 @@ export async function recordCorrection(params: RecordCorrectionParams): Promise<
         wrongAnswer: params.wrongAnswer,
         correctedFact: params.correctedFact,
         correctedBy: params.correctedBy,
+        supersedesId: prior?.id ?? null,
       })
-      .returning({ id: memoryCorrections.id }),
-  );
+      .returning({ id: memoryCorrections.id });
+    return inserted;
+  });
   return { id: row!.id };
 }
 
@@ -65,7 +80,7 @@ export async function findMatchingCorrection(
   embedder: EmbeddingProvider = defaultEmbedder(),
   threshold = DEFAULT_CORRECTION_MATCH_THRESHOLD,
 ): Promise<CorrectionMatch | null> {
-  const rows = await withTenant(tenantId, (db) => db.select().from(memoryCorrections).where(eq(memoryCorrections.tenantId, tenantId)));
+  const rows = await withTenant(tenantId, (db) => db.select().from(memoryCorrections).where(and(eq(memoryCorrections.tenantId, tenantId), isNull(memoryCorrections.supersededAt))));
   if (rows.length === 0) return null;
 
   const [queryVec, ...questionVecs] = await embedManyCached(tenantId, [query, ...rows.map((r) => r.question)], embedder);

@@ -27,6 +27,7 @@
     "db:generate": "drizzle-kit generate --config packages/db/drizzle.config.ts",
     "db:migrate": "tsx packages/db/migrate.ts",
     "db:seed": "tsx packages/db/seed.ts",
+    "db:seed:demo": "tsx scripts/seed-demo-tenant.ts",
     "db:bundle": "tsx scripts/bundle-migrations.ts",
     "db:create-user": "tsx scripts/create-user.ts",
     "policy:lint": "tsx scripts/lint-policy-coverage.ts",

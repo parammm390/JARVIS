@@ -3,6 +3,7 @@
 import Redis from "ioredis";
 
 const TTL_SECONDS = 30 * 60;
+const MAX_SHORT_TERM_TURNS = 20;
 
 let redis: Redis | null = null;
 
@@ -46,7 +47,9 @@ export async function appendShortTerm(
 ): Promise<void> {
   const existing = (await readShortTerm(tenantId, sessionId)) ?? { turns: [] };
   const turns = Array.isArray(existing.turns) ? existing.turns : [];
-  turns.push(entry);
+  const last = turns[turns.length - 1];
+  if (JSON.stringify(last) !== JSON.stringify(entry)) turns.push(entry);
+  if (turns.length > MAX_SHORT_TERM_TURNS) turns.splice(0, turns.length - MAX_SHORT_TERM_TURNS);
   await writeShortTerm(tenantId, sessionId, { ...existing, turns });
 }
 

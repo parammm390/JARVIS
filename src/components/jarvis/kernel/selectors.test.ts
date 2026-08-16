@@ -155,6 +155,21 @@ describe("the truth gate (defect C-01)", () => {
     const t = selectCollectedUsd(input({ cashCollections: null }))
     expect(t).toEqual({ status: "unknown", reason: "loading" })
   })
+
+  it("malformed read-model payloads are unavailable instead of crashing or becoming zero", () => {
+    const malformedCash = input({ cashCollections: {} as SelectorInput["cashCollections"] })
+    expect(selectOverdueInvoices(malformedCash).status).toBe("unavailable")
+    expect(selectCollectedUsd(malformedCash).status).toBe("unavailable")
+    expect(selectPaymentLinksOpen(malformedCash).status).toBe("unavailable")
+
+    const malformedPipeline = input({ pipelineHealth: {} as SelectorInput["pipelineHealth"] })
+    expect(selectOpenLeads(malformedPipeline).status).toBe("unavailable")
+    expect(selectQuotesSent(malformedPipeline).status).toBe("unavailable")
+
+    const malformedSla = input({ slaBreaches: {} as SelectorInput["slaBreaches"] })
+    expect(selectStuckRuns(malformedSla).status).toBe("unavailable")
+    expect(selectOpenReconciliation(malformedSla).status).toBe("unavailable")
+  })
 })
 
 // ---------------------------------------------------------------------------
