@@ -111,7 +111,7 @@ for name in AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY SECRETS_PROVIDER FINNOR_SECR
   grep -q "^$name=" '${worker.secretEnvironmentFile}' || { echo "missing worker environment: $name" >&2; exit 1; }
 done
 grep -Eq '^(AWS_REGION|AWS_BEDROCK_REGION)=' '${worker.secretEnvironmentFile}' || { echo "missing worker AWS region" >&2; exit 1; }
-grep -qx 'SECRETS_PROVIDER=aws-secrets-manager' '${worker.secretEnvironmentFile}' || { echo "worker managed-secret provider is not fail-closed" >&2; exit 1; }
+grep -Eq '^SECRETS_PROVIDER=(aws-secrets-manager|"aws-secrets-manager"|'"'"'aws-secrets-manager'"'"')$' '${worker.secretEnvironmentFile}' || { echo "worker managed-secret provider is not fail-closed" >&2; exit 1; }
 grep -Eq '^FINNOR_SECRET_IDS=.+$' '${worker.secretEnvironmentFile}' || { echo "worker secret mapping is empty" >&2; exit 1; }
 ! grep -q '^AUTH_DEV_BYPASS=' '${worker.secretEnvironmentFile}' || { echo "worker contains forbidden production AUTH_DEV_BYPASS" >&2; exit 1; }
 git ls-remote https://github.com/${contract.canonicalGit.repository}.git refs/heads/${contract.canonicalGit.branch} | grep -q '^${gitRelease.head}'
