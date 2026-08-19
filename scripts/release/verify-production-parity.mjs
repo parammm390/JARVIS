@@ -53,7 +53,7 @@ const worker = contract.topology.worker
 const azureVerifyScript = `set -eu
 systemctl is-active --quiet '${worker.systemdUnit}'
 test "$(readlink -f '${worker.currentSymlink}')" = '${worker.releaseRoot}/${expected.commitSha}'
-test "$(git -C '${worker.currentSymlink}' rev-parse HEAD)" = '${expected.commitSha}'
+test "$(sudo -u finnor git -C '${worker.currentSymlink}' rev-parse HEAD)" = '${expected.commitSha}'
 grep -qx 'FINNOR_COMMIT_SHA=${expected.commitSha}' '${worker.releaseEnvironmentFile}'
 echo FINNOR_AZURE_PARITY_OK`
 const az = process.env.AZURE_CLI || "az"
@@ -68,7 +68,7 @@ const azureRaw = execFileSync(az, [
 ], { encoding: "utf8", maxBuffer: 16 * 1024 * 1024 })
 const azureResult = JSON.parse(azureRaw)
 const azureMessage = (azureResult.value ?? []).map((entry) => entry.message ?? "").join("\n")
-if (!azureMessage.includes("FINNOR_AZURE_PARITY_OK")) throw new Error("Azure source/service parity verification failed")
+if (!azureMessage.includes("FINNOR_AZURE_PARITY_OK")) throw new Error(`Azure source/service parity verification failed:\n${azureMessage}`)
 
 const observed = { frontend, api, worker: workerRelease, migrationHead }
 assertRuntimeParity(contract, expected, observed)
