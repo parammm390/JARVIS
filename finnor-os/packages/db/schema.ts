@@ -28,6 +28,9 @@ const pgTable = finnorOsSchema.table;
 
 export const tenants = pgTable("tenants", {
   id: uuid("id").primaryKey().defaultRandom(),
+  // Stable provisioning identity. Names are presentation data and may change;
+  // clientKey is the durable boundary used to converge repeat manifests.
+  clientKey: text("client_key").notNull().default(sql`'legacy-' || gen_random_uuid()::text`).unique(),
   name: text("name").notNull(),
   ownerPhone: text("owner_phone"),
   // IANA zone (e.g. "America/Chicago"). Drives voice-scheduling/business-hours logic;
@@ -58,6 +61,25 @@ export const tenantSettings = pgTable("tenant_settings", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// Manifest-owned business locations. This is intentionally not a second workspace
+// configuration source and not an alias for inventory warehouses: it only provides
+// stable client/location identities for onboarding and later import mapping.
+export const tenantLocations = pgTable(
+  "tenant_locations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    locationKey: text("location_key").notNull(),
+    name: text("name").notNull(),
+    address: text("address"),
+    timezone: text("timezone"),
+    active: boolean("active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique("tenant_locations_tenant_key_idx").on(t.tenantId, t.locationKey)],
+);
 
 // Stable company configuration is deliberately separate from live operating
 // state and from semantic memory.  These are operator-authored facts used to
@@ -574,7 +596,7 @@ export const domainPolicies = pgTable(
     version: integer("version").notNull().default(1),
     effectiveFrom: timestamp("effective_from", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("domain_policies_tenant_action_idx").on(t.tenantId, t.actionType)],
+  (t) => [unique("domain_policies_tenant_action_unique_idx").on(t.tenantId, t.actionType)],
 );
 
 export const domainPolicyRevisions = pgTable(
@@ -1202,6 +1224,10 @@ export const contacts = pgTable("contacts", {
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
   householdId: uuid("household_id").references(() => households.id),
   name: text("name").notNull(),
+  // Structured names are additive: legacy callers can continue to use `name`, while
+  // declarative imports no longer have to flatten materially different dealer fields.
+  firstName: text("first_name"),
+  lastName: text("last_name"),
   role: text("role"), // e.g. "primary", "spouse", "billing" — free text, not enforced
   ...archivable(),
   ...provenanceColumns(),
@@ -1594,6 +1620,77 @@ export const dataQualityFindings = pgTable(
     resolvedAt: timestamp("resolved_at", { withTimezone: true }),
   },
   (t) => [index("data_quality_findings_unresolved_idx").on(t.tenantId, t.resolvedAt)],
+);
+
+// Phase 3 client imports. Business rows are still written exclusively through
+// @finnor/data-platform; these tables retain the source-to-canonical identity,
+// per-row outcome, quarantine reason, and run report needed for safe replay.
+export const importRuns = pgTable(
+  "import_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    definitionKey: text("definition_key").notNull(),
+    definitionVersion: integer("definition_version").notNull(),
+    sourceSystem: text("source_system").notNull(),
+    sourceName: text("source_name").notNull(),
+    sourceSha256: text("source_sha256").notNull(),
+    definitionSha256: text("definition_sha256").notNull(),
+    dryRun: boolean("dry_run").notNull().default(false),
+    status: text("status", { enum: ["running", "completed", "completed_with_errors", "failed"] }).notNull().default("running"),
+    totalRows: integer("total_rows").notNull().default(0),
+    createdRows: integer("created_rows").notNull().default(0),
+    updatedRows: integer("updated_rows").notNull().default(0),
+    skippedRows: integer("skipped_rows").notNull().default(0),
+    quarantinedRows: integer("quarantined_rows").notNull().default(0),
+    report: jsonb("report").notNull().default({}),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+  },
+  (t) => [index("import_runs_tenant_started_idx").on(t.tenantId, t.startedAt)],
+);
+
+export const importRows = pgTable(
+  "import_rows",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    runId: uuid("run_id").notNull().references(() => importRuns.id),
+    rowNumber: integer("row_number").notNull(),
+    sourceId: text("source_id"),
+    identityKey: text("identity_key"),
+    status: text("status", { enum: ["planned", "created", "updated", "skipped", "quarantined"] }).notNull(),
+    canonicalEntityType: text("canonical_entity_type"),
+    canonicalEntityId: uuid("canonical_entity_id"),
+    reasons: jsonb("reasons").notNull().default([]),
+    normalizedData: jsonb("normalized_data").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("import_rows_run_row_idx").on(t.runId, t.rowNumber),
+    index("import_rows_tenant_status_idx").on(t.tenantId, t.status),
+  ],
+);
+
+export const importEntityRefs = pgTable(
+  "import_entity_refs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    sourceSystem: text("source_system").notNull(),
+    entityType: text("entity_type").notNull(),
+    sourceId: text("source_id").notNull(),
+    canonicalEntityId: uuid("canonical_entity_id").notNull(),
+    identityKey: text("identity_key"),
+    firstRunId: uuid("first_run_id").notNull().references(() => importRuns.id),
+    lastRunId: uuid("last_run_id").notNull().references(() => importRuns.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("import_entity_refs_source_idx").on(t.tenantId, t.sourceSystem, t.entityType, t.sourceId),
+    index("import_entity_refs_identity_idx").on(t.tenantId, t.sourceSystem, t.entityType, t.identityKey),
+  ],
 );
 
 // ---------------------------------------------------------------------------
@@ -2087,6 +2184,13 @@ export const tenantIntegrations = pgTable(
     binding: text("binding").notNull(),
     mode: text("mode", { enum: ["real", "sandbox", "emulator"] }).notNull().default("emulator"),
     config: jsonb("config").notNull().default({}),
+    // Phase 2 tenant credential isolation: these columns are references and
+    // non-secret metadata only. Provider secret material is resolved at call time
+    // by @finnor/security and never enters a normal application table.
+    credentialProvider: text("credential_provider", { enum: ["aws-secrets-manager", "legacy-env"] }),
+    credentialRef: text("credential_ref"),
+    credentialVersion: text("credential_version"),
+    credentialMetadata: jsonb("credential_metadata").notNull().default({}),
     health: text("health", { enum: ["ok", "degraded", "down", "unknown"] }).notNull().default("unknown"),
     lastCheckAt: timestamp("last_check_at", { withTimezone: true }),
     lastError: text("last_error"),

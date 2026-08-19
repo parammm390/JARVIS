@@ -25,10 +25,10 @@ import {
   reserveBudget,
   releaseBudget,
   DAILY_VAPI_CALL_CAP,
-  personaAssistantId,
-  commsMode,
+  resolveCapabilityBindingsForTenant,
   type ToolCallResult,
 } from "@finnor/tools";
+import { resolveTenantCredentialContext } from "@finnor/security";
 import type { ErrorKind } from "@finnor/shared-types";
 import { nextCallingWindow } from "@finnor/plugin-bulk-notify";
 import { revalidateActionExecution } from "@finnor/authority";
@@ -548,7 +548,10 @@ export async function executeBusinessOperationCallBatch(payload: Record<string, 
   }
   const configuration = object(operation.configuration);
   const persona = String(configuration.voicePersona ?? "winback");
-  const assistantId = personaAssistantId(persona) ?? process.env.VAPI_ASSISTANT_ID ?? (commsMode() === "native" ? "sandbox-emulator" : "");
+  const bindings = await resolveCapabilityBindingsForTenant(tenantId);
+  const assistantId = bindings.communications.mode === "vapi"
+    ? await resolveTenantCredentialContext(tenantId, "vapi").then((context) => context.credentials.assistantIds?.[persona] ?? (persona === "main" ? context.credentials.assistantId : ""))
+    : "sandbox-emulator";
   if (!assistantId) {
     for (const target of claimed) await finishTarget({ tenantId, operation, target, status: "failed", failureClass: "configuration", errorKind: "config", error: "The Vapi win-back assistant is not configured." });
     await releaseBudget(tenantId, "vapi", "call", Number(payload.reserved ?? claimed.length), String(payload.reservationDate), String(payload.reservationKey)).catch(() => undefined);

@@ -26,7 +26,6 @@ import {
   emulatorCommunicationsBinding,
   vapiCommunicationsBinding,
   resetCommunicationsEmulator,
-  isVapiConfigured,
   SendConfirmationInputSchema,
   SendConfirmationOutputSchema,
   type SendConfirmationInput,
@@ -49,7 +48,6 @@ import {
   bookProviderAppointmentNativeBinding,
   BookProviderAppointmentInputSchema,
   BookProviderAppointmentOutputSchema,
-  isGhlConfigured,
   resetCrmEmulator,
   syncInvoiceContract,
   syncInvoiceEmulatorBinding,
@@ -60,7 +58,6 @@ import {
   createPaymentLinkEmulatorBinding,
   CreatePaymentLinkInputSchema,
   CreatePaymentLinkOutputSchema,
-  isQuickBooksConfigured,
   resetAccountingEmulator,
   launchAdCampaignContract,
   launchAdCampaignEmulatorBinding,
@@ -93,6 +90,17 @@ import {
 
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
 const TENANT_ID = "00000000-0000-4000-8000-0000000000d2";
+const legacyEnabledForTenant = (process.env.FINNOR_LEGACY_CREDENTIAL_TENANT_IDS ?? "")
+  .split(",")
+  .map((value) => value.trim())
+  .includes(TENANT_ID);
+const legacyVapiConfigured = legacyEnabledForTenant && process.env.COMMUNICATIONS_BINDING === "vapi" && Boolean(
+  process.env.VAPI_API_KEY && process.env.VAPI_PHONE_NUMBER_ID && process.env.VAPI_ASSISTANT_ID,
+);
+const legacyGhlConfigured = legacyEnabledForTenant && process.env.CRM_BINDING === "ghl" && Boolean(process.env.GOHIGHLEVEL_API_KEY);
+const legacyQuickBooksConfigured = legacyEnabledForTenant && process.env.ACCOUNTING_BINDING === "quickbooks" && Boolean(
+  process.env.QUICKBOOKS_CLIENT_ID && process.env.QUICKBOOKS_CLIENT_SECRET && process.env.QUICKBOOKS_REFRESH_TOKEN && process.env.QUICKBOOKS_REALM_ID,
+);
 
 async function dbUp(): Promise<boolean> {
   const c = new pg.Client({ connectionString: DB_URL, connectionTimeoutMillis: 2000 });
@@ -267,7 +275,7 @@ describe.skipIf(!available)("capability contract conformance", () => {
   schedulingConformanceSuite("native", nativeSchedulingBinding);
 
   communicationsConformanceSuite("emulator", emulatorCommunicationsBinding);
-  if (isVapiConfigured()) {
+  if (legacyVapiConfigured) {
     // Places one real, minimal outbound call through Vapi — confirmed acceptable with
     // the user for proving the real binding, skipped automatically otherwise.
     communicationsConformanceSuite("vapi", vapiCommunicationsBinding);
@@ -298,7 +306,7 @@ describe.skipIf(!available)("capability contract conformance", () => {
     SendMessageOutputSchema,
     (idempotencyKey) => ({ tenantId: TENANT_ID, contactId: "contact-1", message: "conformance test", idempotencyKey }),
   );
-  if (isGhlConfigured()) {
+  if (legacyGhlConfigured) {
     genericConformanceSuite(
       "crm upsert_contact — ghl",
       upsertContactContract,
@@ -330,7 +338,7 @@ describe.skipIf(!available)("capability contract conformance", () => {
     SyncInvoiceOutputSchema,
     (idempotencyKey) => ({ tenantId: TENANT_ID, customerName: "Conformance Customer", amountUsd: 100, idempotencyKey }),
   );
-  if (isQuickBooksConfigured()) {
+  if (legacyQuickBooksConfigured) {
     genericConformanceSuite(
       "accounting sync_invoice — quickbooks",
       syncInvoiceContract,

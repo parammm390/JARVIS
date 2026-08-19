@@ -380,10 +380,12 @@ describe.skipIf(!available)("proactive scan handlers", () => {
     const ownerId = "00000000-0000-4000-8000-0000000000f2";
     const priorApiKey = process.env.RESEND_API_KEY;
     const priorCap = process.env.RESEND_DAILY_CAP;
+    const priorSystemProviders = process.env.FINNOR_SYSTEM_CREDENTIAL_PROVIDERS;
     let requestBody: Record<string, unknown> | undefined;
     try {
       process.env.RESEND_API_KEY = "test-key-not-real";
       process.env.RESEND_DAILY_CAP = "50";
+      process.env.FINNOR_SYSTEM_CREDENTIAL_PROVIDERS = "resend";
       await withTenant(TENANT_ID, (db) =>
         db.insert(users).values({ id: ownerId, tenantId: TENANT_ID, email: "digest-owner@finnorai.com", role: "owner" }).onConflictDoNothing(),
       );
@@ -406,8 +408,12 @@ describe.skipIf(!available)("proactive scan handlers", () => {
       expect(String(requestBody?.html)).toContain("Nothing has been approved or acted on without you.");
     } finally {
       setResendFetchForTesting(null);
-      process.env.RESEND_API_KEY = priorApiKey;
-      process.env.RESEND_DAILY_CAP = priorCap;
+      if (priorApiKey === undefined) delete process.env.RESEND_API_KEY;
+      else process.env.RESEND_API_KEY = priorApiKey;
+      if (priorCap === undefined) delete process.env.RESEND_DAILY_CAP;
+      else process.env.RESEND_DAILY_CAP = priorCap;
+      if (priorSystemProviders === undefined) delete process.env.FINNOR_SYSTEM_CREDENTIAL_PROVIDERS;
+      else process.env.FINNOR_SYSTEM_CREDENTIAL_PROVIDERS = priorSystemProviders;
       await withTenant(TENANT_ID, (db) => db.delete(users).where(eq(users.id, ownerId)));
     }
   });

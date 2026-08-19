@@ -54,6 +54,18 @@ describe.skipIf(!available)("hybridRetrieve (§5.3)", () => {
     expect(result.semanticHits[0]!.chunk).toContain("iron filter SOP");
   });
 
+  it("can enforce a canonical-only read boundary when semantic context is not requested", async () => {
+    const result = await hybridRetrieve({
+      tenantId: TENANT_ID,
+      query: "How many leads are on file right now?",
+      structured: [{ source: "business_overview", ref: "current", data: { leads: { total: 1000 } } }],
+      semanticLimit: 0,
+    });
+    expect(result.facts.business_overview).toEqual({ leads: { total: 1000 } });
+    expect(result.semanticHits).toEqual([]);
+    expect(result.citations.some((c) => c.source === "semantic_memory")).toBe(false);
+  });
+
   it("citations carry structured facts first, in the receipt-evidence shape {source, ref, timestamp}", async () => {
     const result = await hybridRetrieve({
       tenantId: TENANT_ID,

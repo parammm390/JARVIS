@@ -14,45 +14,38 @@
 import { createSign } from "node:crypto";
 import { IntegrationError, type ProviderHealth } from "./errors";
 import type { RequestSignatureInput, RequestSignatureOutput } from "./emulators/documents-emulator";
+import type { TenantCredentialContext } from "@finnor/security";
 
 export type { RequestSignatureInput, RequestSignatureOutput };
 
-function docusignConfigured(): boolean {
-  return Boolean(
-    process.env.DOCUSIGN_INTEGRATION_KEY &&
-      process.env.DOCUSIGN_USER_ID &&
-      process.env.DOCUSIGN_ACCOUNT_ID &&
-      process.env.DOCUSIGN_PRIVATE_KEY,
-  );
-}
+export type DocusignCredentialContext = TenantCredentialContext<"docusign">;
 
-export function docusignProviderStatus(): { configured: boolean } {
-  return { configured: docusignConfigured() };
+export function docusignProviderStatus(context: DocusignCredentialContext | null): { configured: boolean } {
+  return { configured: Boolean(context) };
 }
 
 /** Real self-test: the JWT-grant token exchange itself (docusignAccessToken, defined
  *  below) — proves the integration key/user id/private key actually mint a working
  *  access token, not just that all four env vars are present. Mirrors
  *  quickbooks.ts's testQuickBooksConnection. */
-export async function testDocusignConnection(): Promise<ProviderHealth> {
-  if (!docusignConfigured()) return { configured: false, healthy: null };
+export async function testDocusignConnection(context: DocusignCredentialContext): Promise<ProviderHealth> {
   try {
-    await docusignAccessToken();
+    await docusignAccessToken(context);
     return { configured: true, healthy: true };
-  } catch (err) {
-    return { configured: true, healthy: false, error: (err as Error).message };
+  } catch {
+    return { configured: true, healthy: false, error: "DocuSign authenticated connection failed" };
   }
 }
 
-function baseUrl(): string {
-  return process.env.DOCUSIGN_BASE_URL ?? "https://demo.docusign.net";
+function baseUrl(context: DocusignCredentialContext): string {
+  return context.credentials.baseUrl;
 }
 
 /** JWT-grant auth host is the account-server counterpart of the API base — demo's is
  *  account-d.docusign.com, production's is account.docusign.com. Derived from
  *  DOCUSIGN_BASE_URL rather than a separate env var — one fewer knob to misconfigure. */
-function authHost(): string {
-  return baseUrl().includes("demo.docusign.net") ? "account-d.docusign.com" : "account.docusign.com";
+function authHost(context: DocusignCredentialContext): string {
+  return baseUrl(context).includes("demo.docusign.net") ? "account-d.docusign.com" : "account.docusign.com";
 }
 
 function base64url(input: string): string {
@@ -62,14 +55,14 @@ function base64url(input: string): string {
 /** RS256 JWT-bearer assertion — DocuSign's impersonation grant. Signed locally with
  *  node:crypto (no jsonwebtoken dependency); DOCUSIGN_PRIVATE_KEY is the PEM the
  *  integration key's RSA keypair was created with. */
-function buildAssertion(): string {
+function buildAssertion(context: DocusignCredentialContext): string {
   const now = Math.floor(Date.now() / 1000);
   const header = base64url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
   const payload = base64url(
     JSON.stringify({
-      iss: process.env.DOCUSIGN_INTEGRATION_KEY,
-      sub: process.env.DOCUSIGN_USER_ID,
-      aud: authHost(),
+      iss: context.credentials.integrationKey,
+      sub: context.credentials.userId,
+      aud: authHost(context),
       iat: now,
       exp: now + 3600,
       scope: "signature impersonation",
@@ -79,35 +72,35 @@ function buildAssertion(): string {
   const signer = createSign("RSA-SHA256");
   signer.update(signingInput);
   signer.end();
-  const signature = signer.sign(process.env.DOCUSIGN_PRIVATE_KEY!).toString("base64url");
+  const signature = signer.sign(context.credentials.privateKey).toString("base64url");
   return `${signingInput}.${signature}`;
 }
 
-let cachedToken: { accessToken: string; expiresAt: number } | null = null;
+const cachedTokens = new Map<string, { accessToken: string; expiresAt: number }>();
 
 /** JWT tokens are valid ~1h; a per-module cache avoids a token round trip on every
  *  envelope call within that window (quickbooks.ts skips this — its refresh_token
  *  grant is cheap enough not to bother — but DocuSign's JWT assertion path is worth
  *  the extra ~15 lines since signing + the token exchange both cost real latency). */
-async function docusignAccessToken(): Promise<string> {
+async function docusignAccessToken(context: DocusignCredentialContext): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
+  const cachedToken = cachedTokens.get(context.cacheKey);
   if (cachedToken && cachedToken.expiresAt - 60 > now) return cachedToken.accessToken;
 
-  const res = await fetch(`https://${authHost()}/oauth/token`, {
+  const res = await fetch(`https://${authHost(context)}/oauth/token`, {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
       grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-      assertion: buildAssertion(),
+      assertion: buildAssertion(context),
     }),
   });
   if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new IntegrationError("docusign", `JWT token exchange failed (${res.status}): ${body.slice(0, 300)}`, res.status >= 500);
+    throw new IntegrationError("docusign", `JWT token exchange failed (${res.status})`, res.status >= 500);
   }
   const data = (await res.json()) as { access_token?: string; expires_in?: number };
   if (!data.access_token) throw new IntegrationError("docusign", "JWT token exchange returned no access_token", false);
-  cachedToken = { accessToken: data.access_token, expiresAt: now + (data.expires_in ?? 3600) };
+  cachedTokens.set(context.cacheKey, { accessToken: data.access_token, expiresAt: now + (data.expires_in ?? 3600) });
   return data.access_token;
 }
 
@@ -147,16 +140,10 @@ function buildPlaceholderPdf(title: string): Buffer {
  *  immediately (status: "sent"). customFields carry tenantId/proposalId so the
  *  DocuSign Connect webhook (apps/api/app/api/webhooks/esign/route.ts) can resolve
  *  which tenant/proposal an envelope-status callback belongs to. */
-export async function requestDocusignSignature(input: RequestSignatureInput): Promise<RequestSignatureOutput> {
-  if (!docusignConfigured()) {
-    throw new IntegrationError(
-      "docusign",
-      "DocuSign is not connected — DOCUSIGN_INTEGRATION_KEY/USER_ID/ACCOUNT_ID/PRIVATE_KEY are not all set",
-      false,
-    );
-  }
-  const accessToken = await docusignAccessToken();
-  const accountId = process.env.DOCUSIGN_ACCOUNT_ID!;
+export async function requestDocusignSignature(input: RequestSignatureInput, context: DocusignCredentialContext): Promise<RequestSignatureOutput> {
+  if (context.tenantId !== input.tenantId) throw new IntegrationError("docusign", "DocuSign credential context tenant mismatch", false);
+  const accessToken = await docusignAccessToken(context);
+  const accountId = context.credentials.accountId;
   const documentBytes = input.documentBytes ?? buildPlaceholderPdf(`Document ${input.documentId}`);
 
   const customFields = [
@@ -164,7 +151,7 @@ export async function requestDocusignSignature(input: RequestSignatureInput): Pr
     ...(input.proposalId ? [{ name: "proposalId", value: input.proposalId }] : []),
   ];
 
-  const res = await fetch(`${baseUrl()}/restapi/v2.1/accounts/${accountId}/envelopes`, {
+  const res = await fetch(`${baseUrl(context)}/restapi/v2.1/accounts/${accountId}/envelopes`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -197,9 +184,8 @@ export async function requestDocusignSignature(input: RequestSignatureInput): Pr
     }),
   });
   if (!res.ok) {
-    const body = await res.text().catch(() => "");
     const retryable = res.status !== 401 && res.status !== 403;
-    throw new IntegrationError("docusign", `envelope create failed (${res.status}): ${body.slice(0, 300)}`, retryable);
+    throw new IntegrationError("docusign", `envelope create failed (${res.status})`, retryable);
   }
   const data = (await res.json()) as { envelopeId?: string };
   if (!data.envelopeId) throw new IntegrationError("docusign", "envelope create returned no envelopeId", false);
@@ -209,10 +195,10 @@ export async function requestDocusignSignature(input: RequestSignatureInput): Pr
 /** Test-only cleanup helper — voids a demo-env envelope so conformance runs don't
  *  accumulate live clutter in the shared DocuSign developer account. Not part of the
  *  capability contract; used only from tests/integration/real-provider-conformance.test.ts. */
-export async function voidDocusignEnvelope(envelopeId: string, reason = "conformance test cleanup"): Promise<void> {
-  const accessToken = await docusignAccessToken();
-  const accountId = process.env.DOCUSIGN_ACCOUNT_ID!;
-  await fetch(`${baseUrl()}/restapi/v2.1/accounts/${accountId}/envelopes/${envelopeId}`, {
+export async function voidDocusignEnvelope(context: DocusignCredentialContext, envelopeId: string, reason = "conformance test cleanup"): Promise<void> {
+  const accessToken = await docusignAccessToken(context);
+  const accountId = context.credentials.accountId;
+  await fetch(`${baseUrl(context)}/restapi/v2.1/accounts/${accountId}/envelopes/${envelopeId}`, {
     method: "PUT",
     headers: { Authorization: `Bearer ${accessToken}`, "content-type": "application/json" },
     body: JSON.stringify({ status: "voided", voidedReason: reason }),

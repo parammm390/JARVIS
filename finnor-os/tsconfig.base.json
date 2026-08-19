@@ -20,6 +20,7 @@
       "@finnor/db/*": ["./packages/db/*"],
       "@finnor/authority": ["./packages/authority/src/index.ts"],
       "@finnor/data-platform": ["./packages/data-platform/src/index.ts"],
+      "@finnor/import-engine": ["./packages/import-engine/src/index.ts"],
       "@finnor/workflow-runtime": ["./packages/workflow-runtime/src/index.ts"],
       "@finnor/memory": ["./packages/memory/src/index.ts"],
       "@finnor/security": ["./packages/security/src/index.ts"],

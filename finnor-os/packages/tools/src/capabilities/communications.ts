@@ -10,6 +10,7 @@ import type { CapabilityContract, CapabilityBinding, RetryPolicy } from "@finnor
 import { placeVapiCall } from "../vapi-rest";
 import { withCircuitBreaker } from "../provider-circuit-breaker";
 import { claimBudget } from "../provider-budget";
+import { resolveTenantCredentialContext, type TenantCredentialContext } from "@finnor/security";
 import {
   emulatorSendConfirmation,
   emulatorReconcileCall,
@@ -63,16 +64,12 @@ export const emulatorCommunicationsBinding: CapabilityBinding<SendConfirmationIn
   // silent no-op.
 };
 
-export function isVapiConfigured(): boolean {
-  return Boolean(
-    process.env.VAPI_API_KEY &&
-      process.env.VAPI_PHONE_NUMBER_ID &&
-      process.env.VAPI_PHONE_NUMBER_ID !== "PLACEHOLDER_NEEDS_REAL_VALUE" &&
-      process.env.VAPI_ASSISTANT_ID,
-  );
+export function isVapiConfigured(context: TenantCredentialContext<"vapi"> | null): boolean {
+  return Boolean(context);
 }
 
 async function vapiSendConfirmation(input: SendConfirmationInput): Promise<SendConfirmationOutput> {
+  const credentialContext = await resolveTenantCredentialContext(input.tenantId, "vapi");
   // Phase 4 (§4.4): real per-tenant daily cap, checked BEFORE the breaker/call — a
   // tenant that's already hit its cap must never place another real call, breaker
   // state notwithstanding.
@@ -85,10 +82,11 @@ async function vapiSendConfirmation(input: SendConfirmationInput): Promise<SendC
     "vapi",
     async () => {
       const r = await placeVapiCall({
+        tenantId: input.tenantId,
         customerNumber: input.phoneNumber,
         firstMessage: input.message,
         metadata: { tenantId: input.tenantId, idempotencyKey: input.idempotencyKey },
-      });
+      }, credentialContext);
       if (!r.ok) throw new Error(r.error ?? "Vapi call failed");
       return { callId: String((r.output as Record<string, unknown>).id ?? input.idempotencyKey) };
     },

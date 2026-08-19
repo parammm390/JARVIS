@@ -8,7 +8,7 @@ import { withTenant, domainActions, enqueueJob } from "@finnor/db";
 import { appendEpisode } from "@finnor/memory";
 import { eq, and } from "drizzle-orm";
 import type { DomainAction } from "@finnor/shared-types";
-import { ScopedToolRegistry, type ToolRegistry } from "@finnor/tools";
+import { ScopedToolRegistry, tenantProviderConfigured, type ToolRegistry } from "@finnor/tools";
 import type { PluginRegistry } from "../plugin-registry";
 import { diagnoseFailure, buildConfirmationScript } from "../voice";
 import { advanceWorkflowForAction } from "../workflow";
@@ -89,7 +89,7 @@ export function makeGateNode() {
       `push:approval-needed:${state.actionId}`,
       state.correlationId,
     ).catch(() => undefined);
-    if (process.env.VAPI_API_KEY) {
+    if (await tenantProviderConfigured(state.tenantId, "vapi")) {
       await enqueueJob(
         "voice_confirm_request",
         { tenantId: state.tenantId, actionId: state.actionId, script: buildConfirmationScript(state.draft!.summary) },
@@ -154,7 +154,7 @@ export function makeExecuteNode(plugins: PluginRegistry, tools: ToolRegistry) {
         await appendEpisode(state.tenantId, state.actionId, "workflow", {}, { advanced });
       }
     }
-    if (finalStatus === "blocked_integration_unavailable" && process.env.VAPI_API_KEY) {
+    if (finalStatus === "blocked_integration_unavailable" && await tenantProviderConfigured(state.tenantId, "vapi")) {
       await enqueueJob(
         "voice_notify_failure",
         { tenantId: state.tenantId, actionId: state.actionId, script: diagnoseFailure(result.error, state.actionType) },

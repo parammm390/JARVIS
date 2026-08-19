@@ -16,7 +16,20 @@
 import { withTenant, tenantIntegrations } from "@finnor/db";
 import { eq } from "drizzle-orm";
 
-export type BindingMode = "native" | "emulator" | "ghl" | "vapi" | "docusign" | "quickbooks" | "stripe" | "dry_run";
+export type BindingMode =
+  | "native"
+  | "emulator"
+  | "ghl"
+  | "vapi"
+  | "docusign"
+  | "quickbooks"
+  | "stripe"
+  | "meta"
+  | "meta_ads"
+  | "google_ads"
+  | "ads"
+  | "resend"
+  | "dry_run";
 
 export interface BindingResolution {
   mode: BindingMode;

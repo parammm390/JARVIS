@@ -7,7 +7,6 @@
 import type { DomainEnginePlugin } from "../shared/plugin-interface";
 import type { DraftAction, ExecutionResult, ValidationResult, DomainPolicy } from "@finnor/shared-types";
 import type { ToolRegistry } from "@finnor/tools";
-import { VOICE_PERSONAS } from "@finnor/tools";
 import { withTenant, invoices, communicationsLog, enqueueJob } from "@finnor/db";
 import { recordPayment } from "@finnor/data-platform";
 import { findHousehold } from "../shared/db-helpers";
@@ -140,7 +139,6 @@ export const accountingPlugin: DomainEnginePlugin = {
           phoneNumber: String(contact.phone),
           instructions: firstMessage,
           tenantId,
-          assistantId: VOICE_PERSONAS.payment_collector,
           purpose: "payment_reminder",
           agentKey: "payment-collector",
           domainActionId: draft.domainActionId,
@@ -188,7 +186,6 @@ export const accountingPlugin: DomainEnginePlugin = {
         phoneNumber: String(contact.phone),
         instructions: message,
         tenantId,
-        assistantId: VOICE_PERSONAS.payment_collector,
         purpose: "payment_reminder",
         agentKey: "payment-collector",
         domainActionId: draft.domainActionId,

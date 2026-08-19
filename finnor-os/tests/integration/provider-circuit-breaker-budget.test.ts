@@ -12,6 +12,7 @@ import { claimBudget, budgetUsage } from "../../packages/tools/src/provider-budg
 
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
 const TEST_PROVIDER = "test_provider_4_4";
+const TEST_PROVIDER_KEY = `system:${TEST_PROVIDER}`;
 const TEST_TENANT = "00000000-0000-4000-8000-0000000000f8";
 
 async function dbUp(): Promise<boolean> {
@@ -35,7 +36,7 @@ describe.skipIf(!available)("Phase 4 §4.4: durable circuit breaker + per-tenant
     await closePool();
   });
   beforeEach(async () => {
-    await adminDb().delete(providerCircuitState).where(eq(providerCircuitState.provider, TEST_PROVIDER));
+    await adminDb().delete(providerCircuitState).where(eq(providerCircuitState.provider, TEST_PROVIDER_KEY));
     await adminDb().delete(apiRateLimits).where(like(apiRateLimits.bucketKey, `budget:${TEST_TENANT}:%`));
   });
 
@@ -98,7 +99,7 @@ describe.skipIf(!available)("Phase 4 §4.4: durable circuit breaker + per-tenant
     await adminDb()
       .update(providerCircuitState)
       .set({ openedAt: new Date(Date.now() - 61_000) })
-      .where(eq(providerCircuitState.provider, TEST_PROVIDER));
+      .where(eq(providerCircuitState.provider, TEST_PROVIDER_KEY));
 
     // A failing probe: real call attempted (breaker let it through), then re-opens
     // and re-stamps openedAt so the cooldown genuinely restarts rather than admitting
@@ -116,7 +117,7 @@ describe.skipIf(!available)("Phase 4 §4.4: durable circuit breaker + per-tenant
     await adminDb()
       .update(providerCircuitState)
       .set({ openedAt: new Date(Date.now() - 61_000) })
-      .where(eq(providerCircuitState.provider, TEST_PROVIDER));
+      .where(eq(providerCircuitState.provider, TEST_PROVIDER_KEY));
     const result = await withCircuitBreaker(TEST_PROVIDER, async () => { realCalls++; return "recovered"; });
     expect(result).toBe("recovered");
     expect(realCalls).toBe(2);

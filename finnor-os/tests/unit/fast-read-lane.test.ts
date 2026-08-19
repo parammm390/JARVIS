@@ -43,7 +43,7 @@ vi.mock("@finnor/security", async (importOriginal) => {
   return { ...actual, ensureSecretsLoaded: vi.fn(async () => undefined) };
 });
 
-import { FinnorOrchestrator, type Planner } from "@finnor/orchestration";
+import { FinnorOrchestrator, type AnswerEnvelope, type Planner } from "@finnor/orchestration";
 import type { Executor } from "../../packages/orchestration/src/executor";
 import { answerCashCollections, classifyFastReadOnlyQuestion, createFastReadOnlyRouter } from "../../packages/orchestration/src/fast-read-lane";
 import { buildMemorySnapshot } from "@finnor/memory";
@@ -137,6 +137,41 @@ describe("fast read-only lane", () => {
     expect(ensureSecretsLoaded).not.toHaveBeenCalled();
     expect(buildMemorySnapshot).not.toHaveBeenCalled();
     vi.unstubAllEnvs();
+  });
+
+  it("routes the exact capability prompt before memory retrieval or business-question planning", async () => {
+    const planner = { plan: vi.fn() } as unknown as Planner;
+    const executor = { execute: vi.fn() } as unknown as Executor;
+    const answer: AnswerEnvelope = {
+      kind: "answer",
+      intent: "conversation",
+      readOnly: true,
+      spokenSummary: "I can help with research, customers, scheduling, money, and governed execution.",
+      display: { title: "JARVIS", facts: [] },
+      evidence: [{ source: "conversation_model", ref: "test", timestamp: "2026-08-04T12:00:00.000Z", kind: "SESSION" }],
+      asOf: "2026-08-04T12:00:00.000Z",
+      freshness: { status: "fresh", observedAt: "2026-08-04T12:00:00.000Z" },
+    };
+    const responder = { answer: vi.fn(async () => answer) };
+    const orchestrator = new FinnorOrchestrator({
+      planner,
+      executor,
+      conversationResponder: responder,
+      fastReadOnlyRouter: { classify: () => ({ route: "planner", reason: "unsupported" }), route: async () => null },
+    });
+
+    const result = await orchestrator.handleInstructionResult("hey what all can you do ?", {
+      tenantId: "tenant-a",
+      userId: "user-a",
+      role: "owner",
+    });
+
+    expect(result.answer).toEqual(answer);
+    expect(responder.answer).toHaveBeenCalledTimes(1);
+    expect(planner.plan).not.toHaveBeenCalled();
+    expect(buildMemorySnapshot).not.toHaveBeenCalled();
+    expect(JSON.stringify(result.answer)).not.toContain("leads");
+    expect(JSON.stringify(result.answer)).not.toContain("semantic");
   });
 
   it("does not answer a greeting from the fast router", async () => {

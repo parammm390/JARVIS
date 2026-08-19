@@ -5,6 +5,9 @@
 // Ads account (Param's next owner-actions.md step for this provider).
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { createCredentialContextForTesting } from "@finnor/security";
+
+const TENANT_ID = "00000000-0000-4000-8000-0000000000e4";
 
 const META_ENV_KEYS = ["META_ADS_ACCESS_TOKEN", "META_ADS_ACCOUNT_ID"] as const;
 const GOOGLE_ENV_KEYS = [
@@ -29,6 +32,21 @@ function setGoogleConfigured() {
   process.env.GOOGLE_ADS_CLIENT_SECRET = "fake-client-secret";
   process.env.GOOGLE_ADS_CUSTOMER_ID = "123-456-7890";
 }
+function metaContext() {
+  return createCredentialContextForTesting(TENANT_ID, "meta_ads", {
+    accessToken: "fake-meta-token",
+    accountId: "act_123456789",
+  });
+}
+function googleAdsContext() {
+  return createCredentialContextForTesting(TENANT_ID, "google_ads", {
+    developerToken: "fake-dev-token",
+    refreshToken: "fake-refresh",
+    clientId: "fake-client-id",
+    clientSecret: "fake-client-secret",
+    customerId: "123-456-7890",
+  });
+}
 function stubFetchSequence(responses: Array<{ ok: boolean; status?: number; json?: () => Promise<unknown>; text?: () => Promise<string> }>) {
   const fetchSpy = vi.fn();
   for (const r of responses) fetchSpy.mockResolvedValueOnce(r);
@@ -44,14 +62,14 @@ describe("ads adapter — unconfigured state", () => {
 
   it("adsProviderStatus reports both unconfigured when no env vars are set", async () => {
     const { adsProviderStatus } = await import("@finnor/tools");
-    expect(adsProviderStatus()).toEqual({ meta: false, googleAds: false });
+    expect(adsProviderStatus({})).toEqual({ meta: false, googleAds: false });
   });
 
   it("testAdsConnections returns configured:false, healthy:null for both, no network calls", async () => {
     const fetchSpy = vi.fn();
     vi.stubGlobal("fetch", fetchSpy);
     const { testAdsConnections } = await import("@finnor/tools");
-    const result = await testAdsConnections();
+    const result = await testAdsConnections({});
     expect(result).toEqual({ meta: { configured: false, healthy: null }, googleAds: { configured: false, healthy: null } });
     expect(fetchSpy).not.toHaveBeenCalled();
   });
@@ -77,14 +95,14 @@ describe("ads adapter — Meta, configured, stub-fetch", () => {
   it("testAdsConnections reports meta healthy:true on a real 2xx account response", async () => {
     stubFetchSequence([{ ok: true, json: async () => ({ id: "act_123456789", name: "Finnor Water Co." }) }]);
     const { testAdsConnections } = await import("@finnor/tools");
-    const result = await testAdsConnections();
+    const result = await testAdsConnections({ meta: metaContext() });
     expect(result.meta).toEqual({ configured: true, healthy: true });
   });
 
   it("testAdsConnections reports meta healthy:false with the error reason on a non-2xx response", async () => {
     stubFetchSequence([{ ok: false, status: 401, text: async () => "Invalid OAuth access token" }]);
     const { testAdsConnections } = await import("@finnor/tools");
-    const result = await testAdsConnections();
+    const result = await testAdsConnections({ meta: metaContext() });
     expect(result.meta.configured).toBe(true);
     expect(result.meta.healthy).toBe(false);
     expect(result.meta.error).toContain("401");
@@ -110,7 +128,7 @@ describe("ads adapter — Meta, configured, stub-fetch", () => {
       },
     ]);
     const { getAdPerformance } = await import("@finnor/tools");
-    const result = await getAdPerformance(7);
+    const result = await getAdPerformance(7, { meta: metaContext() });
     expect(result.provider).toBe("meta");
     expect(result.campaigns).toEqual([
       { campaign: "Search — water softener", spendUsd: 125.5, impressions: 4200, clicks: 88, ctrPct: 2.1, costPerClickUsd: 1.43, conversions: 5 },
@@ -122,13 +140,13 @@ describe("ads adapter — Meta, configured, stub-fetch", () => {
   it("a non-2xx Meta insights response maps to IntegrationError, retryable on 5xx", async () => {
     stubFetchSequence([{ ok: false, status: 500, text: async () => "Internal error" }]);
     const { getAdPerformance } = await import("@finnor/tools");
-    await expect(getAdPerformance(7)).rejects.toMatchObject({ retryable: true });
+    await expect(getAdPerformance(7, { meta: metaContext() })).rejects.toMatchObject({ retryable: true });
   });
 
   it("a 400 Meta insights response is never retryable", async () => {
     stubFetchSequence([{ ok: false, status: 400, text: async () => "Bad request" }]);
     const { getAdPerformance } = await import("@finnor/tools");
-    await expect(getAdPerformance(7)).rejects.toMatchObject({ retryable: false });
+    await expect(getAdPerformance(7, { meta: metaContext() })).rejects.toMatchObject({ retryable: false });
   });
 });
 
@@ -142,14 +160,14 @@ describe("ads adapter — Google Ads, configured, stub-fetch", () => {
   it("testAdsConnections reports googleAds healthy:true when the OAuth refresh succeeds", async () => {
     stubFetchSequence([{ ok: true, json: async () => ({ access_token: "fake-access-token" }) }]);
     const { testAdsConnections } = await import("@finnor/tools");
-    const result = await testAdsConnections();
+    const result = await testAdsConnections({ googleAds: googleAdsContext() });
     expect(result.googleAds).toEqual({ configured: true, healthy: true });
   });
 
   it("testAdsConnections reports googleAds healthy:false when the OAuth refresh fails", async () => {
     stubFetchSequence([{ ok: false, status: 400, text: async () => "invalid_grant" }]);
     const { testAdsConnections } = await import("@finnor/tools");
-    const result = await testAdsConnections();
+    const result = await testAdsConnections({ googleAds: googleAdsContext() });
     expect(result.googleAds.configured).toBe(true);
     expect(result.googleAds.healthy).toBe(false);
   });
@@ -172,7 +190,7 @@ describe("ads adapter — Google Ads, configured, stub-fetch", () => {
       },
     ]);
     const { getAdPerformance } = await import("@finnor/tools");
-    const result = await getAdPerformance(7);
+    const result = await getAdPerformance(7, { googleAds: googleAdsContext() });
     expect(result.provider).toBe("google_ads");
     expect(result.campaigns).toEqual([
       { campaign: "Google Local Services", spendUsd: 45, impressions: 1200, clicks: 30, ctrPct: 2.5, costPerClickUsd: 1.5, conversions: 3 },
@@ -183,7 +201,7 @@ describe("ads adapter — Google Ads, configured, stub-fetch", () => {
     setMetaConfigured();
     stubFetchSequence([{ ok: true, json: async () => ({ data: [] }) }]);
     const { getAdPerformance } = await import("@finnor/tools");
-    const result = await getAdPerformance(7);
+    const result = await getAdPerformance(7, { meta: metaContext(), googleAds: googleAdsContext() });
     expect(result.provider).toBe("meta");
   });
 });

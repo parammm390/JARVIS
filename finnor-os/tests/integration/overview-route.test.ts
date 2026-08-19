@@ -6,7 +6,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import pg from "pg";
 import { randomUUID } from "node:crypto";
 import { migrate } from "../../packages/db/migrate";
-import { withTenant, closePool, tenants, domainActions, households, domainPolicies, domainPolicyRevisions } from "@finnor/db";
+import { withTenant, closePool, tenants, domainActions, households, leads, domainPolicies, domainPolicyRevisions } from "@finnor/db";
 import { eq } from "drizzle-orm";
 import { GET as overviewGET } from "../../apps/api/app/api/overview/route";
 
@@ -39,8 +39,11 @@ describe.skipIf(!available)("GET /api/overview (Phase 7.6)", () => {
     process.env.AUTH_DEV_BYPASS = "1";
     await migrate(DB_URL);
     await withTenant(TENANT_ID, (db) => db.insert(tenants).values({ id: TENANT_ID, name: "Overview Route Test" }).onConflictDoNothing());
+    const [household] = await withTenant(TENANT_ID, (db) =>
+      db.insert(households).values({ tenantId: TENANT_ID, address: "1 Test Way", contactInfo: { name: "Overview Test Household" } }).returning({ id: households.id }),
+    );
     await withTenant(TENANT_ID, (db) =>
-      db.insert(households).values({ tenantId: TENANT_ID, address: "1 Test Way", contactInfo: { name: "Overview Test Household" } }).onConflictDoNothing(),
+      db.insert(leads).values({ tenantId: TENANT_ID, householdId: household!.id, name: "Overview Test Lead", source: "integration-test" }),
     );
     // Matches real production configuration (docs/policy-matrix.md: get_business_overview
     // is ungated, low risk) — the fail-closed defaultPolicy() otherwise requires
@@ -75,7 +78,10 @@ describe.skipIf(!available)("GET /api/overview (Phase 7.6)", () => {
     // around in this test. domain_policies has a real FK from domain_actions, so it
     // can't be deleted either while those rows remain. Harmless: TENANT_ID is unique
     // to this file, local embedded-dev-only data.
-    await withTenant(TENANT_ID, (db) => db.delete(households).where(eq(households.tenantId, TENANT_ID)));
+    await withTenant(TENANT_ID, async (db) => {
+      await db.delete(leads).where(eq(leads.tenantId, TENANT_ID));
+      await db.delete(households).where(eq(households.tenantId, TENANT_ID));
+    });
     await closePool();
   });
 

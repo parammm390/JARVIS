@@ -21,6 +21,7 @@ describe("secrets manager", () => {
     }
     vi.unstubAllEnvs();
     vi.restoreAllMocks();
+    vi.doUnmock("@aws-sdk/client-secrets-manager");
   });
 
   it("defaults to the env provider, unloaded until first call", async () => {
@@ -124,5 +125,30 @@ describe("secrets manager", () => {
     const { ensureSecretsLoaded } = await import("@finnor/security");
     await expect(ensureSecretsLoaded()).rejects.toThrow();
     expect(sendCalls).toBe(1);
+  });
+
+  it("reads tenant references without env mutation and supports stage/id rotation selectors", async () => {
+    const inputs: Array<Record<string, string>> = [];
+    vi.doMock("@aws-sdk/client-secrets-manager", () => {
+      class FakeSecretsManagerClient {
+        async send(command: { input: Record<string, string> }) {
+          inputs.push(command.input);
+          return { SecretString: JSON.stringify({ secretKey: "resolved-value" }) };
+        }
+      }
+      class FakeGetSecretValueCommand {
+        constructor(public input: Record<string, string>) {}
+      }
+      return { SecretsManagerClient: FakeSecretsManagerClient, GetSecretValueCommand: FakeGetSecretValueCommand };
+    });
+    const before = process.env.STRIPE_SECRET_KEY;
+    const { readAwsSecretReference } = await import("@finnor/security");
+    await readAwsSecretReference("finnor/tenants/tenant-a/stripe", "stage:AWSCURRENT");
+    await readAwsSecretReference("finnor/tenants/tenant-a/stripe", "id:version-id-1");
+    expect(inputs).toEqual([
+      { SecretId: "finnor/tenants/tenant-a/stripe", VersionStage: "AWSCURRENT" },
+      { SecretId: "finnor/tenants/tenant-a/stripe", VersionId: "version-id-1" },
+    ]);
+    expect(process.env.STRIPE_SECRET_KEY).toBe(before);
   });
 });

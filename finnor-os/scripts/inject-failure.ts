@@ -99,16 +99,16 @@ async function injectApprovalExpiryPileup(tenantId: string, count = 3): Promise<
 /** Real provider circuit-breaker open->flag->close cycle, against quickbooks
  *  specifically (zero live traffic today — see file header for why not vapi). */
 async function injectProviderEgressBlock(tenantId: string, provider = "quickbooks"): Promise<InjectionResult> {
-  const before = await circuitSnapshot(provider);
-  for (let i = 0; i < 3; i++) await recordProviderFailure(provider);
-  const opened = await isCircuitOpen(provider);
+  const before = await circuitSnapshot(provider, tenantId);
+  for (let i = 0; i < 3; i++) await recordProviderFailure(provider, tenantId);
+  const opened = await isCircuitOpen(provider, tenantId);
   const alerts = await detectReliabilityAlerts(tenantId);
   const flagged = alerts.some((a) => a.kind === "provider_flapping" && a.detail.provider === provider);
 
   // Real recovery: close the breaker back, exactly as a real provider coming back
   // healthy would via recordProviderSuccess on its next successful call.
-  await recordProviderSuccess(provider);
-  const closedAfter = await isCircuitOpen(provider);
+  await recordProviderSuccess(provider, tenantId);
+  const closedAfter = await isCircuitOpen(provider, tenantId);
 
   return {
     kind: "provider_egress_block",

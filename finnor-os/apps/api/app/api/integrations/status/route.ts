@@ -6,15 +6,15 @@
 // fallback ("are my integrations healthy?") and directly hittable for a health check.
 
 import {
-  testAdsConnections,
-  testQuickBooksConnection,
-  testVapiConnection,
-  testVapiAssistants,
-  ghlIntegrationStatus,
-  testStripeConnection,
-  testDocusignConnection,
+  testTenantAdsConnections,
+  testTenantQuickBooksConnection,
+  testTenantVapiConnection,
+  testTenantVapiAssistants,
+  testTenantGhlConnection,
+  testTenantStripeConnection,
+  testTenantDocusignConnection,
   resolveCapabilityBindingsForTenant,
-  resendProviderStatus,
+  tenantResendStatus,
 } from "@finnor/tools";
 import { requireContext, errorResponse } from "../../../../lib/auth";
 
@@ -22,18 +22,17 @@ export async function GET(req: Request): Promise<Response> {
   try {
     const ctx = await requireContext(req);
     const [ads, quickbooks, vapi, voiceAssistants, stripe, docusign, bindingsReport] = await Promise.all([
-      testAdsConnections(),
-      testQuickBooksConnection(),
-      testVapiConnection(),
-      testVapiAssistants(),
-      testStripeConnection(),
-      testDocusignConnection(),
+      testTenantAdsConnections(ctx.tenantId),
+      testTenantQuickBooksConnection(ctx.tenantId),
+      testTenantVapiConnection(ctx.tenantId),
+      testTenantVapiAssistants(ctx.tenantId),
+      testTenantStripeConnection(ctx.tenantId),
+      testTenantDocusignConnection(ctx.tenantId),
       resolveCapabilityBindingsForTenant(ctx.tenantId),
     ]);
-    const ghl = ghlIntegrationStatus();
+    const [ghl, resend] = await Promise.all([testTenantGhlConnection(ctx.tenantId), tenantResendStatus(ctx.tenantId)]);
     // Same "configured-state only" posture as ghl above — no cheap authenticated no-op
     // exists on Resend's API to probe healthy/unhealthy for real.
-    const resend = { ...resendProviderStatus(), healthy: null as boolean | null };
     const all = { meta_ads: ads.meta, google_ads: ads.googleAds, quickbooks, vapi, ghl, stripe, docusign, resend };
     const summary = {
       configuredCount: Object.values(all).filter((h) => h.configured).length,

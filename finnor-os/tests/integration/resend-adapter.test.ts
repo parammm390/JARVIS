@@ -16,9 +16,18 @@ import {
   resendProviderStatus,
 } from "../../packages/tools/src/resend";
 import { circuitSnapshot } from "../../packages/tools/src/provider-circuit-breaker";
+import { createCredentialContextForTesting } from "@finnor/security";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
 const TENANT = "00000000-0000-4000-8000-0000000000ed";
+
+function resendContext() {
+  return createCredentialContextForTesting(TENANT, "resend", {
+    apiKey: "test-key-not-real",
+    fromAddress: "Finnor <notifications@finnorai.com>",
+    allowlistOwnerEmail: "owner@example.com",
+  });
+}
 
 async function dbUp(): Promise<boolean> {
   const c = new pg.Client({ connectionString: DB_URL, connectionTimeoutMillis: 2000 });
@@ -44,22 +53,25 @@ describe.skipIf(!available)("Resend adapter (A3.T5)", () => {
     process.env.RESEND_ALLOWLIST_OWNER_EMAIL = "owner@example.com";
   });
   afterAll(async () => {
-    process.env.RESEND_API_KEY = originalApiKey;
-    process.env.RESEND_ALLOWLIST_OWNER_EMAIL = originalOwner;
-    process.env.RESEND_DAILY_CAP = originalCap;
+    if (originalApiKey === undefined) delete process.env.RESEND_API_KEY;
+    else process.env.RESEND_API_KEY = originalApiKey;
+    if (originalOwner === undefined) delete process.env.RESEND_ALLOWLIST_OWNER_EMAIL;
+    else process.env.RESEND_ALLOWLIST_OWNER_EMAIL = originalOwner;
+    if (originalCap === undefined) delete process.env.RESEND_DAILY_CAP;
+    else process.env.RESEND_DAILY_CAP = originalCap;
     setResendFetchForTesting(null);
     await closePool();
   });
   beforeEach(async () => {
     await adminDb().delete(apiRateLimits).where(like(apiRateLimits.bucketKey, `budget:${TENANT}:resend:%`));
-    await adminDb().delete(providerCircuitState).where(eq(providerCircuitState.provider, "resend"));
+    await adminDb().delete(providerCircuitState).where(eq(providerCircuitState.provider, `tenant:${TENANT}:resend`));
     setResendFetchForTesting(null);
   });
 
   it("allowlists *@finnorai.com and the configured owner address only", () => {
-    expect(isAllowlistedRecipient("someone@finnorai.com")).toBe(true);
-    expect(isAllowlistedRecipient("OWNER@EXAMPLE.COM")).toBe(true); // case-insensitive
-    expect(isAllowlistedRecipient("random.customer@gmail.com")).toBe(false);
+    expect(isAllowlistedRecipient("someone@finnorai.com", resendContext())).toBe(true);
+    expect(isAllowlistedRecipient("OWNER@EXAMPLE.COM", resendContext())).toBe(true); // case-insensitive
+    expect(isAllowlistedRecipient("random.customer@gmail.com", resendContext())).toBe(false);
   });
 
   it("blocks a non-allowlisted recipient with an honest, non-throwing result — never a real network call", async () => {
@@ -69,7 +81,7 @@ describe.skipIf(!available)("Resend adapter (A3.T5)", () => {
       throw new Error("should never be called");
     }) as unknown as typeof fetch);
 
-    const result = await sendResendEmail({ tenantId: TENANT, to: "a.real.customer@gmail.com", subject: "hi", html: "<p>hi</p>" });
+    const result = await sendResendEmail({ tenantId: TENANT, to: "a.real.customer@gmail.com", subject: "hi", html: "<p>hi</p>" }, resendContext());
     expect(result).toEqual({ sent: false, blocked: true, reason: expect.stringMatching(/not on the pre-launch allowlist/) });
     expect(calls).toBe(0);
   });
@@ -82,7 +94,7 @@ describe.skipIf(!available)("Resend adapter (A3.T5)", () => {
       return new Response(JSON.stringify({ id: "resend_msg_123" }), { status: 200 });
     }) as unknown as typeof fetch);
 
-    const result = await sendResendEmail({ tenantId: TENANT, to: "someone@finnorai.com", subject: "Test", html: "<p>Test</p>" });
+    const result = await sendResendEmail({ tenantId: TENANT, to: "someone@finnorai.com", subject: "Test", html: "<p>Test</p>" }, resendContext());
     expect(result).toEqual({ sent: true, messageId: "resend_msg_123" });
   });
 
@@ -94,9 +106,9 @@ describe.skipIf(!available)("Resend adapter (A3.T5)", () => {
       return new Response(JSON.stringify({ id: `msg_${calls}` }), { status: 200 });
     }) as unknown as typeof fetch);
 
-    const r1 = await sendResendEmail({ tenantId: TENANT, to: "someone@finnorai.com", subject: "1", html: "1" });
-    const r2 = await sendResendEmail({ tenantId: TENANT, to: "someone@finnorai.com", subject: "2", html: "2" });
-    const r3 = await sendResendEmail({ tenantId: TENANT, to: "someone@finnorai.com", subject: "3", html: "3" });
+    const r1 = await sendResendEmail({ tenantId: TENANT, to: "someone@finnorai.com", subject: "1", html: "1" }, resendContext());
+    const r2 = await sendResendEmail({ tenantId: TENANT, to: "someone@finnorai.com", subject: "2", html: "2" }, resendContext());
+    const r3 = await sendResendEmail({ tenantId: TENANT, to: "someone@finnorai.com", subject: "3", html: "3" }, resendContext());
     expect(r1.sent).toBe(true);
     expect(r2.sent).toBe(true);
     expect(r3).toEqual({ sent: false, blocked: true, reason: expect.stringMatching(/daily Resend send cap reached/) });
@@ -108,19 +120,16 @@ describe.skipIf(!available)("Resend adapter (A3.T5)", () => {
     setResendFetchForTesting((async () => new Response("server error", { status: 500 })) as unknown as typeof fetch);
 
     for (let i = 0; i < 3; i++) {
-      await expect(sendResendEmail({ tenantId: TENANT, to: "someone@finnorai.com", subject: "x", html: "x" })).rejects.toThrow();
+      await expect(sendResendEmail({ tenantId: TENANT, to: "someone@finnorai.com", subject: "x", html: "x" }, resendContext())).rejects.toThrow();
     }
-    const snap = await circuitSnapshot("resend");
+    const snap = await circuitSnapshot("resend", TENANT);
     expect(snap.state).toBe("open");
 
-    await expect(sendResendEmail({ tenantId: TENANT, to: "someone@finnorai.com", subject: "x", html: "x" })).rejects.toThrow(/degraded/);
+    await expect(sendResendEmail({ tenantId: TENANT, to: "someone@finnorai.com", subject: "x", html: "x" }, resendContext())).rejects.toThrow(/degraded/);
   });
 
   it("reports configured:true only when RESEND_API_KEY is set", () => {
-    expect(resendProviderStatus().configured).toBe(true);
-    const original = process.env.RESEND_API_KEY;
-    delete process.env.RESEND_API_KEY;
-    expect(resendProviderStatus().configured).toBe(false);
-    process.env.RESEND_API_KEY = original;
+    expect(resendProviderStatus(resendContext()).configured).toBe(true);
+    expect(resendProviderStatus(null).configured).toBe(false);
   });
 });

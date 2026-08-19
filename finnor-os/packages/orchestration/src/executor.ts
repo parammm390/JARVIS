@@ -7,7 +7,7 @@ import type { DomainAction, DomainPolicy, ExecutionResult } from "@finnor/shared
 import { withTenant, domainActions, enqueueJob, reconcileWorkStatus, transitionWork } from "@finnor/db";
 import { appendEpisode } from "@finnor/memory";
 import { eq, and } from "drizzle-orm";
-import { ScopedToolRegistry, type ToolRegistry } from "@finnor/tools";
+import { ScopedToolRegistry, tenantProviderConfigured, type ToolRegistry } from "@finnor/tools";
 import type { PluginRegistry } from "./plugin-registry";
 import { diagnoseFailure, buildConfirmationScript } from "./voice";
 import { advanceWorkflowForAction } from "./workflow";
@@ -90,7 +90,7 @@ export class GatedExecutor implements Executor {
       ).catch(() => undefined); // a push is a nudge, never the gate itself
       // Voice-native confirmation: if Vapi is configured, have it read the draft to the
       // owner and capture the spoken yes/no. The queue UI remains the audit/fallback view.
-      if (process.env.VAPI_API_KEY) {
+      if (await tenantProviderConfigured(action.tenantId, "vapi")) {
         await enqueueJob(
           "voice_confirm_request",
           { tenantId: action.tenantId, actionId: action.id, script: buildConfirmationScript(draft.summary) },
@@ -155,7 +155,7 @@ export class GatedExecutor implements Executor {
         await appendEpisode(action.tenantId, action.id, "workflow", {}, { advanced });
       }
     }
-    if (finalStatus === "blocked_integration_unavailable" && process.env.VAPI_API_KEY) {
+    if (finalStatus === "blocked_integration_unavailable" && await tenantProviderConfigured(action.tenantId, "vapi")) {
       // Spoken failure diagnosis: name the failing integration out loud, in addition to
       // the audit entry and the blocked queue card. Never instead of them.
       await enqueueJob(

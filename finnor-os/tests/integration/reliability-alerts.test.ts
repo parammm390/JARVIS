@@ -16,6 +16,7 @@ import { detectReliabilityAlerts } from "../../apps/worker/src/handlers/scan-rel
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
 const TENANT_ID = "00000000-0000-4000-8000-0000000000d7";
 const HEALTHY_TENANT_ID = "00000000-0000-4000-8000-0000000000d8";
+const TENANT_VAPI_CIRCUIT_KEY = `tenant:${TENANT_ID}:vapi`;
 
 async function dbUp(): Promise<boolean> {
   const c = new pg.Client({ connectionString: DB_URL, connectionTimeoutMillis: 2000 });
@@ -48,13 +49,12 @@ describe.skipIf(!available)("scan-reliability-alerts (Phase 6)", () => {
       );
     });
 
-    // provider_circuit_state is a global table (no tenant_id) — capture real prior
-    // state so this test can restore it and not corrupt the shared dev circuit for
-    // any other test or manual run that checks vapi's breaker afterward.
-    [originalVapiState] = await adminDb().select().from(providerCircuitState).where(eq(providerCircuitState.provider, "vapi"));
+    // Circuit rows use a tenant-qualified provider key. Capture prior state so this
+    // test can restore it without touching another tenant's Vapi breaker.
+    [originalVapiState] = await adminDb().select().from(providerCircuitState).where(eq(providerCircuitState.provider, TENANT_VAPI_CIRCUIT_KEY));
     await adminDb()
       .insert(providerCircuitState)
-      .values({ provider: "vapi", state: "open", consecutiveFailures: 5, openedAt: new Date() })
+      .values({ provider: TENANT_VAPI_CIRCUIT_KEY, state: "open", consecutiveFailures: 5, openedAt: new Date() })
       .onConflictDoUpdate({ target: providerCircuitState.provider, set: { state: "open", consecutiveFailures: 5, openedAt: new Date() } });
   });
 
@@ -67,9 +67,9 @@ describe.skipIf(!available)("scan-reliability-alerts (Phase 6)", () => {
       await adminDb()
         .update(providerCircuitState)
         .set({ state: originalVapiState.state, consecutiveFailures: originalVapiState.consecutiveFailures, openedAt: originalVapiState.openedAt })
-        .where(eq(providerCircuitState.provider, "vapi"));
+        .where(eq(providerCircuitState.provider, TENANT_VAPI_CIRCUIT_KEY));
     } else {
-      await adminDb().delete(providerCircuitState).where(eq(providerCircuitState.provider, "vapi"));
+      await adminDb().delete(providerCircuitState).where(eq(providerCircuitState.provider, TENANT_VAPI_CIRCUIT_KEY));
     }
     await closePool();
   });
@@ -91,9 +91,9 @@ describe.skipIf(!available)("scan-reliability-alerts (Phase 6)", () => {
 
   it("produces zero alerts for a tenant with no backlog and healthy circuits", async () => {
     // Reset vapi to closed just for this assertion, then restore in afterAll.
-    await adminDb().update(providerCircuitState).set({ state: "closed", consecutiveFailures: 0 }).where(eq(providerCircuitState.provider, "vapi"));
+    await adminDb().update(providerCircuitState).set({ state: "closed", consecutiveFailures: 0 }).where(eq(providerCircuitState.provider, TENANT_VAPI_CIRCUIT_KEY));
     const alerts = await detectReliabilityAlerts(HEALTHY_TENANT_ID);
     expect(alerts).toEqual([]);
-    await adminDb().update(providerCircuitState).set({ state: "open", consecutiveFailures: 5 }).where(eq(providerCircuitState.provider, "vapi"));
+    await adminDb().update(providerCircuitState).set({ state: "open", consecutiveFailures: 5 }).where(eq(providerCircuitState.provider, TENANT_VAPI_CIRCUIT_KEY));
   });
 });

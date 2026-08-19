@@ -10,10 +10,36 @@
 // in tests/unit/stripe.test.ts and tests/unit/docusign.test.ts and runs unconditionally.
 
 import { describe, it, expect, afterAll } from "vitest";
-import { createStripePaymentLink, docusignProviderStatus, requestDocusignSignature, voidDocusignEnvelope } from "@finnor/tools";
+import { createStripePaymentLink, requestDocusignSignature, voidDocusignEnvelope } from "@finnor/tools";
+import { createCredentialContextForTesting } from "@finnor/security";
 
 const TENANT_E4 = "00000000-0000-4000-8000-0000000000e4";
 const FAKE_INVOICE_ID = "00000000-0000-4000-8000-0000000000bb";
+
+function stripeContext() {
+  return createCredentialContextForTesting(TENANT_E4, "stripe", {
+    secretKey: process.env.STRIPE_SECRET_KEY!,
+    returnUrlBase: process.env.PAYMENTS_RETURN_URL_BASE,
+  });
+}
+
+const docusignConfigured = Boolean(
+  process.env.DOCUSIGN_INTEGRATION_KEY &&
+    process.env.DOCUSIGN_USER_ID &&
+    process.env.DOCUSIGN_ACCOUNT_ID &&
+    process.env.DOCUSIGN_PRIVATE_KEY,
+);
+
+function docusignContext() {
+  return createCredentialContextForTesting(TENANT_E4, "docusign", {
+    integrationKey: process.env.DOCUSIGN_INTEGRATION_KEY!,
+    userId: process.env.DOCUSIGN_USER_ID!,
+    accountId: process.env.DOCUSIGN_ACCOUNT_ID!,
+    privateKey: process.env.DOCUSIGN_PRIVATE_KEY!,
+    baseUrl: process.env.DOCUSIGN_BASE_URL ?? "https://demo.docusign.net",
+    connectSecret: process.env.DOCUSIGN_CONNECT_SECRET,
+  });
+}
 
 // Refuses to run against a live key by construction — sk_live_ (or anything else) skips.
 describe.skipIf(!process.env.STRIPE_SECRET_KEY?.startsWith("sk_test_"))("Stripe conformance (real test-mode API)", () => {
@@ -23,25 +49,25 @@ describe.skipIf(!process.env.STRIPE_SECRET_KEY?.startsWith("sk_test_"))("Stripe 
       invoiceId: FAKE_INVOICE_ID,
       amountUsd: 42.5,
       idempotencyKey: `conformance-shape-${Date.now()}`,
-    });
+    }, stripeContext());
     expect(result.linkId).toMatch(/^cs_/);
     expect(result.paymentLinkUrl).toMatch(/^https:\/\/checkout\.stripe\.com\//);
   });
 
   it("is idempotent — a retried call with the same idempotencyKey returns the same session id", async () => {
     const idempotencyKey = `conformance-idem-${Date.now()}`;
-    const first = await createStripePaymentLink({ tenantId: TENANT_E4, invoiceId: FAKE_INVOICE_ID, amountUsd: 10, idempotencyKey });
-    const second = await createStripePaymentLink({ tenantId: TENANT_E4, invoiceId: FAKE_INVOICE_ID, amountUsd: 10, idempotencyKey });
+    const first = await createStripePaymentLink({ tenantId: TENANT_E4, invoiceId: FAKE_INVOICE_ID, amountUsd: 10, idempotencyKey }, stripeContext());
+    const second = await createStripePaymentLink({ tenantId: TENANT_E4, invoiceId: FAKE_INVOICE_ID, amountUsd: 10, idempotencyKey }, stripeContext());
     expect(second.linkId).toBe(first.linkId);
   });
 });
 
-describe.skipIf(!docusignProviderStatus().configured)("DocuSign conformance (real demo-env API)", () => {
+describe.skipIf(!docusignConfigured)("DocuSign conformance (real demo-env API)", () => {
   let createdEnvelopeId: string | undefined;
 
   afterAll(async () => {
     if (!createdEnvelopeId) return;
-    await voidDocusignEnvelope(createdEnvelopeId).catch(() => {
+    await voidDocusignEnvelope(docusignContext(), createdEnvelopeId).catch(() => {
       // Best-effort cleanup — a void failure shouldn't fail the suite that already
       // proved the real thing it set out to prove (envelope creation).
     });
@@ -54,7 +80,7 @@ describe.skipIf(!docusignProviderStatus().configured)("DocuSign conformance (rea
       signerName: "Conformance Tester",
       signerEmail: "conformance@example.com",
       idempotencyKey: `conformance-${Date.now()}`,
-    });
+    }, docusignContext());
     expect(result.status).toBe("sent");
     expect(result.signatureRequestId).toBeTruthy();
     createdEnvelopeId = result.signatureRequestId;

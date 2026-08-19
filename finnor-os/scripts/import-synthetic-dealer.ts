@@ -1,12 +1,10 @@
-// Blueprint's required Phase 1 proof (docs/jarvis-90-execution-blueprint.md §1):
-// "import synthetic dealer data, replay the import twice with no duplicates, and
-// produce quality findings for malformed or ambiguous data." Real fixture data run
-// through the real repository layer (@finnor/data-platform) against a real tenant —
-// see tests/integration/canonical-data-import.test.ts for the actual proof assertions.
+// Dealer Zero compatibility fixture, now intentionally routed through the same
+// declarative engine used by real client files. No dealer-specific write path exists.
 
 import "dotenv/config";
-import { withTenant, closePool } from "@finnor/db";
-import { createLead } from "@finnor/data-platform";
+import { and, eq } from "drizzle-orm";
+import { closePool, importEntityRefs, withTenant } from "@finnor/db";
+import { parseImportDefinition, runDeclarativeImport } from "@finnor/import-engine";
 
 export interface SyntheticLeadFixture {
   externalId: string;
@@ -17,11 +15,6 @@ export interface SyntheticLeadFixture {
   notes?: string;
 }
 
-// Deliberately includes:
-//  - synth-001/synth-002: a duplicate candidate pair (same phone, near-identical name,
-//    different external_id — two import rows for what's probably the same customer).
-//  - synth-004: a malformed row (no phone, no email — nothing to reach them by).
-//  - synth-005: a stale-data candidate (see the test, which backdates its activity).
 export const SYNTHETIC_DEALER_LEADS: SyntheticLeadFixture[] = [
   { externalId: "synth-001", name: "Harold Voss", phone: "+13195551001", address: "12 Birchwood Ave, Cedar Falls, IA" },
   { externalId: "synth-002", name: "Harold Voss Jr", phone: "+13195551001", address: "12 Birchwood Ave, Cedar Falls, IA" },
@@ -30,52 +23,56 @@ export const SYNTHETIC_DEALER_LEADS: SyntheticLeadFixture[] = [
   { externalId: "synth-005", name: "Deborah Alt", phone: "+13195551005" },
 ];
 
+export const SYNTHETIC_LEAD_IMPORT = parseImportDefinition({
+  key: "synthetic-dealer-leads",
+  format: "json",
+  version: 1,
+  entity: "lead",
+  sourceSystem: "synthetic_dealer_import",
+  fields: {
+    name: { from: "name", required: true, normalize: ["trim"] },
+    phone: { from: "phone", normalize: ["trim", "phone_e164", "empty_to_null"] },
+    email: { from: "email", normalize: ["trim", "lowercase", "empty_to_null"] },
+    address: { from: "address", normalize: ["trim", "empty_to_null"] },
+    notes: { from: "notes", normalize: ["trim", "empty_to_null"] },
+  },
+  externalId: { from: "externalId", required: true, normalize: ["trim"] },
+  identity: [{ fields: ["email"] }, { fields: ["phone"] }],
+  updateMode: "fill_missing",
+});
+
 export interface ImportResult {
   created: number;
   skipped: number;
+  quarantined: number;
+  runId: string;
   leadIdsByExternalId: Record<string, string>;
 }
 
 export async function importSyntheticDealerData(tenantId: string): Promise<ImportResult> {
-  let created = 0;
-  let skipped = 0;
-  const leadIdsByExternalId: Record<string, string> = {};
-
-  for (const fixture of SYNTHETIC_DEALER_LEADS) {
-    const result = await withTenant(tenantId, (db) =>
-      createLead(db, {
-        tenantId,
-        name: fixture.name,
-        phone: fixture.phone,
-        email: fixture.email,
-        address: fixture.address,
-        notes: fixture.notes,
-        provenance: { sourceSystem: "synthetic_dealer_import", externalId: fixture.externalId },
-      }),
-    );
-    leadIdsByExternalId[fixture.externalId] = result.leadId;
-    if (result.alreadyExisted) skipped++;
-    else created++;
-  }
-
-  return { created, skipped, leadIdsByExternalId };
+  const report = await runDeclarativeImport({
+    tenantId,
+    definition: SYNTHETIC_LEAD_IMPORT,
+    source: { name: "synthetic-dealer-leads.json", content: JSON.stringify(SYNTHETIC_DEALER_LEADS) },
+  });
+  const refs = await withTenant(tenantId, (db) => db.select().from(importEntityRefs).where(and(
+    eq(importEntityRefs.tenantId, tenantId), eq(importEntityRefs.sourceSystem, SYNTHETIC_LEAD_IMPORT.sourceSystem), eq(importEntityRefs.entityType, "lead"),
+  )));
+  return {
+    created: report.created,
+    skipped: report.skipped,
+    quarantined: report.quarantined,
+    runId: report.runId,
+    leadIdsByExternalId: Object.fromEntries(refs.map((ref) => [ref.sourceId, ref.canonicalEntityId])),
+  };
 }
 
 const isMain = process.argv[1]?.endsWith("import-synthetic-dealer.ts") || process.argv[1]?.endsWith("import-synthetic-dealer.js");
 if (isMain) {
   const tenantId = process.env.IMPORT_TENANT_ID;
-  if (!tenantId) {
-    console.error("Set IMPORT_TENANT_ID to the target tenant.");
-    process.exit(1);
-  }
+  if (!tenantId) { console.error("Set IMPORT_TENANT_ID to the target tenant."); process.exit(1); }
   importSyntheticDealerData(tenantId)
-    .then((result) => {
-      console.log(`Imported: ${result.created} created, ${result.skipped} skipped (already existed).`);
-      return closePool();
-    })
-    .catch(async (err) => {
-      console.error(err);
-      await closePool();
-      process.exit(1);
-    });
+    .then((result) => console.log(JSON.stringify(result, null, 2)))
+    .catch((error) => { console.error(error); process.exitCode = 1; })
+    .finally(() => closePool());
 }

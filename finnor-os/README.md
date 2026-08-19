@@ -95,7 +95,7 @@ The Confirmation Queue now has a voice channel — same DB rows, same audit trai
 - **No call active**: when an action gates, a `voice_confirm_request` job places an outbound Vapi call to the tenant's `owner_phone`, reads the draft, and the end-of-call transcript is parsed for the decision. **Unclear speech never approves** — the action just stays pending in the queue.
 - **Failures speak**: when an integration blocks an action, Finnor calls the owner and names exactly what broke ("your GoHighLevel key isn't working — want to give me a working one?"), in addition to the audit entry and the Blocked queue card.
 
-Voice needs three Vapi values in `.env`: `VAPI_API_KEY`, `VAPI_ASSISTANT_ID`, and `VAPI_PHONE_NUMBER_ID` (the number calls are placed from), plus the tenant's `owner_phone` in the tenants table.
+Voice uses the tenant's Vapi credential reference (`apiKey`, `assistantId`, and `phoneNumberId` in the referenced JSON secret), plus that tenant's `owner_phone`. Global Vapi env vars are an explicitly allowlisted legacy migration path only.
 
 ## Where business rules live
 

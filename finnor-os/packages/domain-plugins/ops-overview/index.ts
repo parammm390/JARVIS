@@ -6,8 +6,8 @@
 import type { DomainEnginePlugin } from "../shared/plugin-interface";
 import type { DraftAction, ExecutionResult, ValidationResult, DomainPolicy } from "@finnor/shared-types";
 import type { ToolRegistry } from "@finnor/tools";
-import { resolveProviderForPurpose, testAdsConnections, testQuickBooksConnection, type LLMChannel } from "@finnor/tools";
-import { withTenant, households, domainActions, inventoryItems, invoices, serviceVisits, communicationsLog, maintenanceAgreements } from "@finnor/db";
+import { resolveProviderForPurpose, testTenantAdsConnections, testTenantQuickBooksConnection, type LLMChannel } from "@finnor/tools";
+import { withTenant, leads, domainActions, inventoryItems, invoices, serviceVisits, communicationsLog, maintenanceAgreements } from "@finnor/db";
 import { hybridRetrieve } from "@finnor/memory";
 import { readConfidenceThreshold } from "../shared/plugin-interface";
 import { and, desc, eq, gte, isNull, lt, sql } from "drizzle-orm";
@@ -23,7 +23,17 @@ const CAPABILITY_SUMMARY =
 const CAPABILITY_AREAS = ["business overview", "inventory", "invoices", "customers", "visits", "water-treatment questions", "approval-gated business actions"];
 
 export function isCapabilityQuestion(question: string): boolean {
-  return /\bwhat can (?:you|i) do\b|\bwhat do you handle\b|\bwhat can i ask\b|\bwhat are you able to do\b|\bwhat can you help(?: me)?(?: with| accomplish| do)?\b|\bhelp me accomplish\b/i.test(question);
+  return /\bwhat(?: all)? can (?:you|i) do\b|\bwhat(?: all)? do you handle\b|\bwhat can i ask\b|\bwhat are you able to do\b|\bwhat can you help(?: me)?(?: with| accomplish| do)?\b|\bhelp me accomplish\b/i.test(question);
+}
+
+/**
+ * Canonical operational questions must not inherit approximate same-tenant
+ * semantic snippets. Semantic context is an explicit opt-in for questions that
+ * ask about prior conversations, notes, or remembered history; current leads,
+ * invoices, inventory, work, and approvals remain DB/read-model truth.
+ */
+export function requestsSemanticBusinessContext(question: string): boolean {
+  return /\b(?:remember|memory|recall|discuss(?:ed|ion)?|conversation|transcript|notes?|memo|previous(?:ly)?|what did we (?:say|discuss|talk about)|last time)\b/i.test(question);
 }
 
 export function isInventoryQuestion(question: string): boolean {
@@ -54,7 +64,10 @@ export const AskPayloadSchema = z.object({
 
 async function loadOverview(tenantId: string) {
   return withTenant(tenantId, async (db) => {
-    const [leadCount] = await db.select({ n: sql<number>`count(*)::int` }).from(households);
+    // A lead is a CRM prospect, not a household/customer. Keep this count on
+    // the canonical leads table so the spoken and display payloads cannot label
+    // households as leads.
+    const [leadCount] = await db.select({ n: sql<number>`count(*)::int` }).from(leads);
 
     const pendingActions = await db
       .select({ actionType: domainActions.actionType, status: domainActions.status })
@@ -374,6 +387,7 @@ export const opsOverviewPlugin: DomainEnginePlugin = {
             ref: `consented:min-days:${inactivityDays}`,
             data: { minimumExactDays: inactivityDays, eligibleCount: targets.length, sample },
           }],
+          semanticLimit: 0,
         });
         return {
           status: "success",
@@ -446,7 +460,7 @@ export const opsOverviewPlugin: DomainEnginePlugin = {
         loadOverview(tenantId),
         loadFinanceAndHistorySnapshot(tenantId),
         asksAboutIntegrations
-          ? Promise.all([testAdsConnections(), testQuickBooksConnection()]).then(([ads, qb]) => ({ meta_ads: ads.meta, google_ads: ads.googleAds, quickbooks: qb }))
+          ? Promise.all([testTenantAdsConnections(tenantId), testTenantQuickBooksConnection(tenantId)]).then(([ads, qb]) => ({ meta_ads: ads.meta, google_ads: ads.googleAds, quickbooks: qb }))
           : Promise.resolve(undefined),
         asksAboutInventory ? loadInventorySnapshot(tenantId) : Promise.resolve(undefined),
       ]);
@@ -462,9 +476,22 @@ export const opsOverviewPlugin: DomainEnginePlugin = {
         ...(inventory ? [{ source: "inventory_snapshot", ref: "current", data: inventory }] : []),
       ];
       const confidenceThreshold = typeof draft.payload.retrievalConfidenceThreshold === "number" ? draft.payload.retrievalConfidenceThreshold : undefined;
-      const retrieval = await hybridRetrieve({ tenantId, query: question, structured, confidenceThreshold });
-      const data = { ...retrieval.facts, semanticSnippets: retrieval.semanticHits.map((h) => h.chunk) };
-      if (asksAboutInventory && inventory) {
+      const semanticContextRequested = requestsSemanticBusinessContext(question);
+      const retrieval = await hybridRetrieve({
+        tenantId,
+        query: question,
+        structured,
+        // Canonical business questions are intentionally memory-free. This is
+        // the boundary that prevents an unrelated receipt/transcript from
+        // becoming apparent evidence for a current operational fact.
+        semanticLimit: semanticContextRequested ? 3 : 0,
+        confidenceThreshold,
+      });
+      const data = {
+        ...retrieval.facts,
+        ...(retrieval.semanticHits.length > 0 ? { semanticSnippets: retrieval.semanticHits.map((h) => h.chunk) } : {}),
+      };
+      if (asksAboutInventory && inventory && !semanticContextRequested) {
         return {
           status: "success",
           output: {
@@ -495,14 +522,14 @@ export const opsOverviewPlugin: DomainEnginePlugin = {
       }
     }
     const overview = await loadOverview(tenantId);
-    // §5.3: this branch has no free-text question to retrieve against, but it's still
-    // one of the four "answer actions" the receipt-citation contract covers — the live
-    // overview itself is the structured fact; a generic query surfaces any relevant
-    // recent memory (e.g. a noted recurring issue) as supporting citations too.
+    // This branch has no free-text question to retrieve against. The live overview
+    // is the structured fact; do not attach approximate semantic snippets to a
+    // current dashboard read.
     const retrieval = await hybridRetrieve({
       tenantId,
       query: "business overview leads pending inventory invoices visits",
       structured: [{ source: "business_overview", ref: "current", data: overview }],
+      semanticLimit: 0,
     });
     return {
       status: "success",

@@ -11,6 +11,7 @@ import type { CapabilityContract, CapabilityBinding, RetryPolicy } from "@finnor
 import { syncInvoiceToQuickBooks, quickbooksProviderStatus } from "../quickbooks";
 import { createStripePaymentLink, stripeProviderStatus } from "../stripe";
 import { withCircuitBreaker } from "../provider-circuit-breaker";
+import { resolveTenantCredentialContext, type TenantCredentialContext } from "@finnor/security";
 import {
   emulatorSyncInvoice,
   emulatorCreatePaymentLink,
@@ -43,12 +44,12 @@ export const CreatePaymentLinkOutputSchema = z.object({ paymentLinkUrl: z.string
 
 const RETRY_POLICY: RetryPolicy = { attempts: 3, baseDelayMs: 250, timeoutMs: 10_000 };
 
-export function isQuickBooksConfigured(): boolean {
-  return quickbooksProviderStatus().configured;
+export function isQuickBooksConfigured(context: TenantCredentialContext<"quickbooks"> | null): boolean {
+  return quickbooksProviderStatus(context).configured;
 }
 
-export function isStripeConfigured(): boolean {
-  return stripeProviderStatus().configured;
+export function isStripeConfigured(context: TenantCredentialContext<"stripe"> | null): boolean {
+  return stripeProviderStatus(context).configured;
 }
 
 // --- sync_invoice --------------------------------------------------------------
@@ -75,6 +76,7 @@ export const syncInvoiceEmulatorBinding: CapabilityBinding<SyncInvoiceInput, Syn
 export const syncInvoiceQuickbooksBinding: CapabilityBinding<SyncInvoiceInput, SyncInvoiceOutput> = {
   name: "quickbooks",
   async call(input) {
+    const credentialContext = await resolveTenantCredentialContext(input.tenantId, "quickbooks");
     const result = await withCircuitBreaker(
       "quickbooks",
       () =>
@@ -83,7 +85,7 @@ export const syncInvoiceQuickbooksBinding: CapabilityBinding<SyncInvoiceInput, S
           customerPhone: input.customerPhone,
           amountUsd: input.amountUsd,
           memo: input.memo,
-        }),
+        }, credentialContext),
       { tenantId: input.tenantId },
     );
     // Phase 4 (§4.5): the single join between Finnor's invoice and QuickBooks' real
@@ -125,7 +127,8 @@ export const createPaymentLinkEmulatorBinding: CapabilityBinding<CreatePaymentLi
 export const stripeCreatePaymentLinkBinding: CapabilityBinding<CreatePaymentLinkInput, CreatePaymentLinkOutput> = {
   name: "stripe",
   async call(input) {
-    const result = await withCircuitBreaker("stripe", () => createStripePaymentLink(input), { tenantId: input.tenantId });
+    const credentialContext = await resolveTenantCredentialContext(input.tenantId, "stripe");
+    const result = await withCircuitBreaker("stripe", () => createStripePaymentLink(input, credentialContext), { tenantId: input.tenantId });
     await withTenant(input.tenantId, (db) =>
       db
         .insert(externalRefs)

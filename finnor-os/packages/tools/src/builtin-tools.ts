@@ -3,7 +3,7 @@
 // interface (§31) — swapping a stub for a real implementation never touches callers.
 
 import { z } from "zod";
-import type { ToolRegistry, Tool } from "./registry";
+import { ToolRegistry, type Tool } from "./registry";
 import { connectGhl, connectVapi, callMcpTool } from "./mcp-client";
 import { registerSandboxComms } from "./sandbox";
 import { sendEmail } from "./email";
@@ -12,11 +12,13 @@ import { createVapiCampaign, placeVapiCall } from "./vapi-rest";
 import { VOICE_AGENT_KEYS } from "./voice-personas";
 import { exaSearch } from "./exa";
 import { firecrawlScrape } from "./firecrawl";
-import { getAdPerformance, adsProviderStatus } from "./ads";
 import { syncInvoiceToQuickBooks } from "./quickbooks";
 import { launchAdCampaign, type CampaignLaunchInput } from "./ads-write";
 import { enqueueJob } from "@finnor/db";
 import { IntegrationError } from "./errors";
+import { resolveTenantCredentialContext } from "@finnor/security";
+import { getTenantAdPerformance } from "./tenant-provider";
+import { resolveCapabilityBindingsForTenant } from "./binding-resolution";
 
 const DAILY_CAMPAIGN_CUSTOMER_LIMIT = 200;
 
@@ -28,8 +30,18 @@ const ghlBacked = (name: string, description: string, mcpTool: string, inputSche
   piiAllowlist,
   async run(input) {
     // tenantId is Finnor-internal routing context — never forwarded to GHL.
-    const { tenantId: _tenantId, ...args } = input;
-    const conn = await connectGhl();
+    const { tenantId: _tenantId, ...providerArgs } = input;
+    const tenantId = String(input.tenantId ?? "");
+    if (!tenantId) throw new IntegrationError("ghl", `${name} requires tenantId`, false);
+    const credentialContext = await resolveTenantCredentialContext(tenantId, "ghl");
+    const args = { ...providerArgs };
+    if (mcpTool === "calendars_create-appointment" && !args.calendarId) {
+      if (!credentialContext.credentials.waterTestCalendarId) {
+        throw new IntegrationError("ghl", "GHL tenant credentials do not define a water-test calendar", false);
+      }
+      args.calendarId = credentialContext.credentials.waterTestCalendarId;
+    }
+    const conn = await connectGhl(credentialContext);
     try {
       return await callMcpTool(conn, "ghl", mcpTool, args);
     } finally {
@@ -42,61 +54,72 @@ const ghlBacked = (name: string, description: string, mcpTool: string, inputSche
  * COMMS_MODE selects the comms drivers:
  *  - "real":    always live GHL/Vapi (fails loudly if keys are missing)
  *  - "sandbox": always sandbox (real DB side effects, carrier hop simulated)
- *  - "auto":    real when GOHIGHLEVEL_API_KEY is set, sandbox otherwise (default)
+ *  - "auto":    follows the non-secret CRM_BINDING legacy switch (default native)
+ *
+ * Runtime tool execution is tenant-routed and does not use this compatibility helper.
  */
 export function commsMode(): "ghl" | "native" {
   const mode = process.env.COMMS_MODE ?? "auto";
   if (mode === "real" || mode === "ghl") return "ghl";
   if (mode === "sandbox" || mode === "native") return "native";
-  return process.env.GOHIGHLEVEL_API_KEY ? "ghl" : "native";
+  return process.env.CRM_BINDING === "ghl" ? "ghl" : "native";
 }
 
 export function registerBuiltinTools(registry: ToolRegistry): void {
-  const mode = commsMode();
-  // Live Vapi is allowed only in the real communications posture. Resolve this before
-  // sandbox registration so a duplicate tool name cannot let registration order retain
-  // a live call driver in sandbox/native mode.
-  registerUniversalTools(registry, mode === "ghl"); // email + maps + accounting: real in every mode
-  if (mode === "native") {
-    // Finnor's own database is the CRM/calendar system of record. Only SMS carrier
-    // delivery is recorded-not-transmitted until an SMS provider is connected.
-    registerSandboxComms(registry);
-    return;
-  }
+  const native = new ToolRegistry();
+  registerSandboxComms(native);
+  registerUniversalTools(registry, native);
+  const tenantRoutedGhl = (name: string, description: string, mcpTool: string, inputSchema: z.ZodTypeAny, piiAllowlist?: readonly string[]): Tool => {
+    const live = ghlBacked(name, description, mcpTool, inputSchema, piiAllowlist);
+    return {
+      ...live,
+      integration: "tenant-routed",
+      async run(input) {
+        const tenantId = String(input.tenantId ?? "");
+        if (!tenantId) throw new IntegrationError("ghl", `${name} requires tenantId`, false);
+        const mode = (await resolveCapabilityBindingsForTenant(tenantId)).crm.mode;
+        if (mode === "ghl") return live.run(input);
+        const result = await native.call(name, input);
+        if (!result.ok) throw new IntegrationError("native", result.error ?? `${name} failed`, false);
+        return result.output;
+      },
+    };
+  };
+
   registry.register(
-    ghlBacked(
+    tenantRoutedGhl(
       "ghl_create_contact",
       "Create or update a contact in GoHighLevel",
       "contacts_upsert-contact",
       z.object({ firstName: z.string().optional(), lastName: z.string().optional(), phone: z.string().optional(), email: z.string().optional() }).passthrough(),
-      ["firstName", "lastName", "phone", "email"],
+      ["firstName", "lastName", "phone", "email", "tenantId"],
     ),
   );
   registry.register(
-    ghlBacked(
+    tenantRoutedGhl(
       "ghl_book_appointment",
       "Book a calendar slot in GoHighLevel",
       "calendars_create-appointment",
-      z.object({ calendarId: z.string(), contactId: z.string(), startTime: z.string(), endTime: z.string().optional() }).passthrough(),
-      ["calendarId", "contactId", "startTime", "endTime"],
+      z.object({ calendarId: z.string().optional(), contactId: z.string(), startTime: z.string(), endTime: z.string().optional() }).passthrough(),
+      ["calendarId", "contactId", "startTime", "endTime", "tenantId"],
     ),
   );
   registry.register(
-    ghlBacked(
+    tenantRoutedGhl(
       "ghl_send_sms",
       "Send an SMS via GoHighLevel conversations",
       "conversations_send-a-new-message",
       z.object({ contactId: z.string(), message: z.string() }).passthrough(),
-      ["contactId", "message"],
+      ["contactId", "message", "tenantId"],
     ),
   );
   registry.register(
-    ghlBacked(
+    tenantRoutedGhl(
       "ghl_list_contacts",
       "Read-only: list/search contacts in GoHighLevel (used by acceptance test §32.5)",
       "contacts_get-contacts",
       z.object({ query: z.string().optional(), limit: z.number().optional() }).passthrough(),
-      ["query", "limit"],
+      ["query", "limit", "tenantId"],
     ),
   );
 
@@ -108,7 +131,9 @@ export function registerBuiltinTools(registry: ToolRegistry): void {
       inputSchema: z.object({ phoneNumber: z.string(), assistantId: z.string().optional(), instructions: z.string().optional() }).passthrough(),
       piiAllowlist: ["phoneNumber", "assistantId", "instructions", "tenantId"],
       async run(input) {
-        const conn = await connectVapi();
+        const tenantId = String(input.tenantId ?? "");
+        if (!tenantId) throw new IntegrationError("vapi", "vapi_place_call requires tenantId", false);
+        const conn = await connectVapi(await resolveTenantCredentialContext(tenantId, "vapi"));
         try {
           return await callMcpTool(conn, "vapi", "create_call", input);
         } finally {
@@ -120,19 +145,20 @@ export function registerBuiltinTools(registry: ToolRegistry): void {
 
 }
 
-function registerUniversalTools(registry: ToolRegistry, allowLiveVapi: boolean): void {
+function registerUniversalTools(registry: ToolRegistry, native: ToolRegistry): void {
   // Register the real adapters based on operating mode, not import-time secret
   // visibility. ToolRegistry loads managed secrets immediately before execution;
   // checking env here made a correctly configured Secrets Manager deployment omit
   // the campaign tool for the lifetime of a warm process.
-  if (allowLiveVapi) {
+  {
     // REAL outbound phone calls — Vapi phone number is configured.
     registry.register({
       name: "vapi_place_call",
-      description: "Place a REAL outbound call via the dealer's Vapi phone number, optionally with a specialized assistant persona",
-      integration: "vapi",
+      description: "Tenant-routed outbound call: the tenant's Vapi account or its configured sandbox emulator",
+      integration: "tenant-routed",
       inputSchema: z
         .object({
+          tenantId: z.string().uuid(),
           phoneNumber: z.string().min(7),
           instructions: z.string().optional(),
           assistantId: z.string().optional(),
@@ -148,7 +174,15 @@ function registerUniversalTools(registry: ToolRegistry, allowLiveVapi: boolean):
       // so future planner payload fields never flow into Vapi metadata by accident.
       piiAllowlist: ["phoneNumber", "instructions", "assistantId", "purpose", "tenantId", "agentKey", "domainActionId", "householdId", "invoiceId", "variableValues"],
       async run(input) {
+        const tenantId = String(input.tenantId);
+        if ((await resolveCapabilityBindingsForTenant(tenantId)).communications.mode !== "vapi") {
+          const simulated = await native.call("vapi_place_call", input);
+          if (!simulated.ok) throw new IntegrationError("sandbox", simulated.error ?? "sandbox Vapi call failed", false);
+          return simulated.output;
+        }
+        const credentialContext = await resolveTenantCredentialContext(tenantId, "vapi");
         const r = await placeVapiCall({
+          tenantId,
           customerNumber: String(input.phoneNumber),
           firstMessage: String(input.instructions ?? "Hello! This is Finnor calling on behalf of your water treatment dealer."),
           metadata: {
@@ -164,16 +198,17 @@ function registerUniversalTools(registry: ToolRegistry, allowLiveVapi: boolean):
           variableValues: input.variableValues && typeof input.variableValues === "object"
             ? Object.fromEntries(Object.entries(input.variableValues as Record<string, unknown>).map(([key, value]) => [key, String(value)]))
             : undefined,
-        });
+        }, credentialContext);
         if (!r.ok) throw new Error(r.error ?? "Vapi call failed");
         return { ...r.output, live: true };
       },
     });
     registry.register({
       name: "vapi_create_campaign",
-      description: "Create a real provider-managed Vapi campaign with per-customer assistant context and a bounded calling window",
-      integration: "vapi",
+      description: "Tenant-routed campaign: the tenant's Vapi account or its configured sandbox emulator",
+      integration: "tenant-routed",
       inputSchema: z.object({
+        tenantId: z.string().uuid(),
         name: z.string().min(3).max(200),
         assistantId: z.string().min(1),
         schedulePlan: z.object({ earliestAt: z.string().datetime(), latestAt: z.string().datetime().optional() }),
@@ -191,10 +226,16 @@ function registerUniversalTools(registry: ToolRegistry, allowLiveVapi: boolean):
       }),
       // This nested customer payload is deliberately forwarded: it is the approved
       // campaign cohort and the minimum context the saved Vapi assistant needs.
-      piiAllowlist: ["name", "assistantId", "schedulePlan", "customers"],
+      piiAllowlist: ["tenantId", "name", "assistantId", "schedulePlan", "customers"],
       retryPolicy: { attempts: 3, baseDelayMs: 500, timeoutMs: 25_000 },
       async run(input) {
-        const result = await createVapiCampaign(input as unknown as Parameters<typeof createVapiCampaign>[0]);
+        const tenantId = String(input.tenantId);
+        if ((await resolveCapabilityBindingsForTenant(tenantId)).communications.mode !== "vapi") {
+          const simulated = await native.call("vapi_create_campaign", input);
+          if (!simulated.ok) throw new IntegrationError("sandbox", simulated.error ?? "sandbox Vapi campaign failed", false);
+          return simulated.output;
+        }
+        const result = await createVapiCampaign(input as unknown as Parameters<typeof createVapiCampaign>[0], await resolveTenantCredentialContext(tenantId, "vapi"));
         if (!result.ok) {
           const kind = result.errorKind ?? "provider_down";
           throw new IntegrationError("vapi", result.error ?? "Vapi campaign creation failed", kind === "retryable" || kind === "provider_down", kind);
@@ -208,11 +249,11 @@ function registerUniversalTools(registry: ToolRegistry, allowLiveVapi: boolean):
     description:
       "Real ad campaign performance (spend, clicks, CTR, conversions). Uses Meta or Google Ads if connected, otherwise clearly-labeled demo data.",
     integration: "ads",
-    inputSchema: z.object({ windowDays: z.number().int().min(1).max(90).optional() }).passthrough(),
-    piiAllowlist: ["windowDays"],
+    inputSchema: z.object({ tenantId: z.string().uuid(), windowDays: z.number().int().min(1).max(90).optional() }).passthrough(),
+    piiAllowlist: ["tenantId", "windowDays"],
     async run(input) {
-      const report = await getAdPerformance(input.windowDays ? Number(input.windowDays) : 7);
-      return { ...report, providerStatus: adsProviderStatus() } as unknown as Record<string, unknown>;
+      const report = await getTenantAdPerformance(String(input.tenantId), input.windowDays ? Number(input.windowDays) : 7);
+      return { ...report } as unknown as Record<string, unknown>;
     },
   });
   registry.register({
@@ -272,7 +313,7 @@ function registerUniversalTools(registry: ToolRegistry, allowLiveVapi: boolean):
     description: "Send a real email from Finnor itself (win-back/digest/alert), allowlisted to finnorai.com + the configured owner address only",
     integration: "resend",
     inputSchema: z.object({ tenantId: z.string().uuid(), to: z.string().email(), subject: z.string().min(1), html: z.string().min(1) }).passthrough(),
-    piiAllowlist: ["to", "subject", "html"],
+    piiAllowlist: ["tenantId", "to", "subject", "html"],
     async run(input) {
       // Provider failures must use the worker's real bounded retry/dead-letter
       // lifecycle, not turn this synchronous tool call into a dropped notification.
@@ -315,9 +356,9 @@ function registerUniversalTools(registry: ToolRegistry, allowLiveVapi: boolean):
     description: "Launch a paid ad campaign (dry-run, clearly labeled, until write-scope Ads credentials are connected)",
     integration: "ads",
     inputSchema: z
-      .object({ name: z.string().min(1), dailyBudgetUsd: z.number().positive(), objective: z.string().optional(), targetZip: z.string().optional() })
+      .object({ tenantId: z.string().uuid(), name: z.string().min(1), dailyBudgetUsd: z.number().positive(), objective: z.string().optional(), targetZip: z.string().optional() })
       .passthrough(),
-    piiAllowlist: ["name", "dailyBudgetUsd", "objective", "targetZip"],
+    piiAllowlist: ["tenantId", "name", "dailyBudgetUsd", "objective", "targetZip"],
     async run(input) {
       const result = await launchAdCampaign(input as unknown as CampaignLaunchInput);
       return { ...result };
@@ -335,14 +376,15 @@ function registerAccountingSync(registry: ToolRegistry): void {
     name: "quickbooks_sync_invoice",
     description: "Sync a native Finnor invoice to QuickBooks Online, if connected.",
     integration: "quickbooks",
-    inputSchema: z.object({ customerName: z.string(), customerPhone: z.string().optional(), amountUsd: z.number(), memo: z.string().optional() }),
-    piiAllowlist: ["customerName", "customerPhone", "amountUsd", "memo"],
+    inputSchema: z.object({ tenantId: z.string().uuid(), customerName: z.string(), customerPhone: z.string().optional(), amountUsd: z.number(), memo: z.string().optional() }),
+    piiAllowlist: ["tenantId", "customerName", "customerPhone", "amountUsd", "memo"],
     async run(input) {
       const i = input as { customerName: string; customerPhone?: string; amountUsd: number; memo?: string };
       // Throws IntegrationError (not-connected, or a real API failure) — wrappedCall
       // (registry.call()'s caller) already catches and types it uniformly; no
       // per-tool try/catch needed here.
-      const result = await syncInvoiceToQuickBooks(i);
+      const tenantId = String(input.tenantId);
+      const result = await syncInvoiceToQuickBooks(i, await resolveTenantCredentialContext(tenantId, "quickbooks"));
       return { ...result, synced: true };
     },
   });

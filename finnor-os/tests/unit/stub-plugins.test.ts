@@ -4,8 +4,9 @@
 
 import { describe, it, expect } from "vitest";
 import { createDefaultPluginRegistry } from "../../packages/orchestration/src/plugin-registry";
-import { ToolRegistry } from "@finnor/tools";
+import { getAdPerformance, launchAdCampaign, ToolRegistry } from "@finnor/tools";
 import type { DomainPolicy } from "@finnor/shared-types";
+import { z } from "zod";
 
 const placeholderPolicy = (actionType: string): DomainPolicy => ({
   id: "33333333-3333-4333-8333-333333333333",
@@ -59,6 +60,29 @@ const ALL_EXPECTED_ACTION_TYPES = [
 // ads-API write, so it doesn't need write-scope approval — see packages/domain-plugins/marketing/index.ts.
 const SCAFFOLDED: string[] = [];
 
+function isolatedAdsRegistry(): ToolRegistry {
+  const tools = new ToolRegistry();
+  tools.register({
+    name: "get_ad_performance",
+    description: "isolated adapter contract",
+    integration: "ads",
+    inputSchema: z.object({ tenantId: z.string().uuid(), windowDays: z.number().optional() }),
+    async run(input) {
+      return getAdPerformance(Number(input.windowDays ?? 7), {}) as unknown as Record<string, unknown>;
+    },
+  });
+  tools.register({
+    name: "launch_ad_campaign",
+    description: "isolated dry-run adapter contract",
+    integration: "ads",
+    inputSchema: z.object({ tenantId: z.string().uuid(), name: z.string(), dailyBudgetUsd: z.number() }).passthrough(),
+    async run(input) {
+      return launchAdCampaign(input as unknown as Parameters<typeof launchAdCampaign>[0]) as unknown as Record<string, unknown>;
+    },
+  });
+  return tools;
+}
+
 describe("full action-type roster (§5)", () => {
   const registry = createDefaultPluginRegistry();
 
@@ -84,23 +108,21 @@ describe("full action-type roster (§5)", () => {
   }
 
   it("summarize_ad_performance answers for real — demo data when no ad account is connected, never blocked", async () => {
-    const { createDefaultRegistry } = await import("@finnor/tools");
     const plugin = registry.resolve("summarize_ad_performance")!;
     const policy = { ...placeholderPolicy("summarize_ad_performance"), requiresConfirmation: false };
     const draft = await plugin.draft("summarize_ad_performance", {}, policy);
     expect(draft.requiresConfirmation).toBe(false); // read-only, never gated
-    const result = await plugin.execute(draft, createDefaultRegistry());
+    const result = await plugin.execute(draft, isolatedAdsRegistry());
     expect(result.status).toBe("success"); // no real ad account configured in this test env -> demo data, not a block
     expect((result.output as { provider?: string }).provider).toBe("demo");
     expect(typeof (result.output as { spokenSummary?: string }).spokenSummary).toBe("string");
   });
 
   it("launch_ad_campaign runs for real in a clearly-labeled dry-run mode until write-scope Ads credentials are connected", async () => {
-    const { createDefaultRegistry } = await import("@finnor/tools");
     const plugin = registry.resolve("launch_ad_campaign")!;
     const policy = { ...placeholderPolicy("launch_ad_campaign"), policy: {}, requiresConfirmation: false };
     const draft = await plugin.draft("launch_ad_campaign", { name: "Spring Special", dailyBudgetUsd: 25 }, policy);
-    const result = await plugin.execute(draft, createDefaultRegistry());
+    const result = await plugin.execute(draft, isolatedAdsRegistry());
     expect(result.status).toBe("success"); // genuinely ran — in dry-run mode, never blocked
     expect((result.output as { mode?: string }).mode).toBe("dry_run");
     expect(String((result.output as { note?: string }).note)).toContain("[DRY RUN]");

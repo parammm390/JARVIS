@@ -43,11 +43,11 @@ describe.skipIf(!available)("scan_integration_health (A3.T2)", () => {
     process.env.DATABASE_URL = DB_URL;
     await migrate(DB_URL);
     await withTenant(TENANT, (db) => db.insert(tenants).values({ id: TENANT, name: "Integration Health Test" }).onConflictDoNothing());
-    await recordProviderSuccess("vapi"); // ensure a clean (closed) breaker before the flapping test below
+    await recordProviderSuccess("vapi", TENANT); // ensure this tenant's breaker is clean before the flapping test below
   });
   afterAll(async () => {
     await withTenant(TENANT, (db) => db.delete(tenantIntegrations).where(eq(tenantIntegrations.tenantId, TENANT)));
-    await recordProviderSuccess("vapi");
+    await recordProviderSuccess("vapi", TENANT);
     await closePool();
   });
 
@@ -68,9 +68,9 @@ describe.skipIf(!available)("scan_integration_health (A3.T2)", () => {
     await withTenant(TENANT, (db) =>
       db.insert(tenantIntegrations).values({ tenantId: TENANT, capability: "communications", binding: "vapi", mode: "real" }),
     );
-    await recordProviderFailure("vapi");
-    await recordProviderFailure("vapi");
-    await recordProviderFailure("vapi"); // 3 consecutive failures opens the breaker (provider-circuit-breaker.ts)
+    await recordProviderFailure("vapi", TENANT);
+    await recordProviderFailure("vapi", TENANT);
+    await recordProviderFailure("vapi", TENANT); // 3 consecutive failures opens this tenant's breaker
 
     await scanIntegrationHealth({ tenantId: TENANT });
     const row = await rowFor("communications");

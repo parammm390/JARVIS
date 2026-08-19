@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import pg from "pg";
 import { migrate } from "../../packages/db/migrate";
-import { withTenant, closePool, tenants, leads, households, businessEvents, dataQualityFindings } from "@finnor/db";
+import { withTenant, closePool, tenants, leads, households, businessEvents, dataQualityFindings, importEntityRefs, importRows, importRuns } from "@finnor/db";
 import { eq, and, sql } from "drizzle-orm";
 import { importSyntheticDealerData, SYNTHETIC_DEALER_LEADS } from "../../scripts/import-synthetic-dealer";
 import { scanDataQuality } from "../../apps/worker/src/handlers/scan-data-quality";
@@ -36,6 +36,9 @@ describe.skipIf(!available)("canonical data import — blueprint Phase 1 proof",
     // Clean slate: earlier runs' leads/households/findings for this tenant, if any.
     await withTenant(TENANT_ID, async (db) => {
       await db.delete(dataQualityFindings).where(eq(dataQualityFindings.tenantId, TENANT_ID));
+      await db.delete(importRows).where(eq(importRows.tenantId, TENANT_ID));
+      await db.delete(importEntityRefs).where(eq(importEntityRefs.tenantId, TENANT_ID));
+      await db.delete(importRuns).where(eq(importRuns.tenantId, TENANT_ID));
       await db.delete(leads).where(eq(leads.tenantId, TENANT_ID));
       await db.delete(households).where(eq(households.tenantId, TENANT_ID));
     });
@@ -46,27 +49,31 @@ describe.skipIf(!available)("canonical data import — blueprint Phase 1 proof",
 
   it("importing twice creates no duplicate rows (idempotent by provenance)", async () => {
     const first = await importSyntheticDealerData(TENANT_ID);
-    expect(first.created).toBe(SYNTHETIC_DEALER_LEADS.length);
-    expect(first.skipped).toBe(0);
+    expect(first.created).toBe(3);
+    expect(first.skipped).toBe(1); // the exact shared phone resolves deterministically
+    expect(first.quarantined).toBe(1); // no phone/email: never written to business data
 
     const second = await importSyntheticDealerData(TENANT_ID);
     expect(second.created).toBe(0);
-    expect(second.skipped).toBe(SYNTHETIC_DEALER_LEADS.length);
+    expect(second.skipped).toBe(4);
+    expect(second.quarantined).toBe(1);
     // Same lead ids both times — a re-import upserts, never duplicates.
     expect(second.leadIdsByExternalId).toEqual(first.leadIdsByExternalId);
 
     const leadRows = await withTenant(TENANT_ID, (db) =>
       db.select().from(leads).where(and(eq(leads.tenantId, TENANT_ID), eq(leads.sourceSystem, "synthetic_dealer_import"))),
     );
-    expect(leadRows).toHaveLength(SYNTHETIC_DEALER_LEADS.length);
+    expect(leadRows).toHaveLength(3);
 
     const householdRows = await withTenant(TENANT_ID, (db) => db.select().from(households).where(eq(households.tenantId, TENANT_ID)));
-    // One household per lead (dual-write compromise) — re-import must not mint extras.
-    expect(householdRows).toHaveLength(SYNTHETIC_DEALER_LEADS.length);
+    expect(householdRows).toHaveLength(3);
   });
 
-  it("data-quality scan surfaces the deliberately duplicate, malformed, and stale fixture rows", async () => {
-    const { leadIdsByExternalId } = await importSyntheticDealerData(TENANT_ID);
+  it("quarantines malformed input and still surfaces genuinely stale canonical data", async () => {
+    const { leadIdsByExternalId, runId } = await importSyntheticDealerData(TENANT_ID);
+
+    const [quarantine] = await withTenant(TENANT_ID, (db) => db.select().from(importRows).where(and(eq(importRows.runId, runId), eq(importRows.status, "quarantined"))));
+    expect(quarantine!.reasons).toEqual(expect.arrayContaining([expect.objectContaining({ code: "contact_method_required" })]));
 
     // Backdate synth-005's activity so it reads as stale under the default 14-day window
     // (the scan can't fabricate real time passing, so the test simulates it directly).
@@ -86,14 +93,6 @@ describe.skipIf(!available)("canonical data import — blueprint Phase 1 proof",
     const findings = await withTenant(TENANT_ID, (db) =>
       db.select().from(dataQualityFindings).where(eq(dataQualityFindings.tenantId, TENANT_ID)),
     );
-
-    const duplicate = findings.find((f) => f.findingType === "duplicate_candidate");
-    expect(duplicate, "expected a duplicate_candidate finding for the shared-phone household pair").toBeTruthy();
-
-    const missing = findings.find(
-      (f) => f.findingType === "missing_critical_field" && f.entityId === leadIdsByExternalId["synth-004"],
-    );
-    expect(missing, "expected a missing_critical_field finding for the no-phone/no-email lead").toBeTruthy();
 
     const stale = findings.find((f) => f.findingType === "stale_data" && f.entityId === staleLeadId);
     expect(stale, "expected a stale_data finding for the backdated lead").toBeTruthy();

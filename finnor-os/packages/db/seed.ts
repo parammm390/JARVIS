@@ -139,12 +139,14 @@ export async function seed(databaseUrl = process.env.DATABASE_URL): Promise<void
       `UPDATE tenants SET owner_phone = COALESCE(owner_phone, '${PLACEHOLDER_NEEDS_REAL_VALUE}') WHERE id = $1`,
       [SEED_TENANT_ID],
     );
-    // Maps the seed tenant's registered Vapi line to VAPI_PHONE_NUMBER_ID (the real
-    // Vapi assistant's dialed-number id) when the env var is present, so the tenant
-    // resolver's preferred match key (vapi_phone_number_id) works out of the box in
-    // any environment carrying that env var — single-tenant deploys don't need this
-    // row. Production voice intake fails closed when no line mapping exists.
-    if (process.env.VAPI_PHONE_NUMBER_ID) {
+    // Legacy single-tenant seed bridge only. A global phone-number id may map to this
+    // tenant only when the tenant is explicitly on the same legacy credential
+    // allowlist used by runtime resolution. New tenants provision their own mapping.
+    const legacyVoiceTenantAllowed = (process.env.FINNOR_LEGACY_CREDENTIAL_TENANT_IDS ?? "")
+      .split(",")
+      .map((value) => value.trim())
+      .includes(SEED_TENANT_ID);
+    if (legacyVoiceTenantAllowed && process.env.VAPI_PHONE_NUMBER_ID) {
       await client.query(
         `INSERT INTO tenant_phone_numbers (tenant_id, phone_number, vapi_phone_number_id, label)
          SELECT $1, '${PLACEHOLDER_NEEDS_REAL_VALUE}', $2, 'seed default line'

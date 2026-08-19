@@ -13,6 +13,7 @@ import { createDocument, recordDocumentContent, getDocumentContent } from "@finn
 import type { CapabilityContract, CapabilityBinding, RetryPolicy } from "@finnor/workflow-runtime";
 import { requestDocusignSignature, docusignProviderStatus } from "../docusign";
 import { withCircuitBreaker } from "../provider-circuit-breaker";
+import { resolveTenantCredentialContext, type TenantCredentialContext } from "@finnor/security";
 import { renderDocumentPdf } from "../pdf/render-pdf";
 import {
   emulatorGenerateDocument,
@@ -121,14 +122,15 @@ export const requestSignatureEmulatorBinding: CapabilityBinding<RequestSignature
   call: emulatorRequestSignature,
 };
 
-export function isDocusignConfigured(): boolean {
-  return docusignProviderStatus().configured;
+export function isDocusignConfigured(context: TenantCredentialContext<"docusign"> | null): boolean {
+  return docusignProviderStatus(context).configured;
 }
 
 export const requestSignatureDocusignBinding: CapabilityBinding<RequestSignatureInput, RequestSignatureOutput> = {
   name: "docusign",
   async call(input) {
+    const credentialContext = await resolveTenantCredentialContext(input.tenantId, "docusign");
     const content = await withTenant(input.tenantId, (db) => getDocumentContent(db, input.documentId));
-    return withCircuitBreaker("docusign", () => requestDocusignSignature({ ...input, documentBytes: content?.bytes }), { tenantId: input.tenantId });
+    return withCircuitBreaker("docusign", () => requestDocusignSignature({ ...input, documentBytes: content?.bytes }, credentialContext), { tenantId: input.tenantId });
   },
 };

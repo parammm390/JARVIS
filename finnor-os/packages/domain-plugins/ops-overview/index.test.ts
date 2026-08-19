@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { isCapabilityQuestion, isInventoryQuestion, opsOverviewPlugin } from "./index";
+import { isCapabilityQuestion, isInventoryQuestion, opsOverviewPlugin, requestsSemanticBusinessContext } from "./index";
 
 describe("ops-overview answer actions", () => {
   it("recognizes capability and inventory questions as answer requests", () => {
     expect(isCapabilityQuestion("What can you do for me?")).toBe(true);
+    expect(isCapabilityQuestion("Hey, what all can you do?")).toBe(true);
     expect(isInventoryQuestion("How much inventory do we have on hand?")).toBe(true);
+  });
+
+  it("keeps semantic context opt-in for explicit memory/history requests", () => {
+    expect(requestsSemanticBusinessContext("How many leads are on file right now?")).toBe(false);
+    expect(requestsSemanticBusinessContext("What did we discuss about the iron filter last time?")).toBe(true);
   });
 
   it("answers a capability question as an ungated, grounded answer result", async () => {

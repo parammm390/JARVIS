@@ -7,6 +7,7 @@
 import { z } from "zod";
 import type { CapabilityContract, CapabilityBinding, RetryPolicy } from "@finnor/workflow-runtime";
 import { connectGhl, callMcpTool } from "../mcp-client";
+import { resolveTenantCredentialContext, type TenantCredentialContext } from "@finnor/security";
 import { withCircuitBreaker } from "../provider-circuit-breaker";
 import { upsertHouseholdByPhone, recordOutbound, resolveSmsDestination, bookServiceVisit } from "../sandbox";
 import {
@@ -62,8 +63,8 @@ export const BookProviderAppointmentOutputSchema = z.object({
 
 const RETRY_POLICY: RetryPolicy = { attempts: 3, baseDelayMs: 200, timeoutMs: 8_000 };
 
-export function isGhlConfigured(): boolean {
-  return Boolean(process.env.GOHIGHLEVEL_API_KEY);
+export function isGhlConfigured(context: TenantCredentialContext<"ghl"> | null): boolean {
+  return Boolean(context);
 }
 
 // --- upsert_contact ---------------------------------------------------------
@@ -100,7 +101,7 @@ export const upsertContactGhlBinding: CapabilityBinding<UpsertContactInput, Upse
     return withCircuitBreaker(
       "ghl",
       async () => {
-        const conn = await connectGhl();
+        const conn = await connectGhl(await resolveTenantCredentialContext(input.tenantId, "ghl"));
         try {
           const result = await callMcpTool(conn, "ghl", "contacts_upsert-contact", {
             firstName: input.firstName,
@@ -151,7 +152,7 @@ export const sendMessageGhlBinding: CapabilityBinding<SendMessageInput, SendMess
     return withCircuitBreaker(
       "ghl",
       async () => {
-        const conn = await connectGhl();
+        const conn = await connectGhl(await resolveTenantCredentialContext(input.tenantId, "ghl"));
         try {
           await callMcpTool(conn, "ghl", "conversations_send-a-new-message", { contactId: input.contactId, message: input.message });
           return { sent: true, channel: input.channel ?? "sms" };
@@ -196,9 +197,14 @@ export const bookProviderAppointmentGhlBinding: CapabilityBinding<BookProviderAp
     return withCircuitBreaker(
       "ghl",
       async () => {
-        const conn = await connectGhl();
+        const credentialContext = await resolveTenantCredentialContext(input.tenantId, "ghl");
+        if (!credentialContext.credentials.waterTestCalendarId) {
+          throw new Error("GHL tenant credentials do not define a water-test calendar");
+        }
+        const conn = await connectGhl(credentialContext);
         try {
           const result = await callMcpTool(conn, "ghl", "calendars_create-appointment", {
+            calendarId: credentialContext.credentials.waterTestCalendarId,
             contactId: input.contactId,
             startTime: input.startTime,
           });

@@ -7,15 +7,21 @@
 
 import { withTenant, invoices, households } from "@finnor/db";
 import { eq } from "drizzle-orm";
-import { syncInvoiceToQuickBooks, quickbooksProviderStatus } from "@finnor/tools";
+import { syncInvoiceToQuickBooks } from "@finnor/tools";
+import { resolveTenantCredentialContext, TenantCredentialError } from "@finnor/security";
 import type { JobHandler } from "../queue";
 
 export const quickbooksSync: JobHandler = async (payload) => {
-  if (!quickbooksProviderStatus().configured) return; // not connected — nothing to do, not a failure
-
   const tenantId = String(payload.tenantId ?? "");
   const invoiceId = String(payload.invoiceId ?? "");
   if (!tenantId || !invoiceId) throw new Error("quickbooks_sync requires tenantId and invoiceId");
+  let credentialContext;
+  try {
+    credentialContext = await resolveTenantCredentialContext(tenantId, "quickbooks");
+  } catch (error) {
+    if (error instanceof TenantCredentialError && error.code === "integration_not_bound") return;
+    throw error;
+  }
 
   const inv = await withTenant(tenantId, async (db) => {
     const [row] = await db.select().from(invoices).where(eq(invoices.id, invoiceId));
@@ -35,5 +41,5 @@ export const quickbooksSync: JobHandler = async (payload) => {
     customerPhone: contact.phone ? String(contact.phone) : undefined,
     amountUsd: Number(inv.amountUsd),
     memo: inv.memo ?? undefined,
-  });
+  }, credentialContext);
 };

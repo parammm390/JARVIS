@@ -2,7 +2,8 @@
 // route so /api/setup/status can reuse the exact same checks without duplicating them.
 
 import { connectVapi } from "./mcp-client";
-import { VOICE_PERSONAS, agentKeyForPersona, type VoiceAgentKey, type VoicePersona } from "./voice-personas";
+import { type VoiceAgentKey, type VoicePersona } from "./voice-personas";
+import type { TenantCredentialContext } from "@finnor/security";
 
 export interface HealthEntry {
   configured: boolean;
@@ -11,14 +12,13 @@ export interface HealthEntry {
   note?: string;
 }
 
-export async function testVapiConnection(): Promise<HealthEntry> {
-  if (!process.env.VAPI_API_KEY) return { configured: false, healthy: null };
+export async function testVapiConnection(context: TenantCredentialContext<"vapi">): Promise<HealthEntry> {
   try {
-    const conn = await connectVapi();
+    const conn = await connectVapi(context);
     await conn.close().catch(() => undefined);
     return { configured: true, healthy: true };
-  } catch (err) {
-    return { configured: true, healthy: false, error: (err as Error).message };
+  } catch {
+    return { configured: true, healthy: false, error: "Vapi authenticated connection failed" };
   }
 }
 
@@ -29,32 +29,31 @@ export interface VoiceAssistantHealth extends HealthEntry {
 
 /** Verifies each bounded assistant binding without exposing provider assistant IDs.
  * Vapi documents GET /assistant/:id as the authoritative existence/read check. */
-export async function testVapiAssistants(): Promise<VoiceAssistantHealth[]> {
-  const apiKey = process.env.VAPI_API_KEY;
-  return Promise.all((Object.entries(VOICE_PERSONAS) as Array<[VoicePersona, string | undefined]>).map(async ([personaKey, assistantId]) => {
-    const agentKey = agentKeyForPersona(personaKey)!;
-    if (!assistantId) return { agentKey, personaKey, configured: false, healthy: null };
-    if (!apiKey) return { agentKey, personaKey, configured: true, healthy: null, note: "Vapi provider key is not configured" };
-    try {
-      const response = await fetch(`https://api.vapi.ai/assistant/${encodeURIComponent(assistantId)}`, {
-        headers: { authorization: `Bearer ${apiKey}` },
-        signal: AbortSignal.timeout(5_000),
-      });
-      return response.ok
-        ? { agentKey, personaKey, configured: true, healthy: true }
-        : { agentKey, personaKey, configured: true, healthy: false, error: `Assistant verification failed (${response.status})` };
-    } catch {
-      return { agentKey, personaKey, configured: true, healthy: false, error: "Assistant verification request failed" };
-    }
-  }));
+export async function testVapiAssistants(context: TenantCredentialContext<"vapi">): Promise<VoiceAssistantHealth[]> {
+  try {
+    const response = await fetch(`https://api.vapi.ai/assistant/${encodeURIComponent(context.credentials.assistantId)}`, {
+      headers: { authorization: `Bearer ${context.credentials.apiKey}` },
+      signal: AbortSignal.timeout(5_000),
+    });
+    return [{
+      agentKey: "jarvis",
+      personaKey: "main",
+      configured: true,
+      healthy: response.ok,
+      ...(response.ok ? {} : { error: `Assistant verification failed (${response.status})` }),
+    }];
+  } catch {
+    return [{ agentKey: "jarvis", personaKey: "main", configured: true, healthy: false, error: "Assistant verification request failed" }];
+  }
 }
 
-export function ghlIntegrationStatus(): HealthEntry {
-  // Intentionally not connected in the default topology — the native business layer
-  // (households/inventory_items/invoices) is the system of record; GHL is optional,
-  // not a required integration this build depends on. Never reported as "unhealthy."
-  if (!process.env.GOHIGHLEVEL_API_KEY) {
-    return { configured: false, healthy: null, note: "native business layer is the system of record — GHL is optional" };
+export async function testGhlConnection(context: TenantCredentialContext<"ghl">): Promise<HealthEntry> {
+  try {
+    const { connectGhl } = await import("./mcp-client");
+    const connection = await connectGhl(context);
+    await connection.close().catch(() => undefined);
+    return { configured: true, healthy: true };
+  } catch {
+    return { configured: true, healthy: false, error: "GHL authenticated connection failed" };
   }
-  return { configured: true, healthy: null, note: "configured but not actively self-tested here (native layer still primary)" };
 }

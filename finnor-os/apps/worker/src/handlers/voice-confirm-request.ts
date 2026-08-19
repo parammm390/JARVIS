@@ -4,6 +4,7 @@
 
 import { domainActions, users, withTenant } from "@finnor/db";
 import { placeVapiCall } from "@finnor/tools";
+import { resolveTenantCredentialContext } from "@finnor/security";
 import type { JobHandler } from "../queue";
 import { eligibleApproversForAction } from "@finnor/authority";
 import { and, eq, inArray, isNotNull } from "drizzle-orm";
@@ -22,9 +23,10 @@ export const voiceConfirmRequest: JobHandler = async (payload) => {
   if (!approver?.phoneNumber || approver.phoneNumber === "PLACEHOLDER_NEEDS_REAL_VALUE") throw new Error("No currently authorized approver has a verified employee phone number");
 
   const result = await placeVapiCall({
+    tenantId,
     customerNumber: approver.phoneNumber,
     firstMessage: `Hi, this is Finnor with something that needs your approval. ${script}`,
     metadata: { pendingActionId: actionId, tenantId, approverEmployeeId: approver.id },
-  });
+  }, await resolveTenantCredentialContext(tenantId, "vapi"));
   if (!result.ok) throw new Error(result.error ?? "Vapi call failed");
 };

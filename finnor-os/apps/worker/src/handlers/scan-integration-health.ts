@@ -17,11 +17,13 @@
 import { withTenant, tenantIntegrations } from "@finnor/db";
 import { eq, and } from "drizzle-orm";
 import {
-  testVapiConnection,
-  ghlIntegrationStatus,
-  testDocusignConnection,
-  testQuickBooksConnection,
-  testStripeConnection,
+  testTenantVapiConnection,
+  testTenantGhlConnection,
+  testTenantDocusignConnection,
+  testTenantQuickBooksConnection,
+  testTenantStripeConnection,
+  testTenantAdsConnections,
+  tenantResendStatus,
   circuitSnapshot,
 } from "@finnor/tools";
 import type { JobHandler } from "../queue";
@@ -30,36 +32,60 @@ const CIRCUIT_BREAKER_PROVIDERS = new Set(["vapi", "stripe", "quickbooks", "ghl"
 
 type Health = "ok" | "degraded" | "down" | "unknown";
 
-async function probeBinding(binding: string): Promise<{ health: Health; error: string | null }> {
-  if (CIRCUIT_BREAKER_PROVIDERS.has(binding) && (await circuitSnapshot(binding)).state === "open") {
+async function probeBinding(tenantId: string, binding: string): Promise<{ health: Health; error: string | null }> {
+  if (CIRCUIT_BREAKER_PROVIDERS.has(binding) && (await circuitSnapshot(binding, tenantId)).state === "open") {
     return { health: "down", error: "circuit breaker open — repeated real-call failures" };
   }
   switch (binding) {
     case "vapi": {
-      const r = await testVapiConnection();
+      const r = await testTenantVapiConnection(tenantId);
       return { health: r.healthy === true ? "ok" : r.healthy === false ? "degraded" : "unknown", error: r.error ?? null };
     }
     case "ghl": {
-      const r = ghlIntegrationStatus();
+      const r = await testTenantGhlConnection(tenantId);
       return { health: r.healthy === true ? "ok" : r.healthy === false ? "degraded" : "unknown", error: r.error ?? null };
     }
     case "docusign": {
-      const r = await testDocusignConnection();
+      const r = await testTenantDocusignConnection(tenantId);
       return { health: r.healthy === true ? "ok" : r.healthy === false ? "degraded" : "unknown", error: r.error ?? null };
     }
     case "quickbooks": {
-      const r = await testQuickBooksConnection();
+      const r = await testTenantQuickBooksConnection(tenantId);
       return { health: r.healthy === true ? "ok" : r.healthy === false ? "degraded" : "unknown", error: r.error ?? null };
     }
     case "stripe": {
-      const r = await testStripeConnection();
+      const r = await testTenantStripeConnection(tenantId);
       return { health: r.healthy === true ? "ok" : r.healthy === false ? "degraded" : "unknown", error: r.error ?? null };
+    }
+    case "meta":
+    case "meta_ads": {
+      const r = (await testTenantAdsConnections(tenantId)).meta;
+      return { health: r.healthy === true ? "ok" : r.healthy === false ? "degraded" : "unknown", error: r.error ?? null };
+    }
+    case "google_ads": {
+      const r = (await testTenantAdsConnections(tenantId)).googleAds;
+      return { health: r.healthy === true ? "ok" : r.healthy === false ? "degraded" : "unknown", error: r.error ?? null };
+    }
+    case "ads": {
+      const results = Object.values(await testTenantAdsConnections(tenantId));
+      const configured = results.filter((result) => result.configured);
+      if (configured.some((result) => result.healthy === true)) return { health: "ok", error: null };
+      const failed = configured.find((result) => result.healthy === false);
+      return failed ? { health: "degraded", error: failed.error ?? "Tenant ads connection failed" } : { health: "unknown", error: null };
+    }
+    case "resend": {
+      const r = await tenantResendStatus(tenantId);
+      return { health: r.configured ? "ok" : r.healthy === false ? "degraded" : "unknown", error: r.error ?? null };
     }
     // native/emulator/dry_run: no external vendor behind these — nothing to probe, and
     // an outage here would mean Postgres itself is down, which every other query in
     // this same job would already be failing on.
-    default:
+    case "native":
+    case "emulator":
+    case "dry_run":
       return { health: "ok", error: null };
+    default:
+      return { health: "degraded", error: `Unsupported real integration binding: ${binding}` };
   }
 }
 
@@ -71,7 +97,7 @@ export const scanIntegrationHealth: JobHandler = async (payload) => {
   if (rows.length === 0) return; // no tenant_integrations rows yet — nothing to check, pure env/default resolution stands
 
   for (const row of rows) {
-    const { health, error } = await probeBinding(row.binding);
+    const { health, error } = await probeBinding(tenantId, row.binding);
     await withTenant(tenantId, (db) =>
       db
         .update(tenantIntegrations)

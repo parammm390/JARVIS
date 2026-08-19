@@ -17,6 +17,14 @@ services:
         sync: false
       - key: VAPI_API_KEY
         sync: false
+      # Provider env vars above are legacy-only and inert unless an exact tenant id
+      # is explicitly listed here. New tenants use tenant_integrations secret refs.
+      - key: FINNOR_LEGACY_CREDENTIAL_TENANT_IDS
+        sync: false
+      - key: FINNOR_TENANT_SECRET_PREFIX
+        value: finnor/tenants
+      - key: FINNOR_SYSTEM_CREDENTIAL_PROVIDERS
+        value: resend
       - key: GROQ_API_KEY
         sync: false
   - type: web

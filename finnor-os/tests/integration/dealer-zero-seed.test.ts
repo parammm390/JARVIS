@@ -112,7 +112,7 @@ describe.skipIf(!available)("Dealer Zero seeding (§3.2/§3.6)", () => {
     expect(items.length).toBeLessThanOrEqual(20);
   }, 30_000);
 
-  it("re-running seedTenantPolicies is idempotent — same row count, versions bump, no duplicates", async () => {
+  it("re-running unchanged seedTenantPolicies is convergence-idempotent — no version bumps or duplicates", async () => {
     const before = await withTenant(DEALER_ZERO_TENANT_ID, (db) => db.select().from(domainPolicies).where(eq(domainPolicies.tenantId, DEALER_ZERO_TENANT_ID)));
     await seedTenantPolicies(DEALER_ZERO_TENANT_ID, { reviewLinkUrl: "https://g.page/r/dealer-zero-finnor-water-co/review" });
     const after = await withTenant(DEALER_ZERO_TENANT_ID, (db) => db.select().from(domainPolicies).where(eq(domainPolicies.tenantId, DEALER_ZERO_TENANT_ID)));
@@ -121,7 +121,7 @@ describe.skipIf(!available)("Dealer Zero seeding (§3.2/§3.6)", () => {
     for (const row of after) {
       const prior = beforeById.get(row.id);
       expect(prior).toBeTruthy();
-      expect(row.version).toBe(prior!.version + 1);
+      expect(row.version).toBe(prior!.version);
     }
   }, 30_000);
 });

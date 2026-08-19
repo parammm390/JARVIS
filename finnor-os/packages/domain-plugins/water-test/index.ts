@@ -60,7 +60,6 @@ export const waterTestPlugin: DomainEnginePlugin = {
       };
     }
     const booking = await tools.call("ghl_book_appointment", {
-      calendarId: process.env.GHL_WATER_TEST_CALENDAR_ID ?? "PLACEHOLDER_NEEDS_REAL_VALUE",
       contactId: String((contact.output as Record<string, unknown>).contactId ?? "unknown"),
       startTime: String(draft.payload.scheduledAt ?? ""),
       tenantId: draft.payload.tenantId,

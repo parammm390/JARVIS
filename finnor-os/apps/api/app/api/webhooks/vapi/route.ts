@@ -15,7 +15,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { VapiWebhookSchema } from "@finnor/policy-schema";
 import { adminDb, jobs, withTenant, domainActions, domainPolicies, actionLog, tenantPhoneNumbers, getPool, households, communicationsLog, works, receiveWork, users, workAggregate } from "@finnor/db";
 import { createTask, persistCall, recordBusinessEvent } from "@finnor/data-platform";
-import { ensureSecretsLoaded } from "@finnor/security";
+import { ensureSecretsLoaded, resolveTenantCredentialContext } from "@finnor/security";
 import { parseSpokenDecision, diagnoseFailure, resolveProviderForPurpose } from "@finnor/orchestration";
 import { VOICE_AGENT_KEYS, logWithTrace } from "@finnor/tools";
 import type { Role } from "@finnor/shared-types";
@@ -41,10 +41,10 @@ import { parseVoiceObjectiveCommand } from "../../../../lib/voice-objective-comm
  * production (dev convenience); fails CLOSED otherwise, and always rejects a
  * signature outside a 5-minute window even with a valid secret.
  */
-function verifySignature(req: Request, rawBody: string): boolean {
+function verifySignature(req: Request, rawBody: string, secret?: string): boolean {
   return verifyTimestampedHmacSignature(req, {
     header: "x-vapi-signature",
-    secret: process.env.VAPI_WEBHOOK_SECRET,
+    secret,
     rawBody,
     allowUnsetSecret: process.env.NODE_ENV !== "production",
   });
@@ -581,10 +581,6 @@ async function handleToolCalls(message: Record<string, unknown>, tenantId: strin
 export async function POST(req: Request): Promise<Response> {
   await ensureSecretsLoaded();
   const rawBody = await req.text();
-  if (!verifySignature(req, rawBody)) {
-    logWithTrace({ route: "webhooks/vapi" }).warn({ event: "webhook_signature_rejected", provider: "vapi" }, "rejected webhook: bad x-vapi-signature");
-    return Response.json({ error: "Bad signature" }, { status: 401 });
-  }
   let json: unknown = null;
   try {
     json = JSON.parse(rawBody);
@@ -610,6 +606,18 @@ export async function POST(req: Request): Promise<Response> {
       { error: "Unmapped Vapi line; no tenant-scoped work was accepted" },
       { status: 503, headers: { "retry-after": "60" } },
     );
+  }
+
+  let webhookSecret: string | undefined;
+  try {
+    webhookSecret = (await resolveTenantCredentialContext(tenantId, "vapi")).credentials.webhookSecret;
+  } catch {
+    // A tenant with no real Vapi binding may still exercise unsigned emulator
+    // webhooks outside production. Production always fails closed below.
+  }
+  if (!verifySignature(req, rawBody, webhookSecret)) {
+    logWithTrace({ route: "webhooks/vapi", tenantId }).warn({ event: "webhook_signature_rejected", provider: "vapi" }, "rejected webhook: bad x-vapi-signature");
+    return Response.json({ error: "Bad signature" }, { status: 401 });
   }
 
   // Replay protection, keyed by message shape — NOT bare call id: a single call
