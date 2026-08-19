@@ -58,12 +58,12 @@ async function main(): Promise<void> {
       entity: "customer",
       sourceSystem: "finnor-release-smoke",
       externalId: { from: "id" },
-      fields: { name: { from: "name" } },
+      fields: { name: { from: "name" }, email: { from: "email" } },
     });
     const importReport = await runDeclarativeImport({
       tenantId,
       definition,
-      source: { name: `release-smoke-${evidence.commitSha}.csv`, content: `id,name\nrelease-${evidence.commitSha},Release Smoke\n` },
+      source: { name: `release-smoke-${evidence.commitSha}.csv`, content: `id,name,email\nrelease-${evidence.commitSha},Release Smoke,release-smoke@example.invalid\n` },
       dryRun: true,
     });
     if (!importReport.dryRun || importReport.planned !== 1 || importReport.created !== 0 || importReport.updated !== 0) {
