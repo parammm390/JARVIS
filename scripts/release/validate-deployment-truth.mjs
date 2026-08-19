@@ -73,6 +73,12 @@ for (const entry of scanRoots) scan(join(repoRoot, entry))
 
 const workflow = readFileSync(join(repoRoot, ".github/workflows/production-release.yml"), "utf8")
 const vercelDeployScript = readFileSync(join(repoRoot, "scripts/release/deploy-production.mjs"), "utf8")
+if (/\b(?:prj_|team_)[A-Za-z0-9]+/.test(workflow)) {
+  fail("production workflow must resolve Vercel target IDs from the canonical contract")
+}
+if (!workflow.includes("production.contract.json').topology.api") || !vercelDeployScript.includes("infra/deployment/production.contract.json")) {
+  fail("Vercel release stages must consume the canonical deployment contract")
+}
 if (!/VERCEL_ORG_ID:\s*TEAM_ID/.test(vercelDeployScript) || !/VERCEL_PROJECT_ID:\s*app\.projectId/.test(vercelDeployScript)) {
   fail("Vercel release commands must be scoped to the exact canonical organization and project IDs")
 }

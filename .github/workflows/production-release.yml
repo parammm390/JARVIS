@@ -35,7 +35,6 @@ jobs:
       FINNOR_CHAOS_TEST_CONTEXT: "1"
       FINNOR_RELEASE_SOURCE: github-actions
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-      VERCEL_ORG_ID: team_TlTo8L6Rvgb0H7uJh0G5GLDD
       AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
       AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
       AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
@@ -91,10 +90,10 @@ jobs:
           subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
 
       - name: Pull protected production database configuration
-        env:
-          VERCEL_PROJECT_ID: prj_BoMZ2AXdLIJQXAAe6RqDGBveyq3n
         run: |
-          vercel link --project api --scope "$VERCEL_ORG_ID" --yes --token "$VERCEL_TOKEN"
+          VERCEL_ORG_ID="$(node -p "require('../../../infra/deployment/production.contract.json').topology.api.organizationId")"
+          VERCEL_PROJECT_ID="$(node -p "require('../../../infra/deployment/production.contract.json').topology.api.projectId")"
+          export VERCEL_ORG_ID VERCEL_PROJECT_ID
           vercel pull --yes --environment=production --scope "$VERCEL_ORG_ID" --token "$VERCEL_TOKEN"
         working-directory: finnor-os/apps/api
 

@@ -2,34 +2,37 @@ import { execFileSync, spawnSync } from "node:child_process"
 import { readFileSync, writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 
-const TEAM_ID = process.env.VERCEL_ORG_ID || "team_TlTo8L6Rvgb0H7uJh0G5GLDD"
-const APPS = {
-  frontend: {
-    project: "finnor-agency",
-    projectId: "prj_dttKVOUzFBGnSg6zNdRualYjQ3oe",
-    directory: ".",
-  },
-  api: {
-    project: "api",
-    projectId: "prj_BoMZ2AXdLIJQXAAe6RqDGBveyq3n",
-    directory: "finnor-os",
-  },
-}
+const APP_DIRECTORIES = { frontend: ".", api: "finnor-os" }
 
 const appName = process.argv[2]
 const prepareOnly = process.argv.includes("--prepare-only")
 const deployOnly = process.argv.includes("--deploy-only")
 const outputIndex = process.argv.indexOf("--output-file")
 const outputFile = outputIndex >= 0 ? process.argv[outputIndex + 1] : undefined
-const app = APPS[appName]
+const appDirectory = APP_DIRECTORIES[appName]
 
-if (!app) {
+if (!appDirectory) {
   console.error("Usage: node scripts/release/deploy-production.mjs <frontend|api> [--prepare-only|--deploy-only] [--output-file path]")
   process.exit(2)
 }
 if (prepareOnly && deployOnly) throw new Error("--prepare-only and --deploy-only are mutually exclusive")
 
 const repoRoot = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim()
+const contract = JSON.parse(readFileSync(join(repoRoot, "infra/deployment/production.contract.json"), "utf8"))
+const target = contract.topology[appName]
+if (target?.provider !== "vercel") throw new Error(`${appName} is not a Vercel target in the canonical deployment contract`)
+const app = {
+  project: target.projectName,
+  projectId: target.projectId,
+  directory: appDirectory,
+}
+const TEAM_ID = target.organizationId
+if (process.env.VERCEL_ORG_ID && process.env.VERCEL_ORG_ID !== TEAM_ID) {
+  throw new Error(`VERCEL_ORG_ID differs from the canonical deployment contract`)
+}
+if (process.env.VERCEL_PROJECT_ID && process.env.VERCEL_PROJECT_ID !== app.projectId) {
+  throw new Error(`VERCEL_PROJECT_ID differs from the canonical ${appName} project`)
+}
 
 function git(args) {
   return execFileSync("git", args, { cwd: repoRoot, encoding: "utf8" }).trim()
@@ -77,15 +80,6 @@ const env = {
   FINNOR_VERSION: version,
   FINNOR_ENVIRONMENT: environment,
   FINNOR_RELEASE_SOURCE: source,
-}
-
-const linkFile = join(appDir, ".vercel", "project.json")
-if (!deployOnly) {
-  run("vercel", ["link", "--project", app.project, "--scope", TEAM_ID, "--yes", ...tokenArgs], appDir, env)
-}
-const linkedProject = JSON.parse(readFileSync(linkFile, "utf8"))
-if (linkedProject.projectId !== app.projectId || linkedProject.orgId !== TEAM_ID) {
-  throw new Error(`Vercel link mismatch: expected ${TEAM_ID}/${app.projectId}, got ${linkedProject.orgId}/${linkedProject.projectId}`)
 }
 
 if (!deployOnly) {
