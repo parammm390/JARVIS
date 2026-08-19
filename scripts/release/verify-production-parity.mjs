@@ -38,11 +38,25 @@ let workerRelease
 let migrationHead
 let heartbeatAgeSeconds
 try {
-  const heartbeat = await client.query("SELECT meta, extract(epoch FROM (now() - last_beat_at))::int AS age_seconds FROM finnor_os.worker_heartbeat WHERE id = $1", [contract.topology.worker.heartbeatId])
-  if (heartbeat.rowCount !== 1) throw new Error("worker heartbeat is missing")
-  workerRelease = heartbeat.rows[0].meta
-  heartbeatAgeSeconds = Number(heartbeat.rows[0].age_seconds)
-  if (!Number.isFinite(heartbeatAgeSeconds) || heartbeatAgeSeconds > 120) throw new Error(`worker heartbeat is stale (${heartbeatAgeSeconds}s)`)
+  const heartbeatDeadline = Date.now() + 120_000
+  let lastHeartbeatObservation = "missing"
+  while (true) {
+    const heartbeat = await client.query(
+      "SELECT meta, extract(epoch FROM (now() - last_beat_at))::int AS age_seconds FROM finnor_os.worker_heartbeat WHERE id = $1",
+      [contract.topology.worker.heartbeatId],
+    )
+    if (heartbeat.rowCount === 1) {
+      workerRelease = heartbeat.rows[0].meta
+      heartbeatAgeSeconds = Number(heartbeat.rows[0].age_seconds)
+      const observedCommit = workerRelease?.commitSha ?? "<missing>"
+      lastHeartbeatObservation = `commit=${observedCommit}, age=${heartbeatAgeSeconds}s`
+      if (observedCommit === expected.commitSha && Number.isFinite(heartbeatAgeSeconds) && heartbeatAgeSeconds <= 120) break
+    }
+    if (Date.now() >= heartbeatDeadline) {
+      throw new Error(`worker heartbeat did not become fresh for ${expected.commitSha} within 120s (${lastHeartbeatObservation})`)
+    }
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 5_000))
+  }
   const migrations = await client.query("SELECT name FROM finnor_os._migrations ORDER BY name DESC LIMIT 1")
   migrationHead = migrations.rows[0]?.name
 } finally {

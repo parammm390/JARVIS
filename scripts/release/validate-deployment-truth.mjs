@@ -90,6 +90,9 @@ for (const invariant of [
 if (!parityScript.includes("sudo -u finnor git -C '${worker.currentSymlink}' rev-parse HEAD")) {
   fail("Azure parity verification must inspect the runtime-owned checkout as finnor")
 }
+if (!parityScript.includes("heartbeatDeadline = Date.now() + 120_000") || !parityScript.includes("observedCommit === expected.commitSha")) {
+  fail("runtime parity must wait for a fresh heartbeat carrying the canonical release SHA")
+}
 if (/\b(?:prj_|team_)[A-Za-z0-9]+/.test(workflow)) {
   fail("production workflow must resolve Vercel target IDs from the canonical contract")
 }
