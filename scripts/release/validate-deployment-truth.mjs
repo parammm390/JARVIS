@@ -72,6 +72,10 @@ function scan(path) {
 for (const entry of scanRoots) scan(join(repoRoot, entry))
 
 const workflow = readFileSync(join(repoRoot, ".github/workflows/production-release.yml"), "utf8")
+const vercelDeployScript = readFileSync(join(repoRoot, "scripts/release/deploy-production.mjs"), "utf8")
+if (!/VERCEL_ORG_ID:\s*TEAM_ID/.test(vercelDeployScript) || !/VERCEL_PROJECT_ID:\s*app\.projectId/.test(vercelDeployScript)) {
+  fail("Vercel release commands must be scoped to the exact canonical organization and project IDs")
+}
 for (const invariant of [
   "node scripts/release/preflight-production.mjs",
   "npm run release:migrate:production",
