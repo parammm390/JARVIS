@@ -2,16 +2,12 @@ import { execFileSync, spawnSync } from "node:child_process"
 import { readFileSync, writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 
-const APP_DIRECTORIES = { frontend: ".", api: "finnor-os" }
-
 const appName = process.argv[2]
 const prepareOnly = process.argv.includes("--prepare-only")
 const deployOnly = process.argv.includes("--deploy-only")
 const outputIndex = process.argv.indexOf("--output-file")
 const outputFile = outputIndex >= 0 ? process.argv[outputIndex + 1] : undefined
-const appDirectory = APP_DIRECTORIES[appName]
-
-if (!appDirectory) {
+if (!["frontend", "api"].includes(appName)) {
   console.error("Usage: node scripts/release/deploy-production.mjs <frontend|api> [--prepare-only|--deploy-only] [--output-file path]")
   process.exit(2)
 }
@@ -24,8 +20,10 @@ if (target?.provider !== "vercel") throw new Error(`${appName} is not a Vercel t
 const app = {
   project: target.projectName,
   projectId: target.projectId,
-  directory: appDirectory,
+  directory: target.releaseWorkingDirectory,
+  installCommand: target.installCommand,
 }
+if (!app.directory || app.installCommand !== "npm ci") throw new Error(`${appName} has an unsafe or incomplete canonical build contract`)
 const TEAM_ID = target.organizationId
 if (process.env.VERCEL_ORG_ID && process.env.VERCEL_ORG_ID !== TEAM_ID) {
   throw new Error(`VERCEL_ORG_ID differs from the canonical deployment contract`)
@@ -84,7 +82,9 @@ const env = {
 
 if (!deployOnly) {
   run("vercel", ["pull", "--yes", "--environment=production", "--scope", TEAM_ID, ...tokenArgs], appDir, env)
-  run("vercel", ["build", "--prod", "--yes", "--scope", TEAM_ID, ...tokenArgs], appDir, env)
+  const localConfig = join(appDir, ".vercel", "finnor-release.vercel.json")
+  writeFileSync(localConfig, `${JSON.stringify({ installCommand: app.installCommand }, null, 2)}\n`)
+  run("vercel", ["build", "--prod", "--yes", "--local-config", localConfig, "--scope", TEAM_ID, ...tokenArgs], appDir, env)
 }
 if (prepareOnly) {
   console.log(JSON.stringify({ ok: true, app: appName, prepared: true, commitSha, buildId, version, environment, source }, null, 2))

@@ -143,6 +143,7 @@ jobs:
         run: |
           node scripts/release/deploy-production.mjs frontend --prepare-only
           node scripts/release/deploy-production.mjs api --prepare-only
+          node scripts/release/verify-release.mjs
 
       - name: Migrate production database
         run: npm run release:migrate:production -- apps/api/.vercel/.env.production.local

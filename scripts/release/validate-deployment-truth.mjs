@@ -18,6 +18,10 @@ for (const name of ["frontend", "api", "worker", "orchestrator", "database"]) {
   if (!contract.topology[name]) fail(`topology is missing ${name}`)
 }
 if (contract.topology.frontend.provider !== "vercel" || contract.topology.api.provider !== "vercel") fail("frontend/API provider must be Vercel")
+for (const name of ["frontend", "api"]) {
+  const target = contract.topology[name]
+  if (!target.releaseWorkingDirectory || target.installCommand !== "npm ci") fail(`${name} must use a source-locked npm ci build contract`)
+}
 if (contract.topology.worker.provider !== "azure-vm") fail("worker provider must be Azure VM")
 for (const key of ["tenantId", "subscriptionId", "resourceGroup", "resourceName", "resourceId", "vmId", "systemdUnit"]) {
   if (!contract.topology.worker[key]) fail(`Azure worker contract is missing ${key}`)

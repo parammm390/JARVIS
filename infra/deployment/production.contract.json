@@ -25,6 +25,8 @@
       "projectName": "finnor-agency",
       "projectId": "prj_dttKVOUzFBGnSg6zNdRualYjQ3oe",
       "organizationId": "team_TlTo8L6Rvgb0H7uJh0G5GLDD",
+      "releaseWorkingDirectory": ".",
+      "installCommand": "npm ci",
       "productionUrl": "https://finnorai.com",
       "releasePath": "/api/release"
     },
@@ -33,6 +35,8 @@
       "projectName": "api",
       "projectId": "prj_BoMZ2AXdLIJQXAAe6RqDGBveyq3n",
       "organizationId": "team_TlTo8L6Rvgb0H7uJh0G5GLDD",
+      "releaseWorkingDirectory": "finnor-os",
+      "installCommand": "npm ci",
       "productionUrl": "https://api-psi-brown-95.vercel.app",
       "releasePath": "/api/release"
     },
