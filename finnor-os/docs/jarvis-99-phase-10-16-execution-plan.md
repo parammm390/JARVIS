@@ -1,5 +1,12 @@
 # Phases 10–16 Execution Plan (companion to jarvis-99-roadmap.md)
 
+> **Planning document, not deployment truth.** Provider names and staging steps in
+> this future execution plan are not active deployment instructions. Do not recreate
+> Railway/Render targets or start later phases from this file. Current production
+> topology and the only guarded release path are defined by
+> `infra/deployment/production.contract.json` and
+> `.github/workflows/production-release.yml`.
+
 **Scope note:** Phases 1–9 are built and verified (7–9 confirmed as-built:
 `packages/orchestration/src/repair.ts`, `tiering.ts`, `packages/memory/src/patterns.ts`
 and their three integration test files all exist; `planner.ts` is now 437 lines with
