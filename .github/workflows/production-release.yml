@@ -125,22 +125,11 @@ jobs:
           npm run setup:langgraph
         working-directory: finnor-os
 
-      - name: Phase 1–3 and isolation release gates
-        run: >-
-          npm test -- --run
-          tests/integration/canonical-company-graph.test.ts
-          tests/integration/tenant-isolation.test.ts
-          tests/integration/client-provisioning.test.ts
-          tests/integration/declarative-client-import.test.ts
-          tests/integration/tenant-credential-isolation.test.ts
-          tests/integration/payment-webhook-auth.test.ts
-          tests/integration/scan-integration-health.test.ts
-          tests/unit/import-mapping.test.ts
-          tests/unit/tenant-provider-isolation.test.ts
-          tests/unit/tenant-user-pagination.test.ts
-        working-directory: finnor-os
-
-      - name: Complete FINNOR regression suite
+      # The complete suite includes every focused Phase 1–3/isolation test. Run it
+      # once against this fresh local database: repeating DB-mutating test files in
+      # the same job makes the second pass observe first-pass fixtures and is not an
+      # independent release signal.
+      - name: Phase 1–3, isolation, and complete FINNOR regression suite
         run: npm test
         working-directory: finnor-os
 
