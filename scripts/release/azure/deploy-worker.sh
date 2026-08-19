@@ -26,13 +26,13 @@ if [ ! -d "${release_dir}/.git" ]; then
   sudo -u finnor git clone --quiet --filter=blob:none --no-checkout "https://github.com/${repository}.git" "$staging_dir"
   sudo -u finnor git -C "$staging_dir" fetch --quiet origin "$release_sha"
   sudo -u finnor git -C "$staging_dir" checkout --quiet --detach "$release_sha"
-  test "$(git -C "$staging_dir" rev-parse HEAD)" = "$release_sha"
-  test -z "$(git -C "$staging_dir" status --porcelain=v1 --untracked-files=all)"
+  test "$(sudo -u finnor git -C "$staging_dir" rev-parse HEAD)" = "$release_sha"
+  test -z "$(sudo -u finnor git -C "$staging_dir" status --porcelain=v1 --untracked-files=all)"
   sudo -u finnor bash -lc "cd '$staging_dir/finnor-os' && npm ci --no-audit --no-fund"
   mv "$staging_dir" "$release_dir"
 else
-  test "$(git -C "$release_dir" rev-parse HEAD)" = "$release_sha"
-  test -z "$(git -C "$release_dir" status --porcelain=v1 --untracked-files=all)"
+  test "$(sudo -u finnor git -C "$release_dir" rev-parse HEAD)" = "$release_sha"
+  test -z "$(sudo -u finnor git -C "$release_dir" status --porcelain=v1 --untracked-files=all)"
 fi
 
 release_env_tmp=$(mktemp)

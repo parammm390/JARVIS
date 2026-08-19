@@ -77,6 +77,15 @@ for (const entry of scanRoots) scan(join(repoRoot, entry))
 
 const workflow = readFileSync(join(repoRoot, ".github/workflows/production-release.yml"), "utf8")
 const vercelDeployScript = readFileSync(join(repoRoot, "scripts/release/deploy-production.mjs"), "utf8")
+const azureDeployScript = readFileSync(join(repoRoot, "scripts/release/azure/deploy-worker.sh"), "utf8")
+for (const invariant of [
+  'sudo -u finnor git -C "$staging_dir" rev-parse HEAD',
+  'sudo -u finnor git -C "$staging_dir" status --porcelain=v1 --untracked-files=all',
+  'sudo -u finnor git -C "$release_dir" rev-parse HEAD',
+  'sudo -u finnor git -C "$release_dir" status --porcelain=v1 --untracked-files=all',
+]) {
+  if (!azureDeployScript.includes(invariant)) fail(`Azure release verification lost runtime-owner Git guard: ${invariant}`)
+}
 if (/\b(?:prj_|team_)[A-Za-z0-9]+/.test(workflow)) {
   fail("production workflow must resolve Vercel target IDs from the canonical contract")
 }
