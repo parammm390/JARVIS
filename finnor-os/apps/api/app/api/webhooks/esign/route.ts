@@ -23,9 +23,9 @@ import { applySignatureOutcome } from "../../../../../../packages/domain-plugins
 import { checkAndRecordReceipt } from "../../../../lib/webhook-replay";
 import { errorResponse } from "../../../../lib/auth";
 import { logWithTrace } from "@finnor/tools";
+import { resolveTenantCredentialContext } from "@finnor/security";
 
-function verifyDocusignSignature(req: Request, rawBody: string): boolean {
-  const secret = process.env.DOCUSIGN_CONNECT_SECRET;
+function verifyDocusignSignature(req: Request, rawBody: string, secret?: string): boolean {
   if (!secret) return process.env.NODE_ENV !== "production";
   const header = req.headers.get("x-docusign-signature-1") ?? "";
   let gotBuf: Buffer;
@@ -63,11 +63,6 @@ const STATUS_TO_OUTCOME: Record<string, "signed" | "declined" | "expired"> = {
 export async function POST(req: Request): Promise<Response> {
   try {
     const rawBody = await req.text();
-    if (!verifyDocusignSignature(req, rawBody)) {
-      logWithTrace({ route: "webhooks/esign" }).warn({ event: "webhook_signature_rejected", provider: "docusign" }, "rejected webhook: bad x-docusign-signature-1");
-      return Response.json({ error: "Bad signature" }, { status: 401 });
-    }
-
     let json: unknown = null;
     try {
       json = JSON.parse(rawBody);
@@ -78,14 +73,27 @@ export async function POST(req: Request): Promise<Response> {
     if (!parsed.success) return Response.json({ error: "Malformed webhook" }, { status: 400 });
 
     const { envelopeId, envelopeSummary } = parsed.data.data;
+    const fields = envelopeSummary?.customFields?.textCustomFields ?? [];
+    const tenantId = fields.find((f) => f.name === "tenantId")?.value;
+    const proposalId = fields.find((f) => f.name === "proposalId")?.value;
+    if (!tenantId) return Response.json({ error: "Envelope missing tenantId custom field" }, { status: 400 });
+
+    let connectSecret: string | undefined;
+    try {
+      connectSecret = (await resolveTenantCredentialContext(tenantId, "docusign")).credentials.connectSecret;
+    } catch {
+      // Missing/invalid tenant credentials never use a process-global DocuSign key.
+    }
+    if (!verifyDocusignSignature(req, rawBody, connectSecret)) {
+      logWithTrace({ route: "webhooks/esign", tenantId }).warn({ event: "webhook_signature_rejected", provider: "docusign" }, "rejected webhook: bad x-docusign-signature-1");
+      return Response.json({ error: "Bad signature" }, { status: 401 });
+    }
+
     const status = envelopeSummary?.status ?? "";
     const outcome = STATUS_TO_OUTCOME[status];
     if (!outcome) return Response.json({ received: true, ignored: true, status });
 
-    const fields = envelopeSummary?.customFields?.textCustomFields ?? [];
-    const tenantId = fields.find((f) => f.name === "tenantId")?.value;
-    const proposalId = fields.find((f) => f.name === "proposalId")?.value;
-    if (!tenantId || !proposalId) {
+    if (!proposalId) {
       return Response.json({ error: "Envelope missing tenantId/proposalId custom fields" }, { status: 400 });
     }
 

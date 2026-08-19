@@ -3,8 +3,12 @@
 
 import { wrappedCall, type ToolCallResult } from "./wrap";
 import { IntegrationError } from "./errors";
+import type { TenantCredentialContext } from "@finnor/security";
+
+export type VapiCredentialContext = TenantCredentialContext<"vapi">;
 
 export interface OutboundCallOpts {
+  tenantId: string;
   /** E.164 number to call (the dealer owner, or a customer). */
   customerNumber: string;
   /** What the assistant says the moment the call connects. */
@@ -16,19 +20,15 @@ export interface OutboundCallOpts {
   assistantId?: string;
 }
 
-export async function placeVapiCall(opts: OutboundCallOpts): Promise<ToolCallResult> {
+export async function placeVapiCall(opts: OutboundCallOpts, context: VapiCredentialContext): Promise<ToolCallResult> {
   return wrappedCall("vapi", async () => {
-    const apiKey = process.env.VAPI_API_KEY;
-    const phoneNumberId = process.env.VAPI_PHONE_NUMBER_ID;
-    const assistantId = opts.assistantId ?? process.env.VAPI_ASSISTANT_ID;
-    if (!apiKey) throw new IntegrationError("vapi", "VAPI_API_KEY is not set", false);
-    if (!phoneNumberId || phoneNumberId === "PLACEHOLDER_NEEDS_REAL_VALUE") {
-      throw new IntegrationError(
-        "vapi",
-        "VAPI_PHONE_NUMBER_ID is not set — create/import a number in the Vapi dashboard and set its id",
-        false,
-      );
+    if (context.tenantId !== opts.tenantId) throw new IntegrationError("vapi", "Vapi credential context tenant mismatch", false);
+    const { apiKey, phoneNumberId } = context.credentials;
+    const allowedAssistantIds = new Set([context.credentials.assistantId, ...Object.values(context.credentials.assistantIds ?? {})]);
+    if (opts.assistantId && !allowedAssistantIds.has(opts.assistantId)) {
+      throw new IntegrationError("vapi", "Requested assistant is not part of the tenant credential context", false);
     }
+    const assistantId = opts.assistantId ?? context.credentials.assistantId;
     if (!assistantId) throw new IntegrationError("vapi", "VAPI_ASSISTANT_ID is not set", false);
 
     const res = await fetch("https://api.vapi.ai/call", {
@@ -38,7 +38,7 @@ export async function placeVapiCall(opts: OutboundCallOpts): Promise<ToolCallRes
         assistantId,
         phoneNumberId,
         customer: { number: opts.customerNumber },
-        metadata: opts.metadata ?? {},
+        metadata: { ...(opts.metadata ?? {}), tenantId: opts.tenantId },
         assistantOverrides: {
           firstMessage: opts.firstMessage,
           ...(opts.variableValues ? { variableValues: opts.variableValues } : {}),
@@ -46,8 +46,7 @@ export async function placeVapiCall(opts: OutboundCallOpts): Promise<ToolCallRes
       }),
     });
     if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      throw new IntegrationError("vapi", `create call failed (${res.status}): ${body.slice(0, 300)}`, res.status >= 500);
+      throw new IntegrationError("vapi", `create call failed (${res.status})`, res.status >= 500);
     }
     return (await res.json()) as Record<string, unknown>;
   });
@@ -66,6 +65,7 @@ export interface VapiCampaignCustomer {
 }
 
 export interface CreateVapiCampaignOpts {
+  tenantId: string;
   /** Deterministic per-domain-action name. Used as provider-side idempotency key. */
   name: string;
   assistantId: string;
@@ -86,15 +86,14 @@ function campaignArray(value: unknown): VapiCampaignRecord[] {
   return [];
 }
 
-async function findCampaignByName(apiKey: string, name: string): Promise<VapiCampaignRecord | null> {
+async function findCampaignByName(context: VapiCredentialContext, name: string): Promise<VapiCampaignRecord | null> {
   const createdAtGe = new Date(Date.now() - 35 * 86_400_000).toISOString();
   const query = new URLSearchParams({ limit: "100", createdAtGe });
   const response = await fetch(`https://api.vapi.ai/campaign?${query.toString()}`, {
-    headers: { authorization: `Bearer ${apiKey}` },
+    headers: { authorization: `Bearer ${context.credentials.apiKey}` },
   });
   if (!response.ok) {
-    const body = await response.text().catch(() => "");
-    throw new IntegrationError("vapi", `list campaigns failed (${response.status}): ${body.slice(0, 300)}`, response.status >= 500);
+    throw new IntegrationError("vapi", `list campaigns failed (${response.status})`, response.status >= 500);
   }
   const rows = campaignArray(await response.json());
   return rows.find((row) => row.name === name) ?? null;
@@ -104,20 +103,20 @@ async function findCampaignByName(apiKey: string, name: string): Promise<VapiCam
  * before POST and again after a 5xx so a lost response cannot fan out duplicate calls
  * when the workflow retries. The ToolRegistry provides the outer retry/idempotency
  * ledger; this adapter intentionally makes only one create attempt per invocation. */
-export async function createVapiCampaign(opts: CreateVapiCampaignOpts): Promise<ToolCallResult> {
+export async function createVapiCampaign(opts: CreateVapiCampaignOpts, context: VapiCredentialContext): Promise<ToolCallResult> {
   return wrappedCall(
     "vapi",
     async () => {
-      const apiKey = process.env.VAPI_API_KEY;
-      const phoneNumberId = process.env.VAPI_PHONE_NUMBER_ID;
-      if (!apiKey) throw new IntegrationError("vapi", "VAPI_API_KEY is not set", false);
-      if (!phoneNumberId || phoneNumberId === "PLACEHOLDER_NEEDS_REAL_VALUE") {
-        throw new IntegrationError("vapi", "VAPI_PHONE_NUMBER_ID is not set", false);
+      if (context.tenantId !== opts.tenantId) throw new IntegrationError("vapi", "Vapi credential context tenant mismatch", false);
+      const { apiKey, phoneNumberId } = context.credentials;
+      const allowedAssistantIds = new Set([context.credentials.assistantId, ...Object.values(context.credentials.assistantIds ?? {})]);
+      if (!allowedAssistantIds.has(opts.assistantId)) {
+        throw new IntegrationError("vapi", "Requested campaign assistant is not part of the tenant credential context", false);
       }
       if (!opts.assistantId) throw new IntegrationError("vapi", "A campaign assistantId is required", false);
       if (opts.customers.length === 0) throw new IntegrationError("vapi", "A campaign needs at least one customer", false);
 
-      const existing = await findCampaignByName(apiKey, opts.name);
+      const existing = await findCampaignByName(context, opts.name);
       if (existing) return { ...existing, idempotentReplay: true };
 
       const response = await fetch("https://api.vapi.ai/campaign", {
@@ -135,11 +134,10 @@ export async function createVapiCampaign(opts: CreateVapiCampaignOpts): Promise<
         // A provider can accept the write and still lose the HTTP response. Reconcile
         // once before surfacing the error; outer retries will perform the same check.
         if (response.status >= 500) {
-          const reconciled = await findCampaignByName(apiKey, opts.name).catch(() => null);
+          const reconciled = await findCampaignByName(context, opts.name).catch(() => null);
           if (reconciled) return { ...reconciled, reconciledAfterProviderError: true };
         }
-        const body = await response.text().catch(() => "");
-        throw new IntegrationError("vapi", `create campaign failed (${response.status}): ${body.slice(0, 300)}`, response.status >= 500);
+        throw new IntegrationError("vapi", `create campaign failed (${response.status})`, response.status >= 500);
       }
       return (await response.json()) as Record<string, unknown>;
     },

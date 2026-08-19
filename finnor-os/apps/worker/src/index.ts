@@ -42,6 +42,7 @@ import { startScheduler, startGlobalScheduler, type ScheduledScan } from "./sche
 import { startHeartbeat } from "./heartbeat";
 import { startSseServer } from "./sse-server";
 import { recoverObjectives, runObjectiveIteration } from "./handlers/run-objective-iteration";
+import { releaseProbe } from "./handlers/release-probe";
 
 export function createWorker(): JobQueue {
   const queue = new JobQueue();
@@ -82,6 +83,7 @@ export function createWorker(): JobQueue {
   queue.register("execute_business_operation_call_batch", executeBusinessOperationCallBatch);
   queue.register("run_objective_iteration", runObjectiveIteration);
   queue.register("recover_objectives", recoverObjectives);
+  queue.register("release_probe", releaseProbe);
   return queue;
 }
 
@@ -156,8 +158,8 @@ if (isMain) {
   process.on("SIGTERM", () => controller.abort());
   process.on("SIGINT", () => controller.abort());
   log.info({ event: "worker_started" }, "[worker] started, polling jobs table");
-  // A3.T4: EMULATOR_FAULTS=<capability>:<mode>,... — never set in Railway prod/staging
-  // per the ledger, so this is a no-op there; local/CI chaos runs opt in explicitly.
+  // A3.T4: EMULATOR_FAULTS=<capability>:<mode>,... — never set in production;
+  // local/CI chaos runs opt in explicitly.
   const faultedCapabilities = applyEmulatorFaultsFromEnv();
   if (faultedCapabilities.length > 0) {
     log.warn({ event: "emulator_faults_applied", capabilities: faultedCapabilities }, "[worker] EMULATOR_FAULTS applied — emulators are adversarial");
@@ -173,13 +175,8 @@ if (isMain) {
   // worker_heartbeat. No-ops loudly inside the handler itself until Param supplies
   // BACKUP_GITHUB_TOKEN/BACKUP_GITHUB_REPO.
   if (!certificationMode) startGlobalScheduler("backup_db", 6, 15 * 60_000, controller.signal);
-  // B1.T2, deployed same process as the job loop: this repo's single railway.json
-  // start command (`npx tsx apps/$SERVICE_APP/src/index.ts`) means finnor-worker has
-  // exactly one entrypoint — a second Railway service isn't needed (and isn't
-  // "free tier only" per hard rule #5) when the SSE gateway can just bind its own
-  // port inside the same already-running process. Only starts if Railway (or any
-  // host) actually provides a PORT — local `npm run dev`/`start` for the job loop
-  // alone stays exactly as before, no port required.
+  // The SSE gateway shares the persistent worker process and binds only when the
+  // deployment supplies PORT. Local job-loop development does not require a port.
   if (process.env.PORT) {
     const ssePort = Number(process.env.PORT);
     startSseServer(ssePort, controller.signal)

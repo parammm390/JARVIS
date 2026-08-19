@@ -6,6 +6,12 @@
 // one provider closest to going live (Param's next owner action, per owner-actions.md).
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { createCredentialContextForTesting } from "@finnor/security";
+
+const TENANT_ID = "00000000-0000-4000-8000-0000000000e4";
+const qbContext = () => createCredentialContextForTesting(TENANT_ID, "quickbooks", {
+  clientId: "test-client-id", clientSecret: "test-secret", refreshToken: "test-refresh", realmId: "12345", environment: "sandbox",
+});
 
 const ENV_KEYS = ["QUICKBOOKS_CLIENT_ID", "QUICKBOOKS_CLIENT_SECRET", "QUICKBOOKS_REFRESH_TOKEN", "QUICKBOOKS_REALM_ID"] as const;
 
@@ -31,27 +37,23 @@ describe("quickbooks adapter — unconfigured state", () => {
 
   it("quickbooksProviderStatus reports not configured when no env vars are set", async () => {
     const { quickbooksProviderStatus } = await import("@finnor/tools");
-    expect(quickbooksProviderStatus()).toEqual({ configured: false });
+    expect(quickbooksProviderStatus(null)).toEqual({ configured: false });
   });
 
-  it("testQuickBooksConnection returns configured:false, healthy:null without any network call", async () => {
-    const { testQuickBooksConnection } = await import("@finnor/tools");
-    const result = await testQuickBooksConnection();
-    expect(result).toEqual({ configured: false, healthy: null });
+  it("rejects an incomplete credential shape before any network call", async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+    expect(() => createCredentialContextForTesting(TENANT_ID, "quickbooks", {})).toThrow(/missing clientId/);
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it("syncInvoiceToQuickBooks throws a clear IntegrationError when not connected", async () => {
-    const { syncInvoiceToQuickBooks, IntegrationError } = await import("@finnor/tools");
-    await expect(syncInvoiceToQuickBooks({ customerName: "Test Customer", amountUsd: 100 })).rejects.toThrow(IntegrationError);
-  });
-
-  it("reports configured:true once all four env vars are present (still untested against a real account)", async () => {
+  it("reports configured:true for an explicit validated context", async () => {
     process.env.QUICKBOOKS_CLIENT_ID = "test-client-id";
     process.env.QUICKBOOKS_CLIENT_SECRET = "test-secret";
     process.env.QUICKBOOKS_REFRESH_TOKEN = "test-refresh";
     process.env.QUICKBOOKS_REALM_ID = "12345";
     const { quickbooksProviderStatus } = await import("@finnor/tools");
-    expect(quickbooksProviderStatus()).toEqual({ configured: true });
+    expect(quickbooksProviderStatus(qbContext())).toEqual({ configured: true });
   });
 });
 
@@ -68,7 +70,7 @@ describe("quickbooks adapter — configured, stub-fetch", () => {
       { ok: true, json: async () => ({ Invoice: { Id: "inv-99" } }) },
     ]);
     const { syncInvoiceToQuickBooks } = await import("@finnor/tools");
-    const result = await syncInvoiceToQuickBooks({ customerName: "Jane Doe", amountUsd: 249, memo: "AMC renewal" });
+    const result = await syncInvoiceToQuickBooks({ customerName: "Jane Doe", amountUsd: 249, memo: "AMC renewal" }, qbContext());
     expect(result).toEqual({ quickbooksInvoiceId: "inv-99", quickbooksCustomerId: "cust-1" });
     expect(fetchSpy).toHaveBeenCalledTimes(3); // token, search, invoice create -- no customer-create call when one was found
   });
@@ -81,7 +83,7 @@ describe("quickbooks adapter — configured, stub-fetch", () => {
       { ok: true, json: async () => ({ Invoice: { Id: "inv-100" } }) },
     ]);
     const { syncInvoiceToQuickBooks } = await import("@finnor/tools");
-    const result = await syncInvoiceToQuickBooks({ customerName: "New Customer", amountUsd: 100 });
+    const result = await syncInvoiceToQuickBooks({ customerName: "New Customer", amountUsd: 100 }, qbContext());
     expect(result).toEqual({ quickbooksInvoiceId: "inv-100", quickbooksCustomerId: "cust-new" });
     expect(fetchSpy).toHaveBeenCalledTimes(4);
   });
@@ -89,7 +91,7 @@ describe("quickbooks adapter — configured, stub-fetch", () => {
   it("OAuth token refresh failure surfaces as a clear IntegrationError, no invoice/customer calls attempted", async () => {
     const fetchSpy = stubFetchSequence([{ ok: false, status: 401, text: async () => "invalid_grant" }]);
     const { syncInvoiceToQuickBooks, IntegrationError } = await import("@finnor/tools");
-    await expect(syncInvoiceToQuickBooks({ customerName: "X", amountUsd: 10 })).rejects.toThrow(IntegrationError);
+    await expect(syncInvoiceToQuickBooks({ customerName: "X", amountUsd: 10 }, qbContext())).rejects.toThrow(IntegrationError);
     expect(fetchSpy).toHaveBeenCalledTimes(1); // failed at the token step -- never reached customer/invoice
   });
 
@@ -100,7 +102,7 @@ describe("quickbooks adapter — configured, stub-fetch", () => {
       { ok: false, status: 503, text: async () => "Service temporarily unavailable" },
     ]);
     const { syncInvoiceToQuickBooks } = await import("@finnor/tools");
-    await expect(syncInvoiceToQuickBooks({ customerName: "Jane", amountUsd: 10 })).rejects.toMatchObject({ retryable: true });
+    await expect(syncInvoiceToQuickBooks({ customerName: "Jane", amountUsd: 10 }, qbContext())).rejects.toMatchObject({ retryable: true });
   });
 
   it("a 400 invoice-create response is never retryable", async () => {
@@ -110,19 +112,19 @@ describe("quickbooks adapter — configured, stub-fetch", () => {
       { ok: false, status: 400, text: async () => "Malformed invoice" },
     ]);
     const { syncInvoiceToQuickBooks } = await import("@finnor/tools");
-    await expect(syncInvoiceToQuickBooks({ customerName: "Jane", amountUsd: 10 })).rejects.toMatchObject({ retryable: false });
+    await expect(syncInvoiceToQuickBooks({ customerName: "Jane", amountUsd: 10 }, qbContext())).rejects.toMatchObject({ retryable: false });
   });
 
   it("testQuickBooksConnection reports healthy:true on a real 2xx CompanyInfo response", async () => {
     stubFetchSequence([tokenResponse, { ok: true, json: async () => ({ CompanyInfo: { CompanyName: "Test Co" } }) }]);
     const { testQuickBooksConnection } = await import("@finnor/tools");
-    expect(await testQuickBooksConnection()).toEqual({ configured: true, healthy: true });
+    expect(await testQuickBooksConnection(qbContext())).toEqual({ configured: true, healthy: true });
   });
 
   it("testQuickBooksConnection reports healthy:false with the error reason on a non-2xx response", async () => {
     stubFetchSequence([tokenResponse, { ok: false, status: 403, text: async () => "Forbidden" }]);
     const { testQuickBooksConnection } = await import("@finnor/tools");
-    const result = await testQuickBooksConnection();
+    const result = await testQuickBooksConnection(qbContext());
     expect(result.configured).toBe(true);
     expect(result.healthy).toBe(false);
     expect(result.error).toContain("403");

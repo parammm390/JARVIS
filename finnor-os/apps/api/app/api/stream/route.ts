@@ -8,7 +8,7 @@
 // Bounded lifetime (120s, matching the poll's own ceiling): a real Vercel
 // serverless function cannot hold a connection open indefinitely — verified this
 // session against apps/worker/src/sse/gateway.ts's own header comment, the reason
-// THAT SSE gateway is a separate always-on Railway service rather than living
+// THAT SSE gateway is the always-on worker gateway rather than living
 // here. This stream's natural lifetime is exactly one instruction's own planning
 // window (seconds, not a whole session), which the ceiling already bounds
 // honestly — no separate always-on service needed for this specific job.

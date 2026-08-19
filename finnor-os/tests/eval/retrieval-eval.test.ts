@@ -9,7 +9,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import pg from "pg";
 import { migrate } from "../../packages/db/migrate";
-import { withTenant, closePool, tenants, embeddings } from "@finnor/db";
+import { withTenant, closePool, tenants, embeddings, equipment, households } from "@finnor/db";
 import { and, eq, inArray } from "drizzle-orm";
 import { writeSemantic, DeterministicLocalEmbedder } from "@finnor/memory";
 import { createDefaultPluginRegistry } from "@finnor/orchestration";
@@ -83,6 +83,28 @@ describe.skipIf(!available)("retrieval eval (§5.7) — expected source in top-5
     await withTenant(DEALER_ZERO_TENANT_ID, (db) =>
       db.insert(tenants).values({ id: DEALER_ZERO_TENANT_ID, name: "Finnor Water Co. (Dealer Zero)" }).onConflictDoNothing(),
     );
+    // The old suite passed only when a developer happened to have run the large
+    // Dealer Zero seed beforehand. Keep these two fixture identities local to the
+    // test database so a clean CI checkout proves household grounding without ever
+    // seeding a production client.
+    await withTenant(DEALER_ZERO_TENANT_ID, async (db) => {
+      await db.insert(households).values([
+        { id: "f76f9517-671f-49f2-a527-f748e12f7350", tenantId: DEALER_ZERO_TENANT_ID, address: "8289 Main St, Cedar Falls, IA" },
+        { id: "34a773a3-ef65-406e-8449-24884319b114", tenantId: DEALER_ZERO_TENANT_ID, address: "5253 Cedar Heights Dr, Waterloo, IA" },
+      ]).onConflictDoNothing();
+      const equipmentFixtures = [
+        { householdId: "f76f9517-671f-49f2-a527-f748e12f7350", type: "water_softener", model: "HE Softener 45k" },
+        { householdId: "34a773a3-ef65-406e-8449-24884319b114", type: "whole_house_filter", model: "Whole-House Carbon Filtration System" },
+      ];
+      for (const fixture of equipmentFixtures) {
+        const [existing] = await db.select({ id: equipment.id }).from(equipment).where(and(
+          eq(equipment.tenantId, DEALER_ZERO_TENANT_ID),
+          eq(equipment.householdId, fixture.householdId),
+          eq(equipment.type, fixture.type),
+        ));
+        if (!existing) await db.insert(equipment).values({ tenantId: DEALER_ZERO_TENANT_ID, ...fixture });
+      }
+    });
     // Idempotent: skip any SOP already ingested (a real key would embed once, forever
     // — re-running this eval must never re-embed the same real content on every run).
     const already = await withTenant(DEALER_ZERO_TENANT_ID, (db) =>

@@ -8,10 +8,13 @@
 import { createDefaultPluginRegistry } from "@finnor/orchestration";
 import { createHash } from "node:crypto";
 import {
-  testAdsConnections,
-  testQuickBooksConnection,
-  testVapiConnection,
-  ghlIntegrationStatus,
+  testTenantAdsConnections,
+  testTenantQuickBooksConnection,
+  testTenantVapiConnection,
+  testTenantGhlConnection,
+  testTenantStripeConnection,
+  testTenantDocusignConnection,
+  tenantResendStatus,
   circuitSnapshot,
   resolveCapabilityBindingsForTenant,
   ownedCapabilitiesResolvingToEmulator,
@@ -37,11 +40,15 @@ export async function GET(req: Request): Promise<Response> {
       .map((actionType) => ({ actionType, pluginName: registry.resolve(actionType)!.name }));
     descriptors.push({ actionType: PRICING_CATALOG_ACTION_TYPE, pluginName: "shared-pricing-catalog" });
 
-    const [actionTypes, ads, quickbooks, vapi, pricingCatalog, phoneNumberRows, bindings] = await Promise.all([
+    const [actionTypes, ads, quickbooks, vapi, ghl, stripe, docusign, resend, pricingCatalog, phoneNumberRows, bindings] = await Promise.all([
       scanActionTypeReadiness(ctx.tenantId, descriptors),
-      testAdsConnections(),
-      testQuickBooksConnection(),
-      testVapiConnection(),
+      testTenantAdsConnections(ctx.tenantId),
+      testTenantQuickBooksConnection(ctx.tenantId),
+      testTenantVapiConnection(ctx.tenantId),
+      testTenantGhlConnection(ctx.tenantId),
+      testTenantStripeConnection(ctx.tenantId),
+      testTenantDocusignConnection(ctx.tenantId),
+      tenantResendStatus(ctx.tenantId),
       loadPricingCatalog(ctx.tenantId),
       // tenant_phone_numbers has no RLS (looked up during tenant *resolution*, before
       // tenant_id is known — see migration 0013) — an explicit filter is required and
@@ -65,7 +72,6 @@ export async function GET(req: Request): Promise<Response> {
         placeholderFields: ready ? [] : ["items"],
       };
     }
-    const ghl = ghlIntegrationStatus();
     // No active health-check for these two (same posture as ghl: configured-state only,
     // no extra network round trip inside this endpoint) — LangGraph has no external
     // service to check (it's in-process, using the same Postgres pool as everything else).
@@ -74,7 +80,7 @@ export async function GET(req: Request): Promise<Response> {
     // unconfigured (a real, not-guessed signal — see semantic.ts) rather than the
     // null-means-"not checked" convention zep/ghl use above.
     const embeddingsStatus = embeddingsProviderStatus();
-    const integrations = { meta_ads: ads.meta, google_ads: ads.googleAds, quickbooks, vapi, ghl, zep, embeddings: embeddingsStatus };
+    const integrations = { meta_ads: ads.meta, google_ads: ads.googleAds, quickbooks, vapi, ghl, stripe, docusign, resend, zep, embeddings: embeddingsStatus };
 
     const summary = {
       actionTypesTotal: actionTypes.length,
@@ -95,7 +101,7 @@ export async function GET(req: Request): Promise<Response> {
     // and affected actions are failing closed (degraded), not silently falling back to
     // the emulator.
     const circuitBreakers = Object.fromEntries(
-      await Promise.all(["vapi", "stripe", "quickbooks", "ghl", "docusign", "resend"].map(async (p) => [p, await circuitSnapshot(p)] as const)),
+      await Promise.all(["vapi", "stripe", "quickbooks", "ghl", "docusign", "resend"].map(async (p) => [p, await circuitSnapshot(p, ctx.tenantId)] as const)),
     );
 
     // Phase 16(c) / A1.T3, tenant-row added A3.T1: a staging (or prod) deploy's config

@@ -5,6 +5,7 @@
 
 import { getPool } from "@finnor/db";
 import { placeVapiCall } from "@finnor/tools";
+import { resolveTenantCredentialContext } from "@finnor/security";
 import type { JobHandler } from "../queue";
 
 export const voiceNotifyFailure: JobHandler = async (payload) => {
@@ -18,9 +19,10 @@ export const voiceNotifyFailure: JobHandler = async (payload) => {
     throw new Error("Tenant owner_phone is not set — cannot speak the failure diagnosis");
   }
   const result = await placeVapiCall({
+    tenantId,
     customerNumber: ownerPhone,
     firstMessage: script,
     metadata: { notification: "integration_failure", tenantId },
-  });
+  }, await resolveTenantCredentialContext(tenantId, "vapi"));
   if (!result.ok) throw new Error(result.error ?? "Vapi call failed");
 };

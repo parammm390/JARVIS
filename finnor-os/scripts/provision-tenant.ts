@@ -1,68 +1,60 @@
-// Phase 8 (§8.5, dealer-onboarding pack): the one real command that turns "a dealer
-// signed up" into a working tenant. Orchestrates three already-real, independently
-// tested building blocks rather than reimplementing any of them:
-//   1. creates the tenant row,
-//   2. seeds all 42 policies + the price book (packages/data-platform via
-//      seedTenantPolicies — the exact function scripts/seed-tenant-policies.ts's own
-//      CLI calls, imported directly here, not duplicated),
-//   3. creates the owner's real Supabase login (shells out to scripts/create-user.ts,
-//      which already owns the Supabase Auth + users-row upsert logic correctly and
-//      idempotently — reused, not re-implemented).
-//
-// Deliberately does NOT run scripts/import-synthetic-dealer.ts — that's fixture data
-// for tests/staging, never appropriate for a real dealer's real tenant. Real customer
-// data import is a separate, deliberate step (see docs/dealer-onboarding.md's import
-// section) using the same @finnor/data-platform createLead/createHousehold primitives
-// that script demonstrates, against the dealer's real exported data.
-//
-// Usage:
-//   npx tsx scripts/provision-tenant.ts --name="Acme Water Co" --ownerEmail=owner@acme.com [--timezone=America/Chicago] [--reviewLinkUrl=https://g.page/r/...]
-
 import "dotenv/config";
-import { execFileSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { resolve } from "node:path";
+import { createClient } from "@supabase/supabase-js";
 import { closePool } from "@finnor/db";
-import { bootstrapTenant } from "./tenant-bootstrap";
+import { directProvisionManifest, loadClientManifest } from "./client-manifest";
+import { provisionClient } from "./client-provisioning";
 
-function parseArgs(): { name: string; ownerEmail: string; timezone: string; reviewLinkUrl?: string; trainingMode: boolean } {
-  const args = Object.fromEntries(
-    process.argv.slice(2).map((a) => {
-      const [k, ...rest] = a.replace(/^--/, "").split("=");
-      return [k, rest.join("=")];
-    }),
-  );
-  if (!args.name || !args.ownerEmail) {
-    console.error("Usage: npx tsx scripts/provision-tenant.ts --name=\"Acme Water Co\" --ownerEmail=owner@acme.com [--timezone=America/Chicago] [--reviewLinkUrl=...]");
-    process.exit(1);
-  }
-  return { name: args.name, ownerEmail: args.ownerEmail, timezone: args.timezone ?? "America/Chicago", reviewLinkUrl: args.reviewLinkUrl, trainingMode: "trainingMode" in args };
+function args(): Record<string, string> {
+  return Object.fromEntries(process.argv.slice(2).map((arg) => {
+    const [key, ...rest] = arg.replace(/^--/, "").split("=");
+    return [key, rest.join("=")];
+  }));
 }
 
 async function main(): Promise<void> {
-  const { name, ownerEmail, timezone, reviewLinkUrl, trainingMode } = parseArgs();
-
-  const bootstrap = await bootstrapTenant({ name, timezone, reviewLinkUrl, trainingMode });
-  const tenantId = bootstrap.tenantId;
-  console.log(`1/3 tenant created: ${tenantId} (${name})`);
-  const policyResult = bootstrap.policies;
-  console.log(`2/3 policies seeded: ${policyResult.actionTypesSeeded} action types, ${policyResult.priceBookItemsSeeded} price-book items`);
-  if (!reviewLinkUrl) {
-    console.warn("    create_review_request.review_link_url left as PLACEHOLDER_NEEDS_REAL_VALUE — pass --reviewLinkUrl once the dealer's Google review link exists.");
+  const input = args();
+  if (!input.manifest && (!input.clientKey || !input.name || !input.ownerEmail)) {
+    throw new Error("Usage: --manifest=client.json OR --clientKey=acme-water --name=\"Acme Water Co\" --ownerEmail=owner@acme.com [--timezone=America/Chicago] [--reviewLinkUrl=...]");
   }
+  const manifest = input.manifest
+    ? await loadClientManifest(resolve(input.manifest))
+    : directProvisionManifest({
+      clientKey: input.clientKey!,
+      name: input.name!,
+      ownerEmail: input.ownerEmail!,
+      timezone: input.timezone,
+      reviewLinkUrl: input.reviewLinkUrl,
+      trainingMode: "trainingMode" in input,
+    });
 
-  const scriptDir = dirname(fileURLToPath(import.meta.url));
-  execFileSync("npx", ["tsx", join(scriptDir, "create-user.ts"), `--email=${ownerEmail}`, "--role=owner", `--tenant=${tenantId}`], {
-    stdio: "inherit",
-    cwd: join(scriptDir, ".."),
-  });
-  console.log(`3/3 owner login created for ${ownerEmail}`);
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) {
+    throw new Error("SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY must be set");
+  }
+  const supabase = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false } });
+  const result = await provisionClient(manifest, { auth: supabase.auth.admin });
 
-  console.log(`\nTenant ${tenantId} is provisioned. Next: run setup/status for this tenant to confirm 42/42 configured, then follow docs/dealer-onboarding.md's data-import and provider-flip sections.`);
-  await closePool();
+  console.log(`Tenant converged: ${result.tenantId} (clientKey=${result.clientKey})`);
+  console.log(`Policies: ${result.policies.inserted} inserted, ${result.policies.updated} updated, ${result.policies.unchanged} unchanged`);
+  console.log(`Configuration: ${result.integrations} integrations, ${result.locations} locations, ${result.users.length} users`);
+  for (const user of result.users) {
+    if (!user.password) continue;
+    console.log("");
+    console.log("=== LOGIN PASSWORD — shown once, not stored anywhere ===");
+    console.log(`  email:    ${user.email}`);
+    console.log(`  password: ${user.password}`);
+    console.log("==========================================================");
+  }
+  if (result.humanOnlyField) {
+    console.warn(`${result.humanOnlyField} remains PLACEHOLDER_NEEDS_REAL_VALUE.`);
+  }
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+main()
+  .catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  })
+  .finally(() => closePool());

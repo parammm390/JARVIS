@@ -6,16 +6,17 @@
 // on B7.T6's later fleet-worker widening.
 
 import { adminDb, workerHeartbeat } from "@finnor/db";
-import { getLogger } from "@finnor/tools";
+import { getLogger, getRuntimeReleaseMetadata } from "@finnor/tools";
 
 export const WORKER_HEARTBEAT_ID = "worker";
 
 async function beat(): Promise<void> {
   const now = new Date();
+  const meta = getRuntimeReleaseMetadata("finnor-worker");
   await adminDb()
     .insert(workerHeartbeat)
-    .values({ id: WORKER_HEARTBEAT_ID, lastBeatAt: now })
-    .onConflictDoUpdate({ target: workerHeartbeat.id, set: { lastBeatAt: now } });
+    .values({ id: WORKER_HEARTBEAT_ID, lastBeatAt: now, meta })
+    .onConflictDoUpdate({ target: workerHeartbeat.id, set: { lastBeatAt: now, meta } });
 
   const pingUrl = process.env.HEALTHCHECK_PING_URL;
   if (!pingUrl) return; // ⏸ PARAM signup pending (see JARVIS-CREDENTIALS-LEDGER.md) — no-op, not a fake ping

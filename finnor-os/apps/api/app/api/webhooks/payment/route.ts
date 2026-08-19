@@ -18,6 +18,7 @@ import { checkAndRecordReceipt } from "../../../../lib/webhook-replay";
 import { errorResponse } from "../../../../lib/auth";
 import { verifyTimestampedHmacSignature } from "../../../../lib/verify-hmac-signature";
 import { logWithTrace } from "@finnor/tools";
+import { resolveTenantCredentialContext } from "@finnor/security";
 
 const PaymentWebhookSchema = z.object({
   tenantId: z.string().uuid(),
@@ -44,37 +45,40 @@ const StripeCheckoutSessionEventSchema = z.object({
 export async function POST(req: Request): Promise<Response> {
   try {
     const rawBody = await req.text();
-    const stripeSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    let json: unknown = null;
+    try {
+      json = JSON.parse(rawBody);
+    } catch {
+      // Both provider and emulator schemas below return the same bounded error.
+    }
+    const stripeEvent = StripeCheckoutSessionEventSchema.safeParse(json);
 
-    if (stripeSecret) {
-      // Real provider active — fail closed. stripe-signature is the same
-      // `t=<unix>,v1=<hex hmac>` shape the Vapi route already verifies.
+    if (stripeEvent.success) {
+      const event = stripeEvent.data;
+      const metadata = event.data.object.metadata;
+      if (!metadata?.tenantId) return Response.json({ error: "Stripe event missing tenantId metadata" }, { status: 400 });
+      let stripeSecret: string | undefined;
+      try {
+        stripeSecret = (await resolveTenantCredentialContext(metadata.tenantId, "stripe")).credentials.webhookSecret;
+      } catch {
+        // Missing/invalid tenant credentials remain an unsigned failure in production;
+        // they never fall through to a process-global Stripe account.
+      }
       const verified = verifyTimestampedHmacSignature(req, {
         header: "stripe-signature",
         secret: stripeSecret,
         rawBody,
-        allowUnsetSecret: false,
+        allowUnsetSecret: process.env.NODE_ENV !== "production",
       });
       if (!verified) {
-        logWithTrace({ route: "webhooks/payment" }).warn({ event: "webhook_signature_rejected", provider: "stripe" }, "rejected webhook: bad stripe-signature");
+        logWithTrace({ route: "webhooks/payment", tenantId: metadata.tenantId }).warn({ event: "webhook_signature_rejected", provider: "stripe" }, "rejected webhook: bad stripe-signature");
         return Response.json({ error: "Bad signature" }, { status: 401 });
       }
-
-      let json: unknown = null;
-      try {
-        json = JSON.parse(rawBody);
-      } catch {
-        return Response.json({ error: "Malformed webhook" }, { status: 400 });
-      }
-      const parsed = StripeCheckoutSessionEventSchema.safeParse(json);
-      if (!parsed.success) return Response.json({ error: "Malformed webhook" }, { status: 400 });
-      const event = parsed.data;
 
       if (event.type !== "checkout.session.completed") {
         return Response.json({ received: true, ignored: true });
       }
-      const metadata = event.data.object.metadata;
-      if (!metadata?.tenantId || !metadata?.invoiceId) {
+      if (!metadata.invoiceId) {
         return Response.json({ error: "checkout.session.completed missing tenantId/invoiceId metadata" }, { status: 400 });
       }
 
@@ -107,12 +111,6 @@ export async function POST(req: Request): Promise<Response> {
     }
 
     // No real provider configured, non-production — original generic emulator/dev shape, unchanged.
-    let json: unknown = null;
-    try {
-      json = JSON.parse(rawBody);
-    } catch {
-      // parsed.success below handles it
-    }
     const parsed = PaymentWebhookSchema.safeParse(json);
     if (!parsed.success) return Response.json({ error: "Malformed webhook" }, { status: 400 });
 

@@ -65,7 +65,7 @@ export async function detectReliabilityAlerts(tenantId: string): Promise<Reliabi
   }
 
   for (const provider of MONITORED_PROVIDERS) {
-    const snapshot = await circuitSnapshot(provider);
+    const snapshot = await circuitSnapshot(provider, tenantId);
     if (snapshot.state === "open" || snapshot.consecutiveFailures >= FLAPPING_CONSECUTIVE_FAILURES_THRESHOLD) {
       alerts.push({ kind: "provider_flapping", tenantId, detail: { provider, state: snapshot.state, consecutiveFailures: snapshot.consecutiveFailures } });
     }

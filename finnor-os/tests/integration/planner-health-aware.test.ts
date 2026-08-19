@@ -30,7 +30,7 @@ describe.skipIf(!available)("health-aware planner", () => {
   });
 
   afterAll(async () => {
-    await recordProviderSuccess("vapi");
+    await recordProviderSuccess("vapi", TENANT_ID);
     await closePool();
   });
 
@@ -38,10 +38,10 @@ describe.skipIf(!available)("health-aware planner", () => {
     const originalBinding = process.env.COMMUNICATIONS_BINDING;
     process.env.COMMUNICATIONS_BINDING = "vapi";
     try {
-      await recordProviderSuccess("vapi");
-      await recordProviderFailure("vapi");
-      await recordProviderFailure("vapi");
-      await recordProviderFailure("vapi");
+      await recordProviderSuccess("vapi", TENANT_ID);
+      await recordProviderFailure("vapi", TENANT_ID);
+      await recordProviderFailure("vapi", TENANT_ID);
+      await recordProviderFailure("vapi", TENANT_ID);
 
       const provider: LLMProvider = {
         name: "health-aware-stub",
@@ -82,7 +82,7 @@ describe.skipIf(!available)("health-aware planner", () => {
     } finally {
       if (originalBinding === undefined) delete process.env.COMMUNICATIONS_BINDING;
       else process.env.COMMUNICATIONS_BINDING = originalBinding;
-      await recordProviderSuccess("vapi");
+      await recordProviderSuccess("vapi", TENANT_ID);
     }
   });
 });

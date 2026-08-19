@@ -7,44 +7,39 @@
 
 import { IntegrationError, type ProviderHealth } from "./errors";
 import type { CreatePaymentLinkInput, CreatePaymentLinkOutput } from "./emulators/accounting-emulator";
+import type { TenantCredentialContext } from "@finnor/security";
 
 export type { CreatePaymentLinkInput, CreatePaymentLinkOutput };
 
-function stripeConfigured(): boolean {
-  return Boolean(process.env.STRIPE_SECRET_KEY);
-}
+export type StripeCredentialContext = TenantCredentialContext<"stripe">;
 
-export function stripeProviderStatus(): { configured: boolean } {
-  return { configured: stripeConfigured() };
+export function stripeProviderStatus(context: StripeCredentialContext | null): { configured: boolean } {
+  return { configured: Boolean(context) };
 }
 
 /** Real, cheap Stripe call (GET /v1/balance, the standard health-check endpoint) —
  *  proves the secret key actually works, not just that it's present. Mirrors
  *  quickbooks.ts's testQuickBooksConnection exactly. */
-export async function testStripeConnection(): Promise<ProviderHealth> {
-  if (!stripeConfigured()) return { configured: false, healthy: null };
+export async function testStripeConnection(context: StripeCredentialContext): Promise<ProviderHealth> {
   try {
     const res = await fetch("https://api.stripe.com/v1/balance", {
-      headers: { Authorization: `Bearer ${process.env.STRIPE_SECRET_KEY}` },
+      headers: { Authorization: `Bearer ${context.credentials.secretKey}` },
     });
     if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      return { configured: true, healthy: false, error: `(${res.status}) ${body.slice(0, 200)}` };
+      return { configured: true, healthy: false, error: `Stripe balance check failed (${res.status})` };
     }
     return { configured: true, healthy: true };
-  } catch (err) {
-    return { configured: true, healthy: false, error: (err as Error).message };
+  } catch {
+    return { configured: true, healthy: false, error: "Stripe authenticated connection failed" };
   }
 }
 
 /** Real Stripe Checkout Session creation. Idempotency-Key is Stripe-native (the
  *  header, not a body field) — a retried call with the same key returns the
  *  original session rather than creating a duplicate. */
-export async function createStripePaymentLink(input: CreatePaymentLinkInput): Promise<CreatePaymentLinkOutput> {
-  if (!stripeConfigured()) {
-    throw new IntegrationError("stripe", "Stripe is not connected — STRIPE_SECRET_KEY is not set", false);
-  }
-  const returnBase = process.env.PAYMENTS_RETURN_URL_BASE ?? "https://finnorai.com/pay";
+export async function createStripePaymentLink(input: CreatePaymentLinkInput, context: StripeCredentialContext): Promise<CreatePaymentLinkOutput> {
+  if (context.tenantId !== input.tenantId) throw new IntegrationError("stripe", "Stripe credential context tenant mismatch", false);
+  const returnBase = context.credentials.returnUrlBase ?? "https://finnorai.com/pay";
   const body = new URLSearchParams({
     mode: "payment",
     "line_items[0][price_data][currency]": "usd",
@@ -60,18 +55,16 @@ export async function createStripePaymentLink(input: CreatePaymentLinkInput): Pr
   const res = await fetch("https://api.stripe.com/v1/checkout/sessions", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${process.env.STRIPE_SECRET_KEY}`,
+      Authorization: `Bearer ${context.credentials.secretKey}`,
       "content-type": "application/x-www-form-urlencoded",
       "Idempotency-Key": input.idempotencyKey,
     },
     body,
   });
   if (!res.ok) {
-    const data = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
-    const message = data.error?.message ?? `HTTP ${res.status}`;
     // Auth failures never retry (bad key won't fix itself); anything else may.
     const retryable = res.status !== 401 && res.status !== 403;
-    throw new IntegrationError("stripe", message, retryable);
+    throw new IntegrationError("stripe", `Checkout Session creation failed (${res.status})`, retryable);
   }
   const session = (await res.json()) as { id: string; url: string };
   return { paymentLinkUrl: session.url, linkId: session.id };

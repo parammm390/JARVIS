@@ -12,6 +12,9 @@
 
 import { generateKeyPairSync } from "node:crypto";
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { createCredentialContextForTesting } from "@finnor/security";
+
+const TENANT_ID = "00000000-0000-4000-8000-0000000000e4";
 
 const { privateKey } = generateKeyPairSync("rsa", {
   modulusLength: 2048,
@@ -28,6 +31,16 @@ function setConfigured() {
   process.env.DOCUSIGN_PRIVATE_KEY = privateKey;
 }
 
+function docusignContext() {
+  return createCredentialContextForTesting(TENANT_ID, "docusign", {
+    integrationKey: "test-integration-key",
+    userId: "test-user-id",
+    accountId: "test-account-id",
+    privateKey,
+    baseUrl: "https://demo.docusign.net",
+  });
+}
+
 describe("docusign adapter — unconfigured state", () => {
   beforeEach(() => {
     for (const k of ENV_KEYS) delete process.env[k];
@@ -37,29 +50,20 @@ describe("docusign adapter — unconfigured state", () => {
 
   it("docusignProviderStatus reports not configured when no env vars are set", async () => {
     const { docusignProviderStatus } = await import("@finnor/tools");
-    expect(docusignProviderStatus()).toEqual({ configured: false });
+    expect(docusignProviderStatus(null)).toEqual({ configured: false });
   });
 
-  it("requestDocusignSignature throws a clear IntegrationError when not connected, with no network call", async () => {
+  it("rejects an incomplete credential shape before any network call", async () => {
     const fetchSpy = vi.fn();
     vi.stubGlobal("fetch", fetchSpy);
-    const { requestDocusignSignature, IntegrationError } = await import("@finnor/tools");
-    await expect(
-      requestDocusignSignature({
-        tenantId: "00000000-0000-4000-8000-0000000000e4",
-        documentId: "doc-1",
-        signerName: "Jane Doe",
-        signerEmail: "jane@example.com",
-        idempotencyKey: "k1",
-      }),
-    ).rejects.toThrow(IntegrationError);
+    expect(() => createCredentialContextForTesting(TENANT_ID, "docusign", {})).toThrow(/missing integrationKey/);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it("reports configured:true once all four env vars are present", async () => {
     setConfigured();
     const { docusignProviderStatus } = await import("@finnor/tools");
-    expect(docusignProviderStatus()).toEqual({ configured: true });
+    expect(docusignProviderStatus(docusignContext())).toEqual({ configured: true });
   });
 });
 
@@ -97,7 +101,7 @@ describe("docusign adapter — configured, stub-fetch", () => {
       signerEmail: "jane@example.com",
       idempotencyKey: "k1",
       proposalId: "00000000-0000-4000-8000-0000000000aa",
-    });
+    }, docusignContext());
     expect(result).toEqual({ signatureRequestId: "env-123", status: "sent" });
   });
 
@@ -117,7 +121,7 @@ describe("docusign adapter — configured, stub-fetch", () => {
       signerEmail: "jane@example.com",
       idempotencyKey: "k1",
       proposalId: "00000000-0000-4000-8000-0000000000aa",
-    });
+    }, docusignContext());
     const envelopeCall = fetchSpy.mock.calls.find((call: unknown[]) => !String(call[0]).includes("/oauth/token"))!;
     const body = JSON.parse((envelopeCall[1] as { body: string }).body);
     expect(body.customFields.textCustomFields).toEqual(
@@ -138,7 +142,7 @@ describe("docusign adapter — configured, stub-fetch", () => {
         signerName: "Jane Doe",
         signerEmail: "jane@example.com",
         idempotencyKey: "k2",
-      }),
+      }, docusignContext()),
     ).rejects.toThrow(IntegrationError);
   });
 
@@ -152,7 +156,7 @@ describe("docusign adapter — configured, stub-fetch", () => {
         signerName: "Jane Doe",
         signerEmail: "jane@example.com",
         idempotencyKey: "k3",
-      }),
+      }, docusignContext()),
     ).rejects.toMatchObject({ retryable: false });
   });
 
@@ -166,7 +170,7 @@ describe("docusign adapter — configured, stub-fetch", () => {
         signerName: "Jane Doe",
         signerEmail: "jane@example.com",
         idempotencyKey: "k4",
-      }),
+      }, docusignContext()),
     ).rejects.toMatchObject({ retryable: true });
   });
 
@@ -186,7 +190,7 @@ describe("docusign adapter — configured, stub-fetch", () => {
         signerName: "Jane Doe",
         signerEmail: "jane@example.com",
         idempotencyKey: "k5",
-      }),
+      }, docusignContext()),
     ).rejects.toThrow(IntegrationError);
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });

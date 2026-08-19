@@ -27,8 +27,14 @@ function isRetryableAwsError(err: unknown): boolean {
   return !/AccessDenied|ResourceNotFoundException|InvalidRequestException|DecryptionFailure/.test(name);
 }
 
-async function readAwsSecretOnce(client: SecretsManagerClient, secretId: string): Promise<Record<string, string>> {
-  const response = await client.send(new GetSecretValueCommand({ SecretId: secretId }));
+function versionSelector(version?: string): { VersionId?: string; VersionStage?: string } {
+  if (!version) return {};
+  if (version.startsWith("id:")) return { VersionId: version.slice(3) };
+  return { VersionStage: version.startsWith("stage:") ? version.slice(6) : version };
+}
+
+async function readAwsSecretOnce(client: SecretsManagerClient, secretId: string, version?: string): Promise<Record<string, string>> {
+  const response = await client.send(new GetSecretValueCommand({ SecretId: secretId, ...versionSelector(version) }));
   const raw = response.SecretString ?? (response.SecretBinary ? Buffer.from(response.SecretBinary as Uint8Array).toString("utf8") : "");
   if (!raw) throw new Error(`Secret ${secretId} had no value`);
   try {
@@ -44,12 +50,12 @@ async function readAwsSecretOnce(client: SecretsManagerClient, secretId: string)
 
 /** 3 attempts, exponential backoff + jitter — same shape as packages/tools/src/wrap.ts's
  *  wrappedCall, so this codebase has exactly one retry convention, not two. */
-async function readAwsSecret(client: SecretsManagerClient, secretId: string): Promise<Record<string, string>> {
+async function readAwsSecret(client: SecretsManagerClient, secretId: string, version?: string): Promise<Record<string, string>> {
   const attempts = 3;
   let lastErr: unknown;
   for (let attempt = 1; attempt <= attempts; attempt++) {
     try {
-      return await readAwsSecretOnce(client, secretId);
+      return await readAwsSecretOnce(client, secretId, version);
     } catch (err) {
       lastErr = err;
       if (!isRetryableAwsError(err) || attempt === attempts) break;
@@ -58,6 +64,14 @@ async function readAwsSecret(client: SecretsManagerClient, secretId: string): Pr
     }
   }
   throw lastErr;
+}
+
+/** Read one opaque AWS secret reference without mutating process.env. Tenant-scoped
+ * credential resolution uses this path; ensureSecretsLoaded remains the explicit
+ * legacy/system bootstrap for process-wide infrastructure secrets. */
+export async function readAwsSecretReference(secretId: string, version?: string): Promise<Record<string, string>> {
+  const client = new SecretsManagerClient({ region: process.env.AWS_REGION ?? process.env.AWS_BEDROCK_REGION ?? "us-east-1" });
+  return readAwsSecret(client, secretId, version);
 }
 
 /** Loads managed secrets into process memory only; never logs a secret value. */

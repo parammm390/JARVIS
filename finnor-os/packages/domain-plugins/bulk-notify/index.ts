@@ -17,7 +17,7 @@
 import type { DomainEnginePlugin } from "../shared/plugin-interface";
 import type { DraftAction, ExecutionResult, ValidationResult, DomainPolicy, DomainAction } from "@finnor/shared-types";
 import type { ToolRegistry } from "@finnor/tools";
-import { agentKeyForPersona, personaAssistantId, reserveBudget, releaseBudget, DAILY_VAPI_CALL_CAP } from "@finnor/tools";
+import { agentKeyForPersona, resolveCapabilityBindingsForTenant, resolveTenantVapiContext, reserveBudget, releaseBudget, DAILY_VAPI_CALL_CAP } from "@finnor/tools";
 import { withTenant, households, communicationsLog, serviceVisits, equipment, tenants, createBusinessOperation } from "@finnor/db";
 import { invoices, maintenanceAgreements } from "@finnor/db";
 import { churnRisk } from "@finnor/read-models";
@@ -580,7 +580,11 @@ export const bulkNotifyPlugin: DomainEnginePlugin = {
     // Marketing calls always use the real win-back assistant unless the owner chose a
     // narrower specialized persona. There is no invented sixth/ninth calling agent.
     const voicePersona = draft.payload.voicePersona ? String(draft.payload.voicePersona) : "winback";
-    const assistantId = personaAssistantId(voicePersona) ?? process.env.VAPI_ASSISTANT_ID;
+    const communicationsMode = channel === "call" ? (await resolveCapabilityBindingsForTenant(tenantId)).communications.mode : "emulator";
+    const vapiContext = channel === "call" && communicationsMode === "vapi" ? await resolveTenantVapiContext(tenantId) : null;
+    const assistantId = vapiContext
+      ? (vapiContext.credentials.assistantIds?.[voicePersona] ?? (voicePersona === "main" ? vapiContext.credentials.assistantId : undefined))
+      : "sandbox-emulator";
     const agentKey = agentKeyForPersona(voicePersona);
     if (targets.length === 0) {
       return {
@@ -621,6 +625,7 @@ export const bulkNotifyPlugin: DomainEnginePlugin = {
         const batch = targets.slice(queued, queued + reservation.granted);
         const campaignName = `finnor-winback-${domainActionId}-${window.localDate}-${batchIndex}`;
         const result = await tools.call("vapi_create_campaign", {
+          tenantId,
           name: campaignName,
           assistantId,
           schedulePlan: { earliestAt: window.earliestAt.toISOString(), latestAt: window.latestAt.toISOString() },

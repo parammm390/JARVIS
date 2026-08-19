@@ -92,7 +92,7 @@ export const marketingPlugin: DomainEnginePlugin = {
       return {
         actionType,
         summary: `Pull ad performance for the last ${days} days.`,
-        payload: { windowDays: days },
+        payload: { tenantId: policy.tenantId, windowDays: days },
         requiresConfirmation: false, // read-only
       };
     }
@@ -101,7 +101,7 @@ export const marketingPlugin: DomainEnginePlugin = {
       return {
         actionType,
         summary: `Launch a "${p.objective ?? "leads"}" ad campaign named "${p.name}" at $${p.dailyBudgetUsd}/day${p.targetZip ? ` targeting ${p.targetZip}` : ""}. Approve?`,
-        payload: { ...p },
+        payload: { ...p, tenantId: policy.tenantId },
         requiresConfirmation: policy.requiresConfirmation,
       };
     }
@@ -129,7 +129,7 @@ export const marketingPlugin: DomainEnginePlugin = {
 
   async execute(draft: DraftAction, tools: ToolRegistry): Promise<ExecutionResult> {
     if (draft.actionType === SUMMARIZE) {
-      const r = await tools.call("get_ad_performance", { windowDays: draft.payload.windowDays ?? 7 });
+      const r = await tools.call("get_ad_performance", { tenantId: draft.payload.tenantId, windowDays: draft.payload.windowDays ?? 7 });
       if (!r.ok) {
         return { status: r.integrationUnavailable ? "integration_unavailable" : "failure", output: {}, error: r.error };
       }
@@ -143,6 +143,7 @@ export const marketingPlugin: DomainEnginePlugin = {
 
     if (draft.actionType === LAUNCH_CAMPAIGN) {
       const r = await tools.call("launch_ad_campaign", {
+        tenantId: draft.payload.tenantId,
         name: draft.payload.name,
         dailyBudgetUsd: draft.payload.dailyBudgetUsd,
         objective: draft.payload.objective,

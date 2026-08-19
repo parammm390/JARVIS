@@ -1,5 +1,7 @@
 # JARVIS 95% — Certification (Phase 8)
 
+> **Historical certification evidence.** Provider references below are not current deployment instructions.
+
 **Status as of 2026-07-21: NOT YET CERTIFIED.** Per the pack's own exit gate, this
 document signs off only when all 12 boxes below carry real, linked evidence. As of
 today: **6 of 12 fully met, 4 partial with a precisely-named remaining step, 2 not

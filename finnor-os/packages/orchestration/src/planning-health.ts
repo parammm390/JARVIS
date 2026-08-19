@@ -2,9 +2,9 @@
 // state that execution uses.  This keeps an unavailable provider from becoming a
 // pending action that is guaranteed to fail later.
 
-import { providerCircuitState, tenantIntegrations, withTenant } from "@finnor/db";
-import { resolveCapabilityBindingsForTenant, type CapabilityBindingsReport } from "@finnor/tools";
-import { eq, inArray } from "drizzle-orm";
+import { tenantIntegrations, withTenant } from "@finnor/db";
+import { circuitSnapshot, resolveCapabilityBindingsForTenant, type CapabilityBindingsReport } from "@finnor/tools";
+import { eq } from "drizzle-orm";
 
 type Capability = keyof CapabilityBindingsReport;
 
@@ -44,9 +44,7 @@ export async function buildPlanningHealthContext(tenantId: string): Promise<Plan
     withTenant(tenantId, (db) => db.select().from(tenantIntegrations).where(eq(tenantIntegrations.tenantId, tenantId))),
   ]);
   const providerNames = [...new Set(CAPABILITIES.map((capability) => bindings[capability].mode))];
-  const circuits = await withTenant(tenantId, (db) =>
-    db.select().from(providerCircuitState).where(inArray(providerCircuitState.provider, providerNames)),
-  );
+  const circuits = await Promise.all(providerNames.map((provider) => circuitSnapshot(provider, tenantId)));
   const integrationByCapability = new Map(integrationRows.map((row) => [row.capability, row]));
   const circuitByProvider = new Map(circuits.map((row) => [row.provider, row]));
 

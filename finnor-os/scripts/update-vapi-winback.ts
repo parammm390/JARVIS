@@ -7,7 +7,8 @@
 
 export {};
 
-const ASSISTANT_ID = process.env.VAPI_WINBACK_ASSISTANT_ID ?? "787ec013-a44f-474d-a719-c5d37c0372ae";
+import { resolveTenantCredentialContext, type TenantCredentialContext } from "@finnor/security";
+
 const API = "https://api.vapi.ai";
 
 const WINBACK_PROMPT = `You are Maya, the warm, perceptive win-back specialist for {{dealerName}}. You are calling {{customerName}}, an existing customer, to reconnect like a thoughtful human—not to read a database back to them.
@@ -36,14 +37,23 @@ type Assistant = Record<string, unknown> & {
   model?: Record<string, unknown> & { messages?: Array<Record<string, unknown>> };
 };
 
-function headers(): Record<string, string> {
-  const apiKey = process.env.VAPI_API_KEY;
-  if (!apiKey) throw new Error("VAPI_API_KEY is required");
-  return { authorization: `Bearer ${apiKey}`, "content-type": "application/json" };
+function tenantIdArg(): string {
+  const index = process.argv.indexOf("--tenant-id");
+  const tenantId = index >= 0 ? process.argv[index + 1] : undefined;
+  if (!tenantId) throw new Error("--tenant-id is required");
+  return tenantId;
 }
 
-async function readAssistant(): Promise<Assistant> {
-  const response = await fetch(`${API}/assistant/${ASSISTANT_ID}`, { headers: headers() });
+function assistantId(context: TenantCredentialContext<"vapi">): string {
+  return context.credentials.assistantIds?.winback ?? context.credentials.assistantId;
+}
+
+function headers(context: TenantCredentialContext<"vapi">): Record<string, string> {
+  return { authorization: `Bearer ${context.credentials.apiKey}`, "content-type": "application/json" };
+}
+
+async function readAssistant(context: TenantCredentialContext<"vapi">): Promise<Assistant> {
+  const response = await fetch(`${API}/assistant/${assistantId(context)}`, { headers: headers(context) });
   if (!response.ok) throw new Error(`Vapi assistant read failed (${response.status})`);
   return response.json() as Promise<Assistant>;
 }
@@ -57,12 +67,12 @@ function withWinbackPrompt(model: Assistant["model"]): Record<string, unknown> {
   return { ...model, messages, tools: [], toolIds: [] };
 }
 
-function audit(assistant: Assistant): Record<string, unknown> {
+function audit(assistant: Assistant, configuredAssistantId: string): Record<string, unknown> {
   const messages = assistant.model?.messages ?? [];
   const system = messages.find((message) => message.role === "system");
   const prompt = typeof system?.content === "string" ? system.content : "";
   return {
-    assistantId: assistant.id ?? ASSISTANT_ID,
+    assistantId: assistant.id ?? configuredAssistantId,
     name: assistant.name ?? "unknown",
     provider: assistant.model?.provider ?? null,
     model: assistant.model?.model ?? null,
@@ -83,26 +93,28 @@ function audit(assistant: Assistant): Record<string, unknown> {
 }
 
 async function main(): Promise<void> {
-  const before = await readAssistant();
+  const context = await resolveTenantCredentialContext(tenantIdArg(), "vapi");
+  const configuredAssistantId = assistantId(context);
+  const before = await readAssistant(context);
   if (!process.argv.includes("--apply")) {
-    console.log(JSON.stringify({ mode: "audit", ...audit(before) }, null, 2));
+    console.log(JSON.stringify({ mode: "audit", ...audit(before, configuredAssistantId) }, null, 2));
     return;
   }
   const model = withWinbackPrompt(before.model);
-  const response = await fetch(`${API}/assistant/${ASSISTANT_ID}`, {
+  const response = await fetch(`${API}/assistant/${configuredAssistantId}`, {
     method: "PATCH",
-    headers: headers(),
+    headers: headers(context),
     body: JSON.stringify({ model }),
   });
   if (!response.ok) throw new Error(`Vapi assistant update failed (${response.status})`);
-  const after = await readAssistant();
-  const result = audit(after);
+  const after = await readAssistant(context);
+  const result = audit(after, configuredAssistantId);
   if (!result.variableContractPresent || !result.customerToolProhibitionPresent || !result.humanToneContractPresent || !result.customerToolsRemoved) {
     // Best-effort rollback to the exact prior model if verification contradicts the
     // requested contract. Never leave a half-applied customer-calling prompt.
-    await fetch(`${API}/assistant/${ASSISTANT_ID}`, {
+    await fetch(`${API}/assistant/${configuredAssistantId}`, {
       method: "PATCH",
-      headers: headers(),
+      headers: headers(context),
       body: JSON.stringify({ model: before.model }),
     }).catch(() => undefined);
     throw new Error("Vapi assistant verification failed; prior model was restored");

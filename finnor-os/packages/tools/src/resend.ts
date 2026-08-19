@@ -10,6 +10,9 @@
 import { IntegrationError } from "./errors";
 import { claimBudget } from "./provider-budget";
 import { withCircuitBreaker } from "./provider-circuit-breaker";
+import type { TenantCredentialContext } from "@finnor/security";
+
+export type ResendCredentialContext = TenantCredentialContext<"resend">;
 
 const RESEND_API_URL = "https://api.resend.com/emails";
 
@@ -28,18 +31,14 @@ export function setResendFetchForTesting(f: FetchLike | null): void {
   fetchOverride = f;
 }
 
-function fromAddress(): string {
-  return process.env.RESEND_FROM_ADDRESS ?? "Finnor <notifications@finnorai.com>";
-}
-
 /** *@finnorai.com (any internal address) or the one configured owner address —
  *  RESEND_ALLOWLIST_OWNER_EMAIL, never hardcoded into source (an owner's personal
  *  address is config, not code). Exported so callers can pre-check without spending a
  *  budget claim on a recipient that would be blocked anyway. */
-export function isAllowlistedRecipient(to: string): boolean {
+export function isAllowlistedRecipient(to: string, context: ResendCredentialContext): boolean {
   const lower = to.trim().toLowerCase();
   if (lower.endsWith("@finnorai.com")) return true;
-  const owner = process.env.RESEND_ALLOWLIST_OWNER_EMAIL?.trim().toLowerCase();
+  const owner = context.credentials.allowlistOwnerEmail?.trim().toLowerCase();
   return Boolean(owner) && lower === owner;
 }
 
@@ -52,8 +51,9 @@ export interface ResendSendInput {
 
 export type ResendSendResult = { sent: true; messageId: string } | { sent: false; blocked: true; reason: string };
 
-export async function sendResendEmail(input: ResendSendInput): Promise<ResendSendResult> {
-  if (!isAllowlistedRecipient(input.to)) {
+export async function sendResendEmail(input: ResendSendInput, context: ResendCredentialContext): Promise<ResendSendResult> {
+  if (context.tenantId !== input.tenantId) throw new IntegrationError("resend", "Resend credential context tenant mismatch", false);
+  if (!isAllowlistedRecipient(input.to, context)) {
     return {
       sent: false,
       blocked: true,
@@ -66,21 +66,17 @@ export async function sendResendEmail(input: ResendSendInput): Promise<ResendSen
     return { sent: false, blocked: true, reason: `daily Resend send cap reached (${budget.used}/${budget.cap})` };
   }
 
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) throw new IntegrationError("resend", "RESEND_API_KEY is not set", false);
-
   const messageId = await withCircuitBreaker(
     "resend",
     async () => {
       const doFetch = fetchOverride ?? fetch;
       const res = await doFetch(RESEND_API_URL, {
         method: "POST",
-        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ from: fromAddress(), to: [input.to], subject: input.subject, html: input.html }),
+        headers: { Authorization: `Bearer ${context.credentials.apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ from: context.credentials.fromAddress, to: [input.to], subject: input.subject, html: input.html }),
       });
       if (!res.ok) {
-        const body = await res.text().catch(() => "");
-        throw new IntegrationError("resend", `send failed: ${res.status} ${body}`, res.status >= 500 || res.status === 429);
+        throw new IntegrationError("resend", `send failed (${res.status})`, res.status >= 500 || res.status === 429);
       }
       const json = (await res.json()) as { id?: string };
       return json.id ?? "sent";
@@ -94,6 +90,6 @@ export async function sendResendEmail(input: ResendSendInput): Promise<ResendSen
 /** Configured-state only, same posture as ghlIntegrationStatus() — no cheap
  *  authenticated no-op exists on Resend's API to actively probe, so this never
  *  fabricates a healthy/unhealthy verdict it can't actually back up. */
-export function resendProviderStatus(): { configured: boolean } {
-  return { configured: Boolean(process.env.RESEND_API_KEY) };
+export function resendProviderStatus(context: ResendCredentialContext | null): { configured: boolean } {
+  return { configured: Boolean(context) };
 }

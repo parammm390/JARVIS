@@ -15,6 +15,12 @@
 // extra hoop added here.
 
 import { IntegrationError, type ProviderHealth } from "./errors";
+import type { TenantCredentialContext } from "@finnor/security";
+
+export interface AdsCredentialContexts {
+  meta?: TenantCredentialContext<"meta_ads">;
+  googleAds?: TenantCredentialContext<"google_ads">;
+}
 
 export interface AdCampaignSummary {
   campaign: string;
@@ -34,53 +40,37 @@ export interface AdPerformanceReport {
   totalConversions: number;
 }
 
-function metaConfigured(): boolean {
-  return Boolean(process.env.META_ADS_ACCESS_TOKEN && process.env.META_ADS_ACCOUNT_ID);
-}
-
-function googleAdsConfigured(): boolean {
-  return Boolean(
-    process.env.GOOGLE_ADS_DEVELOPER_TOKEN &&
-      process.env.GOOGLE_ADS_REFRESH_TOKEN &&
-      process.env.GOOGLE_ADS_CLIENT_ID &&
-      process.env.GOOGLE_ADS_CLIENT_SECRET &&
-      process.env.GOOGLE_ADS_CUSTOMER_ID,
-  );
-}
-
-export function adsProviderStatus(): { meta: boolean; googleAds: boolean } {
-  return { meta: metaConfigured(), googleAds: googleAdsConfigured() };
+export function adsProviderStatus(contexts: AdsCredentialContexts): { meta: boolean; googleAds: boolean } {
+  return { meta: Boolean(contexts.meta), googleAds: Boolean(contexts.googleAds) };
 }
 
 /** Real, cheap Meta call (account metadata, not insights) — proves the token is
  *  actually valid and scoped to this account, not just present in the environment. */
-async function testMetaConnection(): Promise<ProviderHealth> {
-  if (!metaConfigured()) return { configured: false, healthy: null };
+async function testMetaConnection(context?: TenantCredentialContext<"meta_ads">): Promise<ProviderHealth> {
+  if (!context) return { configured: false, healthy: null };
   try {
-    const token = process.env.META_ADS_ACCESS_TOKEN!;
-    const accountId = process.env.META_ADS_ACCOUNT_ID!.replace(/^act_/, "");
-    const res = await fetch(
-      `https://graph.facebook.com/v21.0/act_${accountId}?fields=id,name&access_token=${encodeURIComponent(token)}`,
-    );
+    const accountId = context.credentials.accountId.replace(/^act_/, "");
+    const res = await fetch(`https://graph.facebook.com/v21.0/act_${accountId}?fields=id,name`, {
+      headers: { authorization: `Bearer ${context.credentials.accessToken}` },
+    });
     if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      return { configured: true, healthy: false, error: `(${res.status}) ${body.slice(0, 200)}` };
+      return { configured: true, healthy: false, error: `Meta account check failed (${res.status})` };
     }
     return { configured: true, healthy: true };
-  } catch (err) {
-    return { configured: true, healthy: false, error: (err as Error).message };
+  } catch {
+    return { configured: true, healthy: false, error: "Meta authenticated connection failed" };
   }
 }
 
 /** Real Google OAuth2 refresh — if this succeeds, the client id/secret/refresh token
  *  are all actually valid, not just present. Cheaper than a real campaign query. */
-async function testGoogleAdsConnection(): Promise<ProviderHealth> {
-  if (!googleAdsConfigured()) return { configured: false, healthy: null };
+async function testGoogleAdsConnection(context?: TenantCredentialContext<"google_ads">): Promise<ProviderHealth> {
+  if (!context) return { configured: false, healthy: null };
   try {
-    await googleAccessToken();
+    await googleAccessToken(context);
     return { configured: true, healthy: true };
-  } catch (err) {
-    return { configured: true, healthy: false, error: (err as Error).message };
+  } catch {
+    return { configured: true, healthy: false, error: "Google Ads authenticated connection failed" };
   }
 }
 
@@ -88,24 +78,21 @@ async function testGoogleAdsConnection(): Promise<ProviderHealth> {
  *  endpoint and anything voice-queryable ("are my ad integrations healthy?"). Distinct
  *  from adsProviderStatus() above (a cheap sync presence check other callers already
  *  use) — this one costs a real network round trip per configured provider. */
-export async function testAdsConnections(): Promise<{ meta: ProviderHealth; googleAds: ProviderHealth }> {
-  const [meta, googleAds] = await Promise.all([testMetaConnection(), testGoogleAdsConnection()]);
+export async function testAdsConnections(contexts: AdsCredentialContexts): Promise<{ meta: ProviderHealth; googleAds: ProviderHealth }> {
+  const [meta, googleAds] = await Promise.all([testMetaConnection(contexts.meta), testGoogleAdsConnection(contexts.googleAds)]);
   return { meta, googleAds };
 }
 
 /** Real Meta Marketing API call — GET /act_{id}/insights, real fields, no fabrication. */
-async function fetchMetaPerformance(windowDays: number): Promise<AdPerformanceReport> {
-  const token = process.env.META_ADS_ACCESS_TOKEN!;
-  const accountId = process.env.META_ADS_ACCOUNT_ID!.replace(/^act_/, "");
+async function fetchMetaPerformance(windowDays: number, context: TenantCredentialContext<"meta_ads">): Promise<AdPerformanceReport> {
+  const accountId = context.credentials.accountId.replace(/^act_/, "");
   const url =
     `https://graph.facebook.com/v21.0/act_${accountId}/insights` +
     `?level=campaign&date_preset=last_${Math.min(Math.max(windowDays, 1), 90)}d` +
-    `&fields=campaign_name,spend,impressions,clicks,ctr,cpc,actions` +
-    `&access_token=${encodeURIComponent(token)}`;
-  const res = await fetch(url);
+    `&fields=campaign_name,spend,impressions,clicks,ctr,cpc,actions`;
+  const res = await fetch(url, { headers: { authorization: `Bearer ${context.credentials.accessToken}` } });
   if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new IntegrationError("meta_ads", `Meta insights call failed (${res.status}): ${body.slice(0, 300)}`, res.status >= 500);
+    throw new IntegrationError("meta_ads", `Meta insights call failed (${res.status})`, res.status >= 500);
   }
   const data = (await res.json()) as { data?: Array<Record<string, unknown>> };
   const campaigns: AdCampaignSummary[] = (data.data ?? []).map((row) => {
@@ -131,20 +118,19 @@ async function fetchMetaPerformance(windowDays: number): Promise<AdPerformanceRe
 }
 
 /** OAuth2 refresh -> short-lived access token, per Google's standard token endpoint. */
-async function googleAccessToken(): Promise<string> {
+async function googleAccessToken(context: TenantCredentialContext<"google_ads">): Promise<string> {
   const res = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
-      client_id: process.env.GOOGLE_ADS_CLIENT_ID!,
-      client_secret: process.env.GOOGLE_ADS_CLIENT_SECRET!,
-      refresh_token: process.env.GOOGLE_ADS_REFRESH_TOKEN!,
+      client_id: context.credentials.clientId,
+      client_secret: context.credentials.clientSecret,
+      refresh_token: context.credentials.refreshToken,
       grant_type: "refresh_token",
     }),
   });
   if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new IntegrationError("google_ads", `OAuth token refresh failed (${res.status}): ${body.slice(0, 300)}`, res.status >= 500);
+    throw new IntegrationError("google_ads", `OAuth token refresh failed (${res.status})`, res.status >= 500);
   }
   const data = (await res.json()) as { access_token?: string };
   if (!data.access_token) throw new IntegrationError("google_ads", "OAuth refresh returned no access_token", false);
@@ -152,9 +138,9 @@ async function googleAccessToken(): Promise<string> {
 }
 
 /** Real Google Ads API call — searchStream with GAQL, real fields, no fabrication. */
-async function fetchGoogleAdsPerformance(windowDays: number): Promise<AdPerformanceReport> {
-  const accessToken = await googleAccessToken();
-  const customerId = process.env.GOOGLE_ADS_CUSTOMER_ID!.replace(/-/g, "");
+async function fetchGoogleAdsPerformance(windowDays: number, context: TenantCredentialContext<"google_ads">): Promise<AdPerformanceReport> {
+  const accessToken = await googleAccessToken(context);
+  const customerId = context.credentials.customerId.replace(/-/g, "");
   const gaql = `
     SELECT campaign.name, metrics.cost_micros, metrics.impressions, metrics.clicks,
            metrics.ctr, metrics.average_cpc, metrics.conversions
@@ -165,14 +151,13 @@ async function fetchGoogleAdsPerformance(windowDays: number): Promise<AdPerforma
     method: "POST",
     headers: {
       authorization: `Bearer ${accessToken}`,
-      "developer-token": process.env.GOOGLE_ADS_DEVELOPER_TOKEN!,
+      "developer-token": context.credentials.developerToken,
       "content-type": "application/json",
     },
     body: JSON.stringify({ query: gaql }),
   });
   if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new IntegrationError("google_ads", `Google Ads query failed (${res.status}): ${body.slice(0, 300)}`, res.status >= 500);
+    throw new IntegrationError("google_ads", `Google Ads query failed (${res.status})`, res.status >= 500);
   }
   const chunks = (await res.json()) as Array<{ results?: Array<Record<string, unknown>> }>;
   const rows = chunks.flatMap((c) => c.results ?? []);
@@ -222,8 +207,8 @@ export function demoAdPerformance(windowDays: number): AdPerformanceReport {
 }
 
 /** Entry point the marketing plugin calls — provider selection is automatic. */
-export async function getAdPerformance(windowDays = 7): Promise<AdPerformanceReport> {
-  if (metaConfigured()) return fetchMetaPerformance(windowDays);
-  if (googleAdsConfigured()) return fetchGoogleAdsPerformance(windowDays);
+export async function getAdPerformance(windowDays = 7, contexts: AdsCredentialContexts = {}): Promise<AdPerformanceReport> {
+  if (contexts.meta) return fetchMetaPerformance(windowDays, contexts.meta);
+  if (contexts.googleAds) return fetchGoogleAdsPerformance(windowDays, contexts.googleAds);
   return demoAdPerformance(windowDays);
 }

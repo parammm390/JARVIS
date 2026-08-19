@@ -4,6 +4,7 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { IntegrationError } from "./errors";
+import type { TenantCredentialContext } from "@finnor/security";
 
 export interface McpConnection {
   client: Client;
@@ -23,26 +24,22 @@ async function connect(
     await client.connect(transport);
     return { client, close: () => client.close() };
   } catch (err) {
-    throw new IntegrationError(integration, `MCP connect failed: ${(err as Error).message}`, true);
+    throw new IntegrationError(integration, "MCP connect failed", true);
   }
 }
 
 /** GoHighLevel official MCP server (§28). Private Integration Token, least-privilege scopes. */
-export async function connectGhl(): Promise<McpConnection> {
-  const token = process.env.GOHIGHLEVEL_API_KEY;
-  if (!token) throw new IntegrationError("ghl", "GOHIGHLEVEL_API_KEY is not set", false);
+export async function connectGhl(context: TenantCredentialContext<"ghl">): Promise<McpConnection> {
   return connect("ghl", "https://services.leadconnectorhq.com/mcp/", {
-    Authorization: `Bearer ${token}`,
-    ...(process.env.GHL_LOCATION_ID ? { locationId: process.env.GHL_LOCATION_ID } : {}),
+    Authorization: `Bearer ${context.credentials.apiKey}`,
+    ...(context.credentials.locationId ? { locationId: context.credentials.locationId } : {}),
   });
 }
 
 /** Vapi MCP server for natural-language-to-outbound-call (§28). */
-export async function connectVapi(): Promise<McpConnection> {
-  const token = process.env.VAPI_API_KEY;
-  if (!token) throw new IntegrationError("vapi", "VAPI_API_KEY is not set", false);
+export async function connectVapi(context: TenantCredentialContext<"vapi">): Promise<McpConnection> {
   return connect("vapi", "https://mcp.vapi.ai/mcp", {
-    Authorization: `Bearer ${token}`,
+    Authorization: `Bearer ${context.credentials.apiKey}`,
   });
 }
 
@@ -56,6 +53,6 @@ export async function callMcpTool(
     const result = await conn.client.callTool({ name: toolName, arguments: args });
     return { content: result.content ?? [], isError: result.isError ?? false };
   } catch (err) {
-    throw new IntegrationError(integration, `tool ${toolName} failed: ${(err as Error).message}`, true);
+    throw new IntegrationError(integration, `tool ${toolName} failed`, true);
   }
 }

@@ -8,32 +8,35 @@ aspirational.
 ## 1. Provision the tenant
 
 ```
-npx tsx scripts/provision-tenant.ts --name="Acme Water Co" --ownerEmail=owner@acme.com [--timezone=America/Chicago] [--reviewLinkUrl=https://g.page/r/...]
+npx tsx scripts/provision-tenant.ts --clientKey=acme-water --name="Acme Water Co" --ownerEmail=owner@acme.com [--timezone=America/Chicago] [--reviewLinkUrl=https://g.page/r/...]
+# or, for the versioned Phase 1 manifest foundation:
+npx tsx scripts/provision-tenant.ts --manifest=docs/client-manifest.example.json
 ```
 
 This one command (`scripts/provision-tenant.ts`, extended in B6) does four real
 things, each already independently tested elsewhere in this codebase:
-1. Creates the tenant row.
+1. Resolves the tenant by its immutable, database-unique `clientKey`; reruns converge
+   the same tenant rather than creating another row.
 2. Seeds all 42 action-type policies + the price book via `seedTenantPolicies()` —
    the exact function `scripts/seed-tenant-policies.ts`'s own CLI calls (used for
    real to provision both the primary tenant and Dealer Zero in Phase 3).
 3. Creates all nine integration checklist rows (native CRM/scheduling/inventory/documents;
    explicitly labeled emulator rows for unconfigured external providers).
-4. Creates the owner's real Supabase login via `scripts/create-user.ts` (used for
-   real to create the actual production owner account in Phase 1).
+4. Ensures the owner's Supabase login and application user. An email already owned by
+   another tenant hard-fails before tenant or auth mutation; it is never reassigned.
+
+Run provisioning with the migration/admin `DATABASE_URL`, not the restricted runtime
+role. The command deliberately disables RLS for its global identity preflight and will
+fail before touching Supabase Auth if the connection cannot perform that admin check.
 
 If `--reviewLinkUrl` is omitted, `create_review_request`'s policy is left as
 `PLACEHOLDER_NEEDS_REAL_VALUE` — pass it once the dealer's real Google Business review
 link exists (get it from Google Business Profile → "Get more reviews").
 
-**Not yet run end-to-end this session** — deliberately, to avoid creating a real
-Supabase Auth user and a real tenant against production for a throwaway test. Its two
-real building blocks (`seedTenantPolicies`, `create-user.ts`) are each independently
-proven in production already (Phase 1 and Phase 3). The orchestration itself is a
-straightforward sequence of two already-proven calls plus one row insert — low risk,
-but genuinely untested as a single script until the first real dealer runs it. Run it
-once against staging first when that day comes, exactly as every other phase's own
-"staging first" rule requires.
+The complete convergence path is covered against real Postgres by
+`tests/integration/client-provisioning.test.ts`, including ten reruns, partial recovery,
+tenant isolation, policy revision behavior, and settings/integration/location drift.
+Run the command against staging before production as usual.
 
 After provisioning, confirm readiness before touching any real data:
 ```
@@ -44,48 +47,42 @@ Expect `41/42` or `42/42` configured (only `create_review_request` may still sho
 
 ## 2. Import the dealer's real data
 
-Real customer data import uses the same `@finnor/data-platform` primitives
-(`createLead`, and its siblings for households/equipment/service history) that
-`scripts/import-synthetic-dealer.ts` demonstrates against fixture data — that script
-is the reference implementation, proven idempotent and dedup-aware
-(`tests/integration/canonical-data-import.test.ts`): replaying the same import twice
-produces zero duplicates, and malformed/ambiguous rows (missing contact info, likely
-duplicate customers) surface as real `data_quality_findings` rows instead of being
-silently written or silently dropped.
+Real customer data runs through `@finnor/import-engine`, which maps CSV/JSON/JSONL
+into the existing `@finnor/data-platform` canonical write boundary. The synthetic
+dealer script now calls that same engine; it is not a separate importer. See
+`docs/declarative-client-imports.md` for the mapping contract, supported domains,
+identity precedence, relationship order, safe update modes, and quarantine model.
 
 **Procedure:**
-1. Get the dealer's export (most water-treatment CRMs/spreadsheets export CSV — a
-   thin CSV→`SyntheticLeadFixture`-shaped mapper is the only new code a real import
-   needs; the import primitive itself does not change).
-2. Run the import against the real tenant, exactly like the synthetic version:
-   `importSyntheticDealerData(tenantId)`-shaped call with the dealer's real rows.
-3. Check the tenant's `data-quality` read-model (`GET /api/read-models/data-quality`)
-   immediately after — every malformed/duplicate-candidate row the import couldn't
-   confidently resolve is there, not silently dropped.
-4. Re-run the same import file a second time and confirm the created-count is 0 (the
-   idempotency proof, same assertion the test file already makes) — this is the real
-   safety net if the dealer's export needs to be re-run after a correction.
+1. Add a validated mapping under the Phase 1 manifest's `imports` array (or a standalone
+   version-controlled mapping JSON). No client-specific TypeScript importer is needed.
+2. Dry-run with `npm run import:client -- --tenantId=<uuid> --manifest=<path>
+   --importKey=<key> --file=<export> --dry-run`; confirm the report and quarantine rows.
+3. Run without `--dry-run`. A nonzero quarantine count returns exit code 2 and must be
+   reviewed; valid rows still commit independently.
+4. Import parents before children, then rerun corrected/previously blocked child files.
+5. Replay each final file and confirm `created: 0`; source references and exact identity
+   rules prevent duplicates while safe update modes protect trusted canonical values.
 
 ## 3. Per-provider live-flip procedure (test/sandbox → live)
 
-Every binding is one environment variable — this was Phase 4's own design goal, and
-it holds. **General procedure, same for every provider below:** get the provider's
-real live/production credentials from the dealer (never test/sandbox keys), set them
-via the secrets flow (`docs/secrets-runbook.md` if `SECRETS_PROVIDER=aws-secrets-manager`
-is active, else plain env vars), flip the one `*_BINDING` env var, redeploy `api` +
-`finnor-worker`, then run the affected workflow end-to-end against the dealer's own
-tenant before considering it live.
+External provider activation is tenant-scoped. **General procedure:** create the
+provider-specific JSON secret under `finnor/tenants/<tenant-id>/<provider>`, put only
+its reference/version on that tenant's `tenant_integrations` row (or manifest
+`integration.credential`), set that row's binding/mode, then run the tenant-authenticated
+setup/status probe and affected workflow. No process env mutation or per-tenant
+redeploy is part of activation. See `docs/secrets-runbook.md`.
 
-| Provider | Binding var | What the dealer needs to supply | Reference |
+| Provider | Tenant binding | What the dealer needs to supply | Reference |
 |---|---|---|---|
-| Voice (Vapi) | `COMMUNICATIONS_BINDING=vapi` | A real Vapi phone number for their business (or reuse Finnor's own dialing number if the dealer is fine sharing it — ask first) | `owner-actions.md` §7 Vapi section — exact steps already run once for Finnor's own primary tenant |
-| CRM + scheduling | `CRM_BINDING`/`SCHEDULING_BINDING=native` | Nothing — this is Finnor's own database, already the system of record, already live for every tenant today | `owner-actions.md` §6 |
-| Accounting (QuickBooks) | `ACCOUNTING_BINDING=quickbooks`, `QUICKBOOKS_ENVIRONMENT=production` | Their real QuickBooks Online company + OAuth consent (one click on Intuit's screen) | `owner-actions.md` §7 |
-| Payments (Stripe) | `PAYMENTS_BINDING=stripe` | Their real Stripe account, live secret key (`sk_live_...`), and a real webhook signing secret once the endpoint is live | `owner-actions.md` §7 |
-| E-sign (DocuSign) | `ESIGN_BINDING=docusign` | Their real DocuSign account (not the demo/developer one), integration key + RSA keypair | `owner-actions.md` §7 |
-| Marketing (Meta/Google Ads) | `MARKETING_BINDING=ads` | Their real ad accounts; `launch_ad_campaign` creates PAUSED campaigns only, forever — real spend requires a separate manual approval outside this system, by design | `owner-actions.md` §7 |
-| Documents | `DOCUMENTS_BINDING=native` | Nothing — already real (pdf-lib, Postgres-backed) for every tenant today | Phase 4 |
-| Inventory | `INVENTORY_BINDING=native` | Nothing — already real for every tenant today | Phase 4 |
+| Voice (Vapi) | `communications → vapi` | Their Vapi account, assistant, and phone-number identifiers | `owner-actions.md` §7 |
+| CRM + scheduling | `crm/scheduling → native` or `crm → ghl` | GHL token/location/calendar only when GHL is selected | `owner-actions.md` §6 |
+| Accounting (QuickBooks) | `accounting → quickbooks` | Their QuickBooks Online company + OAuth consent | `owner-actions.md` §7 |
+| Payments (Stripe) | `payments → stripe` | Their Stripe account key and webhook signing secret | `owner-actions.md` §7 |
+| E-sign (DocuSign) | `esign → docusign` | Their DocuSign account, integration key, RSA keypair, and Connect secret | `owner-actions.md` §7 |
+| Marketing (Meta/Google Ads) | `marketing → meta_ads/google_ads` | Their ad account and OAuth/token material | `owner-actions.md` §7 |
+| Documents | `documents → native` | Nothing — already real (PDF + Postgres) | Phase 4 |
+| Inventory | `inventory → native` | Nothing — already real | Phase 4 |
 
 **Database role:** every new tenant automatically gets the same least-privilege
 `finnor_app` database role protection as every existing tenant (Phase 8, §8.1) — RLS

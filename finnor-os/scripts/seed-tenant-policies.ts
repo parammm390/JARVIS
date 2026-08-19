@@ -14,11 +14,11 @@
 //   npx tsx scripts/seed-tenant-policies.ts --verify   (no writes — prints the registered action-type count)
 
 import "dotenv/config";
-import { withTenant, closePool, domainPolicies, domainPolicyRevisions } from "@finnor/db";
+import { isDeepStrictEqual } from "node:util";
+import { withTenant, closePool, domainPolicies, domainPolicyRevisions, priceBookItems } from "@finnor/db";
 import { and, eq } from "drizzle-orm";
 import { createDefaultPluginRegistry } from "@finnor/orchestration";
 import { PRICING_CATALOG_ACTION_TYPE } from "../packages/domain-plugins/shared/pricing-catalog";
-import { upsertPriceBookItem } from "@finnor/data-platform";
 
 const DEALER_ZERO_REVIEW_LINK = "https://g.page/r/dealer-zero-finnor-water-co/review";
 
@@ -29,12 +29,30 @@ interface PolicyRow {
   confirmationTemplate?: string | null;
 }
 
+export interface PolicyOverride {
+  policy?: Record<string, unknown>;
+  requiresConfirmation?: boolean;
+  confirmationTemplate?: string | null;
+}
+
+function mergePolicy(base: Record<string, unknown>, override: Record<string, unknown>): Record<string, unknown> {
+  const merged: Record<string, unknown> = { ...base };
+  for (const [key, value] of Object.entries(override)) {
+    const current = merged[key];
+    merged[key] = value && current && typeof value === "object" && typeof current === "object"
+      && !Array.isArray(value) && !Array.isArray(current)
+      ? mergePolicy(current as Record<string, unknown>, value as Record<string, unknown>)
+      : value;
+  }
+  return merged;
+}
+
 // One row per action type in policy-matrix.md — the 41 registered types, in the same
 // order as the matrix's sections. `reviewLinkUrl` is threaded in below, not hardcoded
 // here, since it's the one genuinely tenant-specific field (see the matrix's
 // "Owner-blocked field" section).
-export function policyRows(reviewLinkUrl: string | null): PolicyRow[] {
-  return [
+export function policyRows(reviewLinkUrl: string | null, overrides: Record<string, PolicyOverride> = {}): PolicyRow[] {
+  const rows: PolicyRow[] = [
     { actionType: "schedule_water_test", policy: { service_radius_miles: 25, default_duration_minutes: 45, allowed_windows: ["09:00-12:00", "13:00-17:00"] }, requiresConfirmation: true, confirmationTemplate: "Schedule a water test at {{address}} on {{scheduled_at}} with {{technician}}. Approve?" },
     { actionType: "renew_maintenance_agreement", policy: { renewal_window_days: 30, price_usd: 249, cadence_options: ["annual", "semi_annual"] }, requiresConfirmation: true, confirmationTemplate: "Send a renewal offer to {{household}} for their {{cadence}} maintenance agreement. Approve?" },
 
@@ -130,6 +148,18 @@ export function policyRows(reviewLinkUrl: string | null): PolicyRow[] {
     // dealer localizes later, not the placeholder sentinel.
     { actionType: PRICING_CATALOG_ACTION_TYPE, policy: { laborRatePerHourUsd: 95, taxRatePct: 7, items: [] }, requiresConfirmation: false },
   ];
+  return rows.map((row) => {
+    const override = overrides[row.actionType];
+    if (!override) return row;
+    return {
+      ...row,
+      policy: override.policy ? mergePolicy(row.policy, override.policy) : row.policy,
+      requiresConfirmation: override.requiresConfirmation ?? row.requiresConfirmation,
+      confirmationTemplate: override.confirmationTemplate === undefined
+        ? row.confirmationTemplate
+        : override.confirmationTemplate,
+    };
+  });
 }
 
 // The 12-20 item price book (policy-matrix.md §Pricing) — RO systems, softeners,
@@ -154,16 +184,27 @@ const PRICE_BOOK_ITEMS: Array<{ sku: string; label: string; priceUsd: number }> 
 
 export interface SeedTenantPoliciesResult {
   actionTypesSeeded: number;
+  inserted: number;
+  updated: number;
+  unchanged: number;
   priceBookItemsSeeded: number;
   registeredActionTypeCount: number;
   missingFromMatrix: string[];
   extraInMatrix: string[];
 }
 
-export async function seedTenantPolicies(tenantId: string, opts: { reviewLinkUrl?: string | null } = {}): Promise<SeedTenantPoliciesResult> {
+export async function seedTenantPolicies(
+  tenantId: string,
+  opts: { reviewLinkUrl?: string | null; overrides?: Record<string, PolicyOverride> } = {},
+): Promise<SeedTenantPoliciesResult> {
   const registry = createDefaultPluginRegistry();
   const registered = new Set(registry.actionTypes());
-  const rows = policyRows(opts.reviewLinkUrl ?? null);
+  const rows = policyRows(opts.reviewLinkUrl ?? null, opts.overrides ?? {});
+  const knownPolicyTypes = new Set(rows.map((row) => row.actionType));
+  const unknownOverrides = Object.keys(opts.overrides ?? {}).filter((actionType) => !knownPolicyTypes.has(actionType));
+  if (unknownOverrides.length > 0) {
+    throw new Error(`Unknown policy override action types: ${unknownOverrides.join(", ")}`);
+  }
   const matrixTypes = new Set(rows.map((r) => r.actionType).filter((t) => t !== PRICING_CATALOG_ACTION_TYPE));
 
   // Cross-check: the matrix must cover every currently-registered action type, and
@@ -173,46 +214,63 @@ export async function seedTenantPolicies(tenantId: string, opts: { reviewLinkUrl
   const extraInMatrix = [...matrixTypes].filter((t) => !registered.has(t));
 
   let actionTypesSeeded = 0;
+  let inserted = 0;
+  let updated = 0;
+  let unchanged = 0;
   await withTenant(tenantId, async (db) => {
     for (const row of rows) {
-      const [existing] = await db
+      const desiredTemplate = row.confirmationTemplate ?? null;
+      const [created] = await db.insert(domainPolicies).values({
+        tenantId,
+        actionType: row.actionType,
+        policy: row.policy,
+        requiresConfirmation: row.requiresConfirmation,
+        confirmationTemplate: desiredTemplate,
+      }).onConflictDoNothing({ target: [domainPolicies.tenantId, domainPolicies.actionType] }).returning();
+
+      const [existing] = created ? [] : await db
         .select()
         .from(domainPolicies)
-        .where(and(eq(domainPolicies.tenantId, tenantId), eq(domainPolicies.actionType, row.actionType)));
-      const [persisted] = existing
+        .where(and(eq(domainPolicies.tenantId, tenantId), eq(domainPolicies.actionType, row.actionType)))
+        .for("update");
+      if (!created && !existing) throw new Error(`Policy seed could not lock ${row.actionType}`);
+
+      const changed = Boolean(existing) && (
+        !isDeepStrictEqual(existing!.policy, row.policy)
+        || existing!.requiresConfirmation !== row.requiresConfirmation
+        || existing!.confirmationTemplate !== desiredTemplate
+      );
+      const [persisted] = changed
         ? await db
           .update(domainPolicies)
           .set({
             policy: row.policy,
             requiresConfirmation: row.requiresConfirmation,
-            confirmationTemplate: row.confirmationTemplate ?? existing.confirmationTemplate ?? null,
-            version: existing.version + 1,
+            confirmationTemplate: desiredTemplate,
+            version: existing!.version + 1,
+            effectiveFrom: new Date(),
           })
-          .where(eq(domainPolicies.id, existing.id))
+          .where(eq(domainPolicies.id, existing!.id))
           .returning()
-        : await db.insert(domainPolicies).values({
-          tenantId,
-          actionType: row.actionType,
-          policy: row.policy,
-          requiresConfirmation: row.requiresConfirmation,
-          confirmationTemplate: row.confirmationTemplate ?? null,
-        }).returning();
+        : [created ?? existing!];
       if (!persisted) throw new Error(`Policy seed did not persist ${row.actionType}`);
-      // Policy execution resolves only immutable revision rows. Each seed update
-      // creates exactly the matching revision version; repeated seeding remains
-      // idempotent because the policy version advances with deliberate updates.
-      await db.insert(domainPolicyRevisions).values({
-        tenantId,
-        policyId: persisted.id,
-        actionType: persisted.actionType,
-        version: persisted.version,
-        policy: persisted.policy,
-        requiresConfirmation: persisted.requiresConfirmation,
-        confirmationTemplate: persisted.confirmationTemplate,
-        modelProvider: persisted.modelProvider,
-        confirmationTimeoutHours: persisted.confirmationTimeoutHours,
-        effectiveFrom: persisted.effectiveFrom,
-      }).onConflictDoNothing();
+      if (created || changed) {
+        await db.insert(domainPolicyRevisions).values({
+          tenantId,
+          policyId: persisted.id,
+          actionType: persisted.actionType,
+          version: persisted.version,
+          policy: persisted.policy,
+          requiresConfirmation: persisted.requiresConfirmation,
+          confirmationTemplate: persisted.confirmationTemplate,
+          modelProvider: persisted.modelProvider,
+          confirmationTimeoutHours: persisted.confirmationTimeoutHours,
+          effectiveFrom: persisted.effectiveFrom,
+        });
+      }
+      if (created) inserted++;
+      else if (changed) updated++;
+      else unchanged++;
       actionTypesSeeded++;
     }
   });
@@ -220,12 +278,33 @@ export async function seedTenantPolicies(tenantId: string, opts: { reviewLinkUrl
   let priceBookItemsSeeded = 0;
   await withTenant(tenantId, async (db) => {
     for (const item of PRICE_BOOK_ITEMS) {
-      await upsertPriceBookItem(db, { tenantId, sku: item.sku, label: item.label, priceUsd: item.priceUsd });
+      const desiredPrice = item.priceUsd.toFixed(2);
+      const [created] = await db.insert(priceBookItems).values({
+        tenantId,
+        sku: item.sku,
+        label: item.label,
+        priceUsd: desiredPrice,
+        unitOfMeasure: "each",
+      }).onConflictDoNothing({ target: [priceBookItems.tenantId, priceBookItems.sku] }).returning();
+      if (!created) {
+        const [existing] = await db.select().from(priceBookItems)
+          .where(and(eq(priceBookItems.tenantId, tenantId), eq(priceBookItems.sku, item.sku)))
+          .for("update");
+        if (!existing) throw new Error(`Price-book seed could not lock ${item.sku}`);
+        if (existing.label !== item.label || existing.priceUsd !== desiredPrice || existing.unitOfMeasure !== "each") {
+          await db.update(priceBookItems).set({
+            label: item.label,
+            priceUsd: desiredPrice,
+            unitOfMeasure: "each",
+            updatedAt: new Date(),
+          }).where(eq(priceBookItems.id, existing.id));
+        }
+      }
       priceBookItemsSeeded++;
     }
   });
 
-  return { actionTypesSeeded, priceBookItemsSeeded, registeredActionTypeCount: registered.size, missingFromMatrix, extraInMatrix };
+  return { actionTypesSeeded, inserted, updated, unchanged, priceBookItemsSeeded, registeredActionTypeCount: registered.size, missingFromMatrix, extraInMatrix };
 }
 
 function parseArgs() {

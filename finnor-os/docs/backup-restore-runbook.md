@@ -11,7 +11,7 @@ real `backup_db` job does **not** shell out to `pg_dump` at all:
   `SET session_replication_role = replica` to sidestep FK ordering, since every table's PK
   is `uuid().defaultRandom()` — zero serial/identity columns anywhere, so no sequence
   resets needed either). Zero external binary dependency — runs anywhere Node + `pg` can
-  connect, including the Railway worker's own container.
+  connect, including the Azure worker runtime.
 - **Storage target**: a dedicated private GitHub repo's Releases (Cloudflare R2 is
   **blocked** — Param has no card on file, and Cloudflare requires one even for R2's free
   tier; see `JARVIS-CREDENTIALS-LEDGER.md`). `packages/tools/src/backup-storage-github.ts`

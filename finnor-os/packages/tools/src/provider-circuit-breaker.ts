@@ -25,31 +25,37 @@ export interface CircuitState {
   openedAt?: Date | null;
 }
 
-async function getOrInit(provider: string): Promise<typeof providerCircuitState.$inferSelect> {
-  const [existing] = await adminDb().select().from(providerCircuitState).where(eq(providerCircuitState.provider, provider));
+function scopedProvider(provider: string, tenantId?: string): string {
+  return tenantId ? `tenant:${tenantId}:${provider}` : `system:${provider}`;
+}
+
+async function getOrInit(provider: string, tenantId?: string): Promise<typeof providerCircuitState.$inferSelect> {
+  const key = scopedProvider(provider, tenantId);
+  const [existing] = await adminDb().select().from(providerCircuitState).where(eq(providerCircuitState.provider, key));
   if (existing) return existing;
   const [created] = await adminDb()
     .insert(providerCircuitState)
-    .values({ provider })
+    .values({ provider: key })
     .onConflictDoNothing()
     .returning();
   if (created) return created;
-  const [row] = await adminDb().select().from(providerCircuitState).where(eq(providerCircuitState.provider, provider));
+  const [row] = await adminDb().select().from(providerCircuitState).where(eq(providerCircuitState.provider, key));
   return row!;
 }
 
 /** True when the breaker is open — callers must NOT attempt the real provider call;
  *  the affected action should queue as degraded instead (never silently fall back to
  *  the emulator, per §0.3.10). */
-export async function isCircuitOpen(provider: string): Promise<boolean> {
-  const row = await getOrInit(provider);
+export async function isCircuitOpen(provider: string, tenantId?: string): Promise<boolean> {
+  const row = await getOrInit(provider, tenantId);
   return row.state === "open";
 }
 
-export async function recordProviderSuccess(provider: string): Promise<void> {
+export async function recordProviderSuccess(provider: string, tenantId?: string): Promise<void> {
+  const key = scopedProvider(provider, tenantId);
   await adminDb()
     .insert(providerCircuitState)
-    .values({ provider, consecutiveFailures: 0, state: "closed", lastSuccessAt: new Date(), updatedAt: new Date() })
+    .values({ provider: key, consecutiveFailures: 0, state: "closed", lastSuccessAt: new Date(), updatedAt: new Date() })
     .onConflictDoUpdate({
       target: providerCircuitState.provider,
       set: { consecutiveFailures: 0, state: "closed", openedAt: null, lastSuccessAt: new Date(), updatedAt: new Date() },
@@ -64,8 +70,9 @@ export async function recordProviderSuccess(provider: string): Promise<void> {
  *  this, a probe that fails would leave the old openedAt in place and the very next
  *  check would immediately think the cooldown had elapsed again, busy-looping probes
  *  instead of actually waiting out OPEN_COOLDOWN_MS. */
-export async function recordProviderFailure(provider: string): Promise<CircuitState> {
-  await getOrInit(provider); // ensure the row exists before the atomic increment below
+export async function recordProviderFailure(provider: string, tenantId?: string): Promise<CircuitState> {
+  const key = scopedProvider(provider, tenantId);
+  await getOrInit(provider, tenantId); // ensure the row exists before the atomic increment below
   const [row] = await adminDb()
     .update(providerCircuitState)
     .set({
@@ -73,13 +80,13 @@ export async function recordProviderFailure(provider: string): Promise<CircuitSt
       lastFailureAt: new Date(),
       updatedAt: new Date(),
     })
-    .where(eq(providerCircuitState.provider, provider))
+    .where(eq(providerCircuitState.provider, key))
     .returning();
   if (row!.state === "open") {
     const [restamped] = await adminDb()
       .update(providerCircuitState)
       .set({ openedAt: new Date() })
-      .where(eq(providerCircuitState.provider, provider))
+      .where(eq(providerCircuitState.provider, key))
       .returning();
     return { provider, state: "open", consecutiveFailures: restamped!.consecutiveFailures, openedAt: restamped!.openedAt };
   }
@@ -87,15 +94,15 @@ export async function recordProviderFailure(provider: string): Promise<CircuitSt
     const [opened] = await adminDb()
       .update(providerCircuitState)
       .set({ state: "open", openedAt: new Date() })
-      .where(eq(providerCircuitState.provider, provider))
+      .where(eq(providerCircuitState.provider, key))
       .returning();
     return { provider, state: opened!.state as "open", consecutiveFailures: opened!.consecutiveFailures, openedAt: opened!.openedAt };
   }
   return { provider, state: row!.state as "closed" | "open", consecutiveFailures: row!.consecutiveFailures, openedAt: row!.openedAt };
 }
 
-export async function circuitSnapshot(provider: string): Promise<CircuitState> {
-  const row = await getOrInit(provider);
+export async function circuitSnapshot(provider: string, tenantId?: string): Promise<CircuitState> {
+  const row = await getOrInit(provider, tenantId);
   return { provider, state: row.state as "closed" | "open", consecutiveFailures: row.consecutiveFailures, openedAt: row.openedAt };
 }
 
@@ -117,7 +124,7 @@ export interface CircuitBreakerMeta {
  *  recordProviderSuccess — which nothing did, since this function itself refused
  *  every subsequent attempt. */
 export async function withCircuitBreaker<T>(provider: string, fn: () => Promise<T>, meta: CircuitBreakerMeta = {}): Promise<T> {
-  const snap = await circuitSnapshot(provider);
+  const snap = await circuitSnapshot(provider, meta.tenantId);
   const log = logWithTrace({ provider, ...meta });
   if (snap.state === "open") {
     const cooldownElapsed = Date.now() - (snap.openedAt?.getTime() ?? 0) >= OPEN_COOLDOWN_MS;
@@ -129,14 +136,14 @@ export async function withCircuitBreaker<T>(provider: string, fn: () => Promise<
   }
   try {
     const result = await fn();
-    await recordProviderSuccess(provider);
+    await recordProviderSuccess(provider, meta.tenantId);
     if (snap.state === "open") log.info({ event: "circuit_breaker_closed" }, `circuit breaker for ${provider} closed — probe succeeded`);
     return result;
   } catch (err) {
-    const after = await recordProviderFailure(provider);
+    const after = await recordProviderFailure(provider, meta.tenantId);
     if (after.state === "open") {
       log.error(
-        { event: "circuit_breaker_open", consecutiveFailures: after.consecutiveFailures, err: (err as Error).message },
+        { event: "circuit_breaker_open", consecutiveFailures: after.consecutiveFailures },
         `circuit breaker for ${provider} is open`,
       );
     }

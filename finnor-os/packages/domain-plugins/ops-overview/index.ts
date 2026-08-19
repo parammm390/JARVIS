@@ -6,7 +6,7 @@
 import type { DomainEnginePlugin } from "../shared/plugin-interface";
 import type { DraftAction, ExecutionResult, ValidationResult, DomainPolicy } from "@finnor/shared-types";
 import type { ToolRegistry } from "@finnor/tools";
-import { resolveProviderForPurpose, testAdsConnections, testQuickBooksConnection, type LLMChannel } from "@finnor/tools";
+import { resolveProviderForPurpose, testTenantAdsConnections, testTenantQuickBooksConnection, type LLMChannel } from "@finnor/tools";
 import { withTenant, leads, domainActions, inventoryItems, invoices, serviceVisits, communicationsLog, maintenanceAgreements } from "@finnor/db";
 import { hybridRetrieve } from "@finnor/memory";
 import { readConfidenceThreshold } from "../shared/plugin-interface";
@@ -460,7 +460,7 @@ export const opsOverviewPlugin: DomainEnginePlugin = {
         loadOverview(tenantId),
         loadFinanceAndHistorySnapshot(tenantId),
         asksAboutIntegrations
-          ? Promise.all([testAdsConnections(), testQuickBooksConnection()]).then(([ads, qb]) => ({ meta_ads: ads.meta, google_ads: ads.googleAds, quickbooks: qb }))
+          ? Promise.all([testTenantAdsConnections(tenantId), testTenantQuickBooksConnection(tenantId)]).then(([ads, qb]) => ({ meta_ads: ads.meta, google_ads: ads.googleAds, quickbooks: qb }))
           : Promise.resolve(undefined),
         asksAboutInventory ? loadInventorySnapshot(tenantId) : Promise.resolve(undefined),
       ]);

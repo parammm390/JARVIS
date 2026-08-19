@@ -31,6 +31,7 @@ export default defineConfig({
       "@finnor/db": r("./packages/db/index.ts"),
       "@finnor/authority": r("./packages/authority/src/index.ts"),
       "@finnor/data-platform": r("./packages/data-platform/src/index.ts"),
+      "@finnor/import-engine": r("./packages/import-engine/src/index.ts"),
       "@finnor/workflow-runtime": r("./packages/workflow-runtime/src/index.ts"),
       "@finnor/memory": r("./packages/memory/src/index.ts"),
       "@finnor/security": r("./packages/security/src/index.ts"),

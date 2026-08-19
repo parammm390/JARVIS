@@ -10,7 +10,8 @@ const environmentFiles = [
 const systems = [
   ["Postgres", [/^(DATABASE_URL|POSTGRES_URL|MIGRATIONS_DATABASE_URL)$/], "required"],
   ["Redis", [/^REDIS_URL$/], "required"],
-  ["Railway API / worker / orchestrator", [/^RAILWAY_|^SERVICE_APP$/], "required for Railway deployment"],
+  ["FINNOR release identity", [/^FINNOR_(COMMIT_SHA|BUILD_ID|VERSION|ENVIRONMENT|RELEASE_SOURCE)$/], "required on every runtime"],
+  ["Azure persistent runtime", [/^AZURE_(CLIENT_ID|TENANT_ID|SUBSCRIPTION_ID)$/], "required by the production release workflow"],
   ["Sentry", [/^SENTRY_|^NEXT_PUBLIC_SENTRY_/], "optional unless error reporting is enabled"],
   ["Supabase auth", [/SUPABASE/], "required"], ["Vapi", [/^VAPI_|^NEXT_PUBLIC_VAPI_/], "required if voice is enabled"],
   ["OpenAI Realtime", [/^OPENAI_.*REALTIME|^OPENAI_API_KEY$/], "required if Realtime is enabled"],

@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "environment": "production",
+  "canonicalGit": {
+    "remote": "origin",
+    "branch": "main",
+    "repository": "parammm390/JARVIS",
+    "requireCleanWorktree": true
+  },
+  "release": {
+    "requiredMigrationHead": "0080_declarative_client_imports.sql",
+    "metadata": [
+      "FINNOR_COMMIT_SHA",
+      "FINNOR_BUILD_ID",
+      "FINNOR_VERSION",
+      "FINNOR_ENVIRONMENT",
+      "FINNOR_RELEASE_SOURCE"
+    ],
+    "requiredComponents": ["frontend", "api", "worker"],
+    "concurrencyGroup": "finnor-production-release"
+  },
+  "topology": {
+    "frontend": {
+      "provider": "vercel",
+      "projectName": "finnor-agency",
+      "projectId": "prj_dttKVOUzFBGnSg6zNdRualYjQ3oe",
+      "organizationId": "team_TlTo8L6Rvgb0H7uJh0G5GLDD",
+      "productionUrl": "https://finnorai.com",
+      "releasePath": "/api/release"
+    },
+    "api": {
+      "provider": "vercel",
+      "projectName": "api",
+      "projectId": "prj_BoMZ2AXdLIJQXAAe6RqDGBveyq3n",
+      "organizationId": "team_TlTo8L6Rvgb0H7uJh0G5GLDD",
+      "productionUrl": "https://api-psi-brown-95.vercel.app",
+      "releasePath": "/api/release"
+    },
+    "worker": {
+      "provider": "azure-vm",
+      "tenantId": "c2e90e65-2dc0-43aa-80b9-e3091e8e499a",
+      "subscriptionId": "899ba394-2364-46c2-bac6-d88b4b4efec1",
+      "resourceGroup": "finnor-production-rg",
+      "resourceName": "finnor-jarvis-worker",
+      "resourceType": "Microsoft.Compute/virtualMachines",
+      "resourceId": "/subscriptions/899ba394-2364-46c2-bac6-d88b4b4efec1/resourceGroups/finnor-production-rg/providers/Microsoft.Compute/virtualMachines/finnor-jarvis-worker",
+      "vmId": "ff867b16-58da-460d-a73f-4fe81cd0246d",
+      "location": "northcentralus",
+      "adminUsername": "finnor",
+      "systemdUnit": "finnor-jarvis-worker.service",
+      "heartbeatId": "worker",
+      "releaseRoot": "/srv/finnor/releases",
+      "currentSymlink": "/srv/finnor/current",
+      "secretEnvironmentFile": "/etc/finnor/jarvis-worker.env",
+      "releaseEnvironmentFile": "/etc/finnor/release.env"
+    },
+    "orchestrator": {
+      "mode": "embedded-worker",
+      "separateDeployment": false,
+      "releaseIdentity": "worker"
+    },
+    "database": {
+      "provider": "supabase-postgres",
+      "host": "aws-1-ap-northeast-1.pooler.supabase.com",
+      "schema": "finnor_os",
+      "migrationTable": "_migrations"
+    }
+  },
+  "forbiddenActiveProviders": ["railway", "render"]
+}

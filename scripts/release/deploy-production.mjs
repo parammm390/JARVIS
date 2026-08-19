@@ -17,14 +17,17 @@ const APPS = {
 }
 
 const appName = process.argv[2]
+const prepareOnly = process.argv.includes("--prepare-only")
+const deployOnly = process.argv.includes("--deploy-only")
 const outputIndex = process.argv.indexOf("--output-file")
 const outputFile = outputIndex >= 0 ? process.argv[outputIndex + 1] : undefined
 const app = APPS[appName]
 
 if (!app) {
-  console.error("Usage: node scripts/release/deploy-production.mjs <frontend|api> [--output-file path]")
+  console.error("Usage: node scripts/release/deploy-production.mjs <frontend|api> [--prepare-only|--deploy-only] [--output-file path]")
   process.exit(2)
 }
+if (prepareOnly && deployOnly) throw new Error("--prepare-only and --deploy-only are mutually exclusive")
 
 const repoRoot = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim()
 
@@ -72,15 +75,23 @@ const env = {
   FINNOR_RELEASE_SOURCE: source,
 }
 
-run("vercel", ["link", "--project", app.project, "--scope", TEAM_ID, "--yes", ...tokenArgs], appDir, env)
 const linkFile = join(appDir, ".vercel", "project.json")
+if (!deployOnly) {
+  run("vercel", ["link", "--project", app.project, "--scope", TEAM_ID, "--yes", ...tokenArgs], appDir, env)
+}
 const linkedProject = JSON.parse(readFileSync(linkFile, "utf8"))
 if (linkedProject.projectId !== app.projectId || linkedProject.orgId !== TEAM_ID) {
   throw new Error(`Vercel link mismatch: expected ${TEAM_ID}/${app.projectId}, got ${linkedProject.orgId}/${linkedProject.projectId}`)
 }
 
-run("vercel", ["pull", "--yes", "--environment=production", "--scope", TEAM_ID, ...tokenArgs], appDir, env)
-run("vercel", ["build", "--prod", "--yes", "--scope", TEAM_ID, ...tokenArgs], appDir, env)
+if (!deployOnly) {
+  run("vercel", ["pull", "--yes", "--environment=production", "--scope", TEAM_ID, ...tokenArgs], appDir, env)
+  run("vercel", ["build", "--prod", "--yes", "--scope", TEAM_ID, ...tokenArgs], appDir, env)
+}
+if (prepareOnly) {
+  console.log(JSON.stringify({ ok: true, app: appName, prepared: true, commitSha, buildId, version, environment, source }, null, 2))
+  process.exit(0)
+}
 
 const deployArgs = [
   "deploy", "--prebuilt", "--prod", "--yes", "--scope", TEAM_ID,

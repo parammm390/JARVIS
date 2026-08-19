@@ -1,0 +1,94 @@
+{
+  "manifestVersion": 1,
+  "clientKey": "acme-water",
+  "tenant": {
+    "name": "Acme Water Co",
+    "timezone": "America/Chicago",
+    "ownerPhone": "+15555550100",
+    "settings": {
+      "isDealerZero": false,
+      "simulatorEnabled": false,
+      "trainingMode": false
+    }
+  },
+  "locations": [
+    {
+      "key": "main-office",
+      "name": "Main Office",
+      "address": "1 Water Way, Cedar Falls, IA",
+      "timezone": "America/Chicago"
+    }
+  ],
+  "users": [
+    {
+      "email": "owner@acme.example",
+      "role": "owner",
+      "displayName": "Acme Owner"
+    }
+  ],
+  "workspaceConfig": {
+    "enabledSurfaces": ["home", "work", "customers", "schedule", "money", "agents"],
+    "terminology": {
+      "home": "Home",
+      "work": "Work",
+      "customers": "Customers",
+      "schedule": "Schedule",
+      "money": "Money",
+      "agents": "Agents"
+    },
+    "voiceEnabled": true,
+    "navigationPriority": ["home", "work", "customers", "schedule", "money", "agents"],
+    "brand": { "accent": "cyan", "radius": "soft", "mark": "A" },
+    "visibility": { "policy": true, "authority": true }
+  },
+  "policyOverrides": {
+    "create_review_request": {
+      "policy": { "review_link_url": "https://example.com/acme/review" }
+    }
+  },
+  "requiredCapabilities": ["crm", "communications"],
+  "integrations": [
+    { "capability": "crm", "binding": "native", "mode": "real", "config": {} },
+    {
+      "capability": "communications",
+      "binding": "vapi",
+      "mode": "sandbox",
+      "config": {},
+      "credential": {
+        "provider": "aws-secrets-manager",
+        "ref": "finnor/tenants/{tenantId}/vapi",
+        "version": "AWSCURRENT",
+        "metadata": {}
+      },
+      "credentialRefs": { "apiKey": "finnor/clients/acme/vapi-api-key" }
+    }
+  ],
+  "credentialRefs": {
+    "primaryDatabase": "finnor/clients/acme/database"
+  },
+  "imports": [
+    {
+      "key": "initial-crm-export",
+      "source": "csv",
+      "definition": {
+        "version": 1,
+        "entity": "customer",
+        "sourceSystem": "acme-crm",
+        "fields": {
+          "firstName": { "from": "FIRST_NAME", "required": true, "normalize": ["trim", "title_case"] },
+          "lastName": { "from": "LAST_NAME", "normalize": ["trim", "title_case"] },
+          "phone": { "from": "PHONE", "normalize": ["trim", "phone_e164", "empty_to_null"] },
+          "email": { "from": "EMAIL", "normalize": ["trim", "lowercase", "empty_to_null"] },
+          "address": { "from": "SERVICE_ADDRESS", "normalize": ["trim"] }
+        },
+        "externalId": { "from": "CUSTOMER_ID", "required": true, "normalize": ["trim"] },
+        "identity": [
+          { "fields": ["email"] },
+          { "fields": ["phone"] }
+        ],
+        "updateMode": "fill_missing",
+        "batchSize": 100
+      }
+    }
+  ]
+}

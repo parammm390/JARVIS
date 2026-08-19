@@ -9,7 +9,8 @@
 
 import { getPool, withTenant, scanFindings, domainActions, llmCalls, users } from "@finnor/db";
 import { and, eq, gte, isNull, sql } from "drizzle-orm";
-import { placeVapiCall, VOICE_PERSONAS, logWithTrace, isAllowlistedRecipient, sendResendEmail } from "@finnor/tools";
+import { placeVapiCall, logWithTrace, isAllowlistedRecipient, resolveTenantResendContext, sendResendEmail } from "@finnor/tools";
+import { resolveTenantCredentialContext, TenantCredentialError, type TenantCredentialContext } from "@finnor/security";
 import { followUpDebt, cashCollections, intelligenceForecasts, routeSavingsBriefing, slaBreaches } from "@finnor/read-models";
 import type { JobHandler } from "../queue";
 
@@ -85,7 +86,13 @@ export const ownerDigest: JobHandler = async (payload) => {
   const owners = await withTenant(tenantId, (db) =>
     db.select({ email: users.email }).from(users).where(and(eq(users.tenantId, tenantId), eq(users.role, "owner"))),
   );
-  const emailRecipients = owners.map((owner) => owner.email).filter(isAllowlistedRecipient);
+  let resendContext: TenantCredentialContext<"resend"> | null = null;
+  try {
+    resendContext = await resolveTenantResendContext(tenantId);
+  } catch (error) {
+    if (!(error instanceof TenantCredentialError) || (error.code !== "integration_not_bound" && error.code !== "system_not_allowed")) throw error;
+  }
+  const emailRecipients = resendContext ? owners.map((owner) => owner.email).filter((email) => isAllowlistedRecipient(email, resendContext!)) : [];
   const skippedOwners = owners.length - emailRecipients.length;
   if (skippedOwners > 0) {
     logWithTrace({ traceId: payload._correlationId as string | undefined, tenantId }).warn(
@@ -101,7 +108,7 @@ export const ownerDigest: JobHandler = async (payload) => {
       to,
       subject: "Finnor daily operating brief",
       html: digestEmailHtml(parts),
-    });
+    }, resendContext!);
     if (!result.sent) {
       logWithTrace({ traceId: payload._correlationId as string | undefined, tenantId }).warn(
         { reason: result.reason }, "[owner_digest] email was blocked — findings remain available",
@@ -114,12 +121,13 @@ export const ownerDigest: JobHandler = async (payload) => {
   const ownerPhone = rows[0]?.owner_phone as string | null | undefined;
 
   if (ownerPhone && ownerPhone !== "PLACEHOLDER_NEEDS_REAL_VALUE") {
+    const vapiContext = await resolveTenantCredentialContext(tenantId, "vapi");
     const result = await placeVapiCall({
+      tenantId,
       customerNumber: ownerPhone,
       firstMessage: message,
       metadata: { tenantId, purpose: "owner_digest" },
-      assistantId: VOICE_PERSONAS.main,
-    });
+    }, vapiContext);
     if (!result.ok) {
       // Don't dead-letter a daily digest over a transient call failure — the findings
       // stay undigested and roll into tomorrow's call instead of being lost.

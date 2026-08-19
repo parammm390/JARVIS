@@ -29,7 +29,7 @@ function setEnv(key: (typeof ENV_KEYS)[number], value: string | undefined): void
 }
 
 describe("builtin outbound-call registration", () => {
-  it("keeps the sandbox call driver when live Vapi credentials are present", () => {
+  it("does not select a live driver at registration from process-global credentials", () => {
     setEnv("COMMS_MODE", "sandbox");
     setEnv("GOHIGHLEVEL_API_KEY", "configured");
     setEnv("VAPI_API_KEY", "configured");
@@ -40,8 +40,8 @@ describe("builtin outbound-call registration", () => {
     registerBuiltinTools(registry);
 
     const callTool = registry.registered.find((tool) => tool.name === "vapi_place_call");
-    expect(callTool?.integration).toBe("sandbox");
-    expect(callTool?.description).toMatch(/^SANDBOX:/);
+    expect(callTool?.integration).toBe("tenant-routed");
+    expect(callTool?.description).toMatch(/^Tenant-routed/);
   });
 
   it("registers the real campaign adapter from operating mode even before managed secrets are loaded", () => {

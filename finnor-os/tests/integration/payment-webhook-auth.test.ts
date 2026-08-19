@@ -8,8 +8,9 @@ import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import pg from "pg";
 import { createHmac, randomUUID } from "node:crypto";
 import { migrate } from "../../packages/db/migrate";
-import { withTenant, closePool, tenants, households, invoices } from "@finnor/db";
+import { withTenant, closePool, tenants, households, invoices, tenantIntegrations } from "@finnor/db";
 import { POST as paymentWebhook } from "../../apps/api/app/api/webhooks/payment/route";
+import { setTenantSecretReaderForTesting } from "@finnor/security";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
 const TENANT = "00000000-0000-4000-8000-0000000000ee";
@@ -48,6 +49,18 @@ describe.skipIf(!available)("POST /api/webhooks/payment (A3.T6)", () => {
     process.env.DATABASE_URL = DB_URL;
     await migrate(DB_URL);
     await withTenant(TENANT, (db) => db.insert(tenants).values({ id: TENANT, name: "Payment Webhook Test" }).onConflictDoNothing());
+    await withTenant(TENANT, (db) => db.insert(tenantIntegrations).values({
+      tenantId: TENANT,
+      capability: "payments",
+      binding: "stripe",
+      mode: "sandbox",
+      credentialProvider: "aws-secrets-manager",
+      credentialRef: `finnor/tenants/${TENANT}/stripe`,
+    }).onConflictDoUpdate({
+      target: [tenantIntegrations.tenantId, tenantIntegrations.capability],
+      set: { binding: "stripe", mode: "sandbox", credentialProvider: "aws-secrets-manager", credentialRef: `finnor/tenants/${TENANT}/stripe` },
+    }));
+    setTenantSecretReaderForTesting(async () => ({ secretKey: "stripe-test-key", webhookSecret: "real-secret" }));
     const [household] = await withTenant(TENANT, (db) =>
       db.insert(households).values({ tenantId: TENANT, address: "1 Test St", contactInfo: {} }).returning(),
     );
@@ -58,6 +71,7 @@ describe.skipIf(!available)("POST /api/webhooks/payment (A3.T6)", () => {
   });
   afterAll(async () => {
     vi.unstubAllEnvs();
+    setTenantSecretReaderForTesting(null);
     process.env.STRIPE_WEBHOOK_SECRET = originalSecret;
     await closePool();
   });
@@ -79,9 +93,9 @@ describe.skipIf(!available)("POST /api/webhooks/payment (A3.T6)", () => {
   });
 
   it("rejects a real stripe-signature header with the wrong secret, in any environment", async () => {
-    process.env.STRIPE_WEBHOOK_SECRET = "real-secret";
+    process.env.STRIPE_WEBHOOK_SECRET = "global-secret-must-not-be-used";
     vi.stubEnv("NODE_ENV", "production");
-    const rawBody = JSON.stringify({ id: "evt_1", type: "checkout.session.completed", data: { object: { amount_total: 4200, metadata: {} } } });
+    const rawBody = JSON.stringify({ id: "evt_1", type: "checkout.session.completed", data: { object: { amount_total: 4200, metadata: { tenantId: TENANT, invoiceId } } } });
     const t = Math.floor(Date.now() / 1000);
     const badSig = createHmac("sha256", "wrong-secret").update(`${t}.${rawBody}`).digest("hex");
     const res = await paymentWebhook(req(rawBody, { "stripe-signature": `t=${t},v1=${badSig}` }));
@@ -89,7 +103,7 @@ describe.skipIf(!available)("POST /api/webhooks/payment (A3.T6)", () => {
   });
 
   it("accepts a correctly-signed real stripe event once a secret is configured, in production", async () => {
-    process.env.STRIPE_WEBHOOK_SECRET = "real-secret";
+    process.env.STRIPE_WEBHOOK_SECRET = "global-secret-must-not-be-used";
     vi.stubEnv("NODE_ENV", "production");
     const rawBody = JSON.stringify({
       id: `evt_${randomUUID()}`,
