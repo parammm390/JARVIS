@@ -90,7 +90,8 @@ const instanceView = azJson([
   "--name",
   worker.resourceName,
 ])
-const powerState = instanceView.statuses?.find((status) => status.code?.startsWith("PowerState/"))?.displayStatus
+const instanceStatuses = instanceView.statuses ?? instanceView.instanceView?.statuses ?? []
+const powerState = instanceStatuses.find((status) => status.code?.startsWith("PowerState/"))?.displayStatus
 assertResolvedTarget("Azure worker", worker, {
   resourceId: vm.id,
   vmId: vm.vmId,
