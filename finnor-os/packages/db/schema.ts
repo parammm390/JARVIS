@@ -1693,6 +1693,215 @@ export const importEntityRefs = pgTable(
   ],
 );
 
+// Phase 4 client factory. The existing Postgres jobs queue dispatches/resumes these
+// runs; these tables only retain onboarding state and immutable attempt evidence.
+// They are admin-only because a run begins before a tenant exists and can span the
+// global client identity boundary.
+export const clientFactoryRuns = pgTable(
+  "client_factory_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clientKey: text("client_key").notNull(),
+    tenantId: uuid("tenant_id").references(() => tenants.id),
+    manifestVersion: integer("manifest_version").notNull(),
+    manifestSha256: text("manifest_sha256").notNull(),
+    manifestSnapshot: jsonb("manifest_snapshot").notNull(),
+    status: text("status", { enum: ["pending", "running", "passed", "failed", "blocked_config", "cancelled"] }).notNull().default("pending"),
+    currentStage: text("current_stage"),
+    leaseOwner: text("lease_owner"),
+    leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
+    dispatchVersion: integer("dispatch_version").notNull().default(0),
+    cancelRequestedAt: timestamp("cancel_requested_at", { withTimezone: true }),
+    lastError: text("last_error"),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("client_factory_runs_tenant_idx").on(t.tenantId, t.createdAt)],
+);
+
+export const clientFactoryStages = pgTable(
+  "client_factory_stages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    runId: uuid("run_id").notNull().references(() => clientFactoryRuns.id),
+    stageKey: text("stage_key").notNull(),
+    ordinal: integer("ordinal").notNull(),
+    status: text("status", { enum: ["pending", "running", "passed", "failed", "blocked_config", "cancelled"] }).notNull().default("pending"),
+    inputSha256: text("input_sha256"),
+    attempts: integer("attempts").notNull().default(0),
+    evidence: jsonb("evidence").notNull().default({}),
+    lastError: text("last_error"),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("client_factory_stages_run_key_idx").on(t.runId, t.stageKey),
+    unique("client_factory_stages_run_ordinal_idx").on(t.runId, t.ordinal),
+  ],
+);
+
+export const clientFactoryStageAttempts = pgTable(
+  "client_factory_stage_attempts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    runId: uuid("run_id").notNull().references(() => clientFactoryRuns.id),
+    stageId: uuid("stage_id").notNull().references(() => clientFactoryStages.id),
+    stageKey: text("stage_key").notNull(),
+    attempt: integer("attempt").notNull(),
+    inputSha256: text("input_sha256").notNull(),
+    status: text("status", { enum: ["running", "passed", "failed", "blocked_config", "cancelled"] }).notNull(),
+    evidence: jsonb("evidence").notNull().default({}),
+    error: text("error"),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+  },
+  (t) => [unique("client_factory_stage_attempt_number_idx").on(t.stageId, t.attempt)],
+);
+
+// Phase 5 governance ledger. The SQL migration adds database triggers that reject
+// UPDATE/DELETE; these Drizzle declarations exist for typed inspection only. Writes
+// go through release:certify's content-addressed, insert-only persistence boundary.
+export const coreCertifications = pgTable(
+  "core_certifications",
+  {
+    certificationId: text("certification_id").primaryKey(),
+    canonicalCoreSha: text("canonical_core_sha").notNull(),
+    coreSourceTreeHash: text("core_source_tree_hash").notNull(),
+    suiteHash: text("suite_hash").notNull(),
+    status: text("status", { enum: ["PASS", "FAIL", "BLOCKED_CONFIG"] }).notNull(),
+    evidenceHash: text("evidence_hash").notNull(),
+    artifact: jsonb("artifact").notNull(),
+    certifiedAt: timestamp("certified_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("core_certifications_reuse_idx").on(t.canonicalCoreSha, t.coreSourceTreeHash, t.suiteHash)],
+);
+
+export const clientCertifications = pgTable(
+  "client_certifications",
+  {
+    certificationId: text("certification_id").primaryKey(),
+    clientKey: text("client_key").notNull(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    canonicalCoreSha: text("canonical_core_sha").notNull(),
+    coreCertificationId: text("core_certification_id").notNull().references(() => coreCertifications.certificationId),
+    configurationHash: text("configuration_hash").notNull(),
+    deploymentEvidenceHash: text("deployment_evidence_hash").notNull(),
+    migrationVersion: text("migration_version").notNull(),
+    schemaHash: text("schema_hash").notNull(),
+    suiteHash: text("suite_hash").notNull(),
+    status: text("status", { enum: ["PASS", "FAIL", "BLOCKED_CONFIG"] }).notNull(),
+    evidenceHash: text("evidence_hash").notNull(),
+    artifact: jsonb("artifact").notNull(),
+    certifiedAt: timestamp("certified_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("client_certifications_current_idx").on(t.clientKey, t.tenantId, t.canonicalCoreSha, t.configurationHash, t.createdAt)],
+);
+
+export const clientReleases = pgTable(
+  "client_releases",
+  {
+    releaseId: text("release_id").primaryKey(),
+    releaseVersion: text("release_version").notNull().unique(),
+    clientKey: text("client_key").notNull(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    canonicalCoreSha: text("canonical_core_sha").notNull(),
+    coreCertificationId: text("core_certification_id").notNull().references(() => coreCertifications.certificationId),
+    clientCertificationId: text("client_certification_id").notNull().references(() => clientCertifications.certificationId),
+    manifestHash: text("manifest_hash").notNull(),
+    configurationHash: text("configuration_hash").notNull(),
+    deploymentEvidenceHash: text("deployment_evidence_hash").notNull(),
+    migrationVersion: text("migration_version").notNull(),
+    schemaHash: text("schema_hash").notNull(),
+    status: text("status", { enum: ["PASS", "FAIL", "BLOCKED_CONFIG"] }).notNull(),
+    predecessorReleaseId: text("predecessor_release_id"),
+    rollbackTargetReleaseId: text("rollback_target_release_id"),
+    artifact: jsonb("artifact").notNull(),
+    certifiedAt: timestamp("certified_at", { withTimezone: true }).notNull(),
+    releasedAt: timestamp("released_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("client_releases_cert_deployment_idx").on(t.clientCertificationId, t.deploymentEvidenceHash),
+    index("client_releases_client_history_idx").on(t.clientKey, t.tenantId, t.releasedAt),
+  ],
+);
+
+// Phase 6 lifecycle control plane. Certified configuration and promotion rows are
+// append-only; activeClientReleases is the intentionally small mutable pointer.
+export const clientReleaseConfigurations = pgTable(
+  "client_release_configurations",
+  {
+    releaseId: text("release_id").primaryKey().references(() => clientReleases.releaseId),
+    clientKey: text("client_key").notNull(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    manifestHash: text("manifest_hash").notNull(),
+    configurationHash: text("configuration_hash").notNull(),
+    manifestSnapshot: jsonb("manifest_snapshot").notNull(),
+    certifiedState: jsonb("certified_state").notNull(),
+    certifiedStateHash: text("certified_state_hash").notNull(),
+    evidenceHash: text("evidence_hash").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("client_release_configurations_client_idx").on(t.clientKey, t.tenantId, t.createdAt)],
+);
+
+export const clientLifecycleOperations = pgTable(
+  "client_lifecycle_operations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clientKey: text("client_key").notNull(),
+    tenantId: uuid("tenant_id").references(() => tenants.id),
+    operationType: text("operation_type", { enum: ["status", "diff", "dry_run", "apply", "certify", "promote", "drift", "rollback"] }).notNull(),
+    status: text("status", { enum: ["running", "PASS", "FAIL", "BLOCKED_CONFIG", "NOOP"] }).notNull().default("running"),
+    planId: text("plan_id"),
+    desiredManifestHash: text("desired_manifest_hash"),
+    fromReleaseId: text("from_release_id").references(() => clientReleases.releaseId),
+    toReleaseId: text("to_release_id").references(() => clientReleases.releaseId),
+    plan: jsonb("plan").notNull().default({}),
+    evidence: jsonb("evidence").notNull().default({}),
+    evidenceHash: text("evidence_hash"),
+    provenance: jsonb("provenance").notNull().default({}),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+  },
+  (t) => [index("client_lifecycle_operations_history_idx").on(t.clientKey, t.startedAt)],
+);
+
+export const clientReleasePromotions = pgTable(
+  "client_release_promotions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clientKey: text("client_key").notNull(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    releaseId: text("release_id").notNull().references(() => clientReleases.releaseId),
+    previousReleaseId: text("previous_release_id").references(() => clientReleases.releaseId),
+    operationId: uuid("operation_id").notNull().unique().references(() => clientLifecycleOperations.id),
+    kind: text("kind", { enum: ["promotion", "rollback"] }).notNull(),
+    evidence: jsonb("evidence").notNull(),
+    evidenceHash: text("evidence_hash").notNull(),
+    promotedAt: timestamp("promoted_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("client_release_promotions_history_idx").on(t.clientKey, t.tenantId, t.promotedAt),
+    index("client_release_promotions_release_fk_idx").on(t.releaseId),
+  ],
+);
+
+export const activeClientReleases = pgTable("active_client_releases", {
+  tenantId: uuid("tenant_id").primaryKey().references(() => tenants.id),
+  clientKey: text("client_key").notNull().unique(),
+  releaseId: text("release_id").notNull().references(() => clientReleases.releaseId),
+  promotionId: uuid("promotion_id").notNull().references(() => clientReleasePromotions.id),
+  revision: integer("revision").notNull().default(1),
+  promotedAt: timestamp("promoted_at", { withTimezone: true }).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 // ---------------------------------------------------------------------------
 // Durable execution runtime (Phase 2, docs/jarvis-90-execution-blueprint.md §3).
 // Command/step lifecycle mirrors domainActions' proven atomic

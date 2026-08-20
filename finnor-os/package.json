@@ -29,6 +29,8 @@
     "db:seed": "tsx packages/db/seed.ts",
     "db:seed:demo": "tsx scripts/seed-demo-tenant.ts",
     "import:client": "tsx scripts/import-client-data.ts",
+    "factory:client": "tsx scripts/client-factory.ts",
+    "client:lifecycle": "tsx scripts/client-lifecycle.ts",
     "db:bundle": "tsx scripts/bundle-migrations.ts",
     "db:create-user": "tsx scripts/create-user.ts",
     "policy:lint": "tsx scripts/lint-policy-coverage.ts",

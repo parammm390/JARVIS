@@ -7,6 +7,7 @@ dist/
 openapi.json
 .devdb/
 .vercel
+.certifications/
 # Downloaded from the tracked public-source manifest by scripts/ingest-reference-corpus.ts.
 # Do not commit third-party PDFs; record their exact URL and SHA-256 in sources.json.
 corpus/water-treatment/*.pdf

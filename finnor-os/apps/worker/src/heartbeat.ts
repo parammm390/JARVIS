@@ -12,10 +12,17 @@ export const WORKER_HEARTBEAT_ID = "worker";
 
 async function beat(): Promise<void> {
   const now = new Date();
+  const meta = {
+    releaseSha: process.env.FINNOR_COMMIT_SHA ?? process.env.RELEASE_SHA ?? process.env.RAILWAY_GIT_COMMIT_SHA ?? null,
+    coreCertificationId: process.env.FINNOR_CORE_CERTIFICATION_ID ?? null,
+    deploymentId: process.env.FINNOR_WORKER_DEPLOYMENT_ID ?? process.env.RAILWAY_DEPLOYMENT_ID ?? null,
+    environment: process.env.FINNOR_ENVIRONMENT ?? process.env.RAILWAY_ENVIRONMENT_NAME ?? null,
+    source: process.env.FINNOR_RELEASE_SOURCE ?? null,
+  };
   await adminDb()
     .insert(workerHeartbeat)
-    .values({ id: WORKER_HEARTBEAT_ID, lastBeatAt: now })
-    .onConflictDoUpdate({ target: workerHeartbeat.id, set: { lastBeatAt: now } });
+    .values({ id: WORKER_HEARTBEAT_ID, lastBeatAt: now, meta })
+    .onConflictDoUpdate({ target: workerHeartbeat.id, set: { lastBeatAt: now, meta } });
 
   const pingUrl = process.env.HEALTHCHECK_PING_URL;
   if (!pingUrl) return; // ⏸ PARAM signup pending (see JARVIS-CREDENTIALS-LEDGER.md) — no-op, not a fake ping

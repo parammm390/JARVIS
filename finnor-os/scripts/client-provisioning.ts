@@ -4,7 +4,7 @@ import type { ClientManifest } from "./client-manifest";
 import { bootstrapTenant } from "./tenant-bootstrap";
 import { CrossTenantUserError, ensureTenantUser, normalizeEmail, type TenantAuthAdmin } from "./tenant-user";
 
-async function preflightUserAssignments(manifest: ClientManifest, pool: pg.Pool): Promise<void> {
+export async function preflightUserAssignments(manifest: ClientManifest, pool: pg.Pool): Promise<void> {
   if (manifest.users.length === 0) return;
   const client = await pool.connect();
   try {
@@ -33,6 +33,21 @@ async function preflightUserAssignments(manifest: ClientManifest, pool: pg.Pool)
   }
 }
 
+/** Converge only application/Auth identities after the stable tenant exists. */
+export async function convergeClientUsers(
+  manifest: ClientManifest,
+  tenantId: string,
+  dependencies: { auth: TenantAuthAdmin; pool?: pg.Pool; preflight?: boolean },
+) {
+  const pool = dependencies.pool ?? getPool();
+  if (dependencies.preflight !== false) await preflightUserAssignments(manifest, pool);
+  const users = [];
+  for (const user of manifest.users) {
+    users.push(await ensureTenantUser({ tenantId, ...user }, { auth: dependencies.auth, pool }));
+  }
+  return users;
+}
+
 export async function provisionClient(
   manifest: ClientManifest,
   dependencies: { auth: TenantAuthAdmin; pool?: pg.Pool },
@@ -42,9 +57,6 @@ export async function provisionClient(
   // identity conflict cannot leave a half-configured client behind.
   await preflightUserAssignments(manifest, pool);
   const bootstrap = await bootstrapTenant(manifest);
-  const users = [];
-  for (const user of manifest.users) {
-    users.push(await ensureTenantUser({ tenantId: bootstrap.tenantId, ...user }, { auth: dependencies.auth, pool }));
-  }
+  const users = await convergeClientUsers(manifest, bootstrap.tenantId, { ...dependencies, pool, preflight: false });
   return { ...bootstrap, users };
 }

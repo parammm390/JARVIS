@@ -17,9 +17,19 @@ function containsSecretShapedKey(value: unknown): boolean {
   if (Array.isArray(value)) return value.some(containsSecretShapedKey);
   if (!value || typeof value !== "object") return false;
   return Object.entries(value as Record<string, unknown>).some(
-    ([key, nested]) => /secret|password|access[\s_-]?token|refresh[\s_-]?token|private[\s_-]?key|api[\s_-]?key|credential/i.test(key) || containsSecretShapedKey(nested),
+    ([key, nested]) => /secret|password|(?:access|refresh)?[\s_-]?token|private[\s_-]?key|api[\s_-]?key|credential/i.test(key) || containsSecretShapedKey(nested),
   );
 }
+
+const SafeReferenceSchema = z.string().trim().min(1).max(2048).refine(
+  (value) => !/[\s?#]/.test(value) && !/:\/\/[^/]*@/.test(value),
+  "references must be opaque names/paths without embedded credentials or URL query material",
+);
+
+const SafeSourceRefSchema = z.string().trim().min(1).max(2048).refine(
+  (value) => !/[?#]/.test(value) && !/:\/\/[^/]*@/.test(value),
+  "sourceRef cannot contain URL credentials, query parameters, or fragments",
+);
 
 export const TenantRoleSchema = z.enum(["owner", "dispatcher", "technician"]);
 export const CapabilitySchema = z.enum([
@@ -46,10 +56,10 @@ const IntegrationSchema = z.object({
   config: z.record(z.unknown()).default({}),
   // Phase 1 descriptive references remain accepted for manifest compatibility.
   // Phase 2's executable provider reference is the typed `credential` field below.
-  credentialRefs: z.record(z.string().trim().min(1)).default({}),
+  credentialRefs: z.record(SafeReferenceSchema).default({}),
   credential: z.object({
     provider: z.enum(["aws-secrets-manager", "legacy-env"]),
-    ref: z.string().trim().min(1),
+    ref: SafeReferenceSchema,
     version: z.string().trim().min(1).optional(),
     metadata: z.record(z.unknown()).default({}),
   }).optional(),
@@ -64,8 +74,11 @@ const PolicyOverrideSchema = z.object({
 const ImportDefinitionSchema = z.object({
   key: z.string().trim().min(1).max(64),
   source: z.enum(["csv", "json", "jsonl"]),
+  // A durable locator, not source contents. The default factory resolver accepts a
+  // local path or file:// URL; deployments may inject a resolver for object storage.
+  sourceRef: SafeSourceRefSchema.optional(),
   definition: DeclarativeImportBodySchema,
-  credentialRef: z.string().trim().min(1).optional(),
+  credentialRef: SafeReferenceSchema.optional(),
 });
 
 export const ClientManifestSchema = z.object({
@@ -101,7 +114,7 @@ export const ClientManifestSchema = z.object({
   policyOverrides: z.record(PolicyOverrideSchema).default({}),
   requiredCapabilities: z.array(CapabilitySchema).default([]),
   integrations: z.array(IntegrationSchema).default(DEFAULT_INTEGRATIONS.map((row) => ({ ...row }))),
-  credentialRefs: z.record(z.string().trim().min(1)).default({}),
+  credentialRefs: z.record(SafeReferenceSchema).default({}),
   imports: z.array(ImportDefinitionSchema).default([]),
 }).superRefine((manifest, ctx) => {
   const unique = (values: string[]) => new Set(values).size === values.length;
@@ -123,6 +136,15 @@ export const ClientManifestSchema = z.object({
     }
     if (containsSecretShapedKey(integration.credential?.metadata)) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["integrations", index, "credential", "metadata"], message: "credential metadata cannot contain secret-shaped keys" });
+    }
+    if (integration.credential?.provider === "legacy-env" && !/^legacy-env:(quickbooks|vapi|stripe|docusign|ghl|resend|meta_ads|google_ads)$/.test(integration.credential.ref)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["integrations", index, "credential", "ref"], message: "legacy-env credential reference is not allowlisted" });
+    }
+    if (integration.credential?.provider === "aws-secrets-manager" && !(
+      integration.credential.ref.startsWith("arn:aws:secretsmanager:")
+      || integration.credential.ref.startsWith("finnor/tenants/")
+    )) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["integrations", index, "credential", "ref"], message: "AWS credential reference must be a Secrets Manager ARN or finnor/tenants path" });
     }
   });
   const configured = new Set(manifest.integrations.map((integration) => integration.capability));

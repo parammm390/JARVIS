@@ -9,6 +9,7 @@ export type ReleaseMetadata = {
   version: string
   source: string
   projectId: string | null
+  coreCertificationId: string | null
   traceable: boolean
 }
 
@@ -29,6 +30,7 @@ export function getReleaseMetadata(service: string): ReleaseMetadata {
   const environment = firstEnv("FINNOR_ENVIRONMENT", "VERCEL_ENV", "NODE_ENV") ?? "unknown"
   const source = firstEnv("FINNOR_RELEASE_SOURCE") ?? (process.env.GITHUB_ACTIONS === "true" ? "github-actions" : "unknown")
   const projectId = firstEnv("VERCEL_PROJECT_ID") ?? null
+  const coreCertificationId = firstEnv("FINNOR_CORE_CERTIFICATION_ID") ?? null
 
   return {
     service,
@@ -39,13 +41,14 @@ export function getReleaseMetadata(service: string): ReleaseMetadata {
     version,
     source,
     projectId,
+    coreCertificationId,
     traceable:
       FULL_COMMIT_SHA.test(commitSha) &&
       buildId !== "unknown" &&
       deploymentId !== null &&
       environment !== "unknown" &&
       version !== "unknown" &&
-      source !== "unknown",
+      source !== "unknown" &&
+      /^corecert-[0-9a-f]{64}$/.test(coreCertificationId ?? ""),
   }
 }
-

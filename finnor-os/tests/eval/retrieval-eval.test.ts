@@ -9,13 +9,13 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import pg from "pg";
 import { migrate } from "../../packages/db/migrate";
-import { withTenant, closePool, tenants, embeddings } from "@finnor/db";
+import { withTenant, closePool, tenants, embeddings, households, equipment, serviceVisits } from "@finnor/db";
 import { and, eq, inArray } from "drizzle-orm";
 import { writeSemantic, DeterministicLocalEmbedder } from "@finnor/memory";
 import { createDefaultPluginRegistry } from "@finnor/orchestration";
 import { ToolRegistry } from "@finnor/tools";
 import type { DomainPolicy } from "@finnor/shared-types";
-import { DEALER_ZERO_TENANT_ID, SOP_DOCS, FIXTURES, type EvalFixture } from "./fixtures";
+import { DEALER_ZERO_TENANT_ID, REAL_HOUSEHOLDS, SOP_DOCS, FIXTURES, type EvalFixture } from "./fixtures";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
 const EVAL_PASS_THRESHOLD = 0.85;
@@ -83,6 +83,52 @@ describe.skipIf(!available)("retrieval eval (§5.7) — expected source in top-5
     await withTenant(DEALER_ZERO_TENANT_ID, (db) =>
       db.insert(tenants).values({ id: DEALER_ZERO_TENANT_ID, name: "Finnor Water Co. (Dealer Zero)" }).onConflictDoNothing(),
     );
+    // The two household fixtures were originally copied from one live Dealer Zero
+    // database, but their generated UUIDs were never recreated by migrations. Keep a
+    // canonical, minimal snapshot here so this CI gate is reproducible on a brand-new
+    // database rather than passing only on the original developer machine.
+    await withTenant(DEALER_ZERO_TENANT_ID, async (db) => {
+      await db.insert(households).values([
+        {
+          id: REAL_HOUSEHOLDS.softener.id,
+          tenantId: DEALER_ZERO_TENANT_ID,
+          address: REAL_HOUSEHOLDS.softener.address,
+          contactInfo: { source: "retrieval_eval_snapshot" },
+        },
+        {
+          id: REAL_HOUSEHOLDS.carbonFilter.id,
+          tenantId: DEALER_ZERO_TENANT_ID,
+          address: REAL_HOUSEHOLDS.carbonFilter.address,
+          contactInfo: { source: "retrieval_eval_snapshot" },
+        },
+      ]).onConflictDoNothing();
+      await db.insert(equipment).values([
+        {
+          id: "00000000-0000-4000-8000-00000000e001",
+          tenantId: DEALER_ZERO_TENANT_ID,
+          householdId: REAL_HOUSEHOLDS.softener.id,
+          type: REAL_HOUSEHOLDS.softener.equipmentType,
+          model: "HE Softener 45k",
+          source: "finnor",
+        },
+        {
+          id: "00000000-0000-4000-8000-00000000e002",
+          tenantId: DEALER_ZERO_TENANT_ID,
+          householdId: REAL_HOUSEHOLDS.carbonFilter.id,
+          type: REAL_HOUSEHOLDS.carbonFilter.equipmentType,
+          model: "Whole-House Carbon Filtration System",
+          source: "finnor",
+        },
+      ]).onConflictDoNothing();
+      await db.insert(serviceVisits).values({
+        id: "00000000-0000-4000-8000-00000000e003",
+        tenantId: DEALER_ZERO_TENANT_ID,
+        householdId: REAL_HOUSEHOLDS.softener.id,
+        type: "maintenance",
+        completedAt: new Date("2026-01-15T18:00:00.000Z"),
+        notes: "Canonical retrieval-evaluation service-history snapshot.",
+      }).onConflictDoNothing();
+    });
     // Idempotent: skip any SOP already ingested (a real key would embed once, forever
     // — re-running this eval must never re-embed the same real content on every run).
     const already = await withTenant(DEALER_ZERO_TENANT_ID, (db) =>

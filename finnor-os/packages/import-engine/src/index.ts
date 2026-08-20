@@ -56,6 +56,7 @@ export async function runDeclarativeImport(input: RunImportInput): Promise<Impor
   }).returning());
   if (!run) throw new Error("failed to create import run");
 
+  try {
   const counts = { created: 0, updated: 0, skipped: 0, planned: 0, quarantined: 0 };
   for (let offset = 0; offset < rows.length; offset += definition.batchSize) {
     for (const parsed of rows.slice(offset, offset + definition.batchSize)) {
@@ -140,4 +141,16 @@ export async function runDeclarativeImport(input: RunImportInput): Promise<Impor
     skippedRows: counts.skipped, quarantinedRows: counts.quarantined, report, finishedAt: new Date(),
   }).where(eq(importRuns.id, run.id)));
   return report;
+  } catch (error) {
+    // A process crash remains visible as `running` and can be diagnosed by age. Any
+    // caught execution failure is terminally recorded here before it reaches the
+    // client factory/job retry boundary; do not persist provider/source error text,
+    // which can contain secret or customer material.
+    await withTenant(input.tenantId, (db) => db.update(importRuns).set({
+      status: "failed",
+      report: { code: "import_execution_failed" },
+      finishedAt: new Date(),
+    }).where(eq(importRuns.id, run.id))).catch(() => undefined);
+    throw error;
+  }
 }
