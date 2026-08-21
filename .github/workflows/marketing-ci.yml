@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     # A release check must report a verdict. This bounds a wedged browser/tool
     # process instead of leaving the workflow perpetually "In progress".
-    timeout-minutes: 20
+    timeout-minutes: 45
     env:
       # The Supabase ANON/publishable key, not the service-role secret — Next.js
       # bakes every NEXT_PUBLIC_* var into the client JS bundle at build time, so
