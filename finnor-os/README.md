@@ -82,9 +82,10 @@ Every variable is documented inline in [.env.example](.env.example). Values mark
 
 ## Deploying
 
-- **API + Console** → two Vercel projects. Set each project's Root Directory to `finnor-os/apps/api` and `finnor-os/apps/console`. Add the env vars from `.env.example`. Set `AUTH_DEV_BYPASS=0`.
-- **Worker + Orchestrator** → a Railway/Render-class Node host (they hold persistent loops; serverless can't). Blueprint in [infra/deployment/worker-service.yaml](infra/deployment/worker-service.yaml).
-- **Database** → your existing Supabase project. Run `DATABASE_URL=<supabase-url> npm run db:migrate` from CI, never by hand against production.
+- **Frontend + API** → the Vercel projects named in [`../infra/deployment/production.contract.json`](../infra/deployment/production.contract.json).
+- **Worker + embedded orchestrator** → the Azure VM and systemd unit named in that same contract. They hold persistent loops and are deployed by the guarded production workflow.
+- **Database** → the production database endpoint and required migration head in the contract. Production migration is allowed only after the full runtime preflight succeeds.
+- **Release rule** → `.github/workflows/production-release.yml` is the only production path; it accepts only the exact `origin/main` SHA and must verify DB/API/frontend/worker/orchestrator parity before PASS.
 - **Webhooks** → point Vapi's server URL at `https://<api-domain>/api/webhooks/vapi` (set `VAPI_WEBHOOK_SECRET` on both sides) and GHL webhooks at `/api/webhooks/ghl`.
 
 ## Voice-native confirmation

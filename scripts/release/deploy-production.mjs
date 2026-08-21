@@ -2,31 +2,35 @@ import { execFileSync, spawnSync } from "node:child_process"
 import { readFileSync, writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 
-const TEAM_ID = process.env.VERCEL_ORG_ID || "team_TlTo8L6Rvgb0H7uJh0G5GLDD"
-const APPS = {
-  frontend: {
-    project: "finnor-agency",
-    projectId: "prj_dttKVOUzFBGnSg6zNdRualYjQ3oe",
-    directory: ".",
-  },
-  api: {
-    project: "api",
-    projectId: "prj_BoMZ2AXdLIJQXAAe6RqDGBveyq3n",
-    directory: "finnor-os",
-  },
-}
-
 const appName = process.argv[2]
+const prepareOnly = process.argv.includes("--prepare-only")
+const deployOnly = process.argv.includes("--deploy-only")
 const outputIndex = process.argv.indexOf("--output-file")
 const outputFile = outputIndex >= 0 ? process.argv[outputIndex + 1] : undefined
-const app = APPS[appName]
-
-if (!app) {
-  console.error("Usage: node scripts/release/deploy-production.mjs <frontend|api> [--output-file path]")
+if (!["frontend", "api"].includes(appName)) {
+  console.error("Usage: node scripts/release/deploy-production.mjs <frontend|api> [--prepare-only|--deploy-only] [--output-file path]")
   process.exit(2)
 }
+if (prepareOnly && deployOnly) throw new Error("--prepare-only and --deploy-only are mutually exclusive")
 
 const repoRoot = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim()
+const contract = JSON.parse(readFileSync(join(repoRoot, "infra/deployment/production.contract.json"), "utf8"))
+const target = contract.topology[appName]
+if (target?.provider !== "vercel") throw new Error(`${appName} is not a Vercel target in the canonical deployment contract`)
+const app = {
+  project: target.projectName,
+  projectId: target.projectId,
+  directory: target.releaseWorkingDirectory,
+  installCommand: target.installCommand,
+}
+if (!app.directory || app.installCommand !== "npm ci") throw new Error(`${appName} has an unsafe or incomplete canonical build contract`)
+const TEAM_ID = target.organizationId
+if (process.env.VERCEL_ORG_ID && process.env.VERCEL_ORG_ID !== TEAM_ID) {
+  throw new Error(`VERCEL_ORG_ID differs from the canonical deployment contract`)
+}
+if (process.env.VERCEL_PROJECT_ID && process.env.VERCEL_PROJECT_ID !== app.projectId) {
+  throw new Error(`VERCEL_PROJECT_ID differs from the canonical ${appName} project`)
+}
 
 function git(args) {
   return execFileSync("git", args, { cwd: repoRoot, encoding: "utf8" }).trim()
@@ -65,6 +69,10 @@ const appDir = resolve(repoRoot, app.directory)
 const tokenArgs = process.env.VERCEL_TOKEN ? ["--token", process.env.VERCEL_TOKEN] : []
 const env = {
   ...process.env,
+  // Vercel treats VERCEL_ORG_ID and VERCEL_PROJECT_ID as a pair. Scope every
+  // link/pull/build/deploy invocation to the exact project in the contract.
+  VERCEL_ORG_ID: TEAM_ID,
+  VERCEL_PROJECT_ID: app.projectId,
   FINNOR_COMMIT_SHA: commitSha,
   FINNOR_BUILD_ID: buildId,
   FINNOR_VERSION: version,
@@ -72,15 +80,16 @@ const env = {
   FINNOR_RELEASE_SOURCE: source,
 }
 
-run("vercel", ["link", "--project", app.project, "--scope", TEAM_ID, "--yes", ...tokenArgs], appDir, env)
-const linkFile = join(appDir, ".vercel", "project.json")
-const linkedProject = JSON.parse(readFileSync(linkFile, "utf8"))
-if (linkedProject.projectId !== app.projectId || linkedProject.orgId !== TEAM_ID) {
-  throw new Error(`Vercel link mismatch: expected ${TEAM_ID}/${app.projectId}, got ${linkedProject.orgId}/${linkedProject.projectId}`)
+if (!deployOnly) {
+  run("vercel", ["pull", "--yes", "--environment=production", "--scope", TEAM_ID, ...tokenArgs], appDir, env)
+  const localConfig = join(appDir, ".vercel", "finnor-release.vercel.json")
+  writeFileSync(localConfig, `${JSON.stringify({ installCommand: app.installCommand }, null, 2)}\n`)
+  run("vercel", ["build", "--prod", "--yes", "--local-config", localConfig, "--scope", TEAM_ID, ...tokenArgs], appDir, env)
 }
-
-run("vercel", ["pull", "--yes", "--environment=production", "--scope", TEAM_ID, ...tokenArgs], appDir, env)
-run("vercel", ["build", "--prod", "--yes", "--scope", TEAM_ID, ...tokenArgs], appDir, env)
+if (prepareOnly) {
+  console.log(JSON.stringify({ ok: true, app: appName, prepared: true, commitSha, buildId, version, environment, source }, null, 2))
+  process.exit(0)
+}
 
 const deployArgs = [
   "deploy", "--prebuilt", "--prod", "--yes", "--scope", TEAM_ID,

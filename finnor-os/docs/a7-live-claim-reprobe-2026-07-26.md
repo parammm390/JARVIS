@@ -1,5 +1,7 @@
 # A7 live-claim re-probe — 2026-07-26
 
+> **Historical evidence only.** Live claims in this dated report are superseded by the canonical production contract and current release-parity evidence.
+
 This replaces neither historical evidence nor the certification document. It records
 what was actually re-probed this cycle, and marks anything outside the available
 non-destructive probes as unverified rather than carrying an old “confirmed live”

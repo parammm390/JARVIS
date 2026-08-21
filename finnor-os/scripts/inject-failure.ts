@@ -8,7 +8,7 @@
 // Only the injections that are genuinely safe to run against real production
 // infrastructure without risking real customer-facing side effects are implemented
 // here. Two kinds are deliberately NOT wired to fire automatically:
-//   - worker_kill: requires actually restarting the deployed Railway worker process,
+//   - worker_kill: requires actually restarting the deployed persistent worker process,
 //     which briefly stops job processing for EVERY tenant, not just Dealer Zero (the
 //     primary tenant has real invoices/customers on the same worker). Phase 6 already
 //     built and proved this exact mechanism (scripts/staging-infra-chaos-test.ts) —

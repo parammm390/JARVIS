@@ -83,43 +83,26 @@ describe.skipIf(!available)("retrieval eval (§5.7) — expected source in top-5
     await withTenant(DEALER_ZERO_TENANT_ID, (db) =>
       db.insert(tenants).values({ id: DEALER_ZERO_TENANT_ID, name: "Finnor Water Co. (Dealer Zero)" }).onConflictDoNothing(),
     );
-    // The two household fixtures were originally copied from one live Dealer Zero
-    // database, but their generated UUIDs were never recreated by migrations. Keep a
-    // canonical, minimal snapshot here so this CI gate is reproducible on a brand-new
-    // database rather than passing only on the original developer machine.
+    // The old suite passed only when a developer happened to have run the large
+    // Dealer Zero seed beforehand. Keep the bounded household/equipment/service
+    // snapshot local to the test database so clean CI proves every retrieval route.
     await withTenant(DEALER_ZERO_TENANT_ID, async (db) => {
       await db.insert(households).values([
-        {
-          id: REAL_HOUSEHOLDS.softener.id,
-          tenantId: DEALER_ZERO_TENANT_ID,
-          address: REAL_HOUSEHOLDS.softener.address,
-          contactInfo: { source: "retrieval_eval_snapshot" },
-        },
-        {
-          id: REAL_HOUSEHOLDS.carbonFilter.id,
-          tenantId: DEALER_ZERO_TENANT_ID,
-          address: REAL_HOUSEHOLDS.carbonFilter.address,
-          contactInfo: { source: "retrieval_eval_snapshot" },
-        },
+        { id: REAL_HOUSEHOLDS.softener.id, tenantId: DEALER_ZERO_TENANT_ID, address: REAL_HOUSEHOLDS.softener.address, contactInfo: { source: "retrieval_eval_snapshot" } },
+        { id: REAL_HOUSEHOLDS.carbonFilter.id, tenantId: DEALER_ZERO_TENANT_ID, address: REAL_HOUSEHOLDS.carbonFilter.address, contactInfo: { source: "retrieval_eval_snapshot" } },
       ]).onConflictDoNothing();
-      await db.insert(equipment).values([
-        {
-          id: "00000000-0000-4000-8000-00000000e001",
-          tenantId: DEALER_ZERO_TENANT_ID,
-          householdId: REAL_HOUSEHOLDS.softener.id,
-          type: REAL_HOUSEHOLDS.softener.equipmentType,
-          model: "HE Softener 45k",
-          source: "finnor",
-        },
-        {
-          id: "00000000-0000-4000-8000-00000000e002",
-          tenantId: DEALER_ZERO_TENANT_ID,
-          householdId: REAL_HOUSEHOLDS.carbonFilter.id,
-          type: REAL_HOUSEHOLDS.carbonFilter.equipmentType,
-          model: "Whole-House Carbon Filtration System",
-          source: "finnor",
-        },
-      ]).onConflictDoNothing();
+      const equipmentFixtures = [
+        { householdId: REAL_HOUSEHOLDS.softener.id, type: REAL_HOUSEHOLDS.softener.equipmentType, model: "HE Softener 45k" },
+        { householdId: REAL_HOUSEHOLDS.carbonFilter.id, type: REAL_HOUSEHOLDS.carbonFilter.equipmentType, model: "Whole-House Carbon Filtration System" },
+      ];
+      for (const fixture of equipmentFixtures) {
+        const [existing] = await db.select({ id: equipment.id }).from(equipment).where(and(
+          eq(equipment.tenantId, DEALER_ZERO_TENANT_ID),
+          eq(equipment.householdId, fixture.householdId),
+          eq(equipment.type, fixture.type),
+        ));
+        if (!existing) await db.insert(equipment).values({ tenantId: DEALER_ZERO_TENANT_ID, ...fixture });
+      }
       await db.insert(serviceVisits).values({
         id: "00000000-0000-4000-8000-00000000e003",
         tenantId: DEALER_ZERO_TENANT_ID,

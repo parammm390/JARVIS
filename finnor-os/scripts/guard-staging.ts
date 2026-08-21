@@ -6,7 +6,7 @@
 //      embedded-postgres dev default, so a forgotten env var can't silently run the
 //      staging suite against localhost (or, worse, whatever DATABASE_URL happens to be
 //      exported in the shell) and report a false "staging is fine."
-// Provisioning staging itself (a real Supabase/Railway project) is a human step per
+// Provisioning staging itself (a separately contracted database and persistent runtime) is a human step per
 // docs/staging-setup.md — this script only guards the command that exercises it once
 // it exists.
 import { spawnSync } from "node:child_process";

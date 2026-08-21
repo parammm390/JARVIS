@@ -11,7 +11,7 @@
 // executed end-to-end. Run it with: k6 run scripts/k6-load-test.js
 //
 // Required env vars:
-//   BASE_URL              — e.g. https://finnor-os-staging.up.railway.app (staging only)
+//   BASE_URL              — the explicitly contracted staging API URL (staging only)
 //   TENANT_ID             — the Dealer Zero tenant id on that environment
 //   AUTH_BEARER_TOKEN     — a real Supabase JWT for a user on TENANT_ID (staging runs
 //                           with AUTH_DEV_BYPASS=0 per docs/staging-setup.md, so this is

@@ -11,6 +11,11 @@ most of the remaining ~35-45%, and even after all 16, the last stretch to 100% i
 real API credentials for a real operating dealer — not more code. Do not quote
 "Phases 1-6 complete" out of this context.
 
+> **Planning document, not deployment truth.** Provider names and staging ideas in
+> this roadmap are historical/future planning only. Do not provision or release from
+> them. Current production topology and the only guarded release path are defined by
+> `infra/deployment/production.contract.json` and `.github/workflows/production-release.yml`.
+
 ## PHASES 1-6 (their specific scope built + verified) — summary of what already exists
 
 **Phase 1 — Canonical Data Platform.** 21 new tables in a dedicated `finnor_os`

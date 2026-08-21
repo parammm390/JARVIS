@@ -1,5 +1,7 @@
 # Owner actions — steps only Param can do
 
+> **Archived historical action ledger.** Do not execute provider or deployment instructions in this file. Current production targets and release steps exist only in `infra/deployment/production.contract.json` and `.github/workflows/production-release.yml`.
+
 ## 1. ~~Supabase publishable/anon key~~ — RESOLVED, was already in Vercel
 
 Turned out `NEXT_PUBLIC_SUPABASE_ANON_KEY` (already set on `finnor-agency`, from an earlier setup pass) is the correct publishable key for project `kpxrnonhnhexutvdywbh` — same project `FINNOR_OS_SUPABASE_URL` points at. Missed the cross-reference initially because it's named generically rather than `FINNOR_OS_*`; no action needed, login was built using it directly.
