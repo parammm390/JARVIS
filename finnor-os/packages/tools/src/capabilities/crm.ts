@@ -7,9 +7,10 @@
 import { z } from "zod";
 import type { CapabilityContract, CapabilityBinding, RetryPolicy } from "@finnor/workflow-runtime";
 import { connectGhl, callMcpTool } from "../mcp-client";
-import { resolveTenantCredentialContext, type TenantCredentialContext } from "@finnor/security";
+import { resolveCredentialContext, type TenantCredentialContext } from "@finnor/security";
 import { withCircuitBreaker } from "../provider-circuit-breaker";
 import { upsertHouseholdByPhone, recordOutbound, resolveSmsDestination, bookServiceVisit } from "../sandbox";
+import { governedCapabilityRuntime } from "./governed-runtime";
 import {
   emulatorUpsertContact,
   emulatorSendMessage,
@@ -67,6 +68,22 @@ export function isGhlConfigured(context: TenantCredentialContext<"ghl"> | null):
   return Boolean(context);
 }
 
+async function resolveGhlApplication(input: object & { tenantId: string }, fallbackPurpose: string) {
+  const runtime = governedCapabilityRuntime(input, fallbackPurpose);
+  return resolveCredentialContext(input.tenantId, runtime.__identityActorId, "ghl", runtime.__identityPurpose, {
+    application: "ghl",
+    ...(runtime.__authProfileRef ? { authProfileRef: runtime.__authProfileRef } : {}),
+  });
+}
+
+async function resolveGhlCommunication(input: object & { tenantId: string }, channel: "sms" | "calendar", fallbackPurpose: string) {
+  const runtime = governedCapabilityRuntime(input, fallbackPurpose);
+  return resolveCredentialContext(input.tenantId, runtime.__identityActorId, "ghl", runtime.__identityPurpose, {
+    channel,
+    ...(runtime.__communicationIdentityId ? { communicationIdentityId: runtime.__communicationIdentityId } : {}),
+  });
+}
+
 // --- upsert_contact ---------------------------------------------------------
 
 export const upsertContactContract: CapabilityContract<UpsertContactInput, UpsertContactOutput> = {
@@ -101,7 +118,7 @@ export const upsertContactGhlBinding: CapabilityBinding<UpsertContactInput, Upse
     return withCircuitBreaker(
       "ghl",
       async () => {
-        const conn = await connectGhl(await resolveTenantCredentialContext(input.tenantId, "ghl"));
+        const conn = await connectGhl(await resolveGhlApplication(input, "upsert_contact"));
         try {
           const result = await callMcpTool(conn, "ghl", "contacts_upsert-contact", {
             firstName: input.firstName,
@@ -152,7 +169,7 @@ export const sendMessageGhlBinding: CapabilityBinding<SendMessageInput, SendMess
     return withCircuitBreaker(
       "ghl",
       async () => {
-        const conn = await connectGhl(await resolveTenantCredentialContext(input.tenantId, "ghl"));
+        const conn = await connectGhl(await resolveGhlCommunication(input, "sms", "send_message"));
         try {
           await callMcpTool(conn, "ghl", "conversations_send-a-new-message", { contactId: input.contactId, message: input.message });
           return { sent: true, channel: input.channel ?? "sms" };
@@ -197,7 +214,7 @@ export const bookProviderAppointmentGhlBinding: CapabilityBinding<BookProviderAp
     return withCircuitBreaker(
       "ghl",
       async () => {
-        const credentialContext = await resolveTenantCredentialContext(input.tenantId, "ghl");
+        const credentialContext = await resolveGhlCommunication(input, "calendar", "book_provider_appointment");
         if (!credentialContext.credentials.waterTestCalendarId) {
           throw new Error("GHL tenant credentials do not define a water-test calendar");
         }

@@ -21,6 +21,9 @@ const RESOURCE_KEYS: Record<string, string> = {
   appointmentId: "appointment",
   workId: "work",
   taskId: "task",
+  communicationIdentityId: "communication_identity",
+  applicationAccountId: "application_account",
+  authProfileId: "auth_profile",
 };
 
 function walk(value: unknown, visit: (key: string, value: unknown) => void): void {
@@ -104,10 +107,28 @@ export function queryAuthorityRequest(request: OperationalQueryRequest, workId?:
     case "agent_activity": resource = { type: "agent_activity" }; break;
     case "business_state": resource = { type: "business_state" }; break;
     case "company_context": {
-      const anchor = raw.anchor && typeof raw.anchor === "object" ? raw.anchor as Record<string, unknown> : null;
-      resource = anchor && typeof anchor.entityType === "string"
-        ? { type: anchor.entityType, ...(typeof anchor.entityId === "string" ? { id: anchor.entityId } : {}) }
-        : { type: "household", ...(typeof raw.householdId === "string" ? { id: raw.householdId } : {}) };
+      const anchor = params.anchor && typeof params.anchor === "object" ? params.anchor as Record<string, unknown> : null;
+      resource = anchor && typeof anchor.partyType === "string"
+        ? { type: anchor.partyType, ...(typeof anchor.partyId === "string" ? { id: anchor.partyId } : {}) }
+        : anchor && typeof anchor.entityType === "string"
+          ? { type: anchor.entityType, ...(typeof anchor.entityId === "string" ? { id: anchor.entityId } : {}) }
+          : { type: "household", ...(typeof params.householdId === "string" ? { id: params.householdId } : {}) };
+      break;
+    }
+    case "party_lookup":
+    case "party_context":
+    case "party_availability": {
+      const ref = params.ref && typeof params.ref === "object" ? params.ref as Record<string, unknown> : null;
+      resource = ref && typeof ref.partyType === "string"
+        ? { type: ref.partyType, ...(typeof ref.partyId === "string" ? { id: ref.partyId } : {}) }
+        : { type: "party" };
+      break;
+    }
+    case "team_roster": {
+      const ref = params.teamRef && typeof params.teamRef === "object" ? params.teamRef as Record<string, unknown> : null;
+      resource = ref && typeof ref.partyType === "string"
+        ? { type: ref.partyType, ...(typeof ref.partyId === "string" ? { id: ref.partyId } : {}) }
+        : { type: "team" };
       break;
     }
   }

@@ -361,11 +361,40 @@ export async function runClientCertificationGates(input: {
         || actual.credential_ref !== desiredRef
         || actual.credential_version !== (expected.credential?.version ?? null);
     }).map((row) => row.capability);
-    const credentialGateStatus: CertificationStatus = credentialDrift.length ? "FAIL" : missingCredentialCapabilities.length ? "BLOCKED_CONFIG" : "PASS";
+    const communicationCredentialRows = await pool.query<{
+      identity_key: string; credential_provider: string | null; credential_ref: string | null; credential_version: string | null;
+    }>("SELECT identity_key,credential_provider,credential_ref,credential_version FROM finnor_os.communication_identities WHERE tenant_id=$1", [tenantId]);
+    const communicationCredentialByKey = new Map(communicationCredentialRows.rows.map((row) => [row.identity_key, row]));
+    const communicationCredentialDrift = (manifest.communicationIdentities ?? []).flatMap((expected) => {
+      const actual = communicationCredentialByKey.get(expected.key);
+      const desiredRef = expected.credential?.ref.replaceAll("{tenantId}", tenantId) ?? null;
+      return !actual
+        || actual.credential_provider !== (expected.credential?.provider ?? null)
+        || actual.credential_ref !== desiredRef
+        || actual.credential_version !== (expected.credential?.version ?? null) ? [expected.key] : [];
+    });
+    const authProfileCredentialRows = await pool.query<{
+      auth_profile_ref: string; credential_provider: string | null; credential_ref: string | null; credential_version: string | null;
+    }>("SELECT auth_profile_ref,credential_provider,credential_ref,credential_version FROM finnor_os.auth_profiles WHERE tenant_id=$1", [tenantId]);
+    const authProfileCredentialByRef = new Map(authProfileCredentialRows.rows.map((row) => [row.auth_profile_ref, row]));
+    const authProfileCredentialDrift = (manifest.authProfiles ?? []).flatMap((expected) => {
+      const actual = authProfileCredentialByRef.get(expected.ref);
+      const desiredRef = expected.credential?.ref.replaceAll("{tenantId}", tenantId) ?? null;
+      return !actual
+        || actual.credential_provider !== (expected.credential?.provider ?? null)
+        || actual.credential_ref !== desiredRef
+        || actual.credential_version !== (expected.credential?.version ?? null) ? [expected.ref] : [];
+    });
+    const credentialGateStatus: CertificationStatus = credentialDrift.length || communicationCredentialDrift.length || authProfileCredentialDrift.length
+      ? "FAIL" : missingCredentialCapabilities.length ? "BLOCKED_CONFIG" : "PASS";
     gates.set("credential_references", gateResult("credential_references", credentialGateStatus, {
       missingCredentialCapabilities,
       credentialDrift,
+      communicationCredentialDrift,
+      authProfileCredentialDrift,
       references: integrationRows.rows.map((row) => ({ capability: row.capability, provider: row.credential_provider, configured: Boolean(row.credential_ref), referenceHash: row.credential_ref ? sha256(row.credential_ref) : null, versionConfigured: Boolean(row.credential_version) })),
+      identityReferences: communicationCredentialRows.rows.map((row) => ({ identityKey: row.identity_key, provider: row.credential_provider, configured: Boolean(row.credential_ref), referenceHash: row.credential_ref ? sha256(row.credential_ref) : null, versionConfigured: Boolean(row.credential_version) })),
+      authProfileReferences: authProfileCredentialRows.rows.map((row) => ({ authProfileRef: row.auth_profile_ref, provider: row.credential_provider, configured: Boolean(row.credential_ref), referenceHash: row.credential_ref ? sha256(row.credential_ref) : null, versionConfigured: Boolean(row.credential_version) })),
     }));
 
     const relevantProviders = manifest.requiredCapabilities.flatMap((capability) => {
@@ -469,7 +498,8 @@ export async function runClientCertificationGates(input: {
     "approval_authority_configuration", "worker_runtime_health", "water_treatment_journeys", "evidence_receipts", "core_diff_guard",
   ].map((key) => gates.get(key)?.status ?? "FAIL");
   const ownerConfigured = manifest.users.some((user) => user.role === "owner" && user.status === "active");
-  const migrationCompatible = dbIdentity.migrations.includes("0082_phase5_certification_releases.sql");
+  const migrationCompatible = dbIdentity.migrations.includes("0082_phase5_certification_releases.sql")
+    && dbIdentity.migrations.includes("0085_phase1_identity_access_fabric.sql");
   const completenessStatus = combinedStatus([
     deploymentStatus,
     ownerConfigured ? "PASS" : "BLOCKED_CONFIG",

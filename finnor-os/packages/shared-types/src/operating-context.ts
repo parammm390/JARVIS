@@ -1,4 +1,6 @@
 import type { CanonicalEntityRef } from "./company-graph";
+import type { OperationalPartySummary } from "./operational-queries";
+import type { OperatingIdentityAccess } from "./identity-access";
 
 /**
  * Evidence classes are deliberately ordered.  Callers may enrich a higher class
@@ -68,6 +70,39 @@ export interface OperatingContextMemoryHit {
   provenance?: Record<string, unknown>;
 }
 
+/**
+ * Bounded canonical company-directory context for the authenticated employee.
+ * Every value is assembled from tenant-scoped Postgres rows. Profile and memory
+ * may enrich the surrounding OperatingContext, but never override this data.
+ */
+export interface OperatingCompanyDirectory {
+  employee: OperationalPartySummary | null;
+  teams: OperationalPartySummary[];
+  locations: OperationalPartySummary[];
+  reporting: {
+    manager: OperationalPartySummary | null;
+    reports: OperationalPartySummary[];
+    backups: OperationalPartySummary[];
+    assistants: OperationalPartySummary[];
+  };
+  currentWork: Array<{
+    id: string;
+    status: string;
+    instruction: string | null;
+    updatedAt: string | null;
+  }>;
+  currentTasks: Array<{
+    id: string;
+    title: string;
+    status: string;
+    dueAt: string | null;
+    authorityRole: string | null;
+  }>;
+  authorityRoles: string[];
+  referencedParties: OperationalPartySummary[];
+  sourceTables: string[];
+}
+
 export interface OperatingContext {
   version: 1;
   assembledAt: string;
@@ -94,6 +129,10 @@ export interface OperatingContext {
     activeContext: Record<string, unknown>;
     updatedAt: string | null;
   } | null;
+  companyDirectory: OperatingCompanyDirectory;
+  /** Safe governed handles available to the authenticated employee. This surface
+   * never contains a credential provider/ref/version or any resolved secret. */
+  identityAccess: OperatingIdentityAccess;
   referencedEntities: CanonicalEntityRef[];
   canonicalSummaries: Array<{
     name: string;

@@ -6,7 +6,7 @@
  * it in a request would make it too easy for a planner/tool payload to smuggle a
  * cross-tenant selector into a read path.
  */
-import type { CanonicalEntityRef, CompanyContext } from "./company-graph";
+import type { CanonicalEntityRef, CompanyContext, CompanyContextAnchor, PartyRef } from "./company-graph";
 
 export const OPERATIONAL_QUERY_VERSION = 1 as const;
 
@@ -20,6 +20,10 @@ export const OPERATIONAL_QUERY_INTENTS = [
   "agent_activity",
   "business_state",
   "company_context",
+  "party_lookup",
+  "party_context",
+  "team_roster",
+  "party_availability",
 ] as const;
 
 export type CanonicalOperationalQueryIntent = (typeof OPERATIONAL_QUERY_INTENTS)[number];
@@ -133,10 +137,43 @@ export interface BusinessStateRequest {
 export interface CompanyContextRequest {
   intent: "company_context";
   /** Exact typed anchor. tenantId is deliberately supplied only by the executor. */
-  anchor?: CanonicalEntityRef;
+  anchor?: CompanyContextAnchor;
   /** Convenience selectors for customer-first JARVIS journeys. */
   householdId?: string;
   query?: string;
+}
+
+export interface PartyLookupRequest {
+  intent: "party_lookup";
+  /** A canonical PartyRef takes precedence over text resolution. */
+  ref?: PartyRef;
+  /** Relationship phrases are resolved against authenticated employee/work context. */
+  query?: string;
+  page?: OperationalQueryPageRequest;
+}
+
+export interface PartyContextRequest {
+  intent: "party_context";
+  ref?: PartyRef;
+  query?: string;
+  page?: OperationalQueryPageRequest;
+}
+
+export interface TeamRosterRequest {
+  intent: "team_roster";
+  /** The team ref is optional when query names the team. */
+  teamRef?: PartyRef;
+  query?: string;
+  page?: OperationalQueryPageRequest;
+}
+
+export interface PartyAvailabilityRequest {
+  intent: "party_availability";
+  ref?: PartyRef;
+  query?: string;
+  localDateRange?: OperationalLocalDateRange;
+  includeCapacity?: boolean;
+  page?: OperationalQueryPageRequest;
 }
 
 export type CanonicalOperationalQueryRequest =
@@ -148,7 +185,11 @@ export type CanonicalOperationalQueryRequest =
   | InventoryStatusRequest
   | AgentActivityRequest
   | BusinessStateRequest
-  | CompanyContextRequest;
+  | CompanyContextRequest
+  | PartyLookupRequest
+  | PartyContextRequest
+  | TeamRosterRequest
+  | PartyAvailabilityRequest;
 
 export interface CustomerLookupCompatibilityRequest {
   intent: "customer_lookup";
@@ -221,7 +262,7 @@ export interface OperationalQueryExecutionRef {
   status: "running" | "succeeded" | "failed";
 }
 
-export type OperationalQueryResultStatus = "ok" | "ambiguous" | "not_found";
+export type OperationalQueryResultStatus = "ok" | "ambiguous" | "not_found" | "inactive";
 
 export interface OperationalQueryResultMeta {
   version: typeof OPERATIONAL_QUERY_VERSION;
@@ -438,8 +479,71 @@ export interface BusinessStateResult extends OperationalQueryResultBase<"busines
 }
 
 export interface CompanyContextResult extends OperationalQueryResultBase<"company_context"> {
-  resolution: "exact" | "unique" | "ambiguous" | "not_found";
+  resolution: "exact" | "unique" | "ambiguous" | "not_found" | "inactive";
   context: CompanyContext | null;
+}
+
+export interface OperationalPartySummary {
+  ref: PartyRef;
+  displayName: string;
+  status: "active" | "inactive" | "suspended";
+  description: string | null;
+  title?: string | null;
+  role?: string | null;
+  organizationName?: string | null;
+  aliases?: string[];
+  teamNames?: string[];
+  locationNames?: string[];
+}
+
+export interface PartyLookupResult extends OperationalQueryResultBase<"party_lookup"> {
+  resolution: "exact" | "unique" | "ambiguous" | "not_found" | "inactive";
+  rows: OperationalPartySummary[];
+}
+
+export interface PartyRelationshipRow {
+  relationship: string;
+  from: PartyRef;
+  to: PartyRef;
+  label: string | null;
+  status: string | null;
+}
+
+export interface PartyContextResult extends OperationalQueryResultBase<"party_context"> {
+  resolution: "exact" | "unique" | "ambiguous" | "not_found" | "inactive";
+  party: OperationalPartySummary | null;
+  candidates: OperationalPartySummary[];
+  teams: OperationalPartySummary[];
+  locations: OperationalPartySummary[];
+  relationships: PartyRelationshipRow[];
+  currentWork: Array<{ id: string; status: string; instruction: string | null; updatedAt: string | null }>;
+  currentTasks: Array<{ id: string; title: string; status: string; dueAt: string | null; authorityRole: string | null }>;
+  authorityRoles: string[];
+}
+
+export interface TeamRosterResult extends OperationalQueryResultBase<"team_roster"> {
+  resolution: "exact" | "unique" | "ambiguous" | "not_found" | "inactive";
+  team: OperationalPartySummary | null;
+  candidates: OperationalPartySummary[];
+  members: Array<OperationalPartySummary & { membershipRole?: string | null }>;
+}
+
+export interface PartyAvailabilityWindow {
+  dayOfWeek: number | null;
+  startTime: string | null;
+  endTime: string | null;
+  maxConcurrentJobs: number | null;
+}
+
+export interface PartyAvailabilityResult extends OperationalQueryResultBase<"party_availability"> {
+  resolution: "exact" | "unique" | "ambiguous" | "not_found" | "inactive";
+  party: OperationalPartySummary | null;
+  candidates: OperationalPartySummary[];
+  availability: "available" | "unavailable" | "unknown";
+  windows: PartyAvailabilityWindow[];
+  capacity: { openAssignments: number; maxConcurrentJobs: number | null } | null;
+  dispatchProfile: { workdayStart: string | null; workdayEnd: string | null; defaultSlaMinutes: number | null } | null;
+  sourceTables: string[];
 }
 
 export type OperationalQueryResult =
@@ -451,7 +555,11 @@ export type OperationalQueryResult =
   | InventoryStatusResult
   | AgentActivityResult
   | BusinessStateResult
-  | CompanyContextResult;
+  | CompanyContextResult
+  | PartyLookupResult
+  | PartyContextResult
+  | TeamRosterResult
+  | PartyAvailabilityResult;
 
 /** Compact result accepted by the router compatibility seam. Canonical executor
  * results also carry these fields through OperationalQueryResultBase. */
@@ -489,4 +597,8 @@ export type OperationalQueryResultFor<R extends OperationalQueryRequest> =
                               : R extends BusinessStateRequest ? BusinessStateResult
                                 : R extends BusinessStateCompatibilityRequest ? BusinessStateResult
                                   : R extends CompanyContextRequest ? CompanyContextResult
+                                    : R extends PartyLookupRequest ? PartyLookupResult
+                                      : R extends PartyContextRequest ? PartyContextResult
+                                        : R extends TeamRosterRequest ? TeamRosterResult
+                                          : R extends PartyAvailabilityRequest ? PartyAvailabilityResult
                                     : never;

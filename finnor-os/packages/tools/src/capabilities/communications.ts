@@ -10,7 +10,8 @@ import type { CapabilityContract, CapabilityBinding, RetryPolicy } from "@finnor
 import { placeVapiCall } from "../vapi-rest";
 import { withCircuitBreaker } from "../provider-circuit-breaker";
 import { claimBudget } from "../provider-budget";
-import { resolveTenantCredentialContext, type TenantCredentialContext } from "@finnor/security";
+import { resolveCredentialContext, type TenantCredentialContext } from "@finnor/security";
+import { governedCapabilityRuntime } from "./governed-runtime";
 import {
   emulatorSendConfirmation,
   emulatorReconcileCall,
@@ -69,7 +70,17 @@ export function isVapiConfigured(context: TenantCredentialContext<"vapi"> | null
 }
 
 async function vapiSendConfirmation(input: SendConfirmationInput): Promise<SendConfirmationOutput> {
-  const credentialContext = await resolveTenantCredentialContext(input.tenantId, "vapi");
+  const runtime = governedCapabilityRuntime(input, "send_confirmation_call");
+  const credentialContext = await resolveCredentialContext(
+    input.tenantId,
+    runtime.__identityActorId,
+    "vapi",
+    runtime.__identityPurpose,
+    {
+      channel: "voice",
+      ...(runtime.__communicationIdentityId ? { communicationIdentityId: runtime.__communicationIdentityId } : {}),
+    },
+  );
   // Phase 4 (§4.4): real per-tenant daily cap, checked BEFORE the breaker/call — a
   // tenant that's already hit its cap must never place another real call, breaker
   // state notwithstanding.

@@ -3,33 +3,33 @@
 
 import nodemailer, { type Transporter } from "nodemailer";
 import { IntegrationError } from "./errors";
+import type { TenantCredentialContext } from "@finnor/security";
+
+export type GmailCredentialContext = TenantCredentialContext<"gmail">;
 
 let transporterOverride: Transporter | null = null;
 
-/** Tests inject a stub transport here; production uses Gmail SMTP from env. */
+/** Tests inject a stub transport here; production uses the governed Gmail context. */
 export function setEmailTransportForTesting(t: Transporter | null): void {
   transporterOverride = t;
 }
 
-function getTransporter(): Transporter {
+function getTransporter(context: GmailCredentialContext): Transporter {
   if (transporterOverride) return transporterOverride;
-  const user = process.env.GMAIL_USER;
-  const pass = process.env.GMAIL_APP_PASSWORD;
-  if (!user || !pass) {
-    throw new IntegrationError("email", "GMAIL_USER / GMAIL_APP_PASSWORD are not set", false);
-  }
-  return nodemailer.createTransport({ service: "gmail", auth: { user, pass } });
+  return nodemailer.createTransport({ service: "gmail", auth: { user: context.credentials.user, pass: context.credentials.appPassword } });
 }
 
 export async function sendEmail(opts: {
+  tenantId: string;
   to: string;
   subject: string;
   body: string;
-}): Promise<{ messageId: string }> {
-  const transporter = getTransporter();
+}, context: GmailCredentialContext): Promise<{ messageId: string }> {
+  if (context.tenantId !== opts.tenantId) throw new IntegrationError("email", "Gmail credential context tenant mismatch", false);
+  const transporter = getTransporter(context);
   try {
     const info = await transporter.sendMail({
-      from: process.env.GMAIL_USER,
+      from: context.credentials.user,
       to: opts.to,
       subject: opts.subject,
       text: opts.body,
@@ -41,9 +41,9 @@ export async function sendEmail(opts: {
 }
 
 /** Verify SMTP credentials without sending anything. */
-export async function verifyEmailTransport(): Promise<boolean> {
+export async function verifyEmailTransport(context: GmailCredentialContext): Promise<boolean> {
   try {
-    await getTransporter().verify();
+    await getTransporter(context).verify();
     return true;
   } catch {
     return false;

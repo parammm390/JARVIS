@@ -271,6 +271,16 @@ export function hashClientConfiguration(manifest: ClientManifest): ClientConfigu
         credentialReference: credential ? { provider: credential.provider, referenceHash: sha256(credential.ref), versionConfigured: Boolean(credential.version) } : null,
         descriptiveReferenceHashes: Object.fromEntries(Object.entries(credentialRefs).map(([key, ref]) => [key, sha256(ref)])),
       })),
+      communicationIdentities: (manifest.communicationIdentities ?? []).map(({ credential, ...identity }) => ({
+        ...identity,
+        credentialReference: credential ? { provider: credential.provider, referenceHash: sha256(credential.ref), versionConfigured: Boolean(credential.version) } : null,
+      })),
+      communicationIdentityBindings: manifest.communicationIdentityBindings ?? null,
+      applicationAccounts: manifest.applicationAccounts ?? null,
+      authProfiles: (manifest.authProfiles ?? []).map(({ credential, ...profile }) => ({
+        ...profile,
+        credentialReference: credential ? { provider: credential.provider, referenceHash: sha256(credential.ref), versionConfigured: Boolean(credential.version) } : null,
+      })),
       credentialReferenceHashes: Object.fromEntries(Object.entries(manifest.credentialRefs).map(([key, ref]) => [key, sha256(ref)])),
     }),
   };

@@ -37,7 +37,7 @@ function fakeAuth() {
   return { users, listUsers, createUser, updateUserById, auth: { listUsers, createUser, updateUserById } as unknown as TenantAuthAdmin };
 }
 
-function manifest(key: string, email: string, overrides: Partial<ClientManifest> = {}): ClientManifest {
+function manifest(key: string, email: string, overrides: Record<string, unknown> = {}): ClientManifest {
   return parseClientManifest({
     clientKey: key,
     tenant: { name: "Convergence Water", timezone: "America/Chicago" },
@@ -206,4 +206,287 @@ describe.skipIf(!available)("client identity and convergent provisioning", () =>
       location_updated_at: snapshot.rows[0].location_updated_at,
     });
   }, 60_000);
+
+  it("repeats a 100-employee Company World manifest without duplicate parties", async () => {
+    const suffix = randomUUID().slice(0, 8);
+    const key = `hundred-${suffix}`;
+    const employeeUsers = Array.from({ length: 100 }, (_, index) => ({
+      email: `${key}-${index}@example.test`,
+      role: index === 0 ? "owner" as const : "technician" as const,
+      displayName: `Employee ${index}`,
+      locationKey: "main-office",
+    }));
+    const desired = manifest(key, employeeUsers[0]!.email, {
+      users: employeeUsers,
+      orgUnits: [
+        { key: "ops", name: "Operations", kind: "team", locationKey: "main-office" },
+        { key: "dispatch", name: "Dispatch", kind: "department" },
+      ],
+      orgUnitMemberships: employeeUsers.map((user) => ({ employeeEmail: user.email, orgUnitKey: "ops" })),
+      employeeRelationships: employeeUsers.slice(1).map((user) => ({
+        subjectEmployeeEmail: user.email,
+        relatedEmployeeEmail: employeeUsers[0]!.email,
+        relationshipType: "manager" as const,
+      })),
+      aliases: [
+        { key: "ops-alias", partyType: "team", partyKey: "ops", alias: "Field Operations" },
+        { key: "owner-alias", partyType: "employee", partyKey: employeeUsers[0]!.email, alias: "Operations Lead" },
+        { key: "supplier-alias", partyType: "external_organization", partyKey: "parts-supplier", alias: "Our Parts Supplier" },
+        { key: "contact-alias", partyType: "external_contact", partyKey: "parts-jane", alias: "Jane at Parts" },
+      ],
+      externalOrganizations: [{ key: "parts-supplier", name: "Parts Supplier", kind: "supplier", businessEmail: "sales@parts.test" }],
+      externalContacts: [{ key: "parts-jane", name: "Jane Parts", externalOrganizationKey: "parts-supplier", businessEmail: "jane@parts.test" }],
+    });
+    const auth = fakeAuth();
+    const first = await provisionClient(desired, { auth: auth.auth });
+    const second = await provisionClient(desired, { auth: auth.auth });
+
+    expect(second.tenantId).toBe(first.tenantId);
+    expect(second.companyWorld).toMatchObject({
+      orgUnits: 2,
+      memberships: 100,
+      relationships: 99,
+      aliases: 4,
+      externalOrganizations: 1,
+      externalContacts: 1,
+    });
+    const counts = await getPool().query<{
+      users: number; org_units: number; memberships: number; relationships: number;
+      aliases: number; external_organizations: number; external_contacts: number;
+    }>(
+      `SELECT
+        (SELECT count(*)::int FROM finnor_os.users WHERE tenant_id=$1) users,
+        (SELECT count(*)::int FROM finnor_os.org_units WHERE tenant_id=$1 AND managed_by=$2) org_units,
+        (SELECT count(*)::int FROM finnor_os.org_unit_memberships WHERE tenant_id=$1 AND managed_by=$2 AND active) memberships,
+        (SELECT count(*)::int FROM finnor_os.employee_relationships WHERE tenant_id=$1 AND managed_by=$2 AND active) relationships,
+        (SELECT count(*)::int FROM finnor_os.party_aliases WHERE tenant_id=$1 AND managed_by=$2 AND active) aliases,
+        (SELECT count(*)::int FROM finnor_os.external_organizations WHERE tenant_id=$1 AND managed_by=$2 AND active) external_organizations,
+        (SELECT count(*)::int FROM finnor_os.external_contacts WHERE tenant_id=$1 AND managed_by=$2 AND active) external_contacts`,
+      [first.tenantId, desired.clientKey],
+    );
+    expect(counts.rows[0]).toEqual({ users: 100, org_units: 2, memberships: 100, relationships: 99, aliases: 4, external_organizations: 1, external_contacts: 1 });
+    const identities = await getPool().query(
+      `SELECT
+        (SELECT id FROM finnor_os.org_units WHERE tenant_id=$1 AND unit_key='ops') org_id,
+        (SELECT id FROM finnor_os.external_organizations WHERE tenant_id=$1 AND organization_key='parts-supplier') organization_id,
+        (SELECT id FROM finnor_os.external_contacts WHERE tenant_id=$1 AND contact_key='parts-jane') contact_id,
+        (SELECT id FROM finnor_os.party_aliases WHERE tenant_id=$1 AND alias_key='ops-alias') alias_id,
+        (SELECT m.id FROM finnor_os.org_unit_memberships m JOIN finnor_os.users u ON u.id=m.employee_id JOIN finnor_os.org_units o ON o.id=m.org_unit_id WHERE m.tenant_id=$1 AND u.email=$2 AND o.unit_key='ops') membership_id`,
+      [first.tenantId, employeeUsers[0]!.email],
+    );
+    await provisionClient(desired, { auth: auth.auth });
+    const repeatedIdentities = await getPool().query(
+      `SELECT
+        (SELECT id FROM finnor_os.org_units WHERE tenant_id=$1 AND unit_key='ops') org_id,
+        (SELECT id FROM finnor_os.external_organizations WHERE tenant_id=$1 AND organization_key='parts-supplier') organization_id,
+        (SELECT id FROM finnor_os.external_contacts WHERE tenant_id=$1 AND contact_key='parts-jane') contact_id,
+        (SELECT id FROM finnor_os.party_aliases WHERE tenant_id=$1 AND alias_key='ops-alias') alias_id,
+        (SELECT m.id FROM finnor_os.org_unit_memberships m JOIN finnor_os.users u ON u.id=m.employee_id JOIN finnor_os.org_units o ON o.id=m.org_unit_id WHERE m.tenant_id=$1 AND u.email=$2 AND o.unit_key='ops') membership_id`,
+      [first.tenantId, employeeUsers[0]!.email],
+    );
+    expect(repeatedIdentities.rows[0]).toEqual(identities.rows[0]);
+  }, 180_000);
+
+  it("preserves omitted Company World collections and safely inactivates only manifest-owned removals", async () => {
+    const suffix = randomUUID().slice(0, 8);
+    const key = `modify-${suffix}`;
+    const managerEmail = `manager-${suffix}@example.test`;
+    const workerEmail = `worker-${suffix}@example.test`;
+    const auth = fakeAuth();
+    const initial = manifest(key, managerEmail, {
+      users: [
+        { email: managerEmail, role: "owner", displayName: "Manager", locationKey: "main-office" },
+        { email: workerEmail, role: "technician", displayName: "Worker" },
+      ],
+      orgUnits: [
+        { key: "ops", name: "Operations", kind: "team" },
+        { key: "support", name: "Support", kind: "team" },
+      ],
+      orgUnitMemberships: [
+        { employeeEmail: managerEmail, orgUnitKey: "ops", membershipRole: "lead" },
+        { employeeEmail: workerEmail, orgUnitKey: "support" },
+      ],
+      employeeRelationships: [{ subjectEmployeeEmail: workerEmail, relatedEmployeeEmail: managerEmail, relationshipType: "manager" }],
+      aliases: [
+        { key: "ops-alias", partyType: "team", partyKey: "ops", alias: "Ops Team" },
+        { key: "worker-alias", partyType: "employee", partyKey: workerEmail, alias: "Field Worker" },
+      ],
+      externalOrganizations: [{ key: "old-supplier", name: "Old Supplier", kind: "supplier" }],
+      externalContacts: [{ key: "old-contact", name: "Old Contact", externalOrganizationKey: "old-supplier" }],
+    });
+    const first = await provisionClient(initial, { auth: auth.auth });
+    const before = await getPool().query<{
+      ops_id: string; support_id: string; membership_id: string; removed_membership_id: string;
+      relationship_id: string; alias_id: string; supplier_id: string; contact_id: string; location_id: string;
+    }>(
+      `SELECT
+        (SELECT id FROM finnor_os.org_units WHERE tenant_id=$1 AND unit_key='ops') ops_id,
+        (SELECT id FROM finnor_os.org_units WHERE tenant_id=$1 AND unit_key='support') support_id,
+        (SELECT m.id FROM finnor_os.org_unit_memberships m JOIN finnor_os.users u ON u.id=m.employee_id JOIN finnor_os.org_units o ON o.id=m.org_unit_id WHERE m.tenant_id=$1 AND u.email=$2 AND o.unit_key='ops') membership_id,
+        (SELECT m.id FROM finnor_os.org_unit_memberships m JOIN finnor_os.users u ON u.id=m.employee_id JOIN finnor_os.org_units o ON o.id=m.org_unit_id WHERE m.tenant_id=$1 AND u.email=$3 AND o.unit_key='support') removed_membership_id,
+        (SELECT id FROM finnor_os.employee_relationships WHERE tenant_id=$1) relationship_id,
+        (SELECT id FROM finnor_os.party_aliases WHERE tenant_id=$1 AND alias_key='ops-alias') alias_id,
+        (SELECT id FROM finnor_os.external_organizations WHERE tenant_id=$1 AND organization_key='old-supplier') supplier_id,
+        (SELECT id FROM finnor_os.external_contacts WHERE tenant_id=$1 AND contact_key='old-contact') contact_id,
+        (SELECT primary_location_id FROM finnor_os.users WHERE tenant_id=$1 AND email=$2) location_id`,
+      [first.tenantId, managerEmail, workerEmail],
+    );
+    expect(before.rows[0]!.location_id).toBeTruthy();
+
+    // An operator-authored row is outside this client's managed_by scope.
+    await getPool().query(
+      `INSERT INTO finnor_os.org_units (tenant_id, unit_key, name, kind, managed_by)
+       VALUES ($1, 'operator-team', 'Operator Team', 'team', NULL)`,
+      [first.tenantId],
+    );
+    const operatorTeam = await getPool().query<{ id: string }>("SELECT id FROM finnor_os.org_units WHERE tenant_id=$1 AND unit_key='operator-team'", [first.tenantId]);
+    const manager = await getPool().query<{ id: string }>("SELECT id FROM finnor_os.users WHERE tenant_id=$1 AND email=$2", [first.tenantId, managerEmail]);
+    const worker = await getPool().query<{ id: string }>("SELECT id FROM finnor_os.users WHERE tenant_id=$1 AND email=$2", [first.tenantId, workerEmail]);
+    await getPool().query(
+      `INSERT INTO finnor_os.org_unit_memberships (tenant_id, org_unit_id, employee_id, managed_by)
+       VALUES ($1, $2, $3, NULL)`,
+      [first.tenantId, operatorTeam.rows[0]!.id, worker.rows[0]!.id],
+    );
+    await getPool().query(
+      `INSERT INTO finnor_os.employee_relationships (tenant_id, subject_employee_id, related_employee_id, relationship_type, managed_by)
+       VALUES ($1, $2, $3, 'backup', NULL)`,
+      [first.tenantId, worker.rows[0]!.id, manager.rows[0]!.id],
+    );
+    await getPool().query(
+      `INSERT INTO finnor_os.party_aliases (tenant_id, alias_key, party_type, party_id, alias, normalized_alias, managed_by)
+       VALUES ($1, 'operator-alias', 'employee', $2, 'Operator Alias', 'operator alias', NULL)`,
+      [first.tenantId, worker.rows[0]!.id],
+    );
+    await getPool().query(
+      `INSERT INTO finnor_os.external_organizations (tenant_id, organization_key, name, kind, managed_by)
+       VALUES ($1, 'operator-supplier', 'Operator Supplier', 'supplier', NULL)`,
+      [first.tenantId],
+    );
+    const operatorOrg = await getPool().query<{ id: string }>("SELECT id FROM finnor_os.external_organizations WHERE tenant_id=$1 AND organization_key='operator-supplier'", [first.tenantId]);
+    await getPool().query(
+      `INSERT INTO finnor_os.external_contacts (tenant_id, contact_key, external_organization_id, name, managed_by)
+       VALUES ($1, 'operator-contact', $2, 'Operator Contact', NULL)`,
+      [first.tenantId, operatorOrg.rows[0]!.id],
+    );
+
+    // A pre-P0 manifest omits every Company World collection and must leave all
+    // existing rows, including the primary location, as-is.
+    const omitted = manifest(key, managerEmail, {
+      users: [{ email: managerEmail, role: "owner", displayName: "Manager" }, { email: workerEmail, role: "technician", displayName: "Worker" }],
+    });
+    await provisionClient(omitted, { auth: auth.auth });
+    const afterOmission = await getPool().query(
+      `SELECT
+        (SELECT active FROM finnor_os.org_units WHERE tenant_id=$1 AND unit_key='support') support_active,
+        (SELECT primary_location_id FROM finnor_os.users WHERE tenant_id=$1 AND email=$2) location_id,
+        (SELECT active FROM finnor_os.org_units WHERE tenant_id=$1 AND unit_key='operator-team') operator_active,
+        (SELECT managed_by FROM finnor_os.org_units WHERE tenant_id=$1 AND unit_key='operator-team') operator_managed_by`,
+      [first.tenantId, managerEmail],
+    );
+    expect(afterOmission.rows[0]).toMatchObject({ support_active: true, location_id: before.rows[0]!.location_id, operator_active: true, operator_managed_by: null });
+
+    const changed = parseClientManifest({
+      ...omitted,
+      users: [{ email: managerEmail, role: "owner", displayName: "Manager" }, { email: workerEmail, role: "technician", displayName: "Worker" }],
+      orgUnits: [{ key: "ops", name: "Renamed Operations", kind: "team" }],
+      orgUnitMemberships: [{ employeeEmail: managerEmail, orgUnitKey: "ops", membershipRole: "lead" }],
+      employeeRelationships: [],
+      aliases: [],
+      externalOrganizations: [],
+      externalContacts: [],
+    });
+    await provisionClient(changed, { auth: auth.auth });
+    const after = await getPool().query(
+      `SELECT
+        (SELECT id FROM finnor_os.org_units WHERE tenant_id=$1 AND unit_key='ops') ops_id,
+        (SELECT name FROM finnor_os.org_units WHERE tenant_id=$1 AND unit_key='ops') ops_name,
+        (SELECT active FROM finnor_os.org_units WHERE tenant_id=$1 AND unit_key='support') support_active,
+        (SELECT active FROM finnor_os.org_unit_memberships WHERE id=$2) retained_membership_active,
+        (SELECT active FROM finnor_os.org_unit_memberships WHERE id=$3) removed_membership_active,
+        (SELECT active FROM finnor_os.employee_relationships WHERE id=$4) removed_relationship_active,
+        (SELECT active FROM finnor_os.party_aliases WHERE id=$5) removed_alias_active,
+        (SELECT active FROM finnor_os.external_organizations WHERE id=$6) removed_supplier_active,
+        (SELECT active FROM finnor_os.external_contacts WHERE id=$7) removed_contact_active,
+        (SELECT active FROM finnor_os.org_units WHERE tenant_id=$1 AND unit_key='operator-team') operator_active,
+        (SELECT m.active FROM finnor_os.org_unit_memberships m JOIN finnor_os.org_units o ON o.id=m.org_unit_id WHERE m.tenant_id=$1 AND o.unit_key='operator-team') operator_membership_active,
+        (SELECT active FROM finnor_os.employee_relationships WHERE tenant_id=$1 AND relationship_type='backup') operator_relationship_active,
+        (SELECT active FROM finnor_os.party_aliases WHERE tenant_id=$1 AND alias_key='operator-alias') operator_alias_active,
+        (SELECT active FROM finnor_os.external_organizations WHERE tenant_id=$1 AND organization_key='operator-supplier') operator_supplier_active,
+        (SELECT active FROM finnor_os.external_contacts WHERE tenant_id=$1 AND contact_key='operator-contact') operator_contact_active,
+        (SELECT primary_location_id FROM finnor_os.users WHERE tenant_id=$1 AND email=$8) preserved_location_id`,
+      [first.tenantId, before.rows[0]!.membership_id, before.rows[0]!.removed_membership_id, before.rows[0]!.relationship_id, before.rows[0]!.alias_id, before.rows[0]!.supplier_id, before.rows[0]!.contact_id, managerEmail],
+    );
+    expect(after.rows[0]).toMatchObject({
+      ops_id: before.rows[0]!.ops_id,
+      ops_name: "Renamed Operations",
+      support_active: false,
+      retained_membership_active: true,
+      removed_membership_active: false,
+      removed_relationship_active: false,
+      removed_alias_active: false,
+      removed_supplier_active: false,
+      removed_contact_active: false,
+      operator_active: true,
+      operator_membership_active: true,
+      operator_relationship_active: true,
+      operator_alias_active: true,
+      operator_supplier_active: true,
+      operator_contact_active: true,
+      preserved_location_id: before.rows[0]!.location_id,
+    });
+
+    const cleared = parseClientManifest({ ...changed, users: [{ email: managerEmail, role: "owner", locationKey: null }, { email: workerEmail, role: "technician" }] });
+    await provisionClient(cleared, { auth: auth.auth });
+    const location = await getPool().query("SELECT primary_location_id FROM finnor_os.users WHERE tenant_id=$1 AND email=$2", [first.tenantId, managerEmail]);
+    expect(location.rows[0].primary_location_id).toBeNull();
+  }, 180_000);
+
+  it("limits per-user orgUnitKeys convergence to employees that declared the field", async () => {
+    const suffix = randomUUID().slice(0, 8);
+    const key = `user-scope-${suffix}`;
+    const firstEmail = `first-${suffix}@example.test`;
+    const secondEmail = `second-${suffix}@example.test`;
+    const auth = fakeAuth();
+    const users = [
+      { email: firstEmail, role: "owner" as const, displayName: "First Employee" },
+      { email: secondEmail, role: "technician" as const, displayName: "Second Employee" },
+    ];
+    const orgUnits = [
+      { key: "alpha-team", name: "Alpha Team", kind: "team" as const },
+      { key: "beta-team", name: "Beta Team", kind: "team" as const },
+    ];
+    const initial = manifest(key, firstEmail, {
+      users,
+      orgUnits,
+      orgUnitMemberships: [
+        { employeeEmail: firstEmail, orgUnitKey: "alpha-team" },
+        { employeeEmail: secondEmail, orgUnitKey: "beta-team" },
+      ],
+    });
+    const provisioned = await provisionClient(initial, { auth: auth.auth });
+
+    const partial = manifest(key, firstEmail, {
+      users: [
+        { ...users[0]!, orgUnitKeys: [] },
+        users[1]!,
+      ],
+      orgUnits,
+      // Omitted: the collection is not globally authoritative. Only the first
+      // employee's explicit orgUnitKeys field is a membership convergence scope.
+    });
+    await provisionClient(partial, { auth: auth.auth });
+
+    const rows = await getPool().query<{ email: string; active: boolean }>(
+      `SELECT u.email, m.active
+       FROM finnor_os.org_unit_memberships m
+       JOIN finnor_os.users u ON u.tenant_id=m.tenant_id AND u.id=m.employee_id
+       WHERE m.tenant_id=$1 AND m.managed_by=$2
+       ORDER BY u.email`,
+      [provisioned.tenantId, key],
+    );
+    expect(rows.rows).toEqual([
+      { email: firstEmail, active: false },
+      { email: secondEmail, active: true },
+    ]);
+  }, 120_000);
 });

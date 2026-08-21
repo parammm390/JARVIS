@@ -131,7 +131,19 @@ export function makeExecuteNode(plugins: PluginRegistry, tools: ToolRegistry) {
     const plugin = plugins.resolve(state.actionType)!;
     await setStatus(state.tenantId, state.actionId, "executing");
     // Same idempotency scoping as the legacy GatedExecutor — see its comment.
-    const scopedTools = new ScopedToolRegistry(tools, { tenantId: state.tenantId, domainActionId: state.actionId });
+    const requestedCommunicationIdentityId = typeof state.draft!.payload.communicationIdentityId === "string" ? state.draft!.payload.communicationIdentityId : undefined;
+    const requestedAuthProfileRef = typeof state.draft!.payload.authProfileRef === "string" ? state.draft!.payload.authProfileRef : undefined;
+    const accessPurpose = typeof state.draft!.payload.purpose === "string" && state.draft!.payload.purpose.trim()
+      ? state.draft!.payload.purpose
+      : state.actionType;
+    const scopedTools = new ScopedToolRegistry(tools, {
+      tenantId: state.tenantId,
+      domainActionId: state.actionId,
+      actorId: state.initiatedBy ?? "system:orchestration",
+      purpose: accessPurpose,
+      ...(requestedCommunicationIdentityId ? { communicationIdentityId: requestedCommunicationIdentityId } : {}),
+      ...(requestedAuthProfileRef ? { authProfileRef: requestedAuthProfileRef } : {}),
+    });
     // §2.5: same runtime bridge as the legacy GatedExecutor — see its comment.
     const result = await executePluginViaRuntime({
       tenantId: state.tenantId,

@@ -72,6 +72,7 @@ function plannerOperatingContext(context: OperatingContext | undefined): Record<
     tenant: context.tenant,
     employee: context.employee,
     activeWork: context.activeWork,
+    companyDirectory: context.companyDirectory,
     referencedEntities: context.referencedEntities,
     canonicalSummaries: context.canonicalSummaries,
     integrationHealth: context.integrationHealth,

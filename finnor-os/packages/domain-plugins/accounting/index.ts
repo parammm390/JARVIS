@@ -113,7 +113,7 @@ export const accountingPlugin: DomainEnginePlugin = {
       });
       // Fire-and-forget — a QuickBooks outage or missing connection never affects the
       // native invoice's own success; quickbooksSync itself no-ops if unconfigured.
-      await enqueueJob("quickbooks_sync", { tenantId, invoiceId: inv.id }, `qbo-sync:${inv.id}`).catch(() => undefined);
+      await enqueueJob("quickbooks_sync", { tenantId, invoiceId: inv.id, domainActionId: draft.domainActionId }, `qbo-sync:${inv.id}`).catch(() => undefined);
       return {
         status: "success",
         output: { invoiceId: inv.id, amountUsd: inv.amountUsd, dueDate: inv.dueDate?.toISOString() ?? null },

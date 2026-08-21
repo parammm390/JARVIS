@@ -123,7 +123,7 @@ describe.skipIf(!available)("Upgrade 7 canonical company graph", () => {
   it("uses the same contract through Query Plane and the Work projection", async () => {
     const result = await executeOperationalQuery(tenantA, { intent: "company_context", anchor: { entityType: "payment", entityId: paymentA } }, { workId: workA });
     expect(result.status).toBe("ok");
-    expect(result.context?.household.id).toBe(householdA);
+    expect(result.context?.household?.id).toBe(householdA);
     const links = await withTenant(tenantA, (db) => db.select().from(workEntityLinks).where(and(eq(workEntityLinks.tenantId, tenantA), eq(workEntityLinks.workId, workA))));
     expect(links).toEqual(expect.arrayContaining([expect.objectContaining({ entityType: "household", entityId: householdA })]));
     const projected = (await workCases(tenantA)).find((row) => row.root.kind === "work" && row.root.id === workA);

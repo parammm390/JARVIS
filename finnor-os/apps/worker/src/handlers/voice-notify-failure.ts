@@ -5,7 +5,7 @@
 
 import { getPool } from "@finnor/db";
 import { placeVapiCall } from "@finnor/tools";
-import { resolveTenantCredentialContext } from "@finnor/security";
+import { resolveCredentialContext } from "@finnor/security";
 import type { JobHandler } from "../queue";
 
 export const voiceNotifyFailure: JobHandler = async (payload) => {
@@ -23,6 +23,6 @@ export const voiceNotifyFailure: JobHandler = async (payload) => {
     customerNumber: ownerPhone,
     firstMessage: script,
     metadata: { notification: "integration_failure", tenantId },
-  }, await resolveTenantCredentialContext(tenantId, "vapi"));
+  }, await resolveCredentialContext(tenantId, "system:integration-failure", "vapi", "integration_failure", { channel: "voice" }));
   if (!result.ok) throw new Error(result.error ?? "Vapi call failed");
 };

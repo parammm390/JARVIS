@@ -8,6 +8,7 @@ export type TenantCredentialProvider =
   | "stripe"
   | "docusign"
   | "ghl"
+  | "gmail"
   | "resend"
   | "meta_ads"
   | "google_ads";
@@ -49,6 +50,11 @@ export interface GhlCredentials {
   waterTestCalendarId?: string;
 }
 
+export interface GmailCredentials {
+  user: string;
+  appPassword: string;
+}
+
 export interface ResendCredentials {
   apiKey: string;
   fromAddress: string;
@@ -74,6 +80,7 @@ export interface TenantCredentialMap {
   stripe: StripeCredentials;
   docusign: DocusignCredentials;
   ghl: GhlCredentials;
+  gmail: GmailCredentials;
   resend: ResendCredentials;
   meta_ads: MetaAdsCredentials;
   google_ads: GoogleAdsCredentials;
@@ -126,6 +133,7 @@ interface IntegrationReference {
   capability: string;
   binding: string;
   mode: string;
+  config: unknown;
   credentialProvider: "aws-secrets-manager" | "legacy-env" | null;
   credentialRef: string | null;
   credentialVersion: string | null;
@@ -148,6 +156,7 @@ const PROVIDER_BINDINGS: Record<TenantCredentialProvider, readonly string[]> = {
   stripe: ["stripe"],
   docusign: ["docusign"],
   ghl: ["ghl"],
+  gmail: ["gmail"],
   resend: ["resend"],
   meta_ads: ["meta_ads", "meta"],
   google_ads: ["google_ads"],
@@ -159,6 +168,8 @@ const PROVIDER_CAPABILITIES: Partial<Record<TenantCredentialProvider, readonly s
   stripe: ["payments"],
   docusign: ["esign"],
   ghl: ["crm", "scheduling"],
+  gmail: ["communications"],
+  resend: ["communications"],
   meta_ads: ["marketing"],
   google_ads: ["marketing"],
 };
@@ -169,6 +180,7 @@ const LEGACY_BINDING_ENV: Partial<Record<TenantCredentialProvider, readonly [str
   stripe: ["PAYMENTS_BINDING", "stripe"],
   docusign: ["ESIGN_BINDING", "docusign"],
   ghl: ["CRM_BINDING", "ghl"],
+  gmail: ["EMAIL_BINDING", "gmail"],
   meta_ads: ["MARKETING_BINDING", "meta_ads"],
   google_ads: ["MARKETING_BINDING", "google_ads"],
 };
@@ -191,6 +203,20 @@ function legacyBindingEnabled(provider: TenantCredentialProvider): boolean {
 
 function object(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function integrationRoutingMetadata(integration: Pick<IntegrationReference, "config" | "credentialMetadata">): Record<string, unknown> {
+  const config = object(integration.config);
+  const metadata = object(integration.credentialMetadata);
+  const keys = ["address", "fromAddress", "user", "phoneNumberId", "locationId", "adapter", "accountId", "realmId", "customerId"] as const;
+  return Object.fromEntries(keys.flatMap((key) => {
+    const preferred = metadata[key];
+    const fallback = config[key];
+    const value = typeof preferred === "string" && preferred.trim()
+      ? preferred.trim()
+      : typeof fallback === "string" && fallback.trim() ? fallback.trim() : undefined;
+    return value ? [[key, value]] : [];
+  }));
 }
 
 function hasSensitiveMetadataKey(value: unknown): boolean {
@@ -271,6 +297,12 @@ function validateCredentials<P extends TenantCredentialProvider>(provider: P, ra
         waterTestCalendarId: stringField(raw, ["waterTestCalendarId", "GHL_WATER_TEST_CALENDAR_ID"], false),
       };
       break;
+    case "gmail":
+      credentials = {
+        user: stringField(raw, ["user", "fromAddress", "GMAIL_USER"])!,
+        appPassword: stringField(raw, ["appPassword", "GMAIL_APP_PASSWORD"])!,
+      };
+      break;
     case "resend":
       credentials = {
         apiKey: stringField(raw, ["apiKey", "RESEND_API_KEY"])!,
@@ -304,6 +336,7 @@ function legacyValues(provider: TenantCredentialProvider): Record<string, unknow
     stripe: ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "PAYMENTS_RETURN_URL_BASE"],
     docusign: ["DOCUSIGN_INTEGRATION_KEY", "DOCUSIGN_USER_ID", "DOCUSIGN_ACCOUNT_ID", "DOCUSIGN_PRIVATE_KEY", "DOCUSIGN_BASE_URL", "DOCUSIGN_CONNECT_SECRET"],
     ghl: ["GOHIGHLEVEL_API_KEY", "GHL_LOCATION_ID", "GHL_WATER_TEST_CALENDAR_ID"],
+    gmail: ["GMAIL_USER", "GMAIL_APP_PASSWORD"],
     resend: ["RESEND_API_KEY", "RESEND_FROM_ADDRESS", "RESEND_ALLOWLIST_OWNER_EMAIL"],
     meta_ads: ["META_ADS_ACCESS_TOKEN", "META_ADS_ACCOUNT_ID"],
     google_ads: ["GOOGLE_ADS_DEVELOPER_TOKEN", "GOOGLE_ADS_REFRESH_TOKEN", "GOOGLE_ADS_CLIENT_ID", "GOOGLE_ADS_CLIENT_SECRET", "GOOGLE_ADS_CUSTOMER_ID"],
@@ -346,6 +379,7 @@ async function integrationForProvider(tenantId: string, provider: TenantCredenti
         capability: tenantIntegrations.capability,
         binding: tenantIntegrations.binding,
         mode: tenantIntegrations.mode,
+        config: tenantIntegrations.config,
         credentialProvider: tenantIntegrations.credentialProvider,
         credentialRef: tenantIntegrations.credentialRef,
         credentialVersion: tenantIntegrations.credentialVersion,
@@ -357,7 +391,7 @@ async function integrationForProvider(tenantId: string, provider: TenantCredenti
   const matches = rows.filter((row) => {
     const binding = row.binding.trim().toLowerCase();
     if (PROVIDER_BINDINGS[provider].includes(binding)) return true;
-    return binding === "ads" && (provider === "meta_ads" || provider === "google_ads") && object(row.credentialMetadata).adapter === provider;
+    return binding === "ads" && (provider === "meta_ads" || provider === "google_ads") && integrationRoutingMetadata(row).adapter === provider;
   });
   if (matches.length === 0) {
     const capabilities = PROVIDER_CAPABILITIES[provider] ?? [];
@@ -401,7 +435,10 @@ async function cachedSecret(cacheKey: string, reference: string, version?: strin
 
 function legacyContext<P extends TenantCredentialProvider>(tenantId: string, provider: P, integration?: IntegrationReference): TenantCredentialContext<P> {
   try {
-    const credentials = validateCredentials(provider, legacyValues(provider));
+    const credentials = validateCredentials(provider, {
+      ...legacyValues(provider),
+      ...(integration ? integrationRoutingMetadata(integration) : {}),
+    });
     return context({
       tenantId,
       provider,
@@ -413,6 +450,127 @@ function legacyContext<P extends TenantCredentialProvider>(tenantId: string, pro
     });
   } catch {
     throw new TenantCredentialError("invalid_credentials", provider, tenantId, `${provider} legacy credentials are incomplete or invalid`);
+  }
+}
+
+export interface GovernedCredentialReference {
+  credentialProvider: "aws-secrets-manager" | "legacy-env" | null;
+  credentialRef: string | null;
+  credentialVersion: string | null;
+  /** Public routing/account values such as a Vapi phone-number id or QuickBooks
+   * realm id. Secret-shaped keys are rejected before this is merged. */
+  publicMetadata?: Record<string, unknown>;
+  integration?: {
+    id: string;
+    capability: string;
+    binding: string;
+    mode?: string;
+  };
+}
+
+/** Resolve a governed identity/auth-profile reference through the same secret reader,
+ * validation, cache, tenant namespace, and legacy allowlist as tenant integrations.
+ * This is runtime-only: callers must not serialize the returned context. */
+export async function resolveCredentialReferenceContext<P extends TenantCredentialProvider>(
+  tenantId: string,
+  provider: P,
+  reference: GovernedCredentialReference,
+): Promise<TenantCredentialContext<P>> {
+  const metadata = reference.publicMetadata ?? {};
+  if (hasSensitiveMetadataKey(metadata)) {
+    throw new TenantCredentialError("invalid_reference", provider, tenantId, `${provider} public credential metadata contains a forbidden secret-shaped key`);
+  }
+  if (!reference.credentialProvider && !reference.credentialRef) {
+    // Compatibility is restricted to an explicit tenant integration. The legacy
+    // resolver never accepts an unbound process-wide credential. Canonical public
+    // routing remains authoritative over the integration's legacy default account.
+    const resolved = await resolveTenantCredentialContext(tenantId, provider);
+    if (Object.keys(metadata).length === 0) return resolved;
+    return context({
+      tenantId,
+      provider,
+      source: resolved.source,
+      integration: reference.integration ? {
+        id: reference.integration.id,
+        capability: reference.integration.capability,
+        binding: reference.integration.binding,
+        mode: reference.integration.mode ?? "real",
+        config: {},
+        credentialProvider: null,
+        credentialRef: null,
+        credentialVersion: null,
+        credentialMetadata: metadata,
+      } : undefined,
+      secretProvider: resolved.reference.secretProvider,
+      reference: resolved.reference.id,
+      version: resolved.reference.version,
+      credentials: validateCredentials(provider, { ...resolved.credentials, ...metadata }),
+    });
+  }
+  if (!reference.credentialProvider || !reference.credentialRef) {
+    throw new TenantCredentialError("invalid_reference", provider, tenantId, `${provider} has a partial governed credential reference`);
+  }
+  const integration: IntegrationReference | undefined = reference.integration ? {
+    id: reference.integration.id,
+    capability: reference.integration.capability,
+    binding: reference.integration.binding,
+    mode: reference.integration.mode ?? "real",
+    config: {},
+    credentialProvider: reference.credentialProvider,
+    credentialRef: reference.credentialRef,
+    credentialVersion: reference.credentialVersion,
+    credentialMetadata: metadata,
+  } : undefined;
+
+  if (reference.credentialProvider === "legacy-env") {
+    if (reference.credentialRef !== `legacy-env:${provider}`) {
+      throw new TenantCredentialError("invalid_reference", provider, tenantId, `${provider} has an invalid legacy credential reference`);
+    }
+    if (!legacyTenantAllowed(tenantId)) {
+      throw new TenantCredentialError("legacy_not_allowed", provider, tenantId, `${provider} legacy credentials are not allowed for this tenant`);
+    }
+    try {
+      return context({
+        tenantId,
+        provider,
+        source: "legacy-env",
+        integration,
+        secretProvider: "legacy-env",
+        reference: reference.credentialRef,
+        credentials: validateCredentials(provider, { ...legacyValues(provider), ...metadata }),
+      });
+    } catch (error) {
+      if (error instanceof TenantCredentialError) throw error;
+      throw new TenantCredentialError("invalid_credentials", provider, tenantId, `${provider} legacy credentials are incomplete or invalid`);
+    }
+  }
+
+  if (!tenantBoundAwsReference(reference.credentialRef, tenantId)) {
+    throw new TenantCredentialError("invalid_reference", provider, tenantId, `${provider} credential reference is outside the tenant namespace`);
+  }
+  const cacheKey = `${tenantId}:${provider}:aws-secrets-manager:${reference.credentialRef}:${reference.credentialVersion ?? "current"}`;
+  let secret: Record<string, string>;
+  try {
+    secret = await cachedSecret(cacheKey, reference.credentialRef, reference.credentialVersion);
+  } catch {
+    throw new TenantCredentialError("secret_unavailable", provider, tenantId, `${provider} credential secret could not be read`);
+  }
+  try {
+    return context({
+      tenantId,
+      provider,
+      source: "tenant-secret",
+      integration,
+      secretProvider: "aws-secrets-manager",
+      reference: reference.credentialRef,
+      version: reference.credentialVersion,
+      // Public account routing (for example a selected phoneNumberId/realmId) is
+      // allowed to override the secret bundle's default account. Secret-shaped keys
+      // were rejected above, so this cannot replace authentication material.
+      credentials: validateCredentials(provider, { ...secret, ...metadata }),
+    });
+  } catch {
+    throw new TenantCredentialError("invalid_credentials", provider, tenantId, `${provider} credential secret has an invalid shape`);
   }
 }
 
@@ -474,7 +632,7 @@ export async function resolveTenantCredentialContext<P extends TenantCredentialP
     throw new TenantCredentialError("secret_unavailable", provider, tenantId, `${provider} credential secret could not be read`);
   }
   try {
-    const credentials = validateCredentials(provider, { ...object(integration.credentialMetadata), ...secret });
+    const credentials = validateCredentials(provider, { ...secret, ...integrationRoutingMetadata(integration) });
     return context({
       tenantId,
       provider,

@@ -10,7 +10,7 @@ import { parseImportDefinition, runDeclarativeImport, type ImportReport } from "
 import { loadClientManifest, parseClientManifest, type ClientManifest } from "./client-manifest";
 import { convergeClientUsers, preflightUserAssignments } from "./client-provisioning";
 import type { TenantAuthAdmin } from "./tenant-user";
-import { convergeIntegrations, convergeWorkspaceAndPolicies, ensureTenantRecord } from "./tenant-bootstrap";
+import { convergeCompanyWorld, convergeIdentityAccess, convergeIntegrations, convergeWorkspaceAndPolicies, ensureTenantRecord } from "./tenant-bootstrap";
 
 export const CLIENT_FACTORY_STAGES = [
   "validate",
@@ -352,9 +352,32 @@ function inputForStage(stage: ClientFactoryStage, manifest: ClientManifest, tena
   switch (stage) {
     case "validate": return manifest;
     case "tenant": return { clientKey: manifest.clientKey, tenant: { name: manifest.tenant.name, timezone: manifest.tenant.timezone, ownerPhone: manifest.tenant.ownerPhone ?? null } };
-    case "identity": return { clientKey: manifest.clientKey, users: manifest.users };
+    case "identity": return {
+      clientKey: manifest.clientKey,
+      users: manifest.users,
+      orgUnits: manifest.orgUnits ?? [],
+      orgUnitsPresent: manifest.orgUnits !== undefined,
+      orgUnitMemberships: manifest.orgUnitMemberships ?? [],
+      orgUnitMembershipsPresent: manifest.orgUnitMemberships !== undefined,
+      employeeRelationships: manifest.employeeRelationships ?? [],
+      employeeRelationshipsPresent: manifest.employeeRelationships !== undefined,
+      aliases: manifest.aliases ?? [],
+      aliasesPresent: manifest.aliases !== undefined,
+      externalOrganizations: manifest.externalOrganizations ?? [],
+      externalOrganizationsPresent: manifest.externalOrganizations !== undefined,
+      externalContacts: manifest.externalContacts ?? [],
+      externalContactsPresent: manifest.externalContacts !== undefined,
+    };
     case "workspace_policies": return { clientKey: manifest.clientKey, settings: manifest.tenant.settings, workspaceConfig: manifest.workspaceConfig ?? null, locations: manifest.locations, policyOverrides: manifest.policyOverrides };
-    case "integrations_credentials": return { clientKey: manifest.clientKey, requiredCapabilities: manifest.requiredCapabilities, integrations: manifest.integrations };
+    case "integrations_credentials": return {
+      clientKey: manifest.clientKey,
+      requiredCapabilities: manifest.requiredCapabilities,
+      integrations: manifest.integrations,
+      communicationIdentities: manifest.communicationIdentities ?? null,
+      communicationIdentityBindings: manifest.communicationIdentityBindings ?? null,
+      applicationAccounts: manifest.applicationAccounts ?? null,
+      authProfiles: manifest.authProfiles ?? null,
+    };
     case "import": return { tenantId, imports: preparedImports?.map((item) => ({ key: item.key, definition: item.definition, sourceSha256: item.sourceSha256 }))
       ?? manifest.imports.map((item) => ({ key: item.key, format: item.source, sourceRef: item.sourceRef ?? null, definition: item.definition })) };
     case "tenant_health": return { tenantId, checkpoints: priorHashes };
@@ -497,7 +520,13 @@ async function executeStage(
   const tenantId = context.tenantId;
   if (stage === "identity") {
     const users = await convergeClientUsers(manifest, tenantId, { auth: context.auth, pool });
-    return { evidence: { users: users.map(({ id, email, role, createdAuthUser, createdAppUser }) => ({ id, email, role, createdAuthUser, createdAppUser })) } };
+    const companyWorld = await convergeCompanyWorld(manifest, tenantId, users, pool);
+    return {
+      evidence: {
+        users: users.map(({ id, email, role, createdAuthUser, createdAppUser }) => ({ id, email, role, createdAuthUser, createdAppUser })),
+        companyWorld,
+      },
+    };
   }
   if (stage === "workspace_policies") {
     const result = await convergeWorkspaceAndPolicies(manifest, tenantId, pool);
@@ -505,12 +534,14 @@ async function executeStage(
   }
   if (stage === "integrations_credentials") {
     const result = await convergeIntegrations(manifest, tenantId, pool);
+    const identityAccess = await convergeIdentityAccess(manifest, tenantId, pool);
     const missing = manifest.requiredCapabilities.filter((capability) => {
       const integration = manifest.integrations.find((candidate) => candidate.capability === capability)!;
       return integration.mode !== "emulator" && integration.binding !== "native" && !integration.credential;
     });
     const evidence = {
       integrations: result.integrations,
+      identityAccess,
       requiredCapabilities: manifest.requiredCapabilities,
       credentialReferences: manifest.integrations.filter((integration) => integration.credential).map((integration) => ({ capability: integration.capability, provider: integration.credential!.provider, configured: true })),
       missingCredentialCapabilities: missing,

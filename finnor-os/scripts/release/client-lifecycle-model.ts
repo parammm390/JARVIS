@@ -59,6 +59,22 @@ function diffProjection(manifest: ClientManifest): unknown {
     tenant: manifest.tenant,
     locations: keyed(manifest.locations, (row) => row.key),
     users: keyed(manifest.users, (row) => row.email),
+    orgUnits: manifest.orgUnits === undefined ? null : keyed(manifest.orgUnits, (row) => row.key),
+    orgUnitMemberships: manifest.orgUnitMemberships === undefined
+      ? null
+      : keyed(manifest.orgUnitMemberships, (row) => `${row.orgUnitKey}:${row.employeeEmail}`),
+    employeeRelationships: manifest.employeeRelationships === undefined
+      ? null
+      : keyed(manifest.employeeRelationships, (row) => `${row.subjectEmployeeEmail}:${row.relationshipType}:${row.relatedEmployeeEmail}`),
+    aliases: manifest.aliases === undefined ? null : keyed(manifest.aliases, (row) => row.key),
+    externalOrganizations: manifest.externalOrganizations === undefined ? null : keyed(manifest.externalOrganizations, (row) => row.key),
+    externalContacts: manifest.externalContacts === undefined ? null : keyed(manifest.externalContacts, (row) => row.key),
+    communicationIdentities: manifest.communicationIdentities === undefined ? null : keyed(manifest.communicationIdentities, (row) => row.key),
+    communicationIdentityBindings: manifest.communicationIdentityBindings === undefined
+      ? null
+      : keyed(manifest.communicationIdentityBindings, (row) => `${row.identityKey}:${JSON.stringify(row.principal)}:${row.purpose}`),
+    applicationAccounts: manifest.applicationAccounts === undefined ? null : keyed(manifest.applicationAccounts, (row) => row.key),
+    authProfiles: manifest.authProfiles === undefined ? null : keyed(manifest.authProfiles, (row) => row.ref),
     workspaceConfig: manifest.workspaceConfig ?? null,
     policyOverrides: manifest.policyOverrides,
     requiredCapabilities: [...manifest.requiredCapabilities].sort(),
@@ -73,10 +89,22 @@ function pointerToken(value: string): string {
 }
 
 function areaForPath(path: string): LifecycleArea {
-  if (path.startsWith("/users")) return "identity";
+  if (path.startsWith("/users")
+    || path.startsWith("/orgUnits")
+    || path.startsWith("/orgUnitMemberships")
+    || path.startsWith("/employeeRelationships")
+    || path.startsWith("/aliases")
+    || path.startsWith("/externalOrganizations")
+    || path.startsWith("/externalContacts")) return "identity";
   if (path.startsWith("/workspaceConfig") || path.startsWith("/locations") || path.startsWith("/tenant/settings")) return "workspace";
   if (path.startsWith("/policyOverrides")) return "policy";
-  if (path.startsWith("/integrations") || path.startsWith("/requiredCapabilities") || path.startsWith("/credentialRefs")) return "integration";
+  if (path.startsWith("/integrations")
+    || path.startsWith("/requiredCapabilities")
+    || path.startsWith("/credentialRefs")
+    || path.startsWith("/communicationIdentities")
+    || path.startsWith("/communicationIdentityBindings")
+    || path.startsWith("/applicationAccounts")
+    || path.startsWith("/authProfiles")) return "integration";
   if (path.startsWith("/imports")) return "import";
   return "tenant";
 }

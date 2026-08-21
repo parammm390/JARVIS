@@ -50,7 +50,14 @@ import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, or, sql } from "dri
 import { performance } from "node:perf_hooks";
 import { holtWinters, type ForecastPoint } from "./holt-winters";
 import { rollingZScores } from "./anomaly-detector";
-import type { CanonicalEntityNode, CanonicalEntityRef, CanonicalRelationship, CompanyContext } from "@finnor/shared-types";
+import {
+  partyRefToCanonicalEntityRef,
+  type CanonicalEntityNode,
+  type CanonicalEntityRef,
+  type CanonicalRelationship,
+  type CompanyContext,
+  type CompanyContextAnchor,
+} from "@finnor/shared-types";
 
 export * from "./route-optimizer";
 export * from "./slot-recommender";
@@ -61,6 +68,8 @@ export * from "./reorder-points";
 export * from "./failure-injection-calendar";
 export * from "./work-cases";
 export * from "./operational-queries";
+export * from "./party-resolver";
+export * from "./party-queries";
 
 export interface IntelligenceForecasts {
   cashCollections: ForecastPoint[] | null;
@@ -879,15 +888,132 @@ function householdDisplayName(contactInfo: Record<string, unknown>): string | nu
   return typeof contactInfo.name === "string" && contactInfo.name.trim() ? contactInfo.name.trim() : null;
 }
 
+function canonicalContextAnchor(anchor: CompanyContextAnchor): CanonicalEntityRef {
+  return "partyType" in anchor ? partyRefToCanonicalEntityRef(anchor) : anchor;
+}
+
+/** Company-only graph projection for canonical parties that do not belong to a
+ * household. The database view exposes bounded labels/status only; private contact
+ * fields and profile/auth material never enter CompanyContext. */
+async function companyWorldContext(
+  tenantId: string,
+  anchor: CompanyContextAnchor,
+  canonicalAnchor: CanonicalEntityRef,
+): Promise<CompanyContext | null> {
+  const rows = await withTenant(tenantId, async (db) => {
+    const result = await db.execute<{
+      entity_type: CanonicalEntityRef["entityType"];
+      entity_id: string;
+      depth: number | string;
+      label: string | null;
+      status: string | null;
+      occurred_at: Date | string | null;
+      source_table: string;
+    }>(sql`
+      WITH RECURSIVE reached(entity_type, entity_id, depth) AS (
+        SELECT ${canonicalAnchor.entityType}::text, ${canonicalAnchor.entityId}::uuid, 0
+        WHERE finnor_os.canonical_entity_tenant(${canonicalAnchor.entityType}, ${canonicalAnchor.entityId}::uuid)=${tenantId}::uuid
+        UNION
+        SELECT CASE WHEN edge.from_entity_type=r.entity_type AND edge.from_entity_id=r.entity_id
+                    THEN edge.to_entity_type ELSE edge.from_entity_type END,
+               CASE WHEN edge.from_entity_type=r.entity_type AND edge.from_entity_id=r.entity_id
+                    THEN edge.to_entity_id ELSE edge.from_entity_id END,
+               r.depth + 1
+        FROM reached r
+        JOIN finnor_os.company_graph_edges edge
+          ON edge.tenant_id=${tenantId}::uuid
+         AND ((edge.from_entity_type=r.entity_type AND edge.from_entity_id=r.entity_id)
+           OR (edge.to_entity_type=r.entity_type AND edge.to_entity_id=r.entity_id))
+        WHERE r.depth < 3
+      ), nearest AS (
+        SELECT entity_type, entity_id, min(depth)::int AS depth
+        FROM reached GROUP BY entity_type, entity_id
+      )
+      SELECT n.entity_type, n.entity_id, nearest.depth, n.label, n.status,
+             n.occurred_at, n.source_table
+      FROM nearest
+      JOIN finnor_os.company_graph_nodes n
+        ON n.tenant_id=${tenantId}::uuid
+       AND n.entity_type=nearest.entity_type AND n.entity_id=nearest.entity_id
+      ORDER BY nearest.depth, n.entity_type, n.entity_id
+      LIMIT ${COMPANY_CONTEXT_NODE_CAP + 1}
+    `);
+    return result.rows;
+  });
+  if (rows.length === 0) return null;
+
+  const truncatedNodes = rows.length > COMPANY_CONTEXT_NODE_CAP;
+  const selected = rows.slice(0, COMPANY_CONTEXT_NODE_CAP);
+  const nodes: CanonicalEntityNode[] = selected.map((row) => ({
+    entityType: row.entity_type,
+    entityId: row.entity_id,
+    label: row.label,
+    status: row.status,
+    occurredAt: row.occurred_at instanceof Date
+      ? row.occurred_at.toISOString()
+      : row.occurred_at
+        ? new Date(row.occurred_at).toISOString()
+        : null,
+  }));
+  const wanted = new Set(nodes.map((node) => `${node.entityType}:${node.entityId}`));
+  const relationships = await withTenant(tenantId, async (db) => {
+    if (nodes.length === 0) return [] as CanonicalRelationship[];
+    const wantedValues = sql.join(nodes.map((node) => sql`(${node.entityType}::text, ${node.entityId}::uuid)`), sql`, `);
+    const result = await db.execute<{
+      from_entity_type: CanonicalEntityRef["entityType"];
+      from_entity_id: string;
+      relationship: string;
+      to_entity_type: CanonicalEntityRef["entityType"];
+      to_entity_id: string;
+      source_table: string;
+      source_column: string;
+    }>(sql`
+      WITH wanted(entity_type, entity_id) AS (VALUES ${wantedValues})
+      SELECT edge.from_entity_type, edge.from_entity_id, edge.relationship,
+             edge.to_entity_type, edge.to_entity_id, edge.source_table, edge.source_column
+      FROM finnor_os.company_graph_edges edge
+      JOIN wanted from_ref ON from_ref.entity_type=edge.from_entity_type AND from_ref.entity_id=edge.from_entity_id
+      JOIN wanted to_ref ON to_ref.entity_type=edge.to_entity_type AND to_ref.entity_id=edge.to_entity_id
+      WHERE edge.tenant_id=${tenantId}::uuid
+      ORDER BY edge.source_table, edge.from_entity_id, edge.to_entity_id
+      LIMIT 500
+    `);
+    return result.rows.map((row) => ({
+      from: { entityType: row.from_entity_type, entityId: row.from_entity_id },
+      relationship: row.relationship,
+      to: { entityType: row.to_entity_type, entityId: row.to_entity_id },
+      source: { table: row.source_table, column: row.source_column },
+    })).filter((edge) => wanted.has(`${edge.from.entityType}:${edge.from.entityId}`)
+      && wanted.has(`${edge.to.entityType}:${edge.to.entityId}`));
+  });
+  const sourceTables = [...new Set([
+    ...selected.map((row) => row.source_table),
+    ...relationships.map((edge) => edge.source.table),
+  ])].sort();
+  return {
+    anchor,
+    household: null,
+    nodes,
+    relationships,
+    truncated: truncatedNodes || relationships.length >= 500,
+    source: { kind: "canonical_postgres", tables: sourceTables },
+    asOf: new Date().toISOString(),
+  };
+}
+
 /** The reusable read contract consumed by query/runtime/workspace layers. It is a
  * bounded projection of canonical rows plus exact FK provenance, not a second data
  * store. */
 export async function companyContext(
   tenantId: string,
-  anchor: CanonicalEntityRef,
+  anchor: CompanyContextAnchor,
 ): Promise<CompanyContext | null> {
-  const householdId = await resolveCanonicalHousehold(tenantId, anchor);
-  if (!householdId) return null;
+  const canonicalAnchor = canonicalContextAnchor(anchor);
+  if (["user", "org_unit", "tenant_location", "external_organization", "external_contact"].includes(canonicalAnchor.entityType)) {
+    return companyWorldContext(tenantId, anchor, canonicalAnchor);
+  }
+  const householdId = await resolveCanonicalHousehold(tenantId, canonicalAnchor);
+  if (!householdId) return companyWorldContext(tenantId, anchor, canonicalAnchor);
   const snapshot = await household360(tenantId, householdId);
   if (!snapshot) return null;
 

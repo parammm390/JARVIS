@@ -8,6 +8,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { performance } from "node:perf_hooks";
 import {
   CANONICAL_ENTITY_TYPES,
+  PARTY_TYPES,
   type CompanyContextRequest,
   type CanonicalOperationalQueryIntent,
   type CanonicalOperationalQueryRequest,
@@ -16,6 +17,7 @@ import {
   type OperationalQueryResult as SharedOperationalQueryResult,
   type OperationalQuerySource,
   type OperatingEvidenceKind,
+  type PartyRef,
   type TenantContext,
 } from "@finnor/shared-types";
 import {
@@ -43,7 +45,8 @@ type DraftOperationalQueryRequest =
   | { intent: "company_context"; query: string };
 
 type QueryDateValue = string | "today" | "tomorrow";
-type QueryResultStatus = "ok" | "ambiguous" | "not_found";
+type QueryResultStatus = "ok" | "ambiguous" | "not_found" | "inactive";
+type QueryTenantContext = Pick<TenantContext, "tenantId"> & Partial<Pick<TenantContext, "userId" | "employeeId">>;
 
 export interface OperationalQueryDateRange {
   timeZone: string;
@@ -131,10 +134,10 @@ export type ExecuteOperationalQuery = typeof canonicalExecuteOperationalQuery;
 export interface FastReadOnlyRouter {
   classify(instruction: string): FastReadOnlyClassification;
   /** Existing seam: returns a browser/voice answer or null. */
-  route(instruction: string, ctx: Pick<TenantContext, "tenantId">): Promise<AnswerEnvelope | null>;
+  route(instruction: string, ctx: QueryTenantContext): Promise<AnswerEnvelope | null>;
   /** Typed seams used by the orchestrator/API. Optional on injected legacy routers. */
   interpret?(instruction: string): OperationalQueryDecision;
-  execute?(request: OperationalQueryRequest, ctx: Pick<TenantContext, "tenantId">, options?: OperationalQueryOptions): Promise<OperationalQueryExecution>;
+  execute?(request: OperationalQueryRequest, ctx: QueryTenantContext, options?: OperationalQueryOptions): Promise<OperationalQueryExecution>;
   answer?(execution: OperationalQueryExecution): AnswerEnvelope;
 }
 
@@ -154,6 +157,7 @@ const ISO_DATE = /\b\d{4}-\d{2}-\d{2}\b/g;
 const DATE_WORD = /\b(?:today|tomorrow)\b/gi;
 const DATE_CONNECTOR = /\b(?:through|thru|to|until|and|between)\b/i;
 const DANGEROUS_LOOKUP_TEXT = /[;{}[\]<>=$`]/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
@@ -318,6 +322,26 @@ function isLocalDateRange(value: unknown): value is OperationalLocalDateRange {
   return isRecord(value) && isLocalDateValue(value.startDate) && (value.endDate === undefined || isLocalDateValue(value.endDate));
 }
 
+function isPartyRef(value: unknown): value is PartyRef {
+  return isRecord(value)
+    && Object.keys(value).length === 2
+    && Object.keys(value).every((key) => key === "partyType" || key === "partyId")
+    && typeof value.partyType === "string"
+    && PARTY_TYPES.includes(value.partyType as (typeof PARTY_TYPES)[number])
+    && typeof value.partyId === "string"
+    && UUID.test(value.partyId);
+}
+
+function isCanonicalEntityRef(value: unknown): value is CompanyContextRequest["anchor"] {
+  return isRecord(value)
+    && Object.keys(value).length === 2
+    && Object.keys(value).every((key) => key === "entityType" || key === "entityId")
+    && typeof value.entityType === "string"
+    && CANONICAL_ENTITY_TYPES.includes(value.entityType as (typeof CANONICAL_ENTITY_TYPES)[number])
+    && typeof value.entityId === "string"
+    && UUID.test(value.entityId);
+}
+
 function paramsFor(input: Record<string, unknown>): { params: Record<string, unknown>; error?: string } {
   const rawParams = input.params;
   const direct = Object.fromEntries(Object.entries(input).filter(([key]) => key !== "intent" && key !== "params"));
@@ -434,15 +458,60 @@ export function validateOperationalQueryRequest(input: unknown): { success: true
     if (page !== undefined && !isPage(page)) return { success: false, error: "Invalid page" };
     return { success: true, request: { intent: "business_state", ...(page ? { page } : {}) } };
   }
+  if (intent === "party_lookup" || intent === "party_context") {
+    const unknown = unknownFields(params, ["ref", "query", "page", "limit"]);
+    if (unknown.length) return { success: false, error: `Unknown fields for ${intent}: ${unknown.join(", ")}` };
+    const page = params.page ?? (params.limit === undefined ? undefined : { limit: params.limit });
+    if (page !== undefined && !isPage(page)) return { success: false, error: "Invalid page" };
+    if (params.ref !== undefined && !isPartyRef(params.ref)) return { success: false, error: "ref must be a PartyRef" };
+    if (params.query !== undefined && (typeof params.query !== "string" || !params.query.trim() || params.query.length > 300)) return { success: false, error: "query must be a bounded non-empty string" };
+    if (!params.ref && !params.query) return { success: false, error: `${intent} requires ref or query` };
+    return { success: true, request: {
+      intent,
+      ...(params.ref ? { ref: params.ref } : {}),
+      ...(typeof params.query === "string" ? { query: params.query } : {}),
+      ...(page ? { page } : {}),
+    } };
+  }
+  if (intent === "team_roster") {
+    const unknown = unknownFields(params, ["teamRef", "query", "page", "limit"]);
+    if (unknown.length) return { success: false, error: `Unknown fields for team_roster: ${unknown.join(", ")}` };
+    const page = params.page ?? (params.limit === undefined ? undefined : { limit: params.limit });
+    if (page !== undefined && !isPage(page)) return { success: false, error: "Invalid page" };
+    if (params.teamRef !== undefined && (!isPartyRef(params.teamRef) || params.teamRef.partyType !== "team")) return { success: false, error: "teamRef must be a team PartyRef" };
+    if (params.query !== undefined && (typeof params.query !== "string" || !params.query.trim() || params.query.length > 300)) return { success: false, error: "query must be a bounded non-empty string" };
+    if (!params.teamRef && !params.query) return { success: false, error: "team_roster requires teamRef or query" };
+    return { success: true, request: {
+      intent: "team_roster",
+      ...(params.teamRef ? { teamRef: params.teamRef } : {}),
+      ...(typeof params.query === "string" ? { query: params.query } : {}),
+      ...(page ? { page } : {}),
+    } };
+  }
+  if (intent === "party_availability") {
+    const unknown = unknownFields(params, ["ref", "query", "localDateRange", "includeCapacity", "page", "limit"]);
+    if (unknown.length) return { success: false, error: `Unknown fields for party_availability: ${unknown.join(", ")}` };
+    const page = params.page ?? (params.limit === undefined ? undefined : { limit: params.limit });
+    if (page !== undefined && !isPage(page)) return { success: false, error: "Invalid page" };
+    if (params.ref !== undefined && !isPartyRef(params.ref)) return { success: false, error: "ref must be a PartyRef" };
+    if (params.query !== undefined && (typeof params.query !== "string" || !params.query.trim() || params.query.length > 300)) return { success: false, error: "query must be a bounded non-empty string" };
+    if (params.localDateRange !== undefined && !isLocalDateRange(params.localDateRange)) return { success: false, error: "localDateRange must contain ISO local dates, today, or tomorrow" };
+    if (params.includeCapacity !== undefined && typeof params.includeCapacity !== "boolean") return { success: false, error: "includeCapacity must be boolean" };
+    if (!params.ref && !params.query) return { success: false, error: "party_availability requires ref or query" };
+    return { success: true, request: {
+      intent: "party_availability",
+      ...(params.ref ? { ref: params.ref } : {}),
+      ...(typeof params.query === "string" ? { query: params.query } : {}),
+      ...(params.localDateRange ? { localDateRange: params.localDateRange } : {}),
+      ...(params.includeCapacity === undefined ? {} : { includeCapacity: params.includeCapacity }),
+      ...(page ? { page } : {}),
+    } };
+  }
   if (intent === "company_context") {
     const unknown = unknownFields(params, ["anchor", "householdId", "query"]);
     if (unknown.length) return { success: false, error: `Unknown fields for company_context: ${unknown.join(", ")}` };
-    if (params.anchor !== undefined && (!isRecord(params.anchor)
-      || typeof params.anchor.entityType !== "string"
-      || !CANONICAL_ENTITY_TYPES.includes(params.anchor.entityType as (typeof CANONICAL_ENTITY_TYPES)[number])
-      || typeof params.anchor.entityId !== "string"
-      || !/^[0-9a-f-]{36}$/i.test(params.anchor.entityId))) {
-      return { success: false, error: "anchor must be a canonical entity reference" };
+    if (params.anchor !== undefined && !isCanonicalEntityRef(params.anchor) && !isPartyRef(params.anchor)) {
+      return { success: false, error: "anchor must be a canonical entity reference or PartyRef" };
     }
     if (params.householdId !== undefined && (typeof params.householdId !== "string" || !/^[0-9a-f-]{36}$/i.test(params.householdId))) return { success: false, error: "householdId must be a UUID" };
     if (params.query !== undefined && (typeof params.query !== "string" || !params.query.trim() || params.query.length > 300)) return { success: false, error: "query must be a bounded non-empty string" };
@@ -536,7 +605,13 @@ function canonicalizeResult(request: OperationalQueryRequest, raw: unknown, asOf
   const top = isRecord(raw) ? raw : {};
   const candidate = isRecord(top.result) ? top.result : top;
   const source = isRecord(candidate.source) ? candidate.source as unknown as OperationalQuerySource : sourceFor(request.intent);
-  const status: QueryResultStatus = candidate.status === "ambiguous" || candidate.status === "not_found" ? candidate.status : "ok";
+  const status: QueryResultStatus = candidate.status === "ambiguous"
+    ? "ambiguous"
+    : candidate.status === "not_found"
+      ? "not_found"
+      : candidate.status === "inactive"
+        ? "inactive"
+      : "ok";
   const resultAsOf = typeof candidate.asOf === "string" ? candidate.asOf : asOf;
   if (candidate.kind === "operational_query_result" && candidate.version === 1 && isRecord(candidate.page) && isRecord(candidate.meta)) return candidate as unknown as OperationalQueryResult;
   const data = isRecord(candidate.data) ? candidate.data : {};
@@ -664,6 +739,17 @@ function summarizeData(intent: OperationalQueryIntent, result: OperationalQueryR
   if (intent === "work_list") return { title: "Work", spokenSummary: `I found ${resultCount(result)} durable Work records or related operational items.`, facts: [{ label: "Records", value: String(resultCount(result)) }] };
   if (intent === "inventory_status") return { title: "Inventory", spokenSummary: `I found ${resultCount(result)} inventory records matching the request.`, facts: [{ label: "Records", value: String(resultCount(result)) }] };
   if (intent === "agent_activity") return { title: "Agent activity", spokenSummary: `I found ${resultCount(result)} recent agent activity records.`, facts: [{ label: "Records", value: String(resultCount(result)) }] };
+  if (intent === "party_lookup") {
+    const rows = arrayLength(result, "rows");
+    const resolution = resultValue(result, "resolution");
+    if (resolution === "ambiguous") return { title: "Party lookup", spokenSummary: `I found ${rows} possible directory matches. Which one should I use?`, facts: [{ label: "Possible matches", value: String(rows) }] };
+    if (resolution === "inactive") return { title: "Party lookup", spokenSummary: "The matching directory party is inactive or suspended and cannot be used as an operational target.", facts: [{ label: "Status", value: "inactive" }] };
+    if (resolution === "not_found") return { title: "Party lookup", spokenSummary: "I couldn't find a matching operational party in this tenant.", facts: [{ label: "Matches", value: "0" }] };
+    return { title: "Party lookup", spokenSummary: "I found the operational party in this tenant directory.", facts: [{ label: "Matches", value: String(rows) }] };
+  }
+  if (intent === "party_context") return { title: "Party context", spokenSummary: result.status === "inactive" ? "The requested party is inactive or suspended, so no operational context was loaded." : `I retrieved ${resultCount(result)} bounded party-context records from the canonical directory.`, facts: [{ label: "Status", value: result.status }] };
+  if (intent === "team_roster") return { title: "Team roster", spokenSummary: result.status === "inactive" ? "The requested team is inactive and cannot be used as an operational roster." : `I retrieved ${resultCount(result)} active team-roster members.`, facts: [{ label: "Members", value: String(resultCount(result)) }, { label: "Status", value: result.status }] };
+  if (intent === "party_availability") return { title: "Party availability", spokenSummary: result.status === "inactive" ? "The requested party is inactive or suspended and cannot be used for dispatch." : `I retrieved the canonical availability state: ${String(resultValue(result, "availability") ?? "unknown")}.`, facts: [{ label: "Availability", value: String(resultValue(result, "availability") ?? "unknown") }, { label: "Status", value: result.status }] };
   if (intent === "company_context") {
     const context = isRecord(resultValue(result, "context")) ? resultValue(result, "context") as Record<string, unknown> : null;
     const household = context && isRecord(context.household) ? context.household : null;
@@ -727,6 +813,8 @@ export function createFastReadOnlyRouter(deps: FastReadOnlyRouterDeps = {}): Fas
       const start = performance.now();
       const executionOptions: OperationalQueryOptions = {
         ...options,
+        ...(ctx.employeeId ? { employeeId: ctx.employeeId } : {}),
+        ...(ctx.userId ? { userId: ctx.userId } : {}),
         // The canonical executor expects a function-valued clock. Keeping it
         // stable makes replay and focused tests deterministic.
         now: () => startedAtDate,

@@ -5,21 +5,39 @@
 // customer-facing invoice creation ever knowing or caring. If QuickBooks isn't
 // connected, this is a silent no-op (not an error) — nothing was promised to sync.
 
-import { withTenant, invoices, households } from "@finnor/db";
-import { eq } from "drizzle-orm";
+import { domainActions, withTenant, invoices, households } from "@finnor/db";
+import { and, eq } from "drizzle-orm";
 import { syncInvoiceToQuickBooks } from "@finnor/tools";
-import { resolveTenantCredentialContext, TenantCredentialError } from "@finnor/security";
+import { IdentityAccessError, resolveCredentialContext } from "@finnor/security";
 import type { JobHandler } from "../queue";
 
 export const quickbooksSync: JobHandler = async (payload) => {
   const tenantId = String(payload.tenantId ?? "");
   const invoiceId = String(payload.invoiceId ?? "");
+  const domainActionId = typeof payload.domainActionId === "string" ? payload.domainActionId : null;
   if (!tenantId || !invoiceId) throw new Error("quickbooks_sync requires tenantId and invoiceId");
+  const [origin] = domainActionId ? await withTenant(tenantId, (db) => db.select({
+    initiatedBy: domainActions.initiatedBy,
+    actionType: domainActions.actionType,
+    payload: domainActions.payload,
+  }).from(domainActions).where(and(eq(domainActions.tenantId, tenantId), eq(domainActions.id, domainActionId))).limit(1)) : [];
+  const originPayload = origin?.payload && typeof origin.payload === "object" && !Array.isArray(origin.payload)
+    ? origin.payload as Record<string, unknown>
+    : {};
   let credentialContext;
   try {
-    credentialContext = await resolveTenantCredentialContext(tenantId, "quickbooks");
+    credentialContext = await resolveCredentialContext(
+      tenantId,
+      origin?.initiatedBy ?? "system:quickbooks-sync",
+      "quickbooks",
+      typeof originPayload.purpose === "string" ? originPayload.purpose : origin?.actionType ?? "invoice_sync",
+      {
+        application: "quickbooks",
+        ...(typeof originPayload.authProfileRef === "string" ? { authProfileRef: originPayload.authProfileRef } : {}),
+      },
+    );
   } catch (error) {
-    if (error instanceof TenantCredentialError && error.code === "integration_not_bound") return;
+    if (error instanceof IdentityAccessError && error.code === "no_valid_auth_profile") return;
     throw error;
   }
 

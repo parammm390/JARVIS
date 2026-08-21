@@ -122,7 +122,17 @@ export class GatedExecutor implements Executor {
     // Scoped per action execution: claims each external tool call against the
     // external_operations ledger so a reflection retry never re-fires an
     // already-completed side effect (send an SMS twice, double-sync an invoice).
-    const scopedTools = new ScopedToolRegistry(this.tools, { tenantId: action.tenantId, domainActionId: action.id });
+    const requestedCommunicationIdentityId = typeof draft.payload.communicationIdentityId === "string" ? draft.payload.communicationIdentityId : undefined;
+    const requestedAuthProfileRef = typeof draft.payload.authProfileRef === "string" ? draft.payload.authProfileRef : undefined;
+    const accessPurpose = typeof draft.payload.purpose === "string" && draft.payload.purpose.trim() ? draft.payload.purpose : action.actionType;
+    const scopedTools = new ScopedToolRegistry(this.tools, {
+      tenantId: action.tenantId,
+      domainActionId: action.id,
+      ...(action.initiatedBy ? { actorId: action.initiatedBy } : { actorId: "system:orchestration" }),
+      purpose: accessPurpose,
+      ...(requestedCommunicationIdentityId ? { communicationIdentityId: requestedCommunicationIdentityId } : {}),
+      ...(requestedAuthProfileRef ? { authProfileRef: requestedAuthProfileRef } : {}),
+    });
     // §2.5: routes through @finnor/workflow-runtime (command/step + DecisionReceipt)
     // instead of calling plugin.execute() bare — same real result, now with a durable
     // record. See runtime-bridge.ts's header comment for why this is synchronous.

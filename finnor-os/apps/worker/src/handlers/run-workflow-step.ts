@@ -8,7 +8,8 @@
 
 import { claimStep, completeStep, failStep, advanceWorkflow, recoverStaleSteps, executeCapability } from "@finnor/workflow-runtime";
 import type { CapabilityContract, CapabilityBinding } from "@finnor/workflow-runtime";
-import { withTenant } from "@finnor/db";
+import { domainActions, withTenant } from "@finnor/db";
+import { and, eq } from "drizzle-orm";
 import { createWorkOrder, recordPayment } from "@finnor/data-platform";
 import {
   holdAppointmentContract,
@@ -244,7 +245,29 @@ export const runWorkflowStep: JobHandler = async (payload) => {
     const entry = STEP_HANDLERS[claimed.stepType];
     if (!entry) throw new Error(`No handler for workflow step type "${claimed.stepType}"`);
 
-    const input = entry.mapPayload ? entry.mapPayload(claimed.payload as Record<string, unknown>) : claimed.payload;
+    const mapped = entry.mapPayload ? entry.mapPayload(claimed.payload as Record<string, unknown>) : claimed.payload as Record<string, unknown>;
+    const [origin] = claimed.domainActionId
+      ? await withTenant(tenantId, (db) => db.select({
+          initiatedBy: domainActions.initiatedBy,
+          actionType: domainActions.actionType,
+          payload: domainActions.payload,
+        }).from(domainActions).where(and(
+          eq(domainActions.tenantId, tenantId),
+          eq(domainActions.id, claimed.domainActionId!),
+        )).limit(1))
+      : [];
+    const originPayload = origin?.payload && typeof origin.payload === "object" && !Array.isArray(origin.payload)
+      ? origin.payload as Record<string, unknown>
+      : {};
+    // The payload may choose only safe identity/profile handles and purpose. Actor and
+    // tenant always come from the persisted, authority-gated action/step boundary.
+    const input = {
+      ...mapped,
+      __identityActorId: origin?.initiatedBy ?? "system:workflow-capability",
+      __identityPurpose: typeof originPayload.purpose === "string" ? originPayload.purpose : origin?.actionType ?? claimed.stepType,
+      ...(typeof originPayload.communicationIdentityId === "string" ? { __communicationIdentityId: originPayload.communicationIdentityId } : {}),
+      ...(typeof originPayload.authProfileRef === "string" ? { __authProfileRef: originPayload.authProfileRef } : {}),
+    };
     const result = await executeCapability(tenantId, stepId, entry.contract, await entry.resolveBinding(tenantId), input);
     if (!result.ok) {
       await failStep(tenantId, stepId, result.error);

@@ -7,6 +7,7 @@ export * from "./dealer-zero-time-compression";
 export * from "./operational-queries";
 export * from "./company-graph";
 export * from "./operating-context";
+export * from "./identity-access";
 
 export type Role = "owner" | "dispatcher" | "technician";
 
