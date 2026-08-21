@@ -28,7 +28,7 @@ import {
   resolveCapabilityBindingsForTenant,
   type ToolCallResult,
 } from "@finnor/tools";
-import { resolveTenantCredentialContext } from "@finnor/security";
+import { resolveCredentialContext } from "@finnor/security";
 import type { ErrorKind } from "@finnor/shared-types";
 import { nextCallingWindow } from "@finnor/plugin-bulk-notify";
 import { revalidateActionExecution } from "@finnor/authority";
@@ -80,6 +80,26 @@ async function loadOperation(tenantId: string, operationId: string): Promise<Ope
   const [row] = await withTenant(tenantId, (db) => db.select().from(businessOperations)
     .where(and(eq(businessOperations.tenantId, tenantId), eq(businessOperations.id, operationId))).limit(1));
   return row ?? null;
+}
+
+async function actionAccessContext(tenantId: string, actionId: string): Promise<{
+  actorId: string;
+  purpose: string;
+  communicationIdentityId?: string;
+  authProfileRef?: string;
+}> {
+  const [action] = await withTenant(tenantId, (db) => db.select({
+    initiatedBy: domainActions.initiatedBy,
+    actionType: domainActions.actionType,
+    payload: domainActions.payload,
+  }).from(domainActions).where(and(eq(domainActions.tenantId, tenantId), eq(domainActions.id, actionId))).limit(1));
+  const draft = object(action?.payload);
+  return {
+    actorId: action?.initiatedBy ?? "system:business-operation",
+    purpose: typeof draft.purpose === "string" ? draft.purpose : action?.actionType ?? "business_operation",
+    ...(typeof draft.communicationIdentityId === "string" ? { communicationIdentityId: draft.communicationIdentityId } : {}),
+    ...(typeof draft.authProfileRef === "string" ? { authProfileRef: draft.authProfileRef } : {}),
+  };
 }
 
 async function operationAuthorityStillValid(operation: OperationRow): Promise<boolean> {
@@ -489,7 +509,8 @@ export async function executeBusinessOperationTarget(payload: Record<string, unk
     await finishTarget({ tenantId, operation, target, status: "failed", failureClass: "invalid_input", errorKind: "validation", error: "The approved SMS preview is empty." });
     return;
   }
-  const scoped = new ScopedToolRegistry(tools(), { tenantId, domainActionId: operation.domainActionId, operationKeyPrefix: `operation:${operationId}:target:${target.id}` });
+  const access = await actionAccessContext(tenantId, operation.domainActionId);
+  const scoped = new ScopedToolRegistry(tools(), { tenantId, domainActionId: operation.domainActionId, ...access, operationKeyPrefix: `operation:${operationId}:target:${target.id}` });
   const contact = await scoped.call("ghl_create_contact", { phone: check.phone, firstName: String(prepared.label ?? "Customer"), tenantId });
   const result = contact.ok
     ? await scoped.call("ghl_send_sms", { contactId: String(contact.output.contactId ?? ""), message, tenantId })
@@ -549,8 +570,12 @@ export async function executeBusinessOperationCallBatch(payload: Record<string, 
   const configuration = object(operation.configuration);
   const persona = String(configuration.voicePersona ?? "winback");
   const bindings = await resolveCapabilityBindingsForTenant(tenantId);
+  const access = await actionAccessContext(tenantId, operation.domainActionId);
   const assistantId = bindings.communications.mode === "vapi"
-    ? await resolveTenantCredentialContext(tenantId, "vapi").then((context) => context.credentials.assistantIds?.[persona] ?? (persona === "main" ? context.credentials.assistantId : ""))
+    ? await resolveCredentialContext(tenantId, access.actorId, "vapi", access.purpose, {
+        channel: "voice",
+        ...(access.communicationIdentityId ? { communicationIdentityId: access.communicationIdentityId } : {}),
+      }).then((context) => context.credentials.assistantIds?.[persona] ?? (persona === "main" ? context.credentials.assistantId : ""))
     : "sandbox-emulator";
   if (!assistantId) {
     for (const target of claimed) await finishTarget({ tenantId, operation, target, status: "failed", failureClass: "configuration", errorKind: "config", error: "The Vapi win-back assistant is not configured." });
@@ -559,7 +584,7 @@ export async function executeBusinessOperationCallBatch(payload: Record<string, 
   }
   const sequence = Number(payload.sequence ?? 0);
   const name = `finnor-winback-${operationId}-${String(payload.reservationDate)}-${sequence}`;
-  const scoped = new ScopedToolRegistry(tools(), { tenantId, domainActionId: operation.domainActionId, operationKeyPrefix: `operation:${operationId}:call-batch:${sequence}` });
+  const scoped = new ScopedToolRegistry(tools(), { tenantId, domainActionId: operation.domainActionId, ...access, operationKeyPrefix: `operation:${operationId}:call-batch:${sequence}` });
   const result = await scoped.call("vapi_create_campaign", {
     tenantId,
     name,

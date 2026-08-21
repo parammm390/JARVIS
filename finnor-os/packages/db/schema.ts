@@ -16,6 +16,8 @@ import {
   real,
   date,
   primaryKey,
+  foreignKey,
+  check,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { money, provenanceColumns, archivable, bytea } from "./columns";
@@ -26,18 +28,22 @@ import { money, provenanceColumns, archivable, bytea } from "./columns";
 export const finnorOsSchema = pgSchema("finnor_os");
 const pgTable = finnorOsSchema.table;
 
-export const tenants = pgTable("tenants", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  // Stable provisioning identity. Names are presentation data and may change;
-  // clientKey is the durable boundary used to converge repeat manifests.
-  clientKey: text("client_key").notNull().default(sql`'legacy-' || gen_random_uuid()::text`).unique(),
-  name: text("name").notNull(),
-  ownerPhone: text("owner_phone"),
-  // IANA zone (e.g. "America/Chicago"). Drives voice-scheduling/business-hours logic;
-  // defaults to the current target market's most common zone, never guessed per-request.
-  timezone: text("timezone").notNull().default("America/Chicago"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const tenants = pgTable(
+  "tenants",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    // Stable provisioning identity. Names are presentation data and may change;
+    // clientKey is the durable boundary used to converge repeat manifests.
+    clientKey: text("client_key").notNull().default(sql`'legacy-' || gen_random_uuid()::text`).unique(),
+    name: text("name").notNull(),
+    ownerPhone: text("owner_phone"),
+    // IANA zone (e.g. "America/Chicago"). Drives voice-scheduling/business-hours logic;
+    // defaults to the current target market's most common zone, never guessed per-request.
+    timezone: text("timezone").notNull().default("America/Chicago"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique("tenants_id_client_key_key").on(t.id, t.clientKey)],
+);
 
 // §3.2/§3.3: one row per tenant of real, DB-backed flags. is_dealer_zero is what
 // other code checks for the "labeled dealer-zero everywhere" rule instead of matching
@@ -78,7 +84,50 @@ export const tenantLocations = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [unique("tenant_locations_tenant_key_idx").on(t.tenantId, t.locationKey)],
+  (t) => [
+    unique("tenant_locations_tenant_key_unique").on(t.tenantId, t.locationKey),
+    unique("tenant_locations_tenant_id_id_key").on(t.tenantId, t.id),
+  ],
+);
+
+// Phase 0 Company World: teams and departments are canonical graph nodes, not
+// role/authority substitutes. Their stable key is manifest-owned and therefore
+// safe for convergent provisioning.
+export const orgUnits = pgTable(
+  "org_units",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    unitKey: text("unit_key").notNull(),
+    name: text("name").notNull(),
+    kind: text("kind", { enum: ["team", "department"] }).notNull().default("team"),
+    description: text("description"),
+    locationId: uuid("location_id"),
+    managedBy: text("managed_by"),
+    active: boolean("active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("org_units_unit_key_format_check", sql`${t.unitKey} = lower(${t.unitKey}) AND ${t.unitKey} ~ '^[a-z0-9][a-z0-9_-]{1,62}[a-z0-9]$'`),
+    check("org_units_kind_check", sql`${t.kind} IN ('team', 'department')`),
+    unique("org_units_tenant_key_unique").on(t.tenantId, t.unitKey),
+    unique("org_units_tenant_id_id_key").on(t.tenantId, t.id),
+    index("org_units_tenant_active_key_idx").on(t.tenantId, t.active, t.unitKey),
+    index("org_units_tenant_name_idx").on(t.tenantId, t.name),
+    index("org_units_tenant_location_idx").on(t.tenantId, t.locationId).where(sql`${t.locationId} IS NOT NULL`),
+    index("org_units_tenant_managed_by_idx").on(t.tenantId, t.managedBy).where(sql`${t.managedBy} IS NOT NULL`),
+    foreignKey({
+      columns: [t.tenantId, t.locationId],
+      foreignColumns: [tenantLocations.tenantId, tenantLocations.id],
+      name: "org_units_location_tenant_fkey",
+    }),
+    foreignKey({
+      columns: [t.tenantId, t.managedBy],
+      foreignColumns: [tenants.id, tenants.clientKey],
+      name: "org_units_managed_by_tenant_fkey",
+    }),
+  ],
 );
 
 // Stable company configuration is deliberately separate from live operating
@@ -99,20 +148,384 @@ export const tenantOperatingProfiles = pgTable("tenant_operating_profiles", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const users = pgTable("users", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
-  email: text("email").notNull().unique(),
-  role: text("role", { enum: ["owner", "dispatcher", "technician"] }).notNull(),
-  displayName: text("display_name"),
-  phoneNumber: text("phone_number"),
-  status: text("status", { enum: ["active", "suspended"] }).notNull().default("active"),
-  // D5.T1: the authenticated technician's durable link to their operational record.
-  // Nullable for owners/dispatchers and for existing invitations that have not yet
-  // been paired with a technician record.
-  technicianId: uuid("technician_id").references(() => technicians.id),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const users = pgTable(
+  "users",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    email: text("email").notNull().unique(),
+    role: text("role", { enum: ["owner", "dispatcher", "technician"] }).notNull(),
+    displayName: text("display_name"),
+    phoneNumber: text("phone_number"),
+    status: text("status", { enum: ["active", "suspended"] }).notNull().default("active"),
+    // D5.T1: the authenticated technician's durable link to their operational record.
+    // Nullable for owners/dispatchers and for existing invitations that have not yet
+    // been paired with a technician record.
+    technicianId: uuid("technician_id").references(() => technicians.id),
+    // Canonical operating-location reference. Teams may also carry a location, but
+    // this direct link answers the employee's primary location without inventing a
+    // second employee/location directory.
+    primaryLocationId: uuid("primary_location_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("users_tenant_id_id_key").on(t.tenantId, t.id),
+    index("users_tenant_display_name_idx").on(t.tenantId, t.displayName),
+    index("users_tenant_primary_location_idx").on(t.tenantId, t.primaryLocationId).where(sql`${t.primaryLocationId} IS NOT NULL`),
+    foreignKey({
+      columns: [t.tenantId, t.primaryLocationId],
+      foreignColumns: [tenantLocations.tenantId, tenantLocations.id],
+      name: "users_primary_location_tenant_fkey",
+    }),
+  ],
+);
+
+export const orgUnitMemberships = pgTable(
+  "org_unit_memberships",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    orgUnitId: uuid("org_unit_id").notNull(),
+    employeeId: uuid("employee_id").notNull(),
+    membershipRole: text("membership_role"),
+    isPrimary: boolean("is_primary").notNull().default(false),
+    managedBy: text("managed_by"),
+    active: boolean("active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("org_unit_memberships_identity_unique").on(t.tenantId, t.orgUnitId, t.employeeId),
+    unique("org_unit_memberships_tenant_id_id_key").on(t.tenantId, t.id),
+    index("org_unit_memberships_tenant_unit_active_idx").on(t.tenantId, t.orgUnitId, t.active, t.employeeId),
+    index("org_unit_memberships_tenant_employee_active_idx").on(t.tenantId, t.employeeId, t.active, t.orgUnitId),
+    index("org_unit_memberships_tenant_managed_by_idx").on(t.tenantId, t.managedBy).where(sql`${t.managedBy} IS NOT NULL`),
+    foreignKey({
+      columns: [t.tenantId, t.orgUnitId],
+      foreignColumns: [orgUnits.tenantId, orgUnits.id],
+      name: "org_unit_memberships_org_unit_tenant_fkey",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [t.tenantId, t.employeeId],
+      foreignColumns: [users.tenantId, users.id],
+      name: "org_unit_memberships_employee_tenant_fkey",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [t.tenantId, t.managedBy],
+      foreignColumns: [tenants.id, tenants.clientKey],
+      name: "org_unit_memberships_managed_by_tenant_fkey",
+    }),
+  ],
+);
+
+// `manager` means subject_employee reports to related_employee. `backup` and
+// `assistant` use the same subject -> related direction; the inverse manager/report
+// edge is derived on the existing Company Graph surface.
+export const employeeRelationships = pgTable(
+  "employee_relationships",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    subjectEmployeeId: uuid("subject_employee_id").notNull(),
+    relatedEmployeeId: uuid("related_employee_id").notNull(),
+    relationshipType: text("relationship_type", { enum: ["manager", "backup", "assistant"] }).notNull(),
+    managedBy: text("managed_by"),
+    active: boolean("active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("employee_relationships_relationship_type_check", sql`${t.relationshipType} IN ('manager', 'backup', 'assistant')`),
+    check("employee_relationships_not_self_check", sql`${t.subjectEmployeeId} <> ${t.relatedEmployeeId}`),
+    unique("employee_relationships_identity_unique").on(t.tenantId, t.subjectEmployeeId, t.relationshipType, t.relatedEmployeeId),
+    unique("employee_relationships_tenant_id_id_key").on(t.tenantId, t.id),
+    index("employee_relationships_tenant_employee_type_idx").on(t.tenantId, t.subjectEmployeeId, t.relationshipType, t.active),
+    index("employee_relationships_tenant_related_type_idx").on(t.tenantId, t.relatedEmployeeId, t.relationshipType, t.active),
+    index("employee_relationships_tenant_managed_by_idx").on(t.tenantId, t.managedBy).where(sql`${t.managedBy} IS NOT NULL`),
+    foreignKey({
+      columns: [t.tenantId, t.subjectEmployeeId],
+      foreignColumns: [users.tenantId, users.id],
+      name: "employee_relationships_subject_employee_tenant_fkey",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [t.tenantId, t.relatedEmployeeId],
+      foreignColumns: [users.tenantId, users.id],
+      name: "employee_relationships_related_employee_tenant_fkey",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [t.tenantId, t.managedBy],
+      foreignColumns: [tenants.id, tenants.clientKey],
+      name: "employee_relationships_managed_by_tenant_fkey",
+    }),
+  ],
+);
+
+export const externalOrganizations = pgTable(
+  "external_organizations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    organizationKey: text("organization_key").notNull(),
+    name: text("name").notNull(),
+    kind: text("kind", { enum: ["supplier", "vendor", "distributor", "partner", "contractor", "agency", "other"] }).notNull().default("other"),
+    businessEmail: text("business_email"),
+    businessPhone: text("business_phone"),
+    managedBy: text("managed_by"),
+    active: boolean("active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("external_organizations_key_format_check", sql`${t.organizationKey} = lower(${t.organizationKey}) AND ${t.organizationKey} ~ '^[a-z0-9][a-z0-9_-]{1,62}[a-z0-9]$'`),
+    check("external_organizations_kind_check", sql`${t.kind} IN ('supplier', 'vendor', 'distributor', 'partner', 'contractor', 'agency', 'other')`),
+    unique("external_organizations_tenant_key_unique").on(t.tenantId, t.organizationKey),
+    unique("external_organizations_tenant_id_id_key").on(t.tenantId, t.id),
+    index("external_organizations_tenant_active_name_idx").on(t.tenantId, t.active, t.name, t.id),
+    index("external_organizations_tenant_type_active_idx").on(t.tenantId, t.kind, t.active, t.id),
+    index("external_organizations_tenant_email_idx").on(t.tenantId, sql`lower(${t.businessEmail})`, t.id).where(sql`${t.businessEmail} IS NOT NULL`),
+    index("external_organizations_tenant_phone_idx").on(t.tenantId, t.businessPhone, t.id).where(sql`${t.businessPhone} IS NOT NULL`),
+    index("external_organizations_tenant_managed_by_idx").on(t.tenantId, t.managedBy).where(sql`${t.managedBy} IS NOT NULL`),
+    foreignKey({
+      columns: [t.tenantId, t.managedBy],
+      foreignColumns: [tenants.id, tenants.clientKey],
+      name: "external_organizations_managed_by_tenant_fkey",
+    }),
+  ],
+);
+
+export const externalContacts = pgTable(
+  "external_contacts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    contactKey: text("contact_key").notNull(),
+    externalOrganizationId: uuid("external_organization_id"),
+    name: text("name").notNull(),
+    title: text("title"),
+    businessEmail: text("business_email"),
+    businessPhone: text("business_phone"),
+    managedBy: text("managed_by"),
+    active: boolean("active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("external_contacts_key_format_check", sql`${t.contactKey} = lower(${t.contactKey}) AND ${t.contactKey} ~ '^[a-z0-9][a-z0-9_-]{1,62}[a-z0-9]$'`),
+    unique("external_contacts_tenant_key_unique").on(t.tenantId, t.contactKey),
+    unique("external_contacts_tenant_id_id_key").on(t.tenantId, t.id),
+    index("external_contacts_tenant_active_name_idx").on(t.tenantId, t.active, t.name, t.id),
+    index("external_contacts_tenant_organization_idx").on(t.tenantId, t.externalOrganizationId, t.active, t.id).where(sql`${t.externalOrganizationId} IS NOT NULL`),
+    index("external_contacts_tenant_email_idx").on(t.tenantId, sql`lower(${t.businessEmail})`, t.id).where(sql`${t.businessEmail} IS NOT NULL`),
+    index("external_contacts_tenant_phone_idx").on(t.tenantId, t.businessPhone, t.id).where(sql`${t.businessPhone} IS NOT NULL`),
+    index("external_contacts_tenant_managed_by_idx").on(t.tenantId, t.managedBy).where(sql`${t.managedBy} IS NOT NULL`),
+    foreignKey({
+      columns: [t.tenantId, t.externalOrganizationId],
+      foreignColumns: [externalOrganizations.tenantId, externalOrganizations.id],
+      name: "external_contacts_organization_tenant_fkey",
+    }),
+    foreignKey({
+      columns: [t.tenantId, t.managedBy],
+      foreignColumns: [tenants.id, tenants.clientKey],
+      name: "external_contacts_managed_by_tenant_fkey",
+    }),
+  ],
+);
+
+export const partyAliases = pgTable(
+  "party_aliases",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    aliasKey: text("alias_key").notNull(),
+    partyType: text("party_type", { enum: ["employee", "team", "location", "household", "contact", "external_organization", "external_contact"] }).notNull(),
+    partyId: uuid("party_id").notNull(),
+    alias: text("alias").notNull(),
+    normalizedAlias: text("normalized_alias").notNull(),
+    managedBy: text("managed_by"),
+    active: boolean("active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("party_aliases_party_type_check", sql`${t.partyType} IN ('employee', 'team', 'location', 'household', 'contact', 'external_organization', 'external_contact')`),
+    check("party_aliases_alias_nonempty_check", sql`btrim(${t.alias}) <> ''`),
+    check("party_aliases_normalized_nonempty_check", sql`${t.normalizedAlias} <> ''`),
+    check("party_aliases_alias_key_format_check", sql`${t.aliasKey} = lower(${t.aliasKey}) AND ${t.aliasKey} ~ '^[a-z0-9][a-z0-9_-]{1,62}[a-z0-9]$'`),
+    unique("party_aliases_tenant_key_unique").on(t.tenantId, t.aliasKey),
+    unique("party_aliases_tenant_id_id_key").on(t.tenantId, t.id),
+    unique("party_aliases_identity_unique").on(t.tenantId, t.partyType, t.partyId, t.normalizedAlias),
+    index("party_aliases_tenant_normalized_active_idx").on(t.tenantId, t.normalizedAlias, t.active, t.partyType, t.partyId),
+    index("party_aliases_tenant_party_active_idx").on(t.tenantId, t.partyType, t.partyId, t.active),
+    index("party_aliases_tenant_managed_by_idx").on(t.tenantId, t.managedBy).where(sql`${t.managedBy} IS NOT NULL`),
+    foreignKey({
+      columns: [t.tenantId, t.managedBy],
+      foreignColumns: [tenants.id, tenants.clientKey],
+      name: "party_aliases_managed_by_tenant_fkey",
+    }),
+  ],
+);
+
+// Phase 1 Identity + Access Binding Fabric. These rows describe governed handles
+// and secret references only; resolved passwords/tokens/cookies never enter Postgres.
+export const communicationIdentities = pgTable(
+  "communication_identities",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    identityKey: text("identity_key").notNull(),
+    provider: text("provider").notNull(),
+    channel: text("channel", { enum: ["email", "sms", "voice", "chat", "calendar"] }).notNull(),
+    address: text("address"),
+    providerIdentityRef: text("provider_identity_ref"),
+    status: text("status", { enum: ["active", "disabled", "suspended"] }).notNull().default("active"),
+    capabilities: jsonb("capabilities").notNull().default([]),
+    credentialProvider: text("credential_provider", { enum: ["aws-secrets-manager", "legacy-env"] }),
+    credentialRef: text("credential_ref"),
+    credentialVersion: text("credential_version"),
+    managedBy: text("managed_by"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("communication_identities_key_format_check", sql`${t.identityKey} = lower(${t.identityKey}) AND ${t.identityKey} ~ '^[a-z0-9][a-z0-9_-]{1,62}[a-z0-9]$'`),
+    check("communication_identities_provider_format_check", sql`${t.provider} = lower(${t.provider}) AND ${t.provider} ~ '^[a-z0-9][a-z0-9_-]{0,62}$'`),
+    check("communication_identities_channel_check", sql`${t.channel} IN ('email','sms','voice','chat','calendar')`),
+    check("communication_identities_status_check", sql`${t.status} IN ('active','disabled','suspended')`),
+    check("communication_identities_endpoint_check", sql`coalesce(btrim(${t.address}), '') <> '' OR coalesce(btrim(${t.providerIdentityRef}), '') <> ''`),
+    check("communication_identities_capabilities_array_check", sql`jsonb_typeof(${t.capabilities}) = 'array'`),
+    unique("communication_identities_tenant_key_unique").on(t.tenantId, t.identityKey),
+    unique("communication_identities_tenant_id_id_key").on(t.tenantId, t.id),
+    index("communication_identities_tenant_channel_status_idx").on(t.tenantId, t.channel, t.status, t.provider),
+    index("communication_identities_tenant_managed_by_idx").on(t.tenantId, t.managedBy).where(sql`${t.managedBy} IS NOT NULL`),
+    foreignKey({
+      columns: [t.tenantId, t.managedBy],
+      foreignColumns: [tenants.id, tenants.clientKey],
+      name: "communication_identities_managed_by_tenant_fkey",
+    }),
+  ],
+);
+
+export const communicationIdentityBindings = pgTable(
+  "communication_identity_bindings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    communicationIdentityId: uuid("communication_identity_id").notNull(),
+    principalType: text("principal_type", { enum: ["employee", "team", "location", "tenant"] }).notNull(),
+    principalId: uuid("principal_id").notNull(),
+    purpose: text("purpose").notNull().default("default"),
+    priority: integer("priority").notNull().default(0),
+    status: text("status", { enum: ["active", "disabled"] }).notNull().default("active"),
+    managedBy: text("managed_by"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("communication_identity_bindings_principal_type_check", sql`${t.principalType} IN ('employee','team','location','tenant')`),
+    check("communication_identity_bindings_purpose_check", sql`btrim(${t.purpose}) <> '' AND length(${t.purpose}) <= 120`),
+    check("communication_identity_bindings_status_check", sql`${t.status} IN ('active','disabled')`),
+    unique("communication_identity_bindings_identity_unique").on(t.tenantId, t.communicationIdentityId, t.principalType, t.principalId, t.purpose),
+    unique("communication_identity_bindings_tenant_id_id_key").on(t.tenantId, t.id),
+    index("communication_identity_bindings_principal_lookup_idx").on(t.tenantId, t.principalType, t.principalId, t.status, t.purpose, t.priority),
+    index("communication_identity_bindings_identity_idx").on(t.tenantId, t.communicationIdentityId, t.status),
+    index("communication_identity_bindings_managed_by_idx").on(t.tenantId, t.managedBy).where(sql`${t.managedBy} IS NOT NULL`),
+    foreignKey({
+      columns: [t.tenantId, t.communicationIdentityId],
+      foreignColumns: [communicationIdentities.tenantId, communicationIdentities.id],
+      name: "communication_identity_bindings_identity_tenant_fkey",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [t.tenantId, t.managedBy],
+      foreignColumns: [tenants.id, tenants.clientKey],
+      name: "communication_identity_bindings_managed_by_tenant_fkey",
+    }),
+  ],
+);
+
+export const applicationAccounts = pgTable(
+  "application_accounts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    accountKey: text("account_key").notNull(),
+    application: text("application").notNull(),
+    provider: text("provider").notNull(),
+    displayName: text("display_name").notNull(),
+    providerAccountRef: text("provider_account_ref"),
+    status: text("status", { enum: ["active", "disabled", "suspended"] }).notNull().default("active"),
+    capabilities: jsonb("capabilities").notNull().default([]),
+    metadata: jsonb("metadata").notNull().default({}),
+    managedBy: text("managed_by"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("application_accounts_key_format_check", sql`${t.accountKey} = lower(${t.accountKey}) AND ${t.accountKey} ~ '^[a-z0-9][a-z0-9_-]{1,62}[a-z0-9]$'`),
+    check("application_accounts_application_format_check", sql`${t.application} = lower(${t.application}) AND ${t.application} ~ '^[a-z0-9][a-z0-9_-]{0,62}$'`),
+    check("application_accounts_provider_format_check", sql`${t.provider} = lower(${t.provider}) AND ${t.provider} ~ '^[a-z0-9][a-z0-9_-]{0,62}$'`),
+    check("application_accounts_status_check", sql`${t.status} IN ('active','disabled','suspended')`),
+    check("application_accounts_capabilities_array_check", sql`jsonb_typeof(${t.capabilities}) = 'array'`),
+    check("application_accounts_metadata_object_check", sql`jsonb_typeof(${t.metadata}) = 'object'`),
+    unique("application_accounts_tenant_key_unique").on(t.tenantId, t.accountKey),
+    unique("application_accounts_tenant_id_id_key").on(t.tenantId, t.id),
+    index("application_accounts_tenant_application_status_idx").on(t.tenantId, t.application, t.status, t.provider),
+    index("application_accounts_tenant_managed_by_idx").on(t.tenantId, t.managedBy).where(sql`${t.managedBy} IS NOT NULL`),
+    foreignKey({
+      columns: [t.tenantId, t.managedBy],
+      foreignColumns: [tenants.id, tenants.clientKey],
+      name: "application_accounts_managed_by_tenant_fkey",
+    }),
+  ],
+);
+
+export const authProfiles = pgTable(
+  "auth_profiles",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    authProfileRef: text("auth_profile_ref").notNull(),
+    principalType: text("principal_type", { enum: ["employee", "team", "location", "tenant"] }).notNull(),
+    principalId: uuid("principal_id").notNull(),
+    applicationAccountId: uuid("application_account_id").notNull(),
+    purpose: text("purpose").notNull().default("default"),
+    priority: integer("priority").notNull().default(0),
+    scope: jsonb("scope").notNull().default({}),
+    credentialProvider: text("credential_provider", { enum: ["aws-secrets-manager", "legacy-env"] }),
+    credentialRef: text("credential_ref"),
+    credentialVersion: text("credential_version"),
+    status: text("status", { enum: ["active", "disabled", "suspended"] }).notNull().default("active"),
+    capabilities: jsonb("capabilities").notNull().default([]),
+    restrictions: jsonb("restrictions").notNull().default({}),
+    managedBy: text("managed_by"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("auth_profiles_ref_format_check", sql`${t.authProfileRef} = lower(${t.authProfileRef}) AND ${t.authProfileRef} ~ '^[a-z0-9][a-z0-9_-]{1,126}[a-z0-9]$'`),
+    check("auth_profiles_principal_type_check", sql`${t.principalType} IN ('employee','team','location','tenant')`),
+    check("auth_profiles_purpose_check", sql`btrim(${t.purpose}) <> '' AND length(${t.purpose}) <= 120`),
+    check("auth_profiles_status_check", sql`${t.status} IN ('active','disabled','suspended')`),
+    check("auth_profiles_scope_object_check", sql`jsonb_typeof(${t.scope}) = 'object'`),
+    check("auth_profiles_capabilities_array_check", sql`jsonb_typeof(${t.capabilities}) = 'array'`),
+    check("auth_profiles_restrictions_object_check", sql`jsonb_typeof(${t.restrictions}) = 'object'`),
+    unique("auth_profiles_tenant_ref_unique").on(t.tenantId, t.authProfileRef),
+    unique("auth_profiles_tenant_id_id_key").on(t.tenantId, t.id),
+    unique("auth_profiles_binding_unique").on(t.tenantId, t.applicationAccountId, t.principalType, t.principalId, t.purpose),
+    index("auth_profiles_principal_lookup_idx").on(t.tenantId, t.principalType, t.principalId, t.status, t.purpose, t.priority),
+    index("auth_profiles_account_status_idx").on(t.tenantId, t.applicationAccountId, t.status),
+    index("auth_profiles_managed_by_idx").on(t.tenantId, t.managedBy).where(sql`${t.managedBy} IS NOT NULL`),
+    foreignKey({
+      columns: [t.tenantId, t.applicationAccountId],
+      foreignColumns: [applicationAccounts.tenantId, applicationAccounts.id],
+      name: "auth_profiles_account_tenant_fkey",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [t.tenantId, t.managedBy],
+      foreignColumns: [tenants.id, tenants.clientKey],
+      name: "auth_profiles_managed_by_tenant_fkey",
+    }),
+  ],
+);
 
 // Authenticated-person profile facts (for example title or an explicitly
 // configured age/birth date) are not inferred from conversations.  Keeping them
@@ -410,6 +823,10 @@ export const workQueryExecutions = pgTable(
         "agent_activity",
         "business_state",
         "company_context",
+        "party_lookup",
+        "party_context",
+        "team_roster",
+        "party_availability",
       ],
     }).notNull(),
     request: jsonb("request").notNull().default({}),
@@ -1692,6 +2109,215 @@ export const importEntityRefs = pgTable(
     index("import_entity_refs_identity_idx").on(t.tenantId, t.sourceSystem, t.entityType, t.identityKey),
   ],
 );
+
+// Phase 4 client factory. The existing Postgres jobs queue dispatches/resumes these
+// runs; these tables only retain onboarding state and immutable attempt evidence.
+// They are admin-only because a run begins before a tenant exists and can span the
+// global client identity boundary.
+export const clientFactoryRuns = pgTable(
+  "client_factory_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clientKey: text("client_key").notNull(),
+    tenantId: uuid("tenant_id").references(() => tenants.id),
+    manifestVersion: integer("manifest_version").notNull(),
+    manifestSha256: text("manifest_sha256").notNull(),
+    manifestSnapshot: jsonb("manifest_snapshot").notNull(),
+    status: text("status", { enum: ["pending", "running", "passed", "failed", "blocked_config", "cancelled"] }).notNull().default("pending"),
+    currentStage: text("current_stage"),
+    leaseOwner: text("lease_owner"),
+    leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
+    dispatchVersion: integer("dispatch_version").notNull().default(0),
+    cancelRequestedAt: timestamp("cancel_requested_at", { withTimezone: true }),
+    lastError: text("last_error"),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("client_factory_runs_tenant_idx").on(t.tenantId, t.createdAt)],
+);
+
+export const clientFactoryStages = pgTable(
+  "client_factory_stages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    runId: uuid("run_id").notNull().references(() => clientFactoryRuns.id),
+    stageKey: text("stage_key").notNull(),
+    ordinal: integer("ordinal").notNull(),
+    status: text("status", { enum: ["pending", "running", "passed", "failed", "blocked_config", "cancelled"] }).notNull().default("pending"),
+    inputSha256: text("input_sha256"),
+    attempts: integer("attempts").notNull().default(0),
+    evidence: jsonb("evidence").notNull().default({}),
+    lastError: text("last_error"),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("client_factory_stages_run_key_idx").on(t.runId, t.stageKey),
+    unique("client_factory_stages_run_ordinal_idx").on(t.runId, t.ordinal),
+  ],
+);
+
+export const clientFactoryStageAttempts = pgTable(
+  "client_factory_stage_attempts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    runId: uuid("run_id").notNull().references(() => clientFactoryRuns.id),
+    stageId: uuid("stage_id").notNull().references(() => clientFactoryStages.id),
+    stageKey: text("stage_key").notNull(),
+    attempt: integer("attempt").notNull(),
+    inputSha256: text("input_sha256").notNull(),
+    status: text("status", { enum: ["running", "passed", "failed", "blocked_config", "cancelled"] }).notNull(),
+    evidence: jsonb("evidence").notNull().default({}),
+    error: text("error"),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+  },
+  (t) => [unique("client_factory_stage_attempt_number_idx").on(t.stageId, t.attempt)],
+);
+
+// Phase 5 governance ledger. The SQL migration adds database triggers that reject
+// UPDATE/DELETE; these Drizzle declarations exist for typed inspection only. Writes
+// go through release:certify's content-addressed, insert-only persistence boundary.
+export const coreCertifications = pgTable(
+  "core_certifications",
+  {
+    certificationId: text("certification_id").primaryKey(),
+    canonicalCoreSha: text("canonical_core_sha").notNull(),
+    coreSourceTreeHash: text("core_source_tree_hash").notNull(),
+    suiteHash: text("suite_hash").notNull(),
+    status: text("status", { enum: ["PASS", "FAIL", "BLOCKED_CONFIG"] }).notNull(),
+    evidenceHash: text("evidence_hash").notNull(),
+    artifact: jsonb("artifact").notNull(),
+    certifiedAt: timestamp("certified_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("core_certifications_reuse_idx").on(t.canonicalCoreSha, t.coreSourceTreeHash, t.suiteHash)],
+);
+
+export const clientCertifications = pgTable(
+  "client_certifications",
+  {
+    certificationId: text("certification_id").primaryKey(),
+    clientKey: text("client_key").notNull(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    canonicalCoreSha: text("canonical_core_sha").notNull(),
+    coreCertificationId: text("core_certification_id").notNull().references(() => coreCertifications.certificationId),
+    configurationHash: text("configuration_hash").notNull(),
+    deploymentEvidenceHash: text("deployment_evidence_hash").notNull(),
+    migrationVersion: text("migration_version").notNull(),
+    schemaHash: text("schema_hash").notNull(),
+    suiteHash: text("suite_hash").notNull(),
+    status: text("status", { enum: ["PASS", "FAIL", "BLOCKED_CONFIG"] }).notNull(),
+    evidenceHash: text("evidence_hash").notNull(),
+    artifact: jsonb("artifact").notNull(),
+    certifiedAt: timestamp("certified_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("client_certifications_current_idx").on(t.clientKey, t.tenantId, t.canonicalCoreSha, t.configurationHash, t.createdAt)],
+);
+
+export const clientReleases = pgTable(
+  "client_releases",
+  {
+    releaseId: text("release_id").primaryKey(),
+    releaseVersion: text("release_version").notNull().unique(),
+    clientKey: text("client_key").notNull(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    canonicalCoreSha: text("canonical_core_sha").notNull(),
+    coreCertificationId: text("core_certification_id").notNull().references(() => coreCertifications.certificationId),
+    clientCertificationId: text("client_certification_id").notNull().references(() => clientCertifications.certificationId),
+    manifestHash: text("manifest_hash").notNull(),
+    configurationHash: text("configuration_hash").notNull(),
+    deploymentEvidenceHash: text("deployment_evidence_hash").notNull(),
+    migrationVersion: text("migration_version").notNull(),
+    schemaHash: text("schema_hash").notNull(),
+    status: text("status", { enum: ["PASS", "FAIL", "BLOCKED_CONFIG"] }).notNull(),
+    predecessorReleaseId: text("predecessor_release_id"),
+    rollbackTargetReleaseId: text("rollback_target_release_id"),
+    artifact: jsonb("artifact").notNull(),
+    certifiedAt: timestamp("certified_at", { withTimezone: true }).notNull(),
+    releasedAt: timestamp("released_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("client_releases_cert_deployment_idx").on(t.clientCertificationId, t.deploymentEvidenceHash),
+    index("client_releases_client_history_idx").on(t.clientKey, t.tenantId, t.releasedAt),
+  ],
+);
+
+// Phase 6 lifecycle control plane. Certified configuration and promotion rows are
+// append-only; activeClientReleases is the intentionally small mutable pointer.
+export const clientReleaseConfigurations = pgTable(
+  "client_release_configurations",
+  {
+    releaseId: text("release_id").primaryKey().references(() => clientReleases.releaseId),
+    clientKey: text("client_key").notNull(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    manifestHash: text("manifest_hash").notNull(),
+    configurationHash: text("configuration_hash").notNull(),
+    manifestSnapshot: jsonb("manifest_snapshot").notNull(),
+    certifiedState: jsonb("certified_state").notNull(),
+    certifiedStateHash: text("certified_state_hash").notNull(),
+    evidenceHash: text("evidence_hash").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("client_release_configurations_client_idx").on(t.clientKey, t.tenantId, t.createdAt)],
+);
+
+export const clientLifecycleOperations = pgTable(
+  "client_lifecycle_operations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clientKey: text("client_key").notNull(),
+    tenantId: uuid("tenant_id").references(() => tenants.id),
+    operationType: text("operation_type", { enum: ["status", "diff", "dry_run", "apply", "certify", "promote", "drift", "rollback"] }).notNull(),
+    status: text("status", { enum: ["running", "PASS", "FAIL", "BLOCKED_CONFIG", "NOOP"] }).notNull().default("running"),
+    planId: text("plan_id"),
+    desiredManifestHash: text("desired_manifest_hash"),
+    fromReleaseId: text("from_release_id").references(() => clientReleases.releaseId),
+    toReleaseId: text("to_release_id").references(() => clientReleases.releaseId),
+    plan: jsonb("plan").notNull().default({}),
+    evidence: jsonb("evidence").notNull().default({}),
+    evidenceHash: text("evidence_hash"),
+    provenance: jsonb("provenance").notNull().default({}),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+  },
+  (t) => [index("client_lifecycle_operations_history_idx").on(t.clientKey, t.startedAt)],
+);
+
+export const clientReleasePromotions = pgTable(
+  "client_release_promotions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clientKey: text("client_key").notNull(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    releaseId: text("release_id").notNull().references(() => clientReleases.releaseId),
+    previousReleaseId: text("previous_release_id").references(() => clientReleases.releaseId),
+    operationId: uuid("operation_id").notNull().unique().references(() => clientLifecycleOperations.id),
+    kind: text("kind", { enum: ["promotion", "rollback"] }).notNull(),
+    evidence: jsonb("evidence").notNull(),
+    evidenceHash: text("evidence_hash").notNull(),
+    promotedAt: timestamp("promoted_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("client_release_promotions_history_idx").on(t.clientKey, t.tenantId, t.promotedAt),
+    index("client_release_promotions_release_fk_idx").on(t.releaseId),
+  ],
+);
+
+export const activeClientReleases = pgTable("active_client_releases", {
+  tenantId: uuid("tenant_id").primaryKey().references(() => tenants.id),
+  clientKey: text("client_key").notNull().unique(),
+  releaseId: text("release_id").notNull().references(() => clientReleases.releaseId),
+  promotionId: uuid("promotion_id").notNull().references(() => clientReleasePromotions.id),
+  revision: integer("revision").notNull().default(1),
+  promotedAt: timestamp("promoted_at", { withTimezone: true }).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 // ---------------------------------------------------------------------------
 // Durable execution runtime (Phase 2, docs/jarvis-90-execution-blueprint.md §3).

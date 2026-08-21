@@ -7,6 +7,21 @@ aspirational.
 
 ## 1. Provision the tenant
 
+Phase 4 operators should normally use the durable factory, which covers provisioning,
+credential-reference checks, import, and tenant health in one resumable run:
+
+```
+npm run factory:client -- --command=start --manifest=/absolute/path/client.json
+npm run factory:client -- --command=status --clientKey=acme-water
+```
+
+See `docs/client-factory.md` for resume, retry, cancellation, and foreground execution.
+The lower-level commands below remain supported Phase 1–3 diagnostics.
+
+After the factory is `passed`, run Phase 5 client certification with the PASS core
+artifact plus verified deployment and tenant journey evidence. `ready_for_certification`
+is not production approval. See `docs/release-certification.md`.
+
 ```
 npx tsx scripts/provision-tenant.ts --clientKey=acme-water --name="Acme Water Co" --ownerEmail=owner@acme.com [--timezone=America/Chicago] [--reviewLinkUrl=https://g.page/r/...]
 # or, for the versioned Phase 1 manifest foundation:

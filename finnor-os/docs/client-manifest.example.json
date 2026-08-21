@@ -70,6 +70,7 @@
     {
       "key": "initial-crm-export",
       "source": "csv",
+      "sourceRef": "../exports/acme-customers.csv",
       "definition": {
         "version": 1,
         "entity": "customer",

@@ -11,7 +11,8 @@ import type { CapabilityContract, CapabilityBinding, RetryPolicy } from "@finnor
 import { syncInvoiceToQuickBooks, quickbooksProviderStatus } from "../quickbooks";
 import { createStripePaymentLink, stripeProviderStatus } from "../stripe";
 import { withCircuitBreaker } from "../provider-circuit-breaker";
-import { resolveTenantCredentialContext, type TenantCredentialContext } from "@finnor/security";
+import { resolveCredentialContext, type TenantCredentialContext } from "@finnor/security";
+import { governedCapabilityRuntime } from "./governed-runtime";
 import {
   emulatorSyncInvoice,
   emulatorCreatePaymentLink,
@@ -76,7 +77,11 @@ export const syncInvoiceEmulatorBinding: CapabilityBinding<SyncInvoiceInput, Syn
 export const syncInvoiceQuickbooksBinding: CapabilityBinding<SyncInvoiceInput, SyncInvoiceOutput> = {
   name: "quickbooks",
   async call(input) {
-    const credentialContext = await resolveTenantCredentialContext(input.tenantId, "quickbooks");
+    const runtime = governedCapabilityRuntime(input, "sync_invoice");
+    const credentialContext = await resolveCredentialContext(input.tenantId, runtime.__identityActorId, "quickbooks", runtime.__identityPurpose, {
+      application: "quickbooks",
+      ...(runtime.__authProfileRef ? { authProfileRef: runtime.__authProfileRef } : {}),
+    });
     const result = await withCircuitBreaker(
       "quickbooks",
       () =>
@@ -127,7 +132,11 @@ export const createPaymentLinkEmulatorBinding: CapabilityBinding<CreatePaymentLi
 export const stripeCreatePaymentLinkBinding: CapabilityBinding<CreatePaymentLinkInput, CreatePaymentLinkOutput> = {
   name: "stripe",
   async call(input) {
-    const credentialContext = await resolveTenantCredentialContext(input.tenantId, "stripe");
+    const runtime = governedCapabilityRuntime(input, "create_payment_link");
+    const credentialContext = await resolveCredentialContext(input.tenantId, runtime.__identityActorId, "stripe", runtime.__identityPurpose, {
+      application: "stripe",
+      ...(runtime.__authProfileRef ? { authProfileRef: runtime.__authProfileRef } : {}),
+    });
     const result = await withCircuitBreaker("stripe", () => createStripePaymentLink(input, credentialContext), { tenantId: input.tenantId });
     await withTenant(input.tenantId, (db) =>
       db

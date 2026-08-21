@@ -9,6 +9,17 @@ import { ensureSecretsLoaded, minimizeExternalInput } from "@finnor/security";
 import { claimExternalOperation, recordExternalOperationResult, awaitExternalOperationResolution } from "./idempotent-call";
 import { initObservability, Sentry } from "./observability";
 
+/** Trusted execution metadata injected by an action/workflow boundary. It is never
+ * parsed from planner/tool input and never forwarded to an external provider. */
+export interface ToolRuntimeContext {
+  tenantId?: string;
+  actorId?: string;
+  purpose?: string;
+  domainActionId?: string;
+  communicationIdentityId?: string;
+  authProfileRef?: string;
+}
+
 export interface Tool {
   name: string;
   description: string;
@@ -20,7 +31,7 @@ export interface Tool {
    *  .passthrough(), so without this a stray field (household notes, an SSN some
    *  future planner payload attaches) flows straight to the external adapter. */
   piiAllowlist?: readonly string[];
-  run(input: Record<string, unknown>): Promise<Record<string, unknown>>;
+  run(input: Record<string, unknown>, runtime?: Readonly<ToolRuntimeContext>): Promise<Record<string, unknown>>;
 }
 
 export class ToolRegistry {
@@ -47,13 +58,25 @@ export class ToolRegistry {
    *  ok/fail — never the input/output itself, respecting the PII-minimization above),
    *  and a captured message on failure. No-ops harmlessly without SENTRY_DSN. */
   async call(name: string, input: Record<string, unknown>): Promise<ToolCallResult> {
+    return this.callWithRuntimeContext(name, input, {});
+  }
+
+  /** ScopedToolRegistry is the only production caller that supplies this context.
+   * Keeping it out of input validation prevents a forged payload from replacing the
+   * authenticated actor, tenant, identity handle, or authProfileRef. */
+  async callWithRuntimeContext(
+    name: string,
+    input: Record<string, unknown>,
+    runtime: Readonly<ToolRuntimeContext>,
+  ): Promise<ToolCallResult> {
     initObservability();
     await ensureSecretsLoaded();
     const tool = this.tools.get(name);
     if (!tool) {
       return { ok: false, output: {}, error: `Unknown tool: ${name}` };
     }
-    const parsed = tool.inputSchema.safeParse(input);
+    const effectiveInput = runtime.tenantId ? { ...input, tenantId: runtime.tenantId } : input;
+    const parsed = tool.inputSchema.safeParse(effectiveInput);
     if (!parsed.success) {
       return {
         ok: false,
@@ -63,7 +86,11 @@ export class ToolRegistry {
     }
     const safeInput = tool.piiAllowlist ? minimizeExternalInput(parsed.data, tool.piiAllowlist) : parsed.data;
     const start = Date.now();
-    const result = await wrappedCall(tool.integration, () => tool.run(safeInput), tool.retryPolicy ?? DEFAULT_RETRY);
+    const result = await wrappedCall(
+      tool.integration,
+      () => Object.keys(runtime).length > 0 ? tool.run(safeInput, runtime) : tool.run(safeInput),
+      tool.retryPolicy ?? DEFAULT_RETRY,
+    );
     const ms = Date.now() - start;
     Sentry.addBreadcrumb({ category: "tool", message: name, data: { integration: tool.integration, ok: result.ok, ms } });
     if (!result.ok) Sentry.captureMessage(`tool_failed:${name}`, { level: "warning" });
@@ -74,6 +101,10 @@ export class ToolRegistry {
 export interface ToolCallContext {
   tenantId: string;
   domainActionId: string;
+  actorId?: string;
+  purpose?: string;
+  communicationIdentityId?: string;
+  authProfileRef?: string;
   /** Deterministic namespace for independently queued targets/batches of one action. */
   operationKeyPrefix?: string;
 }
@@ -142,7 +173,14 @@ export class ScopedToolRegistry extends ToolRegistry {
         ? { ok: true, output: (settled.response ?? {}) as Record<string, unknown> }
         : { ok: false, output: (settled.response ?? {}) as Record<string, unknown>, integrationUnavailable: true, errorKind: "retryable" };
     }
-    const result = await this.base.call(name, input);
+    const result = await this.base.callWithRuntimeContext(name, input, {
+      tenantId: this.ctx.tenantId,
+      domainActionId: this.ctx.domainActionId,
+      ...(this.ctx.actorId ? { actorId: this.ctx.actorId } : {}),
+      ...(this.ctx.purpose ? { purpose: this.ctx.purpose } : {}),
+      ...(this.ctx.communicationIdentityId ? { communicationIdentityId: this.ctx.communicationIdentityId } : {}),
+      ...(this.ctx.authProfileRef ? { authProfileRef: this.ctx.authProfileRef } : {}),
+    });
     await recordExternalOperationResult(this.ctx.tenantId, this.ctx.domainActionId, operationKey, result.ok ? "succeeded" : "failed", result.output);
     return result;
   }

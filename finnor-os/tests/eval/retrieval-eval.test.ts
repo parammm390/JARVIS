@@ -9,13 +9,13 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import pg from "pg";
 import { migrate } from "../../packages/db/migrate";
-import { withTenant, closePool, tenants, embeddings, equipment, households } from "@finnor/db";
+import { withTenant, closePool, tenants, embeddings, households, equipment, serviceVisits } from "@finnor/db";
 import { and, eq, inArray } from "drizzle-orm";
 import { writeSemantic, DeterministicLocalEmbedder } from "@finnor/memory";
 import { createDefaultPluginRegistry } from "@finnor/orchestration";
 import { ToolRegistry } from "@finnor/tools";
 import type { DomainPolicy } from "@finnor/shared-types";
-import { DEALER_ZERO_TENANT_ID, SOP_DOCS, FIXTURES, type EvalFixture } from "./fixtures";
+import { DEALER_ZERO_TENANT_ID, REAL_HOUSEHOLDS, SOP_DOCS, FIXTURES, type EvalFixture } from "./fixtures";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
 const EVAL_PASS_THRESHOLD = 0.85;
@@ -84,17 +84,16 @@ describe.skipIf(!available)("retrieval eval (§5.7) — expected source in top-5
       db.insert(tenants).values({ id: DEALER_ZERO_TENANT_ID, name: "Finnor Water Co. (Dealer Zero)" }).onConflictDoNothing(),
     );
     // The old suite passed only when a developer happened to have run the large
-    // Dealer Zero seed beforehand. Keep these two fixture identities local to the
-    // test database so a clean CI checkout proves household grounding without ever
-    // seeding a production client.
+    // Dealer Zero seed beforehand. Keep the bounded household/equipment/service
+    // snapshot local to the test database so clean CI proves every retrieval route.
     await withTenant(DEALER_ZERO_TENANT_ID, async (db) => {
       await db.insert(households).values([
-        { id: "f76f9517-671f-49f2-a527-f748e12f7350", tenantId: DEALER_ZERO_TENANT_ID, address: "8289 Main St, Cedar Falls, IA" },
-        { id: "34a773a3-ef65-406e-8449-24884319b114", tenantId: DEALER_ZERO_TENANT_ID, address: "5253 Cedar Heights Dr, Waterloo, IA" },
+        { id: REAL_HOUSEHOLDS.softener.id, tenantId: DEALER_ZERO_TENANT_ID, address: REAL_HOUSEHOLDS.softener.address, contactInfo: { source: "retrieval_eval_snapshot" } },
+        { id: REAL_HOUSEHOLDS.carbonFilter.id, tenantId: DEALER_ZERO_TENANT_ID, address: REAL_HOUSEHOLDS.carbonFilter.address, contactInfo: { source: "retrieval_eval_snapshot" } },
       ]).onConflictDoNothing();
       const equipmentFixtures = [
-        { householdId: "f76f9517-671f-49f2-a527-f748e12f7350", type: "water_softener", model: "HE Softener 45k" },
-        { householdId: "34a773a3-ef65-406e-8449-24884319b114", type: "whole_house_filter", model: "Whole-House Carbon Filtration System" },
+        { householdId: REAL_HOUSEHOLDS.softener.id, type: REAL_HOUSEHOLDS.softener.equipmentType, model: "HE Softener 45k" },
+        { householdId: REAL_HOUSEHOLDS.carbonFilter.id, type: REAL_HOUSEHOLDS.carbonFilter.equipmentType, model: "Whole-House Carbon Filtration System" },
       ];
       for (const fixture of equipmentFixtures) {
         const [existing] = await db.select({ id: equipment.id }).from(equipment).where(and(
@@ -104,6 +103,14 @@ describe.skipIf(!available)("retrieval eval (§5.7) — expected source in top-5
         ));
         if (!existing) await db.insert(equipment).values({ tenantId: DEALER_ZERO_TENANT_ID, ...fixture });
       }
+      await db.insert(serviceVisits).values({
+        id: "00000000-0000-4000-8000-00000000e003",
+        tenantId: DEALER_ZERO_TENANT_ID,
+        householdId: REAL_HOUSEHOLDS.softener.id,
+        type: "maintenance",
+        completedAt: new Date("2026-01-15T18:00:00.000Z"),
+        notes: "Canonical retrieval-evaluation service-history snapshot.",
+      }).onConflictDoNothing();
     });
     // Idempotent: skip any SOP already ingested (a real key would embed once, forever
     // — re-running this eval must never re-embed the same real content on every run).

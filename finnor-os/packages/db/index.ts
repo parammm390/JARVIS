@@ -1049,7 +1049,11 @@ export type WorkQueryIntent =
   | "inventory_status"
   | "agent_activity"
   | "business_state"
-  | "company_context";
+  | "company_context"
+  | "party_lookup"
+  | "party_context"
+  | "team_roster"
+  | "party_availability";
 
 export interface BeginWorkQueryExecutionParams {
   tenantId: string;

@@ -42,6 +42,7 @@ import { startScheduler, startGlobalScheduler, type ScheduledScan } from "./sche
 import { startHeartbeat } from "./heartbeat";
 import { startSseServer } from "./sse-server";
 import { recoverObjectives, runObjectiveIteration } from "./handlers/run-objective-iteration";
+import { runClientFactoryJob } from "./handlers/run-client-factory";
 import { releaseProbe } from "./handlers/release-probe";
 
 export function createWorker(): JobQueue {
@@ -83,6 +84,7 @@ export function createWorker(): JobQueue {
   queue.register("execute_business_operation_call_batch", executeBusinessOperationCallBatch);
   queue.register("run_objective_iteration", runObjectiveIteration);
   queue.register("recover_objectives", recoverObjectives);
+  queue.register("run_client_factory", runClientFactoryJob);
   queue.register("release_probe", releaseProbe);
   return queue;
 }

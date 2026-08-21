@@ -13,8 +13,9 @@ import { createDocument, recordDocumentContent, getDocumentContent } from "@finn
 import type { CapabilityContract, CapabilityBinding, RetryPolicy } from "@finnor/workflow-runtime";
 import { requestDocusignSignature, docusignProviderStatus } from "../docusign";
 import { withCircuitBreaker } from "../provider-circuit-breaker";
-import { resolveTenantCredentialContext, type TenantCredentialContext } from "@finnor/security";
+import { resolveCredentialContext, type TenantCredentialContext } from "@finnor/security";
 import { renderDocumentPdf } from "../pdf/render-pdf";
+import { governedCapabilityRuntime } from "./governed-runtime";
 import {
   emulatorGenerateDocument,
   emulatorRequestSignature,
@@ -129,7 +130,11 @@ export function isDocusignConfigured(context: TenantCredentialContext<"docusign"
 export const requestSignatureDocusignBinding: CapabilityBinding<RequestSignatureInput, RequestSignatureOutput> = {
   name: "docusign",
   async call(input) {
-    const credentialContext = await resolveTenantCredentialContext(input.tenantId, "docusign");
+    const runtime = governedCapabilityRuntime(input, "request_signature");
+    const credentialContext = await resolveCredentialContext(input.tenantId, runtime.__identityActorId, "docusign", runtime.__identityPurpose, {
+      application: "docusign",
+      ...(runtime.__authProfileRef ? { authProfileRef: runtime.__authProfileRef } : {}),
+    });
     const content = await withTenant(input.tenantId, (db) => getDocumentContent(db, input.documentId));
     return withCircuitBreaker("docusign", () => requestDocusignSignature({ ...input, documentBytes: content?.bytes }, credentialContext), { tenantId: input.tenantId });
   },

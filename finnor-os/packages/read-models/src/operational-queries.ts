@@ -64,13 +64,20 @@ import type {
   OperationalQueryResult,
   OperationalQueryResultFor,
   OperationalQuerySource,
+  PartyAvailabilityResult,
+  PartyContextResult,
+  PartyLookupResult,
+  TeamRosterResult,
   ScheduleRangeRequest,
   ScheduleRangeResult,
   ScheduleRow,
   WorkListRequest,
   WorkListResult,
 } from "@finnor/shared-types";
+import { canonicalEntityRefToPartyRef } from "@finnor/shared-types";
 import { companyContext as resolveCompanyContext } from "./index";
+import { executePartyOperationalQuery, type PartyReadExecutionContext } from "./party-queries";
+import { resolveParty } from "./party-resolver";
 import { and, asc, desc, eq, gt, gte, inArray, isNotNull, isNull, lt, or, sql, type AnyColumn, type SQL } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import { performance } from "node:perf_hooks";
@@ -78,6 +85,7 @@ import { performance } from "node:perf_hooks";
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_PAGE_SIZE = 100;
 const FUZZY_CANDIDATE_CAP = 1_000;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 type Cursor = Record<string, unknown>;
 
@@ -92,6 +100,10 @@ interface QueryOptions {
   now?: (() => Date) | Date;
   /** Optional lower cap for a caller that wants an even smaller bounded page. */
   maxRows?: number;
+  /** Trusted authenticated employee identity for relationship-aware party reads. */
+  employeeId?: string;
+  /** Trusted authenticated user identity; never read from a request payload. */
+  userId?: string;
 }
 
 export type OperationalQueryOptions = QueryOptions;
@@ -105,7 +117,11 @@ type CanonicalOperationalQueryResult =
   | InventoryStatusResult
   | AgentActivityResult
   | BusinessStateResult
-  | CompanyContextResult;
+  | CompanyContextResult
+  | PartyLookupResult
+  | PartyContextResult
+  | TeamRosterResult
+  | PartyAvailabilityResult;
 
 interface PageContext {
   limit: number;
@@ -238,7 +254,7 @@ interface ResolvedTenantRange {
   localDateRange?: OperationalLocalDateRange;
 }
 
-async function resolveTenantRange(
+export async function resolveTenantRange(
   db: Db,
   tenantId: string,
   request: { range?: OperationalQueryRange; localDateRange?: OperationalLocalDateRange },
@@ -1643,16 +1659,59 @@ async function companyContextQuery(
   asOf: string,
   options: QueryOptions,
 ): Promise<CompanyContextResult> {
-  let anchor = request.anchor;
-  let resolution: CompanyContextResult["resolution"] = anchor || request.householdId ? "exact" : "not_found";
-  if (!anchor && request.householdId) anchor = { entityType: "household", entityId: request.householdId };
-  if (!anchor && request.query?.trim()) {
-    const lookup = await withTenant(tenantId, (db) => customerLookup(db, tenantId, { intent: "customer_lookup", query: request.query, page: { limit: 2 } }, asOf, options));
-    if (lookup.resolution === "ambiguous") resolution = "ambiguous";
-    else if (lookup.resolution === "not_found") resolution = "not_found";
-    else if (lookup.rows[0]) {
-      anchor = { entityType: "household", entityId: lookup.rows[0].householdId };
+  let anchor: CompanyContextRequest["anchor"];
+  let resolution: CompanyContextResult["resolution"] = "not_found";
+  const requesterEmployeeId = options.employeeId && UUID.test(options.employeeId)
+    ? options.employeeId
+    : options.userId && UUID.test(options.userId)
+      ? options.userId
+      : undefined;
+  const resolverContext = {
+    ...(requesterEmployeeId ? { requesterEmployeeId } : {}),
+    ...(options.workId && UUID.test(options.workId) ? { workId: options.workId } : {}),
+  };
+  const explicitPartyRef = request.anchor
+    ? "partyType" in request.anchor
+      ? request.anchor
+      : canonicalEntityRefToPartyRef(request.anchor)
+    : request.householdId
+      ? { partyType: "household" as const, partyId: request.householdId }
+      : null;
+
+  if (explicitPartyRef) {
+    const partyResolution = await resolveParty(tenantId, { ref: explicitPartyRef }, resolverContext);
+    if (partyResolution.status === "resolved" && partyResolution.party) {
+      anchor = partyResolution.party.ref;
+      resolution = "exact";
+    } else {
+      resolution = partyResolution.status === "ambiguous"
+        ? "ambiguous"
+        : partyResolution.status === "inactive"
+          ? "inactive"
+          : "not_found";
+    }
+  } else if (request.anchor) {
+    // Legacy canonical anchors that have no PartyRef representation retain the
+    // existing graph path. Company-party anchors always pass through the resolver.
+    anchor = request.anchor;
+    resolution = "exact";
+  } else if (request.query?.trim()) {
+    const partyResolution = await resolveParty(tenantId, { query: request.query }, resolverContext);
+    if (partyResolution.status === "resolved" && partyResolution.party) {
+      anchor = partyResolution.party.ref;
       resolution = "unique";
+    } else if (partyResolution.status === "ambiguous" || partyResolution.status === "inactive") {
+      resolution = partyResolution.status;
+    } else {
+      // Preserve the legacy household/address journey only after the one
+      // canonical Party Resolver has explicitly returned not_found.
+      const lookup = await withTenant(tenantId, (db) => customerLookup(db, tenantId, { intent: "customer_lookup", query: request.query, page: { limit: 2 } }, asOf, options));
+      if (lookup.resolution === "ambiguous") resolution = "ambiguous";
+      else if (lookup.resolution === "not_found") resolution = "not_found";
+      else if (lookup.rows[0]) {
+        anchor = { partyType: "household", partyId: lookup.rows[0].householdId };
+        resolution = "unique";
+      }
     }
   }
   const context = anchor ? await resolveCompanyContext(tenantId, anchor) : null;
@@ -1668,7 +1727,7 @@ async function companyContextQuery(
   );
   return {
     ...base("company_context", sourceInfo, asOf, info),
-    status: resolution === "ambiguous" ? "ambiguous" : resolution === "not_found" ? "not_found" : "ok",
+    status: resolution === "ambiguous" ? "ambiguous" : resolution === "not_found" ? "not_found" : resolution === "inactive" ? "inactive" : "ok",
     resolution,
     context,
   };
@@ -1757,11 +1816,13 @@ function normalizeOperationalRequest(request: OperationalQueryRequest, asOf: str
 function compatibilityEnvelope(result: CanonicalOperationalQueryResult): CanonicalOperationalQueryResult {
   if (!("version" in result)) return result;
   const { data: _data, kind: _kind, status: _status, ...payload } = result;
-  const status = result.intent === "customer_lookup"
-    ? result.resolution === "ambiguous" ? "ambiguous" : result.resolution === "not_found" ? "not_found" : "ok"
-    : result.intent === "company_context"
-      ? result.resolution === "ambiguous" ? "ambiguous" : result.resolution === "not_found" ? "not_found" : "ok"
-    : "ok";
+  const status = "resolution" in result && result.resolution === "ambiguous"
+    ? "ambiguous"
+    : "resolution" in result && result.resolution === "inactive"
+      ? "inactive"
+      : "resolution" in result && result.resolution === "not_found"
+      ? "not_found"
+      : "ok";
   return {
     ...result,
     kind: "operational_query_result",
@@ -1796,6 +1857,11 @@ async function runOperationalQuery(
       return businessState(db, tenantId, request, asOf, options);
     case "company_context":
       throw new Error("company_context must execute outside an existing tenant transaction");
+    case "party_lookup":
+    case "party_context":
+    case "team_roster":
+    case "party_availability":
+      throw new Error(`${request.intent} must execute outside an existing tenant transaction`);
     default:
       return assertNever(request);
   }
@@ -1806,7 +1872,7 @@ function assertNever(value: never): never {
 }
 
 /**
- * Execute one of the nine exact operational read intents. The request is never
+ * Execute one of the exact operational read intents. The request is never
  * allowed to carry tenantId; tenant scope is established only by this authenticated
  * parameter and withTenant(). When Work metadata is provided, this creates a
  * work_query_executions receipt rather than a planner attempt.
@@ -1841,15 +1907,28 @@ export async function executeOperationalQuery<T extends OperationalQueryRequest>
     // company_context composes several bounded read models. Execute those tenant
     // transactions sequentially: production intentionally uses a one-connection
     // pool, so nesting withTenant() inside another transaction would deadlock.
+    const partyIntent = canonicalRequest.intent === "party_lookup"
+      || canonicalRequest.intent === "party_context"
+      || canonicalRequest.intent === "team_roster"
+      || canonicalRequest.intent === "party_availability";
+    const partyContext: PartyReadExecutionContext = {
+      ...(options.employeeId ? { employeeId: options.employeeId } : {}),
+      ...(options.userId ? { userId: options.userId } : {}),
+      ...(options.workId ? { workId: options.workId } : {}),
+      now: startedAt,
+      ...(options.maxRows === undefined ? {} : { maxRows: options.maxRows }),
+    };
     const rawResult = canonicalRequest.intent === "company_context"
       ? await companyContextQuery(tenantId, canonicalRequest, asOf, options)
-      : await withTenant(tenantId, (db) => runOperationalQuery(db, tenantId, canonicalRequest, asOf, options));
+      : partyIntent
+        ? await executePartyOperationalQuery(tenantId, canonicalRequest, partyContext)
+        : await withTenant(tenantId, (db) => runOperationalQuery(db, tenantId, canonicalRequest, asOf, options));
     const result = compatibilityEnvelope(rawResult);
     if (options.workId) {
       const householdId = result.intent === "customer_lookup" && result.rows.length === 1
         ? result.rows[0]!.householdId
         : result.intent === "company_context" && result.context
-          ? result.context.household.id
+          ? result.context.household?.id ?? null
           : null;
       if (householdId) await attachWorkEntity(tenantId, options.workId, {
         entityType: "household",
@@ -1908,4 +1987,8 @@ export const operationalQueryIntents = [
   "agent_activity",
   "business_state",
   "company_context",
+  "party_lookup",
+  "party_context",
+  "team_roster",
+  "party_availability",
 ] as const;

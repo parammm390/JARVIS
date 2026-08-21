@@ -45,6 +45,18 @@ const OperationalQueryWorkSchema = z.object({
   executionKey: z.string().min(1).max(200).optional(),
   idempotencyKey: z.string().min(1).max(200).optional(),
 }).strict();
+const PartyRefSchema = z.object({
+  partyType: z.enum(["employee", "team", "location", "household", "contact", "external_organization", "external_contact"]),
+  partyId: z.string().uuid(),
+}).strict();
+const TeamRefSchema = z.object({
+  partyType: z.literal("team"),
+  partyId: z.string().uuid(),
+}).strict();
+const PartyLocalDateRangeSchema = z.object({
+  startDate: z.string().regex(/^(?:today|tomorrow|\d{4}-\d{2}-\d{2})$/),
+  endDate: z.string().regex(/^(?:today|tomorrow|\d{4}-\d{2}-\d{2})$/).optional(),
+}).strict();
 const OperationalQueryRequestSchema = z.discriminatedUnion("intent", [
   z.object({
     intent: z.literal("customer_lookup"),
@@ -109,12 +121,41 @@ const OperationalQueryRequestSchema = z.discriminatedUnion("intent", [
   }).merge(OperationalQueryWorkSchema),
   z.object({
     intent: z.literal("company_context"),
-    anchor: z.object({
-      entityType: z.enum(["household","contact","user","technician","equipment","service_visit","maintenance_agreement","lead","opportunity","quote","proposal","work_order","appointment","invoice","payment","conversation","call","message","communication","document","task","work","domain_action","workflow_run","workflow_step","business_operation","business_operation_target","decision_receipt","business_event"]),
-      entityId: z.string().uuid(),
-    }).strict().optional(),
+    anchor: z.union([
+      z.object({
+        entityType: z.enum(["household","contact","user","technician","equipment","service_visit","maintenance_agreement","lead","opportunity","quote","proposal","work_order","appointment","invoice","payment","conversation","call","message","communication","document","task","work","domain_action","workflow_run","workflow_step","business_operation","business_operation_target","decision_receipt","business_event","org_unit","tenant_location","external_organization","external_contact"]),
+        entityId: z.string().uuid(),
+      }).strict(),
+      PartyRefSchema,
+    ]).optional(),
     householdId: z.string().uuid().optional(),
     query: z.string().trim().min(1).max(300).optional(),
+  }).merge(OperationalQueryWorkSchema),
+  z.object({
+    intent: z.literal("party_lookup"),
+    ref: PartyRefSchema.optional(),
+    query: z.string().trim().min(1).max(300).optional(),
+    page: OperationalQueryPageSchema.optional(),
+  }).merge(OperationalQueryWorkSchema),
+  z.object({
+    intent: z.literal("party_context"),
+    ref: PartyRefSchema.optional(),
+    query: z.string().trim().min(1).max(300).optional(),
+    page: OperationalQueryPageSchema.optional(),
+  }).merge(OperationalQueryWorkSchema),
+  z.object({
+    intent: z.literal("team_roster"),
+    teamRef: TeamRefSchema.optional(),
+    query: z.string().trim().min(1).max(300).optional(),
+    page: OperationalQueryPageSchema.optional(),
+  }).merge(OperationalQueryWorkSchema),
+  z.object({
+    intent: z.literal("party_availability"),
+    ref: PartyRefSchema.optional(),
+    query: z.string().trim().min(1).max(300).optional(),
+    localDateRange: PartyLocalDateRangeSchema.optional(),
+    includeCapacity: z.boolean().optional(),
+    page: OperationalQueryPageSchema.optional(),
   }).merge(OperationalQueryWorkSchema),
 ]);
 // Each discriminated-union branch owns the strict Work metadata fields. An

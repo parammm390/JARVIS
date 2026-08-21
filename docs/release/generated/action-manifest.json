@@ -1,14 +1,14 @@
 {
-  "generatedAt": "2026-08-09T09:19:29.126Z",
+  "generatedAt": "2026-08-21T13:09:48.846Z",
   "actionCount": 44,
   "actions": [
     {
       "plugin": "ops-overview",
       "actionType": "answer_business_question",
       "sourcePath": "finnor-os/packages/domain-plugins/ops-overview/index.ts",
-      "sourceLine": 238,
+      "sourceLine": 331,
       "schemaSourcePath": "finnor-os/packages/domain-plugins/ops-overview/index.ts",
-      "schemaSourceLine": 239
+      "schemaSourceLine": 332
     },
     {
       "plugin": "customer-comm",
@@ -38,33 +38,33 @@
       "plugin": "scheduling",
       "actionType": "assign_technician_to_visit",
       "sourcePath": "finnor-os/packages/domain-plugins/scheduling/index.ts",
-      "sourceLine": 41,
+      "sourceLine": 46,
       "schemaSourcePath": "finnor-os/packages/domain-plugins/scheduling/index.ts",
-      "schemaSourceLine": 42
+      "schemaSourceLine": 47
     },
     {
       "plugin": "bulk-notify",
       "actionType": "bulk_notify_existing_customers",
       "sourcePath": "finnor-os/packages/domain-plugins/bulk-notify/index.ts",
-      "sourceLine": 182,
+      "sourceLine": 459,
       "schemaSourcePath": "finnor-os/packages/domain-plugins/bulk-notify/index.ts",
-      "schemaSourceLine": 183
+      "schemaSourceLine": 460
     },
     {
       "plugin": "accounting",
       "actionType": "call_overdue_invoices",
       "sourcePath": "finnor-os/packages/domain-plugins/accounting/index.ts",
-      "sourceLine": 43,
+      "sourceLine": 42,
       "schemaSourcePath": "finnor-os/packages/domain-plugins/accounting/index.ts",
-      "schemaSourceLine": 44
+      "schemaSourceLine": 43
     },
     {
       "plugin": "web-research",
       "actionType": "check_business_reviews",
       "sourcePath": "finnor-os/packages/domain-plugins/web-research/index.ts",
-      "sourceLine": 138,
+      "sourceLine": 261,
       "schemaSourcePath": "finnor-os/packages/domain-plugins/web-research/index.ts",
-      "schemaSourceLine": 139
+      "schemaSourceLine": 262
     },
     {
       "plugin": "service-reminders",
@@ -86,9 +86,9 @@
       "plugin": "scheduling",
       "actionType": "check_technician_availability",
       "sourcePath": "finnor-os/packages/domain-plugins/scheduling/index.ts",
-      "sourceLine": 41,
+      "sourceLine": 46,
       "schemaSourcePath": "finnor-os/packages/domain-plugins/scheduling/index.ts",
-      "schemaSourceLine": 42
+      "schemaSourceLine": 47
     },
     {
       "plugin": "clarification",
@@ -102,9 +102,9 @@
       "plugin": "accounting",
       "actionType": "create_invoice",
       "sourcePath": "finnor-os/packages/domain-plugins/accounting/index.ts",
-      "sourceLine": 43,
+      "sourceLine": 42,
       "schemaSourcePath": "finnor-os/packages/domain-plugins/accounting/index.ts",
-      "schemaSourceLine": 44
+      "schemaSourceLine": 43
     },
     {
       "plugin": "crm",
@@ -158,9 +158,9 @@
       "plugin": "ops-overview",
       "actionType": "get_business_overview",
       "sourcePath": "finnor-os/packages/domain-plugins/ops-overview/index.ts",
-      "sourceLine": 238,
+      "sourceLine": 331,
       "schemaSourcePath": "finnor-os/packages/domain-plugins/ops-overview/index.ts",
-      "schemaSourceLine": 239
+      "schemaSourceLine": 332
     },
     {
       "plugin": "marketing",
@@ -206,9 +206,9 @@
       "plugin": "accounting",
       "actionType": "record_payment",
       "sourcePath": "finnor-os/packages/domain-plugins/accounting/index.ts",
-      "sourceLine": 43,
+      "sourceLine": 42,
       "schemaSourcePath": "finnor-os/packages/domain-plugins/accounting/index.ts",
-      "schemaSourceLine": 44
+      "schemaSourceLine": 43
     },
     {
       "plugin": "maintenance-agreement",
@@ -230,9 +230,9 @@
       "plugin": "scheduling",
       "actionType": "reschedule_visit",
       "sourcePath": "finnor-os/packages/domain-plugins/scheduling/index.ts",
-      "sourceLine": 41,
+      "sourceLine": 46,
       "schemaSourcePath": "finnor-os/packages/domain-plugins/scheduling/index.ts",
-      "schemaSourceLine": 42
+      "schemaSourceLine": 47
     },
     {
       "plugin": "route-optimization",
@@ -246,9 +246,9 @@
       "plugin": "web-research",
       "actionType": "scan_competitors",
       "sourcePath": "finnor-os/packages/domain-plugins/web-research/index.ts",
-      "sourceLine": 138,
+      "sourceLine": 261,
       "schemaSourcePath": "finnor-os/packages/domain-plugins/web-research/index.ts",
-      "schemaSourceLine": 139
+      "schemaSourceLine": 262
     },
     {
       "plugin": "water-test",
@@ -262,9 +262,9 @@
       "plugin": "web-research",
       "actionType": "search_web",
       "sourcePath": "finnor-os/packages/domain-plugins/web-research/index.ts",
-      "sourceLine": 138,
+      "sourceLine": 261,
       "schemaSourcePath": "finnor-os/packages/domain-plugins/web-research/index.ts",
-      "schemaSourceLine": 139
+      "schemaSourceLine": 262
     },
     {
       "plugin": "customer-comm",
@@ -286,9 +286,9 @@
       "plugin": "accounting",
       "actionType": "send_payment_reminder",
       "sourcePath": "finnor-os/packages/domain-plugins/accounting/index.ts",
-      "sourceLine": 43,
+      "sourceLine": 42,
       "schemaSourcePath": "finnor-os/packages/domain-plugins/accounting/index.ts",
-      "schemaSourceLine": 44
+      "schemaSourceLine": 43
     },
     {
       "plugin": "quotation",

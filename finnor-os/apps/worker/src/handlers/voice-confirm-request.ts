@@ -4,7 +4,7 @@
 
 import { domainActions, users, withTenant } from "@finnor/db";
 import { placeVapiCall } from "@finnor/tools";
-import { resolveTenantCredentialContext } from "@finnor/security";
+import { resolveCredentialContext } from "@finnor/security";
 import type { JobHandler } from "../queue";
 import { eligibleApproversForAction } from "@finnor/authority";
 import { and, eq, inArray, isNotNull } from "drizzle-orm";
@@ -27,6 +27,6 @@ export const voiceConfirmRequest: JobHandler = async (payload) => {
     customerNumber: approver.phoneNumber,
     firstMessage: `Hi, this is Finnor with something that needs your approval. ${script}`,
     metadata: { pendingActionId: actionId, tenantId, approverEmployeeId: approver.id },
-  }, await resolveTenantCredentialContext(tenantId, "vapi"));
+  }, await resolveCredentialContext(tenantId, "system:approval-request", "vapi", "voice_confirmation", { channel: "voice" }));
   if (!result.ok) throw new Error(result.error ?? "Vapi call failed");
 };

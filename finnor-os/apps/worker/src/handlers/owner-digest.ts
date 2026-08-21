@@ -10,7 +10,7 @@
 import { getPool, withTenant, scanFindings, domainActions, llmCalls, users } from "@finnor/db";
 import { and, eq, gte, isNull, sql } from "drizzle-orm";
 import { placeVapiCall, logWithTrace, isAllowlistedRecipient, resolveTenantResendContext, sendResendEmail } from "@finnor/tools";
-import { resolveTenantCredentialContext, TenantCredentialError, type TenantCredentialContext } from "@finnor/security";
+import { resolveCredentialContext, TenantCredentialError, type TenantCredentialContext } from "@finnor/security";
 import { followUpDebt, cashCollections, intelligenceForecasts, routeSavingsBriefing, slaBreaches } from "@finnor/read-models";
 import type { JobHandler } from "../queue";
 
@@ -121,7 +121,7 @@ export const ownerDigest: JobHandler = async (payload) => {
   const ownerPhone = rows[0]?.owner_phone as string | null | undefined;
 
   if (ownerPhone && ownerPhone !== "PLACEHOLDER_NEEDS_REAL_VALUE") {
-    const vapiContext = await resolveTenantCredentialContext(tenantId, "vapi");
+    const vapiContext = await resolveCredentialContext(tenantId, "system:owner-digest", "vapi", "owner_digest", { channel: "voice" });
     const result = await placeVapiCall({
       tenantId,
       customerNumber: ownerPhone,

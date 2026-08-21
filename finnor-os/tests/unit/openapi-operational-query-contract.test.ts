@@ -25,7 +25,7 @@ describe("generated Upgrade 3 OpenAPI contract", () => {
   it("composes Work metadata into each strict intent branch", () => {
     const schema = openapi.paths["/api/queries"].post.requestBody.content["application/json"].schema;
     expect(schema.allOf).toBeUndefined();
-    expect(schema.anyOf).toHaveLength(9);
+    expect(schema.anyOf).toHaveLength(13);
 
     for (const branch of schema.anyOf ?? []) {
       expect(branch.additionalProperties).toBe(false);
@@ -56,6 +56,10 @@ describe("generated Upgrade 3 OpenAPI contract", () => {
     expect(byIntent.get("inventory_status")).toEqual(expect.objectContaining({ sku: expect.any(Object) }));
     expect(byIntent.get("customer_cohort")).toEqual(expect.objectContaining({ asOf: expect.any(Object) }));
     expect(byIntent.get("company_context")).toEqual(expect.objectContaining({ anchor: expect.any(Object), householdId: expect.any(Object), query: expect.any(Object) }));
+    expect(byIntent.get("party_lookup")).toEqual(expect.objectContaining({ ref: expect.any(Object), query: expect.any(Object) }));
+    expect(byIntent.get("party_context")).toEqual(expect.objectContaining({ ref: expect.any(Object), query: expect.any(Object) }));
+    expect(byIntent.get("team_roster")).toEqual(expect.objectContaining({ teamRef: expect.any(Object), query: expect.any(Object) }));
+    expect(byIntent.get("party_availability")).toEqual(expect.objectContaining({ ref: expect.any(Object), query: expect.any(Object), localDateRange: expect.any(Object), includeCapacity: expect.any(Object) }));
     expect(openapi.paths["/api/works/{id}"].get.summary).toMatch(/query executions/i);
   });
 });

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { classifyFastReadOnlyQuestion, interpretOperationalQuery } from "../../packages/orchestration/src/fast-read-lane";
+import { classifyFastReadOnlyQuestion, createFastReadOnlyRouter, interpretOperationalQuery, validateOperationalQueryRequest } from "../../packages/orchestration/src/fast-read-lane";
+import { queryAuthorityRequest } from "../../packages/orchestration/src/authority-runtime";
 
 const supportedReads: Array<[string, string]> = [
   ["Find the customer record for Alice Johnson", "customer_lookup"],
@@ -58,5 +59,62 @@ describe("Upgrade 3 deterministic operational-query classification", () => {
     expect(result.route).toBe("planner");
     expect(result.intent).toBeUndefined();
     expect(result.request).toBeUndefined();
+  });
+
+  it("validates the four canonical party reads without a tenant selector or resolver bypass", () => {
+    const ref = { partyType: "employee", partyId: "11111111-1111-4111-8111-111111111111" } as const;
+    const requests = [
+      { intent: "party_lookup", ref },
+      { intent: "party_context", query: "my manager" },
+      { intent: "team_roster", teamRef: { partyType: "team", partyId: ref.partyId } },
+      { intent: "party_availability", ref, localDateRange: { startDate: "today" }, includeCapacity: true },
+    ];
+    for (const request of requests) {
+      const parsed = validateOperationalQueryRequest(request);
+      expect(parsed.success).toBe(true);
+      if (parsed.success) expect(parsed.request).not.toHaveProperty("tenantId");
+    }
+    expect(validateOperationalQueryRequest({ intent: "party_lookup", query: "Ada", tenantId: "other" }).success).toBe(false);
+    expect(validateOperationalQueryRequest({ intent: "party_context", query: "Ada", includeInactive: true }).success).toBe(false);
+    expect(validateOperationalQueryRequest({ intent: "team_roster", teamRef: ref }).success).toBe(false);
+  });
+
+  it("accepts both canonical and PartyRef company-context anchors", () => {
+    const id = "22222222-2222-4222-8222-222222222222";
+    expect(validateOperationalQueryRequest({ intent: "company_context", anchor: { entityType: "household", entityId: id } }).success).toBe(true);
+    expect(validateOperationalQueryRequest({ intent: "company_context", anchor: { partyType: "employee", partyId: id } }).success).toBe(true);
+    expect(validateOperationalQueryRequest({ intent: "company_context", anchor: { entityType: "household", entityId: id, tenantId: "other" } }).success).toBe(false);
+    expect(validateOperationalQueryRequest({ intent: "company_context", anchor: { partyType: "employee", partyId: id, tenantId: "other" } }).success).toBe(false);
+    expect(validateOperationalQueryRequest({ intent: "company_context", anchor: { entityType: "household", entityId: id, extra: true } }).success).toBe(false);
+  });
+
+  it("scopes party authority to the typed PartyRef when one is supplied", () => {
+    const id = "33333333-3333-4333-8333-333333333333";
+    expect(queryAuthorityRequest({ intent: "party_availability", ref: { partyType: "employee", partyId: id } }).resource).toEqual({ type: "employee", id });
+    expect(queryAuthorityRequest({ intent: "team_roster", teamRef: { partyType: "team", partyId: id } }).resource).toEqual({ type: "team", id });
+    expect(queryAuthorityRequest({ intent: "company_context", anchor: { partyType: "team", partyId: id } }).resource).toEqual({ type: "team", id });
+  });
+
+  it("preserves an explicit inactive result status through the fast-read envelope", async () => {
+    const source = { kind: "canonical_postgres" as const, tables: ["users"] };
+    const raw = {
+      kind: "operational_query_result" as const,
+      status: "inactive" as const,
+      data: {},
+      version: 1 as const,
+      intent: "party_lookup" as const,
+      source,
+      asOf: "2026-08-21T00:00:00.000Z",
+      count: 1,
+      truncated: false,
+      page: { limit: 1, returned: 1, totalCount: 1, totalCountExact: true, hasMore: false, nextCursor: null, truncated: false },
+      meta: { version: 1 as const, source, asOf: "2026-08-21T00:00:00.000Z" },
+    };
+    const router = createFastReadOnlyRouter({
+      now: () => new Date("2026-08-21T00:00:00.000Z"),
+      executeOperationalQuery: (async () => raw) as never,
+    });
+    const execution = await router.execute!({ intent: "party_lookup", query: "Former employee" }, { tenantId: "tenant-a", userId: "11111111-1111-4111-8111-111111111111" });
+    expect(execution.result.status).toBe("inactive");
   });
 });

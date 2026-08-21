@@ -19,8 +19,9 @@
 
 export const DEALER_ZERO_TENANT_ID = "00000000-0000-4000-8000-0000000000d0";
 
-// Real households seeded by scripts/seed-dealer-zero.ts (verified live against this
-// environment's own database — addresses/equipment are real seeded rows, not invented).
+// Canonical snapshots of real households originally produced by seed-dealer-zero.ts
+// and verified against Dealer Zero. retrieval-eval.test.ts inserts the same identities
+// idempotently so a clean CI database evaluates the same corpus.
 export const REAL_HOUSEHOLDS = {
   softener: { id: "f76f9517-671f-49f2-a527-f748e12f7350", address: "8289 Main St, Cedar Falls, IA", equipmentType: "water_softener" },
   carbonFilter: { id: "34a773a3-ef65-406e-8449-24884319b114", address: "5253 Cedar Heights Dr, Waterloo, IA", equipmentType: "whole_house_filter" },

@@ -12,7 +12,7 @@ export function GET(): Response {
       "x-finnor-deployment-id": release.deploymentId ?? "unknown",
       "x-finnor-environment": release.environment,
       "x-finnor-version": release.version,
+      "x-finnor-core-certification-id": release.coreCertificationId ?? "unknown",
     },
   })
 }
-

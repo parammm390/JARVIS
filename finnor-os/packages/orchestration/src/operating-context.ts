@@ -1,10 +1,13 @@
 import {
   CANONICAL_ENTITY_TYPES,
+  canonicalEntityRefToPartyRef,
   OPERATING_TRUTH_PRECEDENCE,
   type CanonicalEntityRef,
   type MemorySnapshot,
+  type OperatingCompanyDirectory,
   type OperatingContext,
   type OperatingSourceRef,
+  type PartyRef,
   type TenantContext,
 } from "@finnor/shared-types";
 import {
@@ -18,8 +21,9 @@ import {
 } from "@finnor/db";
 import { and, eq } from "drizzle-orm";
 import { buildMemorySnapshot } from "@finnor/memory";
-import { executeOperationalQuery, resolveHouseholdMention } from "@finnor/read-models";
+import { executeOperationalQuery, loadOperatingDirectoryContext, resolveHouseholdMention } from "@finnor/read-models";
 import { buildPlanningHealthContext } from "./planning-health";
+import { listAvailableIdentityAccess } from "@finnor/security";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ENTITY_TYPES = new Set<string>(CANONICAL_ENTITY_TYPES);
@@ -46,6 +50,24 @@ function emptyMemory(): MemorySnapshot {
 
 function profileSource(source: string, ref: string, asOf: string | null): OperatingSourceRef {
   return { kind: "PROFILE", source, ref, asOf: asOf ?? new Date().toISOString(), role: "context_only" };
+}
+
+function emptyCompanyDirectory(): OperatingCompanyDirectory {
+  return {
+    employee: null,
+    teams: [],
+    locations: [],
+    reporting: { manager: null, reports: [], backups: [], assistants: [] },
+    currentWork: [],
+    currentTasks: [],
+    authorityRoles: [],
+    referencedParties: [],
+    sourceTables: [],
+  };
+}
+
+function emptyIdentityAccess(): OperatingContext["identityAccess"] {
+  return { communicationIdentities: [], applicationAccounts: [], authProfiles: [] };
 }
 
 export interface AssembleOperatingContextOptions {
@@ -87,6 +109,8 @@ export async function assembleOperatingContext(
   let userProfile: typeof userOperatingProfiles.$inferSelect | undefined;
   let workRow: typeof works.$inferSelect | undefined;
   let linkedEntities: Array<{ entityType: string; entityId: string }> = [];
+  let companyDirectory: OperatingCompanyDirectory = emptyCompanyDirectory();
+  let identityAccess: OperatingContext["identityAccess"] = emptyIdentityAccess();
 
   try {
     const loaded = await withTenant(ctx.tenantId, async (db) => {
@@ -215,14 +239,44 @@ export async function assembleOperatingContext(
   }
   if (resolvedHouseholdId && UUID.test(resolvedHouseholdId)) refs.set(`household:${resolvedHouseholdId}`, { entityType: "household", entityId: resolvedHouseholdId });
   const active = record(opts.activeContext ?? workRow?.activeContext);
+  const trustedPartyRefs = new Map<string, PartyRef>();
   if (Array.isArray(active.entityRefs)) {
     for (const candidate of active.entityRefs) {
       const value = record(candidate);
       if (typeof value.entityType === "string" && ENTITY_TYPES.has(value.entityType) && typeof value.entityId === "string" && UUID.test(value.entityId)) {
         const ref = { entityType: value.entityType as CanonicalEntityRef["entityType"], entityId: value.entityId };
         refs.set(`${ref.entityType}:${ref.entityId}`, ref);
+        const partyRef = canonicalEntityRefToPartyRef(ref);
+        if (partyRef) trustedPartyRefs.set(`${partyRef.partyType}:${partyRef.partyId}`, partyRef);
       }
     }
+  }
+  for (const candidate of linkedEntities) {
+    if (!ENTITY_TYPES.has(candidate.entityType) || !UUID.test(candidate.entityId)) continue;
+    const ref = { entityType: candidate.entityType as CanonicalEntityRef["entityType"], entityId: candidate.entityId };
+    const partyRef = canonicalEntityRefToPartyRef(ref);
+    if (partyRef) trustedPartyRefs.set(`${partyRef.partyType}:${partyRef.partyId}`, partyRef);
+  }
+
+  try {
+    companyDirectory = await loadOperatingDirectoryContext(ctx.tenantId, {
+      ...(ctx.employeeId ? { employeeId: ctx.employeeId } : {}),
+      ...(ctx.userId ? { userId: ctx.userId } : {}),
+      ...(opts.workId ? { workId: opts.workId } : {}),
+      now: new Date(assembledAt),
+      referencedPartyRefs: [...trustedPartyRefs.values()],
+    });
+    sources.push({ kind: "CANONICAL", source: "company_directory", asOf: assembledAt, role: "context_only" });
+  } catch (error) {
+    errors.push(`company directory unavailable: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  try {
+    const actorId = ctx.employeeId ?? ctx.userId;
+    identityAccess = await listAvailableIdentityAccess(ctx.tenantId, actorId);
+    sources.push({ kind: "CANONICAL", source: "identity_access", asOf: assembledAt, role: "context_only" });
+  } catch (error) {
+    errors.push(`identity/access context unavailable: ${error instanceof Error ? error.message : String(error)}`);
   }
 
   const comparisonDefaults = record(tenantProfile?.comparisonDefaults);
@@ -254,7 +308,7 @@ export async function assembleOperatingContext(
       employeeId: ctx.employeeId ?? userRow?.id ?? null,
       displayName: userRow?.displayName ?? null,
       role: userRow?.role ?? ctx.role,
-      authorityRoles: ctx.authorityRoles ?? [ctx.role],
+      authorityRoles: companyDirectory.authorityRoles.length > 0 ? companyDirectory.authorityRoles : ctx.authorityRoles ?? [ctx.role],
       profile: {
         title: userProfile?.title ?? null,
         profileFacts: record(userProfile?.profileFacts),
@@ -269,6 +323,8 @@ export async function assembleOperatingContext(
       activeContext: record(workRow.activeContext),
       updatedAt: iso(workRow.updatedAt),
     } : null,
+    companyDirectory,
+    identityAccess,
     referencedEntities: [...refs.values()],
     canonicalSummaries,
     memory: {

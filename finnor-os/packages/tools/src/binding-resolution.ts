@@ -20,6 +20,7 @@ export type BindingMode =
   | "native"
   | "emulator"
   | "ghl"
+  | "gmail"
   | "vapi"
   | "docusign"
   | "quickbooks"
