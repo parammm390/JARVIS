@@ -401,13 +401,95 @@ export interface paths {
                         intent: "company_context";
                         anchor?: {
                             /** @enum {string} */
-                            entityType: "household" | "contact" | "user" | "technician" | "equipment" | "service_visit" | "maintenance_agreement" | "lead" | "opportunity" | "quote" | "proposal" | "work_order" | "appointment" | "invoice" | "payment" | "conversation" | "call" | "message" | "communication" | "document" | "task" | "work" | "domain_action" | "workflow_run" | "workflow_step" | "business_operation" | "business_operation_target" | "decision_receipt" | "business_event";
+                            entityType: "household" | "contact" | "user" | "technician" | "equipment" | "service_visit" | "maintenance_agreement" | "lead" | "opportunity" | "quote" | "proposal" | "work_order" | "appointment" | "invoice" | "payment" | "conversation" | "call" | "message" | "communication" | "document" | "task" | "work" | "domain_action" | "workflow_run" | "workflow_step" | "business_operation" | "business_operation_target" | "decision_receipt" | "business_event" | "org_unit" | "tenant_location" | "external_organization" | "external_contact";
                             /** Format: uuid */
                             entityId: string;
+                        } | {
+                            /** @enum {string} */
+                            partyType: "employee" | "team" | "location" | "household" | "contact" | "external_organization" | "external_contact";
+                            /** Format: uuid */
+                            partyId: string;
                         };
                         /** Format: uuid */
                         householdId?: string;
                         query?: string;
+                        /** Format: uuid */
+                        workId?: string;
+                        executionKey?: string;
+                        idempotencyKey?: string;
+                    } | {
+                        /** @constant */
+                        intent: "party_lookup";
+                        ref?: {
+                            /** @enum {string} */
+                            partyType: "employee" | "team" | "location" | "household" | "contact" | "external_organization" | "external_contact";
+                            /** Format: uuid */
+                            partyId: string;
+                        };
+                        query?: string;
+                        page?: {
+                            limit?: number;
+                            cursor?: string;
+                        };
+                        /** Format: uuid */
+                        workId?: string;
+                        executionKey?: string;
+                        idempotencyKey?: string;
+                    } | {
+                        /** @constant */
+                        intent: "party_context";
+                        ref?: {
+                            /** @enum {string} */
+                            partyType: "employee" | "team" | "location" | "household" | "contact" | "external_organization" | "external_contact";
+                            /** Format: uuid */
+                            partyId: string;
+                        };
+                        query?: string;
+                        page?: {
+                            limit?: number;
+                            cursor?: string;
+                        };
+                        /** Format: uuid */
+                        workId?: string;
+                        executionKey?: string;
+                        idempotencyKey?: string;
+                    } | {
+                        /** @constant */
+                        intent: "team_roster";
+                        teamRef?: {
+                            /** @constant */
+                            partyType: "team";
+                            /** Format: uuid */
+                            partyId: string;
+                        };
+                        query?: string;
+                        page?: {
+                            limit?: number;
+                            cursor?: string;
+                        };
+                        /** Format: uuid */
+                        workId?: string;
+                        executionKey?: string;
+                        idempotencyKey?: string;
+                    } | {
+                        /** @constant */
+                        intent: "party_availability";
+                        ref?: {
+                            /** @enum {string} */
+                            partyType: "employee" | "team" | "location" | "household" | "contact" | "external_organization" | "external_contact";
+                            /** Format: uuid */
+                            partyId: string;
+                        };
+                        query?: string;
+                        localDateRange?: {
+                            startDate: string;
+                            endDate?: string;
+                        };
+                        includeCapacity?: boolean;
+                        page?: {
+                            limit?: number;
+                            cursor?: string;
+                        };
                         /** Format: uuid */
                         workId?: string;
                         executionKey?: string;

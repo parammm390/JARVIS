@@ -4,7 +4,7 @@
 
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-import { ACTION_HARDENING_SPEC } from "./action-hardening-spec";
+import { LEGACY_ACTION_HARDENING_SPEC as ACTION_HARDENING_SPEC } from "./action-hardening-spec";
 import { buildActionFixture } from "./run-action-contract-matrix";
 
 const SCRIPT_DIR = dirname(new URL(import.meta.url).pathname);

@@ -23,7 +23,7 @@ import { resolveTenantFromBearerToken } from "@finnor/security";
 import { FinnorOrchestrator, type Planner } from "../../packages/orchestration/src/index";
 import type { ExecutionResult } from "../../packages/shared-types/src/index";
 import {
-  ACTION_HARDENING_SPEC,
+  LEGACY_ACTION_HARDENING_SPEC as ACTION_HARDENING_SPEC,
   requiresTypedConfirmation,
 } from "./action-hardening-spec";
 import { buildActionFixture } from "./run-action-contract-matrix";

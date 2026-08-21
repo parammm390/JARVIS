@@ -25,6 +25,7 @@ import {
   PenLine,
   HardHat,
   Landmark,
+  Workflow,
   type LucideIcon,
 } from "lucide-react"
 
@@ -56,6 +57,7 @@ export const PLUGIN_META: Record<string, PluginStyle> = {
   "proposal-signature": { label: "Proposal Signature", icon: PenLine, accent: "violet" },
   "proposal-to-installation": { label: "Installation", icon: HardHat, accent: "amber" },
   "invoice-to-cash": { label: "Invoice → Cash", icon: Landmark, accent: "cyan" },
+  "universal-actions": { label: "Universal Actions", icon: Workflow, accent: "violet" },
 }
 
 export const ACCENT_CLASS: Record<string, { bg: string; text: string; border: string }> = {

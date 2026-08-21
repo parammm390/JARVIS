@@ -22,7 +22,10 @@ export class IntegrationError extends Error {
 
 export class IntegrationTimeoutError extends IntegrationError {
   constructor(integration: string, timeoutMs: number) {
-    super(integration, `timed out after ${timeoutMs}ms`, true);
+    // Once a consequential provider request has left the process, a timeout does not
+    // prove it failed. Retrying inline could duplicate the effect; reconciliation is
+    // required before another attempt is authorized.
+    super(integration, `timed out after ${timeoutMs}ms; provider outcome is unknown`, false, "unknown_outcome");
     this.name = "IntegrationTimeoutError";
   }
 }

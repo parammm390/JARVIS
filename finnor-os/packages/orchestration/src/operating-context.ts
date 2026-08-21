@@ -18,8 +18,14 @@ import {
   withTenant,
   workEntityLinks,
   works,
+  acknowledgementRequests,
+  delegations,
+  internalEventParticipants,
+  internalEvents,
+  orgUnitMemberships,
+  tenantSettings,
 } from "@finnor/db";
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
 import { buildMemorySnapshot } from "@finnor/memory";
 import { executeOperationalQuery, loadOperatingDirectoryContext, resolveHouseholdMention } from "@finnor/read-models";
 import { buildPlanningHealthContext } from "./planning-health";
@@ -70,6 +76,15 @@ function emptyIdentityAccess(): OperatingContext["identityAccess"] {
   return { communicationIdentities: [], applicationAccounts: [], authProfiles: [] };
 }
 
+function emptyUniversalActions(): OperatingContext["universalActions"] {
+  return {
+    capabilities: { allowedChannels: ["internal", "email", "sms", "voice"], allowChannelFallback: false, maxGroupRecipients: 50, externalDocumentSharing: false, externalCalendarMode: "internal_only", browserExecutable: false, computerExecutable: false },
+    activeDelegations: [],
+    pendingAcknowledgements: [],
+    upcomingInternalEvents: [],
+  };
+}
+
 export interface AssembleOperatingContextOptions {
   instruction: string;
   workId?: string;
@@ -111,6 +126,7 @@ export async function assembleOperatingContext(
   let linkedEntities: Array<{ entityType: string; entityId: string }> = [];
   let companyDirectory: OperatingCompanyDirectory = emptyCompanyDirectory();
   let identityAccess: OperatingContext["identityAccess"] = emptyIdentityAccess();
+  let universalActions: OperatingContext["universalActions"] = emptyUniversalActions();
 
   try {
     const loaded = await withTenant(ctx.tenantId, async (db) => {
@@ -161,6 +177,110 @@ export async function assembleOperatingContext(
     linkedEntities = loaded.entities;
   } catch (error) {
     errors.push(`profile/work context unavailable: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  try {
+    const actorId = ctx.employeeId ?? (UUID.test(ctx.userId) ? ctx.userId : undefined);
+    const loaded = await withTenant(ctx.tenantId, async (db) => {
+      const [settings] = await db.select({ config: tenantSettings.universalActionConfig }).from(tenantSettings).where(eq(tenantSettings.tenantId, ctx.tenantId)).limit(1);
+      const scope = [
+        ...(opts.workId ? [eq(delegations.workId, opts.workId)] : []),
+        ...(actorId ? [or(
+          and(eq(delegations.targetType, "employee"), eq(delegations.targetId, actorId)),
+          sql`${delegations.targetType}='team' AND EXISTS (
+            SELECT 1 FROM ${orgUnitMemberships} membership
+            WHERE membership.tenant_id=${ctx.tenantId}::uuid
+              AND membership.org_unit_id=${delegations.targetId}
+              AND membership.employee_id=${actorId}::uuid
+              AND membership.active=true
+          )`,
+        )!] : []),
+      ];
+      const delegationRows = scope.length > 0 ? await db.select().from(delegations).where(and(
+        eq(delegations.tenantId, ctx.tenantId),
+        sql`${delegations.status} NOT IN ('completed','declined','cancelled')`,
+        or(...scope)!,
+      )).orderBy(asc(delegations.acknowledgementDeadline), asc(delegations.completionDeadline)).limit(20) : [];
+      const acknowledgementScope = [
+        ...(opts.workId ? [eq(acknowledgementRequests.workId, opts.workId)] : []),
+        ...(actorId ? [or(
+          and(eq(acknowledgementRequests.recipientType, "employee"), eq(acknowledgementRequests.recipientId, actorId)),
+          sql`${acknowledgementRequests.recipientType}='team' AND EXISTS (
+            SELECT 1 FROM ${orgUnitMemberships} membership
+            WHERE membership.tenant_id=${ctx.tenantId}::uuid
+              AND membership.org_unit_id=${acknowledgementRequests.recipientId}
+              AND membership.employee_id=${actorId}::uuid
+              AND membership.active=true
+          )`,
+        )!] : []),
+      ];
+      const acknowledgementRows = acknowledgementScope.length > 0 ? await db.select().from(acknowledgementRequests).where(and(
+        eq(acknowledgementRequests.tenantId, ctx.tenantId),
+        sql`${acknowledgementRequests.status} IN ('requested','delivered')`,
+        or(...acknowledgementScope)!,
+      )).orderBy(asc(acknowledgementRequests.deadline)).limit(20) : [];
+      const eventRows = (opts.workId || actorId) ? await db.select({
+        id: internalEvents.id,
+        title: internalEvents.title,
+        status: internalEvents.status,
+        startsAt: internalEvents.startsAt,
+        endsAt: internalEvents.endsAt,
+      }).from(internalEvents)
+        .where(and(
+          eq(internalEvents.tenantId, ctx.tenantId),
+          sql`${internalEvents.status} IN ('scheduled','rescheduled')`,
+          sql`${internalEvents.endsAt} >= now()`,
+          or(
+            ...(opts.workId ? [eq(internalEvents.workId, opts.workId)] : []),
+            ...(actorId ? [sql`EXISTS (
+              SELECT 1 FROM ${internalEventParticipants} participant
+              WHERE participant.tenant_id=${ctx.tenantId}::uuid
+                AND participant.internal_event_id=${internalEvents.id}
+                AND (
+                  (participant.party_type='employee' AND participant.party_id=${actorId}::uuid)
+                  OR (participant.party_type='team' AND EXISTS (
+                    SELECT 1 FROM ${orgUnitMemberships} membership
+                    WHERE membership.tenant_id=${ctx.tenantId}::uuid
+                      AND membership.org_unit_id=participant.party_id
+                      AND membership.employee_id=${actorId}::uuid
+                      AND membership.active=true
+                  ))
+                )
+            )`] : []),
+          )!,
+        )).orderBy(asc(internalEvents.startsAt)).limit(20) : [];
+      const participantCounts = eventRows.length > 0 ? await db.select({
+        internalEventId: internalEventParticipants.internalEventId,
+        count: sql<number>`count(*)::int`,
+      }).from(internalEventParticipants).where(and(
+        eq(internalEventParticipants.tenantId, ctx.tenantId),
+        inArray(internalEventParticipants.internalEventId, eventRows.map((row) => row.id)),
+      )).groupBy(internalEventParticipants.internalEventId) : [];
+      const countByEvent = new Map(participantCounts.map((row) => [row.internalEventId, row.count]));
+      return { settings, delegationRows, acknowledgementRows, eventRows: eventRows.map((row) => ({ ...row, participantCount: countByEvent.get(row.id) ?? 0 })) };
+    });
+    const root = record(loaded.settings?.config);
+    const communications = record(root.communication);
+    const scheduling = record(root.scheduling);
+    const sharing = record(root.documentSharing);
+    const allowedChannels = stringArray(communications.allowedChannels).filter((channel) => ["internal", "email", "sms", "voice"].includes(channel));
+    universalActions = {
+      capabilities: {
+        allowedChannels: allowedChannels.length > 0 ? allowedChannels : ["internal", "email", "sms", "voice"],
+        allowChannelFallback: communications.allowChannelFallback === true,
+        maxGroupRecipients: Number.isInteger(communications.maxGroupRecipients) ? Math.min(500, Math.max(1, Number(communications.maxGroupRecipients))) : 50,
+        externalDocumentSharing: sharing.allowExternal === true,
+        externalCalendarMode: scheduling.externalCalendarMode === "when_available" ? "when_available" : "internal_only",
+        browserExecutable: false,
+        computerExecutable: false,
+      },
+      activeDelegations: loaded.delegationRows.map((row) => ({ delegationRef: { delegationId: row.id }, target: { partyType: row.targetType as PartyRef["partyType"], partyId: row.targetId }, objective: row.objective.slice(0, 500), status: row.status, workRef: row.workId ? { workId: row.workId } : null, taskRef: row.taskId ? { taskId: row.taskId } : null, acknowledgementDeadline: iso(row.acknowledgementDeadline), completionDeadline: iso(row.completionDeadline) })),
+      pendingAcknowledgements: loaded.acknowledgementRows.map((row) => ({ acknowledgementRequestId: row.id, recipient: { partyType: row.recipientType as PartyRef["partyType"], partyId: row.recipientId }, status: row.status, deadline: iso(row.deadline), delegationRef: row.delegationId ? { delegationId: row.delegationId } : null })),
+      upcomingInternalEvents: loaded.eventRows.map((row) => ({ internalEventRef: { internalEventId: row.id }, title: row.title, status: row.status, startsAt: row.startsAt.toISOString(), endsAt: row.endsAt.toISOString(), participantCount: row.participantCount })),
+    };
+    sources.push({ kind: "CANONICAL", source: "universal_action_state", asOf: assembledAt, role: "context_only" });
+  } catch (error) {
+    errors.push(`universal action state unavailable: ${error instanceof Error ? error.message : String(error)}`);
   }
 
   if (!tenantRow) missing.push("tenant.identity");
@@ -325,6 +445,7 @@ export async function assembleOperatingContext(
     } : null,
     companyDirectory,
     identityAccess,
+    universalActions,
     referencedEntities: [...refs.values()],
     canonicalSummaries,
     memory: {

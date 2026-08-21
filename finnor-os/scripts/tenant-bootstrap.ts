@@ -4,7 +4,7 @@
 import type pg from "pg";
 import { getPool } from "@finnor/db";
 import { DEFAULT_WORKSPACE_CONFIG } from "../apps/api/lib/workspace-config";
-import type { ClientManifest } from "./client-manifest";
+import { DEFAULT_UNIVERSAL_ACTION_CONFIG, type ClientManifest } from "./client-manifest";
 import { seedTenantPolicies } from "./seed-tenant-policies";
 
 export interface ProvisionedManifestUser {
@@ -128,23 +128,29 @@ export async function convergeWorkspaceAndPolicies(
     await client.query("SELECT set_config('app.tenant_id', $1, true)", [tenantId]);
     const settings = manifest.tenant.settings;
     const desiredWorkspace = manifest.workspaceConfig ?? null;
+    const desiredUniversalActions = manifest.universalActions ?? null;
     await client.query(
       `INSERT INTO tenant_settings
-         (tenant_id, is_dealer_zero, simulator_enabled, training_mode, workspace_config)
-       VALUES ($1, $2, $3, $4, $5::jsonb)
+         (tenant_id, is_dealer_zero, simulator_enabled, training_mode, workspace_config, universal_action_config)
+       VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb)
        ON CONFLICT (tenant_id) DO UPDATE
        SET is_dealer_zero = EXCLUDED.is_dealer_zero,
            simulator_enabled = EXCLUDED.simulator_enabled,
            training_mode = EXCLUDED.training_mode,
-           workspace_config = COALESCE($6::jsonb, tenant_settings.workspace_config),
+           workspace_config = COALESCE($7::jsonb, tenant_settings.workspace_config),
+           universal_action_config = COALESCE($8::jsonb, tenant_settings.universal_action_config),
            updated_at = now()
        WHERE (tenant_settings.is_dealer_zero, tenant_settings.simulator_enabled, tenant_settings.training_mode,
-              tenant_settings.workspace_config)
+              tenant_settings.workspace_config, tenant_settings.universal_action_config)
              IS DISTINCT FROM
              (EXCLUDED.is_dealer_zero, EXCLUDED.simulator_enabled, EXCLUDED.training_mode,
-              COALESCE($6::jsonb, tenant_settings.workspace_config))`,
+              COALESCE($7::jsonb, tenant_settings.workspace_config),
+              COALESCE($8::jsonb, tenant_settings.universal_action_config))`,
       [tenantId, settings.isDealerZero, settings.simulatorEnabled, settings.trainingMode,
-        JSON.stringify(desiredWorkspace ?? DEFAULT_WORKSPACE_CONFIG), desiredWorkspace ? JSON.stringify(desiredWorkspace) : null],
+        JSON.stringify(desiredWorkspace ?? DEFAULT_WORKSPACE_CONFIG),
+        JSON.stringify(desiredUniversalActions ?? DEFAULT_UNIVERSAL_ACTION_CONFIG),
+        desiredWorkspace ? JSON.stringify(desiredWorkspace) : null,
+        desiredUniversalActions ? JSON.stringify(desiredUniversalActions) : null],
     );
 
     for (const location of manifest.locations) {

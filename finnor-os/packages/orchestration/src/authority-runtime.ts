@@ -21,6 +21,11 @@ const RESOURCE_KEYS: Record<string, string> = {
   appointmentId: "appointment",
   workId: "work",
   taskId: "task",
+  documentId: "document",
+  locationId: "location",
+  delegationId: "delegation",
+  internalEventId: "internal_event",
+  objectiveLoopId: "objective_loop",
   communicationIdentityId: "communication_identity",
   applicationAccountId: "application_account",
   authProfileId: "auth_profile",
@@ -37,6 +42,21 @@ function walk(value: unknown, visit: (key: string, value: unknown) => void): voi
 
 export function authorityResourcesFromPayload(payload: Record<string, unknown>): AuthorityResource[] {
   const resources: AuthorityResource[] = [];
+  // Typed nested references are the P2 planner contract. Resolve their declared
+  // canonical type rather than reducing every PartyRef to an unscoped UUID.
+  const collectTypedRefs = (value: unknown): void => {
+    if (Array.isArray(value)) { for (const item of value) collectTypedRefs(item); return; }
+    if (!value || typeof value !== "object") return;
+    const row = value as Record<string, unknown>;
+    if (typeof row.partyType === "string" && typeof row.partyId === "string" && UUID.test(row.partyId)) {
+      resources.push({ type: row.partyType, id: row.partyId });
+    }
+    if (typeof row.entityType === "string" && typeof row.entityId === "string" && UUID.test(row.entityId)) {
+      resources.push({ type: row.entityType, id: row.entityId });
+    }
+    for (const child of Object.values(row)) collectTypedRefs(child);
+  };
+  collectTypedRefs(payload);
   walk(payload, (key, value) => {
     const type = RESOURCE_KEYS[key] ?? (key.endsWith("Ids") ? RESOURCE_KEYS[`${key.slice(0, -3)}Id`] : undefined);
     if (!type) return;

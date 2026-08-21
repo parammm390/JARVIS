@@ -6,7 +6,7 @@ import type { ToolCallResult, RetryPolicy } from "./wrap";
 import { wrappedCall, DEFAULT_RETRY } from "./wrap";
 import { createHash } from "node:crypto";
 import { ensureSecretsLoaded, minimizeExternalInput } from "@finnor/security";
-import { claimExternalOperation, recordExternalOperationResult, awaitExternalOperationResolution } from "./idempotent-call";
+import { claimExternalOperation, recordExternalOperationResult, awaitExternalOperationResolution, markExternalOperationUnknown } from "./idempotent-call";
 import { initObservability, Sentry } from "./observability";
 
 /** Trusted execution metadata injected by an action/workflow boundary. It is never
@@ -50,6 +50,18 @@ export class ToolRegistry {
 
   list(): string[] {
     return [...this.tools.keys()];
+  }
+
+  /** Trusted execution metadata is absent on an unscoped registry. Plugins may read
+   * it only after GatedExecutor constructs a ScopedToolRegistry. */
+  runtimeContext(): Readonly<ToolRuntimeContext> | undefined {
+    return undefined;
+  }
+
+  /** Stable semantic idempotency is meaningful only in a scoped execution. The base
+   * registry keeps compatibility for tests/tools that intentionally run unscoped. */
+  async callIdempotent(name: string, input: Record<string, unknown>, _semanticKey: string): Promise<ToolCallResult> {
+    return this.call(name, input);
   }
 
   /** Every call goes through secrets loading, validation, PII minimization (if the
@@ -151,8 +163,29 @@ export class ScopedToolRegistry extends ToolRegistry {
     return this.base.list();
   }
 
+  override runtimeContext(): Readonly<ToolRuntimeContext> {
+    return Object.freeze({
+      tenantId: this.ctx.tenantId,
+      domainActionId: this.ctx.domainActionId,
+      ...(this.ctx.actorId ? { actorId: this.ctx.actorId } : {}),
+      ...(this.ctx.purpose ? { purpose: this.ctx.purpose } : {}),
+      ...(this.ctx.communicationIdentityId ? { communicationIdentityId: this.ctx.communicationIdentityId } : {}),
+      ...(this.ctx.authProfileRef ? { authProfileRef: this.ctx.authProfileRef } : {}),
+    });
+  }
+
   override async call(name: string, input: Record<string, unknown>): Promise<ToolCallResult> {
     const operationKey = `${this.ctx.operationKeyPrefix ? `${this.ctx.operationKeyPrefix}:` : ""}${name}:${this.callIndex++}`;
+    return this.callForOperation(name, input, operationKey);
+  }
+
+  override async callIdempotent(name: string, input: Record<string, unknown>, semanticKey: string): Promise<ToolCallResult> {
+    const safeKey = createHash("sha256").update(semanticKey).digest("hex").slice(0, 32);
+    const operationKey = `${this.ctx.operationKeyPrefix ? `${this.ctx.operationKeyPrefix}:` : ""}${name}:semantic:${safeKey}`;
+    return this.callForOperation(name, input, operationKey);
+  }
+
+  private async callForOperation(name: string, input: Record<string, unknown>, operationKey: string): Promise<ToolCallResult> {
     const requestHash = hashInput(input);
     const claim = await claimExternalOperation(this.ctx.tenantId, this.ctx.domainActionId, operationKey, requestHash);
     if (!claim.claimed) {
@@ -169,9 +202,17 @@ export class ScopedToolRegistry extends ToolRegistry {
       const settled = await awaitExternalOperationResolution(this.ctx.tenantId, this.ctx.domainActionId, operationKey, claim.existing);
       // Match wrappedCall's own convention exactly (wrap.ts): integrationUnavailable is
       // only ever present on a failure, never as an explicit `false` on success.
-      return settled.status === "succeeded"
-        ? { ok: true, output: (settled.response ?? {}) as Record<string, unknown> }
-        : { ok: false, output: (settled.response ?? {}) as Record<string, unknown>, integrationUnavailable: true, errorKind: "retryable" };
+      if (settled.status === "succeeded") {
+        return { ok: true, output: (settled.response ?? {}) as Record<string, unknown> };
+      }
+      if (settled.status === "unknown") {
+        return { ok: false, output: (settled.response ?? {}) as Record<string, unknown>, error: "Provider outcome is unknown; reconcile before retrying", integrationUnavailable: true, errorKind: "unknown_outcome" };
+      }
+      if (settled.status === "running") {
+        await markExternalOperationUnknown(this.ctx.tenantId, this.ctx.domainActionId, operationKey, { reason: "claim_owner_did_not_settle" });
+        return { ok: false, output: {}, error: "Prior provider attempt did not settle; outcome requires reconciliation", integrationUnavailable: true, errorKind: "unknown_outcome" };
+      }
+      return { ok: false, output: (settled.response ?? {}) as Record<string, unknown>, integrationUnavailable: true, errorKind: "retryable" };
     }
     const result = await this.base.callWithRuntimeContext(name, input, {
       tenantId: this.ctx.tenantId,
@@ -181,7 +222,13 @@ export class ScopedToolRegistry extends ToolRegistry {
       ...(this.ctx.communicationIdentityId ? { communicationIdentityId: this.ctx.communicationIdentityId } : {}),
       ...(this.ctx.authProfileRef ? { authProfileRef: this.ctx.authProfileRef } : {}),
     });
-    await recordExternalOperationResult(this.ctx.tenantId, this.ctx.domainActionId, operationKey, result.ok ? "succeeded" : "failed", result.output);
+    await recordExternalOperationResult(
+      this.ctx.tenantId,
+      this.ctx.domainActionId,
+      operationKey,
+      result.ok ? "succeeded" : result.errorKind === "unknown_outcome" ? "unknown" : "failed",
+      result.ok ? result.output : { ...result.output, ...(result.error ? { error: result.error } : {}), ...(result.errorKind ? { errorKind: result.errorKind } : {}) },
+    );
     return result;
   }
 }

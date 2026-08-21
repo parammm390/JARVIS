@@ -64,6 +64,15 @@ export const tenantSettings = pgTable("tenant_settings", {
     brand: { accent: "cyan", radius: "soft", mark: "F" },
     visibility: { policy: true, authority: true },
   }),
+  // Phase 2 tenant-safe routing/delegation policy. Provider credentials and raw
+  // endpoints never belong here; the migration enforces a secret-shaped-key ban.
+  universalActionConfig: jsonb("universal_action_config").notNull().default({
+    communication: { allowedChannels: ["internal", "email", "sms", "voice"], allowChannelFallback: false, maxGroupRecipients: 50 },
+    acknowledgements: { defaultDeadlineMinutes: 240 },
+    delegations: { defaultAckDeadlineMinutes: 240, defaultCompletionHours: 24 },
+    scheduling: { externalCalendarMode: "internal_only" },
+    documentSharing: { allowExternal: false },
+  }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -1480,7 +1489,7 @@ export const businessOperationTargets = pgTable(
     nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).notNull().defaultNow(),
     leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
     failureClass: text("failure_class", { enum: ["retryable", "policy", "configuration", "invalid_input", "human_review"] }),
-    errorKind: text("error_kind", { enum: ["retryable", "terminal", "conflict", "auth", "validation", "provider_down", "needs_human", "config"] }),
+    errorKind: text("error_kind", { enum: ["retryable", "terminal", "conflict", "auth", "validation", "provider_down", "needs_human", "config", "unknown_outcome"] }),
     lastError: text("last_error"),
     providerRef: text("provider_ref"),
     evidence: jsonb("evidence").notNull().default([]),
@@ -1714,21 +1723,46 @@ export const opportunities = pgTable("opportunities", {
 
 // Generic task tracker — mirrors workflow_states' subjectType/subjectId polymorphic
 // pattern so a task can hang off any entity (a lead, a work order, an invoice, ...).
-export const tasks = pgTable("tasks", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
-  subjectType: text("subject_type").notNull(),
-  subjectId: uuid("subject_id").notNull(),
-  title: text("title").notNull(),
-  dueAt: timestamp("due_at", { withTimezone: true }),
-  assigneeType: text("assignee_type", { enum: ["user", "technician"] }),
-  assigneeId: uuid("assignee_id"),
-  status: text("status", { enum: ["open", "done", "cancelled"] }).notNull().default("open"),
-  priority: text("priority", { enum: ["low", "normal", "high"] }).notNull().default("normal"),
-  ...archivable(),
-  ...provenanceColumns(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const tasks = pgTable(
+  "tasks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    subjectType: text("subject_type").notNull(),
+    subjectId: uuid("subject_id").notNull(),
+    title: text("title").notNull(),
+    dueAt: timestamp("due_at", { withTimezone: true }),
+    assigneeType: text("assignee_type", { enum: ["user", "technician"] }),
+    assigneeId: uuid("assignee_id"),
+    // Canonical PartyRef assignment supports a team without overloading the legacy
+    // user/technician columns. Employee assignments mirror into both contracts.
+    assignedPartyType: text("assigned_party_type", { enum: ["employee", "team"] }),
+    assignedPartyId: uuid("assigned_party_id"),
+    workId: uuid("work_id").references(() => works.id),
+    sourceDomainActionId: uuid("source_domain_action_id").references(() => domainActions.id),
+    status: text("status", { enum: ["open", "done", "cancelled"] }).notNull().default("open"),
+    priority: text("priority", { enum: ["low", "normal", "high"] }).notNull().default("normal"),
+    ...archivable(),
+    ...provenanceColumns(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("tasks_source_domain_action_unique").on(t.sourceDomainActionId),
+    index("tasks_tenant_work_status_idx").on(t.tenantId, t.workId, t.status),
+    index("tasks_tenant_assigned_party_idx").on(t.tenantId, t.assignedPartyType, t.assignedPartyId, t.status),
+    foreignKey({
+      columns: [t.tenantId, t.workId],
+      foreignColumns: [works.tenantId, works.id],
+      name: "tasks_work_tenant_fkey",
+    }),
+    foreignKey({
+      columns: [t.tenantId, t.sourceDomainActionId],
+      foreignColumns: [domainActions.tenantId, domainActions.id],
+      name: "tasks_source_action_tenant_fkey",
+    }),
+  ],
+);
 
 // Also polymorphic subject (a lead's water-test hold, a work order's install slot, ...).
 export const appointments = pgTable("appointments", {
@@ -2625,7 +2659,7 @@ export const deadLetters = pgTable(
     envelope: jsonb("envelope").notNull(),
     // A4.T1 (migration 0040): added needs_human/config to match shared-types' ErrorKind.
     errorKind: text("error_kind", {
-      enum: ["retryable", "terminal", "conflict", "auth", "validation", "provider_down", "needs_human", "config"],
+      enum: ["retryable", "terminal", "conflict", "auth", "validation", "provider_down", "needs_human", "config", "unknown_outcome"],
     }).notNull(),
     attempts: integer("attempts").notNull().default(0),
     firstSeenAt: timestamp("first_seen_at", { withTimezone: true }).notNull().defaultNow(),
@@ -2930,4 +2964,232 @@ export const instructionEvents = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [unique("instruction_events_instruction_seq_idx").on(t.instructionId, t.seq), index("instruction_events_tenant_idx").on(t.tenantId)],
+);
+
+// Phase 2 Universal Action + Delegation Fabric. Delivery state is deliberately
+// separate from acknowledgement and from delegation acceptance/completion.
+export const communicationDeliveries = pgTable(
+  "communication_deliveries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    domainActionId: uuid("domain_action_id").notNull().references(() => domainActions.id),
+    workId: uuid("work_id").references(() => works.id),
+    recipientType: text("recipient_type").notNull(),
+    recipientId: uuid("recipient_id").notNull(),
+    channel: text("channel", { enum: ["internal", "email", "sms", "voice"] }).notNull(),
+    route: text("route", { enum: ["native", "api", "browser", "computer", "manual"] }).notNull(),
+    status: text("status", { enum: ["queued", "sent", "delivered", "failed", "unknown"] }).notNull().default("queued"),
+    provider: text("provider"),
+    communicationIdentityId: uuid("communication_identity_id"),
+    providerMessageRef: text("provider_message_ref"),
+    errorCode: text("error_code"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("communication_deliveries_semantic_unique").on(t.domainActionId, t.recipientType, t.recipientId, t.channel),
+    index("communication_deliveries_tenant_status_idx").on(t.tenantId, t.status, t.updatedAt),
+    index("communication_deliveries_tenant_recipient_idx").on(t.tenantId, t.recipientType, t.recipientId, t.createdAt),
+    foreignKey({
+      columns: [t.tenantId, t.communicationIdentityId],
+      foreignColumns: [communicationIdentities.tenantId, communicationIdentities.id],
+      name: "communication_deliveries_identity_tenant_fkey",
+    }),
+  ],
+);
+
+export const delegations = pgTable(
+  "delegations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    domainActionId: uuid("domain_action_id").notNull().references(() => domainActions.id),
+    workId: uuid("work_id").references(() => works.id),
+    taskId: uuid("task_id").references(() => tasks.id),
+    objectiveLoopId: uuid("objective_loop_id").references(() => workObjectiveLoops.id),
+    createdBy: uuid("created_by").references(() => users.id),
+    targetType: text("target_type").notNull(),
+    targetId: uuid("target_id").notNull(),
+    objective: text("objective").notNull(),
+    intent: jsonb("intent").notNull().default({}),
+    status: text("status", {
+      enum: ["created", "sent", "delivered", "acknowledged", "accepted", "completed", "declined", "overdue", "escalated", "cancelled", "failed_delivery"],
+    }).notNull().default("created"),
+    acknowledgementDeadline: timestamp("acknowledgement_deadline", { withTimezone: true }),
+    completionDeadline: timestamp("completion_deadline", { withTimezone: true }),
+    escalationTargetType: text("escalation_target_type"),
+    escalationTargetId: uuid("escalation_target_id"),
+    escalationRule: jsonb("escalation_rule").notNull().default({}),
+    evidenceRefs: jsonb("evidence_refs").notNull().default([]),
+    acknowledgedAt: timestamp("acknowledged_at", { withTimezone: true }),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("delegations_domain_action_unique").on(t.domainActionId),
+    index("delegations_tenant_target_status_idx").on(t.tenantId, t.targetType, t.targetId, t.status),
+    index("delegations_tenant_deadlines_idx").on(t.tenantId, t.status, t.acknowledgementDeadline, t.completionDeadline),
+  ],
+);
+
+export const delegationEvents = pgTable(
+  "delegation_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    delegationId: uuid("delegation_id").notNull().references(() => delegations.id),
+    seq: integer("seq").notNull(),
+    eventType: text("event_type").notNull(),
+    fromStatus: text("from_status"),
+    toStatus: text("to_status").notNull(),
+    actorId: uuid("actor_id").references(() => users.id),
+    evidence: jsonb("evidence").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("delegation_events_delegation_seq_unique").on(t.delegationId, t.seq),
+    index("delegation_events_tenant_delegation_idx").on(t.tenantId, t.delegationId, t.createdAt),
+  ],
+);
+
+export const acknowledgementRequests = pgTable(
+  "acknowledgement_requests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    domainActionId: uuid("domain_action_id").notNull().references(() => domainActions.id),
+    delegationId: uuid("delegation_id").references(() => delegations.id),
+    deliveryId: uuid("delivery_id").references(() => communicationDeliveries.id),
+    workId: uuid("work_id").references(() => works.id),
+    taskId: uuid("task_id").references(() => tasks.id),
+    recipientType: text("recipient_type").notNull(),
+    recipientId: uuid("recipient_id").notNull(),
+    request: text("request").notNull(),
+    status: text("status", { enum: ["requested", "delivered", "acknowledged", "declined", "expired", "cancelled"] }).notNull().default("requested"),
+    deadline: timestamp("deadline", { withTimezone: true }),
+    acknowledgedAt: timestamp("acknowledged_at", { withTimezone: true }),
+    declinedAt: timestamp("declined_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("acknowledgement_requests_domain_action_unique").on(t.domainActionId),
+    index("acknowledgement_requests_tenant_status_deadline_idx").on(t.tenantId, t.status, t.deadline),
+  ],
+);
+
+export const internalEvents = pgTable(
+  "internal_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    originDomainActionId: uuid("origin_domain_action_id").notNull().references(() => domainActions.id),
+    lastDomainActionId: uuid("last_domain_action_id").notNull().references(() => domainActions.id),
+    workId: uuid("work_id").references(() => works.id),
+    locationId: uuid("location_id").references(() => tenantLocations.id),
+    title: text("title").notNull(),
+    purpose: text("purpose"),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
+    status: text("status", { enum: ["scheduled", "rescheduled", "cancelled", "completed"] }).notNull().default("scheduled"),
+    revision: integer("revision").notNull().default(1),
+    createdBy: uuid("created_by").references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("internal_events_origin_action_unique").on(t.originDomainActionId),
+    index("internal_events_tenant_time_idx").on(t.tenantId, t.startsAt, t.endsAt),
+  ],
+);
+
+export const internalEventParticipants = pgTable(
+  "internal_event_participants",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    internalEventId: uuid("internal_event_id").notNull().references(() => internalEvents.id, { onDelete: "cascade" }),
+    partyType: text("party_type").notNull(),
+    partyId: uuid("party_id").notNull(),
+    responseStatus: text("response_status", { enum: ["pending", "accepted", "declined", "tentative"] }).notNull().default("pending"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique("internal_event_participants_identity_unique").on(t.internalEventId, t.partyType, t.partyId)],
+);
+
+export const internalEventEvents = pgTable(
+  "internal_event_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    internalEventId: uuid("internal_event_id").notNull().references(() => internalEvents.id),
+    domainActionId: uuid("domain_action_id").notNull().references(() => domainActions.id),
+    seq: integer("seq").notNull(),
+    eventType: text("event_type").notNull(),
+    payload: jsonb("payload").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("internal_event_events_event_seq_unique").on(t.internalEventId, t.seq),
+    unique("internal_event_events_domain_action_unique").on(t.domainActionId),
+  ],
+);
+
+export const documentShares = pgTable(
+  "document_shares",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    domainActionId: uuid("domain_action_id").notNull().references(() => domainActions.id),
+    documentId: uuid("document_id").notNull().references(() => documents.id),
+    recipientType: text("recipient_type").notNull(),
+    recipientId: uuid("recipient_id").notNull(),
+    accessLevel: text("access_level", { enum: ["view", "comment"] }).notNull().default("view"),
+    route: text("route", { enum: ["native", "api", "browser", "computer", "manual"] }).notNull(),
+    status: text("status", { enum: ["shared", "pending_manual", "failed", "revoked"] }).notNull(),
+    providerShareRef: text("provider_share_ref"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("document_shares_domain_action_unique").on(t.domainActionId),
+    index("document_shares_tenant_document_idx").on(t.tenantId, t.documentId, t.createdAt),
+  ],
+);
+
+export const universalActionEvents = pgTable(
+  "universal_action_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    domainActionId: uuid("domain_action_id").notNull().references(() => domainActions.id),
+    seq: integer("seq").notNull(),
+    actionType: text("action_type").notNull(),
+    eventType: text("event_type").notNull(),
+    route: text("route", { enum: ["native", "api", "browser", "computer", "manual"] }),
+    subjectType: text("subject_type"),
+    subjectId: uuid("subject_id"),
+    actorId: uuid("actor_id"),
+    communicationIdentityId: uuid("communication_identity_id"),
+    evidence: jsonb("evidence").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("universal_action_events_action_seq_unique").on(t.domainActionId, t.seq),
+    index("universal_action_events_tenant_action_idx").on(t.tenantId, t.domainActionId, t.createdAt),
+    foreignKey({
+      columns: [t.tenantId, t.actorId],
+      foreignColumns: [users.tenantId, users.id],
+      name: "universal_action_events_actor_tenant_fkey",
+    }),
+    foreignKey({
+      columns: [t.tenantId, t.communicationIdentityId],
+      foreignColumns: [communicationIdentities.tenantId, communicationIdentities.id],
+      name: "universal_action_events_identity_tenant_fkey",
+    }),
+  ],
 );

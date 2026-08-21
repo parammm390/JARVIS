@@ -36,7 +36,7 @@ const CLUSTER_ESCALATE_THRESHOLD = 3;
 const REPEATED_ATTEMPTS_ESCALATE_THRESHOLD = 3;
 
 const NEVER_REPLAY_KINDS: ReadonlySet<ErrorKind> = new Set(["validation", "terminal", "auth"]);
-const HUMAN_OR_CONFIG_KINDS: ReadonlySet<ErrorKind> = new Set(["needs_human", "config"]);
+const HUMAN_OR_CONFIG_KINDS: ReadonlySet<ErrorKind> = new Set(["needs_human", "config", "unknown_outcome"]);
 
 /** Pure — unit-testable without a DB round trip. `otherOpenInFamily` is the count of
  *  OTHER open dead letters sharing this row's event family, computed by the caller. */
