@@ -23,7 +23,7 @@ export interface ActionHardeningSpecRow {
 }
 
 /** The binding table in plan §3.3. This is intentionally not inferred from code. */
-const FIXED_ROWS: ReadonlyArray<readonly [string, string, ActionProfile, ApprovalFloor, string, boolean]> = [
+const LEGACY_FIXED_ROWS: ReadonlyArray<readonly [string, string, ActionProfile, ApprovalFloor, string, boolean]> = [
   ["accounting", "create_invoice", "OPERATIONAL_CHANGE", "REQUIRED", "accounting", true],
   ["accounting", "send_payment_reminder", "EXTERNAL_SIDE_EFFECT", "REQUIRED", "communications/accounting", true],
   ["accounting", "record_payment", "FINANCIAL_WRITE", "TYPED_REQUIRED", "accounting/payments", true],
@@ -70,15 +70,39 @@ const FIXED_ROWS: ReadonlyArray<readonly [string, string, ActionProfile, Approva
   ["web-research", "check_business_reviews", "READ_ONLY", "NONE", "exa/firecrawl/evidence", false],
 ];
 
-export const ACTION_HARDENING_SPEC: readonly ActionHardeningSpecRow[] = FIXED_ROWS.map(([plugin, actionType, profile, approvalFloor, capabilityFamily, external]) => ({
+const UNIVERSAL_FIXED_ROWS: ReadonlyArray<readonly [string, string, ActionProfile, ApprovalFloor, string, boolean]> = [
+  ["universal-actions", "send_message", "EXTERNAL_SIDE_EFFECT", "REQUIRED", "communications/identity", true],
+  ["universal-actions", "place_call", "EXTERNAL_SIDE_EFFECT", "REQUIRED", "voice/communications/identity", true],
+  ["universal-actions", "request_acknowledgement", "INTERNAL_WRITE", "POLICY", "delegation/communications", false],
+  ["universal-actions", "notify_group", "BATCH_EXTERNAL", "TYPED_REQUIRED", "communications/identity", true],
+  ["universal-actions", "create_task", "INTERNAL_WRITE", "POLICY", "tasks/work", false],
+  ["universal-actions", "assign_task", "OPERATIONAL_CHANGE", "REQUIRED", "tasks/authority", false],
+  ["universal-actions", "update_task", "OPERATIONAL_CHANGE", "REQUIRED", "tasks/work", false],
+  ["universal-actions", "handoff_work", "OPERATIONAL_CHANGE", "REQUIRED", "work/authority", false],
+  ["universal-actions", "delegate_objective", "DURABLE_WORKFLOW", "REQUIRED", "delegation/tasks/work", false],
+  ["universal-actions", "escalate_work", "OPERATIONAL_CHANGE", "REQUIRED", "delegation/authority", false],
+  ["universal-actions", "cancel_delegation", "OPERATIONAL_CHANGE", "REQUIRED", "delegation/authority", false],
+  ["universal-actions", "schedule_internal_event", "OPERATIONAL_CHANGE", "REQUIRED", "scheduling/work", false],
+  ["universal-actions", "reschedule_internal_event", "OPERATIONAL_CHANGE", "REQUIRED", "scheduling/work", false],
+  ["universal-actions", "share_document", "EXTERNAL_SIDE_EFFECT", "REQUIRED", "documents/communications", true],
+];
+
+const mapRows = (rows: ReadonlyArray<readonly [string, string, ActionProfile, ApprovalFloor, string, boolean]>): readonly ActionHardeningSpecRow[] => rows.map(([plugin, actionType, profile, approvalFloor, capabilityFamily, external]) => ({
   plugin,
   actionType,
-  profile: profile as ActionProfile,
-  approvalFloor: approvalFloor as ApprovalFloor,
+  profile,
+  approvalFloor,
   capabilityFamily,
   external,
   receipt: true as const,
 }));
+
+export const LEGACY_ACTION_HARDENING_SPEC = mapRows(LEGACY_FIXED_ROWS);
+export const UNIVERSAL_ACTION_HARDENING_SPEC = mapRows(UNIVERSAL_FIXED_ROWS);
+export const ACTION_HARDENING_SPEC: readonly ActionHardeningSpecRow[] = [...LEGACY_ACTION_HARDENING_SPEC, ...UNIVERSAL_ACTION_HARDENING_SPEC];
+export const LEGACY_ACTION_COUNT = 44;
+export const UNIVERSAL_ACTION_COUNT = 14;
+export const TOTAL_ACTION_COUNT = LEGACY_ACTION_COUNT + UNIVERSAL_ACTION_COUNT;
 
 export const ACTION_HARDENING_SPEC_BY_ACTION = new Map(ACTION_HARDENING_SPEC.map((row) => [row.actionType, row]));
 
@@ -111,6 +135,9 @@ export function requiresTypedConfirmation(actionType: string): boolean {
   return ACTION_HARDENING_SPEC_BY_ACTION.get(actionType)?.approvalFloor === "TYPED_REQUIRED";
 }
 
-if (ACTION_HARDENING_SPEC.length !== 44 || new Set(ACTION_HARDENING_SPEC.map((row) => row.actionType)).size !== 44) {
-  throw new Error("The release action hardening spec must contain exactly 44 unique action types.");
+if (LEGACY_ACTION_HARDENING_SPEC.length !== LEGACY_ACTION_COUNT
+  || UNIVERSAL_ACTION_HARDENING_SPEC.length !== UNIVERSAL_ACTION_COUNT
+  || ACTION_HARDENING_SPEC.length !== TOTAL_ACTION_COUNT
+  || new Set(ACTION_HARDENING_SPEC.map((row) => row.actionType)).size !== TOTAL_ACTION_COUNT) {
+  throw new Error(`The release action hardening spec must contain exactly ${LEGACY_ACTION_COUNT} legacy + ${UNIVERSAL_ACTION_COUNT} universal unique action types.`);
 }

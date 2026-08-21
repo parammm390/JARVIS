@@ -8,6 +8,7 @@ export * from "./operational-queries";
 export * from "./company-graph";
 export * from "./operating-context";
 export * from "./identity-access";
+export * from "./universal-actions";
 
 export type Role = "owner" | "dispatcher" | "technician";
 
@@ -303,7 +304,7 @@ export const PLACEHOLDER_NEEDS_REAL_VALUE = "PLACEHOLDER_NEEDS_REAL_VALUE";
 // precedent in the plan). The original 6 kinds are unchanged — this only fills the
 // two gaps the plan's RETRYABLE|TERMINAL|NEEDS_HUMAN|CONFIG list named that this
 // finer-grained taxonomy didn't already cover.
-export type ErrorKind = "retryable" | "terminal" | "conflict" | "auth" | "validation" | "provider_down" | "needs_human" | "config";
+export type ErrorKind = "retryable" | "terminal" | "conflict" | "auth" | "validation" | "provider_down" | "needs_human" | "config" | "unknown_outcome";
 
 export interface TypedError {
   kind: ErrorKind;

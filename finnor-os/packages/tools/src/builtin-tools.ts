@@ -14,7 +14,7 @@ import { exaSearch } from "./exa";
 import { firecrawlScrape } from "./firecrawl";
 import { syncInvoiceToQuickBooks } from "./quickbooks";
 import { launchAdCampaign, type CampaignLaunchInput } from "./ads-write";
-import { enqueueJob } from "@finnor/db";
+import { enqueueJob, sandboxOutbox, withTenant } from "@finnor/db";
 import { IntegrationError } from "./errors";
 import { resolveCredentialContext } from "@finnor/security";
 import { getTenantAdPerformance } from "./tenant-provider";
@@ -116,6 +116,42 @@ export function registerBuiltinTools(registry: ToolRegistry): void {
       ["firstName", "lastName", "phone", "email", "tenantId"],
     ),
   );
+  registry.register({
+    name: "send_sms_to_number",
+    description: "Send an SMS to an execution-resolved phone number through the tenant's governed SMS identity",
+    integration: "tenant-routed",
+    inputSchema: z.object({ tenantId: z.string().uuid(), phoneNumber: z.string().min(7).max(40), message: z.string().min(1).max(5000) }).passthrough(),
+    piiAllowlist: ["tenantId", "phoneNumber", "message"],
+    async run(input, runtime) {
+      const tenantId = String(input.tenantId);
+      const mode = (await resolveCapabilityBindingsForTenant(tenantId)).crm.mode;
+      if (mode === "native" || mode === "emulator") {
+        const [row] = await withTenant(tenantId, (db) => db.insert(sandboxOutbox).values({
+          tenantId,
+          channel: "sms",
+          toNumber: String(input.phoneNumber),
+          content: String(input.message),
+          simulated: true,
+        }).returning({ id: sandboxOutbox.id }));
+        return { sent: true, simulated: true, messageId: row!.id };
+      }
+      if (mode !== "ghl") throw new IntegrationError("ghl", `Unsupported tenant SMS binding: ${mode}`, false, "config");
+      const credentialContext = await resolveCredentialContext(tenantId, actor(runtime), "ghl", purpose(runtime, "send_sms_to_number"), {
+        channel: "sms",
+        ...(runtime?.communicationIdentityId ? { communicationIdentityId: runtime.communicationIdentityId } : {}),
+      });
+      const conn = await connectGhl(credentialContext);
+      try {
+        const contact = await callMcpTool(conn, "ghl", "contacts_upsert-contact", { phone: String(input.phoneNumber) });
+        const contactId = opaqueProviderId(contact, ["contactId", "id"]);
+        if (!contactId) throw new IntegrationError("ghl", "Contact upsert did not return a contact identifier", false, "provider_down");
+        const sent = await callMcpTool(conn, "ghl", "conversations_send-a-new-message", { contactId, message: String(input.message) });
+        return { sent: true, messageId: opaqueProviderId(sent, ["messageId", "id"]), contactId, communicationIdentityId: credentialContext.access.communicationIdentityId };
+      } finally {
+        await conn.close().catch(() => undefined);
+      }
+    },
+  });
   registry.register(
     tenantRoutedGhl(
       "ghl_book_appointment",
@@ -167,6 +203,17 @@ export function registerBuiltinTools(registry: ToolRegistry): void {
     });
   }
 
+}
+
+function opaqueProviderId(value: unknown, keys: readonly string[]): string | null {
+  if (!value || typeof value !== "object") return null;
+  const row = value as Record<string, unknown>;
+  for (const key of keys) if (typeof row[key] === "string" && row[key]) return String(row[key]);
+  for (const child of Object.values(row)) {
+    const nested = opaqueProviderId(child, keys);
+    if (nested) return nested;
+  }
+  return null;
 }
 
 function registerUniversalTools(registry: ToolRegistry, native: ToolRegistry): void {
@@ -227,7 +274,7 @@ function registerUniversalTools(registry: ToolRegistry, native: ToolRegistry): v
             : undefined,
         }, credentialContext);
         if (!r.ok) throw new Error(r.error ?? "Vapi call failed");
-        return { ...r.output, live: true };
+        return { ...r.output, live: true, communicationIdentityId: credentialContext.access.communicationIdentityId };
       },
     });
     registry.register({

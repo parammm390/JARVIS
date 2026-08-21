@@ -6,7 +6,7 @@
 // already-completed external side effect like sending an SMS or syncing an invoice.
 
 import { withTenant, externalOperations } from "@finnor/db";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { redactStructured } from "@finnor/security";
 
 export type ExternalOperationRow = typeof externalOperations.$inferSelect;
@@ -20,20 +20,24 @@ export async function claimExternalOperation(
   requestHash: string,
 ): Promise<ClaimResult> {
   return withTenant(tenantId, async (db) => {
-    const [row] = await db
-      .insert(externalOperations)
-      .values({ tenantId, domainActionId, operationKey, requestHash, status: "running" })
-      .onConflictDoNothing({ target: [externalOperations.domainActionId, externalOperations.operationKey] })
-      .returning();
-    if (row) return { claimed: true } as const;
-    const [existing] = await db
-      .select()
-      .from(externalOperations)
-      .where(and(eq(externalOperations.domainActionId, domainActionId), eq(externalOperations.operationKey, operationKey)));
-    // The INSERT lost the race but the winner hasn't committed its row yet (vanishingly
-    // rare, sub-millisecond window) — treat as claimed rather than crash; the winner's
-    // own claim call already has the real row.
-    if (!existing) return { claimed: true } as const;
+    let existing: ExternalOperationRow | undefined;
+    for (let attempt = 0; attempt < 2 && !existing; attempt += 1) {
+      const [row] = await db
+        .insert(externalOperations)
+        .values({ tenantId, domainActionId, operationKey, requestHash, status: "running" })
+        .onConflictDoNothing({ target: [externalOperations.domainActionId, externalOperations.operationKey] })
+        .returning();
+      if (row) return { claimed: true } as const;
+      [existing] = await db
+        .select()
+        .from(externalOperations)
+        .where(and(eq(externalOperations.domainActionId, domainActionId), eq(externalOperations.operationKey, operationKey)));
+    }
+    // Never execute a consequential provider call without owning a durable claim.
+    // READ COMMITTED should reveal a conflict winner to the following SELECT; if an
+    // administrative delete or an unexpected visibility fault prevents that, fail
+    // closed instead of letting two callers dispatch the same effect.
+    if (!existing) throw new Error("External operation claim could not be established safely");
     // Idempotency protects against re-doing a SUCCESSFUL side effect (never send the
     // same SMS twice) — it must NOT block a legitimate reflection retry after a
     // genuine failure, since retrying a failed send is exactly reflection's job, and a
@@ -88,7 +92,7 @@ export async function recordExternalOperationResult(
   tenantId: string,
   domainActionId: string,
   operationKey: string,
-  status: "succeeded" | "failed",
+  status: "succeeded" | "failed" | "unknown",
   response: Record<string, unknown>,
 ): Promise<void> {
   const redacted = redactStructured(response) as Record<string, unknown>;
@@ -98,7 +102,7 @@ export async function recordExternalOperationResult(
   // phone/email PII. Preserve only this small allowlist after structural redaction;
   // without it the cached replay returned "[REDACTED]" as contactId and made a safe
   // retry fail before the send.
-  for (const key of ["id", "contactId", "householdId", "messageId", "campaignId", "visitId", "appointmentId"]) {
+  for (const key of ["id", "contactId", "householdId", "messageId", "campaignId", "visitId", "appointmentId", "callId", "communicationIdentityId"]) {
     if (typeof response[key] === "string") redacted[key] = response[key];
   }
   await withTenant(tenantId, (db) =>
@@ -110,4 +114,41 @@ export async function recordExternalOperationResult(
       .set({ status, response: redacted, updatedAt: new Date() })
       .where(and(eq(externalOperations.domainActionId, domainActionId), eq(externalOperations.operationKey, operationKey))),
   );
+}
+
+/** Explicit provider reconciliation is the only way an unknown operation becomes a
+ * known success/failure. The caller supplies provider evidence, which is redacted by
+ * the same persistence path as ordinary results. */
+export async function reconcileExternalOperation(
+  tenantId: string,
+  domainActionId: string,
+  operationKey: string,
+  status: "succeeded" | "failed",
+  evidence: Record<string, unknown>,
+): Promise<ExternalOperationRow> {
+  const redacted = redactStructured(evidence) as Record<string, unknown>;
+  return withTenant(tenantId, async (db) => {
+    const [row] = await db
+      .update(externalOperations)
+      .set({ status, response: redacted, updatedAt: new Date() })
+      .where(and(
+        eq(externalOperations.domainActionId, domainActionId),
+        eq(externalOperations.operationKey, operationKey),
+        // A stale running row can represent a process crash after provider dispatch;
+        // reconciliation may settle it too, but normal succeeded/failed rows are final.
+        sql`${externalOperations.status} IN ('unknown','running')`,
+      ))
+      .returning();
+    if (!row) throw new Error("External operation is not awaiting reconciliation");
+    return row;
+  });
+}
+
+export async function markExternalOperationUnknown(
+  tenantId: string,
+  domainActionId: string,
+  operationKey: string,
+  evidence: Record<string, unknown> = {},
+): Promise<void> {
+  await recordExternalOperationResult(tenantId, domainActionId, operationKey, "unknown", evidence);
 }

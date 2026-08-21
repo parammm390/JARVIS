@@ -131,7 +131,12 @@ export function makeExecuteNode(plugins: PluginRegistry, tools: ToolRegistry) {
     const plugin = plugins.resolve(state.actionType)!;
     await setStatus(state.tenantId, state.actionId, "executing");
     // Same idempotency scoping as the legacy GatedExecutor — see its comment.
-    const requestedCommunicationIdentityId = typeof state.draft!.payload.communicationIdentityId === "string" ? state.draft!.payload.communicationIdentityId : undefined;
+    const identityRef = state.draft!.payload.communicationIdentityRef && typeof state.draft!.payload.communicationIdentityRef === "object"
+      ? state.draft!.payload.communicationIdentityRef as Record<string, unknown>
+      : null;
+    const requestedCommunicationIdentityId = typeof state.draft!.payload.communicationIdentityId === "string"
+      ? state.draft!.payload.communicationIdentityId
+      : typeof identityRef?.communicationIdentityId === "string" ? identityRef.communicationIdentityId : undefined;
     const requestedAuthProfileRef = typeof state.draft!.payload.authProfileRef === "string" ? state.draft!.payload.authProfileRef : undefined;
     const accessPurpose = typeof state.draft!.payload.purpose === "string" && state.draft!.payload.purpose.trim()
       ? state.draft!.payload.purpose

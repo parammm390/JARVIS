@@ -229,6 +229,29 @@ const ImportDefinitionSchema = z.object({
   credentialRef: SafeReferenceSchema.optional(),
 });
 
+export const DEFAULT_UNIVERSAL_ACTION_CONFIG = {
+  communication: { allowedChannels: ["internal", "email", "sms", "voice"] as const, allowChannelFallback: false, maxGroupRecipients: 50 },
+  acknowledgements: { defaultDeadlineMinutes: 240 },
+  delegations: { defaultAckDeadlineMinutes: 240, defaultCompletionHours: 24 },
+  scheduling: { externalCalendarMode: "internal_only" as const },
+  documentSharing: { allowExternal: false },
+};
+
+const UniversalActionConfigSchema = z.object({
+  communication: z.object({
+    allowedChannels: z.array(z.enum(["internal", "email", "sms", "voice"])).min(1).max(4).default([...DEFAULT_UNIVERSAL_ACTION_CONFIG.communication.allowedChannels]),
+    allowChannelFallback: z.boolean().default(false),
+    maxGroupRecipients: z.number().int().min(1).max(500).default(50),
+  }).strict().default({}),
+  acknowledgements: z.object({ defaultDeadlineMinutes: z.number().int().min(1).max(43_200).default(240) }).strict().default({}),
+  delegations: z.object({
+    defaultAckDeadlineMinutes: z.number().int().min(1).max(43_200).default(240),
+    defaultCompletionHours: z.number().int().min(1).max(8_760).default(24),
+  }).strict().default({}),
+  scheduling: z.object({ externalCalendarMode: z.enum(["internal_only", "when_available"]).default("internal_only") }).strict().default({}),
+  documentSharing: z.object({ allowExternal: z.boolean().default(false) }).strict().default({}),
+}).strict();
+
 export const ClientManifestSchema = z.object({
   manifestVersion: z.literal(1).default(1),
   clientKey: ClientKeySchema,
@@ -270,6 +293,9 @@ export const ClientManifestSchema = z.object({
   // Omission means preserve an existing tenant_settings.workspace_config. A new
   // tenant receives the existing application default, never a parallel config row.
   workspaceConfig: WorkspaceConfigSchema.optional(),
+  // Omission preserves an existing tenant's configuration. A new tenant receives
+  // DEFAULT_UNIVERSAL_ACTION_CONFIG; this object can never carry provider secrets.
+  universalActions: UniversalActionConfigSchema.optional(),
   policyOverrides: z.record(PolicyOverrideSchema).default({}),
   requiredCapabilities: z.array(CapabilitySchema).default([]),
   integrations: z.array(IntegrationSchema).default(DEFAULT_INTEGRATIONS.map((row) => ({ ...row }))),
@@ -422,6 +448,9 @@ export const ClientManifestSchema = z.object({
   }
   if (!unique(manifest.integrations.map((integration) => integration.capability))) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["integrations"], message: "integration capabilities must be unique" });
+  }
+  if (containsSecretShapedKey(manifest.universalActions)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["universalActions"], message: "universal action configuration cannot contain secret-shaped keys" });
   }
   if (!unique(manifest.imports.map((definition) => definition.key))) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["imports"], message: "import keys must be unique" });

@@ -1,4 +1,4 @@
-import type { CanonicalEntityRef } from "./company-graph";
+import type { CanonicalEntityRef, PartyRef } from "./company-graph";
 import type { OperationalPartySummary } from "./operational-queries";
 import type { OperatingIdentityAccess } from "./identity-access";
 
@@ -133,6 +133,42 @@ export interface OperatingContext {
   /** Safe governed handles available to the authenticated employee. This surface
    * never contains a credential provider/ref/version or any resolved secret. */
   identityAccess: OperatingIdentityAccess;
+  universalActions?: {
+    capabilities: {
+      allowedChannels: string[];
+      allowChannelFallback: boolean;
+      maxGroupRecipients: number;
+      externalDocumentSharing: boolean;
+      externalCalendarMode: "internal_only" | "when_available";
+      browserExecutable: false;
+      computerExecutable: false;
+    };
+    activeDelegations: Array<{
+      delegationRef: { delegationId: string };
+      target: PartyRef;
+      objective: string;
+      status: string;
+      workRef: { workId: string } | null;
+      taskRef: { taskId: string } | null;
+      acknowledgementDeadline: string | null;
+      completionDeadline: string | null;
+    }>;
+    pendingAcknowledgements: Array<{
+      acknowledgementRequestId: string;
+      recipient: PartyRef;
+      status: string;
+      deadline: string | null;
+      delegationRef: { delegationId: string } | null;
+    }>;
+    upcomingInternalEvents: Array<{
+      internalEventRef: { internalEventId: string };
+      title: string;
+      status: string;
+      startsAt: string;
+      endsAt: string;
+      participantCount: number;
+    }>;
+  };
   referencedEntities: CanonicalEntityRef[];
   canonicalSummaries: Array<{
     name: string;

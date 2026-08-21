@@ -1,4 +1,4 @@
-// Phase 3.2: idempotent tenant → 42 placeholder-free policy rows + price book, straight
+// Idempotent tenant policy seed: every registered action plus the price-book row.
 // from finnor-os/docs/policy-matrix.md (the single source of truth — if this script and
 // that doc ever disagree, the doc wins, fix this file). Covers all 41 registered
 // domain_policies rows plus the pricing_catalog pseudo-row + its price_book_items.
@@ -142,6 +142,23 @@ export function policyRows(reviewLinkUrl: string | null, overrides: Record<strin
     { actionType: "clarification_request", policy: {}, requiresConfirmation: true },
     { actionType: "manual_step_suggestion", policy: {}, requiresConfirmation: false },
     { actionType: "route_suggestion", policy: {}, requiresConfirmation: true },
+
+    // Phase 2 Universal Action + Delegation Fabric. Route selection and identity
+    // resolution remain runtime-owned; these rows contain business policy only.
+    { actionType: "send_message", policy: {}, requiresConfirmation: true },
+    { actionType: "place_call", policy: {}, requiresConfirmation: true },
+    { actionType: "request_acknowledgement", policy: {}, requiresConfirmation: true },
+    { actionType: "notify_group", policy: {}, requiresConfirmation: true },
+    { actionType: "create_task", policy: {}, requiresConfirmation: true },
+    { actionType: "assign_task", policy: {}, requiresConfirmation: true },
+    { actionType: "update_task", policy: {}, requiresConfirmation: true },
+    { actionType: "handoff_work", policy: {}, requiresConfirmation: true },
+    { actionType: "delegate_objective", policy: {}, requiresConfirmation: true },
+    { actionType: "escalate_work", policy: {}, requiresConfirmation: true },
+    { actionType: "cancel_delegation", policy: {}, requiresConfirmation: true },
+    { actionType: "schedule_internal_event", policy: {}, requiresConfirmation: true },
+    { actionType: "reschedule_internal_event", policy: {}, requiresConfirmation: true },
+    { actionType: "share_document", policy: {}, requiresConfirmation: true },
 
     // The pricing_catalog pseudo-row: scalars only (DECISIONS: labor $95/h). Real US
     // sales-tax rates vary by state/locality — 7% is a real, usable generic default the
