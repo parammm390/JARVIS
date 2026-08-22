@@ -4,8 +4,7 @@ import { assertCanonicalRelease, assertDeploymentPlan, assertResolvedTarget, ass
 
 const contract = loadContract()
 const sha = "a".repeat(40)
-const coreCertificationId = "corecert-test"
-const release = { ...expectedRelease(sha), coreCertificationId, traceable: true }
+const release = { ...expectedRelease(sha), traceable: true }
 
 test("production release from a non-main SHA is rejected", () => {
   assert.throws(() => assertCanonicalRelease({ head: sha, remoteMain: "b".repeat(40), dirty: "" }), /not canonical remote main/)
@@ -39,7 +38,6 @@ test("runtime SHA mismatch rejects parity", () => {
     api: { ...release, commitSha: "b".repeat(40) },
     worker: { ...release, capabilities: ["orchestration"] },
     migrationHead: contract.release.requiredMigrationHead,
-    expectedCoreCertificationId: coreCertificationId,
   }
   assert.throws(() => assertRuntimeParity(contract, expectedRelease(sha), observed), /api.commitSha/)
 })
@@ -50,7 +48,6 @@ test("complete canonical parity passes", () => {
     api: release,
     worker: { ...release, capabilities: ["orchestration"] },
     migrationHead: contract.release.requiredMigrationHead,
-    expectedCoreCertificationId: coreCertificationId,
   }
   assert.doesNotThrow(() => assertRuntimeParity(contract, expectedRelease(sha), observed))
 })

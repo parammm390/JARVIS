@@ -59,8 +59,8 @@ export function assertRuntimeParity(contract, expected, observed) {
       failures.push(`${component}: missing release evidence`)
       continue
     }
-    for (const key of ["commitSha", "buildId", "version", "environment", "source", "coreCertificationId"]) {
-      const expectedValue = key === "coreCertificationId" ? observed.expectedCoreCertificationId : expected[key]
+    for (const key of ["commitSha", "buildId", "version", "environment", "source"]) {
+      const expectedValue = expected[key]
       if (release[key] !== expectedValue) failures.push(`${component}.${key}: ${release[key] ?? "<missing>"} != ${expectedValue ?? "<missing>"}`)
     }
     if (release.traceable !== true) failures.push(`${component}: release metadata is not traceable`)

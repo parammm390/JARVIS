@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-08-21T16:10:08.626Z",
-  "actionCount": 58,
+  "generatedAt": "2026-08-22T02:29:02.940Z",
+  "actionCount": 59,
   "actions": [
     {
       "plugin": "ops-overview",
@@ -113,6 +113,14 @@
       "sourceLine": 19,
       "schemaSourcePath": "finnor-os/packages/domain-plugins/clarification/index.ts",
       "schemaSourceLine": 20
+    },
+    {
+      "plugin": "computer-task",
+      "actionType": "computer_task",
+      "sourcePath": "finnor-os/packages/domain-plugins/computer-task/index.ts",
+      "sourceLine": 40,
+      "schemaSourcePath": "finnor-os/packages/domain-plugins/computer-task/index.ts",
+      "schemaSourceLine": 41
     },
     {
       "plugin": "accounting",

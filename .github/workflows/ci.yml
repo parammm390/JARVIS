@@ -1,5 +1,5 @@
 # CI (§29): lint/typecheck + vitest on every PR. Production deployment is owned by
-# production-release.yml and its single commit-locked release job.
+# production-release.yml and its commit-locked Phase 5 readiness/release job graph.
 # NOTE: this repo lives at finnor-os/ inside the FINNOR repository, so paths are scoped.
 name: finnor-os-ci
 on:

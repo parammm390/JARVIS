@@ -16,6 +16,7 @@ export const BACKEND_ACTION_TYPES = [
   "check_stock_level",
   "check_technician_availability",
   "clarification_request",
+  "computer_task",
   "create_invoice",
   "create_lead",
   "create_review_request",
