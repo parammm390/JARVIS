@@ -8,8 +8,8 @@
 import type { DomainEnginePlugin } from "../shared/plugin-interface";
 import type { DraftAction, ExecutionResult, ValidationResult, DomainPolicy } from "@finnor/shared-types";
 import type { ToolRegistry } from "@finnor/tools";
-import { withTenant, invoices, households, domainActions, decisionReceipts } from "@finnor/db";
-import { submitCommand, enqueueStep, receiveInboxEvent, finalizeReceipt } from "@finnor/workflow-runtime";
+import { withTenant, invoices, households, domainActions, decisionReceipts, ingestIntegrationEventTx } from "@finnor/db";
+import { submitCommand, enqueueStep, receiveInboxEventTx, finalizeReceipt } from "@finnor/workflow-runtime";
 import { recordPayment } from "@finnor/data-platform";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -267,26 +267,52 @@ export async function applyPaymentWebhookEvent(params: {
   status: PaymentWebhookStatus;
   matchStepId?: string;
 }): Promise<{ applied: boolean; reason?: string }> {
-  const received = await receiveInboxEvent({
-    tenantId: params.tenantId,
-    provider: "payment_provider",
-    eventId: params.providerEventId,
-    payload: { invoiceId: params.invoiceId, amountUsd: params.amountUsd, status: params.status },
-    matchStepId: params.matchStepId,
-  });
-  if (received.status === "duplicate") return { applied: false, reason: "duplicate delivery" };
-
-  if (params.status === "succeeded") {
-    await withTenant(params.tenantId, (db) =>
-      recordPayment(db, {
+  const intake = await withTenant(params.tenantId, async (db) => {
+    const received = await receiveInboxEventTx(db, {
+      tenantId: params.tenantId,
+      provider: "payment_provider",
+      eventId: params.providerEventId,
+      payload: { invoiceId: params.invoiceId, amountUsd: params.amountUsd, status: params.status },
+      matchStepId: params.matchStepId,
+    });
+    if (received.status === "duplicate") return { duplicate: true } as const;
+    if (params.status === "succeeded") {
+      await recordPayment(db, {
         tenantId: params.tenantId,
         invoiceId: params.invoiceId,
         amountUsd: params.amountUsd,
         method: "card",
         provenance: { sourceSystem: "payment_provider", externalId: params.providerEventId },
-      }),
-    );
+      });
+      await ingestIntegrationEventTx(db, {
+        tenantId: params.tenantId,
+        source: "payment_provider",
+        provider: "payment_provider",
+        sourceEventId: params.providerEventId,
+        eventType: "payment.succeeded",
+        resource: { type: "invoice", id: params.invoiceId },
+        payload: { status: params.status, amountUsd: params.amountUsd },
+        evidenceRefs: [{ type: "inbox_event", id: received.inboxEventId }],
+        trustClass: "untrusted_external",
+      });
+    } else {
+      await ingestIntegrationEventTx(db, {
+        tenantId: params.tenantId,
+        source: "payment_provider",
+        provider: "payment_provider",
+        sourceEventId: params.providerEventId,
+        eventType: "payment.failed",
+        resource: { type: "invoice", id: params.invoiceId },
+        payload: { status: params.status, amountUsd: params.amountUsd },
+        evidenceRefs: [{ type: "inbox_event", id: received.inboxEventId }],
+        trustClass: "untrusted_external",
+      });
+    }
+    return { duplicate: false } as const;
+  });
+  if (intake.duplicate) return { applied: false, reason: "duplicate delivery" };
 
+  if (params.status === "succeeded") {
     const workflow = await findInvoiceWorkflowRow(params.tenantId, params.invoiceId);
     if (workflow?.receiptId) {
       const priorActual =

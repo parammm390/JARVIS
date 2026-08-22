@@ -2,17 +2,23 @@
 // a durable DB row /api/vitals reads for staleness (migration 0035), and a
 // healthchecks.io ping that alerts externally the moment beats stop arriving (the DB
 // row alone can't page anyone; healthchecks.io is the part that actually notices the
-// worker died). Fixed id "worker" — single process today, see migration 0035's note
-// on B7.T6's later fleet-worker widening.
+// worker died). Every process has its own row so rolling releases and multi-worker
+// fleets can be verified without pretending that one fixed process is the fleet.
 
-import { adminDb, workerHeartbeat } from "@finnor/db";
+import { adminDb, serviceReleaseHeartbeats, workerHeartbeat } from "@finnor/db";
 import { getLogger } from "@finnor/tools";
+import { hostname } from "node:os";
 
-export const WORKER_HEARTBEAT_ID = "worker";
+export const WORKER_HEARTBEAT_ID = process.env.FINNOR_WORKER_INSTANCE_ID?.trim()
+  || `worker:${hostname()}:${process.pid}`;
+export const CURRENT_MIGRATION_HEAD = "0090_phase5_production_connection_reliability.sql";
 
 async function beat(): Promise<void> {
   const now = new Date();
   const meta = {
+    instanceId: WORKER_HEARTBEAT_ID,
+    capabilities: (process.env.FINNOR_WORKER_CAPABILITIES ?? "jobs,orchestration,computer,event-wake,connection-health")
+      .split(",").map((value) => value.trim()).filter(Boolean),
     releaseSha: process.env.FINNOR_COMMIT_SHA ?? process.env.RELEASE_SHA ?? process.env.RAILWAY_GIT_COMMIT_SHA ?? null,
     coreCertificationId: process.env.FINNOR_CORE_CERTIFICATION_ID ?? null,
     deploymentId: process.env.FINNOR_WORKER_DEPLOYMENT_ID ?? process.env.RAILWAY_DEPLOYMENT_ID ?? null,
@@ -23,6 +29,38 @@ async function beat(): Promise<void> {
     .insert(workerHeartbeat)
     .values({ id: WORKER_HEARTBEAT_ID, lastBeatAt: now, meta })
     .onConflictDoUpdate({ target: workerHeartbeat.id, set: { lastBeatAt: now, meta } });
+  const releaseSha = String(meta.releaseSha ?? "unknown");
+  await adminDb()
+    .insert(serviceReleaseHeartbeats)
+    .values({
+      service: "worker",
+      instanceId: WORKER_HEARTBEAT_ID,
+      releaseSha,
+      buildId: process.env.FINNOR_BUILD_ID ?? "unknown",
+      version: process.env.FINNOR_VERSION ?? "unknown",
+      releaseSource: process.env.FINNOR_RELEASE_SOURCE ?? "unknown",
+      coreCertificationId: process.env.FINNOR_CORE_CERTIFICATION_ID ?? null,
+      migrationHead: CURRENT_MIGRATION_HEAD,
+      deploymentId: meta.deploymentId,
+      capabilities: meta.capabilities,
+      environment: String(meta.environment ?? process.env.NODE_ENV ?? "unknown"),
+      lastBeatAt: now,
+    })
+    .onConflictDoUpdate({
+      target: [serviceReleaseHeartbeats.service, serviceReleaseHeartbeats.instanceId],
+      set: {
+        releaseSha,
+        buildId: process.env.FINNOR_BUILD_ID ?? "unknown",
+        version: process.env.FINNOR_VERSION ?? "unknown",
+        releaseSource: process.env.FINNOR_RELEASE_SOURCE ?? "unknown",
+        coreCertificationId: process.env.FINNOR_CORE_CERTIFICATION_ID ?? null,
+        migrationHead: CURRENT_MIGRATION_HEAD,
+        deploymentId: meta.deploymentId,
+        capabilities: meta.capabilities,
+        environment: String(meta.environment ?? process.env.NODE_ENV ?? "unknown"),
+        lastBeatAt: now,
+      },
+    });
 
   const pingUrl = process.env.HEALTHCHECK_PING_URL;
   if (!pingUrl) return; // ⏸ PARAM signup pending (see JARVIS-CREDENTIALS-LEDGER.md) — no-op, not a fake ping

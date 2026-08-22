@@ -1,8 +1,10 @@
-import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
+import { SecretsManagerClient, CreateSecretCommand, GetSecretValueCommand, PutSecretValueCommand } from "@aws-sdk/client-secrets-manager";
 
 type Provider = "env" | "aws-secrets-manager";
 let initialization: Promise<void> | null = null;
 let loadedAt = 0;
+type SecretReferenceReader = (secretId: string, version?: string) => Promise<Record<string, string>>;
+let secretReferenceReaderOverride: SecretReferenceReader | null = null;
 
 function provider(): Provider {
   return process.env.SECRETS_PROVIDER === "aws-secrets-manager" ? "aws-secrets-manager" : "env";
@@ -70,8 +72,42 @@ async function readAwsSecret(client: SecretsManagerClient, secretId: string, ver
  * credential resolution uses this path; ensureSecretsLoaded remains the explicit
  * legacy/system bootstrap for process-wide infrastructure secrets. */
 export async function readAwsSecretReference(secretId: string, version?: string): Promise<Record<string, string>> {
+  if (secretReferenceReaderOverride) return secretReferenceReaderOverride(secretId, version);
   const client = new SecretsManagerClient({ region: process.env.AWS_REGION ?? process.env.AWS_BEDROCK_REGION ?? "us-east-1" });
   return readAwsSecret(client, secretId, version);
+}
+
+export function setAwsSecretReaderForTesting(reader: SecretReferenceReader | null): void {
+  secretReferenceReaderOverride = reader;
+}
+
+type SecretWriter = (secretId: string, value: Record<string, string>) => Promise<string>;
+let secretWriterOverride: SecretWriter | null = null;
+
+/** Create or rotate one tenant-scoped JSON secret and return an immutable VersionId.
+ * Secret values never enter logs or Postgres. AccessDenied and malformed requests
+ * fail closed; only ResourceNotFound selects the create path. */
+export async function writeAwsSecretReference(secretId: string, value: Record<string, string>): Promise<string> {
+  if (!secretId.trim() || Object.keys(value).length === 0 || Object.values(value).some((entry) => typeof entry !== "string")) {
+    throw new Error("A non-empty managed-secret reference and string bundle are required");
+  }
+  if (secretWriterOverride) return secretWriterOverride(secretId, value);
+  const client = new SecretsManagerClient({ region: process.env.AWS_REGION ?? process.env.AWS_BEDROCK_REGION ?? "us-east-1" });
+  const SecretString = JSON.stringify(value);
+  try {
+    const response = await client.send(new PutSecretValueCommand({ SecretId: secretId, SecretString }));
+    if (!response.VersionId) throw new Error("Secrets Manager did not return a version id");
+    return response.VersionId;
+  } catch (error) {
+    if ((error as { name?: string }).name !== "ResourceNotFoundException") throw error;
+    const response = await client.send(new CreateSecretCommand({ Name: secretId, SecretString }));
+    if (!response.VersionId) throw new Error("Secrets Manager did not return a version id");
+    return response.VersionId;
+  }
+}
+
+export function setAwsSecretWriterForTesting(writer: SecretWriter | null): void {
+  secretWriterOverride = writer;
 }
 
 /** Loads managed secrets into process memory only; never logs a secret value. */

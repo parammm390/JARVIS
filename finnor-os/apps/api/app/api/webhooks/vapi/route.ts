@@ -8,12 +8,12 @@
 //                                       audit-first decide() path the console uses.
 //  2. end-of-call-report for an outbound confirmation call (metadata.pendingActionId):
 //     the transcript is parsed for the spoken decision. Unclear NEVER approves.
-//  3. end-of-call-report for a normal customer call: transcript enqueued for the
-//     Planner, exactly as before.
+//  3. end-of-call-report for a normal customer call: persisted and normalized as
+//     untrusted evidence; it can wake an exact wait but never becomes an instruction.
 
 import { createHash, randomUUID } from "node:crypto";
 import { VapiWebhookSchema } from "@finnor/policy-schema";
-import { adminDb, jobs, withTenant, domainActions, domainPolicies, actionLog, tenantPhoneNumbers, getPool, households, communicationsLog, works, receiveWork, users, workAggregate } from "@finnor/db";
+import { adminDb, withTenant, domainActions, domainPolicies, actionLog, tenantPhoneNumbers, getPool, households, communicationsLog, works, receiveWork, users, workAggregate, ingestIntegrationEventTx, type Db } from "@finnor/db";
 import { createTask, persistCall, recordBusinessEvent } from "@finnor/data-platform";
 import { ensureSecretsLoaded, resolveTenantCredentialContext } from "@finnor/security";
 import { parseSpokenDecision, diagnoseFailure, resolveProviderForPurpose } from "@finnor/orchestration";
@@ -157,7 +157,8 @@ function outboundOutcome(msg: Record<string, unknown>, transcript: string): Reco
   };
 }
 
-async function recordOutboundCustomerOutcome(
+async function recordOutboundCustomerOutcomeTx(
+  db: Db,
   tenantId: string,
   householdId: string | undefined,
   callId: string | undefined,
@@ -165,46 +166,44 @@ async function recordOutboundCustomerOutcome(
   outcome: Record<string, unknown>,
 ): Promise<void> {
   if (!householdId) return;
-  await withTenant(tenantId, async (db) => {
-    const summary = [
-      `Outbound ${callContext.purpose ?? "customer"} call`,
-      `outcome: ${String(outcome.outcome ?? "unknown")}`,
-      outcome.experienceSummary ? `experience: ${String(outcome.experienceSummary)}` : null,
-      outcome.preferredTimeText ? `preferred time: ${String(outcome.preferredTimeText)}` : null,
-    ].filter(Boolean).join("; ");
-    await db.insert(communicationsLog).values({
-      householdId,
-      channel: "call",
-      direction: "outbound",
-      content: summary.slice(0, 1200),
-    });
-    if (outcome.optOut === true) {
-      await db.update(households).set({ marketingConsent: false }).where(eq(households.id, householdId));
-    }
-    await recordBusinessEvent(db, {
-      tenantId,
-      entityType: "household",
-      entityId: householdId,
-      eventType: "campaign_call_completed",
-      source: "vapi",
-      payload: {
-        callId: callId ?? null,
-        domainActionId: callContext.domainActionId ?? null,
-        agentKey: callContext.agentKey ?? null,
-        purpose: callContext.purpose ?? null,
-        ...outcome,
-      },
-    });
-    if (outcome.appointmentRequested === true) {
-      await createTask(db, {
-        tenantId,
-        subjectType: "household",
-        subjectId: householdId,
-        title: `Confirm appointment requested during ${callContext.purpose ?? "outbound"} call${outcome.preferredTimeText ? ` · ${String(outcome.preferredTimeText)}` : ""}`.slice(0, 500),
-        priority: "high",
-      });
-    }
+  const summary = [
+    `Outbound ${callContext.purpose ?? "customer"} call`,
+    `outcome: ${String(outcome.outcome ?? "unknown")}`,
+    outcome.experienceSummary ? `experience: ${String(outcome.experienceSummary)}` : null,
+    outcome.preferredTimeText ? `preferred time: ${String(outcome.preferredTimeText)}` : null,
+  ].filter(Boolean).join("; ");
+  await db.insert(communicationsLog).values({
+    householdId,
+    channel: "call",
+    direction: "outbound",
+    content: summary.slice(0, 1200),
   });
+  if (outcome.optOut === true) {
+    await db.update(households).set({ marketingConsent: false }).where(eq(households.id, householdId));
+  }
+  await recordBusinessEvent(db, {
+    tenantId,
+    entityType: "household",
+    entityId: householdId,
+    eventType: "campaign_call_completed",
+    source: "vapi",
+    payload: {
+      callId: callId ?? null,
+      domainActionId: callContext.domainActionId ?? null,
+      agentKey: callContext.agentKey ?? null,
+      purpose: callContext.purpose ?? null,
+      ...outcome,
+    },
+  });
+  if (outcome.appointmentRequested === true) {
+    await createTask(db, {
+      tenantId,
+      subjectType: "household",
+      subjectId: householdId,
+      title: `Confirm appointment requested during ${callContext.purpose ?? "outbound"} call${outcome.preferredTimeText ? ` · ${String(outcome.preferredTimeText)}` : ""}`.slice(0, 500),
+      priority: "high",
+    });
+  }
 }
 
 /**
@@ -628,7 +627,7 @@ export async function POST(req: Request): Promise<Response> {
   // first. "end-of-call-report" genuinely fires once per call, so call id alone is
   // the right key there.
   const callId = msg.call?.id;
-  {
+  if (msg.type !== "end-of-call-report") {
     const toolCallIds = ((msg.toolCallList ?? msg.toolCalls ?? []) as VapiToolCall[]).map((tc) => tc.id).join(",");
     const eventId = callId
       ? msg.type === "tool-calls"
@@ -666,19 +665,19 @@ export async function POST(req: Request): Promise<Response> {
 
     // 2. Outbound confirmation call ended — parse the spoken decision from the transcript.
     if (metadata.pendingActionId) {
-      const decision = parseSpokenDecision(transcript, await loadVoiceConfirmationPhrases(String(metadata.tenantId ?? tenantId)));
+      const decision = parseSpokenDecision(transcript, await loadVoiceConfirmationPhrases(tenantId));
       if (decision === "unclear") {
         // Fail closed: unclear speech never approves. The action stays pending in the queue.
         return Response.json({ received: true, decision: "unclear", note: "action left pending" });
       }
       const approverEmployeeId = typeof metadata.approverEmployeeId === "string" ? metadata.approverEmployeeId : null;
-      const [approver] = approverEmployeeId ? await withTenant(String(metadata.tenantId ?? tenantId), (db) => db.select({ id: users.id, role: users.role, phoneNumber: users.phoneNumber, status: users.status }).from(users).where(and(eq(users.tenantId, String(metadata.tenantId ?? tenantId)), eq(users.id, approverEmployeeId))).limit(1)) : [];
+      const [approver] = approverEmployeeId ? await withTenant(tenantId, (db) => db.select({ id: users.id, role: users.role, phoneNumber: users.phoneNumber, status: users.status }).from(users).where(and(eq(users.tenantId, tenantId), eq(users.id, approverEmployeeId))).limit(1)) : [];
       if (!approver || approver.status !== "active" || !approver.phoneNumber || approver.phoneNumber !== msg.call?.customer?.number) {
         return Response.json({ received: true, decision: "refused", note: "outbound approver identity could not be re-verified" });
       }
       const result = await getOrchestrator().decide(
         String(metadata.pendingActionId),
-        String(metadata.tenantId ?? tenantId),
+        tenantId,
         decision,
         approver.id,
         { role: approver.role, note: `voice:${msg.call?.id ?? "outbound"}` },
@@ -689,90 +688,71 @@ export async function POST(req: Request): Promise<Response> {
     // A2.T1: same trace-id namespace as the live-call path above.
     const correlationId = msg.call?.id ? `vapi:${msg.call.id}` : randomUUID();
 
-    // 3. Normal customer call — persist a permanent, queryable call record (Phase 1
-    // canonical data platform; replaces the old "transcript used once, then discarded"
-    // pattern), then the transcript still becomes a Planner instruction as before.
-    let resolvedHouseholdId = callContext.householdId;
+    // 3. Normal customer call — persist the canonical call, then normalize one
+    // untrusted observation. Customer/provider speech is evidence and may satisfy an
+    // exact configured wait; it is never submitted as a privileged instruction.
     const outcome = callContext.direction === "outbound" ? outboundOutcome(msg, transcript) : undefined;
-    if (msg.call?.id) {
-      const startedAt = typeof msg.startedAt === "string" ? new Date(msg.startedAt) : undefined;
-      const endedAt = typeof msg.endedAt === "string" ? new Date(msg.endedAt) : undefined;
-      const inboundIdentity = !callContext.householdId && msg.call.customer?.number
-        ? await resolveVoiceIdentity(tenantId, msg.call.customer.number)
-        : null;
-      const householdId = callContext.householdId ?? inboundIdentity?.matchedHouseholdId ?? undefined;
-      resolvedHouseholdId = householdId;
-      await withTenant(tenantId, (db) =>
-        persistCall(db, {
+    const inboundIdentity = !callContext.householdId && msg.call?.customer?.number
+      ? await resolveVoiceIdentity(tenantId, msg.call.customer.number)
+      : null;
+    const resolvedHouseholdId = callContext.householdId ?? inboundIdentity?.matchedHouseholdId ?? undefined;
+    const normalized = await withTenant(tenantId, async (db) => {
+      const persisted = msg.call?.id ? await persistCall(db, {
           tenantId,
-          provenance: { sourceSystem: "vapi", externalId: msg.call!.id! },
+          provenance: { sourceSystem: "vapi", externalId: msg.call.id },
           direction: callContext.direction ?? "inbound",
           transcript,
           fromNumber: msg.call?.customer?.number,
           toNumber: msg.call?.phoneNumber?.number,
-          startedAt,
-          endedAt,
+          startedAt: typeof msg.startedAt === "string" ? new Date(msg.startedAt) : undefined,
+          endedAt: typeof msg.endedAt === "string" ? new Date(msg.endedAt) : undefined,
           endedReason: typeof msg.endedReason === "string" ? msg.endedReason : undefined,
           raw: callContextRaw(callContext, msg.type, outcome),
-          householdId,
-        }),
-      ).catch((err) => {
-        // Never let call-persistence failure block the instruction from still reaching
-        // the Planner — the jobs insert below is the load-bearing path.
-        logWithTrace({ traceId: correlationId, tenantId }).error(
-          { err: err instanceof Error ? err.message : String(err) },
-          "[vapi] failed to persist call record",
-        );
+          householdId: resolvedHouseholdId,
+        }) : null;
+      const [linkedAction] = callContext.domainActionId ? await db.select({ workId: domainActions.workId }).from(domainActions).where(and(
+        eq(domainActions.tenantId, tenantId),
+        eq(domainActions.id, callContext.domainActionId),
+      )).limit(1) : [];
+      const event = await ingestIntegrationEventTx(db, {
+        tenantId,
+        source: "vapi",
+        provider: "vapi",
+        sourceEventId: msg.call?.id ? `${msg.call.id}:completed` : `body:${createHash("sha256").update(rawBody).digest("hex")}:completed`,
+        eventType: "call.completed",
+        occurredAt: typeof msg.endedAt === "string" ? new Date(msg.endedAt) : new Date(),
+        party: resolvedHouseholdId ? { type: "household", id: resolvedHouseholdId } : null,
+        resource: persisted ? { type: "call", id: persisted.callId } : null,
+        workId: linkedAction?.workId ?? null,
+        // Provider metadata is only a hint. Attach the action ref after a tenant-
+        // scoped canonical lookup succeeds.
+        domainActionId: linkedAction ? callContext.domainActionId ?? null : null,
+        providerConversationId: msg.call?.id ?? null,
+        correlationId,
+        payload: {
+          direction: callContext.direction ?? "inbound",
+          endedReason: typeof msg.endedReason === "string" ? msg.endedReason.slice(0, 200) : null,
+          outcome: outcome ?? null,
+          transcriptExcerpt: transcript.replace(/\s+/g, " ").trim().slice(0, 4000),
+        },
+        evidenceRefs: persisted ? [{ type: "call", id: persisted.callId }] : [],
+        trustClass: "untrusted_external",
       });
-    }
+      if (callContext.direction === "outbound" && !event.duplicate) {
+        await recordOutboundCustomerOutcomeTx(db, tenantId, resolvedHouseholdId, msg.call?.id, callContext, outcome ?? outboundOutcome(msg, transcript));
+      }
+      return event;
+    });
 
     // A customer answering an outbound campaign/payment/service call is never the
     // authenticated dealer. Persist the call and its bounded outcome, then stop: the
     // old path enqueued their transcript as an owner `process_instruction`, which
     // could turn customer speech into privileged plans.
     if (callContext.direction === "outbound") {
-      await recordOutboundCustomerOutcome(tenantId, resolvedHouseholdId, msg.call?.id, callContext, outcome ?? outboundOutcome(msg, transcript)).catch((err) => {
-        logWithTrace({ traceId: correlationId, tenantId }).error(
-          { err: err instanceof Error ? err.message : String(err) },
-          "[vapi] failed to persist outbound customer outcome",
-        );
-      });
-      return Response.json({ received: true, outbound: true, outcome: outcome?.outcome ?? "unknown" });
+      return Response.json({ received: true, duplicate: normalized.duplicate, outbound: true, outcome: outcome?.outcome ?? "unknown" });
     }
 
-    if (!transcript.trim()) return Response.json({ received: true, note: "empty inbound transcript; no instruction queued" });
-
-    const receivedWork = await receiveWork({
-      tenantId,
-      instruction: transcript,
-      channel: "voice",
-      sessionId: msg.call?.id ? `vapi:${msg.call.id}` : undefined,
-      idempotencyKey: msg.call?.id ? `vapi:${msg.call.id}:transcript` : `vapi:${correlationId}`,
-      activeContext: resolvedHouseholdId ? { householdId: resolvedHouseholdId } : undefined,
-    });
-
-    // _correlationId is the convention queue.ts's tick() and enqueueJob() already
-    // read/write; a bare `.insert(jobs)` (this call bypasses the enqueueJob() helper
-    // for its custom idempotencyKey shape) has to set it by hand.
-    await adminDb()
-      .insert(jobs)
-      .values({
-        type: "process_instruction",
-        payload: {
-          tenantId,
-          instruction: transcript,
-          source: "vapi",
-          callId: msg.call?.id ?? null,
-          workId: receivedWork.workId,
-          workInputId: receivedWork.workInputId,
-          instructionId: receivedWork.instructionId,
-          _correlationId: correlationId,
-        },
-        idempotencyKey: msg.call?.id ? `vapi:${msg.call.id}` : null,
-        lane: "interactive",
-        priority: 100,
-      })
-      .onConflictDoNothing({ target: jobs.idempotencyKey });
+    return Response.json({ received: true, duplicate: normalized.duplicate, observation: true, instructionQueued: false });
   }
   return Response.json({ received: true });
 }

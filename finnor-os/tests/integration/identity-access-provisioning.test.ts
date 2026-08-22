@@ -362,4 +362,121 @@ describe.skipIf(!available)("identity/access manifest convergence", () => {
       vi.unstubAllEnvs();
     }
   }, 120_000);
+
+  it("converges a manifest v2 company without code edits and preserves runtime OAuth state until configuration requires reauth", async () => {
+    const suffix = randomUUID().slice(0, 8);
+    const clientKey = `phase5-company-${suffix}`;
+    const ownerEmail = `${clientKey}@example.test`;
+    const mailbox = `operations-${suffix}@example.test`;
+    const auth = fakeAuth();
+    const manifest = parseClientManifest({
+      manifestVersion: 2,
+      clientKey,
+      tenant: { name: "Phase 5 Company", timezone: "America/Chicago" },
+      locations: [
+        { key: "north", name: "North" },
+        { key: "south", name: "South" },
+      ],
+      users: [{ email: ownerEmail, role: "owner", displayName: "Owner", locationKey: "north", orgUnitKeys: ["operations"] }],
+      orgUnits: [{ key: "operations", name: "Operations", kind: "team", locationKey: "north" }],
+      applicationAccounts: [{
+        key: "operations-gmail", application: "gmail", provider: "gmail", displayName: "Operations Gmail",
+        providerAccountRef: mailbox, capabilities: ["send"], metadata: { region: "us" },
+      }],
+      authProfiles: [{
+        ref: "operations-gmail-oauth", principal: { type: "team", orgUnitKey: "operations" },
+        applicationAccountKey: "operations-gmail", purpose: "send", authMethod: "oauth2",
+        requiredScopes: ["https://www.googleapis.com/auth/gmail.send"], capabilities: ["send"],
+      }],
+      communicationIdentities: [{
+        key: "operations-email", provider: "gmail", channel: "email", address: mailbox,
+        authProfileRef: "operations-gmail-oauth", capabilities: ["send"],
+      }],
+      communicationIdentityBindings: [{
+        identityKey: "operations-email", principal: { type: "team", orgUnitKey: "operations" }, purpose: "send", priority: 100,
+      }],
+      connectionRequirements: [{ authProfileRef: "operations-gmail-oauth", provider: "gmail", required: true, purposes: ["send"] }],
+      connectionPolicy: { healthCheckMinutes: 10 },
+      computer: {
+        enabled: true, provider: "steel", allowedOrigins: ["https://supplier.example.test"],
+        maxSteps: 20, timeoutMs: 180000, maxProviderCredits: 5, maxScreenshots: 5,
+        maxArtifacts: 10, maxDownloadBytes: 5242880, maxUploadBytes: 0, maxOutputBytes: 65536,
+      },
+      durableLimits: [{ provider: "gmail", action: "send", perMinute: 30 }],
+      retentionPolicies: [
+        { dataClass: "messages", retentionDays: 180 },
+        { dataClass: "computer_artifact_content", retentionDays: 30 },
+      ],
+    });
+
+    const first = await provisionClient(manifest, { auth });
+    const profile = await getPool().query<{ id: string }>(
+      "SELECT id FROM auth_profiles WHERE tenant_id=$1 AND auth_profile_ref='operations-gmail-oauth'", [first.tenantId],
+    );
+    const reference = `finnor/tenants/${first.tenantId}/gmail/oauth/${profile.rows[0]!.id}`;
+    await getPool().query(
+      `UPDATE auth_profiles SET connection_status='active',credential_provider='aws-secrets-manager',
+       credential_ref=$2,credential_version='id:oauth-v1',granted_scopes=required_scopes,connected_at=now()
+       WHERE tenant_id=$1 AND auth_profile_ref='operations-gmail-oauth'`,
+      [first.tenantId, reference],
+    );
+
+    const repeated = await provisionClient(manifest, { auth });
+    expect(repeated.tenantId).toBe(first.tenantId);
+    const stable = await getPool().query(
+      `SELECT p.id,p.connection_status,p.credential_ref,p.credential_version,i.auth_profile_id,
+              s.connection_requirements,s.connection_policy,s.computer_config,
+              (SELECT count(*)::int FROM tenant_locations WHERE tenant_id=$1) location_count,
+              (SELECT count(*)::int FROM tenant_rate_limit_policies WHERE tenant_id=$1) limit_count,
+              (SELECT count(*)::int FROM tenant_retention_policies WHERE tenant_id=$1) retention_count
+         FROM auth_profiles p
+         JOIN communication_identities i ON i.tenant_id=p.tenant_id AND i.auth_profile_id=p.id
+         JOIN tenant_settings s ON s.tenant_id=p.tenant_id
+        WHERE p.tenant_id=$1 AND p.auth_profile_ref='operations-gmail-oauth'`,
+      [first.tenantId],
+    );
+    expect(stable.rows[0]).toMatchObject({
+      id: profile.rows[0]!.id,
+      connection_status: "active",
+      credential_ref: reference,
+      credential_version: "id:oauth-v1",
+      auth_profile_id: profile.rows[0]!.id,
+      location_count: 2,
+      limit_count: 1,
+      retention_count: 2,
+    });
+    expect(stable.rows[0].computer_config).toMatchObject({ enabled: true, provider: "steel", maxSteps: 20 });
+    expect(JSON.stringify(stable.rows[0])).not.toMatch(/accessToken|refreshToken|password|cookie/i);
+
+    const scopeChanged = parseClientManifest({
+      ...manifest,
+      authProfiles: manifest.authProfiles!.map((item) => ({
+        ...item,
+        requiredScopes: [...item.requiredScopes, "https://www.googleapis.com/auth/calendar.events"],
+      })),
+      durableLimits: [{ provider: "gmail", action: "send", perMinute: 45 }],
+      retentionPolicies: [{ dataClass: "messages", retentionDays: 365 }],
+    });
+    await provisionClient(scopeChanged, { auth });
+    const changed = await getPool().query(
+      `SELECT connection_status,credential_ref,credential_version,required_scopes,
+              (SELECT per_minute FROM tenant_rate_limit_policies WHERE tenant_id=$1 AND provider='gmail' AND action='send') per_minute,
+              (SELECT retention_days FROM tenant_retention_policies WHERE tenant_id=$1 AND data_class='messages') message_days,
+              (SELECT count(*)::int FROM tenant_retention_policies WHERE tenant_id=$1) retention_count
+         FROM auth_profiles WHERE tenant_id=$1 AND auth_profile_ref='operations-gmail-oauth'`,
+      [first.tenantId],
+    );
+    expect(changed.rows[0]).toMatchObject({
+      connection_status: "reauth_required",
+      credential_ref: reference,
+      credential_version: "id:oauth-v1",
+      per_minute: 45,
+      message_days: 365,
+      retention_count: 1,
+    });
+    expect(changed.rows[0].required_scopes).toEqual(expect.arrayContaining([
+      "https://www.googleapis.com/auth/gmail.send",
+      "https://www.googleapis.com/auth/calendar.events",
+    ]));
+  }, 120_000);
 });

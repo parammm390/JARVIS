@@ -3,10 +3,9 @@
 // additionally tracks whether the event was matched and applied to an open
 // workflow_step, or needs a reconciliation_case.
 
-import { withTenant, inboxEvents, workflowSteps } from "@finnor/db";
+import { withTenant, inboxEvents, reconciliationCases, workflowSteps, type Db } from "@finnor/db";
 import { and, eq } from "drizzle-orm";
 import { createHash } from "node:crypto";
-import { openReconciliationCase } from "./reconciliation";
 
 export interface ReceiveInboxEventParams {
   tenantId: string;
@@ -23,27 +22,25 @@ export type ReceiveInboxEventResult =
   | { status: "matched"; inboxEventId: string; stepId: string }
   | { status: "unmatched"; inboxEventId: string };
 
-export async function receiveInboxEvent(params: ReceiveInboxEventParams): Promise<ReceiveInboxEventResult> {
+export async function receiveInboxEventTx(db: Db, params: ReceiveInboxEventParams): Promise<ReceiveInboxEventResult> {
   const payloadHash = createHash("sha256").update(JSON.stringify(params.payload)).digest("hex");
-
-  const result = await withTenant(params.tenantId, async (db) => {
     const [row] = await db
       .insert(inboxEvents)
       .values({ tenantId: params.tenantId, provider: params.provider, eventId: params.eventId, payloadHash, status: "received" })
-      .onConflictDoNothing({ target: [inboxEvents.provider, inboxEvents.eventId] })
+      .onConflictDoNothing({ target: [inboxEvents.tenantId, inboxEvents.provider, inboxEvents.eventId] })
       .returning();
 
     if (!row) {
       const [existing] = await db
         .select()
         .from(inboxEvents)
-        .where(and(eq(inboxEvents.provider, params.provider), eq(inboxEvents.eventId, params.eventId)));
-      await db.update(inboxEvents).set({ status: "duplicate" }).where(eq(inboxEvents.id, existing!.id));
+        .where(and(eq(inboxEvents.tenantId, params.tenantId), eq(inboxEvents.provider, params.provider), eq(inboxEvents.eventId, params.eventId)));
+      if (!existing) throw new Error("Inbox replay claim resolved outside the authenticated tenant");
       return { status: "duplicate" as const, inboxEventId: existing!.id };
     }
 
     if (params.matchStepId) {
-      const [step] = await db.select().from(workflowSteps).where(eq(workflowSteps.id, params.matchStepId));
+      const [step] = await db.select().from(workflowSteps).where(and(eq(workflowSteps.tenantId, params.tenantId), eq(workflowSteps.id, params.matchStepId)));
       if (step) {
         await db.update(inboxEvents).set({ status: "matched", matchedStepId: step.id }).where(eq(inboxEvents.id, row.id));
         return { status: "matched" as const, inboxEventId: row.id, stepId: step.id };
@@ -51,16 +48,15 @@ export async function receiveInboxEvent(params: ReceiveInboxEventParams): Promis
     }
 
     await db.update(inboxEvents).set({ status: "unmatched" }).where(eq(inboxEvents.id, row.id));
-    return { status: "unmatched" as const, inboxEventId: row.id };
-  });
-
-  if (result.status === "unmatched") {
-    await openReconciliationCase(params.tenantId, {
+    await db.insert(reconciliationCases).values({
+      tenantId: params.tenantId,
       caseType: "unmatched_inbox_event",
-      relatedInboxEventId: result.inboxEventId,
+      relatedInboxEventId: row.id,
       details: { provider: params.provider, eventId: params.eventId },
     });
-  }
+    return { status: "unmatched" as const, inboxEventId: row.id };
+}
 
-  return result;
+export async function receiveInboxEvent(params: ReceiveInboxEventParams): Promise<ReceiveInboxEventResult> {
+  return withTenant(params.tenantId, (db) => receiveInboxEventTx(db, params));
 }

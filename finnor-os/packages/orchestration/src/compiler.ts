@@ -18,8 +18,30 @@
 // Explicitly NOT in scope: changing the Planner's own LLM call, or auto-executing a
 // multi-step workflow without the existing confirmation gate.
 
-import { withTenant, households, invoices, quotes, leads, workOrders, maintenanceAgreements, technicians, proposals, serviceVisits, contacts, appointments, type Db } from "@finnor/db";
-import { and, eq, type AnyColumn, type SQL } from "drizzle-orm";
+import {
+  withTenant,
+  households,
+  invoices,
+  quotes,
+  leads,
+  workOrders,
+  maintenanceAgreements,
+  technicians,
+  proposals,
+  serviceVisits,
+  contacts,
+  appointments,
+  tasks,
+  works,
+  documents,
+  tenantLocations,
+  delegations,
+  internalEvents,
+  workObjectiveLoops,
+  communicationIdentities,
+  type Db,
+} from "@finnor/db";
+import { and, eq, sql, type AnyColumn, type SQL } from "drizzle-orm";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -86,9 +108,93 @@ async function lookUpKnownId(db: Db, tenantId: string | undefined, field: string
       const [row] = await db.select({ id: appointments.id }).from(appointments).where(tenantFor(eq(appointments.id, value), appointments.tenantId)).limit(1);
       return row ? "verified" : "not_found";
     }
+    case "taskId": {
+      const [row] = await db.select({ id: tasks.id }).from(tasks).where(tenantFor(eq(tasks.id, value), tasks.tenantId)).limit(1);
+      return row ? "verified" : "not_found";
+    }
+    case "workId": {
+      const [row] = await db.select({ id: works.id }).from(works).where(tenantFor(eq(works.id, value), works.tenantId)).limit(1);
+      return row ? "verified" : "not_found";
+    }
+    case "documentId": {
+      const [row] = await db.select({ id: documents.id }).from(documents).where(tenantFor(eq(documents.id, value), documents.tenantId)).limit(1);
+      return row ? "verified" : "not_found";
+    }
+    case "locationId": {
+      const [row] = await db.select({ id: tenantLocations.id }).from(tenantLocations).where(tenantFor(eq(tenantLocations.id, value), tenantLocations.tenantId)).limit(1);
+      return row ? "verified" : "not_found";
+    }
+    case "delegationId": {
+      const [row] = await db.select({ id: delegations.id }).from(delegations).where(tenantFor(eq(delegations.id, value), delegations.tenantId)).limit(1);
+      return row ? "verified" : "not_found";
+    }
+    case "internalEventId": {
+      const [row] = await db.select({ id: internalEvents.id }).from(internalEvents).where(tenantFor(eq(internalEvents.id, value), internalEvents.tenantId)).limit(1);
+      return row ? "verified" : "not_found";
+    }
+    case "objectiveLoopId": {
+      const [row] = await db.select({ id: workObjectiveLoops.id }).from(workObjectiveLoops).where(tenantFor(eq(workObjectiveLoops.id, value), workObjectiveLoops.tenantId)).limit(1);
+      return row ? "verified" : "not_found";
+    }
+    case "communicationIdentityId": {
+      const [row] = await db.select({ id: communicationIdentities.id }).from(communicationIdentities).where(tenantFor(eq(communicationIdentities.id, value), communicationIdentities.tenantId)).limit(1);
+      return row ? "verified" : "not_found";
+    }
     default:
       return "unverifiable";
   }
+}
+
+async function lookUpTypedRef(
+  db: Db,
+  tenantId: string | undefined,
+  kind: "party" | "entity",
+  type: string,
+  value: string,
+): Promise<"verified" | "not_found"> {
+  const result = kind === "party"
+    ? await db.execute<{ tenant_id: string | null }>(sql`
+        SELECT finnor_os.party_ref_tenant(${type},${value}::uuid)::text tenant_id
+      `)
+    : await db.execute<{ tenant_id: string | null }>(sql`
+        SELECT finnor_os.canonical_entity_tenant(${type},${value}::uuid)::text tenant_id
+      `);
+  const resolvedTenant = result.rows[0]?.tenant_id ?? null;
+  return resolvedTenant && (!tenantId || resolvedTenant === tenantId) ? "verified" : "not_found";
+}
+
+interface GroundingCandidate {
+  field: string;
+  value: string;
+  typed?: { kind: "party" | "entity"; type: string };
+}
+
+function collectGroundingCandidates(value: unknown, path = ""): GroundingCandidate[] {
+  if (Array.isArray(value)) {
+    return value.flatMap((item, index) => collectGroundingCandidates(item, `${path}[${index}]`));
+  }
+  if (!value || typeof value !== "object") return [];
+  const row = value as Record<string, unknown>;
+  const candidates: GroundingCandidate[] = [];
+  const consumed = new Set<string>();
+  if (typeof row.partyType === "string" && typeof row.partyId === "string" && UUID_RE.test(row.partyId)) {
+    candidates.push({ field: path ? `${path}.partyId` : "partyId", value: row.partyId, typed: { kind: "party", type: row.partyType } });
+    consumed.add("partyId");
+  }
+  if (typeof row.entityType === "string" && typeof row.entityId === "string" && UUID_RE.test(row.entityId)) {
+    candidates.push({ field: path ? `${path}.entityId` : "entityId", value: row.entityId, typed: { kind: "entity", type: row.entityType } });
+    consumed.add("entityId");
+  }
+  for (const [key, child] of Object.entries(row)) {
+    if (consumed.has(key)) continue;
+    const childPath = path ? `${path}.${key}` : key;
+    if (key.endsWith("Id") && typeof child === "string" && UUID_RE.test(child)) {
+      candidates.push({ field: childPath, value: child });
+    } else {
+      candidates.push(...collectGroundingCandidates(child, childPath));
+    }
+  }
+  return candidates;
 }
 
 // The vertical-workflow action types (Phase 4/5) that submit a multi-step command
@@ -139,13 +245,17 @@ export function groundEntitiesWithDb(db: Db, tenantId: string, payload: Record<s
 export async function groundEntitiesWithDb(db: Db, tenantOrPayload: string | Record<string, unknown>, maybePayload?: Record<string, unknown>): Promise<GroundedField[]> {
   const tenantId = typeof tenantOrPayload === "string" ? tenantOrPayload : undefined;
   const payload = typeof tenantOrPayload === "string" ? maybePayload! : tenantOrPayload;
-  const candidates = Object.entries(payload).filter(
-    (entry): entry is [string, string] => entry[0].endsWith("Id") && typeof entry[1] === "string" && UUID_RE.test(entry[1]),
-  );
+  const candidates = collectGroundingCandidates(payload);
   if (candidates.length === 0) return [];
   const results: GroundedField[] = [];
-  for (const [field, value] of candidates) {
-    results.push({ field, status: await lookUpKnownId(db, tenantId, field, value) });
+  for (const candidate of candidates) {
+    const key = candidate.field.split(".").at(-1)?.replace(/^.*\]/, "") ?? candidate.field;
+    results.push({
+      field: candidate.field,
+      status: candidate.typed
+        ? await lookUpTypedRef(db, tenantId, candidate.typed.kind, candidate.typed.type, candidate.value)
+        : await lookUpKnownId(db, tenantId, key, candidate.value),
+    });
   }
   return results;
 }

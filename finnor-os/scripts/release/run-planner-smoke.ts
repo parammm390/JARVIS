@@ -9,7 +9,7 @@ import { randomUUID } from "node:crypto";
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { ACTION_HARDENING_SPEC, type ActionProfile } from "./action-hardening-spec";
+import { LEGACY_ACTION_HARDENING_SPEC as ACTION_HARDENING_SPEC, type ActionProfile } from "./action-hardening-spec";
 import { evaluateStagingGuards, formatStagingGuardReport } from "./staging-guards";
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));

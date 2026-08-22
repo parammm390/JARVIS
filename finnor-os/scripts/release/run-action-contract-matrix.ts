@@ -1,4 +1,4 @@
-// P1.T2–T10 — one parameterized core contract runner for the fixed 44-action spec.
+// One parameterized core contract runner for the complete fixed action spec.
 // It uses the guarded certification tenants, never calls a real provider, and fails
 // closed when the local certification database or seed guard is absent.
 
@@ -24,6 +24,7 @@ import {
   ACTION_HARDENING_SPEC_BY_ACTION,
   approvalRequirementForAction,
   requiresTypedConfirmation,
+  TOTAL_ACTION_COUNT,
   type ActionHardeningSpecRow,
 } from "./action-hardening-spec";
 import {
@@ -88,7 +89,7 @@ function alphaId(resource: string, ordinal = 1): string {
   return certificationId("alpha", resource, ordinal);
 }
 
-/** The only valid-payload source used by all 44 matrix rows. */
+/** The only valid-payload source used by every matrix row. */
 export function buildActionFixture(actionType: string): Record<string, unknown> {
   const h = alphaId("household");
   const tech = alphaId("technician");
@@ -98,6 +99,13 @@ export function buildActionFixture(actionType: string): Record<string, unknown> 
   const proposal = alphaId("proposal");
   const contact = alphaId("contact");
   const agreement = alphaId("agreement");
+  const employee = alphaId("user");
+  const team = alphaId("orgUnit");
+  const work = alphaId("work");
+  const task = alphaId("task");
+  const delegation = alphaId("delegation");
+  const internalEvent = alphaId("internalEvent");
+  const document = alphaId("document");
   const fixture: Record<string, Record<string, unknown>> = {
     create_invoice: { householdId: h, customerName: "Certification Household", amountUsd: 1250, memo: "Certification invoice", dueDate: "2026-09-01T00:00:00.000Z" },
     send_payment_reminder: { invoiceId: invoice, channel: "auto" },
@@ -143,6 +151,21 @@ export function buildActionFixture(actionType: string): Record<string, unknown> 
     search_web: { query: "water treatment certification", numResults: 3 },
     scan_competitors: { area: "Certification area", focus: "pricing", sources: [] },
     check_business_reviews: { businessName: "Certification Water Co", area: "Certification area" },
+    send_message: { recipient: { partyType: "employee", partyId: employee }, channel: "internal", body: "Certification internal message" },
+    place_call: { recipient: { partyType: "household", partyId: h }, objective: "Confirm the certification appointment", script: "This is a certification call." },
+    request_acknowledgement: { recipient: { partyType: "employee", partyId: employee }, request: "Acknowledge the certification handoff", deadline: "2026-09-01T12:00:00.000Z" },
+    notify_group: { teamRef: { partyType: "team", partyId: team }, channel: "internal", body: "Certification team notification" },
+    create_task: { subjectRef: { entityType: "household", entityId: h }, title: "Certification task", priority: "normal" },
+    assign_task: { taskRef: { taskId: task }, assigneeRef: { partyType: "employee", partyId: employee } },
+    update_task: { taskRef: { taskId: task }, status: "done" },
+    handoff_work: { workRef: { workId: work }, targetEmployeeRef: { partyType: "employee", partyId: employee }, note: "Certification handoff" },
+    delegate_objective: { workRef: { workId: work }, targetRef: { partyType: "employee", partyId: employee }, objective: "Complete the certification objective", acknowledgementDeadline: "2026-09-01T12:00:00.000Z", completionDeadline: "2026-09-02T12:00:00.000Z" },
+    escalate_work: { delegationRef: { delegationId: delegation }, targetRef: { partyType: "employee", partyId: employee }, reason: "Certification escalation", evidenceRefs: [] },
+    cancel_delegation: { delegationRef: { delegationId: delegation }, reason: "Certification cancellation" },
+    schedule_internal_event: { title: "Certification event", startsAt: "2026-09-01T14:00:00.000Z", endsAt: "2026-09-01T15:00:00.000Z", participants: [{ partyType: "employee", partyId: employee }] },
+    reschedule_internal_event: { internalEventRef: { internalEventId: internalEvent }, startsAt: "2026-09-01T15:00:00.000Z", endsAt: "2026-09-01T16:00:00.000Z", reason: "Certification reschedule" },
+    share_document: { documentRef: { documentId: document }, recipient: { partyType: "employee", partyId: employee }, accessLevel: "view" },
+    computer_task: { application: "supplier_portal", authProfileRef: "supplier-west", task: "Find the confirmed ETA for supplier order WS-48", target: { kind: "supplier_order", identifier: "WS-48" }, mode: "READ_ONLY", successCriteria: ["A confirmed ETA is visible for WS-48"] },
   };
   const value = fixture[actionType];
   if (!value) throw new Error(`No shared certification fixture exists for ${actionType}`);
@@ -161,14 +184,55 @@ const RESOURCE_BY_ID_FIELD: Record<string, string> = {
   leadId: "lead",
   workOrderId: "workOrder",
   appointmentId: "appointment",
+  workId: "work",
+  taskId: "task",
+  documentId: "document",
+  delegationId: "delegation",
+  internalEventId: "internalEvent",
+};
+
+const RESOURCE_BY_PARTY_TYPE: Record<string, string> = {
+  employee: "user",
+  team: "orgUnit",
+  household: "household",
+  contact: "contact",
+};
+
+const RESOURCE_BY_ENTITY_TYPE: Record<string, string> = {
+  household: "household",
+  contact: "contact",
+  lead: "lead",
+  quote: "quote",
+  invoice: "invoice",
+  proposal: "proposal",
+  work_order: "workOrder",
+  appointment: "appointment",
+  document: "document",
+  task: "task",
+  work: "work",
+  delegation: "delegation",
+  internal_event: "internalEvent",
 };
 
 function replaceReferencedIds(payload: Record<string, unknown>, replacement: "missing" | "bravo"): Record<string, unknown> {
   const copy = structuredClone(payload);
-  for (const [field, resource] of Object.entries(RESOURCE_BY_ID_FIELD)) {
-    if (typeof copy[field] !== "string") continue;
-    copy[field] = replacement === "missing" ? MISSING_ENTITY_ID : certificationId("bravo", resource, 1);
-  }
+  const replacementId = (resource: string) => replacement === "missing" ? MISSING_ENTITY_ID : certificationId("bravo", resource, 1);
+  const visit = (value: unknown): void => {
+    if (Array.isArray(value)) { for (const item of value) visit(item); return; }
+    if (!value || typeof value !== "object") return;
+    const row = value as Record<string, unknown>;
+    const partyResource = typeof row.partyType === "string" ? RESOURCE_BY_PARTY_TYPE[row.partyType] : undefined;
+    if (partyResource && typeof row.partyId === "string") row.partyId = replacementId(partyResource);
+    const entityResource = typeof row.entityType === "string" ? RESOURCE_BY_ENTITY_TYPE[row.entityType] : undefined;
+    if (entityResource && typeof row.entityId === "string") row.entityId = replacementId(entityResource);
+    for (const [field, child] of Object.entries(row)) {
+      if (field === "partyId" || field === "entityId") continue;
+      const resource = RESOURCE_BY_ID_FIELD[field];
+      if (resource && typeof child === "string") row[field] = replacementId(resource);
+      else visit(child);
+    }
+  };
+  visit(copy);
   return copy;
 }
 
@@ -195,7 +259,7 @@ function invalidPayloadFor(): null {
 async function frontendContract(): Promise<FrontendContract> {
   const manifest = JSON.parse(await readFile(MANIFEST_PATH, "utf8")) as { actions: Array<{ actionType: string }> };
   const actionTypes = manifest.actions.map((action) => action.actionType);
-  const source = `// GENERATED FILE — source: finnor-os/docs/release/generated/action-manifest.json.\n// Regenerated by the Phase 1 contract runner; do not edit the action list here.\n\nexport const BACKEND_ACTION_TYPES = ${JSON.stringify(actionTypes, null, 2)} as const;\n\nexport const BACKEND_ACTION_TYPE_COUNT = BACKEND_ACTION_TYPES.length;\n`;
+  const source = `// GENERATED FILE — source: finnor-os/docs/release/generated/action-manifest.json.\n// Regenerated by the Phase 2 universal-action contract runner; do not edit the action list here.\n\nexport const BACKEND_ACTION_TYPES = ${JSON.stringify(actionTypes, null, 2)} as const;\n\nexport const BACKEND_ACTION_TYPE_COUNT = BACKEND_ACTION_TYPES.length;\n`;
   await mkdir(dirname(FRONTEND_ACTION_TYPES_PATH), { recursive: true });
   await writeFile(FRONTEND_ACTION_TYPES_PATH, source, "utf8");
   const registrySource = await readFile(FRONTEND_REGISTRY_PATH, "utf8");
@@ -224,7 +288,7 @@ async function frontendContract(): Promise<FrontendContract> {
 }
 
 async function groundingGate(payload: Record<string, unknown>, kind: "missing" | "cross"): Promise<GateResult> {
-  const evidenceId = kind === "missing" ? "P1-GROUND-MISSING" : "P1-GROUND-CROSS-TENANT";
+  const evidenceId = kind === "missing" ? "P2-GROUND-MISSING" : "P2-GROUND-CROSS-TENANT";
   const checked = replaceReferencedIds(payload, kind === "missing" ? "missing" : "bravo");
   const grounded = await withTenant(ALPHA_TENANT, (db) => groundEntitiesWithDb(db, ALPHA_TENANT, checked));
   if (grounded.length === 0) return { status: "N/A", evidenceId, detail: "fixture has no referenced entity field" };
@@ -238,12 +302,12 @@ async function groundingGate(payload: Record<string, unknown>, kind: "missing" |
 
 async function insertContractAction(tenantId: string, actionType: string, policyId: string, status: "approved" | "completed" | "rejected" | "blocked_integration_unavailable" | "failed" | "executing"): Promise<string> {
   const id = randomUUID();
-  await withTenant(tenantId, (db) => db.insert(domainActions).values({ id, tenantId, actionType, payload: { certification: true }, policyId, policyVersion: 1, status, summary: `Phase 1 contract ${actionType}` }));
+  await withTenant(tenantId, (db) => db.insert(domainActions).values({ id, tenantId, actionType, payload: { certification: true }, policyId, policyVersion: 1, status, summary: `Phase 2 universal-action contract ${actionType}` }));
   return id;
 }
 
 async function actionClaimIdempotency(row: ActionHardeningSpecRow, policy: DomainPolicy): Promise<GateResult> {
-  const evidenceId = `P1-IDEMPOTENCY-${row.actionType}`;
+  const evidenceId = `P2-IDEMPOTENCY-${row.actionType}`;
   const actionId = await insertContractAction(ALPHA_TENANT, row.actionType, policy.id, "approved");
   const claim = async () => withTenant(ALPHA_TENANT, (db) =>
     db.update(domainActions).set({ status: "executing" }).where(and(eq(domainActions.id, actionId), eq(domainActions.tenantId, ALPHA_TENANT), eq(domainActions.status, "approved"))).returning({ id: domainActions.id }),
@@ -256,14 +320,14 @@ async function actionClaimIdempotency(row: ActionHardeningSpecRow, policy: Domai
 }
 
 async function externalIdempotency(row: ActionHardeningSpecRow, policy: DomainPolicy): Promise<GateResult> {
-  const evidenceId = `P1-PROVIDER-IDEMPOTENCY-${row.actionType}`;
+  const evidenceId = `P2-PROVIDER-IDEMPOTENCY-${row.actionType}`;
   const sequentialActionId = await insertContractAction(ALPHA_TENANT, row.actionType, policy.id, "approved");
   const concurrentActionId = await insertContractAction(ALPHA_TENANT, row.actionType, policy.id, "approved");
   const base = new ToolRegistry();
   let effects = 0;
   base.register({
     name: "certification_effect",
-    description: "Phase 1 local idempotency probe",
+    description: "Phase 2 universal-action local idempotency probe",
     inputSchema: z.object({ token: z.string() }),
     integration: "certification",
     async run() {
@@ -291,7 +355,7 @@ async function externalIdempotency(row: ActionHardeningSpecRow, policy: DomainPo
 }
 
 async function receiptOutcome(row: ActionHardeningSpecRow, policy: DomainPolicy, outcome: TerminalOutcome): Promise<GateResult> {
-  const evidenceId = `P1-RECEIPT-${row.actionType}-${outcome}`;
+  const evidenceId = `P2-RECEIPT-${row.actionType}-${outcome}`;
   const status = outcome === "rejected" ? "rejected" : outcome === "blocked" ? "blocked_integration_unavailable" : outcome === "failed" ? "failed" : outcome === "completed" || outcome === "compensated" ? "completed" : "failed";
   const actionId = await insertContractAction(ALPHA_TENANT, row.actionType, policy.id, status);
   const correlationId = `p1:${row.actionType}:${outcome}`;
@@ -306,7 +370,7 @@ async function receiptOutcome(row: ActionHardeningSpecRow, policy: DomainPolicy,
   const opened = await openReceipt({
     tenantId: ALPHA_TENANT,
     domainActionId: actionId,
-    objective: `Phase 1 ${outcome} contract for ${row.actionType}`,
+    objective: `Phase 2 ${outcome} contract for ${row.actionType}`,
     evidence: [{ source: "phase1_contract", ref: evidenceId, timestamp: new Date().toISOString() }],
     policyApplied: { id: policy.id, version: policy.version },
     riskTier,
@@ -322,7 +386,7 @@ async function receiptOutcome(row: ActionHardeningSpecRow, policy: DomainPolicy,
   } else {
     const failure: ReceiptFailure = {
       errorKind: outcome === "blocked" ? "config" : outcome === "rejected" ? "needs_human" : "terminal",
-      message: `Phase 1 certification ${outcome}; no unrecorded effect is claimed.`,
+      message: `Phase 2 certification ${outcome}; no unrecorded effect is claimed.`,
       recoveryPath: outcome === "blocked" ? "configure_binding" : outcome === "rejected" ? "new_approval" : "manual_review",
     };
     await finalizeReceipt(ALPHA_TENANT, opened.receiptId, { failure });
@@ -338,14 +402,14 @@ async function receiptOutcome(row: ActionHardeningSpecRow, policy: DomainPolicy,
 }
 
 async function predictionGate(registry: PluginRegistry, row: ActionHardeningSpecRow, payload: Record<string, unknown>, policy: DomainPolicy): Promise<GateResult> {
-  const evidenceId = `P1-PREDICTION-${row.actionType}`;
+  const evidenceId = `P2-PREDICTION-${row.actionType}`;
   const simulation = await registry.simulate(row.actionType, payload, policy);
   const explicit = Boolean(simulation && (simulation.mode === "schema" || simulation.mode === "dry_run") && simulation.summary.trim() && simulation.predicted && typeof simulation.predicted === "object");
   return { status: explicit ? "PASS" : "FAIL", evidenceId, detail: explicit ? `${simulation.mode} prediction is explicit and labeled no-write by the plugin/registry contract` : "simulation did not return an explicit mode, summary, and predicted object" };
 }
 
 function floorGate(row: ActionHardeningSpecRow): GateResult {
-  const evidenceId = `P1-APPROVAL-${row.actionType}`;
+  const evidenceId = `P2-APPROVAL-${row.actionType}`;
   const none = approvalRequirementForAction(row.actionType, false, false);
   const policy = approvalRequirementForAction(row.actionType, true, false);
   const typed = requiresTypedConfirmation(row.actionType);
@@ -366,10 +430,10 @@ async function runRow(registry: PluginRegistry, frontend: FrontendContract, row:
     const plugin = registry.resolve(row.actionType);
     const payload = buildActionFixture(row.actionType);
     const policy = policyFor(row, ALPHA_TENANT);
-    gates.registry = { status: plugin?.name === row.plugin ? "PASS" : "FAIL", evidenceId: `P1-REGISTRY-${row.actionType}`, detail: plugin ? `${plugin.name} resolved without collision` : "action not registered" };
-    gates.valid_input = { status: plugin?.validate(row.actionType, payload, policy).valid ? "PASS" : "FAIL", evidenceId: `P1-SCHEMA-VALID-${row.actionType}`, detail: "shared fixture accepted by runtime validator" };
+    gates.registry = { status: plugin?.name === row.plugin ? "PASS" : "FAIL", evidenceId: `P2-REGISTRY-${row.actionType}`, detail: plugin ? `${plugin.name} resolved without collision` : "action not registered" };
+    gates.valid_input = { status: plugin?.validate(row.actionType, payload, policy).valid ? "PASS" : "FAIL", evidenceId: `P2-SCHEMA-VALID-${row.actionType}`, detail: "shared fixture accepted by runtime validator" };
     const invalid = plugin?.validate(row.actionType, invalidPayloadFor(), policy);
-    gates.invalid_input = { status: invalid && !invalid.valid ? "PASS" : "FAIL", evidenceId: `P1-SCHEMA-INVALID-${row.actionType}`, detail: invalid && !invalid.valid ? "null payload rejected" : "runtime validator accepted null" };
+    gates.invalid_input = { status: invalid && !invalid.valid ? "PASS" : "FAIL", evidenceId: `P2-SCHEMA-INVALID-${row.actionType}`, detail: invalid && !invalid.valid ? "null payload rejected" : "runtime validator accepted null" };
     gates.missing_entity = await groundingGate(payload, "missing");
     gates.cross_tenant = await groundingGate(payload, "cross");
     gates.approval_floor = floorGate(row);
@@ -383,11 +447,11 @@ async function runRow(registry: PluginRegistry, frontend: FrontendContract, row:
       gates.idempotency = await actionClaimIdempotency(row, policy);
       if (row.external) gates.provider_idempotency = await externalIdempotency(row, policy);
     } else {
-      gates.idempotency = { status: "N/A", evidenceId: `P1-IDEMPOTENCY-${row.actionType}`, detail: "read-only/meta action has no business or provider effect to repeat" };
-      gates.provider_idempotency = { status: "N/A", evidenceId: `P1-PROVIDER-IDEMPOTENCY-${row.actionType}`, detail: "read-only/meta action has no provider effect" };
+      gates.idempotency = { status: "N/A", evidenceId: `P2-IDEMPOTENCY-${row.actionType}`, detail: "read-only/meta action has no business or provider effect to repeat" };
+      gates.provider_idempotency = { status: "N/A", evidenceId: `P2-PROVIDER-IDEMPOTENCY-${row.actionType}`, detail: "read-only/meta action has no provider effect" };
     }
-    gates.frontend = { status: frontend.ok && frontend.actionTypes.includes(row.actionType) ? "PASS" : "FAIL", evidenceId: `P1-FRONTEND-${row.actionType}`, detail: frontend.detail };
-    gates.no_fallback = { status: frontend.fallbackMounts === 0 ? "PASS" : "FAIL", evidenceId: `P1-FALLBACK-${row.actionType}`, detail: `certified ActionRenderer fallback imports=${frontend.fallbackMounts}` };
+    gates.frontend = { status: frontend.ok && frontend.actionTypes.includes(row.actionType) ? "PASS" : "FAIL", evidenceId: `P2-FRONTEND-${row.actionType}`, detail: frontend.detail };
+    gates.no_fallback = { status: frontend.fallbackMounts === 0 ? "PASS" : "FAIL", evidenceId: `P2-FALLBACK-${row.actionType}`, detail: `certified ActionRenderer fallback imports=${frontend.fallbackMounts}` };
     for (const gate of Object.values(gates)) if (gate.evidenceId) evidenceIds.push(gate.evidenceId);
     const failures = Object.entries(gates).filter(([, gate]) => gate.status === "FAIL");
     return { actionType: row.actionType, plugin: row.plugin, profile: row.profile, approvalFloor: row.approvalFloor, external: row.external, status: failures.length === 0 ? "PASS" : "FAIL", gates, evidenceIds, ...(failures.length > 0 ? { failure: failures.map(([name, gate]) => `${name}: ${gate.detail}`).join(" | ") } : {}) };
@@ -400,9 +464,9 @@ async function runRow(registry: PluginRegistry, frontend: FrontendContract, row:
 function markdownReport(rows: MatrixRow[], frontend: FrontendContract): string {
   const passed = rows.filter((row) => row.status === "PASS").length;
   const lines = [
-    "# Phase 1 Action Contract Results",
+    "# Phase 2 Universal Action Contract Results",
     "",
-    `Generated by npm run release:contract against the guarded local certification database. **${passed}/44 rows PASS; ${rows.length - passed} FAIL.**`,
+    `Generated by npm run release:contract against the guarded local certification database. **${passed}/${TOTAL_ACTION_COUNT} rows PASS; ${rows.length - passed} FAIL.**`,
     "",
     "Provider-backed calls are not performed by this core harness. It proves the fixed contract, tenant grounding, approval floor, shared idempotency claims, receipt/audit truth, prediction shape, and generated frontend coverage. Missing live provider credentials remain Phase 2/3 BLOCKED-CONFIG evidence.",
     "",
@@ -423,14 +487,14 @@ function markdownReport(rows: MatrixRow[], frontend: FrontendContract): string {
 }
 
 export async function runActionContractMatrix(databaseUrl = process.env.DATABASE_URL): Promise<MatrixRow[]> {
-  if (!databaseUrl) throw new Error("DATABASE_URL is required; the Phase 1 core matrix never falls back to an unscoped or in-memory database");
+  if (!databaseUrl) throw new Error("DATABASE_URL is required; the Phase 2 universal-action matrix never falls back to an unscoped or in-memory database");
   await seedCertificationTenants(databaseUrl);
   const frontend = await frontendContract();
   const registry = createDefaultPluginRegistry();
   const rows: MatrixRow[] = [];
   for (const [index, spec] of ACTION_HARDENING_SPEC.entries()) rows.push(await runRow(registry, frontend, spec, index));
   const report = {
-    phase: "P1",
+    phase: "P2",
     generatedAt: new Date().toISOString(),
     actionCount: ACTION_HARDENING_SPEC.length,
     passCount: rows.filter((row) => row.status === "PASS").length,
@@ -441,14 +505,14 @@ export async function runActionContractMatrix(databaseUrl = process.env.DATABASE
   await mkdir(dirname(JSON_REPORT_PATH), { recursive: true });
   await writeFile(JSON_REPORT_PATH, `${JSON.stringify(report, null, 2)}\n`, "utf8");
   await writeFile(MARKDOWN_REPORT_PATH, markdownReport(rows, frontend), "utf8");
-  if (report.failCount > 0) throw new Error(`P1 action contract matrix failed ${report.failCount}/44 rows; see docs/release/action-contract-results.md`);
-  console.log(`P1_CONTRACT_MATRIX_PASS rows=${report.passCount}/44 frontend=${frontend.actionTypes.length}/44 fallback_mounts=${frontend.fallbackMounts}`);
+  if (report.failCount > 0) throw new Error(`Action contract matrix failed ${report.failCount}/${TOTAL_ACTION_COUNT} rows; see docs/release/action-contract-results.md`);
+  console.log(`P2_CONTRACT_MATRIX_PASS rows=${report.passCount}/${TOTAL_ACTION_COUNT} frontend=${frontend.actionTypes.length}/${TOTAL_ACTION_COUNT} fallback_mounts=${frontend.fallbackMounts}`);
   return rows;
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   runActionContractMatrix().catch((error) => {
-    console.error(`P1_CONTRACT_MATRIX_FAIL ${error instanceof Error ? error.message : "unknown error"}`);
+    console.error(`P2_CONTRACT_MATRIX_FAIL ${error instanceof Error ? error.message : "unknown error"}`);
     process.exitCode = 1;
   });
 }

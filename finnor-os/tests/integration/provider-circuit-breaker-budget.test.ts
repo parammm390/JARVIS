@@ -124,6 +124,37 @@ describe.skipIf(!available)("Phase 4 §4.4: durable circuit breaker + per-tenant
     expect(await isCircuitOpen(TEST_PROVIDER)).toBe(false);
   });
 
+  it("admits exactly one half-open probe across concurrent worker processes", async () => {
+    await recordProviderFailure(TEST_PROVIDER);
+    await recordProviderFailure(TEST_PROVIDER);
+    await recordProviderFailure(TEST_PROVIDER);
+    await adminDb().update(providerCircuitState)
+      .set({ openedAt: new Date(Date.now() - 61_000) })
+      .where(eq(providerCircuitState.provider, TEST_PROVIDER_KEY));
+
+    let releaseProbe!: () => void;
+    let probeStarted!: () => void;
+    const release = new Promise<void>((resolve) => { releaseProbe = resolve; });
+    const started = new Promise<void>((resolve) => { probeStarted = resolve; });
+    let realCalls = 0;
+    const first = withCircuitBreaker(TEST_PROVIDER, async () => {
+      realCalls++;
+      probeStarted();
+      await release;
+      return "recovered";
+    });
+    await started;
+    const second = withCircuitBreaker(TEST_PROVIDER, async () => {
+      realCalls++;
+      return "should-not-run";
+    });
+    await expect(second).rejects.toThrow(/probe already in flight/i);
+    expect(realCalls).toBe(1);
+    releaseProbe();
+    await expect(first).resolves.toBe("recovered");
+    expect(await isCircuitOpen(TEST_PROVIDER)).toBe(false);
+  });
+
   it("claimBudget enforces a real daily cap per tenant+provider+metric, independent metrics don't interfere", async () => {
     const first = await claimBudget(TEST_TENANT, TEST_PROVIDER, "call", 2);
     expect(first).toEqual({ allowed: true, used: 1, cap: 2 });

@@ -122,7 +122,12 @@ export class GatedExecutor implements Executor {
     // Scoped per action execution: claims each external tool call against the
     // external_operations ledger so a reflection retry never re-fires an
     // already-completed side effect (send an SMS twice, double-sync an invoice).
-    const requestedCommunicationIdentityId = typeof draft.payload.communicationIdentityId === "string" ? draft.payload.communicationIdentityId : undefined;
+    const identityRef = draft.payload.communicationIdentityRef && typeof draft.payload.communicationIdentityRef === "object"
+      ? draft.payload.communicationIdentityRef as Record<string, unknown>
+      : null;
+    const requestedCommunicationIdentityId = typeof draft.payload.communicationIdentityId === "string"
+      ? draft.payload.communicationIdentityId
+      : typeof identityRef?.communicationIdentityId === "string" ? identityRef.communicationIdentityId : undefined;
     const requestedAuthProfileRef = typeof draft.payload.authProfileRef === "string" ? draft.payload.authProfileRef : undefined;
     const accessPurpose = typeof draft.payload.purpose === "string" && draft.payload.purpose.trim() ? draft.payload.purpose : action.actionType;
     const scopedTools = new ScopedToolRegistry(this.tools, {
@@ -146,6 +151,13 @@ export class GatedExecutor implements Executor {
       tools: scopedTools,
     });
     await appendEpisode(action.tenantId, action.id, "execute", { draft: draft.payload }, { ...result });
+
+    // computer_task's synchronous action result means "durably queued", not
+    // "business task succeeded". The worker owns the executing -> terminal action
+    // transition after it observes verifiable external evidence.
+    if (result.status === "success" && result.output.pendingComputerRun === true) {
+      return result;
+    }
 
     const finalStatus =
       result.status === "success"

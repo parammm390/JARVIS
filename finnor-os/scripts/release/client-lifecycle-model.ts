@@ -75,6 +75,11 @@ function diffProjection(manifest: ClientManifest): unknown {
       : keyed(manifest.communicationIdentityBindings, (row) => `${row.identityKey}:${JSON.stringify(row.principal)}:${row.purpose}`),
     applicationAccounts: manifest.applicationAccounts === undefined ? null : keyed(manifest.applicationAccounts, (row) => row.key),
     authProfiles: manifest.authProfiles === undefined ? null : keyed(manifest.authProfiles, (row) => row.ref),
+    connectionRequirements: manifest.connectionRequirements === undefined ? null : keyed(manifest.connectionRequirements, (row) => row.authProfileRef),
+    connectionPolicy: manifest.connectionPolicy ?? null,
+    computer: manifest.computer ?? null,
+    durableLimits: manifest.durableLimits === undefined ? null : keyed(manifest.durableLimits, (row) => `${row.provider}:${row.action}`),
+    retentionPolicies: manifest.retentionPolicies === undefined ? null : keyed(manifest.retentionPolicies, (row) => row.dataClass),
     workspaceConfig: manifest.workspaceConfig ?? null,
     policyOverrides: manifest.policyOverrides,
     requiredCapabilities: [...manifest.requiredCapabilities].sort(),
@@ -97,14 +102,18 @@ function areaForPath(path: string): LifecycleArea {
     || path.startsWith("/externalOrganizations")
     || path.startsWith("/externalContacts")) return "identity";
   if (path.startsWith("/workspaceConfig") || path.startsWith("/locations") || path.startsWith("/tenant/settings")) return "workspace";
-  if (path.startsWith("/policyOverrides")) return "policy";
+  if (path.startsWith("/policyOverrides") || path.startsWith("/retentionPolicies")) return "policy";
   if (path.startsWith("/integrations")
     || path.startsWith("/requiredCapabilities")
     || path.startsWith("/credentialRefs")
     || path.startsWith("/communicationIdentities")
     || path.startsWith("/communicationIdentityBindings")
     || path.startsWith("/applicationAccounts")
-    || path.startsWith("/authProfiles")) return "integration";
+    || path.startsWith("/authProfiles")
+    || path.startsWith("/connectionRequirements")
+    || path.startsWith("/connectionPolicy")
+    || path.startsWith("/computer")
+    || path.startsWith("/durableLimits")) return "integration";
   if (path.startsWith("/imports")) return "import";
   return "tenant";
 }

@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@finnor/authority": "*",
+    "@finnor/computer": "*",
     "@finnor/data-platform": "*",
     "@finnor/db": "*",
     "@finnor/memory": "*",

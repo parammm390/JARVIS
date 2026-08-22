@@ -9,7 +9,7 @@ import { migrate } from "../../packages/db/migrate";
 import { seed, SEED_TENANT_ID } from "../../packages/db/seed";
 import { closePool, withTenant, rolePermissions } from "@finnor/db";
 import { requireContext, canApprove, AuthError } from "../../apps/api/lib/auth";
-import { checkRateLimit, secondsUntilWindowReset } from "../../apps/api/lib/rate-limit";
+import { checkProviderRateLimit, checkRateLimit, secondsUntilWindowReset } from "../../apps/api/lib/rate-limit";
 import { checkAndRecordReceipt } from "../../apps/api/lib/webhook-replay";
 import { POST as submitAction } from "../../apps/api/app/api/actions/route";
 import { eq, and } from "drizzle-orm";
@@ -64,6 +64,19 @@ describe.skipIf(!available)("authz — dev-bypass hardening, rate limiting, webh
     const results: boolean[] = [];
     for (let i = 0; i < 5; i++) results.push(await checkRateLimit(bucket, 3));
     expect(results).toEqual([true, true, true, false, false]);
+  });
+
+  it("enforces one durable tenant/provider budget across concurrent worker-like callers", async () => {
+    const tenantId = randomUUID();
+    const provider = `phase5-${randomUUID()}`;
+    const results = await Promise.all(Array.from({ length: 20 }, () => checkProviderRateLimit({
+      tenantId,
+      provider,
+      action: "send",
+      limitPerMinute: 5,
+    })));
+    expect(results.filter(Boolean)).toHaveLength(5);
+    expect(results.filter((allowed) => !allowed)).toHaveLength(15);
   });
 
   it("secondsUntilWindowReset returns a sane value within the 60s fixed window", () => {

@@ -401,13 +401,95 @@ export interface paths {
                         intent: "company_context";
                         anchor?: {
                             /** @enum {string} */
-                            entityType: "household" | "contact" | "user" | "technician" | "equipment" | "service_visit" | "maintenance_agreement" | "lead" | "opportunity" | "quote" | "proposal" | "work_order" | "appointment" | "invoice" | "payment" | "conversation" | "call" | "message" | "communication" | "document" | "task" | "work" | "domain_action" | "workflow_run" | "workflow_step" | "business_operation" | "business_operation_target" | "decision_receipt" | "business_event";
+                            entityType: "household" | "contact" | "user" | "technician" | "equipment" | "service_visit" | "maintenance_agreement" | "lead" | "opportunity" | "quote" | "proposal" | "work_order" | "appointment" | "invoice" | "payment" | "conversation" | "call" | "message" | "communication" | "document" | "task" | "work" | "domain_action" | "workflow_run" | "workflow_step" | "business_operation" | "business_operation_target" | "decision_receipt" | "business_event" | "org_unit" | "tenant_location" | "external_organization" | "external_contact";
                             /** Format: uuid */
                             entityId: string;
+                        } | {
+                            /** @enum {string} */
+                            partyType: "employee" | "team" | "location" | "household" | "contact" | "external_organization" | "external_contact";
+                            /** Format: uuid */
+                            partyId: string;
                         };
                         /** Format: uuid */
                         householdId?: string;
                         query?: string;
+                        /** Format: uuid */
+                        workId?: string;
+                        executionKey?: string;
+                        idempotencyKey?: string;
+                    } | {
+                        /** @constant */
+                        intent: "party_lookup";
+                        ref?: {
+                            /** @enum {string} */
+                            partyType: "employee" | "team" | "location" | "household" | "contact" | "external_organization" | "external_contact";
+                            /** Format: uuid */
+                            partyId: string;
+                        };
+                        query?: string;
+                        page?: {
+                            limit?: number;
+                            cursor?: string;
+                        };
+                        /** Format: uuid */
+                        workId?: string;
+                        executionKey?: string;
+                        idempotencyKey?: string;
+                    } | {
+                        /** @constant */
+                        intent: "party_context";
+                        ref?: {
+                            /** @enum {string} */
+                            partyType: "employee" | "team" | "location" | "household" | "contact" | "external_organization" | "external_contact";
+                            /** Format: uuid */
+                            partyId: string;
+                        };
+                        query?: string;
+                        page?: {
+                            limit?: number;
+                            cursor?: string;
+                        };
+                        /** Format: uuid */
+                        workId?: string;
+                        executionKey?: string;
+                        idempotencyKey?: string;
+                    } | {
+                        /** @constant */
+                        intent: "team_roster";
+                        teamRef?: {
+                            /** @constant */
+                            partyType: "team";
+                            /** Format: uuid */
+                            partyId: string;
+                        };
+                        query?: string;
+                        page?: {
+                            limit?: number;
+                            cursor?: string;
+                        };
+                        /** Format: uuid */
+                        workId?: string;
+                        executionKey?: string;
+                        idempotencyKey?: string;
+                    } | {
+                        /** @constant */
+                        intent: "party_availability";
+                        ref?: {
+                            /** @enum {string} */
+                            partyType: "employee" | "team" | "location" | "household" | "contact" | "external_organization" | "external_contact";
+                            /** Format: uuid */
+                            partyId: string;
+                        };
+                        query?: string;
+                        localDateRange?: {
+                            startDate: string;
+                            endDate?: string;
+                        };
+                        includeCapacity?: boolean;
+                        page?: {
+                            limit?: number;
+                            cursor?: string;
+                        };
                         /** Format: uuid */
                         workId?: string;
                         executionKey?: string;
@@ -695,6 +777,95 @@ export interface paths {
                 };
                 /** @description Operation has no recoverable targets or cannot be retried in its current state */
                 409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/computer/runs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Reconstruct one tenant-scoped computer run from safe durable run, step, and artifact metadata */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description {run, steps, artifacts}; no provider/auth handles or artifact bytes */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Computer run not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/computer/runs/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request durable cancellation of an active computer run */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description {run, cancellationRequested} */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Not the actor or an authorized approver */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Computer run not found */
+                404: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -1960,7 +2131,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** D1.T3 activity theater — merged action_log + workflow_step + call feed, forward-only (occurredAt,id) keyset cursor */
+        /** D1.T3 activity theater — merged action_log + workflow_step + computer_step + call feed, forward-only (occurredAt,id) keyset cursor */
         get: {
             parameters: {
                 query?: {

@@ -15,9 +15,9 @@ export const CERTIFICATION_TENANTS: Record<CertificationTenantKey, { id: string;
 };
 
 const RESOURCE_PREFIX: Record<CertificationTenantKey, Record<string, string>> = {
-  alpha: { technician: "a0100000", user: "a0200000", household: "a1000000", contact: "a2000000", lead: "a3000000", opportunity: "a4000000", quote: "a5000000", quoteLine: "a5100000", invoice: "a6000000", workOrder: "a7000000", visit: "a7100000", appointment: "a7200000", proposal: "a8000000", agreement: "a8100000", conversation: "a9000000", call: "a9100000", message: "a9200000", document: "a9300000", warehouse: "a9400000", stock: "a9500000", policy: "aa000000", revision: "aa100000", action: "aa200000", permission: "aa300000" },
-  bravo: { technician: "b0100000", user: "b0200000", household: "b1000000", contact: "b2000000", lead: "b3000000", opportunity: "b4000000", quote: "b5000000", quoteLine: "b5100000", invoice: "b6000000", workOrder: "b7000000", visit: "b7100000", appointment: "b7200000", proposal: "b8000000", agreement: "b8100000", conversation: "b9000000", call: "b9100000", message: "b9200000", document: "b9300000", warehouse: "b9400000", stock: "b9500000", policy: "ba000000", revision: "ba100000", action: "ba200000", permission: "ba300000" },
-  charlie: { technician: "c0100000", user: "c0200000", household: "c1000000", contact: "c2000000", lead: "c3000000", opportunity: "c4000000", quote: "c5000000", quoteLine: "c5100000", invoice: "c6000000", workOrder: "c7000000", visit: "c7100000", appointment: "c7200000", proposal: "c8000000", agreement: "c8100000", conversation: "c9000000", call: "c9100000", message: "c9200000", document: "c9300000", warehouse: "c9400000", stock: "c9500000", policy: "ca000000", revision: "ca100000", action: "ca200000", permission: "ca300000" },
+  alpha: { technician: "a0100000", user: "a0200000", household: "a1000000", contact: "a2000000", lead: "a3000000", opportunity: "a4000000", quote: "a5000000", quoteLine: "a5100000", invoice: "a6000000", workOrder: "a7000000", visit: "a7100000", appointment: "a7200000", proposal: "a8000000", agreement: "a8100000", conversation: "a9000000", call: "a9100000", message: "a9200000", document: "a9300000", warehouse: "a9400000", stock: "a9500000", policy: "aa000000", revision: "aa100000", action: "aa200000", permission: "aa300000", orgUnit: "ab000000", work: "ab100000", task: "ab200000", delegation: "ab300000", internalEvent: "ab400000" },
+  bravo: { technician: "b0100000", user: "b0200000", household: "b1000000", contact: "b2000000", lead: "b3000000", opportunity: "b4000000", quote: "b5000000", quoteLine: "b5100000", invoice: "b6000000", workOrder: "b7000000", visit: "b7100000", appointment: "b7200000", proposal: "b8000000", agreement: "b8100000", conversation: "b9000000", call: "b9100000", message: "b9200000", document: "b9300000", warehouse: "b9400000", stock: "b9500000", policy: "ba000000", revision: "ba100000", action: "ba200000", permission: "ba300000", orgUnit: "bb000000", work: "bb100000", task: "bb200000", delegation: "bb300000", internalEvent: "bb400000" },
+  charlie: { technician: "c0100000", user: "c0200000", household: "c1000000", contact: "c2000000", lead: "c3000000", opportunity: "c4000000", quote: "c5000000", quoteLine: "c5100000", invoice: "c6000000", workOrder: "c7000000", visit: "c7100000", appointment: "c7200000", proposal: "c8000000", agreement: "c8100000", conversation: "c9000000", call: "c9100000", message: "c9200000", document: "c9300000", warehouse: "c9400000", stock: "c9500000", policy: "ca000000", revision: "ca100000", action: "ca200000", permission: "ca300000", orgUnit: "cb000000", work: "cb100000", task: "cb200000", delegation: "cb300000", internalEvent: "cb400000" },
 };
 
 export function certificationId(tenant: CertificationTenantKey, resource: string, ordinal: number): string {
@@ -304,6 +304,53 @@ async function insertTenant(client: pg.Client, tenant: CertificationTenantKey, t
       [certificationId(tenant, "permission", ACTION_HARDENING_SPEC.indexOf(spec) * 2 + 1), config.id, spec.actionType, requiresConfirmation, certificationId(tenant, "permission", ACTION_HARDENING_SPEC.indexOf(spec) * 2 + 2)],
     );
   }
+
+  // P2 contract fixtures use real canonical rows in every certification tenant so
+  // the cross-tenant gate distinguishes an existing foreign ref from a missing ref.
+  const delegationPolicyIndex = ACTION_HARDENING_SPEC.findIndex((row) => row.actionType === "delegate_objective") + 1;
+  const schedulingPolicyIndex = ACTION_HARDENING_SPEC.findIndex((row) => row.actionType === "schedule_internal_event") + 1;
+  const workId = certificationId(tenant, "work", 1);
+  const taskId = certificationId(tenant, "task", 1);
+  const delegationActionId = certificationId(tenant, "action", 100);
+  const schedulingActionId = certificationId(tenant, "action", 101);
+  await client.query(
+    `INSERT INTO org_units(id,tenant_id,unit_key,name,kind)
+     VALUES ($1,$2,$3,$4,'team')
+     ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name,active=true`,
+    [certificationId(tenant, "orgUnit", 1), config.id, `${tenant}-certification-team`, `${config.alias} Certification Team`],
+  );
+  await client.query(
+    `INSERT INTO works(id,tenant_id,status,initial_channel,initial_instruction,created_by,current_owner_id,assigned_to)
+     VALUES ($1,$2,'ready','console',$3,$4,$4,$4)
+     ON CONFLICT (id) DO UPDATE SET initial_instruction=EXCLUDED.initial_instruction,current_owner_id=EXCLUDED.current_owner_id,assigned_to=EXCLUDED.assigned_to`,
+    [workId, config.id, `${config.alias} universal-action certification Work`, certificationId(tenant, "user", 1)],
+  );
+  await client.query(
+    `INSERT INTO tasks(id,tenant_id,subject_type,subject_id,title,work_id,status,priority)
+     VALUES ($1,$2,'work',$3,$4,$3,'open','normal')
+     ON CONFLICT (id) DO UPDATE SET title=EXCLUDED.title,work_id=EXCLUDED.work_id,status='open'`,
+    [taskId, config.id, workId, `${config.alias} universal-action certification task`],
+  );
+  await client.query(
+    `INSERT INTO domain_actions(id,tenant_id,action_type,payload,policy_id,policy_version,status,summary,initiated_by,work_id)
+     VALUES
+      ($1,$3,'delegate_objective','{}'::jsonb,$4,1,'completed','Certification delegation substrate',$6,$7),
+      ($2,$3,'schedule_internal_event','{}'::jsonb,$5,1,'completed','Certification scheduling substrate',$6,$7)
+     ON CONFLICT (id) DO UPDATE SET initiated_by=EXCLUDED.initiated_by,work_id=EXCLUDED.work_id`,
+    [delegationActionId, schedulingActionId, config.id, certificationId(tenant, "policy", delegationPolicyIndex), certificationId(tenant, "policy", schedulingPolicyIndex), certificationId(tenant, "user", 1), workId],
+  );
+  await client.query(
+    `INSERT INTO delegations(id,tenant_id,domain_action_id,work_id,task_id,created_by,target_type,target_id,objective,status)
+     VALUES ($1,$2,$3,$4,$5,$6,'employee',$6,'Certification delegated objective','delivered')
+     ON CONFLICT (id) DO UPDATE SET objective=EXCLUDED.objective,status='delivered'`,
+    [certificationId(tenant, "delegation", 1), config.id, delegationActionId, workId, taskId, certificationId(tenant, "user", 1)],
+  );
+  await client.query(
+    `INSERT INTO internal_events(id,tenant_id,origin_domain_action_id,last_domain_action_id,work_id,title,starts_at,ends_at,status,created_by)
+     VALUES ($1,$2,$3,$3,$4,'Certification internal event','2026-09-01T14:00:00.000Z','2026-09-01T15:00:00.000Z','scheduled',$5)
+     ON CONFLICT (id) DO UPDATE SET title=EXCLUDED.title,status='scheduled'`,
+    [certificationId(tenant, "internalEvent", 1), config.id, schedulingActionId, workId, certificationId(tenant, "user", 1)],
+  );
 
   for (let i = 1; i <= 3; i += 1) {
     const actionType = ["get_business_overview", "create_lead", "log_interaction"][i - 1]!;

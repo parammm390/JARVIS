@@ -14,8 +14,8 @@
 import type { DomainEnginePlugin } from "../shared/plugin-interface";
 import type { DraftAction, ExecutionResult, ValidationResult, DomainPolicy } from "@finnor/shared-types";
 import type { ToolRegistry } from "@finnor/tools";
-import { withTenant, proposals, quotes } from "@finnor/db";
-import { submitCommand, enqueueStep, receiveInboxEvent } from "@finnor/workflow-runtime";
+import { withTenant, proposals, quotes, ingestIntegrationEventTx } from "@finnor/db";
+import { submitCommand, enqueueStep, receiveInboxEventTx } from "@finnor/workflow-runtime";
 import { recordBusinessEvent } from "@finnor/data-platform";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
@@ -136,17 +136,16 @@ export async function applySignatureOutcome(params: {
   outcome: SignatureOutcome;
   matchStepId?: string;
 }): Promise<{ applied: boolean; reason?: string }> {
-  const received = await receiveInboxEvent({
-    tenantId: params.tenantId,
-    provider: "e_signature",
-    eventId: `${params.signatureRequestId}:${params.outcome}`,
-    payload: { quoteId: params.quoteId, proposalId: params.proposalId, outcome: params.outcome },
-    matchStepId: params.matchStepId,
-  });
-  if (received.status === "duplicate") return { applied: false, reason: "duplicate delivery" };
-
   const quoteStatus = params.outcome === "signed" ? "accepted" : params.outcome === "declined" ? "declined" : "expired";
-  await withTenant(params.tenantId, async (db) => {
+  const intake = await withTenant(params.tenantId, async (db) => {
+    const received = await receiveInboxEventTx(db, {
+      tenantId: params.tenantId,
+      provider: "e_signature",
+      eventId: `${params.signatureRequestId}:${params.outcome}`,
+      payload: { quoteId: params.quoteId, proposalId: params.proposalId, outcome: params.outcome },
+      matchStepId: params.matchStepId,
+    });
+    if (received.status === "duplicate") return { duplicate: true } as const;
     await db.update(quotes).set({ status: quoteStatus }).where(eq(quotes.id, params.quoteId));
     if (quoteStatus === "accepted") {
       await db.update(proposals).set({ status: "accepted" }).where(eq(proposals.id, params.proposalId));
@@ -158,7 +157,21 @@ export async function applySignatureOutcome(params: {
       eventType: `quote_${quoteStatus}`,
       payload: { proposalId: params.proposalId, signatureRequestId: params.signatureRequestId },
     });
+    await ingestIntegrationEventTx(db, {
+      tenantId: params.tenantId,
+      source: "e_signature",
+      provider: "e_signature",
+      sourceEventId: `${params.signatureRequestId}:${params.outcome}`,
+      eventType: `signature.${params.outcome}`,
+      resource: { type: "proposal", id: params.proposalId },
+      correlationId: params.signatureRequestId,
+      payload: { quoteId: params.quoteId, outcome: params.outcome },
+      evidenceRefs: [{ type: "inbox_event", id: received.inboxEventId }],
+      trustClass: "untrusted_external",
+    });
+    return { duplicate: false } as const;
   });
+  if (intake.duplicate) return { applied: false, reason: "duplicate delivery" };
 
   return { applied: true };
 }

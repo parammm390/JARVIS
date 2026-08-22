@@ -30,6 +30,7 @@ export default defineConfig({
       "@finnor/db/migrations-bundle": r("./packages/db/migrations-bundle.ts"),
       "@finnor/db": r("./packages/db/index.ts"),
       "@finnor/authority": r("./packages/authority/src/index.ts"),
+      "@finnor/computer": r("./packages/computer/src/index.ts"),
       "@finnor/data-platform": r("./packages/data-platform/src/index.ts"),
       "@finnor/import-engine": r("./packages/import-engine/src/index.ts"),
       "@finnor/workflow-runtime": r("./packages/workflow-runtime/src/index.ts"),

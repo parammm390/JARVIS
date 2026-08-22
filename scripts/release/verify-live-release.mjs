@@ -1,7 +1,7 @@
-const [baseUrl, expectedSha, expectedBuildId, expectedVersion, expectedEnvironment = "production"] = process.argv.slice(2)
+const [baseUrl, expectedSha, expectedBuildId, expectedVersion, expectedCoreCertificationId, expectedEnvironment = "production"] = process.argv.slice(2)
 
-if (!baseUrl || !expectedSha || !expectedBuildId || !expectedVersion) {
-  console.error("Usage: node scripts/release/verify-live-release.mjs <url> <commit-sha> <build-id> <version> [environment]")
+if (!baseUrl || !expectedSha || !expectedBuildId || !expectedVersion || !expectedCoreCertificationId) {
+  console.error("Usage: node scripts/release/verify-live-release.mjs <url> <commit-sha> <build-id> <version> <core-certification-id> [environment]")
   process.exit(2)
 }
 
@@ -24,6 +24,7 @@ const checks = {
   environment: body.environment === expectedEnvironment,
   deploymentId: typeof body.deploymentId === "string" && /^dpl_/.test(body.deploymentId),
   traceable: body.traceable === true,
+  coreCertificationId: body.coreCertificationId === expectedCoreCertificationId,
 }
 
 if (Object.values(checks).some((value) => !value)) {
@@ -32,4 +33,3 @@ if (Object.values(checks).some((value) => !value)) {
 }
 
 console.log(JSON.stringify({ ok: true, url, checks, release: body }, null, 2))
-

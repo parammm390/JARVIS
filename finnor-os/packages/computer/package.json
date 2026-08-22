@@ -1,0 +1,19 @@
+{
+  "name": "@finnor/computer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "@finnor/authority": "*",
+    "@finnor/db": "*",
+    "@finnor/security": "*",
+    "@finnor/shared-types": "*",
+    "@finnor/tools": "*",
+    "drizzle-orm": "^0.45.2",
+    "playwright-core": "^1.62.1",
+    "steel-sdk": "^0.18.0",
+    "zod": "^3.23.8"
+  }
+}

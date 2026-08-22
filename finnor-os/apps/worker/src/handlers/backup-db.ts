@@ -16,8 +16,8 @@ import type { JobHandler } from "../queue";
 export const backupDb: JobHandler = async () => {
   const cfg = backupStorageConfig();
   if (!cfg) {
-    getLogger().warn({}, "[backup_db] BACKUP_GITHUB_TOKEN/BACKUP_GITHUB_REPO not set — skipping this tick (not an error, just unconfigured)");
-    return;
+    getLogger().error({ verdict: "BLOCKED-CONFIG" }, "[backup_db] managed backup storage is not configured");
+    throw new Error("BLOCKED-CONFIG: BACKUP_GITHUB_TOKEN/BACKUP_GITHUB_REPO are required for the supplementary backup job");
   }
 
   const databaseUrl = process.env.DATABASE_URL;

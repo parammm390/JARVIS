@@ -40,6 +40,13 @@ export const CANONICAL_ENTITY_TYPES = [
   "tenant_location",
   "external_organization",
   "external_contact",
+  // Phase 2 Universal Action + Delegation Fabric. These remain canonical IDs
+  // inside the authenticated tenant; no reference ever carries a tenant selector.
+  "delegation",
+  "acknowledgement_request",
+  "communication_delivery",
+  "internal_event",
+  "document_share",
 ] as const;
 
 export type CanonicalEntityType = (typeof CANONICAL_ENTITY_TYPES)[number];

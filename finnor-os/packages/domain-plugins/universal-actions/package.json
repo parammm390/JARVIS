@@ -1,0 +1,18 @@
+{
+  "name": "@finnor/plugin-universal-actions",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "index.ts",
+  "types": "index.ts",
+  "dependencies": {
+    "@finnor/authority": "*",
+    "@finnor/db": "*",
+    "@finnor/read-models": "*",
+    "@finnor/security": "*",
+    "@finnor/shared-types": "*",
+    "@finnor/tools": "*",
+    "drizzle-orm": "^0.45.2",
+    "zod": "^3.23.8"
+  }
+}

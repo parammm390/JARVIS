@@ -192,7 +192,7 @@ export interface TimeCompressedDemo {
 
 // Verified against finnor-os/apps/api/app/api/activity/route.ts (A2.T6).
 export interface ActivityItem {
-  source: "action_log" | "workflow_step" | "call"
+  source: "action_log" | "workflow_step" | "computer_step" | "call"
   id: string
   occurredAt: string
   detail: Record<string, unknown>

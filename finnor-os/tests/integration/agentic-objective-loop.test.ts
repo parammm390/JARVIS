@@ -17,6 +17,7 @@ import {
   users,
   withTenant,
   workAggregate,
+  workEventWaits,
   workObjectiveLoops,
   workObjectivePlannerAttempts,
   workObjectiveSteps,
@@ -25,6 +26,7 @@ import { ToolRegistry } from "@finnor/tools";
 import {
   controlWorkObjective,
   FinnorOrchestrator,
+  processWorkEventWaitDeadline,
   recoverRunnableObjectives,
   type ObjectiveDecision,
   type ObjectiveDecisionPlanner,
@@ -399,11 +401,13 @@ describe.skipIf(!available)("Upgrade 9 governed agentic objective loop", () => {
     expect(await orchestrator.runObjectiveIteration({ tenantId, workId: started.workId, objectiveLoopId: started.objectiveLoopId })).toBe("waiting");
     const waiting = await withTenant(tenantId, async (db) => ({
       loop: (await db.select().from(workObjectiveLoops).where(eq(workObjectiveLoops.id, started.objectiveLoopId)))[0]!,
-      continuation: (await db.select().from(jobs).where(eq(jobs.idempotencyKey, `objective:${started.objectiveLoopId}:revision:1:step:2`)))[0]!,
+      wait: (await db.select().from(workEventWaits).where(eq(workEventWaits.objectiveLoopId, started.objectiveLoopId)))[0]!,
     }));
     expect(waiting.loop.nextRunAt).not.toBeNull();
-    expect(waiting.continuation.runAt.getTime()).toBeGreaterThan(Date.now());
+    const [deadlineJob] = await withTenant(tenantId, (db) => db.select().from(jobs).where(eq(jobs.idempotencyKey, `work-event-wait:${waiting.wait.id}:deadline`)));
+    expect(deadlineJob!.runAt.getTime()).toBeGreaterThan(Date.now());
     await new Promise((resolve) => setTimeout(resolve, 100));
+    expect((await processWorkEventWaitDeadline(tenantId, waiting.wait.id, new Date(waiting.wait.deadlineAt!.getTime() + 2_001))).outcome).toBe("timed_out");
     expect(await orchestrator.runObjectiveIteration({ tenantId, workId: started.workId, objectiveLoopId: started.objectiveLoopId })).toBe("completed");
   });
 

@@ -1,17 +1,17 @@
 // GET /api/activity?since=<cursor>&limit=<n> (A2.T6) — merged, tenant-scoped feed of
-// action_log + workflow_steps + calls, for D1.T3's live Activity Theater
+// action_log + workflow_steps + computer_steps + Work events + calls, for D1.T3's live Activity Theater
 // (SSE-first, cursor-delta polling fallback per C1.T2). Distinct from the existing
 // GET /api/events (business_events — a separate, already-populated cross-entity
 // timeline; see packages/data-platform/src/events.ts's own comment on why that table
-// deliberately excludes exactly these three sources): this merges 3 raw tables that
+// deliberately excludes these activity sources): this merges 5 raw tables that
 // have no shared event log of their own.
 //
 // Forward-only keyset cursor (occurredAt, id), opposite direction from /api/events'
 // backward `before` paging — "what's new since I last polled", not "load older
 // history". Each source is one indexed, tenant-scoped query; merged and re-limited in
-// app code, never a cross-table SQL UNION (three very different row shapes).
+// app code, never a cross-table SQL UNION (five different row shapes).
 
-import { withTenant, actionLog, workflowSteps, calls, domainActions } from "@finnor/db";
+import { withTenant, actionLog, workflowSteps, computerSteps, calls, domainActions, workEvents } from "@finnor/db";
 import { and, asc, eq, gt, inArray, or, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { requireContext, errorResponse, AuthError } from "../../../lib/auth";
@@ -41,7 +41,7 @@ function encodeCursor(occurredAt: Date, id: string): string {
 }
 
 interface ActivityItem {
-  source: "action_log" | "workflow_step" | "call";
+  source: "action_log" | "workflow_step" | "computer_step" | "work_event" | "call";
   id: string;
   occurredAt: Date;
   detail: Record<string, unknown>;
@@ -74,7 +74,7 @@ export async function GET(req: Request): Promise<Response> {
     const cursor = parsed.data.since ? decodeCursor(parsed.data.since) : null;
     const { limit } = parsed.data;
 
-    const { actionLogRows, stepRows, callRows } = await withTenant(ctx.tenantId, async (db) => {
+    const { actionLogRows, stepRows, computerStepRows, workEventRows, callRows } = await withTenant(ctx.tenantId, async (db) => {
       const actionLogRows = await db
           .select()
           .from(actionLog)
@@ -93,7 +93,19 @@ export async function GET(req: Request): Promise<Response> {
           .where(and(eq(calls.tenantId, ctx.tenantId), afterCursor(calls.createdAt, calls.id, cursor)))
           .orderBy(asc(calls.createdAt), asc(calls.id))
           .limit(limit);
-      return { actionLogRows, stepRows, callRows };
+      const computerStepRows = await db
+          .select()
+          .from(computerSteps)
+          .where(and(eq(computerSteps.tenantId, ctx.tenantId), afterCursor(computerSteps.createdAt, computerSteps.id, cursor)))
+          .orderBy(asc(computerSteps.createdAt), asc(computerSteps.id))
+          .limit(limit);
+      const workEventRows = await db
+          .select()
+          .from(workEvents)
+          .where(and(eq(workEvents.tenantId, ctx.tenantId), afterCursor(workEvents.createdAt, workEvents.id, cursor)))
+          .orderBy(asc(workEvents.createdAt), asc(workEvents.id))
+          .limit(limit);
+      return { actionLogRows, stepRows, computerStepRows, workEventRows, callRows };
     });
 
     // D3.T1: the renderer registry (root src/) dispatches on actionType + payload —
@@ -131,6 +143,20 @@ export async function GET(req: Request): Promise<Response> {
         occurredAt: r.updatedAt,
         detail: { workflowRunId: r.workflowRunId, stepType: r.stepType, status: r.status, terminalReason: r.terminalReason },
       })),
+      ...computerStepRows.map((r) => ({
+        source: "computer_step" as const,
+        id: r.id,
+        // Cursor predicates and ordering use createdAt. Keep the emitted tuple on
+        // that exact durable column so reconnects cannot skip or replay a step.
+        occurredAt: r.createdAt,
+        detail: { runId: r.runId, seq: r.seq, phase: r.phase, operation: r.operation, status: r.status, summary: r.summary, pageUrl: r.pageUrl, detail: r.detail },
+      })),
+      ...workEventRows.map((r) => ({
+        source: "work_event" as const,
+        id: r.id,
+        occurredAt: r.createdAt,
+        detail: { workId: r.workId, seq: r.seq, eventType: r.eventType, fromStatus: r.fromStatus, toStatus: r.toStatus, payload: r.payload },
+      })),
       ...callRows.map((r) => ({
         source: "call" as const,
         id: r.id,
@@ -145,7 +171,7 @@ export async function GET(req: Request): Promise<Response> {
     const nextCursor = last ? encodeCursor(last.occurredAt, last.id) : (parsed.data.since ?? null);
 
     return Response.json(
-      { items, nextCursor, hasMore: [actionLogRows, stepRows, callRows].some((rows) => rows.length === limit) },
+      { items, nextCursor, hasMore: [actionLogRows, stepRows, computerStepRows, workEventRows, callRows].some((rows) => rows.length === limit) },
       { headers: { "cache-control": "no-store" } },
     );
   } catch (err) {
