@@ -117,6 +117,8 @@ jobs:
 
       - name: Verify clean canonical release source
         run: npm run release:verify
+        env:
+          FINNOR_ENVIRONMENT: production
 
       - name: Apply migrations from an empty database
         run: |
