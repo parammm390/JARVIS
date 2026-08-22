@@ -114,7 +114,6 @@ jobs:
           echo "FINNOR_COMMIT_SHA=$sha" >> "$GITHUB_ENV"
           echo "FINNOR_BUILD_ID=finnor-$short" >> "$GITHUB_ENV"
           echo "FINNOR_VERSION=0.1.0+$short" >> "$GITHUB_ENV"
-          echo "FINNOR_ENVIRONMENT=production" >> "$GITHUB_ENV"
 
       - name: Verify clean canonical release source
         run: npm run release:verify
@@ -129,6 +128,7 @@ jobs:
 
       - name: Phase 5 type, security, runtime, and regression suite
         run: |
+          npm run openapi
           npm run typecheck
           npm test
           npm run release:manifest
