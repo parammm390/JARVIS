@@ -127,6 +127,21 @@ export const ACTION_FIXTURES: Record<string, unknown> = {
     missingFields: ["householdId"],
     context: "Two households share the last name \"Henderson\" in this tenant.",
   },
+  // universal-actions — canonical references only, never raw tenant/endpoint data.
+  send_message: { recipient: { partyType: "employee", partyId: "11111111-1111-4111-8111-111111111111" }, channel: "internal", body: "Please review the service exception before noon." },
+  place_call: { recipient: { partyType: "household", partyId: "22222222-2222-4222-8222-222222222222" }, objective: "Confirm tomorrow's installation window", script: "Calling to confirm your installation window tomorrow." },
+  request_acknowledgement: { recipient: { partyType: "employee", partyId: "11111111-1111-4111-8111-111111111111" }, request: "Acknowledge the dispatch handoff", deadline: "2026-07-25T18:00:00.000Z" },
+  notify_group: { teamRef: { partyType: "team", partyId: "33333333-3333-4333-8333-333333333333" }, channel: "internal", body: "Storm routing plan is ready for review." },
+  create_task: { subjectRef: { entityType: "work", entityId: "44444444-4444-4444-8444-444444444444" }, title: "Verify replacement valve stock", priority: "high" },
+  assign_task: { taskRef: { taskId: "55555555-5555-4555-8555-555555555555" }, assigneeRef: { partyType: "employee", partyId: "11111111-1111-4111-8111-111111111111" } },
+  update_task: { taskRef: { taskId: "55555555-5555-4555-8555-555555555555" }, status: "done" },
+  handoff_work: { workRef: { workId: "44444444-4444-4444-8444-444444444444" }, targetEmployeeRef: { partyType: "employee", partyId: "11111111-1111-4111-8111-111111111111" }, note: "Dispatcher owns the next step." },
+  delegate_objective: { workRef: { workId: "44444444-4444-4444-8444-444444444444" }, targetRef: { partyType: "employee", partyId: "11111111-1111-4111-8111-111111111111" }, objective: "Resolve the service exception", acknowledgementDeadline: "2026-07-25T18:00:00.000Z", completionDeadline: "2026-07-26T18:00:00.000Z" },
+  escalate_work: { delegationRef: { delegationId: "66666666-6666-4666-8666-666666666666" }, targetRef: { partyType: "employee", partyId: "11111111-1111-4111-8111-111111111111" }, reason: "Acknowledgement deadline passed", evidenceRefs: [] },
+  cancel_delegation: { delegationRef: { delegationId: "66666666-6666-4666-8666-666666666666" }, reason: "Customer rescheduled the underlying work" },
+  schedule_internal_event: { title: "Dispatch review", startsAt: "2026-07-25T14:00:00.000Z", endsAt: "2026-07-25T14:30:00.000Z", participants: [{ partyType: "employee", partyId: "11111111-1111-4111-8111-111111111111" }] },
+  reschedule_internal_event: { internalEventRef: { internalEventId: "77777777-7777-4777-8777-777777777777" }, startsAt: "2026-07-25T15:00:00.000Z", endsAt: "2026-07-25T15:30:00.000Z", reason: "Field call ran long" },
+  share_document: { documentRef: { documentId: "88888888-8888-4888-8888-888888888888" }, recipient: { partyType: "employee", partyId: "11111111-1111-4111-8111-111111111111" }, accessLevel: "view" },
   // manual-step — an explicit, non-side-effecting operator handoff.
   manual_step_suggestion: {
     originalActionType: "send_customer_message",

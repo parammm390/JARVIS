@@ -14,9 +14,10 @@ permissions:
   id-token: write
 
 jobs:
-  canonical-graph-gate:
+  release:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 60
+    environment: production
     services:
       postgres:
         image: pgvector/pgvector:pg16
@@ -29,6 +30,7 @@ jobs:
           --health-cmd "pg_isready -U finnor" --health-interval 5s
           --health-timeout 5s --health-retries 10
     env:
+      CI: "true"
       DATABASE_URL: postgres://finnor:finnor@localhost:5432/finnor
       FINNOR_CHAOS_TEST_CONTEXT: "1"
     steps:
@@ -164,7 +166,10 @@ jobs:
       AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
       AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       FINNOR_RELEASE_SOURCE: github-actions
-      CI: "true"
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -227,7 +232,13 @@ jobs:
           echo "FINNOR_VERSION=0.1.0+$short" >> "$GITHUB_ENV"
           echo "FINNOR_ENVIRONMENT=production" >> "$GITHUB_ENV"
 
-      - name: Verify clean GitHub source and release metadata
+      - name: Require production credentials before any mutation
+        run: |
+          for name in VERCEL_TOKEN AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID; do
+            test -n "${!name:-}" || { echo "::error::$name is missing from the production environment"; exit 1; }
+          done
+
+      - name: Verify clean canonical Git source
         run: node scripts/release/verify-release.mjs
 
       - name: Authenticate exact Azure subscription with GitHub OIDC
@@ -242,6 +253,7 @@ jobs:
           npm run lint
           npx tsc --noEmit -p tsconfig.json
           npm run test:unit
+          npm run typecheck --prefix finnor-os
 
       - name: API typecheck gate
         run: npm run typecheck

@@ -1,7 +1,7 @@
 // B1.T2 — the SSE gateway. A small, hand-rolled Node http server (no new dependency —
 // SSE is just a long-lived text/event-stream response, nothing a framework buys much
-// for here) that runs on its own port on Railway, since Vercel's serverless functions
-// can't hold a connection open (§10 risk note). GET /events verifies the caller's own
+// for here) that runs on the persistent worker, since serverless functions cannot
+// hold a connection open (§10 risk note). GET /events verifies the caller's own
 // Supabase JWT (reusing @finnor/security's resolveTenantFromBearerToken — the same
 // logic apps/api/lib/auth.ts's requireContext() now shares, see packages/security/src/
 // auth.ts), tenant-scopes the relay, and forwards jarvis_events NOTIFYs — IDs only, per
@@ -31,7 +31,7 @@
 import http, { type IncomingMessage, type ServerResponse } from "node:http";
 import type { Role, TenantContext } from "@finnor/shared-types";
 import { resolveTenantFromBearerToken, AuthVerificationError } from "@finnor/security";
-import { getLogger } from "@finnor/tools";
+import { getLogger, getRuntimeReleaseMetadata } from "@finnor/tools";
 import { onJarvisEvent, type JarvisEvent } from "./listener";
 
 type IdentityContext = Omit<TenantContext, "correlationId">;
@@ -127,12 +127,16 @@ export function createSseGateway(): http.Server {
       return;
     }
     if (req.method === "GET" && url.pathname === "/healthz") {
+      const release = getRuntimeReleaseMetadata("finnor-worker");
       res.writeHead(200, {
-        "content-type": "text/plain",
-        "x-finnor-environment": process.env.FINNOR_ENVIRONMENT ?? process.env.NODE_ENV ?? "unknown",
-        "x-finnor-release": process.env.RELEASE_SHA ?? process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.VERCEL_GIT_COMMIT_SHA ?? "",
+        "content-type": "application/json",
+        "cache-control": "no-store, max-age=0",
+        "x-finnor-commit-sha": release.commitSha,
+        "x-finnor-build-id": release.buildId,
+        "x-finnor-environment": release.environment,
+        "x-finnor-version": release.version,
       });
-      res.end("ok");
+      res.end(JSON.stringify({ ok: true, release }));
       return;
     }
     if (req.method === "GET" && url.pathname === "/events") {

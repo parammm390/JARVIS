@@ -35,6 +35,11 @@ describe.skipIf(!available)("worker heartbeat", () => {
   });
 
   it("upserts one row per beat, never inserting a duplicate, and advances last_beat_at", async () => {
+    process.env.FINNOR_COMMIT_SHA = "a".repeat(40);
+    process.env.FINNOR_BUILD_ID = `finnor-${"a".repeat(12)}`;
+    process.env.FINNOR_VERSION = `0.1.0+${"a".repeat(12)}`;
+    process.env.FINNOR_ENVIRONMENT = "production";
+    process.env.FINNOR_RELEASE_SOURCE = "test";
     const { adminDb } = await import("@finnor/db");
     const controller = new AbortController();
     startHeartbeat(50, controller.signal);
@@ -54,6 +59,15 @@ describe.skipIf(!available)("worker heartbeat", () => {
     const rows2 = await adminDb().select().from(workerHeartbeat).where(eq(workerHeartbeat.id, WORKER_HEARTBEAT_ID));
     expect(rows2).toHaveLength(1); // still exactly one row — upsert, not insert
     expect(rows2[0]!.lastBeatAt.getTime()).toBeGreaterThan(firstBeat);
+    expect(rows2[0]!.meta).toMatchObject({
+      service: "finnor-worker",
+      commitSha: "a".repeat(40),
+      buildId: `finnor-${"a".repeat(12)}`,
+      version: `0.1.0+${"a".repeat(12)}`,
+      environment: "production",
+      source: "test",
+      traceable: true,
+    });
   });
 
   it("no-ops HEALTHCHECK_PING_URL silently when unset — never throws, never fakes a ping", async () => {

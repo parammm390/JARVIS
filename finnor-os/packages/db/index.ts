@@ -23,21 +23,14 @@ export type Db = NodePgDatabase<typeof schema>;
  * `sslmode=disable` is read as an explicit override before stripping (the standard
  * Postgres convention for "this endpoint genuinely doesn't speak TLS, don't ask it to").
  *
- * `.railway.internal` hosts (Phase 6 staging: a session-mode PgBouncer sitting between
- * the app and Postgres) are Railway's own private network — already an isolated,
- * non-public transport, same trust level as localhost — and the plain Postgres image
- * behind it doesn't terminate TLS, so requesting SSL there fails outright ("the server
- * does not support SSL connections") rather than just being redundant. The same
- * PgBouncer, reached via Railway's *public* TCP proxy for Task 6.4's Vercel-side load
- * test, has the identical no-TLS limitation but crosses the public internet — the
- * hostname heuristic alone can't tell that case apart safely (a real public Postgres
- * host should still get SSL), so that caller passes `sslmode=disable` explicitly rather
- * than this function guessing from the domain.
+ * Non-local endpoints must use TLS unless the caller explicitly supplies the standard
+ * PostgreSQL `sslmode=disable` override. Provider hostnames are never treated as proof
+ * that plaintext transport is safe.
  */
 export function pgConnectionConfig(url: string): pg.ClientConfig {
   const sslDisabled = /[?&]sslmode=disable\b/.test(url);
   const cleaned = url.replace(/([?&])sslmode=[^&]*&?/, "$1").replace(/[?&]$/, "");
-  const skipSsl = sslDisabled || cleaned.includes("localhost") || cleaned.includes("127.0.0.1") || cleaned.includes(".railway.internal");
+  const skipSsl = sslDisabled || cleaned.includes("localhost") || cleaned.includes("127.0.0.1");
   return {
     connectionString: cleaned,
     ...(skipSsl ? {} : { ssl: { rejectUnauthorized: false } }),
@@ -49,8 +42,7 @@ export function pgConnectionConfig(url: string): pg.ClientConfig {
  * question, and treating them as one was a real bug found running the Task 6.4 load
  * test at scale, 2026-07-20. `localhost`/`127.0.0.1` is the only genuinely unshared,
  * unpooled target (local dev, CI's own ephemeral single-tenant container) — every
- * other target in this system, including `.railway.internal` (the worker's private
- * PgBouncer) and the public PgBouncer proxy (`sslmode=disable`, Task 6.4), is a shared
+ * other target in this system, including private and public managed poolers, is a shared
  * pooled resource, exactly like Supabase's Supavisor pooler already was. A generous
  * per-invocation `max` against a shared pool multiplies with every concurrent
  * serverless invocation — under real load this starved PgBouncer's own pool far faster
@@ -85,8 +77,7 @@ export function getPool(): pg.Pool {
     // connection — required because we set search_path per session, which a transaction-
     // mode pooler would reset between clients. We run our own small pg.Pool regardless.
     const cfg = pgConnectionConfig(url);
-    // Every session-mode pooler this app talks to (Supabase Supavisor, and now
-    // PgBouncer whether private or public) caps total concurrent backend connections
+    // Every session-mode pooler this app talks to caps total concurrent backend connections
     // low relative to how many serverless invocations can run at once. A generous
     // per-invocation max against a shared pool multiplies with concurrency and starves
     // it fast — only a genuinely unshared localhost/127.0.0.1 target gets to be

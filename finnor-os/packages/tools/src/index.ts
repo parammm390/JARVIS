@@ -30,6 +30,7 @@ export * from "./docusign";
 export * from "./health";
 export * from "./ads-write";
 export * from "./observability";
+export * from "./release";
 export * from "./logger";
 export * from "./provider-health";
 export * from "./provider-circuit-breaker";
