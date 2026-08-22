@@ -14,7 +14,7 @@ permissions:
   id-token: write
 
 jobs:
-  release:
+  canonical-graph-gate:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     environment: production
@@ -166,10 +166,6 @@ jobs:
       AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
       AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       FINNOR_RELEASE_SOURCE: github-actions
-      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-      AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
-      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
-      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
     steps:
       - uses: actions/checkout@v4
         with:
