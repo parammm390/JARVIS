@@ -44,7 +44,11 @@ export async function wrappedCall(
       return { ok: true, output };
     } catch (err) {
       lastError = err as Error;
-      const retryable = err instanceof IntegrationError ? err.retryable : true;
+      // Only provider adapters that normalized an error as retryable may trigger an
+      // inline retry. An arbitrary exception can represent a validation bug or an
+      // unknown consequential outcome; guessing "transient" here could duplicate a
+      // real-world effect.
+      const retryable = err instanceof IntegrationError ? err.retryable : false;
       if (!retryable || attempt === policy.attempts) break;
       await new Promise((r) => setTimeout(r, policy.baseDelayMs * 2 ** (attempt - 1)));
     }

@@ -3,9 +3,8 @@
 
 import { createHash, createVerify } from "node:crypto";
 import { GhlWebhookSchema } from "@finnor/policy-schema";
-import { adminDb, jobs } from "@finnor/db";
+import { adminDb, getPool, jobs } from "@finnor/db";
 import { ensureSecretsLoaded } from "@finnor/security";
-import { checkAndRecordReceipt } from "../../../../lib/webhook-replay";
 import { logWithTrace } from "@finnor/tools";
 
 /**
@@ -43,20 +42,25 @@ export async function POST(req: Request): Promise<Response> {
   }
   const parsed = GhlWebhookSchema.safeParse(json);
   if (!parsed.success) return Response.json({ error: "Malformed webhook" }, { status: 400 });
+  if (!parsed.data.locationId) return Response.json({ error: "GHL event is missing its signed locationId" }, { status: 400 });
+  const resolved = await getPool().query<{ tenant_id: string | null }>("SELECT finnor_os.resolve_inbound_provider_tenant('ghl',$1) tenant_id", [parsed.data.locationId]);
+  const tenantId = resolved.rows[0]?.tenant_id;
+  if (!tenantId) {
+    logWithTrace({ route: "webhooks/ghl" }).warn({ event: "webhook_tenant_unresolved", provider: "ghl", locationId: parsed.data.locationId }, "rejected GHL webhook: tenant mapping was not unique");
+    return Response.json({ error: "GHL location is not mapped to exactly one tenant" }, { status: 400 });
+  }
 
   const eventId = (parsed.data as Record<string, unknown>)["webhookId"] ?? `body:${createHash("sha256").update(rawBody).digest("hex")}`;
-  // Replay protection at acceptance time — complements, doesn't replace, the
-  // jobs.idempotencyKey dedup below (that only covers events with a webhookId that
-  // reach this insert; this covers the raw event regardless).
-  const receipt = await checkAndRecordReceipt("ghl", String(eventId), rawBody);
-  if (receipt === "duplicate") return Response.json({ received: true, duplicate: true });
-  await adminDb()
+  // The durable job is the acceptance/replay claim. Recording a separate receipt
+  // first creates a crash window where a retry is suppressed before normalization.
+  const inserted = await adminDb()
     .insert(jobs)
     .values({
       type: "reconciliation",
-      payload: parsed.data,
-      idempotencyKey: eventId ? `ghl:${String(eventId)}` : null,
+      payload: { ...parsed.data, tenantId, _providerEventId: String(eventId) },
+      idempotencyKey: `ghl:${tenantId}:${String(eventId)}`,
     })
-    .onConflictDoNothing({ target: jobs.idempotencyKey });
-  return Response.json({ received: true });
+    .onConflictDoNothing({ target: jobs.idempotencyKey })
+    .returning({ id: jobs.id });
+  return Response.json({ received: true, duplicate: inserted.length === 0 });
 }

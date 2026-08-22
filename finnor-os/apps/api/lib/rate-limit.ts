@@ -20,6 +20,10 @@ let redisUnavailableUntil = 0;
 const memoryCounts = new Map<string, { count: number; expiresAt: number }>();
 const REDIS_RECOVERY_WINDOW_MS = 60_000;
 
+function mayUseProcessLocalFallback(): boolean {
+  return process.env.NODE_ENV !== "production" && process.env.FINNOR_ENVIRONMENT !== "production";
+}
+
 /** Test seam + explicit resilience behavior. The transactional Postgres counter is
  * the production default: opening one Redis socket from every independently scaled
  * API route exhausts small Redis plans under normal dashboard polling. Redis remains
@@ -76,6 +80,10 @@ export async function checkRateLimit(bucketKey: string, limit = Number(process.e
       return count <= limit;
     } catch (error) {
       redisUnavailableUntil = Date.now() + REDIS_RECOVERY_WINDOW_MS;
+      if (!mayUseProcessLocalFallback()) {
+        console.error("[rate-limit] Redis unavailable; production rate limit failed closed", error instanceof Error ? error.message : error);
+        return false;
+      }
       console.error("[rate-limit] Redis unavailable; using in-memory fallback", error instanceof Error ? error.message : error);
       return memoryCheck(key, limit);
     }
@@ -88,9 +96,28 @@ export async function checkRateLimit(bucketKey: string, limit = Number(process.e
     );
     return (rows[0]?.count ?? 0) <= limit;
   } catch (error) {
+    if (!mayUseProcessLocalFallback()) {
+      console.error("[rate-limit] durable counter unavailable; production rate limit failed closed", error instanceof Error ? error.message : error);
+      return false;
+    }
     console.error("[rate-limit] durable fallback unavailable; using in-memory fallback", error instanceof Error ? error.message : error);
     return memoryCheck(key, limit);
   }
+}
+
+/** Provider/action budget that is safe across processes. Callers supply the policy
+ * limit selected from canonical configuration; this helper contributes only the
+ * collision-proof tenant/provider/action bucket shape. */
+export async function checkProviderRateLimit(input: {
+  tenantId: string;
+  provider: string;
+  action: string;
+  limitPerMinute: number;
+}): Promise<boolean> {
+  return checkRateLimit(
+    `provider:${input.tenantId}:${input.provider}:${input.action}`,
+    input.limitPerMinute,
+  );
 }
 
 /** A4.T5: how long until the CURRENT fixed window rolls over — the honest Retry-After

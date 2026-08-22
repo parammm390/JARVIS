@@ -113,6 +113,8 @@ export async function rebuildAllProjections(): Promise<{ tenants: number; rebuil
 const DIRTY_VIEWS_BY_KIND: Record<string, ProjectedView[]> = {
   domain_action: ["reliability"],
   workflow_step: ["reliability", "activity-snapshot"],
+  computer_run: ["activity-snapshot"],
+  computer_step: ["activity-snapshot"],
   dead_letter: ["reliability"],
   action_log: ["activity-snapshot"],
   call: ["activity-snapshot"],

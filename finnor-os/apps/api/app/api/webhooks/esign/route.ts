@@ -20,7 +20,6 @@ import { z } from "zod";
 import { withTenant, proposals } from "@finnor/db";
 import { eq } from "drizzle-orm";
 import { applySignatureOutcome } from "../../../../../../packages/domain-plugins/proposal-signature/index";
-import { checkAndRecordReceipt } from "../../../../lib/webhook-replay";
 import { errorResponse } from "../../../../lib/auth";
 import { logWithTrace } from "@finnor/tools";
 import { resolveTenantCredentialContext } from "@finnor/security";
@@ -97,9 +96,6 @@ export async function POST(req: Request): Promise<Response> {
       return Response.json({ error: "Envelope missing tenantId/proposalId custom fields" }, { status: 400 });
     }
 
-    const receipt = await checkAndRecordReceipt("docusign", `${envelopeId}:${status}`, rawBody);
-    if (receipt === "duplicate") return Response.json({ received: true, duplicate: true });
-
     const quoteId = await withTenant(tenantId, async (db) => {
       const [row] = await db.select({ quoteId: proposals.quoteId }).from(proposals).where(eq(proposals.id, proposalId));
       return row?.quoteId ?? null;
@@ -113,7 +109,7 @@ export async function POST(req: Request): Promise<Response> {
       signatureRequestId: envelopeId,
       outcome,
     });
-    return Response.json({ received: true, applied: result.applied });
+    return Response.json({ received: true, applied: result.applied, duplicate: result.reason === "duplicate delivery" });
   } catch (err) {
     return errorResponse(err);
   }

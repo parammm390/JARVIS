@@ -4,6 +4,8 @@
 import { getPool } from "@finnor/db";
 import type { Job } from "@finnor/shared-types";
 import { Sentry, logWithTrace } from "@finnor/tools";
+import { randomUUID } from "node:crypto";
+import { hostname } from "node:os";
 
 export type JobHandler = (payload: Record<string, unknown>) => Promise<void>;
 export type JobLane = "interactive" | "batch";
@@ -16,6 +18,12 @@ export function workerConcurrency(value = process.env.WORKER_CONCURRENCY): numbe
 
 export class JobQueue {
   private handlers = new Map<string, JobHandler>();
+
+  constructor(
+    readonly instanceId = process.env.FINNOR_WORKER_INSTANCE_ID?.trim()
+      || `${hostname()}:${process.pid}:${randomUUID()}`,
+    readonly leaseSeconds = Math.max(process.env.NODE_ENV === "test" ? 3 : 30, Number(process.env.WORKER_JOB_LEASE_SECONDS ?? 300)),
+  ) {}
 
   register(type: string, handler: JobHandler): void {
     this.handlers.set(type, handler);
@@ -35,7 +43,7 @@ export class JobQueue {
    * silently discard it. A reclaimed job consumes an attempt exactly like a normal
    * failed run, so poison jobs still reach the dead-letter queue.
    */
-  async recoverExpiredRunningJobs(leaseSeconds = 300): Promise<number> {
+  async recoverExpiredRunningJobs(leaseSeconds = this.leaseSeconds): Promise<number> {
     const { rowCount } = await getPool().query(
       `UPDATE jobs
        SET status = CASE WHEN attempts >= max_attempts THEN 'dead_letter' ELSE 'queued' END,
@@ -44,10 +52,12 @@ export class JobQueue {
              WHEN attempts >= max_attempts THEN run_at
              ELSE now() + (LEAST(300, 30 * power(2, GREATEST(attempts, 1))) || ' seconds')::interval
            END,
-           started_at = NULL
+           started_at = NULL,
+           lease_owner = NULL,
+           lease_expires_at = NULL,
+           lease_heartbeat_at = NULL
        WHERE status = 'running'
-         AND started_at IS NOT NULL
-         AND started_at < now() - ($1 || ' seconds')::interval`,
+         AND coalesce(lease_expires_at, started_at + ($1 || ' seconds')::interval) <= now()`,
       [String(leaseSeconds)],
     );
     return rowCount ?? 0;
@@ -56,6 +66,11 @@ export class JobQueue {
   /** Claim and run one due job. Returns false when the queue is empty. */
   async tick(): Promise<boolean> {
     await this.recoverExpiredRunningJobs();
+    // A queue instance may intentionally host only a subset of handlers (tests,
+    // lane-specific workers, rolling deploys). It must never claim and poison a job
+    // it cannot execute; leave that row queued for a capable worker instead.
+    const registeredTypes = [...this.handlers.keys()];
+    if (registeredTypes.length === 0) return false;
     const client = await getPool().connect();
     let job: Job | null = null;
     try {
@@ -63,17 +78,32 @@ export class JobQueue {
         await client.query("BEGIN");
         const { rows } = await client.query(
           `SELECT id, type, payload, attempts, max_attempts FROM jobs
-           WHERE status = 'queued' AND run_at <= now()
+           WHERE status = 'queued' AND run_at <= now() AND type = ANY($1::text[])
            ORDER BY CASE lane WHEN 'interactive' THEN 0 ELSE 1 END, priority DESC, run_at
            FOR UPDATE SKIP LOCKED
            LIMIT 1`,
+          [registeredTypes],
         );
         if (rows.length === 0) {
           await client.query("COMMIT");
           return false;
         }
         job = rows[0] as Job;
-        await client.query(`UPDATE jobs SET status = 'running', attempts = attempts + 1, started_at = now() WHERE id = $1`, [job.id]);
+        const claimed = await client.query(
+          `UPDATE jobs
+              SET status = 'running', attempts = attempts + 1, started_at = now(),
+                  lease_owner = $2,
+                  lease_expires_at = now() + ($3 || ' seconds')::interval,
+                  lease_heartbeat_at = now()
+            WHERE id = $1 AND status = 'queued'
+          RETURNING id,type,payload,attempts,max_attempts AS "maxAttempts"`,
+          [job.id, this.instanceId, String(this.leaseSeconds)],
+        );
+        if (claimed.rows.length !== 1) {
+          await client.query("ROLLBACK");
+          return false;
+        }
+        job = claimed.rows[0] as Job;
         await client.query("COMMIT");
       } catch (err) {
         await client.query("ROLLBACK").catch(() => undefined);
@@ -105,6 +135,23 @@ export class JobQueue {
       jobId: job.id,
     });
     const start = Date.now();
+    const renewEveryMs = Math.max(1_000, Math.floor(this.leaseSeconds * 1_000 / 3));
+    let leaseLost = false;
+    const renewLease = async (): Promise<void> => {
+      const result = await getPool().query(
+        `UPDATE jobs
+            SET lease_expires_at=now()+($3 || ' seconds')::interval,lease_heartbeat_at=now()
+          WHERE id=$1 AND status='running' AND lease_owner=$2`,
+        [job!.id, this.instanceId, String(this.leaseSeconds)],
+      );
+      if (result.rowCount !== 1) leaseLost = true;
+    };
+    const renewal = setInterval(() => {
+      void renewLease().catch((error) => {
+        leaseLost = true;
+        log.error({ err: error instanceof Error ? error.message : String(error) }, "job lease renewal failed");
+      });
+    }, renewEveryMs);
     try {
       await Sentry.withScope(async (scope) => {
         scope.setTag("correlation_id", correlationId);
@@ -115,20 +162,31 @@ export class JobQueue {
       const ms = Date.now() - start;
       Sentry.addBreadcrumb({ category: "job", message: job.type, data: { ok: true, ms, correlationId } });
       log.info({ ok: true, ms }, `job ${job.type} completed`);
-      await getPool().query(`UPDATE jobs SET status = 'completed', completed_at = now(), started_at = NULL WHERE id = $1`, [job.id]);
+      if (leaseLost) throw new Error("Worker lost the durable job lease before completion could be committed");
+      const completed = await getPool().query(
+        `UPDATE jobs SET status='completed',completed_at=now(),started_at=NULL,
+                         lease_owner=NULL,lease_expires_at=NULL,lease_heartbeat_at=NULL
+          WHERE id=$1 AND status='running' AND lease_owner=$2`,
+        [job.id, this.instanceId],
+      );
+      if (completed.rowCount !== 1) throw new Error("Worker no longer owns the durable job lease");
     } catch (err) {
       const ms = Date.now() - start;
       Sentry.addBreadcrumb({ category: "job", message: job.type, data: { ok: false, ms, correlationId } });
       Sentry.captureException(err);
       log.error({ ok: false, ms, err: err instanceof Error ? err.message : String(err) }, `job ${job.type} failed`);
-      const attempts = Number(job.attempts) + 1;
-      const max = Number((job as unknown as { max_attempts: number }).max_attempts ?? 3);
+      const attempts = Number(job.attempts);
+      const max = Number(job.maxAttempts ?? 3);
       const dead = attempts >= max;
       const errDetail = err instanceof Error ? (err.stack ?? err.message) : String(err);
       await getPool().query(
-        `UPDATE jobs SET status = $2, last_error = $3, run_at = now() + ($4 || ' seconds')::interval, started_at = NULL WHERE id = $1`,
-        [job.id, dead ? "dead_letter" : "queued", errDetail, String(30 * 2 ** attempts)],
+        `UPDATE jobs SET status=$3,last_error=$4,run_at=now()+($5 || ' seconds')::interval,
+                         started_at=NULL,lease_owner=NULL,lease_expires_at=NULL,lease_heartbeat_at=NULL
+          WHERE id=$1 AND status='running' AND lease_owner=$2`,
+        [job.id, this.instanceId, dead ? "dead_letter" : "queued", errDetail, String(30 * 2 ** attempts)],
       );
+    } finally {
+      clearInterval(renewal);
     }
     return true;
   }

@@ -87,6 +87,10 @@ const UNIVERSAL_FIXED_ROWS: ReadonlyArray<readonly [string, string, ActionProfil
   ["universal-actions", "share_document", "EXTERNAL_SIDE_EFFECT", "REQUIRED", "documents/communications", true],
 ];
 
+const COMPUTER_FIXED_ROWS: ReadonlyArray<readonly [string, string, ActionProfile, ApprovalFloor, string, boolean]> = [
+  ["computer-task", "computer_task", "EXTERNAL_SIDE_EFFECT", "POLICY", "computer/application/identity", true],
+];
+
 const mapRows = (rows: ReadonlyArray<readonly [string, string, ActionProfile, ApprovalFloor, string, boolean]>): readonly ActionHardeningSpecRow[] => rows.map(([plugin, actionType, profile, approvalFloor, capabilityFamily, external]) => ({
   plugin,
   actionType,
@@ -99,10 +103,12 @@ const mapRows = (rows: ReadonlyArray<readonly [string, string, ActionProfile, Ap
 
 export const LEGACY_ACTION_HARDENING_SPEC = mapRows(LEGACY_FIXED_ROWS);
 export const UNIVERSAL_ACTION_HARDENING_SPEC = mapRows(UNIVERSAL_FIXED_ROWS);
-export const ACTION_HARDENING_SPEC: readonly ActionHardeningSpecRow[] = [...LEGACY_ACTION_HARDENING_SPEC, ...UNIVERSAL_ACTION_HARDENING_SPEC];
+export const COMPUTER_ACTION_HARDENING_SPEC = mapRows(COMPUTER_FIXED_ROWS);
+export const ACTION_HARDENING_SPEC: readonly ActionHardeningSpecRow[] = [...LEGACY_ACTION_HARDENING_SPEC, ...UNIVERSAL_ACTION_HARDENING_SPEC, ...COMPUTER_ACTION_HARDENING_SPEC];
 export const LEGACY_ACTION_COUNT = 44;
 export const UNIVERSAL_ACTION_COUNT = 14;
-export const TOTAL_ACTION_COUNT = LEGACY_ACTION_COUNT + UNIVERSAL_ACTION_COUNT;
+export const COMPUTER_ACTION_COUNT = 1;
+export const TOTAL_ACTION_COUNT = LEGACY_ACTION_COUNT + UNIVERSAL_ACTION_COUNT + COMPUTER_ACTION_COUNT;
 
 export const ACTION_HARDENING_SPEC_BY_ACTION = new Map(ACTION_HARDENING_SPEC.map((row) => [row.actionType, row]));
 
@@ -137,7 +143,8 @@ export function requiresTypedConfirmation(actionType: string): boolean {
 
 if (LEGACY_ACTION_HARDENING_SPEC.length !== LEGACY_ACTION_COUNT
   || UNIVERSAL_ACTION_HARDENING_SPEC.length !== UNIVERSAL_ACTION_COUNT
+  || COMPUTER_ACTION_HARDENING_SPEC.length !== COMPUTER_ACTION_COUNT
   || ACTION_HARDENING_SPEC.length !== TOTAL_ACTION_COUNT
   || new Set(ACTION_HARDENING_SPEC.map((row) => row.actionType)).size !== TOTAL_ACTION_COUNT) {
-  throw new Error(`The release action hardening spec must contain exactly ${LEGACY_ACTION_COUNT} legacy + ${UNIVERSAL_ACTION_COUNT} universal unique action types.`);
+  throw new Error(`The release action hardening spec must contain exactly ${LEGACY_ACTION_COUNT} legacy + ${UNIVERSAL_ACTION_COUNT} universal + ${COMPUTER_ACTION_COUNT} computer action types.`);
 }

@@ -21,6 +21,11 @@ function routes(dir = API_ROOT): string[] {
 const EXPLICIT_BOUNDARIES: Record<string, RegExp> = {
   "admin/migrate/route.ts": /ADMIN_SECRET/,
   "health/route.ts": /export async function GET/,
+  // OAuth redirects cannot carry the console JWT. The one-time, tenant-bound state
+  // plus the HttpOnly PKCE cookie are consumed atomically by completeGoogleConnection.
+  "connections/google/callback/route.ts": /completeGoogleConnection/,
+  // Deployment readiness exposes aggregate component status only, never tenant data.
+  "ready/route.ts": /MIGRATION_HEAD/,
   // Public deployment metadata only; contains no tenant or user data.
   "release/route.ts": /getReleaseMetadata/,
   "webhooks/esign/route.ts": /verifyDocusignSignature/,

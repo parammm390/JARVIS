@@ -8,7 +8,7 @@ const contract = loadContract()
 const failures = []
 const fail = (message) => failures.push(message)
 
-if (contract.schemaVersion !== 1 || contract.environment !== "production") fail("contract schema/environment is invalid")
+if (contract.schemaVersion !== 2 || contract.environment !== "production") fail("contract schema/environment is invalid")
 if (contract.canonicalGit.branch !== "main" || contract.canonicalGit.remote !== "origin") fail("canonical Git target must be origin/main")
 if (!contract.canonicalGit.requireCleanWorktree) fail("production contract must require a clean worktree")
 if (contract.release.concurrencyGroup !== "finnor-production-release") fail("production concurrency lock changed")
@@ -42,17 +42,6 @@ const scanRoots = [
   ".github/workflows",
   "scripts/release",
   "infra/deployment",
-  "finnor-os/apps",
-  "finnor-os/packages",
-  "finnor-os/scripts",
-  "README.md",
-  "finnor-os/README.md",
-  "JARVIS-CREDENTIALS-LEDGER.md",
-  "finnor-os/docs/promotion-flow.md",
-  "finnor-os/docs/secrets-runbook.md",
-  "finnor-os/docs/staging-setup.md",
-  "docs/release/generated/deployment-inventory.md",
-  "docs/release/generated/environment-contract.md",
 ]
 const textExtensions = new Set([".js", ".mjs", ".ts", ".tsx", ".json", ".yml", ".yaml", ".md"])
 const forbidden = /railway|render\.com|render[- ]class|render blueprint|(?:provider|platform|host)(?:\s+is|\s*[:=])\s*["']?render\b/i

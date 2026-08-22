@@ -152,6 +152,63 @@ export async function convergeWorkspaceAndPolicies(
         desiredWorkspace ? JSON.stringify(desiredWorkspace) : null,
         desiredUniversalActions ? JSON.stringify(desiredUniversalActions) : null],
     );
+    if (manifest.computer !== undefined || manifest.connectionRequirements !== undefined || manifest.connectionPolicy !== undefined) {
+      await client.query(
+        `UPDATE tenant_settings
+            SET computer_config=coalesce($2::jsonb,computer_config),
+                connection_requirements=coalesce($3::jsonb,connection_requirements),
+                connection_policy=coalesce($4::jsonb,connection_policy),
+                updated_at=now()
+          WHERE tenant_id=$1
+            AND (computer_config,connection_requirements,connection_policy) IS DISTINCT FROM
+                (coalesce($2::jsonb,computer_config),coalesce($3::jsonb,connection_requirements),coalesce($4::jsonb,connection_policy))`,
+        [tenantId,
+          manifest.computer ? JSON.stringify(manifest.computer) : null,
+          manifest.connectionRequirements ? JSON.stringify(manifest.connectionRequirements) : null,
+          manifest.connectionPolicy ? JSON.stringify(manifest.connectionPolicy) : null],
+      );
+    }
+
+    if (manifest.retentionPolicies !== undefined) {
+      for (const policy of manifest.retentionPolicies) {
+        await client.query(
+          `INSERT INTO tenant_retention_policies(tenant_id,data_class,retention_days,legal_hold,managed_by)
+           VALUES ($1,$2,$3,$4,$5)
+           ON CONFLICT (tenant_id,data_class) DO UPDATE
+             SET retention_days=EXCLUDED.retention_days,legal_hold=EXCLUDED.legal_hold,
+                 managed_by=EXCLUDED.managed_by,updated_at=now()
+           WHERE tenant_retention_policies.managed_by=EXCLUDED.managed_by
+             AND (tenant_retention_policies.retention_days,tenant_retention_policies.legal_hold,tenant_retention_policies.managed_by)
+                 IS DISTINCT FROM (EXCLUDED.retention_days,EXCLUDED.legal_hold,EXCLUDED.managed_by)`,
+          [tenantId, policy.dataClass, policy.retentionDays, policy.legalHold, manifest.clientKey],
+        );
+      }
+      await client.query(
+        `DELETE FROM tenant_retention_policies
+          WHERE tenant_id=$1 AND managed_by=$2 AND NOT (data_class=ANY($3::text[]))`,
+        [tenantId, manifest.clientKey, manifest.retentionPolicies.map((policy) => policy.dataClass)],
+      );
+    }
+    if (manifest.durableLimits !== undefined) {
+      for (const limit of manifest.durableLimits) {
+        await client.query(
+          `INSERT INTO tenant_rate_limit_policies(tenant_id,provider,action,per_minute,managed_by)
+           VALUES ($1,$2,$3,$4,$5)
+           ON CONFLICT (tenant_id,provider,action) DO UPDATE
+             SET per_minute=EXCLUDED.per_minute,managed_by=EXCLUDED.managed_by,updated_at=now()
+           WHERE tenant_rate_limit_policies.managed_by=EXCLUDED.managed_by
+             AND (tenant_rate_limit_policies.per_minute,tenant_rate_limit_policies.managed_by)
+                 IS DISTINCT FROM (EXCLUDED.per_minute,EXCLUDED.managed_by)`,
+          [tenantId, limit.provider, limit.action, limit.perMinute, manifest.clientKey],
+        );
+      }
+      await client.query(
+        `DELETE FROM tenant_rate_limit_policies
+          WHERE tenant_id=$1 AND managed_by=$2
+            AND NOT ((provider||':'||action)=ANY($3::text[]))`,
+        [tenantId, manifest.clientKey, manifest.durableLimits.map((limit) => `${limit.provider}:${limit.action}`)],
+      );
+    }
 
     for (const location of manifest.locations) {
       await client.query(
@@ -643,9 +700,9 @@ function legacyAccessKey(capability: string, binding: string): string {
 }
 
 function substitutedCredential(
-  credential: { provider: "aws-secrets-manager" | "legacy-env"; ref: string; version?: string } | undefined,
+  credential: { provider: "aws-secrets-manager" | "os-keychain" | "legacy-env"; ref: string; version?: string } | undefined,
   tenantId: string,
-): { provider: "aws-secrets-manager" | "legacy-env" | null; ref: string | null; version: string | null } {
+): { provider: "aws-secrets-manager" | "os-keychain" | "legacy-env" | null; ref: string | null; version: string | null } {
   return credential
     ? { provider: credential.provider, ref: credential.ref.replaceAll("{tenantId}", tenantId), version: credential.version ?? null }
     : { provider: null, ref: null, version: null };
@@ -709,6 +766,7 @@ export async function convergeIdentityAccess(
             status: "active" as const,
             capabilities: [integration.capability],
             credential: integration.credential,
+            authProfileRef: undefined,
           }];
         })
       : manifest.communicationIdentities ?? [];
@@ -755,6 +813,9 @@ export async function convergeIdentityAccess(
             priority: 0,
             scope: {},
             credential: integration.credential,
+            authMethod: "managed_secret" as const,
+            connectionRequired: true,
+            requiredScopes: [] as string[],
             status: "active" as const,
             capabilities: [integration.capability],
             restrictions: {},
@@ -935,31 +996,70 @@ export async function convergeIdentityAccess(
     }
     for (const profile of resolvedProfiles) {
       const credential = substitutedCredential(profile.credential, tenantId);
+      const authMethod = profile.authMethod ?? "managed_secret";
+      const connectionRequired = profile.connectionRequired ?? true;
+      const requiredScopes = profile.requiredScopes ?? [];
+      const initialConnectionStatus = profile.status !== "active"
+        ? "disabled"
+        : credential.provider || compatibilityMode || authMethod === "managed_secret" ? "active" : "disconnected";
       await client.query(
         `INSERT INTO auth_profiles
            (tenant_id,auth_profile_ref,principal_type,principal_id,application_account_id,purpose,priority,scope,
-            credential_provider,credential_ref,credential_version,status,capabilities,restrictions,managed_by)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11,$12,$13::jsonb,$14::jsonb,$15)
+            credential_provider,credential_ref,credential_version,status,auth_method,connection_required,
+            connection_status,required_scopes,capabilities,restrictions,managed_by,connected_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11,$12,$13,$14,$15,$16::text[],$17::jsonb,$18::jsonb,$19,
+                 CASE WHEN $15='active' THEN now() ELSE NULL END)
          ON CONFLICT (tenant_id,auth_profile_ref) DO UPDATE
          SET principal_type=EXCLUDED.principal_type,principal_id=EXCLUDED.principal_id,
              application_account_id=EXCLUDED.application_account_id,purpose=EXCLUDED.purpose,
-             priority=EXCLUDED.priority,scope=EXCLUDED.scope,credential_provider=EXCLUDED.credential_provider,
-             credential_ref=EXCLUDED.credential_ref,credential_version=EXCLUDED.credential_version,
-             status=EXCLUDED.status,capabilities=EXCLUDED.capabilities,restrictions=EXCLUDED.restrictions,
+             priority=EXCLUDED.priority,scope=EXCLUDED.scope,
+             credential_provider=CASE WHEN auth_profiles.auth_method=EXCLUDED.auth_method AND EXCLUDED.auth_method IN ('oauth2','browser_profile') AND EXCLUDED.credential_provider IS NULL THEN auth_profiles.credential_provider ELSE EXCLUDED.credential_provider END,
+             credential_ref=CASE WHEN auth_profiles.auth_method=EXCLUDED.auth_method AND EXCLUDED.auth_method IN ('oauth2','browser_profile') AND EXCLUDED.credential_ref IS NULL THEN auth_profiles.credential_ref ELSE EXCLUDED.credential_ref END,
+             credential_version=CASE WHEN auth_profiles.auth_method=EXCLUDED.auth_method AND EXCLUDED.auth_method IN ('oauth2','browser_profile') AND EXCLUDED.credential_ref IS NULL THEN auth_profiles.credential_version ELSE EXCLUDED.credential_version END,
+             status=EXCLUDED.status,auth_method=EXCLUDED.auth_method,connection_required=EXCLUDED.connection_required,
+             connection_status=CASE
+               WHEN EXCLUDED.status<>'active' THEN 'disabled'
+               WHEN auth_profiles.auth_method<>EXCLUDED.auth_method THEN EXCLUDED.connection_status
+               WHEN NOT (EXCLUDED.required_scopes <@ auth_profiles.granted_scopes) AND auth_profiles.connection_status='active' THEN 'reauth_required'
+               WHEN EXCLUDED.auth_method IN ('oauth2','browser_profile') AND EXCLUDED.credential_provider IS NULL THEN auth_profiles.connection_status
+               ELSE EXCLUDED.connection_status END,
+             required_scopes=EXCLUDED.required_scopes,
+             capabilities=EXCLUDED.capabilities,restrictions=EXCLUDED.restrictions,
              managed_by=EXCLUDED.managed_by,updated_at=now()
          WHERE auth_profiles.managed_by=EXCLUDED.managed_by
            AND (auth_profiles.principal_type,auth_profiles.principal_id,auth_profiles.application_account_id,
-                auth_profiles.purpose,auth_profiles.priority,auth_profiles.scope,auth_profiles.credential_provider,
-                auth_profiles.credential_ref,auth_profiles.credential_version,auth_profiles.status,
-                auth_profiles.capabilities,auth_profiles.restrictions,auth_profiles.managed_by)
+                auth_profiles.purpose,auth_profiles.priority,auth_profiles.scope,auth_profiles.status,
+                auth_profiles.auth_method,auth_profiles.connection_required,auth_profiles.required_scopes,
+                auth_profiles.capabilities,auth_profiles.restrictions,auth_profiles.managed_by,
+                auth_profiles.credential_provider,auth_profiles.credential_ref,auth_profiles.credential_version)
              IS DISTINCT FROM
                (EXCLUDED.principal_type,EXCLUDED.principal_id,EXCLUDED.application_account_id,
-                EXCLUDED.purpose,EXCLUDED.priority,EXCLUDED.scope,EXCLUDED.credential_provider,
-                EXCLUDED.credential_ref,EXCLUDED.credential_version,EXCLUDED.status,
-                EXCLUDED.capabilities,EXCLUDED.restrictions,EXCLUDED.managed_by)`,
+                EXCLUDED.purpose,EXCLUDED.priority,EXCLUDED.scope,EXCLUDED.status,
+                EXCLUDED.auth_method,EXCLUDED.connection_required,EXCLUDED.required_scopes,
+                EXCLUDED.capabilities,EXCLUDED.restrictions,EXCLUDED.managed_by,
+                CASE WHEN auth_profiles.auth_method=EXCLUDED.auth_method AND EXCLUDED.auth_method IN ('oauth2','browser_profile') AND EXCLUDED.credential_provider IS NULL THEN auth_profiles.credential_provider ELSE EXCLUDED.credential_provider END,
+                CASE WHEN auth_profiles.auth_method=EXCLUDED.auth_method AND EXCLUDED.auth_method IN ('oauth2','browser_profile') AND EXCLUDED.credential_ref IS NULL THEN auth_profiles.credential_ref ELSE EXCLUDED.credential_ref END,
+                CASE WHEN auth_profiles.auth_method=EXCLUDED.auth_method AND EXCLUDED.auth_method IN ('oauth2','browser_profile') AND EXCLUDED.credential_ref IS NULL THEN auth_profiles.credential_version ELSE EXCLUDED.credential_version END)`,
         [tenantId, profile.ref, profile.principal.type, profile.principal.id, profile.applicationAccountId,
           profile.purpose, profile.priority, JSON.stringify(profile.scope), credential.provider, credential.ref,
-          credential.version, profile.status, JSON.stringify(profile.capabilities), JSON.stringify(profile.restrictions), manifest.clientKey],
+          credential.version, profile.status, authMethod, connectionRequired, initialConnectionStatus, requiredScopes,
+          JSON.stringify(profile.capabilities), JSON.stringify(profile.restrictions), manifest.clientKey],
+      );
+    }
+
+    const persistedProfiles = (await client.query<{ id: string; auth_profile_ref: string }>(
+      "SELECT id,auth_profile_ref FROM auth_profiles WHERE tenant_id=$1",
+      [tenantId],
+    )).rows;
+    const profileIds = new Map(persistedProfiles.map((row) => [row.auth_profile_ref, row.id]));
+    for (const identity of communicationIdentities) {
+      const linkedProfileId = identity.authProfileRef ? profileIds.get(identity.authProfileRef) : null;
+      if (identity.authProfileRef && !linkedProfileId) throw new Error(`Communication identity references unprovisioned auth profile ${identity.authProfileRef}`);
+      await client.query(
+        `UPDATE communication_identities SET auth_profile_id=$4,updated_at=now()
+          WHERE tenant_id=$1 AND identity_key=$2 AND managed_by=$3
+            AND auth_profile_id IS DISTINCT FROM $4`,
+        [tenantId, identity.key, manifest.clientKey, linkedProfileId],
       );
     }
 

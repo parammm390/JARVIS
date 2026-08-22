@@ -86,7 +86,9 @@ describe.skipIf(!available)("inbox event dedup + matching", () => {
       db.select().from(inboxEvents).where(and(eq(inboxEvents.provider, "test_provider"), eq(inboxEvents.eventId, "evt-replay-1"))),
     );
     expect(rows).toHaveLength(1); // never a second row for the same (provider, event_id)
-    expect(rows[0]!.status).toBe("duplicate");
+    // A replay result is duplicate, but the durable processing state retains the
+    // original semantic outcome instead of regressing matched -> duplicate.
+    expect(rows[0]!.status).toBe("matched");
 
     const [step] = await withTenant(TENANT_ID, (db) => db.select().from(workflowSteps).where(eq(workflowSteps.id, stepId)));
     expect(step!.status).toBe("completed");

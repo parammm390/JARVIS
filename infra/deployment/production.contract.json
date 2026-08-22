@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "environment": "production",
   "canonicalGit": {
     "remote": "origin",
@@ -8,13 +8,14 @@
     "requireCleanWorktree": true
   },
   "release": {
-    "requiredMigrationHead": "0080_declarative_client_imports.sql",
+    "requiredMigrationHead": "0090_phase5_production_connection_reliability.sql",
     "metadata": [
       "FINNOR_COMMIT_SHA",
       "FINNOR_BUILD_ID",
       "FINNOR_VERSION",
       "FINNOR_ENVIRONMENT",
-      "FINNOR_RELEASE_SOURCE"
+      "FINNOR_RELEASE_SOURCE",
+      "FINNOR_CORE_CERTIFICATION_ID"
     ],
     "requiredComponents": ["frontend", "api", "worker"],
     "concurrencyGroup": "finnor-production-release"
@@ -38,7 +39,8 @@
       "releaseWorkingDirectory": "finnor-os",
       "installCommand": "npm ci",
       "productionUrl": "https://api-psi-brown-95.vercel.app",
-      "releasePath": "/api/release"
+      "releasePath": "/api/release",
+      "readinessPath": "/api/ready"
     },
     "worker": {
       "provider": "azure-vm",
@@ -52,7 +54,6 @@
       "location": "northcentralus",
       "adminUsername": "finnor",
       "systemdUnit": "finnor-jarvis-worker.service",
-      "heartbeatId": "worker",
       "releaseRoot": "/srv/finnor/releases",
       "currentSymlink": "/srv/finnor/current",
       "secretEnvironmentFile": "/etc/finnor/jarvis-worker.env",
@@ -61,7 +62,8 @@
     "orchestrator": {
       "mode": "embedded-worker",
       "separateDeployment": false,
-      "releaseIdentity": "worker"
+      "releaseIdentity": "worker",
+      "requiredCapability": "orchestration"
     },
     "database": {
       "provider": "supabase-postgres",

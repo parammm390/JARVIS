@@ -157,6 +157,12 @@ export const CredentialReferenceSchema = z.object({
   version: z.string().trim().min(1).optional(),
 }).strict();
 
+const AuthProfileCredentialReferenceSchema = z.object({
+  provider: z.enum(["aws-secrets-manager", "os-keychain", "legacy-env"]),
+  ref: SafeReferenceSchema,
+  version: z.string().trim().min(1).optional(),
+}).strict();
+
 export const IdentityPrincipalSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("employee"), employeeEmail: EmailSchema }).strict(),
   z.object({ type: z.literal("team"), orgUnitKey: ManifestKeySchema }).strict(),
@@ -173,6 +179,7 @@ const CommunicationIdentitySchema = z.object({
   status: z.enum(["active", "disabled", "suspended"]).default("active"),
   capabilities: CapabilityListSchema,
   credential: CredentialReferenceSchema.optional(),
+  authProfileRef: z.string().trim().regex(/^[a-z0-9][a-z0-9_-]{1,126}[a-z0-9]$/).optional(),
 }).strict().refine(
   (identity) => Boolean(identity.address || identity.providerIdentityRef),
   { message: "communication identity requires an address or providerIdentityRef" },
@@ -207,7 +214,10 @@ const AuthProfileSchema = z.object({
   purpose: PurposeSchema,
   priority: z.number().int().min(-1_000_000).max(1_000_000).default(0),
   scope: z.record(z.unknown()).default({}),
-  credential: CredentialReferenceSchema.optional(),
+  credential: AuthProfileCredentialReferenceSchema.optional(),
+  authMethod: z.enum(["managed_secret", "oauth2", "browser_profile"]).default("managed_secret"),
+  connectionRequired: z.boolean().default(true),
+  requiredScopes: z.array(z.string().trim().min(1).max(500)).max(64).default([]),
   status: z.enum(["active", "disabled", "suspended"]).default("active"),
   capabilities: CapabilityListSchema,
   restrictions: z.record(z.unknown()).default({}),
@@ -252,8 +262,50 @@ const UniversalActionConfigSchema = z.object({
   documentSharing: z.object({ allowExternal: z.boolean().default(false) }).strict().default({}),
 }).strict();
 
+const ConnectionRequirementSchema = z.object({
+  authProfileRef: z.string().trim().regex(/^[a-z0-9][a-z0-9_-]{1,126}[a-z0-9]$/),
+  provider: ProviderKeySchema,
+  required: z.boolean().default(true),
+  purposes: z.array(z.string().trim().min(1).max(120)).max(64).default([]),
+}).strict();
+
+const ConnectionPolicySchema = z.object({
+  failClosedStatuses: z.array(z.enum(["disconnected", "connecting", "expired", "reauth_required", "revoked", "disabled", "misconfigured", "provider_unavailable"]))
+    .default(["disconnected", "connecting", "expired", "reauth_required", "revoked", "disabled", "misconfigured", "provider_unavailable"]),
+  healthCheckMinutes: z.number().int().min(1).max(1440).default(15),
+}).strict();
+
+const ComputerManifestSchema = z.object({
+  enabled: z.boolean().default(false),
+  provider: z.literal("steel").default("steel"),
+  allowedOrigins: z.array(z.string().url().refine((value) => {
+    const url = new URL(value);
+    return url.protocol === "https:" && !url.username && !url.password && !url.search && !url.hash;
+  }, "computer origins must be credential-free HTTPS origins")).max(64).default([]),
+  maxSteps: z.number().int().min(1).max(200).default(30),
+  timeoutMs: z.number().int().min(10_000).max(1_800_000).default(300_000),
+  maxProviderCredits: z.number().int().min(1).max(10_000).default(10),
+  maxScreenshots: z.number().int().min(0).max(100).default(10),
+  maxArtifacts: z.number().int().min(0).max(500).default(20),
+  maxDownloadBytes: z.number().int().min(0).max(1_073_741_824).default(10_485_760),
+  maxUploadBytes: z.number().int().min(0).max(1_073_741_824).default(0),
+  maxOutputBytes: z.number().int().min(1_024).max(16_777_216).default(131_072),
+}).strict();
+
+const DurableLimitSchema = z.object({
+  provider: ProviderKeySchema,
+  action: z.string().trim().min(1).max(120),
+  perMinute: z.number().int().min(1).max(1_000_000),
+}).strict();
+
+const RetentionPolicySchema = z.object({
+  dataClass: z.enum(["messages", "job_payloads", "computer_artifact_content", "model_records"]),
+  retentionDays: z.number().int().min(1).max(3650),
+  legalHold: z.boolean().default(false),
+}).strict();
+
 export const ClientManifestSchema = z.object({
-  manifestVersion: z.literal(1).default(1),
+  manifestVersion: z.union([z.literal(1), z.literal(2)]).default(1),
   clientKey: ClientKeySchema,
   tenant: z.object({
     name: z.string().trim().min(1).max(160),
@@ -290,6 +342,13 @@ export const ClientManifestSchema = z.object({
   communicationIdentityBindings: z.array(CommunicationIdentityBindingSchema).optional(),
   applicationAccounts: z.array(ApplicationAccountSchema).optional(),
   authProfiles: z.array(AuthProfileSchema).optional(),
+  // Phase 5 additions are safe declarative requirements only. Runtime tokens,
+  // cookies, passwords, and browser state remain in managed tenant secrets.
+  connectionRequirements: z.array(ConnectionRequirementSchema).optional(),
+  connectionPolicy: ConnectionPolicySchema.optional(),
+  computer: ComputerManifestSchema.optional(),
+  durableLimits: z.array(DurableLimitSchema).optional(),
+  retentionPolicies: z.array(RetentionPolicySchema).optional(),
   // Omission means preserve an existing tenant_settings.workspace_config. A new
   // tenant receives the existing application default, never a parallel config row.
   workspaceConfig: WorkspaceConfigSchema.optional(),
@@ -303,6 +362,19 @@ export const ClientManifestSchema = z.object({
   imports: z.array(ImportDefinitionSchema).default([]),
 }).strict().superRefine((manifest, ctx) => {
   const unique = (values: string[]) => new Set(values).size === values.length;
+  if (manifest.manifestVersion === 1 && [
+    manifest.connectionRequirements,
+    manifest.connectionPolicy,
+    manifest.computer,
+    manifest.durableLimits,
+    manifest.retentionPolicies,
+  ].some((value) => value !== undefined)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["manifestVersion"], message: "Phase 5 connection/computer/limit/retention fields require manifestVersion 2" });
+  }
+  if (manifest.manifestVersion === 1 && (manifest.authProfiles ?? []).some((profile) =>
+    profile.authMethod !== "managed_secret" || profile.requiredScopes.length > 0 || profile.connectionRequired !== true)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["manifestVersion"], message: "OAuth/browser connection profiles require manifestVersion 2" });
+  }
   const orgUnits = manifest.orgUnits ?? [];
   const memberships = manifest.orgUnitMemberships ?? [];
   const relationships = manifest.employeeRelationships ?? [];
@@ -341,6 +413,15 @@ export const ClientManifestSchema = z.object({
   }
   if (manifest.authProfiles && !unique(manifest.authProfiles.map((profile) => profile.ref))) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["authProfiles"], message: "auth profile refs must be unique" });
+  }
+  if (manifest.connectionRequirements && !unique(manifest.connectionRequirements.map((requirement) => requirement.authProfileRef))) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["connectionRequirements"], message: "connection requirements must have unique authProfileRefs" });
+  }
+  if (manifest.durableLimits && !unique(manifest.durableLimits.map((limit) => `${limit.provider}:${limit.action}`))) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["durableLimits"], message: "durable provider/action limits must be unique" });
+  }
+  if (manifest.retentionPolicies && !unique(manifest.retentionPolicies.map((policy) => policy.dataClass))) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["retentionPolicies"], message: "retention data classes must be unique" });
   }
   if (manifest.authProfiles && !unique(manifest.authProfiles.map((profile) => `${profile.applicationAccountKey}:${JSON.stringify(profile.principal)}:${profile.purpose}`))) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["authProfiles"], message: "application account/principal/purpose bindings must be unique" });
@@ -403,6 +484,22 @@ export const ClientManifestSchema = z.object({
     validatePrincipal(binding.principal, ["communicationIdentityBindings", index, "principal"]);
   }
   const applicationAccountKeys = new Set((manifest.applicationAccounts ?? []).map((account) => account.key));
+  const authProfileRefs = new Set((manifest.authProfiles ?? []).map((profile) => profile.ref));
+  for (const [index, identity] of (manifest.communicationIdentities ?? []).entries()) {
+    if (identity.authProfileRef && !authProfileRefs.has(identity.authProfileRef)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["communicationIdentities", index, "authProfileRef"], message: "communication identity authProfileRef must resolve in this manifest" });
+    }
+  }
+  for (const [index, requirement] of (manifest.connectionRequirements ?? []).entries()) {
+    if (!authProfileRefs.has(requirement.authProfileRef)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["connectionRequirements", index, "authProfileRef"], message: "connection requirement must reference a declared auth profile" });
+    }
+    const profile = (manifest.authProfiles ?? []).find((candidate) => candidate.ref === requirement.authProfileRef);
+    const account = (manifest.applicationAccounts ?? []).find((candidate) => candidate.key === profile?.applicationAccountKey);
+    if (account && account.provider !== requirement.provider) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["connectionRequirements", index, "provider"], message: "connection requirement provider must match its application account" });
+    }
+  }
   for (const [index, profile] of (manifest.authProfiles ?? []).entries()) {
     if (!applicationAccountKeys.has(profile.applicationAccountKey)) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["authProfiles", index, "applicationAccountKey"], message: "auth profile must reference a declared application account" });
@@ -410,7 +507,7 @@ export const ClientManifestSchema = z.object({
     validatePrincipal(profile.principal, ["authProfiles", index, "principal"]);
   }
   const validateCredential = (
-    credential: z.infer<typeof CredentialReferenceSchema> | undefined,
+    credential: z.infer<typeof CredentialReferenceSchema> | z.infer<typeof AuthProfileCredentialReferenceSchema> | undefined,
     expectedLegacyProvider: string | null,
     path: Array<string | number>,
   ): void => {
@@ -424,6 +521,9 @@ export const ClientManifestSchema = z.object({
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: [...path, "ref"], message: "legacy-env credential reference is not allowlisted for this provider" });
       }
       return;
+    }
+    if (credential.provider === "os-keychain" && credential.version !== undefined) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: [...path, "version"], message: "os-keychain credential references cannot specify a version" });
     }
     const namespaced = credential.ref.startsWith("finnor/tenants/{tenantId}/")
       || (credential.ref.startsWith("arn:aws:secretsmanager:") && credential.ref.includes("{tenantId}"));
@@ -444,6 +544,12 @@ export const ClientManifestSchema = z.object({
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["authProfiles", index], message: "auth profile scope/restrictions cannot contain secret-shaped keys" });
     }
     const account = (manifest.applicationAccounts ?? []).find((candidate) => candidate.key === profile.applicationAccountKey);
+    if (profile.authMethod === "oauth2" && account && !["gmail", "google"].includes(account.provider)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["authProfiles", index, "authMethod"], message: "OAuth 2.0 is currently implemented only for discovered Google/Gmail providers" });
+    }
+    if (profile.authMethod === "oauth2" && profile.credential?.provider === "legacy-env") {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["authProfiles", index, "credential"], message: "OAuth profiles cannot use legacy environment credentials" });
+    }
     validateCredential(profile.credential, account?.provider ?? null, ["authProfiles", index, "credential"]);
   }
   if (!unique(manifest.integrations.map((integration) => integration.capability))) {

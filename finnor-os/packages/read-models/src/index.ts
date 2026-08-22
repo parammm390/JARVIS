@@ -22,6 +22,7 @@ import {
   conversations,
   workflowRuns,
   workflowSteps,
+  computerSteps,
   reconciliationCases,
   dataQualityFindings,
   contacts,
@@ -1234,7 +1235,7 @@ export async function reliability(tenantId: string, windowDays = 1): Promise<Rel
 }
 
 export interface ActivitySnapshotItem {
-  source: "action_log" | "workflow_step" | "call";
+  source: "action_log" | "workflow_step" | "computer_step" | "call";
   id: string;
   occurredAt: string;
   detail: Record<string, unknown>;
@@ -1246,7 +1247,7 @@ export interface ActivitySnapshot {
 }
 
 // B1.T3: a fast "what just happened" snapshot — the most recent `limit` items across
-// the same 3 sources GET /api/activity (A2.T6) merges, but a plain snapshot (no cursor
+// the same 4 sources GET /api/activity (A2.T6) merges, but a plain snapshot (no cursor
 // paging). Does NOT replace /api/activity — that route's forward-cursor semantics are
 // what D1.T3's live Activity Theater actually polls for new items; this is what a CQRS
 // projection wants to cache for a fast first paint (packages/projections).
@@ -1254,6 +1255,7 @@ export async function activitySnapshot(tenantId: string, limit = 50): Promise<Ac
   return withTenant(tenantId, async (db) => {
     const actionLogRows = await db.select().from(actionLog).where(eq(actionLog.tenantId, tenantId)).orderBy(desc(actionLog.timestamp)).limit(limit);
     const stepRows = await db.select().from(workflowSteps).where(eq(workflowSteps.tenantId, tenantId)).orderBy(desc(workflowSteps.updatedAt)).limit(limit);
+    const computerStepRows = await db.select().from(computerSteps).where(eq(computerSteps.tenantId, tenantId)).orderBy(desc(computerSteps.createdAt)).limit(limit);
     const callRows = await db.select().from(calls).where(eq(calls.tenantId, tenantId)).orderBy(desc(calls.createdAt)).limit(limit);
     const items: ActivitySnapshotItem[] = [
       ...actionLogRows.map((r) => ({
@@ -1267,6 +1269,12 @@ export async function activitySnapshot(tenantId: string, limit = 50): Promise<Ac
         id: r.id,
         occurredAt: r.updatedAt.toISOString(),
         detail: { workflowRunId: r.workflowRunId, stepType: r.stepType, status: r.status, terminalReason: r.terminalReason },
+      })),
+      ...computerStepRows.map((r) => ({
+        source: "computer_step" as const,
+        id: r.id,
+        occurredAt: r.createdAt.toISOString(),
+        detail: { runId: r.runId, seq: r.seq, phase: r.phase, operation: r.operation, status: r.status, summary: r.summary, pageUrl: r.pageUrl, detail: r.detail },
       })),
       ...callRows.map((r) => ({
         source: "call" as const,

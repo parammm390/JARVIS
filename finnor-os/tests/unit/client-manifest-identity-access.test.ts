@@ -111,4 +111,39 @@ describe("Client Manifest governed identity/access contract", () => {
     expect(plan.factoryStages).toContain("integrations_credentials");
     expect(plan.certificationGates).toContain("credential_references");
   });
+
+  it("requires manifest v2 for governed OAuth and stores only safe connection requirements", () => {
+    const phase5 = {
+      ...base,
+      applicationAccounts: [{
+        key: "alice-gmail", application: "gmail", provider: "gmail", displayName: "Alice Gmail",
+        providerAccountRef: "alice@example.test", capabilities: ["send"], metadata: {},
+      }],
+      authProfiles: [{
+        ref: "alice-gmail-oauth", principal: { type: "employee" as const, employeeEmail: "alice@example.test" },
+        applicationAccountKey: "alice-gmail", purpose: "send", authMethod: "oauth2" as const,
+        requiredScopes: ["https://www.googleapis.com/auth/gmail.send"], capabilities: ["send"],
+      }],
+      connectionRequirements: [{ authProfileRef: "alice-gmail-oauth", provider: "gmail", purposes: ["send"] }],
+    };
+    expect(() => parseClientManifest(phase5)).toThrow(/manifestVersion 2/i);
+    const parsed = parseClientManifest({ ...phase5, manifestVersion: 2 });
+    expect(parsed).toMatchObject({
+      manifestVersion: 2,
+      authProfiles: [expect.objectContaining({ authMethod: "oauth2", connectionRequired: true })],
+      connectionRequirements: [expect.objectContaining({ provider: "gmail", required: true })],
+    });
+    expect(JSON.stringify(parsed)).not.toMatch(/accessToken|refreshToken|password|cookie/i);
+    const changed = parseClientManifest({
+      ...phase5,
+      manifestVersion: 2,
+      connectionPolicy: { healthCheckMinutes: 5 },
+      durableLimits: [{ provider: "gmail", action: "send", perMinute: 20 }],
+      retentionPolicies: [{ dataClass: "messages", retentionDays: 180 }],
+    });
+    const plan = buildClientImpactPlan({ currentManifest: parsed, desiredManifest: changed });
+    expect(plan.affectedAreas).toEqual(expect.arrayContaining(["policy", "integration"]));
+    expect(plan.factoryStages).toContain("integrations_credentials");
+    expect(plan.certificationGates).toContain("tenant_provider_health");
+  });
 });

@@ -1,6 +1,12 @@
-import { tenantIntegrations, withTenant } from "@finnor/db";
-import { eq } from "drizzle-orm";
-import { readAwsSecretReference } from "./secrets";
+import { authProfiles, connectionEvents, tenantIntegrations, withTenant } from "@finnor/db";
+import { and, eq, sql } from "drizzle-orm";
+import { readAwsSecretReference, writeAwsSecretReference } from "./secrets";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+
+const execFileAsync = promisify(execFile);
+
+export type ManagedCredentialProvider = "aws-secrets-manager" | "os-keychain";
 
 export type TenantCredentialProvider =
   | "quickbooks"
@@ -52,7 +58,13 @@ export interface GhlCredentials {
 
 export interface GmailCredentials {
   user: string;
-  appPassword: string;
+  authMethod: "app_password" | "oauth2";
+  appPassword?: string;
+  accessToken?: string;
+  refreshToken?: string;
+  expiresAt?: string;
+  scopes?: string;
+  subject?: string;
 }
 
 export interface ResendCredentials {
@@ -113,6 +125,7 @@ export type TenantCredentialErrorCode =
   | "ambiguous_integration"
   | "secret_unavailable"
   | "invalid_credentials"
+  | "reauth_required"
   | "legacy_not_allowed"
   | "system_not_allowed";
 
@@ -298,10 +311,23 @@ function validateCredentials<P extends TenantCredentialProvider>(provider: P, ra
       };
       break;
     case "gmail":
-      credentials = {
-        user: stringField(raw, ["user", "fromAddress", "GMAIL_USER"])!,
-        appPassword: stringField(raw, ["appPassword", "GMAIL_APP_PASSWORD"])!,
-      };
+      if (stringField(raw, ["refreshToken"], false)) {
+        credentials = {
+          user: stringField(raw, ["user", "fromAddress", "GMAIL_USER"])!,
+          authMethod: "oauth2",
+          accessToken: stringField(raw, ["accessToken"], false),
+          refreshToken: stringField(raw, ["refreshToken"])!,
+          expiresAt: stringField(raw, ["expiresAt"], false),
+          scopes: stringField(raw, ["scopes"], false),
+          subject: stringField(raw, ["subject"], false),
+        };
+      } else {
+        credentials = {
+          user: stringField(raw, ["user", "fromAddress", "GMAIL_USER"])!,
+          authMethod: "app_password",
+          appPassword: stringField(raw, ["appPassword", "GMAIL_APP_PASSWORD"])!,
+        };
+      }
       break;
     case "resend":
       credentials = {
@@ -433,6 +459,168 @@ async function cachedSecret(cacheKey: string, reference: string, version?: strin
   return read;
 }
 
+async function markGmailReauthRequired(tenantId: string, reference: string, reasonCode: string): Promise<void> {
+  await withTenant(tenantId, async (db) => {
+    const rows = await db.update(authProfiles).set({
+      connectionStatus: "reauth_required",
+      reauthRequiredAt: new Date(),
+      lastConnectionErrorCode: reasonCode,
+      connectionRevision: sql`${authProfiles.connectionRevision} + 1`,
+      updatedAt: new Date(),
+    }).where(and(eq(authProfiles.tenantId, tenantId), eq(authProfiles.credentialRef, reference))).returning({
+      id: authProfiles.id,
+    });
+    for (const row of rows) {
+      await db.insert(connectionEvents).values({
+        tenantId,
+        authProfileId: row.id,
+        eventType: "reauth_required",
+        fromStatus: "active",
+        toStatus: "reauth_required",
+        reasonCode,
+      });
+    }
+  });
+}
+
+/** Refresh a Google OAuth access token before it expires. The long-lived refresh
+ * token remains inside the tenant secret, the platform OAuth client is loaded by the
+ * existing managed system-secret bootstrap, and invalid_grant immediately removes
+ * the profile from runtime selection. */
+async function refreshGmailOAuthSecret(params: {
+  tenantId: string;
+  reference: string;
+  secret: Record<string, string>;
+}): Promise<Record<string, string>> {
+  const refreshToken = params.secret.refreshToken;
+  if (!refreshToken) return params.secret;
+  const expiresAt = Date.parse(params.secret.expiresAt ?? "");
+  if (params.secret.accessToken && Number.isFinite(expiresAt) && expiresAt > Date.now() + 5 * 60_000) return params.secret;
+  const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID?.trim();
+  const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET?.trim();
+  if (!clientId || !clientSecret) throw new Error("Google OAuth client configuration is unavailable");
+
+  const response = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ client_id: clientId, client_secret: clientSecret, refresh_token: refreshToken, grant_type: "refresh_token" }),
+  });
+  const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
+  if (!response.ok) {
+    const code = typeof payload.error === "string" ? payload.error : "oauth_refresh_failed";
+    if (code === "invalid_grant") {
+      await markGmailReauthRequired(params.tenantId, params.reference, code);
+      throw new TenantCredentialError("reauth_required", "gmail", params.tenantId, "Google connection requires reauthorization");
+    }
+    throw new Error("Google OAuth refresh is temporarily unavailable");
+  }
+  const accessToken = typeof payload.access_token === "string" ? payload.access_token : null;
+  const expiresIn = typeof payload.expires_in === "number" ? payload.expires_in : Number(payload.expires_in);
+  if (!accessToken || !Number.isFinite(expiresIn) || expiresIn <= 0) throw new Error("Google OAuth refresh returned an invalid token envelope");
+  const refreshed = {
+    ...params.secret,
+    accessToken,
+    expiresAt: new Date(Date.now() + expiresIn * 1_000).toISOString(),
+    ...(typeof payload.scope === "string" ? { scopes: payload.scope } : {}),
+  };
+  const versionId = await writeAwsSecretReference(params.reference, refreshed);
+  await withTenant(params.tenantId, async (db) => {
+    const rows = await db.update(authProfiles).set({
+      credentialVersion: `id:${versionId}`,
+      connectionStatus: "active",
+      tokenExpiresAt: new Date(refreshed.expiresAt),
+      lastRefreshedAt: new Date(),
+      lastVerifiedAt: new Date(),
+      lastConnectionErrorCode: null,
+      connectionRevision: sql`${authProfiles.connectionRevision} + 1`,
+      updatedAt: new Date(),
+    }).where(and(eq(authProfiles.tenantId, params.tenantId), eq(authProfiles.credentialRef, params.reference))).returning({ id: authProfiles.id });
+    for (const row of rows) {
+      await db.insert(connectionEvents).values({
+        tenantId: params.tenantId,
+        authProfileId: row.id,
+        eventType: "refreshed",
+        fromStatus: "active",
+        toStatus: "active",
+        reasonCode: "scheduled_refresh",
+      });
+    }
+  });
+  return refreshed;
+}
+
+export interface TenantBoundSecretReference {
+  credentialProvider: ManagedCredentialProvider | "legacy-env" | null;
+  credentialRef: string | null;
+  credentialVersion: string | null;
+}
+
+async function readOsKeychainReference(reference: string): Promise<Record<string, string>> {
+  if (process.platform !== "darwin" || process.env.FINNOR_ENVIRONMENT !== "staging" || process.env.FINNOR_ALLOW_OS_KEYCHAIN_SECRETS !== "1") {
+    throw new Error("OS Keychain tenant secrets are restricted to explicit macOS staging runs");
+  }
+  const { stdout } = await execFileAsync("/usr/bin/security", [
+    "find-generic-password", "-s", reference, "-a", "finnor", "-w",
+  ], { encoding: "utf8", maxBuffer: 64 * 1024 });
+  const raw = stdout.trim();
+  if (!raw) throw new Error("The OS Keychain item had no value");
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (parsed && !Array.isArray(parsed) && typeof parsed === "object") {
+      const values = Object.fromEntries(Object.entries(parsed as Record<string, unknown>)
+        .filter((entry): entry is [string, string] => typeof entry[1] === "string"));
+      if (Object.keys(values).length > 0) return values;
+    }
+  } catch {
+    // Single-value Keychain items remain supported for provider-neutral callers.
+  }
+  return { value: raw };
+}
+
+/** Runtime-only escape hatch for provider-neutral infrastructure that consumes a
+ * governed auth-profile secret whose shape is not one of FINNOR's native API
+ * integrations. The reference still has to be selected from tenant-scoped DB state,
+ * live below the tenant AWS namespace, and pass through the shared cache/reader.
+ * Callers must narrow the returned bundle immediately and never serialize it. */
+export async function resolveTenantBoundSecretBundle(
+  tenantId: string,
+  reference: TenantBoundSecretReference,
+): Promise<Readonly<Record<string, string>>> {
+  if ((reference.credentialProvider !== "aws-secrets-manager" && reference.credentialProvider !== "os-keychain") || !reference.credentialRef) {
+    throw new Error("A tenant-bound managed-secret auth profile is required");
+  }
+  if (!tenantBoundAwsReference(reference.credentialRef, tenantId)) {
+    throw new Error("The auth-profile credential reference is outside the tenant namespace");
+  }
+  const cacheKey = `${tenantId}:computer-auth:${reference.credentialProvider}:${reference.credentialRef}:${reference.credentialVersion ?? "current"}`;
+  try {
+    const bundle = reference.credentialProvider === "os-keychain"
+      ? await cachedSecretWith(cacheKey, () => readOsKeychainReference(reference.credentialRef!))
+      : await cachedSecret(cacheKey, reference.credentialRef, reference.credentialVersion);
+    return Object.freeze({ ...bundle });
+  } catch {
+    throw new Error("The governed auth-profile secret could not be read");
+  }
+}
+
+async function cachedSecretWith(cacheKey: string, read: () => Promise<Record<string, string>>): Promise<Record<string, string>> {
+  const now = Date.now();
+  const cached = secretCache.get(cacheKey);
+  if (cached && cached.expiresAt > now) return cached.value;
+  const inflight = secretInflight.get(cacheKey);
+  if (inflight) return inflight;
+  const pending = read()
+    .then((value) => {
+      const configured = Number(process.env.TENANT_CREDENTIAL_CACHE_MS ?? 60_000);
+      const ttl = Number.isFinite(configured) && configured >= 0 ? Math.min(configured, 300_000) : 60_000;
+      secretCache.set(cacheKey, { value, expiresAt: Date.now() + ttl });
+      return value;
+    })
+    .finally(() => secretInflight.delete(cacheKey));
+  secretInflight.set(cacheKey, pending);
+  return pending;
+}
+
 function legacyContext<P extends TenantCredentialProvider>(tenantId: string, provider: P, integration?: IntegrationReference): TenantCredentialContext<P> {
   try {
     const credentials = validateCredentials(provider, {
@@ -552,7 +740,11 @@ export async function resolveCredentialReferenceContext<P extends TenantCredenti
   let secret: Record<string, string>;
   try {
     secret = await cachedSecret(cacheKey, reference.credentialRef, reference.credentialVersion);
-  } catch {
+    if (provider === "gmail") {
+      secret = await refreshGmailOAuthSecret({ tenantId, reference: reference.credentialRef, secret });
+    }
+  } catch (error) {
+    if (error instanceof TenantCredentialError) throw error;
     throw new TenantCredentialError("secret_unavailable", provider, tenantId, `${provider} credential secret could not be read`);
   }
   try {
@@ -628,7 +820,11 @@ export async function resolveTenantCredentialContext<P extends TenantCredentialP
   let secret: Record<string, string>;
   try {
     secret = await cachedSecret(cacheKey, integration.credentialRef, integration.credentialVersion);
-  } catch {
+    if (provider === "gmail") {
+      secret = await refreshGmailOAuthSecret({ tenantId, reference: integration.credentialRef, secret });
+    }
+  } catch (error) {
+    if (error instanceof TenantCredentialError) throw error;
     throw new TenantCredentialError("secret_unavailable", provider, tenantId, `${provider} credential secret could not be read`);
   }
   try {

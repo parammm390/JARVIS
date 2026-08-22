@@ -182,7 +182,7 @@ export async function assembleOperatingContext(
   try {
     const actorId = ctx.employeeId ?? (UUID.test(ctx.userId) ? ctx.userId : undefined);
     const loaded = await withTenant(ctx.tenantId, async (db) => {
-      const [settings] = await db.select({ config: tenantSettings.universalActionConfig }).from(tenantSettings).where(eq(tenantSettings.tenantId, ctx.tenantId)).limit(1);
+      const [settings] = await db.select({ config: tenantSettings.universalActionConfig, computerConfig: tenantSettings.computerConfig }).from(tenantSettings).where(eq(tenantSettings.tenantId, ctx.tenantId)).limit(1);
       const scope = [
         ...(opts.workId ? [eq(delegations.workId, opts.workId)] : []),
         ...(actorId ? [or(
@@ -263,6 +263,7 @@ export async function assembleOperatingContext(
     const communications = record(root.communication);
     const scheduling = record(root.scheduling);
     const sharing = record(root.documentSharing);
+    const computer = record(loaded.settings?.computerConfig);
     const allowedChannels = stringArray(communications.allowedChannels).filter((channel) => ["internal", "email", "sms", "voice"].includes(channel));
     universalActions = {
       capabilities: {
@@ -272,7 +273,7 @@ export async function assembleOperatingContext(
         externalDocumentSharing: sharing.allowExternal === true,
         externalCalendarMode: scheduling.externalCalendarMode === "when_available" ? "when_available" : "internal_only",
         browserExecutable: false,
-        computerExecutable: false,
+        computerExecutable: computer.enabled === true && computer.provider === "steel",
       },
       activeDelegations: loaded.delegationRows.map((row) => ({ delegationRef: { delegationId: row.id }, target: { partyType: row.targetType as PartyRef["partyType"], partyId: row.targetId }, objective: row.objective.slice(0, 500), status: row.status, workRef: row.workId ? { workId: row.workId } : null, taskRef: row.taskId ? { taskId: row.taskId } : null, acknowledgementDeadline: iso(row.acknowledgementDeadline), completionDeadline: iso(row.completionDeadline) })),
       pendingAcknowledgements: loaded.acknowledgementRows.map((row) => ({ acknowledgementRequestId: row.id, recipient: { partyType: row.recipientType as PartyRef["partyType"], partyId: row.recipientId }, status: row.status, deadline: iso(row.deadline), delegationRef: row.delegationId ? { delegationId: row.delegationId } : null })),

@@ -2,31 +2,25 @@
 // steps (docs/jarvis-90-execution-blueprint.md §4.4). Phase 15 adds real Stripe
 // signature verification once STRIPE_WEBHOOK_SECRET exists, matching the existing
 // webhooks/ghl and webhooks/vapi routes' own pattern of failing closed once a real
-// secret exists. Absent that secret, the original generic emulator/dev shape stays
-// accepted OUTSIDE production only (A3.T6: this route used to accept it unconditionally
-// in every env, the one webhook route that didn't match every other route's own
-// "unset secret = accept-all only outside production, never in it" posture — a deploy
-// with PAYMENTS_BINDING=stripe but no webhook secret yet configured doesn't silently
-// stop working in dev, but production now fails closed like everywhere else). Dedup is
-// real regardless: transport-level via checkAndRecordReceipt (webhook_receipts),
-// business-level via applyPaymentWebhookEvent's receiveInboxEvent (inbox_events) —
-// the same two-layer dedup the ghl/vapi routes already use.
+// secret exists. The generic emulator/bridge shape uses its own timestamped shared
+// secret plus an opaque tenant-bound route in every environment. Replay claiming,
+// canonical payment state, integration event matching, and wake enqueue commit as one
+// tenant transaction inside applyPaymentWebhookEvent.
 
 import { z } from "zod";
 import { applyPaymentWebhookEvent } from "../../../../../../packages/domain-plugins/invoice-to-cash/index";
-import { checkAndRecordReceipt } from "../../../../lib/webhook-replay";
 import { errorResponse } from "../../../../lib/auth";
 import { verifyTimestampedHmacSignature } from "../../../../lib/verify-hmac-signature";
 import { logWithTrace } from "@finnor/tools";
 import { resolveTenantCredentialContext } from "@finnor/security";
+import { getPool } from "@finnor/db";
 
 const PaymentWebhookSchema = z.object({
-  tenantId: z.string().uuid(),
   invoiceId: z.string().uuid(),
   providerEventId: z.string().min(1),
   amountUsd: z.number().positive(),
   status: z.enum(["succeeded", "failed"]),
-});
+}).strict();
 
 // Stripe's checkout.session.completed event — only the fields this route reads.
 // tenantId/invoiceId round-trip via the metadata createStripePaymentLink set at
@@ -82,9 +76,6 @@ export async function POST(req: Request): Promise<Response> {
         return Response.json({ error: "checkout.session.completed missing tenantId/invoiceId metadata" }, { status: 400 });
       }
 
-      const receipt = await checkAndRecordReceipt("stripe", event.id, rawBody);
-      if (receipt === "duplicate") return Response.json({ received: true, duplicate: true });
-
       const result = await applyPaymentWebhookEvent({
         tenantId: metadata.tenantId,
         invoiceId: metadata.invoiceId,
@@ -92,39 +83,45 @@ export async function POST(req: Request): Promise<Response> {
         amountUsd: (event.data.object.amount_total ?? 0) / 100,
         status: "succeeded",
       });
-      return Response.json({ received: true, applied: result.applied });
+      return Response.json({ received: true, applied: result.applied, duplicate: result.reason === "duplicate delivery" });
     }
 
-    // A3.T6: no STRIPE_WEBHOOK_SECRET configured — same fail posture as every other
-    // webhook route in this repo (ghl/vapi/esign): accept-all is a dev convenience
-    // ONLY, never in production. Before this gate existed, this route was the one
-    // exception that accepted an unsigned, caller-supplied-tenantId payload in
-    // production too — a real, live gap (anyone who knew a tenantId could POST a fake
-    // "payment succeeded" event and have it applied) whenever PAYMENTS_BINDING wasn't
-    // yet stripe with its secret configured.
-    if (process.env.NODE_ENV === "production") {
+    // Generic emulator/bridge delivery has no platform-native signature, so it uses
+    // an explicit timestamped shared secret and opaque tenant-bound route. The body
+    // never selects a tenant, in any environment.
+    const emulatorVerified = verifyTimestampedHmacSignature(req, {
+      header: "x-payment-signature",
+      secret: process.env.PAYMENT_EMULATOR_WEBHOOK_SECRET,
+      rawBody,
+      allowUnsetSecret: false,
+    });
+    if (!emulatorVerified) {
       logWithTrace({ route: "webhooks/payment" }).warn(
-        { event: "webhook_signature_rejected", provider: "payment_provider", reason: "no STRIPE_WEBHOOK_SECRET configured in production" },
-        "rejected webhook: no verification secret configured in production",
+        { event: "webhook_signature_rejected", provider: "payment_emulator" },
+        "rejected emulator webhook: bad x-payment-signature",
       );
       return Response.json({ error: "Bad signature" }, { status: 401 });
     }
 
-    // No real provider configured, non-production — original generic emulator/dev shape, unchanged.
     const parsed = PaymentWebhookSchema.safeParse(json);
     if (!parsed.success) return Response.json({ error: "Malformed webhook" }, { status: 400 });
-
-    const receipt = await checkAndRecordReceipt("payment_provider", parsed.data.providerEventId, rawBody);
-    if (receipt === "duplicate") return Response.json({ received: true, duplicate: true });
+    const routeId = req.headers.get("x-finnor-route-id")?.trim() ?? "";
+    if (!routeId) return Response.json({ error: "Missing tenant-bound webhook route" }, { status: 400 });
+    const resolved = await getPool().query<{ tenant_id: string | null }>(
+      "SELECT finnor_os.resolve_inbound_provider_tenant('payment_emulator',$1) tenant_id",
+      [routeId],
+    );
+    const tenantId = resolved.rows[0]?.tenant_id;
+    if (!tenantId) return Response.json({ error: "Webhook route is not mapped to exactly one tenant" }, { status: 400 });
 
     const result = await applyPaymentWebhookEvent({
-      tenantId: parsed.data.tenantId,
+      tenantId,
       invoiceId: parsed.data.invoiceId,
       providerEventId: parsed.data.providerEventId,
       amountUsd: parsed.data.amountUsd,
       status: parsed.data.status,
     });
-    return Response.json({ received: true, applied: result.applied });
+    return Response.json({ received: true, applied: result.applied, duplicate: result.reason === "duplicate delivery" });
   } catch (err) {
     return errorResponse(err);
   }

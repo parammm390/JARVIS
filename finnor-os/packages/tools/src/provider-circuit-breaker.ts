@@ -5,9 +5,10 @@
 // invocations (Vercel API routes, worker job handlers) with no shared process memory,
 // so "3 consecutive failures" only means anything if it survives between calls.
 
-import { adminDb, providerCircuitState } from "@finnor/db";
+import { adminDb, getPool, providerCircuitState } from "@finnor/db";
 import { eq, sql } from "drizzle-orm";
 import { logWithTrace } from "./logger";
+import { randomUUID } from "node:crypto";
 
 const OPEN_AFTER_CONSECUTIVE_FAILURES = 3;
 // A3.T3: real half-open recovery — before this, an opened breaker refused every
@@ -58,7 +59,7 @@ export async function recordProviderSuccess(provider: string, tenantId?: string)
     .values({ provider: key, consecutiveFailures: 0, state: "closed", lastSuccessAt: new Date(), updatedAt: new Date() })
     .onConflictDoUpdate({
       target: providerCircuitState.provider,
-      set: { consecutiveFailures: 0, state: "closed", openedAt: null, lastSuccessAt: new Date(), updatedAt: new Date() },
+      set: { consecutiveFailures: 0, state: "closed", openedAt: null, probeLeaseOwner: null, probeLeaseExpiresAt: null, lastSuccessAt: new Date(), updatedAt: new Date() },
     });
 }
 
@@ -85,7 +86,7 @@ export async function recordProviderFailure(provider: string, tenantId?: string)
   if (row!.state === "open") {
     const [restamped] = await adminDb()
       .update(providerCircuitState)
-      .set({ openedAt: new Date() })
+      .set({ openedAt: new Date(), probeLeaseOwner: null, probeLeaseExpiresAt: null })
       .where(eq(providerCircuitState.provider, key))
       .returning();
     return { provider, state: "open", consecutiveFailures: restamped!.consecutiveFailures, openedAt: restamped!.openedAt };
@@ -93,7 +94,7 @@ export async function recordProviderFailure(provider: string, tenantId?: string)
   if (row!.consecutiveFailures >= OPEN_AFTER_CONSECUTIVE_FAILURES) {
     const [opened] = await adminDb()
       .update(providerCircuitState)
-      .set({ state: "open", openedAt: new Date() })
+      .set({ state: "open", openedAt: new Date(), probeLeaseOwner: null, probeLeaseExpiresAt: null })
       .where(eq(providerCircuitState.provider, key))
       .returning();
     return { provider, state: opened!.state as "open", consecutiveFailures: opened!.consecutiveFailures, openedAt: opened!.openedAt };
@@ -132,7 +133,22 @@ export async function withCircuitBreaker<T>(provider: string, fn: () => Promise<
       log.warn({ event: "circuit_breaker_refused", consecutiveFailures: snap.consecutiveFailures }, `circuit breaker open for ${provider} — call refused`);
       throw new Error(`degraded: awaiting ${provider} (circuit breaker open after repeated failures)`);
     }
-    log.info({ event: "circuit_breaker_half_open_probe" }, `circuit breaker cooldown elapsed for ${provider} — attempting one probe call`);
+    const key = scopedProvider(provider, meta.tenantId);
+    const probeOwner = randomUUID();
+    const claimed = await getPool().query(
+      `UPDATE finnor_os.provider_circuit_state
+          SET probe_lease_owner=$2,probe_lease_expires_at=now()+interval '30 seconds',updated_at=now()
+        WHERE provider=$1 AND state='open'
+          AND opened_at<=now()-interval '60 seconds'
+          AND (probe_lease_expires_at IS NULL OR probe_lease_expires_at<=now())
+      RETURNING provider`,
+      [key, probeOwner],
+    );
+    if (claimed.rowCount !== 1) {
+      log.warn({ event: "circuit_breaker_probe_already_claimed" }, `circuit breaker probe already in flight for ${provider}`);
+      throw new Error(`degraded: awaiting ${provider} (half-open probe already in flight)`);
+    }
+    log.info({ event: "circuit_breaker_half_open_probe", probeOwner }, `circuit breaker cooldown elapsed for ${provider} — attempting one probe call`);
   }
   try {
     const result = await fn();

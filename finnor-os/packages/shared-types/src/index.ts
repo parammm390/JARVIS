@@ -9,6 +9,7 @@ export * from "./company-graph";
 export * from "./operating-context";
 export * from "./identity-access";
 export * from "./universal-actions";
+export * from "./computer";
 
 export type Role = "owner" | "dispatcher" | "technician";
 

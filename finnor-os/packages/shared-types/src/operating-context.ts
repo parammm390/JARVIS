@@ -141,7 +141,7 @@ export interface OperatingContext {
       externalDocumentSharing: boolean;
       externalCalendarMode: "internal_only" | "when_available";
       browserExecutable: false;
-      computerExecutable: false;
+      computerExecutable: boolean;
     };
     activeDelegations: Array<{
       delegationRef: { delegationId: string };

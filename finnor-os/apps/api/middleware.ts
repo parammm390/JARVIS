@@ -12,7 +12,7 @@ function corsHeaders(requestOrigin: string | null): Record<string, string> {
   const origin = requestOrigin && ALLOWED_ORIGINS.includes(requestOrigin) ? requestOrigin : ALLOWED_ORIGINS[0]!;
   return {
     "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "authorization, content-type, x-tenant-id, x-user-id, x-user-role",
     "Access-Control-Max-Age": "86400",
   };
@@ -25,11 +25,12 @@ export function middleware(req: NextRequest) {
   }
   const isWebhook =
     req.nextUrl.pathname.startsWith("/api/webhooks/") ||
-    req.nextUrl.pathname.startsWith("/api/admin/"); // admin routes carry their own ADMIN_SECRET check
+    req.nextUrl.pathname.startsWith("/api/admin/") || // admin routes carry their own ADMIN_SECRET check
+    req.nextUrl.pathname === "/api/connections/google/callback"; // signed state + PKCE + one-time DB claim
   // Release provenance and liveness are deliberately anonymous. Keep this
   // boundary aligned with their route handlers so platform middleware cannot
   // turn a healthy deployment into an apparent 401 before either handler runs.
-  const isPublicReadiness = req.nextUrl.pathname === "/api/release" || req.nextUrl.pathname === "/api/health";
+  const isPublicReadiness = req.nextUrl.pathname === "/api/release" || req.nextUrl.pathname === "/api/health" || req.nextUrl.pathname === "/api/ready";
   const hasAuth =
     req.headers.has("authorization") ||
     // Same NODE_ENV gate as lib/auth.ts's requireContext(): a misconfigured prod deploy

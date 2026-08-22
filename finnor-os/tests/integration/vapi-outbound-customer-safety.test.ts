@@ -110,6 +110,16 @@ describe.skipIf(!available)("Vapi outbound customer safety", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ outbound: true, outcome: "interested" });
 
+    const replay = await POST(reportRequest(callId, householdId, {
+      outcome: "interested",
+      sentiment: "positive",
+      appointmentRequested: true,
+      preferredTimeText: "Tuesday afternoon",
+      optOut: false,
+      experienceSummary: "Happy with the water quality and interested in a filter check.",
+    }, "Tuesday afternoon would be great."));
+    expect(await replay.json()).toMatchObject({ outbound: true, duplicate: true });
+
     const queued = await adminDb().select().from(jobs).where(eq(jobs.idempotencyKey, `vapi:${callId}`));
     expect(queued).toHaveLength(0);
     const state = await withTenant(SEED_TENANT_ID, async (db) => ({
@@ -120,8 +130,9 @@ describe.skipIf(!available)("Vapi outbound customer safety", () => {
     }));
     expect(state.calls).toHaveLength(1);
     expect(state.calls[0]!.direction).toBe("outbound");
+    expect(state.comms).toHaveLength(1);
     expect(state.comms.at(-1)?.content).toContain("outcome: interested");
-    expect(state.tasks.some((task) => task.title.includes("Tuesday afternoon"))).toBe(true);
+    expect(state.tasks.filter((task) => task.title.includes("Tuesday afternoon"))).toHaveLength(1);
     expect(state.events).toHaveLength(1);
   });
 

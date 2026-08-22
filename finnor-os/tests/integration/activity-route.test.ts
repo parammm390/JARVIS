@@ -1,11 +1,11 @@
-// A2.T6 acceptance: GET /api/activity merges action_log + workflow_steps + calls into
-// one tenant-scoped, cursor-paginated feed — real rows from all three sources, real
+// A2.T6 acceptance: GET /api/activity merges action_log + workflow_steps +
+// computer_steps + Work events + calls into one tenant-scoped, cursor-paginated feed — real
 // tenant isolation, and a monotonic since-cursor that never re-serves the same item.
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import pg from "pg";
 import { migrate } from "../../packages/db/migrate";
-import { withTenant, closePool, tenants, domainActions } from "@finnor/db";
+import { withTenant, closePool, tenants, domainActions, receiveWork } from "@finnor/db";
 import { appendEpisode } from "@finnor/memory";
 import { persistCall } from "@finnor/data-platform";
 import { submitCommand } from "@finnor/workflow-runtime";
@@ -47,6 +47,13 @@ async function seedTenantActivity(tenantId: string, tag: string) {
     }),
   );
 
+  await receiveWork({
+    tenantId,
+    channel: "console",
+    instruction: `activity test work ${tag}`,
+    idempotencyKey: `activity-test-work-${tag}`,
+  });
+
   await withTenant(tenantId, (db) =>
     persistCall(db, {
       tenantId,
@@ -77,7 +84,7 @@ describe.skipIf(!available)("GET /api/activity", () => {
     process.env.AUTH_DEV_BYPASS = original;
   });
 
-  it("merges all three sources for the requesting tenant and excludes the other tenant's rows", async () => {
+  it("merges canonical sources, including Work events, and excludes the other tenant's rows", async () => {
     await seedTenantActivity(TENANT_A, "merge");
     await seedTenantActivity(TENANT_B, "other-tenant");
 
@@ -87,6 +94,7 @@ describe.skipIf(!available)("GET /api/activity", () => {
     const sources = new Set(body.items.map((i: { source: string }) => i.source));
     expect(sources.has("action_log")).toBe(true);
     expect(sources.has("workflow_step")).toBe(true);
+    expect(sources.has("work_event")).toBe(true);
     expect(sources.has("call")).toBe(true);
 
     // None of tenant B's rows leak into tenant A's feed.

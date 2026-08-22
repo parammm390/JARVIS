@@ -28,6 +28,10 @@ const RunControlBodySchema = z.object({ expectedVersion: z.number().int().nonneg
 const SubmitCorrectionBodySchema = z.object({ receiptId: z.string().uuid(), correctedFact: z.string().min(1).max(2000) });
 const RetryWorkBodySchema = z.object({ idempotencyKey: z.string().min(1).max(200) });
 const RetryOperationBodySchema = z.object({ recoveryKey: z.string().min(1).max(200) });
+const BeginGoogleConnectionBodySchema = z.object({
+  authProfileRef: z.string().regex(/^[a-z0-9][a-z0-9_-]{1,126}[a-z0-9]$/),
+  redirectUri: z.string().url().optional(),
+}).strict();
 
 // Upgrade 3: the typed operational-query request is intentionally mirrored here
 // as a strict discriminated union. Tenant identity is never part of this schema;
@@ -173,6 +177,45 @@ const doc = {
       "Multi-tenant AI orchestration API for water treatment dealers. All /api routes (except webhooks) require a Supabase bearer token; every response is tenant-scoped by RLS.",
   },
   paths: {
+    "/api/ready": {
+      get: { summary: "Dependency readiness for database, migration head, worker fleet, and managed secrets", responses: { "200": { description: "Ready with exact release provenance" }, "503": { description: "A process-level dependency is not ready" } } },
+    },
+    "/api/connections/google/start": {
+      post: {
+        summary: "Start a governed Google OAuth connection using one-time state and PKCE",
+        requestBody: { content: { "application/json": { schema: s(BeginGoogleConnectionBodySchema) } } },
+        responses: { "200": { description: "Safe provider authorization URL and expiry; verifier remains HttpOnly" }, "400": { description: "Invalid or unsupported connection" }, "401": { description: "Bad auth" }, "403": { description: "Employee authority denied" } },
+      },
+    },
+    "/api/connections/google/callback": {
+      get: {
+        summary: "Consume one Google OAuth callback and bind the verified provider account",
+        parameters: [
+          { name: "state", in: "query", required: true, schema: { type: "string" } },
+          { name: "code", in: "query", required: true, schema: { type: "string" } },
+        ],
+        responses: { "303": { description: "Redirect to the connection settings result" } },
+      },
+    },
+    "/api/connections/{ref}": {
+      get: {
+        summary: "Read safe connection lifecycle status",
+        parameters: [{ name: "ref", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "Safe status/scopes/timestamps without credential reference or token" }, "401": { description: "Bad auth" }, "404": { description: "Profile not found" } },
+      },
+      delete: {
+        summary: "Revoke a governed connection locally and attempt provider revocation",
+        parameters: [{ name: "ref", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "Local revocation is authoritative" }, "401": { description: "Bad auth" }, "403": { description: "Employee authority denied" } },
+      },
+    },
+    "/api/connections/{ref}/verify": {
+      post: {
+        summary: "Run a bounded connection health verification",
+        parameters: [{ name: "ref", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "Connection usable" }, "409": { description: "Connection degraded, expired, or requires reauthentication" } },
+      },
+    },
     // --- Proxy-reachable surface (src/app/api/jarvis/[...path]/route.ts's own
     // allowlist) — C1.T1 audited this against every real route.ts file this session,
     // not assumed from the old (9-path) version of this doc. Response bodies mostly
@@ -262,6 +305,18 @@ const doc = {
           "404": { description: "Operation not found" },
           "409": { description: "Operation has no recoverable targets or cannot be retried in its current state" },
         },
+      },
+    },
+    "/api/computer/runs/{id}": {
+      get: {
+        summary: "Reconstruct one tenant-scoped computer run from safe durable run, step, and artifact metadata",
+        responses: { "200": { description: "{run, steps, artifacts}; no provider/auth handles or artifact bytes" }, "404": { description: "Computer run not found" } },
+      },
+    },
+    "/api/computer/runs/{id}/cancel": {
+      post: {
+        summary: "Request durable cancellation of an active computer run",
+        responses: { "200": { description: "{run, cancellationRequested}" }, "403": { description: "Not the actor or an authorized approver" }, "404": { description: "Computer run not found" } },
       },
     },
     "/api/actions/{id}/reject": {
@@ -438,7 +493,7 @@ const doc = {
     },
     "/api/activity": {
       get: {
-        summary: "D1.T3 activity theater — merged action_log + workflow_step + call feed, forward-only (occurredAt,id) keyset cursor",
+        summary: "D1.T3 activity theater — merged action_log + workflow_step + computer_step + call feed, forward-only (occurredAt,id) keyset cursor",
         parameters: [
           { name: "since", in: "query", schema: { type: "string" } },
           { name: "limit", in: "query", schema: { type: "integer" } },

@@ -152,6 +152,13 @@ export class GatedExecutor implements Executor {
     });
     await appendEpisode(action.tenantId, action.id, "execute", { draft: draft.payload }, { ...result });
 
+    // computer_task's synchronous action result means "durably queued", not
+    // "business task succeeded". The worker owns the executing -> terminal action
+    // transition after it observes verifiable external evidence.
+    if (result.status === "success" && result.output.pendingComputerRun === true) {
+      return result;
+    }
+
     const finalStatus =
       result.status === "success"
         ? "completed"

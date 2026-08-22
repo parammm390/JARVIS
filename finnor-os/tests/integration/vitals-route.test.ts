@@ -1,11 +1,11 @@
 // A2.T5 acceptance: GET /api/vitals — auth required, and each section reflects real
 // DB state (queue depth/oldest-pending age from a real queued job, DLQ count scoped to
-// THIS tenant only, heartbeat age from a real worker_heartbeat row).
+// THIS tenant only, heartbeat age from the canonical release-heartbeat fleet).
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import pg from "pg";
 import { migrate } from "../../packages/db/migrate";
-import { getPool, withTenant, closePool, tenants, deadLetters, workerHeartbeat } from "@finnor/db";
+import { getPool, withTenant, closePool, tenants, deadLetters } from "@finnor/db";
 import { GET as vitalsRoute } from "../../apps/api/app/api/vitals/route";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
@@ -83,20 +83,23 @@ describe.skipIf(!available)("GET /api/vitals", () => {
     expect(bodyB.dlq.openCount).toBe(2);
   });
 
-  it("reports heartbeat age from a real worker_heartbeat row, and unhealthy when stale", async () => {
-    await getPool().query(`DELETE FROM worker_heartbeat WHERE id = 'worker'`);
+  it("reports exact worker release/migration identity and becomes unhealthy when the fleet is stale", async () => {
+    await getPool().query(`DELETE FROM service_release_heartbeats WHERE service='worker'`);
     const res1 = await vitalsRoute(req(TENANT_A));
     const body1 = await res1.json();
     expect(body1.heartbeat.ageSeconds).toBeNull();
     expect(body1.heartbeat.healthy).toBe(false);
 
-    await getPool().query(`INSERT INTO worker_heartbeat (id, last_beat_at) VALUES ('worker', now())`);
+    await getPool().query(`INSERT INTO service_release_heartbeats
+      (service,instance_id,release_sha,build_id,version,release_source,core_certification_id,migration_head,capabilities,environment,last_beat_at)
+      VALUES ('worker','vitals-worker','phase5-sha','finnor-phase5','0.1.0+phase5','test','corecert-test','0090_phase5_production_connection_reliability.sql',ARRAY['jobs','orchestration'],'test',now())`);
     const res2 = await vitalsRoute(req(TENANT_A));
     const body2 = await res2.json();
     expect(body2.heartbeat.ageSeconds).toBeLessThan(5);
     expect(body2.heartbeat.healthy).toBe(true);
+    expect(body2.heartbeat).toMatchObject({ releaseSha: "phase5-sha", migrationHead: "0090_phase5_production_connection_reliability.sql" });
 
-    await getPool().query(`UPDATE worker_heartbeat SET last_beat_at = now() - interval '10 minutes' WHERE id = 'worker'`);
+    await getPool().query(`UPDATE service_release_heartbeats SET last_beat_at=now()-interval '10 minutes' WHERE service='worker'`);
     const res3 = await vitalsRoute(req(TENANT_A));
     const body3 = await res3.json();
     expect(body3.heartbeat.healthy).toBe(false);

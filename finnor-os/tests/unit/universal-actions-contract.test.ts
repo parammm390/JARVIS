@@ -75,8 +75,9 @@ describe("Universal Action + Delegation contract", () => {
     expect(universalActionsPlugin.actionTypes).toEqual(UNIVERSAL_ACTION_TYPES);
 
     const registered = createDefaultPluginRegistry().actionTypes();
-    expect(registered).toHaveLength(58);
-    expect(new Set(registered).size).toBe(58);
+    expect(registered).toHaveLength(59);
+    expect(new Set(registered).size).toBe(59);
+    expect(registered).toContain("computer_task");
     for (const row of LEGACY_ACTION_HARDENING_SPEC) expect(registered).toContain(row.actionType);
     for (const actionType of UNIVERSAL_ACTION_TYPES) expect(registered).toContain(actionType);
   });

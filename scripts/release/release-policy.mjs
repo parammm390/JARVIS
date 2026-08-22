@@ -41,42 +41,35 @@ export function assertResolvedTarget(label, expected, observed, keys) {
     const expectedValue = expected[key]
     const observedValue = observed?.[key]
     if (typeof expectedValue === "string" && typeof observedValue === "string") {
-      return expectedValue.toLowerCase() === observedValue.toLowerCase()
-        ? []
-        : [`${key}: ${observedValue} != ${expectedValue}`]
+      return expectedValue.toLowerCase() === observedValue.toLowerCase() ? [] : [`${key}: ${observedValue} != ${expectedValue}`]
     }
     return observedValue === expectedValue ? [] : [`${key}: ${observedValue ?? "<missing>"} != ${expectedValue ?? "<missing>"}`]
   })
   if (failures.length) throw new Error(`${label} target differs from canonical contract:\n${failures.join("\n")}`)
 }
 
-function migrationSequence(name) {
-  const match = /^(\d{4})_/.exec(name ?? "")
-  return match ? Number(match[1]) : Number.NaN
-}
-
 export function assertRuntimeParity(contract, expected, observed) {
-  const required = new Set(contract.release.requiredComponents)
-  if (contract.topology.orchestrator.separateDeployment) required.add("orchestrator")
   const failures = []
-  for (const component of required) {
+  if (contract.topology.orchestrator.separateDeployment === false && contract.topology.orchestrator.releaseIdentity !== "worker") {
+    failures.push("embedded orchestrator must inherit worker release identity")
+  }
+  for (const component of contract.release.requiredComponents) {
     const release = observed[component]
     if (!release) {
       failures.push(`${component}: missing release evidence`)
       continue
     }
-    for (const key of ["commitSha", "buildId", "version", "environment", "source"]) {
-      if (release[key] !== expected[key]) failures.push(`${component}.${key}: ${release[key] ?? "<missing>"} != ${expected[key]}`)
+    for (const key of ["commitSha", "buildId", "version", "environment", "source", "coreCertificationId"]) {
+      const expectedValue = key === "coreCertificationId" ? observed.expectedCoreCertificationId : expected[key]
+      if (release[key] !== expectedValue) failures.push(`${component}.${key}: ${release[key] ?? "<missing>"} != ${expectedValue ?? "<missing>"}`)
     }
     if (release.traceable !== true) failures.push(`${component}: release metadata is not traceable`)
   }
-  if (contract.topology.orchestrator.separateDeployment === false && contract.topology.orchestrator.releaseIdentity !== "worker") {
-    failures.push("embedded orchestrator must inherit worker release identity")
+  if (!observed.worker?.capabilities?.includes(contract.topology.orchestrator.requiredCapability)) {
+    failures.push("worker release does not prove the embedded orchestrator capability")
   }
-  const observedMigration = migrationSequence(observed.migrationHead)
-  const requiredMigration = migrationSequence(contract.release.requiredMigrationHead)
-  if (!Number.isFinite(observedMigration) || observedMigration < requiredMigration) {
-    failures.push(`database migration head: ${observed.migrationHead ?? "<missing>"} < ${contract.release.requiredMigrationHead}`)
+  if (observed.migrationHead !== contract.release.requiredMigrationHead) {
+    failures.push(`database migration head: ${observed.migrationHead ?? "<missing>"} != ${contract.release.requiredMigrationHead}`)
   }
   if (failures.length) throw new Error(`release parity failed:\n${failures.join("\n")}`)
 }

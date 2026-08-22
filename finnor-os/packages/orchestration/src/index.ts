@@ -75,6 +75,7 @@ export * from "./authority-runtime";
 export * from "./objective-loop";
 export * from "./operating-context";
 export * from "./research-context";
+export * from "./event-waits";
 
 const EXTERNAL_RESEARCH_ACTION_TYPES = new Set(["search_web", "scan_competitors", "check_business_reviews"]);
 

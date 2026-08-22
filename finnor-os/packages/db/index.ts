@@ -6,11 +6,12 @@
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import * as schema from "./schema";
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { CANONICAL_ENTITY_TYPES, type AttachWorkEntityInput, type CanonicalEntityRef } from "@finnor/shared-types";
 
 export * from "./schema";
+export * from "./event-fabric";
 export { schema };
 
 export type Db = NodePgDatabase<typeof schema>;
@@ -998,6 +999,9 @@ export type WorkAggregate = Record<string, unknown> & {
   objectiveLoop: typeof schema.workObjectiveLoops.$inferSelect | null;
   objectiveSteps: Array<typeof schema.workObjectiveSteps.$inferSelect>;
   objectivePlannerAttempts: Array<typeof schema.workObjectivePlannerAttempts.$inferSelect>;
+  eventWaits: Array<typeof schema.workEventWaits.$inferSelect>;
+  wakeClaims: Array<typeof schema.workWakeClaims.$inferSelect>;
+  integrationEvents: Array<typeof schema.integrationEvents.$inferSelect>;
 };
 
 export async function workAggregate(tenantId: string, workId: string): Promise<WorkAggregate | null> {
@@ -1030,7 +1034,16 @@ export async function workAggregate(tenantId: string, workId: string): Promise<W
     const [objectiveLoop] = await db.select().from(schema.workObjectiveLoops).where(and(eq(schema.workObjectiveLoops.tenantId, tenantId), eq(schema.workObjectiveLoops.workId, workId))).limit(1);
     const objectiveSteps = objectiveLoop ? await db.select().from(schema.workObjectiveSteps).where(and(eq(schema.workObjectiveSteps.tenantId, tenantId), eq(schema.workObjectiveSteps.objectiveLoopId, objectiveLoop.id))).orderBy(asc(schema.workObjectiveSteps.stepNumber)) : [];
     const objectivePlannerAttempts = objectiveLoop ? await db.select().from(schema.workObjectivePlannerAttempts).where(and(eq(schema.workObjectivePlannerAttempts.tenantId, tenantId), eq(schema.workObjectivePlannerAttempts.objectiveLoopId, objectiveLoop.id))).orderBy(asc(schema.workObjectivePlannerAttempts.startedAt)) : [];
-    return { work, inputs, plannerAttempts, actions, approvals, workflowRuns, workflowSteps, receipts, repairs, events, queryExecutions, entityLinks, operations, operationTargets, operationEvents, objectiveLoop: objectiveLoop ?? null, objectiveSteps, objectivePlannerAttempts };
+    const eventWaits = await db.select().from(schema.workEventWaits).where(and(eq(schema.workEventWaits.tenantId, tenantId), eq(schema.workEventWaits.workId, workId))).orderBy(asc(schema.workEventWaits.createdAt));
+    const wakeClaims = await db.select().from(schema.workWakeClaims).where(and(eq(schema.workWakeClaims.tenantId, tenantId), eq(schema.workWakeClaims.workId, workId))).orderBy(asc(schema.workWakeClaims.claimedAt));
+    const wakeEventIds = wakeClaims.map((claim) => claim.integrationEventId);
+    const integrationEvents = await db.select().from(schema.integrationEvents).where(and(
+      eq(schema.integrationEvents.tenantId, tenantId),
+      wakeEventIds.length > 0
+        ? or(eq(schema.integrationEvents.workId, workId), inArray(schema.integrationEvents.id, wakeEventIds))
+        : eq(schema.integrationEvents.workId, workId),
+    )).orderBy(asc(schema.integrationEvents.occurredAt));
+    return { work, inputs, plannerAttempts, actions, approvals, workflowRuns, workflowSteps, receipts, repairs, events, queryExecutions, entityLinks, operations, operationTargets, operationEvents, objectiveLoop: objectiveLoop ?? null, objectiveSteps, objectivePlannerAttempts, eventWaits, wakeClaims, integrationEvents };
   });
 }
 

@@ -21,6 +21,7 @@ import type {
 import { and, eq } from "drizzle-orm";
 import {
   resolveCredentialReferenceContext,
+  resolveTenantBoundSecretBundle,
   resolveTenantCredentialContext,
   TenantCredentialError,
   type TenantCredentialContext,
@@ -183,6 +184,13 @@ type CommunicationCandidate = {
   credentialProvider: "aws-secrets-manager" | "legacy-env" | null;
   credentialRef: string | null;
   credentialVersion: string | null;
+  authProfileId: string | null;
+  linkedAuthProfileRef: string | null;
+  linkedCredentialProvider: "aws-secrets-manager" | "os-keychain" | "legacy-env" | null;
+  linkedCredentialRef: string | null;
+  linkedCredentialVersion: string | null;
+  linkedProfileStatus: "active" | "disabled" | "suspended" | null;
+  linkedConnectionStatus: string | null;
   principalType: IdentityPrincipalRef["type"];
   principalId: string;
   purpose: string;
@@ -204,6 +212,13 @@ async function communicationRows(tenantId: string): Promise<CommunicationCandida
     credentialProvider: communicationIdentities.credentialProvider,
     credentialRef: communicationIdentities.credentialRef,
     credentialVersion: communicationIdentities.credentialVersion,
+    authProfileId: communicationIdentities.authProfileId,
+    linkedAuthProfileRef: authProfiles.authProfileRef,
+    linkedCredentialProvider: authProfiles.credentialProvider,
+    linkedCredentialRef: authProfiles.credentialRef,
+    linkedCredentialVersion: authProfiles.credentialVersion,
+    linkedProfileStatus: authProfiles.status,
+    linkedConnectionStatus: authProfiles.connectionStatus,
     principalType: communicationIdentityBindings.principalType,
     principalId: communicationIdentityBindings.principalId,
     purpose: communicationIdentityBindings.purpose,
@@ -212,6 +227,9 @@ async function communicationRows(tenantId: string): Promise<CommunicationCandida
   }).from(communicationIdentityBindings).innerJoin(communicationIdentities, and(
     eq(communicationIdentities.tenantId, tenantId),
     eq(communicationIdentities.id, communicationIdentityBindings.communicationIdentityId),
+  )).leftJoin(authProfiles, and(
+    eq(authProfiles.tenantId, tenantId),
+    eq(authProfiles.id, communicationIdentities.authProfileId),
   )).where(eq(communicationIdentityBindings.tenantId, tenantId))) as Promise<CommunicationCandidate[]>;
 }
 
@@ -245,6 +263,7 @@ async function resolveCommunication<P extends TenantCredentialProvider>(params: 
   const candidates = all.flatMap((row) => {
     if (params.explicitId && row.identityId !== params.explicitId) return [];
     if (row.identityStatus !== "active" || row.bindingStatus !== "active") return [];
+    if (row.authProfileId && (row.linkedProfileStatus !== "active" || row.linkedCredentialProvider === "os-keychain" || !["active", "degraded"].includes(row.linkedConnectionStatus ?? ""))) return [];
     if (row.provider !== params.provider || row.channel !== params.channel) return [];
     const purpose = purposeRank(row.purpose, params.purpose);
     if (purpose === null) return [];
@@ -274,9 +293,9 @@ async function resolveCommunication<P extends TenantCredentialProvider>(params: 
       const selected = allowed.sort((a, b) => a.candidate.row.bindingId.localeCompare(b.candidate.row.bindingId))[0]!;
       const row = selected.candidate.row;
       const credential = await resolveCredentialReferenceContext(params.tenantId, params.provider, {
-        credentialProvider: row.credentialProvider,
-        credentialRef: row.credentialRef,
-        credentialVersion: row.credentialVersion,
+        credentialProvider: row.authProfileId ? row.linkedCredentialProvider as "aws-secrets-manager" | "legacy-env" | null : row.credentialProvider,
+        credentialRef: row.authProfileId ? row.linkedCredentialRef : row.credentialRef,
+        credentialVersion: row.authProfileId ? row.linkedCredentialVersion : row.credentialVersion,
         publicMetadata: communicationMetadata(params.provider, row),
         integration: { id: row.identityId, capability: "communications", binding: row.provider },
       });
@@ -286,6 +305,7 @@ async function resolveCommunication<P extends TenantCredentialProvider>(params: 
         principalRef: selected.candidate.principalRef,
         authorityDecisionId: selected.decisionId,
         communicationIdentityId: row.identityId,
+        ...(row.linkedAuthProfileRef ? { authProfileRef: row.linkedAuthProfileRef } : {}),
       });
     }
     cursor += group.length;
@@ -345,10 +365,14 @@ type AuthCandidate = {
   purpose: string;
   priority: number;
   scope: unknown;
-  credentialProvider: "aws-secrets-manager" | "legacy-env" | null;
+  credentialProvider: "aws-secrets-manager" | "os-keychain" | "legacy-env" | null;
   credentialRef: string | null;
   credentialVersion: string | null;
   profileStatus: "active" | "disabled" | "suspended";
+  authMethod: "managed_secret" | "oauth2" | "browser_profile";
+  connectionStatus: string;
+  requiredScopes: unknown;
+  grantedScopes: unknown;
   profileCapabilities: unknown;
   restrictions: unknown;
 };
@@ -375,6 +399,10 @@ async function authRows(tenantId: string): Promise<AuthCandidate[]> {
     credentialRef: authProfiles.credentialRef,
     credentialVersion: authProfiles.credentialVersion,
     profileStatus: authProfiles.status,
+    authMethod: authProfiles.authMethod,
+    connectionStatus: authProfiles.connectionStatus,
+    requiredScopes: authProfiles.requiredScopes,
+    grantedScopes: authProfiles.grantedScopes,
     profileCapabilities: authProfiles.capabilities,
     restrictions: authProfiles.restrictions,
   }).from(authProfiles).innerJoin(applicationAccounts, and(
@@ -418,20 +446,22 @@ async function selectApplicationAccess(params: {
   application: string;
   purpose: string;
   authProfileRef?: string;
+  connectionSetup?: boolean;
 }): Promise<SelectedAuthProfile | null> {
   const all = await authRows(params.tenantId);
   if (params.authProfileRef && !all.some((row) => row.authProfileRef === params.authProfileRef)) {
     throw new IdentityAccessError("auth_profile_not_found", "The requested authProfileRef is unavailable in this tenant");
   }
-  if (params.authProfileRef && all.some((row) => row.authProfileRef === params.authProfileRef && (row.profileStatus !== "active" || row.accountStatus !== "active"))) {
+  if (params.authProfileRef && all.some((row) => row.authProfileRef === params.authProfileRef && (row.profileStatus !== "active" || row.accountStatus !== "active" || (!params.connectionSetup && !["active", "degraded"].includes(row.connectionStatus)) || (params.connectionSetup && row.connectionStatus === "disabled")))) {
     throw new IdentityAccessError("auth_profile_inactive", "The requested auth profile or application account is not active");
   }
   const candidates = all.flatMap((row) => {
     if (params.authProfileRef && row.authProfileRef !== params.authProfileRef) return [];
     if (row.profileStatus !== "active" || row.accountStatus !== "active") return [];
+    if (params.connectionSetup ? row.connectionStatus === "disabled" : !["active", "degraded"].includes(row.connectionStatus)) return [];
     if ((params.provider && row.provider !== params.provider) || row.application !== params.application) return [];
     if (!restrictionsAllow(row, params.actor.actorId, params.purpose)) return [];
-    const purpose = purposeRank(row.purpose, params.purpose);
+    const purpose = params.connectionSetup ? 0 : purposeRank(row.purpose, params.purpose);
     if (purpose === null) return [];
     const principalRef: IdentityPrincipalRef = { type: row.principalType, id: row.principalId };
     const related = relation(principalRef, params.tenantId, params.actor);
@@ -480,6 +510,9 @@ async function resolveApplication<P extends TenantCredentialProvider>(params: {
   const selected = await selectApplicationAccess(params);
   if (selected) {
     const row = selected.row;
+    if (row.credentialProvider === "os-keychain") {
+      throw new IdentityAccessError("no_valid_auth_profile", "OS Keychain auth profiles are restricted to governed computer execution");
+    }
     const credential = await resolveCredentialReferenceContext(params.tenantId, params.provider, {
       credentialProvider: row.credentialProvider,
       credentialRef: row.credentialRef,
@@ -608,6 +641,104 @@ export async function resolveAuthProfileRef(
   };
 }
 
+/** Authorize connection administration against the same canonical employee/account
+ * graph without pretending a disconnected profile is already runtime-usable. */
+export async function authorizeAuthProfileConnection(
+  tenantId: string,
+  actorId: string,
+  application: string,
+  authProfileRef: string,
+): Promise<ResolvedAuthProfileAccess> {
+  const actor = await loadActorScope(tenantId, actorId);
+  const selected = await selectApplicationAccess({
+    tenantId,
+    actor,
+    application,
+    purpose: "connection_admin",
+    authProfileRef,
+    connectionSetup: true,
+  });
+  if (!selected) throw new IdentityAccessError("authority_denied", "The actor is not authorized to administer this auth profile");
+  const row = selected.row;
+  return {
+    authProfileRef: row.authProfileRef,
+    applicationAccount: {
+      id: row.accountId,
+      key: row.accountKey,
+      application: row.application,
+      provider: row.provider,
+      displayName: row.displayName,
+      providerAccountRef: row.providerAccountRef,
+      status: "active",
+      capabilities: strings(row.accountCapabilities),
+    },
+    principalRef: selected.principalRef,
+    purpose: "connection_admin",
+    status: "active",
+    capabilities: strings(row.profileCapabilities),
+    restrictions: object(row.restrictions),
+    authorityDecisionId: selected.decisionId,
+  };
+}
+
+export interface ResolvedComputerAuthProfile {
+  profileId: string;
+  authProfileRef: string;
+  applicationAccountId: string;
+  application: string;
+  principalRef: IdentityPrincipalRef;
+  purpose: string;
+  capabilities: string[];
+  restrictions: Record<string, unknown>;
+  accountMetadata: Record<string, unknown>;
+  authorityDecisionId: string;
+  /** Credential-sensitive Steel restoration handles. Runtime memory only. */
+  steelSessionAuth: Readonly<{ profileId?: string; namespace?: string }>;
+}
+
+/** Resolves actor -> application account -> auth profile -> authority -> tenant-bound
+ * managed secret for a computer run. Only Steel restoration handles survive the
+ * narrowing step; passwords, cookies, tokens, and arbitrary secret fields never
+ * cross this boundary or reach planner-visible projections. */
+export async function resolveComputerAuthProfile(
+  tenantId: string,
+  actorId: string,
+  application: string,
+  purpose: string,
+  authProfileRef: string,
+): Promise<ResolvedComputerAuthProfile> {
+  const actor = await loadActorScope(tenantId, actorId);
+  const selected = await selectApplicationAccess({ tenantId, actor, application, purpose, authProfileRef });
+  if (!selected) throw new IdentityAccessError("no_valid_auth_profile", "No governed auth profile is configured for this application and purpose");
+  const row = selected.row;
+  const bundle = await resolveTenantBoundSecretBundle(tenantId, {
+    credentialProvider: row.credentialProvider,
+    credentialRef: row.credentialRef,
+    credentialVersion: row.credentialVersion,
+  });
+  const profileId = bundle.steelProfileId ?? bundle.profileId;
+  const namespace = bundle.steelNamespace ?? bundle.namespace;
+  if (!profileId && !namespace) {
+    throw new IdentityAccessError("no_valid_auth_profile", "The governed auth profile does not contain a Steel profile or credential namespace");
+  }
+  return Object.freeze({
+    profileId: row.profileId,
+    authProfileRef: row.authProfileRef,
+    applicationAccountId: row.accountId,
+    application: row.application,
+    principalRef: selected.principalRef,
+    purpose,
+    capabilities: strings(row.profileCapabilities),
+    restrictions: object(row.restrictions),
+    accountMetadata: object(row.accountMetadata),
+    authorityDecisionId: selected.decisionId,
+    steelSessionAuth: Object.freeze({
+      ...(typeof profileId === "string" && profileId.trim() ? { profileId: profileId.trim() } : {}),
+      ...(typeof namespace === "string" && namespace.trim() ? { namespace: namespace.trim() } : {}),
+    }),
+  });
+}
+
 /** Bounded, secret-free Operating Context projection. It lists only the actor's own,
  * active-team, active-location, or tenant/shared bindings. Cross-principal act-as
  * profiles remain execution-only and are revealed only when explicitly authorized. */
@@ -652,6 +783,10 @@ export async function listAvailableIdentityAccess(tenantId: string, actorId: str
       purpose: row.purpose,
       priority: row.priority,
       status: row.profileStatus,
+      authMethod: row.authMethod,
+      connectionStatus: row.connectionStatus as AvailableAuthProfile["connectionStatus"],
+      requiredScopes: strings(row.requiredScopes),
+      grantedScopes: strings(row.grantedScopes),
       capabilities: strings(row.profileCapabilities),
       restrictions: object(row.restrictions),
     });

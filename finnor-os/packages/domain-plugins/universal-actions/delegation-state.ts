@@ -1,4 +1,4 @@
-import { acknowledgementRequests, delegationEvents, delegations, orgUnitMemberships, users, withTenant, type Db } from "@finnor/db";
+import { acknowledgementRequests, delegationEvents, delegations, ingestIntegrationEventTx, orgUnitMemberships, users, withTenant, type Db } from "@finnor/db";
 import type { DelegationStatus } from "@finnor/shared-types";
 import { and, eq, sql } from "drizzle-orm";
 
@@ -65,6 +65,10 @@ async function transitionDelegationTx(
     evidence?: Record<string, unknown>;
   },
 ): Promise<DelegationTransitionResult> {
+  // All event-producing P2 transitions take the same tenant lock before their
+  // canonical rows. A simultaneous deadline therefore has one deterministic order:
+  // acknowledgement-before-deadline or deadline-before-acknowledgement, never both.
+  await db.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${params.tenantId}, 904))`);
   await db.execute(sql`SELECT id FROM ${delegations} WHERE ${delegations.tenantId}=${params.tenantId} AND ${delegations.id}=${params.delegationId} FOR UPDATE`);
   const [row] = await db.select().from(delegations).where(and(eq(delegations.tenantId, params.tenantId), eq(delegations.id, params.delegationId))).limit(1);
   if (!row) throw new Error("Delegation not found");
@@ -94,6 +98,28 @@ async function transitionDelegationTx(
     actorId: params.actorId ?? null,
     evidence: params.evidence ?? {},
   });
+  const [acknowledgement] = await db.select({ id: acknowledgementRequests.id }).from(acknowledgementRequests).where(and(
+    eq(acknowledgementRequests.tenantId, params.tenantId),
+    eq(acknowledgementRequests.delegationId, row.id),
+  )).limit(1);
+  await ingestIntegrationEventTx(db, {
+    tenantId: params.tenantId,
+    source: "delegation_runtime",
+    sourceEventId: `delegation:${row.id}:event:${seq}`,
+    eventType: `delegation.${params.to}`,
+    occurredAt: now,
+    party: { type: row.targetType, id: row.targetId },
+    resource: { type: "delegation", id: row.id },
+    workId: row.workId,
+    taskId: row.taskId,
+    delegationId: row.id,
+    acknowledgementRequestId: acknowledgement?.id ?? null,
+    domainActionId: row.domainActionId,
+    correlationId: row.workId ?? row.id,
+    payload: { fromStatus: from, toStatus: params.to, actorId: params.actorId ?? null },
+    evidenceRefs: [{ type: "delegation_event", delegationId: row.id, seq }],
+    trustClass: "trusted_runtime",
+  });
   return { delegationId: row.id, from, to: params.to, eventSequence: seq, duplicate: false };
 }
 
@@ -119,6 +145,7 @@ export async function acknowledgeDelegation(params: {
   evidence?: Record<string, unknown>;
 }): Promise<DelegationTransitionResult> {
   return withTenant(params.tenantId, async (db) => {
+    await db.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${params.tenantId}, 904))`);
     await db.execute(sql`SELECT id FROM ${acknowledgementRequests} WHERE ${acknowledgementRequests.tenantId}=${params.tenantId} AND ${acknowledgementRequests.id}=${params.acknowledgementRequestId} AND ${acknowledgementRequests.delegationId}=${params.delegationId} FOR UPDATE`);
     const [row] = await db.select().from(acknowledgementRequests).where(and(
       eq(acknowledgementRequests.tenantId, params.tenantId),

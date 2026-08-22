@@ -1,8 +1,6 @@
 // A3.T6 acceptance: the payment webhook now matches every other webhook route's own
-// fail posture — unset STRIPE_WEBHOOK_SECRET accepts unsigned payloads OUTSIDE
-// production only (dev convenience), and fails closed (401) in production. Before this
-// fix it was the one route in this repo that accepted an unsigned, caller-supplied-
-// tenantId payload unconditionally, in every environment including production.
+// fail posture. The generic emulator shape is also signed and resolves its tenant
+// from an opaque configured route; a caller-supplied tenantId is never trusted.
 
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import pg from "pg";
@@ -14,6 +12,7 @@ import { setTenantSecretReaderForTesting } from "@finnor/security";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
 const TENANT = "00000000-0000-4000-8000-0000000000ee";
+const ROUTE_ID = "payment-emulator-route-ee";
 
 async function dbUp(): Promise<boolean> {
   const c = new pg.Client({ connectionString: DB_URL, connectionTimeoutMillis: 2000 });
@@ -29,7 +28,6 @@ const available = await dbUp();
 
 function devShapeBody(invoiceId: string): string {
   return JSON.stringify({
-    tenantId: TENANT,
     invoiceId,
     providerEventId: `evt_${randomUUID()}`,
     amountUsd: 42,
@@ -39,6 +37,12 @@ function devShapeBody(invoiceId: string): string {
 
 function req(body: string, headers: Record<string, string> = {}): Request {
   return new Request("http://localhost/api/webhooks/payment", { method: "POST", body, headers });
+}
+
+function emulatorHeaders(body: string, secret = "emulator-secret"): Record<string, string> {
+  const t = Math.floor(Date.now() / 1000);
+  const signature = createHmac("sha256", secret).update(`${t}.${body}`).digest("hex");
+  return { "x-payment-signature": `t=${t},v1=${signature}`, "x-finnor-route-id": ROUTE_ID };
 }
 
 describe.skipIf(!available)("POST /api/webhooks/payment (A3.T6)", () => {
@@ -56,9 +60,10 @@ describe.skipIf(!available)("POST /api/webhooks/payment (A3.T6)", () => {
       mode: "sandbox",
       credentialProvider: "aws-secrets-manager",
       credentialRef: `finnor/tenants/${TENANT}/stripe`,
+      config: { webhookRouteId: ROUTE_ID },
     }).onConflictDoUpdate({
       target: [tenantIntegrations.tenantId, tenantIntegrations.capability],
-      set: { binding: "stripe", mode: "sandbox", credentialProvider: "aws-secrets-manager", credentialRef: `finnor/tenants/${TENANT}/stripe` },
+      set: { binding: "stripe", mode: "sandbox", credentialProvider: "aws-secrets-manager", credentialRef: `finnor/tenants/${TENANT}/stripe`, config: { webhookRouteId: ROUTE_ID } },
     }));
     setTenantSecretReaderForTesting(async () => ({ secretKey: "stripe-test-key", webhookSecret: "real-secret" }));
     const [household] = await withTenant(TENANT, (db) =>
@@ -73,23 +78,40 @@ describe.skipIf(!available)("POST /api/webhooks/payment (A3.T6)", () => {
     vi.unstubAllEnvs();
     setTenantSecretReaderForTesting(null);
     process.env.STRIPE_WEBHOOK_SECRET = originalSecret;
+    delete process.env.PAYMENT_EMULATOR_WEBHOOK_SECRET;
     await closePool();
   });
 
-  it("accepts the unsigned dev shape OUTSIDE production when no secret is configured — unchanged dev convenience", async () => {
+  it("accepts the signed emulator shape outside production through a tenant-bound route", async () => {
     delete process.env.STRIPE_WEBHOOK_SECRET;
+    process.env.PAYMENT_EMULATOR_WEBHOOK_SECRET = "emulator-secret";
     vi.stubEnv("NODE_ENV", "test");
-    const res = await paymentWebhook(req(devShapeBody(invoiceId)));
+    const body = devShapeBody(invoiceId);
+    const res = await paymentWebhook(req(body, emulatorHeaders(body)));
     expect(res.status).toBe(200);
   });
 
-  it("A3.T6 fix: rejects the SAME unsigned dev shape in production when no secret is configured — real gap, now closed", async () => {
+  it("rejects an unsigned emulator shape in every environment", async () => {
     delete process.env.STRIPE_WEBHOOK_SECRET;
-    vi.stubEnv("NODE_ENV", "production");
+    delete process.env.PAYMENT_EMULATOR_WEBHOOK_SECRET;
+    vi.stubEnv("NODE_ENV", "test");
     const res = await paymentWebhook(req(devShapeBody(invoiceId)));
     expect(res.status).toBe(401);
     const body = await res.json();
     expect(body.error).toBe("Bad signature");
+  });
+
+  it("rejects a caller-supplied tenant selector even when the emulator signature is valid", async () => {
+    delete process.env.STRIPE_WEBHOOK_SECRET;
+    process.env.PAYMENT_EMULATOR_WEBHOOK_SECRET = "emulator-secret";
+    vi.stubEnv("NODE_ENV", "test");
+    const body = JSON.stringify({
+      ...JSON.parse(devShapeBody(invoiceId)),
+      tenantId: "00000000-0000-4000-8000-0000000000ff",
+    });
+    const res = await paymentWebhook(req(body, emulatorHeaders(body)));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe("Malformed webhook");
   });
 
   it("rejects a real stripe-signature header with the wrong secret, in any environment", async () => {

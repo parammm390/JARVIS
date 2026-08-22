@@ -43,6 +43,9 @@ import { startHeartbeat } from "./heartbeat";
 import { startSseServer } from "./sse-server";
 import { recoverObjectives, runObjectiveIteration } from "./handlers/run-objective-iteration";
 import { runClientFactoryJob } from "./handlers/run-client-factory";
+import { recoverComputerTasks, runComputerTask } from "./handlers/run-computer-task";
+import { processWorkEventWaitDeadlineHandler } from "./handlers/process-work-event-wait-deadline";
+import { scanConnectionHealth } from "./handlers/scan-connection-health";
 import { releaseProbe } from "./handlers/release-probe";
 
 export function createWorker(): JobQueue {
@@ -85,6 +88,10 @@ export function createWorker(): JobQueue {
   queue.register("run_objective_iteration", runObjectiveIteration);
   queue.register("recover_objectives", recoverObjectives);
   queue.register("run_client_factory", runClientFactoryJob);
+  queue.register("run_computer_task", runComputerTask);
+  queue.register("recover_computer_tasks", recoverComputerTasks);
+  queue.register("process_work_event_wait_deadline", processWorkEventWaitDeadlineHandler);
+  queue.register("scan_connection_health", scanConnectionHealth);
   queue.register("release_probe", releaseProbe);
   return queue;
 }
@@ -97,6 +104,7 @@ const PROACTIVE_SCANS: ScheduledScan[] = [
   // Upgrade 9 restart/approval/operation backstop. Normal continuations are event-
   // driven and immediate; this scan only repairs a missed enqueue after a crash.
   { type: "recover_objectives", intervalHours: 1 / 6, payload: (tenantId) => ({ tenantId }) },
+  { type: "recover_computer_tasks", intervalHours: 1 / 6, payload: (tenantId) => ({ tenantId }) },
   { type: "scheduled_reminder", intervalHours: 24, payload: (tenantId) => ({ tenantId, windowDays: 30 }) },
   { type: "scan_cold_leads", intervalHours: 24, payload: (tenantId) => ({ tenantId }) },
   { type: "scan_low_inventory", intervalHours: 24, payload: (tenantId) => ({ tenantId }) },
@@ -115,6 +123,7 @@ const PROACTIVE_SCANS: ScheduledScan[] = [
   // scheduler's own 15-min tick (see scheduler.ts's own "not a promise of exact
   // timing" header), same honest "close enough" posture as every other sub-daily scan.
   { type: "scan_integration_health", intervalHours: 1 / 6, payload: (tenantId) => ({ tenantId }) },
+  { type: "scan_connection_health", intervalHours: 1 / 4, payload: (tenantId) => ({ tenantId }) },
   // A4.T2: same honest sub-hourly posture as scan_integration_health just above — real
   // cadence is this scheduler's own 15-min tick, not this number. The exit gate's "<5min"
   // claim is about direct-invocation detection latency (see the integration test), not

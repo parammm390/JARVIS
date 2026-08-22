@@ -25,6 +25,7 @@ import {
   users,
   withTenant,
   workAggregate,
+  workEventWaits,
   workEvents,
   workObjectiveLoops,
   works,
@@ -32,6 +33,7 @@ import {
 import { employeeAuthoritySnapshot } from "@finnor/authority";
 import {
   FinnorOrchestrator,
+  processWorkEventWaitDeadline,
   recoverRunnableObjectives,
   type ObjectiveDecision,
   type ObjectiveDecisionPlanner,
@@ -342,20 +344,18 @@ describe.skipIf(!available)("Upgrade 10 whole-system integration", () => {
       maxSteps: 4,
     });
     expect(await orchestrator.runObjectiveIteration({ tenantId, workId: started.workId, objectiveLoopId: started.objectiveLoopId })).toBe("waiting");
+    const [durableWait] = await withTenant(tenantId, (db) => db.select().from(workEventWaits).where(eq(workEventWaits.objectiveLoopId, started.objectiveLoopId)));
+    expect(durableWait).toMatchObject({ status: "waiting", deadlineAt: expect.any(Date) });
     await closePool();
-    const simulatedResumeAt = new Date(Date.now() - 1_000);
-    await withTenant(tenantId, async (db) => {
-      await db.update(workObjectiveLoops).set({ nextRunAt: simulatedResumeAt }).where(eq(workObjectiveLoops.id, started.objectiveLoopId));
-      await db.update(jobs).set({ runAt: simulatedResumeAt }).where(eq(jobs.idempotencyKey, `objective:${started.objectiveLoopId}:revision:1:step:2`));
-    });
     const recoveryStarted = performance.now();
-    const enqueued = await recoverRunnableObjectives(tenantId);
+    const deadline = await processWorkEventWaitDeadline(tenantId, durableWait!.id, new Date(durableWait!.deadlineAt!.getTime() + 2_001));
+    const enqueued = deadline.outcome === "timed_out" ? 1 : 0;
     const restarted = new FinnorOrchestrator({ objectiveDecisionPlanner: new ScriptedPlanner([
       { kind: "complete", outcome: { resumedAfterRestart: true }, reason: "The due continuation re-inspected the same Work after restart." },
     ]) });
     expect(await restarted.runObjectiveIteration({ tenantId, workId: started.workId, objectiveLoopId: started.objectiveLoopId })).toBe("completed");
     const aggregate = await workAggregate(tenantId, started.workId);
-    const continuationJobs = await withTenant(tenantId, (db) => db.select().from(jobs).where(eq(jobs.idempotencyKey, `objective:${started.objectiveLoopId}:revision:1:step:2`)));
+    const continuationJobs = await withTenant(tenantId, (db) => db.select().from(jobs).where(eq(jobs.idempotencyKey, `objective-wake:${durableWait!.id}`)));
     expect(continuationJobs).toHaveLength(1);
     expect(aggregate!.objectiveSteps.map((step) => step.iterationOutcome)).toEqual(["waiting", "completed"]);
     expect(aggregate!.work).toMatchObject({ currentOwnerId: ownerId, activeContext: { householdId }, status: "completed" });

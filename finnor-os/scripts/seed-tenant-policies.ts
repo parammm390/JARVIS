@@ -160,6 +160,10 @@ export function policyRows(reviewLinkUrl: string | null, overrides: Record<strin
     { actionType: "reschedule_internal_event", policy: {}, requiresConfirmation: true },
     { actionType: "share_document", policy: {}, requiresConfirmation: true },
 
+    // Phase 3 Computer Execution Fabric. READ_ONLY may be relaxed by an explicit
+    // tenant override; WRITE remains confirmation-gated by the plugin itself.
+    { actionType: "computer_task", policy: {}, requiresConfirmation: true },
+
     // The pricing_catalog pseudo-row: scalars only (DECISIONS: labor $95/h). Real US
     // sales-tax rates vary by state/locality — 7% is a real, usable generic default the
     // dealer localizes later, not the placeholder sentinel.

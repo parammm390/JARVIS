@@ -22,11 +22,28 @@ async function dbUp(): Promise<boolean> {
 }
 const available = await dbUp();
 
+const TEST_JOB_TYPES = [
+  "test_ok",
+  "test_idem",
+  "test_fail",
+  "crashed_worker",
+  "crashed_poison_job",
+  "drain_test",
+  "drain_on_shutdown",
+  "lease_renewal_test",
+  "unhandled_test",
+  "registered_only_test",
+];
+
+async function clearQueueTestJobs(): Promise<void> {
+  await getPool().query("DELETE FROM jobs WHERE type = ANY($1::text[])", [TEST_JOB_TYPES]);
+}
+
 describe.skipIf(!available)("postgres job queue (§32.7)", () => {
   beforeAll(async () => {
     process.env.DATABASE_URL = DB_URL;
     await migrate(DB_URL);
-    await getPool().query("DELETE FROM jobs");
+    await clearQueueTestJobs();
   });
 
   afterAll(async () => {
@@ -55,8 +72,21 @@ describe.skipIf(!available)("postgres job queue (§32.7)", () => {
     expect(rows[0].n).toBe(1);
   });
 
+  it("claims only job types registered by this worker instance", async () => {
+    const queue = new JobQueue();
+    let ran = 0;
+    queue.register("registered_only_test", async () => { ran++; });
+    await queue.enqueue("unhandled_test", {}, `unhandled-${Date.now()}`, "interactive", 100);
+    await queue.enqueue("registered_only_test", {}, `registered-${Date.now()}`);
+
+    expect(await queue.tick()).toBe(true);
+    expect(ran).toBe(1);
+    const { rows } = await getPool().query("SELECT status FROM jobs WHERE type = 'unhandled_test'");
+    expect(rows).toEqual([{ status: "queued" }]);
+  });
+
   it("failing job retries with backoff and dead-letters after max attempts", async () => {
-    await getPool().query("DELETE FROM jobs"); // isolate from earlier tests' leftover jobs
+    await clearQueueTestJobs();
     const queue = new JobQueue();
     let attempts = 0;
     queue.register("test_fail", async () => {
@@ -79,7 +109,7 @@ describe.skipIf(!available)("postgres job queue (§32.7)", () => {
   });
 
   it("reclaims an expired worker lease instead of leaving a crashed job running forever", async () => {
-    await getPool().query("DELETE FROM jobs");
+    await clearQueueTestJobs();
     const queue = new JobQueue();
     await getPool().query(
       `INSERT INTO jobs (type, payload, status, attempts, max_attempts, started_at)
@@ -93,7 +123,7 @@ describe.skipIf(!available)("postgres job queue (§32.7)", () => {
   });
 
   it("dead-letters an expired lease that already exhausted its attempts", async () => {
-    await getPool().query("DELETE FROM jobs");
+    await clearQueueTestJobs();
     const queue = new JobQueue();
     await getPool().query(
       `INSERT INTO jobs (type, payload, status, attempts, max_attempts, started_at)
@@ -105,7 +135,7 @@ describe.skipIf(!available)("postgres job queue (§32.7)", () => {
   });
 
   it("does not leak a pooled connection on an empty queue (regression: tick() used to return before releasing its client on the empty-queue path — fine locally where the pool caps at 10, but in production's ssl pool, capped at 2, two consecutive empty ticks permanently exhausted it and every later tick hung forever)", async () => {
-    await getPool().query("DELETE FROM jobs");
+    await clearQueueTestJobs();
     const queue = new JobQueue();
     // Local dev's pool caps at 10 connections (non-ssl, packages/db/index.ts). Call
     // tick() on a genuinely empty queue more times than that — before the fix, each
@@ -117,7 +147,7 @@ describe.skipIf(!available)("postgres job queue (§32.7)", () => {
   });
 
   it("two worker instances drain every job once and interactive work wins over batch", async () => {
-    await getPool().query("DELETE FROM jobs");
+    await clearQueueTestJobs();
     const first = new JobQueue(); const second = new JobQueue();
     const completed: string[] = [];
     for (const queue of [first, second]) queue.register("drain_test", async (payload) => { completed.push(String(payload.id)); });
@@ -137,7 +167,7 @@ describe.skipIf(!available)("postgres job queue (§32.7)", () => {
     expect(workerConcurrency("3")).toBe(3);
     expect(workerConcurrency("0")).toBe(1);
     expect(workerConcurrency("99")).toBe(1);
-    await getPool().query("DELETE FROM jobs");
+    await clearQueueTestJobs();
     const queue = new JobQueue();
     const controller = new AbortController();
     let release!: () => void;
@@ -155,5 +185,40 @@ describe.skipIf(!available)("postgres job queue (§32.7)", () => {
     await loop;
     const { rows } = await getPool().query("SELECT status FROM jobs WHERE type = 'drain_on_shutdown'");
     expect(rows[0].status).toBe("completed");
+  });
+
+  it("renews a long-running claim so a second worker cannot recover or execute it", async () => {
+    await clearQueueTestJobs();
+    const owner = new JobQueue("lease-owner", 3);
+    const contender = new JobQueue("lease-contender", 3);
+    let started!: () => void;
+    let release!: () => void;
+    const didStart = new Promise<void>((resolve) => { started = resolve; });
+    const mayFinish = new Promise<void>((resolve) => { release = resolve; });
+    let executions = 0;
+    owner.register("lease_renewal_test", async () => {
+      executions++;
+      started();
+      await mayFinish;
+    });
+    contender.register("lease_renewal_test", async () => { executions++; });
+    await owner.enqueue("lease_renewal_test", {});
+
+    const running = owner.tick();
+    await didStart;
+    await new Promise((resolve) => setTimeout(resolve, 1_300));
+    expect(await contender.recoverExpiredRunningJobs(3)).toBe(0);
+    expect(await contender.tick()).toBe(false);
+    const leased = await getPool().query(
+      "SELECT lease_owner, lease_heartbeat_at, lease_expires_at > now() AS fresh FROM jobs WHERE type='lease_renewal_test'",
+    );
+    expect(leased.rows[0]).toMatchObject({ lease_owner: "lease-owner", fresh: true });
+    expect(leased.rows[0].lease_heartbeat_at).not.toBeNull();
+
+    release();
+    await running;
+    expect(executions).toBe(1);
+    const completed = await getPool().query("SELECT status,lease_owner FROM jobs WHERE type='lease_renewal_test'");
+    expect(completed.rows[0]).toEqual({ status: "completed", lease_owner: null });
   });
 });

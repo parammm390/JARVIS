@@ -165,6 +165,7 @@ export function buildActionFixture(actionType: string): Record<string, unknown> 
     schedule_internal_event: { title: "Certification event", startsAt: "2026-09-01T14:00:00.000Z", endsAt: "2026-09-01T15:00:00.000Z", participants: [{ partyType: "employee", partyId: employee }] },
     reschedule_internal_event: { internalEventRef: { internalEventId: internalEvent }, startsAt: "2026-09-01T15:00:00.000Z", endsAt: "2026-09-01T16:00:00.000Z", reason: "Certification reschedule" },
     share_document: { documentRef: { documentId: document }, recipient: { partyType: "employee", partyId: employee }, accessLevel: "view" },
+    computer_task: { application: "supplier_portal", authProfileRef: "supplier-west", task: "Find the confirmed ETA for supplier order WS-48", target: { kind: "supplier_order", identifier: "WS-48" }, mode: "READ_ONLY", successCriteria: ["A confirmed ETA is visible for WS-48"] },
   };
   const value = fixture[actionType];
   if (!value) throw new Error(`No shared certification fixture exists for ${actionType}`);

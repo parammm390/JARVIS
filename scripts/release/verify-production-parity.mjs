@@ -13,6 +13,8 @@ if (!databaseEnvPath) throw new Error("Usage: node scripts/release/verify-produc
 const gitRelease = readGitRelease(repoRoot, contract)
 assertCanonicalRelease(gitRelease)
 const expected = expectedRelease(gitRelease.head, process.env.FINNOR_RELEASE_SOURCE || "github-actions")
+const expectedCoreCertificationId = process.env.FINNOR_CORE_CERTIFICATION_ID
+if (!expectedCoreCertificationId) throw new Error("FINNOR_CORE_CERTIFICATION_ID is required")
 
 async function fetchRelease(component) {
   const target = contract.topology[component]
@@ -41,14 +43,31 @@ try {
   const heartbeatDeadline = Date.now() + 120_000
   let lastHeartbeatObservation = "missing"
   while (true) {
-    const heartbeat = await client.query(
-      "SELECT meta, extract(epoch FROM (now() - last_beat_at))::int AS age_seconds FROM finnor_os.worker_heartbeat WHERE id = $1",
-      [contract.topology.worker.heartbeatId],
-    )
+    const heartbeat = await client.query(`
+      SELECT release_sha,build_id,version,release_source,core_certification_id,
+             migration_head,deployment_id,capabilities,environment,
+             extract(epoch FROM (now()-last_beat_at))::int AS age_seconds
+        FROM finnor_os.service_release_heartbeats
+       WHERE service='worker'
+       ORDER BY last_beat_at DESC
+       LIMIT 1
+    `)
     if (heartbeat.rowCount === 1) {
-      workerRelease = heartbeat.rows[0].meta
-      heartbeatAgeSeconds = Number(heartbeat.rows[0].age_seconds)
-      const observedCommit = workerRelease?.commitSha ?? "<missing>"
+      const row = heartbeat.rows[0]
+      workerRelease = {
+        commitSha: row.release_sha,
+        buildId: row.build_id,
+        version: row.version,
+        source: row.release_source,
+        coreCertificationId: row.core_certification_id,
+        migrationHead: row.migration_head,
+        deploymentId: row.deployment_id,
+        capabilities: row.capabilities,
+        environment: row.environment,
+        traceable: true,
+      }
+      heartbeatAgeSeconds = Number(row.age_seconds)
+      const observedCommit = workerRelease.commitSha ?? "<missing>"
       lastHeartbeatObservation = `commit=${observedCommit}, age=${heartbeatAgeSeconds}s`
       if (observedCommit === expected.commitSha && Number.isFinite(heartbeatAgeSeconds) && heartbeatAgeSeconds <= 120) break
     }
@@ -69,6 +88,7 @@ systemctl is-active --quiet '${worker.systemdUnit}'
 test "$(readlink -f '${worker.currentSymlink}')" = '${worker.releaseRoot}/${expected.commitSha}'
 test "$(sudo -u finnor git -C '${worker.currentSymlink}' rev-parse HEAD)" = '${expected.commitSha}'
 grep -qx 'FINNOR_COMMIT_SHA=${expected.commitSha}' '${worker.releaseEnvironmentFile}'
+grep -qx 'FINNOR_CORE_CERTIFICATION_ID=${expectedCoreCertificationId}' '${worker.releaseEnvironmentFile}'
 echo FINNOR_AZURE_PARITY_OK`
 const az = process.env.AZURE_CLI || "az"
 const azureRaw = execFileSync(az, [
@@ -84,14 +104,14 @@ const azureResult = JSON.parse(azureRaw)
 const azureMessage = (azureResult.value ?? []).map((entry) => entry.message ?? "").join("\n")
 if (!azureMessage.includes("FINNOR_AZURE_PARITY_OK")) throw new Error(`Azure source/service parity verification failed:\n${azureMessage}`)
 
-const observed = { frontend, api, worker: workerRelease, migrationHead }
+const observed = { frontend, api, worker: workerRelease, migrationHead, expectedCoreCertificationId }
 assertRuntimeParity(contract, expected, observed)
 console.log(JSON.stringify({
   ok: true,
   commitSha: expected.commitSha,
   frontend: { service: frontend.service, commitSha: frontend.commitSha, deploymentId: frontend.deploymentId },
   api: { service: api.service, commitSha: api.commitSha, deploymentId: api.deploymentId },
-  worker: { service: workerRelease.service, commitSha: workerRelease.commitSha, heartbeatAgeSeconds },
+  worker: { commitSha: workerRelease.commitSha, heartbeatAgeSeconds, capabilities: workerRelease.capabilities },
   orchestrator: { mode: contract.topology.orchestrator.mode, releaseIdentity: contract.topology.orchestrator.releaseIdentity },
   migrationHead,
 }, null, 2))

@@ -23,6 +23,7 @@ import { PermissionVeil } from "../ui/primitives/PermissionVeil"
 const SOURCE_ICON: Record<ActivityItem["source"], string> = {
   action_log: "bg-cyan-400",
   workflow_step: "bg-teal-400",
+  computer_step: "bg-amber-300",
   call: "bg-violet-400",
 }
 
@@ -33,6 +34,11 @@ function summarize(item: ActivityItem): string {
     const type = typeof d.stepType === "string" ? d.stepType.replaceAll("_", " ") : "workflow step"
     const status = typeof d.status === "string" ? d.status : ""
     return status ? `${type} — ${status}` : type
+  }
+  if (item.source === "computer_step") {
+    const operation = typeof d.operation === "string" ? d.operation.replaceAll("_", " ") : "computer step"
+    const status = typeof d.status === "string" ? d.status : ""
+    return status ? `${operation} — ${status}` : operation
   }
   const dir = typeof d.direction === "string" ? d.direction : "call"
   return `${dir} call`
@@ -143,7 +149,7 @@ export function ActivityTheater() {
                   }}
                   type="button"
                   onClick={() => void openReceiptFor(item)}
-                  disabled={item.source === "call"}
+                  disabled={item.source === "call" || item.source === "computer_step"}
                   className="flex w-full items-center gap-2 rounded-lg border border-white/6 bg-white/[0.015] px-2.5 py-1.5 text-left j-fs-micro hover:bg-white/[0.04] disabled:cursor-default disabled:hover:bg-white/[0.015]"
                 >
                   {/* F7.T2 — FLOW-96 ListToDetail: this dot shares a layoutId with the

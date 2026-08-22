@@ -5,6 +5,7 @@ release_sha="__FINNOR_RELEASE_SHA__"
 build_id="__FINNOR_BUILD_ID__"
 version="__FINNOR_VERSION__"
 release_source="__FINNOR_RELEASE_SOURCE__"
+core_certification_id="__FINNOR_CORE_CERTIFICATION_ID__"
 repository="__FINNOR_REPOSITORY__"
 unit_name="__FINNOR_SYSTEMD_UNIT__"
 release_root="__FINNOR_RELEASE_ROOT__"
@@ -59,12 +60,14 @@ FINNOR_BUILD_ID=$build_id
 FINNOR_VERSION=$version
 FINNOR_ENVIRONMENT=production
 FINNOR_RELEASE_SOURCE=$release_source
+FINNOR_CORE_CERTIFICATION_ID=$core_certification_id
+FINNOR_WORKER_CAPABILITIES=jobs,orchestration,computer,event-wake,connection-health
 EOF
 install -o root -g finnor -m 0644 "$release_env_tmp" "$release_env"
 
 cat >"$unit_tmp" <<EOF
 [Unit]
-Description=FINNOR JARVIS production worker
+Description=FINNOR production worker and embedded orchestrator
 After=network-online.target
 Wants=network-online.target
 StartLimitIntervalSec=300
@@ -89,7 +92,7 @@ ProtectHome=true
 UMask=0077
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=finnor-jarvis-worker
+SyslogIdentifier=finnor-worker
 
 [Install]
 WantedBy=multi-user.target

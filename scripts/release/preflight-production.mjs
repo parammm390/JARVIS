@@ -21,6 +21,7 @@ if (!existsSync(databaseEnvPath)) throw new Error(`protected database environmen
 const gitRelease = readGitRelease(repoRoot, contract)
 assertCanonicalRelease(gitRelease)
 const expected = expectedRelease(gitRelease.head, process.env.FINNOR_RELEASE_SOURCE || "github-actions")
+if (!process.env.FINNOR_CORE_CERTIFICATION_ID) throw new Error("FINNOR_CORE_CERTIFICATION_ID is required")
 for (const [name, value] of Object.entries({
   FINNOR_COMMIT_SHA: expected.commitSha,
   FINNOR_BUILD_ID: expected.buildId,

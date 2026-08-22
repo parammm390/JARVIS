@@ -73,6 +73,25 @@ export const tenantSettings = pgTable("tenant_settings", {
     scheduling: { externalCalendarMode: "internal_only" },
     documentSharing: { allowExternal: false },
   }),
+  // Phase 3 execution budgets and provider choice. Application origins live on the
+  // governed account/profile rows, not in planner payloads or provider credentials.
+  computerConfig: jsonb("computer_config").notNull().default({
+    enabled: false,
+    provider: "steel",
+    maxSteps: 30,
+    timeoutMs: 300000,
+    maxProviderCredits: 10,
+    maxScreenshots: 10,
+    maxArtifacts: 20,
+    maxDownloadBytes: 10485760,
+    maxUploadBytes: 0,
+    maxOutputBytes: 131072,
+  }),
+  connectionRequirements: jsonb("connection_requirements").notNull().default([]),
+  connectionPolicy: jsonb("connection_policy").notNull().default({
+    failClosedStatuses: ["disconnected", "connecting", "expired", "reauth_required", "revoked", "disabled", "misconfigured", "provider_unavailable"],
+    healthCheckMinutes: 15,
+  }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -391,6 +410,9 @@ export const communicationIdentities = pgTable(
     credentialProvider: text("credential_provider", { enum: ["aws-secrets-manager", "legacy-env"] }),
     credentialRef: text("credential_ref"),
     credentialVersion: text("credential_version"),
+    // Phase 5 may bind a communication address to the same governed auth profile
+    // used by an application account (for example a Gmail OAuth connection).
+    authProfileId: uuid("auth_profile_id"),
     managedBy: text("managed_by"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -499,10 +521,26 @@ export const authProfiles = pgTable(
     purpose: text("purpose").notNull().default("default"),
     priority: integer("priority").notNull().default(0),
     scope: jsonb("scope").notNull().default({}),
-    credentialProvider: text("credential_provider", { enum: ["aws-secrets-manager", "legacy-env"] }),
+    credentialProvider: text("credential_provider", { enum: ["aws-secrets-manager", "os-keychain", "legacy-env"] }),
     credentialRef: text("credential_ref"),
     credentialVersion: text("credential_version"),
     status: text("status", { enum: ["active", "disabled", "suspended"] }).notNull().default("active"),
+    authMethod: text("auth_method", { enum: ["managed_secret", "oauth2", "browser_profile"] }).notNull().default("managed_secret"),
+    connectionRequired: boolean("connection_required").notNull().default(true),
+    connectionStatus: text("connection_status", {
+      enum: ["disconnected", "connecting", "active", "degraded", "expired", "reauth_required", "revoked", "disabled", "misconfigured", "provider_unavailable"],
+    }).notNull().default("active"),
+    requiredScopes: text("required_scopes").array().notNull().default([]),
+    grantedScopes: text("granted_scopes").array().notNull().default([]),
+    providerSubjectRef: text("provider_subject_ref"),
+    tokenExpiresAt: timestamp("token_expires_at", { withTimezone: true }),
+    connectedAt: timestamp("connected_at", { withTimezone: true }),
+    lastRefreshedAt: timestamp("last_refreshed_at", { withTimezone: true }),
+    lastVerifiedAt: timestamp("last_verified_at", { withTimezone: true }),
+    reauthRequiredAt: timestamp("reauth_required_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    lastConnectionErrorCode: text("last_connection_error_code"),
+    connectionRevision: integer("connection_revision").notNull().default(1),
     capabilities: jsonb("capabilities").notNull().default([]),
     restrictions: jsonb("restrictions").notNull().default({}),
     managedBy: text("managed_by"),
@@ -517,6 +555,9 @@ export const authProfiles = pgTable(
     check("auth_profiles_scope_object_check", sql`jsonb_typeof(${t.scope}) = 'object'`),
     check("auth_profiles_capabilities_array_check", sql`jsonb_typeof(${t.capabilities}) = 'array'`),
     check("auth_profiles_restrictions_object_check", sql`jsonb_typeof(${t.restrictions}) = 'object'`),
+    check("auth_profiles_auth_method_check", sql`${t.authMethod} IN ('managed_secret','oauth2','browser_profile')`),
+    check("auth_profiles_connection_status_check", sql`${t.connectionStatus} IN ('disconnected','connecting','active','degraded','expired','reauth_required','revoked','disabled','misconfigured','provider_unavailable')`),
+    check("auth_profiles_connection_revision_check", sql`${t.connectionRevision} >= 1`),
     unique("auth_profiles_tenant_ref_unique").on(t.tenantId, t.authProfileRef),
     unique("auth_profiles_tenant_id_id_key").on(t.tenantId, t.id),
     unique("auth_profiles_binding_unique").on(t.tenantId, t.applicationAccountId, t.principalType, t.principalId, t.purpose),
@@ -533,6 +574,110 @@ export const authProfiles = pgTable(
       foreignColumns: [tenants.id, tenants.clientKey],
       name: "auth_profiles_managed_by_tenant_fkey",
     }),
+  ],
+);
+
+export const oauthConnectionRequests = pgTable(
+  "oauth_connection_requests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    authProfileId: uuid("auth_profile_id").notNull(),
+    actorId: uuid("actor_id").notNull(),
+    provider: text("provider").notNull(),
+    stateHash: text("state_hash").notNull().unique(),
+    pkceChallenge: text("pkce_challenge").notNull(),
+    redirectUri: text("redirect_uri").notNull(),
+    requestedScopes: text("requested_scopes").array().notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    consumedAt: timestamp("consumed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    foreignKey({
+      columns: [t.tenantId, t.authProfileId],
+      foreignColumns: [authProfiles.tenantId, authProfiles.id],
+      name: "oauth_connection_requests_profile_tenant_fkey",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [t.tenantId, t.actorId],
+      foreignColumns: [users.tenantId, users.id],
+      name: "oauth_connection_requests_actor_tenant_fkey",
+    }),
+    index("oauth_connection_requests_expiry_idx").on(t.expiresAt).where(sql`${t.consumedAt} IS NULL`),
+    index("oauth_connection_requests_tenant_profile_idx").on(t.tenantId, t.authProfileId, t.createdAt),
+  ],
+);
+
+export const connectionEvents = pgTable(
+  "connection_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    authProfileId: uuid("auth_profile_id").notNull(),
+    actorId: uuid("actor_id"),
+    eventType: text("event_type", {
+      enum: ["connect_started", "connect_failed", "connected", "refreshed", "verified", "degraded", "reauth_required", "revoked", "disabled", "reconnected", "provider_unavailable"],
+    }).notNull(),
+    fromStatus: text("from_status"),
+    toStatus: text("to_status").notNull(),
+    reasonCode: text("reason_code"),
+    traceId: text("trace_id"),
+    metadata: jsonb("metadata").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    foreignKey({
+      columns: [t.tenantId, t.authProfileId],
+      foreignColumns: [authProfiles.tenantId, authProfiles.id],
+      name: "connection_events_profile_tenant_fkey",
+    }),
+    foreignKey({
+      columns: [t.tenantId, t.actorId],
+      foreignColumns: [users.tenantId, users.id],
+      name: "connection_events_actor_tenant_fkey",
+    }),
+    index("connection_events_tenant_profile_idx").on(t.tenantId, t.authProfileId, t.createdAt),
+  ],
+);
+
+export const tenantRetentionPolicies = pgTable(
+  "tenant_retention_policies",
+  {
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    dataClass: text("data_class", {
+      enum: ["messages", "job_payloads", "computer_artifact_content", "model_records"],
+    }).notNull(),
+    retentionDays: integer("retention_days").notNull(),
+    legalHold: boolean("legal_hold").notNull().default(false),
+    managedBy: text("managed_by"),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.tenantId, t.dataClass] }),
+    check("tenant_retention_policies_days_check", sql`${t.retentionDays} BETWEEN 1 AND 3650`),
+    foreignKey({
+      columns: [t.tenantId, t.managedBy],
+      foreignColumns: [tenants.id, tenants.clientKey],
+      name: "tenant_retention_policies_managed_by_tenant_fkey",
+    }),
+  ],
+);
+
+export const tenantRateLimitPolicies = pgTable(
+  "tenant_rate_limit_policies",
+  {
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    provider: text("provider").notNull(),
+    action: text("action").notNull(),
+    perMinute: integer("per_minute").notNull(),
+    managedBy: text("managed_by"),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.tenantId, t.provider, t.action] }),
+    check("tenant_rate_limit_policies_per_minute_check", sql`${t.perMinute} BETWEEN 1 AND 1000000`),
+    foreignKey({ columns: [t.tenantId, t.managedBy], foreignColumns: [tenants.id, tenants.clientKey], name: "tenant_rate_limit_policies_managed_by_tenant_fkey" }),
   ],
 );
 
@@ -1422,8 +1567,14 @@ export const jobs = pgTable(
     priority: integer("priority").notNull().default(0),
     // Idempotency: callers may supply a key; enqueue is a no-op if it already exists.
     idempotencyKey: text("idempotency_key").unique(),
+    leaseOwner: text("lease_owner"),
+    leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
+    leaseHeartbeatAt: timestamp("lease_heartbeat_at", { withTimezone: true }),
   },
-  (t) => [index("jobs_status_run_at_idx").on(t.status, t.runAt)],
+  (t) => [
+    index("jobs_status_run_at_idx").on(t.status, t.runAt),
+    index("jobs_expired_lease_idx").on(t.leaseExpiresAt).where(sql`${t.status} = 'running'`),
+  ],
 );
 
 // Upgrade 6: the minimum durable business-operation envelope for work that cannot
@@ -1536,6 +1687,8 @@ export const providerCircuitState = pgTable("provider_circuit_state", {
   openedAt: timestamp("opened_at", { withTimezone: true }),
   lastFailureAt: timestamp("last_failure_at", { withTimezone: true }),
   lastSuccessAt: timestamp("last_success_at", { withTimezone: true }),
+  probeLeaseOwner: text("probe_lease_owner"),
+  probeLeaseExpiresAt: timestamp("probe_lease_expires_at", { withTimezone: true }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -1545,6 +1698,28 @@ export const workerHeartbeat = pgTable("worker_heartbeat", {
   lastBeatAt: timestamp("last_beat_at", { withTimezone: true }).notNull().defaultNow(),
   meta: jsonb("meta").notNull().default({}),
 });
+
+export const serviceReleaseHeartbeats = pgTable(
+  "service_release_heartbeats",
+  {
+    service: text("service").notNull(),
+    instanceId: text("instance_id").notNull(),
+    releaseSha: text("release_sha").notNull(),
+    buildId: text("build_id").notNull(),
+    version: text("version").notNull(),
+    releaseSource: text("release_source").notNull(),
+    coreCertificationId: text("core_certification_id"),
+    migrationHead: text("migration_head").notNull(),
+    deploymentId: text("deployment_id"),
+    capabilities: text("capabilities").array().notNull().default([]),
+    environment: text("environment").notNull(),
+    lastBeatAt: timestamp("last_beat_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.service, t.instanceId] }),
+    index("service_release_heartbeats_fresh_idx").on(t.service, t.lastBeatAt),
+  ],
+);
 
 export const apiRateLimits = pgTable("api_rate_limits", {
   bucketKey: text("bucket_key").notNull(),
@@ -2502,7 +2677,7 @@ export const inboxEvents = pgTable(
     envelopeVersion: integer("envelope_version").notNull().default(1),
     receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [unique("inbox_events_provider_event_idx").on(t.provider, t.eventId)],
+  (t) => [unique("inbox_events_provider_event_idx").on(t.tenantId, t.provider, t.eventId)],
 );
 
 // Opened automatically when an outbox event's delivery is unknown after retries
@@ -3191,5 +3366,223 @@ export const universalActionEvents = pgTable(
       foreignColumns: [communicationIdentities.tenantId, communicationIdentities.id],
       name: "universal_action_events_identity_tenant_fkey",
     }),
+  ],
+);
+
+// Phase 3: durable, provider-neutral computer execution. providerSessionRef is a
+// credential-sensitive runtime handle: workers need it for crash cleanup, but no
+// safe projection, planner context, activity event, or receipt may serialize it.
+export const computerRuns = pgTable(
+  "computer_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    domainActionId: uuid("domain_action_id").notNull().references(() => domainActions.id),
+    workId: uuid("work_id").references(() => works.id),
+    objectiveLoopId: uuid("objective_loop_id").references(() => workObjectiveLoops.id),
+    actorId: uuid("actor_id").notNull().references(() => users.id),
+    applicationAccountId: uuid("application_account_id").notNull().references(() => applicationAccounts.id),
+    authProfileId: uuid("auth_profile_id").notNull().references(() => authProfiles.id),
+    authProfileRef: text("auth_profile_ref").notNull(),
+    application: text("application").notNull(),
+    provider: text("provider").notNull(),
+    providerSessionRef: text("provider_session_ref"),
+    status: text("status", { enum: ["queued", "authorizing", "provisioning", "authenticating", "running", "reconciling", "succeeded", "blocked", "failed", "timed_out", "cancelled"] }).notNull().default("queued"),
+    mode: text("mode", { enum: ["READ_ONLY", "WRITE"] }).notNull(),
+    task: text("task").notNull(),
+    target: jsonb("target").notNull(),
+    authorizedEffect: jsonb("authorized_effect"),
+    allowedOrigins: jsonb("allowed_origins").notNull().default([]),
+    authOrigins: jsonb("auth_origins").notNull().default([]),
+    limits: jsonb("limits").notNull(),
+    result: jsonb("result"),
+    failureCode: text("failure_code"),
+    blockReason: text("block_reason"),
+    effectStatus: text("effect_status", { enum: ["none", "pending", "dispatching", "succeeded", "failed", "unknown"] }).notNull().default("none"),
+    effectOperationKey: text("effect_operation_key"),
+    cancellationRequestedAt: timestamp("cancellation_requested_at", { withTimezone: true }),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    sessionReleasedAt: timestamp("session_released_at", { withTimezone: true }),
+    deadlineAt: timestamp("deadline_at", { withTimezone: true }),
+    lastHeartbeatAt: timestamp("last_heartbeat_at", { withTimezone: true }),
+    cleanupAttemptedAt: timestamp("cleanup_attempted_at", { withTimezone: true }),
+    cleanupFailureCode: text("cleanup_failure_code"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("computer_runs_domain_action_unique").on(t.domainActionId),
+    unique("computer_runs_tenant_id_id_key").on(t.tenantId, t.id),
+    index("computer_runs_tenant_status_created_idx").on(t.tenantId, t.status, t.createdAt),
+    index("computer_runs_tenant_work_idx").on(t.tenantId, t.workId, t.createdAt),
+    index("computer_runs_stale_active_idx").on(t.deadlineAt, t.lastHeartbeatAt).where(sql`${t.status} IN ('authorizing','provisioning','authenticating','running','reconciling')`),
+  ],
+);
+
+export const computerSteps = pgTable(
+  "computer_steps",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    runId: uuid("run_id").notNull().references(() => computerRuns.id),
+    seq: integer("seq").notNull(),
+    phase: text("phase", { enum: ["queued", "authorizing", "provisioning", "authenticating", "running", "reconciling", "succeeded", "blocked", "failed", "timed_out", "cancelled"] }).notNull(),
+    operation: text("operation").notNull(),
+    status: text("status", { enum: ["started", "succeeded", "blocked", "failed"] }).notNull().default("started"),
+    summary: text("summary").notNull(),
+    pageUrl: text("page_url"),
+    detail: jsonb("detail").notNull().default({}),
+    effectCandidateHash: text("effect_candidate_hash"),
+    authorityDecisionId: uuid("authority_decision_id").references(() => authorityDecisions.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (t) => [
+    unique("computer_steps_run_seq_unique").on(t.runId, t.seq),
+    unique("computer_steps_tenant_id_id_key").on(t.tenantId, t.id),
+    index("computer_steps_tenant_run_created_idx").on(t.tenantId, t.runId, t.createdAt),
+  ],
+);
+
+export const computerArtifacts = pgTable(
+  "computer_artifacts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    runId: uuid("run_id").notNull().references(() => computerRuns.id),
+    stepId: uuid("step_id").references(() => computerSteps.id),
+    kind: text("kind", { enum: ["dom_snapshot", "screenshot", "download", "upload", "result_evidence"] }).notNull(),
+    mimeType: text("mime_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    sha256: text("sha256").notNull(),
+    storageRef: text("storage_ref"),
+    content: bytea("content"),
+    metadata: jsonb("metadata").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("computer_artifacts_tenant_run_created_idx").on(t.tenantId, t.runId, t.createdAt),
+    unique("computer_artifacts_tenant_id_id_key").on(t.tenantId, t.id),
+  ],
+);
+
+// Phase 4: one provider-neutral observation envelope. External text remains bounded
+// untrusted evidence and is structurally ineligible to become an instruction.
+export const integrationEvents = pgTable(
+  "integration_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    source: text("source").notNull(),
+    provider: text("provider"),
+    sourceEventId: text("source_event_id").notNull(),
+    eventType: text("event_type").notNull(),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
+    receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
+    partyType: text("party_type"),
+    partyId: uuid("party_id"),
+    resourceType: text("resource_type"),
+    resourceId: uuid("resource_id"),
+    workId: uuid("work_id").references(() => works.id),
+    taskId: uuid("task_id").references(() => tasks.id),
+    delegationId: uuid("delegation_id").references(() => delegations.id),
+    acknowledgementRequestId: uuid("acknowledgement_request_id").references(() => acknowledgementRequests.id),
+    computerRunId: uuid("computer_run_id").references(() => computerRuns.id),
+    domainActionId: uuid("domain_action_id").references(() => domainActions.id),
+    providerConversationId: text("provider_conversation_id"),
+    providerMessageId: text("provider_message_id"),
+    applicationRef: text("application_ref"),
+    correlationId: text("correlation_id"),
+    payload: jsonb("payload").notNull().default({}),
+    evidenceRefs: jsonb("evidence_refs").notNull().default([]),
+    trustClass: text("trust_class", { enum: ["untrusted_external", "trusted_runtime"] }).notNull().default("untrusted_external"),
+    contentTreatment: text("content_treatment").notNull().default("untrusted_evidence"),
+    instructionEligible: boolean("instruction_eligible").notNull().default(false),
+    status: text("status", { enum: ["received", "matched", "unmatched", "ignored"] }).notNull().default("received"),
+    matchedAt: timestamp("matched_at", { withTimezone: true }),
+    processedAt: timestamp("processed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("integration_events_replay_unique").on(t.tenantId, t.source, t.sourceEventId),
+    check("integration_events_party_pair_check", sql`(${t.partyType} IS NULL)=(${t.partyId} IS NULL)`),
+    check("integration_events_resource_pair_check", sql`(${t.resourceType} IS NULL)=(${t.resourceId} IS NULL)`),
+    index("integration_events_tenant_type_time_idx").on(t.tenantId, t.eventType, t.occurredAt),
+    index("integration_events_tenant_work_time_idx").on(t.tenantId, t.workId, t.occurredAt).where(sql`${t.workId} IS NOT NULL`),
+    index("integration_events_tenant_status_received_idx").on(t.tenantId, t.status, t.receivedAt),
+  ],
+);
+
+// A wait is an exact, durable correlation contract owned by the Objective Loop step
+// that paused. The timer engine may only time it out and wake that same loop.
+export const workEventWaits = pgTable(
+  "work_event_waits",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    workId: uuid("work_id").notNull().references(() => works.id),
+    objectiveLoopId: uuid("objective_loop_id").notNull().references(() => workObjectiveLoops.id),
+    objectiveStepId: uuid("objective_step_id").notNull().references(() => workObjectiveSteps.id),
+    status: text("status", { enum: ["waiting", "satisfied", "timed_out", "cancelled"] }).notNull().default("waiting"),
+    expectedEventType: text("expected_event_type").notNull(),
+    subjectType: text("subject_type"),
+    subjectId: uuid("subject_id"),
+    resourceType: text("resource_type"),
+    resourceId: uuid("resource_id"),
+    delegationId: uuid("delegation_id").references(() => delegations.id),
+    taskId: uuid("task_id").references(() => tasks.id),
+    acknowledgementRequestId: uuid("acknowledgement_request_id").references(() => acknowledgementRequests.id),
+    computerRunId: uuid("computer_run_id").references(() => computerRuns.id),
+    domainActionId: uuid("domain_action_id").references(() => domainActions.id),
+    provider: text("provider"),
+    providerConversationId: text("provider_conversation_id"),
+    providerMessageId: text("provider_message_id"),
+    applicationRef: text("application_ref"),
+    correlationId: text("correlation_id"),
+    conditionSummary: text("condition_summary").notNull(),
+    continuationPolicy: jsonb("continuation_policy").notNull().default({ mode: "reinspect_current_state", maxDecisions: 1 }),
+    earliestAt: timestamp("earliest_at", { withTimezone: true }).notNull().defaultNow(),
+    deadlineAt: timestamp("deadline_at", { withTimezone: true }),
+    matchedEventId: uuid("matched_event_id").references(() => integrationEvents.id),
+    satisfiedAt: timestamp("satisfied_at", { withTimezone: true }),
+    timedOutAt: timestamp("timed_out_at", { withTimezone: true }),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("work_event_waits_step_unique").on(t.objectiveStepId),
+    unique("work_event_waits_tenant_id_id_key").on(t.tenantId, t.id),
+    check("work_event_waits_subject_pair_check", sql`(${t.subjectType} IS NULL)=(${t.subjectId} IS NULL)`),
+    check("work_event_waits_resource_pair_check", sql`(${t.resourceType} IS NULL)=(${t.resourceId} IS NULL)`),
+    index("work_event_waits_tenant_match_idx").on(t.tenantId, t.status, t.expectedEventType, t.earliestAt),
+    index("work_event_waits_tenant_deadline_idx").on(t.tenantId, t.status, t.deadlineAt).where(sql`${t.deadlineAt} IS NOT NULL`),
+    index("work_event_waits_tenant_work_idx").on(t.tenantId, t.workId, t.createdAt),
+  ],
+);
+
+// One row is the database-level semantic continuation claim. The associated job is
+// inserted in the same transaction, closing both crash windows around enqueue.
+export const workWakeClaims = pgTable(
+  "work_wake_claims",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    waitId: uuid("wait_id").notNull().references(() => workEventWaits.id),
+    integrationEventId: uuid("integration_event_id").notNull().references(() => integrationEvents.id),
+    objectiveLoopId: uuid("objective_loop_id").notNull().references(() => workObjectiveLoops.id),
+    workId: uuid("work_id").notNull().references(() => works.id),
+    cause: text("cause", { enum: ["event", "deadline"] }).notNull(),
+    objectiveRevision: integer("objective_revision").notNull(),
+    jobId: uuid("job_id").notNull().references(() => jobs.id),
+    claimedAt: timestamp("claimed_at", { withTimezone: true }).notNull().defaultNow(),
+    consumedAt: timestamp("consumed_at", { withTimezone: true }),
+  },
+  (t) => [
+    unique("work_wake_claims_wait_unique").on(t.waitId),
+    unique("work_wake_claims_job_unique").on(t.jobId),
+    unique("work_wake_claims_tenant_id_id_key").on(t.tenantId, t.id),
+    index("work_wake_claims_tenant_loop_idx").on(t.tenantId, t.objectiveLoopId, t.claimedAt),
   ],
 );
