@@ -112,6 +112,10 @@ const deployArgs = [
   ...tokenArgs,
 ]
 const deployOutput = run("vercel", deployArgs, appDir, env)
+// Vercel CLI sometimes terminates its final deployment URL without a newline.
+// Keep the workflow-facing marker on its own line so the release parser cannot
+// concatenate it with provider output after an otherwise successful deployment.
+if (deployOutput && !deployOutput.endsWith("\n")) process.stdout.write("\n")
 const urls = [...deployOutput.matchAll(/https:\/\/[^\s)]+/g)].map((match) => match[0].replace(/[.,]+$/, ""))
 const deploymentUrl = urls.at(-1)
 if (!deploymentUrl) throw new Error("Vercel did not return a deployment URL")
