@@ -1,8 +1,10 @@
 # FINNOR core and client certification
 
-Phase 5 repairs the existing `release:certify` entry point and makes it the single
-governance layer over the Phase 1–4 client factory and the canonical production
-deployment scripts. It does not deploy services or replace the factory/runtime.
+The `release:certify` entry point is the Phase 6 certification layer over the Phase
+1–5 runtime. It does not deploy services or replace the factory/runtime. Phase 5
+production releases deliberately do not convert unavailable staging load or live
+provider evidence into a fabricated PASS; those gates remain fail-closed until Phase
+6 runs them against an explicitly contracted environment.
 
 Phase 6 promotion, update, drift, and configuration-only rollback are documented in
 `docs/client-release-lifecycle.md`. That layer consumes these artifacts without
@@ -34,12 +36,11 @@ is stored content-addressed under `.certifications/core/`; when `DATABASE_URL` i
 available it is also inserted into the append-only certification ledger and can be
 reused from that durable ledger by later runs.
 
-The production workflow runs this expensive matrix once, transfers the immutable
-artifact to the repaired deploy job, and makes `deploy-production.mjs` reject a
-missing, non-PASS, wrong-SHA, incomplete, or hash-tampered core certification. The
-certification id is embedded in deployment metadata and `/api/release` and is verified
-after deployment. Failed/blocked artifacts are retained for diagnosis but are never
-accepted by the deploy job.
+The Phase 6 workflow may run this expensive matrix once and transfer the immutable
+artifact to later certified promotion machinery. The Phase 5 production workflow
+instead runs its deterministic migration, type, security, runtime, contract, policy,
+build, and release-parity gates and leaves load/SLO and selected live canaries to this
+certification layer, as required by the phase boundary.
 
 ## Client certification (bounded per client deployment)
 

@@ -1,8 +1,8 @@
 {
   "phase": "P2",
-  "generatedAt": "2026-08-21T16:10:17.623Z",
-  "actionCount": 58,
-  "passCount": 58,
+  "generatedAt": "2026-08-22T02:29:13.649Z",
+  "actionCount": 59,
+  "passCount": 59,
   "failCount": 0,
   "frontend": {
     "ok": true,
@@ -21,6 +21,7 @@
       "check_stock_level",
       "check_technician_availability",
       "clarification_request",
+      "computer_task",
       "create_invoice",
       "create_lead",
       "create_review_request",
@@ -6206,6 +6207,114 @@
         "P2-PROVIDER-IDEMPOTENCY-share_document",
         "P2-FRONTEND-share_document",
         "P2-FALLBACK-share_document"
+      ]
+    },
+    {
+      "actionType": "computer_task",
+      "plugin": "computer-task",
+      "profile": "EXTERNAL_SIDE_EFFECT",
+      "approvalFloor": "POLICY",
+      "external": true,
+      "status": "PASS",
+      "gates": {
+        "registry": {
+          "status": "PASS",
+          "evidenceId": "P2-REGISTRY-computer_task",
+          "detail": "computer-task resolved without collision"
+        },
+        "valid_input": {
+          "status": "PASS",
+          "evidenceId": "P2-SCHEMA-VALID-computer_task",
+          "detail": "shared fixture accepted by runtime validator"
+        },
+        "invalid_input": {
+          "status": "PASS",
+          "evidenceId": "P2-SCHEMA-INVALID-computer_task",
+          "detail": "null payload rejected"
+        },
+        "missing_entity": {
+          "status": "N/A",
+          "evidenceId": "P2-GROUND-MISSING",
+          "detail": "fixture has no referenced entity field"
+        },
+        "cross_tenant": {
+          "status": "N/A",
+          "evidenceId": "P2-GROUND-CROSS-TENANT",
+          "detail": "fixture has no referenced entity field"
+        },
+        "approval_floor": {
+          "status": "PASS",
+          "evidenceId": "P2-APPROVAL-computer_task",
+          "detail": "POLICY: requires=true, typed=false, approval-queue=true"
+        },
+        "prediction": {
+          "status": "PASS",
+          "evidenceId": "P2-PREDICTION-computer_task",
+          "detail": "schema prediction is explicit and labeled no-write by the plugin/registry contract"
+        },
+        "receipt_completed": {
+          "status": "PASS",
+          "evidenceId": "P2-RECEIPT-computer_task-completed",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "receipt_rejected": {
+          "status": "PASS",
+          "evidenceId": "P2-RECEIPT-computer_task-rejected",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_blocked": {
+          "status": "PASS",
+          "evidenceId": "P2-RECEIPT-computer_task-blocked",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_failed": {
+          "status": "PASS",
+          "evidenceId": "P2-RECEIPT-computer_task-failed",
+          "detail": "finalized=true actual=false failure=true audit=true"
+        },
+        "receipt_compensated": {
+          "status": "PASS",
+          "evidenceId": "P2-RECEIPT-computer_task-compensated",
+          "detail": "finalized=true actual=true failure=false audit=true"
+        },
+        "idempotency": {
+          "status": "PASS",
+          "evidenceId": "P2-IDEMPOTENCY-computer_task",
+          "detail": "atomic action claim winners=1, repeat-after-terminal=0"
+        },
+        "provider_idempotency": {
+          "status": "PASS",
+          "evidenceId": "P2-PROVIDER-IDEMPOTENCY-computer_task",
+          "detail": "sequential-effects=1 concurrent-effects=1 ledger=1/1"
+        },
+        "frontend": {
+          "status": "PASS",
+          "evidenceId": "P2-FRONTEND-computer_task",
+          "detail": "generated manifest, renderer entries, six-state coverage, and zero certified fallback mounts"
+        },
+        "no_fallback": {
+          "status": "PASS",
+          "evidenceId": "P2-FALLBACK-computer_task",
+          "detail": "certified ActionRenderer fallback imports=0"
+        }
+      },
+      "evidenceIds": [
+        "P2-REGISTRY-computer_task",
+        "P2-SCHEMA-VALID-computer_task",
+        "P2-SCHEMA-INVALID-computer_task",
+        "P2-GROUND-MISSING",
+        "P2-GROUND-CROSS-TENANT",
+        "P2-APPROVAL-computer_task",
+        "P2-PREDICTION-computer_task",
+        "P2-RECEIPT-computer_task-completed",
+        "P2-RECEIPT-computer_task-rejected",
+        "P2-RECEIPT-computer_task-blocked",
+        "P2-RECEIPT-computer_task-failed",
+        "P2-RECEIPT-computer_task-compensated",
+        "P2-IDEMPOTENCY-computer_task",
+        "P2-PROVIDER-IDEMPOTENCY-computer_task",
+        "P2-FRONTEND-computer_task",
+        "P2-FALLBACK-computer_task"
       ]
     }
   ]

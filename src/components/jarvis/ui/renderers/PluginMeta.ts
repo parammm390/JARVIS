@@ -26,6 +26,7 @@ import {
   HardHat,
   Landmark,
   Workflow,
+  Monitor,
   type LucideIcon,
 } from "lucide-react"
 
@@ -58,6 +59,7 @@ export const PLUGIN_META: Record<string, PluginStyle> = {
   "proposal-to-installation": { label: "Installation", icon: HardHat, accent: "amber" },
   "invoice-to-cash": { label: "Invoice → Cash", icon: Landmark, accent: "cyan" },
   "universal-actions": { label: "Universal Actions", icon: Workflow, accent: "violet" },
+  "computer-task": { label: "Computer Task", icon: Monitor, accent: "amber" },
 }
 
 export const ACCENT_CLASS: Record<string, { bg: string; text: string; border: string }> = {

@@ -149,6 +149,16 @@ export const ACTION_FIXTURES: Record<string, unknown> = {
     unavailableCapabilities: ["communications"],
     reason: "The communications provider is not configured.",
   },
+  // computer-task — read-only representative payload; the governed auth-profile
+  // reference is intentionally not credential material.
+  computer_task: {
+    application: "supplier_portal",
+    authProfileRef: "supplier-west",
+    task: "Find the confirmed ETA for supplier order WS-48.",
+    target: { kind: "supplier_order", identifier: "WS-48" },
+    mode: "READ_ONLY",
+    successCriteria: ["A confirmed ETA is visible for WS-48"],
+  },
 }
 
 /** Not an action type (see VoiceCallScene.tsx's header) — a `calls` table row
