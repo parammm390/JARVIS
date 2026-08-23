@@ -75,7 +75,7 @@ describe.skipIf(!available)("Phase 5 CausalReplayProjection", () => {
         timeContext: { timezone: "Asia/Kolkata" },
       },
     });
-    const attempt = await beginWorkPlannerAttempt({ tenantId: TENANT, workId: WORK, workInputId: received.workInputId, attemptKey: "phase5-certification" });
+    const attempt = await beginWorkPlannerAttempt({ tenantId: TENANT, workId: WORK, workInputId: received.workInputId, attemptKey: "replay" });
     plannerAttemptId = attempt.id;
 
     await admin.query(`INSERT INTO finnor_os.domain_policies(id,tenant_id,action_type,policy,requires_confirmation,version,effective_from) VALUES ($1,$2,'update_customer','{"scope":"customer"}',true,1,'2026-08-01T00:00:00Z')`, [POLICY, TENANT]);
