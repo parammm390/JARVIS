@@ -15,6 +15,7 @@
 
 import { jarvisGet, jarvisPost } from "../lib/api"
 import type { OperationalQueryExecution } from "../workspaces/contracts"
+import type { OperatingInteractionContextValue } from "./operating-interaction"
 
 export type InstructionSource = "voice" | "typed"
 
@@ -110,6 +111,8 @@ export interface SubmitInstructionOpts {
   instructionId?: string
   /** Existing durable Work for a clarification/follow-up continuation. */
   workId?: string
+  /** Exact visible business context captured at the shared text/voice seam. */
+  activeContext?: OperatingInteractionContextValue
 }
 
 /** The shape `POST /api/actions` returns for each planned `DomainAction` — the
@@ -173,6 +176,7 @@ export async function submitInstruction(text: string, opts: SubmitInstructionOpt
     sessionId,
     instructionId: opts.instructionId,
     workId: opts.workId,
+    activeContext: opts.activeContext,
   })
   return {
     planned: body.planned ?? [],

@@ -67,7 +67,12 @@ vi.mock("@finnor/db", () => ({
   transitionWork: mocks.transitionWork,
   workAggregate: mocks.workAggregate,
 }));
-vi.mock("@finnor/orchestration", () => ({ interpretOperationalQuery: mocks.interpretOperationalQuery }));
+vi.mock("@finnor/orchestration", () => ({
+  interpretOperationalQuery: mocks.interpretOperationalQuery,
+  resolveOperatingInteractionContext: vi.fn(async ({ context }: { context?: unknown }) => context),
+  interactionAwareOperationalDecision: vi.fn((decision: unknown) => decision),
+  OperatingInteractionContextError: class OperatingInteractionContextError extends Error {},
+}));
 
 import { POST as actionsPOST } from "../../apps/api/app/api/actions/route";
 

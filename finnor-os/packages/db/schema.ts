@@ -18,6 +18,7 @@ import {
   primaryKey,
   foreignKey,
   check,
+  bigint,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { money, provenanceColumns, archivable, bytea } from "./columns";
@@ -53,16 +54,26 @@ export const tenantSettings = pgTable("tenant_settings", {
   isDealerZero: boolean("is_dealer_zero").notNull().default(false),
   simulatorEnabled: boolean("simulator_enabled").notNull().default(false),
   trainingMode: boolean("training_mode").notNull().default(false),
-  // Minimal tenant-wide JARVIS presentation controls. This deliberately stays
-  // on the existing tenant settings aggregate rather than creating a second
-  // configuration source or mixing company vocabulary into per-user prefs.
+  // Tenant Experience Manifest V2. This deliberately stays on the existing
+  // tenant settings aggregate rather than creating a second configuration source
+  // or mixing company vocabulary into per-user preferences. Runtime authority,
+  // integrations, and credentials remain in their existing governed contracts.
   workspaceConfig: jsonb("workspace_config").notNull().default({
+    version: 2,
     enabledSurfaces: ["home", "work", "customers", "schedule", "money", "agents"],
     terminology: { home: "Home", work: "Work", customers: "Customers", schedule: "Schedule", money: "Money", agents: "Agents" },
+    vocabulary: { customer: "Customer", homeowner: "Homeowner", account: "Account", technician: "Technician", installer: "Installer", serviceVisit: "Service Visit", appointment: "Appointment", quote: "Quote", proposal: "Proposal", invoice: "Invoice", job: "Job", work: "Work" },
     voiceEnabled: true,
     navigationPriority: ["home", "work", "customers", "schedule", "money", "agents"],
-    brand: { accent: "cyan", radius: "soft", mark: "F" },
+    brand: { accent: "cyan", surfaceTone: "ink", radius: "soft", density: "balanced", typography: "system", motion: "standard", mark: "F", logoAssetKey: "finnor" },
     visibility: { policy: true, authority: true },
+    roles: {
+      owner: { startView: "command", visibleSurfaces: ["home", "work", "customers", "schedule", "money", "agents"], ready: { primaryFocus: "operational_attention", heroMetric: "pending_approvals", pulseMetrics: ["pending_approvals", "collected_usd", "overdue_invoice_value", "open_leads", "runs_in_flight"], attentionCategories: ["recovery", "approval", "schedule", "money", "customer", "work"], quickActions: [{ key: "inspect_blocked_work" }, { key: "review_overdue_invoices" }, { key: "review_pending_approvals" }], primaryProjection: "work" } },
+      dispatcher: { startView: "schedule", visibleSurfaces: ["home", "work", "customers", "schedule", "agents"], ready: { primaryFocus: "dispatch", heroMetric: "technician_load", pulseMetrics: ["technician_load", "pending_approvals", "runs_in_flight", "stuck_runs"], attentionCategories: ["recovery", "approval", "schedule", "customer", "work"], quickActions: [{ key: "review_schedule" }, { key: "review_technician_load" }, { key: "inspect_blocked_work" }], primaryProjection: "schedule" } },
+      technician: { startView: "my-day", visibleSurfaces: ["home", "work", "customers", "schedule"], ready: { primaryFocus: "assigned_work", heroMetric: "assigned_work_today", pulseMetrics: ["assigned_work_today"], attentionCategories: ["recovery", "schedule", "customer", "work"], quickActions: [{ key: "open_my_day" }], primaryProjection: "assigned-day" } },
+    },
+    scenes: { ready: { detail: "balanced", emphasis: "presence" }, listening: { detail: "compact", emphasis: "presence" }, plan: { detail: "balanced", emphasis: "context" }, approval: { detail: "detailed", emphasis: "evidence" }, working: { detail: "balanced", emphasis: "evidence" }, outcome: { detail: "detailed", emphasis: "evidence" }, recovery: { detail: "detailed", emphasis: "context" } },
+    extensions: {},
   }),
   // Phase 2 tenant-safe routing/delegation policy. Provider credentials and raw
   // endpoints never belong here; the migration enforces a secret-shaped-key ban.
@@ -896,6 +907,9 @@ export const workInputs = pgTable(
     instructionText: text("instruction_text").notNull(),
     createdBy: uuid("created_by").references(() => users.id),
     idempotencyKey: text("idempotency_key"),
+    contextSnapshot: jsonb("context_snapshot"),
+    contextSnapshotHash: text("context_snapshot_hash"),
+    contextCapturedAt: timestamp("context_captured_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -917,6 +931,9 @@ export const workPlannerAttempts = pgTable(
     status: text("status", { enum: ["planning", "succeeded", "failed", "timed_out"] }).notNull().default("planning"),
     plannerResult: jsonb("planner_result"),
     failure: jsonb("failure"),
+    decisionContextSnapshot: jsonb("decision_context_snapshot"),
+    decisionContextHash: text("decision_context_hash"),
+    decisionContextCapturedAt: timestamp("decision_context_captured_at", { withTimezone: true }),
     startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
     completedAt: timestamp("completed_at", { withTimezone: true }),
   },
@@ -1738,6 +1755,9 @@ export const externalOperations = pgTable("external_operations", {
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
   domainActionId: uuid("domain_action_id").notNull().references(() => domainActions.id),
   operationKey: text("operation_key").notNull(),
+  // The exact ToolRegistry integration selected for this attempt. Historical rows
+  // remain null rather than being guessed from action type or current tenant config.
+  provider: text("provider"),
   requestHash: text("request_hash").notNull(),
   status: text("status", { enum: ["running", "succeeded", "failed", "unknown"] }).notNull(),
   response: jsonb("response"),
@@ -2223,6 +2243,39 @@ export const businessEvents = pgTable(
   ],
 );
 
+// Phase 2 Live Business World: one opaque cursor scope and monotonically
+// increasing sequence per tenant. Operational deltas are invalidation evidence,
+// not copied business rows; canonical data remains in the domain tables above.
+export const tenantOperationalDeltaCursors = pgTable(
+  "tenant_operational_delta_cursors",
+  {
+    tenantId: uuid("tenant_id").primaryKey().references(() => tenants.id, { onDelete: "cascade" }),
+    scope: uuid("scope").notNull().defaultRandom().unique(),
+    lastSeq: bigint("last_seq", { mode: "bigint" }).notNull().default(0n),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+);
+
+export const operationalDeltas = pgTable(
+  "operational_deltas",
+  {
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    seq: bigint("seq", { mode: "bigint" }).notNull(),
+    changeType: text("change_type").notNull(),
+    priority: text("priority", { enum: ["low", "normal", "high"] }).notNull().default("normal"),
+    entityRefs: jsonb("entity_refs").notNull().default([]),
+    workId: uuid("work_id").references(() => works.id, { onDelete: "set null" }),
+    projectionTags: text("projection_tags").array().notNull().default([]),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.tenantId, t.seq] }),
+    index("operational_deltas_tenant_time_idx").on(t.tenantId, t.occurredAt),
+    index("operational_deltas_tenant_work_idx").on(t.tenantId, t.workId, t.seq).where(sql`${t.workId} IS NOT NULL`),
+  ],
+);
+
 // Its own table, not a scan_findings reuse — scan_findings is a one-way "digest once"
 // contract; data-quality findings need an open/resolved lifecycle and re-surfacing.
 export const dataQualityFindings = pgTable(
@@ -2627,6 +2680,9 @@ export const integrationOperations = pgTable(
     workflowStepId: uuid("workflow_step_id").notNull().references(() => workflowSteps.id),
     operationKey: text("operation_key").notNull(),
     capability: text("capability").notNull(),
+    // Binding.name at the actual execution boundary (native/emulator/vendor).
+    // This is presentation-safe provenance, never provider response material.
+    provider: text("provider"),
     requestHash: text("request_hash").notNull(),
     status: text("status", { enum: ["running", "succeeded", "failed", "unknown"] }).notNull(),
     response: jsonb("response"),

@@ -30,11 +30,11 @@ async function dbUp(): Promise<boolean> {
 }
 const available = await dbUp();
 
-function connectSse(port: number, tenantId: string): Promise<{ req: http.ClientRequest; chunks: string[] }> {
+function connectSse(port: number, tenantId: string, lastEventId?: string): Promise<{ req: http.ClientRequest; chunks: string[] }> {
   return new Promise((resolve, reject) => {
     const chunks: string[] = [];
     const req = http.get(
-      { host: "127.0.0.1", port, path: "/events", headers: { "x-tenant-id": tenantId } },
+      { host: "127.0.0.1", port, path: "/events", headers: { "x-tenant-id": tenantId, ...(lastEventId ? { "last-event-id": lastEventId } : {}) } },
       (res) => {
         if (res.statusCode !== 200) {
           reject(new Error(`Expected 200, got ${res.statusCode}`));
@@ -45,6 +45,15 @@ function connectSse(port: number, tenantId: string): Promise<{ req: http.ClientR
       },
     );
     req.on("error", reject);
+  });
+}
+
+function operationalFrames(chunks: string[]): Array<{ id: string; data: Record<string, unknown> }> {
+  return chunks.join("").split("\n\n").flatMap((frame) => {
+    if (!frame.includes("event: operational_delta")) return [];
+    const id = frame.split("\n").find((line) => line.startsWith("id: "))?.slice(4);
+    const data = frame.split("\n").find((line) => line.startsWith("data: "))?.slice(6);
+    return id && data ? [{ id, data: JSON.parse(data) as Record<string, unknown> }] : [];
   });
 }
 
@@ -88,8 +97,8 @@ describe.skipIf(!available)("B1.T2 — SSE gateway", () => {
     });
   });
 
-  it("streams a real jarvis_events NOTIFY to the connected tenant within 2s, and not to another tenant", async () => {
-    const [{ chunks }, other] = await Promise.all([connectSse(port, tenantId), connectSse(port, otherTenantId)]);
+  it("streams a durable safe delta to the connected tenant within 2s, and not to another tenant", async () => {
+    const [own, other] = await Promise.all([connectSse(port, tenantId), connectSse(port, otherTenantId)]);
     // Give both SSE connections a moment to register their onJarvisEvent subscriber
     // before the write happens, same as a real client's connect-then-listen race.
     await new Promise((r) => setTimeout(r, 100));
@@ -103,19 +112,52 @@ describe.skipIf(!available)("B1.T2 — SSE gateway", () => {
     const deadline = Date.now() + 2000;
     let received: Record<string, unknown> | null = null;
     while (Date.now() < deadline && !received) {
-      const joined = chunks.join("");
-      const match = joined.match(/data: (\{.*"kind":"domain_action".*\})\n/);
-      if (match) received = JSON.parse(match[1]!);
+      received = operationalFrames(own.chunks).find((frame) =>
+        Array.isArray(frame.data.entityRefs) && frame.data.entityRefs.some((ref) => (ref as { entityId?: unknown }).entityId === action!.id),
+      )?.data ?? null;
       if (!received) await new Promise((r) => setTimeout(r, 25));
     }
     const elapsedMs = Date.now() - start;
 
     expect(received).not.toBeNull();
-    expect(received!.id).toBe(action!.id);
-    expect(received!.tenantId).toBe(tenantId);
+    expect(received!.changeType).toBe("domain_actions.insert");
+    expect(received).not.toHaveProperty("tenantId");
+    expect(received).not.toHaveProperty("payload");
     expect(elapsedMs).toBeLessThan(2000);
 
     // Tenant isolation: the other tenant's stream must never see this event.
     expect(other.chunks.join("")).not.toContain(action!.id);
+    own.req.destroy();
+    other.req.destroy();
+  });
+
+  it("replays a delta written while disconnected and rejects another tenant's cursor", async () => {
+    const first = await connectSse(port, tenantId);
+    const [seen] = await adminDb().insert(domainActions).values({ tenantId, actionType: "cursor_seed", payload: {}, status: "draft" }).returning();
+    const deadline = Date.now() + 2000;
+    let cursor: string | undefined;
+    while (Date.now() < deadline && !cursor) {
+      cursor = operationalFrames(first.chunks).find((frame) => JSON.stringify(frame.data.entityRefs).includes(seen!.id))?.id;
+      if (!cursor) await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    expect(cursor).toBeTruthy();
+    first.req.destroy();
+
+    const [missed] = await adminDb().insert(domainActions).values({ tenantId, actionType: "cursor_replay", payload: {}, status: "draft" }).returning();
+    const resumed = await connectSse(port, tenantId, cursor);
+    let replayed = false;
+    while (Date.now() < deadline + 2000 && !replayed) {
+      replayed = operationalFrames(resumed.chunks).some((frame) => JSON.stringify(frame.data.entityRefs).includes(missed!.id));
+      if (!replayed) await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    expect(replayed).toBe(true);
+    resumed.req.destroy();
+
+    await new Promise<void>((resolve, reject) => {
+      http.get({ host: "127.0.0.1", port, path: "/events", headers: { "x-tenant-id": otherTenantId, "last-event-id": cursor! } }, (res) => {
+        expect(res.statusCode).toBe(409);
+        resolve();
+      }).on("error", reject);
+    });
   });
 });

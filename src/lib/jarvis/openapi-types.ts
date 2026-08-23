@@ -346,7 +346,68 @@ export interface paths {
                         /** Format: uuid */
                         workId?: string;
                         activeContext?: {
-                            [key: string]: unknown;
+                            /** @constant */
+                            version: 1;
+                            /** Format: date-time */
+                            capturedAt: string;
+                            /** @enum {string} */
+                            source: "voice" | "text" | "console";
+                            activeWork?: {
+                                /** Format: uuid */
+                                workId: string;
+                            };
+                            focusedEntity?: {
+                                /** @enum {string} */
+                                entityType: "household" | "contact" | "user" | "technician" | "equipment" | "service_visit" | "maintenance_agreement" | "lead" | "opportunity" | "quote" | "proposal" | "work_order" | "appointment" | "invoice" | "payment" | "conversation" | "call" | "message" | "communication" | "document" | "task" | "work" | "domain_action" | "workflow_run" | "workflow_step" | "business_operation" | "business_operation_target" | "decision_receipt" | "business_event" | "org_unit" | "tenant_location" | "external_organization" | "external_contact" | "delegation" | "acknowledgement_request" | "communication_delivery" | "internal_event" | "document_share" | "inventory_item" | "computer_run";
+                                /** Format: uuid */
+                                entityId: string;
+                            };
+                            /** @default [] */
+                            selectedEntities?: {
+                                /** @enum {string} */
+                                entityType: "household" | "contact" | "user" | "technician" | "equipment" | "service_visit" | "maintenance_agreement" | "lead" | "opportunity" | "quote" | "proposal" | "work_order" | "appointment" | "invoice" | "payment" | "conversation" | "call" | "message" | "communication" | "document" | "task" | "work" | "domain_action" | "workflow_run" | "workflow_step" | "business_operation" | "business_operation_target" | "decision_receipt" | "business_event" | "org_unit" | "tenant_location" | "external_organization" | "external_contact" | "delegation" | "acknowledgement_request" | "communication_delivery" | "internal_event" | "document_share" | "inventory_item" | "computer_run";
+                                /** Format: uuid */
+                                entityId: string;
+                            }[];
+                            /** @default [] */
+                            excludedEntities?: {
+                                /** @enum {string} */
+                                entityType: "household" | "contact" | "user" | "technician" | "equipment" | "service_visit" | "maintenance_agreement" | "lead" | "opportunity" | "quote" | "proposal" | "work_order" | "appointment" | "invoice" | "payment" | "conversation" | "call" | "message" | "communication" | "document" | "task" | "work" | "domain_action" | "workflow_run" | "workflow_step" | "business_operation" | "business_operation_target" | "decision_receipt" | "business_event" | "org_unit" | "tenant_location" | "external_organization" | "external_contact" | "delegation" | "acknowledgement_request" | "communication_delivery" | "internal_event" | "document_share" | "inventory_item" | "computer_run";
+                                /** Format: uuid */
+                                entityId: string;
+                            }[];
+                            surface: {
+                                /** @enum {string} */
+                                id: "home" | "customers" | "money" | "work" | "schedule" | "agents";
+                                route?: string;
+                                /** @enum {string} */
+                                spatialState?: "canvas" | "detail" | "list" | "map" | "timeline";
+                            };
+                            /** @default [] */
+                            filters?: {
+                                field: string;
+                                /** @enum {string} */
+                                operator: "eq" | "neq" | "in" | "not_in" | "gte" | "lte" | "contains";
+                                value: string | number | boolean | string[];
+                            }[];
+                            timeContext?: {
+                                /** Format: date-time */
+                                start?: string;
+                                /** Format: date-time */
+                                end?: string;
+                                timezone?: string;
+                            };
+                            cohort?: {
+                                /** @constant */
+                                kind: "work_query_execution";
+                                /** Format: uuid */
+                                executionId: string;
+                                /** @constant */
+                                entityType: "household";
+                                /** @constant */
+                                queryIntent: "customer_cohort";
+                                count: number;
+                            };
                         };
                     };
                 };
@@ -414,7 +475,68 @@ export interface paths {
                         workId?: string;
                         idempotencyKey?: string;
                         activeContext?: {
-                            [key: string]: unknown;
+                            /** @constant */
+                            version: 1;
+                            /** Format: date-time */
+                            capturedAt: string;
+                            /** @enum {string} */
+                            source: "voice" | "text" | "console";
+                            activeWork?: {
+                                /** Format: uuid */
+                                workId: string;
+                            };
+                            focusedEntity?: {
+                                /** @enum {string} */
+                                entityType: "household" | "contact" | "user" | "technician" | "equipment" | "service_visit" | "maintenance_agreement" | "lead" | "opportunity" | "quote" | "proposal" | "work_order" | "appointment" | "invoice" | "payment" | "conversation" | "call" | "message" | "communication" | "document" | "task" | "work" | "domain_action" | "workflow_run" | "workflow_step" | "business_operation" | "business_operation_target" | "decision_receipt" | "business_event" | "org_unit" | "tenant_location" | "external_organization" | "external_contact" | "delegation" | "acknowledgement_request" | "communication_delivery" | "internal_event" | "document_share" | "inventory_item" | "computer_run";
+                                /** Format: uuid */
+                                entityId: string;
+                            };
+                            /** @default [] */
+                            selectedEntities?: {
+                                /** @enum {string} */
+                                entityType: "household" | "contact" | "user" | "technician" | "equipment" | "service_visit" | "maintenance_agreement" | "lead" | "opportunity" | "quote" | "proposal" | "work_order" | "appointment" | "invoice" | "payment" | "conversation" | "call" | "message" | "communication" | "document" | "task" | "work" | "domain_action" | "workflow_run" | "workflow_step" | "business_operation" | "business_operation_target" | "decision_receipt" | "business_event" | "org_unit" | "tenant_location" | "external_organization" | "external_contact" | "delegation" | "acknowledgement_request" | "communication_delivery" | "internal_event" | "document_share" | "inventory_item" | "computer_run";
+                                /** Format: uuid */
+                                entityId: string;
+                            }[];
+                            /** @default [] */
+                            excludedEntities?: {
+                                /** @enum {string} */
+                                entityType: "household" | "contact" | "user" | "technician" | "equipment" | "service_visit" | "maintenance_agreement" | "lead" | "opportunity" | "quote" | "proposal" | "work_order" | "appointment" | "invoice" | "payment" | "conversation" | "call" | "message" | "communication" | "document" | "task" | "work" | "domain_action" | "workflow_run" | "workflow_step" | "business_operation" | "business_operation_target" | "decision_receipt" | "business_event" | "org_unit" | "tenant_location" | "external_organization" | "external_contact" | "delegation" | "acknowledgement_request" | "communication_delivery" | "internal_event" | "document_share" | "inventory_item" | "computer_run";
+                                /** Format: uuid */
+                                entityId: string;
+                            }[];
+                            surface: {
+                                /** @enum {string} */
+                                id: "home" | "customers" | "money" | "work" | "schedule" | "agents";
+                                route?: string;
+                                /** @enum {string} */
+                                spatialState?: "canvas" | "detail" | "list" | "map" | "timeline";
+                            };
+                            /** @default [] */
+                            filters?: {
+                                field: string;
+                                /** @enum {string} */
+                                operator: "eq" | "neq" | "in" | "not_in" | "gte" | "lte" | "contains";
+                                value: string | number | boolean | string[];
+                            }[];
+                            timeContext?: {
+                                /** Format: date-time */
+                                start?: string;
+                                /** Format: date-time */
+                                end?: string;
+                                timezone?: string;
+                            };
+                            cohort?: {
+                                /** @constant */
+                                kind: "work_query_execution";
+                                /** Format: uuid */
+                                executionId: string;
+                                /** @constant */
+                                entityType: "household";
+                                /** @constant */
+                                queryIntent: "customer_cohort";
+                                count: number;
+                            };
                         };
                         budgets?: {
                             maxSteps?: number;
@@ -1603,6 +1725,81 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/workflows/steps/{id}/compensate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Compensate one completed workflow effect with its registered typed binding */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        reason: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Compensation succeeded or an existing successful case was returned */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid reason */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Not authorized */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Step not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Illegal or unsupported compensation */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Compensation attempted and failed; case and receipt were preserved */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/events": {
         parameters: {
             query?: never;
@@ -1626,6 +1823,100 @@ export interface paths {
             responses: {
                 /** @description {events: EventRow[]} */
                 200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/business-world": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Bounded canonical Business World projection for one operating scene */
+        get: {
+            parameters: {
+                query: {
+                    scene: "customer" | "schedule" | "money" | "work" | "inventory" | "computer";
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description {data: BusinessWorldProjection} */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid scene */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/operational-deltas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Establish or replay a bounded tenant-scoped operational delta cursor */
+        get: {
+            parameters: {
+                query?: {
+                    cursor?: string;
+                    limit?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OperationalDeltaPage */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid cursor */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Cursor tenant scope mismatch */
+                409: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -2690,6 +2981,106 @@ export interface paths {
             requestBody?: never;
             responses: {
                 /** @description Canonical durable Work aggregate */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Bad auth */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Work not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/works/{id}/execution": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read one bounded, tenant-scoped execution projection for a durable Work */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Presentation-safe action DAG, authority, workflow, computer, uncertainty, and receipt truth */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Bad auth */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Work not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/works/{id}/replay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Replay one Work's evidence-backed causal history without mutating operational state */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Bounded, privacy-safe trigger-to-outcome causal graph with explicit provenance gaps */
                 200: {
                     headers: {
                         [name: string]: unknown;

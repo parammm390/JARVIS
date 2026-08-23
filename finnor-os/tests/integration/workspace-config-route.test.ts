@@ -7,6 +7,7 @@ import {
   closePool,
   employeeRoleAssignments,
   employeeRoles,
+  operationalDeltas,
   roleAuthorityGrants,
   tenantSettings,
   tenants,
@@ -58,11 +59,25 @@ describe.skipIf(!available)("tenant workspace configuration", () => {
   });
 
   it("returns defaults and lets only the owner save tenant-wide controls", async () => {
-    expect((await (await GET(request())).json()).config).toEqual(DEFAULT_WORKSPACE_CONFIG);
-    const configured = { ...DEFAULT_WORKSPACE_CONFIG, enabledSurfaces: ["home", "work", "money"], terminology: { ...DEFAULT_WORKSPACE_CONFIG.terminology, work: "Cases" }, voiceEnabled: false };
+    const initial = await (await GET(request())).json();
+    expect(initial.config).toEqual(DEFAULT_WORKSPACE_CONFIG);
+    expect(initial.config.version).toBe(2);
+    expect(initial.revision).toBeNull();
+    const configured = { ...DEFAULT_WORKSPACE_CONFIG, enabledSurfaces: ["home", "work", "money"] as Array<"home" | "work" | "money">, terminology: { ...DEFAULT_WORKSPACE_CONFIG.terminology, work: "Cases" }, voiceEnabled: false, roles: {
+      ...DEFAULT_WORKSPACE_CONFIG.roles,
+      owner: { ...DEFAULT_WORKSPACE_CONFIG.roles.owner, visibleSurfaces: ["home", "work", "money"] as Array<"home" | "work" | "money"> },
+      dispatcher: { ...DEFAULT_WORKSPACE_CONFIG.roles.dispatcher, visibleSurfaces: ["home", "work"] as Array<"home" | "work"> },
+      technician: { ...DEFAULT_WORKSPACE_CONFIG.roles.technician, visibleSurfaces: ["home", "work"] as Array<"home" | "work"> },
+    } };
     expect((await PUT(request("dispatcher", { method: "PUT", body: JSON.stringify(configured) }))).status).toBe(403);
-    expect((await PUT(request("owner", { method: "PUT", body: JSON.stringify(configured) }))).status).toBe(200);
+    const savedResponse = await PUT(request("owner", { method: "PUT", body: JSON.stringify(configured) }));
+    expect(savedResponse.status).toBe(200);
+    expect((await savedResponse.json()).revision).toEqual(expect.any(String));
     expect((await (await GET(request("dispatcher"))).json()).config).toMatchObject({ enabledSurfaces: ["home", "work", "money"], terminology: { work: "Cases" }, voiceEnabled: false });
+    const deltas = await withTenant(TENANT, async (db) => db.select().from(operationalDeltas));
+    expect(deltas.some((delta) => delta.projectionTags.includes("preferences"))).toBe(true);
+    const other = await withTenant(OTHER_TENANT, async (db) => db.select().from(tenantSettings).where(eq(tenantSettings.tenantId, OTHER_TENANT)));
+    expect(other[0]!.workspaceConfig).toMatchObject({ terminology: { work: "Other Work" } });
   });
 
   it("rejects unsafe or incomplete navigation contracts", async () => {

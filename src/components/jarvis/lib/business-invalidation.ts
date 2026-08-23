@@ -2,7 +2,7 @@ import type { ProjectionTag } from "./business-projection-cache"
 
 export interface BusinessInvalidationSignal {
   tags: readonly ProjectionTag[]
-  source: "mutation" | "business-event" | "trace" | "manual" | "broadcast"
+  source: "mutation" | "business-event" | "trace" | "manual" | "broadcast" | "realtime" | "resync"
   path?: string
   at: number
 }
@@ -20,9 +20,49 @@ export function publishBusinessInvalidation(signal: Omit<BusinessInvalidationSig
   listeners.forEach((listener) => listener(event))
 }
 
+/** Coalesces a burst of durable deltas into one selective cache invalidation. This
+ * keeps replay/network bursts from producing one external-store notification and
+ * render opportunity per ledger row while preserving the union of affected views. */
+export class BusinessInvalidationBatcher {
+  private readonly tags = new Set<ProjectionTag>()
+  private timer: ReturnType<typeof setTimeout> | null = null
+  private source: BusinessInvalidationSignal["source"] = "realtime"
+
+  constructor(
+    private readonly emit: (signal: Omit<BusinessInvalidationSignal, "at">) => void = publishBusinessInvalidation,
+    private readonly delayMs = 16,
+  ) {}
+
+  push(tags: readonly ProjectionTag[], source: BusinessInvalidationSignal["source"]): void {
+    const wasEmpty = this.tags.size === 0
+    for (const tag of tags) this.tags.add(tag)
+    if (source === "resync" || wasEmpty) this.source = source
+    if (this.timer !== null || this.tags.size === 0) return
+    this.timer = setTimeout(() => this.flush(), this.delayMs)
+  }
+
+  flush(): void {
+    if (this.timer !== null) clearTimeout(this.timer)
+    this.timer = null
+    if (this.tags.size === 0) return
+    const tags = [...this.tags]
+    this.tags.clear()
+    const source = this.source
+    this.source = "realtime"
+    this.emit({ tags, source })
+  }
+
+  cancel(): void {
+    if (this.timer !== null) clearTimeout(this.timer)
+    this.timer = null
+    this.tags.clear()
+  }
+}
+
 export function mutationProjectionTags(path: string): ProjectionTag[] {
   const clean = path.replace(/^\/+/, "")
   if (clean === "queries") return []
+  if (clean === "workspace-config") return ["preferences"]
   if (clean === "actions") return ["actions", "approvals", "work", "activity", "events", "queries"]
   if (/^actions\/[^/]+\/(confirm|reject|escalate|revert)$/.test(clean)) {
     return ["actions", "approvals", "workflows", "work", "receipts", "activity", "events", "customers", "schedule", "money", "agents", "queries"]
@@ -47,5 +87,7 @@ export function businessEventProjectionTags(eventType: string, entityType: strin
   if (/(action|approval)/.test(value)) { tags.add("actions"); tags.add("approvals") }
   if (/(workflow|step|run)/.test(value)) tags.add("workflows")
   if (/(receipt|evidence|correction)/.test(value)) tags.add("receipts")
+  if (/(inventory|stock|procurement)/.test(value)) tags.add("inventory")
+  if (/(computer|browser|application_account)/.test(value)) tags.add("computer")
   return [...tags]
 }

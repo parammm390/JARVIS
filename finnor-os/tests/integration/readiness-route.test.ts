@@ -29,7 +29,7 @@ describe.skipIf(!available)("API dependency readiness", () => {
 
     await getPool().query(`INSERT INTO service_release_heartbeats
       (service,instance_id,release_sha,build_id,version,release_source,core_certification_id,migration_head,capabilities,environment,last_beat_at)
-      VALUES ('worker','ready-worker','test-sha','test-build','test-version','test','corecert-test','0090_phase5_production_connection_reliability.sql',ARRAY['jobs','orchestration'],'test',now())`);
+      VALUES ('worker','ready-worker','test-sha','test-build','test-version','test','corecert-test','0095_phase5_causal_replay.sql',ARRAY['jobs','orchestration'],'test',now())`);
     const ready = await readiness();
     expect(ready.status).toBe(200);
     const body = await ready.json();

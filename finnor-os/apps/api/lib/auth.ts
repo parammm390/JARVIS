@@ -8,7 +8,7 @@ import { ensureSecretsLoaded, resolveTenantFromBearerToken, AuthVerificationErro
 import { initObservability, Sentry, logWithTrace } from "@finnor/tools";
 import { checkRateLimit, secondsUntilWindowReset } from "./rate-limit";
 import { redactText } from "@finnor/security";
-import { evaluateAuthority } from "@finnor/authority";
+import { canExerciseAuthority, evaluateAuthority } from "@finnor/authority";
 
 export class AuthError extends Error {
   constructor(
@@ -102,6 +102,17 @@ export async function canApprove(ctx: TenantContext, actionType: string): Promis
     risk: "medium",
   });
   return decision.outcome === "allowed";
+}
+
+/** Projection-only capability discovery. Unlike canApprove(), this records no
+ * decision; the corresponding mutation route always re-authorizes durably. */
+export async function canApproveReadOnly(ctx: TenantContext, actionType: string): Promise<boolean> {
+  return canExerciseAuthority(ctx, {
+    operation: "approval",
+    capability: `approve:${actionType}`,
+    resource: { type: "*" },
+    risk: "medium",
+  });
 }
 
 export function errorResponse(err: unknown): Response {

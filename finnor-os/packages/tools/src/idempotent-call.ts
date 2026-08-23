@@ -18,13 +18,14 @@ export async function claimExternalOperation(
   domainActionId: string,
   operationKey: string,
   requestHash: string,
+  provider?: string,
 ): Promise<ClaimResult> {
   return withTenant(tenantId, async (db) => {
     let existing: ExternalOperationRow | undefined;
     for (let attempt = 0; attempt < 2 && !existing; attempt += 1) {
       const [row] = await db
         .insert(externalOperations)
-        .values({ tenantId, domainActionId, operationKey, requestHash, status: "running" })
+        .values({ tenantId, domainActionId, operationKey, provider: provider ?? null, requestHash, status: "running" })
         .onConflictDoNothing({ target: [externalOperations.domainActionId, externalOperations.operationKey] })
         .returning();
       if (row) return { claimed: true } as const;
@@ -46,7 +47,7 @@ export async function claimExternalOperation(
     if (existing.status === "failed") {
       const [reclaimed] = await db
         .update(externalOperations)
-        .set({ status: "running", requestHash, updatedAt: new Date() })
+        .set({ status: "running", requestHash, ...(provider ? { provider } : {}), updatedAt: new Date() })
         .where(and(eq(externalOperations.domainActionId, domainActionId), eq(externalOperations.operationKey, operationKey), eq(externalOperations.status, "failed")))
         .returning();
       if (reclaimed) return { claimed: true } as const;

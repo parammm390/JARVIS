@@ -98,7 +98,7 @@ export const CAPABILITY_DOMAINS = [
     shortLabel: "Command",
     mandate: "Turns an owner instruction into grounded business context, a bounded plan, and a clear decision boundary.",
     authorityCopy: "May read and prepare work; consequential action still follows the existing approval contract.",
-    actionTypes: ["clarification_request", "get_business_overview", "answer_business_question", "manual_step_suggestion", "request_acknowledgement", "create_task", "assign_task", "update_task", "handoff_work", "delegate_objective", "escalate_work", "cancel_delegation"],
+    actionTypes: ["clarification_request", "get_business_overview", "answer_business_question", "manual_step_suggestion", "request_acknowledgement", "create_task", "assign_task", "update_task", "handoff_work", "delegate_objective", "escalate_work", "cancel_delegation", "computer_task"],
     voiceAgentKeys: ["jarvis"],
     glyph: "command",
   },

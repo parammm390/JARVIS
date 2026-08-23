@@ -86,7 +86,7 @@ export async function executeCapability<TIn, TOut>(
   const claim = await withTenant(tenantId, async (db) => {
     const [row] = await db
       .insert(integrationOperations)
-      .values({ tenantId, workflowStepId, operationKey, capability: contract.capability, requestHash, status: "running" })
+      .values({ tenantId, workflowStepId, operationKey, capability: contract.capability, provider: binding.name, requestHash, status: "running" })
       .onConflictDoNothing({ target: [integrationOperations.workflowStepId, integrationOperations.operationKey] })
       .returning();
     if (row) return { claimed: true as const };
@@ -106,7 +106,7 @@ export async function executeCapability<TIn, TOut>(
     await withTenant(tenantId, (db) =>
       db
         .update(integrationOperations)
-        .set({ status: "running", requestHash, updatedAt: new Date() })
+        .set({ status: "running", provider: binding.name, requestHash, updatedAt: new Date() })
         .where(and(eq(integrationOperations.workflowStepId, workflowStepId), eq(integrationOperations.operationKey, operationKey))),
     );
   }

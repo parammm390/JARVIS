@@ -1,5 +1,6 @@
 import type { Metadata } from "next"
 import WorkSurface from "@/components/jarvis/panels/WorkSurface"
+import { BusinessWorldScene } from "@/components/jarvis/BusinessWorldScene"
 
 export const metadata: Metadata = {
   title: "JARVIS — Work",
@@ -7,5 +8,5 @@ export const metadata: Metadata = {
 }
 
 export default function JarvisWorkPage() {
-  return <WorkSurface />
+  return <><BusinessWorldScene scene="work" /><WorkSurface /></>
 }

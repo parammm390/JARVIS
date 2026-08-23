@@ -9,10 +9,11 @@
 import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
-import type { DomainAction, ExecutionResult, OperationalQueryRequest, Role, TenantContext } from "@finnor/shared-types";
+import type { DomainAction, ExecutionResult, OperatingInteractionContext, OperationalQueryRequest, Role, TenantContext } from "@finnor/shared-types";
 import {
   domainActions,
   actionLog,
+  canonicalRefsFromContext,
   computerArtifacts,
   computerRuns,
   createWorkEventWaitTx,
@@ -40,6 +41,7 @@ import type { PluginRegistry } from "./plugin-registry";
 import { queryAuthorityRequest } from "./authority-runtime";
 import { validateOperationalQueryRequest } from "./fast-read-lane";
 import { ingestIntegrationEvent, markObjectiveWakeConsumed, objectiveWakeContext, recoverDueWorkEventWaits } from "./event-waits";
+import { resolveOperatingInteractionContext } from "./interaction-context";
 
 export const OBJECTIVE_ITERATION_OUTCOMES = ["continue", "awaiting_approval", "waiting", "blocked", "completed", "failed"] as const;
 export type ObjectiveIterationOutcome = (typeof OBJECTIVE_ITERATION_OUTCOMES)[number];
@@ -146,7 +148,7 @@ export interface StartObjectiveOptions extends ObjectiveBudgets {
   instructionId?: string;
   workId?: string;
   idempotencyKey?: string;
-  activeContext?: Record<string, unknown>;
+  activeContext?: OperatingInteractionContext | Record<string, unknown>;
 }
 
 export interface StartObjectiveResult {
@@ -311,6 +313,15 @@ async function scheduleIteration(loop: { id: string; tenantId: string; workId: s
 }
 
 export async function startWorkObjective(objective: string, ctx: TenantContext, options: StartObjectiveOptions = {}): Promise<StartObjectiveResult> {
+  options = {
+    ...options,
+    activeContext: await resolveOperatingInteractionContext({
+      tenantId: ctx.tenantId,
+      context: options.activeContext,
+      channel: options.channel ?? "text",
+      workId: options.workId,
+    }),
+  };
   const employeeId = ctx.employeeId ?? (/^[0-9a-f-]{36}$/i.test(ctx.userId) ? ctx.userId : undefined);
   const authority = employeeId
     ? await employeeAuthoritySnapshot({ ...ctx, employeeId }).catch(() => null)
@@ -324,7 +335,7 @@ export async function startWorkObjective(objective: string, ctx: TenantContext, 
     workId: options.workId,
     userId: ctx.userId,
     idempotencyKey: options.idempotencyKey,
-    activeContext: options.activeContext,
+    activeContext: options.activeContext as Record<string, unknown> | undefined,
     authorityContext: {
       employeeId: employeeId ?? null,
       revision: authority?.revision ?? ctx.authorityRevision ?? null,
@@ -433,7 +444,8 @@ function latestHouseholdId(aggregate: Awaited<ReturnType<typeof workAggregate>>)
   const linked = links.find((link) => link.entityType === "household")?.entityId;
   if (linked) return linked;
   const activeContext = isRecord((aggregate.work as { activeContext?: unknown }).activeContext) ? (aggregate.work as { activeContext: Record<string, unknown> }).activeContext : {};
-  return typeof activeContext.householdId === "string" ? activeContext.householdId : null;
+  if (typeof activeContext.householdId === "string") return activeContext.householdId;
+  return canonicalRefsFromContext(activeContext).find((ref) => ref.entityType === "household")?.entityId ?? null;
 }
 
 async function inspectCanonicalState(tenantId: string, workId: string, loop: typeof workObjectiveLoops.$inferSelect, step: typeof workObjectiveSteps.$inferSelect, ctx: TenantContext): Promise<{ inspection: ObjectiveInspection; inspectionHash: string }> {

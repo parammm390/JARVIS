@@ -142,15 +142,6 @@ export const ACTION_FIXTURES: Record<string, unknown> = {
   schedule_internal_event: { title: "Dispatch review", startsAt: "2026-07-25T14:00:00.000Z", endsAt: "2026-07-25T14:30:00.000Z", participants: [{ partyType: "employee", partyId: "11111111-1111-4111-8111-111111111111" }] },
   reschedule_internal_event: { internalEventRef: { internalEventId: "77777777-7777-4777-8777-777777777777" }, startsAt: "2026-07-25T15:00:00.000Z", endsAt: "2026-07-25T15:30:00.000Z", reason: "Field call ran long" },
   share_document: { documentRef: { documentId: "88888888-8888-4888-8888-888888888888" }, recipient: { partyType: "employee", partyId: "11111111-1111-4111-8111-111111111111" }, accessLevel: "view" },
-  // manual-step — an explicit, non-side-effecting operator handoff.
-  manual_step_suggestion: {
-    originalActionType: "send_customer_message",
-    originalPayload: { householdId: "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70" },
-    unavailableCapabilities: ["communications"],
-    reason: "The communications provider is not configured.",
-  },
-  // computer-task — read-only representative payload; the governed auth-profile
-  // reference is intentionally not credential material.
   computer_task: {
     application: "supplier_portal",
     authProfileRef: "supplier-west",
@@ -158,6 +149,13 @@ export const ACTION_FIXTURES: Record<string, unknown> = {
     target: { kind: "supplier_order", identifier: "WS-48" },
     mode: "READ_ONLY",
     successCriteria: ["A confirmed ETA is visible for WS-48"],
+  },
+  // manual-step — an explicit, non-side-effecting operator handoff.
+  manual_step_suggestion: {
+    originalActionType: "send_customer_message",
+    originalPayload: { householdId: "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70" },
+    unavailableCapabilities: ["communications"],
+    reason: "The communications provider is not configured.",
   },
 }
 

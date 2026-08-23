@@ -53,6 +53,11 @@ export const BulkNotifyPayloadSchema = z
     // The one real number the whole campaign is allowed to state — set by the owner
     // (typed or spoken), never invented downstream. Omit for a non-discount check-in.
     discountPercent: opt(z.number().min(0).max(100)),
+    // Exact explicit exclusions from a validated bounded interaction context.
+    excludedHouseholdIds: z.array(z.string().uuid()).max(50).default([]),
+    // Compact provenance only; actual membership is resolved and frozen server-side.
+    cohortExecutionId: opt(z.string().uuid()),
+    cohortCount: opt(z.number().int().min(0)),
   })
   // Executor-owned frozen-cohort metadata is preserved on the second parse. User
   // input is still validated field-by-field above; these extra fields are created by
@@ -156,6 +161,7 @@ export interface InactivityWindow {
   maxMonthsInactive?: number;
   minDaysInactive?: number;
   maxDaysInactive?: number;
+  excludedHouseholdIds?: string[];
 }
 
 /** Exported so the consent behavior is directly unit-testable. */
@@ -242,6 +248,7 @@ export async function findConsentedTargets(tenantId: string, window?: Inactivity
 
     return rows
       .filter((r) => {
+        if (window?.excludedHouseholdIds?.includes(r.id)) return false;
         if (!window) return true;
         const days = daysAgo(lastSeenById.get(r.id) ?? null);
         if (window.minDaysInactive !== undefined && days < window.minDaysInactive) return false;
@@ -370,16 +377,20 @@ export function campaignCustomer(
 }
 
 async function prepareWinbackOperation(draft: DraftAction, action: DomainAction, policy: DomainPolicy): Promise<DraftAction> {
-  const targetIds = Array.isArray(draft.payload.targetHouseholdIds)
-    ? draft.payload.targetHouseholdIds.filter((id): id is string => typeof id === "string")
-    : [];
   // draft() passes its exact evaluated cohort through this in-memory-only field so
   // no consent/contact change between the two steps can silently alter who appears
   // in the approval. It is stripped before the domain action is persisted. The
   // fallback exists only for callers that construct a DraftAction themselves.
   const preparationTargets = Array.isArray(draft.payload._operationPreparationTargets)
     ? (draft.payload._operationPreparationTargets as ConsentedTarget[])
-    : await findConsentedTargets(action.tenantId);
+    : await findConsentedTargets(action.tenantId, {
+        minMonthsInactive: typeof draft.payload.minMonthsInactive === "number" ? draft.payload.minMonthsInactive : undefined,
+        maxMonthsInactive: typeof draft.payload.maxMonthsInactive === "number" ? draft.payload.maxMonthsInactive : undefined,
+        minDaysInactive: typeof draft.payload.minDaysInactive === "number" ? draft.payload.minDaysInactive : undefined,
+        maxDaysInactive: typeof draft.payload.maxDaysInactive === "number" ? draft.payload.maxDaysInactive : undefined,
+        excludedHouseholdIds: Array.isArray(draft.payload.excludedHouseholdIds) ? draft.payload.excludedHouseholdIds.filter((id): id is string => typeof id === "string") : undefined,
+      });
+  const targetIds = preparationTargets.map((target) => target.householdId);
   const byId = new Map(preparationTargets.map((target) => [target.householdId, target]));
   const targets = targetIds.map((id) => byId.get(id)).filter((target): target is ConsentedTarget => Boolean(target));
   const channel = String(draft.payload.channel ?? "sms") === "call" ? "call" : "sms";
@@ -406,7 +417,9 @@ async function prepareWinbackOperation(draft: DraftAction, action: DomainAction,
       maxMonthsInactive: draft.payload.maxMonthsInactive ?? null,
       minDaysInactive: draft.payload.minDaysInactive ?? null,
       maxDaysInactive: draft.payload.maxDaysInactive ?? null,
-      frozenTargetIds: targetIds,
+      cohortExecutionId: draft.payload.cohortExecutionId ?? null,
+      excludedHouseholdIds: draft.payload.excludedHouseholdIds ?? [],
+      resolvedTargetCount: targets.length,
     },
     targets: targets.map((target) => ({
       targetId: target.householdId,
@@ -441,8 +454,13 @@ async function prepareWinbackOperation(draft: DraftAction, action: DomainAction,
     policyApplied: { id: policy.id, version: policy.version },
     correlationId: action.correlationId ?? null,
   });
-  const { _operationPreparationTargets: _discardedPreparationTargets, ...persistedPayload } = draft.payload;
+  const {
+    _operationPreparationTargets: _discardedPreparationTargets,
+    targetHouseholdIds: _discardedTargetHouseholdIds,
+    ...persistedPayload
+  } = draft.payload;
   void _discardedPreparationTargets;
+  void _discardedTargetHouseholdIds;
   return {
     ...draft,
     payload: {
@@ -475,6 +493,7 @@ export const bulkNotifyPlugin: DomainEnginePlugin = {
       maxMonthsInactive: p.maxMonthsInactive as number | undefined,
       minDaysInactive: p.minDaysInactive as number | undefined,
       maxDaysInactive: p.maxDaysInactive as number | undefined,
+      excludedHouseholdIds: p.excludedHouseholdIds as string[] | undefined,
     });
     const sample = targets[0];
     const windowNote = p.minDaysInactive !== undefined || p.maxDaysInactive !== undefined
@@ -501,13 +520,12 @@ export const bulkNotifyPlugin: DomainEnginePlugin = {
     return {
       actionType,
       summary,
-      // Freeze only the approved cohort IDs, not thousands of full customer histories
-      // inside one domain_action row. Execution rehydrates current data and rechecks
-      // consent, so a customer who opts out before approval is still excluded.
+      // Only the compact query reference/count crosses the action boundary. The
+      // executor-only target snapshot below is consumed into normalized operation
+      // target rows and removed before the domain_action payload is persisted.
       payload: {
         ...p,
         tenantId: policy.tenantId,
-        targetHouseholdIds: targets.map((target) => target.householdId),
         // Executor-only bridge to prepareDurableOperation. This exact evaluated
         // cohort is removed before the draft is written to domain_actions.
         _operationPreparationTargets: targets,
@@ -531,6 +549,7 @@ export const bulkNotifyPlugin: DomainEnginePlugin = {
       maxMonthsInactive: p.maxMonthsInactive as number | undefined,
       minDaysInactive: p.minDaysInactive as number | undefined,
       maxDaysInactive: p.maxDaysInactive as number | undefined,
+      excludedHouseholdIds: p.excludedHouseholdIds as string[] | undefined,
     });
     const callable = targets.length;
     const batches = p.channel === "call" ? Math.ceil(targets.length / DAILY_VAPI_CALL_CAP) : 1;
@@ -556,16 +575,20 @@ export const bulkNotifyPlugin: DomainEnginePlugin = {
     const discountPercent = typeof draft.payload.discountPercent === "number" ? draft.payload.discountPercent : undefined;
     const channel = String(draft.payload.channel ?? "sms");
     const tenantId = String(draft.payload.tenantId ?? "");
+    const inProcessTargets = Array.isArray(draft.payload._operationPreparationTargets)
+      ? (draft.payload._operationPreparationTargets as ConsentedTarget[])
+      : [];
     const approvedIds = new Set(
       Array.isArray(draft.payload.targetHouseholdIds)
         ? draft.payload.targetHouseholdIds.filter((id): id is string => typeof id === "string")
-        : [],
+        : inProcessTargets.map((target) => target.householdId),
     );
     const refreshed = await findConsentedTargets(tenantId, {
       minMonthsInactive: typeof draft.payload.minMonthsInactive === "number" ? draft.payload.minMonthsInactive : undefined,
       maxMonthsInactive: typeof draft.payload.maxMonthsInactive === "number" ? draft.payload.maxMonthsInactive : undefined,
       minDaysInactive: typeof draft.payload.minDaysInactive === "number" ? draft.payload.minDaysInactive : undefined,
       maxDaysInactive: typeof draft.payload.maxDaysInactive === "number" ? draft.payload.maxDaysInactive : undefined,
+      excludedHouseholdIds: Array.isArray(draft.payload.excludedHouseholdIds) ? draft.payload.excludedHouseholdIds.filter((id): id is string => typeof id === "string") : undefined,
     });
     // Backward-compatible rehydration for pre-upgrade pending drafts that stored full
     // targets. New drafts always use the compact frozen ID cohort above.

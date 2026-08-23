@@ -7,8 +7,8 @@ import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import * as schema from "./schema";
 import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
-import { randomUUID } from "node:crypto";
-import { CANONICAL_ENTITY_TYPES, type AttachWorkEntityInput, type CanonicalEntityRef } from "@finnor/shared-types";
+import { createHash, randomUUID } from "node:crypto";
+import { CANONICAL_ENTITY_TYPES, type AttachWorkEntityInput, type CanonicalEntityRef, type DecisionContextSnapshot } from "@finnor/shared-types";
 
 export * from "./schema";
 export * from "./event-fabric";
@@ -576,6 +576,26 @@ function isUuid(value: string | undefined): value is string {
   return Boolean(value && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value));
 }
 
+const PROVENANCE_BYTE_LIMIT = 65_536;
+
+function boundedProvenance(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const serialized = JSON.stringify(value);
+  if (Buffer.byteLength(serialized, "utf8") > PROVENANCE_BYTE_LIMIT) {
+    throw new Error(`Provenance snapshot exceeds the ${PROVENANCE_BYTE_LIMIT}-byte bound`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function provenanceHash(value: unknown): string {
+  return createHash("sha256").update(JSON.stringify(value)).digest("hex");
+}
+
+function provenanceCapturedAt(value: Record<string, unknown> | null, fallback = new Date()): Date {
+  const candidate = typeof value?.capturedAt === "string" ? new Date(value.capturedAt) : fallback;
+  return Number.isNaN(candidate.getTime()) ? fallback : candidate;
+}
+
 const canonicalEntityTypes = new Set<string>(CANONICAL_ENTITY_TYPES);
 
 export function canonicalRefsFromContext(value: unknown): CanonicalEntityRef[] {
@@ -584,13 +604,17 @@ export function canonicalRefsFromContext(value: unknown): CanonicalEntityRef[] {
   if (typeof context.householdId === "string" && isUuid(context.householdId)) {
     refs.push({ entityType: "household", entityId: context.householdId });
   }
-  if (Array.isArray(context.entityRefs)) {
-    for (const candidate of context.entityRefs) {
+  const candidates = [
+    ...(Array.isArray(context.entityRefs) ? context.entityRefs : []),
+    ...(context.focusedEntity ? [context.focusedEntity] : []),
+    ...(Array.isArray(context.selectedEntities) ? context.selectedEntities : []),
+    ...(Array.isArray(context.excludedEntities) ? context.excludedEntities : []),
+  ];
+  for (const candidate of candidates) {
       const ref = jsonObject(candidate);
       if (typeof ref.entityType === "string" && canonicalEntityTypes.has(ref.entityType) && typeof ref.entityId === "string" && isUuid(ref.entityId)) {
         refs.push({ entityType: ref.entityType as CanonicalEntityRef["entityType"], entityId: ref.entityId });
       }
-    }
   }
   return [...new Map(refs.map((ref) => [`${ref.entityType}:${ref.entityId}`, ref])).values()];
 }
@@ -628,6 +652,9 @@ export async function attachWorkEntity(
 export async function receiveWork(params: ReceiveWorkParams): Promise<ReceivedWork> {
   const desiredWorkId = params.workId ?? params.instructionId ?? randomUUID();
   const desiredInstructionId = params.instructionId ?? randomUUID();
+  const contextSnapshot = boundedProvenance(params.activeContext);
+  const contextSnapshotHash = contextSnapshot ? provenanceHash(contextSnapshot) : null;
+  const contextCapturedAt = contextSnapshot ? provenanceCapturedAt(contextSnapshot) : null;
   return withTenant(params.tenantId, async (db) => {
     const [validUser] = isUuid(params.userId)
       ? await db.select({ id: schema.users.id }).from(schema.users).where(and(eq(schema.users.tenantId, params.tenantId), eq(schema.users.id, params.userId))).limit(1)
@@ -728,6 +755,9 @@ export async function receiveWork(params: ReceiveWorkParams): Promise<ReceivedWo
       instructionText: params.instruction,
       createdBy: validUser?.id ?? null,
       idempotencyKey: params.idempotencyKey ?? null,
+      contextSnapshot,
+      contextSnapshotHash,
+      contextCapturedAt,
     }).onConflictDoNothing().returning();
     if (!input) {
       const [raced] = await db.select().from(schema.workInputs).where(and(eq(schema.workInputs.tenantId, params.tenantId), eq(schema.workInputs.instructionId, desiredInstructionId))).limit(1);
@@ -904,8 +934,12 @@ export async function beginWorkPlannerAttempt(params: {
 }): Promise<{ id: string; attempt: number; claimed: boolean; status: "planning" | "succeeded" | "failed" | "timed_out" }> {
   return withTenant(params.tenantId, async (db) => {
     await db.execute(sql`SELECT id FROM ${schema.works} WHERE ${schema.works.id} = ${params.workId} AND ${schema.works.tenantId} = ${params.tenantId} FOR UPDATE`);
+    const [work] = await db.select().from(schema.works).where(and(eq(schema.works.id, params.workId), eq(schema.works.tenantId, params.tenantId))).limit(1);
+    if (!work) throw new Error("Work not found");
     const [existing] = await db.select().from(schema.workPlannerAttempts).where(and(eq(schema.workPlannerAttempts.workId, params.workId), eq(schema.workPlannerAttempts.attemptKey, params.attemptKey))).limit(1);
     if (existing) return { id: existing.id, attempt: existing.attempt, claimed: false, status: existing.status };
+    const [input] = await db.select().from(schema.workInputs).where(and(eq(schema.workInputs.id, params.workInputId), eq(schema.workInputs.workId, params.workId))).limit(1);
+    const snapshot = await decisionContextSnapshot(db, work, input);
     const [latest] = await db.select({ maxAttempt: sql<number>`coalesce(max(${schema.workPlannerAttempts.attempt}), 0)::int` }).from(schema.workPlannerAttempts).where(eq(schema.workPlannerAttempts.workId, params.workId));
     const [created] = await db.insert(schema.workPlannerAttempts).values({
       tenantId: params.tenantId,
@@ -914,6 +948,9 @@ export async function beginWorkPlannerAttempt(params: {
       attempt: (latest?.maxAttempt ?? 0) + 1,
       attemptKey: params.attemptKey,
       status: "planning",
+      decisionContextSnapshot: snapshot,
+      decisionContextHash: provenanceHash(snapshot),
+      decisionContextCapturedAt: new Date(snapshot.capturedAt),
     }).returning();
     return { id: created!.id, attempt: created!.attempt, claimed: true, status: created!.status };
   });
@@ -932,6 +969,87 @@ export async function finishWorkPlannerAttempt(params: {
     failure: params.failure ?? null,
     completedAt: new Date(),
   }).where(and(eq(schema.workPlannerAttempts.id, params.attemptId), eq(schema.workPlannerAttempts.tenantId, params.tenantId))));
+}
+
+async function decisionContextSnapshot(
+  db: Db,
+  work: typeof schema.works.$inferSelect,
+  input: typeof schema.workInputs.$inferSelect | undefined,
+): Promise<DecisionContextSnapshot> {
+  const rawContext = input?.contextSnapshot ?? work.activeContext;
+  const context = boundedProvenance(rawContext);
+  const refs = canonicalRefsFromContext(rawContext);
+  const focused = jsonObject(context?.focusedEntity);
+  const selected = Array.isArray(context?.selectedEntities) ? context.selectedEntities : [];
+  const excluded = Array.isArray(context?.excludedEntities) ? context.excludedEntities : [];
+  const relationshipFor = (ref: CanonicalEntityRef): DecisionContextSnapshot["entities"][number]["relationship"] => {
+    if (focused.entityType === ref.entityType && focused.entityId === ref.entityId) return "focused";
+    if (selected.some((candidate) => {
+      const row = jsonObject(candidate);
+      return row.entityType === ref.entityType && row.entityId === ref.entityId;
+    })) return "selected";
+    if (excluded.some((candidate) => {
+      const row = jsonObject(candidate);
+      return row.entityType === ref.entityType && row.entityId === ref.entityId;
+    })) return "excluded";
+    return "referenced";
+  };
+  const userIds = refs.filter((ref) => ref.entityType === "user").map((ref) => ref.entityId);
+  const householdIds = refs.filter((ref) => ref.entityType === "household").map((ref) => ref.entityId);
+  const [userRows, householdRows, authorityState] = await Promise.all([
+    userIds.length > 0
+      ? db.select({ id: schema.users.id, displayName: schema.users.displayName, email: schema.users.email, status: schema.users.status }).from(schema.users).where(inArray(schema.users.id, userIds))
+      : Promise.resolve([]),
+    householdIds.length > 0
+      ? db.select({ id: schema.households.id, address: schema.households.address, contactInfo: schema.households.contactInfo }).from(schema.households).where(inArray(schema.households.id, householdIds))
+      : Promise.resolve([]),
+    db.select({ revision: schema.authorityStates.revision }).from(schema.authorityStates).where(eq(schema.authorityStates.tenantId, work.tenantId)).limit(1),
+  ]);
+  const userById = new Map(userRows.map((row) => [row.id, row]));
+  const householdById = new Map(householdRows.map((row) => [row.id, row]));
+  const entities = refs.slice(0, 100).map((ref) => {
+    const user = ref.entityType === "user" ? userById.get(ref.entityId) : undefined;
+    const household = ref.entityType === "household" ? householdById.get(ref.entityId) : undefined;
+    const contactInfo = jsonObject(household?.contactInfo);
+    return {
+      entityType: ref.entityType,
+      entityId: ref.entityId,
+      relationship: relationshipFor(ref),
+      label: user?.displayName ?? user?.email ?? (typeof contactInfo.name === "string" ? contactInfo.name : household?.address ?? null),
+      status: user?.status ?? (household ? "active" : null),
+      occurredAt: null,
+      sourceTable: user ? "users" : household ? "households" : null,
+    };
+  });
+  const authority = jsonObject(work.authorityContext);
+  const revision = typeof authority.revision === "number" ? authority.revision : authorityState[0]?.revision ?? null;
+  const roles = Array.isArray(authority.roles) ? authority.roles.filter((role): role is string => typeof role === "string").slice(0, 20) : [];
+  const capturedAt = new Date().toISOString();
+  const interactionContext = context?.version === 1 ? context : null;
+  const missing = [
+    ...(interactionContext ? [] : ["interaction_context"]),
+    ...(entities.some((entity) => entity.label === null) ? ["entity_labels"] : []),
+    ...(revision === null ? ["authority_revision"] : []),
+  ];
+  return {
+    version: 1,
+    capturedAt,
+    interactionContext: interactionContext as DecisionContextSnapshot["interactionContext"],
+    entities,
+    cohort: jsonObject(context?.cohort).executionId && typeof jsonObject(context?.cohort).executionId === "string"
+      ? {
+          executionId: String(jsonObject(context?.cohort).executionId),
+          intent: String(jsonObject(context?.cohort).queryIntent ?? "customer_cohort"),
+          status: "succeeded",
+          rowCount: Number(jsonObject(context?.cohort).count ?? 0),
+          completedAt: null,
+        }
+      : null,
+    canonicalEvidence: refs.slice(0, 100).map((ref) => ({ kind: "entity_reference", source: "work_entity_links", ref: `${work.id}:${ref.entityType}:${ref.entityId}`, asOf: capturedAt })),
+    canonicalSummaries: [{ name: "work_context", source: "works.active_context", asOf: capturedAt, dataHash: provenanceHash(rawContext ?? {}) }],
+    authority: { employeeId: work.currentOwnerId ?? work.createdBy, revision, roles },
+    health: { status: missing.length === 0 ? "complete" : "partial", missing },
+  };
 }
 
 export async function latestWorkInput(tenantId: string, workId: string): Promise<typeof schema.workInputs.$inferSelect | null> {
@@ -1237,3 +1355,5 @@ export async function finishWorkQueryExecution(params: FinishWorkQueryExecutionP
     ));
   });
 }
+
+export * from "./operational-deltas";

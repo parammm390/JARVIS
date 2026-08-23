@@ -8,26 +8,31 @@
     "mode": "load",
     "status": "BLOCKED-CONFIG",
     "productionEgress": false,
-    "targetHosts": {
-      "api": "finnor-p3-api-staging-e1r0acypd-bloodride2-3212s-projects.vercel.app",
-      "frontend": "finnor-p3-console-staging-2rl6z9h8x-bloodride2-3212s-projects.vercel.app",
-      "worker": "finnor-worker-staging.up.railway.app",
-      "orchestrator": "finnor-orchestrator-staging.up.railway.app",
-      "database": "aws-0-ap-southeast-1.pooler.supabase.com",
-      "redis": "redis.railway.internal"
-    },
+    "targetHosts": {},
     "missing": [
+      "STAGING_API_URL",
+      "STAGING_FRONTEND_URL",
+      "STAGING_WORKER_URL",
+      "STAGING_ORCHESTRATOR_URL",
+      "STAGING_DATABASE_URL",
+      "STAGING_REDIS_URL",
+      "P3_STAGING_IDENTITY_CONFIRMED",
+      "STAGING_AUTH_MODE",
+      "STAGING_EXPECTED_SHA",
+      "P3_NO_EGRESS",
       "P3_LOAD_JWTS_FILE",
       "P3_LOAD_RECONCILIATION_FILE",
       "P3_LOAD_INSTRUCTION"
     ],
-    "failures": [],
+    "failures": [
+      "COMMS_MODE must remain emulator-safe"
+    ],
     "observations": [
       "productionEgress=false",
       "secretValuesPrinted=false",
       "providerPayloadsPrinted=false",
-      "targets=6/6",
-      "targetHosts=api:finnor-p3-api-staging-e1r0acypd-bloodride2-3212s-projects.vercel.app,frontend:finnor-p3-console-staging-2rl6z9h8x-bloodride2-3212s-projects.vercel.app,worker:finnor-worker-staging.up.railway.app,orchestrator:finnor-orchestrator-staging.up.railway.app,database:aws-0-ap-southeast-1.pooler.supabase.com,redis:redis.railway.internal",
+      "targets=0/6",
+      "targetHosts=none",
       "externalBindings=emulator-safe-required"
     ]
   },

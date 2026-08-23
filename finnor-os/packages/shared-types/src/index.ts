@@ -7,9 +7,14 @@ export * from "./dealer-zero-time-compression";
 export * from "./operational-queries";
 export * from "./company-graph";
 export * from "./operating-context";
+export * from "./operating-interaction";
 export * from "./identity-access";
 export * from "./universal-actions";
 export * from "./computer";
+export * from "./business-world";
+export * from "./operational-delta";
+export * from "./execution-projection";
+export * from "./causal-replay";
 
 export type Role = "owner" | "dispatcher" | "technician";
 

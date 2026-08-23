@@ -11,6 +11,7 @@ import {
   createClientRelease,
   createCoreCertification,
   CORE_GATE_KEYS,
+  CORE_CERTIFICATION_SUITE_VERSION,
   assertCoreCertificationIntegrity,
   gateResult,
   hashClientConfiguration,
@@ -21,6 +22,7 @@ import {
 import { CertificationArtifactStore, assertClientReleaseRollbackReferences, persistClientReleaseBundle, persistCoreCertification } from "./certification-store";
 import { inspectCoreDiff } from "./core-diff-guard";
 import { runCoreCommandGates, sourceProvenanceGate } from "./core-certification-gates";
+import { runFinalCertificationCommand } from "./run-final-certification";
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const FINNOR_OS_ROOT = resolve(SCRIPT_DIR, "../..");
@@ -74,8 +76,9 @@ async function coreCommand(options: Record<string, string | boolean>, store: Cer
         const result = await getPool().query<{ artifact: CoreCertification }>(
           `SELECT artifact FROM finnor_os.core_certifications
            WHERE canonical_core_sha=$1 AND core_source_tree_hash=$2 AND status='PASS'
+             AND artifact->>'suiteVersion'=$3
            ORDER BY certified_at DESC`,
-          [canonicalCoreSha, diff.coreSourceTreeHash],
+          [canonicalCoreSha, diff.coreSourceTreeHash, CORE_CERTIFICATION_SUITE_VERSION],
         );
         durable = result.rows.map((row) => row.artifact);
       } catch (error) {
@@ -177,10 +180,12 @@ async function main(): Promise<void> {
   const { command, options } = cliArgs();
   const storeRoot = resolve(stringOption(options, "store") ?? resolve(FINNOR_OS_ROOT, ".certifications"));
   const store = new CertificationArtifactStore(storeRoot);
+  if (command === "final") return runFinalCertificationCommand(options, store);
   if (command === "core") return coreCommand(options, store);
   if (command === "client") return clientCommand(options, store);
   console.error([
     "Usage:",
+    "  npm run release:certify -- final [--core-sha=<40-char-sha>] [--deployment-evidence=<json>] [--store=<dir>] [--skip-core] [--dry-run]",
     "  npm run release:certify -- core [--core-sha=<40-char-sha>] [--store=<dir>] [--force]",
     "  npm run release:certify -- client --manifest=<json> --factory-run=<uuid> --core-certification=<json> --deployment-evidence=<json> [--journey-evidence=<json>] [--predecessor-release=<id>] [--rollback-target=<id>] [--store=<dir>]",
   ].join("\n"));

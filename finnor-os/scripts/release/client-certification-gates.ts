@@ -499,7 +499,8 @@ export async function runClientCertificationGates(input: {
   ].map((key) => gates.get(key)?.status ?? "FAIL");
   const ownerConfigured = manifest.users.some((user) => user.role === "owner" && user.status === "active");
   const migrationCompatible = dbIdentity.migrations.includes("0082_phase5_certification_releases.sql")
-    && dbIdentity.migrations.includes("0085_phase1_identity_access_fabric.sql");
+    && dbIdentity.migrations.includes("0085_phase1_identity_access_fabric.sql")
+    && dbIdentity.migrations.includes("0091_phase6_final_certification.sql");
   const completenessStatus = combinedStatus([
     deploymentStatus,
     ownerConfigured ? "PASS" : "BLOCKED_CONFIG",

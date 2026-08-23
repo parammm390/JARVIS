@@ -1,5 +1,6 @@
 import type { Metadata } from "next"
 import CashPressureSurface from "@/components/jarvis/panels/CashPressureSurface"
+import { BusinessWorldScene } from "@/components/jarvis/BusinessWorldScene"
 
 export const metadata: Metadata = {
   title: "JARVIS — Money",
@@ -7,5 +8,5 @@ export const metadata: Metadata = {
 }
 
 export default function MoneyPage() {
-  return <CashPressureSurface />
+  return <><BusinessWorldScene scene="money" /><CashPressureSurface /></>
 }

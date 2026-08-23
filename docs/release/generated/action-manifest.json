@@ -1,14 +1,14 @@
 {
-  "generatedAt": "2026-08-22T02:29:02.940Z",
+  "generatedAt": "2026-08-23T01:31:01.534Z",
   "actionCount": 59,
   "actions": [
     {
       "plugin": "ops-overview",
       "actionType": "answer_business_question",
       "sourcePath": "finnor-os/packages/domain-plugins/ops-overview/index.ts",
-      "sourceLine": 331,
+      "sourceLine": 332,
       "schemaSourcePath": "finnor-os/packages/domain-plugins/ops-overview/index.ts",
-      "schemaSourceLine": 332
+      "schemaSourceLine": 333
     },
     {
       "plugin": "customer-comm",
@@ -54,9 +54,9 @@
       "plugin": "bulk-notify",
       "actionType": "bulk_notify_existing_customers",
       "sourcePath": "finnor-os/packages/domain-plugins/bulk-notify/index.ts",
-      "sourceLine": 459,
+      "sourceLine": 477,
       "schemaSourcePath": "finnor-os/packages/domain-plugins/bulk-notify/index.ts",
-      "schemaSourceLine": 460
+      "schemaSourceLine": 478
     },
     {
       "plugin": "accounting",
@@ -206,9 +206,9 @@
       "plugin": "ops-overview",
       "actionType": "get_business_overview",
       "sourcePath": "finnor-os/packages/domain-plugins/ops-overview/index.ts",
-      "sourceLine": 331,
+      "sourceLine": 332,
       "schemaSourcePath": "finnor-os/packages/domain-plugins/ops-overview/index.ts",
-      "schemaSourceLine": 332
+      "schemaSourceLine": 333
     },
     {
       "plugin": "universal-actions",

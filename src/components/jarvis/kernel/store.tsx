@@ -48,6 +48,7 @@ import { recordTraceEventReceived } from "./trace-metrics"
 import type { InstructionState, JarvisMode, Presence, Truth } from "./types"
 import { looksLikeFollowUpReference, UNRESOLVED_REFERENCE_MESSAGE, UNRESOLVED_REFERENCE_CONTEXT } from "./followup-reference"
 import { isOperationalQueryExecution, type OperationalQueryExecution } from "../workspaces/contracts"
+import { operatingInteractionFromWorkAggregate, useOperatingInteractionActions, type OperatingInteractionContextValue } from "./operating-interaction"
 
 // ---------------------------------------------------------------------------
 // Thread shape
@@ -289,6 +290,8 @@ export interface Thread {
   /** Upgrade 2: stable across clarification/follow-up turns while instructionId
    * rotates per trace submission. Optional for older fixtures. */
   workId?: string | null
+  /** Exact context snapshot submitted with the current Work input. */
+  interactionContext?: OperatingInteractionContextValue | null
   source: InstructionSource
   instructionText: string
   createdAtMs: number
@@ -905,6 +908,7 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
   const effectiveMode: JarvisMode = mode ?? (auth.session ? "production" : "preview")
   const selectorInput = useSelectorInput()
   const lane = useLanePresentation()
+  const interaction = useOperatingInteractionActions()
 
   const [thread, setThread] = useState<Thread | null>(null)
   const [restoredThreadPresentation, setRestoredThreadPresentation] = useState<{ threadId: string; instructionState: InstructionState } | null>(null)
@@ -1093,6 +1097,7 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
         const workRes = initialWorkRes ?? (durableWorkId !== pointer.workId
           ? await jarvisGet<unknown>(`works/${durableWorkId}`).catch(() => null)
           : null)
+        interaction.restore(operatingInteractionFromWorkAggregate(workRes), durableWorkId)
         if (durableWorkId !== pointer.workId) {
           persistActiveThreadPointer({ ...pointer, workId: durableWorkId })
         }
@@ -1336,6 +1341,7 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
       // not merely look continuous while submitting an unrelated Work.
       const fallbackSessionId = existing ? existing.sessionId : sessionIdOverride ?? getOrCreateSessionId(source)
       const identity = continuationIdentity(existing, fallbackSessionId)
+      const activeContext = interaction.capture(source, identity.workId)
       const sessionId = identity.sessionId
       const id = existing?.id ?? newId()
       // jarvis-v3 P3.T6: always freshly minted, never reused across turns — this
@@ -1369,6 +1375,7 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
         sessionId,
         instructionId,
         workId: identity.workId ?? instructionId,
+        interactionContext: activeContext,
         source,
         instructionText: text,
         createdAtMs: nowMs,
@@ -1411,7 +1418,7 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
 
       let result: Awaited<ReturnType<typeof submitInstruction>>
       try {
-        result = await submitInstruction(text, { source, sessionId, instructionId, workId: identity.workId ?? undefined })
+        result = await submitInstruction(text, { source, sessionId, instructionId, workId: identity.workId ?? undefined, activeContext })
       } catch (err) {
         if (activeInstructionIdRef.current !== instructionId) return "stale"
         const errorEnvelope = err instanceof JarvisApiError && err.details && typeof err.details === "object" && !Array.isArray(err.details)
@@ -1467,6 +1474,7 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
         instructionText: text,
         createdAtMs: nowMs,
       })
+      interaction.bindWork(result.workId ?? existing?.workId ?? instructionId)
 
       // ② UNDERSTOOD / ③ PLAN — the trace transport above may already have driven ACK,
       // TRACE_planning, TRACE_clarification and every action_created node by the
@@ -1624,7 +1632,7 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
       return "accepted"
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [data.approvalsThisSession, data.rejectionsThisSession, drainTraceQueue, enqueueTraceEvents, resetTraceQueue],
+    [data.approvalsThisSession, data.rejectionsThisSession, drainTraceQueue, enqueueTraceEvents, resetTraceQueue, interaction],
   )
 
   const retryThread = useCallback(async () => {

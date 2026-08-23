@@ -7,8 +7,8 @@
 //
 // Zero raw-JSON default surfaces: getRendererEntry() always resolves to a tier;
 // FallbackRenderer.tsx (a designed, debug-gated backstop) is the only path that can
-// ever show raw JSON, and only for a genuinely unregistered type — none of the 44
-// real ones hit it.
+// ever show raw JSON, and only for a genuinely unregistered type — no certified
+// action hits it.
 
 import type { ComponentType } from "react"
 import { WaterTestScene } from "./flagships/WaterTestScene"
@@ -194,21 +194,6 @@ const STANDARD_FIELDS: Record<string, { plugin: string; label: string; fields: F
     label: "Manual Step Suggested",
     fields: [f("originalActionType", "original action", "text"), f("unavailableCapabilities", "unavailable capability", "text"), f("reason", "reason", "longtext")],
   },
-  // computer-task — governed application/auth references only; no credential or
-  // browser-session material is rendered by this contract surface.
-  computer_task: {
-    plugin: "computer-task",
-    label: "Computer Task",
-    fields: [
-      f("application", "application", "text"),
-      f("authProfileRef", "auth profile", "text"),
-      f("task", "task", "longtext"),
-      f("target", "target", "text"),
-      f("mode", "mode", "enum"),
-      f("successCriteria", "success criteria", "text"),
-      f("authorizedEffect", "authorized effect", "text"),
-    ],
-  },
   // universal-actions
   send_message: { plugin: "universal-actions", label: "Send Message", fields: [f("recipient", "recipient", "text"), f("channel", "channel", "enum"), f("subject", "subject", "text"), f("body", "message", "longtext")] },
   place_call: { plugin: "universal-actions", label: "Place Call", fields: [f("recipient", "recipient", "text"), f("objective", "objective", "longtext"), f("script", "script", "longtext")] },
@@ -224,6 +209,21 @@ const STANDARD_FIELDS: Record<string, { plugin: string; label: string; fields: F
   schedule_internal_event: { plugin: "universal-actions", label: "Schedule Internal Event", fields: [f("title", "title", "text"), f("startsAt", "starts", "date"), f("endsAt", "ends", "date"), f("participants", "participants", "text")] },
   reschedule_internal_event: { plugin: "universal-actions", label: "Reschedule Internal Event", fields: [f("internalEventRef", "event", "text"), f("startsAt", "starts", "date"), f("endsAt", "ends", "date"), f("reason", "reason", "longtext")] },
   share_document: { plugin: "universal-actions", label: "Share Document", fields: [f("documentRef", "document", "text"), f("recipient", "recipient", "text"), f("accessLevel", "access", "enum")] },
+  // computer-task — governed application/auth references only; no credential or
+  // browser-session material is rendered by this contract surface.
+  computer_task: {
+    plugin: "computer-task",
+    label: "Computer Task",
+    fields: [
+      f("application", "application", "text"),
+      f("authProfileRef", "auth profile", "text"),
+      f("task", "task", "longtext"),
+      f("target", "target", "text"),
+      f("mode", "mode", "enum"),
+      f("successCriteria", "success criteria", "text"),
+      f("authorizedEffect", "authorized effect", "text"),
+    ],
+  },
 }
 
 // ---------------------------------------------------------------------------

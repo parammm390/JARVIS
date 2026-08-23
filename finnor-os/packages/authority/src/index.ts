@@ -476,6 +476,52 @@ export async function employeeAuthoritySnapshot(ctx: TenantContext): Promise<{ e
   });
 }
 
+/** Read-only counterpart to evaluateAuthority for projection/control discovery.
+ * It deliberately appends no authority decision: GET read models may reveal only
+ * controls the current employee can exercise, without turning a read into history.
+ * Mutation routes still call evaluateAuthority and remain the final authorizer. */
+export async function canExerciseAuthority(ctx: TenantContext, request: AuthorityRequest): Promise<boolean> {
+  return withTenant(ctx.tenantId, async (db) => {
+    const employeeId = ctx.employeeId ?? (UUID.test(ctx.userId) ? ctx.userId : null);
+    const legacyApprovalAllowed = async (): Promise<boolean> => {
+      if (process.env.NODE_ENV === "production" || request.operation !== "approval") return false;
+      const actionType = request.capability.replace(/^approve:/, "");
+      const permissions = await db.select({ actionType: rolePermissions.actionType, canApprove: rolePermissions.canApprove }).from(rolePermissions).where(and(
+        eq(rolePermissions.tenantId, ctx.tenantId),
+        eq(rolePermissions.role, ctx.role),
+        or(eq(rolePermissions.actionType, actionType), eq(rolePermissions.actionType, "*")),
+      ));
+      const permission = permissions.find((row) => row.actionType === actionType) ?? permissions.find((row) => row.actionType === "*");
+      return permission?.canApprove ?? ctx.role === "owner";
+    };
+    if (!employeeId) return legacyApprovalAllowed();
+
+    const auth = await loadAuthority(db, ctx.tenantId, employeeId);
+    if (!auth.employee) return legacyApprovalAllowed();
+    if (auth.employee.status !== "active") return false;
+
+    const resources = normalizeResources(request);
+    const candidates = auth.grants.filter((grant) => capabilityMatches(grant.capability, request.capability));
+    const evaluated: Array<{ grant: Grant; scopeAllowed: boolean; amountAllowed: boolean; riskAllowed: boolean }> = [];
+    for (const grant of candidates) {
+      const assignment = auth.assignments.find((row) => row.roleId === grant.roleId);
+      if (!assignment) continue;
+      const typeAllowed = resources.every((resource) => resourceTypeMatches(grant.resourceType, resource.type));
+      const scopeAllowed = typeAllowed && (await Promise.all(resources.map((resource) => scopeAllows(db, ctx.tenantId, employeeId, assignment, resource)))).every(Boolean);
+      evaluated.push({
+        grant,
+        scopeAllowed,
+        amountAllowed: request.amountUsd === undefined || grant.maxAmountUsd === null || request.amountUsd <= Number(grant.maxAmountUsd),
+        riskAllowed: RISK_RANK[request.risk] <= RISK_RANK[grant.maxRisk],
+      });
+    }
+    if (evaluated.some((row) => row.grant.effect === "deny" && row.scopeAllowed)) return false;
+    const chosen = evaluated.find((row) => row.grant.effect === "allow" && row.scopeAllowed && row.amountAllowed && row.riskAllowed);
+    if (!chosen) return false;
+    return request.policyRequiresApproval !== true && chosen.grant.approvalRequired !== true;
+  });
+}
+
 export async function eligibleApproversForAction(tenantId: string, actionId: string): Promise<string[]> {
   return withTenant(tenantId, async (db) => {
     const [action] = await db.select({ actionType: domainActions.actionType, authorityContext: domainActions.authorityContext }).from(domainActions).where(and(eq(domainActions.tenantId, tenantId), eq(domainActions.id, actionId))).limit(1);

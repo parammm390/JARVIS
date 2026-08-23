@@ -12,17 +12,21 @@ import {
 } from "./surface-routes"
 import { WorkspaceSettingsButton, useWorkspaceConfig } from "../WorkspaceConfigProvider"
 import { orderedWorkspaceItems } from "../lib/workspace-config"
+import { useJarvisAuth } from "../lib/jarvis-auth"
+import { TenantBrandMark } from "../experience/TenantBrandMark"
+import type { ExperienceRole } from "../lib/workspace-config"
 
 export type { HouseholdContext, OperationalSurface } from "./surface-routes"
 export { MOBILE_SURFACES, SURFACES, withHouseholdContext, withOperationalContext } from "./surface-routes"
 
-export function OperationalSurfaceNav({ active, context, workCaseId }: { active: OperationalSurface; context?: HouseholdContext; workCaseId?: string | null }) {
+export function OperationalSurfaceNav({ active, context, workCaseId, roleOverride }: { active: OperationalSurface; context?: HouseholdContext; workCaseId?: string | null; roleOverride?: ExperienceRole }) {
   const { config } = useWorkspaceConfig()
+  const { role } = useJarvisAuth()
   const [moreOpen, setMoreOpen] = useState(false)
   const moreButtonRef = useRef<HTMLButtonElement>(null)
   const moreCloseRef = useRef<HTMLButtonElement>(null)
   const moreActive = active === "customers" || active === "agents"
-  const surfaces = orderedWorkspaceItems(SURFACES, config)
+  const surfaces = orderedWorkspaceItems(SURFACES, config, roleOverride ?? role ?? undefined)
   const mobileSurfaces = surfaces.filter((surface) => surface.key !== "customers" && surface.key !== "agents")
   const moreSurfaces = surfaces.filter((surface) => surface.key === "customers" || surface.key === "agents")
 
@@ -45,7 +49,7 @@ export function OperationalSurfaceNav({ active, context, workCaseId }: { active:
   return (
     <header className="jarvis-surface-nav" data-jarvis-surface-nav data-more-open={moreOpen ? "true" : "false"}>
       <Link className="jarvis-surface-nav__brand" href={withOperationalContext("/jarvis", context, workCaseId)} prefetch={false} aria-label="FINNOR JARVIS home">
-        <b>{config.brand.mark}</b> FINNOR <span>JARVIS</span>
+        <b><TenantBrandMark size={24} /></b> FINNOR <span>JARVIS</span>
       </Link>
       <nav className="jarvis-surface-nav__links" aria-label="Operational surfaces">
         {surfaces.map((surface) => (

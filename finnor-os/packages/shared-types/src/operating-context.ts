@@ -1,6 +1,7 @@
 import type { CanonicalEntityRef, PartyRef } from "./company-graph";
 import type { OperationalPartySummary } from "./operational-queries";
 import type { OperatingIdentityAccess } from "./identity-access";
+import type { OperatingInteractionContext, OperatingInteractionPrecedence } from "./operating-interaction";
 
 /**
  * Evidence classes are deliberately ordered.  Callers may enrich a higher class
@@ -107,6 +108,9 @@ export interface OperatingContext {
   version: 1;
   assembledAt: string;
   truthPrecedence: readonly OperatingEvidenceKind[];
+  interactionPrecedence?: readonly OperatingInteractionPrecedence[];
+  /** Authenticated, tenant-re-resolved explicit canvas state. */
+  interactionContext?: OperatingInteractionContext | null;
   tenant: {
     id: string;
     companyName: string | null;

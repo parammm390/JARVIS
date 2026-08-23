@@ -1,7 +1,7 @@
 // Orchestration core (§9): Planner → confirmation gate → Executor → Reflection.
 // This module is the single entry point the API, webhooks, and workers all use.
 
-import type { DomainAction, DomainPolicy, TenantContext, ExecutionResult, MemorySnapshot, OperatingContext, Role } from "@finnor/shared-types";
+import type { DomainAction, DomainPolicy, TenantContext, ExecutionResult, MemorySnapshot, OperatingContext, OperatingInteractionContext, Role } from "@finnor/shared-types";
 import {
   withTenant, domainActions, domainPolicies, domainPolicyRevisions, actionLog,
   decisionReceipts, planRepairs, enqueueJob, receiveWork, transitionWork,
@@ -38,6 +38,7 @@ import {
 import { isConversationalTurn, LLMConversationResponder, type ConversationResponder } from "./conversation";
 import { requiresTypedConfirmation } from "../../../scripts/release/action-hardening-spec";
 import { assembleOperatingContext } from "./operating-context";
+import { interactionAwareOperationalDecision, resolveOperatingInteractionContext } from "./interaction-context";
 import { employeeAuthoritySnapshot, evaluateActionApproval, evaluateAuthority, finalizeApprovalAuthority, finalizeApprovalAuthorityTx, isFinalApprovalStep, revalidateActionExecution } from "@finnor/authority";
 import { queryAuthorityRequest } from "./authority-runtime";
 import {
@@ -76,6 +77,8 @@ export * from "./objective-loop";
 export * from "./operating-context";
 export * from "./research-context";
 export * from "./event-waits";
+export * from "./interaction-context";
+export * from "./interaction-targeting";
 
 const EXTERNAL_RESEARCH_ACTION_TYPES = new Set(["search_web", "scan_competitors", "check_business_reviews"]);
 
@@ -98,7 +101,7 @@ export interface InstructionOptions {
   /** Optional deterministic key for the durable work_query_executions receipt. */
   executionKey?: string;
   plannerAttemptKey?: string;
-  activeContext?: Record<string, unknown>;
+  activeContext?: OperatingInteractionContext | Record<string, unknown>;
   channel?: "voice" | "text" | "console";
   signal?: AbortSignal;
   deadlineAt?: number;
@@ -115,7 +118,7 @@ export interface OperationalQueryOptions {
   workId?: string;
   idempotencyKey?: string;
   executionKey?: string;
-  activeContext?: Record<string, unknown>;
+  activeContext?: OperatingInteractionContext | Record<string, unknown>;
   channel?: "voice" | "text" | "console";
 }
 
@@ -446,7 +449,7 @@ export class FinnorOrchestrator implements Orchestrator {
       workId: opts.workId,
       userId: ctx.userId,
       idempotencyKey: opts.idempotencyKey,
-      activeContext: opts.activeContext,
+      activeContext: opts.activeContext as Record<string, unknown> | undefined,
       authorityContext: await authorityContextForWork(ctx),
     });
     if (received.duplicate) {
@@ -493,6 +496,15 @@ export class FinnorOrchestrator implements Orchestrator {
     ctx: TenantContext,
     opts: InstructionOptions = {},
   ): Promise<InstructionResult> {
+    opts = {
+      ...opts,
+      activeContext: await resolveOperatingInteractionContext({
+        tenantId: ctx.tenantId,
+        context: opts.activeContext,
+        channel: opts.channel ?? "console",
+        workId: opts.workId,
+      }),
+    };
     const received = opts.workId && opts.workInputId && opts.instructionId
       ? {
           workId: opts.workId,
@@ -508,7 +520,7 @@ export class FinnorOrchestrator implements Orchestrator {
           workId: opts.workId,
           userId: ctx.userId,
           idempotencyKey: opts.idempotencyKey,
-          activeContext: opts.activeContext,
+          activeContext: opts.activeContext as Record<string, unknown> | undefined,
           authorityContext: await authorityContextForWork(ctx),
         });
     const workId = received.workId;
@@ -532,11 +544,14 @@ export class FinnorOrchestrator implements Orchestrator {
     let fastAnswer: AnswerEnvelope | null = null;
     let fastQuery: OperationalQueryExecution | undefined;
     let operatingContext: OperatingContext | undefined;
-    const suppliedDecision = opts.fastReadDecision;
+    const suppliedDecision = opts.fastReadDecision ? interactionAwareOperationalDecision(opts.fastReadDecision, opts.activeContext as OperatingInteractionContext | undefined) : undefined;
     const shouldClassify = !opts.skipFastReadClassification && suppliedDecision === undefined;
     let fastDecision: OperationalQueryDecision | undefined = suppliedDecision;
     try {
-      if (shouldClassify) fastDecision = this.fastReadOnlyRouter.interpret?.(instruction);
+      if (shouldClassify) {
+        const interpreted = this.fastReadOnlyRouter.interpret?.(instruction);
+        fastDecision = interpreted ? interactionAwareOperationalDecision(interpreted, opts.activeContext as OperatingInteractionContext | undefined) : undefined;
+      }
       if (fastDecision?.route === "fast_read" && this.fastReadOnlyRouter.execute) {
         await emitInstructionEvent(ctx.tenantId, instructionId, "step_progress", { stage: "resolving_context", sourceKind: "PROFILE" });
         operatingContext = (await assembleOperatingContext(ctx, {
@@ -629,7 +644,7 @@ export class FinnorOrchestrator implements Orchestrator {
         householdId: resolvedHouseholdId ?? null,
         mentionedHousehold: mentionedHousehold?.label ?? null,
         operatingContextHealth: operatingContext.health.status,
-      }, resolvedHouseholdId ? { activeContext: { householdId: resolvedHouseholdId } } : {});
+      }, resolvedHouseholdId && !operatingContext.interactionContext ? { activeContext: { householdId: resolvedHouseholdId } } : {});
       if (resolvedHouseholdId) await attachWorkEntity(ctx.tenantId, workId, {
         entityType: "household",
         entityId: resolvedHouseholdId,
@@ -647,6 +662,9 @@ export class FinnorOrchestrator implements Orchestrator {
       // longTerm are single facts (present or not, hence count 0|1); episodic/
       // semantic/patterns are real arrays already built above.
       const contextChips = [
+        { label: "explicit canvas targets", count: operatingContext?.interactionContext?.selectedEntities.length || (operatingContext?.interactionContext?.focusedEntity ? 1 : 0), source: "interaction:explicit", kind: "CANONICAL", role: "context_only" },
+        { label: "explicit exclusions", count: operatingContext?.interactionContext?.excludedEntities.length ?? 0, source: "interaction:exclusions", kind: "CANONICAL", role: "context_only" },
+        { label: "bounded cohort reference", count: operatingContext?.interactionContext?.cohort ? 1 : 0, source: "interaction:cohort", kind: "CANONICAL", role: "context_only" },
         { label: "authenticated company profile", count: operatingContext?.tenant.companyName ? 1 : 0, source: "profile:tenant", kind: "PROFILE", role: "context_only" },
         { label: "current Work", count: operatingContext?.activeWork ? 1 : 0, source: "work:active", kind: "WORK", role: "context_only" },
         { label: "canonical business state", count: operatingContext?.canonicalSummaries.length ?? 0, source: "operational:business-state", kind: "CANONICAL", role: "context_only" },
@@ -658,7 +676,13 @@ export class FinnorOrchestrator implements Orchestrator {
       await emitInstructionEvent(ctx.tenantId, instructionId, "context_retrieved", { chips: contextChips });
       await emitInstructionEvent(ctx.tenantId, instructionId, "planning");
     }
-    const plannerAttempt = await beginWorkPlannerAttempt({ tenantId: ctx.tenantId, workId, workInputId, attemptKey: opts.plannerAttemptKey ?? `input:${workInputId}` });
+    const plannerAttempt = await beginWorkPlannerAttempt({
+      tenantId: ctx.tenantId,
+      workId,
+      workInputId,
+      attemptKey: opts.plannerAttemptKey ?? `input:${workInputId}`,
+      ...(operatingContext ? { decisionContext: operatingContext } : {}),
+    });
     requireFreshPlannerAttempt(workId, plannerAttempt);
     await transitionWork(ctx.tenantId, workId, "planning", "planning_started", { plannerAttemptId: plannerAttempt.id });
     let actions: DomainAction[];

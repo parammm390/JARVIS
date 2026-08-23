@@ -5,7 +5,7 @@ import { requireContext, errorResponse, enforceRouteRateLimit } from "../../../l
 import { getOrchestrator } from "../../../lib/orchestrator";
 import { enforceBatchBackpressure } from "../../../lib/backpressure";
 import { receiveWork, recordWorkResponse, transitionWork, workAggregate } from "@finnor/db";
-import { interpretOperationalQuery } from "@finnor/orchestration";
+import { interactionAwareOperationalDecision, interpretOperationalQuery, OperatingInteractionContextError, resolveOperatingInteractionContext } from "@finnor/orchestration";
 import { employeeAuthoritySnapshot } from "@finnor/authority";
 
 export async function POST(req: Request): Promise<Response> {
@@ -22,10 +22,24 @@ export async function POST(req: Request): Promise<Response> {
         { status: 400 },
       );
     }
+    let activeContext = body.data.activeContext;
+    try {
+      activeContext = await resolveOperatingInteractionContext({
+        tenantId: ctx.tenantId,
+        context: body.data.activeContext,
+        channel: body.data.channel,
+        workId: body.data.workId,
+      });
+    } catch (error) {
+      if (error instanceof OperatingInteractionContextError) {
+        return Response.json({ error: error.message, code: error.code }, { status: error.status });
+      }
+      throw error;
+    }
     // Classify once before planner-only gates. Authentication and the generic
     // authenticated-route limiter already ran in requireContext; this tighter
     // intake bucket and batch backpressure are reserved for planner work.
-    const fastReadDecision = interpretOperationalQuery(body.data.instruction);
+    const fastReadDecision = interactionAwareOperationalDecision(interpretOperationalQuery(body.data.instruction), activeContext);
     if (fastReadDecision.route === "planner") {
       await enforceRouteRateLimit(`intake:${ctx.tenantId}`, Number(process.env.RATE_LIMIT_INTAKE_PER_MINUTE ?? 20));
     }
@@ -40,7 +54,7 @@ export async function POST(req: Request): Promise<Response> {
       workId: body.data.workId,
       userId: ctx.userId,
       idempotencyKey: body.data.idempotencyKey,
-      activeContext: body.data.activeContext,
+      activeContext,
       authorityContext: ctx.employeeId ? await employeeAuthoritySnapshot(ctx) : { principal: ctx.userId, kind: "service" },
     });
     if (received.duplicate) {
@@ -76,7 +90,7 @@ export async function POST(req: Request): Promise<Response> {
         workInputId: received.workInputId,
         idempotencyKey: body.data.idempotencyKey,
         channel: body.data.channel,
-        activeContext: body.data.activeContext,
+        activeContext,
         fastReadDecision,
         skipFastReadClassification: true,
       });

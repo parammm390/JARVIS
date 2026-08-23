@@ -1,5 +1,6 @@
 import type { Metadata } from "next"
 import DispatchFieldSurface from "@/components/jarvis/panels/DispatchFieldSurface"
+import { BusinessWorldScene } from "@/components/jarvis/BusinessWorldScene"
 
 export const metadata: Metadata = {
   title: "JARVIS — Schedule",
@@ -7,5 +8,5 @@ export const metadata: Metadata = {
 }
 
 export default function SchedulePage() {
-  return <DispatchFieldSurface />
+  return <><BusinessWorldScene scene="schedule" /><DispatchFieldSurface /></>
 }

@@ -100,10 +100,10 @@ describe("P3.T3 exact Agent → Work → Customer projection", () => {
 })
 
 describe("backend capability control plane", () => {
-  it("curates nine capability domains over all 58 registered action contracts exactly once", () => {
+  it("curates nine capability domains over all 59 registered action contracts exactly once", () => {
     expect(CAPABILITY_DOMAINS).toHaveLength(9)
-    expect(REGISTERED_BACKEND_ACTION_COUNT).toBe(58)
-    expect(new Set(REGISTERED_BACKEND_ACTIONS).size).toBe(58)
+    expect(REGISTERED_BACKEND_ACTION_COUNT).toBe(59)
+    expect(new Set(REGISTERED_BACKEND_ACTIONS).size).toBe(59)
     expect(CAPABILITY_DOMAINS.map((domain) => domain.label)).toEqual([
       "Command Authority",
       "Customer Desk",

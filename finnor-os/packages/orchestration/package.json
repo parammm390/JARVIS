@@ -9,6 +9,7 @@
     "@finnor/authority": "*",
     "@finnor/db": "*",
     "@finnor/memory": "*",
+    "@finnor/policy-schema": "*",
     "@finnor/plugins-shared": "*",
     "@finnor/read-models": "*",
     "@finnor/security": "*",

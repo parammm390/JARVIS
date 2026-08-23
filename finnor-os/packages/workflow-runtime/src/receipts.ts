@@ -3,7 +3,7 @@
 // packages/db/schema.ts's decisionReceipts table and its unique(workflowStepId).
 
 import { withTenant, decisionReceipts, llmCalls } from "@finnor/db";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import type { ReceiptEvidence, ReceiptApproval, ReceiptFailure } from "@finnor/shared-types";
 
 export interface OpenReceiptParams {
@@ -68,7 +68,7 @@ export async function openReceipt(params: OpenReceiptParams): Promise<{ receiptI
 export async function finalizeReceipt(
   tenantId: string,
   receiptId: string,
-  result: { actualResult: Record<string, unknown>; evidence?: ReceiptEvidence[] } | { failure: ReceiptFailure },
+  result: { actualResult: Record<string, unknown>; evidence?: ReceiptEvidence[] } | { failure: ReceiptFailure; evidence?: ReceiptEvidence[] },
 ): Promise<void> {
   await withTenant(tenantId, (db) =>
     db
@@ -79,8 +79,28 @@ export async function finalizeReceipt(
         ...("evidence" in result && result.evidence ? { evidence: result.evidence } : {}),
         finalizedAt: new Date(),
       })
-      .where(eq(decisionReceipts.id, receiptId)),
+      .where(and(eq(decisionReceipts.tenantId, tenantId), eq(decisionReceipts.id, receiptId))),
   );
+}
+
+/** Computer-backed actions first finalize their single-action receipt with the
+ * durable queue result, then the worker owns the real terminal observation. This
+ * helper settles that same newest action receipt when the governed computer run is
+ * terminal, preserving one causal receipt rather than claiming queueing was success. */
+export async function finalizeLatestReceiptForAction(
+  tenantId: string,
+  domainActionId: string,
+  result: { actualResult: Record<string, unknown>; evidence?: ReceiptEvidence[] } | { failure: ReceiptFailure; evidence?: ReceiptEvidence[] },
+): Promise<string | null> {
+  const [receipt] = await withTenant(tenantId, (db) => db
+    .select({ id: decisionReceipts.id })
+    .from(decisionReceipts)
+    .where(and(eq(decisionReceipts.tenantId, tenantId), eq(decisionReceipts.domainActionId, domainActionId)))
+    .orderBy(desc(decisionReceipts.createdAt))
+    .limit(1));
+  if (!receipt) return null;
+  await finalizeReceipt(tenantId, receipt.id, result);
+  return receipt.id;
 }
 
 /** Looks up the receipt already opened for a step (finalizeReceipt needs the id;
@@ -91,7 +111,16 @@ export async function finalizeReceipt(
 export async function findReceiptByStep(
   tenantId: string,
   workflowStepId: string,
-): Promise<{ id: string; objective: string; domainActionId: string | null; workflowRunId: string | null } | null> {
+): Promise<{
+  id: string;
+  objective: string;
+  domainActionId: string | null;
+  workflowRunId: string | null;
+  workId: string | null;
+  policyApplied: unknown;
+  riskTier: "low" | "medium" | "high";
+  actualResult: unknown;
+} | null> {
   const [row] = await withTenant(tenantId, (db) =>
     db
       .select({
@@ -99,6 +128,10 @@ export async function findReceiptByStep(
         objective: decisionReceipts.objective,
         domainActionId: decisionReceipts.domainActionId,
         workflowRunId: decisionReceipts.workflowRunId,
+        workId: decisionReceipts.workId,
+        policyApplied: decisionReceipts.policyApplied,
+        riskTier: decisionReceipts.riskTier,
+        actualResult: decisionReceipts.actualResult,
       })
       .from(decisionReceipts)
       .where(eq(decisionReceipts.workflowStepId, workflowStepId)),

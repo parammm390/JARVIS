@@ -2,7 +2,7 @@ import { getPool } from "@finnor/db";
 import { ensureSecretsLoaded, secretProviderStatus } from "@finnor/security";
 import { getReleaseMetadata } from "../../../lib/release";
 
-const MIGRATION_HEAD = "0090_phase5_production_connection_reliability.sql";
+const MIGRATION_HEAD = "0095_phase5_causal_replay.sql";
 
 /** Dependency readiness, deliberately separate from /api/health liveness. Optional
  * provider connections are tenant-level degradation and never make the whole API

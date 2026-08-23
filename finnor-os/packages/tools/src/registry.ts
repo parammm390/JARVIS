@@ -52,6 +52,12 @@ export class ToolRegistry {
     return [...this.tools.keys()];
   }
 
+  /** Presentation-safe provenance for the implementation that will receive a tool
+   * call. Inputs, credentials, and provider responses are deliberately absent. */
+  integrationFor(name: string): string | null {
+    return this.tools.get(name)?.integration ?? null;
+  }
+
   /** Trusted execution metadata is absent on an unscoped registry. Plugins may read
    * it only after GatedExecutor constructs a ScopedToolRegistry. */
   runtimeContext(): Readonly<ToolRuntimeContext> | undefined {
@@ -163,6 +169,10 @@ export class ScopedToolRegistry extends ToolRegistry {
     return this.base.list();
   }
 
+  override integrationFor(name: string): string | null {
+    return this.base.integrationFor(name);
+  }
+
   override runtimeContext(): Readonly<ToolRuntimeContext> {
     return Object.freeze({
       tenantId: this.ctx.tenantId,
@@ -187,7 +197,13 @@ export class ScopedToolRegistry extends ToolRegistry {
 
   private async callForOperation(name: string, input: Record<string, unknown>, operationKey: string): Promise<ToolCallResult> {
     const requestHash = hashInput(input);
-    const claim = await claimExternalOperation(this.ctx.tenantId, this.ctx.domainActionId, operationKey, requestHash);
+    const claim = await claimExternalOperation(
+      this.ctx.tenantId,
+      this.ctx.domainActionId,
+      operationKey,
+      requestHash,
+      this.base.integrationFor(name) ?? undefined,
+    );
     if (!claim.claimed) {
       if (claim.existing.requestHash !== requestHash) {
         return {

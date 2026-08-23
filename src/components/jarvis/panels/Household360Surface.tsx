@@ -11,6 +11,7 @@ import { businessProjections } from "../lib/projection-definitions"
 import { OperationalSurfaceNav, withOperationalContext, type HouseholdContext } from "../surfaces/OperationalSurfaceNav"
 import { HOUSEHOLD_BANDS, formatHouseholdDate, formatHouseholdDateTime, formatHouseholdUsd, householdDisplayName, summarizeHousehold } from "./household360-model"
 import "../jarvis-theme.css"
+import { useOperatingInteractionActions } from "../kernel/operating-interaction"
 
 type SourceState = "loading" | "live" | "denied" | "unavailable"
 
@@ -64,6 +65,7 @@ function callOutcome(call: Household360Projection["calls"][number]): string {
 
 export default function Household360Surface() {
   const { session, loading: authLoading } = useJarvisAuth()
+  const { focusEntity, setFilters } = useOperatingInteractionActions()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [search, setSearch] = useState("")
   const [surfaceSearch, setSurfaceSearch] = useState("")
@@ -102,17 +104,20 @@ export default function Household360Surface() {
     const requestedId = surfaceQuery.get("householdId") ?? requestedCase?.linkedEntities.find((entity) => entity.entityType === "household")?.entityId ?? null
     if (requestedId && rows.some((row) => row.id === requestedId)) {
       setSelectedId(requestedId)
+      const row = rows.find((candidate) => candidate.id === requestedId)!
+      focusEntity({ entityType: "household", entityId: requestedId }, rowName(row))
       return
     }
     if (requestedWorkCaseId) {
       setSelectedId(null)
       return
     }
-    setSelectedId((current) => {
-      if (current && rows.some((row) => row.id === current)) return current
-      return rows.find((row) => row.marketingConsent)?.id ?? rows[0]?.id ?? null
-    })
-  }, [requestedWorkCaseId, rows, surfaceQuery, workCases, workProjection.data])
+    setSelectedId((current) => current && rows.some((row) => row.id === current) ? current : null)
+  }, [focusEntity, requestedWorkCaseId, rows, surfaceQuery, workCases, workProjection.data])
+
+  useEffect(() => {
+    setFilters(search.trim() ? [{ field: "customerSearch", operator: "contains", value: search.trim() }] : [])
+  }, [search, setFilters])
 
   const selectedRow = rows.find((row) => row.id === selectedId) ?? null
   const selectedProjection = selectedId ? detailProjection.data : null
@@ -126,6 +131,8 @@ export default function Household360Surface() {
 
   function selectHousehold(id: string) {
     setSelectedId(id)
+    const row = rows.find((candidate) => candidate.id === id)
+    focusEntity({ entityType: "household", entityId: id }, row ? rowName(row) : undefined)
     const next = withOperationalContext("/jarvis/customers", { id, label: "" }, requestedWorkCaseId)
     window.history.replaceState(null, "", next)
     setSurfaceSearch(new URL(next, window.location.origin).search)
@@ -228,10 +235,10 @@ export default function Household360Surface() {
                   <section>
                     <div className="jarvis-household-evidence-heading"><span>MONEY HISTORY</span><small>Created, due, and paid are kept separate</small></div>
                     {selectedProjection.invoices.length > 0 ? [...selectedProjection.invoices].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 6).map((invoice) => (
-                      <div className="jarvis-household-evidence-row" key={invoice.id}>
+                      <button type="button" className="jarvis-household-evidence-row w-full text-left" key={invoice.id} onClick={() => focusEntity({ entityType: "invoice", entityId: invoice.id }, `${formatHouseholdUsd(invoice.amountUsd)} invoice`)} title="Use this exact invoice in the next command">
                         <span><strong>{formatHouseholdUsd(invoice.amountUsd)} · {humanize(invoice.status)}</strong><small>Created {formatHouseholdDateTime(invoice.createdAt)} · Due {formatHouseholdDateTime(invoice.dueDate)}{invoice.memo ? ` · ${invoice.memo}` : ""}</small></span>
-                        <span>{invoice.payments.length > 0 ? `Paid ${formatHouseholdDateTime(invoice.payments[0]!.receivedAt)}` : "No payment event"}</span>
-                      </div>
+                        <span>{invoice.payments.length > 0 ? `Paid ${formatHouseholdDateTime(invoice.payments[0]!.receivedAt)}` : "No payment event"} · Use invoice</span>
+                      </button>
                     )) : <p className="jarvis-household-muted">No invoice history recorded.</p>}
                   </section>
                   <section>

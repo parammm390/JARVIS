@@ -53,3 +53,4 @@ export * from "./emulators/documents-emulator";
 export * from "./capabilities/documents";
 export * from "./binding-resolution";
 export * from "./tenant-provider";
+export * from "./compensation-capabilities";

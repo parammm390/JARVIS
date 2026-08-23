@@ -8,13 +8,14 @@
     "requireCleanWorktree": true
   },
   "release": {
-    "requiredMigrationHead": "0090_phase5_production_connection_reliability.sql",
+    "requiredMigrationHead": "0095_phase5_causal_replay.sql",
     "metadata": [
       "FINNOR_COMMIT_SHA",
       "FINNOR_BUILD_ID",
       "FINNOR_VERSION",
       "FINNOR_ENVIRONMENT",
-      "FINNOR_RELEASE_SOURCE"
+      "FINNOR_RELEASE_SOURCE",
+      "FINNOR_CORE_CERTIFICATION_ID"
     ],
     "requiredComponents": ["frontend", "api", "worker"],
     "concurrencyGroup": "finnor-production-release"

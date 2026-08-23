@@ -2,6 +2,7 @@
 // Business rule CONTENT never lives here; only its shape does.
 
 import { z } from "zod";
+import { CANONICAL_ENTITY_TYPES } from "@finnor/shared-types";
 
 export const RoleSchema = z.enum(["owner", "dispatcher", "technician"]);
 
@@ -48,6 +49,65 @@ export type DomainActionInput = z.infer<typeof DomainActionSchema>;
 
 // ---- API boundary schemas (every route validates with these) ----
 
+export const CanonicalEntityRefSchema = z.object({
+  entityType: z.enum(CANONICAL_ENTITY_TYPES),
+  entityId: z.string().uuid(),
+}).strict();
+
+const InteractionFilterValueSchema = z.union([
+  z.string().max(200),
+  z.number().finite(),
+  z.boolean(),
+  z.array(z.string().max(200)).max(50),
+]);
+
+/** One bounded, versioned context contract for typed and voice intake. */
+export const OperatingInteractionContextSchema = z.object({
+  version: z.literal(1),
+  capturedAt: z.string().datetime(),
+  source: z.enum(["voice", "text", "console"]),
+  activeWork: z.object({ workId: z.string().uuid() }).strict().optional(),
+  focusedEntity: CanonicalEntityRefSchema.optional(),
+  selectedEntities: z.array(CanonicalEntityRefSchema).max(50).default([]),
+  excludedEntities: z.array(CanonicalEntityRefSchema).max(50).default([]),
+  surface: z.object({
+    id: z.enum(["home", "customers", "money", "work", "schedule", "agents"]),
+    route: z.string().startsWith("/jarvis").max(300).optional(),
+    spatialState: z.enum(["canvas", "detail", "list", "map", "timeline"]).optional(),
+  }).strict(),
+  filters: z.array(z.object({
+    field: z.string().regex(/^[a-z][a-zA-Z0-9_.-]{0,63}$/),
+    operator: z.enum(["eq", "neq", "in", "not_in", "gte", "lte", "contains"]),
+    value: InteractionFilterValueSchema,
+  }).strict()).max(20).default([]),
+  timeContext: z.object({
+    start: z.string().datetime().optional(),
+    end: z.string().datetime().optional(),
+    timezone: z.string().min(1).max(100).optional(),
+  }).strict().optional(),
+  cohort: z.object({
+    kind: z.literal("work_query_execution"),
+    executionId: z.string().uuid(),
+    entityType: z.literal("household"),
+    queryIntent: z.literal("customer_cohort"),
+    count: z.number().int().min(0),
+  }).strict().optional(),
+}).strict().superRefine((context, issue) => {
+  const selected = new Set(context.selectedEntities.map((ref) => `${ref.entityType}:${ref.entityId}`));
+  const excluded = new Set<string>();
+  for (const ref of context.excludedEntities) {
+    const key = `${ref.entityType}:${ref.entityId}`;
+    if (excluded.has(key)) issue.addIssue({ code: z.ZodIssueCode.custom, path: ["excludedEntities"], message: "Duplicate exclusions are not allowed" });
+    excluded.add(key);
+    if (!context.cohort && !selected.has(key)) issue.addIssue({ code: z.ZodIssueCode.custom, path: ["excludedEntities"], message: "An exclusion must belong to the direct selection or referenced cohort" });
+    if (context.cohort && ref.entityType !== context.cohort.entityType) issue.addIssue({ code: z.ZodIssueCode.custom, path: ["excludedEntities"], message: "Cohort exclusions must use the cohort entity type" });
+  }
+  if (context.timeContext?.start && context.timeContext.end && context.timeContext.start > context.timeContext.end) {
+    issue.addIssue({ code: z.ZodIssueCode.custom, path: ["timeContext"], message: "timeContext.start must be before timeContext.end" });
+  }
+});
+export type OperatingInteractionContextInput = z.infer<typeof OperatingInteractionContextSchema>;
+
 export const SubmitInstructionSchema = z.object({
   instruction: z.string().min(1).max(10_000),
   channel: z.enum(["voice", "text", "console"]).default("console"),
@@ -65,7 +125,7 @@ export const SubmitInstructionSchema = z.object({
   // Upgrade 2: an explicit continuation appends a new input to this active Work.
   // Omitting it creates a new Work (whose id equals instructionId when supplied).
   workId: z.string().uuid().optional(),
-  activeContext: z.record(z.unknown()).optional(),
+  activeContext: OperatingInteractionContextSchema.optional(),
 });
 export type SubmitInstruction = z.infer<typeof SubmitInstructionSchema>;
 
@@ -76,7 +136,7 @@ export const StartObjectiveSchema = z.object({
   instructionId: z.string().uuid().optional(),
   workId: z.string().uuid().optional(),
   idempotencyKey: z.string().min(1).max(200).optional(),
-  activeContext: z.record(z.unknown()).optional(),
+  activeContext: OperatingInteractionContextSchema.optional(),
   budgets: z.object({
     maxSteps: z.number().int().min(1).max(50).optional(),
     maxActions: z.number().int().min(0).max(25).optional(),

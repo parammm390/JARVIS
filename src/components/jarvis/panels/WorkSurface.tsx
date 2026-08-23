@@ -20,8 +20,11 @@ import { buildWorkInspectorFacts } from "./work-inspector"
 import { useWorkspaceConfig } from "../WorkspaceConfigProvider"
 import { inspectorFieldVisible } from "../lib/workspace-config"
 import "../jarvis-theme.css"
+import { useOperatingInteractionActions } from "../kernel/operating-interaction"
 
 const ApprovalCockpit = dynamic(() => import("../bridge/ApprovalCockpit").then((module) => module.ApprovalCockpit), { ssr: false })
+const ExecutionTheater = dynamic(() => import("./ExecutionTheater").then((module) => module.ExecutionTheater), { ssr: false })
+const OperationalTimeMachine = dynamic(() => import("./OperationalTimeMachine").then((module) => module.OperationalTimeMachine), { ssr: false })
 const WorkflowTheater = dynamic(() => import("./WorkflowTheater").then((module) => module.WorkflowTheater), { ssr: false })
 const ReceiptContent = dynamic(() => import("../lib/ReceiptDrawer").then((module) => module.ReceiptContent), { ssr: false })
 
@@ -416,7 +419,7 @@ function WorkSpine({
         </Chapter>
 
         <Chapter number="05" title="EXECUTION" active={stageFor(workCase) === "Execution"}>
-          {workCase.workflows.length === 0 && !workCase.operations?.length ? <p className="jarvis-work-muted">No workflow run or durable operation is linked. The case has not been promoted into execution.</p> : (
+          {workCase.durableWork ? (
             <div className="jarvis-work-execution-list">
               {(workCase.operations ?? []).map((operation) => {
                 const resolved = operation.counts.succeeded + operation.counts.failed + operation.counts.skipped
@@ -434,18 +437,9 @@ function WorkSpine({
                   </div>
                 )
               })}
-              {workCase.workflows.map((workflow) => (
-                <div key={workflow.id} className="jarvis-work-run">
-                  <div className="jarvis-work-run__header"><span><Workflow className="h-4 w-4" aria-hidden />{humanize(workflow.workflowType)}</span><strong>{workflowStatusLabel(workflow.status)}</strong></div>
-                  <div className="jarvis-work-run__id">run {shortId(workflow.id)}{workflow.correlationId ? ` · trace ${shortId(workflow.correlationId)}` : ""}</div>
-                  <ol className="jarvis-work-step-list">
-                    {workflow.steps.map((step) => <li key={step.id} data-step-status={step.status}><span>{step.sequence + 1}</span><span>{humanize(step.stepType)}</span><small>{humanize(step.status)}</small></li>)}
-                  </ol>
-                </div>
-              ))}
-              {actionIds.length > 0 && <div className="jarvis-work-reused-theater" data-work-reused-renderer="workflow-theater"><WorkflowTheater actionIds={actionIds} /></div>}
+              <ExecutionTheater workId={workCase.durableWork.id} onRefresh={onRefresh} />
             </div>
-          )}
+          ) : workCase.workflows.length === 0 && !workCase.operations?.length ? <p className="jarvis-work-muted">No workflow run or durable operation is linked. The case has not been promoted into execution.</p> : <div className="jarvis-work-execution-list">{workCase.workflows.map((workflow) => <div key={workflow.id} className="jarvis-work-run"><div className="jarvis-work-run__header"><span><Workflow className="h-4 w-4" aria-hidden />{humanize(workflow.workflowType)}</span><strong>{workflowStatusLabel(workflow.status)}</strong></div><div className="jarvis-work-run__id">run {shortId(workflow.id)}{workflow.correlationId ? ` · trace ${shortId(workflow.correlationId)}` : ""}</div><ol className="jarvis-work-step-list">{workflow.steps.map((step) => <li key={step.id} data-step-status={step.status}><span>{step.sequence + 1}</span><span>{humanize(step.stepType)}</span><small>{humanize(step.status)}</small></li>)}</ol></div>)}{actionIds.length > 0 && <div className="jarvis-work-reused-theater" data-work-reused-renderer="workflow-theater"><WorkflowTheater actionIds={actionIds} /></div>}</div>}
         </Chapter>
 
         <Chapter number="06" title="EVIDENCE & OUTCOME" active={stageFor(workCase) === "Evidence & outcome"}>
@@ -466,7 +460,11 @@ function WorkSpine({
           {workCase.businessEvents.length > 0 && <div className="jarvis-work-event-line"><Check className="h-4 w-4" aria-hidden /> {workCase.businessEvents.length} exact business event{workCase.businessEvents.length === 1 ? "" : "s"} linked to the recorded entities.</div>}
         </Chapter>
 
-        <Chapter number="07" title="NEXT ACTION" active={workCase.status !== "Completed"}>
+        {workCase.durableWork ? <Chapter number="07" title="TIME MACHINE">
+          <OperationalTimeMachine workId={workCase.durableWork.id} />
+        </Chapter> : null}
+
+        <Chapter number={workCase.durableWork ? "08" : "07"} title="NEXT ACTION" active={workCase.status !== "Completed"}>
           {objective ? <div><p className="jarvis-work-next-line"><Clock3 className="h-4 w-4" aria-hidden /> {objective.nextStep ?? (objective.state === "completed" ? "The objective has a verified terminal outcome." : "Canonical re-inspection will determine the next bounded step.")}</p>{objective.reason && <p className="jarvis-work-muted">Why · {objective.reason}</p>}{latestIteration && <p className="jarvis-work-muted">Last observed · {observationLabel(latestIteration.observation)}</p>}{objective.nextRunAt && <p className="jarvis-work-muted">Scheduled continuation · {new Date(objective.nextRunAt).toLocaleString()}</p>}<div className="jarvis-work-link-row">{["blocked", "waiting"].includes(objective.state) && <button type="button" className="jarvis-work-secondary-button" disabled={objectiveBusy !== null} onClick={() => void controlObjective("continue")}>{objectiveBusy === "continue" ? "Continuing…" : "Continue objective"}</button>}{["continue", "waiting", "awaiting_approval"].includes(objective.state) && <button type="button" className="jarvis-work-secondary-button" disabled={objectiveBusy !== null} onClick={() => void controlObjective("interrupt")}>{objectiveBusy === "interrupt" ? "Interrupting…" : "Interrupt loop"}</button>}</div>{objective.state !== "completed" && objective.state !== "failed" && <form className="jarvis-work-redirect" onSubmit={(event) => { event.preventDefault(); if (redirectObjective.trim()) void controlObjective("redirect") }}><label htmlFor={`redirect-objective-${workCase.id}`}>Redirect this same Work</label><div><input id={`redirect-objective-${workCase.id}`} value={redirectObjective} onChange={(event) => setRedirectObjective(event.target.value)} placeholder="Give JARVIS a revised outcome" maxLength={10_000} /><button type="submit" className="jarvis-work-secondary-button" disabled={objectiveBusy !== null || !redirectObjective.trim()}>{objectiveBusy === "redirect" ? "Redirecting…" : "Redirect"}</button></div></form>}{objectiveError && <p className="jarvis-work-honest-warning">{objectiveError}</p>}</div>
             : pendingApprovals.length > 0 ? <p className="jarvis-work-next-line"><ShieldCheck className="h-4 w-4" aria-hidden /> Approval is the recorded next boundary.</p>
             : workCase.status === "Failed" || workCase.status === "Blocked" ? <p className="jarvis-work-next-line"><UserRound className="h-4 w-4" aria-hidden /> Manual review — no frontend-generated recovery action.</p>
@@ -498,6 +496,7 @@ function WorkInspector({ target, workCase, onClose }: { target: InspectorTarget;
 
 export function WorkSurface() {
   const { cases, loading, error, live, stale, denied, reload } = useWorkCases()
+  const { focusEntity, setFilters, capture } = useOperatingInteractionActions()
   const [filter, setFilter] = useState<WorkFilter>("Open")
   const [search, setSearch] = useState("")
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -541,24 +540,33 @@ export function WorkSurface() {
   const visibleCases = useMemo(() => scopedCases.filter((workCase) => filterMatches(workCase, filter) && workCaseMatchesSearch(workCase, search.trim())).sort((left, right) => STATUS_ORDER.indexOf(left.status) - STATUS_ORDER.indexOf(right.status) || right.updatedAt.localeCompare(left.updatedAt)), [filter, scopedCases, search])
   const visibleGroups = useMemo(() => groupWorkCases(visibleCases), [visibleCases])
   const requestedCase = useMemo(() => cases.find((workCase) => workCaseMatchesQuery(workCase, surfaceQuery)) ?? null, [cases, surfaceQuery])
-  const selectedCase = scopedCases.find((workCase) => workCase.id === selectedId) ?? requestedCase ?? (!hasExactTarget ? visibleCases[0] : null)
+  const selectedCase = scopedCases.find((workCase) => workCase.id === selectedId) ?? requestedCase ?? null
 
   useEffect(() => {
     if (!requestedCase || !hasExactTarget) return
     setSelectedId((current) => current === requestedCase.id ? current : requestedCase.id)
+    focusEntity({ entityType: "work", entityId: requestedCase.id }, requestedCase.title ?? `Work ${shortId(requestedCase.id)}`)
     setFilter((current) => {
       if (requestedCase.status === "Completed") return "Done"
       if (requestedCase.status === "Needs you" || requestedCase.status === "Working" || requestedCase.status === "Waiting" || requestedCase.status === "Failed") return requestedCase.status
       return current
     })
-  }, [hasExactTarget, requestedCase])
+  }, [focusEntity, hasExactTarget, requestedCase])
 
   const selectCase = (workCase: WorkCaseProjection) => {
     setSelectedId(workCase.id)
+    focusEntity({ entityType: "work", entityId: workCase.id }, workCase.title ?? `Work ${shortId(workCase.id)}`)
     setInspector(null)
     setQueueOpen(false)
     window.history.replaceState(null, "", `/jarvis/work?${queryForWorkCase(workCase)}`)
   }
+
+  useEffect(() => {
+    setFilters([
+      { field: "workStatus", operator: "eq", value: filter },
+      ...(search.trim() ? [{ field: "workSearch", operator: "contains" as const, value: search.trim() }] : []),
+    ])
+  }, [filter, search, setFilters])
 
   const assignObjective = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -571,6 +579,7 @@ export function WorkSurface() {
         objective,
         channel: "text",
         idempotencyKey: `workspace-objective:${crypto.randomUUID()}`,
+        activeContext: capture("typed", null),
       })
       setObjectiveDraft("")
       setFilter("Open")
@@ -618,7 +627,7 @@ export function WorkSurface() {
         </section>
 
         <section className="jarvis-work-main" aria-label="Causal Spine">
-          {selectedCase ? <WorkSpine workCase={selectedCase} onInspect={setInspector} onRefresh={reload} /> : <div className="jarvis-work-main__empty"><CircleDot className="h-6 w-6" aria-hidden /><h2>Choose a Work Case</h2><p>The seven-chapter causal record opens here when the tenant projection returns an exact root.</p></div>}
+          {selectedCase ? <WorkSpine workCase={selectedCase} onInspect={setInspector} onRefresh={reload} /> : <div className="jarvis-work-main__empty"><CircleDot className="h-6 w-6" aria-hidden /><h2>Choose a Work Case</h2><p>The causal record opens here when the tenant projection returns an exact root.</p></div>}
         </section>
 
         {inspector && selectedCase && <WorkInspector target={inspector} workCase={selectedCase} onClose={() => setInspector(null)} />}

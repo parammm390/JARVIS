@@ -22,6 +22,7 @@ import type {
   ComputerTaskInput,
 } from "@finnor/shared-types";
 import type { ToolRuntimeContext } from "@finnor/tools";
+import { finalizeLatestReceiptForAction } from "@finnor/workflow-runtime";
 import { and, asc, desc, eq, max, sql } from "drizzle-orm";
 import { deriveComputerOriginPolicy } from "./origins";
 import { assertNoComputerSecrets, redactComputerValue } from "./redaction";
@@ -407,7 +408,7 @@ export async function finalizeComputerRun(tenantId: string, runId: string, termi
   if (!current || TERMINAL.includes(current.status as ComputerRunStatus)) return;
   const safeResult = terminal.status === "succeeded" ? redactComputerValue(terminal.result) as Record<string, unknown> : null;
   if (safeResult) assertNoComputerSecrets(safeResult);
-  const finalizedWorkId = await withTenant(tenantId, async (db) => {
+  const finalized = await withTenant(tenantId, async (db) => {
     await db.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${tenantId}, 904))`);
     await db.execute(sql`SELECT id FROM ${computerRuns} WHERE ${computerRuns.tenantId}=${tenantId} AND ${computerRuns.id}=${runId} FOR UPDATE`);
     const [locked] = await db.select().from(computerRuns).where(and(eq(computerRuns.tenantId, tenantId), eq(computerRuns.id, runId))).limit(1);
@@ -451,9 +452,27 @@ export async function finalizeComputerRun(tenantId: string, runId: string, termi
       evidenceRefs: [{ type: "computer_run", id: locked.id }],
       trustClass: "trusted_runtime",
     });
-    return locked.workId;
+    return { workId: locked.workId, domainActionId: locked.domainActionId, effectStatus: locked.effectStatus };
   }, current.actorId);
-  if (finalizedWorkId) await reconcileWorkStatus(tenantId, finalizedWorkId);
+  if (finalized) {
+    const evidence = [{ source: "computer_run", ref: runId, timestamp: new Date().toISOString() }];
+    await finalizeLatestReceiptForAction(
+      tenantId,
+      finalized.domainActionId,
+      terminal.status === "succeeded"
+        ? { actualResult: { status: terminal.status, computerRunId: runId, result: safeResult }, evidence }
+        : { failure: {
+            errorKind: finalized.effectStatus === "unknown" || terminal.status === "timed_out" ? "unknown_outcome" : terminal.status === "blocked" ? "needs_human" : "terminal",
+            message: terminal.reason.slice(0, 2_000),
+            recoveryPath: finalized.effectStatus === "unknown" || terminal.status === "timed_out"
+              ? "Reconcile the external application state before authorizing another attempt."
+              : terminal.status === "blocked"
+                ? "Resolve the recorded computer block and obtain any required authority before another attempt."
+                : "Review the durable computer evidence before choosing a legal recovery transition.",
+          }, evidence },
+    ).catch((error) => console.error(`[decision_receipts] failed to settle computer receipt for run ${runId}`, error));
+    if (finalized.workId) await reconcileWorkStatus(tenantId, finalized.workId);
+  }
 }
 
 export async function countComputerArtifacts(tenantId: string, runId: string): Promise<{ total: number; screenshots: number }> {

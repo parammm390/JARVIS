@@ -162,6 +162,9 @@ async function cleanupRun(runId: string, commandId: string, stepIds: string[]): 
       await db.delete(integrationOperations).where(eq(integrationOperations.workflowStepId, id));
       await db.delete(decisionReceipts).where(eq(decisionReceipts.workflowStepId, id));
     }
+    // A run-level receipt may intentionally have no workflow_step_id. Remove those
+    // before their parent run so cleanup observes the same FK contract as production.
+    await db.delete(decisionReceipts).where(eq(decisionReceipts.workflowRunId, runId));
     await db.delete(workflowSteps).where(eq(workflowSteps.workflowRunId, runId));
     await db.delete(workflowRuns).where(eq(workflowRuns.id, runId));
     await db.delete(commands).where(eq(commands.id, commandId));

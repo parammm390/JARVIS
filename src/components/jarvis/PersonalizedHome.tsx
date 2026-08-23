@@ -17,6 +17,8 @@ import { PushOptIn } from "./PushOptIn"
 import { CustomCursor } from "./CustomCursor"
 import DispatchFieldSurface from "./panels/DispatchFieldSurface"
 import { OperationalSurfaceNav } from "./surfaces/OperationalSurfaceNav"
+import { useWorkspaceConfig } from "./WorkspaceConfigProvider"
+import { TenantReadyExperience } from "./experience/TenantReadyExperience"
 import "./jarvis-theme.css"
 
 // The canonical owner Thread is the dominant interaction surface, but it is
@@ -49,6 +51,7 @@ function SceneFrame({ children, accent, density, landing }: { children: React.Re
 
 function RoleLanding() {
   const { session, role, roleLoading, roleError, retryRole, authError, retryAuth } = useJarvisAuth()
+  const { config } = useWorkspaceConfig()
   const [prefs, setPrefs] = useState<Prefs | null>(null)
   useEffect(() => {
     // Preferences are private user data. Wait for the same authenticated role
@@ -89,15 +92,15 @@ function RoleLanding() {
   // spatial shell. The older two-rail Bridge remains available at /jarvis/bridge
   // for its own explicit route and does not compete with this product surface.
   if (role === "owner") return <InstructionThreadBridge standalone={false} />
-  const selected = roleLandingFor(role!, prefs?.homepage ?? null)
+  const selected = roleLandingFor(role!, prefs?.homepage ?? null, config.roles[role!].startView)
   const density = prefs?.density ?? "comfortable"
   if (selected === "schedule") {
     return <div data-jarvis-role-landing="schedule" data-jarvis-density={density}><DispatchFieldSurface /></div>
   }
   if (selected === "dispatch-map") {
-    return <SceneFrame accent={prefs?.accent ?? null} density={density} landing={selected}><main className="jarvis-role-landing__stage mx-auto min-h-screen max-w-7xl p-5 md:p-8" data-jarvis-density={density}><SinceYouWereAway /><header><div className="j-label flex items-center gap-2"><Map className="h-4 w-4" /> Dispatcher scene</div><h1 className="mt-1 text-2xl font-black">Dispatch and approvals</h1></header><DispatchMap /><ApprovalCockpit /></main></SceneFrame>
+    return <SceneFrame accent={prefs?.accent ?? null} density={density} landing={selected}><main className="jarvis-role-landing__stage mx-auto min-h-screen max-w-7xl p-5 md:p-8" data-jarvis-density={density}><SinceYouWereAway /><header><div className="j-label flex items-center gap-2"><Map className="h-4 w-4" /> Dispatcher scene</div><h1 className="mt-1 text-2xl font-black">Dispatch and approvals</h1></header><TenantReadyExperience role="dispatcher" compact /><DispatchMap /><ApprovalCockpit /></main></SceneFrame>
   }
-  return <SceneFrame accent={prefs?.accent ?? null} density={density} landing="my-day"><main className="jarvis-role-landing__stage mx-auto min-h-screen max-w-lg p-5 md:p-8" data-jarvis-density={density}><SinceYouWereAway /><header><div className="j-label flex items-center gap-2"><Wrench className="h-4 w-4" /> Technician scene</div><h1 className="mt-1 text-2xl font-black">Your assigned day</h1></header><MyDay /></main></SceneFrame>
+  return <SceneFrame accent={prefs?.accent ?? null} density={density} landing="my-day"><main className="jarvis-role-landing__stage mx-auto min-h-screen max-w-lg p-5 md:p-8" data-jarvis-density={density}><SinceYouWereAway /><header><div className="j-label flex items-center gap-2"><Wrench className="h-4 w-4" /> Technician scene</div><h1 className="mt-1 text-2xl font-black">Your assigned day</h1></header><TenantReadyExperience role="technician" compact /><MyDay /></main></SceneFrame>
 }
 
 export default function PersonalizedHome() {

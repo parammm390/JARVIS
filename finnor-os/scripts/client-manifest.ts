@@ -349,8 +349,9 @@ export const ClientManifestSchema = z.object({
   computer: ComputerManifestSchema.optional(),
   durableLimits: z.array(DurableLimitSchema).optional(),
   retentionPolicies: z.array(RetentionPolicySchema).optional(),
-  // Omission means preserve an existing tenant_settings.workspace_config. A new
-  // tenant receives the existing application default, never a parallel config row.
+  // Tenant Experience Manifest V2 lives in the existing workspace-config aggregate.
+  // Omission preserves an existing tenant value; legacy values normalize forward;
+  // a new tenant receives the application default, never a parallel config row.
   workspaceConfig: WorkspaceConfigSchema.optional(),
   // Omission preserves an existing tenant's configuration. A new tenant receives
   // DEFAULT_UNIVERSAL_ACTION_CONFIG; this object can never carry provider secrets.

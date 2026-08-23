@@ -1,47 +1,23 @@
-// B1.T2 — the SSE gateway. A small, hand-rolled Node http server (no new dependency —
-// SSE is just a long-lived text/event-stream response, nothing a framework buys much
-// for here) that runs on the persistent worker, since serverless functions cannot
-// hold a connection open (§10 risk note). GET /events verifies the caller's own
-// Supabase JWT (reusing @finnor/security's resolveTenantFromBearerToken — the same
-// logic apps/api/lib/auth.ts's requireContext() now shares, see packages/security/src/
-// auth.ts), tenant-scopes the relay, and forwards jarvis_events NOTIFYs — IDs only, per
-// B1.T1's own design ("listeners refetch via authz'd APIs"): a client that receives an
-// event does not trust its payload for data, it just knows something changed and
-// refetches through the REST API it already has tenant-scoped access to.
-//
-// Auth transport note: native EventSource cannot set custom headers, so the browser
-// client (src/lib/jarvis/useLiveQuery.ts) has no way to attach `Authorization: Bearer`.
-// This endpoint therefore also accepts the token as a `?token=` query parameter for
-// EventSource callers — the standard, widely-used workaround for this exact browser
-// limitation (GitHub/Notion/Intercom-style SSE auth). The header path stays available
-// for curl/fetch-based callers and is what this session's own verification uses.
-// AUTH_DEV_BYPASS follows the identical convention as apps/api/lib/auth.ts's
-// requireContext() (header OR query param, gated on NODE_ENV !== "production") so
-// integration tests can run against a real HTTP server without a real Supabase account
-// — the same standing pattern every other test in this repo already uses.
-//
-// Reconnect contract: each event carries a monotonic `id:` field, so a browser
-// EventSource reconnecting after a drop sends `Last-Event-ID` automatically. This
-// gateway does not replay missed events on reconnect — NOTIFY itself isn't persisted,
-// so there is nothing to replay from. A client that misses events during a gap relies
-// on useLiveQuery's polling fallback (already implemented, C1.T2) to catch up; the
-// Last-Event-ID header is read and logged for observability but otherwise honestly
-// unused, not silently ignored without saying so.
+// Tenant-wide SSE gateway. Postgres NOTIFY is the existing shared wake signal;
+// correctness comes from the tenant-scoped operational_deltas ledger, never from
+// process memory or NOTIFY delivery. Business rows remain behind authenticated APIs.
 
 import http, { type IncomingMessage, type ServerResponse } from "node:http";
 import type { Role, TenantContext } from "@finnor/shared-types";
+import { readOperationalDeltas } from "@finnor/db";
 import { resolveTenantFromBearerToken, AuthVerificationError } from "@finnor/security";
 import { getLogger, getRuntimeReleaseMetadata } from "@finnor/tools";
 import { onJarvisEvent, type JarvisEvent } from "./listener";
 
 type IdentityContext = Omit<TenantContext, "correlationId">;
+type DeltaPage = Awaited<ReturnType<typeof readOperationalDeltas>>;
 
 const HEARTBEAT_MS = 15_000;
 
 function allowedOrigins(): string[] {
   return (process.env.JARVIS_SSE_ALLOWED_ORIGINS ?? "http://localhost:3000,https://finnorai.com")
     .split(",")
-    .map((o) => o.trim())
+    .map((origin) => origin.trim())
     .filter(Boolean);
 }
 
@@ -51,7 +27,7 @@ function corsHeaders(requestOrigin: string | undefined): Record<string, string> 
   return {
     "access-control-allow-origin": origin,
     "access-control-allow-methods": "GET, OPTIONS",
-    "access-control-allow-headers": "authorization",
+    "access-control-allow-headers": "authorization,last-event-id",
     "access-control-max-age": "86400",
     vary: "origin",
   };
@@ -66,21 +42,28 @@ async function authenticate(req: IncomingMessage, url: URL): Promise<IdentityCon
       return { tenantId, userId, role };
     }
   }
-
-  const authHeader = req.headers["authorization"];
-  const bearer = typeof authHeader === "string" && authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : undefined;
-  const token = bearer ?? url.searchParams.get("token") ?? undefined;
+  const authHeader = req.headers.authorization;
+  const token = typeof authHeader === "string" && authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : undefined;
   if (!token) throw new AuthVerificationError("Missing bearer token", 401);
   return resolveTenantFromBearerToken(token);
 }
 
+function statusForError(error: unknown): number {
+  if (error instanceof AuthVerificationError) return error.status;
+  const code = error && typeof error === "object" && "code" in error ? String((error as { code?: unknown }).code) : null;
+  if (code === "scope_mismatch") return 409;
+  if (code === "invalid_cursor") return 400;
+  return 503;
+}
+
 function handleEvents(req: IncomingMessage, res: ServerResponse, url: URL): void {
   authenticate(req, url)
-    .then((ctx) => {
-      const lastEventId = req.headers["last-event-id"];
-      if (lastEventId) {
-        getLogger().info({ tenantId: ctx.tenantId, lastEventId }, "[sse] client reconnected with Last-Event-ID (no replay — polling fallback covers the gap)");
-      }
+    .then(async (ctx) => {
+      const lastHeader = req.headers["last-event-id"];
+      const lastEventId = typeof lastHeader === "string" ? lastHeader : undefined;
+      // Resolve/validate before response headers so malformed and cross-tenant
+      // cursors fail closed with an ordinary HTTP response.
+      let pendingInitial: DeltaPage | null = await readOperationalDeltas(ctx.tenantId, lastEventId);
 
       res.writeHead(200, {
         "content-type": "text/event-stream",
@@ -91,29 +74,73 @@ function handleEvents(req: IncomingMessage, res: ServerResponse, url: URL): void
       });
       res.write(": connected\n\n");
 
-      let eventCounter = 0;
+      let cursor = pendingInitial.cursor;
+      let closed = false;
+      let draining = false;
+      let drainAgain = false;
+
+      const writePage = (page: DeltaPage) => {
+        cursor = page.cursor;
+        if (page.status === "resync_required") {
+          res.write(`id: ${page.cursor}\n`);
+          res.write("event: resync\n");
+          res.write(`data: ${JSON.stringify({ status: page.status, cursor: page.cursor })}\n\n`);
+          return;
+        }
+        for (const delta of page.deltas) {
+          cursor = delta.cursor;
+          res.write(`id: ${delta.cursor}\n`);
+          res.write("event: operational_delta\n");
+          res.write(`data: ${JSON.stringify(delta)}\n\n`);
+        }
+      };
+
+      const drain = async () => {
+        if (closed) return;
+        if (draining) { drainAgain = true; return; }
+        draining = true;
+        try {
+          do {
+            drainAgain = false;
+            if (pendingInitial) {
+              writePage(pendingInitial);
+              pendingInitial = null;
+            }
+            let page = await readOperationalDeltas(ctx.tenantId, cursor);
+            writePage(page);
+            while (!closed && page.status === "ok" && page.hasMore) {
+              page = await readOperationalDeltas(ctx.tenantId, cursor);
+              writePage(page);
+            }
+            // This read happens after subscription and therefore closes the
+            // read-before-LISTEN race even when the initial page was empty.
+          } while (drainAgain && !closed);
+        } catch (error) {
+          getLogger().error({ tenantId: ctx.tenantId, error: error instanceof Error ? error.message : String(error) }, "[sse] durable delta drain failed");
+          if (!closed) res.write(`event: resync\ndata: ${JSON.stringify({ status: "resync_required" })}\n\n`);
+        } finally {
+          draining = false;
+        }
+      };
+
       const unsubscribe = onJarvisEvent((event: JarvisEvent) => {
-        if (event.tenantId !== ctx.tenantId) return;
-        eventCounter += 1;
-        res.write(`id: ${eventCounter}\n`);
-        res.write(`data: ${JSON.stringify(event)}\n\n`);
+        if (event.tenantId === ctx.tenantId && event.kind === "operational_delta") void drain();
       });
+      void drain();
 
-      const heartbeat = setInterval(() => {
-        res.write(": heartbeat\n\n");
-      }, HEARTBEAT_MS);
-
+      const heartbeat = setInterval(() => res.write(": heartbeat\n\n"), HEARTBEAT_MS);
       const cleanup = () => {
+        closed = true;
         clearInterval(heartbeat);
         unsubscribe();
       };
       req.on("close", cleanup);
       res.on("error", cleanup);
     })
-    .catch((err) => {
-      const status = err instanceof AuthVerificationError ? err.status : 401;
-      const message = err instanceof Error ? err.message : "Unauthorized";
-      res.writeHead(status, { "content-type": "application/json", ...corsHeaders(req.headers.origin) });
+    .catch((error) => {
+      if (res.headersSent) return;
+      const message = error instanceof Error ? error.message : "Realtime unavailable";
+      res.writeHead(statusForError(error), { "content-type": "application/json", ...corsHeaders(req.headers.origin) });
       res.end(JSON.stringify({ error: message }));
     });
 }

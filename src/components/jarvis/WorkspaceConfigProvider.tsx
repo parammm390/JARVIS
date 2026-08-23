@@ -4,12 +4,14 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { Check, ChevronDown, ChevronUp, Settings2, X } from "lucide-react"
 import { useJarvisAuth } from "./lib/jarvis-auth"
 import { jarvisGet, jarvisPut } from "./lib/api"
+import { onBusinessInvalidation } from "./lib/business-invalidation"
 import { DEFAULT_TENANT_WORKSPACE_CONFIG, WORKSPACE_SURFACES, normalizeWorkspaceConfig, type TenantWorkspaceConfig, type WorkspaceSurfaceKey } from "./lib/workspace-config"
 import "./jarvis-theme.css"
 
 type ConfigStatus = "idle" | "loading" | "ready" | "saving" | "error"
 interface WorkspaceConfigState {
   config: TenantWorkspaceConfig
+  revision: string | null
   editable: boolean
   status: ConfigStatus
   error: string | null
@@ -20,7 +22,7 @@ interface WorkspaceConfigState {
 }
 
 const WorkspaceConfigContext = createContext<WorkspaceConfigState>({
-  config: DEFAULT_TENANT_WORKSPACE_CONFIG, editable: false, status: "idle", error: null, settingsOpen: false,
+  config: DEFAULT_TENANT_WORKSPACE_CONFIG, revision: null, editable: false, status: "idle", error: null, settingsOpen: false,
   openSettings: () => {}, closeSettings: () => {}, save: async () => false,
 })
 
@@ -77,7 +79,16 @@ function WorkspaceSettingsDrawer() {
     const ok = await save(draft)
     setSaved(ok)
   }
-  const setSurface = (surface: WorkspaceSurfaceKey, enabled: boolean) => setDraft((current) => ({ ...current, enabledSurfaces: enabled ? Array.from(new Set([...current.enabledSurfaces, surface])) : current.enabledSurfaces.filter((item) => item !== surface) }))
+  const setSurface = (surface: WorkspaceSurfaceKey, enabled: boolean) => setDraft((current) => ({
+    ...current,
+    enabledSurfaces: enabled ? Array.from(new Set([...current.enabledSurfaces, surface])) : current.enabledSurfaces.filter((item) => item !== surface),
+    roles: Object.fromEntries((Object.entries(current.roles) as Array<[keyof TenantWorkspaceConfig["roles"], TenantWorkspaceConfig["roles"][keyof TenantWorkspaceConfig["roles"]]]>).map(([role, roleConfig]) => [role, {
+      ...roleConfig,
+      visibleSurfaces: enabled
+        ? role === "owner" ? Array.from(new Set([...roleConfig.visibleSurfaces, surface])) : roleConfig.visibleSurfaces
+        : roleConfig.visibleSurfaces.filter((item) => item !== surface),
+    }])) as TenantWorkspaceConfig["roles"],
+  }))
 
   return (
     <div className="jarvis-workspace-settings-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeSettings() }}>
@@ -101,34 +112,71 @@ export function WorkspaceConfigProvider({ children }: { children: ReactNode }) {
   const { session, role } = useJarvisAuth()
   const sessionUserId = session?.user.id ?? null
   const [config, setConfig] = useState(DEFAULT_TENANT_WORKSPACE_CONFIG)
+  const [revision, setRevision] = useState<string | null>(null)
   const [editable, setEditable] = useState(false)
   const [status, setStatus] = useState<ConfigStatus>("idle")
   const [error, setError] = useState<string | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const requestSequenceRef = useRef(0)
+
+  const refresh = useCallback(async (preserveOnError: boolean) => {
+    if (!sessionUserId || !role) return
+    const sequence = ++requestSequenceRef.current
+    setStatus((current) => preserveOnError && current === "ready" ? current : "loading")
+    setError(null)
+    try {
+      const response = await jarvisGet<{ config: unknown; editable: boolean; revision: string | null }>("workspace-config")
+      if (sequence !== requestSequenceRef.current) return
+      setConfig(normalizeWorkspaceConfig(response.config))
+      setRevision(response.revision)
+      setEditable(response.editable)
+      setStatus("ready")
+    } catch {
+      if (sequence !== requestSequenceRef.current) return
+      if (!preserveOnError) {
+        setConfig(DEFAULT_TENANT_WORKSPACE_CONFIG)
+        setRevision(null)
+        setEditable(role === "owner")
+      }
+      setStatus("error")
+      setError(preserveOnError ? "The latest tenant experience refresh was delayed. The last valid presentation remains active." : "Tenant workspace controls are not available from the current backend.")
+    }
+  }, [role, sessionUserId])
 
   useEffect(() => {
-    if (!sessionUserId || !role) { setConfig(DEFAULT_TENANT_WORKSPACE_CONFIG); setEditable(false); setStatus("idle"); return }
-    let cancelled = false
-    setStatus("loading")
-    setError(null)
-    void jarvisGet<{ config: unknown; editable: boolean }>("workspace-config")
-      .then((response) => { if (!cancelled) { setConfig(normalizeWorkspaceConfig(response.config)); setEditable(response.editable); setStatus("ready") } })
-      .catch(() => { if (!cancelled) { setConfig(DEFAULT_TENANT_WORKSPACE_CONFIG); setEditable(role === "owner"); setStatus("error"); setError("Tenant workspace controls are not available from the current backend.") } })
-    return () => { cancelled = true }
-  }, [role, sessionUserId])
+    if (!sessionUserId || !role) {
+      requestSequenceRef.current += 1
+      setConfig(DEFAULT_TENANT_WORKSPACE_CONFIG); setRevision(null); setEditable(false); setStatus("idle")
+      return
+    }
+    void refresh(false)
+  }, [refresh, role, sessionUserId])
+
+  useEffect(() => onBusinessInvalidation((signal) => {
+    if (!sessionUserId || !signal.tags.includes("preferences")) return
+    void refresh(true)
+  }), [refresh, sessionUserId])
 
   useEffect(() => {
     const root = document.documentElement
     root.dataset.jarvisTenantAccent = config.brand.accent
     root.dataset.jarvisWorkspaceRadius = config.brand.radius
-    return () => { delete root.dataset.jarvisTenantAccent; delete root.dataset.jarvisWorkspaceRadius }
-  }, [config.brand.accent, config.brand.radius])
+    root.dataset.jarvisSurfaceTone = config.brand.surfaceTone
+    root.dataset.jarvisExperienceDensity = config.brand.density
+    root.dataset.jarvisExperienceTypography = config.brand.typography
+    root.dataset.jarvisExperienceMotion = config.brand.motion
+    return () => {
+      delete root.dataset.jarvisTenantAccent; delete root.dataset.jarvisWorkspaceRadius; delete root.dataset.jarvisSurfaceTone
+      delete root.dataset.jarvisExperienceDensity; delete root.dataset.jarvisExperienceTypography; delete root.dataset.jarvisExperienceMotion
+    }
+  }, [config.brand.accent, config.brand.density, config.brand.motion, config.brand.radius, config.brand.surfaceTone, config.brand.typography])
 
   const save = useCallback(async (next: TenantWorkspaceConfig) => {
     setStatus("saving"); setError(null)
     try {
-      const response = await jarvisPut<{ config: unknown; editable: boolean }>("workspace-config", next)
-      setConfig(normalizeWorkspaceConfig(response.config)); setEditable(response.editable); setStatus("ready")
+      const response = await jarvisPut<{ config: unknown; editable: boolean; revision: string | null }>("workspace-config", next)
+      requestSequenceRef.current += 1
+      setConfig(normalizeWorkspaceConfig(response.config)); setRevision(response.revision); setEditable(response.editable); setStatus("ready")
       return true
     } catch (saveError) {
       setStatus("error"); setError(saveError instanceof Error ? saveError.message : "Workspace configuration could not be saved.")
@@ -136,6 +184,18 @@ export function WorkspaceConfigProvider({ children }: { children: ReactNode }) {
     }
   }, [])
   const closeSettings = useCallback(() => setSettingsOpen(false), [])
-  const value = useMemo<WorkspaceConfigState>(() => ({ config, editable, status, error, settingsOpen, openSettings: () => setSettingsOpen(true), closeSettings, save }), [closeSettings, config, editable, error, save, settingsOpen, status])
+  const value = useMemo<WorkspaceConfigState>(() => ({ config, revision, editable, status, error, settingsOpen, openSettings: () => setSettingsOpen(true), closeSettings, save }), [closeSettings, config, editable, error, revision, save, settingsOpen, status])
   return <WorkspaceConfigContext.Provider value={value}>{children}<WorkspaceSettingsDrawer /></WorkspaceConfigContext.Provider>
+}
+
+/** Deterministic test-only composition seam for the build-gated fixture route.
+ * It exercises the production registries/components with a validated static
+ * manifest and never grants edit authority or bypasses backend authorization. */
+export function WorkspaceConfigFixtureProvider({ config: input, children }: { config: unknown; children: ReactNode }) {
+  const config = useMemo(() => normalizeWorkspaceConfig(input), [input])
+  const value = useMemo<WorkspaceConfigState>(() => ({
+    config, revision: "fixture", editable: false, status: "ready", error: null, settingsOpen: false,
+    openSettings: () => {}, closeSettings: () => {}, save: async () => false,
+  }), [config])
+  return <WorkspaceConfigContext.Provider value={value}>{children}</WorkspaceConfigContext.Provider>
 }

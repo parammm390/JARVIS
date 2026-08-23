@@ -358,7 +358,11 @@ describe.skipIf(!available)("Upgrade 10 whole-system integration", () => {
     const continuationJobs = await withTenant(tenantId, (db) => db.select().from(jobs).where(eq(jobs.idempotencyKey, `objective-wake:${durableWait!.id}`)));
     expect(continuationJobs).toHaveLength(1);
     expect(aggregate!.objectiveSteps.map((step) => step.iterationOutcome)).toEqual(["waiting", "completed"]);
-    expect(aggregate!.work).toMatchObject({ currentOwnerId: ownerId, activeContext: { householdId }, status: "completed" });
+    expect(aggregate!.work).toMatchObject({
+      currentOwnerId: ownerId,
+      activeContext: { version: 1, focusedEntity: { entityType: "household", entityId: householdId } },
+      status: "completed",
+    });
     metric("waiting_restart_resume", {
       recoveryMs: Math.round(performance.now() - recoveryStarted),
       recoveryScanEnqueues: enqueued,

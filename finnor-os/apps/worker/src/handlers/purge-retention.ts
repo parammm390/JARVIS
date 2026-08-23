@@ -8,6 +8,7 @@ export interface RetentionPurgeResult {
   jobsDeleted: number;
   computerArtifactContentsScrubbed: number;
   modelRecordsDeleted: number;
+  operationalDeltasDeleted: number;
   retentionDays: number;
   dataClassDays: Record<string, number>;
 }
@@ -60,6 +61,13 @@ export async function purgeTenantRetention(tenantId: string): Promise<RetentionP
       `DELETE FROM llm_calls WHERE tenant_id=$1 AND created_at<$2`,
       [tenantId, cutoff("model_records")],
     );
+    // Realtime invalidations contain refs/tags only and have a fixed, bounded replay
+    // window independent of business-data retention policy. The per-tenant cursor is
+    // retained, so a client older than this window gets an explicit resync_required.
+    const deltaRetention = await client.query<{ deleted: string }>(
+      "SELECT finnor_os.purge_operational_deltas($1,$2) AS deleted",
+      [tenantId, new Date(Date.now() - 7 * 86_400_000)],
+    );
     await client.query("COMMIT");
     const result = {
       callsScrubbed: calls.rowCount ?? 0,
@@ -67,6 +75,7 @@ export async function purgeTenantRetention(tenantId: string): Promise<RetentionP
       jobsDeleted: jobs.rowCount ?? 0,
       computerArtifactContentsScrubbed: artifacts.rowCount ?? 0,
       modelRecordsDeleted: modelRecords.rowCount ?? 0,
+      operationalDeltasDeleted: Number(deltaRetention.rows[0]?.deleted ?? 0),
       retentionDays,
       dataClassDays: Object.fromEntries(["messages", "job_payloads", "computer_artifact_content", "model_records"].map((key) => [key, days(key)])),
     };
