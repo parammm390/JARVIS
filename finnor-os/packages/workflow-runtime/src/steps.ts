@@ -160,13 +160,30 @@ export async function completeStep(tenantId: string, stepId: string, evidence: R
   await withTenant(tenantId, (db) =>
     db
       .update(workflowSteps)
-      .set({ status: "completed", evidence, leaseExpiresAt: null, updatedAt: new Date() })
+      .set({ status: "completed", executionState: "verified", evidence, leaseExpiresAt: null, updatedAt: new Date() })
       .where(and(eq(workflowSteps.tenantId, tenantId), eq(workflowSteps.id, stepId))),
   );
   await finalizeReceiptForStep(tenantId, stepId, { actualResult: evidence });
   await ingestStepReceipt(tenantId, stepId, evidence).catch((err) =>
     console.error(`[memory] auto-ingest failed for step ${stepId}`, err),
   );
+}
+
+/** Provider acknowledgement has crossed the local commit boundary but is not final
+ * remote/business truth. Park the durable step without finalizing its receipt or
+ * advancing the run; an authenticated provider event or bounded read-back settles it. */
+export async function awaitStepObservation(tenantId: string, stepId: string, evidence: Record<string, unknown>): Promise<void> {
+  await withTenant(tenantId, (db) => db.update(workflowSteps).set({
+    status: "waiting_observation",
+    executionState: "awaiting_observation",
+    evidence,
+    leaseExpiresAt: null,
+    updatedAt: new Date(),
+  }).where(and(
+    eq(workflowSteps.tenantId, tenantId),
+    eq(workflowSteps.id, stepId),
+    eq(workflowSteps.status, "leased"),
+  )));
 }
 
 export async function failStep(

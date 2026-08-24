@@ -50,6 +50,8 @@ import {
   domainPolicies,
   decisionReceipts,
   reconciliationCases,
+  tenantIntegrations,
+  externalOperations,
   type Db,
 } from "@finnor/db";
 import { and, asc, desc, eq, sql, type AnyColumn, type SQL } from "drizzle-orm";
@@ -786,6 +788,42 @@ export async function ensureBusinessEffect(params: {
 
 export async function verifyBusinessEffectPreconditions(tenantId: string, effect: BusinessEffectSet): Promise<void> {
   await withTenant(tenantId, async (db) => {
+    if (effect.operation.external) {
+      const binding = effect.bindings.find((candidate) => candidate.provider || candidate.applicationAccountId);
+      if (binding?.provider) {
+        const rows = await db.select().from(tenantIntegrations).where(and(
+          eq(tenantIntegrations.tenantId, tenantId),
+          eq(tenantIntegrations.binding, binding.provider),
+          ...(binding.applicationAccountId ? [eq(tenantIntegrations.applicationAccountId, binding.applicationAccountId)] : []),
+        )).limit(2);
+        if (rows.length !== 1) {
+          throw new BusinessEffectBoundaryError("stale_precondition", `External source ${binding.provider} is not bound to one exact tenant account`);
+        }
+        const integration = rows[0]!;
+        if (integration.health === "down" || integration.syncStatus === "blocked" || integration.reconciliationStatus === "blocked") {
+          throw new BusinessEffectBoundaryError("stale_precondition", `External source ${binding.provider} is blocked or unavailable; refresh/recovery is required`);
+        }
+        const freshness = integration.freshnessPolicy && typeof integration.freshnessPolicy === "object" && !Array.isArray(integration.freshnessPolicy)
+          ? integration.freshnessPolicy as Record<string, unknown> : {};
+        const source = integration.sourcePolicy && typeof integration.sourcePolicy === "object" && !Array.isArray(integration.sourcePolicy)
+          ? integration.sourcePolicy as Record<string, unknown> : {};
+        const maxAgeSeconds = typeof freshness.maxAgeSeconds === "number" && freshness.maxAgeSeconds > 0 ? freshness.maxAgeSeconds : null;
+        const requiresFresh = freshness.requireFreshBeforeEffect === true
+          || source.requireFreshBeforeEffect === true
+          || freshness.criticality === "consequential"
+          || freshness.staleBehavior === "refresh_then_block";
+        if (requiresFresh && (!integration.syncInitializedAt || !integration.lastSuccessfulSyncAt)) {
+          throw new BusinessEffectBoundaryError("stale_precondition", `External source ${binding.provider} has not completed its required initial synchronization`);
+        }
+        if (requiresFresh && maxAgeSeconds !== null && integration.lastSuccessfulSyncAt
+            && Date.now() - integration.lastSuccessfulSyncAt.getTime() > maxAgeSeconds * 1000) {
+          await db.update(tenantIntegrations).set({ freshnessState: "stale", syncStatus: "degraded", updatedAt: new Date() }).where(and(
+            eq(tenantIntegrations.tenantId, tenantId), eq(tenantIntegrations.id, integration.id),
+          ));
+          throw new BusinessEffectBoundaryError("stale_precondition", `External source ${binding.provider} is beyond its configured freshness window; refresh/reconcile before execution`);
+        }
+      }
+    }
     for (const precondition of effect.preconditions) {
       if (!precondition.expectedHash) continue;
       const current = await safeState(db, tenantId, precondition.target);
@@ -815,9 +853,9 @@ export async function markBusinessEffectExecuting(tenantId: string, effect: Busi
   // reflection policy. Unknown/reconciliation-required outcomes are intentionally
   // excluded so they can never be converted into a blind duplicate mutation.
   const permittedStatus = effect.operation.external
-    // Same-effect external redelivery still enters the pre-existing operation ledger,
-    // which returns the prior result instead of dispatching a second mutation.
-    ? sql`${businessEffects.status} IN ('authorized','failed','partially_verified','verified')`
+    // Provider acknowledgement/partial verification is itself an uncertain
+    // outcome. Only the observer may settle it; re-entering would risk a duplicate.
+    ? sql`${businessEffects.status} IN ('authorized','failed')`
     : sql`${businessEffects.status} IN ('authorized','failed')`;
   const [claimed] = await withTenant(tenantId, (db) => db.update(businessEffects).set({ status: "executing", executionStartedAt: new Date() }).where(and(eq(businessEffects.tenantId, tenantId), eq(businessEffects.id, effect.id), permittedStatus)).returning({ id: businessEffects.id }));
   if (!claimed) {
@@ -834,6 +872,14 @@ function valuesMatch(expected: Record<string, unknown>, current: Record<string, 
 }
 
 export async function recordBusinessEffectOutcome(tenantId: string, effect: BusinessEffectSet, result: ExecutionResult): Promise<BusinessEffectVerification> {
+  const requiresExternalObservation = effect.operation.external && Boolean((await withTenant(tenantId, (db) => db.select({
+    id: externalOperations.domainActionId,
+  }).from(externalOperations).where(and(
+    eq(externalOperations.tenantId, tenantId),
+    eq(externalOperations.businessEffectId, effect.id),
+    eq(externalOperations.status, "succeeded"),
+    sql`${externalOperations.integrationId} IS NOT NULL`,
+  )).limit(1)))[0]);
   let verification: BusinessEffectVerification;
   let status: typeof businessEffects.$inferSelect.status;
   if (result.errorKind === "unknown_outcome") {
@@ -842,7 +888,7 @@ export async function recordBusinessEffectOutcome(tenantId: string, effect: Busi
   } else if (result.status !== "success") {
     verification = { state: "unverified", basis: result.error ?? "The effect did not produce a successful observable result", checkedAt: new Date().toISOString(), observed: result.output };
     status = "failed";
-  } else if (result.output.verified === true) {
+  } else if (result.output.verified === true && (!requiresExternalObservation || result.output.externalObserved === true)) {
     verification = {
       state: "verified",
       basis: result.output.canonicalObserved === true
@@ -888,10 +934,12 @@ export async function recordBusinessEffectOutcome(tenantId: string, effect: Busi
         .limit(1);
       return legacy ? { canonicalCommunicationId: legacy.id, channel: legacy.channel, recordedAt: legacy.timestamp.toISOString() } : null;
     });
-    verification = observed
+    verification = observed && !requiresExternalObservation
       ? { state: "verified", basis: "Canonical outbound communication state was observed after execution", checkedAt: new Date().toISOString(), observed }
-      : { state: "partially_verified", basis: "The provider accepted the delivery, but no canonical outbound communication state was observed", checkedAt: new Date().toISOString(), observed: result.output };
-    status = observed ? "verified" : "partially_verified";
+      : { state: "partially_verified", basis: observed
+          ? "Canonical outbound intent is recorded, but final external delivery has not yet been observed"
+          : "The provider accepted the delivery, but no canonical or external delivery state was observed", checkedAt: new Date().toISOString(), observed: result.output };
+    status = observed && !requiresExternalObservation ? "verified" : "partially_verified";
   } else if (effect.expected.state?.exists === true) {
     const observedTargets = collectEffectTargets(result.output, effect.source.domainActionId).filter((target) => target.type !== "proposed_business_change");
     let observed: Record<string, unknown> | null = null;
@@ -917,7 +965,7 @@ export async function recordBusinessEffectOutcome(tenantId: string, effect: Busi
     const matched = Boolean(current && valuesMatch(effect.expected.state!, current));
     verification = { state: matched ? "verified" : "divergent", basis: matched ? "Canonical state matches the EffectSet expected after-state" : "Canonical state does not match the EffectSet expected after-state", checkedAt: new Date().toISOString(), ...(current ? { observed: current } : {}) };
     status = matched ? "verified" : "divergent";
-  } else if (effect.operation.external) {
+  } else if (requiresExternalObservation) {
     verification = { state: "partially_verified", basis: "A durable provider/canonical delivery result exists, but final external business state is not fully observable", checkedAt: new Date().toISOString(), observed: result.output };
     status = "partially_verified";
   } else {

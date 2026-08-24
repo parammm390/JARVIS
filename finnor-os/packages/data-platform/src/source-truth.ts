@@ -1,0 +1,516 @@
+import { createHash } from "node:crypto";
+import {
+  externalRefs,
+  reconciliationCases,
+  tenantIntegrations,
+  type Db,
+} from "@finnor/db";
+import type {
+  CanonicalSourceRecord,
+  ExternalEffectObservation,
+  SourceFreshnessPolicy,
+  SourceFreshnessState,
+  SourceRelationshipRef,
+} from "@finnor/shared-types";
+import { and, eq, sql } from "drizzle-orm";
+import {
+  CanonicalImportError,
+  writeCanonicalImportRow,
+  type CanonicalImportEntity,
+  type CanonicalImportWriteResult,
+} from "./import-writes";
+import { recordBusinessEvent } from "./events";
+
+export type SourceMaterializationStatus =
+  | "created"
+  | "updated"
+  | "unchanged"
+  | "duplicate"
+  | "out_of_order"
+  | "ambiguous"
+  | "unresolved"
+  | "conflict"
+  | "tombstoned";
+
+export interface SourceMaterializationResult {
+  status: SourceMaterializationStatus;
+  sourceLinkId: string;
+  canonicalEntityId?: string;
+  canonicalEntityType?: string;
+  businessEffectId?: string;
+  reason?: string;
+}
+
+export class SourceTruthError extends Error {
+  constructor(
+    readonly code:
+      | "integration_not_found"
+      | "provider_binding_mismatch"
+      | "invalid_record"
+      | "unresolved_relationship"
+      | "cross_tenant_reference",
+    message: string,
+  ) {
+    super(message);
+    this.name = "SourceTruthError";
+  }
+}
+
+function canonicalJson(value: unknown): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  return `{${Object.entries(value as Record<string, unknown>)
+    .filter(([, nested]) => nested !== undefined)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, nested]) => `${JSON.stringify(key)}:${canonicalJson(nested)}`)
+    .join(",")}}`;
+}
+
+export function sourceTruthHash(value: unknown): string {
+  return createHash("sha256").update(canonicalJson(value)).digest("hex");
+}
+
+function parseObservedAt(value: string): Date {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) throw new SourceTruthError("invalid_record", "source observedAt is invalid");
+  return date;
+}
+
+function parseSequence(value: string | undefined): bigint | null {
+  if (value === undefined) return null;
+  try {
+    const parsed = BigInt(value);
+    if (parsed < 0n) throw new Error("negative");
+    return parsed;
+  } catch {
+    throw new SourceTruthError("invalid_record", "sourceSequence must be non-negative decimal text");
+  }
+}
+
+function changedFields(before: unknown, after: Record<string, unknown>): string[] {
+  const prior = before && typeof before === "object" && !Array.isArray(before)
+    ? before as Record<string, unknown>
+    : {};
+  return Object.keys(after).filter((field) => sourceTruthHash(prior[field]) !== sourceTruthHash(after[field]));
+}
+
+function externalOwnedData(record: CanonicalSourceRecord): { writable: Record<string, unknown>; conflicts: string[] } {
+  const writable: Record<string, unknown> = {};
+  const conflicts: string[] = [];
+  for (const [field, value] of Object.entries(record.data)) {
+    const authority = record.ownership.fields?.[field] ?? record.ownership.default;
+    if (authority === "external" && record.ownership.direction !== "outbound") writable[field] = value;
+    else conflicts.push(field);
+  }
+  return { writable, conflicts };
+}
+
+async function resolveRelationship(db: Db, record: CanonicalSourceRecord, relationship: SourceRelationshipRef): Promise<string | undefined> {
+  if (relationship.canonicalId) return relationship.canonicalId;
+  if (!relationship.externalId || !relationship.externalObjectType) return undefined;
+  const [link] = await db.select({
+    tenantId: externalRefs.tenantId,
+    internalId: externalRefs.internalId,
+    mappingStatus: externalRefs.mappingStatus,
+  }).from(externalRefs).where(and(
+    eq(externalRefs.tenantId, record.tenantId),
+    eq(externalRefs.integrationId, record.integrationId),
+    eq(externalRefs.externalObjectType, relationship.externalObjectType),
+    eq(externalRefs.externalId, relationship.externalId),
+  )).limit(1);
+  if (link?.tenantId && link.tenantId !== record.tenantId) {
+    throw new SourceTruthError("cross_tenant_reference", "source relationship crosses tenant boundary");
+  }
+  return link?.mappingStatus === "mapped" ? link.internalId ?? undefined : undefined;
+}
+
+async function resolveRelationships(db: Db, record: CanonicalSourceRecord): Promise<Record<string, string>> {
+  const resolved: Record<string, string> = {};
+  for (const [name, relationship] of Object.entries(record.relationships ?? {})) {
+    const canonicalId = await resolveRelationship(db, record, relationship);
+    if (!canonicalId && relationship.required !== false) {
+      throw new SourceTruthError(
+        "unresolved_relationship",
+        `${record.externalObjectType}/${record.externalId} is waiting for ${name}`,
+      );
+    }
+    if (canonicalId) resolved[name] = canonicalId;
+  }
+  return resolved;
+}
+
+async function upsertSourceLink(
+  db: Db,
+  record: CanonicalSourceRecord,
+  values: {
+    internalId?: string | null;
+    mappingStatus: "mapped" | "unresolved" | "ambiguous" | "tombstoned";
+    candidateCanonicalIds?: string[];
+    observedHash: string;
+    canonicalHash?: string | null;
+    syncStatus: "acknowledged" | "observed" | "materialized" | "reconciled" | "conflict" | "source_missing" | "failed";
+    conflictState?: "none" | "canonical_newer" | "external_newer" | "divergent" | "ambiguous" | "manual_resolution_required";
+    providerDeleted?: boolean;
+    tombstonedAt?: Date | null;
+  },
+): Promise<string> {
+  const observedAt = parseObservedAt(record.observedAt);
+  const sourceSequence = parseSequence(record.sourceSequence);
+  const candidateCanonicalIds = `{${(values.candidateCanonicalIds ?? []).join(",")}}`;
+  const result = await db.execute<{ id: string }>(sql`
+    INSERT INTO finnor_os.external_refs(
+      tenant_id,entity,internal_id,provider,external_id,integration_id,external_object_type,
+      mapping_status,identity_key,candidate_canonical_ids,source_version,source_sequence,
+      observed_state,observed_hash,canonical_hash,first_observed_at,last_observed_at,
+      last_successful_sync_at,freshness_state,sync_status,conflict_state,ownership_policy,
+      provenance,provider_deleted,tombstoned_at,last_effect_id,synced_at,updated_at
+    ) VALUES (
+      ${record.tenantId}::uuid,${record.canonicalEntity},${values.internalId ?? null}::uuid,
+      ${record.provider},${record.externalId},${record.integrationId}::uuid,${record.externalObjectType},
+      ${values.mappingStatus},${record.identityKey ?? null},${candidateCanonicalIds}::uuid[],
+      ${record.sourceVersion ?? null},${sourceSequence},${JSON.stringify(record.data)}::jsonb,
+      ${values.observedHash},${values.canonicalHash ?? null},${observedAt},${observedAt},now(),'fresh',
+      ${values.syncStatus},${values.conflictState ?? "none"},${JSON.stringify(record.ownership)}::jsonb,
+      ${JSON.stringify(record.provenance ?? {})}::jsonb,${values.providerDeleted ?? false},
+      ${values.tombstonedAt ?? null},${record.businessEffectId ?? null}::uuid,now(),now()
+    )
+    ON CONFLICT (tenant_id,integration_id,external_object_type,external_id) WHERE integration_id IS NOT NULL
+    DO UPDATE SET
+      entity=EXCLUDED.entity,
+      internal_id=EXCLUDED.internal_id,
+      provider=EXCLUDED.provider,
+      mapping_status=EXCLUDED.mapping_status,
+      identity_key=EXCLUDED.identity_key,
+      candidate_canonical_ids=EXCLUDED.candidate_canonical_ids,
+      source_version=EXCLUDED.source_version,
+      source_sequence=EXCLUDED.source_sequence,
+      observed_state=EXCLUDED.observed_state,
+      observed_hash=EXCLUDED.observed_hash,
+      canonical_hash=EXCLUDED.canonical_hash,
+      last_observed_at=EXCLUDED.last_observed_at,
+      last_successful_sync_at=now(),
+      freshness_state='fresh',
+      sync_status=EXCLUDED.sync_status,
+      conflict_state=EXCLUDED.conflict_state,
+      ownership_policy=EXCLUDED.ownership_policy,
+      provenance=EXCLUDED.provenance,
+      provider_deleted=EXCLUDED.provider_deleted,
+      tombstoned_at=EXCLUDED.tombstoned_at,
+      last_effect_id=coalesce(EXCLUDED.last_effect_id,finnor_os.external_refs.last_effect_id),
+      synced_at=now(),updated_at=now()
+    RETURNING id::text
+  `);
+  const id = result.rows[0]?.id;
+  if (!id) throw new Error("source link upsert returned no id");
+  return id;
+}
+
+async function openReconciliationCase(
+  db: Db,
+  record: CanonicalSourceRecord,
+  sourceLinkId: string,
+  caseType: "external_drift" | "mapping_ambiguous",
+  classification: string,
+  authoritativeSide: "finnor" | "external" | "manual",
+  details: Record<string, unknown>,
+): Promise<void> {
+  const [existing] = await db.select({ id: reconciliationCases.id }).from(reconciliationCases).where(and(
+    eq(reconciliationCases.tenantId, record.tenantId),
+    eq(reconciliationCases.sourceLinkId, sourceLinkId),
+    eq(reconciliationCases.caseType, caseType),
+    eq(reconciliationCases.status, "open"),
+  )).limit(1);
+  if (!existing) {
+    await db.insert(reconciliationCases).values({
+      tenantId: record.tenantId,
+      caseType,
+      integrationId: record.integrationId,
+      sourceLinkId,
+      businessEffectId: record.businessEffectId ?? null,
+      classification,
+      authoritativeSide,
+      details,
+    });
+  }
+  await refreshIntegrationConflictCount(db, record.tenantId, record.integrationId);
+}
+
+async function refreshIntegrationConflictCount(db: Db, tenantId: string, integrationId: string): Promise<void> {
+  const result = await db.execute<{ count: string | number }>(sql`
+    SELECT count(*) AS count FROM finnor_os.reconciliation_cases
+    WHERE tenant_id=${tenantId}::uuid AND integration_id=${integrationId}::uuid AND status='open'
+  `);
+  const unresolvedConflicts = Number(result.rows[0]?.count ?? 0);
+  await db.update(tenantIntegrations).set({ unresolvedConflicts, updatedAt: new Date() }).where(and(
+    eq(tenantIntegrations.tenantId, tenantId),
+    eq(tenantIntegrations.id, integrationId),
+  ));
+}
+
+async function resolveSourceCases(db: Db, record: CanonicalSourceRecord, sourceLinkId: string): Promise<void> {
+  await db.update(reconciliationCases).set({
+    status: "resolved",
+    resolution: { mechanism: "source_reconciled", observedAt: record.observedAt },
+    resolvedAt: new Date(),
+  }).where(and(
+    eq(reconciliationCases.tenantId, record.tenantId),
+    eq(reconciliationCases.integrationId, record.integrationId),
+    eq(reconciliationCases.sourceLinkId, sourceLinkId),
+    eq(reconciliationCases.status, "open"),
+  ));
+  await refreshIntegrationConflictCount(db, record.tenantId, record.integrationId);
+}
+
+/** Records only the provider identity returned by a successful mutation. This is an
+ * acknowledgement link—not an observation—so freshness stays unknown and no effect
+ * may become verified until materializeSourceRecord/read-back supplies remote state. */
+export async function recordExternalReferenceAcknowledgement(db: Db, params: {
+  tenantId: string;
+  integrationId: string;
+  provider: string;
+  canonicalEntity: string;
+  canonicalEntityId: string;
+  externalObjectType: string;
+  externalId: string;
+  businessEffectId?: string;
+}): Promise<string> {
+  const [integration] = await db.select({ id: tenantIntegrations.id, binding: tenantIntegrations.binding }).from(tenantIntegrations).where(and(
+    eq(tenantIntegrations.tenantId, params.tenantId),
+    eq(tenantIntegrations.id, params.integrationId),
+  )).limit(1);
+  if (!integration || integration.binding !== params.provider) {
+    throw new SourceTruthError("provider_binding_mismatch", "acknowledgement does not match the configured tenant integration/account");
+  }
+  const [existing] = await db.select({ id: externalRefs.id, internalId: externalRefs.internalId }).from(externalRefs).where(and(
+    eq(externalRefs.tenantId, params.tenantId),
+    eq(externalRefs.integrationId, params.integrationId),
+    eq(externalRefs.externalObjectType, params.externalObjectType),
+    eq(externalRefs.externalId, params.externalId),
+  )).limit(1);
+  if (existing?.internalId && existing.internalId !== params.canonicalEntityId) {
+    throw new SourceTruthError("invalid_record", "provider object is already mapped to a different canonical entity");
+  }
+  const result = await db.execute<{ id: string }>(sql`
+    INSERT INTO finnor_os.external_refs(
+      tenant_id,entity,internal_id,provider,external_id,integration_id,external_object_type,
+      mapping_status,observed_state,freshness_state,sync_status,conflict_state,
+      ownership_policy,provenance,last_effect_id,synced_at,updated_at
+    ) VALUES (
+      ${params.tenantId}::uuid,${params.canonicalEntity},${params.canonicalEntityId}::uuid,
+      ${params.provider},${params.externalId},${params.integrationId}::uuid,${params.externalObjectType},
+      'mapped','{}'::jsonb,'unknown','acknowledged','none','{}'::jsonb,
+      ${JSON.stringify({ acknowledgement: true })}::jsonb,${params.businessEffectId ?? null}::uuid,now(),now()
+    )
+    ON CONFLICT (tenant_id,integration_id,external_object_type,external_id) WHERE integration_id IS NOT NULL
+    DO UPDATE SET internal_id=EXCLUDED.internal_id,entity=EXCLUDED.entity,
+      last_effect_id=coalesce(EXCLUDED.last_effect_id,finnor_os.external_refs.last_effect_id),
+      synced_at=now(),updated_at=now()
+    RETURNING id::text
+  `);
+  const id = result.rows[0]?.id;
+  if (!id) throw new Error("external acknowledgement link returned no id");
+  return id;
+}
+
+/** Materializes one normalized provider observation inside the caller's existing
+ * tenant transaction. The external source link and canonical write therefore commit
+ * together. It is convergent by provider identity and fail-closed on tenant/account. */
+export async function materializeSourceRecord(db: Db, record: CanonicalSourceRecord): Promise<SourceMaterializationResult> {
+  if (!record.externalId || !record.externalObjectType || !record.canonicalEntity || !record.sourceScope) {
+    throw new SourceTruthError("invalid_record", "source identity fields are required");
+  }
+  if (!record.ownership || !["finnor", "external", "manual"].includes(record.ownership.default)) {
+    throw new SourceTruthError("invalid_record", "an explicit source ownership policy is required");
+  }
+  const [integration] = await db.select({
+    id: tenantIntegrations.id,
+    tenantId: tenantIntegrations.tenantId,
+    binding: tenantIntegrations.binding,
+  }).from(tenantIntegrations).where(and(
+    eq(tenantIntegrations.tenantId, record.tenantId),
+    eq(tenantIntegrations.id, record.integrationId),
+  )).limit(1);
+  if (!integration) throw new SourceTruthError("integration_not_found", "configured tenant integration was not found");
+  if (integration.tenantId !== record.tenantId) throw new SourceTruthError("cross_tenant_reference", "integration crosses tenant boundary");
+  if (integration.binding !== record.provider) {
+    throw new SourceTruthError("provider_binding_mismatch", `integration binding ${integration.binding} cannot observe ${record.provider}`);
+  }
+
+  const observedAt = parseObservedAt(record.observedAt);
+  const sourceSequence = parseSequence(record.sourceSequence);
+  const observedHash = sourceTruthHash(record.data);
+  const [existing] = await db.select().from(externalRefs).where(and(
+    eq(externalRefs.tenantId, record.tenantId),
+    eq(externalRefs.integrationId, record.integrationId),
+    eq(externalRefs.externalObjectType, record.externalObjectType),
+    eq(externalRefs.externalId, record.externalId),
+  )).limit(1);
+
+  if (existing) {
+    if (sourceSequence !== null && existing.sourceSequence !== null && sourceSequence < existing.sourceSequence) {
+      return { status: "out_of_order", sourceLinkId: existing.id, canonicalEntityId: existing.internalId ?? undefined, reason: "provider sequence regressed" };
+    }
+    if (sourceSequence === null && existing.lastObservedAt && observedAt.getTime() < existing.lastObservedAt.getTime()) {
+      await db.update(externalRefs).set({ conflictState: "manual_resolution_required", syncStatus: "conflict", updatedAt: new Date() }).where(eq(externalRefs.id, existing.id));
+      await openReconciliationCase(db, record, existing.id, "external_drift", "ordering_unprovable", "manual", {
+        retainedObservedAt: existing.lastObservedAt.toISOString(), rejectedObservedAt: observedAt.toISOString(),
+      });
+      return { status: "conflict", sourceLinkId: existing.id, canonicalEntityId: existing.internalId ?? undefined, reason: "older event without provider sequence" };
+    }
+    if (existing.observedHash === observedHash && !record.deleted) {
+      await db.update(externalRefs).set({
+        sourceVersion: record.sourceVersion ?? existing.sourceVersion,
+        sourceSequence: sourceSequence ?? existing.sourceSequence,
+        lastObservedAt: observedAt,
+        lastSuccessfulSyncAt: new Date(),
+        freshnessState: "fresh",
+        updatedAt: new Date(),
+      }).where(eq(externalRefs.id, existing.id));
+      return { status: "duplicate", sourceLinkId: existing.id, canonicalEntityId: existing.internalId ?? undefined, businessEffectId: record.businessEffectId };
+    }
+  }
+
+  if ((record.candidateCanonicalIds?.length ?? 0) > 1) {
+    const sourceLinkId = await upsertSourceLink(db, record, {
+      internalId: null,
+      mappingStatus: "ambiguous",
+      candidateCanonicalIds: record.candidateCanonicalIds,
+      observedHash,
+      syncStatus: "conflict",
+      conflictState: "ambiguous",
+    });
+    await openReconciliationCase(db, record, sourceLinkId, "mapping_ambiguous", "multiple_deterministic_candidates", "manual", {
+      candidateCanonicalIds: record.candidateCanonicalIds,
+    });
+    return { status: "ambiguous", sourceLinkId, reason: "multiple deterministic candidates" };
+  }
+
+  if (record.deleted) {
+    const sourceLinkId = await upsertSourceLink(db, record, {
+      internalId: existing?.internalId ?? null,
+      mappingStatus: "tombstoned",
+      observedHash,
+      canonicalHash: existing?.canonicalHash,
+      syncStatus: "source_missing",
+      providerDeleted: true,
+      tombstonedAt: observedAt,
+    });
+    if (existing?.internalId) {
+      await recordBusinessEvent(db, {
+        tenantId: record.tenantId,
+        entityType: record.canonicalEntity,
+        entityId: existing.internalId,
+        eventType: "external_source_tombstoned",
+        source: String(record.provider),
+        payload: { sourceLinkId, externalObjectType: record.externalObjectType },
+      });
+    }
+    return { status: "tombstoned", sourceLinkId, canonicalEntityId: existing?.internalId ?? undefined };
+  }
+
+  let relationships: Record<string, string>;
+  try {
+    relationships = await resolveRelationships(db, record);
+  } catch (error) {
+    if (!(error instanceof SourceTruthError) || error.code !== "unresolved_relationship") throw error;
+    const sourceLinkId = await upsertSourceLink(db, record, {
+      internalId: existing?.internalId ?? null,
+      mappingStatus: existing?.internalId ? "mapped" : "unresolved",
+      observedHash,
+      canonicalHash: existing?.canonicalHash,
+      syncStatus: "failed",
+      conflictState: "manual_resolution_required",
+    });
+    await openReconciliationCase(db, record, sourceLinkId, "external_drift", "unresolved_relationship", "manual", { reason: error.message });
+    return { status: "unresolved", sourceLinkId, canonicalEntityId: existing?.internalId ?? undefined, reason: error.message };
+  }
+
+  const observedChanged = Boolean(existing?.observedHash && existing.observedHash !== observedHash);
+  const changed = observedChanged ? changedFields(existing?.observedState, record.data) : [];
+  const { writable, conflicts: nonExternalFields } = externalOwnedData(record);
+  const conflictingChangedFields = changed.filter((field) => nonExternalFields.includes(field));
+  if (conflictingChangedFields.length > 0) {
+    const sourceLinkId = await upsertSourceLink(db, record, {
+      internalId: existing?.internalId ?? null,
+      mappingStatus: existing?.internalId ? "mapped" : "unresolved",
+      observedHash,
+      canonicalHash: existing?.canonicalHash,
+      syncStatus: "conflict",
+      conflictState: record.ownership.default === "finnor" ? "canonical_newer" : "manual_resolution_required",
+    });
+    await openReconciliationCase(db, record, sourceLinkId, "external_drift", "field_ownership_conflict", record.ownership.default, {
+      fields: conflictingChangedFields,
+      policy: record.ownership,
+    });
+    return { status: "conflict", sourceLinkId, canonicalEntityId: existing?.internalId ?? undefined, reason: "field ownership conflict" };
+  }
+
+  let write: CanonicalImportWriteResult;
+  try {
+    write = await writeCanonicalImportRow(db, {
+      tenantId: record.tenantId,
+      entity: record.canonicalEntity as CanonicalImportEntity,
+      data: Object.keys(writable).length > 0 ? writable : record.data,
+      relationships,
+      existingId: existing?.internalId ?? record.candidateCanonicalIds?.[0],
+      sourceOwned: Boolean(existing?.internalId),
+      updateMode: Object.keys(writable).length > 0 ? "source_owned" : "insert_only",
+      provenance: { sourceSystem: String(record.provider), sourceId: record.externalId },
+    });
+  } catch (error) {
+    if (!(error instanceof CanonicalImportError) || error.code !== "ambiguous_match") throw error;
+    const sourceLinkId = await upsertSourceLink(db, record, {
+      internalId: null,
+      mappingStatus: "unresolved",
+      observedHash,
+      syncStatus: "conflict",
+      conflictState: "ambiguous",
+    });
+    await openReconciliationCase(db, record, sourceLinkId, "mapping_ambiguous", "canonical_identity_ambiguous", "manual", { message: error.message });
+    return { status: "ambiguous", sourceLinkId, reason: error.message };
+  }
+
+  const canonicalHash = sourceTruthHash({ entity: write.entityType, id: write.entityId, applied: writable });
+  const sourceLinkId = await upsertSourceLink(db, record, {
+    internalId: write.entityId,
+    mappingStatus: "mapped",
+    observedHash,
+    canonicalHash,
+    syncStatus: "reconciled",
+  });
+  await resolveSourceCases(db, record, sourceLinkId);
+  return {
+    status: write.action === "created" ? "created" : write.action === "updated" ? "updated" : "unchanged",
+    sourceLinkId,
+    canonicalEntityId: write.entityId,
+    canonicalEntityType: write.entityType,
+    businessEffectId: record.businessEffectId,
+  };
+}
+
+export function freshnessState(lastSuccessfulSyncAt: Date | string | null | undefined, policy: SourceFreshnessPolicy, now = new Date()): SourceFreshnessState {
+  if (!lastSuccessfulSyncAt) return "unknown";
+  const observed = lastSuccessfulSyncAt instanceof Date ? lastSuccessfulSyncAt : new Date(lastSuccessfulSyncAt);
+  if (Number.isNaN(observed.getTime()) || policy.maxAgeSeconds <= 0) return "unknown";
+  const ageSeconds = Math.max(0, (now.getTime() - observed.getTime()) / 1000);
+  if (ageSeconds <= policy.maxAgeSeconds) return "fresh";
+  if (ageSeconds <= policy.maxAgeSeconds * 3) return "stale";
+  return "expired";
+}
+
+function compareExpected(expected: unknown, observed: unknown, path = ""): Array<{ path: string; expected: unknown; observed: unknown }> {
+  if (expected && typeof expected === "object" && !Array.isArray(expected)) {
+    const actual = observed && typeof observed === "object" && !Array.isArray(observed) ? observed as Record<string, unknown> : {};
+    return Object.entries(expected as Record<string, unknown>).flatMap(([key, value]) => compareExpected(value, actual[key], path ? `${path}.${key}` : key));
+  }
+  return sourceTruthHash(expected) === sourceTruthHash(observed) ? [] : [{ path, expected, observed }];
+}
+
+/** Exact expected-subset comparison used by read-after-write, polling, and webhook
+ * confirmation. Provider HTTP success is deliberately absent from this function. */
+export function observeExternalEffect(input: Omit<ExternalEffectObservation, "classification" | "mismatches"> & { definitelyAbsent?: boolean }): ExternalEffectObservation {
+  if (input.definitelyAbsent) return { ...input, classification: "absent", mismatches: [] };
+  if (!input.observed) return { ...input, classification: "unknown", mismatches: [] };
+  const mismatches = compareExpected(input.expected, input.observed);
+  return { ...input, classification: mismatches.length === 0 ? "present" : "divergent", mismatches };
+}

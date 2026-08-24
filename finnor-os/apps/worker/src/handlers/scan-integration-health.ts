@@ -14,8 +14,8 @@
 // the breaker is the thing actually gating real calls right now, so health must agree
 // with it rather than contradict it with an independent, possibly-stale reading.
 
-import { withTenant, tenantIntegrations } from "@finnor/db";
-import { eq, and } from "drizzle-orm";
+import { reconciliationCases, withTenant, tenantIntegrations } from "@finnor/db";
+import { eq, and, sql } from "drizzle-orm";
 import {
   testTenantVapiConnection,
   testTenantGhlConnection,
@@ -97,11 +97,40 @@ export const scanIntegrationHealth: JobHandler = async (payload) => {
   if (rows.length === 0) return; // no tenant_integrations rows yet — nothing to check, pure env/default resolution stands
 
   for (const row of rows) {
-    const { health, error } = await probeBinding(tenantId, row.binding);
+    const probe = await probeBinding(tenantId, row.binding);
+    const [conflicts] = await withTenant(tenantId, (db) => db.select({
+      count: sql<number>`count(*)::int`,
+    }).from(reconciliationCases).where(and(
+      eq(reconciliationCases.tenantId, tenantId),
+      eq(reconciliationCases.integrationId, row.id),
+      eq(reconciliationCases.status, "open"),
+    )));
+    const unresolvedConflicts = conflicts?.count ?? 0;
+    const policy = row.freshnessPolicy && typeof row.freshnessPolicy === "object" && !Array.isArray(row.freshnessPolicy)
+      ? row.freshnessPolicy as Record<string, unknown> : {};
+    const maxAgeSeconds = typeof policy.maxAgeSeconds === "number" && policy.maxAgeSeconds > 0 ? policy.maxAgeSeconds : null;
+    const ageSeconds = row.lastSuccessfulSyncAt ? (Date.now() - row.lastSuccessfulSyncAt.getTime()) / 1000 : null;
+    const freshnessState = ageSeconds === null || maxAgeSeconds === null ? row.freshnessState
+      : ageSeconds <= maxAgeSeconds ? "fresh"
+        : ageSeconds <= maxAgeSeconds * 3 ? "stale" : "expired";
+    const liveTruthRequired = row.outcomePacks.length > 0;
+    const emulatorBlocked = liveTruthRequired && (row.mode === "emulator" || row.binding === "emulator");
+    const health = probe.health === "ok" && (freshnessState === "stale" || freshnessState === "expired" || unresolvedConflicts > 0)
+      ? "degraded" : emulatorBlocked ? "degraded" : probe.health;
+    const error = emulatorBlocked ? "BLOCKED-CONFIG: required outcome pack is bound to an internal emulator"
+      : probe.error ?? (row.syncStatus === "blocked" || row.reconciliationStatus === "blocked" ? row.lastError : null);
     await withTenant(tenantId, (db) =>
       db
         .update(tenantIntegrations)
-        .set({ health, lastCheckAt: new Date(), lastError: error, updatedAt: new Date() })
+        .set({
+          health,
+          freshnessState,
+          unresolvedConflicts,
+          ...(emulatorBlocked ? { syncStatus: "blocked" as const, reconciliationStatus: "blocked" as const } : {}),
+          lastCheckAt: new Date(),
+          lastError: error,
+          updatedAt: new Date(),
+        })
         .where(and(eq(tenantIntegrations.tenantId, tenantId), eq(tenantIntegrations.capability, row.capability))),
     );
   }

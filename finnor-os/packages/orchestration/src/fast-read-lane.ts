@@ -25,6 +25,7 @@ import {
   type CashCollections,
   type OperationalQueryOptions,
 } from "@finnor/read-models";
+import { tenantSourceTruthReport, type TenantSourceTruthReport } from "@finnor/tools";
 
 /** Keep the old public names, but make their public meaning canonical. */
 export type OperationalQueryIntent = CanonicalOperationalQueryIntent;
@@ -66,6 +67,23 @@ export interface OperationalQueryMetadata {
   completedAt: string;
   timeZone?: string;
   dateRange?: OperationalQueryDateRange;
+  sourceTruth?: OperationalQuerySourceTruth;
+}
+
+export interface OperationalQuerySourceTruth {
+  assessedAt: string;
+  status: "fresh" | "stale" | "unknown";
+  provenance: "tenant_integrations+integration_sync_checkpoints+external_refs";
+  sources: Array<{
+    integrationId: string;
+    capability: string;
+    provider: string;
+    state: string;
+    freshness: string;
+    asOf?: string;
+    unresolvedConflicts: number;
+    blockedReason?: string;
+  }>;
 }
 
 export interface OperationalQueryExecution {
@@ -107,6 +125,7 @@ export interface AnswerEvidence {
 export interface AnswerFreshness {
   status: "fresh" | "stale" | "unknown";
   observedAt: string;
+  sourceTruth?: OperationalQuerySourceTruth;
 }
 
 /** Browser/voice-safe answer contract. Raw read-model rows do not cross this seam. */
@@ -146,6 +165,9 @@ export interface FastReadOnlyRouterDeps {
   executeOperationalQuery?: ExecuteOperationalQuery;
   /** Explicit legacy test seam. It is adapted to the canonical money result shape. */
   cashCollections?: (tenantId: string) => Promise<CashCollections>;
+  /** Test/embedding seam. Production loads only local canonical source state; it
+   * never fans an operational query out to a remote provider. */
+  sourceTruth?: (tenantId: string, now?: Date) => Promise<TenantSourceTruthReport>;
   now?: () => Date;
 }
 
@@ -645,7 +667,50 @@ function dateRangeFromResult(result: OperationalQueryResult): { timeZone?: strin
   return { timeZone: value.timeZone, dateRange: { timeZone: value.timeZone, startLocalDate, endLocalDateInclusive, startAt: range.start, endAt: range.end } };
 }
 
-function normalizeCanonicalExecution(request: OperationalQueryRequest, raw: unknown, startedAt: string, completedAt: string, durationMs: number): OperationalQueryExecution {
+const QUERY_SOURCE_CAPABILITIES: Record<OperationalQueryIntent, string[]> = {
+  customer_lookup: ["crm"],
+  customer_cohort: ["crm"],
+  schedule_range: ["scheduling"],
+  money_summary: ["accounting", "payments"],
+  work_list: [],
+  inventory_status: ["inventory"],
+  agent_activity: ["communications", "crm"],
+  business_state: ["crm", "scheduling", "inventory", "accounting", "payments", "communications"],
+  company_context: ["crm", "scheduling", "accounting", "payments", "communications"],
+  party_lookup: ["crm"],
+  party_context: ["crm"],
+  team_roster: [],
+  party_availability: ["scheduling"],
+};
+
+function querySourceTruth(intent: OperationalQueryIntent, report: TenantSourceTruthReport, assessedAt: string): OperationalQuerySourceTruth {
+  const capabilities = new Set(QUERY_SOURCE_CAPABILITIES[intent]);
+  const sources = report.sources.filter((source) => capabilities.has(source.capability) && (
+    source.sourcePolicyConfigured
+    || source.syncScopes.length > 0
+    || !["native", "emulator", "dry_run"].includes(source.binding)
+  )).map((source) => ({
+    integrationId: source.integrationId,
+    capability: source.capability,
+    provider: source.binding,
+    state: source.state,
+    freshness: source.freshness,
+    ...(source.lastSuccessfulSyncAt || source.lastObservedAt ? { asOf: source.lastSuccessfulSyncAt ?? source.lastObservedAt } : {}),
+    unresolvedConflicts: source.unresolvedConflicts,
+    ...(source.blockedReason ? { blockedReason: source.blockedReason } : {}),
+  }));
+  const status = sources.length === 0 || sources.every((source) => source.state === "fresh") ? "fresh"
+    : sources.some((source) => ["blocked", "degraded"].includes(source.state) || ["stale", "expired"].includes(source.freshness)) ? "stale"
+      : "unknown";
+  return {
+    assessedAt,
+    status,
+    provenance: "tenant_integrations+integration_sync_checkpoints+external_refs",
+    sources,
+  };
+}
+
+function normalizeCanonicalExecution(request: OperationalQueryRequest, raw: unknown, startedAt: string, completedAt: string, durationMs: number, sourceTruth?: OperationalQuerySourceTruth): OperationalQueryExecution {
   const result = canonicalizeResult(request, raw, completedAt);
   const top = isRecord(raw) ? raw : {};
   const metadata = isRecord(top.metadata) ? top.metadata : {};
@@ -662,6 +727,7 @@ function normalizeCanonicalExecution(request: OperationalQueryRequest, raw: unkn
       completedAt,
       ...(dates.timeZone ? { timeZone: dates.timeZone } : {}),
       ...(dates.dateRange ? { dateRange: dates.dateRange } : {}),
+      ...(sourceTruth ? { sourceTruth } : {}),
     },
   };
 }
@@ -797,7 +863,13 @@ function answerForExecution(execution: OperationalQueryExecution): AnswerEnvelop
     display: { title: summary.title, facts: summary.facts.slice(0, 8) },
     evidence: [{ source: `operational_query:${execution.request.intent}`, ref: execution.metadata.queryId, timestamp: execution.result.asOf, kind: "CANONICAL" }],
     asOf: execution.result.asOf,
-    freshness: { status: "fresh", observedAt: execution.result.asOf },
+    freshness: {
+      status: execution.metadata.sourceTruth?.status ?? "fresh",
+      observedAt: execution.metadata.sourceTruth?.sources
+        .map((source) => source.asOf).filter((value): value is string => Boolean(value)).sort()[0]
+        ?? execution.result.asOf,
+      ...(execution.metadata.sourceTruth ? { sourceTruth: execution.metadata.sourceTruth } : {}),
+    },
     query: execution,
   };
 }
@@ -827,7 +899,21 @@ export function createFastReadOnlyRouter(deps: FastReadOnlyRouterDeps = {}): Fas
         raw = await (deps.executeOperationalQuery ?? canonicalExecuteOperationalQuery)(ctx.tenantId, request, executionOptions);
       }
       const completedAt = clock().toISOString();
-      return normalizeCanonicalExecution(request, raw, startedAt, completedAt, Math.max(0, Math.round(performance.now() - start)));
+      const sourceTruthLoader = deps.sourceTruth ?? (!deps.executeOperationalQuery && !deps.cashCollections ? tenantSourceTruthReport : undefined);
+      let sourceTruth: OperationalQuerySourceTruth | undefined;
+      if (sourceTruthLoader) {
+        try {
+          sourceTruth = querySourceTruth(request.intent, await sourceTruthLoader(ctx.tenantId, startedAtDate), completedAt);
+        } catch {
+          sourceTruth = {
+            assessedAt: completedAt,
+            status: "unknown",
+            provenance: "tenant_integrations+integration_sync_checkpoints+external_refs",
+            sources: [],
+          };
+        }
+      }
+      return normalizeCanonicalExecution(request, raw, startedAt, completedAt, Math.max(0, Math.round(performance.now() - start)), sourceTruth);
     },
     async route(instruction, ctx) {
       const decision = interpretOperationalQuery(instruction);

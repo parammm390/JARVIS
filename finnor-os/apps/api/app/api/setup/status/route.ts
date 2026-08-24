@@ -18,6 +18,7 @@ import {
   circuitSnapshot,
   resolveCapabilityBindingsForTenant,
   ownedCapabilitiesResolvingToEmulator,
+  tenantSourceTruthReport,
 } from "@finnor/tools";
 import { zepProviderStatus, embeddingsProviderStatus } from "@finnor/memory";
 import { secretProviderStatus } from "@finnor/security";
@@ -40,7 +41,7 @@ export async function GET(req: Request): Promise<Response> {
       .map((actionType) => ({ actionType, pluginName: registry.resolve(actionType)!.name }));
     descriptors.push({ actionType: PRICING_CATALOG_ACTION_TYPE, pluginName: "shared-pricing-catalog" });
 
-    const [actionTypes, ads, quickbooks, vapi, ghl, stripe, docusign, resend, pricingCatalog, phoneNumberRows, bindings] = await Promise.all([
+    const [actionTypes, ads, quickbooks, vapi, ghl, stripe, docusign, resend, pricingCatalog, phoneNumberRows, bindings, truth] = await Promise.all([
       scanActionTypeReadiness(ctx.tenantId, descriptors),
       testTenantAdsConnections(ctx.tenantId),
       testTenantQuickBooksConnection(ctx.tenantId),
@@ -58,6 +59,7 @@ export async function GET(req: Request): Promise<Response> {
         .from(tenantPhoneNumbers)
         .where(eq(tenantPhoneNumbers.tenantId, ctx.tenantId)),
       resolveCapabilityBindingsForTenant(ctx.tenantId),
+      tenantSourceTruthReport(ctx.tenantId),
     ]);
     // Line-item pricing now lives in price_book_items, not the domain_policies JSONB
     // blob scanActionTypeReadiness inspects — override the generic check for this one
@@ -90,7 +92,7 @@ export async function GET(req: Request): Promise<Response> {
       integrationsHealthy: Object.values(integrations).filter((h) => h.healthy === true).length,
       integrationsUnhealthy: Object.values(integrations).filter((h) => h.healthy === false).length,
       readyForProduction:
-        actionTypes.every((a) => a.status !== "unconfigured") && Object.values(integrations).every((h) => h.healthy !== false),
+        actionTypes.every((a) => a.status !== "unconfigured") && Object.values(integrations).every((h) => h.healthy !== false) && truth.ready,
     };
 
     const phoneRouting = { configured: phoneNumberRows.length > 0, numbers: phoneNumberRows };
@@ -139,7 +141,7 @@ export async function GET(req: Request): Promise<Response> {
       },
     };
 
-    return Response.json({ actionTypes, integrations, summary, phoneRouting, environment, circuitBreakers }, { headers: { "cache-control": "no-store" } });
+    return Response.json({ actionTypes, integrations, truth, summary, phoneRouting, environment, circuitBreakers }, { headers: { "cache-control": "no-store" } });
   } catch (err) {
     return errorResponse(err);
   }

@@ -6,7 +6,9 @@
 // gated phase per the blueprint's own rule).
 
 import { z } from "zod";
-import { withTenant, externalRefs } from "@finnor/db";
+import { invoices, withTenant } from "@finnor/db";
+import { and, eq } from "drizzle-orm";
+import { recordExternalReferenceAcknowledgement } from "@finnor/data-platform";
 import type { CapabilityContract, CapabilityBinding, RetryPolicy } from "@finnor/workflow-runtime";
 import { syncInvoiceToQuickBooks, quickbooksProviderStatus } from "../quickbooks";
 import { createStripePaymentLink, stripeProviderStatus } from "../stripe";
@@ -97,15 +99,30 @@ export const syncInvoiceQuickbooksBinding: CapabilityBinding<SyncInvoiceInput, S
     // objects. invoiceId is optional upstream (older callers may not pass it) — only
     // write a real ref when there's a real internal id to join against.
     if (input.invoiceId) {
-      await withTenant(input.tenantId, (db) =>
-        db
-          .insert(externalRefs)
-          .values({ tenantId: input.tenantId, entity: "invoice", internalId: input.invoiceId!, provider: "quickbooks", externalId: result.quickbooksInvoiceId })
-          .onConflictDoUpdate({
-            target: [externalRefs.tenantId, externalRefs.entity, externalRefs.internalId, externalRefs.provider],
-            set: { externalId: result.quickbooksInvoiceId, syncedAt: new Date() },
-          }),
-      );
+      if (!credentialContext.integration.id) throw new Error("QuickBooks mutation has no exact tenant integration/account binding");
+      await withTenant(input.tenantId, (db) => recordExternalReferenceAcknowledgement(db, {
+        tenantId: input.tenantId,
+        integrationId: credentialContext.integration.id!,
+        provider: "quickbooks",
+        canonicalEntity: "invoice",
+        canonicalEntityId: input.invoiceId!,
+        externalObjectType: "invoice",
+        externalId: result.quickbooksInvoiceId,
+        businessEffectId: runtime.__businessEffectId,
+      }));
+      const [invoice] = await withTenant(input.tenantId, (db) => db.select({ householdId: invoices.householdId }).from(invoices).where(and(
+        eq(invoices.tenantId, input.tenantId), eq(invoices.id, input.invoiceId!),
+      )).limit(1));
+      if (invoice?.householdId) await withTenant(input.tenantId, (db) => recordExternalReferenceAcknowledgement(db, {
+        tenantId: input.tenantId,
+        integrationId: credentialContext.integration.id!,
+        provider: "quickbooks",
+        canonicalEntity: "household",
+        canonicalEntityId: invoice.householdId,
+        externalObjectType: "customer",
+        externalId: result.quickbooksCustomerId,
+        businessEffectId: runtime.__businessEffectId,
+      }));
     }
     return { externalInvoiceId: result.quickbooksInvoiceId, externalCustomerId: result.quickbooksCustomerId };
   },
@@ -138,15 +155,17 @@ export const stripeCreatePaymentLinkBinding: CapabilityBinding<CreatePaymentLink
       ...(runtime.__authProfileRef ? { authProfileRef: runtime.__authProfileRef } : {}),
     });
     const result = await withCircuitBreaker("stripe", () => createStripePaymentLink(input, credentialContext), { tenantId: input.tenantId });
-    await withTenant(input.tenantId, (db) =>
-      db
-        .insert(externalRefs)
-        .values({ tenantId: input.tenantId, entity: "invoice", internalId: input.invoiceId, provider: "stripe", externalId: result.linkId })
-        .onConflictDoUpdate({
-          target: [externalRefs.tenantId, externalRefs.entity, externalRefs.internalId, externalRefs.provider],
-          set: { externalId: result.linkId, syncedAt: new Date() },
-        }),
-    );
+    if (!credentialContext.integration.id) throw new Error("Stripe mutation has no exact tenant integration/account binding");
+    await withTenant(input.tenantId, (db) => recordExternalReferenceAcknowledgement(db, {
+      tenantId: input.tenantId,
+      integrationId: credentialContext.integration.id!,
+      provider: "stripe",
+      canonicalEntity: "invoice",
+      canonicalEntityId: input.invoiceId,
+      externalObjectType: "checkout_session",
+      externalId: result.linkId,
+      businessEffectId: runtime.__businessEffectId,
+    }));
     return result;
   },
 };

@@ -132,6 +132,24 @@ const IntegrationSchema = z.object({
   capability: CapabilitySchema,
   binding: z.string().trim().min(1).max(64),
   mode: z.enum(["real", "sandbox", "emulator"]),
+  /** Stable, tenant-scoped identity bindings. These are references to the
+   * applicationAccounts/authProfiles collections, never provider credentials. */
+  applicationAccountKey: ManifestKeySchema.optional(),
+  authProfileRef: z.string().trim().regex(/^[a-z0-9][a-z0-9_-]{1,126}[a-z0-9]$/).optional(),
+  sourcePolicy: z.object({
+    default: z.enum(["finnor", "external", "manual"]),
+    fields: z.record(z.enum(["finnor", "external", "manual"])).optional(),
+    direction: z.enum(["inbound", "outbound", "bidirectional_governed"]),
+  }).strict().optional(),
+  freshnessPolicy: z.object({
+    scope: z.string().trim().min(1).max(120),
+    maxAgeSeconds: z.number().int().positive().max(31_536_000),
+    criticality: z.enum(["informational", "operational", "consequential"]),
+    staleBehavior: z.enum(["allow_with_warning", "refresh_then_degrade", "refresh_then_block"]),
+    requireFreshBeforeEffect: z.boolean().default(false),
+  }).strict().optional(),
+  syncScopes: z.array(z.string().trim().min(1).max(120)).default([]),
+  outcomePacks: z.array(z.string().trim().regex(/^[a-z0-9][a-z0-9_-]{0,119}$/)).default([]),
   config: z.record(z.unknown()).default({}),
   // Phase 1 descriptive references remain accepted for manifest compatibility.
   // Phase 2's executable provider reference is the typed `credential` field below.
@@ -506,6 +524,29 @@ export const ClientManifestSchema = z.object({
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["authProfiles", index, "applicationAccountKey"], message: "auth profile must reference a declared application account" });
     }
     validatePrincipal(profile.principal, ["authProfiles", index, "principal"]);
+  }
+  for (const [index, integration] of manifest.integrations.entries()) {
+    const account = integration.applicationAccountKey
+      ? (manifest.applicationAccounts ?? []).find((candidate) => candidate.key === integration.applicationAccountKey)
+      : undefined;
+    const profile = integration.authProfileRef
+      ? (manifest.authProfiles ?? []).find((candidate) => candidate.ref === integration.authProfileRef)
+      : undefined;
+    if (integration.applicationAccountKey && !account) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["integrations", index, "applicationAccountKey"], message: "integration must reference a declared application account" });
+    }
+    if (integration.authProfileRef && !profile) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["integrations", index, "authProfileRef"], message: "integration must reference a declared auth profile" });
+    }
+    if (account && account.provider !== integration.binding) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["integrations", index, "binding"], message: "integration binding must match its application account provider" });
+    }
+    if (profile && integration.applicationAccountKey && profile.applicationAccountKey !== integration.applicationAccountKey) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["integrations", index, "authProfileRef"], message: "integration auth profile must belong to its application account" });
+    }
+    if (integration.mode === "emulator" && integration.outcomePacks.length > 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["integrations", index, "outcomePacks"], message: "emulator integrations cannot certify live outcome packs" });
+    }
   }
   const validateCredential = (
     credential: z.infer<typeof CredentialReferenceSchema> | z.infer<typeof AuthProfileCredentialReferenceSchema> | undefined,

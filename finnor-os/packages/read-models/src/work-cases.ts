@@ -50,7 +50,7 @@ export type DomainActionStatus =
   | "blocked_integration_unavailable";
 
 export type WorkflowRunStatus = "running" | "completed" | "failed" | "compensating" | "compensated" | "paused" | "cancelled" | "escalated";
-export type WorkflowStepStatus = "pending" | "leased" | "completed" | "failed" | "compensating" | "compensated";
+export type WorkflowStepStatus = "pending" | "leased" | "waiting_observation" | "completed" | "failed" | "compensating" | "compensated";
 export type InstructionPhase =
   | "received"
   | "context_retrieved"
@@ -401,6 +401,7 @@ export function projectWorkflowStepStatus(status: WorkflowStepStatus): WorkStatu
     case "compensating":
       return "Working";
     case "pending":
+    case "waiting_observation":
       return "Waiting";
     case "completed":
     case "compensated":

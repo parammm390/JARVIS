@@ -13,7 +13,7 @@
 
 import { createHash, randomUUID } from "node:crypto";
 import { VapiWebhookSchema } from "@finnor/policy-schema";
-import { adminDb, withTenant, domainActions, domainPolicies, actionLog, tenantPhoneNumbers, getPool, households, communicationsLog, works, receiveWork, users, workAggregate, ingestIntegrationEventTx, type Db } from "@finnor/db";
+import { adminDb, withTenant, domainActions, domainPolicies, actionLog, tenantPhoneNumbers, getPool, households, communicationsLog, works, receiveWork, users, workAggregate, ingestIntegrationEventTx, externalOperations, integrationOperations, enqueueJob, type Db } from "@finnor/db";
 import { createTask, persistCall, recordBusinessEvent } from "@finnor/data-platform";
 import { ensureSecretsLoaded, resolveTenantCredentialContext } from "@finnor/security";
 import { parseSpokenDecision, diagnoseFailure, resolveProviderForPurpose } from "@finnor/orchestration";
@@ -28,7 +28,7 @@ import {
   markConfirmationsResolved,
   createHandoff,
 } from "@finnor/voice-os";
-import { and, desc, eq, inArray, notInArray } from "drizzle-orm";
+import { and, desc, eq, inArray, notInArray, sql } from "drizzle-orm";
 import { getOrchestrator } from "../../../../lib/orchestrator";
 import { checkAndRecordReceipt } from "../../../../lib/webhook-replay";
 import { verifyTimestampedHmacSignature } from "../../../../lib/verify-hmac-signature";
@@ -749,6 +749,33 @@ export async function POST(req: Request): Promise<Response> {
       }
       return event;
     });
+
+    if (msg.call?.id) {
+      const waiting = await withTenant(tenantId, async (db) => ({
+        external: await db.select({ actionId: externalOperations.domainActionId, operationKey: externalOperations.operationKey }).from(externalOperations).where(and(
+          eq(externalOperations.tenantId, tenantId),
+          eq(externalOperations.provider, "vapi"),
+          eq(externalOperations.verificationStatus, "awaiting_observation"),
+          eq(sql`${externalOperations.response}->>'callId'`, msg.call!.id!),
+        )),
+        capability: await db.select({ id: integrationOperations.id }).from(integrationOperations).where(and(
+          eq(integrationOperations.tenantId, tenantId),
+          eq(integrationOperations.provider, "vapi"),
+          eq(integrationOperations.verificationStatus, "awaiting_observation"),
+          eq(sql`${integrationOperations.response}->>'callId'`, msg.call!.id!),
+        )),
+      }));
+      for (const operation of waiting.external) await enqueueJob(
+        "observe_external_effect",
+        { tenantId, domainActionId: operation.actionId, externalOperationKey: operation.operationKey, attempt: 99 },
+        `observe-vapi-event:${tenantId}:${msg.call.id}:${operation.operationKey}`,
+      );
+      for (const operation of waiting.capability) await enqueueJob(
+        "observe_external_effect",
+        { tenantId, integrationOperationId: operation.id, attempt: 99 },
+        `observe-vapi-event:${tenantId}:${msg.call.id}:${operation.id}`,
+      );
+    }
 
     // A customer answering an outbound campaign/payment/service call is never the
     // authenticated dealer. Persist the call and its bounded outcome, then stop: the

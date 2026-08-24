@@ -17,6 +17,7 @@ export * from "./execution-projection";
 export * from "./causal-replay";
 export * from "./business-effects";
 export * from "./objectives";
+export * from "./source-truth";
 
 export type Role = "owner" | "dispatcher" | "technician";
 

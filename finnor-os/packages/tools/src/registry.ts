@@ -7,6 +7,7 @@ import { wrappedCall, DEFAULT_RETRY } from "./wrap";
 import { createHash } from "node:crypto";
 import { ensureSecretsLoaded, minimizeExternalInput } from "@finnor/security";
 import { claimExternalOperation, recordExternalOperationResult, awaitExternalOperationResolution, markExternalOperationUnknown } from "./idempotent-call";
+import { resolveCapabilityBindingsForTenant } from "./binding-resolution";
 import { initObservability, Sentry } from "./observability";
 
 /** Trusted execution metadata injected by an action/workflow boundary. It is never
@@ -205,13 +206,20 @@ export class ScopedToolRegistry extends ToolRegistry {
 
   private async callForOperation(name: string, input: Record<string, unknown>, operationKey: string): Promise<ToolCallResult> {
     const requestHash = hashInput(input);
+    const declaredProvider = this.base.integrationFor(name) ?? undefined;
+    const provider = declaredProvider === "tenant-routed"
+      ? name.startsWith("vapi_")
+        ? (await resolveCapabilityBindingsForTenant(this.ctx.tenantId)).communications.mode
+        : (await resolveCapabilityBindingsForTenant(this.ctx.tenantId)).crm.mode
+      : declaredProvider;
     const claim = await claimExternalOperation(
       this.ctx.tenantId,
       this.ctx.domainActionId,
       operationKey,
       requestHash,
-      this.base.integrationFor(name) ?? undefined,
+      provider,
       this.ctx.businessEffectId,
+      this.ctx.authProfileRef,
     );
     if (!claim.claimed) {
       if (claim.existing.requestHash !== requestHash) {
@@ -249,13 +257,21 @@ export class ScopedToolRegistry extends ToolRegistry {
       ...(this.ctx.businessEffectId ? { businessEffectId: this.ctx.businessEffectId } : {}),
       ...(this.ctx.businessEffectHash ? { businessEffectHash: this.ctx.businessEffectHash } : {}),
     });
-    await recordExternalOperationResult(
+    const operation = await recordExternalOperationResult(
       this.ctx.tenantId,
       this.ctx.domainActionId,
       operationKey,
       result.ok ? "succeeded" : result.errorKind === "unknown_outcome" ? "unknown" : "failed",
       result.ok ? result.output : { ...result.output, ...(result.error ? { error: result.error } : {}), ...(result.errorKind ? { errorKind: result.errorKind } : {}) },
     );
+    if (result.ok && operation?.verificationStatus === "awaiting_observation" && this.ctx.businessEffectId) {
+      const { enqueueJob } = await import("@finnor/db");
+      await enqueueJob(
+        "observe_external_effect",
+        { tenantId: this.ctx.tenantId, externalOperationKey: operation.operationKey, domainActionId: this.ctx.domainActionId, attempt: 1 },
+        `observe-effect:${this.ctx.tenantId}:${this.ctx.domainActionId}:${operation.operationKey}:1`,
+      );
+    }
     return result;
   }
 }

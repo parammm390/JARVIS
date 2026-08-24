@@ -6,7 +6,7 @@
 // registry (STEP_HANDLERS) rather than hand-written if-branches, since Phase 4-6's
 // vertical workflows add many more step types on top of Phase 2's original two.
 
-import { claimStep, completeStep, failStep, advanceWorkflow, recoverStaleSteps, executeCapability, openReconciliationCase } from "@finnor/workflow-runtime";
+import { claimStep, completeStep, failStep, advanceWorkflow, recoverStaleSteps, executeCapability, openReconciliationCase, awaitStepObservation } from "@finnor/workflow-runtime";
 import type { CapabilityContract, CapabilityBinding } from "@finnor/workflow-runtime";
 import { businessEffects, commands, domainActions, integrationOperations, reconciliationCases, reconcileWorkStatus, workflowRuns, workflowSteps, withTenant } from "@finnor/db";
 import { and, eq, sql } from "drizzle-orm";
@@ -436,11 +436,28 @@ export const runWorkflowStep: JobHandler = async (payload) => {
       __identityPurpose: typeof originPayload.purpose === "string" ? originPayload.purpose : origin?.actionType ?? claimed.stepType,
       ...(typeof originPayload.communicationIdentityId === "string" ? { __communicationIdentityId: originPayload.communicationIdentityId } : {}),
       ...(typeof originPayload.authProfileRef === "string" ? { __authProfileRef: originPayload.authProfileRef } : {}),
+      ...(claimed.businessEffectId ? { __businessEffectId: claimed.businessEffectId } : {}),
     };
     const result = await executeCapability(tenantId, stepId, entry.contract, await entry.resolveBinding(tenantId), input);
     if (!result.ok) {
+      if (result.unknownOutcome) {
+        await withTenant(tenantId, async (db) => {
+          await db.update(workflowSteps).set({ executionState: "reconciling", leaseExpiresAt: null, updatedAt: new Date() }).where(and(eq(workflowSteps.tenantId, tenantId), eq(workflowSteps.id, stepId)));
+          if (claimed.businessEffectId) await db.update(businessEffects).set({ status: "reconciliation_required" }).where(and(eq(businessEffects.tenantId, tenantId), eq(businessEffects.id, claimed.businessEffectId)));
+          if (claimed.domainActionId) await db.update(domainActions).set({ status: "needs_human_review", executionStartedAt: null }).where(and(eq(domainActions.tenantId, tenantId), eq(domainActions.id, claimed.domainActionId)));
+        });
+        return;
+      }
       await withTenant(tenantId, (db) => db.update(workflowSteps).set({ executionState: "failed_before_effect" }).where(and(eq(workflowSteps.tenantId, tenantId), eq(workflowSteps.id, stepId))));
       await failStep(tenantId, stepId, result.error);
+      return;
+    }
+    if (result.awaitingObservation) {
+      await awaitStepObservation(tenantId, stepId, {
+        providerAcknowledged: true,
+        integrationOperationId: result.integrationOperationId,
+        output: result.output as Record<string, unknown>,
+      });
       return;
     }
     await withTenant(tenantId, (db) => db.update(workflowSteps).set({ executionState: "verified" }).where(and(eq(workflowSteps.tenantId, tenantId), eq(workflowSteps.id, stepId))));

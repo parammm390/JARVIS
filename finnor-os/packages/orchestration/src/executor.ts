@@ -215,6 +215,8 @@ export class GatedExecutor implements Executor {
     const finalStatus =
       effectVerification?.state === "divergent" || effectVerification?.state === "reconciliation_required" || result.errorKind === "unknown_outcome"
         ? "needs_human_review"
+        : effectVerification?.state === "partially_verified"
+          ? "executing"
         : result.status === "success"
         ? "completed"
         : result.status === "integration_unavailable"

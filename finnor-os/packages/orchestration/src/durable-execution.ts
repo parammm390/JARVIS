@@ -23,6 +23,7 @@ import {
 } from "@finnor/tools";
 import {
   advanceWorkflow,
+  awaitStepObservation,
   completeStep,
   failStep,
   openReconciliationCase,
@@ -267,6 +268,9 @@ async function recordSemanticOperation(
   await withTenant(loaded.action.tenantId, (db) => db.update(integrationOperations).set({
     status,
     response: { status: result.status, output: result.output, expected: result.expected ?? null, error: result.error ?? null, errorKind: result.errorKind ?? null },
+    providerAcknowledgedAt: status === "succeeded" && loaded.effect.operation.external ? new Date() : null,
+    verificationStatus: status === "succeeded" && loaded.effect.operation.external ? "awaiting_observation"
+      : status === "unknown" ? "unknown" : "not_required",
     updatedAt: new Date(),
   }).where(and(
     eq(integrationOperations.workflowStepId, loaded.step.id),
@@ -437,20 +441,32 @@ export async function executeAuthorizedEffectStep(
   }
 
   const verification = await recordBusinessEffectOutcome(tenantId, loaded.effect, result);
+  const awaitingExternalObservation = loaded.effect.operation.external && verification.state === "partially_verified";
   const finalStatus = verification.state === "divergent" || verification.state === "reconciliation_required" || result.errorKind === "unknown_outcome"
     ? "needs_human_review"
-    : result.status === "success" ? "completed"
+    : awaitingExternalObservation ? "executing"
+      : result.status === "success" ? "completed"
       : result.status === "integration_unavailable" ? "blocked_integration_unavailable" : "failed";
   await withTenant(tenantId, async (db) => {
     await db.update(workflowSteps).set({
       executionState: verification.state === "reconciliation_required" ? "reconciling"
-        : result.status === "success" ? "verified"
+        : awaitingExternalObservation ? "awaiting_observation"
+          : result.status === "success" ? "verified"
           : result.errorKind === "unknown_outcome" ? "failed_after_possible_effect" : "failed_before_effect",
     }).where(and(eq(workflowSteps.tenantId, tenantId), eq(workflowSteps.id, stepId)));
     await db.update(domainActions).set({ status: finalStatus, executionStartedAt: null })
       .where(and(eq(domainActions.tenantId, tenantId), eq(domainActions.id, loaded.action.id), eq(domainActions.status, "executing")));
   });
   if (result.status === "success") {
+    if (awaitingExternalObservation) {
+      await awaitStepObservation(tenantId, stepId, {
+        providerAcknowledged: true,
+        output: result.output,
+        verification,
+      });
+      if (loaded.action.workId) await reconcileWorkStatus(tenantId, loaded.action.workId);
+      return;
+    }
     await completeStep(tenantId, stepId, { status: result.status, output: result.output, verification });
     const advanced = await advanceWorkflowForAction(tenantId, loaded.action.actionType, loaded.effect.delta.values).catch(() => []);
     if (advanced.length > 0) await appendEpisode(tenantId, loaded.action.id, "workflow", {}, { advanced });
