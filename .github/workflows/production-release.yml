@@ -82,6 +82,8 @@ jobs:
       DATABASE_URL: postgres://finnor:finnor@localhost:5432/finnor
       FINNOR_CHAOS_TEST_CONTEXT: "1"
       FINNOR_RELEASE_SOURCE: github-actions
+      FINNOR_RELEASE_PROFILE: production
+      FINNOR_ENVIRONMENT: production
       NODE_ENV: test
       CERTIFICATION_SEED_ALLOWED: "1"
       CERTIFICATION_TEST_EMAILS: certification@example.invalid
