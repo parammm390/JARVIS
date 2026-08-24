@@ -169,5 +169,5 @@ const result = {
 if (outputFile) {
   writeFileSync(resolve(outputFile), `${JSON.stringify(result, null, 2)}\n`)
 }
-console.log(`FINNOR_DEPLOYMENT_URL=${deploymentUrl}`)
+console.log(`\nFINNOR_DEPLOYMENT_URL=${deploymentUrl}`)
 console.log(JSON.stringify(result, null, 2))
