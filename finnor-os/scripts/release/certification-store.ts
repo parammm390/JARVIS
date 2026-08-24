@@ -7,13 +7,16 @@ import {
   CORE_CERTIFICATION_SCHEMA,
   CORE_CERTIFICATION_SUITE_VERSION,
   FINAL_CERTIFICATION_SCHEMA,
+  OUTCOME_PACK_CERTIFICATION_SCHEMA,
   assertCoreCertificationIntegrity,
   assertFinalCertificationIntegrity,
+  assertOutcomePackCertificationIntegrity,
   stableStringify,
   type ClientCertification,
   type ClientRelease,
   type CoreCertification,
   type FinalCertification,
+  type OutcomePackCertificationArtifact,
 } from "./certification-model";
 
 export interface StoredArtifact<T> {
@@ -100,6 +103,12 @@ export class CertificationArtifactStore {
     return writeExclusive(join(this.root, "final", `${artifact.certificationId}.json`), artifact);
   }
 
+  async writeOutcomePackCertification(artifact: OutcomePackCertificationArtifact): Promise<StoredArtifact<OutcomePackCertificationArtifact>> {
+    if (artifact.schema !== OUTCOME_PACK_CERTIFICATION_SCHEMA) throw new Error("Unexpected Outcome Pack certification schema");
+    assertOutcomePackCertificationIntegrity(artifact);
+    return writeExclusive(join(this.root, "outcome-packs", artifact.tenantId, artifact.packId, `${artifact.certificationId}.json`), artifact);
+  }
+
   async readFinalCertification(path: string): Promise<FinalCertification> {
     const artifact = JSON.parse(await readFile(path, "utf8")) as FinalCertification;
     if (artifact.schema !== FINAL_CERTIFICATION_SCHEMA) throw new Error(`${path} is not a FINNOR final certification`);
@@ -142,6 +151,35 @@ export async function persistFinalCertification(pool: pg.Pool, artifact: FinalCe
       artifact.status, artifact.evidenceHash, JSON.stringify(artifact), artifact.certifiedAt],
   );
   await assertDatabaseArtifact(pool, "final_certifications", "certification_id", artifact.certificationId, artifact);
+}
+
+export async function persistOutcomePackCertification(pool: pg.Pool, artifact: OutcomePackCertificationArtifact): Promise<void> {
+  assertOutcomePackCertificationIntegrity(artifact);
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("SET LOCAL search_path=finnor_os,public");
+    await client.query("SET LOCAL row_security=off");
+    await client.query(
+      `INSERT INTO finnor_os.outcome_pack_certifications
+        (tenant_id,pack_id,pack_version,level,status,fingerprint,dependency_versions,evidence,
+         sample_size,critical_violations,certified_at,valid_until)
+       VALUES($1::uuid,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9,$10,$11::timestamptz,$12::timestamptz)
+       ON CONFLICT(tenant_id,pack_id,pack_version,level,fingerprint) DO UPDATE SET
+         status=EXCLUDED.status,evidence=EXCLUDED.evidence,sample_size=EXCLUDED.sample_size,
+         critical_violations=EXCLUDED.critical_violations,certified_at=EXCLUDED.certified_at,
+         valid_until=EXCLUDED.valid_until,suspended_at=NULL,suspension_reason=NULL`,
+      [artifact.tenantId, artifact.packId, artifact.packVersion, artifact.level, artifact.status, artifact.fingerprint,
+        JSON.stringify({ suiteVersion: artifact.suiteVersion }), JSON.stringify(artifact), artifact.sampleSize,
+        artifact.criticalViolations, artifact.certifiedAt, artifact.validUntil],
+    );
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function assertClientReleaseRollbackReferences(pool: pg.Pool, release: ClientRelease): Promise<void> {

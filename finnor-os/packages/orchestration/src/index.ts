@@ -88,6 +88,8 @@ export * from "./durable-execution";
 export * from "./instruction-routing";
 export * from "./objective-success";
 export * from "./external-observation";
+export * from "./outcome-packs";
+export * from "./autonomy";
 
 const EXTERNAL_RESEARCH_ACTION_TYPES = new Set(["search_web", "scan_competitors", "check_business_reviews"]);
 

@@ -8,7 +8,7 @@
     "requireCleanWorktree": true
   },
   "release": {
-    "requiredMigrationHead": "0099_live_company_twin_truth_layer.sql",
+  "requiredMigrationHead": "0100_certified_outcome_packs_progressive_autonomy.sql",
     "metadata": [
       "FINNOR_COMMIT_SHA",
       "FINNOR_BUILD_ID",

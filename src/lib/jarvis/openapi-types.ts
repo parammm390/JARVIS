@@ -538,6 +538,62 @@ export interface paths {
                                 count: number;
                             };
                         };
+                        successCondition?: {
+                            /** @constant */
+                            version: 1;
+                            statement: string;
+                            /** @constant */
+                            mode: "all";
+                            /** @constant */
+                            source: "explicit";
+                            criteria: ({
+                                /** @constant */
+                                kind: "no_open_execution";
+                            } | {
+                                /** @constant */
+                                kind: "all_objective_effects_verified";
+                                minimumCount: number;
+                            } | {
+                                /** @constant */
+                                kind: "canonical_query";
+                                request: {
+                                    [key: string]: unknown;
+                                };
+                                assertion: {
+                                    path: (string | number)[];
+                                    /** @enum {string} */
+                                    operator: "exists" | "not_exists" | "eq" | "not_eq" | "gte" | "lte" | "contains" | "array_contains";
+                                    expected?: unknown;
+                                };
+                            } | {
+                                /** @constant */
+                                kind: "matched_wait";
+                                minimumCount: number;
+                                eventType?: string;
+                            } | {
+                                /** @constant */
+                                kind: "delegation_state";
+                                minimumCount: number;
+                                /** @enum {string} */
+                                requiredStatus: "acknowledged" | "accepted" | "completed";
+                            } | {
+                                /** @constant */
+                                kind: "computer_run_state";
+                                minimumCount: number;
+                                /** @constant */
+                                requiredStatus: "succeeded";
+                                evidenceRequired: boolean;
+                            } | {
+                                /** @constant */
+                                kind: "decision_evidence";
+                                minimumCount: number;
+                                accepted: ("canonical_query" | "business_effect" | "matched_event" | "delegation" | "computer_run")[];
+                            } | {
+                                /** @constant */
+                                kind: "manual_verification";
+                                reason: string;
+                            })[];
+                        };
                         budgets?: {
                             maxSteps?: number;
                             maxActions?: number;
@@ -574,6 +630,393 @@ export interface paths {
                 };
                 /** @description Bad auth */
                 401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outcome-packs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the five certified outcome contracts, tenant operating state, and evidence-derived autonomy readiness */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Definitions, settings, certifications, active grants, and explicit readiness gates */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Bad auth */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        /** Accept responsibility for one versioned Outcome Pack on the existing durable Objective controller */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        packId: "lead_to_verified_water_test_booking" | "stuck_installation_service_resolution" | "overdue_receivable_collection" | "service_due_lifecycle" | "general_operator_objective";
+                        input: {
+                            [key: string]: unknown;
+                        };
+                        /**
+                         * @default console
+                         * @enum {string}
+                         */
+                        channel?: "voice" | "text" | "console";
+                        sessionId?: string;
+                        /** Format: uuid */
+                        instructionId?: string;
+                        /** Format: uuid */
+                        workId?: string;
+                        idempotencyKey?: string;
+                        activeContext?: {
+                            /** @constant */
+                            version: 1;
+                            /** Format: date-time */
+                            capturedAt: string;
+                            /** @enum {string} */
+                            source: "voice" | "text" | "console";
+                            activeWork?: {
+                                /** Format: uuid */
+                                workId: string;
+                            };
+                            focusedEntity?: {
+                                /** @enum {string} */
+                                entityType: "household" | "contact" | "user" | "technician" | "equipment" | "service_visit" | "maintenance_agreement" | "lead" | "opportunity" | "quote" | "proposal" | "work_order" | "appointment" | "invoice" | "payment" | "conversation" | "call" | "message" | "communication" | "document" | "task" | "work" | "domain_action" | "workflow_run" | "workflow_step" | "business_operation" | "business_operation_target" | "decision_receipt" | "business_event" | "org_unit" | "tenant_location" | "external_organization" | "external_contact" | "delegation" | "acknowledgement_request" | "communication_delivery" | "internal_event" | "document_share" | "inventory_item" | "computer_run";
+                                /** Format: uuid */
+                                entityId: string;
+                            };
+                            /** @default [] */
+                            selectedEntities?: {
+                                /** @enum {string} */
+                                entityType: "household" | "contact" | "user" | "technician" | "equipment" | "service_visit" | "maintenance_agreement" | "lead" | "opportunity" | "quote" | "proposal" | "work_order" | "appointment" | "invoice" | "payment" | "conversation" | "call" | "message" | "communication" | "document" | "task" | "work" | "domain_action" | "workflow_run" | "workflow_step" | "business_operation" | "business_operation_target" | "decision_receipt" | "business_event" | "org_unit" | "tenant_location" | "external_organization" | "external_contact" | "delegation" | "acknowledgement_request" | "communication_delivery" | "internal_event" | "document_share" | "inventory_item" | "computer_run";
+                                /** Format: uuid */
+                                entityId: string;
+                            }[];
+                            /** @default [] */
+                            excludedEntities?: {
+                                /** @enum {string} */
+                                entityType: "household" | "contact" | "user" | "technician" | "equipment" | "service_visit" | "maintenance_agreement" | "lead" | "opportunity" | "quote" | "proposal" | "work_order" | "appointment" | "invoice" | "payment" | "conversation" | "call" | "message" | "communication" | "document" | "task" | "work" | "domain_action" | "workflow_run" | "workflow_step" | "business_operation" | "business_operation_target" | "decision_receipt" | "business_event" | "org_unit" | "tenant_location" | "external_organization" | "external_contact" | "delegation" | "acknowledgement_request" | "communication_delivery" | "internal_event" | "document_share" | "inventory_item" | "computer_run";
+                                /** Format: uuid */
+                                entityId: string;
+                            }[];
+                            surface: {
+                                /** @enum {string} */
+                                id: "home" | "customers" | "money" | "work" | "schedule" | "agents";
+                                route?: string;
+                                /** @enum {string} */
+                                spatialState?: "canvas" | "detail" | "list" | "map" | "timeline";
+                            };
+                            /** @default [] */
+                            filters?: {
+                                field: string;
+                                /** @enum {string} */
+                                operator: "eq" | "neq" | "in" | "not_in" | "gte" | "lte" | "contains";
+                                value: string | number | boolean | string[];
+                            }[];
+                            timeContext?: {
+                                /** Format: date-time */
+                                start?: string;
+                                /** Format: date-time */
+                                end?: string;
+                                timezone?: string;
+                            };
+                            cohort?: {
+                                /** @constant */
+                                kind: "work_query_execution";
+                                /** Format: uuid */
+                                executionId: string;
+                                /** @constant */
+                                entityType: "household";
+                                /** @constant */
+                                queryIntent: "customer_cohort";
+                                count: number;
+                            };
+                        };
+                        budgets?: {
+                            maxSteps?: number;
+                            maxActions?: number;
+                            maxQueries?: number;
+                            maxPlannerFailures?: number;
+                            maxConsecutiveNoProgress?: number;
+                            /** Format: date-time */
+                            deadlineAt?: string;
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description Pack, Work, and Objective persisted and first iteration queued */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid pack input or disabled pack */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Bad auth */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outcome-packs/grants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List tenant-scoped progressive-autonomy grants and their current status */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Current and historical exact-scope grants */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Bad auth */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Owner authority required */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        /** Create one narrow, expiring autonomy grant only after deterministic readiness passes */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        packId: "lead_to_verified_water_test_booking" | "stuck_installation_service_resolution" | "overdue_receivable_collection" | "service_due_lifecycle" | "general_operator_objective";
+                        packVersion: number;
+                        scope: {
+                            effectClasses: ("internal_draft" | "internal_write" | "operational_change" | "financial_write" | "external_side_effect" | "external_spend" | "batch_external" | "durable_workflow")[];
+                            resources: {
+                                type: string;
+                                ids?: string[];
+                            }[];
+                            principal: string;
+                            providers: {
+                                provider: string;
+                                /** Format: uuid */
+                                applicationAccountId?: string;
+                            }[];
+                            maxAmountUsd: number | null;
+                            /** @enum {string} */
+                            maxRisk: "low" | "medium" | "high";
+                            /** Format: date-time */
+                            validFrom: string;
+                            /** Format: date-time */
+                            expiresAt: string;
+                            policyVersion: number | null;
+                            authorityRevision: number;
+                            certificationFingerprint: string;
+                            /** Format: date-time */
+                            reviewAfter: string;
+                        };
+                        reason: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Grant persisted */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid scope or readiness not earned */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Owner authority required */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outcome-packs/grants/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke an autonomy grant and prevent all future uncommitted effects that depended on it */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        reason: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Grant revoked */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Owner authority required */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Grant not found in tenant */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outcome-packs/control": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Enable or disable an Outcome Pack; disabling pauses active runs and suspends grants */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        packId: "lead_to_verified_water_test_booking" | "stuck_installation_service_resolution" | "overdue_receivable_collection" | "service_due_lifecycle" | "general_operator_objective";
+                        enabled: boolean;
+                        reason: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Tenant pack operating state updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Owner authority required */
+                403: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -977,12 +1420,75 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Pending actions */
+                /** @description Pending actions with their exact frozen Business Effect */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": {
+                            actions: ({
+                                /** Format: uuid */
+                                id: string;
+                                actionType: string;
+                                summary: string | null;
+                                payload: {
+                                    [key: string]: unknown;
+                                };
+                                status: string;
+                                businessEffect: ({
+                                    /** Format: uuid */
+                                    id: string;
+                                    /** @constant */
+                                    schemaVersion: 1;
+                                    semanticHash: string;
+                                    scopeHash: string;
+                                    operation: {
+                                        name: string;
+                                        class: string;
+                                        external: boolean;
+                                    };
+                                    targets: {
+                                        kind: string;
+                                        type: string;
+                                        id: string;
+                                        sourcePath?: string;
+                                    }[];
+                                    bindings: {
+                                        [key: string]: unknown;
+                                    }[];
+                                    before: {
+                                        [key: string]: unknown;
+                                    }[];
+                                    delta: {
+                                        operation: string;
+                                        values: {
+                                            [key: string]: unknown;
+                                        };
+                                    };
+                                    expected: {
+                                        [key: string]: unknown;
+                                    };
+                                    authority: {
+                                        [key: string]: unknown;
+                                    };
+                                    approval: {
+                                        required: boolean;
+                                        typedConfirmation: boolean;
+                                        summary: string;
+                                    };
+                                    provenance: {
+                                        [key: string]: unknown;
+                                    };
+                                } & {
+                                    [key: string]: unknown;
+                                }) | null;
+                                businessEffectStatus: string | null;
+                            } & {
+                                [key: string]: unknown;
+                            })[];
+                        };
+                    };
                 };
                 /** @description Bad auth */
                 401: {
@@ -3174,6 +3680,9 @@ export interface paths {
                         command: "interrupt";
                     } | {
                         /** @constant */
+                        command: "cancel";
+                    } | {
+                        /** @constant */
                         command: "redirect";
                         objective: string;
                         /**
@@ -3184,6 +3693,62 @@ export interface paths {
                         /** Format: uuid */
                         instructionId?: string;
                         idempotencyKey?: string;
+                        successCondition?: {
+                            /** @constant */
+                            version: 1;
+                            statement: string;
+                            /** @constant */
+                            mode: "all";
+                            /** @constant */
+                            source: "explicit";
+                            criteria: ({
+                                /** @constant */
+                                kind: "no_open_execution";
+                            } | {
+                                /** @constant */
+                                kind: "all_objective_effects_verified";
+                                minimumCount: number;
+                            } | {
+                                /** @constant */
+                                kind: "canonical_query";
+                                request: {
+                                    [key: string]: unknown;
+                                };
+                                assertion: {
+                                    path: (string | number)[];
+                                    /** @enum {string} */
+                                    operator: "exists" | "not_exists" | "eq" | "not_eq" | "gte" | "lte" | "contains" | "array_contains";
+                                    expected?: unknown;
+                                };
+                            } | {
+                                /** @constant */
+                                kind: "matched_wait";
+                                minimumCount: number;
+                                eventType?: string;
+                            } | {
+                                /** @constant */
+                                kind: "delegation_state";
+                                minimumCount: number;
+                                /** @enum {string} */
+                                requiredStatus: "acknowledged" | "accepted" | "completed";
+                            } | {
+                                /** @constant */
+                                kind: "computer_run_state";
+                                minimumCount: number;
+                                /** @constant */
+                                requiredStatus: "succeeded";
+                                evidenceRequired: boolean;
+                            } | {
+                                /** @constant */
+                                kind: "decision_evidence";
+                                minimumCount: number;
+                                accepted: ("canonical_query" | "business_effect" | "matched_event" | "delegation" | "computer_run")[];
+                            } | {
+                                /** @constant */
+                                kind: "manual_verification";
+                                reason: string;
+                            })[];
+                        };
                     };
                 };
             };

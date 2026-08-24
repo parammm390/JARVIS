@@ -17,6 +17,7 @@ export interface BootstrapTenantResult {
   clientKey: string;
   policies: Awaited<ReturnType<typeof seedTenantPolicies>>;
   integrations: number;
+  outcomePacks: number;
   locations: number;
   humanOnlyField: string | null;
 }
@@ -1191,9 +1192,56 @@ export async function convergeIntegrations(
   return { integrations: manifest.integrations.length };
 }
 
+/** Converge the narrow pack enable/default-mode surface. Grants are deliberately
+ * excluded: evidence-earned Autopilot authority can only be created explicitly. */
+export async function convergeOutcomePacks(
+  manifest: ClientManifest,
+  tenantId: string,
+  pool: pg.Pool = getPool(),
+): Promise<{ outcomePacks: number }> {
+  if (manifest.outcomePacks === undefined) {
+    const count = await withClientMutation(manifest, pool, async (client) => {
+      const result = await client.query<{ count: string }>("SELECT count(*)::text AS count FROM tenant_outcome_pack_settings WHERE tenant_id=$1", [tenantId]);
+      return Number(result.rows[0]?.count ?? 0);
+    });
+    return { outcomePacks: count };
+  }
+  await withClientMutation(manifest, pool, async (client) => {
+    const tenant = await client.query("SELECT id FROM tenants WHERE id=$1 AND client_key=$2", [tenantId, manifest.clientKey]);
+    if (!tenant.rows[0]) throw new Error(`Tenant ${tenantId} does not match client ${manifest.clientKey}`);
+    await client.query("SELECT set_config('app.tenant_id',$1,true)", [tenantId]);
+    for (const pack of manifest.outcomePacks ?? []) {
+      await client.query(
+        `INSERT INTO tenant_outcome_pack_settings(tenant_id,pack_id,enabled,default_mode,reason)
+         VALUES($1,$2,$3,$4,$5)
+         ON CONFLICT(tenant_id,pack_id) DO UPDATE SET
+           enabled=EXCLUDED.enabled,default_mode=EXCLUDED.default_mode,reason=EXCLUDED.reason,
+           revision=tenant_outcome_pack_settings.revision+1,updated_at=now()
+         WHERE (tenant_outcome_pack_settings.enabled,tenant_outcome_pack_settings.default_mode,tenant_outcome_pack_settings.reason)
+           IS DISTINCT FROM (EXCLUDED.enabled,EXCLUDED.default_mode,EXCLUDED.reason)`,
+        [tenantId, pack.packId, pack.enabled, pack.defaultMode, pack.reason ?? "client_manifest"],
+      );
+    }
+    const declared = (manifest.outcomePacks ?? []).map((pack) => pack.packId);
+    await client.query(
+      `UPDATE tenant_outcome_pack_settings SET enabled=false,reason='removed_from_client_manifest',revision=revision+1,updated_at=now()
+       WHERE tenant_id=$1 AND NOT(pack_id=ANY($2::text[])) AND enabled=true`,
+      [tenantId, declared],
+    );
+    await client.query(
+      `UPDATE autonomy_grants g SET status='suspended',reason='pack_disabled_by_client_manifest',updated_at=now()
+       FROM tenant_outcome_pack_settings s
+       WHERE s.tenant_id=$1 AND s.tenant_id=g.tenant_id AND s.pack_id=g.pack_id AND s.enabled=false AND g.status='active'`,
+      [tenantId],
+    );
+  });
+  return { outcomePacks: manifest.outcomePacks.length };
+}
+
 export async function bootstrapTenant(manifest: ClientManifest, pool: pg.Pool = getPool()): Promise<BootstrapTenantResult> {
   const tenantId = await ensureTenantRecord(manifest, pool);
   const workspace = await convergeWorkspaceAndPolicies(manifest, tenantId, pool);
   const integrations = await convergeIntegrations(manifest, tenantId, pool);
-  return { tenantId, clientKey: manifest.clientKey, ...workspace, ...integrations };
+  const outcomePacks = await convergeOutcomePacks(manifest, tenantId, pool);
+  return { tenantId, clientKey: manifest.clientKey, ...workspace, ...integrations, ...outcomePacks };
 }

@@ -2,7 +2,7 @@
 // Business rule CONTENT never lives here; only its shape does.
 
 import { z } from "zod";
-import { CANONICAL_ENTITY_TYPES } from "@finnor/shared-types";
+import { CANONICAL_ENTITY_TYPES, OUTCOME_PACK_IDS } from "@finnor/shared-types";
 
 export const RoleSchema = z.enum(["owner", "dispatcher", "technician"]);
 
@@ -177,6 +177,51 @@ export const ControlObjectiveSchema = z.discriminatedUnion("command", [
   z.object({ command: z.literal("cancel") }),
   z.object({ command: z.literal("redirect"), objective: z.string().min(1).max(10_000), channel: z.enum(["voice", "text", "console"]).default("text"), instructionId: z.string().uuid().optional(), idempotencyKey: z.string().min(1).max(200).optional(), successCondition: ObjectiveSuccessConditionInputSchema.optional() }),
 ]);
+
+export const OutcomePackIdSchema = z.enum(OUTCOME_PACK_IDS);
+export const OutcomePackModeSchema = z.enum(["shadow", "approval", "autopilot"]);
+export const StartOutcomePackSchema = z.object({
+  packId: OutcomePackIdSchema,
+  input: z.record(z.unknown()),
+  channel: z.enum(["voice", "text", "console"]).default("console"),
+  sessionId: z.string().max(500).optional(),
+  instructionId: z.string().uuid().optional(),
+  workId: z.string().uuid().optional(),
+  idempotencyKey: z.string().min(1).max(200).optional(),
+  activeContext: OperatingInteractionContextSchema.optional(),
+  budgets: z.object({
+    maxSteps: z.number().int().min(1).max(50).optional(),
+    maxActions: z.number().int().min(0).max(25).optional(),
+    maxQueries: z.number().int().min(1).max(50).optional(),
+    maxPlannerFailures: z.number().int().min(1).max(10).optional(),
+    maxConsecutiveNoProgress: z.number().int().min(1).max(10).optional(),
+    deadlineAt: z.string().datetime().optional(),
+  }).optional(),
+}).strict();
+
+const EffectClassSchema = z.enum(["internal_draft", "internal_write", "operational_change", "financial_write", "external_side_effect", "external_spend", "batch_external", "durable_workflow"]);
+export const CreateAutonomyGrantSchema = z.object({
+  packId: OutcomePackIdSchema,
+  packVersion: z.number().int().positive(),
+  scope: z.object({
+    effectClasses: z.array(EffectClassSchema).min(1).max(8),
+    resources: z.array(z.object({ type: z.string().min(1).max(120), ids: z.array(z.string().min(1).max(500)).max(100).optional() }).strict()).min(1).max(100),
+    principal: z.string().min(1).max(200),
+    providers: z.array(z.object({ provider: z.string().min(1).max(120), applicationAccountId: z.string().uuid().optional() }).strict()).max(50),
+    maxAmountUsd: z.number().nonnegative().nullable(),
+    maxRisk: z.enum(["low", "medium", "high"]),
+    validFrom: z.string().datetime(),
+    expiresAt: z.string().datetime(),
+    policyVersion: z.number().int().positive().nullable(),
+    authorityRevision: z.number().int().positive(),
+    certificationFingerprint: z.string().regex(/^[0-9a-f]{64}$/),
+    reviewAfter: z.string().datetime(),
+  }).strict(),
+  reason: z.string().trim().min(1).max(2_000),
+}).strict();
+
+export const RevokeAutonomyGrantSchema = z.object({ reason: z.string().trim().min(1).max(2_000) }).strict();
+export const SetOutcomePackEnabledSchema = z.object({ packId: OutcomePackIdSchema, enabled: z.boolean(), reason: z.string().trim().min(1).max(2_000) }).strict();
 
 export const HandoffWorkSchema = z.object({
   targetEmployeeId: z.string().uuid(),

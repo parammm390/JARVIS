@@ -1363,6 +1363,160 @@ export const workObjectiveSteps = pgTable(
   ],
 );
 
+// Phase 5 Certified Outcome Packs. These rows bind the pack/autonomy contract to the
+// existing Work + Objective controller; they do not own execution or authorization.
+export const outcomePackRuns = pgTable(
+  "outcome_pack_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    workId: uuid("work_id").notNull().references(() => works.id),
+    objectiveLoopId: uuid("objective_loop_id").notNull().references(() => workObjectiveLoops.id),
+    packId: text("pack_id").notNull(),
+    packVersion: integer("pack_version").notNull(),
+    mode: text("mode", { enum: ["shadow", "approval", "autopilot"] }).notNull(),
+    status: text("status", { enum: ["active", "paused", "blocked", "shadow_recorded", "completed", "failed", "cancelled"] }).notNull().default("active"),
+    certificationFingerprint: text("certification_fingerprint").notNull(),
+    objective: text("objective").notNull(),
+    input: jsonb("input").notNull().default({}),
+    subjectRefs: jsonb("subject_refs").notNull().default([]),
+    successCondition: jsonb("success_condition").notNull(),
+    blockedReason: text("blocked_reason"),
+    finalVerification: jsonb("final_verification"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (t) => [
+    unique("outcome_pack_runs_work_idx").on(t.workId),
+    unique("outcome_pack_runs_objective_idx").on(t.objectiveLoopId),
+    index("outcome_pack_runs_tenant_pack_status_idx").on(t.tenantId, t.packId, t.status, t.createdAt),
+  ],
+);
+
+export const tenantOutcomePackSettings = pgTable(
+  "tenant_outcome_pack_settings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    packId: text("pack_id").notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    defaultMode: text("default_mode", { enum: ["shadow", "approval", "autopilot"] }).notNull().default("approval"),
+    reason: text("reason"),
+    revision: integer("revision").notNull().default(1),
+    updatedBy: uuid("updated_by").references(() => users.id),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique("tenant_outcome_pack_settings_tenant_pack_idx").on(t.tenantId, t.packId)],
+);
+
+export const outcomePackCertifications = pgTable(
+  "outcome_pack_certifications",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    packId: text("pack_id").notNull(),
+    packVersion: integer("pack_version").notNull(),
+    level: text("level", { enum: ["deterministic", "chaos", "sandbox", "live_provider", "production"] }).notNull(),
+    status: text("status", { enum: ["LOCAL_PASS", "SANDBOX_PASS", "LIVE_TEST_PASS", "BLOCKED_CONFIG", "NOT_CERTIFIED", "SUSPENDED"] }).notNull(),
+    fingerprint: text("fingerprint").notNull(),
+    dependencyVersions: jsonb("dependency_versions").notNull(),
+    evidence: jsonb("evidence").notNull().default({}),
+    sampleSize: integer("sample_size").notNull().default(0),
+    criticalViolations: integer("critical_violations").notNull().default(0),
+    certifiedAt: timestamp("certified_at", { withTimezone: true }).notNull().defaultNow(),
+    validUntil: timestamp("valid_until", { withTimezone: true }).notNull(),
+    suspendedAt: timestamp("suspended_at", { withTimezone: true }),
+    suspensionReason: text("suspension_reason"),
+  },
+  (t) => [
+    unique("outcome_pack_certification_identity_idx").on(t.tenantId, t.packId, t.packVersion, t.level, t.fingerprint),
+    index("outcome_pack_certification_current_idx").on(t.tenantId, t.packId, t.status, t.validUntil),
+  ],
+);
+
+export const autonomyGrants = pgTable(
+  "autonomy_grants",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    packId: text("pack_id").notNull(),
+    packVersion: integer("pack_version").notNull(),
+    status: text("status", { enum: ["active", "suspended", "revoked", "expired"] }).notNull().default("active"),
+    effectClasses: text("effect_classes").array().notNull(),
+    resourceScope: jsonb("resource_scope").notNull(),
+    principal: text("principal").notNull(),
+    providerScope: jsonb("provider_scope").notNull().default([]),
+    maxAmountUsd: numeric("max_amount_usd", { precision: 14, scale: 2 }),
+    maxRisk: text("max_risk", { enum: ["low", "medium", "high"] }).notNull().default("low"),
+    policyVersion: integer("policy_version"),
+    authorityRevision: integer("authority_revision").notNull(),
+    certificationFingerprint: text("certification_fingerprint").notNull(),
+    validFrom: timestamp("valid_from", { withTimezone: true }).notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    reviewAfter: timestamp("review_after", { withTimezone: true }).notNull(),
+    createdBy: uuid("created_by").notNull().references(() => users.id),
+    revokedBy: uuid("revoked_by").references(() => users.id),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    reason: text("reason"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("autonomy_grants_scope_idx").on(t.tenantId, t.packId, t.status, t.expiresAt)],
+);
+
+export const autonomyEvaluations = pgTable(
+  "autonomy_evaluations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    outcomePackRunId: uuid("outcome_pack_run_id").notNull().references(() => outcomePackRuns.id),
+    workId: uuid("work_id").notNull().references(() => works.id),
+    domainActionId: uuid("domain_action_id").references(() => domainActions.id),
+    businessEffectId: uuid("business_effect_id").references(() => businessEffects.id),
+    grantId: uuid("grant_id").references(() => autonomyGrants.id),
+    mode: text("mode", { enum: ["shadow", "approval", "autopilot"] }).notNull(),
+    outcome: text("outcome", { enum: ["shadow_only", "approval_required", "autopilot_allowed", "blocked"] }).notNull(),
+    eligible: boolean("eligible").notNull(),
+    reasonCodes: text("reason_codes").array().notNull(),
+    authorityRevision: integer("authority_revision"),
+    policyVersion: integer("policy_version"),
+    certificationFingerprint: text("certification_fingerprint").notNull(),
+    sourceHealthSnapshot: jsonb("source_health_snapshot").notNull().default([]),
+    scopeSnapshot: jsonb("scope_snapshot").notNull().default({}),
+    evaluatedAt: timestamp("evaluated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("autonomy_evaluations_pack_time_idx").on(t.tenantId, t.outcomePackRunId, t.evaluatedAt),
+    index("autonomy_evaluations_effect_idx").on(t.businessEffectId),
+  ],
+);
+
+export const outcomeShadowProposals = pgTable(
+  "outcome_shadow_proposals",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    outcomePackRunId: uuid("outcome_pack_run_id").notNull().references(() => outcomePackRuns.id),
+    workId: uuid("work_id").notNull().references(() => works.id),
+    domainActionId: uuid("domain_action_id").notNull().references(() => domainActions.id),
+    businessEffectId: uuid("business_effect_id").notNull().references(() => businessEffects.id),
+    semanticHash: text("semantic_hash").notNull(),
+    hypotheticalEffect: jsonb("hypothetical_effect").notNull(),
+    expectedOutcome: jsonb("expected_outcome"),
+    comparisonStatus: text("comparison_status", { enum: ["pending", "matched", "modified", "divergent", "unsafe", "inconclusive"] }).notNull().default("pending"),
+    observedOutcome: jsonb("observed_outcome"),
+    comparison: jsonb("comparison"),
+    proposedAt: timestamp("proposed_at", { withTimezone: true }).notNull().defaultNow(),
+    comparedAt: timestamp("compared_at", { withTimezone: true }),
+  },
+  (t) => [
+    unique("outcome_shadow_proposals_action_idx").on(t.domainActionId),
+    unique("outcome_shadow_proposals_effect_idx").on(t.businessEffectId),
+    index("outcome_shadow_proposals_pack_status_idx").on(t.tenantId, t.outcomePackRunId, t.comparisonStatus),
+  ],
+);
+
 export const workObjectivePlannerAttempts = pgTable(
   "work_objective_planner_attempts",
   {

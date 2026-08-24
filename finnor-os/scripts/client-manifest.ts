@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { z } from "zod";
 import { WorkspaceConfigSchema } from "../apps/api/lib/workspace-config";
 import { DeclarativeImportBodySchema } from "@finnor/import-engine";
+import { OUTCOME_PACK_IDS } from "@finnor/shared-types";
 
 export const ClientKeySchema = z.string().trim().regex(
   /^[a-z0-9][a-z0-9_-]{1,62}[a-z0-9]$/,
@@ -322,6 +323,13 @@ const RetentionPolicySchema = z.object({
   legalHold: z.boolean().default(false),
 }).strict();
 
+const OutcomePackManifestSchema = z.object({
+  packId: z.enum(OUTCOME_PACK_IDS),
+  enabled: z.boolean().default(true),
+  defaultMode: z.enum(["shadow", "approval", "autopilot"]).default("approval"),
+  reason: z.string().trim().min(1).max(2_000).optional(),
+}).strict();
+
 export const ClientManifestSchema = z.object({
   manifestVersion: z.union([z.literal(1), z.literal(2)]).default(1),
   clientKey: ClientKeySchema,
@@ -367,6 +375,9 @@ export const ClientManifestSchema = z.object({
   computer: ComputerManifestSchema.optional(),
   durableLimits: z.array(DurableLimitSchema).optional(),
   retentionPolicies: z.array(RetentionPolicySchema).optional(),
+  /** Omission preserves existing settings. Autopilot remains inert without a
+   * separately earned and explicitly created narrow autonomy grant. */
+  outcomePacks: z.array(OutcomePackManifestSchema).optional(),
   // Tenant Experience Manifest V2 lives in the existing workspace-config aggregate.
   // Omission preserves an existing tenant value; legacy values normalize forward;
   // a new tenant receives the application default, never a parallel config row.
@@ -387,6 +398,7 @@ export const ClientManifestSchema = z.object({
     manifest.computer,
     manifest.durableLimits,
     manifest.retentionPolicies,
+    manifest.outcomePacks,
   ].some((value) => value !== undefined)) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["manifestVersion"], message: "Phase 5 connection/computer/limit/retention fields require manifestVersion 2" });
   }
@@ -441,6 +453,9 @@ export const ClientManifestSchema = z.object({
   }
   if (manifest.retentionPolicies && !unique(manifest.retentionPolicies.map((policy) => policy.dataClass))) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["retentionPolicies"], message: "retention data classes must be unique" });
+  }
+  if (manifest.outcomePacks && !unique(manifest.outcomePacks.map((pack) => pack.packId))) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["outcomePacks"], message: "outcome pack ids must be unique" });
   }
   if (manifest.authProfiles && !unique(manifest.authProfiles.map((profile) => `${profile.applicationAccountKey}:${JSON.stringify(profile.principal)}:${profile.purpose}`))) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["authProfiles"], message: "application account/principal/purpose bindings must be unique" });

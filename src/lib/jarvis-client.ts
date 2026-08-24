@@ -411,7 +411,7 @@ export interface WorkCaseProjection {
   objectiveLoop?: {
     id: string
     objective: string
-    state: "continue" | "awaiting_approval" | "waiting" | "blocked" | "completed" | "failed"
+    state: "continue" | "awaiting_approval" | "waiting" | "blocked" | "completed" | "failed" | "cancelled"
     revision: number
     reason: string | null
     nextStep: string | null
@@ -432,6 +432,33 @@ export interface WorkCaseProjection {
       plannerAttempts: Array<{ id: string; attempt: number; status: string; provider: string | null; failure: unknown }>
     }>
   }
+  outcomePack?: {
+    id: string
+    packId: string
+    packVersion: number
+    mode: "shadow" | "approval" | "autopilot"
+    status: string
+    certificationFingerprint: string
+    objective: string
+    subjectRefs: unknown
+    blockedReason: string | null
+    finalVerification: unknown
+    latestAutonomyDecision: {
+      outcome: string
+      eligible: boolean
+      reasonCodes: string[]
+      grantId: string | null
+      evaluatedAt: string
+    } | null
+    shadowProposals: Array<{
+      id: string
+      businessEffectId: string
+      semanticHash: string
+      comparisonStatus: string
+      proposedAt: string
+      comparedAt: string | null
+    }>
+  }
 }
 
 // Phase 3 — presentation-safe detail projection for one selected durable Work.
@@ -447,7 +474,7 @@ export interface ExecutionComputerRun {
   steps: Array<{ id: string; seq: number; phase: string; operation: string; status: string; summary: string; createdAt: string; completedAt: string | null }>; stepCount: number; stepsTruncated: boolean; result: Record<string, unknown> | null; failureCode: string | null; blockReason: string | null; cancellationRequested: boolean; createdAt: string; startedAt: string | null; finishedAt: string | null; sourceRef: string
 }
 export interface ExecutionActionNode {
-  id: string; planId: string | null; actionType: string; businessVerb: string; summary: string | null; sourceStatus: string; status: ExecutionNodeStatus; semanticPayload: Record<string, unknown>; targets: ExecutionTarget[]; dependencyIds: string[]; dependentIds: string[]; blockedBy: Array<{ actionId: string; status: string }>; actor: ExecutionActor | null
+  id: string; planId: string | null; actionType: string; businessVerb: string; summary: string | null; sourceStatus: string; status: ExecutionNodeStatus; semanticPayload: Record<string, unknown>; businessEffect: { id: string; semanticHash: string; scopeHash: string; status: string; contract: Record<string, unknown>; verification: Record<string, unknown> | null; sourceRef: string } | null; targets: ExecutionTarget[]; dependencyIds: string[]; dependentIds: string[]; blockedBy: Array<{ actionId: string; status: string }>; actor: ExecutionActor | null
   route: { application: string | null; provider: string | null; identity: { kind: string; id: string; label: string | null; channel: string | null } | null; route: string | null; source: string; sourceRef: string } | null
   authority: { state: string; decisionId: string | null; revision: number | null; operation: string | null; outcome: string | null; risk: string | null; reasonCode: string | null; employeeId: string | null; sourceRef: string | null }
   approval: { required: boolean; status: string; requestId: string | null; currentStep: number | null; totalSteps: number; decidedBy: ExecutionActor | null; decidedAt: string | null; consequence: string; sourceRef: string | null }
@@ -458,7 +485,7 @@ export interface ExecutionWorkflow {
   steps: Array<{ id: string; sequence: number; stepType: string; status: string; attempts: number; terminalReason: string | null; domainActionId: string | null; integration: { capability: string; provider: string | null; status: string; sourceRef: string } | null; reconciliation: { caseId: string; status: string; sourceRef: string } | null; compensation: { caseId: string; status: string; sourceRef: string } | null; controls: ExecutionControl[]; updatedAt: string; sourceRef: string }>
   controls: ExecutionControl[]; createdAt: string; updatedAt: string; sourceRef: string
 }
-export interface ExecutionReceiptProjection { id: string; workId: string; domainActionId: string | null; workflowRunId: string | null; workflowStepId: string | null; objective: string; policyApplied: { id: string; version: number } | null; riskTier: string; approval: { required: boolean; approvedBy: string | null; at: string | null }; expectedResult: Record<string, unknown> | null; actualResult: Record<string, unknown> | null; evidence: ExecutionEvidence[]; failure: ExecutionFailure | null; finalizedAt: string | null; createdAt: string; sourceRef: string }
+export interface ExecutionReceiptProjection { id: string; workId: string; domainActionId: string | null; workflowRunId: string | null; workflowStepId: string | null; businessEffectId: string | null; intendedEffectHash: string | null; authorizedEffectHash: string | null; executedEffectHash: string | null; effectVerification: Record<string, unknown> | null; recoveryEffectId: string | null; objective: string; policyApplied: { id: string; version: number } | null; riskTier: string; approval: { required: boolean; approvedBy: string | null; at: string | null }; expectedResult: Record<string, unknown> | null; actualResult: Record<string, unknown> | null; evidence: ExecutionEvidence[]; failure: ExecutionFailure | null; finalizedAt: string | null; createdAt: string; sourceRef: string }
 export interface ExecutionProjection {
   version: 1; work: { id: string; status: string; objective: string; createdAt: string; updatedAt: string; finalOutcome: Record<string, unknown> | null; failure: ExecutionFailure | null }; targets: ExecutionTarget[]; nodes: ExecutionActionNode[]; edges: Array<{ fromActionId: string; toActionId: string; state: string; sourceRef: string }>; workflows: ExecutionWorkflow[]; receipts: ExecutionReceiptProjection[]; viewer: { role: "owner" | "dispatcher" | "technician"; evidenceVisibility: "full" | "restricted" }; limits: { actions: number; workflowSteps: number; computerStepsPerRun: number; evidencePerReceipt: number }; truncated: { actions: boolean; workflowSteps: boolean; computerSteps: boolean; evidence: boolean }; asOf: string
 }
@@ -586,7 +613,7 @@ export const jarvisClient = {
   startObjective: (body: { objective: string; channel?: "voice" | "text" | "console"; idempotencyKey?: string; activeContext?: OperatingInteractionContextValue }): Promise<ObjectiveStartResponse> =>
     jarvisPost<ObjectiveStartResponse>("objectives", body),
 
-  controlObjective: (workId: string, body: { command: "continue" | "interrupt" } | { command: "redirect"; objective: string; channel?: "voice" | "text" | "console"; idempotencyKey?: string }): Promise<{ objective: WorkCaseProjection["objectiveLoop"] }> =>
+  controlObjective: (workId: string, body: { command: "continue" | "interrupt" | "cancel" } | { command: "redirect"; objective: string; channel?: "voice" | "text" | "console"; idempotencyKey?: string }): Promise<{ objective: WorkCaseProjection["objectiveLoop"] }> =>
     jarvisPost<{ objective: WorkCaseProjection["objectiveLoop"] }>(`works/${workId}/objective`, body),
 
   handoffWork: (workId: string, body: { targetEmployeeId: string; note?: string }): Promise<{ handoff: { previousOwnerId: string | null; currentOwnerId: string; duplicate: boolean } }> =>
