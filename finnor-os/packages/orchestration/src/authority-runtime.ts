@@ -90,12 +90,16 @@ export function actionAuthorityRequest(action: DomainAction, policy: DomainPolic
   return {
     operation: alreadyApproved ? "execution" : "action",
     capability: `action:${action.actionType}`,
-    resources: authorityResourcesFromPayload(draft.payload ?? action.payload),
-    amountUsd: authorityAmountFromPayload(draft.payload ?? action.payload),
-    risk: authorityRiskForAction(action.actionType),
+    resources: draft.businessEffect
+      ? draft.businessEffect.targets.map((target) => ({ type: target.type, ...(UUID.test(target.id) ? { id: target.id } : {}) }))
+      : authorityResourcesFromPayload(draft.payload ?? action.payload),
+    amountUsd: draft.businessEffect?.exposure?.currency === "USD" ? draft.businessEffect.exposure.amount : authorityAmountFromPayload(draft.payload ?? action.payload),
+    risk: draft.businessEffect?.authority.risk ?? authorityRiskForAction(action.actionType),
     policyRequiresApproval: approval.requiresConfirmation && !alreadyApproved,
     workId: action.workId ?? undefined,
     domainActionId: action.id,
+    businessEffectId: draft.businessEffect?.id,
+    businessEffectHash: draft.businessEffect?.semanticHash,
   };
 }
 

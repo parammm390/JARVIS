@@ -11,14 +11,49 @@
 // Nothing here bypasses a policy's requiresConfirmation gate: a gated action lands in
 // the real approval queue exactly like a real dealer/customer-triggered one would.
 
-import { withTenant, tenantSettings, households, technicians, maintenanceAgreements, invoices, serviceVisits, communicationsLog } from "@finnor/db";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { withTenant, tenantSettings, households, technicians, maintenanceAgreements, invoices, serviceVisits, communicationsLog, workflowSteps } from "@finnor/db";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { createLead } from "@finnor/data-platform";
 import { FinnorOrchestrator, recordDealerZeroDay } from "@finnor/orchestration";
 import { planDailyEvents, type DailySimulationContext } from "../simulator/plan";
 import { isScenarioPack, type ScenarioPack } from "../simulator/scenarios";
+import { runWorkflowStep } from "./run-workflow-step";
 
 let orchestrator: FinnorOrchestrator | null = null;
+
+/**
+ * The simulator is a worker-owned scheduled job, so a queued Business Effect must
+ * be driven by the same durable step handler as production. Drafting an action is
+ * deliberately not treated as execution: approval-gated actions remain pending,
+ * while policy-authorized internal writes produce their real receipt/effect state.
+ */
+async function drainQueuedAction(tenantId: string, domainActionId: string): Promise<void> {
+  for (let pass = 0; pass < 32; pass += 1) {
+    const pending = await withTenant(tenantId, (db) => db
+      .select({ id: workflowSteps.id })
+      .from(workflowSteps)
+      .where(and(
+        eq(workflowSteps.tenantId, tenantId),
+        eq(workflowSteps.domainActionId, domainActionId),
+        eq(workflowSteps.status, "pending"),
+      ))
+      .orderBy(asc(workflowSteps.createdAt), asc(workflowSteps.sequence)));
+    if (pending.length === 0) return;
+    for (const step of pending) {
+      await runWorkflowStep({ tenantId, workflowStepId: step.id });
+    }
+  }
+  throw new Error(`Simulator durable action did not settle within its bounded step budget: ${domainActionId}`);
+}
+
+async function draftAndDrain(
+  actionType: string,
+  payload: Record<string, unknown>,
+  tenantId: string,
+): Promise<void> {
+  const result = await orchestrator!.draftKnownAction(actionType, payload, tenantId, { source: "dealer_zero_simulator" });
+  await drainQueuedAction(tenantId, result.action.id);
+}
 
 async function loadContext(tenantId: string): Promise<DailySimulationContext> {
   return withTenant(tenantId, async (db) => {
@@ -97,11 +132,10 @@ export async function runSimulatorTick(tenantId: string, dateSeed: string, scena
       }),
     );
     if (visit.outcome === "completed") {
-      await orchestrator.draftKnownAction(
+      await draftAndDrain(
         "log_visit_report",
         { householdId: visit.householdId, report: "Completed scheduled maintenance visit. System checked, readings within normal range, no issues found.", markCompleted: true },
         tenantId,
-        { source: "dealer_zero_simulator" },
       );
       await orchestrator.draftKnownAction(
         "log_stock_used_on_visit",
@@ -121,11 +155,10 @@ export async function runSimulatorTick(tenantId: string, dateSeed: string, scena
         content: "Hi, our water has had a strange taste the last couple days, can someone take a look?",
       }),
     );
-    await orchestrator.draftKnownAction(
+    await draftAndDrain(
       "flag_visit_issue",
       { issue: "Customer reported an unusual water taste via SMS — needs a follow-up visit or diagnostic call." },
       tenantId,
-      { source: "dealer_zero_simulator" },
     );
   }
 
@@ -142,11 +175,10 @@ export async function runSimulatorTick(tenantId: string, dateSeed: string, scena
     await orchestrator.draftKnownAction("record_payment", { invoiceId: payment.invoiceId }, tenantId, { source: "dealer_zero_simulator" });
   }
   for (const householdId of plan.recallHouseholdIds) {
-    await orchestrator.draftKnownAction(
+    await draftAndDrain(
       "flag_visit_issue",
       { issue: "DEMO equipment-recall scenario: inspect installed equipment and contact the household.", householdId },
       tenantId,
-      { source: "dealer_zero_simulator" },
     );
   }
   await recordDealerZeroDay(tenantId, dateSeed, scenario, plan, startedAt);

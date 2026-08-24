@@ -10,6 +10,7 @@ import { createDefaultPluginRegistry, GatedExecutor, LLMPlanner, recordPredictio
 import { createDefaultRegistry } from "@finnor/tools";
 import type { LLMProvider } from "@finnor/orchestration";
 import type { DomainAction, DomainPolicy, MemorySnapshot, TenantContext } from "@finnor/shared-types";
+import { driveDurableAction } from "./helpers/durable-action";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
 const TENANT_ID = "00000000-0000-4000-8000-0000000000c7";
@@ -36,7 +37,9 @@ describe.skipIf(!available)("quotation predicted receipt", () => {
     const [before] = await withTenant(TENANT_ID, (db) => db.select().from(domainActions).where(and(eq(domainActions.tenantId, TENANT_ID), eq(domainActions.id, action!.id))));
     expect(before!.predictedReceipt).toMatchObject({ simulation: { predicted: { totalUsd: 125, expectedResult: { quote: { totalUsd: 125 } } } } });
     const policy: DomainPolicy = { id: "", tenantId: TENANT_ID, actionType: "generate_quote", policy: {}, requiresConfirmation: false, confirmationTemplate: null, version: 0 };
-    const result = await new GatedExecutor(plugins, createDefaultRegistry()).execute(action as DomainAction, policy);
+    const authorized = await new GatedExecutor(plugins, createDefaultRegistry()).execute(action as DomainAction, policy);
+    expect(authorized.output).toMatchObject({ queued: true, durableWorkerExecution: true });
+    const result = await driveDurableAction(TENANT_ID, action!.id);
     await recordPredictionDiff(action as DomainAction, result);
     const [after] = await withTenant(TENANT_ID, (db) => db.select().from(domainActions).where(eq(domainActions.id, action!.id)));
     expect(result.output).toMatchObject({ quote: { totalUsd: 125 } });

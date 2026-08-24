@@ -84,7 +84,8 @@ async function detectAndHealOrphanedSteps(tenantId: string): Promise<WatchdogFin
 
   const findings: WatchdogFinding[] = [];
   for (const step of pending) {
-    const { rows } = await getPool().query("SELECT 1 FROM jobs WHERE idempotency_key = $1 LIMIT 1", [`workflow-step:${step.idempotencyKey}`]);
+    const canonicalJobKey = `workflow-step:${tenantId}:${step.id}`;
+    const { rows } = await getPool().query("SELECT 1 FROM jobs WHERE idempotency_key = $1 LIMIT 1", [canonicalJobKey]);
     if (rows.length > 0) continue; // a job exists — not orphaned, just genuinely queued/slow
     findings.push({
       kind: "orphaned_step",

@@ -11,7 +11,7 @@ import type { DomainEnginePlugin } from "../shared/plugin-interface";
 import type { DraftAction, ExecutionResult, ValidationResult, DomainPolicy } from "@finnor/shared-types";
 import type { ToolRegistry } from "@finnor/tools";
 import { withTenant, invoices, warehouses, warehouseStock, workOrders } from "@finnor/db";
-import { submitCommand, enqueueStep } from "@finnor/workflow-runtime";
+import { submitCommand } from "@finnor/workflow-runtime";
 import { recordBusinessEvent } from "@finnor/data-platform";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
@@ -103,6 +103,13 @@ export const proposalToInstallationPlugin: DomainEnginePlugin = {
 
     const submitted = await withTenant(tenantId, (db) =>
       submitCommand(db, {
+        businessEffectId: draft.businessEffect?.id,
+        authorizedEffectHash: draft.businessEffect?.semanticHash,
+        authorityDecisionId: draft.authorityDecisionId,
+        authorityRevision: draft.authorityRevision,
+        policyId: draft.businessEffect?.authority.policyId ?? undefined,
+        policyVersion: draft.businessEffect?.authority.policyVersion ?? undefined,
+        executionClass: draft.businessEffect?.operation.class,
         tenantId,
         commandType: "start_installation_workflow",
         payload: { quoteId, householdId, invoiceId: invoice.id },
@@ -113,10 +120,6 @@ export const proposalToInstallationPlugin: DomainEnginePlugin = {
         steps,
       }),
     );
-
-    if (!submitted.alreadyExisted) {
-      await enqueueStep(tenantId, submitted.stepIds[0]!, steps[0]!.payload.idempotencyKey as string);
-    }
 
     return {
       status: "success",

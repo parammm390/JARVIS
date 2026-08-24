@@ -10,6 +10,7 @@ import {
   attachWorkEntity,
   authorityStates,
   workObjectiveSteps,
+  businessEffects,
 } from "@finnor/db";
 import { buildMemorySnapshot, appendEpisode, appendShortTerm, mirrorTurnToZep } from "@finnor/memory";
 import { createDefaultRegistry, type ToolRegistry } from "@finnor/tools";
@@ -41,6 +42,8 @@ import { assembleOperatingContext } from "./operating-context";
 import { interactionAwareOperationalDecision, resolveOperatingInteractionContext } from "./interaction-context";
 import { employeeAuthoritySnapshot, evaluateActionApproval, evaluateAuthority, finalizeApprovalAuthority, finalizeApprovalAuthorityTx, isFinalApprovalStep, revalidateActionExecution } from "@finnor/authority";
 import { queryAuthorityRequest } from "./authority-runtime";
+import { isConsequentialAction } from "./compiler";
+import { authorizeActionExecution, authorizeActionExecutionTx } from "./runtime-bridge";
 import {
   controlWorkObjective,
   ObjectiveLoopRuntime,
@@ -49,6 +52,7 @@ import {
   type ObjectiveDecisionPlanner,
   type StartObjectiveOptions,
 } from "./objective-loop";
+import { classifyInstructionRoute, finalizeInstructionRoute, type InstructionRouteDecision } from "./instruction-routing";
 
 export * from "./llm";
 export * from "./planner";
@@ -79,6 +83,13 @@ export * from "./research-context";
 export * from "./event-waits";
 export * from "./interaction-context";
 export * from "./interaction-targeting";
+export * from "./runtime-bridge";
+export * from "./durable-execution";
+export * from "./instruction-routing";
+export * from "./objective-success";
+export * from "./external-observation";
+export * from "./outcome-packs";
+export * from "./autonomy";
 
 const EXTERNAL_RESEARCH_ACTION_TYPES = new Set(["search_web", "scan_competitors", "check_business_reviews"]);
 
@@ -89,6 +100,7 @@ export interface InstructionResult {
   workId?: string;
   workInputId?: string;
   instructionId?: string;
+  objective?: { objectiveLoopId: string; state: string; route: "OBJECTIVE" };
 }
 
 export interface InstructionOptions {
@@ -110,6 +122,8 @@ export interface InstructionOptions {
   fastReadDecision?: OperationalQueryDecision;
   /** Skip the legacy router classification entirely after a planner decision. */
   skipFastReadClassification?: boolean;
+  /** Set by an intake boundary that already applied the one execution-model policy. */
+  instructionRouteDecision?: InstructionRouteDecision;
 }
 
 export interface OperationalQueryOptions {
@@ -265,7 +279,7 @@ export class FinnorOrchestrator implements Orchestrator {
     return this.objectiveLoopRuntime.runIteration(params);
   }
 
-  async controlObjective(params: { tenantId: string; workId: string; command: "continue" | "interrupt" | "redirect"; actorId: string; objective?: string; correlationId?: string }) {
+  async controlObjective(params: { tenantId: string; workId: string; command: "continue" | "interrupt" | "redirect" | "cancel"; actorId: string; objective?: string; successCondition?: import("@finnor/shared-types").ObjectiveSuccessCondition; correlationId?: string }) {
     return controlWorkObjective(params);
   }
 
@@ -473,7 +487,7 @@ export class FinnorOrchestrator implements Orchestrator {
       workId: received.workId,
     });
     await emitInstructionEvent(ctx.tenantId, received.instructionId, "received", { workId: received.workId, queryIntent: request.intent });
-    await transitionWork(ctx.tenantId, received.workId, "understanding", "query_understanding_started", { queryIntent: request.intent, workInputId: received.workInputId });
+    await transitionWork(ctx.tenantId, received.workId, "understanding", "query_understanding_started", { queryIntent: request.intent, workInputId: received.workInputId }, { executionModel: "query" });
     const result = await this.executeFastOperationalQuery(request, ctx, {
       workId: received.workId,
       workInputId: received.workInputId,
@@ -547,12 +561,25 @@ export class FinnorOrchestrator implements Orchestrator {
     const suppliedDecision = opts.fastReadDecision ? interactionAwareOperationalDecision(opts.fastReadDecision, opts.activeContext as OperatingInteractionContext | undefined) : undefined;
     const shouldClassify = !opts.skipFastReadClassification && suppliedDecision === undefined;
     let fastDecision: OperationalQueryDecision | undefined = suppliedDecision;
+    let instructionRoute: InstructionRouteDecision | undefined = opts.instructionRouteDecision;
     try {
       if (shouldClassify) {
         const interpreted = this.fastReadOnlyRouter.interpret?.(instruction);
         fastDecision = interpreted ? interactionAwareOperationalDecision(interpreted, opts.activeContext as OperatingInteractionContext | undefined) : undefined;
       }
-      if (fastDecision?.route === "fast_read" && this.fastReadOnlyRouter.execute) {
+      const routeReadDecision: OperationalQueryDecision = fastDecision ?? { route: "planner", reason: "unsupported" };
+      instructionRoute ??= classifyInstructionRoute({
+        instruction,
+        fastReadDecision: routeReadDecision,
+        activeContext: opts.activeContext,
+        conversational: isConversationalTurn(instruction),
+      });
+      await transitionWork(ctx.tenantId, workId, "understanding", "instruction_routed", {
+        policyVersion: instructionRoute.version,
+        route: instructionRoute.route,
+        reasonCodes: instructionRoute.reasonCodes,
+      }, instructionRoute.route === "CONVERSATION" ? {} : { executionModel: instructionRoute.route === "QUERY" ? "query" : instructionRoute.route === "ATOMIC_EFFECT" ? "atomic_effect" : "objective" });
+      if (instructionRoute.route === "QUERY" && routeReadDecision.route === "fast_read" && this.fastReadOnlyRouter.execute) {
         await emitInstructionEvent(ctx.tenantId, instructionId, "step_progress", { stage: "resolving_context", sourceKind: "PROFILE" });
         operatingContext = (await assembleOperatingContext(ctx, {
           instruction,
@@ -562,7 +589,7 @@ export class FinnorOrchestrator implements Orchestrator {
           includeMemory: false,
           includeCanonicalBusinessState: false,
         })).context;
-        const result = await this.executeFastOperationalQuery(fastDecision.request, ctx, { workId, workInputId, instructionId }, { executionKey: opts.executionKey ?? opts.idempotencyKey ?? instructionId });
+        const result = await this.executeFastOperationalQuery(routeReadDecision.request, ctx, { workId, workInputId, instructionId }, { executionKey: opts.executionKey ?? opts.idempotencyKey ?? instructionId });
         fastQuery = result.execution;
         fastAnswer = result.answer ?? null;
       } else if (!opts.skipFastReadClassification && fastDecision === undefined) {
@@ -587,11 +614,26 @@ export class FinnorOrchestrator implements Orchestrator {
       return { actions: [], answer: fastAnswer, workId, workInputId, instructionId };
     }
 
+    if (instructionRoute?.route === "OBJECTIVE") {
+      await emitInstructionEvent(ctx.tenantId, instructionId, "planning", { route: "objective" });
+      const started = await this.startObjective(instruction, ctx, {
+        channel: opts.channel ?? "console",
+        sessionId: opts.sessionId,
+        instructionId,
+        workId,
+        workInputId,
+        idempotencyKey: opts.idempotencyKey,
+        activeContext: opts.activeContext,
+      });
+      await emitInstructionEvent(ctx.tenantId, instructionId, "plan_ready", { route: "objective", objectiveLoopId: started.objectiveLoopId, boundedIterations: true });
+      return { actions: [], workId, workInputId, instructionId, objective: { objectiveLoopId: started.objectiveLoopId, state: started.state, route: "OBJECTIVE" } };
+    }
+
     // Greetings and capability turns are conversational by contract. Keep them
     // off the household resolver, semantic retrieval, and planner path so a simple
     // "hey" is fast, cannot inherit an unrelated customer/research context, and
     // still produces the same explicit progress trace as every other turn.
-    if (isConversationalTurn(instruction)) {
+    if (instructionRoute?.route === "CONVERSATION") {
       try {
         await ensureSecretsLoaded();
       } catch (err) {
@@ -703,6 +745,43 @@ export class FinnorOrchestrator implements Orchestrator {
       await transitionWork(ctx.tenantId, workId, "failed", "planning_failed", failure, { failure });
       await emitInstructionEvent(ctx.tenantId, instructionId, "failed", { error: failure.message, workId, recoverable: true });
       throw err;
+    }
+    const finalRoute = finalizeInstructionRoute(instructionRoute!, actions);
+    if (finalRoute.route === "OBJECTIVE") {
+      if (actions.length > 0) {
+        await withTenant(ctx.tenantId, async (db) => {
+          const rejected = await db.update(domainActions).set({ status: "rejected" }).where(and(
+            eq(domainActions.tenantId, ctx.tenantId),
+            inArray(domainActions.id, actions.map((action) => action.id)),
+            eq(domainActions.status, "draft"),
+          )).returning({ id: domainActions.id });
+          if (rejected.length > 0) await db.insert(actionLog).values(rejected.map((action) => ({
+            tenantId: ctx.tenantId,
+            domainActionId: action.id,
+            step: "rejected",
+            input: { routePolicyVersion: finalRoute.version },
+            output: { reason: "Typed plan proved this instruction was not one independent EffectSet; the same Work now owns a persistent Objective." },
+          })));
+        });
+      }
+      await finishWorkPlannerAttempt({
+        tenantId: ctx.tenantId,
+        attemptId: plannerAttempt.id,
+        status: "succeeded",
+        plannerResult: { route: "OBJECTIVE", reasonCodes: finalRoute.reasonCodes, supersededActionIds: actions.map((action) => action.id) },
+      });
+      await transitionWork(ctx.tenantId, workId, "planning", "instruction_route_refined", { from: instructionRoute!.route, to: "OBJECTIVE", reasonCodes: finalRoute.reasonCodes }, { executionModel: "objective" });
+      const started = await this.startObjective(instruction, ctx, {
+        channel: opts.channel ?? "console",
+        sessionId: opts.sessionId,
+        instructionId,
+        workId,
+        workInputId,
+        idempotencyKey: opts.idempotencyKey,
+        activeContext: opts.activeContext,
+      });
+      await emitInstructionEvent(ctx.tenantId, instructionId, "plan_ready", { route: "objective", objectiveLoopId: started.objectiveLoopId, boundedIterations: true });
+      return { actions: [], workId, workInputId, instructionId, objective: { objectiveLoopId: started.objectiveLoopId, state: started.state, route: "OBJECTIVE" } };
     }
     if (await isInstructionCancelled(ctx.tenantId, instructionId)) {
       await this.rejectCancelledDrafts(ctx.tenantId, instructionId);
@@ -998,11 +1077,22 @@ export class FinnorOrchestrator implements Orchestrator {
       // episode in the same transaction as its pending→approved transition; requiring
       // it prevents a bare forged SQL status mutation from claiming execution.
       const [approval] = await db
-        .select({ id: actionLog.id })
+        .select({ id: actionLog.id, output: actionLog.output })
         .from(actionLog)
         .where(and(eq(actionLog.domainActionId, actionId), eq(actionLog.tenantId, tenantId), eq(actionLog.step, "confirmed")))
+        .orderBy(desc(actionLog.timestamp))
         .limit(1);
-      const [claimed] = approval
+      const [currentBeforeClaim] = await db.select().from(domainActions).where(and(eq(domainActions.id, actionId), eq(domainActions.tenantId, tenantId))).limit(1);
+      const [effect] = currentBeforeClaim?.businessEffectId
+        ? await db.select().from(businessEffects).where(and(eq(businessEffects.tenantId, tenantId), eq(businessEffects.id, currentBeforeClaim.businessEffectId))).limit(1)
+        : [];
+      const approvalOutput = approval?.output && typeof approval.output === "object" ? approval.output as Record<string, unknown> : {};
+      const requiresEffect = Boolean(currentBeforeClaim && isConsequentialAction(currentBeforeClaim.actionType, currentBeforeClaim.payload as Record<string, unknown>));
+      const validApproval = Boolean(approval && (!requiresEffect || (effect && approvalOutput.businessEffectId === effect.id && approvalOutput.authorizedEffectHash === effect.semanticHash)));
+      if (validApproval && requiresEffect && currentBeforeClaim?.status === "approved") {
+        return { claimed: null, current: currentBeforeClaim, consequentialReady: true as const };
+      }
+      const [claimed] = validApproval
         ? await db
             .update(domainActions)
             .set({ status: "executing", executionStartedAt: new Date() })
@@ -1010,10 +1100,20 @@ export class FinnorOrchestrator implements Orchestrator {
             .returning()
         : [];
       if (claimed) return { claimed, current: claimed };
-      const [current] = await db.select().from(domainActions).where(and(eq(domainActions.id, actionId), eq(domainActions.tenantId, tenantId)));
+      const [current] = currentBeforeClaim ? [currentBeforeClaim] : await db.select().from(domainActions).where(and(eq(domainActions.id, actionId), eq(domainActions.tenantId, tenantId)));
       return { claimed: null, current };
     });
     if (!row.current) return { status: "failure", output: {}, error: "Action not found" };
+    if ("consequentialReady" in row && row.consequentialReady) {
+      const durable = await authorizeActionExecution({
+        tenantId,
+        actionId,
+        approvedBy,
+        authorizationSource: "human_approval",
+      });
+      if (row.current.workId) await reconcileWorkStatus(tenantId, row.current.workId);
+      return { status: "success", output: { authorized: true, durable: true, queued: true, durableWorkerExecution: true, ...durable }, expected: { durableWorkerExecution: true } };
+    }
     if (!row.claimed) {
       if (row.current.status !== "executing" && row.current.status !== "completed") {
         return {
@@ -1055,6 +1155,7 @@ export class FinnorOrchestrator implements Orchestrator {
       authorityRevision: claimed.authorityRevision,
       authorityContext: claimed.authorityContext as Record<string, unknown>,
       objectiveStepId: claimed.objectiveStepId,
+      businessEffectId: claimed.businessEffectId,
       approvedBy,
     };
     const policy = await this.loadPolicy(action);
@@ -1301,6 +1402,12 @@ export class FinnorOrchestrator implements Orchestrator {
         if ((state?.revision ?? 1) !== approverAuthority.authorityRevision) return { claimed: null, current: null, staleAuthority: true as const };
       }
       const [before] = await db.select().from(domainActions).where(and(eq(domainActions.id, actionId), eq(domainActions.tenantId, tenantId)));
+      const [effect] = before?.businessEffectId
+        ? await db.select().from(businessEffects).where(and(eq(businessEffects.tenantId, tenantId), eq(businessEffects.id, before.businessEffectId))).limit(1)
+        : [];
+      if (decision === "approve" && before && isConsequentialAction(before.actionType, before.payload as Record<string, unknown>) && !effect) {
+        return { claimed: null, current: before, effectBoundary: true as const };
+      }
       const [claimed] = await db
         .update(domainActions)
         .set({ status: toStatus })
@@ -1341,11 +1448,22 @@ export class FinnorOrchestrator implements Orchestrator {
         },
         output: {
           channel: decidedBy.startsWith("voice:") ? "voice" : "console",
+          businessEffectId: effect?.id ?? null,
+          intendedEffectHash: effect?.semanticHash ?? null,
+          authorizedEffectHash: decision === "approve" ? effect?.semanticHash ?? null : null,
           ...(decision === "approve" ? { note: opts?.note ?? null, policyDrift } : decision === "reject" ? { reason: opts?.reason ?? null } : { note: opts?.note ?? null }),
         },
       });
       if (approverAuthority && humanDecision) {
         await finalizeApprovalAuthorityTx(db, { tenantId, actionId, decision, approverId: decidedBy, authorityDecisionId: approverAuthority.id });
+      }
+      if (effect) {
+        await db.update(businessEffects).set(decision === "approve"
+          ? { status: "authorized", authorizedAt: new Date() }
+          : decision === "reject"
+            ? { status: "cancelled" }
+            : { status: "compiled" })
+          .where(and(eq(businessEffects.tenantId, tenantId), eq(businessEffects.id, effect.id), eq(businessEffects.status, "compiled")));
       }
       const durableOperation = decision === "approve"
         ? await authorizeBusinessOperationTx(db, {
@@ -1368,6 +1486,24 @@ export class FinnorOrchestrator implements Orchestrator {
         });
         return { claimed: { ...claimed, status: "executing" as const, executionStartedAt: new Date() }, current: claimed, durableOperation };
       }
+      const durableAction = decision === "approve" && effect
+        ? await authorizeActionExecutionTx(db, {
+            tenantId,
+            actionId,
+            approvedBy: decidedBy,
+            authorityDecisionId: approverAuthority?.id,
+            authorityRevision: approverAuthority?.authorityRevision,
+            authorizationSource: "human_approval",
+          })
+        : null;
+      if (durableAction) {
+        return {
+          claimed: { ...claimed, status: "executing" as const, executionStartedAt: new Date() },
+          current: claimed,
+          durableOperation: null,
+          durableAction,
+        };
+      }
       if (decision === "reject") {
         const [operation] = await db.update(businessOperations).set({ status: "cancelled", completedAt: new Date(), updatedAt: new Date(), finalOutcome: { rejected: true, decidedBy } })
           .where(and(eq(businessOperations.tenantId, tenantId), eq(businessOperations.domainActionId, actionId), eq(businessOperations.status, "awaiting_approval")))
@@ -1377,10 +1513,13 @@ export class FinnorOrchestrator implements Orchestrator {
             .where(and(eq(decisionReceipts.tenantId, tenantId), eq(decisionReceipts.operationId, operation.id)));
         }
       }
-      return { claimed, current: claimed, durableOperation: null, staleAuthority: false as const };
+      return { claimed, current: claimed, durableOperation: null, durableAction: null, staleAuthority: false as const };
     });
     if ("staleAuthority" in transition && transition.staleAuthority) {
       return { status: "failure", output: { staleAuthority: true }, error: "Authority changed while the decision was being applied; review the request again." };
+    }
+    if ("effectBoundary" in transition && transition.effectBoundary) {
+      return { status: "failure", output: { effectBoundary: "effect_missing" }, error: "Approval refused: the consequential action has no frozen Business Effect." };
     }
     if (!transition.current) return { status: "failure", output: {}, error: "Action not found" };
     if (!transition.claimed) {
@@ -1410,6 +1549,29 @@ export class FinnorOrchestrator implements Orchestrator {
           operationId: transition.durableOperation.id,
           operationStatus: transition.durableOperation.status,
           queued: transition.durableOperation.authorized,
+        },
+        expected: { durableWorkerExecution: true },
+      };
+    }
+    if ("durableAction" in transition && transition.durableAction) {
+      if (row.instructionId) {
+        await emitInstructionEvent(tenantId, row.instructionId, "executing", {
+          actionId,
+          commandId: transition.durableAction.commandId,
+          workflowRunId: transition.durableAction.workflowRunId,
+          queued: true,
+          durable: true,
+        }).catch(() => undefined);
+      }
+      if (row.workId) await reconcileWorkStatus(tenantId, row.workId);
+      return {
+        status: "success",
+        output: {
+          authorized: true,
+          durable: true,
+          queued: true,
+          durableWorkerExecution: true,
+          ...transition.durableAction,
         },
         expected: { durableWorkerExecution: true },
       };
@@ -1492,6 +1654,22 @@ export class FinnorOrchestrator implements Orchestrator {
         .limit(1),
     );
     return row?.instructionId ?? null;
+  }
+
+  /** Persistent workers call this after a durable action settles. It restores the
+   * same plan-DAG continuation the former synchronous runAction path performed,
+   * deriving readiness only from canonical terminal action state. */
+  async resumePlanForAction(actionId: string, tenantId: string): Promise<boolean> {
+    const [action] = await withTenant(tenantId, (db) => db.select({
+      planId: domainActions.planId,
+      status: domainActions.status,
+    }).from(domainActions).where(and(
+      eq(domainActions.tenantId, tenantId),
+      eq(domainActions.id, actionId),
+    )).limit(1));
+    if (!action?.planId || action.status !== "completed") return false;
+    await this.dispatchReadyPlanActions(tenantId, action.planId);
+    return true;
   }
 
   /** Sends newly-unblocked DAG nodes through the ordinary validation/gate path. */

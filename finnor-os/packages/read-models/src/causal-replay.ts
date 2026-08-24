@@ -3,10 +3,12 @@ import {
   authorityApprovalRequests,
   authorityApprovalRequestSteps,
   authorityDecisions,
+  businessEffects,
   businessEvents,
   communicationDeliveries,
   compensationCases,
   computerArtifacts,
+  commands,
   decisionReceipts,
   domainActions,
   domainPolicyRevisions,
@@ -24,6 +26,7 @@ import {
   workObjectivePlannerAttempts,
   workObjectiveSteps,
   workPlannerAttempts,
+  workflowRuns,
   workflowSteps,
   works,
   type WorkAggregate,
@@ -131,6 +134,7 @@ export async function causalReplayProjection(
   const actions = (aggregate.actions ?? []) as ActionRow[];
   const receipts = (aggregate.receipts ?? []) as ReceiptRow[];
   const objectiveSteps = (aggregate.objectiveSteps ?? []) as ObjectiveStepRow[];
+  const objectiveLoop = aggregate.objectiveLoop;
   const objectiveAttempts = (aggregate.objectivePlannerAttempts ?? []) as ObjectiveAttemptRow[];
   const workflowStepRows = (aggregate.workflowSteps ?? []) as WorkflowStepRow[];
   const repairs = (aggregate.repairs ?? []) as Array<{ id: string; failedDomainActionId: string; status: string; terminalReceipt: unknown; createdAt: Date; proposedAt: Date | null }>;
@@ -168,6 +172,10 @@ export async function causalReplayProjection(
       eq(authorityApprovalRequestSteps.tenantId, tenantId),
       inArray(authorityApprovalRequestSteps.approvalRequestId, approvalIds),
     )).orderBy(asc(authorityApprovalRequestSteps.sequence)) : [];
+    const effectRows = actionIds.length ? await db.select().from(businessEffects).where(and(
+      eq(businessEffects.tenantId, tenantId),
+      inArray(businessEffects.domainActionId, actionIds),
+    )).orderBy(asc(businessEffects.createdAt)) : [];
     const policyRows = policyIds.length ? await db.select().from(domainPolicyRevisions).where(and(
       eq(domainPolicyRevisions.tenantId, tenantId),
       inArray(domainPolicyRevisions.policyId, policyIds),
@@ -188,6 +196,10 @@ export async function causalReplayProjection(
       eq(integrationOperations.tenantId, tenantId),
       inArray(integrationOperations.workflowStepId, stepIds),
     )).orderBy(asc(integrationOperations.createdAt)) : [];
+    const commandRows = await db.select({ command: commands, runId: workflowRuns.id }).from(workflowRuns)
+      .innerJoin(commands, and(eq(commands.tenantId, tenantId), eq(commands.id, workflowRuns.commandId)))
+      .where(and(eq(workflowRuns.tenantId, tenantId), eq(workflowRuns.workId, workId)))
+      .orderBy(asc(commands.createdAt));
     const outboxRows = stepIds.length ? await db.select().from(outboxEvents).where(and(
       eq(outboxEvents.tenantId, tenantId),
       inArray(outboxEvents.workflowStepId, stepIds),
@@ -238,11 +250,13 @@ export async function causalReplayProjection(
       authorityRows,
       approvalRows,
       approvalSteps,
+      effectRows,
       policyRows,
       externalRows,
       deliveryRows,
       universalRows,
       integrationRows,
+      commandRows,
       outboxRows,
       inboxRows,
       reconciliationRows,
@@ -427,7 +441,7 @@ export async function causalReplayProjection(
       occurredAt: iso(step.startedAt),
       sourceRefs: [sourceRef("work_objective_steps", step.id)],
       evidence: [evidence("work_objective_steps", step.id, iso(step.startedAt), step.inspectionHash ? "available" : "unavailable", step.inspectionHash)],
-      facts: sanitizeExecutionValue({ inspection: step.inspection, inspectionHash: step.inspectionHash, decision: step.decision, observation: step.observation, failure: step.failure }, viewer.role) as Record<string, unknown>,
+      facts: sanitizeExecutionValue({ inspection: step.inspection, inspectionHash: step.inspectionHash, decision: step.decision, observation: step.observation, recoveryKind: step.recoveryKind, successVerification: step.successVerification, failure: step.failure }, viewer.role) as Record<string, unknown>,
       entityRefs: [],
     });
     for (const plannerId of objectivePlannerByStep.get(step.id) ?? []) addEdge({
@@ -444,9 +458,11 @@ export async function causalReplayProjection(
   const policyNodeByAction = new Map<string, string>();
   const authorityNodeByAction = new Map<string, string>();
   const approvalNodeByAction = new Map<string, string>();
+  const effectNodeByAction = new Map<string, string>();
   const policyByIdentity = new Map(extra.policyRows.map((row) => [`${row.policyId}:${row.version}`, row]));
   const authorityByAction = new Map(extra.authorityRows.flatMap((row) => row.domainActionId ? [[row.domainActionId, row] as const] : []));
   const approvalByAction = new Map(extra.approvalRows.map((row) => [row.domainActionId, row]));
+  const effectByAction = new Map(extra.effectRows.flatMap((row) => row.domainActionId ? [[row.domainActionId, row] as const] : []));
   for (const action of actions) {
     const projected = executionNodeByAction.get(action.id);
     const id = `action:${action.id}`;
@@ -505,6 +521,26 @@ export async function causalReplayProjection(
       addMissing(`missing:policy:${action.id}`, iso(action.createdAt), `Action ${action.id} has no resolvable historical policy revision.`, id);
     }
 
+    const effect = effectByAction.get(action.id);
+    if (effect) {
+      const effectId = `effect:${effect.id}`;
+      effectNodeByAction.set(action.id, effectId);
+      const contract = record(effect.effect);
+      addNode({
+        id: effectId,
+        stage: "planning",
+        title: "Business Effect compiled",
+        summary: `${humanize(effect.operationClass)} · ${humanize(effect.status)}`,
+        status: effect.status,
+        occurredAt: iso(effect.createdAt),
+        sourceRefs: [sourceRef("business_effects", effect.id)],
+        evidence: [evidence("business_effects", effect.id, iso(effect.createdAt), "available", effect.semanticHash)],
+        facts: sanitizeExecutionValue({ semanticHash: effect.semanticHash, scopeHash: effect.scopeHash, contract, verification: effect.verification }, viewer.role) as Record<string, unknown>,
+        entityRefs: Array.isArray(contract.targets) ? contract.targets.flatMap((target) => { const row = record(target); return typeof row.type === "string" && typeof row.id === "string" ? [{ entityType: row.type, entityId: row.id }] : []; }) : [],
+      });
+      addEdge({ from: policyNodeByAction.get(action.id) ?? id, to: effectId, relation: "compiled_business_effect", evidenceRefs: [sourceRef("business_effects", effect.id), `${sourceRef("domain_actions", action.id)}.business_effect_id`], explanation: "The DomainAction is immutably bound to the canonical Business Effect compiled before approval or execution." });
+    }
+
     const decision = authorityByAction.get(action.id);
     if (decision) {
       const authorityId = `authority:${decision.id}`;
@@ -521,7 +557,7 @@ export async function causalReplayProjection(
         facts: sanitizeExecutionValue({ employeeId: decision.employeeId, revision: decision.authorityRevision, operation: decision.operation, capability: decision.capability, resourceType: decision.resourceType, resourceId: decision.resourceId, risk: decision.risk, outcome: decision.outcome, reasonCode: decision.reasonCode, evidence: decision.evidence }, viewer.role) as Record<string, unknown>,
         entityRefs: decision.resourceId ? [{ entityType: decision.resourceType, entityId: decision.resourceId }] : [],
       });
-      addEdge({ from: policyNodeByAction.get(action.id) ?? id, to: authorityId, relation: "evaluated_authority", evidenceRefs: [sourceRef("authority_decisions", decision.id), `${sourceRef("authority_decisions", decision.id)}.domain_action_id`], explanation: "The immutable authority decision is durably linked to this action and its decision-time revision." });
+      addEdge({ from: effectNodeByAction.get(action.id) ?? policyNodeByAction.get(action.id) ?? id, to: authorityId, relation: "evaluated_authority", evidenceRefs: [sourceRef("authority_decisions", decision.id), `${sourceRef("authority_decisions", decision.id)}.domain_action_id`, ...(decision.businessEffectId ? [`${sourceRef("authority_decisions", decision.id)}.business_effect_id`] : [])], explanation: "The immutable authority decision is durably linked to this action, effect, and decision-time revision." });
     } else {
       addMissing(`missing:authority:${action.id}`, iso(action.createdAt), `Action ${action.id} has no durable authority decision.`, policyNodeByAction.get(action.id) ?? id);
     }
@@ -556,6 +592,43 @@ export async function causalReplayProjection(
     }
   }
 
+  const commandNodeByRun = new Map<string, string>();
+  for (const row of extra.commandRows) {
+    const command = row.command;
+    const id = `execution-authorization:${command.id}`;
+    commandNodeByRun.set(row.runId, id);
+    addNode({
+      id,
+      stage: command.status === "failed" || command.status === "cancelled" ? "failure" : "approval",
+      title: "Durable effect authorization",
+      summary: `${humanize(command.commandType)} · ${humanize(command.status)}`,
+      status: command.status,
+      occurredAt: iso(command.authorizedAt ?? command.createdAt),
+      sourceRefs: [sourceRef("commands", command.id)],
+      evidence: [evidence("commands", command.id, iso(command.authorizedAt ?? command.createdAt), command.authorizedEffectHash ? "available" : "unavailable", command.authorizedEffectHash)],
+      facts: sanitizeExecutionValue({
+        businessEffectId: command.businessEffectId,
+        authorizedEffectHash: command.authorizedEffectHash,
+        authorityDecisionId: command.authorityDecisionId,
+        authorityRevision: command.authorityRevision,
+        policyId: command.policyId,
+        policyVersion: command.policyVersion,
+        executionClass: command.executionClass,
+        cancellationRequestedAt: iso(command.cancellationRequestedAt, "") || null,
+      }, viewer.role) as Record<string, unknown>,
+      entityRefs: [],
+    });
+    const actionId = workflowStepRows.find((step) => step.workflowRunId === row.runId)?.domainActionId;
+    const upstream = actionId ? approvalNodeByAction.get(actionId) ?? authorityNodeByAction.get(actionId) ?? actionNodeById.get(actionId) : undefined;
+    if (upstream) addEdge({
+      from: upstream,
+      to: id,
+      relation: "authorized_exact_effect",
+      evidenceRefs: [`${sourceRef("commands", command.id)}.authorized_effect_hash`, `${sourceRef("commands", command.id)}.business_effect_id`],
+      explanation: "The final decision and durable command reference the exact immutable Business Effect and authorization revision.",
+    });
+  }
+
   const providerNodesByAction = new Map<string, string[]>();
   const attachProvider = (actionId: string, nodeId: string, evidenceRef: string) => {
     providerNodesByAction.set(actionId, [...(providerNodesByAction.get(actionId) ?? []), nodeId]);
@@ -583,7 +656,9 @@ export async function causalReplayProjection(
   for (const step of workflowStepRows) {
     const id = `workflow-step:${step.id}`;
     stepNodeById.set(step.id, id);
-    addNode({ id, stage: step.status === "failed" ? "failure" : "execution", title: humanize(step.stepType), summary: `Workflow step ${step.sequence + 1} · ${humanize(step.status)}`, status: step.status, occurredAt: iso(step.updatedAt), sourceRefs: [sourceRef("workflow_steps", step.id)], evidence: [evidence("workflow_steps", step.id, iso(step.updatedAt))], facts: sanitizeExecutionValue({ attempts: step.attempts, terminalReason: step.terminalReason, evidence: step.evidence }, viewer.role) as Record<string, unknown>, entityRefs: [] });
+    addNode({ id, stage: step.status === "failed" || step.executionState === "reconciling" || step.executionState === "failed_after_possible_effect" ? "failure" : "execution", title: humanize(step.stepType), summary: `Workflow step ${step.sequence + 1} · ${humanize(step.executionState)}`, status: step.executionState, occurredAt: iso(step.updatedAt), sourceRefs: [sourceRef("workflow_steps", step.id)], evidence: [evidence("workflow_steps", step.id, iso(step.updatedAt))], facts: sanitizeExecutionValue({ localStatus: step.status, executionState: step.executionState, attempts: step.attempts, claimedAt: iso(step.claimedAt, "") || null, effectCommitAt: iso(step.effectCommitAt, "") || null, cancellationRequestedAt: iso(step.cancellationRequestedAt, "") || null, terminalReason: step.terminalReason, evidence: step.evidence }, viewer.role) as Record<string, unknown>, entityRefs: [] });
+    const authorization = commandNodeByRun.get(step.workflowRunId);
+    if (authorization) addEdge({ from: authorization, to: id, relation: "claimed_durable_execution", evidenceRefs: [`${sourceRef("workflow_steps", step.id)}.workflow_run_id`], explanation: "The worker step belongs to the run created by this exact durable authorization." });
     if (step.domainActionId && actionNodeById.has(step.domainActionId)) addEdge({ from: actionNodeById.get(step.domainActionId)!, to: id, relation: "executed_as_workflow_step", evidenceRefs: [`${sourceRef("workflow_steps", step.id)}.domain_action_id`], explanation: "The workflow step stores the exact originating DomainAction." });
   }
   for (const operation of extra.integrationRows) {
@@ -754,7 +829,17 @@ export async function causalReplayProjection(
   return {
     version: 1,
     mode: "read_only",
-    work: { id: work.id, status: work.status, objective: work.initialInstruction, createdAt: iso(work.createdAt), updatedAt: iso(work.updatedAt) },
+    work: {
+      id: work.id,
+      status: work.status,
+      executionModel: work.executionModel,
+      objective: objectiveLoop?.objective ?? work.initialInstruction,
+      objectiveState: objectiveLoop?.state ?? null,
+      successCondition: objectiveLoop?.successCondition ?? null,
+      successVerification: objectiveLoop?.successVerification ?? null,
+      createdAt: iso(work.createdAt),
+      updatedAt: iso(work.updatedAt),
+    },
     nodes: finalNodes,
     edges: finalEdges,
     moments,

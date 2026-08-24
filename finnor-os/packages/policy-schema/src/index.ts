@@ -2,7 +2,7 @@
 // Business rule CONTENT never lives here; only its shape does.
 
 import { z } from "zod";
-import { CANONICAL_ENTITY_TYPES } from "@finnor/shared-types";
+import { CANONICAL_ENTITY_TYPES, OUTCOME_PACK_IDS } from "@finnor/shared-types";
 
 export const RoleSchema = z.enum(["owner", "dispatcher", "technician"]);
 
@@ -129,6 +129,29 @@ export const SubmitInstructionSchema = z.object({
 });
 export type SubmitInstruction = z.infer<typeof SubmitInstructionSchema>;
 
+const ObjectiveAssertionSchema = z.object({
+  path: z.array(z.union([z.string().min(1).max(120), z.number().int().nonnegative()])).max(24),
+  operator: z.enum(["exists", "not_exists", "eq", "not_eq", "gte", "lte", "contains", "array_contains"]),
+  expected: z.unknown().optional(),
+}).strict();
+const ObjectiveCriterionSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("no_open_execution") }).strict(),
+  z.object({ kind: z.literal("all_objective_effects_verified"), minimumCount: z.number().int().min(0).max(25) }).strict(),
+  z.object({ kind: z.literal("canonical_query"), request: z.record(z.unknown()), assertion: ObjectiveAssertionSchema }).strict(),
+  z.object({ kind: z.literal("matched_wait"), minimumCount: z.number().int().min(1).max(25), eventType: z.string().min(1).max(200).optional() }).strict(),
+  z.object({ kind: z.literal("delegation_state"), minimumCount: z.number().int().min(1).max(25), requiredStatus: z.enum(["acknowledged", "accepted", "completed"]) }).strict(),
+  z.object({ kind: z.literal("computer_run_state"), minimumCount: z.number().int().min(1).max(25), requiredStatus: z.literal("succeeded"), evidenceRequired: z.boolean() }).strict(),
+  z.object({ kind: z.literal("decision_evidence"), minimumCount: z.number().int().min(1).max(25), accepted: z.array(z.enum(["canonical_query", "business_effect", "matched_event", "delegation", "computer_run"])).min(1).max(5) }).strict(),
+  z.object({ kind: z.literal("manual_verification"), reason: z.string().min(1).max(2_000) }).strict(),
+]);
+export const ObjectiveSuccessConditionInputSchema = z.object({
+  version: z.literal(1),
+  statement: z.string().min(1).max(10_000),
+  mode: z.literal("all"),
+  source: z.literal("explicit"),
+  criteria: z.array(ObjectiveCriterionSchema).min(1).max(20),
+}).strict();
+
 export const StartObjectiveSchema = z.object({
   objective: z.string().min(1).max(10_000),
   channel: z.enum(["voice", "text", "console"]).default("text"),
@@ -137,6 +160,7 @@ export const StartObjectiveSchema = z.object({
   workId: z.string().uuid().optional(),
   idempotencyKey: z.string().min(1).max(200).optional(),
   activeContext: OperatingInteractionContextSchema.optional(),
+  successCondition: ObjectiveSuccessConditionInputSchema.optional(),
   budgets: z.object({
     maxSteps: z.number().int().min(1).max(50).optional(),
     maxActions: z.number().int().min(0).max(25).optional(),
@@ -150,8 +174,54 @@ export const StartObjectiveSchema = z.object({
 export const ControlObjectiveSchema = z.discriminatedUnion("command", [
   z.object({ command: z.literal("continue") }),
   z.object({ command: z.literal("interrupt") }),
-  z.object({ command: z.literal("redirect"), objective: z.string().min(1).max(10_000), channel: z.enum(["voice", "text", "console"]).default("text"), instructionId: z.string().uuid().optional(), idempotencyKey: z.string().min(1).max(200).optional() }),
+  z.object({ command: z.literal("cancel") }),
+  z.object({ command: z.literal("redirect"), objective: z.string().min(1).max(10_000), channel: z.enum(["voice", "text", "console"]).default("text"), instructionId: z.string().uuid().optional(), idempotencyKey: z.string().min(1).max(200).optional(), successCondition: ObjectiveSuccessConditionInputSchema.optional() }),
 ]);
+
+export const OutcomePackIdSchema = z.enum(OUTCOME_PACK_IDS);
+export const OutcomePackModeSchema = z.enum(["shadow", "approval", "autopilot"]);
+export const StartOutcomePackSchema = z.object({
+  packId: OutcomePackIdSchema,
+  input: z.record(z.unknown()),
+  channel: z.enum(["voice", "text", "console"]).default("console"),
+  sessionId: z.string().max(500).optional(),
+  instructionId: z.string().uuid().optional(),
+  workId: z.string().uuid().optional(),
+  idempotencyKey: z.string().min(1).max(200).optional(),
+  activeContext: OperatingInteractionContextSchema.optional(),
+  budgets: z.object({
+    maxSteps: z.number().int().min(1).max(50).optional(),
+    maxActions: z.number().int().min(0).max(25).optional(),
+    maxQueries: z.number().int().min(1).max(50).optional(),
+    maxPlannerFailures: z.number().int().min(1).max(10).optional(),
+    maxConsecutiveNoProgress: z.number().int().min(1).max(10).optional(),
+    deadlineAt: z.string().datetime().optional(),
+  }).optional(),
+}).strict();
+
+const EffectClassSchema = z.enum(["internal_draft", "internal_write", "operational_change", "financial_write", "external_side_effect", "external_spend", "batch_external", "durable_workflow"]);
+export const CreateAutonomyGrantSchema = z.object({
+  packId: OutcomePackIdSchema,
+  packVersion: z.number().int().positive(),
+  scope: z.object({
+    effectClasses: z.array(EffectClassSchema).min(1).max(8),
+    resources: z.array(z.object({ type: z.string().min(1).max(120), ids: z.array(z.string().min(1).max(500)).max(100).optional() }).strict()).min(1).max(100),
+    principal: z.string().min(1).max(200),
+    providers: z.array(z.object({ provider: z.string().min(1).max(120), applicationAccountId: z.string().uuid().optional() }).strict()).max(50),
+    maxAmountUsd: z.number().nonnegative().nullable(),
+    maxRisk: z.enum(["low", "medium", "high"]),
+    validFrom: z.string().datetime(),
+    expiresAt: z.string().datetime(),
+    policyVersion: z.number().int().positive().nullable(),
+    authorityRevision: z.number().int().positive(),
+    certificationFingerprint: z.string().regex(/^[0-9a-f]{64}$/),
+    reviewAfter: z.string().datetime(),
+  }).strict(),
+  reason: z.string().trim().min(1).max(2_000),
+}).strict();
+
+export const RevokeAutonomyGrantSchema = z.object({ reason: z.string().trim().min(1).max(2_000) }).strict();
+export const SetOutcomePackEnabledSchema = z.object({ packId: OutcomePackIdSchema, enabled: z.boolean(), reason: z.string().trim().min(1).max(2_000) }).strict();
 
 export const HandoffWorkSchema = z.object({
   targetEmployeeId: z.string().uuid(),

@@ -3,6 +3,7 @@ import pg from "pg";
 import { closePool, getPool } from "@finnor/db";
 import { GET as readiness } from "../../apps/api/app/api/ready/route";
 import { migrate } from "../../packages/db/migrate";
+import { CURRENT_MIGRATION_HEAD } from "../../packages/db/migration-head";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
 const available = await (async () => {
@@ -29,7 +30,9 @@ describe.skipIf(!available)("API dependency readiness", () => {
 
     await getPool().query(`INSERT INTO service_release_heartbeats
       (service,instance_id,release_sha,build_id,version,release_source,core_certification_id,migration_head,capabilities,environment,last_beat_at)
-      VALUES ('worker','ready-worker','test-sha','test-build','test-version','test','corecert-test','0095_phase5_causal_replay.sql',ARRAY['jobs','orchestration'],'test',now())`);
+      VALUES ('worker','ready-worker','test-sha','test-build','test-version','test','corecert-test',$1,ARRAY['jobs','orchestration'],'test',now())`,
+      [CURRENT_MIGRATION_HEAD],
+    );
     const ready = await readiness();
     expect(ready.status).toBe(200);
     const body = await ready.json();

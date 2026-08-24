@@ -269,7 +269,7 @@ function WorkSpine({
   onRefresh: () => void
 }) {
   const [approvalOpen, setApprovalOpen] = useState(false)
-  const [objectiveBusy, setObjectiveBusy] = useState<"continue" | "interrupt" | "redirect" | null>(null)
+  const [objectiveBusy, setObjectiveBusy] = useState<"continue" | "interrupt" | "redirect" | "cancel" | null>(null)
   const [objectiveError, setObjectiveError] = useState<string | null>(null)
   const [redirectObjective, setRedirectObjective] = useState("")
   const [employees, setEmployees] = useState<EmployeeDirectoryEntry[]>([])
@@ -284,6 +284,7 @@ function WorkSpine({
   const pendingApprovals = workCase.approvals.filter((approval) => approval.status === "pending")
   const failedReceipt = workCase.receipts.find((receipt) => receipt.failure !== null)
   const objective = workCase.objectiveLoop
+  const outcomePack = workCase.outcomePack
   const latestIteration = objective?.iterations.at(-1)
   const currentOwnerId = workCase.durableWork?.assignedTo ?? workCase.durableWork?.currentOwnerId ?? workCase.durableWork?.initiatedBy ?? null
   const currentOwner = employees.find((employee) => employee.id === currentOwnerId)
@@ -305,7 +306,7 @@ function WorkSpine({
     return () => { cancelled = true }
   }, [workCase.durableWork?.id])
 
-  const controlObjective = async (command: "continue" | "interrupt" | "redirect") => {
+  const controlObjective = async (command: "continue" | "interrupt" | "redirect" | "cancel") => {
     setObjectiveBusy(command)
     setObjectiveError(null)
     try {
@@ -356,6 +357,13 @@ function WorkSpine({
 
       <div className="jarvis-work-spine__body">
         <Chapter number="01" title="WHY" active={stageFor(workCase) === "Why"}>
+          {outcomePack && <div className="jarvis-work-action" data-outcome-pack-mode={outcomePack.mode} data-outcome-pack-status={outcomePack.status}>
+            <div className="jarvis-work-action__topline"><strong>Certified outcome pack · {humanize(outcomePack.packId)}</strong><span className="jarvis-work-action__state">{humanize(outcomePack.mode)} · {humanize(outcomePack.status)}</span></div>
+            <p className="jarvis-work-copy">{outcomePack.objective}</p>
+            <div className="jarvis-work-facts"><span>contract v{outcomePack.packVersion}</span><span>fingerprint {shortId(outcomePack.certificationFingerprint)}</span>{outcomePack.shadowProposals.length > 0 && <span>{outcomePack.shadowProposals.length} hypothetical effect{outcomePack.shadowProposals.length === 1 ? "" : "s"} · zero mutation</span>}</div>
+            {outcomePack.latestAutonomyDecision && <p className={outcomePack.latestAutonomyDecision.eligible ? "jarvis-work-muted" : "jarvis-work-honest-warning"}>Autonomy · {humanize(outcomePack.latestAutonomyDecision.outcome)}{outcomePack.latestAutonomyDecision.reasonCodes.length > 0 ? ` · ${outcomePack.latestAutonomyDecision.reasonCodes.map(humanize).join(" · ")}` : ""}</p>}
+            {outcomePack.blockedReason && <p className="jarvis-work-honest-warning">Blocked · {outcomePack.blockedReason}</p>}
+          </div>}
           {objective && <div className="jarvis-work-action" data-objective-state={objective.state}><div className="jarvis-work-action__topline"><strong>Objective</strong><span className="jarvis-work-action__state">{humanize(objective.state)}</span></div><p className="jarvis-work-copy">{objective.objective}</p><div className="jarvis-work-facts"><span>revision {objective.revision}</span><span>{objective.budget.steps}/{objective.budget.maxSteps} steps</span><span>{objective.budget.actions}/{objective.budget.maxActions} actions</span><span>{objective.budget.queries}/{objective.budget.maxQueries} queries</span></div></div>}
           {workCase.instruction ? (
             <>
@@ -465,7 +473,7 @@ function WorkSpine({
         </Chapter> : null}
 
         <Chapter number={workCase.durableWork ? "08" : "07"} title="NEXT ACTION" active={workCase.status !== "Completed"}>
-          {objective ? <div><p className="jarvis-work-next-line"><Clock3 className="h-4 w-4" aria-hidden /> {objective.nextStep ?? (objective.state === "completed" ? "The objective has a verified terminal outcome." : "Canonical re-inspection will determine the next bounded step.")}</p>{objective.reason && <p className="jarvis-work-muted">Why · {objective.reason}</p>}{latestIteration && <p className="jarvis-work-muted">Last observed · {observationLabel(latestIteration.observation)}</p>}{objective.nextRunAt && <p className="jarvis-work-muted">Scheduled continuation · {new Date(objective.nextRunAt).toLocaleString()}</p>}<div className="jarvis-work-link-row">{["blocked", "waiting"].includes(objective.state) && <button type="button" className="jarvis-work-secondary-button" disabled={objectiveBusy !== null} onClick={() => void controlObjective("continue")}>{objectiveBusy === "continue" ? "Continuing…" : "Continue objective"}</button>}{["continue", "waiting", "awaiting_approval"].includes(objective.state) && <button type="button" className="jarvis-work-secondary-button" disabled={objectiveBusy !== null} onClick={() => void controlObjective("interrupt")}>{objectiveBusy === "interrupt" ? "Interrupting…" : "Interrupt loop"}</button>}</div>{objective.state !== "completed" && objective.state !== "failed" && <form className="jarvis-work-redirect" onSubmit={(event) => { event.preventDefault(); if (redirectObjective.trim()) void controlObjective("redirect") }}><label htmlFor={`redirect-objective-${workCase.id}`}>Redirect this same Work</label><div><input id={`redirect-objective-${workCase.id}`} value={redirectObjective} onChange={(event) => setRedirectObjective(event.target.value)} placeholder="Give JARVIS a revised outcome" maxLength={10_000} /><button type="submit" className="jarvis-work-secondary-button" disabled={objectiveBusy !== null || !redirectObjective.trim()}>{objectiveBusy === "redirect" ? "Redirecting…" : "Redirect"}</button></div></form>}{objectiveError && <p className="jarvis-work-honest-warning">{objectiveError}</p>}</div>
+          {objective ? <div><p className="jarvis-work-next-line"><Clock3 className="h-4 w-4" aria-hidden /> {objective.nextStep ?? (objective.state === "completed" ? "The objective has a verified terminal outcome." : "Canonical re-inspection will determine the next bounded step.")}</p>{objective.reason && <p className="jarvis-work-muted">Why · {objective.reason}</p>}{latestIteration && <p className="jarvis-work-muted">Last observed · {observationLabel(latestIteration.observation)}</p>}{objective.nextRunAt && <p className="jarvis-work-muted">Scheduled continuation · {new Date(objective.nextRunAt).toLocaleString()}</p>}<div className="jarvis-work-link-row">{["blocked", "waiting"].includes(objective.state) && <button type="button" className="jarvis-work-secondary-button" disabled={objectiveBusy !== null} onClick={() => void controlObjective("continue")}>{objectiveBusy === "continue" ? "Continuing…" : "Continue objective"}</button>}{["continue", "waiting", "awaiting_approval"].includes(objective.state) && <button type="button" className="jarvis-work-secondary-button" disabled={objectiveBusy !== null} onClick={() => void controlObjective("interrupt")}>{objectiveBusy === "interrupt" ? "Interrupting…" : "Interrupt loop"}</button>}{!["completed", "failed", "cancelled"].includes(objective.state) && <button type="button" className="jarvis-work-secondary-button" disabled={objectiveBusy !== null} onClick={() => void controlObjective("cancel")}>{objectiveBusy === "cancel" ? "Cancelling…" : "Cancel future execution"}</button>}</div>{objective.state !== "completed" && objective.state !== "failed" && <form className="jarvis-work-redirect" onSubmit={(event) => { event.preventDefault(); if (redirectObjective.trim()) void controlObjective("redirect") }}><label htmlFor={`redirect-objective-${workCase.id}`}>Redirect this same Work</label><div><input id={`redirect-objective-${workCase.id}`} value={redirectObjective} onChange={(event) => setRedirectObjective(event.target.value)} placeholder="Give JARVIS a revised outcome" maxLength={10_000} /><button type="submit" className="jarvis-work-secondary-button" disabled={objectiveBusy !== null || !redirectObjective.trim()}>{objectiveBusy === "redirect" ? "Redirecting…" : "Redirect"}</button></div></form>}{objectiveError && <p className="jarvis-work-honest-warning">{objectiveError}</p>}</div>
             : pendingApprovals.length > 0 ? <p className="jarvis-work-next-line"><ShieldCheck className="h-4 w-4" aria-hidden /> Approval is the recorded next boundary.</p>
             : workCase.status === "Failed" || workCase.status === "Blocked" ? <p className="jarvis-work-next-line"><UserRound className="h-4 w-4" aria-hidden /> Manual review — no frontend-generated recovery action.</p>
               : workCase.status === "Working" || workCase.status === "Waiting" ? <p className="jarvis-work-next-line"><Clock3 className="h-4 w-4" aria-hidden /> Waiting for the recorded workflow or external result.</p>

@@ -1,11 +1,13 @@
 import { createHash } from "node:crypto";
 import {
   actionLog,
+  businessEffects,
   computerArtifacts,
   computerRuns,
   computerSteps,
   domainActions,
   jobs,
+  reconciliationCases,
   ingestIntegrationEventTx,
   reconcileWorkStatus,
   tenantSettings,
@@ -182,6 +184,24 @@ export async function queueComputerRun(
   if (canonical(record(loaded.action.payload)) !== canonical(input)) {
     throw new Error("Computer execution input does not match the immutable DomainAction task envelope");
   }
+  let governedEffect: typeof businessEffects.$inferSelect | null = null;
+  if (input.mode === "WRITE") {
+    if (!loaded.action.businessEffectId) {
+      throw new Error("Computer WRITE refused: no exact frozen Business Effect is bound to the action runtime");
+    }
+    const [foundEffect] = await withTenant(tenantId, (db) => db.select().from(businessEffects).where(and(eq(businessEffects.tenantId, tenantId), eq(businessEffects.id, loaded.action!.businessEffectId!))).limit(1), actorId);
+    governedEffect = foundEffect ?? null;
+    if (!governedEffect || !["authorized", "executing"].includes(governedEffect.status)) {
+      throw new Error("Computer WRITE refused: Business Effect authorization is missing, stale, or mismatched");
+    }
+    // Runtime refs are a second anti-confusion assertion when the normal scoped tool
+    // path supplies them. The immutable DomainAction -> BusinessEffect edge remains
+    // the canonical source for crash recovery and direct durable-queue callers.
+    if ((runtime?.businessEffectId || runtime?.businessEffectHash)
+      && (runtime.businessEffectId !== governedEffect.id || runtime.businessEffectHash !== governedEffect.semanticHash)) {
+      throw new Error("Computer WRITE refused: runtime Business Effect does not match the canonical action effect");
+    }
+  }
   const config = limitsFromConfig(loaded.settings?.computerConfig);
   if (!config.enabled) throw new Error("Computer execution is disabled for this tenant");
   if (config.provider !== "steel") throw new Error("The configured computer provider is unavailable in Phase 3");
@@ -207,6 +227,7 @@ export async function queueComputerRun(
     const [created] = await db.insert(computerRuns).values({
       tenantId,
       domainActionId,
+      businessEffectId: governedEffect?.id ?? null,
       workId: loaded.action!.workId,
       objectiveLoopId: loaded.objectiveLoopId,
       actorId,
@@ -452,7 +473,24 @@ export async function finalizeComputerRun(tenantId: string, runId: string, termi
       evidenceRefs: [{ type: "computer_run", id: locked.id }],
       trustClass: "trusted_runtime",
     });
-    return { workId: locked.workId, domainActionId: locked.domainActionId, effectStatus: locked.effectStatus };
+    if (locked.businessEffectId) {
+      const [effectRow] = await db.select({ semanticHash: businessEffects.semanticHash }).from(businessEffects).where(and(eq(businessEffects.tenantId, tenantId), eq(businessEffects.id, locked.businessEffectId))).limit(1);
+      const unknown = locked.effectStatus === "unknown" || terminal.status === "timed_out";
+      const verified = terminal.status === "succeeded" && locked.effectStatus === "succeeded";
+      const verification = {
+        state: verified ? "verified" as const : unknown ? "reconciliation_required" as const : "unverified" as const,
+        basis: verified ? "Computer runtime re-observed the exact authorized effect" : unknown ? "Computer effect outcome is unknown and requires reconciliation" : `Computer run ended ${terminal.status}`,
+        checkedAt: new Date().toISOString(),
+        observed: terminal.status === "succeeded" ? safeResult ?? {} : { status: terminal.status, code: terminal.code },
+      };
+      await db.update(businessEffects).set({ status: verified ? "verified" : unknown ? "reconciliation_required" : "failed", observedResult: verification.observed, verification, observedAt: new Date() }).where(and(eq(businessEffects.tenantId, tenantId), eq(businessEffects.id, locked.businessEffectId)));
+      if (unknown) {
+        const [existingCase] = await db.select({ id: reconciliationCases.id }).from(reconciliationCases).where(and(eq(reconciliationCases.tenantId, tenantId), eq(reconciliationCases.businessEffectId, locked.businessEffectId), eq(reconciliationCases.status, "open"))).limit(1);
+        if (!existingCase) await db.insert(reconciliationCases).values({ tenantId, businessEffectId: locked.businessEffectId, caseType: "unknown_delivery", details: { computerRunId: locked.id, domainActionId: locked.domainActionId, effectStatus: locked.effectStatus } });
+      }
+      return { workId: locked.workId, domainActionId: locked.domainActionId, effectStatus: locked.effectStatus, businessEffectId: locked.businessEffectId, effectHash: effectRow?.semanticHash ?? null, verification };
+    }
+    return { workId: locked.workId, domainActionId: locked.domainActionId, effectStatus: locked.effectStatus, businessEffectId: null, effectHash: null, verification: null };
   }, current.actorId);
   if (finalized) {
     const evidence = [{ source: "computer_run", ref: runId, timestamp: new Date().toISOString() }];
@@ -460,7 +498,7 @@ export async function finalizeComputerRun(tenantId: string, runId: string, termi
       tenantId,
       finalized.domainActionId,
       terminal.status === "succeeded"
-        ? { actualResult: { status: terminal.status, computerRunId: runId, result: safeResult }, evidence }
+        ? { actualResult: { status: terminal.status, computerRunId: runId, result: safeResult }, evidence, executedEffectHash: finalized.effectHash ?? undefined, effectVerification: finalized.verification ?? undefined }
         : { failure: {
             errorKind: finalized.effectStatus === "unknown" || terminal.status === "timed_out" ? "unknown_outcome" : terminal.status === "blocked" ? "needs_human" : "terminal",
             message: terminal.reason.slice(0, 2_000),
@@ -469,7 +507,7 @@ export async function finalizeComputerRun(tenantId: string, runId: string, termi
               : terminal.status === "blocked"
                 ? "Resolve the recorded computer block and obtain any required authority before another attempt."
                 : "Review the durable computer evidence before choosing a legal recovery transition.",
-          }, evidence },
+          }, evidence, executedEffectHash: finalized.effectHash ?? undefined, effectVerification: finalized.verification ?? undefined },
     ).catch((error) => console.error(`[decision_receipts] failed to settle computer receipt for run ${runId}`, error));
     if (finalized.workId) await reconcileWorkStatus(tenantId, finalized.workId);
   }

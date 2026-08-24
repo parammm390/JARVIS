@@ -11,7 +11,7 @@ import pg from "pg";
 import { PostgresSaver } from "@langchain/langgraph-checkpoint-postgres";
 import { migrate } from "../../packages/db/migrate";
 import { seed, SEED_TENANT_ID } from "../../packages/db/seed";
-import { withTenant, closePool, getPool, domainActions, domainPolicies, actionLog } from "@finnor/db";
+import { withTenant, closePool, getPool, domainActions, domainPolicies, actionLog, workflowSteps } from "@finnor/db";
 import {
   FinnorOrchestrator,
   AllowlistExecutor,
@@ -19,8 +19,10 @@ import {
   GatedExecutor,
   buildGateGraph,
   createDefaultPluginRegistry,
+  executeAuthorizedEffectStep,
 } from "@finnor/orchestration";
 import { ToolRegistry } from "@finnor/tools";
+import { claimStep } from "@finnor/workflow-runtime";
 import { and, eq } from "drizzle-orm";
 import type { DomainAction } from "@finnor/shared-types";
 
@@ -106,6 +108,17 @@ async function getLogSteps(id: string): Promise<string[]> {
   });
 }
 
+async function runAuthorizedAction(actionId: string, tools: ToolRegistry): Promise<void> {
+  const [step] = await withTenant(SEED_TENANT_ID, (db) => db.select().from(workflowSteps).where(and(
+    eq(workflowSteps.tenantId, SEED_TENANT_ID),
+    eq(workflowSteps.domainActionId, actionId),
+    eq(workflowSteps.status, "pending"),
+  )).limit(1));
+  if (!step) throw new Error(`No queued durable step for action ${actionId}`);
+  expect(await claimStep(SEED_TENANT_ID, step.id)).toBeTruthy();
+  await executeAuthorizedEffectStep(SEED_TENANT_ID, step.id, { tools });
+}
+
 describe.skipIf(!available)("LangGraph gate flow — schedule_water_test on the new engine", () => {
   beforeAll(async () => {
     process.env.DATABASE_URL = DB_URL;
@@ -136,12 +149,14 @@ describe.skipIf(!available)("LangGraph gate flow — schedule_water_test on the 
     expect((await getAction(action.id)).summary).toContain("412 Maple Ridge Rd");
 
     const result = await orchestrator.decide(action.id, SEED_TENANT_ID, "approve", "test:owner");
-    expect(result.status).toBe("success");
+    expect(result).toMatchObject({ status: "success", output: { queued: true, durable: true } });
+    expect(calls).toHaveLength(0);
+    await runAuthorizedAction(action.id, reg);
     expect(calls.map((c) => c.tool)).toEqual(["ghl_create_contact", "ghl_book_appointment"]);
     expect((await getAction(action.id)).status).toBe("completed");
 
     const steps = await getLogSteps(action.id);
-    for (const s of ["validate", "draft", "gate", "confirmed", "execute"]) {
+    for (const s of ["validate", "draft", "gate", "confirmed", "execution_authorized", "effect_commit_started", "worker_execute"]) {
       expect(steps).toContain(s);
     }
   });
@@ -219,7 +234,9 @@ describe.skipIf(!available)("LangGraph gate flow — schedule_water_test on the 
     const resumeOrchestrator = freshGraphOrchestrator(resumeTools);
 
     const result = await resumeOrchestrator.decide(action.id, SEED_TENANT_ID, "approve", "test:owner-after-restart");
-    expect(result.status).toBe("success");
+    expect(result).toMatchObject({ status: "success", output: { queued: true, durable: true } });
+    expect(resumeCalls).toHaveLength(0);
+    await runAuthorizedAction(action.id, resumeTools);
     expect(resumeCalls.map((c) => c.tool)).toEqual(["ghl_create_contact", "ghl_book_appointment"]);
     expect((await getAction(action.id)).status).toBe("completed");
   });

@@ -11,6 +11,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { CANONICAL_ENTITY_TYPES, type AttachWorkEntityInput, type CanonicalEntityRef, type DecisionContextSnapshot } from "@finnor/shared-types";
 
 export * from "./schema";
+export * from "./migration-head";
 export * from "./event-fabric";
 export { schema };
 
@@ -523,7 +524,7 @@ export async function retryBusinessOperation(params: {
 
 export const WORK_STATUSES = [
   "received", "understanding", "planning", "ready", "actionable",
-  "awaiting_approval", "executing", "waiting", "blocked", "completed", "failed", "recovery",
+  "awaiting_approval", "executing", "waiting", "blocked", "completed", "failed", "cancelled", "recovery",
 ] as const;
 export type WorkStatus = (typeof WORK_STATUSES)[number];
 
@@ -886,7 +887,13 @@ export async function transitionWork(
   toStatus: WorkStatus,
   eventType: string,
   payload: Record<string, unknown> = {},
-  patch: { finalOutcome?: unknown; failure?: unknown; recovery?: unknown; activeContext?: Record<string, unknown> } = {},
+  patch: {
+    finalOutcome?: unknown;
+    failure?: unknown;
+    recovery?: unknown;
+    activeContext?: Record<string, unknown>;
+    executionModel?: "query" | "atomic_effect" | "objective";
+  } = {},
 ): Promise<void> {
   await withTenant(tenantId, async (db) => {
     await db.execute(sql`SELECT id FROM ${schema.works} WHERE ${schema.works.id} = ${workId} AND ${schema.works.tenantId} = ${tenantId} FOR UPDATE`);
@@ -900,6 +907,7 @@ export async function transitionWork(
       ...(patch.failure !== undefined ? { failure: patch.failure as object } : {}),
       ...(patch.recovery !== undefined ? { recovery: patch.recovery as object } : {}),
       ...(patch.activeContext ? { activeContext: { ...jsonObject(work.activeContext), ...patch.activeContext } } : {}),
+      ...(patch.executionModel ? { executionModel: patch.executionModel } : {}),
     }).where(eq(schema.works.id, workId));
     await db.insert(schema.workEvents).values({
       tenantId,

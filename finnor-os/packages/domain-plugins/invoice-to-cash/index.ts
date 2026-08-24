@@ -8,9 +8,9 @@
 import type { DomainEnginePlugin } from "../shared/plugin-interface";
 import type { DraftAction, ExecutionResult, ValidationResult, DomainPolicy } from "@finnor/shared-types";
 import type { ToolRegistry } from "@finnor/tools";
-import { withTenant, invoices, households, domainActions, decisionReceipts, ingestIntegrationEventTx } from "@finnor/db";
-import { submitCommand, enqueueStep, receiveInboxEventTx, finalizeReceipt } from "@finnor/workflow-runtime";
-import { recordPayment } from "@finnor/data-platform";
+import { withTenant, invoices, households, domainActions, decisionReceipts, ingestIntegrationEventTx, tenantIntegrations } from "@finnor/db";
+import { submitCommand, receiveInboxEventTx, finalizeReceipt } from "@finnor/workflow-runtime";
+import { materializeSourceRecord, recordPayment } from "@finnor/data-platform";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -82,6 +82,13 @@ export const invoiceToCashPlugin: DomainEnginePlugin = {
       channel: (p.channel as "sms" | "email" | undefined) ?? "sms",
       correlationId: draft.correlationId,
       domainActionId: draft.domainActionId,
+      businessEffectId: draft.businessEffect?.id,
+      authorizedEffectHash: draft.businessEffect?.semanticHash,
+      authorityDecisionId: draft.authorityDecisionId,
+      authorityRevision: draft.authorityRevision,
+      policyId: draft.businessEffect?.authority.policyId ?? undefined,
+      policyVersion: draft.businessEffect?.authority.policyVersion ?? undefined,
+      executionClass: draft.businessEffect?.operation.class,
     });
     if (!result.ok) return { status: "failure", output: {}, error: result.error, errorKind: "validation" };
     return {
@@ -100,7 +107,20 @@ export const invoiceToCashPlugin: DomainEnginePlugin = {
  */
 export async function startInvoiceToCash(
   tenantId: string,
-  params: { invoiceId: string; contactId?: string; channel?: "sms" | "email"; correlationId?: string; domainActionId?: string },
+  params: {
+    invoiceId: string;
+    contactId?: string;
+    channel?: "sms" | "email";
+    correlationId?: string;
+    domainActionId?: string;
+    businessEffectId?: string;
+    authorizedEffectHash?: string;
+    authorityDecisionId?: string;
+    authorityRevision?: number;
+    policyId?: string;
+    policyVersion?: number;
+    executionClass?: string;
+  },
 ): Promise<{ ok: true; commandId: string; workflowRunId: string } | { ok: false; error: string }> {
   const invoiceId = params.invoiceId;
   const invoice = await withTenant(tenantId, async (db) => {
@@ -120,6 +140,13 @@ export async function startInvoiceToCash(
   const idempotencyKey = `invoice-to-cash:${invoiceId}`;
   const submitted = await withTenant(tenantId, (db) =>
     submitCommand(db, {
+      businessEffectId: params.businessEffectId,
+      authorizedEffectHash: params.authorizedEffectHash,
+      authorityDecisionId: params.authorityDecisionId,
+      authorityRevision: params.authorityRevision,
+      policyId: params.policyId,
+      policyVersion: params.policyVersion,
+      executionClass: params.executionClass,
       tenantId,
       commandType: "start_invoice_to_cash_workflow",
       payload: { invoiceId },
@@ -157,10 +184,6 @@ export async function startInvoiceToCash(
       ],
     }),
   );
-
-  if (!submitted.alreadyExisted) {
-    await enqueueStep(tenantId, submitted.stepIds[0]!, `${idempotencyKey}:link`);
-  }
 
   return { ok: true, commandId: submitted.commandId, workflowRunId: submitted.workflowRunId };
 }
@@ -266,6 +289,10 @@ export async function applyPaymentWebhookEvent(params: {
   amountUsd: number;
   status: PaymentWebhookStatus;
   matchStepId?: string;
+  provider?: string;
+  integrationId?: string;
+  externalObjectType?: string;
+  externalObjectId?: string;
 }): Promise<{ applied: boolean; reason?: string }> {
   const intake = await withTenant(params.tenantId, async (db) => {
     const received = await receiveInboxEventTx(db, {
@@ -277,13 +304,39 @@ export async function applyPaymentWebhookEvent(params: {
     });
     if (received.status === "duplicate") return { duplicate: true } as const;
     if (params.status === "succeeded") {
-      await recordPayment(db, {
+      const payment = await recordPayment(db, {
         tenantId: params.tenantId,
         invoiceId: params.invoiceId,
         amountUsd: params.amountUsd,
         method: "card",
-        provenance: { sourceSystem: "payment_provider", externalId: params.providerEventId },
+        provenance: { sourceSystem: params.provider ?? "payment_provider", externalId: params.externalObjectId ?? params.providerEventId },
       });
+      if (params.integrationId && params.provider && params.externalObjectId) {
+        await materializeSourceRecord(db, {
+          tenantId: params.tenantId,
+          integrationId: params.integrationId,
+          provider: params.provider,
+          sourceScope: "payments",
+          externalObjectType: params.externalObjectType ?? "payment",
+          externalId: params.externalObjectId,
+          canonicalEntity: "payment",
+          observedAt: new Date().toISOString(),
+          candidateCanonicalIds: [payment.paymentId],
+          data: { amountUsd: params.amountUsd, status: params.status, method: "card" },
+          relationships: { invoiceId: { entity: "invoice", canonicalId: params.invoiceId } },
+          ownership: { default: "external", direction: "inbound" },
+          provenance: { providerEventId: params.providerEventId, mechanism: "webhook" },
+        });
+        await db.update(tenantIntegrations).set({
+          webhookStatus: "healthy",
+          freshnessState: "fresh",
+          reconciliationStatus: "healthy",
+          lastObservedAt: new Date(),
+          lastSuccessfulSyncAt: new Date(),
+          lastError: null,
+          updatedAt: new Date(),
+        }).where(and(eq(tenantIntegrations.tenantId, params.tenantId), eq(tenantIntegrations.id, params.integrationId)));
+      }
       await ingestIntegrationEventTx(db, {
         tenantId: params.tenantId,
         source: "payment_provider",

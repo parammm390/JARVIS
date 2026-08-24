@@ -1,5 +1,5 @@
 import { payments, invoices, type Db } from "@finnor/db";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { recordBusinessEvent } from "./events";
 
 export interface RecordPaymentParams {
@@ -13,6 +13,11 @@ export interface RecordPaymentParams {
 // Additive alongside the existing invoices.status column — records the actual payment
 // event/method, then marks the invoice paid the same way accounting/index.ts already did.
 export async function recordPayment(db: Db, params: RecordPaymentParams): Promise<{ paymentId: string }> {
+  const [invoice] = await db.select({ id: invoices.id }).from(invoices).where(and(
+    eq(invoices.tenantId, params.tenantId),
+    eq(invoices.id, params.invoiceId),
+  )).limit(1);
+  if (!invoice) throw new Error("Payment invoice does not belong to this tenant");
   const [payment] = await db
     .insert(payments)
     .values({
@@ -26,7 +31,7 @@ export async function recordPayment(db: Db, params: RecordPaymentParams): Promis
     })
     .returning();
 
-  await db.update(invoices).set({ status: "paid" }).where(eq(invoices.id, params.invoiceId));
+  await db.update(invoices).set({ status: "paid" }).where(and(eq(invoices.tenantId, params.tenantId), eq(invoices.id, params.invoiceId)));
 
   await recordBusinessEvent(db, {
     tenantId: params.tenantId,

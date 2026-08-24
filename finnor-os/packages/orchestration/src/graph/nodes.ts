@@ -16,6 +16,12 @@ import { executePluginViaRuntime } from "../runtime-bridge";
 import type { GateState } from "./state";
 import { evaluateActionAuthorityBoundary } from "../authority-runtime";
 import { revalidateActionExecution } from "@finnor/authority";
+import { approvalRequirementForAction } from "../../../../scripts/release/action-hardening-spec";
+import {
+  BusinessEffectBoundaryError,
+  ensureBusinessEffect,
+  recordBusinessEffectOutcome,
+} from "../compiler";
 
 async function setStatus(tenantId: string, actionId: string, status: DomainAction["status"]): Promise<void> {
   await withTenant(tenantId, async (db) => {
@@ -24,7 +30,7 @@ async function setStatus(tenantId: string, actionId: string, status: DomainActio
       .set({
         status,
         ...(status === "executing" ? { executionStartedAt: new Date() } : {}),
-        ...(status === "completed" || status === "failed" || status === "blocked_integration_unavailable" ? { executionStartedAt: null } : {}),
+        ...(status === "completed" || status === "failed" || status === "blocked_integration_unavailable" || status === "needs_human_review" ? { executionStartedAt: null } : {}),
       })
       .where(and(eq(domainActions.id, actionId), eq(domainActions.tenantId, tenantId)));
   });
@@ -58,7 +64,7 @@ export function makeDraftNode(plugins: PluginRegistry) {
 
 export function makeGateNode() {
   return async (state: GateState): Promise<Partial<GateState>> => {
-    const authority = await evaluateActionAuthorityBoundary({
+    const action: DomainAction = {
       id: state.actionId,
       tenantId: state.tenantId,
       actionType: state.actionType,
@@ -68,36 +74,50 @@ export function makeGateNode() {
       status: state.alreadyApproved ? "approved" : "draft",
       createdAt: new Date().toISOString(),
       initiatedBy: state.initiatedBy ?? null,
-    }, state.policy, state.draft!);
+    };
+    const approval = approvalRequirementForAction(state.actionType, state.policy.requiresConfirmation, state.draft!.requiresConfirmation);
+    try {
+      const effect = await ensureBusinessEffect({ action, draft: state.draft!, policy: state.policy, approval });
+      if (effect) await appendEpisode(state.tenantId, state.actionId, "effect_compiled", {}, { businessEffectId: effect.id, semanticHash: effect.semanticHash, scopeHash: effect.scopeHash });
+    } catch (error) {
+      if (!(error instanceof BusinessEffectBoundaryError)) throw error;
+      await setStatus(state.tenantId, state.actionId, "needs_human_review");
+      await appendEpisode(state.tenantId, state.actionId, "effect_blocked", {}, { code: error.code, message: error.message });
+      return { authorityOutcome: "denied", authorityReasonCode: error.code, requiresGate: false };
+    }
+    const authority = await evaluateActionAuthorityBoundary(action, state.policy, state.draft!);
     if (authority.decision.outcome === "denied") return {
       authorityOutcome: "denied",
       authorityDecisionId: authority.decision.id,
       authorityReasonCode: authority.decision.reasonCode,
     };
-    const needsGate = Boolean((state.policy.requiresConfirmation || state.draft!.requiresConfirmation || authority.decision.outcome === "approval_required") && !state.alreadyApproved);
-    if (!needsGate) return { authorityOutcome: authority.decision.outcome, authorityDecisionId: authority.decision.id, authorityReasonCode: authority.decision.reasonCode };
+    const needsGate = Boolean((approval.requiresConfirmation || authority.decision.outcome === "approval_required") && !state.alreadyApproved);
+    if (!needsGate) {
+      return { authorityOutcome: authority.decision.outcome, authorityDecisionId: authority.decision.id, authorityReasonCode: authority.decision.reasonCode, requiresGate: false };
+    }
+    const summary = state.draft!.businessEffect?.approval.summary ?? state.draft!.summary;
     await withTenant(state.tenantId, async (db) => {
       await db
         .update(domainActions)
-        .set({ status: "pending", summary: state.draft!.summary, payload: state.draft!.payload })
+        .set({ status: "pending", summary, payload: state.draft!.payload })
         .where(and(eq(domainActions.id, state.actionId), eq(domainActions.tenantId, state.tenantId)));
     });
-    await appendEpisode(state.tenantId, state.actionId, "gate", {}, { gated: true, summary: state.draft!.summary });
+    await appendEpisode(state.tenantId, state.actionId, "gate", {}, { gated: true, summary, businessEffectId: state.draft!.businessEffect?.id ?? null, semanticHash: state.draft!.businessEffect?.semanticHash ?? null });
     await enqueueJob(
       "send_push_notification",
-      { tenantId: state.tenantId, kind: "approval-needed", actionId: state.actionId, body: state.draft!.summary },
+      { tenantId: state.tenantId, kind: "approval-needed", actionId: state.actionId, body: summary },
       `push:approval-needed:${state.actionId}`,
       state.correlationId,
     ).catch(() => undefined);
     if (await tenantProviderConfigured(state.tenantId, "vapi")) {
       await enqueueJob(
         "voice_confirm_request",
-        { tenantId: state.tenantId, actionId: state.actionId, script: buildConfirmationScript(state.draft!.summary) },
+        { tenantId: state.tenantId, actionId: state.actionId, script: buildConfirmationScript(summary) },
         `voice-confirm:${state.actionId}`,
         state.correlationId,
       ).catch(() => undefined);
     }
-    return { authorityOutcome: authority.decision.outcome, authorityDecisionId: authority.decision.id, authorityReasonCode: authority.decision.reasonCode };
+    return { authorityOutcome: authority.decision.outcome, authorityDecisionId: authority.decision.id, authorityReasonCode: authority.decision.reasonCode, requiresGate: true };
   };
 }
 
@@ -105,8 +125,7 @@ export function makeGateNode() {
 // matching GatedExecutor's own re-check pattern.
 export function routeAfterGate(state: GateState): "pause" | "execute" | "failed" {
   if (state.authorityOutcome === "denied") return "failed";
-  const needsGate = Boolean((state.policy.requiresConfirmation || state.draft!.requiresConfirmation || state.authorityOutcome === "approval_required") && !state.alreadyApproved);
-  return needsGate ? "pause" : "execute";
+  return state.requiresGate ? "pause" : "execute";
 }
 
 // The ONLY node that calls interrupt(). No side effects before or after it — LangGraph
@@ -123,21 +142,26 @@ export function routeAfterPause(state: GateState): "execute" | "rejected" {
 
 export function makeExecuteNode(plugins: PluginRegistry, tools: ToolRegistry) {
   return async (state: GateState): Promise<Partial<GateState>> => {
-    const freshAuthority = await revalidateActionExecution(state.tenantId, state.actionId);
-    if (freshAuthority.outcome !== "allowed") {
-      await setStatus(state.tenantId, state.actionId, "failed");
-      return { result: { status: "failure", output: { authorityDecisionId: freshAuthority.id }, error: `Authority denied before execution: ${freshAuthority.reasonCode}` } };
+    // Consequential effects are revalidated by their persistent worker immediately
+    // before the commit point. Reads remain synchronous and revalidate here.
+    if (!state.draft!.businessEffect) {
+      const freshAuthority = await revalidateActionExecution(state.tenantId, state.actionId);
+      if (freshAuthority.outcome !== "allowed") {
+        await setStatus(state.tenantId, state.actionId, "failed");
+        return { result: { status: "failure", output: { authorityDecisionId: freshAuthority.id }, error: `Authority denied before execution: ${freshAuthority.reasonCode}` } };
+      }
+      await setStatus(state.tenantId, state.actionId, "executing");
     }
     const plugin = plugins.resolve(state.actionType)!;
-    await setStatus(state.tenantId, state.actionId, "executing");
     // Same idempotency scoping as the legacy GatedExecutor — see its comment.
     const identityRef = state.draft!.payload.communicationIdentityRef && typeof state.draft!.payload.communicationIdentityRef === "object"
       ? state.draft!.payload.communicationIdentityRef as Record<string, unknown>
       : null;
     const requestedCommunicationIdentityId = typeof state.draft!.payload.communicationIdentityId === "string"
       ? state.draft!.payload.communicationIdentityId
-      : typeof identityRef?.communicationIdentityId === "string" ? identityRef.communicationIdentityId : undefined;
-    const requestedAuthProfileRef = typeof state.draft!.payload.authProfileRef === "string" ? state.draft!.payload.authProfileRef : undefined;
+      : typeof identityRef?.communicationIdentityId === "string" ? identityRef.communicationIdentityId
+        : state.draft!.businessEffect?.bindings.find((binding) => binding.communicationIdentityId)?.communicationIdentityId;
+    const requestedAuthProfileRef = typeof state.draft!.payload.authProfileRef === "string" ? state.draft!.payload.authProfileRef : state.draft!.businessEffect?.bindings.find((binding) => binding.authProfileRef)?.authProfileRef;
     const accessPurpose = typeof state.draft!.payload.purpose === "string" && state.draft!.payload.purpose.trim()
       ? state.draft!.payload.purpose
       : state.actionType;
@@ -148,6 +172,7 @@ export function makeExecuteNode(plugins: PluginRegistry, tools: ToolRegistry) {
       purpose: accessPurpose,
       ...(requestedCommunicationIdentityId ? { communicationIdentityId: requestedCommunicationIdentityId } : {}),
       ...(requestedAuthProfileRef ? { authProfileRef: requestedAuthProfileRef } : {}),
+      ...(state.draft!.businessEffect ? { businessEffectId: state.draft!.businessEffect.id, businessEffectHash: state.draft!.businessEffect.semanticHash } : {}),
     });
     // §2.5: same runtime bridge as the legacy GatedExecutor — see its comment.
     const result = await executePluginViaRuntime({
@@ -159,10 +184,15 @@ export function makeExecuteNode(plugins: PluginRegistry, tools: ToolRegistry) {
       plugin,
       tools: scopedTools,
     });
+    if (result.output.durableWorkerExecution === true) return { result };
+    const effectVerification = state.draft!.businessEffect ? await recordBusinessEffectOutcome(state.tenantId, state.draft!.businessEffect, result) : null;
     await appendEpisode(state.tenantId, state.actionId, "execute", { draft: state.draft!.payload }, { ...result });
 
     const finalStatus =
-      result.status === "success" ? "completed" : result.status === "integration_unavailable" ? "blocked_integration_unavailable" : "failed";
+      effectVerification?.state === "divergent" || effectVerification?.state === "reconciliation_required" || result.errorKind === "unknown_outcome"
+        ? "needs_human_review"
+        : effectVerification?.state === "partially_verified" ? "executing"
+        : result.status === "success" ? "completed" : result.status === "integration_unavailable" ? "blocked_integration_unavailable" : "failed";
     await setStatus(state.tenantId, state.actionId, finalStatus);
 
     if (finalStatus === "completed") {

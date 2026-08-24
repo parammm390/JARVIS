@@ -6,8 +6,9 @@
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import pg from "pg";
+import { randomUUID } from "node:crypto";
 import { migrate } from "../../packages/db/migrate";
-import { withTenant, closePool, tenants, workflowSteps, workflowRuns, commands, integrationOperations, compensationCases, appointments, decisionReceipts } from "@finnor/db";
+import { withTenant, closePool, tenants, workflowSteps, workflowRuns, commands, integrationOperations, compensationCases, appointments, decisionReceipts, domainActions, businessEffects, authorityDecisions } from "@finnor/db";
 import { eq } from "drizzle-orm";
 import { submitCommand, executeCapability, compensateStep, claimStep, completeStep } from "@finnor/workflow-runtime";
 import { POST as compensateRoute } from "../../apps/api/app/api/workflows/steps/[id]/compensate/route";
@@ -122,6 +123,61 @@ describe.skipIf(!available)("compensation", () => {
 
     const [afterRow] = await withTenant(TENANT_ID, (db) => db.select().from(appointments).where(eq(appointments.id, result.output.holdId)));
     expect(afterRow!.status).toBe("canceled");
+  });
+
+  it("governs compensation as a new exact Business Effect linked to the original", async () => {
+    const stepId = await newStep("hold_appointment");
+    const actionId = randomUUID();
+    const originalEffectId = randomUUID();
+    const semanticHash = "c".repeat(64);
+    const scopeHash = "d".repeat(64);
+    const originalEffect = {
+      id: originalEffectId,
+      schemaVersion: 1,
+      semanticHash,
+      scopeHash,
+      source: { domainActionId: actionId, actionType: "schedule_water_test", workId: null, objectiveStepId: null },
+      mode: "consequential",
+      operation: { name: "schedule_water_test", class: "operational_change", external: false },
+      targets: [{ kind: "resource", type: "proposed_business_change", id: actionId, sourcePath: "domainActionId" }],
+      bindings: [], preconditions: [], before: [],
+      delta: { operation: "schedule_water_test", values: { address: "Governed compensation test" } },
+      expected: { observation: "recorded_result", state: null }, exposure: null,
+      authority: { capability: "action:schedule_water_test", risk: "high", policyId: null, policyVersion: null },
+      approval: { required: true, typedConfirmation: false, summary: "Schedule governed test" },
+      reversibility: { classification: "compensatable", compensationCapability: "scheduling.hold.compensate" },
+      uncertainty: { unknownOutcome: "reconcile_before_retry", stalePrecondition: "block_and_recompile" },
+      provenance: { compiler: "finnor_effect_compiler", compilerVersion: 1, compiledAt: new Date().toISOString(), replacementForEffectId: null, compensationForEffectId: null },
+    } as const;
+    await withTenant(TENANT_ID, async (db) => {
+      await db.insert(domainActions).values({ id: actionId, tenantId: TENANT_ID, actionType: "schedule_water_test", payload: {}, status: "completed" });
+      await db.insert(businessEffects).values({ id: originalEffectId, tenantId: TENANT_ID, domainActionId: actionId, semanticHash, scopeHash, operationClass: "operational_change", effect: originalEffect, status: "verified" });
+      await db.update(domainActions).set({ businessEffectId: originalEffectId }).where(eq(domainActions.id, actionId));
+      await db.update(workflowSteps).set({ businessEffectId: originalEffectId }).where(eq(workflowSteps.id, stepId));
+    });
+    const input = HoldAppointmentInputSchema.parse({
+      tenantId: TENANT_ID,
+      subjectType: "compensation_effect_test",
+      subjectId: TENANT_ID,
+      scheduledAt: new Date().toISOString(),
+      idempotencyKey: `compensation-effect-${stepId}`,
+    });
+    const result = await executeCapability(TENANT_ID, stepId, holdAppointmentContract, emulatorSchedulingBinding, input);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("setup failed");
+    await completeStep(TENANT_ID, stepId, { output: result.output });
+    const compensated = await compensateStep(TENANT_ID, stepId, "customer cancelled", holdAppointmentContract, emulatorSchedulingBinding, input, result.output, "system:compensation-test", "owner");
+    expect(compensated.succeeded).toBe(true);
+    const [caseRow] = await withTenant(TENANT_ID, (db) => db.select().from(compensationCases).where(eq(compensationCases.id, compensated.caseId)));
+    expect(caseRow!.businessEffectId).toBe(originalEffectId);
+    expect(caseRow!.compensationEffectId).not.toBeNull();
+    const [recovery] = await withTenant(TENANT_ID, (db) => db.select().from(businessEffects).where(eq(businessEffects.id, caseRow!.compensationEffectId!)));
+    expect(recovery).toMatchObject({ status: "verified", compensationForEffectId: originalEffectId });
+    expect(recovery!.effect).toMatchObject({ approval: { required: true, typedConfirmation: false }, provenance: { compensationForEffectId: originalEffectId } });
+    const [authority] = await withTenant(TENANT_ID, (db) => db.select().from(authorityDecisions).where(eq(authorityDecisions.businessEffectId, recovery!.id)));
+    expect(authority).toMatchObject({ outcome: "allowed", businessEffectHash: recovery!.semanticHash });
+    const [original] = await withTenant(TENANT_ID, (db) => db.select().from(businessEffects).where(eq(businessEffects.id, originalEffectId)));
+    expect(original!.status).toBe("compensated");
   });
 
   it("communications binding has no compensate() — compensateStep records an explicit failed compensation_case, never a silent no-op", async () => {

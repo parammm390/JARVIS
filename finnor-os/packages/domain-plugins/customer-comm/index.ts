@@ -130,7 +130,16 @@ export const customerCommPlugin: DomainEnginePlugin = {
             householdId: hh.id,
             channel: channel === "email" ? "email" : "sms",
           });
-          await persistMessage(db, { tenantId, conversationId, direction: "outbound", channel, content: message });
+          await persistMessage(db, {
+            tenantId,
+            conversationId,
+            direction: "outbound",
+            channel,
+            content: message,
+            ...(draft.businessEffect
+              ? { provenance: { sourceSystem: `domain_action:${draft.businessEffect.source.domainActionId}` } }
+              : {}),
+          });
         }).catch(() => undefined);
       }
       return { status: "success", output: { sent: true, channel }, expected: { sent: true } };

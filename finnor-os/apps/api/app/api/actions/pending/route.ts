@@ -14,7 +14,7 @@
 // tenant's real price_book_items rows — see lib/price-book-provenance.ts for why this
 // is scoped to price-book comparison rather than a generic all-fields diff.
 
-import { withTenant, domainActions, decisionReceipts, actionLog, priceBookItems } from "@finnor/db";
+import { withTenant, domainActions, businessEffects, decisionReceipts, actionLog, priceBookItems } from "@finnor/db";
 import { inArray, desc, eq, and } from "drizzle-orm";
 import { requireContext, errorResponse } from "../../../../lib/auth";
 import { extractPriceCandidates, buildPriceBookProvenance } from "../../../../lib/price-book-provenance";
@@ -52,6 +52,8 @@ export async function GET(req: Request): Promise<Response> {
     );
 
     const actionIds = rows.map((r) => r.id);
+    const effectRows = actionIds.length > 0 ? await withTenant(ctx.tenantId, (db) => db.select().from(businessEffects).where(and(eq(businessEffects.tenantId, ctx.tenantId), inArray(businessEffects.domainActionId, actionIds)))) : [];
+    const effectByActionId = new Map(effectRows.flatMap((row) => row.domainActionId ? [[row.domainActionId, row] as const] : []));
     // A domain action can have more than one receipt (each reflection-retry step opens
     // its own, per Task 2.5) — order by created desc and keep only the first (latest)
     // one seen per action id, in plain JS rather than a window-function query.
@@ -121,6 +123,8 @@ export async function GET(req: Request): Promise<Response> {
     const actions = rows.map((r) => ({
       ...r,
       receipt: receiptByActionId.get(r.id) ?? null,
+      businessEffect: effectByActionId.get(r.id)?.effect ?? null,
+      businessEffectStatus: effectByActionId.get(r.id)?.status ?? null,
       critic: criticByActionId.get(r.id) ?? null,
       eligibleApproverIds: approversByAction.get(r.id) ?? [],
       canCurrentEmployeeApprove: (approversByAction.get(r.id) ?? []).includes(ctx.employeeId ?? ctx.userId),

@@ -1,6 +1,6 @@
 export type VoiceObjectiveCommand =
   | { command: "start" | "redirect"; objective: string }
-  | { command: "inspect" | "interrupt" | "continue" };
+  | { command: "inspect" | "interrupt" | "continue" | "cancel" };
 
 /** Deliberately narrow spoken control grammar. Ambiguous language stays on the
  * ordinary instruction path; only an explicit reference to "objective" may control
@@ -13,6 +13,7 @@ export function parseVoiceObjectiveCommand(input: string): VoiceObjectiveCommand
   const start = value.match(/^(?:jarvis[, ]+)?(?:start|own|take on)\s+(?:this\s+|the\s+|an\s+)?objective(?:\s+to|\s*:)?\s+(.+)$/i);
   if (start?.[1]?.trim()) return { command: "start", objective: start[1].trim() };
   if (/^(?:jarvis[, ]+)?(?:interrupt|pause|stop)\s+(?:this\s+|the\s+)?objective[.!]?$/i.test(value)) return { command: "interrupt" };
+  if (/^(?:jarvis[, ]+)?(?:cancel|end|abandon)\s+(?:this\s+|the\s+)?objective[.!]?$/i.test(value)) return { command: "cancel" };
   if (/^(?:jarvis[, ]+)?(?:continue|resume)\s+(?:this\s+|the\s+)?objective[.!]?$/i.test(value)) return { command: "continue" };
   if (/^(?:jarvis[, ]+)?(?:(?:inspect|show|check)\s+(?:this\s+|the\s+)?objective|what(?:'s| is)\s+(?:this\s+|the\s+)?objective(?:'s)?\s+status|what are you trying to achieve)[?!.]?$/i.test(value)) return { command: "inspect" };
   return null;

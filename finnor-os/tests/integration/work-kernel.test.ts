@@ -13,7 +13,7 @@ import {
   withTenant,
   workAggregate,
 } from "@finnor/db";
-import { FinnorOrchestrator, type AnswerEnvelope, type Planner } from "@finnor/orchestration";
+import { FinnorOrchestrator } from "@finnor/orchestration";
 import { openReceipt, submitCommand } from "@finnor/workflow-runtime";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
@@ -91,68 +91,40 @@ describe.skipIf(!available)("Upgrade 2 durable Work kernel", () => {
     expect((aggregate!.events as Array<{ eventType: string }>).at(-1)?.eventType).toBe("recovery_input_received");
   });
 
-  it("keeps a timed-out planner request durable and completes the same Work on an idempotent retry", async () => {
+  it("accepts meaningful persistent work before a legacy one-shot planner can time out and deduplicates the Objective", async () => {
     let plannerCalls = 0;
-    const planner: Planner = {
+    const planner = {
       async plan() {
         plannerCalls += 1;
-        if (plannerCalls === 1) throw new Error("Planner timeout after deadline");
-        return [];
+        throw new Error("The one-shot planner must not own meaningful persistent work");
       },
-    };
-    const answer: AnswerEnvelope = {
-      kind: "answer",
-      intent: "conversation",
-      readOnly: true,
-      spokenSummary: "I recovered the request and need one more detail.",
-      display: { title: "JARVIS", facts: [] },
-      evidence: [{ source: "test", ref: "retry", timestamp: "2026-08-12T00:00:00.000Z" }],
-      asOf: "2026-08-12T00:00:00.000Z",
-      freshness: { status: "fresh", observedAt: "2026-08-12T00:00:00.000Z" },
     };
     const orchestrator = new FinnorOrchestrator({
       planner,
       fastReadOnlyRouter: { classify: () => ({ route: "planner", reason: "unsupported" }), route: async () => null },
-      conversationResponder: { answer: async () => answer },
     });
     const instructionId = randomUUID();
     const opts = { instructionId, idempotencyKey: `planner-failure:${randomUUID()}`, channel: "text" as const };
 
-    await expect(orchestrator.handleInstructionResult("Schedule a service visit for the Petersons", {
+    const first = await orchestrator.handleInstructionResult("Schedule a service visit for the Petersons and keep responsibility until it is confirmed", {
       tenantId: TENANT_ID,
       userId: "system:test",
       role: "owner",
-    }, opts)).rejects.toThrow("Planner timeout");
-
-    const failed = await workAggregate(TENANT_ID, instructionId);
-    expect((failed!.work as { status: string }).status).toBe("failed");
-    expect(failed!.plannerAttempts).toEqual(expect.arrayContaining([
-      expect.objectContaining({ status: "timed_out", attemptKey: `input:${instructionId}` }),
-    ]));
-
-    await transitionWork(TENANT_ID, instructionId, "recovery", "retry_requested", { source: "test" });
-    const retry = await orchestrator.handleInstructionResult("Schedule a service visit for the Petersons", {
+    }, opts);
+    const retry = await orchestrator.handleInstructionResult("Schedule a service visit for the Petersons and keep responsibility until it is confirmed", {
       tenantId: TENANT_ID,
       userId: "system:test",
       role: "owner",
-    }, {
-      workId: instructionId,
-      workInputId: instructionId,
-      instructionId,
-      channel: "text",
-      plannerAttemptKey: "retry:one",
-    });
+    }, opts);
 
-    expect(retry).toMatchObject({ workId: instructionId, instructionId, actions: [], answer });
-    const completed = await workAggregate(TENANT_ID, instructionId);
-    expect((completed!.work as { status: string }).status).toBe("completed");
-    expect((completed!.plannerAttempts as Array<{ status: string; attemptKey: string }>)).toEqual([
-      expect.objectContaining({ status: "timed_out", attemptKey: `input:${instructionId}` }),
-      expect.objectContaining({ status: "succeeded", attemptKey: "retry:one" }),
-    ]);
-    expect((completed!.events as Array<{ toStatus: string }>).map((event) => event.toStatus)).toEqual(expect.arrayContaining([
-      "received", "understanding", "planning", "failed", "recovery", "ready", "executing", "completed",
-    ]));
+    expect(first).toMatchObject({ workId: instructionId, instructionId, actions: [], objective: { route: "OBJECTIVE", state: "continue" } });
+    expect(retry).toMatchObject({ workId: instructionId, instructionId, objective: { objectiveLoopId: first.objective!.objectiveLoopId } });
+    expect(plannerCalls).toBe(0);
+    const aggregate = await workAggregate(TENANT_ID, instructionId);
+    expect((aggregate!.work as { status: string; executionModel: string }).status).toBe("executing");
+    expect((aggregate!.work as { executionModel: string }).executionModel).toBe("objective");
+    expect(aggregate!.plannerAttempts).toHaveLength(0);
+    expect(aggregate!.objectiveLoop).toMatchObject({ id: first.objective!.objectiveLoopId, state: "continue" });
   });
 
   it("aggregates planner, action, workflow, and receipt evidence through durable foreign keys", async () => {

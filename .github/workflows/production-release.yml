@@ -128,15 +128,24 @@ jobs:
           npm run setup:langgraph
         working-directory: finnor-os
 
-      - name: Phase 5 type, security, runtime, and regression suite
+      - name: Verify generated API contracts
         run: |
           npm run openapi
-          npm run typecheck
-          npm test
-          npm run release:manifest
-          npm run release:contract
-          npm run policy:lint
+          npm run authz:matrix:check
+          git diff --exit-code -- openapi.json docs/authz-matrix.md
         working-directory: finnor-os
+
+      - name: Create commit-locked core certification
+        run: npm run release:certify -- core --core-sha="$FINNOR_COMMIT_SHA" --store="$RUNNER_TEMP/certifications"
+        working-directory: finnor-os
+
+      - name: Preserve core certification for the release job
+        uses: actions/upload-artifact@v4
+        with:
+          name: finnor-core-certification
+          path: ${{ runner.temp }}/certifications/core/corecert-*.json
+          if-no-files-found: error
+          retention-days: 7
 
   release:
     needs: [canonical-graph-gate, phase5-readiness]
@@ -224,6 +233,18 @@ jobs:
       - name: API typecheck gate
         run: npm run typecheck
         working-directory: finnor-os
+
+      - name: Restore commit-locked core certification
+        uses: actions/download-artifact@v4
+        with:
+          name: finnor-core-certification
+          path: ${{ runner.temp }}/core-certification
+
+      - name: Bind deployment to the certified core artifact
+        run: |
+          certification="$(find "$RUNNER_TEMP/core-certification" -type f -name 'corecert-*.json' -print -quit)"
+          test -n "$certification" && test -f "$certification"
+          echo "FINNOR_CORE_CERTIFICATION_FILE=$certification" >> "$GITHUB_ENV"
 
       - name: Pull protected production database configuration
         run: |

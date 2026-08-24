@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { ClientManifest } from "../client-manifest";
+import type { OutcomeCertificationLevel, OutcomeCertificationStatus, OutcomePackId } from "@finnor/shared-types";
 
 /** The only terminal certification states. Keep these values stable for operators and CI. */
 export const CERTIFICATION_STATUSES = ["PASS", "FAIL", "BLOCKED_CONFIG"] as const;
@@ -14,6 +15,8 @@ export const CORE_CERTIFICATION_SUITE_VERSION = "phase6-core-v1" as const;
 export const CLIENT_CERTIFICATION_SUITE_VERSION = "phase6-client-v1" as const;
 export const FINAL_CERTIFICATION_SCHEMA = "finnor.final-certification/v1" as const;
 export const FINAL_CERTIFICATION_SUITE_VERSION = "phase6-final-v1" as const;
+export const OUTCOME_PACK_CERTIFICATION_SCHEMA = "finnor.outcome-pack-certification/v1" as const;
+export const OUTCOME_PACK_CERTIFICATION_SUITE_VERSION = "phase5-outcome-packs-v1" as const;
 
 const SHA256 = /^[0-9a-f]{64}$/;
 const GIT_SHA = /^[0-9a-f]{40}$/;
@@ -120,6 +123,145 @@ export function certificationStatus(gates: readonly Pick<CertificationGateResult
   if (gates.some((gate) => gate.status === "FAIL")) return "FAIL";
   if (gates.some((gate) => gate.status === "BLOCKED_CONFIG")) return "BLOCKED_CONFIG";
   return "PASS";
+}
+
+export const OUTCOME_PACK_GATE_KEYS = [
+  "pack_contract",
+  "deterministic_runtime",
+  "failure_chaos",
+  "acceptance_journeys",
+  "provider_source_truth",
+  "outcome_verification",
+  "trust_autonomy_safety",
+] as const;
+
+export const PHASE5_ACCEPTANCE_JOURNEYS = [
+  { id: 1, key: "lead_booked_appointment" },
+  { id: 2, key: "stuck_installation" },
+  { id: 3, key: "overdue_receivable" },
+  { id: 4, key: "service_lifecycle" },
+  { id: 5, key: "general_operator_objective" },
+  { id: 6, key: "shadow_zero_effect" },
+  { id: 7, key: "approval_continuation" },
+  { id: 8, key: "autopilot_eligible_effect" },
+  { id: 9, key: "autopilot_outside_scope" },
+  { id: 10, key: "ambiguous_target" },
+  { id: 11, key: "source_stale" },
+  { id: 12, key: "provider_degradation" },
+  { id: 13, key: "authority_revocation" },
+  { id: 14, key: "policy_change" },
+  { id: 15, key: "implementation_change" },
+  { id: 16, key: "human_override" },
+  { id: 17, key: "crash_mid_objective" },
+  { id: 18, key: "possible_remote_effect_crash" },
+  { id: 19, key: "duplicate_external_event" },
+  { id: 20, key: "external_human_edit" },
+  { id: 21, key: "failure_recovery" },
+  { id: 22, key: "false_success_attack" },
+  { id: 23, key: "compensation" },
+  { id: 24, key: "cross_tenant_forgery" },
+  { id: 25, key: "causal_replay" },
+  { id: 26, key: "product_reload" },
+  { id: 27, key: "voice_text_continuation" },
+  { id: 28, key: "autonomy_demotion" },
+] as const;
+
+export interface OutcomePackCertificationArtifact {
+  schema: typeof OUTCOME_PACK_CERTIFICATION_SCHEMA;
+  suiteVersion: typeof OUTCOME_PACK_CERTIFICATION_SUITE_VERSION;
+  certificationId: string;
+  tenantId: string;
+  packId: OutcomePackId;
+  packVersion: number;
+  fingerprint: string;
+  level: OutcomeCertificationLevel;
+  status: OutcomeCertificationStatus;
+  gates: CertificationGateResult[];
+  evidenceHash: string;
+  sampleSize: number;
+  criticalViolations: number;
+  certifiedAt: string;
+  validUntil: string;
+}
+
+export function createOutcomePackCertification(input: {
+  tenantId: string;
+  packId: OutcomePackId;
+  packVersion: number;
+  fingerprint: string;
+  level: OutcomeCertificationLevel;
+  status: OutcomeCertificationStatus;
+  gates: CertificationGateResult[];
+  sampleSize: number;
+  criticalViolations: number;
+  certifiedAt?: string;
+  validUntil: string;
+}): OutcomePackCertificationArtifact {
+  if (!input.tenantId.trim()) throw new Error("Outcome certification requires tenantId");
+  if (!SHA256.test(input.fingerprint)) throw new Error("Outcome certification fingerprint must be SHA-256");
+  if (input.packVersion < 1 || !Number.isInteger(input.packVersion)) throw new Error("Outcome certification packVersion must be positive");
+  if (input.sampleSize < 0 || input.criticalViolations < 0) throw new Error("Outcome certification counts cannot be negative");
+  requireGateSet(OUTCOME_PACK_GATE_KEYS, input.gates);
+  const gates = input.gates.map((gate) => gateResult(gate.gate, gate.status, gate.evidence)).sort((a, b) => a.gate.localeCompare(b.gate));
+  const gateStatus = certificationStatus(gates);
+  const certifiedAt = input.certifiedAt ?? new Date().toISOString();
+  if (new Date(input.validUntil) <= new Date(certifiedAt)) throw new Error("Outcome certification must expire after certification time");
+  if (input.criticalViolations > 0 && ["LOCAL_PASS", "SANDBOX_PASS", "LIVE_TEST_PASS"].includes(input.status)) throw new Error("A passing outcome certification cannot carry critical violations");
+  if (["LOCAL_PASS", "SANDBOX_PASS", "LIVE_TEST_PASS"].includes(input.status) && gateStatus !== "PASS") throw new Error("A passing outcome certification requires every certification gate to pass");
+  if (["LOCAL_PASS", "SANDBOX_PASS", "LIVE_TEST_PASS"].includes(input.status) && input.sampleSize < 1) throw new Error("A passing outcome certification requires measured outcome evidence");
+  if (input.status === "BLOCKED_CONFIG" && gateStatus !== "BLOCKED_CONFIG") throw new Error("BLOCKED_CONFIG requires configuration to be the only blocked certification gate");
+  if (input.status === "NOT_CERTIFIED" && gateStatus === "PASS") throw new Error("NOT_CERTIFIED cannot carry an all-pass gate set");
+  if (input.status === "LOCAL_PASS" && (input.level === "sandbox" || input.level === "live_provider" || input.level === "production")) throw new Error("LOCAL_PASS cannot certify sandbox/live/production levels");
+  if (input.status === "SANDBOX_PASS" && input.level !== "sandbox") throw new Error("SANDBOX_PASS requires sandbox level");
+  if (input.status === "LIVE_TEST_PASS" && input.level !== "live_provider" && input.level !== "production") throw new Error("LIVE_TEST_PASS requires live_provider or production level");
+  const evidenceHash = sha256(gates.map(({ gate, status, evidenceHash: hash }) => ({ gate, status, evidenceHash: hash })));
+  const identity = sha256({
+    suiteVersion: OUTCOME_PACK_CERTIFICATION_SUITE_VERSION,
+    tenantId: input.tenantId,
+    packId: input.packId,
+    packVersion: input.packVersion,
+    fingerprint: input.fingerprint,
+    level: input.level,
+    status: input.status,
+    evidenceHash,
+    sampleSize: input.sampleSize,
+    criticalViolations: input.criticalViolations,
+    validUntil: input.validUntil,
+  });
+  return {
+    schema: OUTCOME_PACK_CERTIFICATION_SCHEMA,
+    suiteVersion: OUTCOME_PACK_CERTIFICATION_SUITE_VERSION,
+    certificationId: `outcomecert-${identity}`,
+    tenantId: input.tenantId,
+    packId: input.packId,
+    packVersion: input.packVersion,
+    fingerprint: input.fingerprint,
+    level: input.level,
+    status: input.status,
+    gates,
+    evidenceHash,
+    sampleSize: input.sampleSize,
+    criticalViolations: input.criticalViolations,
+    certifiedAt,
+    validUntil: input.validUntil,
+  };
+}
+
+export function assertOutcomePackCertificationIntegrity(artifact: OutcomePackCertificationArtifact): void {
+  const rebuilt = createOutcomePackCertification({
+    tenantId: artifact.tenantId,
+    packId: artifact.packId,
+    packVersion: artifact.packVersion,
+    fingerprint: artifact.fingerprint,
+    level: artifact.level,
+    status: artifact.status,
+    gates: artifact.gates,
+    sampleSize: artifact.sampleSize,
+    criticalViolations: artifact.criticalViolations,
+    certifiedAt: artifact.certifiedAt,
+    validUntil: artifact.validUntil,
+  });
+  if (stableStringify(rebuilt) !== stableStringify(artifact)) throw new Error(`Outcome Pack certification ${artifact.certificationId} failed integrity verification`);
 }
 
 export const CORE_GATE_KEYS = [

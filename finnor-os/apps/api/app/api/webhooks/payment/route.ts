@@ -30,6 +30,7 @@ const StripeCheckoutSessionEventSchema = z.object({
   type: z.string(),
   data: z.object({
     object: z.object({
+      id: z.string().min(1).optional(),
       amount_total: z.number().nullable().optional(),
       metadata: z.object({ tenantId: z.string().uuid().optional(), invoiceId: z.string().uuid().optional() }).optional(),
     }),
@@ -52,8 +53,11 @@ export async function POST(req: Request): Promise<Response> {
       const metadata = event.data.object.metadata;
       if (!metadata?.tenantId) return Response.json({ error: "Stripe event missing tenantId metadata" }, { status: 400 });
       let stripeSecret: string | undefined;
+      let stripeIntegrationId: string | null = null;
       try {
-        stripeSecret = (await resolveTenantCredentialContext(metadata.tenantId, "stripe")).credentials.webhookSecret;
+        const credential = await resolveTenantCredentialContext(metadata.tenantId, "stripe");
+        stripeSecret = credential.credentials.webhookSecret;
+        stripeIntegrationId = credential.integration.id;
       } catch {
         // Missing/invalid tenant credentials remain an unsigned failure in production;
         // they never fall through to a process-global Stripe account.
@@ -75,6 +79,9 @@ export async function POST(req: Request): Promise<Response> {
       if (!metadata.invoiceId) {
         return Response.json({ error: "checkout.session.completed missing tenantId/invoiceId metadata" }, { status: 400 });
       }
+      if (!stripeIntegrationId || !event.data.object.id) {
+        return Response.json({ error: "BLOCKED-CONFIG: Stripe webhook is not bound to one exact tenant integration/session" }, { status: 409 });
+      }
 
       const result = await applyPaymentWebhookEvent({
         tenantId: metadata.tenantId,
@@ -82,6 +89,10 @@ export async function POST(req: Request): Promise<Response> {
         providerEventId: event.id,
         amountUsd: (event.data.object.amount_total ?? 0) / 100,
         status: "succeeded",
+        provider: "stripe",
+        integrationId: stripeIntegrationId,
+        externalObjectType: "checkout_session",
+        externalObjectId: event.data.object.id,
       });
       return Response.json({ received: true, applied: result.applied, duplicate: result.reason === "duplicate delivery" });
     }

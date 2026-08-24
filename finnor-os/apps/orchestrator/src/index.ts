@@ -40,8 +40,15 @@ const server = createServer(async (req, res) => {
         const body = BodySchema.safeParse(JSON.parse(raw || "{}"));
         if (!body.success) return send(400, { error: body.error.issues.map((i) => i.message).join("; ") });
         const { instruction, sessionId, ...ctx } = body.data;
-        const actions = await orchestrator.handleInstruction(instruction, ctx, { sessionId });
-        return send(200, { planned: actions });
+        const result = await orchestrator.handleInstructionResult(instruction, ctx, { sessionId });
+        return send(result.objective ? 202 : 200, {
+          planned: result.actions,
+          ...(result.answer ? { answer: result.answer } : {}),
+          ...(result.query ? { query: result.query } : {}),
+          ...(result.objective ? { objective: result.objective } : {}),
+          workId: result.workId,
+          instructionId: result.instructionId,
+        });
       } catch (err) {
         console.error(err);
         return send(500, { error: "Planning failed. Check orchestrator logs." });

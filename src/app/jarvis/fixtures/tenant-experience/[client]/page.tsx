@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation"
 import { TenantExperienceFixture } from "@/components/jarvis/experience/TenantExperienceFixture"
-import northstar from "../../../../../../finnor-os/docs/reference-tenants/northstar-service.reference.json"
-import summit from "../../../../../../finnor-os/docs/reference-tenants/summit-installations.reference.json"
+import northstar from "@/lib/jarvis/fixtures/northstar-service.reference.json"
+import summit from "@/lib/jarvis/fixtures/summit-installations.reference.json"
 
 const MANIFESTS = { northstar, summit } as const
 

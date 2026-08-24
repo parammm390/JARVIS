@@ -9,6 +9,10 @@ import {
   StartObjectiveSchema,
   ControlObjectiveSchema,
   HandoffWorkSchema,
+  StartOutcomePackSchema,
+  CreateAutonomyGrantSchema,
+  RevokeAutonomyGrantSchema,
+  SetOutcomePackEnabledSchema,
   ConfirmActionSchema,
   RejectActionSchema,
   EscalateActionSchema,
@@ -169,6 +173,31 @@ const OperationalQueryRequestSchema = z.discriminatedUnion("intent", [
 // other's fields.
 const OperationalQueryBodySchema = OperationalQueryRequestSchema;
 
+const BusinessEffectResponseSchema = z.object({
+  id: z.string().uuid(),
+  schemaVersion: z.literal(1),
+  semanticHash: z.string().regex(/^[0-9a-f]{64}$/),
+  scopeHash: z.string().regex(/^[0-9a-f]{64}$/),
+  operation: z.object({ name: z.string(), class: z.string(), external: z.boolean() }),
+  targets: z.array(z.object({ kind: z.string(), type: z.string(), id: z.string(), sourcePath: z.string().optional() })),
+  bindings: z.array(z.record(z.unknown())),
+  before: z.array(z.record(z.unknown())),
+  delta: z.object({ operation: z.string(), values: z.record(z.unknown()) }),
+  expected: z.record(z.unknown()),
+  authority: z.record(z.unknown()),
+  approval: z.object({ required: z.boolean(), typedConfirmation: z.boolean(), summary: z.string() }),
+  provenance: z.record(z.unknown()),
+}).passthrough();
+const PendingActionsResponseSchema = z.object({ actions: z.array(z.object({
+  id: z.string().uuid(),
+  actionType: z.string(),
+  summary: z.string().nullable(),
+  payload: z.record(z.unknown()),
+  status: z.string(),
+  businessEffect: BusinessEffectResponseSchema.nullable(),
+  businessEffectStatus: z.string().nullable(),
+}).passthrough()) });
+
 const doc = {
   openapi: "3.1.0",
   info: {
@@ -240,6 +269,43 @@ const doc = {
         responses: { "202": { description: "Objective persisted and queued" }, "200": { description: "Idempotent replay of an existing objective" }, "400": { description: "Invalid objective or budget" }, "401": { description: "Bad auth" } },
       },
     },
+    "/api/outcome-packs": {
+      get: {
+        summary: "List the five certified outcome contracts, tenant operating state, and evidence-derived autonomy readiness",
+        responses: { "200": { description: "Definitions, settings, certifications, active grants, and explicit readiness gates" }, "401": { description: "Bad auth" } },
+      },
+      post: {
+        summary: "Accept responsibility for one versioned Outcome Pack on the existing durable Objective controller",
+        requestBody: { content: { "application/json": { schema: s(StartOutcomePackSchema) } } },
+        responses: { "202": { description: "Pack, Work, and Objective persisted and first iteration queued" }, "400": { description: "Invalid pack input or disabled pack" }, "401": { description: "Bad auth" } },
+      },
+    },
+    "/api/outcome-packs/grants": {
+      get: {
+        summary: "List tenant-scoped progressive-autonomy grants and their current status",
+        responses: { "200": { description: "Current and historical exact-scope grants" }, "401": { description: "Bad auth" }, "403": { description: "Owner authority required" } },
+      },
+      post: {
+        summary: "Create one narrow, expiring autonomy grant only after deterministic readiness passes",
+        requestBody: { content: { "application/json": { schema: s(CreateAutonomyGrantSchema) } } },
+        responses: { "201": { description: "Grant persisted" }, "400": { description: "Invalid scope or readiness not earned" }, "403": { description: "Owner authority required" } },
+      },
+    },
+    "/api/outcome-packs/grants/{id}": {
+      delete: {
+        summary: "Revoke an autonomy grant and prevent all future uncommitted effects that depended on it",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        requestBody: { content: { "application/json": { schema: s(RevokeAutonomyGrantSchema) } } },
+        responses: { "200": { description: "Grant revoked" }, "403": { description: "Owner authority required" }, "404": { description: "Grant not found in tenant" } },
+      },
+    },
+    "/api/outcome-packs/control": {
+      post: {
+        summary: "Enable or disable an Outcome Pack; disabling pauses active runs and suspends grants",
+        requestBody: { content: { "application/json": { schema: s(SetOutcomePackEnabledSchema) } } },
+        responses: { "200": { description: "Tenant pack operating state updated" }, "403": { description: "Owner authority required" } },
+      },
+    },
     "/api/employees": {
       get: {
         summary: "List the authenticated tenant's employee directory for governed Work ownership and handoff",
@@ -270,7 +336,7 @@ const doc = {
       get: {
         summary: "List actions awaiting confirmation (filter=blocked for stuck items)",
         parameters: [{ name: "filter", in: "query", schema: { type: "string", enum: ["pending", "blocked"] } }],
-        responses: { "200": { description: "Pending actions" }, "401": { description: "Bad auth" } },
+        responses: { "200": { description: "Pending actions with their exact frozen Business Effect", content: { "application/json": { schema: s(PendingActionsResponseSchema) } } }, "401": { description: "Bad auth" } },
       },
     },
     "/api/actions/{id}/confirm": {

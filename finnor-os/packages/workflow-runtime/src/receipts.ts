@@ -4,13 +4,16 @@
 
 import { withTenant, decisionReceipts, llmCalls } from "@finnor/db";
 import { eq, and, desc, sql } from "drizzle-orm";
-import type { ReceiptEvidence, ReceiptApproval, ReceiptFailure } from "@finnor/shared-types";
+import type { BusinessEffectVerification, ReceiptEvidence, ReceiptApproval, ReceiptFailure } from "@finnor/shared-types";
 
 export interface OpenReceiptParams {
   tenantId: string;
   workflowRunId?: string;
   workflowStepId?: string;
   domainActionId?: string;
+  businessEffectId?: string;
+  intendedEffectHash?: string;
+  authorizedEffectHash?: string;
   workId?: string;
   objective: string;
   evidence: ReceiptEvidence[];
@@ -40,6 +43,9 @@ export async function openReceipt(params: OpenReceiptParams): Promise<{ receiptI
         workflowRunId: params.workflowRunId ?? null,
         workflowStepId: params.workflowStepId ?? null,
         domainActionId: params.domainActionId ?? null,
+        businessEffectId: params.businessEffectId ?? null,
+        intendedEffectHash: params.intendedEffectHash ?? null,
+        authorizedEffectHash: params.authorizedEffectHash ?? null,
         workId: params.workId ?? null,
         objective: params.objective,
         evidence: params.evidence,
@@ -68,7 +74,11 @@ export async function openReceipt(params: OpenReceiptParams): Promise<{ receiptI
 export async function finalizeReceipt(
   tenantId: string,
   receiptId: string,
-  result: { actualResult: Record<string, unknown>; evidence?: ReceiptEvidence[] } | { failure: ReceiptFailure; evidence?: ReceiptEvidence[] },
+  result: ({ actualResult: Record<string, unknown>; evidence?: ReceiptEvidence[] } | { failure: ReceiptFailure; evidence?: ReceiptEvidence[] }) & {
+    executedEffectHash?: string;
+    effectVerification?: BusinessEffectVerification;
+    recoveryEffectId?: string;
+  },
 ): Promise<void> {
   await withTenant(tenantId, (db) =>
     db
@@ -76,6 +86,12 @@ export async function finalizeReceipt(
       .set({
         actualResult: "actualResult" in result ? result.actualResult : null,
         failure: "failure" in result ? result.failure : null,
+        // A worker may have already attached execution/verification evidence before
+        // completeStep finalizes the ordinary result. Omitted optional fields mean
+        // "preserve existing causal evidence", never "erase it with null".
+        ...(result.executedEffectHash !== undefined ? { executedEffectHash: result.executedEffectHash } : {}),
+        ...(result.effectVerification !== undefined ? { verification: result.effectVerification } : {}),
+        ...(result.recoveryEffectId !== undefined ? { recoveryEffectId: result.recoveryEffectId } : {}),
         ...("evidence" in result && result.evidence ? { evidence: result.evidence } : {}),
         finalizedAt: new Date(),
       })
@@ -90,7 +106,11 @@ export async function finalizeReceipt(
 export async function finalizeLatestReceiptForAction(
   tenantId: string,
   domainActionId: string,
-  result: { actualResult: Record<string, unknown>; evidence?: ReceiptEvidence[] } | { failure: ReceiptFailure; evidence?: ReceiptEvidence[] },
+  result: ({ actualResult: Record<string, unknown>; evidence?: ReceiptEvidence[] } | { failure: ReceiptFailure; evidence?: ReceiptEvidence[] }) & {
+    executedEffectHash?: string;
+    effectVerification?: BusinessEffectVerification;
+    recoveryEffectId?: string;
+  },
 ): Promise<string | null> {
   const [receipt] = await withTenant(tenantId, (db) => db
     .select({ id: decisionReceipts.id })

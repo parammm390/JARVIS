@@ -31,7 +31,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     const capability = await resolveCompensationCapability(ctx.tenantId, loaded.step.stepType, loaded.step.payload, loaded.operation.response).catch(() => null);
     if (!capability || !capability.binding.compensate) return Response.json({ error: `Step type ${loaded.step.stepType} has no supported compensation contract` }, { status: 409 });
-    const result = await compensateStep(ctx.tenantId, id, parsed.data.reason, capability.contract, capability.binding, capability.input, capability.output, ctx.userId);
+    const result = await compensateStep(ctx.tenantId, id, parsed.data.reason, capability.contract, capability.binding, capability.input, capability.output, ctx.userId, ctx.role);
     return Response.json(result, { status: result.succeeded ? 200 : 502 });
   } catch (error) {
     return errorResponse(error);

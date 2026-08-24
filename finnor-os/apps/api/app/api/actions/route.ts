@@ -5,7 +5,7 @@ import { requireContext, errorResponse, enforceRouteRateLimit } from "../../../l
 import { getOrchestrator } from "../../../lib/orchestrator";
 import { enforceBatchBackpressure } from "../../../lib/backpressure";
 import { receiveWork, recordWorkResponse, transitionWork, workAggregate } from "@finnor/db";
-import { interactionAwareOperationalDecision, interpretOperationalQuery, OperatingInteractionContextError, resolveOperatingInteractionContext } from "@finnor/orchestration";
+import { classifyInstructionRoute, interactionAwareOperationalDecision, interpretOperationalQuery, isConversationalTurn, OperatingInteractionContextError, resolveOperatingInteractionContext } from "@finnor/orchestration";
 import { employeeAuthoritySnapshot } from "@finnor/authority";
 
 export async function POST(req: Request): Promise<Response> {
@@ -40,7 +40,8 @@ export async function POST(req: Request): Promise<Response> {
     // authenticated-route limiter already ran in requireContext; this tighter
     // intake bucket and batch backpressure are reserved for planner work.
     const fastReadDecision = interactionAwareOperationalDecision(interpretOperationalQuery(body.data.instruction), activeContext);
-    if (fastReadDecision.route === "planner") {
+    const instructionRouteDecision = classifyInstructionRoute({ instruction: body.data.instruction, fastReadDecision, activeContext, conversational: isConversationalTurn(body.data.instruction) });
+    if (instructionRouteDecision.route !== "QUERY") {
       await enforceRouteRateLimit(`intake:${ctx.tenantId}`, Number(process.env.RATE_LIMIT_INTAKE_PER_MINUTE ?? 20));
     }
     // Work is the intake claim. It commits before backpressure, secrets, memory, or
@@ -76,13 +77,13 @@ export async function POST(req: Request): Promise<Response> {
       };
       const replayQuery = (replayResponse as Record<string, unknown>).query as { metadata?: { durationMs?: number } } | undefined;
       return Response.json(replayResponse, {
-        status: received.status === "completed" || received.status === "failed" ? 200 : 202,
+        status: received.status === "completed" || received.status === "failed" || received.status === "cancelled" ? 200 : 202,
         headers: replayQuery?.metadata?.durationMs === undefined ? undefined : { "Server-Timing": `query;dur=${Number(replayQuery.metadata.durationMs).toFixed(1)}` },
       });
     }
 
     try {
-      if (fastReadDecision.route === "planner") await enforceBatchBackpressure();
+      if (instructionRouteDecision.route === "ATOMIC_EFFECT" || instructionRouteDecision.route === "CONVERSATION") await enforceBatchBackpressure();
       const result = await getOrchestrator().handleInstructionResult(body.data.instruction, ctx, {
         sessionId: body.data.sessionId,
         instructionId: received.instructionId,
@@ -92,19 +93,21 @@ export async function POST(req: Request): Promise<Response> {
         channel: body.data.channel,
         activeContext,
         fastReadDecision,
+        instructionRouteDecision,
         skipFastReadClassification: true,
       });
       const response = {
         planned: result.actions,
         ...(result.answer ? { answer: result.answer } : {}),
         ...(result.query ? { query: result.query } : {}),
+        ...(result.objective ? { objective: result.objective } : {}),
         workId: received.workId,
         workInputId: received.workInputId,
         instructionId: received.instructionId,
       };
       await recordWorkResponse(ctx.tenantId, received.workId, response);
       return Response.json(response, {
-        status: 201,
+        status: result.objective ? 202 : 201,
         headers: result.query ? { "Server-Timing": `query;dur=${result.query.metadata.durationMs.toFixed(1)}` } : undefined,
       });
     } catch (err) {

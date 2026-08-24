@@ -69,6 +69,10 @@ vi.mock("@finnor/db", () => ({
 }));
 vi.mock("@finnor/orchestration", () => ({
   interpretOperationalQuery: mocks.interpretOperationalQuery,
+  classifyInstructionRoute: vi.fn(({ fastReadDecision }: { fastReadDecision: { route: string } }) => fastReadDecision.route === "fast_read"
+    ? { version: 1, route: "QUERY", reasonCodes: ["deterministic_canonical_read"], queryDecision: fastReadDecision }
+    : { version: 1, route: "ATOMIC_EFFECT", reasonCodes: ["strict_single_effect_candidate"] }),
+  isConversationalTurn: vi.fn(() => false),
   resolveOperatingInteractionContext: vi.fn(async ({ context }: { context?: unknown }) => context),
   interactionAwareOperationalDecision: vi.fn((decision: unknown) => decision),
   OperatingInteractionContextError: class OperatingInteractionContextError extends Error {},

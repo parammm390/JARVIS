@@ -1,7 +1,7 @@
 import { StartObjectiveSchema } from "@finnor/policy-schema";
 import { errorResponse, requireContext } from "../../../lib/auth";
 import { getOrchestrator } from "../../../lib/orchestrator";
-import { OperatingInteractionContextError, resolveOperatingInteractionContext } from "@finnor/orchestration";
+import { OperatingInteractionContextError, parseObjectiveSuccessCondition, resolveOperatingInteractionContext } from "@finnor/orchestration";
 
 /** Accept responsibility for a persistent governed objective. The request only
  * commits Work/controller state and queues one bounded iteration; it never runs a
@@ -33,6 +33,7 @@ export async function POST(req: Request): Promise<Response> {
       workId: parsed.data.workId,
       idempotencyKey: parsed.data.idempotencyKey,
       activeContext,
+      successCondition: parsed.data.successCondition ? parseObjectiveSuccessCondition(parsed.data.successCondition) : undefined,
       maxSteps: budgets?.maxSteps,
       maxActions: budgets?.maxActions,
       maxQueries: budgets?.maxQueries,

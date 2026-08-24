@@ -25,6 +25,7 @@ export const GateStateAnnotation = Annotation.Root({
   authorityOutcome: Annotation<"allowed" | "denied" | "approval_required" | undefined>,
   authorityDecisionId: Annotation<string | undefined>,
   authorityReasonCode: Annotation<string | undefined>,
+  requiresGate: Annotation<boolean | undefined>,
 });
 
 export type GateState = typeof GateStateAnnotation.State;

@@ -1,265 +1,374 @@
-// Phase 2 (§2.5, "the great rewiring") acceptance: a single-action execution through
-// GatedExecutor now creates real commands/workflow_runs/workflow_steps/decision_receipts
-// rows via @finnor/workflow-runtime instead of calling plugin.execute() bare — and a
-// reflection-style retry (executor.execute() called twice for the SAME domain action)
-// creates a SECOND independent step + receipt, never silently swallowed as "already ran"
-// (a real regression this test file exists specifically to pin down — an earlier,
-// action-scoped idempotency key in the bridge broke full-flow.test.ts's own
-// "reflection_retry" test by eating the second attempt).
-//
-// New rows are identified by diffing workflow_steps ids before/after each call, not by a
-// marker field in the payload — plugin.draft() reconstructs its own payload (via zod
-// parsing in some plugins), so an injected marker field is not guaranteed to survive
-// into the step's stored payload.
+// Universal durable single-action acceptance. These tests intentionally assert the
+// new API contract: approval returns authorized/queued while canonical state is still
+// unchanged; only a persistent worker may cross the effect boundary.
 
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { z } from "zod";
+import { randomUUID } from "node:crypto";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import pg from "pg";
-import { migrate } from "../../packages/db/migrate";
-import { seed, SEED_TENANT_ID } from "../../packages/db/seed";
-import { withTenant, closePool, domainActions, domainPolicies, actionLog, commands, workflowRuns, workflowSteps, decisionReceipts } from "@finnor/db";
 import { and, eq } from "drizzle-orm";
-import { FinnorOrchestrator, createDefaultPluginRegistry } from "@finnor/orchestration";
-import { executePluginViaRuntime } from "../../packages/orchestration/src/runtime-bridge";
-import { ToolRegistry } from "@finnor/tools";
-import type { DomainAction } from "@finnor/shared-types";
+import {
+  businessEffects,
+  authorityApprovalRequests,
+  authorityApprovalRequestSteps,
+  actionLog,
+  closePool,
+  commands,
+  decisionReceipts,
+  domainActions,
+  integrationOperations,
+  jobs,
+  reconciliationCases,
+  tasks,
+  users,
+  withTenant,
+  workflowRuns,
+  workflowSteps,
+} from "@finnor/db";
+import { FinnorOrchestrator, authorizeActionExecutionTx, executeAuthorizedEffectStep } from "@finnor/orchestration";
+import { migrate } from "../../packages/db/migrate";
+import { seed, SEED_OWNER_EMAIL, SEED_TENANT_ID } from "../../packages/db/seed";
+import { runWorkflowStep } from "../../apps/worker/src/handlers/run-workflow-step";
+import { cancelRun, claimStep, recoverStaleSteps } from "@finnor/workflow-runtime";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
-const ACTION_TYPE = "schedule_water_test";
+const available = await (async () => {
+  const client = new pg.Client({ connectionString: DB_URL, connectionTimeoutMillis: 2_000 });
+  try { await client.connect(); await client.end(); return true; } catch { return false; }
+})();
 
-async function dbUp(): Promise<boolean> {
-  const c = new pg.Client({ connectionString: DB_URL, connectionTimeoutMillis: 2000 });
-  try {
-    await c.connect();
-    await c.end();
-    return true;
-  } catch {
-    return false;
-  }
+let ownerId = "";
+
+async function draftUpdate(title: string) {
+  const taskId = randomUUID();
+  await withTenant(SEED_TENANT_ID, (db) => db.insert(tasks).values({
+    id: taskId,
+    tenantId: SEED_TENANT_ID,
+    subjectType: "business",
+    subjectId: SEED_TENANT_ID,
+    title: "Before durable approval",
+    status: "open",
+    priority: "normal",
+  }));
+  const orchestrator = new FinnorOrchestrator();
+  const drafted = await orchestrator.draftKnownAction("update_task", {
+    taskRef: { taskId },
+    title,
+    status: "done",
+    priority: "high",
+  }, SEED_TENANT_ID, { initiatedBy: ownerId, source: "phase2_acceptance" });
+  expect(drafted.action.businessEffectId).toBeTruthy();
+  const [action] = await withTenant(SEED_TENANT_ID, (db) => db.select().from(domainActions).where(eq(domainActions.id, drafted.action.id)).limit(1));
+  expect(action!.status).toBe("pending");
+  return { orchestrator, action: action!, taskId, effectId: action!.businessEffectId! };
 }
-const available = await dbUp();
 
-function mockTools() {
-  const reg = new ToolRegistry();
-  for (const name of ["ghl_create_contact", "ghl_book_appointment"]) {
-    reg.register({
-      name,
-      description: "mock",
-      integration: "mock-ghl",
-      inputSchema: z.object({}).passthrough(),
-      async run() {
-        return { contactId: "mock-contact-1", booked: true };
-      },
-    });
-  }
-  return reg;
-}
-
-async function createDraftAction(payload: Record<string, unknown>): Promise<DomainAction> {
+async function durableRows(actionId: string) {
   return withTenant(SEED_TENANT_ID, async (db) => {
-    const [policy] = await db.select().from(domainPolicies).where(and(eq(domainPolicies.tenantId, SEED_TENANT_ID), eq(domainPolicies.actionType, ACTION_TYPE))).limit(1);
-    const [row] = await db
-      .insert(domainActions)
-      .values({ tenantId: SEED_TENANT_ID, actionType: ACTION_TYPE, payload, policyId: policy?.id ?? null, status: "approved" })
-      .returning();
-    await db.insert(actionLog).values({
-      tenantId: SEED_TENANT_ID,
-      domainActionId: row!.id,
-      step: "confirmed",
-      input: { by: "test:owner" },
-      output: { channel: "test" },
-    });
-    return {
-      id: row!.id,
-      tenantId: row!.tenantId,
-      actionType: row!.actionType,
-      payload: row!.payload as Record<string, unknown>,
-      policyId: row!.policyId,
-      status: row!.status,
-      createdAt: row!.createdAt.toISOString(),
-    };
+    const [step] = await db.select().from(workflowSteps).where(and(eq(workflowSteps.tenantId, SEED_TENANT_ID), eq(workflowSteps.domainActionId, actionId))).limit(1);
+    const [run] = step ? await db.select().from(workflowRuns).where(eq(workflowRuns.id, step.workflowRunId)).limit(1) : [];
+    const [command] = run ? await db.select().from(commands).where(eq(commands.id, run.commandId)).limit(1) : [];
+    return { step, run, command };
   });
 }
 
-/** Every workflow_step id that currently exists for ACTION_TYPE, across every command
- *  the bridge has ever created for it (accumulates harmlessly across test runs against
- *  the persistent local dev DB, same convention as full-flow.test.ts's own fixtures). */
-async function currentStepIds(): Promise<Set<string>> {
-  return withTenant(SEED_TENANT_ID, async (db) => {
-    const cmds = await db.select({ id: commands.id }).from(commands).where(eq(commands.commandType, ACTION_TYPE));
-    const ids = new Set<string>();
-    for (const c of cmds) {
-      const runs = await db.select({ id: workflowRuns.id }).from(workflowRuns).where(eq(workflowRuns.commandId, c.id));
-      for (const r of runs) {
-        const steps = await db.select({ id: workflowSteps.id }).from(workflowSteps).where(eq(workflowSteps.workflowRunId, r.id));
-        for (const s of steps) ids.add(s.id);
-      }
-    }
-    return ids;
-  });
-}
-
-async function cleanupSteps(stepIds: string[]): Promise<void> {
-  if (stepIds.length === 0) return;
-  await withTenant(SEED_TENANT_ID, async (db) => {
-    for (const stepId of stepIds) {
-      const [step] = await db.select().from(workflowSteps).where(eq(workflowSteps.id, stepId));
-      if (!step) continue;
-      await db.delete(decisionReceipts).where(eq(decisionReceipts.workflowStepId, stepId));
-      await db.delete(workflowSteps).where(eq(workflowSteps.id, stepId));
-      const remaining = await db.select().from(workflowSteps).where(eq(workflowSteps.workflowRunId, step.workflowRunId));
-      if (remaining.length === 0) {
-        const [run] = await db.select().from(workflowRuns).where(eq(workflowRuns.id, step.workflowRunId));
-        await db.delete(workflowRuns).where(eq(workflowRuns.id, step.workflowRunId));
-        if (run) await db.delete(commands).where(eq(commands.id, run.commandId));
-      }
-    }
-  });
-}
-
-describe.skipIf(!available)("single-action execution via the runtime bridge (§2.5)", () => {
+describe.skipIf(!available)("single-action universal durable boundary", () => {
   beforeAll(async () => {
     process.env.DATABASE_URL = DB_URL;
     await migrate(DB_URL);
     await seed(DB_URL);
+    const [owner] = await withTenant(SEED_TENANT_ID, (db) => db.select({ id: users.id }).from(users).where(eq(users.email, SEED_OWNER_EMAIL)).limit(1));
+    ownerId = owner!.id;
   });
-  afterAll(async () => {
-    await closePool();
-  });
+  afterAll(async () => { await closePool(); });
 
-  it("a successful single-action execution produces a command/run/step/receipt trail", async () => {
-    const orchestrator = new FinnorOrchestrator({ tools: mockTools() });
-    const action = await createDraftAction({
-      address: "1 Test Way",
-      contactPhone: "+15555550100",
-      contactName: "Bridge Test Household",
-      requestedAt: "2026-08-01T10:00:00Z",
+  it("commits final approval + exact EffectSet intent + first job atomically, and returns before execution", async () => {
+    const fixture = await draftUpdate("Executed only by the worker");
+    const result = await fixture.orchestrator.decide(fixture.action.id, SEED_TENANT_ID, "approve", ownerId, { role: "owner" });
+    expect(result).toMatchObject({ status: "success", output: { authorized: true, durable: true, queued: true, durableWorkerExecution: true } });
+
+    const beforeWorker = await withTenant(SEED_TENANT_ID, (db) => db.select().from(tasks).where(eq(tasks.id, fixture.taskId)).limit(1));
+    expect(beforeWorker[0]).toMatchObject({ title: "Before durable approval", status: "open", priority: "normal" });
+
+    const { command, run, step } = await durableRows(fixture.action.id);
+    expect(command).toMatchObject({
+      businessEffectId: fixture.effectId,
+      status: "running",
+      executionClass: "operational_change",
     });
+    expect(command!.authorizedEffectHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(run).toMatchObject({ workflowType: "single_action", status: "running" });
+    expect(step).toMatchObject({ stepType: "execute_authorized_effect", status: "pending", executionState: "authorized" });
+    const queued = await withTenant(SEED_TENANT_ID, (db) => db.select().from(jobs).where(eq(jobs.idempotencyKey, `workflow-step:${SEED_TENANT_ID}:${step!.id}`)));
+    expect(queued).toHaveLength(1);
 
-    const before = await currentStepIds();
-    const result = await orchestrator.executor.execute(action, await orchestrator.loadPolicy(action));
-    const after = await currentStepIds();
-    const newIds = [...after].filter((id) => !before.has(id));
-
-    try {
-      expect(result.status).toBe("success");
-      expect(newIds).toHaveLength(1);
-
-      const [step] = await withTenant(SEED_TENANT_ID, (db) => db.select().from(workflowSteps).where(eq(workflowSteps.id, newIds[0]!)));
-      expect(step!.stepType).toBe(ACTION_TYPE);
-      expect(step!.status).toBe("completed");
-
-      const [run] = await withTenant(SEED_TENANT_ID, (db) => db.select().from(workflowRuns).where(eq(workflowRuns.id, step!.workflowRunId)));
-      expect(run!.workflowType).toBe("single_action");
-
-      const [receipt] = await withTenant(SEED_TENANT_ID, (db) => db.select().from(decisionReceipts).where(eq(decisionReceipts.workflowStepId, newIds[0]!)));
-      expect(receipt).toBeTruthy();
-      expect(receipt!.finalizedAt).not.toBeNull();
-      expect(receipt!.actualResult).not.toBeNull();
-      expect(receipt!.failure).toBeNull();
-    } finally {
-      await cleanupSteps(newIds);
-    }
+    await runWorkflowStep({ tenantId: SEED_TENANT_ID, workflowStepId: step!.id });
+    const [afterWorker, action, effect, receipt] = await withTenant(SEED_TENANT_ID, async (db) => Promise.all([
+      db.select().from(tasks).where(eq(tasks.id, fixture.taskId)).then((rows) => rows[0]),
+      db.select().from(domainActions).where(eq(domainActions.id, fixture.action.id)).then((rows) => rows[0]),
+      db.select().from(businessEffects).where(eq(businessEffects.id, fixture.effectId)).then((rows) => rows[0]),
+      db.select().from(decisionReceipts).where(eq(decisionReceipts.workflowStepId, step!.id)).then((rows) => rows[0]),
+    ]));
+    expect(afterWorker).toMatchObject({ title: "Executed only by the worker", status: "done", priority: "high" });
+    expect(action!.status).toBe("completed");
+    expect(effect).toMatchObject({ status: "verified", semanticHash: command!.authorizedEffectHash });
+    expect(receipt).toMatchObject({ executedEffectHash: command!.authorizedEffectHash, verification: expect.objectContaining({ state: "verified" }) });
   });
 
-  it("direct runtime-bridge misuse refuses a pending action before creating a workflow step", async () => {
-    const orchestrator = new FinnorOrchestrator({ tools: mockTools() });
-    const action = await createDraftAction({
-      address: "2 Guardrail Way",
-      contactPhone: "+15555550101",
-      contactName: "Bridge Guardrail",
-    });
-    await withTenant(SEED_TENANT_ID, (db) => db.update(domainActions).set({ status: "pending" }).where(eq(domainActions.id, action.id)));
-    const persisted = { ...action, status: "pending" as const };
-    const policy = await orchestrator.loadPolicy(persisted);
-    const plugin = createDefaultPluginRegistry().resolve(ACTION_TYPE)!;
-    const draft = await plugin.draft(ACTION_TYPE, persisted.payload, policy);
-    const before = await currentStepIds();
+  it("converges repeated/concurrent final approvals and duplicate worker delivery on one semantic effect", async () => {
+    const fixture = await draftUpdate("Exactly one worker effect");
+    const approvals = await Promise.all(Array.from({ length: 2 }, () => fixture.orchestrator.decide(
+      fixture.action.id,
+      SEED_TENANT_ID,
+      "approve",
+      ownerId,
+      { role: "owner" },
+    )));
+    approvals.push(await fixture.orchestrator.decide(fixture.action.id, SEED_TENANT_ID, "approve", ownerId, { role: "owner" }));
+    expect(approvals.every((result) => result.status === "success")).toBe(true);
+    const { step } = await durableRows(fixture.action.id);
+    expect(step).toBeTruthy();
+    const commandCount = await withTenant(SEED_TENANT_ID, (db) => db.select().from(commands).where(eq(commands.businessEffectId, fixture.effectId)));
+    expect(commandCount).toHaveLength(1);
 
-    const result = await executePluginViaRuntime({
-      tenantId: SEED_TENANT_ID,
-      actionId: action.id,
-      actionType: ACTION_TYPE,
-      draft,
-      plugin,
-      tools: mockTools(),
-    });
-
-    expect(result.status).toBe("failure");
-    expect(result.error).toMatch(/audited approval/);
-    expect(await currentStepIds()).toEqual(before);
+    await Promise.all(Array.from({ length: 4 }, () => runWorkflowStep({ tenantId: SEED_TENANT_ID, workflowStepId: step!.id })));
+    const [task, rows] = await withTenant(SEED_TENANT_ID, async (db) => Promise.all([
+      db.select().from(tasks).where(eq(tasks.id, fixture.taskId)).then((result) => result[0]),
+      db.select().from(workflowSteps).where(eq(workflowSteps.id, step!.id)),
+    ]));
+    expect(task).toMatchObject({ title: "Exactly one worker effect", status: "done" });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ status: "completed", attempts: 1, executionState: "verified" });
   });
 
-  it("a forged approved SQL status cannot claim execution without the audited confirmation", async () => {
-    const orchestrator = new FinnorOrchestrator({ tools: mockTools() });
-    const [policy] = await withTenant(SEED_TENANT_ID, (db) => db.select().from(domainPolicies).where(and(eq(domainPolicies.tenantId, SEED_TENANT_ID), eq(domainPolicies.actionType, ACTION_TYPE))).limit(1));
-    const [forged] = await withTenant(SEED_TENANT_ID, (db) =>
-      db.insert(domainActions).values({
+  it("does not queue execution at an intermediate approval-chain step", async () => {
+    const fixture = await draftUpdate("Only the final approver may queue this");
+    await withTenant(SEED_TENANT_ID, async (db) => {
+      const [request] = await db.select().from(authorityApprovalRequests).where(and(
+        eq(authorityApprovalRequests.tenantId, SEED_TENANT_ID),
+        eq(authorityApprovalRequests.domainActionId, fixture.action.id),
+      )).limit(1);
+      const [firstStep] = await db.select().from(authorityApprovalRequestSteps).where(and(
+        eq(authorityApprovalRequestSteps.tenantId, SEED_TENANT_ID),
+        eq(authorityApprovalRequestSteps.approvalRequestId, request!.id),
+        eq(authorityApprovalRequestSteps.sequence, 1),
+      )).limit(1);
+      await db.insert(authorityApprovalRequestSteps).values({
         tenantId: SEED_TENANT_ID,
-        actionType: ACTION_TYPE,
-        payload: { address: "3 Forged Status Way", contactPhone: "+15555550102", contactName: "Forged" },
-        policyId: policy?.id ?? null,
-        status: "approved",
-      }).returning(),
-    );
-    const before = await currentStepIds();
-    const result = await orchestrator.runAction(forged!.id, SEED_TENANT_ID, "test:attacker");
+        approvalRequestId: request!.id,
+        sequence: 2,
+        approverCapability: firstStep!.approverCapability,
+        minApprovals: 1,
+      });
+    });
+    const intermediate = await fixture.orchestrator.decide(fixture.action.id, SEED_TENANT_ID, "approve", ownerId, { role: "owner" });
+    expect(intermediate).toMatchObject({ status: "success", output: { awaitingNextApproval: true } });
+    const [afterIntermediate, noCommands] = await withTenant(SEED_TENANT_ID, async (db) => Promise.all([
+      db.select().from(domainActions).where(eq(domainActions.id, fixture.action.id)).then((rows) => rows[0]),
+      db.select().from(commands).where(eq(commands.businessEffectId, fixture.effectId)),
+    ]));
+    expect(afterIntermediate!.status).toBe("pending");
+    expect(noCommands).toHaveLength(0);
 
-    expect(result.status).toBe("failure");
-    expect(result.error).toMatch(/confirmation gate/);
-    expect((await withTenant(SEED_TENANT_ID, (db) => db.select().from(domainActions).where(eq(domainActions.id, forged!.id)).limit(1)))[0]!.status).toBe("approved");
-    expect(await currentStepIds()).toEqual(before);
+    const final = await fixture.orchestrator.decide(fixture.action.id, SEED_TENANT_ID, "approve", ownerId, { role: "owner" });
+    expect(final).toMatchObject({ status: "success", output: { queued: true, durable: true } });
+    expect((await durableRows(fixture.action.id)).step).toMatchObject({ status: "pending", executionState: "authorized" });
   });
 
-  it("reflection's retry-once mechanism creates a SECOND independent step + receipt, not a swallowed no-op", async () => {
-    const orchestrator = new FinnorOrchestrator({ tools: mockTools() });
-    const action = await createDraftAction({
-      address: "2 Test Way",
-      contactPhone: "+15555550101",
-      contactName: "Retry Test Household",
-      requestedAt: "2026-08-02T10:00:00Z",
-    });
-    const policy = await orchestrator.loadPolicy(action);
+  it("makes rejection terminal before any executable intent exists", async () => {
+    const fixture = await draftUpdate("Rejected effects never execute");
+    expect(await fixture.orchestrator.decide(fixture.action.id, SEED_TENANT_ID, "reject", ownerId, { role: "owner", reason: "Not authorized by the owner" })).toMatchObject({ status: "success", output: { rejected: true } });
+    const [action, effect, commandRows] = await withTenant(SEED_TENANT_ID, async (db) => Promise.all([
+      db.select().from(domainActions).where(eq(domainActions.id, fixture.action.id)).then((rows) => rows[0]),
+      db.select().from(businessEffects).where(eq(businessEffects.id, fixture.effectId)).then((rows) => rows[0]),
+      db.select().from(commands).where(eq(commands.businessEffectId, fixture.effectId)),
+    ]));
+    expect(action!.status).toBe("rejected");
+    expect(effect!.status).toBe("cancelled");
+    expect(commandRows).toHaveLength(0);
+  });
 
-    const before = await currentStepIds();
-    // Two direct calls to executor.execute() for the SAME action, exactly like
-    // reflectWithRetry() does in packages/orchestration/src/index.ts.
-    await orchestrator.executor.execute(action, policy);
-    await orchestrator.executor.execute(action, policy);
-    const after = await currentStepIds();
-    const newIds = [...after].filter((id) => !before.has(id));
+  it("rolls back both approval state and executable intent when the authorization transaction does not commit", async () => {
+    const fixture = await draftUpdate("Rolled back transaction");
+    await expect(withTenant(SEED_TENANT_ID, async (db) => {
+      await db.update(domainActions).set({ status: "approved" }).where(and(eq(domainActions.tenantId, SEED_TENANT_ID), eq(domainActions.id, fixture.action.id), eq(domainActions.status, "pending")));
+      const [effect] = await db.select().from(businessEffects).where(eq(businessEffects.id, fixture.effectId)).limit(1);
+      await db.insert(actionLog).values({
+        tenantId: SEED_TENANT_ID,
+        domainActionId: fixture.action.id,
+        step: "confirmed",
+        input: { by: ownerId },
+        output: { businessEffectId: fixture.effectId, authorizedEffectHash: effect!.semanticHash },
+      });
+      await authorizeActionExecutionTx(db, { tenantId: SEED_TENANT_ID, actionId: fixture.action.id, approvedBy: ownerId, authorizationSource: "human_approval" });
+      throw new Error("injected_crash_before_commit");
+    })).rejects.toThrow("injected_crash_before_commit");
+    const [action, commandRows] = await withTenant(SEED_TENANT_ID, async (db) => Promise.all([
+      db.select().from(domainActions).where(eq(domainActions.id, fixture.action.id)).then((rows) => rows[0]),
+      db.select().from(commands).where(eq(commands.businessEffectId, fixture.effectId)),
+    ]));
+    expect(action!.status).toBe("pending");
+    expect(commandRows).toHaveLength(0);
+  });
 
+  it("cancels an authorized unclaimed effect with a hard no-mutation guarantee", async () => {
+    const fixture = await draftUpdate("Must never be written");
+    await fixture.orchestrator.decide(fixture.action.id, SEED_TENANT_ID, "approve", ownerId, { role: "owner" });
+    const { run, step } = await durableRows(fixture.action.id);
+    const cancelled = await cancelRun(SEED_TENANT_ID, run!.id, run!.version, ownerId);
+    expect(cancelled.ok).toBe(true);
+    await runWorkflowStep({ tenantId: SEED_TENANT_ID, workflowStepId: step!.id });
+
+    const [task, action, effect, storedStep] = await withTenant(SEED_TENANT_ID, async (db) => Promise.all([
+      db.select().from(tasks).where(eq(tasks.id, fixture.taskId)).then((rows) => rows[0]),
+      db.select().from(domainActions).where(eq(domainActions.id, fixture.action.id)).then((rows) => rows[0]),
+      db.select().from(businessEffects).where(eq(businessEffects.id, fixture.effectId)).then((rows) => rows[0]),
+      db.select().from(workflowSteps).where(eq(workflowSteps.id, step!.id)).then((rows) => rows[0]),
+    ]));
+    expect(task).toMatchObject({ title: "Before durable approval", status: "open" });
+    expect(action!.status).toBe("rejected");
+    expect(effect!.status).toBe("cancelled");
+    expect(storedStep).toMatchObject({ status: "failed", executionState: "cancelled_before_effect" });
+  });
+
+  it("lets cancellation win after local claim but before the effect commit point", async () => {
+    const fixture = await draftUpdate("Claimed but cancelled before commit");
+    await fixture.orchestrator.decide(fixture.action.id, SEED_TENANT_ID, "approve", ownerId, { role: "owner" });
+    const { run, step } = await durableRows(fixture.action.id);
+    expect(await claimStep(SEED_TENANT_ID, step!.id)).toMatchObject({ executionState: "claimed" });
+    expect((await cancelRun(SEED_TENANT_ID, run!.id, run!.version, ownerId)).ok).toBe(true);
+    // Simulates the already-running worker continuing after its eligibility checks.
+    await executeAuthorizedEffectStep(SEED_TENANT_ID, step!.id);
+    const [task, storedStep] = await withTenant(SEED_TENANT_ID, async (db) => Promise.all([
+      db.select().from(tasks).where(eq(tasks.id, fixture.taskId)).then((rows) => rows[0]),
+      db.select().from(workflowSteps).where(eq(workflowSteps.id, step!.id)).then((rows) => rows[0]),
+    ]));
+    expect(task).toMatchObject({ title: "Before durable approval", status: "open" });
+    expect(storedStep).toMatchObject({ status: "failed", executionState: "cancelled_before_effect", effectCommitAt: null });
+  });
+
+  it("fails closed when the initiating employee loses authority after approval", async () => {
+    const fixture = await draftUpdate("Revoked authority must not write");
+    await fixture.orchestrator.decide(fixture.action.id, SEED_TENANT_ID, "approve", ownerId, { role: "owner" });
+    const { step } = await durableRows(fixture.action.id);
+    await withTenant(SEED_TENANT_ID, (db) => db.update(users).set({ status: "suspended" }).where(and(eq(users.tenantId, SEED_TENANT_ID), eq(users.id, ownerId))));
     try {
-      // The whole point of NOT using an action-scoped idempotency key in the bridge:
-      // two real executor.execute() calls for the same action are two real, separately
-      // receipted attempts — never collapsed into one. (Whether the SECOND attempt's
-      // plugin call itself succeeds is a separate, pre-existing concern — GHL booking
-      // idempotency at the tool-call layer, ScopedToolRegistry/external_operations,
-      // unrelated to this bridge — so this test does not assert both succeed.)
-      expect(newIds).toHaveLength(2);
-      const steps = await withTenant(SEED_TENANT_ID, async (db) => {
-        const rows = [];
-        for (const id of newIds) {
-          const [s] = await db.select().from(workflowSteps).where(eq(workflowSteps.id, id));
-          rows.push(s!);
-        }
-        return rows;
-      });
-      expect(steps.every((s) => s.stepType === ACTION_TYPE)).toBe(true);
-      // Every attempt is terminal (completed or failed) — never left dangling — and
-      // every attempt has its own finalized receipt.
-      expect(steps.every((s) => s.status === "completed" || s.status === "failed")).toBe(true);
-      const receipts = await withTenant(SEED_TENANT_ID, async (db) => {
-        const rows = [];
-        for (const id of newIds) {
-          const [r] = await db.select().from(decisionReceipts).where(eq(decisionReceipts.workflowStepId, id));
-          rows.push(r);
-        }
-        return rows;
-      });
-      expect(receipts.every((r) => r && r.finalizedAt !== null)).toBe(true);
+      await runWorkflowStep({ tenantId: SEED_TENANT_ID, workflowStepId: step!.id });
     } finally {
-      await cleanupSteps(newIds);
+      await withTenant(SEED_TENANT_ID, (db) => db.update(users).set({ status: "active" }).where(and(eq(users.tenantId, SEED_TENANT_ID), eq(users.id, ownerId))));
     }
+    const [task, action, effect, storedStep] = await withTenant(SEED_TENANT_ID, async (db) => Promise.all([
+      db.select().from(tasks).where(eq(tasks.id, fixture.taskId)).then((rows) => rows[0]),
+      db.select().from(domainActions).where(eq(domainActions.id, fixture.action.id)).then((rows) => rows[0]),
+      db.select().from(businessEffects).where(eq(businessEffects.id, fixture.effectId)).then((rows) => rows[0]),
+      db.select().from(workflowSteps).where(eq(workflowSteps.id, step!.id)).then((rows) => rows[0]),
+    ]));
+    expect(task).toMatchObject({ title: "Before durable approval", status: "open" });
+    expect(action!.status).toBe("needs_human_review");
+    expect(effect!.status).toBe("cancelled");
+    expect(storedStep).toMatchObject({ status: "failed", executionState: "blocked", effectCommitAt: null });
+  });
+
+  it("does not execute an approved effect after its material target precondition changes", async () => {
+    const fixture = await draftUpdate("Stale effect must not overwrite current truth");
+    await fixture.orchestrator.decide(fixture.action.id, SEED_TENANT_ID, "approve", ownerId, { role: "owner" });
+    const { step } = await durableRows(fixture.action.id);
+    await withTenant(SEED_TENANT_ID, (db) => db.update(tasks).set({ title: "Changed after approval", priority: "low" }).where(and(eq(tasks.tenantId, SEED_TENANT_ID), eq(tasks.id, fixture.taskId))));
+    await runWorkflowStep({ tenantId: SEED_TENANT_ID, workflowStepId: step!.id });
+    const [task, action, effect, storedStep] = await withTenant(SEED_TENANT_ID, async (db) => Promise.all([
+      db.select().from(tasks).where(eq(tasks.id, fixture.taskId)).then((rows) => rows[0]),
+      db.select().from(domainActions).where(eq(domainActions.id, fixture.action.id)).then((rows) => rows[0]),
+      db.select().from(businessEffects).where(eq(businessEffects.id, fixture.effectId)).then((rows) => rows[0]),
+      db.select().from(workflowSteps).where(eq(workflowSteps.id, step!.id)).then((rows) => rows[0]),
+    ]));
+    expect(task).toMatchObject({ title: "Changed after approval", status: "open", priority: "low" });
+    expect(action!.status).toBe("needs_human_review");
+    expect(effect!.status).toBe("cancelled");
+    expect(storedStep).toMatchObject({ status: "failed", executionState: "blocked", effectCommitAt: null });
+  });
+
+  it("treats cancellation after the effect commit point as reconciliation, never rollback", async () => {
+    const fixture = await draftUpdate("Possible effect must be reconciled");
+    await fixture.orchestrator.decide(fixture.action.id, SEED_TENANT_ID, "approve", ownerId, { role: "owner" });
+    const { run, step } = await durableRows(fixture.action.id);
+    await claimStep(SEED_TENANT_ID, step!.id);
+    await withTenant(SEED_TENANT_ID, async (db) => {
+      await db.insert(integrationOperations).values({
+        tenantId: SEED_TENANT_ID,
+        workflowStepId: step!.id,
+        businessEffectId: fixture.effectId,
+        operationKey: `business-effect:${step!.id}`,
+        capability: "action:update_task",
+        provider: "injected_possible_acceptance",
+        requestHash: "injected-commit-boundary",
+        status: "running",
+      });
+      await db.update(workflowSteps).set({ executionState: "commit_started", effectCommitAt: new Date() }).where(and(eq(workflowSteps.tenantId, SEED_TENANT_ID), eq(workflowSteps.id, step!.id)));
+      await db.update(businessEffects).set({ status: "executing", executionStartedAt: new Date() }).where(and(eq(businessEffects.tenantId, SEED_TENANT_ID), eq(businessEffects.id, fixture.effectId)));
+    });
+    expect((await cancelRun(SEED_TENANT_ID, run!.id, run!.version, ownerId)).ok).toBe(true);
+    await runWorkflowStep({ tenantId: SEED_TENANT_ID, workflowStepId: step!.id });
+    const [task, action, effect, storedStep, cases] = await withTenant(SEED_TENANT_ID, async (db) => Promise.all([
+      db.select().from(tasks).where(eq(tasks.id, fixture.taskId)).then((rows) => rows[0]),
+      db.select().from(domainActions).where(eq(domainActions.id, fixture.action.id)).then((rows) => rows[0]),
+      db.select().from(businessEffects).where(eq(businessEffects.id, fixture.effectId)).then((rows) => rows[0]),
+      db.select().from(workflowSteps).where(eq(workflowSteps.id, step!.id)).then((rows) => rows[0]),
+      db.select().from(reconciliationCases).where(and(eq(reconciliationCases.tenantId, SEED_TENANT_ID), eq(reconciliationCases.businessEffectId, fixture.effectId))),
+    ]));
+    expect(task).toMatchObject({ title: "Before durable approval", status: "open" });
+    expect(action!.status).toBe("needs_human_review");
+    expect(effect!.status).toBe("reconciliation_required");
+    expect(storedStep).toMatchObject({ status: "leased", executionState: "cancellation_requested" });
+    expect(cases).toHaveLength(1);
+  });
+
+  it("recovers a crash after possible provider acceptance without blind redelivery", async () => {
+    const fixture = await draftUpdate("Unknown delivery must not repeat");
+    await fixture.orchestrator.decide(fixture.action.id, SEED_TENANT_ID, "approve", ownerId, { role: "owner" });
+    const { step } = await durableRows(fixture.action.id);
+    await claimStep(SEED_TENANT_ID, step!.id);
+    await withTenant(SEED_TENANT_ID, async (db) => {
+      await db.insert(integrationOperations).values({
+        tenantId: SEED_TENANT_ID,
+        workflowStepId: step!.id,
+        businessEffectId: fixture.effectId,
+        operationKey: `business-effect:${fixture.effectId}`,
+        capability: "action:update_task",
+        provider: "injected_crash_after_send",
+        requestHash: "injected-possible-acceptance",
+        status: "running",
+      });
+      await db.update(workflowSteps).set({ executionState: "commit_started", effectCommitAt: new Date(), leaseExpiresAt: new Date(Date.now() - 1_000) }).where(and(eq(workflowSteps.tenantId, SEED_TENANT_ID), eq(workflowSteps.id, step!.id)));
+      await db.update(businessEffects).set({ status: "executing", executionStartedAt: new Date() }).where(and(eq(businessEffects.tenantId, SEED_TENANT_ID), eq(businessEffects.id, fixture.effectId)));
+    });
+    expect((await recoverStaleSteps(SEED_TENANT_ID)).reconciled).toBeGreaterThanOrEqual(1);
+    await runWorkflowStep({ tenantId: SEED_TENANT_ID, workflowStepId: step!.id });
+    const [task, action, effect, storedStep, operations, cases] = await withTenant(SEED_TENANT_ID, async (db) => Promise.all([
+      db.select().from(tasks).where(eq(tasks.id, fixture.taskId)).then((rows) => rows[0]),
+      db.select().from(domainActions).where(eq(domainActions.id, fixture.action.id)).then((rows) => rows[0]),
+      db.select().from(businessEffects).where(eq(businessEffects.id, fixture.effectId)).then((rows) => rows[0]),
+      db.select().from(workflowSteps).where(eq(workflowSteps.id, step!.id)).then((rows) => rows[0]),
+      db.select().from(integrationOperations).where(eq(integrationOperations.workflowStepId, step!.id)),
+      db.select().from(reconciliationCases).where(and(eq(reconciliationCases.tenantId, SEED_TENANT_ID), eq(reconciliationCases.relatedStepId, step!.id))),
+    ]));
+    expect(task).toMatchObject({ title: "Before durable approval", status: "open" });
+    expect(action!.status).toBe("needs_human_review");
+    expect(effect!.status).toBe("reconciliation_required");
+    expect(storedStep).toMatchObject({ status: "leased", executionState: "reconciling" });
+    expect(operations).toHaveLength(1);
+    expect(operations[0]!.status).toBe("unknown");
+    expect(cases).toHaveLength(1);
+  });
+
+  it("fails closed when a forged tenant tries to claim another tenant's durable step", async () => {
+    const fixture = await draftUpdate("Cross-tenant claim must not write");
+    await fixture.orchestrator.decide(fixture.action.id, SEED_TENANT_ID, "approve", ownerId, { role: "owner" });
+    const { step } = await durableRows(fixture.action.id);
+    await runWorkflowStep({ tenantId: randomUUID(), workflowStepId: step!.id });
+    const [task, storedStep] = await withTenant(SEED_TENANT_ID, async (db) => Promise.all([
+      db.select().from(tasks).where(eq(tasks.id, fixture.taskId)).then((rows) => rows[0]),
+      db.select().from(workflowSteps).where(eq(workflowSteps.id, step!.id)).then((rows) => rows[0]),
+    ]));
+    expect(task).toMatchObject({ title: "Before durable approval", status: "open" });
+    expect(storedStep).toMatchObject({ status: "pending", executionState: "authorized", attempts: 0 });
   });
 });
