@@ -1,0 +1,24 @@
+title = "FINNOR gitleaks extensions"
+
+# Keep the complete upstream rule set. The allowlist below is deliberately
+# scoped to synthetic test/evidence identifiers and the browser-publishable
+# Supabase key used by the public marketing build; it does not disable secret
+# scanning globally or allow arbitrary credentials.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Known synthetic FINNOR test and evidence fixtures"
+paths = [
+  '''causal-replay\.test\.ts$''',
+  '''evidence/system-audit-authenticated/matrix\.json$''',
+  '''p2-llm-faults\.test\.ts$''',
+  '''JARVIS-FRONTEND-MAESTRO-STATE-v3\.md$''',
+]
+
+[[allowlists]]
+description = "Public browser-publishable Supabase key"
+condition = "AND"
+regexTarget = "match"
+paths = ['''\.github/workflows/marketing-ci\.yml$''']
+regexes = ['''sb_publishable_[A-Za-z0-9_-]+''']
