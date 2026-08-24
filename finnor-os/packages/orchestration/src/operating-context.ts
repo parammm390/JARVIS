@@ -1,15 +1,18 @@
 import {
   CANONICAL_ENTITY_TYPES,
   canonicalEntityRefToPartyRef,
+  OPERATING_INTERACTION_PRECEDENCE,
   OPERATING_TRUTH_PRECEDENCE,
   type CanonicalEntityRef,
   type MemorySnapshot,
   type OperatingCompanyDirectory,
   type OperatingContext,
+  type OperatingInteractionContext,
   type OperatingSourceRef,
   type PartyRef,
   type TenantContext,
 } from "@finnor/shared-types";
+import { OperatingInteractionContextSchema } from "@finnor/policy-schema";
 import {
   tenantOperatingProfiles,
   tenants,
@@ -90,7 +93,7 @@ export interface AssembleOperatingContextOptions {
   workId?: string;
   sessionId?: string;
   householdId?: string;
-  activeContext?: Record<string, unknown>;
+  activeContext?: OperatingInteractionContext | Record<string, unknown>;
   /** Semantic memory is deliberately omitted for deterministic live-state reads. */
   includeMemory?: boolean;
   includeSemanticMemory?: boolean;
@@ -297,7 +300,13 @@ export async function assembleOperatingContext(
   if (workRow) sources.push({ kind: "WORK", source: "works", ref: workRow.id, asOf: iso(workRow.updatedAt) ?? assembledAt, role: "context_only" });
 
   let mentionedHousehold: { householdId: string; label: string } | null = null;
-  let resolvedHouseholdId = opts.householdId;
+  const interactionParsed = OperatingInteractionContextSchema.safeParse(opts.activeContext ?? workRow?.activeContext);
+  const interactionContext: OperatingInteractionContext | null = interactionParsed.success ? interactionParsed.data : null;
+  const explicitHousehold = [
+    ...(interactionContext?.selectedEntities ?? []),
+    ...(interactionContext?.focusedEntity ? [interactionContext.focusedEntity] : []),
+  ].find((ref) => ref.entityType === "household" && !interactionContext?.excludedEntities.some((excluded) => excluded.entityType === ref.entityType && excluded.entityId === ref.entityId));
+  let resolvedHouseholdId = explicitHousehold?.entityId ?? opts.householdId;
   if (opts.includeMemory && !resolvedHouseholdId) {
     try {
       const resolved = await resolveHouseholdMention(ctx.tenantId, opts.instruction);
@@ -359,15 +368,28 @@ export async function assembleOperatingContext(
     }
   }
   if (resolvedHouseholdId && UUID.test(resolvedHouseholdId)) refs.set(`household:${resolvedHouseholdId}`, { entityType: "household", entityId: resolvedHouseholdId });
-  const active = record(opts.activeContext ?? workRow?.activeContext);
   const trustedPartyRefs = new Map<string, PartyRef>();
-  if (Array.isArray(active.entityRefs)) {
-    for (const candidate of active.entityRefs) {
+  const excludedInteractionRefs = new Set((interactionContext?.excludedEntities ?? []).map((ref) => `${ref.entityType}:${ref.entityId}`));
+  const directInteractionRefs = [
+    ...(interactionContext?.selectedEntities ?? []),
+    ...(interactionContext?.focusedEntity ? [interactionContext.focusedEntity] : []),
+  ];
+  for (const ref of directInteractionRefs) {
+    if (excludedInteractionRefs.has(`${ref.entityType}:${ref.entityId}`)) continue;
+    refs.set(`${ref.entityType}:${ref.entityId}`, ref);
+    const partyRef = canonicalEntityRefToPartyRef(ref);
+    if (partyRef) trustedPartyRefs.set(`${partyRef.partyType}:${partyRef.partyId}`, partyRef);
+  }
+  // Read-only compatibility for historical Work created before the versioned
+  // interaction contract. New API intake never accepts this shape.
+  const legacyActive = record(workRow?.activeContext);
+  if (!interactionContext && Array.isArray(legacyActive.entityRefs)) {
+    for (const candidate of legacyActive.entityRefs) {
       const value = record(candidate);
       if (typeof value.entityType === "string" && ENTITY_TYPES.has(value.entityType) && typeof value.entityId === "string" && UUID.test(value.entityId)) {
-        const ref = { entityType: value.entityType as CanonicalEntityRef["entityType"], entityId: value.entityId };
-        refs.set(`${ref.entityType}:${ref.entityId}`, ref);
-        const partyRef = canonicalEntityRefToPartyRef(ref);
+        const legacyRef = { entityType: value.entityType as CanonicalEntityRef["entityType"], entityId: value.entityId };
+        refs.set(`${legacyRef.entityType}:${legacyRef.entityId}`, legacyRef);
+        const partyRef = canonicalEntityRefToPartyRef(legacyRef);
         if (partyRef) trustedPartyRefs.set(`${partyRef.partyType}:${partyRef.partyId}`, partyRef);
       }
     }
@@ -405,6 +427,8 @@ export async function assembleOperatingContext(
     version: 1,
     assembledAt,
     truthPrecedence: OPERATING_TRUTH_PRECEDENCE,
+    interactionPrecedence: OPERATING_INTERACTION_PRECEDENCE,
+    interactionContext,
     tenant: {
       id: ctx.tenantId,
       companyName: tenantRow?.name ?? null,

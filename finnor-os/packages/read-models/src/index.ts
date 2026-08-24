@@ -58,6 +58,9 @@ import {
   type CanonicalRelationship,
   type CompanyContext,
   type CompanyContextAnchor,
+  type BusinessScene,
+  type BusinessWorldObject,
+  type BusinessWorldProjection,
 } from "@finnor/shared-types";
 
 export * from "./route-optimizer";
@@ -71,6 +74,8 @@ export * from "./work-cases";
 export * from "./operational-queries";
 export * from "./party-resolver";
 export * from "./party-queries";
+export * from "./execution-projection";
+export * from "./causal-replay";
 
 export interface IntelligenceForecasts {
   cashCollections: ForecastPoint[] | null;
@@ -1100,6 +1105,134 @@ export async function companyContext(
     nodes,
     relationships,
     truncated: allNodes.length > nodes.length || relationships.length >= 500,
+    source: { kind: "canonical_postgres", tables: sourceTables },
+    asOf: new Date().toISOString(),
+  };
+}
+
+const BUSINESS_WORLD_OBJECT_CAP = 200;
+const BUSINESS_WORLD_RELATIONSHIP_CAP = 500;
+const BUSINESS_SCENE_TYPES: Record<BusinessScene, CanonicalEntityRef["entityType"][]> = {
+  customer: ["household", "contact", "equipment", "service_visit", "maintenance_agreement", "lead", "opportunity", "quote", "proposal", "work_order", "appointment", "invoice", "payment", "conversation", "call", "message", "communication", "document", "task", "work", "decision_receipt"],
+  schedule: ["service_visit", "appointment", "internal_event", "technician", "household", "work_order", "task", "work", "delegation", "acknowledgement_request"],
+  money: ["quote", "proposal", "invoice", "payment", "household", "work", "domain_action", "decision_receipt", "business_operation"],
+  work: ["work", "task", "domain_action", "workflow_run", "workflow_step", "business_operation", "business_operation_target", "decision_receipt", "delegation", "acknowledgement_request", "communication_delivery", "internal_event", "document_share", "computer_run"],
+  inventory: ["inventory_item", "work", "task", "service_visit", "work_order", "domain_action", "decision_receipt"],
+  computer: ["computer_run", "work", "domain_action", "decision_receipt", "document", "communication_delivery"],
+};
+
+interface BusinessWorldNodeRow extends Record<string, unknown> {
+  entity_type: CanonicalEntityRef["entityType"];
+  entity_id: string;
+  label: string | null;
+  status: string | null;
+  occurred_at: Date | string | null;
+  source_table: string;
+}
+
+/** One bounded projection contract for all six scenes. It is assembled at read time
+ * from the existing Company Graph plus Phase 2/3 canonical tables that predate this
+ * contract. It neither persists nor infers business facts. */
+export async function businessWorld(
+  tenantId: string,
+  scene: BusinessScene,
+): Promise<BusinessWorldProjection> {
+  const types = BUSINESS_SCENE_TYPES[scene];
+  const typeValues = sql.join(types.map((type) => sql`${type}`), sql`, `);
+  const selected = await withTenant(tenantId, async (db) => {
+    const result = await db.execute<BusinessWorldNodeRow>(sql`
+      WITH all_nodes AS (
+        SELECT tenant_id,entity_type,entity_id,label,status,occurred_at,source_table
+          FROM finnor_os.company_graph_nodes
+        UNION ALL SELECT tenant_id,'delegation',id,'Delegation',status,updated_at,'delegations' FROM finnor_os.delegations
+        UNION ALL SELECT tenant_id,'acknowledgement_request',id,'Acknowledgement request',status,updated_at,'acknowledgement_requests' FROM finnor_os.acknowledgement_requests
+        UNION ALL SELECT tenant_id,'communication_delivery',id,'Communication delivery',status,updated_at,'communication_deliveries' FROM finnor_os.communication_deliveries
+        UNION ALL SELECT tenant_id,'internal_event',id,title,status,starts_at,'internal_events' FROM finnor_os.internal_events
+        UNION ALL SELECT tenant_id,'document_share',id,'Document share',status,updated_at,'document_shares' FROM finnor_os.document_shares
+        UNION ALL SELECT tenant_id,'inventory_item',id,name,
+          CASE WHEN quantity<=reorder_threshold THEN 'low_stock' ELSE 'in_stock' END,NULL::timestamptz,'inventory_items'
+          FROM finnor_os.inventory_items
+        UNION ALL SELECT tenant_id,'computer_run',id,'Computer run · '||application,status,updated_at,'computer_runs'
+          FROM finnor_os.computer_runs
+      )
+      SELECT entity_type,entity_id,label,status,occurred_at,source_table
+      FROM all_nodes WHERE tenant_id=${tenantId}::uuid AND entity_type IN (${typeValues})
+      ORDER BY occurred_at DESC NULLS LAST,entity_type,entity_id
+      LIMIT ${BUSINESS_WORLD_OBJECT_CAP + 1}
+    `);
+    return result.rows;
+  });
+  const truncatedObjects = selected.length > BUSINESS_WORLD_OBJECT_CAP;
+  const nodeRows = selected.slice(0, BUSINESS_WORLD_OBJECT_CAP);
+  const wantedValues = nodeRows.length > 0
+    ? sql.join(nodeRows.map((row) => sql`(${row.entity_type}::text,${row.entity_id}::uuid)`), sql`, `)
+    : null;
+  const relationships = wantedValues ? await withTenant(tenantId, async (db) => {
+    const result = await db.execute<{
+      from_entity_type: CanonicalEntityRef["entityType"];
+      from_entity_id: string;
+      relationship: string;
+      to_entity_type: CanonicalEntityRef["entityType"];
+      to_entity_id: string;
+      source_table: string;
+      source_column: string;
+    }>(sql`
+      WITH wanted(entity_type,entity_id) AS (VALUES ${wantedValues}), all_edges AS (
+        SELECT tenant_id,from_entity_type,from_entity_id,relationship,to_entity_type,to_entity_id,source_table,source_column
+          FROM finnor_os.company_graph_edges
+        UNION ALL SELECT tenant_id,'delegation',id,'part_of','work',work_id,'delegations','work_id' FROM finnor_os.delegations WHERE work_id IS NOT NULL
+        UNION ALL SELECT tenant_id,'delegation',id,'authorized_by','domain_action',domain_action_id,'delegations','domain_action_id' FROM finnor_os.delegations
+        UNION ALL SELECT tenant_id,'acknowledgement_request',id,'part_of','work',work_id,'acknowledgement_requests','work_id' FROM finnor_os.acknowledgement_requests WHERE work_id IS NOT NULL
+        UNION ALL SELECT tenant_id,'communication_delivery',id,'part_of','work',work_id,'communication_deliveries','work_id' FROM finnor_os.communication_deliveries WHERE work_id IS NOT NULL
+        UNION ALL SELECT tenant_id,'internal_event',id,'part_of','work',work_id,'internal_events','work_id' FROM finnor_os.internal_events WHERE work_id IS NOT NULL
+        UNION ALL SELECT tenant_id,'document_share',id,'shares','document',document_id,'document_shares','document_id' FROM finnor_os.document_shares
+        UNION ALL SELECT tenant_id,'computer_run',id,'part_of','work',work_id,'computer_runs','work_id' FROM finnor_os.computer_runs WHERE work_id IS NOT NULL
+        UNION ALL SELECT tenant_id,'computer_run',id,'executes','domain_action',domain_action_id,'computer_runs','domain_action_id' FROM finnor_os.computer_runs
+      )
+      SELECT edge.from_entity_type,edge.from_entity_id,edge.relationship,edge.to_entity_type,edge.to_entity_id,edge.source_table,edge.source_column
+      FROM all_edges edge
+      JOIN wanted f ON f.entity_type=edge.from_entity_type AND f.entity_id=edge.from_entity_id
+      JOIN wanted t ON t.entity_type=edge.to_entity_type AND t.entity_id=edge.to_entity_id
+      WHERE edge.tenant_id=${tenantId}::uuid
+      ORDER BY edge.source_table,edge.from_entity_id,edge.to_entity_id
+      LIMIT ${BUSINESS_WORLD_RELATIONSHIP_CAP + 1}
+    `);
+    return result.rows.slice(0, BUSINESS_WORLD_RELATIONSHIP_CAP).map((row) => ({
+      from: { entityType: row.from_entity_type, entityId: row.from_entity_id },
+      relationship: row.relationship,
+      to: { entityType: row.to_entity_type, entityId: row.to_entity_id },
+      source: { table: row.source_table, column: row.source_column },
+    }));
+  }) : [];
+  const workByObject = new Map<string, CanonicalEntityRef[]>();
+  for (const edge of relationships) {
+    if (edge.from.entityType === "work") {
+      const key = `${edge.to.entityType}:${edge.to.entityId}`;
+      workByObject.set(key, [...(workByObject.get(key) ?? []), edge.from]);
+    }
+    if (edge.to.entityType === "work") {
+      const key = `${edge.from.entityType}:${edge.from.entityId}`;
+      workByObject.set(key, [...(workByObject.get(key) ?? []), edge.to]);
+    }
+  }
+  const objects: BusinessWorldObject[] = nodeRows.map((row) => ({
+    entityType: row.entity_type,
+    entityId: row.entity_id,
+    label: row.label,
+    status: row.status,
+    occurredAt: row.occurred_at instanceof Date ? row.occurred_at.toISOString() : row.occurred_at ? new Date(row.occurred_at).toISOString() : null,
+    provenance: { kind: "canonical_postgres", table: row.source_table },
+    relatedWork: row.entity_type === "work" ? [{ entityType: "work", entityId: row.entity_id }] : workByObject.get(`${row.entity_type}:${row.entity_id}`) ?? [],
+    interactionEligible: true,
+  }));
+  const sourceTables = [...new Set([...objects.map((row) => row.provenance.table), ...relationships.map((edge) => edge.source.table)])].sort();
+  return {
+    version: 1,
+    scene,
+    objects,
+    relationships,
+    truncated: truncatedObjects || relationships.length >= BUSINESS_WORLD_RELATIONSHIP_CAP,
+    limits: { objects: BUSINESS_WORLD_OBJECT_CAP, relationships: BUSINESS_WORLD_RELATIONSHIP_CAP },
     source: { kind: "canonical_postgres", tables: sourceTables },
     asOf: new Date().toISOString(),
   };

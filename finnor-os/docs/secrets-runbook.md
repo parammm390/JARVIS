@@ -137,17 +137,17 @@ random suffix) once the secrets exist, if the deploy pipeline can tolerate polic
 updates on each new secret. No `PutSecretValue`, `DeleteSecret`, or `ListSecrets` — the
 app only ever reads.
 
-## 3. Platform env-var flips (Vercel / Railway)
+## 3. Platform env-var flips (Vercel / Azure)
 
-Both `apps/api`+`apps/console` (Vercel) and `apps/worker` (Railway) need the same
+Both the Vercel API surfaces and the Azure persistent worker need the same
 three vars set for the cutover:
 
 - `SECRETS_PROVIDER=aws-secrets-manager`
 - `FINNOR_SECRET_IDS` = the JSON blob from §1, as a single-line env var value
 - `AWS_REGION` (or reuse `AWS_BEDROCK_REGION` if already set — `secrets.ts` falls back
   to that, then `us-east-1`) + standard AWS credential env vars
-  (`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`, or an attached IAM role on
-  Railway/ECS if the platform supports it — prefer the role over static keys)
+  (`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`, or an attached workload identity
+  if the runtime supports it — prefer the role over static keys)
 
 Every process-wide credential-bearing var listed in §1 can then be **removed** from
 the platform's plaintext env var UI — `ensureSecretsLoaded` populates `process.env`
@@ -189,7 +189,7 @@ ever run, so this is a clean, immediate revert with no state to unwind.
 ## 6. Rotation rehearsal (no secret values)
 
 1. Choose one non-production credential and create its replacement in the provider.
-2. Update the named secret value on Railway staging and Vercel Preview only; never put
+2. Update the named secret value on the separately contracted staging runtime and Vercel Preview only; never put
    the value in a terminal transcript, commit, issue, or this document.
 3. Deploy staging, run the integration-health probe, and confirm the provider reports
    configured/healthy through a real authenticated no-op.

@@ -11,6 +11,7 @@ import { loadClientManifest, parseClientManifest, type ClientManifest } from "./
 import { convergeClientUsers, preflightUserAssignments } from "./client-provisioning";
 import type { TenantAuthAdmin } from "./tenant-user";
 import { convergeCompanyWorld, convergeIdentityAccess, convergeIntegrations, convergeWorkspaceAndPolicies, ensureTenantRecord } from "./tenant-bootstrap";
+import { TENANT_EXPERIENCE_VERSION } from "../apps/api/lib/workspace-config";
 
 export const CLIENT_FACTORY_STAGES = [
   "validate",
@@ -530,7 +531,16 @@ async function executeStage(
   }
   if (stage === "workspace_policies") {
     const result = await convergeWorkspaceAndPolicies(manifest, tenantId, pool);
-    return { evidence: { locations: result.locations, policies: result.policies, humanOnlyField: result.humanOnlyField } };
+    return { evidence: {
+      locations: result.locations,
+      policies: result.policies,
+      humanOnlyField: result.humanOnlyField,
+      tenantExperience: {
+        version: manifest.workspaceConfig?.version ?? TENANT_EXPERIENCE_VERSION,
+        explicitlyConfigured: manifest.workspaceConfig !== undefined,
+        configSha256: manifest.workspaceConfig ? sha256(manifest.workspaceConfig) : null,
+      },
+    } };
   }
   if (stage === "integrations_credentials") {
     const result = await convergeIntegrations(manifest, tenantId, pool);

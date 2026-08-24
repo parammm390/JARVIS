@@ -59,6 +59,7 @@ export const OverviewPayloadSchema = z.object({
 
 export const AskPayloadSchema = z.object({
   question: z.string().min(2).max(500),
+  householdId: z.string().uuid().optional(),
   responseChannel: z.enum(["voice", "text", "console", "background"]).optional(),
 });
 
@@ -418,15 +419,17 @@ export const opsOverviewPlugin: DomainEnginePlugin = {
       // on every grounded-QA call regardless of topic.
       const asksAboutIntegrations = /\b(integration|connected|quickbooks|meta ads|google ads|ads account|vapi|ghl|gohighlevel)\b/i.test(question);
       const asksAboutInventory = isInventoryQuestion(question);
-      const mentionedHousehold = await resolveHouseholdMention(tenantId, question).catch(() => null);
+      const explicitHouseholdId = typeof draft.payload.householdId === "string" ? draft.payload.householdId : null;
+      const mentionedHousehold = explicitHouseholdId ? null : await resolveHouseholdMention(tenantId, question).catch(() => null);
+      const householdId = explicitHouseholdId ?? mentionedHousehold?.householdId ?? null;
 
       // A named-customer question is identity-critical. Answer from that exact
       // Household 360 only: do not mix in a generic business snapshot or approximate
       // same-tenant semantic snippets, either of which can contaminate dates or names.
-      if (mentionedHousehold) {
-        const customer = await household360(tenantId, mentionedHousehold.householdId);
+      if (householdId) {
+        const customer = await household360(tenantId, householdId);
         if (customer) {
-          const groundedQuestion = mentionedHousehold.fuzzy && mentionedHousehold.instructionAlias
+          const groundedQuestion = mentionedHousehold?.fuzzy && mentionedHousehold.instructionAlias
             ? question.replace(new RegExp(mentionedHousehold.instructionAlias.split(" ").map((token) => token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("\\s+"), "i"), mentionedHousehold.label)
             : question;
           const structured = [{ source: "household_360", ref: customer.household.id, timestamp: customer.household.createdAt, data: householdAnswerProjection(customer) }];

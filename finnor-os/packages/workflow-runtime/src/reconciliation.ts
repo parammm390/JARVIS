@@ -6,6 +6,7 @@ export interface OpenReconciliationCaseParams {
   relatedOutboxEventId?: string;
   relatedInboxEventId?: string;
   relatedStepId?: string;
+  businessEffectId?: string;
   details: Record<string, unknown>;
 }
 
@@ -22,6 +23,7 @@ export async function openReconciliationCase(
         relatedOutboxEventId: params.relatedOutboxEventId ?? null,
         relatedInboxEventId: params.relatedInboxEventId ?? null,
         relatedStepId: params.relatedStepId ?? null,
+        businessEffectId: params.businessEffectId ?? null,
         details: params.details,
       })
       .returning(),

@@ -21,6 +21,7 @@ import { buildPlanningHealthContext, manualStepForUnavailableIntegration } from 
 import { plannerContinuationInstruction, plannerMemoryContext, plannerShortTermContext } from "./planner-memory";
 import { clarificationContinuationAction, enforceExternalResearchRoute, enforceSchedulingMutationRoute, safeReadFallbackForInstruction, schedulingClarificationFallbackForInstruction } from "./read-routing";
 import { resolveCompetitorResearch } from "./research-context";
+import { applyOperatingInteractionTargets } from "./interaction-targeting";
 
 export { clarificationContinuationAction, enforceExternalResearchRoute, enforceSchedulingMutationRoute, safeReadFallbackForInstruction, schedulingClarificationFallbackForInstruction } from "./read-routing";
 
@@ -69,6 +70,8 @@ function plannerOperatingContext(context: OperatingContext | undefined): Record<
     version: context.version,
     assembledAt: context.assembledAt,
     truthPrecedence: context.truthPrecedence,
+    interactionPrecedence: context.interactionPrecedence,
+    interactionContext: context.interactionContext,
     tenant: context.tenant,
     employee: context.employee,
     activeWork: context.activeWork,
@@ -113,6 +116,8 @@ export class LLMPlanner implements Planner {
       "You are the planning core of Finnor, an AI operating system for water treatment dealers.",
       "Translate the dealer instruction into zero or more domain actions.",
       "Truth precedence is strict: CANONICAL live operational records > durable WORK/actions/receipts > configured PROFILE > current SESSION > SEMANTIC MEMORY > external WEB. A lower source may enrich but never replace or contradict a higher one.",
+      "Interaction target precedence is separately strict: explicit operatingContext.interactionContext > active Work > deterministic context > memory > NLP inference. Explicit focused/selected entities and exclusions are already tenant-validated. Never add, substitute, or recover a consequential target from memory or pronoun inference when explicit interaction context exists.",
+      "For a bounded direct selection, act on exactly selectedEntities after excludedEntities. For a referenced cohort, use only its durable cohort/query bounds and exclusions; never enumerate, invent, or widen its population. Selection does not grant authority or approval.",
       "Resolve me/my against operatingContext.employee and us/our/the company against operatingContext.tenant before choosing an action. Missing profile facts remain missing; never infer identity, age, industry, geography, revenue, ARR, or company performance from semantic memory.",
       `The ONLY valid action_type values are: ${actionTypes.join(", ")}.`,
       "Each action_type has a REQUIRED payload JSON schema. Follow it exactly — field names matter:",
@@ -244,6 +249,7 @@ export class LLMPlanner implements Planner {
       }
     }
     valid = enforceSchedulingMutationRoute(redactedInstruction.value, valid, actionTypes);
+    valid = applyOperatingInteractionTargets(valid, opts.operatingContext?.interactionContext);
 
     if (valid.length === 0) return [];
     // Invalid edges fail closed rather than silently becoming independent work.

@@ -16,7 +16,7 @@ import {
   works,
   withTenant,
 } from "@finnor/db";
-import { employeeAuthoritySnapshot, evaluateAuthority } from "@finnor/authority";
+import { canExerciseAuthority, employeeAuthoritySnapshot, evaluateAuthority } from "@finnor/authority";
 import { and, eq } from "drizzle-orm";
 
 const SUPER_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
@@ -139,6 +139,14 @@ describe.skipIf(!available)("Upgrade 8 employee authority runtime", () => {
     const [audit] = await withTenant(tenantA, (db) => db.select().from(authorityDecisions).where(eq(authorityDecisions.id, denied.id)));
     expect(audit?.evidence).toMatchObject({ roles: expect.arrayContaining(["technician"]) });
     await expect(withTenant(tenantA, (db) => db.update(authorityDecisions).set({ reasonCode: "tampered" }).where(eq(authorityDecisions.id, denied.id)))).rejects.toThrow();
+  });
+
+  it("discovers control authority without appending a decision during a read", async () => {
+    const before = await withTenant(tenantA, (db) => db.select({ id: authorityDecisions.id }).from(authorityDecisions));
+    await expect(canExerciseAuthority(ctx(ownerA, "owner"), { operation: "approval", capability: "approve:*", resource: { type: "*" }, risk: "medium" })).resolves.toBe(true);
+    await expect(canExerciseAuthority(ctx(technicianA, "technician"), { operation: "approval", capability: "approve:*", resource: { type: "*" }, risk: "medium" })).resolves.toBe(false);
+    const after = await withTenant(tenantA, (db) => db.select({ id: authorityDecisions.id }).from(authorityDecisions));
+    expect(after).toHaveLength(before.length);
   });
 
   it("prevents cross-tenant assignment and rejects stale authority after revocation", async () => {

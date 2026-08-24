@@ -5,8 +5,8 @@
 // file's lease_expires_at is an additional, finer-grained atomic claim on top of the
 // job-level lease, not a second queue system.
 
-import { withTenant, enqueueJob, workflowSteps, workflowRuns, commands, integrationOperations, reconciliationCases, domainActions, domainPolicies, reconcileWorkStatus, transitionWork } from "@finnor/db";
-import { and, eq, lt, sql, desc } from "drizzle-orm";
+import { withTenant, enqueueJob, workflowSteps, workflowRuns, commands, integrationOperations, reconciliationCases, domainActions, domainPolicies, businessEffects, decisionReceipts, reconcileWorkStatus, transitionWork } from "@finnor/db";
+import { and, eq, lt, sql, desc, inArray } from "drizzle-orm";
 import { maybeChaosKill } from "./chaos";
 import { openReconciliationCase } from "./reconciliation";
 import { openReceipt, finalizeReceipt, findReceiptByStep } from "./receipts";
@@ -25,7 +25,8 @@ export type WorkflowStepRow = typeof workflowSteps.$inferSelect;
 export async function enqueueStep(tenantId: string, stepId: string, idempotencyKey: string): Promise<void> {
   // jobs is not tenant-scoped (schema.ts comment) — the payload carries tenant_id so the
   // handler can re-establish tenant context, same convention as every other job type.
-  await enqueueJob("run_workflow_step", { tenantId, workflowStepId: stepId }, `workflow-step:${idempotencyKey}`);
+  void idempotencyKey; // retained for source compatibility; the canonical key is the tenant-scoped durable step id.
+  await enqueueJob("run_workflow_step", { tenantId, workflowStepId: stepId }, `workflow-step:${tenantId}:${stepId}`);
 }
 
 /** §2.4: opens the one DecisionReceipt for a step's whole lifecycle, at the moment of
@@ -38,17 +39,21 @@ export async function enqueueStep(tenantId: string, stepId: string, idempotencyK
 async function openReceiptForFirstClaim(tenantId: string, step: WorkflowStepRow): Promise<void> {
   if (step.attempts !== 1) return;
   try {
-    const [run] = await withTenant(tenantId, (db) => db.select().from(workflowRuns).where(eq(workflowRuns.id, step.workflowRunId)));
-    const [command] = run ? await withTenant(tenantId, (db) => db.select().from(commands).where(eq(commands.id, run.commandId))) : [undefined];
+    const [run] = await withTenant(tenantId, (db) => db.select().from(workflowRuns).where(and(eq(workflowRuns.tenantId, tenantId), eq(workflowRuns.id, step.workflowRunId))));
+    const [command] = run ? await withTenant(tenantId, (db) => db.select().from(commands).where(and(eq(commands.tenantId, tenantId), eq(commands.id, run.commandId)))) : [undefined];
     // §3.1: policyApplied cites the REAL policy row that gated this step's parent
     // domain_action, when one exists — a system-drafted scan step or a chaos-test
     // step with no domain_action_id honestly gets null, not a fabricated reference.
     let policyApplied: { id: string; version: number } | null = null;
+    let effect: typeof businessEffects.$inferSelect | undefined;
     if (step.domainActionId) {
-      const [action] = await withTenant(tenantId, (db) => db.select().from(domainActions).where(eq(domainActions.id, step.domainActionId!)));
+      const [action] = await withTenant(tenantId, (db) => db.select().from(domainActions).where(and(eq(domainActions.tenantId, tenantId), eq(domainActions.id, step.domainActionId!))));
       if (action?.policyId) {
-        const [policy] = await withTenant(tenantId, (db) => db.select().from(domainPolicies).where(eq(domainPolicies.id, action.policyId!)));
+        const [policy] = await withTenant(tenantId, (db) => db.select().from(domainPolicies).where(and(eq(domainPolicies.tenantId, tenantId), eq(domainPolicies.id, action.policyId!))));
         if (policy) policyApplied = { id: policy.id, version: policy.version };
+      }
+      if (step.businessEffectId) {
+        [effect] = await withTenant(tenantId, (db) => db.select().from(businessEffects).where(and(eq(businessEffects.tenantId, tenantId), eq(businessEffects.id, step.businessEffectId!))).limit(1));
       }
     }
     await openReceipt({
@@ -59,10 +64,14 @@ async function openReceiptForFirstClaim(tenantId: string, step: WorkflowStepRow)
       evidence: [{ source: "workflow_step", ref: step.id, timestamp: new Date().toISOString() }],
       policyApplied,
       riskTier: "medium",
-      proposedAction: { stepType: step.stepType, payload: step.payload },
+      proposedAction: effect ? effect.effect as Record<string, unknown> : { stepType: step.stepType, payload: step.payload },
       approval: { required: true, approvedBy: command?.requestedBy ?? undefined, at: command?.createdAt.toISOString() },
       correlationId: step.correlationId ?? undefined,
       domainActionId: step.domainActionId ?? undefined,
+      businessEffectId: effect?.id,
+      intendedEffectHash: effect?.semanticHash,
+      authorizedEffectHash: effect?.semanticHash,
+      expectedResult: effect ? ((effect.effect as { expected?: Record<string, unknown> }).expected ?? undefined) : undefined,
       workId: run?.workId ?? undefined,
     });
   } catch (err) {
@@ -79,6 +88,8 @@ export async function claimStep(tenantId: string, stepId: string): Promise<Workf
       .update(workflowSteps)
       .set({
         status: "leased",
+        executionState: "claimed",
+        claimedAt: new Date(),
         leaseExpiresAt: new Date(Date.now() + leaseSeconds() * 1000),
         attempts: sql`${workflowSteps.attempts} + 1`,
         updatedAt: new Date(),
@@ -150,7 +161,7 @@ export async function completeStep(tenantId: string, stepId: string, evidence: R
     db
       .update(workflowSteps)
       .set({ status: "completed", evidence, leaseExpiresAt: null, updatedAt: new Date() })
-      .where(eq(workflowSteps.id, stepId)),
+      .where(and(eq(workflowSteps.tenantId, tenantId), eq(workflowSteps.id, stepId))),
   );
   await finalizeReceiptForStep(tenantId, stepId, { actualResult: evidence });
   await ingestStepReceipt(tenantId, stepId, evidence).catch((err) =>
@@ -174,7 +185,7 @@ export async function failStep(
     db
       .update(workflowSteps)
       .set({ status: "failed", terminalReason, leaseExpiresAt: null, updatedAt: new Date() })
-      .where(eq(workflowSteps.id, stepId)),
+      .where(and(eq(workflowSteps.tenantId, tenantId), eq(workflowSteps.id, stepId))),
   );
   await finalizeReceiptForStep(tenantId, stepId, { errorKind, message: terminalReason, recoveryPath: "review via GET /api/workflows/runs and retry or escalate the run" });
   // B2.T6: semantic terminal failures can propose a revised plan. Provider outages
@@ -184,7 +195,7 @@ export async function failStep(
       db.select({ domainActionId: workflowSteps.domainActionId, workId: workflowRuns.workId })
         .from(workflowSteps)
         .innerJoin(workflowRuns, eq(workflowRuns.id, workflowSteps.workflowRunId))
-        .where(eq(workflowSteps.id, stepId)),
+        .where(and(eq(workflowSteps.tenantId, tenantId), eq(workflowRuns.tenantId, tenantId), eq(workflowSteps.id, stepId))),
     );
     if (step?.workId) {
       await transitionWork(tenantId, step.workId, "recovery", "workflow_step_failed", {
@@ -213,7 +224,7 @@ export async function failStep(
 export async function advanceWorkflow(tenantId: string, workflowRunId: string): Promise<void> {
   maybeChaosKill("mid_multi_step");
   const allSteps = await withTenant(tenantId, (db) =>
-    db.select().from(workflowSteps).where(eq(workflowSteps.workflowRunId, workflowRunId)).orderBy(workflowSteps.sequence),
+    db.select().from(workflowSteps).where(and(eq(workflowSteps.tenantId, tenantId), eq(workflowSteps.workflowRunId, workflowRunId))).orderBy(workflowSteps.sequence),
   );
   const next = allSteps.find((s) => s.status === "pending");
   if (next) {
@@ -225,7 +236,7 @@ export async function advanceWorkflow(tenantId: string, workflowRunId: string): 
       }
     }
     await withTenant(tenantId, (db) =>
-      db.update(workflowSteps).set({ payload: { ...(next.payload as Record<string, unknown>), context } }).where(eq(workflowSteps.id, next.id)),
+      db.update(workflowSteps).set({ payload: { ...(next.payload as Record<string, unknown>), context } }).where(and(eq(workflowSteps.tenantId, tenantId), eq(workflowSteps.id, next.id))),
     );
     await enqueueStep(tenantId, next.id, next.idempotencyKey);
     return;
@@ -244,13 +255,63 @@ export async function advanceWorkflow(tenantId: string, workflowRunId: string): 
     db
       .update(workflowRuns)
       .set({ status: finalStatus, version: sql`${workflowRuns.version} + 1`, updatedAt: new Date() })
-      .where(and(eq(workflowRuns.id, workflowRunId), eq(workflowRuns.status, "running")))
+      .where(and(eq(workflowRuns.tenantId, tenantId), eq(workflowRuns.id, workflowRunId), eq(workflowRuns.status, "running")))
       .returning(),
   );
   if (run) {
     await withTenant(tenantId, (db) =>
-      db.update(commands).set({ status: finalStatus, updatedAt: new Date() }).where(eq(commands.id, run.commandId)),
+      db.update(commands).set({ status: finalStatus, updatedAt: new Date() }).where(and(eq(commands.tenantId, tenantId), eq(commands.id, run.commandId))),
     );
+    const effectIds = [...new Set(steps.map((step) => step.businessEffectId).filter((id): id is string => Boolean(id)))];
+    // A single_action run is only the durable dispatch envelope. Its worker records
+    // the real plugin observation, or deliberately leaves the effect executing while
+    // a child workflow/computer run owns observation. Never turn "queued child" into
+    // a fabricated verified business outcome here.
+    if (effectIds.length > 0 && run.workflowType !== "single_action") {
+      const checkedAt = new Date();
+      const uncertain = steps.some((step) => ["reconciling", "failed_after_possible_effect", "cancellation_requested"].includes(step.executionState));
+      const verification = {
+        state: allCompleted ? "verified" : uncertain ? "reconciliation_required" : "unverified",
+        basis: allCompleted
+          ? "Every durable workflow step completed with a recorded result."
+          : uncertain
+            ? "A workflow step may have crossed its effect commit point without a conclusive observation."
+            : "At least one durable workflow step failed before a successful observed outcome.",
+        checkedAt: checkedAt.toISOString(),
+        observed: {
+          workflowRunId,
+          steps: steps.map((step) => ({ id: step.id, type: step.stepType, status: step.status })),
+        },
+      } as const;
+      await withTenant(tenantId, async (db) => {
+        const effects = await db
+          .select({ id: businessEffects.id, semanticHash: businessEffects.semanticHash })
+          .from(businessEffects)
+          .where(and(eq(businessEffects.tenantId, tenantId), inArray(businessEffects.id, effectIds)));
+        for (const effect of effects) {
+          await db
+            .update(businessEffects)
+            .set({
+              status: allCompleted ? "verified" : uncertain ? "reconciliation_required" : "failed",
+              observedResult: verification.observed,
+              verification,
+              observedAt: checkedAt,
+            })
+            .where(and(eq(businessEffects.tenantId, tenantId), eq(businessEffects.id, effect.id)));
+          await db
+            .update(decisionReceipts)
+            .set({ executedEffectHash: effect.semanticHash, verification })
+            .where(and(eq(decisionReceipts.tenantId, tenantId), eq(decisionReceipts.businessEffectId, effect.id)));
+        }
+      });
+      const actionIds = [...new Set(steps.map((step) => step.domainActionId).filter((id): id is string => Boolean(id)))];
+      if (actionIds.length > 0) {
+        await withTenant(tenantId, (db) => db.update(domainActions).set({
+          status: allCompleted ? "completed" : uncertain ? "needs_human_review" : "failed",
+          executionStartedAt: null,
+        }).where(and(eq(domainActions.tenantId, tenantId), inArray(domainActions.id, actionIds), eq(domainActions.status, "executing"))));
+      }
+    }
     if (run.workId) await reconcileWorkStatus(tenantId, run.workId);
   }
 }
@@ -282,14 +343,14 @@ export async function recoverStaleSteps(tenantId: string): Promise<{ recovered: 
       db
         .select()
         .from(integrationOperations)
-        .where(eq(integrationOperations.workflowStepId, step.id))
+        .where(and(eq(integrationOperations.tenantId, tenantId), eq(integrationOperations.workflowStepId, step.id)))
         .orderBy(desc(integrationOperations.createdAt))
         .limit(1),
     );
 
     if (!claimRow) {
       await withTenant(tenantId, (db) =>
-        db.update(workflowSteps).set({ status: "pending", leaseExpiresAt: null }).where(eq(workflowSteps.id, step.id)),
+        db.update(workflowSteps).set({ status: "pending", leaseExpiresAt: null }).where(and(eq(workflowSteps.tenantId, tenantId), eq(workflowSteps.id, step.id))),
       );
       await enqueueStep(tenantId, step.id, step.idempotencyKey);
       recovered++;
@@ -303,7 +364,7 @@ export async function recoverStaleSteps(tenantId: string): Promise<{ recovered: 
       continue;
     }
 
-    if (claimRow.status === "running") {
+    if (claimRow.status === "running" || claimRow.status === "unknown") {
       // Idempotent: recoverStaleSteps() can legitimately be called many times while a
       // step sits stuck (every job-queue poll, every retry loop iteration) — a stale
       // leased step with no lease bump must only ever open ONE open reconciliation_case,
@@ -312,22 +373,39 @@ export async function recoverStaleSteps(tenantId: string): Promise<{ recovered: 
         db
           .select()
           .from(reconciliationCases)
-          .where(and(eq(reconciliationCases.relatedStepId, step.id), eq(reconciliationCases.status, "open"))),
+          .where(and(eq(reconciliationCases.tenantId, tenantId), eq(reconciliationCases.relatedStepId, step.id), eq(reconciliationCases.status, "open"))),
       );
       if (!existingCase) {
         await openReconciliationCase(tenantId, {
           caseType: "unknown_delivery",
           relatedStepId: step.id,
+          businessEffectId: step.businessEffectId ?? undefined,
           details: { operationKey: claimRow.operationKey, capability: claimRow.capability },
         });
         reconciled++;
       }
+      await withTenant(tenantId, async (db) => {
+        if (claimRow.status === "running") {
+          await db.update(integrationOperations).set({ status: "unknown", updatedAt: new Date() })
+            .where(and(eq(integrationOperations.id, claimRow.id), eq(integrationOperations.status, "running")));
+        }
+        await db.update(workflowSteps).set({ executionState: "reconciling", leaseExpiresAt: null, updatedAt: new Date() })
+          .where(and(eq(workflowSteps.tenantId, tenantId), eq(workflowSteps.id, step.id)));
+        if (step.businessEffectId) {
+          await db.update(businessEffects).set({ status: "reconciliation_required" })
+            .where(and(eq(businessEffects.tenantId, tenantId), eq(businessEffects.id, step.businessEffectId), eq(businessEffects.status, "executing")));
+        }
+        if (step.domainActionId) {
+          await db.update(domainActions).set({ status: "needs_human_review", executionStartedAt: null })
+            .where(and(eq(domainActions.tenantId, tenantId), eq(domainActions.id, step.domainActionId), eq(domainActions.status, "executing")));
+        }
+      });
       continue;
     }
 
-    // claimRow.status === 'failed' or 'unknown' (already reconciled) — safe to retry.
+    // A known failed attempt did not deliver an effect and is safe to retry.
     await withTenant(tenantId, (db) =>
-      db.update(workflowSteps).set({ status: "pending", leaseExpiresAt: null }).where(eq(workflowSteps.id, step.id)),
+      db.update(workflowSteps).set({ status: "pending", leaseExpiresAt: null }).where(and(eq(workflowSteps.tenantId, tenantId), eq(workflowSteps.id, step.id))),
     );
     await enqueueStep(tenantId, step.id, step.idempotencyKey);
     recovered++;

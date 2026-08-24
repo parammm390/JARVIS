@@ -9,7 +9,7 @@
 // @finnor/tools — that would be circular. The shape is intentionally identical to
 // packages/tools/src/wrap.ts's RetryPolicy.
 
-import { withTenant, integrationOperations, type Db } from "@finnor/db";
+import { withTenant, integrationOperations, workflowSteps, type Db } from "@finnor/db";
 import { and, eq } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import { maybeChaosKill } from "./chaos";
@@ -82,11 +82,12 @@ export async function executeCapability<TIn, TOut>(
 ): Promise<CapabilityResult<TOut>> {
   const operationKey = contract.idempotencyKeyFrom(input);
   const requestHash = hashInput(input);
+  const [step] = await withTenant(tenantId, (db) => db.select({ businessEffectId: workflowSteps.businessEffectId }).from(workflowSteps).where(and(eq(workflowSteps.tenantId, tenantId), eq(workflowSteps.id, workflowStepId))).limit(1));
 
   const claim = await withTenant(tenantId, async (db) => {
     const [row] = await db
       .insert(integrationOperations)
-      .values({ tenantId, workflowStepId, operationKey, capability: contract.capability, requestHash, status: "running" })
+      .values({ tenantId, workflowStepId, businessEffectId: step?.businessEffectId ?? null, operationKey, capability: contract.capability, provider: binding.name, requestHash, status: "running" })
       .onConflictDoNothing({ target: [integrationOperations.workflowStepId, integrationOperations.operationKey] })
       .returning();
     if (row) return { claimed: true as const };
@@ -99,14 +100,20 @@ export async function executeCapability<TIn, TOut>(
 
   if (!claim.claimed) {
     const existing = claim.existing!;
+    if ((existing.businessEffectId ?? null) !== (step?.businessEffectId ?? null)) throw new Error("Integration operation effect conflict");
     if (existing.status === "succeeded") return { ok: true, output: existing.response as TOut };
     if (existing.status === "running") return { ok: false, error: "operation already in flight" };
-    // status === 'failed' or 'unknown': reclaim the row and take a fresh attempt below —
-    // a failed/unknown-but-since-reconciled attempt didn't durably block a retry.
+    // Unknown means the provider may already have accepted the mutation. Only an
+    // explicit reconciliation transition may turn it into succeeded/failed; never
+    // convert uncertainty into a blind provider retry here.
+    if (existing.status === "unknown") {
+      return { ok: false, error: "provider outcome is unknown; reconcile before retrying" };
+    }
+    // A known failed attempt delivered no effect and is safe to retry.
     await withTenant(tenantId, (db) =>
       db
         .update(integrationOperations)
-        .set({ status: "running", requestHash, updatedAt: new Date() })
+        .set({ status: "running", provider: binding.name, requestHash, updatedAt: new Date() })
         .where(and(eq(integrationOperations.workflowStepId, workflowStepId), eq(integrationOperations.operationKey, operationKey))),
     );
   }

@@ -1,12 +1,11 @@
 // Orchestrator service (§3 blueprint): a thin long-running host over the shared
 // @finnor/orchestration package, exposing an internal HTTP surface for the API and
-// worker to call when deployed as a separate service (Railway/Render-class, §24).
-// In the default single-deploy topology, apps/api calls the package in-process and
-// this service is optional — the interfaces are identical either way.
+// worker to call when the canonical deployment contract requires a separate service.
 
 import "dotenv/config";
 import { createServer } from "node:http";
 import { FinnorOrchestrator } from "@finnor/orchestration";
+import { getRuntimeReleaseMetadata } from "@finnor/tools";
 import { z } from "zod";
 
 const BodySchema = z.object({
@@ -25,12 +24,14 @@ const server = createServer(async (req, res) => {
     res.writeHead(status, { "content-type": "application/json" });
     res.end(JSON.stringify(body));
   };
-  if (req.method === "GET" && req.url === "/health") return send(200, {
-    ok: true,
-    plugins: orchestrator.plugins.actionTypes(),
-    environment: process.env.FINNOR_ENVIRONMENT ?? process.env.NODE_ENV ?? "unknown",
-    release: process.env.RELEASE_SHA ?? process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.VERCEL_GIT_COMMIT_SHA ?? null,
-  });
+  if (req.method === "GET" && req.url === "/health") {
+    const release = getRuntimeReleaseMetadata("finnor-orchestrator");
+    return send(200, {
+      ok: true,
+      plugins: orchestrator.plugins.actionTypes(),
+      release,
+    });
+  }
   if (req.method === "POST" && req.url === "/plan") {
     let raw = "";
     req.on("data", (c) => (raw += c));
@@ -39,8 +40,15 @@ const server = createServer(async (req, res) => {
         const body = BodySchema.safeParse(JSON.parse(raw || "{}"));
         if (!body.success) return send(400, { error: body.error.issues.map((i) => i.message).join("; ") });
         const { instruction, sessionId, ...ctx } = body.data;
-        const actions = await orchestrator.handleInstruction(instruction, ctx, { sessionId });
-        return send(200, { planned: actions });
+        const result = await orchestrator.handleInstructionResult(instruction, ctx, { sessionId });
+        return send(result.objective ? 202 : 200, {
+          planned: result.actions,
+          ...(result.answer ? { answer: result.answer } : {}),
+          ...(result.query ? { query: result.query } : {}),
+          ...(result.objective ? { objective: result.objective } : {}),
+          workId: result.workId,
+          instructionId: result.instructionId,
+        });
       } catch (err) {
         console.error(err);
         return send(500, { error: "Planning failed. Check orchestrator logs." });

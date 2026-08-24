@@ -28,6 +28,7 @@ import {
   workEventWaits,
   workEvents,
   workObjectiveLoops,
+  workflowSteps,
   works,
 } from "@finnor/db";
 import { employeeAuthoritySnapshot } from "@finnor/authority";
@@ -41,9 +42,11 @@ import {
 } from "@finnor/orchestration";
 import { executeOperationalQuery, household360, workCases } from "@finnor/read-models";
 import { dispatchBusinessOperation, executeBusinessOperationTarget } from "../../apps/worker/src/handlers/business-operation";
+import { runWorkflowStep } from "../../apps/worker/src/handlers/run-workflow-step";
 import { POST as handoffRoute } from "../../apps/api/app/api/works/[id]/handoff/route";
 import { GET as employeesRoute } from "../../apps/api/app/api/employees/route";
 import { POST as retryOperationRoute } from "../../apps/api/app/api/operations/[id]/retry/route";
+import { citeObservedObjectiveEvidence } from "./helpers/objective-completion-evidence";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
 
@@ -63,7 +66,7 @@ class ScriptedPlanner implements ObjectiveDecisionPlanner {
   async decide(input: { inspection: ObjectiveInspection }): Promise<ObjectiveDecision> {
     const item = this.script[this.calls++];
     if (!item) throw new Error("Upgrade 10 scripted planner exhausted");
-    return typeof item === "function" ? item(input.inspection) : item;
+    return citeObservedObjectiveEvidence(typeof item === "function" ? item(input.inspection) : item, input.inspection);
   }
 }
 
@@ -82,6 +85,16 @@ function request(path: string, tenantId: string, userId: string, role: "owner" |
 
 function metric(name: string, values: Record<string, number | string | boolean>): void {
   console.info(`[upgrade10-metric] ${JSON.stringify({ name, ...values })}`);
+}
+
+async function executeDurableAction(tenantId: string, actionId: string): Promise<void> {
+  const [step] = await withTenant(tenantId, (db) => db.select().from(workflowSteps).where(and(
+    eq(workflowSteps.tenantId, tenantId),
+    eq(workflowSteps.domainActionId, actionId),
+    eq(workflowSteps.status, "pending"),
+  )).limit(1));
+  if (!step) throw new Error(`No queued durable step for action ${actionId}`);
+  await runWorkflowStep({ tenantId, workflowStepId: step.id });
 }
 
 describe.skipIf(!available)("Upgrade 10 whole-system integration", () => {
@@ -197,7 +210,8 @@ describe.skipIf(!available)("Upgrade 10 whole-system integration", () => {
       authorityContext: { employeeId: ownerId, revision: ownerAuthority.revision, roles: ownerAuthority.roles, principal: ownerId },
     });
 
-    expect((await firstProcess.decide(action.id, tenantId, "approve", ownerId, { role: "owner" })).status).toBe("success");
+    expect(await firstProcess.decide(action.id, tenantId, "approve", ownerId, { role: "owner" })).toMatchObject({ status: "success", output: { queued: true, durable: true } });
+    await executeDurableAction(tenantId, action.id);
     const restartedProcess = new FinnorOrchestrator({ objectiveDecisionPlanner: new ScriptedPlanner([
       (inspection) => {
         const observed = (inspection.actions as Array<{ id: string; status: string }>).some((row) => row.id === action.id && row.status === "completed");
@@ -217,7 +231,7 @@ describe.skipIf(!available)("Upgrade 10 whole-system integration", () => {
     expect(work).toMatchObject({ createdBy: dispatcherId, currentOwnerId: ownerId, assignedTo: ownerId, status: "completed" });
     expect(work.authorityContext).toMatchObject({ employeeId: ownerId, revision: ownerAuthority.revision, handedOffBy: dispatcherId });
     expect((aggregate!.inputs as Array<{ channel: string; createdBy: string | null }>).map((input) => input.channel)).toEqual(["voice", "text"]);
-    expect(aggregate!.objectiveLoop).toMatchObject({ state: "completed", actionCount: 1, queryCount: 1 });
+    expect(aggregate!.objectiveLoop).toMatchObject({ state: "completed", actionCount: 1, queryCount: 2 });
     expect(work.finalOutcome).toMatchObject({ kind: "objective", observation: { customerIssue: "contacted_and_verified", actionId: action.id } });
     expect(aggregate!.receipts).toEqual([expect.objectContaining({ domainActionId: action.id, finalizedAt: expect.any(Date) })]);
     expect(aggregate!.queryExecutions.length).toBeGreaterThanOrEqual(7);
@@ -358,7 +372,11 @@ describe.skipIf(!available)("Upgrade 10 whole-system integration", () => {
     const continuationJobs = await withTenant(tenantId, (db) => db.select().from(jobs).where(eq(jobs.idempotencyKey, `objective-wake:${durableWait!.id}`)));
     expect(continuationJobs).toHaveLength(1);
     expect(aggregate!.objectiveSteps.map((step) => step.iterationOutcome)).toEqual(["waiting", "completed"]);
-    expect(aggregate!.work).toMatchObject({ currentOwnerId: ownerId, activeContext: { householdId }, status: "completed" });
+    expect(aggregate!.work).toMatchObject({
+      currentOwnerId: ownerId,
+      activeContext: { version: 1, focusedEntity: { entityType: "household", entityId: householdId } },
+      status: "completed",
+    });
     metric("waiting_restart_resume", {
       recoveryMs: Math.round(performance.now() - recoveryStarted),
       recoveryScanEnqueues: enqueued,
@@ -422,7 +440,8 @@ describe.skipIf(!available)("Upgrade 10 whole-system integration", () => {
     expect(await orchestrator.runObjectiveIteration({ tenantId, workId: started.workId, objectiveLoopId: started.objectiveLoopId })).toBe("awaiting_approval");
     const awaiting = await workAggregate(tenantId, started.workId);
     const action = (awaiting!.actions as Array<typeof domainActions.$inferSelect>)[0]!;
-    expect((await orchestrator.decide(action.id, tenantId, "approve", ownerId, { role: "owner" })).status).toBe("success");
+    expect(await orchestrator.decide(action.id, tenantId, "approve", ownerId, { role: "owner" })).toMatchObject({ status: "success", output: { queued: true, durable: true } });
+    await executeDurableAction(tenantId, action.id);
     expect(await orchestrator.runObjectiveIteration({ tenantId, workId: started.workId, objectiveLoopId: started.objectiveLoopId })).toBe("completed");
 
     const convergenceStarted = performance.now();

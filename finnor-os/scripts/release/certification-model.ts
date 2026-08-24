@@ -8,8 +8,12 @@ export type CertificationStatus = typeof CERTIFICATION_STATUSES[number];
 export const CORE_CERTIFICATION_SCHEMA = "finnor.core-certification/v1" as const;
 export const CLIENT_CERTIFICATION_SCHEMA = "finnor.client-certification/v1" as const;
 export const CLIENT_RELEASE_SCHEMA = "finnor.client-release/v1" as const;
-export const CORE_CERTIFICATION_SUITE_VERSION = "phase5-core-v1" as const;
-export const CLIENT_CERTIFICATION_SUITE_VERSION = "phase5-client-v1" as const;
+// Phase 6 deliberately rotates the suite identities. A PASS artifact produced by
+// an earlier phase must never be reusable for final production certification.
+export const CORE_CERTIFICATION_SUITE_VERSION = "phase6-core-v1" as const;
+export const CLIENT_CERTIFICATION_SUITE_VERSION = "phase6-client-v1" as const;
+export const FINAL_CERTIFICATION_SCHEMA = "finnor.final-certification/v1" as const;
+export const FINAL_CERTIFICATION_SUITE_VERSION = "phase6-final-v1" as const;
 
 const SHA256 = /^[0-9a-f]{64}$/;
 const GIT_SHA = /^[0-9a-f]{40}$/;
@@ -553,4 +557,235 @@ export function assertClientReleaseIntegrity(
   if (stableStringify(rebuilt) !== stableStringify(artifact)) {
     throw new Error(`Client release ${artifact.releaseId} failed integrity verification`);
   }
+}
+
+/**
+ * Phase 6 final certification is an extension of the existing immutable
+ * certification artifacts. It intentionally keeps the same gate/result and
+ * content-addressing primitives; the additional bindings make a final release
+ * auditable against the exact source, generated contracts, database schema, and
+ * deployment topology that were actually examined.
+ */
+export const FINAL_CERTIFICATION_GATE_KEYS = [
+  "source_provenance",
+  "core_regression",
+  "client_regression",
+  "golden_business_suite",
+  "zero_tolerance_safety",
+  "idempotency_unknown_outcomes",
+  "multi_worker_recovery",
+  "database_restore",
+  "release_deployment_rollback",
+  "provider_chaos",
+  "load_latency_reliability",
+  "live_canaries",
+  "secret_privacy",
+] as const;
+
+export interface FinalCertificationScore {
+  totalJobs: number;
+  correctResolvePlan: number;
+  correctEndToEnd: number;
+  blockedResolvePlan: number;
+  blockedEndToEnd: number;
+  resolvePlanRate: number;
+  endToEndRate: number;
+  resolvePlanThreshold: number;
+  endToEndThreshold: number;
+  distribution: Record<string, number>;
+}
+
+export interface FinalMigrationBinding {
+  head: string;
+  sourceHash: string;
+  schemaHash: string;
+}
+
+export interface FinalActionManifestBinding {
+  count: number;
+  generatedHash: string;
+  sourceHash: string;
+  generatedPath: string;
+}
+
+export interface FinalDeploymentComponent {
+  name: string;
+  provider: string;
+  projectOrResource: string;
+  version: string | null;
+  commitSha: string | null;
+  buildId: string | null;
+  status: CertificationStatus;
+}
+
+export interface FinalDeploymentBinding {
+  contractHash: string;
+  contractSchemaVersion: number;
+  environment: string;
+  canonicalRemote: string;
+  canonicalBranch: string;
+  components: FinalDeploymentComponent[];
+  evidence: unknown;
+}
+
+export interface FinalZeroToleranceResult {
+  status: CertificationStatus;
+  criticalFailures: string[];
+  safetyChecks: Record<string, CertificationStatus>;
+}
+
+export interface FinalCertification {
+  schema: typeof FINAL_CERTIFICATION_SCHEMA;
+  certificationId: string;
+  canonicalGitSha: string;
+  sourceTreeHash: string;
+  coreSourceTreeHash: string;
+  suiteVersion: typeof FINAL_CERTIFICATION_SUITE_VERSION;
+  suiteHash: string;
+  migration: FinalMigrationBinding;
+  actionManifest: FinalActionManifestBinding;
+  deployment: FinalDeploymentBinding;
+  score: FinalCertificationScore;
+  zeroTolerance: FinalZeroToleranceResult;
+  status: CertificationStatus;
+  gates: CertificationGateResult[];
+  evidenceHash: string;
+  certifiedAt: string;
+  provenance: { repository: string; source: string };
+}
+
+function assertFinalDigest(value: string, label: string): void {
+  if (!SHA256.test(value)) throw new Error(`${label} must be a SHA-256 digest`);
+}
+
+function finalSuiteHash(): string {
+  return sha256({ version: FINAL_CERTIFICATION_SUITE_VERSION, gates: FINAL_CERTIFICATION_GATE_KEYS });
+}
+
+function normalizeFinalScore(score: FinalCertificationScore): FinalCertificationScore {
+  if (score.totalJobs !== 100) throw new Error(`Phase 6 golden suite must contain exactly 100 jobs; received ${score.totalJobs}`);
+  if (score.correctResolvePlan < 0 || score.correctResolvePlan > score.totalJobs) throw new Error("Invalid resolve/plan score");
+  if (score.correctEndToEnd < 0 || score.correctEndToEnd > score.totalJobs) throw new Error("Invalid end-to-end score");
+  const resolvePlanRate = score.correctResolvePlan / score.totalJobs;
+  const endToEndRate = score.correctEndToEnd / score.totalJobs;
+  if (score.resolvePlanRate !== resolvePlanRate || score.endToEndRate !== endToEndRate) {
+    throw new Error("Final certification score rates must be derived from counts");
+  }
+  return {
+    ...score,
+    distribution: Object.fromEntries(Object.entries(score.distribution).sort(([a], [b]) => a.localeCompare(b))),
+  };
+}
+
+export function createFinalCertification(input: {
+  canonicalGitSha: string;
+  sourceTreeHash: string;
+  coreSourceTreeHash?: string;
+  migration: FinalMigrationBinding;
+  actionManifest: FinalActionManifestBinding;
+  deployment: FinalDeploymentBinding;
+  score: FinalCertificationScore;
+  zeroTolerance: FinalZeroToleranceResult;
+  gates: CertificationGateResult[];
+  certifiedAt?: string;
+  repository?: string;
+  source?: string;
+}): FinalCertification {
+  const canonicalGitSha = input.canonicalGitSha.toLowerCase();
+  if (!GIT_SHA.test(canonicalGitSha)) throw new Error("canonicalGitSha must be a full 40-character Git SHA");
+  assertFinalDigest(input.sourceTreeHash, "sourceTreeHash");
+  assertFinalDigest(input.coreSourceTreeHash ?? input.sourceTreeHash, "coreSourceTreeHash");
+  assertFinalDigest(input.migration.sourceHash, "migration.sourceHash");
+  assertFinalDigest(input.migration.schemaHash, "migration.schemaHash");
+  assertFinalDigest(input.actionManifest.generatedHash, "actionManifest.generatedHash");
+  assertFinalDigest(input.actionManifest.sourceHash, "actionManifest.sourceHash");
+  assertFinalDigest(input.deployment.contractHash, "deployment.contractHash");
+  if (!Number.isInteger(input.actionManifest.count) || input.actionManifest.count <= 0) {
+    throw new Error("actionManifest.count must be a positive integer");
+  }
+  requireGateSet(FINAL_CERTIFICATION_GATE_KEYS, input.gates);
+  const score = normalizeFinalScore(input.score);
+  const gates = input.gates.map((gate) => gateResult(gate.gate, gate.status, gate.evidence))
+    .sort((a, b) => a.gate.localeCompare(b.gate));
+  const zeroTolerance = {
+    status: input.zeroTolerance.criticalFailures.length > 0 ? "FAIL" as const : input.zeroTolerance.status,
+    criticalFailures: [...input.zeroTolerance.criticalFailures].sort(),
+    safetyChecks: Object.fromEntries(Object.entries(input.zeroTolerance.safetyChecks).sort(([a], [b]) => a.localeCompare(b))),
+  };
+  const guardedGates = zeroTolerance.criticalFailures.length > 0
+    ? gates.map((gate) => gate.gate === "zero_tolerance_safety"
+      ? gateResult("zero_tolerance_safety", "FAIL", { prior: gate.evidence, criticalFailures: zeroTolerance.criticalFailures })
+      : gate)
+    : gates;
+  const suiteHash = finalSuiteHash();
+  const evidenceHash = sha256(guardedGates.map(({ gate, status, evidenceHash: hash }) => ({ gate, status, evidenceHash: hash })));
+  const deployment = {
+    ...input.deployment,
+    components: input.deployment.components.map((component) => ({ ...component })).sort((a, b) => a.name.localeCompare(b.name)),
+    evidence: sanitizeEvidence(input.deployment.evidence),
+  };
+  const identityHash = sha256({
+    canonicalGitSha,
+    sourceTreeHash: input.sourceTreeHash,
+    coreSourceTreeHash: input.coreSourceTreeHash ?? input.sourceTreeHash,
+    suiteVersion: FINAL_CERTIFICATION_SUITE_VERSION,
+    suiteHash,
+    migration: input.migration,
+    actionManifest: input.actionManifest,
+    deployment,
+    score,
+    zeroTolerance,
+    evidenceHash,
+  });
+  return {
+    schema: FINAL_CERTIFICATION_SCHEMA,
+    certificationId: `finalcert-${identityHash}`,
+    canonicalGitSha,
+    sourceTreeHash: input.sourceTreeHash,
+    coreSourceTreeHash: input.coreSourceTreeHash ?? input.sourceTreeHash,
+    suiteVersion: FINAL_CERTIFICATION_SUITE_VERSION,
+    suiteHash,
+    migration: input.migration,
+    actionManifest: input.actionManifest,
+    deployment,
+    score,
+    zeroTolerance,
+    status: certificationStatus(guardedGates),
+    gates: guardedGates,
+    evidenceHash,
+    certifiedAt: input.certifiedAt ?? new Date().toISOString(),
+    provenance: { repository: input.repository ?? "FINNOR", source: input.source ?? "release:certify/final" },
+  };
+}
+
+export function assertFinalCertificationIntegrity(artifact: FinalCertification): void {
+  const rebuilt = createFinalCertification({
+    canonicalGitSha: artifact.canonicalGitSha,
+    sourceTreeHash: artifact.sourceTreeHash,
+    coreSourceTreeHash: artifact.coreSourceTreeHash,
+    migration: artifact.migration,
+    actionManifest: artifact.actionManifest,
+    deployment: artifact.deployment,
+    score: artifact.score,
+    zeroTolerance: artifact.zeroTolerance,
+    gates: artifact.gates,
+    certifiedAt: artifact.certifiedAt,
+    repository: artifact.provenance.repository,
+    source: artifact.provenance.source,
+  });
+  if (stableStringify(rebuilt) !== stableStringify(artifact)) {
+    throw new Error(`Final certification ${artifact.certificationId} failed integrity verification`);
+  }
+}
+
+export function reusableFinalCertification(
+  certifications: readonly FinalCertification[],
+  input: { canonicalGitSha: string; sourceTreeHash: string },
+): FinalCertification | null {
+  const suiteHash = finalSuiteHash();
+  return certifications.find((candidate) => candidate.status === "PASS"
+    && candidate.canonicalGitSha === input.canonicalGitSha.toLowerCase()
+    && candidate.sourceTreeHash === input.sourceTreeHash
+    && candidate.suiteVersion === FINAL_CERTIFICATION_SUITE_VERSION
+    && candidate.suiteHash === suiteHash) ?? null;
 }

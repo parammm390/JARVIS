@@ -5,25 +5,27 @@
 // worker died). Every process has its own row so rolling releases and multi-worker
 // fleets can be verified without pretending that one fixed process is the fleet.
 
-import { adminDb, serviceReleaseHeartbeats, workerHeartbeat } from "@finnor/db";
-import { getLogger } from "@finnor/tools";
+import { CURRENT_MIGRATION_HEAD, adminDb, serviceReleaseHeartbeats, workerHeartbeat } from "@finnor/db";
+import { getLogger, getRuntimeReleaseMetadata } from "@finnor/tools";
 import { hostname } from "node:os";
 
 export const WORKER_HEARTBEAT_ID = process.env.FINNOR_WORKER_INSTANCE_ID?.trim()
   || `worker:${hostname()}:${process.pid}`;
-export const CURRENT_MIGRATION_HEAD = "0090_phase5_production_connection_reliability.sql";
+export { CURRENT_MIGRATION_HEAD } from "@finnor/db";
 
 async function beat(): Promise<void> {
   const now = new Date();
+  const release = getRuntimeReleaseMetadata("finnor-worker");
   const meta = {
+    ...release,
     instanceId: WORKER_HEARTBEAT_ID,
     capabilities: (process.env.FINNOR_WORKER_CAPABILITIES ?? "jobs,orchestration,computer,event-wake,connection-health")
       .split(",").map((value) => value.trim()).filter(Boolean),
-    releaseSha: process.env.FINNOR_COMMIT_SHA ?? process.env.RELEASE_SHA ?? process.env.RAILWAY_GIT_COMMIT_SHA ?? null,
+    releaseSha: release.commitSha,
     coreCertificationId: process.env.FINNOR_CORE_CERTIFICATION_ID ?? null,
     deploymentId: process.env.FINNOR_WORKER_DEPLOYMENT_ID ?? process.env.RAILWAY_DEPLOYMENT_ID ?? null,
-    environment: process.env.FINNOR_ENVIRONMENT ?? process.env.RAILWAY_ENVIRONMENT_NAME ?? null,
-    source: process.env.FINNOR_RELEASE_SOURCE ?? null,
+    environment: release.environment,
+    source: release.source,
   };
   await adminDb()
     .insert(workerHeartbeat)
@@ -36,9 +38,9 @@ async function beat(): Promise<void> {
       service: "worker",
       instanceId: WORKER_HEARTBEAT_ID,
       releaseSha,
-      buildId: process.env.FINNOR_BUILD_ID ?? "unknown",
-      version: process.env.FINNOR_VERSION ?? "unknown",
-      releaseSource: process.env.FINNOR_RELEASE_SOURCE ?? "unknown",
+      buildId: release.buildId,
+      version: release.version,
+      releaseSource: release.source,
       coreCertificationId: process.env.FINNOR_CORE_CERTIFICATION_ID ?? null,
       migrationHead: CURRENT_MIGRATION_HEAD,
       deploymentId: meta.deploymentId,
@@ -50,9 +52,9 @@ async function beat(): Promise<void> {
       target: [serviceReleaseHeartbeats.service, serviceReleaseHeartbeats.instanceId],
       set: {
         releaseSha,
-        buildId: process.env.FINNOR_BUILD_ID ?? "unknown",
-        version: process.env.FINNOR_VERSION ?? "unknown",
-        releaseSource: process.env.FINNOR_RELEASE_SOURCE ?? "unknown",
+        buildId: release.buildId,
+        version: release.version,
+        releaseSource: release.source,
         coreCertificationId: process.env.FINNOR_CORE_CERTIFICATION_ID ?? null,
         migrationHead: CURRENT_MIGRATION_HEAD,
         deploymentId: meta.deploymentId,

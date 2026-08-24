@@ -47,6 +47,10 @@ export const CANONICAL_ENTITY_TYPES = [
   "communication_delivery",
   "internal_event",
   "document_share",
+  // Phase 2 Live Business World. These are existing canonical rows promoted to
+  // the shared identity seam; no duplicate inventory or computer record exists.
+  "inventory_item",
+  "computer_run",
 ] as const;
 
 export type CanonicalEntityType = (typeof CANONICAL_ENTITY_TYPES)[number];

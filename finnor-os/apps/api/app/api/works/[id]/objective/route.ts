@@ -2,6 +2,7 @@ import { receiveWork, workAggregate } from "@finnor/db";
 import { ControlObjectiveSchema } from "@finnor/policy-schema";
 import { errorResponse, requireContext } from "../../../../../lib/auth";
 import { getOrchestrator } from "../../../../../lib/orchestrator";
+import { parseObjectiveSuccessCondition } from "@finnor/orchestration";
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> {
   try {
@@ -39,6 +40,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       command: parsed.data.command,
       actorId: ctx.userId,
       objective: parsed.data.command === "redirect" ? parsed.data.objective : undefined,
+      successCondition: parsed.data.command === "redirect" && parsed.data.successCondition
+        ? parseObjectiveSuccessCondition(parsed.data.successCondition)
+        : undefined,
       correlationId: ctx.correlationId,
     });
     return Response.json({ objective }, { status: objective.state === "continue" ? 202 : 200 });

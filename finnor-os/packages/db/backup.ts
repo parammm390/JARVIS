@@ -1,7 +1,7 @@
 // A4.T4: pure-JS logical dump/restore — deliberately NOT pg_dump/pg_restore. This code
-// runs inside the Railway worker process, whose Node/Nixpacks image has no guaranteed
+// runs inside the persistent worker process, whose runtime image has no guaranteed
 // Postgres client tools on PATH (confirmed absent even in this dev sandbox — no pg_dump,
-// no docker to check inside a real Railway-like image either). scripts/backup-restore-
+// no docker to check inside the production image either). scripts/backup-restore-
 // drill.ts already covers the pg_dump-based path for a real dev machine/CI image that DOES
 // have client tools; this is the production-path alternative that has zero binary
 // dependency, so it can run anywhere `pg` (already a dependency everywhere) can connect.

@@ -9,7 +9,7 @@ import type { DomainEnginePlugin } from "../shared/plugin-interface";
 import type { DraftAction, ExecutionResult, ValidationResult, DomainPolicy } from "@finnor/shared-types";
 import type { ToolRegistry } from "@finnor/tools";
 import { withTenant, invoices, households, domainActions, decisionReceipts, ingestIntegrationEventTx } from "@finnor/db";
-import { submitCommand, enqueueStep, receiveInboxEventTx, finalizeReceipt } from "@finnor/workflow-runtime";
+import { submitCommand, receiveInboxEventTx, finalizeReceipt } from "@finnor/workflow-runtime";
 import { recordPayment } from "@finnor/data-platform";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -82,6 +82,13 @@ export const invoiceToCashPlugin: DomainEnginePlugin = {
       channel: (p.channel as "sms" | "email" | undefined) ?? "sms",
       correlationId: draft.correlationId,
       domainActionId: draft.domainActionId,
+      businessEffectId: draft.businessEffect?.id,
+      authorizedEffectHash: draft.businessEffect?.semanticHash,
+      authorityDecisionId: draft.authorityDecisionId,
+      authorityRevision: draft.authorityRevision,
+      policyId: draft.businessEffect?.authority.policyId ?? undefined,
+      policyVersion: draft.businessEffect?.authority.policyVersion ?? undefined,
+      executionClass: draft.businessEffect?.operation.class,
     });
     if (!result.ok) return { status: "failure", output: {}, error: result.error, errorKind: "validation" };
     return {
@@ -100,7 +107,20 @@ export const invoiceToCashPlugin: DomainEnginePlugin = {
  */
 export async function startInvoiceToCash(
   tenantId: string,
-  params: { invoiceId: string; contactId?: string; channel?: "sms" | "email"; correlationId?: string; domainActionId?: string },
+  params: {
+    invoiceId: string;
+    contactId?: string;
+    channel?: "sms" | "email";
+    correlationId?: string;
+    domainActionId?: string;
+    businessEffectId?: string;
+    authorizedEffectHash?: string;
+    authorityDecisionId?: string;
+    authorityRevision?: number;
+    policyId?: string;
+    policyVersion?: number;
+    executionClass?: string;
+  },
 ): Promise<{ ok: true; commandId: string; workflowRunId: string } | { ok: false; error: string }> {
   const invoiceId = params.invoiceId;
   const invoice = await withTenant(tenantId, async (db) => {
@@ -120,6 +140,13 @@ export async function startInvoiceToCash(
   const idempotencyKey = `invoice-to-cash:${invoiceId}`;
   const submitted = await withTenant(tenantId, (db) =>
     submitCommand(db, {
+      businessEffectId: params.businessEffectId,
+      authorizedEffectHash: params.authorizedEffectHash,
+      authorityDecisionId: params.authorityDecisionId,
+      authorityRevision: params.authorityRevision,
+      policyId: params.policyId,
+      policyVersion: params.policyVersion,
+      executionClass: params.executionClass,
       tenantId,
       commandType: "start_invoice_to_cash_workflow",
       payload: { invoiceId },
@@ -157,10 +184,6 @@ export async function startInvoiceToCash(
       ],
     }),
   );
-
-  if (!submitted.alreadyExisted) {
-    await enqueueStep(tenantId, submitted.stepIds[0]!, `${idempotencyKey}:link`);
-  }
 
   return { ok: true, commandId: submitted.commandId, workflowRunId: submitted.workflowRunId };
 }

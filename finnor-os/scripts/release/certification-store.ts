@@ -5,11 +5,15 @@ import {
   CLIENT_CERTIFICATION_SCHEMA,
   CLIENT_RELEASE_SCHEMA,
   CORE_CERTIFICATION_SCHEMA,
+  CORE_CERTIFICATION_SUITE_VERSION,
+  FINAL_CERTIFICATION_SCHEMA,
   assertCoreCertificationIntegrity,
+  assertFinalCertificationIntegrity,
   stableStringify,
   type ClientCertification,
   type ClientRelease,
   type CoreCertification,
+  type FinalCertification,
 } from "./certification-model";
 
 export interface StoredArtifact<T> {
@@ -79,7 +83,28 @@ export class CertificationArtifactStore {
       if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return [];
       throw error;
     }
-    return Promise.all(files.filter((file) => file.endsWith(".json")).sort().map((file) => this.readCoreCertification(join(dir, file))));
+    // Old phase artifacts remain immutable on disk, but are not candidates for
+    // current-suite reuse. The integrity reader also rejects them if a caller
+    // explicitly asks for one.
+    const current: CoreCertification[] = [];
+    for (const file of files.filter((name) => name.endsWith(".json")).sort()) {
+      const artifact = JSON.parse(await readFile(join(dir, file), "utf8")) as CoreCertification;
+      if (artifact.suiteVersion !== CORE_CERTIFICATION_SUITE_VERSION) continue;
+      current.push(await this.readCoreCertification(join(dir, file)));
+    }
+    return current;
+  }
+
+  async writeFinalCertification(artifact: FinalCertification): Promise<StoredArtifact<FinalCertification>> {
+    if (artifact.schema !== FINAL_CERTIFICATION_SCHEMA) throw new Error("Unexpected final certification schema");
+    return writeExclusive(join(this.root, "final", `${artifact.certificationId}.json`), artifact);
+  }
+
+  async readFinalCertification(path: string): Promise<FinalCertification> {
+    const artifact = JSON.parse(await readFile(path, "utf8")) as FinalCertification;
+    if (artifact.schema !== FINAL_CERTIFICATION_SCHEMA) throw new Error(`${path} is not a FINNOR final certification`);
+    assertFinalCertificationIntegrity(artifact);
+    return artifact;
   }
 }
 
@@ -101,6 +126,22 @@ export async function persistCoreCertification(pool: pg.Pool, artifact: CoreCert
       artifact.status, artifact.evidenceHash, JSON.stringify(artifact), artifact.certifiedAt],
   );
   await assertDatabaseArtifact(pool, "core_certifications", "certification_id", artifact.certificationId, artifact);
+}
+
+export async function persistFinalCertification(pool: pg.Pool, artifact: FinalCertification): Promise<void> {
+  await pool.query(
+    `INSERT INTO finnor_os.final_certifications
+       (certification_id,canonical_git_sha,source_tree_hash,suite_version,suite_hash,migration_head,
+        migration_source_hash,migration_schema_hash,action_count,action_manifest_hash,deployment_contract_hash,status,evidence_hash,
+        artifact,certified_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,$15::timestamptz)
+     ON CONFLICT (certification_id) DO NOTHING`,
+    [artifact.certificationId, artifact.canonicalGitSha, artifact.sourceTreeHash, artifact.suiteVersion,
+      artifact.suiteHash, artifact.migration.head, artifact.migration.sourceHash, artifact.migration.schemaHash,
+      artifact.actionManifest.count, artifact.actionManifest.generatedHash, artifact.deployment.contractHash,
+      artifact.status, artifact.evidenceHash, JSON.stringify(artifact), artifact.certifiedAt],
+  );
+  await assertDatabaseArtifact(pool, "final_certifications", "certification_id", artifact.certificationId, artifact);
 }
 
 export async function assertClientReleaseRollbackReferences(pool: pg.Pool, release: ClientRelease): Promise<void> {

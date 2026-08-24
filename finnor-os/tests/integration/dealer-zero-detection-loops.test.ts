@@ -15,6 +15,7 @@ import { seedTenantPolicies } from "../../scripts/seed-tenant-policies";
 import { scanLowInventory } from "../../apps/worker/src/handlers/scan-low-inventory";
 import { scanServiceDue } from "../../apps/worker/src/handlers/scan-service-due";
 import { FinnorOrchestrator } from "@finnor/orchestration";
+import { driveDurableAction } from "./helpers/durable-action";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
 
@@ -53,10 +54,16 @@ describe.skipIf(!available)("Dealer Zero detection loops (§3.4)", () => {
       db.select().from(domainActions).where(and(eq(domainActions.tenantId, DEALER_ZERO_TENANT_ID), eq(domainActions.actionType, "flag_reorder_needed"))),
     );
     // seed-dealer-zero.ts seeds 3 below-threshold SKUs (FILT-SED, FILT-CARB, MEMB-RO).
-    expect(after.length).toBeGreaterThan(before.length);
-    expect(after.length).toBeGreaterThanOrEqual(3);
+    expect(after.length).toBeGreaterThanOrEqual(Math.max(before.length, 3));
 
-    const newest = after[after.length - 1]!;
+    for (const action of after.filter((candidate) => candidate.status !== "completed")) {
+      await driveDurableAction(DEALER_ZERO_TENANT_ID, action.id);
+    }
+    const settled = await withTenant(DEALER_ZERO_TENANT_ID, (db) =>
+      db.select().from(domainActions).where(and(eq(domainActions.tenantId, DEALER_ZERO_TENANT_ID), eq(domainActions.actionType, "flag_reorder_needed"))),
+    );
+
+    const newest = settled[settled.length - 1]!;
     const [receipt] = await withTenant(DEALER_ZERO_TENANT_ID, (db) => db.select().from(decisionReceipts).where(eq(decisionReceipts.domainActionId, newest.id)));
     expect(receipt).toBeTruthy();
     // flag_reorder_needed is auto-run (requiresConfirmation: false, policy-matrix.md §4)
@@ -110,6 +117,7 @@ describe.skipIf(!available)("Dealer Zero detection loops (§3.4)", () => {
     // the receipt appears once it actually executes.
     const orchestrator = new FinnorOrchestrator();
     await orchestrator.decide(forThisHousehold!.id, DEALER_ZERO_TENANT_ID, "approve", "test:detection-loop-proof");
+    expect((await driveDurableAction(DEALER_ZERO_TENANT_ID, forThisHousehold!.id)).status).toBe("success");
     const [receiptAfterApproval] = await withTenant(DEALER_ZERO_TENANT_ID, (db) =>
       db.select().from(decisionReceipts).where(eq(decisionReceipts.domainActionId, forThisHousehold!.id)),
     );

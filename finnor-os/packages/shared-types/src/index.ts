@@ -7,9 +7,16 @@ export * from "./dealer-zero-time-compression";
 export * from "./operational-queries";
 export * from "./company-graph";
 export * from "./operating-context";
+export * from "./operating-interaction";
 export * from "./identity-access";
 export * from "./universal-actions";
 export * from "./computer";
+export * from "./business-world";
+export * from "./operational-delta";
+export * from "./execution-projection";
+export * from "./causal-replay";
+export * from "./business-effects";
+export * from "./objectives";
 
 export type Role = "owner" | "dispatcher" | "technician";
 
@@ -52,6 +59,10 @@ export interface AuthorityRequest {
   workId?: string;
   domainActionId?: string;
   operationId?: string;
+  /** Canonical semantic intent evaluated at the boundary. Absent only for reads and
+   * historical callers that predate the Business Effect kernel. */
+  businessEffectId?: string;
+  businessEffectHash?: string;
 }
 
 export interface AuthorityDecision {
@@ -70,6 +81,8 @@ export interface AuthorityDecision {
   approvalChainId: string | null;
   eligibleApproverIds: string[];
   evidence: Record<string, unknown>;
+  businessEffectId?: string | null;
+  businessEffectHash?: string | null;
 }
 
 /** B1.T1: the shape of every 'jarvis_events' Postgres NOTIFY payload — IDs only, never
@@ -135,6 +148,8 @@ export interface DomainAction {
    *  false) simply leaves this undefined, which is honest — nobody approved it, it
    *  was allowed to run unattended by policy. */
   approvedBy?: string;
+  /** Frozen canonical semantic intent. Nullable for reads and historical actions. */
+  businessEffectId?: string | null;
 }
 
 export interface DomainPolicy {
@@ -190,8 +205,13 @@ export interface DraftAction {
    *  alongside correlationId, right after plugin.draft() returns, so any
    *  submitCommand() a plugin's own execute() calls can cite requestedBy. */
   approvedBy?: string;
+  /** Durable worker-stamped authorization provenance for child workflow commands. */
+  authorityDecisionId?: string;
+  authorityRevision?: number;
   /** B2.T6: executor-stamped provenance for an async workflow command. */
   domainActionId?: string;
+  /** Executor-compiled trusted contract; plugins may reference but never author it. */
+  businessEffect?: import("./business-effects").BusinessEffectSet;
 }
 
 export type ExecutionStatus =
@@ -367,4 +387,10 @@ export interface DecisionReceipt {
   stepId: string | null;
   createdAt: string;
   finalizedAt: string | null;
+  businessEffectId?: string | null;
+  intendedEffectHash?: string | null;
+  authorizedEffectHash?: string | null;
+  executedEffectHash?: string | null;
+  verification?: import("./business-effects").BusinessEffectVerification | null;
+  recoveryEffectId?: string | null;
 }

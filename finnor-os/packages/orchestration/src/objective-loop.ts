@@ -9,10 +9,14 @@
 import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
-import type { DomainAction, ExecutionResult, OperationalQueryRequest, Role, TenantContext } from "@finnor/shared-types";
+import type { DomainAction, ExecutionResult, ObjectiveSuccessCondition, ObjectiveSuccessVerification, OperatingInteractionContext, OperationalQueryRequest, Role, TenantContext } from "@finnor/shared-types";
 import {
   domainActions,
+  authorityApprovalRequests,
+  authorityApprovalRequestSteps,
+  businessEffects,
   actionLog,
+  canonicalRefsFromContext,
   computerArtifacts,
   computerRuns,
   createWorkEventWaitTx,
@@ -29,7 +33,9 @@ import {
   workObjectivePlannerAttempts,
   workObjectiveSteps,
   workEventWaits,
+  workInputs,
   works,
+  pendingConfirmations,
 } from "@finnor/db";
 import { executeOperationalQuery } from "@finnor/read-models";
 import { employeeAuthoritySnapshot, evaluateAuthority } from "@finnor/authority";
@@ -40,8 +46,17 @@ import type { PluginRegistry } from "./plugin-registry";
 import { queryAuthorityRequest } from "./authority-runtime";
 import { validateOperationalQueryRequest } from "./fast-read-lane";
 import { ingestIntegrationEvent, markObjectiveWakeConsumed, objectiveWakeContext, recoverDueWorkEventWaits } from "./event-waits";
+import { resolveOperatingInteractionContext } from "./interaction-context";
+import {
+  defaultObjectiveSuccessCondition,
+  evaluateObjectiveSuccessCondition,
+  inspectCurrentObjectiveSuccessState,
+  ObjectiveCompletionEvidenceSchema,
+  parseObjectiveCompletionEvidence,
+  parseObjectiveSuccessCondition,
+} from "./objective-success";
 
-export const OBJECTIVE_ITERATION_OUTCOMES = ["continue", "awaiting_approval", "waiting", "blocked", "completed", "failed"] as const;
+export const OBJECTIVE_ITERATION_OUTCOMES = ["continue", "awaiting_approval", "waiting", "blocked", "completed", "failed", "cancelled"] as const;
 export type ObjectiveIterationOutcome = (typeof OBJECTIVE_ITERATION_OUTCOMES)[number];
 
 const OptionalDecisionText = z.preprocess((value) => value === null ? undefined : value, z.string().min(1).max(2000).optional());
@@ -62,10 +77,11 @@ const WaitForSchema = z.object({
   applicationRef: z.string().min(1).max(500).optional(),
   correlationId: z.string().min(1).max(500).optional(),
 }).strict();
+const RecoveryModeSchema = z.enum(["retry", "replan", "recover", "compensate", "escalate"]);
 
 const DecisionSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("query"), request: z.record(z.unknown()), reason: z.string().min(1).max(4000), nextStep: OptionalDecisionText }),
-  z.object({ kind: z.literal("action"), actionType: z.string().min(1).max(200), payload: z.record(z.unknown()), reason: z.string().min(1).max(4000), nextStep: OptionalDecisionText }),
+  z.object({ kind: z.literal("query"), request: z.record(z.unknown()), reason: z.string().min(1).max(4000), nextStep: OptionalDecisionText, recoveryMode: RecoveryModeSchema.optional() }),
+  z.object({ kind: z.literal("action"), actionType: z.string().min(1).max(200), payload: z.record(z.unknown()), reason: z.string().min(1).max(4000), nextStep: OptionalDecisionText, recoveryMode: RecoveryModeSchema.optional() }),
   z.object({
     kind: z.literal("wait"),
     waitFor: WaitForSchema.optional(),
@@ -75,8 +91,9 @@ const DecisionSchema = z.discriminatedUnion("kind", [
     resumeAt: z.string().datetime().optional(),
     condition: z.string().min(1).max(2000).optional(),
     reason: z.string().min(1).max(4000),
+    recoveryMode: RecoveryModeSchema.optional(),
   }),
-  z.object({ kind: z.literal("complete"), outcome: z.record(z.unknown()), reason: z.string().min(1).max(4000) }),
+  z.object({ kind: z.literal("complete"), outcome: z.record(z.unknown()), evidence: ObjectiveCompletionEvidenceSchema.optional(), reason: z.string().min(1).max(4000) }),
   z.object({ kind: z.literal("block"), reason: z.string().min(1).max(4000), recovery: OptionalDecisionText }),
   z.object({ kind: z.literal("fail"), reason: z.string().min(1).max(4000), failure: OptionalDecisionRecord }),
 ]);
@@ -95,7 +112,10 @@ export interface ObjectiveInspection extends Record<string, unknown> {
   delegations: unknown[];
   acknowledgementRequests: unknown[];
   eventWake: unknown;
+  eventWaits: unknown[];
+  integrationEvents: unknown[];
   actions: unknown[];
+  businessEffects: unknown[];
   operations: unknown[];
   receipts: unknown[];
   priorIterations: unknown[];
@@ -145,8 +165,10 @@ export interface StartObjectiveOptions extends ObjectiveBudgets {
   sessionId?: string;
   instructionId?: string;
   workId?: string;
+  workInputId?: string;
   idempotencyKey?: string;
-  activeContext?: Record<string, unknown>;
+  activeContext?: OperatingInteractionContext | Record<string, unknown>;
+  successCondition?: ObjectiveSuccessCondition;
 }
 
 export interface StartObjectiveResult {
@@ -271,7 +293,8 @@ export class LLMObjectiveDecisionPlanner implements ObjectiveDecisionPlanner {
         "Prefer a deterministic query when a missing canonical fact is needed. Use a typed action only for a real mutation.",
         "Execution priority is canonical query/data, native FINNOR action, provider API/MCP, computer_task browser/CDP, visual fallback, then manual fallback. computer_task is only for an already-authorized business task that has no reliable native/API route. Never choose it for work an existing query or action can do, never put browser primitives or a model-selected URL in its payload, and block for ambiguity before computer execution.",
         "For computer_task, use an exact active application/authProfileRef pair visible in canonicalInspection.executionAccess.identityAccess. Never invent or infer an auth profile. computer_task must be READ_ONLY unless the objective explicitly requests one exact mutation.",
-        "Complete when the objective is already satisfied by observed state, including when a previously expected action is no longer necessary.",
+        "A complete decision is only a REQUEST to verify completion. It never completes Work by itself. Cite exact current evidence allowed by canonicalInspection.objective.successCondition; action/workflow/provider success alone is not business-outcome evidence.",
+        "Complete only when the persisted business success condition appears true in current canonical state, including when a previously expected action is no longer necessary. Include evidence using exact query/effect/event/delegation/computer ids or a typed canonical query assertion.",
         "Wait only for a future business condition. Use waitFor with exact canonical refs and optionally deadlineAt for 'event X OR deadline Y'. Never correlate by similar names or message text. A timer-only wait may use deadlineAt without waitFor. Block when safe progress requires a human fact/integration. Fail only for a terminal objective failure.",
         `Allowed action types: ${input.allowedActionTypes.join(", ")}`,
         `Typed operational query intents: customer_lookup, customer_cohort, schedule_range, money_summary, work_list, inventory_status, agent_activity, business_state, company_context.`,
@@ -280,7 +303,7 @@ export class LLMObjectiveDecisionPlanner implements ObjectiveDecisionPlanner {
         input.actionPayloadSpec,
         `Exact governed computer access visible for this decision: ${JSON.stringify(input.inspection.executionAccess)}`,
         'For a governed supplier-order lookup, computer_task still requires all six typed fields: application (copy the exact configured application), authProfileRef (copy the exact active profile ref), task, target {kind:"supplier_order",identifier:<order reference>}, mode:"READ_ONLY", and a non-empty successCriteria array. Never replace these fields with order_number or browser instructions.',
-        'Return one JSON object. Shapes: {"kind":"query","request":{"intent":"..."},"reason":"...","nextStep":"..."}; {"kind":"action","actionType":"...","payload":{},"reason":"...","nextStep":"..."}; {"kind":"wait","waitFor":{"eventType":"delegation.acknowledged","delegationId":"exact UUID","subject":{"type":"employee","id":"exact UUID"}},"deadlineAt":"optional ISO","condition":"short label","reason":"..."}; {"kind":"wait","deadlineAt":"ISO","condition":"timer label","reason":"..."}; {"kind":"complete","outcome":{},"reason":"..."}; {"kind":"block","reason":"...","recovery":"..."}; {"kind":"fail","reason":"...","failure":{}}.',
+        'Return one JSON object. query/action/wait may include recoveryMode: retry|replan|recover|compensate|escalate. Shapes: {"kind":"query","request":{"intent":"..."},"reason":"...","nextStep":"..."}; {"kind":"action","actionType":"...","payload":{},"reason":"...","nextStep":"..."}; {"kind":"wait","waitFor":{"eventType":"delegation.acknowledged","delegationId":"exact UUID","subject":{"type":"employee","id":"exact UUID"}},"deadlineAt":"optional ISO","condition":"short label","reason":"..."}; {"kind":"complete","outcome":{},"evidence":[{"kind":"canonical_query","request":{"intent":"..."},"assertion":{"path":["rows"],"operator":"array_contains","expected":{}}}],"reason":"..."}; {"kind":"block","reason":"...","recovery":"..."}; {"kind":"fail","reason":"...","failure":{}}.',
       ].join("\n"),
       user: JSON.stringify({ objective: input.objective, remainingBudget: input.remaining, canonicalInspection: input.inspection }),
       json: true,
@@ -311,37 +334,65 @@ async function scheduleIteration(loop: { id: string; tenantId: string; workId: s
 }
 
 export async function startWorkObjective(objective: string, ctx: TenantContext, options: StartObjectiveOptions = {}): Promise<StartObjectiveResult> {
+  options = {
+    ...options,
+    activeContext: await resolveOperatingInteractionContext({
+      tenantId: ctx.tenantId,
+      context: options.activeContext,
+      channel: options.channel ?? "text",
+      workId: options.workId,
+    }),
+  };
   const employeeId = ctx.employeeId ?? (/^[0-9a-f-]{36}$/i.test(ctx.userId) ? ctx.userId : undefined);
   const authority = employeeId
     ? await employeeAuthoritySnapshot({ ...ctx, employeeId }).catch(() => null)
     : null;
-  const input = await receiveWork({
-    tenantId: ctx.tenantId,
-    instruction: objective,
-    channel: options.channel ?? "text",
-    sessionId: options.sessionId,
-    instructionId: options.instructionId,
-    workId: options.workId,
-    userId: ctx.userId,
-    idempotencyKey: options.idempotencyKey,
-    activeContext: options.activeContext,
-    authorityContext: {
-      employeeId: employeeId ?? null,
-      revision: authority?.revision ?? ctx.authorityRevision ?? null,
-      roles: authority?.roles ?? ctx.authorityRoles ?? [],
-      principal: ctx.userId,
-    },
-  });
+  const preReceived = options.workId && options.workInputId && options.instructionId
+    ? await withTenant(ctx.tenantId, async (db) => {
+        const [row] = await db.select({ input: workInputs, work: works }).from(workInputs)
+          .innerJoin(works, and(eq(works.tenantId, ctx.tenantId), eq(works.id, workInputs.workId)))
+          .where(and(
+            eq(workInputs.tenantId, ctx.tenantId),
+            eq(workInputs.id, options.workInputId!),
+            eq(workInputs.workId, options.workId!),
+            eq(workInputs.instructionId, options.instructionId!),
+          )).limit(1);
+        if (!row || row.input.instructionText !== objective) throw new Error("The pre-received Work input does not match this objective");
+        return { workId: row.work.id, workInputId: row.input.id, instructionId: row.input.instructionId, created: false, duplicate: false, status: row.work.status, finalOutcome: row.work.finalOutcome };
+      })
+    : null;
+  const input = preReceived ?? await receiveWork({
+      tenantId: ctx.tenantId,
+      instruction: objective,
+      channel: options.channel ?? "text",
+      sessionId: options.sessionId,
+      instructionId: options.instructionId,
+      workId: options.workId,
+      userId: ctx.userId,
+      idempotencyKey: options.idempotencyKey,
+      activeContext: options.activeContext as Record<string, unknown> | undefined,
+      authorityContext: {
+        employeeId: employeeId ?? null,
+        revision: authority?.revision ?? ctx.authorityRevision ?? null,
+        roles: authority?.roles ?? ctx.authorityRoles ?? [],
+        principal: ctx.userId,
+      },
+    });
+  const successCondition = options.successCondition
+    ? parseObjectiveSuccessCondition(options.successCondition)
+    : defaultObjectiveSuccessCondition(objective);
   const loop = await withTenant(ctx.tenantId, async (db) => {
     const [existing] = await db.select().from(workObjectiveLoops).where(and(eq(workObjectiveLoops.tenantId, ctx.tenantId), eq(workObjectiveLoops.workId, input.workId))).limit(1);
     if (existing) {
       if (existing.objective !== objective && !input.duplicate) throw new Error("Work already owns a different objective; use redirect explicitly");
+      if (canonicalJson(existing.successCondition) !== canonicalJson(successCondition) && !input.duplicate) throw new Error("Work already owns a different objective success condition; use redirect explicitly");
       return existing;
     }
     const [created] = await db.insert(workObjectiveLoops).values({
       tenantId: ctx.tenantId,
       workId: input.workId,
       objective,
+      successCondition,
       state: "continue",
       createdBy: ctx.employeeId ?? (/^[0-9a-f-]{36}$/i.test(ctx.userId) ? ctx.userId : null),
       initialChannel: options.channel ?? "text",
@@ -360,8 +411,9 @@ export async function startWorkObjective(objective: string, ctx: TenantContext, 
   await transitionWork(ctx.tenantId, input.workId, "executing", "objective_accepted", {
     objectiveLoopId: loop.id,
     objective,
+    successCondition: loop.successCondition,
     budgets: { maxSteps: loop.maxSteps, maxActions: loop.maxActions, maxQueries: loop.maxQueries },
-  });
+  }, { executionModel: "objective" });
   await scheduleIteration(loop, new Date(), ctx.correlationId);
   return { workId: input.workId, workInputId: input.workInputId, instructionId: input.instructionId, objectiveLoopId: loop.id, state: loop.state, duplicate: input.duplicate };
 }
@@ -386,7 +438,7 @@ async function claimStep(tenantId: string, loopId: string, leaseOwner: string, e
     await db.execute(sql`SELECT id FROM ${workObjectiveLoops} WHERE ${workObjectiveLoops.id}=${loopId} AND ${workObjectiveLoops.tenantId}=${tenantId} FOR UPDATE`);
     const [loop] = await db.select().from(workObjectiveLoops).where(and(eq(workObjectiveLoops.tenantId, tenantId), eq(workObjectiveLoops.id, loopId))).limit(1);
     if (!loop) throw new Error("Objective loop not found");
-    if (["blocked", "completed", "failed"].includes(loop.state)) return { loop, step: null, terminal: true } as const;
+    if (["blocked", "completed", "failed", "cancelled"].includes(loop.state)) return { loop, step: null, terminal: true } as const;
     if (expectedRevision !== undefined && expectedRevision !== loop.revision) return { loop, step: null, terminal: true } as const;
     if (loop.leaseUntil && loop.leaseUntil > new Date() && loop.leaseOwner !== leaseOwner) return { loop, step: null, terminal: true } as const;
     const [unfinished] = await db.select().from(workObjectiveSteps).where(and(eq(workObjectiveSteps.tenantId, tenantId), eq(workObjectiveSteps.objectiveLoopId, loop.id), sql`${workObjectiveSteps.completedAt} IS NULL`)).orderBy(desc(workObjectiveSteps.stepNumber)).limit(1);
@@ -433,7 +485,8 @@ function latestHouseholdId(aggregate: Awaited<ReturnType<typeof workAggregate>>)
   const linked = links.find((link) => link.entityType === "household")?.entityId;
   if (linked) return linked;
   const activeContext = isRecord((aggregate.work as { activeContext?: unknown }).activeContext) ? (aggregate.work as { activeContext: Record<string, unknown> }).activeContext : {};
-  return typeof activeContext.householdId === "string" ? activeContext.householdId : null;
+  if (typeof activeContext.householdId === "string") return activeContext.householdId;
+  return canonicalRefsFromContext(activeContext).find((ref) => ref.entityType === "household")?.entityId ?? null;
 }
 
 async function inspectCanonicalState(tenantId: string, workId: string, loop: typeof workObjectiveLoops.$inferSelect, step: typeof workObjectiveSteps.$inferSelect, ctx: TenantContext): Promise<{ inspection: ObjectiveInspection; inspectionHash: string }> {
@@ -535,9 +588,20 @@ async function inspectCanonicalState(tenantId: string, workId: string, loop: typ
       createdAt: artifact.createdAt.toISOString(),
     })),
   }));
-  const actions = (aggregate.actions as Array<typeof domainActions.$inferSelect>).slice(-20).map((action) => ({
-    id: action.id, actionType: action.actionType, status: action.status, summary: action.summary, payload: bounded(action.payload, 8_000), objectiveStepId: action.objectiveStepId,
+  const aggregateActions = aggregate.actions as Array<typeof domainActions.$inferSelect>;
+  const actions = aggregateActions.slice(-20).map((action) => ({
+    id: action.id, actionType: action.actionType, status: action.status, summary: action.summary, payload: bounded(action.payload, 8_000), objectiveStepId: action.objectiveStepId, businessEffectId: action.businessEffectId,
   }));
+  const actionIds = aggregateActions.map((action) => action.id);
+  const effectRows = actionIds.length === 0 ? [] : await withTenant(tenantId, (db) => db.select({
+    id: businessEffects.id,
+    domainActionId: businessEffects.domainActionId,
+    status: businessEffects.status,
+    effect: businessEffects.effect,
+    verification: businessEffects.verification,
+    observedResult: businessEffects.observedResult,
+    observedAt: businessEffects.observedAt,
+  }).from(businessEffects).where(and(eq(businessEffects.tenantId, tenantId), inArray(businessEffects.domainActionId, actionIds))).orderBy(asc(businessEffects.createdAt)));
   const operations = (aggregate.operations as Array<Record<string, unknown>>).slice(-10).map((operation) => ({
     id: operation.id, domainActionId: operation.domainActionId, operationType: operation.operationType, status: operation.status,
     targetCount: operation.targetCount, pendingCount: operation.pendingCount, runningCount: operation.runningCount,
@@ -553,7 +617,14 @@ async function inspectCanonicalState(tenantId: string, workId: string, loop: typ
     work: { id: workId, status: (aggregate.work as { status: string }).status, activeContext: (aggregate.work as { activeContext: unknown }).activeContext },
     objective: {
       id: loop.id, text: loop.objective, state: loop.state, revision: loop.revision,
-      budget: { stepCount: loop.stepCount, maxSteps: loop.maxSteps, actionCount: loop.actionCount, maxActions: loop.maxActions, queryCount: loop.queryCount, maxQueries: loop.maxQueries },
+      successCondition: loop.successCondition,
+      successVerification: loop.successVerification,
+      budget: {
+        stepCount: loop.stepCount, maxSteps: loop.maxSteps, actionCount: loop.actionCount, maxActions: loop.maxActions,
+        queryCount: loop.queryCount, maxQueries: loop.maxQueries, plannerFailureCount: loop.plannerFailureCount,
+        maxPlannerFailures: loop.maxPlannerFailures, consecutiveNoProgress: loop.consecutiveNoProgress,
+        maxConsecutiveNoProgress: loop.maxConsecutiveNoProgress, deadlineAt: loop.deadlineAt.toISOString(),
+      },
     },
     companyGraph: { householdId, entityLinks: aggregate.entityLinks },
     executionAccess: { identityAccess, computerTask: computerConfig },
@@ -575,9 +646,24 @@ async function inspectCanonicalState(tenantId: string, workId: string, loop: typ
       updatedAt: row.updatedAt.toISOString(),
     })),
     eventWake: bounded(eventWake, 24_000),
+    eventWaits: (aggregate.eventWaits as Array<Record<string, unknown>>).map((wait) => ({
+      id: wait.id, status: wait.status, expectedEventType: wait.expectedEventType,
+      matchedEventId: wait.matchedEventId, conditionSummary: wait.conditionSummary,
+      deadlineAt: wait.deadlineAt instanceof Date ? wait.deadlineAt.toISOString() : wait.deadlineAt ?? null,
+    })),
+    integrationEvents: (aggregate.integrationEvents as Array<Record<string, unknown>>).map((event) => ({
+      id: event.id, eventType: event.eventType, status: event.status, source: event.source,
+      workId: event.workId, occurredAt: event.occurredAt instanceof Date ? event.occurredAt.toISOString() : event.occurredAt,
+      trustClass: event.trustClass,
+    })),
     businessState: bounded(businessState, 40_000),
     ...(companyContext === undefined ? {} : { companyContext: bounded(companyContext, 40_000) }),
     actions,
+    businessEffects: effectRows.map((effect) => ({
+      ...effect,
+      observedAt: effect.observedAt?.toISOString() ?? null,
+      observedResult: bounded(effect.observedResult, 12_000),
+    })),
     operations,
     receipts,
     priorIterations: objectiveSteps.filter((item) => item.id !== step.id).slice(-8).map((item) => ({
@@ -597,9 +683,17 @@ function unresolvedEffect(inspection: ObjectiveInspection): {
   const actions = inspection.actions as Array<{ id: string; status: string }>;
   const operations = inspection.operations as Array<{ status: string }>;
   const browserRuns = inspection.computerRuns as Array<{ id: string; status: string }>;
-  const pending = actions.find((action) => action.status === "pending" || action.status === "needs_human_review");
+  const pending = actions.find((action) => action.status === "pending"
+    || action.status === "needs_human_review"
+    || action.status === "blocked_integration_unavailable");
   if (pending) {
-    return { outcome: "awaiting_approval", reason: "A consequential action is durably paused at the approval boundary.", waitFor: { eventType: "action.state_changed", domainActionId: pending.id } };
+    return {
+      outcome: "awaiting_approval",
+      reason: pending.status === "blocked_integration_unavailable"
+        ? "A known pre-effect provider failure is durably paused for an explicit retry or escalation decision."
+        : "A consequential action is durably paused at the approval boundary.",
+      waitFor: { eventType: "action.state_changed", domainActionId: pending.id },
+    };
   }
   const browserRun = browserRuns.find((run) => !["succeeded", "blocked", "failed", "timed_out", "cancelled"].includes(run.status));
   if (browserRun) {
@@ -631,6 +725,13 @@ async function finishPlannerAttempt(tenantId: string, attemptId: string, status:
   }).where(and(eq(workObjectivePlannerAttempts.tenantId, tenantId), eq(workObjectivePlannerAttempts.id, attemptId))));
 }
 
+function recoveryKind(decision: ObjectiveDecision | undefined): "retry" | "replan" | "recover" | "compensate" | "escalate" | "block" | null {
+  if (!decision) return null;
+  if (decision.kind === "block") return "block";
+  if (decision.kind === "query" || decision.kind === "action" || decision.kind === "wait") return decision.recoveryMode ?? null;
+  return null;
+}
+
 async function finishIteration(params: {
   tenantId: string;
   loop: typeof workObjectiveLoops.$inferSelect;
@@ -648,6 +749,7 @@ async function finishIteration(params: {
   failure?: unknown;
   actionIncrement?: number;
   queryIncrement?: number;
+  successVerification?: ObjectiveSuccessVerification;
   durableWait?: {
     waitFor: z.infer<typeof WaitForSchema>;
     conditionSummary: string;
@@ -692,6 +794,8 @@ async function finishIteration(params: {
       iterationOutcome: outcome,
       scheduledFor: params.scheduledFor ?? null,
       failure: params.failure ? bounded(params.failure, 16_000) : null,
+      recoveryKind: recoveryKind(params.decision),
+      successVerification: params.successVerification ?? null,
       completedAt: new Date(),
     }).where(and(eq(workObjectiveSteps.tenantId, params.tenantId), eq(workObjectiveSteps.id, params.step.id)));
     const [updated] = await db.update(workObjectiveLoops).set({
@@ -703,7 +807,10 @@ async function finishIteration(params: {
       reason,
       nextStep: params.nextStep ?? null,
       lastObservation: bounded(params.observation),
-      completedAt: outcome === "completed" || outcome === "failed" ? new Date() : null,
+      successVerification: params.successVerification ?? current.successVerification,
+      successVerifiedAt: outcome === "completed" ? new Date() : current.successVerifiedAt,
+      completedAt: outcome === "completed" || outcome === "failed" || outcome === "cancelled" ? new Date() : null,
+      cancelledAt: outcome === "cancelled" ? new Date() : current.cancelledAt,
       leaseOwner: null,
       leaseUntil: null,
       updatedAt: new Date(),
@@ -739,8 +846,9 @@ async function finishIteration(params: {
     outcome: result.outcome,
     reason: result.loop.reason,
   }, result.outcome === "completed"
-    ? { finalOutcome: { kind: "objective", objectiveLoopId: params.loop.id, observation: bounded(params.observation), reason: result.loop.reason } }
-    : result.outcome === "failed" ? { failure: { kind: "objective", objectiveLoopId: params.loop.id, reason: result.loop.reason, detail: bounded(params.failure) } } : {});
+    ? { finalOutcome: { kind: "objective", objectiveLoopId: params.loop.id, successVerification: params.successVerification, observation: bounded(params.observation), reason: result.loop.reason } }
+    : result.outcome === "failed" ? { failure: { kind: "objective", objectiveLoopId: params.loop.id, reason: result.loop.reason, detail: bounded(params.failure) } }
+      : result.outcome === "cancelled" ? { finalOutcome: { kind: "objective", objectiveLoopId: params.loop.id, state: "cancelled", reason: result.loop.reason } } : {});
   if (result.outcome === "continue") await scheduleIteration(result.loop, new Date(), params.loop.workId);
   return result;
 }
@@ -868,6 +976,7 @@ export class ObjectiveLoopRuntime {
           if (!hasStrongCorrelation) throw new Error("Objective decision failed semantic validation: event wait requires an exact Work/resource/delegation/task/run/provider correlation; a party alone is insufficient");
         }
       }
+      if (decision.kind === "complete") parseObjectiveCompletionEvidence(decision.evidence);
       await finishPlannerAttempt(params.tenantId, attempt.id, "succeeded", this.planner.providerName, decision);
     } catch (error) {
       const failure = failureShape(error);
@@ -891,7 +1000,39 @@ export class ObjectiveLoopRuntime {
     await withTenant(params.tenantId, (db) => db.update(workObjectiveSteps).set({ phase: decision.kind === "query" || decision.kind === "action" ? "acting" : "observing", decisionKind: decision.kind, decision, decisionReason: decision.reason }).where(eq(workObjectiveSteps.id, step.id)));
 
     if (decision.kind === "complete") {
-      return (await finishIteration({ tenantId: params.tenantId, loop, step, outcome: "completed", reason: decision.reason, decision, observation: decision.outcome, progressMade: true })).outcome;
+      const condition = parseObjectiveSuccessCondition(loop.successCondition);
+      const evidence = parseObjectiveCompletionEvidence(decision.evidence);
+      const requestedVerificationQueries = condition.criteria.filter((criterion) => criterion.kind === "canonical_query").length
+        + evidence.filter((item) => item.kind === "canonical_query").length;
+      if (loop.queryCount + requestedVerificationQueries > loop.maxQueries) {
+        return (await finishIteration({ tenantId: params.tenantId, loop, step, outcome: "blocked", reason: `Objective completion verification would exceed the configured ${loop.maxQueries}-query budget.`, decision, observation: { requestedVerificationQueries, remainingQueries: Math.max(0, loop.maxQueries - loop.queryCount) }, progressMade: false })).outcome;
+      }
+      const successVerification = await evaluateObjectiveSuccessCondition({
+        tenantId: params.tenantId,
+        workId: params.workId,
+        loopId: loop.id,
+        stepNumber: step.stepNumber,
+        condition,
+        inspection: await inspectCurrentObjectiveSuccessState(params.tenantId, params.workId, loop.id),
+        evidence,
+      });
+      if (successVerification.state === "verified") {
+        return (await finishIteration({ tenantId: params.tenantId, loop, step, outcome: "completed", reason: decision.reason, decision, observation: { ...decision.outcome, successVerification }, successVerification, progressMade: true, queryIncrement: successVerification.queryExecutionIds.length })).outcome;
+      }
+      const failedKinds = successVerification.results.filter((result) => !result.satisfied).map((result) => result.kind);
+      return (await finishIteration({
+        tenantId: params.tenantId,
+        loop,
+        step,
+        outcome: successVerification.state === "blocked" ? "blocked" : "continue",
+        reason: `Completion was rejected because the persisted business success condition is not verified: ${failedKinds.join(", ") || "unknown condition"}.`,
+        nextStep: successVerification.state === "blocked" ? "Obtain the required manual verification or redirect the objective with an authorized success condition." : "Re-inspect current business state and choose one bounded step toward the unsatisfied success condition.",
+        decision,
+        observation: { proposedOutcome: decision.outcome, successVerification },
+        successVerification,
+        progressMade: false,
+        queryIncrement: successVerification.queryExecutionIds.length,
+      })).outcome;
     }
     if (decision.kind === "block") {
       return (await finishIteration({ tenantId: params.tenantId, loop, step, outcome: "blocked", reason: decision.reason, nextStep: decision.recovery, decision, observation: { recovery: decision.recovery ?? null }, progressMade: false })).outcome;
@@ -1014,21 +1155,30 @@ export class ObjectiveLoopRuntime {
 export async function controlWorkObjective(params: {
   tenantId: string;
   workId: string;
-  command: "continue" | "interrupt" | "redirect";
+  command: "continue" | "interrupt" | "redirect" | "cancel";
   actorId: string;
   objective?: string;
+  successCondition?: ObjectiveSuccessCondition;
   correlationId?: string;
 }): Promise<typeof workObjectiveLoops.$inferSelect> {
+  let cancellationAlreadyRecorded = false;
   const loop = await withTenant(params.tenantId, async (db) => {
     await db.execute(sql`SELECT id FROM ${workObjectiveLoops} WHERE ${workObjectiveLoops.workId}=${params.workId} AND ${workObjectiveLoops.tenantId}=${params.tenantId} FOR UPDATE`);
     const [current] = await db.select().from(workObjectiveLoops).where(and(eq(workObjectiveLoops.tenantId, params.tenantId), eq(workObjectiveLoops.workId, params.workId))).limit(1);
     if (!current) throw new Error("Work has no objective loop");
+    if (current.state === "cancelled" && params.command === "cancel") {
+      cancellationAlreadyRecorded = true;
+      return current;
+    }
+    if (current.state === "completed" || current.state === "cancelled") {
+      throw new Error(`${current.state === "completed" ? "Completed" : "Cancelled"} objective cannot be ${params.command === "cancel" ? "cancelled" : "continued or redirected"}`);
+    }
     await db.update(workEventWaits).set({ status: "cancelled", cancelledAt: new Date(), updatedAt: new Date() }).where(and(
       eq(workEventWaits.tenantId, params.tenantId),
       eq(workEventWaits.objectiveLoopId, current.id),
       eq(workEventWaits.status, "waiting"),
     ));
-    if (params.command === "interrupt" || params.command === "redirect") {
+    if (params.command === "interrupt" || params.command === "redirect" || params.command === "cancel") {
       const stepIds = (await db.select({ id: workObjectiveSteps.id }).from(workObjectiveSteps).where(and(eq(workObjectiveSteps.tenantId, params.tenantId), eq(workObjectiveSteps.objectiveLoopId, current.id)))).map((step) => step.id);
       if (stepIds.length > 0) {
         const cancelled = await db.update(domainActions).set({ status: "rejected", executionStartedAt: null }).where(and(
@@ -1037,19 +1187,37 @@ export async function controlWorkObjective(params: {
           inArray(domainActions.status, ["draft", "pending", "approved", "needs_human_review"]),
         )).returning({ id: domainActions.id });
         if (cancelled.length > 0) {
+          const cancelledActionIds = cancelled.map((action) => action.id);
+          const approvalRows = await db.update(authorityApprovalRequests).set({ status: "rejected", resolvedAt: new Date() }).where(and(
+            eq(authorityApprovalRequests.tenantId, params.tenantId),
+            inArray(authorityApprovalRequests.domainActionId, cancelledActionIds),
+            eq(authorityApprovalRequests.status, "pending"),
+          )).returning({ id: authorityApprovalRequests.id });
+          if (approvalRows.length > 0) {
+            await db.update(authorityApprovalRequestSteps).set({ status: "skipped", decidedAt: new Date() }).where(and(
+              eq(authorityApprovalRequestSteps.tenantId, params.tenantId),
+              inArray(authorityApprovalRequestSteps.approvalRequestId, approvalRows.map((row) => row.id)),
+              eq(authorityApprovalRequestSteps.status, "pending"),
+            ));
+          }
+          await db.update(pendingConfirmations).set({ status: "rejected", resolvedAt: new Date() }).where(and(
+            eq(pendingConfirmations.tenantId, params.tenantId),
+            inArray(pendingConfirmations.domainActionId, cancelledActionIds),
+            eq(pendingConfirmations.status, "awaiting"),
+          ));
           await db.insert(actionLog).values(cancelled.map((action) => ({
             tenantId: params.tenantId,
             domainActionId: action.id,
             step: "rejected",
             input: { by: params.actorId, command: params.command },
-            output: { reason: "Objective was interrupted or redirected before execution." },
+            output: { reason: "Objective was interrupted, redirected, or cancelled before execution." },
           })));
         }
       }
     }
     await db.update(workObjectiveSteps).set({
       phase: "finished",
-      iterationOutcome: "blocked",
+      iterationOutcome: params.command === "cancel" ? "cancelled" : "blocked",
       decisionReason: `Iteration superseded by ${params.command} from ${params.actorId}.`,
       progressMade: false,
       completedAt: new Date(),
@@ -1058,10 +1226,21 @@ export async function controlWorkObjective(params: {
       const [updated] = await db.update(workObjectiveLoops).set({ state: "blocked", reason: `Interrupted by ${params.actorId}.`, nextStep: "Explicitly continue or redirect this objective.", nextRunAt: null, leaseOwner: null, leaseUntil: null, updatedAt: new Date() }).where(eq(workObjectiveLoops.id, current.id)).returning();
       return updated!;
     }
-    if (current.state === "completed") throw new Error("Completed objective cannot be continued or redirected");
+    if (params.command === "cancel") {
+      const [updated] = await db.update(workObjectiveLoops).set({
+        state: "cancelled", reason: `Responsibility explicitly cancelled by ${params.actorId}.`, nextStep: null,
+        nextRunAt: null, leaseOwner: null, leaseUntil: null, completedAt: new Date(), cancelledAt: new Date(), updatedAt: new Date(),
+      }).where(eq(workObjectiveLoops.id, current.id)).returning();
+      return updated!;
+    }
     if (params.command === "redirect" && !params.objective?.trim()) throw new Error("Redirect requires a non-empty objective");
     const [updated] = await db.update(workObjectiveLoops).set({
-      ...(params.command === "redirect" ? { objective: params.objective!.trim() } : {}),
+      ...(params.command === "redirect" ? {
+        objective: params.objective!.trim(),
+        successCondition: params.successCondition ? parseObjectiveSuccessCondition(params.successCondition) : defaultObjectiveSuccessCondition(params.objective!.trim()),
+        successVerification: null,
+        successVerifiedAt: null,
+      } : {}),
       // A control transition starts a new scheduling generation even when the text
       // is unchanged. This makes any pre-interrupt job provably stale and gives the
       // resumed first step a fresh durable idempotency key.
@@ -1071,8 +1250,9 @@ export async function controlWorkObjective(params: {
     }).where(eq(workObjectiveLoops.id, current.id)).returning();
     return updated!;
   });
+  if (cancellationAlreadyRecorded) return loop;
   const workStatus = loop.state === "continue" ? "executing" : loop.state;
-  await transitionWork(params.tenantId, params.workId, workStatus, `objective_${params.command}`, { objectiveLoopId: loop.id, actorId: params.actorId, revision: loop.revision, objective: params.command === "redirect" ? loop.objective : undefined });
+  await transitionWork(params.tenantId, params.workId, workStatus, `objective_${params.command}`, { objectiveLoopId: loop.id, actorId: params.actorId, revision: loop.revision, objective: params.command === "redirect" ? loop.objective : undefined }, loop.state === "cancelled" ? { finalOutcome: { kind: "objective", objectiveLoopId: loop.id, state: "cancelled", actorId: params.actorId } } : {});
   if (loop.state === "continue") await scheduleIteration(loop, new Date(), params.correlationId);
   return loop;
 }
@@ -1101,7 +1281,9 @@ export async function recoverRunnableObjectives(tenantId: string): Promise<numbe
     if (loop.state === "awaiting_approval") {
       const aggregate = await workAggregate(tenantId, loop.workId);
       const actions = (aggregate?.actions ?? []) as Array<{ status: string }>;
-      if (!actions.some((action) => action.status === "pending" || action.status === "needs_human_review")) {
+      if (!actions.some((action) => action.status === "pending"
+        || action.status === "needs_human_review"
+        || action.status === "blocked_integration_unavailable")) {
         await scheduleIteration(loop, new Date(), loop.workId);
         enqueued += 1;
       }
@@ -1148,7 +1330,7 @@ export async function resumeObjectiveForAction(tenantId: string, actionId: strin
     const [step] = await db.select({ objectiveLoopId: workObjectiveSteps.objectiveLoopId }).from(workObjectiveSteps).where(and(eq(workObjectiveSteps.tenantId, tenantId), eq(workObjectiveSteps.id, action.objectiveStepId))).limit(1);
     if (!step) return null;
     const [current] = await db.select().from(workObjectiveLoops).where(and(eq(workObjectiveLoops.tenantId, tenantId), eq(workObjectiveLoops.id, step.objectiveLoopId))).limit(1);
-    if (!current || ["blocked", "completed", "failed"].includes(current.state)) return null;
+    if (!current || ["blocked", "completed", "failed", "cancelled"].includes(current.state)) return null;
     const [updated] = await db.update(workObjectiveLoops).set({ state: "continue", nextRunAt: new Date(), reason: "The approved/action result changed; canonical observation is due.", nextStep: "Observe the real action, receipt, operation, and business state.", updatedAt: new Date() }).where(eq(workObjectiveLoops.id, current.id)).returning();
     return updated ?? null;
   });

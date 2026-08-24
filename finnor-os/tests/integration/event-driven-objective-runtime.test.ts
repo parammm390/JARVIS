@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import pg from "pg";
 import { and, eq } from "drizzle-orm";
 import { migrate } from "../../packages/db/migrate";
+import { citeObservedObjectiveEvidence } from "./helpers/objective-completion-evidence";
 import {
   acknowledgementRequests,
   applicationAccounts,
@@ -50,7 +51,7 @@ class ScriptedPlanner implements ObjectiveDecisionPlanner {
   async decide(input: { inspection: ObjectiveInspection }): Promise<ObjectiveDecision> {
     const decision = this.decisions[this.calls++];
     if (!decision) throw new Error("Phase 4 scripted planner exhausted");
-    return typeof decision === "function" ? decision(input.inspection) : decision;
+    return citeObservedObjectiveEvidence(typeof decision === "function" ? decision(input.inspection) : decision, input.inspection);
   }
 }
 

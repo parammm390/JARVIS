@@ -7,10 +7,11 @@ import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import * as schema from "./schema";
 import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
-import { randomUUID } from "node:crypto";
-import { CANONICAL_ENTITY_TYPES, type AttachWorkEntityInput, type CanonicalEntityRef } from "@finnor/shared-types";
+import { createHash, randomUUID } from "node:crypto";
+import { CANONICAL_ENTITY_TYPES, type AttachWorkEntityInput, type CanonicalEntityRef, type DecisionContextSnapshot } from "@finnor/shared-types";
 
 export * from "./schema";
+export * from "./migration-head";
 export * from "./event-fabric";
 export { schema };
 
@@ -23,21 +24,14 @@ export type Db = NodePgDatabase<typeof schema>;
  * `sslmode=disable` is read as an explicit override before stripping (the standard
  * Postgres convention for "this endpoint genuinely doesn't speak TLS, don't ask it to").
  *
- * `.railway.internal` hosts (Phase 6 staging: a session-mode PgBouncer sitting between
- * the app and Postgres) are Railway's own private network — already an isolated,
- * non-public transport, same trust level as localhost — and the plain Postgres image
- * behind it doesn't terminate TLS, so requesting SSL there fails outright ("the server
- * does not support SSL connections") rather than just being redundant. The same
- * PgBouncer, reached via Railway's *public* TCP proxy for Task 6.4's Vercel-side load
- * test, has the identical no-TLS limitation but crosses the public internet — the
- * hostname heuristic alone can't tell that case apart safely (a real public Postgres
- * host should still get SSL), so that caller passes `sslmode=disable` explicitly rather
- * than this function guessing from the domain.
+ * Non-local endpoints must use TLS unless the caller explicitly supplies the standard
+ * PostgreSQL `sslmode=disable` override. Provider hostnames are never treated as proof
+ * that plaintext transport is safe.
  */
 export function pgConnectionConfig(url: string): pg.ClientConfig {
   const sslDisabled = /[?&]sslmode=disable\b/.test(url);
   const cleaned = url.replace(/([?&])sslmode=[^&]*&?/, "$1").replace(/[?&]$/, "");
-  const skipSsl = sslDisabled || cleaned.includes("localhost") || cleaned.includes("127.0.0.1") || cleaned.includes(".railway.internal");
+  const skipSsl = sslDisabled || cleaned.includes("localhost") || cleaned.includes("127.0.0.1");
   return {
     connectionString: cleaned,
     ...(skipSsl ? {} : { ssl: { rejectUnauthorized: false } }),
@@ -49,8 +43,7 @@ export function pgConnectionConfig(url: string): pg.ClientConfig {
  * question, and treating them as one was a real bug found running the Task 6.4 load
  * test at scale, 2026-07-20. `localhost`/`127.0.0.1` is the only genuinely unshared,
  * unpooled target (local dev, CI's own ephemeral single-tenant container) — every
- * other target in this system, including `.railway.internal` (the worker's private
- * PgBouncer) and the public PgBouncer proxy (`sslmode=disable`, Task 6.4), is a shared
+ * other target in this system, including private and public managed poolers, is a shared
  * pooled resource, exactly like Supabase's Supavisor pooler already was. A generous
  * per-invocation `max` against a shared pool multiplies with every concurrent
  * serverless invocation — under real load this starved PgBouncer's own pool far faster
@@ -85,8 +78,7 @@ export function getPool(): pg.Pool {
     // connection — required because we set search_path per session, which a transaction-
     // mode pooler would reset between clients. We run our own small pg.Pool regardless.
     const cfg = pgConnectionConfig(url);
-    // Every session-mode pooler this app talks to (Supabase Supavisor, and now
-    // PgBouncer whether private or public) caps total concurrent backend connections
+    // Every session-mode pooler this app talks to caps total concurrent backend connections
     // low relative to how many serverless invocations can run at once. A generous
     // per-invocation max against a shared pool multiplies with concurrency and starves
     // it fast — only a genuinely unshared localhost/127.0.0.1 target gets to be
@@ -532,7 +524,7 @@ export async function retryBusinessOperation(params: {
 
 export const WORK_STATUSES = [
   "received", "understanding", "planning", "ready", "actionable",
-  "awaiting_approval", "executing", "waiting", "blocked", "completed", "failed", "recovery",
+  "awaiting_approval", "executing", "waiting", "blocked", "completed", "failed", "cancelled", "recovery",
 ] as const;
 export type WorkStatus = (typeof WORK_STATUSES)[number];
 
@@ -585,6 +577,26 @@ function isUuid(value: string | undefined): value is string {
   return Boolean(value && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value));
 }
 
+const PROVENANCE_BYTE_LIMIT = 65_536;
+
+function boundedProvenance(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const serialized = JSON.stringify(value);
+  if (Buffer.byteLength(serialized, "utf8") > PROVENANCE_BYTE_LIMIT) {
+    throw new Error(`Provenance snapshot exceeds the ${PROVENANCE_BYTE_LIMIT}-byte bound`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function provenanceHash(value: unknown): string {
+  return createHash("sha256").update(JSON.stringify(value)).digest("hex");
+}
+
+function provenanceCapturedAt(value: Record<string, unknown> | null, fallback = new Date()): Date {
+  const candidate = typeof value?.capturedAt === "string" ? new Date(value.capturedAt) : fallback;
+  return Number.isNaN(candidate.getTime()) ? fallback : candidate;
+}
+
 const canonicalEntityTypes = new Set<string>(CANONICAL_ENTITY_TYPES);
 
 export function canonicalRefsFromContext(value: unknown): CanonicalEntityRef[] {
@@ -593,13 +605,17 @@ export function canonicalRefsFromContext(value: unknown): CanonicalEntityRef[] {
   if (typeof context.householdId === "string" && isUuid(context.householdId)) {
     refs.push({ entityType: "household", entityId: context.householdId });
   }
-  if (Array.isArray(context.entityRefs)) {
-    for (const candidate of context.entityRefs) {
+  const candidates = [
+    ...(Array.isArray(context.entityRefs) ? context.entityRefs : []),
+    ...(context.focusedEntity ? [context.focusedEntity] : []),
+    ...(Array.isArray(context.selectedEntities) ? context.selectedEntities : []),
+    ...(Array.isArray(context.excludedEntities) ? context.excludedEntities : []),
+  ];
+  for (const candidate of candidates) {
       const ref = jsonObject(candidate);
       if (typeof ref.entityType === "string" && canonicalEntityTypes.has(ref.entityType) && typeof ref.entityId === "string" && isUuid(ref.entityId)) {
         refs.push({ entityType: ref.entityType as CanonicalEntityRef["entityType"], entityId: ref.entityId });
       }
-    }
   }
   return [...new Map(refs.map((ref) => [`${ref.entityType}:${ref.entityId}`, ref])).values()];
 }
@@ -637,6 +653,9 @@ export async function attachWorkEntity(
 export async function receiveWork(params: ReceiveWorkParams): Promise<ReceivedWork> {
   const desiredWorkId = params.workId ?? params.instructionId ?? randomUUID();
   const desiredInstructionId = params.instructionId ?? randomUUID();
+  const contextSnapshot = boundedProvenance(params.activeContext);
+  const contextSnapshotHash = contextSnapshot ? provenanceHash(contextSnapshot) : null;
+  const contextCapturedAt = contextSnapshot ? provenanceCapturedAt(contextSnapshot) : null;
   return withTenant(params.tenantId, async (db) => {
     const [validUser] = isUuid(params.userId)
       ? await db.select({ id: schema.users.id }).from(schema.users).where(and(eq(schema.users.tenantId, params.tenantId), eq(schema.users.id, params.userId))).limit(1)
@@ -737,6 +756,9 @@ export async function receiveWork(params: ReceiveWorkParams): Promise<ReceivedWo
       instructionText: params.instruction,
       createdBy: validUser?.id ?? null,
       idempotencyKey: params.idempotencyKey ?? null,
+      contextSnapshot,
+      contextSnapshotHash,
+      contextCapturedAt,
     }).onConflictDoNothing().returning();
     if (!input) {
       const [raced] = await db.select().from(schema.workInputs).where(and(eq(schema.workInputs.tenantId, params.tenantId), eq(schema.workInputs.instructionId, desiredInstructionId))).limit(1);
@@ -865,7 +887,13 @@ export async function transitionWork(
   toStatus: WorkStatus,
   eventType: string,
   payload: Record<string, unknown> = {},
-  patch: { finalOutcome?: unknown; failure?: unknown; recovery?: unknown; activeContext?: Record<string, unknown> } = {},
+  patch: {
+    finalOutcome?: unknown;
+    failure?: unknown;
+    recovery?: unknown;
+    activeContext?: Record<string, unknown>;
+    executionModel?: "query" | "atomic_effect" | "objective";
+  } = {},
 ): Promise<void> {
   await withTenant(tenantId, async (db) => {
     await db.execute(sql`SELECT id FROM ${schema.works} WHERE ${schema.works.id} = ${workId} AND ${schema.works.tenantId} = ${tenantId} FOR UPDATE`);
@@ -879,6 +907,7 @@ export async function transitionWork(
       ...(patch.failure !== undefined ? { failure: patch.failure as object } : {}),
       ...(patch.recovery !== undefined ? { recovery: patch.recovery as object } : {}),
       ...(patch.activeContext ? { activeContext: { ...jsonObject(work.activeContext), ...patch.activeContext } } : {}),
+      ...(patch.executionModel ? { executionModel: patch.executionModel } : {}),
     }).where(eq(schema.works.id, workId));
     await db.insert(schema.workEvents).values({
       tenantId,
@@ -913,8 +942,12 @@ export async function beginWorkPlannerAttempt(params: {
 }): Promise<{ id: string; attempt: number; claimed: boolean; status: "planning" | "succeeded" | "failed" | "timed_out" }> {
   return withTenant(params.tenantId, async (db) => {
     await db.execute(sql`SELECT id FROM ${schema.works} WHERE ${schema.works.id} = ${params.workId} AND ${schema.works.tenantId} = ${params.tenantId} FOR UPDATE`);
+    const [work] = await db.select().from(schema.works).where(and(eq(schema.works.id, params.workId), eq(schema.works.tenantId, params.tenantId))).limit(1);
+    if (!work) throw new Error("Work not found");
     const [existing] = await db.select().from(schema.workPlannerAttempts).where(and(eq(schema.workPlannerAttempts.workId, params.workId), eq(schema.workPlannerAttempts.attemptKey, params.attemptKey))).limit(1);
     if (existing) return { id: existing.id, attempt: existing.attempt, claimed: false, status: existing.status };
+    const [input] = await db.select().from(schema.workInputs).where(and(eq(schema.workInputs.id, params.workInputId), eq(schema.workInputs.workId, params.workId))).limit(1);
+    const snapshot = await decisionContextSnapshot(db, work, input);
     const [latest] = await db.select({ maxAttempt: sql<number>`coalesce(max(${schema.workPlannerAttempts.attempt}), 0)::int` }).from(schema.workPlannerAttempts).where(eq(schema.workPlannerAttempts.workId, params.workId));
     const [created] = await db.insert(schema.workPlannerAttempts).values({
       tenantId: params.tenantId,
@@ -923,6 +956,9 @@ export async function beginWorkPlannerAttempt(params: {
       attempt: (latest?.maxAttempt ?? 0) + 1,
       attemptKey: params.attemptKey,
       status: "planning",
+      decisionContextSnapshot: snapshot,
+      decisionContextHash: provenanceHash(snapshot),
+      decisionContextCapturedAt: new Date(snapshot.capturedAt),
     }).returning();
     return { id: created!.id, attempt: created!.attempt, claimed: true, status: created!.status };
   });
@@ -941,6 +977,87 @@ export async function finishWorkPlannerAttempt(params: {
     failure: params.failure ?? null,
     completedAt: new Date(),
   }).where(and(eq(schema.workPlannerAttempts.id, params.attemptId), eq(schema.workPlannerAttempts.tenantId, params.tenantId))));
+}
+
+async function decisionContextSnapshot(
+  db: Db,
+  work: typeof schema.works.$inferSelect,
+  input: typeof schema.workInputs.$inferSelect | undefined,
+): Promise<DecisionContextSnapshot> {
+  const rawContext = input?.contextSnapshot ?? work.activeContext;
+  const context = boundedProvenance(rawContext);
+  const refs = canonicalRefsFromContext(rawContext);
+  const focused = jsonObject(context?.focusedEntity);
+  const selected = Array.isArray(context?.selectedEntities) ? context.selectedEntities : [];
+  const excluded = Array.isArray(context?.excludedEntities) ? context.excludedEntities : [];
+  const relationshipFor = (ref: CanonicalEntityRef): DecisionContextSnapshot["entities"][number]["relationship"] => {
+    if (focused.entityType === ref.entityType && focused.entityId === ref.entityId) return "focused";
+    if (selected.some((candidate) => {
+      const row = jsonObject(candidate);
+      return row.entityType === ref.entityType && row.entityId === ref.entityId;
+    })) return "selected";
+    if (excluded.some((candidate) => {
+      const row = jsonObject(candidate);
+      return row.entityType === ref.entityType && row.entityId === ref.entityId;
+    })) return "excluded";
+    return "referenced";
+  };
+  const userIds = refs.filter((ref) => ref.entityType === "user").map((ref) => ref.entityId);
+  const householdIds = refs.filter((ref) => ref.entityType === "household").map((ref) => ref.entityId);
+  const [userRows, householdRows, authorityState] = await Promise.all([
+    userIds.length > 0
+      ? db.select({ id: schema.users.id, displayName: schema.users.displayName, email: schema.users.email, status: schema.users.status }).from(schema.users).where(inArray(schema.users.id, userIds))
+      : Promise.resolve([]),
+    householdIds.length > 0
+      ? db.select({ id: schema.households.id, address: schema.households.address, contactInfo: schema.households.contactInfo }).from(schema.households).where(inArray(schema.households.id, householdIds))
+      : Promise.resolve([]),
+    db.select({ revision: schema.authorityStates.revision }).from(schema.authorityStates).where(eq(schema.authorityStates.tenantId, work.tenantId)).limit(1),
+  ]);
+  const userById = new Map(userRows.map((row) => [row.id, row]));
+  const householdById = new Map(householdRows.map((row) => [row.id, row]));
+  const entities = refs.slice(0, 100).map((ref) => {
+    const user = ref.entityType === "user" ? userById.get(ref.entityId) : undefined;
+    const household = ref.entityType === "household" ? householdById.get(ref.entityId) : undefined;
+    const contactInfo = jsonObject(household?.contactInfo);
+    return {
+      entityType: ref.entityType,
+      entityId: ref.entityId,
+      relationship: relationshipFor(ref),
+      label: user?.displayName ?? user?.email ?? (typeof contactInfo.name === "string" ? contactInfo.name : household?.address ?? null),
+      status: user?.status ?? (household ? "active" : null),
+      occurredAt: null,
+      sourceTable: user ? "users" : household ? "households" : null,
+    };
+  });
+  const authority = jsonObject(work.authorityContext);
+  const revision = typeof authority.revision === "number" ? authority.revision : authorityState[0]?.revision ?? null;
+  const roles = Array.isArray(authority.roles) ? authority.roles.filter((role): role is string => typeof role === "string").slice(0, 20) : [];
+  const capturedAt = new Date().toISOString();
+  const interactionContext = context?.version === 1 ? context : null;
+  const missing = [
+    ...(interactionContext ? [] : ["interaction_context"]),
+    ...(entities.some((entity) => entity.label === null) ? ["entity_labels"] : []),
+    ...(revision === null ? ["authority_revision"] : []),
+  ];
+  return {
+    version: 1,
+    capturedAt,
+    interactionContext: interactionContext as DecisionContextSnapshot["interactionContext"],
+    entities,
+    cohort: jsonObject(context?.cohort).executionId && typeof jsonObject(context?.cohort).executionId === "string"
+      ? {
+          executionId: String(jsonObject(context?.cohort).executionId),
+          intent: String(jsonObject(context?.cohort).queryIntent ?? "customer_cohort"),
+          status: "succeeded",
+          rowCount: Number(jsonObject(context?.cohort).count ?? 0),
+          completedAt: null,
+        }
+      : null,
+    canonicalEvidence: refs.slice(0, 100).map((ref) => ({ kind: "entity_reference", source: "work_entity_links", ref: `${work.id}:${ref.entityType}:${ref.entityId}`, asOf: capturedAt })),
+    canonicalSummaries: [{ name: "work_context", source: "works.active_context", asOf: capturedAt, dataHash: provenanceHash(rawContext ?? {}) }],
+    authority: { employeeId: work.currentOwnerId ?? work.createdBy, revision, roles },
+    health: { status: missing.length === 0 ? "complete" : "partial", missing },
+  };
 }
 
 export async function latestWorkInput(tenantId: string, workId: string): Promise<typeof schema.workInputs.$inferSelect | null> {
@@ -1246,3 +1363,5 @@ export async function finishWorkQueryExecution(params: FinishWorkQueryExecutionP
     ));
   });
 }
+
+export * from "./operational-deltas";

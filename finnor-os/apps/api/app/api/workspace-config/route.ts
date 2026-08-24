@@ -6,8 +6,11 @@ import { WorkspaceConfigSchema, normalizeWorkspaceConfig } from "../../../lib/wo
 export async function GET(req: Request): Promise<Response> {
   try {
     const ctx = await requireContext(req);
-    const [settings] = await withTenant(ctx.tenantId, (db) => db.select({ workspaceConfig: tenantSettings.workspaceConfig }).from(tenantSettings).where(eq(tenantSettings.tenantId, ctx.tenantId)).limit(1));
-    return Response.json({ config: normalizeWorkspaceConfig(settings?.workspaceConfig), editable: ctx.role === "owner" });
+    const [settings] = await withTenant(ctx.tenantId, (db) => db.select({ workspaceConfig: tenantSettings.workspaceConfig, updatedAt: tenantSettings.updatedAt }).from(tenantSettings).where(eq(tenantSettings.tenantId, ctx.tenantId)).limit(1));
+    return Response.json(
+      { config: normalizeWorkspaceConfig(settings?.workspaceConfig), editable: ctx.role === "owner", revision: settings?.updatedAt?.toISOString() ?? null },
+      { headers: { "cache-control": "private, no-store" } },
+    );
   } catch (err) {
     return errorResponse(err);
   }
@@ -22,8 +25,11 @@ export async function PUT(req: Request): Promise<Response> {
     const [saved] = await withTenant(ctx.tenantId, (db) => db.insert(tenantSettings)
       .values({ tenantId: ctx.tenantId, workspaceConfig: parsed.data })
       .onConflictDoUpdate({ target: tenantSettings.tenantId, set: { workspaceConfig: parsed.data, updatedAt: new Date() } })
-      .returning({ workspaceConfig: tenantSettings.workspaceConfig }));
-    return Response.json({ config: normalizeWorkspaceConfig(saved?.workspaceConfig), editable: true });
+      .returning({ workspaceConfig: tenantSettings.workspaceConfig, updatedAt: tenantSettings.updatedAt }));
+    return Response.json(
+      { config: normalizeWorkspaceConfig(saved?.workspaceConfig), editable: true, revision: saved?.updatedAt?.toISOString() ?? null },
+      { headers: { "cache-control": "private, no-store" } },
+    );
   } catch (err) {
     return errorResponse(err);
   }

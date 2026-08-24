@@ -92,12 +92,12 @@ describe.skipIf(!available)("GET /api/vitals", () => {
 
     await getPool().query(`INSERT INTO service_release_heartbeats
       (service,instance_id,release_sha,build_id,version,release_source,core_certification_id,migration_head,capabilities,environment,last_beat_at)
-      VALUES ('worker','vitals-worker','phase5-sha','finnor-phase5','0.1.0+phase5','test','corecert-test','0090_phase5_production_connection_reliability.sql',ARRAY['jobs','orchestration'],'test',now())`);
+      VALUES ('worker','vitals-worker','phase5-sha','finnor-phase5','0.1.0+phase5','test','corecert-test','0094_phase4_tenant_experience_v2.sql',ARRAY['jobs','orchestration'],'test',now())`);
     const res2 = await vitalsRoute(req(TENANT_A));
     const body2 = await res2.json();
     expect(body2.heartbeat.ageSeconds).toBeLessThan(5);
     expect(body2.heartbeat.healthy).toBe(true);
-    expect(body2.heartbeat).toMatchObject({ releaseSha: "phase5-sha", migrationHead: "0090_phase5_production_connection_reliability.sql" });
+    expect(body2.heartbeat).toMatchObject({ releaseSha: "phase5-sha", migrationHead: "0094_phase4_tenant_experience_v2.sql" });
 
     await getPool().query(`UPDATE service_release_heartbeats SET last_beat_at=now()-interval '10 minutes' WHERE service='worker'`);
     const res3 = await vitalsRoute(req(TENANT_A));

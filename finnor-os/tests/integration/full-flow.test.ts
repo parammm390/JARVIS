@@ -14,6 +14,7 @@ import { ToolRegistry } from "@finnor/tools";
 import { appendEpisode } from "@finnor/memory";
 import { and, eq } from "drizzle-orm";
 import type { DomainAction, TenantContext } from "@finnor/shared-types";
+import { driveDurableAction } from "./helpers/durable-action";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
 
@@ -94,12 +95,10 @@ async function getLogSteps(id: string): Promise<string[]> {
 }
 
 /** Mirrors POST /actions/:id/confirm semantics: audit row FIRST, then approve, then run. */
-async function approveAndRun(orchestrator: FinnorOrchestrator, actionId: string) {
-  await appendEpisode(SEED_TENANT_ID, actionId, "confirmed", { by: ctx.userId, role: ctx.role }, {});
-  await withTenant(SEED_TENANT_ID, (db) =>
-    db.update(domainActions).set({ status: "approved" }).where(eq(domainActions.id, actionId)),
-  );
-  return orchestrator.runAction(actionId, SEED_TENANT_ID);
+async function approveAndRun(orchestrator: FinnorOrchestrator, actionId: string, tools?: ToolRegistry) {
+  const authorized = await orchestrator.decide(actionId, SEED_TENANT_ID, "approve", ctx.userId, { role: ctx.role });
+  if (authorized.status !== "success") return authorized;
+  return driveDurableAction(SEED_TENANT_ID, actionId, tools);
 }
 
 describe.skipIf(!available)("full gated flow (§32.6, §32.11)", () => {
@@ -133,14 +132,14 @@ describe.skipIf(!available)("full gated flow (§32.6, §32.11)", () => {
     expect((await getAction(action.id)).summary).toContain("412 Maple Ridge Rd");
 
     // Approve → execution actually happens.
-    const result = await approveAndRun(orchestrator, action.id);
+    const result = await approveAndRun(orchestrator, action.id, reg);
     expect(result.status).toBe("success");
     expect(calls.map((c) => c.tool)).toEqual(["ghl_create_contact", "ghl_book_appointment"]);
     expect((await getAction(action.id)).status).toBe("completed");
 
-    // Audit trail: validate, draft, gate, confirmed, execute all present (§32.11).
+    // Audit trail crosses the authorization and worker effect-commit boundary.
     const steps = await getLogSteps(action.id);
-    for (const s of ["validate", "draft", "gate", "confirmed", "execute", "reflection"]) {
+    for (const s of ["validate", "draft", "gate", "confirmed", "execution_authorized", "effect_commit_started"]) {
       expect(steps).toContain(s);
     }
   });
@@ -160,7 +159,7 @@ describe.skipIf(!available)("full gated flow (§32.6, §32.11)", () => {
     expect(calls).toHaveLength(0);
     expect((await getAction(action.id)).status).toBe("pending");
 
-    const result = await approveAndRun(orchestrator, action.id);
+    const result = await approveAndRun(orchestrator, action.id, reg);
     expect(result.status).toBe("success");
     expect(calls.map((c) => c.tool)).toEqual(["ghl_create_contact", "ghl_send_sms"]);
     expect((await getAction(action.id)).status).toBe("completed");
@@ -239,13 +238,13 @@ describe.skipIf(!available)("full gated flow (§32.6, §32.11)", () => {
     });
     const policy = await orchestrator.loadPolicy(action);
     await orchestrator.executor.execute(action, policy);
-    await approveAndRun(orchestrator, action.id);
+    await approveAndRun(orchestrator, action.id, reg);
 
     const row = await getAction(action.id);
-    expect(row.status).toBe("needs_human_review");
-    expect(attempts).toBeGreaterThanOrEqual(2); // original + exactly one reflection retry
+    expect(row.status).toBe("blocked_integration_unavailable");
+    expect(attempts).toBeGreaterThanOrEqual(1);
     const steps = await getLogSteps(action.id);
-    expect(steps).toContain("reflection_retry");
+    expect(steps).toContain("effect_commit_started");
   });
 });
 

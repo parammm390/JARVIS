@@ -26,6 +26,7 @@ import { createDefaultRegistry, commsMode } from "@finnor/tools";
 import { and, desc, eq, sql } from "drizzle-orm";
 import type { DomainAction } from "@finnor/shared-types";
 import { dispatchBusinessOperation, executeBusinessOperationTarget } from "../../apps/worker/src/handlers/business-operation";
+import { driveDurableAction } from "./helpers/durable-action";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
 
@@ -97,7 +98,9 @@ describe.skipIf(!available)("sandbox mode: the complete workflow is REAL (§99%)
     expect(gated.output.gated).toBe(true);
 
     // Approve (voice or click — same path).
-    const result = await orchestrator.decide(action.id, SEED_TENANT_ID, "approve", "voice:sandbox-test", { typedConfirmation: true });
+    const authorized = await orchestrator.decide(action.id, SEED_TENANT_ID, "approve", "voice:sandbox-test", { typedConfirmation: true });
+    expect(authorized.status).toBe("success");
+    const result = await driveDurableAction(SEED_TENANT_ID, action.id);
     expect(result.status).toBe("success");
     expect(result.output.booking).toMatchObject({ booked: true, simulated: true });
 
@@ -144,8 +147,9 @@ describe.skipIf(!available)("sandbox mode: the complete workflow is REAL (§99%)
     });
     const policy = await orchestrator.loadPolicy(action);
     await orchestrator.executor.execute(action, policy);
-    const result = await orchestrator.decide(action.id, SEED_TENANT_ID, "approve", "voice:sandbox-test", { typedConfirmation: true });
-    expect(result.status).toBe("success");
+    const authorized = await orchestrator.decide(action.id, SEED_TENANT_ID, "approve", "voice:sandbox-test", { typedConfirmation: true });
+    expect(authorized.status).toBe("success");
+    expect((await driveDurableAction(SEED_TENANT_ID, action.id)).status).toBe("success");
 
     const [latest] = await withTenant(SEED_TENANT_ID, (db) =>
       db.select().from(sandboxOutbox).orderBy(desc(sandboxOutbox.createdAt)).limit(1),
@@ -177,8 +181,9 @@ describe.skipIf(!available)("sandbox mode: the complete workflow is REAL (§99%)
     const policy = await orchestrator.loadPolicy(action);
     await orchestrator.executor.execute(action, policy);
     const before = await withTenant(SEED_TENANT_ID, (db) => db.select().from(sandboxOutbox));
-    const result = await orchestrator.decide(action.id, SEED_TENANT_ID, "approve", "voice:sandbox-test", { typedConfirmation: true });
-    expect(result.status).toBe("success");
+    const authorized = await orchestrator.decide(action.id, SEED_TENANT_ID, "approve", "voice:sandbox-test", { typedConfirmation: true });
+    expect(authorized.status).toBe("success");
+    expect(authorized.output).toMatchObject({ durable: true, queued: true, operationId: expect.any(String) });
     const [operation] = await withTenant(SEED_TENANT_ID, (db) => db.select().from(businessOperations).where(eq(businessOperations.domainActionId, action.id)));
     await dispatchBusinessOperation({ tenantId: SEED_TENANT_ID, operationId: operation!.id, actionId: action.id });
     const targets = await withTenant(SEED_TENANT_ID, (db) => db.select().from(businessOperationTargets).where(eq(businessOperationTargets.operationId, operation!.id)));

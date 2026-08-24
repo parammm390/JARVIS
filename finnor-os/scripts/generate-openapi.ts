@@ -25,6 +25,7 @@ const s = (schema: Parameters<typeof zodToJsonSchema>[0]) =>
 // here verbatim rather than exported solely for doc generation, matching this repo's
 // existing convention of route-local validation for narrow, single-use bodies.
 const RunControlBodySchema = z.object({ expectedVersion: z.number().int().nonnegative() });
+const CompensationBodySchema = z.object({ reason: z.string().trim().min(3).max(2_000) });
 const SubmitCorrectionBodySchema = z.object({ receiptId: z.string().uuid(), correctedFact: z.string().min(1).max(2000) });
 const RetryWorkBodySchema = z.object({ idempotencyKey: z.string().min(1).max(200) });
 const RetryOperationBodySchema = z.object({ recoveryKey: z.string().min(1).max(200) });
@@ -168,6 +169,31 @@ const OperationalQueryRequestSchema = z.discriminatedUnion("intent", [
 // other's fields.
 const OperationalQueryBodySchema = OperationalQueryRequestSchema;
 
+const BusinessEffectResponseSchema = z.object({
+  id: z.string().uuid(),
+  schemaVersion: z.literal(1),
+  semanticHash: z.string().regex(/^[0-9a-f]{64}$/),
+  scopeHash: z.string().regex(/^[0-9a-f]{64}$/),
+  operation: z.object({ name: z.string(), class: z.string(), external: z.boolean() }),
+  targets: z.array(z.object({ kind: z.string(), type: z.string(), id: z.string(), sourcePath: z.string().optional() })),
+  bindings: z.array(z.record(z.unknown())),
+  before: z.array(z.record(z.unknown())),
+  delta: z.object({ operation: z.string(), values: z.record(z.unknown()) }),
+  expected: z.record(z.unknown()),
+  authority: z.record(z.unknown()),
+  approval: z.object({ required: z.boolean(), typedConfirmation: z.boolean(), summary: z.string() }),
+  provenance: z.record(z.unknown()),
+}).passthrough();
+const PendingActionsResponseSchema = z.object({ actions: z.array(z.object({
+  id: z.string().uuid(),
+  actionType: z.string(),
+  summary: z.string().nullable(),
+  payload: z.record(z.unknown()),
+  status: z.string(),
+  businessEffect: BusinessEffectResponseSchema.nullable(),
+  businessEffectStatus: z.string().nullable(),
+}).passthrough()) });
+
 const doc = {
   openapi: "3.1.0",
   info: {
@@ -269,7 +295,7 @@ const doc = {
       get: {
         summary: "List actions awaiting confirmation (filter=blocked for stuck items)",
         parameters: [{ name: "filter", in: "query", schema: { type: "string", enum: ["pending", "blocked"] } }],
-        responses: { "200": { description: "Pending actions" }, "401": { description: "Bad auth" } },
+        responses: { "200": { description: "Pending actions with their exact frozen Business Effect", content: { "application/json": { schema: s(PendingActionsResponseSchema) } } }, "401": { description: "Bad auth" } },
       },
     },
     "/api/actions/{id}/confirm": {
@@ -380,6 +406,13 @@ const doc = {
         responses: { "200": { description: "{run}" }, "403": { description: "Not owner" }, "404": { description: "Not found" }, "409": { description: "Version conflict / illegal transition" } },
       },
     },
+    "/api/workflows/steps/{id}/compensate": {
+      post: {
+        summary: "Compensate one completed workflow effect with its registered typed binding",
+        requestBody: { content: { "application/json": { schema: s(CompensationBodySchema) } } },
+        responses: { "200": { description: "Compensation succeeded or an existing successful case was returned" }, "400": { description: "Invalid reason" }, "403": { description: "Not authorized" }, "404": { description: "Step not found" }, "409": { description: "Illegal or unsupported compensation" }, "502": { description: "Compensation attempted and failed; case and receipt were preserved" } },
+      },
+    },
     "/api/events": {
       get: {
         summary: "business_events cross-entity timeline (backward `before` paging)",
@@ -389,6 +422,23 @@ const doc = {
           { name: "before", in: "query", schema: { type: "string", format: "date-time" } },
         ],
         responses: { "200": { description: "{events: EventRow[]}" } },
+      },
+    },
+    "/api/business-world": {
+      get: {
+        summary: "Bounded canonical Business World projection for one operating scene",
+        parameters: [{ name: "scene", in: "query", required: true, schema: { type: "string", enum: ["customer", "schedule", "money", "work", "inventory", "computer"] } }],
+        responses: { "200": { description: "{data: BusinessWorldProjection}" }, "400": { description: "Invalid scene" } },
+      },
+    },
+    "/api/operational-deltas": {
+      get: {
+        summary: "Establish or replay a bounded tenant-scoped operational delta cursor",
+        parameters: [
+          { name: "cursor", in: "query", schema: { type: "string" } },
+          { name: "limit", in: "query", schema: { type: "integer", minimum: 1, maximum: 250 } },
+        ],
+        responses: { "200": { description: "OperationalDeltaPage" }, "400": { description: "Invalid cursor" }, "409": { description: "Cursor tenant scope mismatch" } },
       },
     },
     "/api/read-models/{view}": {
@@ -541,6 +591,20 @@ const doc = {
         summary: "Read one Work with inputs, planner attempts, query executions, actions, approvals, workflow runs, receipts, recovery, and events",
         parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
         responses: { "200": { description: "Canonical durable Work aggregate" }, "401": { description: "Bad auth" }, "404": { description: "Work not found" } },
+      },
+    },
+    "/api/works/{id}/execution": {
+      get: {
+        summary: "Read one bounded, tenant-scoped execution projection for a durable Work",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        responses: { "200": { description: "Presentation-safe action DAG, authority, workflow, computer, uncertainty, and receipt truth" }, "401": { description: "Bad auth" }, "404": { description: "Work not found" } },
+      },
+    },
+    "/api/works/{id}/replay": {
+      get: {
+        summary: "Replay one Work's evidence-backed causal history without mutating operational state",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        responses: { "200": { description: "Bounded, privacy-safe trigger-to-outcome causal graph with explicit provenance gaps" }, "401": { description: "Bad auth" }, "404": { description: "Work not found" } },
       },
     },
     "/api/works/{id}/objective": {

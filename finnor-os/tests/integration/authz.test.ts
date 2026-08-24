@@ -95,11 +95,17 @@ describe.skipIf(!available)("authz — dev-bypass hardening, rate limiting, webh
         headers: { authorization: "Bearer garbage-token-not-real", "x-forwarded-for": ip },
       });
 
-    // First 2 (the configured limit) fail on auth verification itself (Supabase isn't
-    // configured in this test env) — 500, NOT 429, proving the IP throttle didn't fire
-    // yet.
-    await expect(requireContext(garbageReq())).rejects.toMatchObject({ status: 500 });
-    await expect(requireContext(garbageReq())).rejects.toMatchObject({ status: 500 });
+    // First 2 (the configured limit) fail on auth verification itself — 401 when the
+    // current test environment has Supabase auth configured, or 500 when it does not;
+    // either is intentionally NOT 429, proving the IP throttle did not fire yet.
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        await requireContext(garbageReq());
+        expect.unreachable("expected invalid bearer token to be rejected");
+      } catch (err) {
+        expect([401, 500]).toContain((err as AuthError).status);
+      }
+    }
     // The 3rd attempt within the same window trips the IP bucket BEFORE even reaching
     // auth verification — 429, with a real Retry-After header, not a generic error.
     try {

@@ -7,6 +7,7 @@
 
 import {
   businessEvents,
+  businessEffects,
   businessOperations,
   businessOperationEvents,
   businessOperationTargets,
@@ -29,10 +30,10 @@ import {
   type ToolCallResult,
 } from "@finnor/tools";
 import { resolveCredentialContext } from "@finnor/security";
-import type { ErrorKind } from "@finnor/shared-types";
+import type { BusinessEffectSet, ErrorKind, ExecutionResult } from "@finnor/shared-types";
 import { nextCallingWindow } from "@finnor/plugin-bulk-notify";
 import { revalidateActionExecution } from "@finnor/authority";
-import { resumeObjectiveForAction } from "@finnor/orchestration";
+import { recordBusinessEffectOutcome, resumeObjectiveForAction } from "@finnor/orchestration";
 import { and, asc, eq, inArray, lte, or, sql } from "drizzle-orm";
 
 const SMS_DISPATCH_SIZE = 50;
@@ -261,6 +262,8 @@ async function refreshOperation(tenantId: string, operationId: string): Promise<
   let workId: string | null = null;
   let objectiveActionId: string | null = null;
   let objectiveWakeDue = false;
+  let terminalEffect: BusinessEffectSet | null = null;
+  let terminalEffectResult: ExecutionResult | null = null;
   await withTenant(tenantId, async (db) => {
     const [operation] = await db.select().from(businessOperations)
       .where(and(eq(businessOperations.tenantId, tenantId), eq(businessOperations.id, operationId))).limit(1);
@@ -325,8 +328,36 @@ async function refreshOperation(tenantId: string, operationId: string): Promise<
         .where(and(eq(domainActions.tenantId, tenantId), eq(domainActions.id, operation.domainActionId)));
       if (operation.status !== status) await appendEventTx(db, { tenantId, operationId, eventType: `operation_${status}`, payload: outcome });
       objectiveWakeDue = operation.status !== status;
+      if (operation.businessEffectId && status !== "needs_human_review") {
+        const [effectRow] = await db.select({ effect: businessEffects.effect }).from(businessEffects).where(and(
+          eq(businessEffects.tenantId, tenantId),
+          eq(businessEffects.id, operation.businessEffectId),
+        )).limit(1);
+        if (effectRow) {
+          terminalEffect = effectRow.effect as BusinessEffectSet;
+          terminalEffectResult = status === "completed"
+            ? {
+                status: "success",
+                output: {
+                  verified: true,
+                  canonicalObserved: true,
+                  businessOperationId: operation.id,
+                  targetOutcomes: outcome,
+                },
+              }
+            : {
+                status: "failure",
+                output: { businessOperationId: operation.id, targetOutcomes: outcome },
+                error: failure?.message ? String(failure.message) : `Business operation ended ${status}`,
+                errorKind: "validation",
+              };
+        }
+      }
     }
   });
+  if (terminalEffect && terminalEffectResult) {
+    await recordBusinessEffectOutcome(tenantId, terminalEffect, terminalEffectResult);
+  }
   if (workId) await reconcileWorkStatus(tenantId, workId);
   if (objectiveWakeDue && objectiveActionId) await resumeObjectiveForAction(tenantId, objectiveActionId).catch(() => false);
 }

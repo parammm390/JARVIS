@@ -18,6 +18,10 @@ export interface ToolRuntimeContext {
   domainActionId?: string;
   communicationIdentityId?: string;
   authProfileRef?: string;
+  /** Frozen semantic effect identity. Trusted execution metadata only: plugins and
+   * providers cannot replace it through their payload. */
+  businessEffectId?: string;
+  businessEffectHash?: string;
 }
 
 export interface Tool {
@@ -50,6 +54,12 @@ export class ToolRegistry {
 
   list(): string[] {
     return [...this.tools.keys()];
+  }
+
+  /** Presentation-safe provenance for the implementation that will receive a tool
+   * call. Inputs, credentials, and provider responses are deliberately absent. */
+  integrationFor(name: string): string | null {
+    return this.tools.get(name)?.integration ?? null;
   }
 
   /** Trusted execution metadata is absent on an unscoped registry. Plugins may read
@@ -117,6 +127,8 @@ export interface ToolCallContext {
   purpose?: string;
   communicationIdentityId?: string;
   authProfileRef?: string;
+  businessEffectId?: string;
+  businessEffectHash?: string;
   /** Deterministic namespace for independently queued targets/batches of one action. */
   operationKeyPrefix?: string;
 }
@@ -163,6 +175,10 @@ export class ScopedToolRegistry extends ToolRegistry {
     return this.base.list();
   }
 
+  override integrationFor(name: string): string | null {
+    return this.base.integrationFor(name);
+  }
+
   override runtimeContext(): Readonly<ToolRuntimeContext> {
     return Object.freeze({
       tenantId: this.ctx.tenantId,
@@ -171,6 +187,8 @@ export class ScopedToolRegistry extends ToolRegistry {
       ...(this.ctx.purpose ? { purpose: this.ctx.purpose } : {}),
       ...(this.ctx.communicationIdentityId ? { communicationIdentityId: this.ctx.communicationIdentityId } : {}),
       ...(this.ctx.authProfileRef ? { authProfileRef: this.ctx.authProfileRef } : {}),
+      ...(this.ctx.businessEffectId ? { businessEffectId: this.ctx.businessEffectId } : {}),
+      ...(this.ctx.businessEffectHash ? { businessEffectHash: this.ctx.businessEffectHash } : {}),
     });
   }
 
@@ -187,7 +205,14 @@ export class ScopedToolRegistry extends ToolRegistry {
 
   private async callForOperation(name: string, input: Record<string, unknown>, operationKey: string): Promise<ToolCallResult> {
     const requestHash = hashInput(input);
-    const claim = await claimExternalOperation(this.ctx.tenantId, this.ctx.domainActionId, operationKey, requestHash);
+    const claim = await claimExternalOperation(
+      this.ctx.tenantId,
+      this.ctx.domainActionId,
+      operationKey,
+      requestHash,
+      this.base.integrationFor(name) ?? undefined,
+      this.ctx.businessEffectId,
+    );
     if (!claim.claimed) {
       if (claim.existing.requestHash !== requestHash) {
         return {
@@ -221,6 +246,8 @@ export class ScopedToolRegistry extends ToolRegistry {
       ...(this.ctx.purpose ? { purpose: this.ctx.purpose } : {}),
       ...(this.ctx.communicationIdentityId ? { communicationIdentityId: this.ctx.communicationIdentityId } : {}),
       ...(this.ctx.authProfileRef ? { authProfileRef: this.ctx.authProfileRef } : {}),
+      ...(this.ctx.businessEffectId ? { businessEffectId: this.ctx.businessEffectId } : {}),
+      ...(this.ctx.businessEffectHash ? { businessEffectHash: this.ctx.businessEffectHash } : {}),
     });
     await recordExternalOperationResult(
       this.ctx.tenantId,

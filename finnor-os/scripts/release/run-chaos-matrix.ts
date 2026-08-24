@@ -176,6 +176,7 @@ function sanitizedChildEnvironment(databaseUrl?: string, group?: string): NodeJS
     ...process.env,
     ...(databaseUrl ? { DATABASE_URL: databaseUrl } : {}),
     NODE_ENV: "test",
+    FINNOR_ENVIRONMENT: "test",
     FINNOR_CHAOS_TEST_CONTEXT: "1",
     LIVE_SMOKE_ALLOWED: "0",
     CERTIFICATION_SEED_ALLOWED: "1",

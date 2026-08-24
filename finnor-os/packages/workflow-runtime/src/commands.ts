@@ -2,7 +2,7 @@
 // created already-approved (approval happens upstream, e.g. an existing domain_action
 // gate) — this table exists to give every workflow_run a stable, idempotent parent.
 
-import { commands, workflowRuns, workflowSteps, domainActions, type Db } from "@finnor/db";
+import { commands, workflowRuns, workflowSteps, domainActions, jobs, type Db } from "@finnor/db";
 import { and, eq } from "drizzle-orm";
 
 export interface StepDefinition {
@@ -27,7 +27,19 @@ export interface SubmitCommandParams {
    *  by domain_action_id, not just workflow_step_id. Left undefined for genuine
    *  multi-step workflow-kind commands, which have no single originating action. */
   domainActionId?: string;
+  businessEffectId?: string;
+  authorizedEffectHash?: string;
+  authorityDecisionId?: string;
+  authorityRevision?: number;
+  policyId?: string;
+  policyVersion?: number;
+  executionClass?: string;
+  authorizedAt?: Date;
   workId?: string;
+  /** The normal command contract queues its first step in the same transaction as
+   * the command. Tests/admin importers may opt out only when intentionally creating
+   * a paused graph that another transaction will drive. */
+  enqueueFirstStep?: boolean;
 }
 
 export interface SubmitCommandResult {
@@ -35,6 +47,26 @@ export interface SubmitCommandResult {
   workflowRunId: string;
   stepIds: string[];
   alreadyExisted: boolean;
+}
+
+function firstStepJobKey(tenantId: string, stepId: string): string {
+  // jobs is global rather than RLS-scoped, so tenant identity is part of the global
+  // uniqueness key. The UUID is still rechecked against the tenant-scoped step by
+  // claimStep before any handler is allowed to execute it.
+  return `workflow-step:${tenantId}:${stepId}`;
+}
+
+async function enqueueFirstStepTx(db: Db, tenantId: string, stepId: string, correlationId?: string): Promise<void> {
+  const payload = correlationId
+    ? { tenantId, workflowStepId: stepId, _correlationId: correlationId }
+    : { tenantId, workflowStepId: stepId };
+  await db.insert(jobs).values({
+    type: "run_workflow_step",
+    payload,
+    idempotencyKey: firstStepJobKey(tenantId, stepId),
+    lane: "interactive",
+    priority: 100,
+  }).onConflictDoNothing({ target: jobs.idempotencyKey });
 }
 
 export async function submitCommand(db: Db, params: SubmitCommandParams): Promise<SubmitCommandResult> {
@@ -48,9 +80,18 @@ export async function submitCommand(db: Db, params: SubmitCommandParams): Promis
       .from(commands)
       .where(and(eq(commands.tenantId, params.tenantId), eq(commands.idempotencyKey, params.idempotencyKey)));
     if (existingCommand) {
+      if ((params.businessEffectId ?? null) !== (existingCommand.businessEffectId ?? null)
+          || (params.authorizedEffectHash ?? null) !== (existingCommand.authorizedEffectHash ?? null)) {
+        throw new Error("Command idempotency conflict: durable authorization is bound to a different Business Effect");
+      }
       const [run] = await db.select().from(workflowRuns).where(eq(workflowRuns.commandId, existingCommand.id));
+      if (!run) throw new Error("Durable command exists without its workflow run");
       if (run && workId && !run.workId) await db.update(workflowRuns).set({ workId }).where(eq(workflowRuns.id, run.id));
       const steps = run ? await db.select().from(workflowSteps).where(eq(workflowSteps.workflowRunId, run.id)) : [];
+      const first = steps.sort((a, b) => a.sequence - b.sequence)[0];
+      if (first && first.status === "pending" && params.enqueueFirstStep !== false) {
+        await enqueueFirstStepTx(db, params.tenantId, first.id, params.correlationId);
+      }
       return {
         commandId: existingCommand.id,
         workflowRunId: run?.id ?? "",
@@ -60,18 +101,33 @@ export async function submitCommand(db: Db, params: SubmitCommandParams): Promis
     }
   }
 
-  const [command] = await db
-    .insert(commands)
-    .values({
+  const commandValues = {
       tenantId: params.tenantId,
       commandType: params.commandType,
       payload: params.payload,
       idempotencyKey: params.idempotencyKey ?? null,
       requestedBy: params.requestedBy ?? null,
       correlationId: params.correlationId ?? null,
+      businessEffectId: params.businessEffectId ?? null,
+      authorizedEffectHash: params.authorizedEffectHash ?? null,
+      authorityDecisionId: params.authorityDecisionId ?? null,
+      authorityRevision: params.authorityRevision ?? null,
+      policyId: params.policyId ?? null,
+      policyVersion: params.policyVersion ?? null,
+      executionClass: params.executionClass ?? null,
+      authorizedAt: params.authorizedAt ?? new Date(),
       status: "approved",
-    })
-    .returning();
+    } as const;
+  const insertedCommands = params.idempotencyKey
+    ? await db.insert(commands).values(commandValues)
+        .onConflictDoNothing({ target: [commands.tenantId, commands.idempotencyKey] })
+        .returning()
+    : await db.insert(commands).values(commandValues).returning();
+  const command = insertedCommands[0];
+  // Two authorization transactions may both miss the optimistic SELECT above. The
+  // unique key is the arbiter; once ON CONFLICT waits for the winner, a new READ
+  // COMMITTED statement can safely load and return that winner's complete graph.
+  if (!command) return submitCommand(db, params);
 
   const [run] = await db
     .insert(workflowRuns)
@@ -90,11 +146,19 @@ export async function submitCommand(db: Db, params: SubmitCommandParams): Promis
         idempotencyKey: `${run!.id}:${i}`,
         correlationId: params.correlationId ?? null,
         domainActionId: params.domainActionId ?? null,
+        businessEffectId: params.businessEffectId ?? null,
       })),
     )
     .returning();
 
   await db.update(commands).set({ status: "running", updatedAt: new Date() }).where(eq(commands.id, command!.id));
+
+  if (stepRows[0] && params.enqueueFirstStep !== false) {
+    // This insert uses the caller's Db transaction. A committed command can never
+    // exist without its executable first job, and a rolled-back approval leaves
+    // neither command nor job behind.
+    await enqueueFirstStepTx(db, params.tenantId, stepRows[0].id, params.correlationId);
+  }
 
   return {
     commandId: command!.id,

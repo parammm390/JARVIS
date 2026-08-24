@@ -66,9 +66,18 @@ function blockedConfiguration(output: string): boolean {
 
 function runCommand(repoRoot: string, spec: CommandSpec): CommandObservation {
   const cwd = spec.cwd === "repo" ? repoRoot : join(repoRoot, "finnor-os");
+  const isTestCommand = spec.command === "npm" && spec.args.includes("test");
   const result = spawnSync(spec.command, spec.args, {
     cwd,
-    env: { ...process.env, ...spec.env },
+    // Release metadata is intentionally production-shaped in the parent
+    // certification process. Test children must still exercise their local
+    // degradation paths (for example Redis fallback) rather than inheriting a
+    // production environment and failing closed for the wrong reason.
+    env: {
+      ...process.env,
+      ...spec.env,
+      ...(isTestCommand ? { NODE_ENV: "test", FINNOR_ENVIRONMENT: "test" } : {}),
+    },
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
     timeout: 40 * 60_000,

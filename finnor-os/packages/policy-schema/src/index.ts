@@ -2,6 +2,7 @@
 // Business rule CONTENT never lives here; only its shape does.
 
 import { z } from "zod";
+import { CANONICAL_ENTITY_TYPES } from "@finnor/shared-types";
 
 export const RoleSchema = z.enum(["owner", "dispatcher", "technician"]);
 
@@ -48,6 +49,65 @@ export type DomainActionInput = z.infer<typeof DomainActionSchema>;
 
 // ---- API boundary schemas (every route validates with these) ----
 
+export const CanonicalEntityRefSchema = z.object({
+  entityType: z.enum(CANONICAL_ENTITY_TYPES),
+  entityId: z.string().uuid(),
+}).strict();
+
+const InteractionFilterValueSchema = z.union([
+  z.string().max(200),
+  z.number().finite(),
+  z.boolean(),
+  z.array(z.string().max(200)).max(50),
+]);
+
+/** One bounded, versioned context contract for typed and voice intake. */
+export const OperatingInteractionContextSchema = z.object({
+  version: z.literal(1),
+  capturedAt: z.string().datetime(),
+  source: z.enum(["voice", "text", "console"]),
+  activeWork: z.object({ workId: z.string().uuid() }).strict().optional(),
+  focusedEntity: CanonicalEntityRefSchema.optional(),
+  selectedEntities: z.array(CanonicalEntityRefSchema).max(50).default([]),
+  excludedEntities: z.array(CanonicalEntityRefSchema).max(50).default([]),
+  surface: z.object({
+    id: z.enum(["home", "customers", "money", "work", "schedule", "agents"]),
+    route: z.string().startsWith("/jarvis").max(300).optional(),
+    spatialState: z.enum(["canvas", "detail", "list", "map", "timeline"]).optional(),
+  }).strict(),
+  filters: z.array(z.object({
+    field: z.string().regex(/^[a-z][a-zA-Z0-9_.-]{0,63}$/),
+    operator: z.enum(["eq", "neq", "in", "not_in", "gte", "lte", "contains"]),
+    value: InteractionFilterValueSchema,
+  }).strict()).max(20).default([]),
+  timeContext: z.object({
+    start: z.string().datetime().optional(),
+    end: z.string().datetime().optional(),
+    timezone: z.string().min(1).max(100).optional(),
+  }).strict().optional(),
+  cohort: z.object({
+    kind: z.literal("work_query_execution"),
+    executionId: z.string().uuid(),
+    entityType: z.literal("household"),
+    queryIntent: z.literal("customer_cohort"),
+    count: z.number().int().min(0),
+  }).strict().optional(),
+}).strict().superRefine((context, issue) => {
+  const selected = new Set(context.selectedEntities.map((ref) => `${ref.entityType}:${ref.entityId}`));
+  const excluded = new Set<string>();
+  for (const ref of context.excludedEntities) {
+    const key = `${ref.entityType}:${ref.entityId}`;
+    if (excluded.has(key)) issue.addIssue({ code: z.ZodIssueCode.custom, path: ["excludedEntities"], message: "Duplicate exclusions are not allowed" });
+    excluded.add(key);
+    if (!context.cohort && !selected.has(key)) issue.addIssue({ code: z.ZodIssueCode.custom, path: ["excludedEntities"], message: "An exclusion must belong to the direct selection or referenced cohort" });
+    if (context.cohort && ref.entityType !== context.cohort.entityType) issue.addIssue({ code: z.ZodIssueCode.custom, path: ["excludedEntities"], message: "Cohort exclusions must use the cohort entity type" });
+  }
+  if (context.timeContext?.start && context.timeContext.end && context.timeContext.start > context.timeContext.end) {
+    issue.addIssue({ code: z.ZodIssueCode.custom, path: ["timeContext"], message: "timeContext.start must be before timeContext.end" });
+  }
+});
+export type OperatingInteractionContextInput = z.infer<typeof OperatingInteractionContextSchema>;
+
 export const SubmitInstructionSchema = z.object({
   instruction: z.string().min(1).max(10_000),
   channel: z.enum(["voice", "text", "console"]).default("console"),
@@ -65,9 +125,32 @@ export const SubmitInstructionSchema = z.object({
   // Upgrade 2: an explicit continuation appends a new input to this active Work.
   // Omitting it creates a new Work (whose id equals instructionId when supplied).
   workId: z.string().uuid().optional(),
-  activeContext: z.record(z.unknown()).optional(),
+  activeContext: OperatingInteractionContextSchema.optional(),
 });
 export type SubmitInstruction = z.infer<typeof SubmitInstructionSchema>;
+
+const ObjectiveAssertionSchema = z.object({
+  path: z.array(z.union([z.string().min(1).max(120), z.number().int().nonnegative()])).max(24),
+  operator: z.enum(["exists", "not_exists", "eq", "not_eq", "gte", "lte", "contains", "array_contains"]),
+  expected: z.unknown().optional(),
+}).strict();
+const ObjectiveCriterionSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("no_open_execution") }).strict(),
+  z.object({ kind: z.literal("all_objective_effects_verified"), minimumCount: z.number().int().min(0).max(25) }).strict(),
+  z.object({ kind: z.literal("canonical_query"), request: z.record(z.unknown()), assertion: ObjectiveAssertionSchema }).strict(),
+  z.object({ kind: z.literal("matched_wait"), minimumCount: z.number().int().min(1).max(25), eventType: z.string().min(1).max(200).optional() }).strict(),
+  z.object({ kind: z.literal("delegation_state"), minimumCount: z.number().int().min(1).max(25), requiredStatus: z.enum(["acknowledged", "accepted", "completed"]) }).strict(),
+  z.object({ kind: z.literal("computer_run_state"), minimumCount: z.number().int().min(1).max(25), requiredStatus: z.literal("succeeded"), evidenceRequired: z.boolean() }).strict(),
+  z.object({ kind: z.literal("decision_evidence"), minimumCount: z.number().int().min(1).max(25), accepted: z.array(z.enum(["canonical_query", "business_effect", "matched_event", "delegation", "computer_run"])).min(1).max(5) }).strict(),
+  z.object({ kind: z.literal("manual_verification"), reason: z.string().min(1).max(2_000) }).strict(),
+]);
+export const ObjectiveSuccessConditionInputSchema = z.object({
+  version: z.literal(1),
+  statement: z.string().min(1).max(10_000),
+  mode: z.literal("all"),
+  source: z.literal("explicit"),
+  criteria: z.array(ObjectiveCriterionSchema).min(1).max(20),
+}).strict();
 
 export const StartObjectiveSchema = z.object({
   objective: z.string().min(1).max(10_000),
@@ -76,7 +159,8 @@ export const StartObjectiveSchema = z.object({
   instructionId: z.string().uuid().optional(),
   workId: z.string().uuid().optional(),
   idempotencyKey: z.string().min(1).max(200).optional(),
-  activeContext: z.record(z.unknown()).optional(),
+  activeContext: OperatingInteractionContextSchema.optional(),
+  successCondition: ObjectiveSuccessConditionInputSchema.optional(),
   budgets: z.object({
     maxSteps: z.number().int().min(1).max(50).optional(),
     maxActions: z.number().int().min(0).max(25).optional(),
@@ -90,7 +174,8 @@ export const StartObjectiveSchema = z.object({
 export const ControlObjectiveSchema = z.discriminatedUnion("command", [
   z.object({ command: z.literal("continue") }),
   z.object({ command: z.literal("interrupt") }),
-  z.object({ command: z.literal("redirect"), objective: z.string().min(1).max(10_000), channel: z.enum(["voice", "text", "console"]).default("text"), instructionId: z.string().uuid().optional(), idempotencyKey: z.string().min(1).max(200).optional() }),
+  z.object({ command: z.literal("cancel") }),
+  z.object({ command: z.literal("redirect"), objective: z.string().min(1).max(10_000), channel: z.enum(["voice", "text", "console"]).default("text"), instructionId: z.string().uuid().optional(), idempotencyKey: z.string().min(1).max(200).optional(), successCondition: ObjectiveSuccessConditionInputSchema.optional() }),
 ]);
 
 export const HandoffWorkSchema = z.object({

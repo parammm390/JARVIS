@@ -26,6 +26,7 @@ import { seedTenantPolicies } from "../../scripts/seed-tenant-policies";
 import { FinnorOrchestrator } from "@finnor/orchestration";
 import { POST as confirmPOST } from "../../apps/api/app/api/actions/[id]/confirm/route";
 import { randomUUID } from "node:crypto";
+import { driveDurableAction } from "./helpers/durable-action";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
 
@@ -93,6 +94,7 @@ describe.skipIf(!available)("DecisionReceipt.policyApplied + approval.approvedBy
       { params: Promise.resolve({ id: leadDraft.action.id }) },
     );
     expect(res.status).toBe(200);
+    expect((await driveDurableAction(DEALER_ZERO_TENANT_ID, leadDraft.action.id)).status).toBe("success");
 
     const [receipt] = await withTenant(DEALER_ZERO_TENANT_ID, (db) => db.select().from(decisionReceipts).where(eq(decisionReceipts.domainActionId, leadDraft.action.id)));
     expect(receipt, "a receipt must exist after approval + execution").toBeTruthy();

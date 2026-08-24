@@ -67,14 +67,25 @@ export interface CoreDiffResult {
  */
 export function inspectCoreDiff(repoRoot: string, canonicalCoreSha: string): CoreDiffResult {
   if (!/^[0-9a-f]{40}$/i.test(canonicalCoreSha)) throw new Error("canonicalCoreSha must be a full Git SHA");
-  // `git diff <sha>` includes committed changes after the core SHA plus tracked
-  // worktree/index changes. Add untracked files explicitly so a new client-specific
-  // TypeScript fork cannot hide outside Git's diff.
-  const tracked = git(repoRoot, ["diff", "--name-only", "-z", canonicalCoreSha, "--"])
+  // Keep the comparison bounded in repositories that carry large untracked
+  // evidence/database trees. A worktree diff against a commit can otherwise walk
+  // every untracked byte before it reports the shared source files we care about.
+  // The three tracked queries cover committed-after-canonical, staged, and
+  // unstaged changes independently; the untracked query is scoped to shared source
+  // roots so a client evidence dump cannot mask a new core file.
+  const committed = git(repoRoot, ["diff", "--name-only", "-z", `${canonicalCoreSha}..HEAD`, "--"])
     .split("\0").filter(Boolean);
-  const untracked = git(repoRoot, ["ls-files", "--others", "--exclude-standard", "-z"])
+  const staged = git(repoRoot, ["diff", "--cached", "--name-only", "-z", "--"])
     .split("\0").filter(Boolean);
-  const paths = [...new Set([...tracked, ...untracked])].sort();
+  const worktree = git(repoRoot, ["diff-files", "--name-only", "-z", "--"])
+    .split("\0").filter(Boolean);
+  const untrackedRoots = [
+    ...SHARED_CORE_PREFIXES.map((prefix) => prefix.replace(/\/$/, "")),
+    ...[...ALWAYS_CORE_FILES],
+  ];
+  const untracked = git(repoRoot, ["ls-files", "--others", "--exclude-standard", "-z", "--", ...untrackedRoots])
+    .split("\0").filter(Boolean);
+  const paths = [...new Set([...committed, ...staged, ...worktree, ...untracked])].sort();
   const changedSharedCorePaths = paths.filter(isSharedCorePath);
   return {
     canonicalCoreSha: canonicalCoreSha.toLowerCase(),

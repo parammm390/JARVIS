@@ -236,6 +236,7 @@ export interface WorkCaseProjection {
   durableWork?: {
     id: string;
     status: DurableWorkRow["status"];
+    executionModel: DurableWorkRow["executionModel"];
     sessionId: string | null;
     channel: DurableWorkRow["initialChannel"];
     activeContext: unknown;
@@ -261,12 +262,16 @@ export interface WorkCaseProjection {
   objectiveLoop?: {
     id: string;
     objective: string;
-    state: "continue" | "awaiting_approval" | "waiting" | "blocked" | "completed" | "failed";
+    state: "continue" | "awaiting_approval" | "waiting" | "blocked" | "completed" | "failed" | "cancelled";
     revision: number;
     reason: string | null;
     nextStep: string | null;
     nextRunAt: string | null;
     lastObservation: unknown;
+    successCondition: unknown;
+    successVerification: unknown;
+    successVerifiedAt: string | null;
+    cancelledAt: string | null;
     budget: { steps: number; maxSteps: number; actions: number; maxActions: number; queries: number; maxQueries: number };
     iterations: Array<{
       id: string;
@@ -277,6 +282,8 @@ export interface WorkCaseProjection {
       observation: unknown;
       progressMade: boolean | null;
       outcome: string | null;
+      recoveryKind: string | null;
+      successVerification: unknown;
       scheduledFor: string | null;
       completedAt: string | null;
       plannerAttempts: Array<{ id: string; attempt: number; status: string; provider: string | null; failure: unknown }>;
@@ -984,6 +991,8 @@ export async function workCases(tenantId: string): Promise<WorkCaseProjection[]>
       const status = durableWork
         ? durableWork.status === "completed"
           ? "Completed"
+          : durableWork.status === "cancelled"
+            ? "Completed"
           : durableWork.status === "failed"
             ? "Failed"
             : durableWork.status === "blocked"
@@ -1034,6 +1043,7 @@ export async function workCases(tenantId: string): Promise<WorkCaseProjection[]>
           durableWork: {
             id: durableWork.id,
             status: durableWork.status,
+            executionModel: durableWork.executionModel,
             sessionId: durableWork.sessionId,
             channel: durableWork.initialChannel,
             activeContext: durableWork.activeContext,
@@ -1083,6 +1093,10 @@ export async function workCases(tenantId: string): Promise<WorkCaseProjection[]>
               nextStep: objectiveLoop.nextStep,
               nextRunAt: iso(objectiveLoop.nextRunAt),
               lastObservation: objectiveLoop.lastObservation,
+              successCondition: objectiveLoop.successCondition,
+              successVerification: objectiveLoop.successVerification,
+              successVerifiedAt: iso(objectiveLoop.successVerifiedAt),
+              cancelledAt: iso(objectiveLoop.cancelledAt),
               budget: {
                 steps: objectiveLoop.stepCount,
                 maxSteps: objectiveLoop.maxSteps,
@@ -1100,6 +1114,8 @@ export async function workCases(tenantId: string): Promise<WorkCaseProjection[]>
                 observation: step.observation,
                 progressMade: step.progressMade,
                 outcome: step.iterationOutcome,
+                recoveryKind: step.recoveryKind,
+                successVerification: step.successVerification,
                 scheduledFor: iso(step.scheduledFor),
                 completedAt: iso(step.completedAt),
                 plannerAttempts: objectiveAttemptRows.filter((attempt) => attempt.objectiveStepId === step.id).map((attempt) => ({ id: attempt.id, attempt: attempt.attempt, status: attempt.status, provider: attempt.provider, failure: attempt.failure })),
