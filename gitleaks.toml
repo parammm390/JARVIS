@@ -24,3 +24,9 @@ id = "generic-api-key"
   condition = "AND"
   paths = ['''finnor-os/tests/unit/p2-llm-faults\.test\.ts$''']
   regexes = ['''phase2-test-bedrock''']
+
+  [[rules.allowlists]]
+  description = "Exact replay attempt marker in the causal replay fixture"
+  condition = "AND"
+  paths = ['''finnor-os/tests/integration/causal-replay\.test\.ts$''']
+  regexes = ['''attemptKey: \"replay\"''']
