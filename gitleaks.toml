@@ -29,4 +29,4 @@ id = "generic-api-key"
   description = "Exact replay attempt marker in the causal replay fixture"
   condition = "AND"
   paths = ['''finnor-os/tests/integration/causal-replay\.test\.ts$''']
-  regexes = ['''replay''']
+  regexes = ['''phase5-certification|replay''']
