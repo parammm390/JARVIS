@@ -1,10 +1,10 @@
 name: security
 on:
   pull_request:
-    paths: ["finnor-os/**", ".github/workflows/security.yml"]
+    paths: ["finnor-os/**", ".github/workflows/security.yml", "gitleaks.toml"]
   push:
     branches: [main]
-    paths: ["finnor-os/**", ".github/workflows/security.yml"]
+    paths: ["finnor-os/**", ".github/workflows/security.yml", "gitleaks.toml"]
 permissions:
   actions: read
   contents: read
@@ -20,6 +20,7 @@ jobs:
       - uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: gitleaks.toml
   osv:
     name: osv-scanner
     # v2 ships reusable workflows, not a root action.yml. Calling the root as an
