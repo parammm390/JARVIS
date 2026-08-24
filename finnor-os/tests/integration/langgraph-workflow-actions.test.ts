@@ -28,6 +28,7 @@ import {
   actionLog,
   commands,
   workflowRuns,
+  workflowSteps,
 } from "@finnor/db";
 import {
   FinnorOrchestrator,
@@ -40,6 +41,7 @@ import {
 import { ToolRegistry } from "@finnor/tools";
 import { eq, and } from "drizzle-orm";
 import type { DomainAction } from "@finnor/shared-types";
+import { runWorkflowStep } from "../../apps/worker/src/handlers/run-workflow-step";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
 const TENANT_ID = "00000000-0000-4000-8000-0000000000fe";
@@ -57,6 +59,19 @@ async function dbUp(): Promise<boolean> {
 }
 const available = await dbUp();
 
+async function drainDurableAction(actionId: string): Promise<void> {
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const [step] = await withTenant(TENANT_ID, (db) => db.select().from(workflowSteps).where(and(
+      eq(workflowSteps.tenantId, TENANT_ID),
+      eq(workflowSteps.domainActionId, actionId),
+      eq(workflowSteps.status, "pending"),
+    )).orderBy(workflowSteps.createdAt, workflowSteps.sequence).limit(1));
+    if (!step) return;
+    await runWorkflowStep({ tenantId: TENANT_ID, workflowStepId: step.id });
+  }
+  throw new Error(`Durable action ${actionId} did not settle within the bounded workflow drain`);
+}
+
 /** Builds a fresh orchestrator wired to a brand-new graph/checkpointer instance —
  *  never reusing any module-level singleton — so "construct a fresh instance" in the
  *  restart-proof test genuinely shares no in-memory state with whatever gated the
@@ -73,7 +88,11 @@ function freshGraphOrchestrator(): FinnorOrchestrator {
 
 async function seedInvoice(): Promise<{ householdId: string; invoiceId: string }> {
   return withTenant(TENANT_ID, async (db) => {
-    const [hh] = await db.insert(households).values({ tenantId: TENANT_ID, address: "1 Restart Proof Way", contactInfo: {} }).returning();
+    const [hh] = await db.insert(households).values({
+      tenantId: TENANT_ID,
+      address: "1 Restart Proof Way",
+      contactInfo: { name: "Restart Proof Customer", phone: "+15555550123" },
+    }).returning();
     const [inv] = await db.insert(invoices).values({ tenantId: TENANT_ID, householdId: hh!.id, amountUsd: "425.00", status: "sent" }).returning();
     return { householdId: hh!.id, invoiceId: inv!.id };
   });
@@ -153,7 +172,8 @@ describe.skipIf(!available)("LangGraph restart proof — start_invoice_to_cash_w
     // only the tenant/action IDs and the shared Postgres database connect them.
     const resumeOrchestratorA = freshGraphOrchestrator();
     const result = await resumeOrchestratorA.decide(action.id, TENANT_ID, "approve", "test:owner-after-restart", { typedConfirmation: true });
-    expect(result.status).toBe("success");
+    expect(result).toMatchObject({ status: "success", output: { queued: true, durable: true } });
+    await drainDurableAction(action.id);
     expect((await getAction(action.id)).status).toBe("completed");
 
     // (a) resumed from the checkpoint, not re-derived: exactly one validate and one

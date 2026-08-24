@@ -8,7 +8,7 @@
     "requireCleanWorktree": true
   },
   "release": {
-    "requiredMigrationHead": "0095_phase5_causal_replay.sql",
+    "requiredMigrationHead": "0098_objective_first_outcome_runtime.sql",
     "metadata": [
       "FINNOR_COMMIT_SHA",
       "FINNOR_BUILD_ID",

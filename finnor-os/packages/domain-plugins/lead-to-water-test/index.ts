@@ -11,7 +11,7 @@ import type { DomainEnginePlugin } from "../shared/plugin-interface";
 import type { DraftAction, ExecutionResult, ValidationResult, DomainPolicy } from "@finnor/shared-types";
 import type { ToolRegistry } from "@finnor/tools";
 import { withTenant, appointments } from "@finnor/db";
-import { submitCommand, enqueueStep } from "@finnor/workflow-runtime";
+import { submitCommand } from "@finnor/workflow-runtime";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
@@ -67,6 +67,13 @@ export const leadToWaterTestPlugin: DomainEnginePlugin = {
 
     const submitted = await withTenant(tenantId, (db) =>
       submitCommand(db, {
+        businessEffectId: draft.businessEffect?.id,
+        authorizedEffectHash: draft.businessEffect?.semanticHash,
+        authorityDecisionId: draft.authorityDecisionId,
+        authorityRevision: draft.authorityRevision,
+        policyId: draft.businessEffect?.authority.policyId ?? undefined,
+        policyVersion: draft.businessEffect?.authority.policyVersion ?? undefined,
+        executionClass: draft.businessEffect?.operation.class,
         tenantId,
         commandType: "start_water_test_workflow",
         payload: { householdId },
@@ -110,14 +117,6 @@ export const leadToWaterTestPlugin: DomainEnginePlugin = {
         ],
       }),
     );
-
-    if (!submitted.alreadyExisted) {
-      // Kick off async processing via the existing job queue (run_workflow_step,
-      // registered in apps/worker/src/index.ts) — this execute() returns immediately;
-      // the actual hold/notify/confirm sequence runs out-of-band, exactly like every
-      // other durable command in this runtime.
-      await enqueueStep(tenantId, submitted.stepIds[0]!, `${idempotencyKey}:hold`);
-    }
 
     return {
       status: "success",

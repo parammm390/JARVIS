@@ -5,13 +5,13 @@
 // worker died). Every process has its own row so rolling releases and multi-worker
 // fleets can be verified without pretending that one fixed process is the fleet.
 
-import { adminDb, serviceReleaseHeartbeats, workerHeartbeat } from "@finnor/db";
+import { CURRENT_MIGRATION_HEAD, adminDb, serviceReleaseHeartbeats, workerHeartbeat } from "@finnor/db";
 import { getLogger, getRuntimeReleaseMetadata } from "@finnor/tools";
 import { hostname } from "node:os";
 
 export const WORKER_HEARTBEAT_ID = process.env.FINNOR_WORKER_INSTANCE_ID?.trim()
   || `worker:${hostname()}:${process.pid}`;
-export const CURRENT_MIGRATION_HEAD = "0090_phase5_production_connection_reliability.sql";
+export { CURRENT_MIGRATION_HEAD } from "@finnor/db";
 
 async function beat(): Promise<void> {
   const now = new Date();

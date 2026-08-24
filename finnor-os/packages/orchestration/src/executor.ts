@@ -11,9 +11,16 @@ import { ScopedToolRegistry, tenantProviderConfigured, type ToolRegistry } from 
 import type { PluginRegistry } from "./plugin-registry";
 import { diagnoseFailure, buildConfirmationScript } from "./voice";
 import { advanceWorkflowForAction } from "./workflow";
-import { executePluginViaRuntime } from "./runtime-bridge";
+import { classifyExecutionFailure, executePluginViaRuntime } from "./runtime-bridge";
+import { finalizeReceipt, openReceipt } from "@finnor/workflow-runtime";
+import { redactStructured } from "@finnor/security";
 import { approvalRequirementForAction } from "../../../scripts/release/action-hardening-spec";
 import { evaluateActionAuthorityBoundary } from "./authority-runtime";
+import {
+  BusinessEffectBoundaryError,
+  ensureBusinessEffect,
+  recordBusinessEffectOutcome,
+} from "./compiler";
 
 export interface Executor {
   execute(action: DomainAction, policy: DomainPolicy): Promise<ExecutionResult>;
@@ -59,6 +66,16 @@ export class GatedExecutor implements Executor {
     await appendEpisode(action.tenantId, action.id, "draft", {}, { summary: draft.summary });
 
     const approval = approvalRequirementForAction(action.actionType, policy.requiresConfirmation, draft.requiresConfirmation);
+    let effect;
+    try {
+      effect = await ensureBusinessEffect({ action, draft, policy, approval });
+    } catch (error) {
+      if (!(error instanceof BusinessEffectBoundaryError)) throw error;
+      await this.setStatus(action, "needs_human_review");
+      await appendEpisode(action.tenantId, action.id, "effect_blocked", {}, { code: error.code, message: error.message });
+      return { status: "failure", output: { effectBoundary: error.code }, error: error.message, errorKind: "conflict" };
+    }
+    if (effect) await appendEpisode(action.tenantId, action.id, "effect_compiled", {}, { businessEffectId: effect.id, semanticHash: effect.semanticHash, scopeHash: effect.scopeHash });
     const authority = await evaluateActionAuthorityBoundary(action, policy, draft);
     if (authority.decision.outcome === "denied" || ((action.status === "approved" || action.status === "executing") && authority.decision.outcome !== "allowed")) {
       await this.setStatus(action, "failed");
@@ -78,13 +95,13 @@ export class GatedExecutor implements Executor {
       await withTenant(action.tenantId, async (db) => {
         await db
           .update(domainActions)
-          .set({ status: "pending", summary: draft.summary, payload: draft.payload })
+          .set({ status: "pending", summary: effect?.approval.summary ?? draft.summary, payload: draft.payload })
           .where(and(eq(domainActions.id, action.id), eq(domainActions.tenantId, action.tenantId)));
       });
-      await appendEpisode(action.tenantId, action.id, "gate", {}, { gated: true, summary: draft.summary });
+      await appendEpisode(action.tenantId, action.id, "gate", {}, { gated: true, summary: effect?.approval.summary ?? draft.summary, businessEffectId: effect?.id ?? null, semanticHash: effect?.semanticHash ?? null });
       await enqueueJob(
         "send_push_notification",
-        { tenantId: action.tenantId, kind: "approval-needed", actionId: action.id, body: draft.summary },
+        { tenantId: action.tenantId, kind: "approval-needed", actionId: action.id, body: effect?.approval.summary ?? draft.summary },
         `push:approval-needed:${action.id}`,
         action.correlationId,
       ).catch(() => undefined); // a push is a nudge, never the gate itself
@@ -93,7 +110,7 @@ export class GatedExecutor implements Executor {
       if (await tenantProviderConfigured(action.tenantId, "vapi")) {
         await enqueueJob(
           "voice_confirm_request",
-          { tenantId: action.tenantId, actionId: action.id, script: buildConfirmationScript(draft.summary) },
+          { tenantId: action.tenantId, actionId: action.id, script: buildConfirmationScript(effect?.approval.summary ?? draft.summary) },
           `voice-confirm:${action.id}`,
           action.correlationId,
         ).catch(() => undefined); // queue trouble must never break the gate itself
@@ -101,7 +118,7 @@ export class GatedExecutor implements Executor {
       // Stop here. Execution resumes only via POST /actions/:id/confirm or a spoken yes.
       return {
         status: "success",
-        output: { gated: true, pendingConfirmation: true, summary: draft.summary },
+        output: { gated: true, pendingConfirmation: true, summary: effect?.approval.summary ?? draft.summary, businessEffectId: effect?.id },
       };
     }
     // --------------------------------------------------------
@@ -112,13 +129,18 @@ export class GatedExecutor implements Executor {
     // Confirmation-required actions instead carry the `confirmed` episode written
     // by decide(), which the bridge validates independently.
     if (!approval.requiresConfirmation && !requiresAuthorityGate) {
-      await appendEpisode(action.tenantId, action.id, "policy_ungated_authorized", { policyId: policy.id ?? null }, {
-        actionType: action.actionType,
-        approvalFloor: approval.approvalFloor,
-        reason: "fixed action floor does not require confirmation",
-      });
+      // Consequential policy authorization is persisted by runtime-bridge in the
+      // same transaction as its command/first job. Reads have no Business Effect and
+      // retain the small synchronous authorization episode used below.
+      if (!effect) {
+        await appendEpisode(action.tenantId, action.id, "policy_ungated_authorized", { policyId: policy.id ?? null }, {
+          actionType: action.actionType,
+          approvalFloor: approval.approvalFloor,
+          reason: "fixed action floor does not require confirmation",
+        });
+      }
     }
-    await this.setStatus(action, "executing");
+    if (!effect) await this.setStatus(action, "executing");
     // Scoped per action execution: claims each external tool call against the
     // external_operations ledger so a reflection retry never re-fires an
     // already-completed side effect (send an SMS twice, double-sync an invoice).
@@ -127,8 +149,9 @@ export class GatedExecutor implements Executor {
       : null;
     const requestedCommunicationIdentityId = typeof draft.payload.communicationIdentityId === "string"
       ? draft.payload.communicationIdentityId
-      : typeof identityRef?.communicationIdentityId === "string" ? identityRef.communicationIdentityId : undefined;
-    const requestedAuthProfileRef = typeof draft.payload.authProfileRef === "string" ? draft.payload.authProfileRef : undefined;
+      : typeof identityRef?.communicationIdentityId === "string" ? identityRef.communicationIdentityId
+        : effect?.bindings.find((binding) => binding.communicationIdentityId)?.communicationIdentityId;
+    const requestedAuthProfileRef = typeof draft.payload.authProfileRef === "string" ? draft.payload.authProfileRef : effect?.bindings.find((binding) => binding.authProfileRef)?.authProfileRef;
     const accessPurpose = typeof draft.payload.purpose === "string" && draft.payload.purpose.trim() ? draft.payload.purpose : action.actionType;
     const scopedTools = new ScopedToolRegistry(this.tools, {
       tenantId: action.tenantId,
@@ -137,6 +160,7 @@ export class GatedExecutor implements Executor {
       purpose: accessPurpose,
       ...(requestedCommunicationIdentityId ? { communicationIdentityId: requestedCommunicationIdentityId } : {}),
       ...(requestedAuthProfileRef ? { authProfileRef: requestedAuthProfileRef } : {}),
+      ...(effect ? { businessEffectId: effect.id, businessEffectHash: effect.semanticHash } : {}),
     });
     // §2.5: routes through @finnor/workflow-runtime (command/step + DecisionReceipt)
     // instead of calling plugin.execute() bare — same real result, now with a durable
@@ -150,6 +174,35 @@ export class GatedExecutor implements Executor {
       plugin,
       tools: scopedTools,
     });
+    if (result.output.durableWorkerExecution === true) {
+      if (action.workId) await transitionWork(action.tenantId, action.workId, "executing", "action_execution_authorized", {
+        actionId: action.id,
+        workflowRunId: result.output.workflowRunId,
+        queued: true,
+      });
+      return result;
+    }
+    if (!effect) {
+      const { receiptId } = await openReceipt({
+        tenantId: action.tenantId,
+        workId: action.workId ?? undefined,
+        domainActionId: action.id,
+        objective: `${action.actionType}: synchronous non-consequential execution`,
+        evidence: [{ source: "domain_action", ref: action.id, timestamp: new Date().toISOString() }],
+        policyApplied: policy.version > 0 && policy.id ? { id: policy.id, version: policy.version } : null,
+        riskTier: "low",
+        proposedAction: { actionType: action.actionType, summary: draft.summary },
+        approval: { required: false, at: new Date().toISOString() },
+        expectedResult: result.expected,
+      });
+      if (result.status === "success") {
+        await finalizeReceipt(action.tenantId, receiptId, { actualResult: { status: result.status, output: redactStructured(result.output) } });
+      } else {
+        const failure = classifyExecutionFailure(result);
+        await finalizeReceipt(action.tenantId, receiptId, { failure: { errorKind: failure.errorKind, message: failure.reason, recoveryPath: "Review the action result and submit a corrected request if needed." } });
+      }
+    }
+    const effectVerification = effect ? await recordBusinessEffectOutcome(action.tenantId, effect, result) : null;
     await appendEpisode(action.tenantId, action.id, "execute", { draft: draft.payload }, { ...result });
 
     // computer_task's synchronous action result means "durably queued", not
@@ -160,7 +213,9 @@ export class GatedExecutor implements Executor {
     }
 
     const finalStatus =
-      result.status === "success"
+      effectVerification?.state === "divergent" || effectVerification?.state === "reconciliation_required" || result.errorKind === "unknown_outcome"
+        ? "needs_human_review"
+        : result.status === "success"
         ? "completed"
         : result.status === "integration_unavailable"
           ? "blocked_integration_unavailable"
@@ -197,7 +252,7 @@ export class GatedExecutor implements Executor {
         .set({
           status,
           ...(status === "executing" ? { executionStartedAt: new Date() } : {}),
-          ...(status === "completed" || status === "failed" || status === "blocked_integration_unavailable" ? { executionStartedAt: null } : {}),
+          ...(status === "completed" || status === "failed" || status === "blocked_integration_unavailable" || status === "needs_human_review" ? { executionStartedAt: null } : {}),
         })
         .where(and(eq(domainActions.id, action.id), eq(domainActions.tenantId, action.tenantId)));
     });

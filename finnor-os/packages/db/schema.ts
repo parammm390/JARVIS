@@ -820,9 +820,15 @@ export const authorityDecisions = pgTable(
     workId: uuid("work_id").references(() => works.id),
     domainActionId: uuid("domain_action_id"),
     operationId: uuid("operation_id"),
+    businessEffectId: uuid("business_effect_id"),
+    businessEffectHash: text("business_effect_hash"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("authority_decisions_tenant_employee_idx").on(t.tenantId, t.employeeId, t.createdAt), index("authority_decisions_action_idx").on(t.domainActionId)],
+  (t) => [
+    unique("authority_decisions_tenant_id_id_key").on(t.tenantId, t.id),
+    index("authority_decisions_tenant_employee_idx").on(t.tenantId, t.employeeId, t.createdAt),
+    index("authority_decisions_action_idx").on(t.domainActionId),
+  ],
 );
 
 export const authorityApprovalRequests = pgTable(
@@ -834,6 +840,8 @@ export const authorityApprovalRequests = pgTable(
     requesterId: uuid("requester_id").references(() => users.id),
     authorityDecisionId: uuid("authority_decision_id").notNull().references(() => authorityDecisions.id),
     approvalChainId: uuid("approval_chain_id").notNull().references(() => approvalChains.id),
+    businessEffectId: uuid("business_effect_id"),
+    businessEffectHash: text("business_effect_hash"),
     status: text("status", { enum: ["pending", "approved", "rejected", "expired"] }).notNull().default("pending"),
     currentStep: integer("current_step").notNull().default(1),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -870,12 +878,13 @@ export const works = pgTable(
     status: text("status", {
       enum: [
         "received", "understanding", "planning", "ready", "actionable",
-        "awaiting_approval", "executing", "waiting", "blocked", "completed", "failed", "recovery",
+        "awaiting_approval", "executing", "waiting", "blocked", "completed", "failed", "cancelled", "recovery",
       ],
     }).notNull().default("received"),
     sessionId: text("session_id"),
     initialChannel: text("initial_channel", { enum: ["voice", "text", "console"] }).notNull(),
     initialInstruction: text("initial_instruction").notNull(),
+    executionModel: text("execution_model", { enum: ["query", "atomic_effect", "objective"] }),
     createdBy: uuid("created_by").references(() => users.id),
     currentOwnerId: uuid("current_owner_id").references(() => users.id),
     assignedTo: uuid("assigned_to").references(() => users.id),
@@ -955,13 +964,13 @@ export const workEvents = pgTable(
     fromStatus: text("from_status", {
       enum: [
         "received", "understanding", "planning", "ready", "actionable",
-        "awaiting_approval", "executing", "waiting", "blocked", "completed", "failed", "recovery",
+        "awaiting_approval", "executing", "waiting", "blocked", "completed", "failed", "cancelled", "recovery",
       ],
     }),
     toStatus: text("to_status", {
       enum: [
         "received", "understanding", "planning", "ready", "actionable",
-        "awaiting_approval", "executing", "waiting", "blocked", "completed", "failed", "recovery",
+        "awaiting_approval", "executing", "waiting", "blocked", "completed", "failed", "cancelled", "recovery",
       ],
     }).notNull(),
     payload: jsonb("payload").notNull().default({}),
@@ -1028,7 +1037,7 @@ export const workObjectiveLoops = pgTable(
     tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
     workId: uuid("work_id").notNull().references(() => works.id),
     objective: text("objective").notNull(),
-    state: text("state", { enum: ["continue", "awaiting_approval", "waiting", "blocked", "completed", "failed"] }).notNull().default("continue"),
+    state: text("state", { enum: ["continue", "awaiting_approval", "waiting", "blocked", "completed", "failed", "cancelled"] }).notNull().default("continue"),
     revision: integer("revision").notNull().default(1),
     stepCount: integer("step_count").notNull().default(0),
     actionCount: integer("action_count").notNull().default(0),
@@ -1045,11 +1054,15 @@ export const workObjectiveLoops = pgTable(
     reason: text("reason"),
     nextStep: text("next_step"),
     lastObservation: jsonb("last_observation"),
+    successCondition: jsonb("success_condition").notNull(),
+    successVerification: jsonb("success_verification"),
+    successVerifiedAt: timestamp("success_verified_at", { withTimezone: true }),
     createdBy: uuid("created_by").references(() => users.id),
     initialChannel: text("initial_channel", { enum: ["voice", "text", "console"] }).notNull(),
     leaseOwner: text("lease_owner"),
     leaseUntil: timestamp("lease_until", { withTimezone: true }),
     completedAt: timestamp("completed_at", { withTimezone: true }),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -1184,7 +1197,10 @@ export const domainPolicies = pgTable(
     version: integer("version").notNull().default(1),
     effectiveFrom: timestamp("effective_from", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [unique("domain_policies_tenant_action_unique_idx").on(t.tenantId, t.actionType)],
+  (t) => [
+    unique("domain_policies_tenant_id_id_key").on(t.tenantId, t.id),
+    unique("domain_policies_tenant_action_unique_idx").on(t.tenantId, t.actionType),
+  ],
 );
 
 export const domainPolicyRevisions = pgTable(
@@ -1264,12 +1280,48 @@ export const domainActions = pgTable(
     // as a UUID to avoid a circular module declaration: objective steps also point
     // back to their one typed action.
     objectiveStepId: uuid("objective_step_id"),
+    // Phase 1 Universal Business Effect kernel. Nullable for deterministic reads and
+    // historical actions; consequential execution resolves this tenant-consistent ref.
+    businessEffectId: uuid("business_effect_id"),
   },
   (t) => [
     index("domain_actions_tenant_status_idx").on(t.tenantId, t.status),
     index("domain_actions_tenant_plan_idx").on(t.tenantId, t.planId),
     index("domain_actions_work_idx").on(t.workId),
     unique("domain_actions_objective_step_idx").on(t.objectiveStepId),
+    unique("domain_actions_tenant_id_id_key").on(t.tenantId, t.id),
+  ],
+);
+
+/** Immutable semantic intent compiled from a validated/grounded DomainAction before
+ * authority, approval, or execution. Lifecycle/verification columns may advance;
+ * the effect body and hashes are frozen by migration trigger. */
+export const businessEffects = pgTable(
+  "business_effects",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    domainActionId: uuid("domain_action_id").references(() => domainActions.id),
+    version: integer("version").notNull().default(1),
+    semanticHash: text("semantic_hash").notNull(),
+    scopeHash: text("scope_hash").notNull(),
+    operationClass: text("operation_class", { enum: ["internal_draft", "internal_write", "operational_change", "financial_write", "external_side_effect", "external_spend", "batch_external", "durable_workflow"] }).notNull(),
+    effect: jsonb("effect").notNull(),
+    status: text("status", { enum: ["compiled", "authorized", "executing", "executed", "verified", "partially_verified", "unverified", "divergent", "reconciliation_required", "failed", "cancelled", "compensated"] }).notNull().default("compiled"),
+    observedResult: jsonb("observed_result"),
+    verification: jsonb("verification"),
+    replacementForEffectId: uuid("replacement_for_effect_id"),
+    compensationForEffectId: uuid("compensation_for_effect_id"),
+    authorizedAt: timestamp("authorized_at", { withTimezone: true }),
+    executionStartedAt: timestamp("execution_started_at", { withTimezone: true }),
+    observedAt: timestamp("observed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("business_effects_action_unique").on(t.domainActionId),
+    unique("business_effects_tenant_id_id_key").on(t.tenantId, t.id),
+    index("business_effects_tenant_status_idx").on(t.tenantId, t.status, t.createdAt),
+    index("business_effects_tenant_hash_idx").on(t.tenantId, t.semanticHash),
   ],
 );
 
@@ -1293,7 +1345,9 @@ export const workObjectiveSteps = pgTable(
     domainActionId: uuid("domain_action_id").references(() => domainActions.id),
     observation: jsonb("observation"),
     progressMade: boolean("progress_made"),
-    iterationOutcome: text("iteration_outcome", { enum: ["continue", "awaiting_approval", "waiting", "blocked", "completed", "failed"] }),
+    iterationOutcome: text("iteration_outcome", { enum: ["continue", "awaiting_approval", "waiting", "blocked", "completed", "failed", "cancelled"] }),
+    recoveryKind: text("recovery_kind", { enum: ["retry", "replan", "recover", "compensate", "escalate", "block"] }),
+    successVerification: jsonb("success_verification"),
     scheduledFor: timestamp("scheduled_for", { withTimezone: true }),
     failure: jsonb("failure"),
     startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
@@ -1605,6 +1659,7 @@ export const businessOperations = pgTable(
     tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
     workId: uuid("work_id").references(() => works.id),
     domainActionId: uuid("domain_action_id").notNull().references(() => domainActions.id),
+    businessEffectId: uuid("business_effect_id"),
     operationType: text("operation_type", { enum: ["customer_winback"] }).notNull(),
     status: text("status", {
       enum: ["awaiting_approval", "queued", "running", "completed", "completed_with_failures", "needs_human_review", "failed", "cancelled"],
@@ -1758,6 +1813,7 @@ export const externalOperations = pgTable("external_operations", {
   // The exact ToolRegistry integration selected for this attempt. Historical rows
   // remain null rather than being guessed from action type or current tenant config.
   provider: text("provider"),
+  businessEffectId: uuid("business_effect_id"),
   requestHash: text("request_hash").notNull(),
   status: text("status", { enum: ["running", "succeeded", "failed", "unknown"] }).notNull(),
   response: jsonb("response"),
@@ -2602,8 +2658,19 @@ export const commands = pgTable(
     payload: jsonb("payload").notNull().default({}),
     idempotencyKey: text("idempotency_key"),
     requestedBy: text("requested_by"),
+    businessEffectId: uuid("business_effect_id"),
+    /** Frozen authorization episode for the command. These are references and
+     * hashes only; credentials/provider secrets never enter the durable intent. */
+    authorizedEffectHash: text("authorized_effect_hash"),
+    authorityDecisionId: uuid("authority_decision_id").references(() => authorityDecisions.id),
+    authorityRevision: integer("authority_revision"),
+    policyId: uuid("policy_id").references(() => domainPolicies.id),
+    policyVersion: integer("policy_version"),
+    executionClass: text("execution_class"),
+    authorizedAt: timestamp("authorized_at", { withTimezone: true }),
+    cancellationRequestedAt: timestamp("cancellation_requested_at", { withTimezone: true }),
     // Created already-approved — approval happens upstream of this runtime.
-    status: text("status", { enum: ["approved", "running", "completed", "failed"] })
+    status: text("status", { enum: ["approved", "running", "completed", "failed", "cancelled"] })
       .notNull()
       .default("approved"),
     // §2.4: finishes the Phase-16(e) correlationId thread into the durable runtime —
@@ -2663,6 +2730,28 @@ export const workflowSteps = pgTable(
     // link, set only for steps the runtime bridge creates (workflow-kind commands
     // have no single originating domain_action, so it stays null for those).
     domainActionId: uuid("domain_action_id").references(() => domainActions.id),
+    businessEffectId: uuid("business_effect_id"),
+    /** Local delivery state is deliberately separate from the remote/business
+     * effect state. `commit_started` is the point after which cancellation cannot
+     * honestly claim that nothing happened. */
+    executionState: text("execution_state", {
+      enum: [
+        "authorized",
+        "claimed",
+        "commit_started",
+        "awaiting_observation",
+        "reconciling",
+        "verified",
+        "failed_before_effect",
+        "failed_after_possible_effect",
+        "cancelled_before_effect",
+        "cancellation_requested",
+        "blocked",
+      ],
+    }).notNull().default("authorized"),
+    claimedAt: timestamp("claimed_at", { withTimezone: true }),
+    effectCommitAt: timestamp("effect_commit_at", { withTimezone: true }),
+    cancellationRequestedAt: timestamp("cancellation_requested_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -2683,6 +2772,7 @@ export const integrationOperations = pgTable(
     // Binding.name at the actual execution boundary (native/emulator/vendor).
     // This is presentation-safe provenance, never provider response material.
     provider: text("provider"),
+    businessEffectId: uuid("business_effect_id"),
     requestHash: text("request_hash").notNull(),
     status: text("status", { enum: ["running", "succeeded", "failed", "unknown"] }).notNull(),
     response: jsonb("response"),
@@ -2745,6 +2835,7 @@ export const reconciliationCases = pgTable("reconciliation_cases", {
   relatedOutboxEventId: uuid("related_outbox_event_id").references(() => outboxEvents.id),
   relatedInboxEventId: uuid("related_inbox_event_id").references(() => inboxEvents.id),
   relatedStepId: uuid("related_step_id").references(() => workflowSteps.id),
+  businessEffectId: uuid("business_effect_id"),
   details: jsonb("details").notNull().default({}),
   status: text("status", { enum: ["open", "resolved"] }).notNull().default("open"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -2756,6 +2847,8 @@ export const compensationCases = pgTable("compensation_cases", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
   workflowStepId: uuid("workflow_step_id").notNull().references(() => workflowSteps.id),
+  businessEffectId: uuid("business_effect_id"),
+  compensationEffectId: uuid("compensation_effect_id"),
   reason: text("reason").notNull(),
   status: text("status", { enum: ["pending", "succeeded", "failed"] }).notNull().default("pending"),
   details: jsonb("details").notNull().default({}),
@@ -2790,6 +2883,12 @@ export const decisionReceipts = pgTable(
     failure: jsonb("failure"),
     correlationId: text("correlation_id"),
     llmCostUsd: real("llm_cost_usd"),
+    businessEffectId: uuid("business_effect_id"),
+    intendedEffectHash: text("intended_effect_hash"),
+    authorizedEffectHash: text("authorized_effect_hash"),
+    executedEffectHash: text("executed_effect_hash"),
+    verification: jsonb("verification"),
+    recoveryEffectId: uuid("recovery_effect_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     finalizedAt: timestamp("finalized_at", { withTimezone: true }),
   },
@@ -3434,6 +3533,7 @@ export const computerRuns = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
     domainActionId: uuid("domain_action_id").notNull().references(() => domainActions.id),
+    businessEffectId: uuid("business_effect_id"),
     workId: uuid("work_id").references(() => works.id),
     objectiveLoopId: uuid("objective_loop_id").references(() => workObjectiveLoops.id),
     actorId: uuid("actor_id").notNull().references(() => users.id),

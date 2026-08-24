@@ -21,10 +21,13 @@ import {
   workObjectiveLoops,
   workObjectivePlannerAttempts,
   workObjectiveSteps,
+  workflowRuns,
+  workflowSteps,
 } from "@finnor/db";
 import { ToolRegistry } from "@finnor/tools";
 import {
   controlWorkObjective,
+  executeAuthorizedEffectStep,
   FinnorOrchestrator,
   processWorkEventWaitDeadline,
   recoverRunnableObjectives,
@@ -32,8 +35,11 @@ import {
   type ObjectiveDecisionPlanner,
   type ObjectiveInspection,
 } from "@finnor/orchestration";
+import { claimStep, retryRun } from "@finnor/workflow-runtime";
+import { runWorkflowStep } from "../../apps/worker/src/handlers/run-workflow-step";
 import { POST as startObjectiveRoute } from "../../apps/api/app/api/objectives/route";
 import { GET as getObjectiveRoute, POST as controlObjectiveRoute } from "../../apps/api/app/api/works/[id]/objective/route";
+import { citeObservedObjectiveEvidence } from "./helpers/objective-completion-evidence";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
 
@@ -43,6 +49,20 @@ async function dbUp(): Promise<boolean> {
 }
 
 const available = await dbUp();
+
+async function durableStepForAction(tenantId: string, actionId: string) {
+  const [step] = await withTenant(tenantId, (db) => db.select().from(workflowSteps).where(and(
+    eq(workflowSteps.tenantId, tenantId),
+    eq(workflowSteps.domainActionId, actionId),
+  )).limit(1));
+  if (!step) throw new Error(`No durable workflow step for action ${actionId}`);
+  const [run] = await withTenant(tenantId, (db) => db.select().from(workflowRuns).where(and(
+    eq(workflowRuns.tenantId, tenantId),
+    eq(workflowRuns.id, step.workflowRunId),
+  )).limit(1));
+  if (!run) throw new Error(`No durable workflow run for action ${actionId}`);
+  return { step, run };
+}
 
 class ScriptedPlanner implements ObjectiveDecisionPlanner {
   providerName = "scripted-objective-test";
@@ -54,7 +74,7 @@ class ScriptedPlanner implements ObjectiveDecisionPlanner {
     const item = this.script[this.calls++];
     if (!item) throw new Error("Scripted planner exhausted");
     if (item instanceof Error) throw item;
-    return typeof item === "function" ? item(input.inspection) : item;
+    return citeObservedObjectiveEvidence(typeof item === "function" ? item(input.inspection) : item, input.inspection);
   }
 }
 
@@ -119,11 +139,13 @@ describe.skipIf(!available)("Upgrade 9 governed agentic objective loop", () => {
     expect(action).toMatchObject({ status: "pending", initiatedBy: ownerId, objectiveStepId: expect.any(String) });
 
     const approved = await orchestrator.decide(action.id, tenantId, "approve", ownerId, { role: "owner" });
-    expect(approved.status).toBe("success");
+    expect(approved).toMatchObject({ status: "success", output: { queued: true, durable: true } });
+    const { step } = await durableStepForAction(tenantId, action.id);
+    await runWorkflowStep({ tenantId, workflowStepId: step.id });
     expect(await orchestrator.runObjectiveIteration({ tenantId, workId: started.workId, objectiveLoopId: started.objectiveLoopId })).toBe("completed");
 
     const aggregate = await workAggregate(tenantId, started.workId);
-    expect(aggregate!.objectiveLoop).toMatchObject({ state: "completed", stepCount: 3, actionCount: 1, queryCount: 1 });
+    expect(aggregate!.objectiveLoop).toMatchObject({ state: "completed", stepCount: 3, actionCount: 1, queryCount: 2 });
     expect(aggregate!.objectiveSteps.map((step) => step.iterationOutcome)).toEqual(["continue", "awaiting_approval", "completed"]);
     expect((aggregate!.work as { status: string }).status).toBe("completed");
     expect(aggregate!.queryExecutions.length).toBeGreaterThanOrEqual(4); // business/company inspection each iteration + selected lookup
@@ -184,7 +206,7 @@ describe.skipIf(!available)("Upgrade 9 governed agentic objective loop", () => {
     const aggregate = await workAggregate(tenantId, started.workId);
     expect(aggregate!.objectiveSteps).toHaveLength(1);
     expect(aggregate!.objectivePlannerAttempts.map((attempt) => attempt.status)).toEqual(["failed", "succeeded"]);
-    expect(aggregate!.objectiveLoop).toMatchObject({ state: "completed", stepCount: 1, queryCount: 0, plannerFailureCount: 1 });
+    expect(aggregate!.objectiveLoop).toMatchObject({ state: "completed", stepCount: 1, queryCount: 1, plannerFailureCount: 1 });
   });
 
   it("leases an iteration so concurrent workers cannot make two model decisions", async () => {
@@ -195,11 +217,11 @@ describe.skipIf(!available)("Upgrade 9 governed agentic objective loop", () => {
     let calls = 0;
     const planner: ObjectiveDecisionPlanner = {
       providerName: "leased-objective-test",
-      async decide() {
+      async decide(input) {
         calls += 1;
         plannerStarted();
         await gate;
-        return { kind: "complete", outcome: { leased: true }, reason: "Only the lease holder made this decision." };
+        return citeObservedObjectiveEvidence({ kind: "complete", outcome: { leased: true }, reason: "Only the lease holder made this decision." }, input.inspection);
       },
     };
     const orchestrator = new FinnorOrchestrator({ objectiveDecisionPlanner: planner });
@@ -278,19 +300,26 @@ describe.skipIf(!available)("Upgrade 9 governed agentic objective loop", () => {
     expect(await orchestrator.runObjectiveIteration({ tenantId, workId: started.workId, objectiveLoopId: started.objectiveLoopId })).toBe("awaiting_approval");
     const first = await workAggregate(tenantId, started.workId);
     const action = (first!.actions as Array<typeof domainActions.$inferSelect>)[0]!;
-    expect((await orchestrator.decide(action.id, tenantId, "approve", ownerId, { role: "owner" })).status).toBe("integration_unavailable");
+    expect(await orchestrator.decide(action.id, tenantId, "approve", ownerId, { role: "owner" })).toMatchObject({ status: "success", output: { queued: true, durable: true } });
+    const firstExecution = await durableStepForAction(tenantId, action.id);
+    expect(await claimStep(tenantId, firstExecution.step.id)).toBeTruthy();
+    await executeAuthorizedEffectStep(tenantId, firstExecution.step.id, { tools });
     const afterFailure = await workAggregate(tenantId, started.workId);
-    expect((afterFailure!.actions as Array<typeof domainActions.$inferSelect>)[0]).toMatchObject({ id: action.id, status: "needs_human_review" });
+    expect((afterFailure!.actions as Array<typeof domainActions.$inferSelect>)[0]).toMatchObject({ id: action.id, status: "blocked_integration_unavailable" });
     expect(await orchestrator.runObjectiveIteration({ tenantId, workId: started.workId, objectiveLoopId: started.objectiveLoopId })).toBe("awaiting_approval");
 
     const recoveryStarted = performance.now();
     providerAvailable = true;
-    expect((await orchestrator.decide(action.id, tenantId, "approve", ownerId, { role: "owner" })).status).toBe("success");
+    const failedRun = (await durableStepForAction(tenantId, action.id)).run;
+    expect(await retryRun(tenantId, failedRun.id, failedRun.version, ownerId)).toMatchObject({ ok: true });
+    const retried = await durableStepForAction(tenantId, action.id);
+    expect(await claimStep(tenantId, retried.step.id)).toBeTruthy();
+    await executeAuthorizedEffectStep(tenantId, retried.step.id, { tools });
     expect(await orchestrator.runObjectiveIteration({ tenantId, workId: started.workId, objectiveLoopId: started.objectiveLoopId })).toBe("completed");
     const recovered = await workAggregate(tenantId, started.workId);
     expect(recovered!.objectiveLoop).toMatchObject({ state: "completed", actionCount: 1 });
     expect(recovered!.actions).toEqual([expect.objectContaining({ id: action.id, status: "completed" })]);
-    expect(providerAttempts).toBe(3); // initial call + one bounded reflection retry + authorized recovery
+    expect(providerAttempts).toBe(2); // one known failed attempt + one explicit safe retry
     const delivered = await withTenant(tenantId, (db) => db.select().from(sandboxOutbox).where(and(eq(sandboxOutbox.tenantId, tenantId), eq(sandboxOutbox.content, "Hi Avery Objective! Just following up about provider recovery proof — reply here or call us if you need anything."))));
     expect(delivered).toHaveLength(1);
     console.info(`[upgrade10-metric] ${JSON.stringify({

@@ -6,11 +6,13 @@
 // registry (STEP_HANDLERS) rather than hand-written if-branches, since Phase 4-6's
 // vertical workflows add many more step types on top of Phase 2's original two.
 
-import { claimStep, completeStep, failStep, advanceWorkflow, recoverStaleSteps, executeCapability } from "@finnor/workflow-runtime";
+import { claimStep, completeStep, failStep, advanceWorkflow, recoverStaleSteps, executeCapability, openReconciliationCase } from "@finnor/workflow-runtime";
 import type { CapabilityContract, CapabilityBinding } from "@finnor/workflow-runtime";
-import { domainActions, withTenant } from "@finnor/db";
-import { and, eq } from "drizzle-orm";
+import { businessEffects, commands, domainActions, integrationOperations, reconciliationCases, reconcileWorkStatus, workflowRuns, workflowSteps, withTenant } from "@finnor/db";
+import { and, eq, sql } from "drizzle-orm";
+import { executeAuthorizedEffectStep, FinnorOrchestrator, revalidateAuthorizedEffectEligibility, resumeObjectiveForAction } from "@finnor/orchestration";
 import { createWorkOrder, recordPayment } from "@finnor/data-platform";
+import { createHash } from "node:crypto";
 import {
   holdAppointmentContract,
   emulatorSchedulingBinding,
@@ -221,6 +223,139 @@ const INTERNAL_STEP_HANDLERS: Record<string, (tenantId: string, payload: Record<
   },
 };
 
+type InternalOperationClaim =
+  | { kind: "execute"; operationKey: string }
+  | { kind: "replay"; operationKey: string; output: Record<string, unknown> }
+  | { kind: "reconcile" };
+
+/** Internal Postgres mutations need the same crash boundary as provider calls. The
+ * ledger row is committed before the handler transaction starts. If the process dies
+ * after that transaction commits but before acknowledgement, recovery sees `running`
+ * and reconciles instead of performing the mutation again. */
+async function claimInternalOperation(
+  tenantId: string,
+  step: typeof workflowSteps.$inferSelect,
+): Promise<InternalOperationClaim> {
+  const operationKey = `internal:${step.stepType}:${step.id}`;
+  const requestHash = createHash("sha256").update(JSON.stringify(step.payload)).digest("hex");
+  const claim = await withTenant(tenantId, async (db) => {
+    const [inserted] = await db.insert(integrationOperations).values({
+      tenantId,
+      workflowStepId: step.id,
+      businessEffectId: step.businessEffectId,
+      operationKey,
+      capability: `internal:${step.stepType}`,
+      provider: "finnor_postgres",
+      requestHash,
+      status: "running",
+    }).onConflictDoNothing({ target: [integrationOperations.workflowStepId, integrationOperations.operationKey] }).returning();
+    if (inserted) return { inserted: true as const };
+    const [existing] = await db.select().from(integrationOperations).where(and(
+      eq(integrationOperations.tenantId, tenantId),
+      eq(integrationOperations.workflowStepId, step.id),
+      eq(integrationOperations.operationKey, operationKey),
+    )).limit(1);
+    return { inserted: false as const, existing };
+  });
+  if (claim.inserted) return { kind: "execute", operationKey };
+  const existing = claim.existing;
+  if (!existing || existing.requestHash !== requestHash || existing.businessEffectId !== step.businessEffectId) {
+    throw new Error("Internal operation identity conflicts with the authorized workflow step");
+  }
+  if (existing.status === "succeeded") {
+    return { kind: "replay", operationKey, output: (existing.response ?? {}) as Record<string, unknown> };
+  }
+  if (existing.status === "running" || existing.status === "unknown") {
+    const [openCase] = await withTenant(tenantId, (db) => db.select({ id: reconciliationCases.id }).from(reconciliationCases).where(and(
+      eq(reconciliationCases.tenantId, tenantId),
+      eq(reconciliationCases.relatedStepId, step.id),
+      eq(reconciliationCases.status, "open"),
+    )).limit(1));
+    if (!openCase) await openReconciliationCase(tenantId, {
+      caseType: "unknown_delivery",
+      relatedStepId: step.id,
+      businessEffectId: step.businessEffectId ?? undefined,
+      details: { operationKey, capability: `internal:${step.stepType}` },
+    });
+    await withTenant(tenantId, async (db) => {
+      await db.update(integrationOperations).set({ status: "unknown", updatedAt: new Date() }).where(and(
+        eq(integrationOperations.tenantId, tenantId),
+        eq(integrationOperations.id, existing.id),
+        eq(integrationOperations.status, "running"),
+      ));
+      await db.update(workflowSteps).set({ executionState: "reconciling", leaseExpiresAt: null, updatedAt: new Date() }).where(and(
+        eq(workflowSteps.tenantId, tenantId), eq(workflowSteps.id, step.id),
+      ));
+      if (step.businessEffectId) await db.update(businessEffects).set({ status: "reconciliation_required" }).where(and(
+        eq(businessEffects.tenantId, tenantId), eq(businessEffects.id, step.businessEffectId),
+      ));
+      if (step.domainActionId) await db.update(domainActions).set({ status: "needs_human_review", executionStartedAt: null }).where(and(
+        eq(domainActions.tenantId, tenantId), eq(domainActions.id, step.domainActionId),
+      ));
+    });
+    return { kind: "reconcile" };
+  }
+  await withTenant(tenantId, (db) => db.update(integrationOperations).set({ status: "running", response: null, updatedAt: new Date() }).where(and(
+    eq(integrationOperations.tenantId, tenantId),
+    eq(integrationOperations.id, existing.id),
+    eq(integrationOperations.status, "failed"),
+  )));
+  return { kind: "execute", operationKey };
+}
+
+/** Each consequential workflow step has its own effect commit point. The parent
+ * single-action worker already froze/revalidated the EffectSet before creating the
+ * child workflow; this check revalidates revocation/cancellation immediately before
+ * every later mutation and atomically records that the step may now have an effect. */
+async function beginWorkflowStepEffect(tenantId: string, step: typeof workflowSteps.$inferSelect): Promise<boolean> {
+  if (!step.domainActionId || !step.businessEffectId) return true;
+  const [boundary] = await withTenant(tenantId, (db) => db.select({
+    commandEffectId: commands.businessEffectId,
+    authorizedEffectHash: commands.authorizedEffectHash,
+    effectHash: businessEffects.semanticHash,
+    effectActionId: businessEffects.domainActionId,
+  }).from(workflowSteps)
+    .innerJoin(workflowRuns, and(eq(workflowRuns.tenantId, tenantId), eq(workflowRuns.id, workflowSteps.workflowRunId)))
+    .innerJoin(commands, and(eq(commands.tenantId, tenantId), eq(commands.id, workflowRuns.commandId)))
+    .innerJoin(businessEffects, and(eq(businessEffects.tenantId, tenantId), eq(businessEffects.id, workflowSteps.businessEffectId)))
+    .where(and(eq(workflowSteps.tenantId, tenantId), eq(workflowSteps.id, step.id))).limit(1));
+  if (!boundary || boundary.commandEffectId !== step.businessEffectId
+      || boundary.authorizedEffectHash !== boundary.effectHash
+      || boundary.effectActionId !== step.domainActionId) return false;
+  const eligibility = await revalidateAuthorizedEffectEligibility(tenantId, step.domainActionId, step.businessEffectId);
+  if (!eligibility.allowed) {
+    await withTenant(tenantId, async (db) => {
+      await db.update(workflowSteps).set({ executionState: "blocked", status: "failed", terminalReason: eligibility.reason, leaseExpiresAt: null })
+        .where(and(eq(workflowSteps.tenantId, tenantId), eq(workflowSteps.id, step.id), eq(workflowSteps.executionState, "claimed")));
+      await db.update(domainActions).set({ status: "needs_human_review", executionStartedAt: null })
+        .where(and(eq(domainActions.tenantId, tenantId), eq(domainActions.id, step.domainActionId!)));
+    });
+    return false;
+  }
+  return withTenant(tenantId, async (db) => {
+    const [commit] = await db.update(workflowSteps).set({ executionState: "commit_started", effectCommitAt: new Date(), updatedAt: new Date() })
+      .where(and(
+        eq(workflowSteps.tenantId, tenantId),
+        eq(workflowSteps.id, step.id),
+        eq(workflowSteps.status, "leased"),
+        eq(workflowSteps.executionState, "claimed"),
+        // A cancel transaction that wins first flips the run state, so this
+        // predicate makes cancellation-before-commit a hard no-effect guarantee.
+        sql`${workflowSteps.workflowRunId} IN (SELECT id FROM ${workflowRuns} WHERE tenant_id=${tenantId}::uuid AND status='running')`,
+      )).returning({ id: workflowSteps.id });
+    return Boolean(commit);
+  });
+}
+
+async function resumeBusinessControllers(tenantId: string, domainActionId: string | null): Promise<void> {
+  if (!domainActionId) return;
+  const [action] = await withTenant(tenantId, (db) => db.select({ workId: domainActions.workId }).from(domainActions)
+    .where(and(eq(domainActions.tenantId, tenantId), eq(domainActions.id, domainActionId))).limit(1));
+  if (action?.workId) await reconcileWorkStatus(tenantId, action.workId);
+  await resumeObjectiveForAction(tenantId, domainActionId).catch(() => false);
+  await new FinnorOrchestrator().resumePlanForAction(domainActionId, tenantId).catch(() => false);
+}
+
 export const runWorkflowStep: JobHandler = async (payload) => {
   const tenantId = String(payload.tenantId ?? "");
   const stepId = String(payload.workflowStepId ?? "");
@@ -234,11 +369,45 @@ export const runWorkflowStep: JobHandler = async (payload) => {
   if (!claimed) return; // already leased/completed elsewhere — duplicate delivery, safe no-op
 
   try {
+    if (claimed.stepType === "execute_authorized_effect") {
+      await executeAuthorizedEffectStep(tenantId, stepId);
+      await resumeBusinessControllers(tenantId, claimed.domainActionId);
+      return;
+    }
+    if (!(await beginWorkflowStepEffect(tenantId, claimed))) {
+      await failStep(tenantId, stepId, "Execution was cancelled or authority was invalidated before the step effect commit point", "conflict");
+      return;
+    }
     const internalHandler = INTERNAL_STEP_HANDLERS[claimed.stepType];
     if (internalHandler) {
-      const output = await internalHandler(tenantId, claimed.payload as Record<string, unknown>);
+      const internalClaim = await claimInternalOperation(tenantId, claimed);
+      if (internalClaim.kind === "reconcile") return;
+      let output = internalClaim.kind === "replay" ? internalClaim.output : undefined;
+      if (!output) {
+        try {
+          output = await internalHandler(tenantId, claimed.payload as Record<string, unknown>);
+        } catch (error) {
+          await withTenant(tenantId, (db) => db.update(integrationOperations).set({
+            status: "failed",
+            response: { error: error instanceof Error ? error.message : "Internal mutation failed" },
+            updatedAt: new Date(),
+          }).where(and(
+            eq(integrationOperations.tenantId, tenantId),
+            eq(integrationOperations.workflowStepId, stepId),
+            eq(integrationOperations.operationKey, internalClaim.operationKey),
+          )));
+          throw error;
+        }
+        await withTenant(tenantId, (db) => db.update(integrationOperations).set({ status: "succeeded", response: output, updatedAt: new Date() }).where(and(
+          eq(integrationOperations.tenantId, tenantId),
+          eq(integrationOperations.workflowStepId, stepId),
+          eq(integrationOperations.operationKey, internalClaim.operationKey),
+        )));
+      }
+      await withTenant(tenantId, (db) => db.update(workflowSteps).set({ executionState: "verified" }).where(and(eq(workflowSteps.tenantId, tenantId), eq(workflowSteps.id, stepId))));
       await completeStep(tenantId, stepId, { output });
       await advanceWorkflow(tenantId, claimed.workflowRunId);
+      await resumeBusinessControllers(tenantId, claimed.domainActionId);
       return;
     }
 
@@ -270,11 +439,14 @@ export const runWorkflowStep: JobHandler = async (payload) => {
     };
     const result = await executeCapability(tenantId, stepId, entry.contract, await entry.resolveBinding(tenantId), input);
     if (!result.ok) {
+      await withTenant(tenantId, (db) => db.update(workflowSteps).set({ executionState: "failed_before_effect" }).where(and(eq(workflowSteps.tenantId, tenantId), eq(workflowSteps.id, stepId))));
       await failStep(tenantId, stepId, result.error);
       return;
     }
+    await withTenant(tenantId, (db) => db.update(workflowSteps).set({ executionState: "verified" }).where(and(eq(workflowSteps.tenantId, tenantId), eq(workflowSteps.id, stepId))));
     await completeStep(tenantId, stepId, { output: result.output as Record<string, unknown> });
     await advanceWorkflow(tenantId, claimed.workflowRunId);
+    await resumeBusinessControllers(tenantId, claimed.domainActionId);
   } catch (err) {
     await failStep(tenantId, stepId, (err as Error).message);
   }

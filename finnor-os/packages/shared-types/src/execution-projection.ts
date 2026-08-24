@@ -1,5 +1,7 @@
 import type { AuthorityOperation, AuthorityOutcome, AuthorityRisk, DomainActionStatus, ErrorKind, Role } from "./index";
 import type { ComputerEffectStatus, ComputerExecutionMode, ComputerRunStatus } from "./computer";
+import type { BusinessEffectSet, BusinessEffectVerification } from "./business-effects";
+import type { ObjectiveSuccessCondition, ObjectiveSuccessVerification } from "./objectives";
 
 export const EXECUTION_COMPENSATABLE_STEP_TYPES = ["hold_appointment", "reserve_stock"] as const;
 
@@ -13,7 +15,12 @@ export interface ExecutionProjection {
   work: {
     id: string;
     status: string;
+    executionModel: "query" | "atomic_effect" | "objective" | null;
     objective: string;
+    objectiveState: string | null;
+    successCondition: ObjectiveSuccessCondition | null;
+    successVerification: ObjectiveSuccessVerification | null;
+    successVerifiedAt: string | null;
     createdAt: string;
     updatedAt: string;
     finalOutcome: Record<string, unknown> | null;
@@ -53,7 +60,9 @@ export type ExecutionNodeStatus =
   | "runnable"
   | "awaiting_approval"
   | "approved"
+  | "queued"
   | "executing"
+  | "reconciling"
   | "verifying"
   | "succeeded"
   | "failed"
@@ -78,6 +87,7 @@ export interface ExecutionActionNode {
   sourceStatus: DomainActionStatus;
   status: ExecutionNodeStatus;
   semanticPayload: Record<string, unknown>;
+  businessEffect: ExecutionBusinessEffect | null;
   targets: ExecutionTarget[];
   dependencyIds: string[];
   dependentIds: string[];
@@ -108,6 +118,16 @@ export interface ExecutionActionNode {
     lastChangedAt: string;
   };
   sourceRefs: string[];
+}
+
+export interface ExecutionBusinessEffect {
+  id: string;
+  semanticHash: string;
+  scopeHash: string;
+  status: string;
+  contract: BusinessEffectSet;
+  verification: BusinessEffectVerification | null;
+  sourceRef: string;
 }
 
 export interface ExecutionDependencyEdge {
@@ -216,6 +236,9 @@ export interface ExecutionWorkflowStep {
   sequence: number;
   stepType: string;
   status: "pending" | "leased" | "completed" | "failed" | "compensating" | "compensated";
+  executionState: "authorized" | "claimed" | "commit_started" | "awaiting_observation" | "reconciling" | "verified" | "failed_before_effect" | "failed_after_possible_effect" | "cancelled_before_effect" | "cancellation_requested" | "blocked";
+  effectCommitAt: string | null;
+  cancellationRequestedAt: string | null;
   attempts: number;
   terminalReason: string | null;
   domainActionId: string | null;
@@ -272,6 +295,12 @@ export interface ExecutionReceipt {
   domainActionId: string | null;
   workflowRunId: string | null;
   workflowStepId: string | null;
+  businessEffectId: string | null;
+  intendedEffectHash: string | null;
+  authorizedEffectHash: string | null;
+  executedEffectHash: string | null;
+  effectVerification: BusinessEffectVerification | null;
+  recoveryEffectId: string | null;
   objective: string;
   policyApplied: { id: string; version: number } | null;
   riskTier: AuthorityRisk;

@@ -19,13 +19,14 @@ export async function claimExternalOperation(
   operationKey: string,
   requestHash: string,
   provider?: string,
+  businessEffectId?: string,
 ): Promise<ClaimResult> {
   return withTenant(tenantId, async (db) => {
     let existing: ExternalOperationRow | undefined;
     for (let attempt = 0; attempt < 2 && !existing; attempt += 1) {
       const [row] = await db
         .insert(externalOperations)
-        .values({ tenantId, domainActionId, operationKey, provider: provider ?? null, requestHash, status: "running" })
+        .values({ tenantId, domainActionId, businessEffectId: businessEffectId ?? null, operationKey, provider: provider ?? null, requestHash, status: "running" })
         .onConflictDoNothing({ target: [externalOperations.domainActionId, externalOperations.operationKey] })
         .returning();
       if (row) return { claimed: true } as const;
@@ -39,6 +40,9 @@ export async function claimExternalOperation(
     // administrative delete or an unexpected visibility fault prevents that, fail
     // closed instead of letting two callers dispatch the same effect.
     if (!existing) throw new Error("External operation claim could not be established safely");
+    if ((existing.businessEffectId ?? null) !== (businessEffectId ?? null)) {
+      throw new Error("External operation effect conflict: refusing to reuse an idempotency claim for a different Business Effect");
+    }
     // Idempotency protects against re-doing a SUCCESSFUL side effect (never send the
     // same SMS twice) — it must NOT block a legitimate reflection retry after a
     // genuine failure, since retrying a failed send is exactly reflection's job, and a

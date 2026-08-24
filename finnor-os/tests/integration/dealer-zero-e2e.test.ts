@@ -30,7 +30,7 @@ import {
   decisionReceipts,
   reconciliationCases,
 } from "@finnor/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, ne } from "drizzle-orm";
 import { createDefaultPluginRegistry, FinnorOrchestrator } from "@finnor/orchestration";
 import { createLead } from "@finnor/data-platform";
 import { seedDealerZero, DEALER_ZERO_TENANT_ID } from "../../scripts/seed-dealer-zero";
@@ -39,6 +39,7 @@ import { PRICING_CATALOG_ACTION_TYPE } from "../../packages/domain-plugins/share
 import { POST as confirmRoute } from "../../apps/api/app/api/actions/[id]/confirm/route";
 import { runWorkflowStep } from "../../apps/worker/src/handlers/run-workflow-step";
 import { resetSchedulingEmulator, resetCommunicationsEmulator, getEmulatorHoldStatus, wasEmulatorCallSent } from "@finnor/tools";
+import { driveDurableAction } from "./helpers/durable-action";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
 
@@ -157,11 +158,18 @@ describe.skipIf(!available)("Phase 3.6 proof tests — policy conformance + Deal
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.result.status).toBe("success");
-    const { workflowRunId, commandId } = body.result.output as { workflowRunId: string; commandId: string };
-    expect(workflowRunId).toBeTruthy();
+    const { workflowRunId: outerWorkflowRunId, commandId: outerCommandId } = body.result.output as { workflowRunId: string; commandId: string };
+    expect(outerWorkflowRunId).toBeTruthy();
 
-    // 5. Drive the async steps (the real worker's own mechanism, not a shortcut) to
-    // completion — hold_appointment, send_confirmation_call, confirm_appointment.
+    // 5. Drive the authorization envelope and the child workflow through the real
+    // worker handlers. The approval response names the single-action envelope; the
+    // plugin creates the business workflow only when that worker executes.
+    expect((await driveDurableAction(DEALER_ZERO_TENANT_ID, action.id)).status).toBe("success");
+    const [childRun] = await withTenant(DEALER_ZERO_TENANT_ID, (db) => db.select({ id: workflowRuns.id, commandId: workflowRuns.commandId }).from(workflowRuns)
+      .innerJoin(workflowSteps, and(eq(workflowSteps.tenantId, DEALER_ZERO_TENANT_ID), eq(workflowSteps.workflowRunId, workflowRuns.id)))
+      .where(and(eq(workflowRuns.tenantId, DEALER_ZERO_TENANT_ID), ne(workflowRuns.workflowType, "single_action"), eq(workflowSteps.domainActionId, action.id))).limit(1));
+    expect(childRun).toBeTruthy();
+    const workflowRunId = childRun!.id;
     const steps = await driveToCompletion(workflowRunId);
     expect(steps.every((s) => s.status === "completed")).toBe(true);
     expect(steps.map((s) => s.stepType).sort()).toEqual(["confirm_appointment", "hold_appointment", "send_confirmation_call"]);
@@ -201,7 +209,15 @@ describe.skipIf(!available)("Phase 3.6 proof tests — policy conformance + Deal
       }
       await db.delete(workflowSteps).where(eq(workflowSteps.workflowRunId, workflowRunId));
       await db.delete(workflowRuns).where(eq(workflowRuns.id, workflowRunId));
-      await db.delete(commands).where(eq(commands.id, commandId));
+      await db.delete(commands).where(eq(commands.id, childRun!.commandId));
+      const outerSteps = await db.select().from(workflowSteps).where(eq(workflowSteps.workflowRunId, outerWorkflowRunId));
+      for (const s of outerSteps) {
+        await db.delete(integrationOperations).where(eq(integrationOperations.workflowStepId, s.id));
+        await db.delete(decisionReceipts).where(eq(decisionReceipts.workflowStepId, s.id));
+      }
+      await db.delete(workflowSteps).where(eq(workflowSteps.workflowRunId, outerWorkflowRunId));
+      await db.delete(workflowRuns).where(eq(workflowRuns.id, outerWorkflowRunId));
+      await db.delete(commands).where(eq(commands.id, outerCommandId));
     });
   }, 30_000);
 });

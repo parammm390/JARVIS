@@ -1,24 +1,12 @@
-// POST /api/actions/:id/revert — D2.T4 honest undo: approved -> pending, ONLY while
-// unclaimed. domain_actions has no `version` column (unlike workflow_runs, which run-
-// control-route.ts keys on), so the optimistic-concurrency guard here is the atomic
-// conditional UPDATE itself, keyed on status="approved" — the same "conditional
-// UPDATE is the single winner" pattern FinnorOrchestrator.decide()/runAction() already
-// use, just reusing status as the version.
-//
-// Real architectural finding (see the D2 STATE block for the full writeup): decide()
-// calls runAction() synchronously in the SAME request that approves an action, and
-// runAction()'s own atomic UPDATE claims approved -> executing before that request
-// even returns. So for every action type today, the "approved" window is sub-
-// millisecond by the time this route could ever be called — this endpoint will
-// almost always, honestly, report 409 "already claimed." That is not a bug in this
-// route; it is what "already-claimed says so truthfully" (the plan's own words) looks
-// like given today's synchronous approve-then-execute architecture. Building a real
-// grace-period before execution would be an architecture change, out of scope for a
-// frontend-cockpit session — flagged for Param, not improvised here.
+// POST /api/actions/:id/revert — true durable cancellation. A consequential approval
+// immediately owns a workflow run, so this route uses the run's optimistic control:
+// before effect commit it guarantees no mutation; after possible effect it records a
+// cancellation request and reconciliation rather than pretending to roll back.
 
-import { withTenant, domainActions, actionLog } from "@finnor/db";
+import { withTenant, domainActions, actionLog, workflowRuns, workflowSteps } from "@finnor/db";
+import { cancelRun } from "@finnor/workflow-runtime";
 import { z } from "zod";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { requireContext, canApprove, errorResponse } from "../../../../../lib/auth";
 
 const RevertActionSchema = z.object({ note: z.string().optional() });
@@ -30,16 +18,30 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const body = RevertActionSchema.safeParse(await req.json().catch(() => ({})));
     if (!body.success) return Response.json({ error: "Invalid body" }, { status: 400 });
 
-    const row = await withTenant(ctx.tenantId, async (db) => {
+    const snapshot = await withTenant(ctx.tenantId, async (db) => {
       const [r] = await db
         .select()
         .from(domainActions)
         .where(and(eq(domainActions.id, id), eq(domainActions.tenantId, ctx.tenantId)));
-      return r;
+      if (!r) return null;
+      const [run] = await db.select({ id: workflowRuns.id, version: workflowRuns.version, status: workflowRuns.status })
+        .from(workflowRuns)
+        .innerJoin(workflowSteps, eq(workflowSteps.workflowRunId, workflowRuns.id))
+        .where(and(
+          eq(workflowRuns.tenantId, ctx.tenantId),
+          eq(workflowSteps.domainActionId, id),
+          inArray(workflowRuns.status, ["running", "paused"]),
+        )).limit(1);
+      return { action: r, run };
     });
-    if (!row) return Response.json({ error: "Action not found" }, { status: 404 });
-    if (!(await canApprove(ctx, row.actionType))) {
-      return Response.json({ error: `Your role (${ctx.role}) cannot undo a decision on ${row.actionType}` }, { status: 403 });
+    if (!snapshot) return Response.json({ error: "Action not found" }, { status: 404 });
+    if (!(await canApprove(ctx, snapshot.action.actionType))) {
+      return Response.json({ error: `Your role (${ctx.role}) cannot undo a decision on ${snapshot.action.actionType}` }, { status: 403 });
+    }
+    if (snapshot.run) {
+      const cancelled = await cancelRun(ctx.tenantId, snapshot.run.id, snapshot.run.version, ctx.userId);
+      if (!cancelled.ok) return Response.json({ error: cancelled.reason }, { status: 409 });
+      return Response.json({ status: "cancelled", reverted: true, workflowRunId: snapshot.run.id });
     }
 
     const transition = await withTenant(ctx.tenantId, async (db) => {
@@ -68,7 +70,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (!transition.claimed) {
       const status = transition.current?.status ?? "unknown";
       return Response.json(
-        { error: `Action is ${status} — it's already been claimed and can no longer be undone.`, status },
+        { error: `Action has already been claimed (${status}) and has no cancellable durable run.`, status },
         { status: 409 },
       );
     }

@@ -6,6 +6,7 @@ import {
   authorityApprovalRequestSteps,
   authorityDecisions,
   authorityStates,
+  businessEffects,
   domainActions,
   employeeRoleAssignments,
   employeeRoles,
@@ -214,6 +215,8 @@ function decisionShape(row: typeof authorityDecisions.$inferSelect, eligibleAppr
     approvalChainId: row.approvalChainId,
     eligibleApproverIds,
     evidence: record(row.evidence),
+    businessEffectId: row.businessEffectId,
+    businessEffectHash: row.businessEffectHash,
   };
 }
 
@@ -247,6 +250,8 @@ async function insertDecision(db: Db, params: {
     workId: params.request.workId && UUID.test(params.request.workId) ? params.request.workId : null,
     domainActionId: params.request.domainActionId && UUID.test(params.request.domainActionId) ? params.request.domainActionId : null,
     operationId: params.request.operationId && UUID.test(params.request.operationId) ? params.request.operationId : null,
+    businessEffectId: params.request.businessEffectId && UUID.test(params.request.businessEffectId) ? params.request.businessEffectId : null,
+    businessEffectHash: params.request.businessEffectHash ?? null,
   }).returning();
   return decisionShape(row!, params.eligibleApproverIds ?? []);
 }
@@ -367,6 +372,8 @@ export async function recordActionAuthority(params: {
       resources: normalizeResources(params.request),
       approvalChainId: params.decision.approvalChainId,
       eligibleApproverIds: params.decision.eligibleApproverIds,
+      businessEffectId: params.request.businessEffectId ?? null,
+      businessEffectHash: params.request.businessEffectHash ?? null,
     };
     await db.update(domainActions).set({
       initiatedBy: params.decision.employeeId,
@@ -388,6 +395,8 @@ export async function recordActionAuthority(params: {
       requesterId: params.decision.employeeId,
       authorityDecisionId: params.decision.id,
       approvalChainId: params.decision.approvalChainId,
+      businessEffectId: params.request.businessEffectId ?? null,
+      businessEffectHash: params.request.businessEffectHash ?? null,
     }).onConflictDoNothing({ target: authorityApprovalRequests.domainActionId }).returning();
     if (!approvalRequest) return;
     const steps = await db.select().from(approvalChainSteps).where(and(eq(approvalChainSteps.tenantId, params.ctx.tenantId), eq(approvalChainSteps.approvalChainId, params.decision.approvalChainId))).orderBy(approvalChainSteps.sequence);
@@ -411,14 +420,19 @@ export async function evaluateActionApproval(ctx: TenantContext, actionId: strin
     requestStatus: authorityApprovalRequests.status,
     currentStep: authorityApprovalRequests.currentStep,
     stepCapability: authorityApprovalRequestSteps.approverCapability,
+    businessEffectId: domainActions.businessEffectId,
+    requestBusinessEffectId: authorityApprovalRequests.businessEffectId,
+    requestBusinessEffectHash: authorityApprovalRequests.businessEffectHash,
+    effectSemanticHash: businessEffects.semanticHash,
   }).from(domainActions)
     .leftJoin(authorityApprovalRequests, and(eq(authorityApprovalRequests.domainActionId, domainActions.id), eq(authorityApprovalRequests.tenantId, ctx.tenantId)))
     .leftJoin(authorityApprovalRequestSteps, and(eq(authorityApprovalRequestSteps.approvalRequestId, authorityApprovalRequests.id), eq(authorityApprovalRequestSteps.sequence, authorityApprovalRequests.currentStep)))
+    .leftJoin(businessEffects, and(eq(businessEffects.id, domainActions.businessEffectId), eq(businessEffects.tenantId, ctx.tenantId)))
     .where(and(eq(domainActions.tenantId, ctx.tenantId), eq(domainActions.id, actionId))).limit(1));
   if (!row) throw new Error("Action not found");
   const context = record(row.authorityContext);
   const resources = Array.isArray(context.resources) ? context.resources.filter((item): item is AuthorityResource => Boolean(item && typeof item === "object" && typeof (item as AuthorityResource).type === "string")) : [];
-  return evaluateAuthority(ctx, {
+  const request: AuthorityRequest = {
     operation: "approval",
     capability: row.stepCapability ?? `approve:${row.actionType}`,
     resources,
@@ -426,7 +440,21 @@ export async function evaluateActionApproval(ctx: TenantContext, actionId: strin
     risk: context.risk === "low" || context.risk === "high" ? context.risk : "medium",
     workId: row.workId ?? undefined,
     domainActionId: actionId,
-  });
+    businessEffectId: row.businessEffectId ?? undefined,
+    businessEffectHash: row.effectSemanticHash ?? undefined,
+  };
+  if (row.businessEffectId && (!row.effectSemanticHash || (row.requestId && (row.requestBusinessEffectId !== row.businessEffectId || row.requestBusinessEffectHash !== row.effectSemanticHash)))) {
+    return withTenant(ctx.tenantId, (db) => insertDecision(db, {
+      ctx,
+      request,
+      employeeId: ctx.employeeId ?? (UUID.test(ctx.userId) ? ctx.userId : null),
+      revision: 1,
+      outcome: "denied",
+      reasonCode: "business_effect_approval_mismatch",
+      evidence: { actionBusinessEffectId: row.businessEffectId, requestBusinessEffectId: row.requestBusinessEffectId, requestBusinessEffectHash: row.requestBusinessEffectHash, currentEffectHash: row.effectSemanticHash },
+    }));
+  }
+  return evaluateAuthority(ctx, request);
 }
 
 export async function finalizeApprovalAuthorityTx(db: Db, params: {
@@ -536,7 +564,13 @@ export async function eligibleApproversForAction(tenantId: string, actionId: str
 /** Used by durable workers immediately before effects. It rejects stale/revoked
  * initiator authority even when an earlier approval decision was valid. */
 export async function revalidateActionExecution(tenantId: string, actionId: string, operation: "execution" | "durable_operation" = "execution", operationId?: string): Promise<AuthorityDecision> {
-  const [action] = await withTenant(tenantId, (db) => db.select().from(domainActions).where(and(eq(domainActions.tenantId, tenantId), eq(domainActions.id, actionId))).limit(1));
+  const [loaded] = await withTenant(tenantId, (db) => db
+    .select({ action: domainActions, effect: businessEffects })
+    .from(domainActions)
+    .leftJoin(businessEffects, and(eq(businessEffects.tenantId, tenantId), eq(businessEffects.id, domainActions.businessEffectId)))
+    .where(and(eq(domainActions.tenantId, tenantId), eq(domainActions.id, actionId)))
+    .limit(1));
+  const action = loaded?.action;
   if (!action) throw new Error("Action not found");
   const context = record(action.authorityContext);
   const employeeId = action.initiatedBy;
@@ -552,13 +586,40 @@ export async function revalidateActionExecution(tenantId: string, actionId: stri
       workId: action.workId ?? undefined,
       domainActionId: action.id,
       operationId,
+      businessEffectId: action.businessEffectId ?? undefined,
+      businessEffectHash: loaded.effect?.semanticHash,
     };
+  // `failed` means the provider returned a known negative outcome and may enter the
+  // existing one-shot retry policy. Unknown/reconciliation/divergent effects remain
+  // excluded and therefore fail closed before any repeat mutation.
+  if (action.businessEffectId && (!loaded.effect || !["authorized", "executing", "failed", "partially_verified", "verified"].includes(loaded.effect.status))) {
+    return withTenant(tenantId, (db) => insertDecision(db, {
+      ctx,
+      request,
+      employeeId,
+      revision: action.authorityRevision ?? 1,
+      outcome: "denied",
+      reasonCode: "business_effect_not_authorized",
+      evidence: { businessEffectId: action.businessEffectId, effectStatus: loaded.effect?.status ?? null },
+    }));
+  }
   const decision = await evaluateAuthority(ctx, request);
   if (decision.outcome === "denied") return decision;
   const originallyRequiredApproval = context.outcome === "approval_required" || decision.outcome === "approval_required";
   if (!originallyRequiredApproval) return decision;
   return withTenant(tenantId, async (db) => {
-    const [approval] = await db.select({ id: authorityApprovalRequests.id, status: authorityApprovalRequests.status }).from(authorityApprovalRequests).where(and(eq(authorityApprovalRequests.tenantId, tenantId), eq(authorityApprovalRequests.domainActionId, actionId))).limit(1);
+    const [approval] = await db.select({ id: authorityApprovalRequests.id, status: authorityApprovalRequests.status, businessEffectId: authorityApprovalRequests.businessEffectId, businessEffectHash: authorityApprovalRequests.businessEffectHash }).from(authorityApprovalRequests).where(and(eq(authorityApprovalRequests.tenantId, tenantId), eq(authorityApprovalRequests.domainActionId, actionId))).limit(1);
+    if (action.businessEffectId && (approval?.businessEffectId !== action.businessEffectId || approval.businessEffectHash !== loaded.effect?.semanticHash)) {
+      return insertDecision(db, {
+        ctx,
+        request,
+        employeeId,
+        revision: decision.authorityRevision,
+        outcome: "denied",
+        reasonCode: "authorized_business_effect_mismatch",
+        evidence: { priorDecisionId: decision.id, approvalRequestId: approval?.id ?? null, actionBusinessEffectId: action.businessEffectId, approvalBusinessEffectId: approval?.businessEffectId ?? null },
+      });
+    }
     if (approval?.status !== "approved") {
       if (decision.outcome === "approval_required") return decision;
       return insertDecision(db, {

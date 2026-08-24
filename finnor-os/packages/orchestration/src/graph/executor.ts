@@ -45,7 +45,7 @@ export class LangGraphExecutor implements Executor {
 
     const after = await this.graph.getState(config);
     if ((after.next ?? []).includes("pause")) {
-      return { status: "success", output: { gated: true, pendingConfirmation: true, summary: after.values.draft?.summary } };
+      return { status: "success", output: { gated: true, pendingConfirmation: true, summary: after.values.draft?.businessEffect?.approval.summary ?? after.values.draft?.summary, businessEffectId: after.values.draft?.businessEffect?.id } };
     }
     return after.values.result as ExecutionResult;
   }

@@ -104,13 +104,14 @@ describe.skipIf(!available)("scan_watchdog detector (A4.T2)", () => {
       return { stepId: step!.id };
     });
 
-    const beforeJob = await getPool().query("SELECT 1 FROM jobs WHERE idempotency_key = $1", [`workflow-step:${idempotencyKey}`]);
+    const canonicalJobKey = `workflow-step:${SEED_TENANT_ID}:${stepId}`;
+    const beforeJob = await getPool().query("SELECT 1 FROM jobs WHERE idempotency_key = $1", [canonicalJobKey]);
     expect(beforeJob.rows).toHaveLength(0); // confirms it's genuinely orphaned before detection
 
     const findings = await detectWatchdogFindings(SEED_TENANT_ID);
     expect(findings.some((f) => f.kind === "orphaned_step" && f.refId === stepId)).toBe(true);
 
-    const afterJob = await getPool().query("SELECT 1 FROM jobs WHERE idempotency_key = $1", [`workflow-step:${idempotencyKey}`]);
+    const afterJob = await getPool().query("SELECT 1 FROM jobs WHERE idempotency_key = $1", [canonicalJobKey]);
     expect(afterJob.rows).toHaveLength(1); // self-healed: a job now exists for it
   });
 
@@ -132,7 +133,7 @@ describe.skipIf(!available)("scan_watchdog detector (A4.T2)", () => {
     await getPool().query("INSERT INTO jobs (type, payload, idempotency_key) VALUES ($1, $2, $3)", [
       "run_workflow_step",
       JSON.stringify({ tenantId: SEED_TENANT_ID, workflowStepId: stepId }),
-      `workflow-step:${idempotencyKey}`,
+      `workflow-step:${SEED_TENANT_ID}:${stepId}`,
     ]);
 
     const findings = await detectWatchdogFindings(SEED_TENANT_ID);

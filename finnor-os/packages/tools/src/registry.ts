@@ -18,6 +18,10 @@ export interface ToolRuntimeContext {
   domainActionId?: string;
   communicationIdentityId?: string;
   authProfileRef?: string;
+  /** Frozen semantic effect identity. Trusted execution metadata only: plugins and
+   * providers cannot replace it through their payload. */
+  businessEffectId?: string;
+  businessEffectHash?: string;
 }
 
 export interface Tool {
@@ -123,6 +127,8 @@ export interface ToolCallContext {
   purpose?: string;
   communicationIdentityId?: string;
   authProfileRef?: string;
+  businessEffectId?: string;
+  businessEffectHash?: string;
   /** Deterministic namespace for independently queued targets/batches of one action. */
   operationKeyPrefix?: string;
 }
@@ -181,6 +187,8 @@ export class ScopedToolRegistry extends ToolRegistry {
       ...(this.ctx.purpose ? { purpose: this.ctx.purpose } : {}),
       ...(this.ctx.communicationIdentityId ? { communicationIdentityId: this.ctx.communicationIdentityId } : {}),
       ...(this.ctx.authProfileRef ? { authProfileRef: this.ctx.authProfileRef } : {}),
+      ...(this.ctx.businessEffectId ? { businessEffectId: this.ctx.businessEffectId } : {}),
+      ...(this.ctx.businessEffectHash ? { businessEffectHash: this.ctx.businessEffectHash } : {}),
     });
   }
 
@@ -203,6 +211,7 @@ export class ScopedToolRegistry extends ToolRegistry {
       operationKey,
       requestHash,
       this.base.integrationFor(name) ?? undefined,
+      this.ctx.businessEffectId,
     );
     if (!claim.claimed) {
       if (claim.existing.requestHash !== requestHash) {
@@ -237,6 +246,8 @@ export class ScopedToolRegistry extends ToolRegistry {
       ...(this.ctx.purpose ? { purpose: this.ctx.purpose } : {}),
       ...(this.ctx.communicationIdentityId ? { communicationIdentityId: this.ctx.communicationIdentityId } : {}),
       ...(this.ctx.authProfileRef ? { authProfileRef: this.ctx.authProfileRef } : {}),
+      ...(this.ctx.businessEffectId ? { businessEffectId: this.ctx.businessEffectId } : {}),
+      ...(this.ctx.businessEffectHash ? { businessEffectHash: this.ctx.businessEffectHash } : {}),
     });
     await recordExternalOperationResult(
       this.ctx.tenantId,

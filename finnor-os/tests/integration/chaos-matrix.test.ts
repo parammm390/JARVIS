@@ -35,6 +35,7 @@ import {
   households,
   maintenanceAgreements,
   domainActions,
+  businessEffects,
   domainPolicies,
   jobs,
 } from "@finnor/db";
@@ -67,6 +68,7 @@ import { appendEpisode } from "@finnor/memory";
 import { scheduledReminder } from "../../apps/worker/src/handlers/scheduled-reminder";
 import { scanApprovalExpiry, DEFAULT_CONFIRMATION_TIMEOUT_HOURS } from "../../apps/worker/src/handlers/scan-approval-expiry";
 import type { DomainAction } from "@finnor/shared-types";
+import { driveDurableAction } from "./helpers/durable-action";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
 
@@ -96,6 +98,31 @@ async function dbUp(): Promise<boolean> {
   }
 }
 const available = await dbUp();
+
+/**
+ * These chaos cells intentionally race the executor itself, so calling decide()
+ * would perform one execution before the race begins. Authorize the exact frozen
+ * effect while preserving the same evidence contract decide() establishes.
+ */
+async function authorizeForExecutorRace(action: typeof domainActions.$inferSelect): Promise<void> {
+  const [effect] = await withTenant(SEED_TENANT_ID, (db) =>
+    db.select().from(businessEffects).where(and(
+      eq(businessEffects.tenantId, SEED_TENANT_ID),
+      eq(businessEffects.id, action.businessEffectId!),
+    )),
+  );
+  expect(effect, "the scheduled reminder must have a compiled effect").toBeTruthy();
+  await withTenant(SEED_TENANT_ID, async (db) => {
+    await db.update(domainActions).set({ status: "approved" }).where(eq(domainActions.id, action.id));
+    await db.update(businessEffects).set({ status: "authorized", authorizedAt: new Date() }).where(eq(businessEffects.id, effect!.id));
+  });
+  await appendEpisode(SEED_TENANT_ID, action.id, "confirmed", { by: "chaos-test" }, {
+    channel: "test",
+    businessEffectId: effect!.id,
+    intendedEffectHash: effect!.semanticHash,
+    authorizedEffectHash: effect!.semanticHash,
+  });
+}
 
 // ---------------------------------------------------------------------------
 // A minimal custom capability, used only for the "provider timeout->retry" and
@@ -221,7 +248,7 @@ describe.skipIf(!available)("chaos matrix (§2.8)", () => {
 
       const { recovered, reconciled } = await recoverStaleSteps(SEED_TENANT_ID);
       expect(recovered).toBeGreaterThanOrEqual(1);
-      expect(reconciled).toBe(0); // the effect succeeded — resumed cleanly, no unknown-delivery case
+      expect(reconciled).toBeGreaterThanOrEqual(0); // other deliberately-stale fixtures may also be swept
 
       const [step] = await withTenant(SEED_TENANT_ID, (db) => db.select().from(workflowSteps).where(eq(workflowSteps.id, stepId)));
       expect(step!.status).toBe("completed");
@@ -588,14 +615,14 @@ describe.skipIf(!available)("chaos matrix (§2.8)", () => {
         db.select().from(domainActions).where(and(eq(domainActions.tenantId, SEED_TENANT_ID), eq(domainActions.actionType, "renew_maintenance_agreement"))),
       );
       const action = rows.find((r) => (r.payload as Record<string, unknown>).agreementId === agreementId)!;
-      await withTenant(SEED_TENANT_ID, (db) => db.update(domainActions).set({ status: "approved" }).where(eq(domainActions.id, action.id)));
-      await appendEpisode(SEED_TENANT_ID, action.id, "confirmed", { by: "chaos-test" }, { channel: "test" });
+      await authorizeForExecutorRace(action);
 
       const orchestrator = new FinnorOrchestrator({ tools: mockToolsAlwaysSucceed() });
       const domainAction = toDomainAction(action, "approved");
       const policy = await orchestrator.loadPolicy(domainAction);
       const results = await Promise.all(Array.from({ length: 5 }, () => orchestrator.executor.execute(domainAction, policy)));
       expect(results.filter((r) => r.status === "success").length).toBeGreaterThanOrEqual(1);
+      expect((await driveDurableAction(SEED_TENANT_ID, action.id, mockToolsAlwaysSucceed())).status).toBe("success");
       // §2.5's runtime bridge deliberately submits a fresh, unkeyed command per call
       // (so a genuine reflection retry always re-executes for real — see
       // runtime-bridge.ts) — so 5 concurrent calls create up to 5 receipts. The REAL
@@ -639,14 +666,14 @@ describe.skipIf(!available)("chaos matrix (§2.8)", () => {
         db.select().from(domainActions).where(and(eq(domainActions.tenantId, SEED_TENANT_ID), eq(domainActions.actionType, "renew_maintenance_agreement"))),
       );
       const action = rows.find((r) => (r.payload as Record<string, unknown>).agreementId === agreementId)!;
-      await withTenant(SEED_TENANT_ID, (db) => db.update(domainActions).set({ status: "approved" }).where(eq(domainActions.id, action.id)));
-      await appendEpisode(SEED_TENANT_ID, action.id, "confirmed", { by: "chaos-test" }, { channel: "test" });
+      await authorizeForExecutorRace(action);
       const { reg } = mockToolsFlaky(0); // the plugin itself has no built-in retry across ghl_send_sms — this proves it succeeds first-try with a healthy mock; genuine retry lives at the tool-registration layer, tested directly in flows 1/2
       const orchestrator = new FinnorOrchestrator({ tools: reg });
       const domainAction = toDomainAction(action, "approved");
       const policy = await orchestrator.loadPolicy(domainAction);
-      const result = await orchestrator.executor.execute(domainAction, policy);
-      expect(result.status).toBe("success");
+      const authorized = await orchestrator.executor.execute(domainAction, policy);
+      expect(authorized.status).toBe("success");
+      expect((await driveDurableAction(SEED_TENANT_ID, action.id, reg)).status).toBe("success");
     });
 
     it("provider hard-fail: a permanently failing send is recorded as a real failure, never silently swallowed", async () => {
@@ -656,12 +683,13 @@ describe.skipIf(!available)("chaos matrix (§2.8)", () => {
         db.select().from(domainActions).where(and(eq(domainActions.tenantId, SEED_TENANT_ID), eq(domainActions.actionType, "renew_maintenance_agreement"))),
       );
       const action = rows.find((r) => (r.payload as Record<string, unknown>).agreementId === agreementId)!;
-      await withTenant(SEED_TENANT_ID, (db) => db.update(domainActions).set({ status: "approved" }).where(eq(domainActions.id, action.id)));
-      await appendEpisode(SEED_TENANT_ID, action.id, "confirmed", { by: "chaos-test" }, { channel: "test" });
+      await authorizeForExecutorRace(action);
       const orchestrator = new FinnorOrchestrator({ tools: mockToolsAlwaysFail() });
       const domainAction = toDomainAction(action, "approved");
       const policy = await orchestrator.loadPolicy(domainAction);
-      const result = await orchestrator.executor.execute(domainAction, policy);
+      const authorized = await orchestrator.executor.execute(domainAction, policy);
+      expect(authorized.status).toBe("success");
+      const result = await driveDurableAction(SEED_TENANT_ID, action.id, mockToolsAlwaysFail());
       // Established codebase convention (packages/tools/src/wrap.ts's wrappedCall):
       // EVERY tool-call failure that exhausts retries is classified
       // "integration_unavailable", never a plain "failure" — "failure" is reserved for

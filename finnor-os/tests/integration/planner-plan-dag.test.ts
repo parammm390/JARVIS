@@ -7,12 +7,13 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import pg from "pg";
 import { randomUUID } from "node:crypto";
 import { migrate } from "../../packages/db/migrate";
-import { closePool, decisionReceipts, domainActions, tenants, withTenant } from "@finnor/db";
+import { closePool, decisionReceipts, domainActions, tenants, withTenant, workflowSteps } from "@finnor/db";
 import { and, eq, inArray } from "drizzle-orm";
 import { GatedExecutor, LLMPlanner, createDefaultPluginRegistry, readyPlanActions, validateDependencyIndexes } from "@finnor/orchestration";
 import { createDefaultRegistry } from "@finnor/tools";
 import type { LLMProvider } from "@finnor/orchestration";
 import type { MemorySnapshot, TenantContext } from "@finnor/shared-types";
+import { runWorkflowStep } from "../../apps/worker/src/handlers/run-workflow-step";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
 const TENANT_ID = "00000000-0000-4000-8000-0000000000b2";
@@ -31,6 +32,16 @@ const available = await dbUp();
 
 const emptyMemory = (): MemorySnapshot => ({ shortTerm: null, longTerm: null, semantic: [], episodic: [], patterns: null });
 const context = (): TenantContext => ({ tenantId: TENANT_ID, userId: "planner-dag-test", role: "owner" });
+
+async function runDurableAction(actionId: string): Promise<void> {
+  const [step] = await withTenant(TENANT_ID, (db) => db.select().from(workflowSteps).where(and(
+    eq(workflowSteps.tenantId, TENANT_ID),
+    eq(workflowSteps.domainActionId, actionId),
+    eq(workflowSteps.status, "pending"),
+  )).limit(1));
+  if (!step) return; // non-consequential/manual actions remain synchronous
+  await runWorkflowStep({ tenantId: TENANT_ID, workflowStepId: step.id });
+}
 
 describe.skipIf(!available)("planner plan DAG", () => {
   beforeAll(async () => {
@@ -109,8 +120,10 @@ describe.skipIf(!available)("planner plan DAG", () => {
     const policy = { id: "", tenantId: TENANT_ID, actionType: "manual_step_suggestion", policy: {}, requiresConfirmation: false, confirmationTemplate: null, version: 0 };
     expect((await readyPlanActions(TENANT_ID, planId)).map((action) => action.id)).toEqual([first!.id]);
     await executor.execute({ id: first!.id, tenantId: TENANT_ID, actionType: first!.actionType, payload: first!.payload as Record<string, unknown>, policyId: null, status: "draft", createdAt: first!.createdAt.toISOString() }, policy);
+    await runDurableAction(first!.id);
     expect((await readyPlanActions(TENANT_ID, planId)).map((action) => action.id)).toEqual([second!.id]);
     await executor.execute({ id: second!.id, tenantId: TENANT_ID, actionType: second!.actionType, payload: second!.payload as Record<string, unknown>, policyId: null, status: "draft", createdAt: second!.createdAt.toISOString() }, policy);
+    await runDurableAction(second!.id);
     const receipts = await withTenant(TENANT_ID, (db) => db.select().from(decisionReceipts).where(eq(decisionReceipts.tenantId, TENANT_ID)));
     expect(receipts.filter((receipt) => receipt.domainActionId === first!.id || receipt.domainActionId === second!.id)).toHaveLength(2);
   });

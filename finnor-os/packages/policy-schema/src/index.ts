@@ -129,6 +129,29 @@ export const SubmitInstructionSchema = z.object({
 });
 export type SubmitInstruction = z.infer<typeof SubmitInstructionSchema>;
 
+const ObjectiveAssertionSchema = z.object({
+  path: z.array(z.union([z.string().min(1).max(120), z.number().int().nonnegative()])).max(24),
+  operator: z.enum(["exists", "not_exists", "eq", "not_eq", "gte", "lte", "contains", "array_contains"]),
+  expected: z.unknown().optional(),
+}).strict();
+const ObjectiveCriterionSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("no_open_execution") }).strict(),
+  z.object({ kind: z.literal("all_objective_effects_verified"), minimumCount: z.number().int().min(0).max(25) }).strict(),
+  z.object({ kind: z.literal("canonical_query"), request: z.record(z.unknown()), assertion: ObjectiveAssertionSchema }).strict(),
+  z.object({ kind: z.literal("matched_wait"), minimumCount: z.number().int().min(1).max(25), eventType: z.string().min(1).max(200).optional() }).strict(),
+  z.object({ kind: z.literal("delegation_state"), minimumCount: z.number().int().min(1).max(25), requiredStatus: z.enum(["acknowledged", "accepted", "completed"]) }).strict(),
+  z.object({ kind: z.literal("computer_run_state"), minimumCount: z.number().int().min(1).max(25), requiredStatus: z.literal("succeeded"), evidenceRequired: z.boolean() }).strict(),
+  z.object({ kind: z.literal("decision_evidence"), minimumCount: z.number().int().min(1).max(25), accepted: z.array(z.enum(["canonical_query", "business_effect", "matched_event", "delegation", "computer_run"])).min(1).max(5) }).strict(),
+  z.object({ kind: z.literal("manual_verification"), reason: z.string().min(1).max(2_000) }).strict(),
+]);
+export const ObjectiveSuccessConditionInputSchema = z.object({
+  version: z.literal(1),
+  statement: z.string().min(1).max(10_000),
+  mode: z.literal("all"),
+  source: z.literal("explicit"),
+  criteria: z.array(ObjectiveCriterionSchema).min(1).max(20),
+}).strict();
+
 export const StartObjectiveSchema = z.object({
   objective: z.string().min(1).max(10_000),
   channel: z.enum(["voice", "text", "console"]).default("text"),
@@ -137,6 +160,7 @@ export const StartObjectiveSchema = z.object({
   workId: z.string().uuid().optional(),
   idempotencyKey: z.string().min(1).max(200).optional(),
   activeContext: OperatingInteractionContextSchema.optional(),
+  successCondition: ObjectiveSuccessConditionInputSchema.optional(),
   budgets: z.object({
     maxSteps: z.number().int().min(1).max(50).optional(),
     maxActions: z.number().int().min(0).max(25).optional(),
@@ -150,7 +174,8 @@ export const StartObjectiveSchema = z.object({
 export const ControlObjectiveSchema = z.discriminatedUnion("command", [
   z.object({ command: z.literal("continue") }),
   z.object({ command: z.literal("interrupt") }),
-  z.object({ command: z.literal("redirect"), objective: z.string().min(1).max(10_000), channel: z.enum(["voice", "text", "console"]).default("text"), instructionId: z.string().uuid().optional(), idempotencyKey: z.string().min(1).max(200).optional() }),
+  z.object({ command: z.literal("cancel") }),
+  z.object({ command: z.literal("redirect"), objective: z.string().min(1).max(10_000), channel: z.enum(["voice", "text", "console"]).default("text"), instructionId: z.string().uuid().optional(), idempotencyKey: z.string().min(1).max(200).optional(), successCondition: ObjectiveSuccessConditionInputSchema.optional() }),
 ]);
 
 export const HandoffWorkSchema = z.object({

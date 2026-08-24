@@ -5,6 +5,7 @@ import {
   authorityApprovalRequests,
   authorityApprovalRequestSteps,
   authorityDecisions,
+  businessEffects,
   communicationDeliveries,
   communicationIdentities,
   compensationCases,
@@ -226,6 +227,7 @@ export function deriveExecutionNodeStatus(params: {
   verification: ExecutionVerificationState;
   authorityState?: ExecutionAuthority["state"];
   computerStatus?: string | null;
+  effectExecutionStates?: string[];
 }): ExecutionActionNode["status"] {
   if (params.authorityState === "denied" || params.authorityState === "authority_changed" || params.authorityState === "reauthorization_required") return "denied";
   if (params.computerStatus && !["succeeded", "blocked", "failed", "timed_out", "cancelled"].includes(params.computerStatus)) return "executing";
@@ -235,7 +237,11 @@ export function deriveExecutionNodeStatus(params: {
   }
   if (params.sourceStatus === "pending") return "awaiting_approval";
   if (params.sourceStatus === "approved") return "approved";
-  if (params.sourceStatus === "executing") return "executing";
+  if (params.sourceStatus === "executing") {
+    if (params.effectExecutionStates?.some((state) => state === "reconciling" || state === "failed_after_possible_effect" || state === "cancellation_requested")) return "reconciling";
+    if (params.effectExecutionStates?.length && params.effectExecutionStates.every((state) => state === "authorized")) return "queued";
+    return "executing";
+  }
   if (params.sourceStatus === "completed") return params.verification === "verified" ? "succeeded" : "verifying";
   if (params.sourceStatus === "rejected") return "rejected";
   if (params.sourceStatus === "failed") return "failed";
@@ -246,7 +252,7 @@ function edgeState(status: ExecutionActionNode["status"]): ExecutionDependencyEd
   if (status === "succeeded") return "succeeded";
   if (status === "failed" || status === "denied" || status === "rejected") return "failed";
   if (status === "blocked") return "blocked";
-  if (status === "runnable" || status === "approved" || status === "executing" || status === "verifying") return "runnable";
+  if (status === "runnable" || status === "approved" || status === "queued" || status === "executing" || status === "reconciling" || status === "verifying") return "runnable";
   return "waiting";
 }
 
@@ -287,6 +293,7 @@ export async function executionProjection(
     const actionsTruncated = actionRowsPlus.length > ACTION_LIMIT;
     const actionRows = actionRowsPlus.slice(0, ACTION_LIMIT);
     const actionIds = actionRows.map((row) => row.id);
+    const effectRows = actionIds.length ? await db.select().from(businessEffects).where(and(eq(businessEffects.tenantId, tenantId), inArray(businessEffects.domainActionId, actionIds))).orderBy(asc(businessEffects.createdAt)) : [];
     const runIds = runRows.map((row) => row.id);
     const workOrActionsForDelivery = or(eq(communicationDeliveries.workId, workId), ...(actionIds.length ? [inArray(communicationDeliveries.domainActionId, actionIds)] : []));
     const workOrActionsForComputer = or(eq(computerRuns.workId, workId), ...(actionIds.length ? [inArray(computerRuns.domainActionId, actionIds)] : []));
@@ -403,6 +410,12 @@ export async function executionProjection(
         domainActionId: receipt.domainActionId,
         workflowRunId: receipt.workflowRunId,
         workflowStepId: receipt.workflowStepId,
+        businessEffectId: receipt.businessEffectId,
+        intendedEffectHash: receipt.intendedEffectHash,
+        authorizedEffectHash: receipt.authorizedEffectHash,
+        executedEffectHash: receipt.executedEffectHash,
+        effectVerification: receipt.verification as import("@finnor/shared-types").BusinessEffectVerification | null,
+        recoveryEffectId: receipt.recoveryEffectId,
         objective: receipt.objective,
         policyApplied: receipt.policyApplied as { id: string; version: number } | null,
         riskTier: receipt.riskTier,
@@ -438,6 +451,7 @@ export async function executionProjection(
     const deliveryByAction = new Map<string, typeof deliveryRows>();
     for (const delivery of deliveryRows) deliveryByAction.set(delivery.domainActionId, [...(deliveryByAction.get(delivery.domainActionId) ?? []), delivery]);
     const computerByAction = new Map(computerRows.map((row) => [row.domainActionId, row]));
+    const effectByAction = new Map(effectRows.flatMap((row) => row.domainActionId ? [[row.domainActionId, row] as const] : []));
 
     let anyComputerTruncated = computerRowsPlus.length > COMPUTER_RUN_LIMIT;
     const projectComputer = (run: typeof computerRows[number]): ExecutionComputerRun => {
@@ -492,6 +506,9 @@ export async function executionProjection(
             sequence: step.sequence,
             stepType: step.stepType,
             status: step.status,
+            executionState: step.executionState,
+            effectCommitAt: iso(step.effectCommitAt),
+            cancellationRequestedAt: iso(step.cancellationRequestedAt),
             attempts: step.attempts,
             terminalReason: step.terminalReason ? boundedString(step.terminalReason) : null,
             domainActionId: step.domainActionId,
@@ -533,6 +550,7 @@ export async function executionProjection(
       const deliveries = deliveryByAction.get(action.id) ?? [];
       const computer = projectedComputerByAction.get(action.id) ?? null;
       const actionLogs = logsByAction.get(action.id) ?? [];
+      const effect = effectByAction.get(action.id) ?? null;
       const unknown = ext.some((row) => row.status === "unknown") || actionIntegrations.some((row) => row.status === "unknown") || deliveries.some((row) => row.status === "unknown") || actionRecon.some((row) => row?.status === "open") || computer?.effectStatus === "unknown";
       const reconciling = actionRecon.some((row) => row?.status === "open") || computer?.status === "reconciling";
       const workflowFailed = actionRuns.some((run) => ["failed", "cancelled", "escalated"].includes(run.status));
@@ -664,6 +682,7 @@ export async function executionProjection(
       return {
         action,
         verification,
+        effectExecutionStates: actionSteps.map((step) => step.executionState),
         node: {
           id: action.id,
           planId: action.planId,
@@ -672,7 +691,19 @@ export async function executionProjection(
           summary: action.summary,
           sourceStatus: action.status,
           status: "waiting_dependency" as ExecutionActionNode["status"],
-          semanticPayload: sanitizeExecutionValue(action.payload, viewer.role) as Record<string, unknown>,
+          semanticPayload: sanitizeExecutionValue(
+            effect ? (effect.effect as import("@finnor/shared-types").BusinessEffectSet).delta.values : action.payload,
+            viewer.role,
+          ) as Record<string, unknown>,
+          businessEffect: effect ? {
+            id: effect.id,
+            semanticHash: effect.semanticHash,
+            scopeHash: effect.scopeHash,
+            status: effect.status,
+            contract: sanitizeExecutionValue(effect.effect, viewer.role) as unknown as import("@finnor/shared-types").BusinessEffectSet,
+            verification: effect.verification as import("@finnor/shared-types").BusinessEffectVerification | null,
+            sourceRef: `business_effects:${effect.id}`,
+          } : null,
           targets: actionTargets,
           dependencyIds: action.dependsOn,
           dependentIds: [] as string[],
@@ -690,7 +721,7 @@ export async function executionProjection(
           computer,
           controls,
           timestamps: { createdAt: action.createdAt.toISOString(), executionStartedAt: iso(action.executionStartedAt), lastChangedAt: receipt?.finalizedAt ?? computer?.finishedAt ?? computer?.startedAt ?? action.createdAt.toISOString() },
-          sourceRefs: [`domain_actions:${action.id}`, ...(receipt ? [receipt.sourceRef] : []), ...(authority.sourceRef ? [authority.sourceRef] : []), ...(route ? [route.sourceRef] : [])],
+          sourceRefs: [`domain_actions:${action.id}`, ...(effect ? [`business_effects:${effect.id}`] : []), ...(receipt ? [receipt.sourceRef] : []), ...(authority.sourceRef ? [authority.sourceRef] : []), ...(route ? [route.sourceRef] : [])],
         } satisfies ExecutionActionNode,
       };
     });
@@ -705,6 +736,7 @@ export async function executionProjection(
         verification: shell.verification,
         authorityState: shell.node.authority.state,
         computerStatus: shell.node.computer?.status,
+        effectExecutionStates: shell.effectExecutionStates,
       });
     }
     const nodes = nodeShells.map((shell) => shell.node);
@@ -723,7 +755,12 @@ export async function executionProjection(
       work: {
         id: work.id,
         status: work.status,
+        executionModel: work.executionModel,
         objective,
+        objectiveState: objectiveRows[0]?.state ?? null,
+        successCondition: objectiveRows[0]?.successCondition as ExecutionProjection["work"]["successCondition"] ?? null,
+        successVerification: objectiveRows[0]?.successVerification as ExecutionProjection["work"]["successVerification"] ?? null,
+        successVerifiedAt: objectiveRows[0]?.successVerifiedAt?.toISOString() ?? null,
         createdAt: work.createdAt.toISOString(),
         updatedAt: work.updatedAt.toISOString(),
         finalOutcome: work.finalOutcome ? sanitizeExecutionValue(work.finalOutcome, viewer.role) as Record<string, unknown> : null,

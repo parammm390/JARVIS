@@ -362,7 +362,7 @@ async function handleToolCalls(message: Record<string, unknown>, tenantId: strin
           const activeObjective = activeAggregate?.objectiveLoop;
           let spoken: string;
           if (objectiveCommand.command === "start") {
-            if (activeObjective && !["completed", "failed"].includes(activeObjective.state)) {
+            if (activeObjective && !["completed", "failed", "cancelled"].includes(activeObjective.state)) {
               spoken = `There is already an active objective: ${activeObjective.objective}. Say redirect this objective to, followed by the revised outcome.`;
             } else {
               const started = await orchestrator.startObjective(
@@ -399,6 +399,8 @@ async function handleToolCalls(message: Record<string, unknown>, tenantId: strin
             });
             spoken = objectiveCommand.command === "interrupt"
               ? `I interrupted the objective durably. Completed progress is preserved, and it will not continue until you explicitly resume or redirect it.`
+              : objectiveCommand.command === "cancel"
+                ? `I cancelled responsibility for that objective explicitly. Its causal history is preserved and it will not resume.`
               : objectiveCommand.command === "redirect"
                 ? `I redirected the same Work to: ${controlled.objective}. I will re-inspect canonical business state before the next step.`
                 : `I resumed the same objective. I will re-inspect canonical business state before choosing the next bounded step.`;
@@ -427,6 +429,10 @@ async function handleToolCalls(message: Record<string, unknown>, tenantId: strin
         });
         if (instructionResult.answer) {
           results.push({ toolCallId: tc.id, result: instructionResult.answer.spokenSummary });
+          continue;
+        }
+        if (instructionResult.objective) {
+          results.push({ toolCallId: tc.id, result: `I accepted that as durable objective Work ${instructionResult.workId?.slice(0, 8)}. I will re-inspect current business state, take one governed step at a time, and stop only when the outcome verifies or I am explicitly blocked.` });
           continue;
         }
         if (actions.length === 0) {

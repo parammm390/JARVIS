@@ -169,6 +169,31 @@ const OperationalQueryRequestSchema = z.discriminatedUnion("intent", [
 // other's fields.
 const OperationalQueryBodySchema = OperationalQueryRequestSchema;
 
+const BusinessEffectResponseSchema = z.object({
+  id: z.string().uuid(),
+  schemaVersion: z.literal(1),
+  semanticHash: z.string().regex(/^[0-9a-f]{64}$/),
+  scopeHash: z.string().regex(/^[0-9a-f]{64}$/),
+  operation: z.object({ name: z.string(), class: z.string(), external: z.boolean() }),
+  targets: z.array(z.object({ kind: z.string(), type: z.string(), id: z.string(), sourcePath: z.string().optional() })),
+  bindings: z.array(z.record(z.unknown())),
+  before: z.array(z.record(z.unknown())),
+  delta: z.object({ operation: z.string(), values: z.record(z.unknown()) }),
+  expected: z.record(z.unknown()),
+  authority: z.record(z.unknown()),
+  approval: z.object({ required: z.boolean(), typedConfirmation: z.boolean(), summary: z.string() }),
+  provenance: z.record(z.unknown()),
+}).passthrough();
+const PendingActionsResponseSchema = z.object({ actions: z.array(z.object({
+  id: z.string().uuid(),
+  actionType: z.string(),
+  summary: z.string().nullable(),
+  payload: z.record(z.unknown()),
+  status: z.string(),
+  businessEffect: BusinessEffectResponseSchema.nullable(),
+  businessEffectStatus: z.string().nullable(),
+}).passthrough()) });
+
 const doc = {
   openapi: "3.1.0",
   info: {
@@ -270,7 +295,7 @@ const doc = {
       get: {
         summary: "List actions awaiting confirmation (filter=blocked for stuck items)",
         parameters: [{ name: "filter", in: "query", schema: { type: "string", enum: ["pending", "blocked"] } }],
-        responses: { "200": { description: "Pending actions" }, "401": { description: "Bad auth" } },
+        responses: { "200": { description: "Pending actions with their exact frozen Business Effect", content: { "application/json": { schema: s(PendingActionsResponseSchema) } } }, "401": { description: "Bad auth" } },
       },
     },
     "/api/actions/{id}/confirm": {

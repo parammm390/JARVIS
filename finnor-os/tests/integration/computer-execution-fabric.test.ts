@@ -92,9 +92,25 @@ describe.skipIf(!available)("Phase 3 Computer Execution Fabric", () => {
 
   async function executingWriteAction(): Promise<string> {
     const actionId = randomUUID();
+    const effectId = randomUUID();
     const payload = { application: "supplier_portal", authProfileRef: "supplier-west", task: "Update the delivery note for WS-48", target: { kind: "supplier_order", identifier: "WS-48" }, mode: "WRITE", successCriteria: ["Exact delivery note observed"], authorizedEffect: { operation: "update_delivery_note", target: { kind: "supplier_order", identifier: "WS-48" }, changes: { deliveryNote: "Call warehouse before delivery" } } };
     await admin.query(`INSERT INTO finnor_os.domain_actions(id,tenant_id,action_type,payload,status,initiated_by,authority_context) VALUES ($1,$2,'computer_task',$3::jsonb,'executing',$4,'{"outcome":"allowed","resources":[]}')`, [actionId, tenantId, JSON.stringify(payload), actorId]);
-    await admin.query(`INSERT INTO finnor_os.action_log(tenant_id,domain_action_id,step,input,output) VALUES ($1,$2,'confirmed','{}','{"approved":true}')`, [tenantId, actionId]);
+    const effectHash = createHash("sha256").update(JSON.stringify(payload.authorizedEffect)).digest("hex");
+    await admin.query(
+      `INSERT INTO finnor_os.business_effects(id,tenant_id,domain_action_id,semantic_hash,scope_hash,operation_class,effect,status,authorized_at,execution_started_at)
+       VALUES ($1,$2,$3,$4,$4,'external_side_effect',$5::jsonb,'executing',now(),now())`,
+      [effectId, tenantId, actionId, effectHash, JSON.stringify({
+        schemaVersion: 1,
+        semanticHash: effectHash,
+        source: { domainActionId: actionId, actionType: "computer_task", workId: null, objectiveStepId: null },
+        targets: [{ kind: "resource", type: "proposed_business_change", id: actionId, sourcePath: "domainActionId" }],
+        bindings: [],
+        authority: { policyId: null },
+        delta: payload.authorizedEffect,
+      })],
+    );
+    await admin.query(`UPDATE finnor_os.domain_actions SET business_effect_id=$3 WHERE tenant_id=$1 AND id=$2`, [tenantId, actionId, effectId]);
+    await admin.query(`INSERT INTO finnor_os.action_log(tenant_id,domain_action_id,step,input,output) VALUES ($1,$2,'confirmed','{}',$3::jsonb)`, [tenantId, actionId, JSON.stringify({ approved: true, businessEffectId: effectId, authorizedEffectHash: effectHash })]);
     return actionId;
   }
 

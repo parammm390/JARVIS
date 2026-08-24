@@ -15,7 +15,7 @@ import type { DomainEnginePlugin } from "../shared/plugin-interface";
 import type { DraftAction, ExecutionResult, ValidationResult, DomainPolicy } from "@finnor/shared-types";
 import type { ToolRegistry } from "@finnor/tools";
 import { withTenant, proposals, quotes, ingestIntegrationEventTx } from "@finnor/db";
-import { submitCommand, enqueueStep, receiveInboxEventTx } from "@finnor/workflow-runtime";
+import { submitCommand, receiveInboxEventTx } from "@finnor/workflow-runtime";
 import { recordBusinessEvent } from "@finnor/data-platform";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
@@ -72,6 +72,13 @@ export const proposalSignaturePlugin: DomainEnginePlugin = {
     const idempotencyKey = `proposal-signature:${proposalId}`;
     const submitted = await withTenant(tenantId, (db) =>
       submitCommand(db, {
+        businessEffectId: draft.businessEffect?.id,
+        authorizedEffectHash: draft.businessEffect?.semanticHash,
+        authorityDecisionId: draft.authorityDecisionId,
+        authorityRevision: draft.authorityRevision,
+        policyId: draft.businessEffect?.authority.policyId ?? undefined,
+        policyVersion: draft.businessEffect?.authority.policyVersion ?? undefined,
+        executionClass: draft.businessEffect?.operation.class,
         tenantId,
         commandType: "request_proposal_signature",
         payload: { proposalId, quoteId: proposal.quoteId },
@@ -106,10 +113,6 @@ export const proposalSignaturePlugin: DomainEnginePlugin = {
         ],
       }),
     );
-
-    if (!submitted.alreadyExisted) {
-      await enqueueStep(tenantId, submitted.stepIds[0]!, `${idempotencyKey}:doc`);
-    }
 
     return {
       status: "success",

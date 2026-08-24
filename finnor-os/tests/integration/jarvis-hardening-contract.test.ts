@@ -44,6 +44,8 @@ import {
 } from "@finnor/orchestration";
 import { executeOperationalQuery } from "@finnor/read-models";
 import { POST as confirmPOST } from "../../apps/api/app/api/actions/[id]/confirm/route";
+import { driveDurableAction } from "./helpers/durable-action";
+import { citeObservedObjectiveEvidence } from "./helpers/objective-completion-evidence";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
 
@@ -165,7 +167,10 @@ class ScriptedObjectivePlanner implements ObjectiveDecisionPlanner {
     }
     const completed = (input.inspection.actions as Array<{ actionType?: string; status?: string }>).some((action) => action.actionType === "send_follow_up" && action.status === "completed");
     if (!completed) throw new Error("The objective planner was asked to complete before observing the action receipt");
-    return { kind: "complete", outcome: { observed: true }, reason: "The approved follow-up and its receipt are now canonical." };
+    return citeObservedObjectiveEvidence(
+      { kind: "complete", outcome: { observed: true }, reason: "The approved follow-up and its receipt are now canonical." },
+      input.inspection,
+    );
   }
 }
 
@@ -429,6 +434,7 @@ describe.skipIf(!available)("JARVIS hardening contract against migrated PostgreS
 
     const approved = await orchestrator.decide(action.id, TENANT_ID, "approve", OWNER_ID, { role: "owner" });
     expect(approved.status).toBe("success");
+    expect((await driveDurableAction(TENANT_ID, action.id)).status).toBe("success");
     expect(await orchestrator.runObjectiveIteration({ tenantId: TENANT_ID, workId: objective.workId, objectiveLoopId: objective.objectiveLoopId })).toBe("completed");
     const completed = await workAggregate(TENANT_ID, objective.workId);
     expect(completed!.objectiveSteps.map((step) => step.iterationOutcome)).toEqual(["continue", "awaiting_approval", "completed"]);
