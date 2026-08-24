@@ -253,7 +253,7 @@ jobs:
           VERCEL_ORG_ID="$(node -p "require('../../../infra/deployment/production.contract.json').topology.api.organizationId")"
           VERCEL_PROJECT_ID="$(node -p "require('../../../infra/deployment/production.contract.json').topology.api.projectId")"
           export VERCEL_ORG_ID VERCEL_PROJECT_ID
-          vercel pull --yes --environment=production --scope "$VERCEL_ORG_ID" --token "$VERCEL_TOKEN"
+          vercel pull --yes --environment=production --token "$VERCEL_TOKEN"
         working-directory: finnor-os/apps/api
 
       - name: Preflight every production target before mutation
