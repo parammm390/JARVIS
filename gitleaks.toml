@@ -7,18 +7,12 @@ title = "FINNOR gitleaks extensions"
 [extend]
 useDefault = true
 
-[[allowlists]]
-description = "Known synthetic FINNOR test and evidence fixtures"
+ [allowlist]
+description = "Known synthetic FINNOR fixtures and public browser key"
 paths = [
   '''causal-replay\.test\.ts$''',
   '''evidence/system-audit-authenticated/matrix\.json$''',
   '''p2-llm-faults\.test\.ts$''',
   '''JARVIS-FRONTEND-MAESTRO-STATE-v3\.md$''',
 ]
-
-[[allowlists]]
-description = "Public browser-publishable Supabase key"
-condition = "AND"
-regexTarget = "match"
-paths = ['''\.github/workflows/marketing-ci\.yml$''']
 regexes = ['''sb_publishable_[A-Za-z0-9_-]+''']
