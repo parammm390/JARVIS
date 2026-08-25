@@ -528,6 +528,13 @@ export const WORK_STATUSES = [
 ] as const;
 export type WorkStatus = (typeof WORK_STATUSES)[number];
 
+export class WorkTransitionConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "WorkTransitionConflictError";
+  }
+}
+
 export interface ReceiveWorkParams {
   tenantId: string;
   instruction: string;
@@ -893,12 +900,41 @@ export async function transitionWork(
     recovery?: unknown;
     activeContext?: Record<string, unknown>;
     executionModel?: "query" | "atomic_effect" | "objective";
+    /** Optimistic generation fence for instruction-owned transitions. */
+    expectedWorkInputId?: string;
   } = {},
 ): Promise<void> {
   await withTenant(tenantId, async (db) => {
     await db.execute(sql`SELECT id FROM ${schema.works} WHERE ${schema.works.id} = ${workId} AND ${schema.works.tenantId} = ${tenantId} FOR UPDATE`);
     const [work] = await db.select().from(schema.works).where(and(eq(schema.works.id, workId), eq(schema.works.tenantId, tenantId))).limit(1);
     if (!work) throw new Error("Work not found");
+    if (patch.expectedWorkInputId) {
+      const [latestInput] = await db.select({ id: schema.workInputs.id })
+        .from(schema.workInputs)
+        .where(and(eq(schema.workInputs.tenantId, tenantId), eq(schema.workInputs.workId, workId)))
+        .orderBy(desc(schema.workInputs.createdAt), desc(schema.workInputs.id))
+        .limit(1);
+      if (latestInput?.id !== patch.expectedWorkInputId) {
+        throw new WorkTransitionConflictError(`Work input ${patch.expectedWorkInputId} is no longer active`);
+      }
+    }
+    if ((work.status === "completed" || work.status === "cancelled") && toStatus !== work.status) {
+      const [latestEvent] = await db.select({ eventType: schema.workEvents.eventType, payload: schema.workEvents.payload })
+        .from(schema.workEvents)
+        .where(and(eq(schema.workEvents.tenantId, tenantId), eq(schema.workEvents.workId, workId)))
+        .orderBy(desc(schema.workEvents.seq))
+        .limit(1);
+      const eventInputId = jsonObject(latestEvent?.payload).workInputId;
+      const explicitlyContinued = patch.expectedWorkInputId
+        && (latestEvent?.eventType === "input_received" || latestEvent?.eventType === "recovery_input_received")
+        && eventInputId === patch.expectedWorkInputId;
+      if (!explicitlyContinued) {
+        throw new WorkTransitionConflictError(`Terminal Work ${workId} cannot transition from ${work.status} to ${toStatus} without a newer active input`);
+      }
+    }
+    if (work.status === "failed" && !["failed", "recovery", "cancelled"].includes(toStatus)) {
+      throw new WorkTransitionConflictError(`Failed Work ${workId} must enter explicit recovery before transitioning to ${toStatus}`);
+    }
     const [latest] = await db.select({ maxSeq: sql<number>`coalesce(max(${schema.workEvents.seq}), 0)::int` }).from(schema.workEvents).where(eq(schema.workEvents.workId, workId));
     await db.update(schema.works).set({
       status: toStatus,
@@ -1061,7 +1097,7 @@ async function decisionContextSnapshot(
 }
 
 export async function latestWorkInput(tenantId: string, workId: string): Promise<typeof schema.workInputs.$inferSelect | null> {
-  const [row] = await withTenant(tenantId, (db) => db.select().from(schema.workInputs).where(and(eq(schema.workInputs.tenantId, tenantId), eq(schema.workInputs.workId, workId))).orderBy(desc(schema.workInputs.createdAt)).limit(1));
+  const [row] = await withTenant(tenantId, (db) => db.select().from(schema.workInputs).where(and(eq(schema.workInputs.tenantId, tenantId), eq(schema.workInputs.workId, workId))).orderBy(desc(schema.workInputs.createdAt), desc(schema.workInputs.id)).limit(1));
   return row ?? null;
 }
 
@@ -1079,6 +1115,9 @@ export async function reconcileWorkStatus(tenantId: string, workId: string): Pro
     return { actions, runs, repairs, operations, objectiveLoop, work };
   });
   if (!snapshot.work) throw new Error("Work not found");
+  // Cancellation is a user-owned terminal fact. Late action/run reconciliation
+  // may refine child evidence, but it must never resurrect the parent Work.
+  if (snapshot.work.status === "cancelled") return "cancelled";
   if (snapshot.objectiveLoop) {
     const status: WorkStatus = snapshot.objectiveLoop.state === "continue"
       ? "executing"
@@ -1102,6 +1141,7 @@ export async function reconcileWorkStatus(tenantId: string, workId: string): Pro
   else if (actionStatuses.some((value) => value === "pending" || value === "needs_human_review") || runStatuses.some((value) => value === "paused" || value === "escalated")) status = "awaiting_approval";
   else if (actionStatuses.some((value) => value === "draft")) status = "actionable";
   else if (actionStatuses.some((value) => value === "failed" || value === "blocked_integration_unavailable") || runStatuses.some((value) => value === "failed") || operationStatuses.some((value) => value === "failed")) status = "failed";
+  else if (actionStatuses.length > 0 && actionStatuses.every((value) => value === "rejected") && runStatuses.every((value) => value === "cancelled") && operationStatuses.every((value) => value === "cancelled")) status = "cancelled";
   else if (actionStatuses.length > 0 && actionStatuses.every((value) => value === "completed" || value === "rejected") && runStatuses.every((value) => ["completed", "compensated", "cancelled"].includes(value)) && operationStatuses.every((value) => ["completed", "completed_with_failures", "cancelled"].includes(value))) status = "completed";
   else status = snapshot.work.status;
 
@@ -1111,7 +1151,7 @@ export async function reconcileWorkStatus(tenantId: string, workId: string): Pro
     operations: operationStatuses.reduce<Record<string, number>>((acc, value) => ({ ...acc, [value]: (acc[value] ?? 0) + 1 }), {}),
   };
   if (status !== snapshot.work.status) {
-    await transitionWork(tenantId, workId, status, "children_reconciled", counts, status === "completed" ? { finalOutcome: counts } : status === "failed" ? { failure: counts } : {});
+    await transitionWork(tenantId, workId, status, "children_reconciled", counts, status === "completed" || status === "cancelled" ? { finalOutcome: counts } : status === "failed" ? { failure: counts } : {});
   }
   return status;
 }

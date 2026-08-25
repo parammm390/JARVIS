@@ -30,7 +30,7 @@ test.describe("authenticated cockpit flow", () => {
   test("the authenticated adaptive workspace exposes the real command surface", async ({ page }) => {
     test.skip(test.info().project.name !== "desktop-chromium", "responsive public/private shell coverage is certified separately")
     await expect(page.locator("[data-jarvis-adaptive-runtime]")).toBeVisible({ timeout: 15_000 })
-    await expect(page.getByRole("heading", { name: "What needs attention now" })).toBeVisible()
+    await expect(page.getByRole("heading", { name: "What needs attention now", level: 1 })).toBeVisible()
     await expect(page.getByPlaceholder("Tell JARVIS what you need")).toBeVisible()
     await expect(page.getByText("PUBLIC PREVIEW", { exact: true })).toHaveCount(0)
   })
@@ -52,6 +52,41 @@ test.describe("authenticated cockpit flow", () => {
     await page.getByLabel("Operational surfaces", { exact: true }).getByRole("link", { name: "Money", exact: true }).click()
     await expect(page.locator("[data-jarvis-cash-pressure]")).toBeVisible({ timeout: 15_000 })
     await expect(page.getByRole("heading", { name: "Where cash is stuck." })).toBeVisible()
+  })
+
+  test("all six Business World lenses use the shared canonical projection contract", async ({ page }) => {
+    test.skip(test.info().project.name !== "desktop-chromium", "single authenticated browser journey")
+    const scenes = ["customer", "schedule", "money", "work", "inventory", "computer"] as const
+    await page.route("**/api/jarvis/business-world?scene=*", async (route) => {
+      const scene = new URL(route.request().url()).searchParams.get("scene") as (typeof scenes)[number]
+      await route.fulfill({ json: { data: {
+        version: 1,
+        scene,
+        objects: [{
+          entityType: scene === "inventory" ? "inventory_item" : scene === "computer" ? "computer_run" : scene === "money" ? "invoice" : scene === "schedule" ? "appointment" : scene === "work" ? "work" : "household",
+          entityId: "11111111-1111-4111-8111-111111111111",
+          label: `${scene} canonical object`,
+          status: "active",
+          occurredAt: "2026-08-22T00:00:00.000Z",
+          provenance: { kind: "canonical_postgres", table: `${scene}_fixture` },
+          relatedWork: [],
+          interactionEligible: true,
+        }],
+        relationships: [],
+        truncated: false,
+        limits: { objects: 200, relationships: 500 },
+        source: { kind: "canonical_postgres", tables: [`${scene}_fixture`] },
+        asOf: "2026-08-22T00:00:00.000Z",
+      } } })
+    })
+
+    for (const [path, scene] of [["customers", "customer"], ["schedule", "schedule"], ["money", "money"], ["work", "work"]] as const) {
+      await page.goto(`/jarvis/${path}`)
+      await expect(page.getByLabel(`${scene} business world`)).toContainText("1 canonical objects")
+    }
+    await page.goto("/jarvis/agents")
+    await expect(page.getByLabel("inventory business world")).toContainText("1 canonical objects")
+    await expect(page.getByLabel("computer business world")).toContainText("1 canonical objects")
   })
 })
 

@@ -47,7 +47,7 @@ import type {
   WorkspaceProjection,
   OperationalQueryExecution,
 } from "./contracts"
-import { projectRestingAttention, type RestingAttentionItem } from "./resting-attention"
+import { projectRestingAttention, restingAttentionPresentation, type RestingAttentionItem } from "./resting-attention"
 import { withOperationalContext } from "../surfaces/surface-routes"
 import { buildWorkspaceInspector, groupWorkspaceInspector, type WorkspaceInspectorItem } from "./workspace-inspector"
 import { deriveWorkspaceProgress, splitResearchNarrative } from "./presentation"
@@ -212,6 +212,7 @@ function RestingWorkspace({
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(items[0]?.workCase.id ?? null)
   const selected = items.find((item) => item.workCase.id === selectedId) ?? items[0] ?? null
+  const presentation = restingAttentionPresentation({ itemCount: items.length, loading, error, stale })
 
   useEffect(() => {
     if (!selected) return
@@ -224,12 +225,12 @@ function RestingWorkspace({
       <header className="jarvis-resting-workspace__header">
         <div>
           <span className="jarvis-resting-workspace__eyebrow"><i aria-hidden /> Operational attention</span>
-          <h2 id="jarvis-attention-title">{loading && items.length === 0 ? "Reading what needs attention…" : items.length > 0 ? `${items.length} ${items.length === 1 ? "thing needs" : "things need"} attention now` : "No urgent Work is waiting"}</h2>
-          <p>{items.length > 0 ? "Only the highest-priority conditions from canonical Work are shown here." : "JARVIS found no blocked, failed, approval-bound, overdue-continuation, or employee-assigned Work requiring action."}</p>
+          <h2 id="jarvis-attention-title">{presentation.heading}</h2>
+          <p>{presentation.detail}</p>
         </div>
         <div className="jarvis-resting-workspace__truth">
           <CheckCircle2 size={14} aria-hidden />
-          <span><strong>Canonical Work</strong>{stale ? "Last verified projection" : "Live projection"}</span>
+          <span><strong>Canonical Work</strong>{presentation.truthLabel}</span>
         </div>
       </header>
 
@@ -258,12 +259,12 @@ function RestingWorkspace({
             </article>
           ))}
         </div>
-      ) : (
+      ) : presentation.showClearState ? (
         <div className="jarvis-resting-workspace__clear">
           <CheckCircle2 size={24} aria-hidden />
           <div><strong>The operating queue is clear.</strong><p>Conversation remains available below for a customer query or a new business objective.</p></div>
         </div>
-      )}
+      ) : null}
     </section>
   )
 }

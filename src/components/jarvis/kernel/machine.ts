@@ -10,7 +10,7 @@
 // own binding rule, and the reason `nextState` returns `null` (meaning "ignore")
 // rather than throwing.
 
-import type { InstructionEvent, InstructionState } from "./types"
+import type { CancelableInstructionState, InstructionEvent, InstructionState } from "./types"
 
 export interface MachineState {
   instructionState: InstructionState
@@ -22,6 +22,10 @@ export const initialMachineState: MachineState = { instructionState: "idle" }
  *  listed — the caller (`transition`) turns that into a no-op + dev warning. */
 function nextState(from: InstructionState, event: InstructionEvent): InstructionState | null {
   if (event.type === "RESET") return "idle"
+  if (event.type === "USER_CANCEL_REQUESTED" && isCancelable(from)) return "stopping"
+  // A canonical cancellation can arrive from SSE/polling before the local POST
+  // resolves, so every in-flight state accepts the server-owned terminal fact.
+  if (event.type === "USER_CANCELLED" && (isCancelable(from) || from === "stopping")) return "cancelled"
 
   switch (from) {
     case "idle":
@@ -49,11 +53,9 @@ function nextState(from: InstructionState, event: InstructionEvent): Instruction
 
     case "clarifying":
       if (event.type === "ANSWERED") return "captured"
-      if (event.type === "USER_CANCELLED") return "cancelled"
       return null
 
     case "awaiting_approval":
-      if (event.type === "USER_CANCELLED") return "cancelled"
       if (event.type === "APPROVAL_DECIDED") return event.approvedCount >= 1 ? "executing" : "cancelled"
       return null
 
@@ -68,6 +70,11 @@ function nextState(from: InstructionState, event: InstructionEvent): Instruction
       if (event.type === "TERMINAL") return terminalOutcome(event)
       return null
 
+    case "stopping":
+      if (event.type === "CANCEL_FAILED") return event.returnTo
+      if (event.type === "TRACE_failed") return "failed"
+      return null
+
     // Terminal states: only RESET moves them (handled above).
     case "completed":
     case "partial":
@@ -78,6 +85,16 @@ function nextState(from: InstructionState, event: InstructionEvent): Instruction
     default:
       return null
   }
+}
+
+function isCancelable(state: InstructionState): state is CancelableInstructionState {
+  return state === "captured"
+    || state === "understanding"
+    || state === "planning"
+    || state === "clarifying"
+    || state === "awaiting_approval"
+    || state === "executing"
+    || state === "verifying"
 }
 
 function terminalOutcome(event: Extract<InstructionEvent, { type: "TERMINAL" }>): InstructionState {

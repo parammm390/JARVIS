@@ -200,7 +200,7 @@ export async function POST(req: Request): Promise<Response> {
         await transitionWork(ctx.tenantId, received.workId, "failed", "intake_processing_failed", {
           message,
           recoverable: true,
-        }, { failure: { message, recoverable: true, at: new Date().toISOString() } }).catch(() => undefined);
+        }, { failure: { message, recoverable: true, at: new Date().toISOString() }, expectedWorkInputId: received.workInputId }).catch(() => undefined);
       }
       return Response.json({
         error: message,

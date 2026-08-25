@@ -8,8 +8,10 @@ import {
   domainActions,
   finishWorkPlannerAttempt,
   receiveWork,
+  reconcileWorkStatus,
   tenants,
   transitionWork,
+  WorkTransitionConflictError,
   withTenant,
   workAggregate,
 } from "@finnor/db";
@@ -89,6 +91,113 @@ describe.skipIf(!available)("Upgrade 2 durable Work kernel", () => {
     });
     expect((aggregate!.events as Array<{ seq: number; eventType: string }>).map((event) => event.seq)).toEqual([1, 2, 3]);
     expect((aggregate!.events as Array<{ eventType: string }>).at(-1)?.eventType).toBe("recovery_input_received");
+  });
+
+  it("keeps cancellation terminal against late planner and child reconciliation writes", async () => {
+    const received = await receiveWork({
+      tenantId: TENANT_ID,
+      instruction: "Plan something slowly",
+      instructionId: randomUUID(),
+      channel: "text",
+    });
+    await transitionWork(TENANT_ID, received.workId, "planning", "planning_started", {}, { expectedWorkInputId: received.workInputId });
+    await transitionWork(TENANT_ID, received.workId, "cancelled", "cancelled", { requestedBy: "test" });
+    await withTenant(TENANT_ID, (db) => db.insert(domainActions).values({
+      tenantId: TENANT_ID,
+      workId: received.workId,
+      instructionId: received.instructionId,
+      actionType: "late_planner_draft",
+      payload: {},
+      status: "draft",
+    }));
+
+    await expect(transitionWork(
+      TENANT_ID,
+      received.workId,
+      "ready",
+      "planner_succeeded",
+      {},
+      { expectedWorkInputId: received.workInputId },
+    )).rejects.toBeInstanceOf(WorkTransitionConflictError);
+    expect(await reconcileWorkStatus(TENANT_ID, received.workId)).toBe("cancelled");
+    expect((await workAggregate(TENANT_ID, received.workId))!.work).toMatchObject({ status: "cancelled" });
+  });
+
+  it("requires an explicit recovery transition before failed Work can become ready again", async () => {
+    const received = await receiveWork({
+      tenantId: TENANT_ID,
+      instruction: "Exercise the failed Work fence",
+      instructionId: randomUUID(),
+      channel: "text",
+    });
+    await transitionWork(TENANT_ID, received.workId, "failed", "planning_failed", { message: "test failure" });
+
+    await expect(transitionWork(
+      TENANT_ID,
+      received.workId,
+      "ready",
+      "stale_planner_succeeded",
+      {},
+      { expectedWorkInputId: received.workInputId },
+    )).rejects.toBeInstanceOf(WorkTransitionConflictError);
+
+    await transitionWork(TENANT_ID, received.workId, "recovery", "retry_requested", { requestedBy: "test" });
+    await transitionWork(TENANT_ID, received.workId, "ready", "recovery_ready");
+    expect((await workAggregate(TENANT_ID, received.workId))!.work).toMatchObject({ status: "ready" });
+  });
+
+  it("allows only a newer explicit input to continue cancelled Work", async () => {
+    const first = await receiveWork({
+      tenantId: TENANT_ID,
+      instruction: "First turn",
+      instructionId: randomUUID(),
+      channel: "text",
+    });
+    await transitionWork(TENANT_ID, first.workId, "cancelled", "cancelled", { requestedBy: "test" });
+    const continuation = await receiveWork({
+      tenantId: TENANT_ID,
+      workId: first.workId,
+      instruction: "Continue with a new turn",
+      instructionId: randomUUID(),
+      channel: "text",
+    });
+
+    await expect(transitionWork(
+      TENANT_ID,
+      first.workId,
+      "planning",
+      "stale_planner_write",
+      {},
+      { expectedWorkInputId: first.workInputId },
+    )).rejects.toBeInstanceOf(WorkTransitionConflictError);
+    await transitionWork(
+      TENANT_ID,
+      first.workId,
+      "understanding",
+      "understanding_started",
+      { workInputId: continuation.workInputId },
+      { expectedWorkInputId: continuation.workInputId },
+    );
+    expect((await workAggregate(TENANT_ID, first.workId))!.work).toMatchObject({ status: "understanding" });
+  });
+
+  it("reconciles an all-rejected plan as cancelled, never completed", async () => {
+    const received = await receiveWork({
+      tenantId: TENANT_ID,
+      instruction: "Propose an action that the owner rejects",
+      instructionId: randomUUID(),
+      channel: "text",
+    });
+    await withTenant(TENANT_ID, (db) => db.insert(domainActions).values({
+      tenantId: TENANT_ID,
+      workId: received.workId,
+      instructionId: received.instructionId,
+      actionType: "rejected_plan_action",
+      payload: {},
+      status: "rejected",
+    }));
+    expect(await reconcileWorkStatus(TENANT_ID, received.workId)).toBe("cancelled");
+    expect((await workAggregate(TENANT_ID, received.workId))!.work).toMatchObject({ status: "cancelled" });
   });
 
   it("accepts meaningful persistent work before a legacy one-shot planner can time out and deduplicates the Objective", async () => {

@@ -256,7 +256,7 @@ export interface InvoiceResource {
 // P2.T1/T2 — exact read-only Work contract. The server projection keeps the
 // durable rows authoritative; this client type only describes the already-shaped
 // causal record consumed by the Work surface.
-export type WorkCaseStatus = "Needs you" | "Working" | "Waiting" | "Completed" | "Failed" | "Blocked"
+export type WorkCaseStatus = "Needs you" | "Working" | "Waiting" | "Partial" | "Cancelled" | "Completed" | "Failed" | "Blocked"
 export interface WorkEntityLink {
   entityType: string
   entityId: string

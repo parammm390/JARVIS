@@ -31,4 +31,14 @@ describe("Work contextual inspector", () => {
     expect(facts.find((fact) => fact.label === "What happened")?.value).toContain("Provider unavailable")
     expect(facts.find((fact) => fact.label === "Next permitted action")?.value).toContain("Retry delivery")
   })
+
+  it("does not present cancelled Work as completed or still in flight", () => {
+    const facts = buildWorkInspectorFacts(workCase({ status: "Cancelled", approvals: [] }))
+    expect(facts.find((fact) => fact.label === "Next permitted action")?.value).toContain("No future execution is scheduled")
+  })
+
+  it("routes partial outcomes to incomplete-evidence review", () => {
+    const facts = buildWorkInspectorFacts(workCase({ status: "Partial", approvals: [] }))
+    expect(facts.find((fact) => fact.label === "Next permitted action")?.value).toContain("Inspect the incomplete outcome")
+  })
 })

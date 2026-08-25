@@ -6,10 +6,11 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import pg from "pg";
 import { migrate } from "../../packages/db/migrate";
-import { closePool, withTenant, tenants } from "@finnor/db";
+import { closePool, receiveWork, transitionWork, withTenant, tenants, workAggregate } from "@finnor/db";
 import { ensureInstructionSession, emitInstructionEvent } from "../../packages/orchestration/src/instruction-trace";
 import { GET as getInstruction } from "../../apps/api/app/api/instructions/[id]/route";
 import { GET as getInstructionEvents } from "../../apps/api/app/api/instructions/[id]/events/route";
+import { POST as cancelInstruction } from "../../apps/api/app/api/instructions/[id]/cancel/route";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
 const TENANT_ID = "00000000-0000-4000-8000-0000000000ea";
@@ -29,6 +30,10 @@ const available = await dbUp();
 
 function req(url: string, tenantId = TENANT_ID): Request {
   return new Request(`http://localhost${url}`, { headers: { "x-tenant-id": tenantId, "x-user-role": "owner" } });
+}
+
+function postReq(url: string, tenantId = TENANT_ID): Request {
+  return new Request(`http://localhost${url}`, { method: "POST", headers: { "x-tenant-id": tenantId, "x-user-role": "owner" } });
 }
 
 describe.skipIf(!available)("GET /api/instructions/:id and /events (P3.T5)", () => {
@@ -94,5 +99,25 @@ describe.skipIf(!available)("GET /api/instructions/:id and /events (P3.T5)", () 
     const id = randomUUID();
     const res = await getInstructionEvents(req(`/api/instructions/${id}/events`), { params: Promise.resolve({ id }) });
     expect(res.status).toBe(404);
+  });
+
+  it("POST /cancel persists canonical cancelled Work and is idempotent", async () => {
+    const instructionId = randomUUID();
+    const received = await receiveWork({
+      tenantId: TENANT_ID,
+      instructionId,
+      instruction: "Slow planning request",
+      channel: "text",
+    });
+    await transitionWork(TENANT_ID, received.workId, "planning", "planning_started", {}, { expectedWorkInputId: received.workInputId });
+
+    const first = await cancelInstruction(postReq(`/api/instructions/${instructionId}/cancel`), { params: Promise.resolve({ id: instructionId }) });
+    expect(first.status).toBe(200);
+    expect(await first.json()).toMatchObject({ status: "cancelled", inFlightActions: 0 });
+    expect((await workAggregate(TENANT_ID, received.workId))!.work).toMatchObject({ status: "cancelled", finalOutcome: { kind: "cancelled" } });
+
+    const duplicate = await cancelInstruction(postReq(`/api/instructions/${instructionId}/cancel`), { params: Promise.resolve({ id: instructionId }) });
+    expect(duplicate.status).toBe(200);
+    expect(await duplicate.json()).toMatchObject({ status: "cancelled", duplicate: true });
   });
 });

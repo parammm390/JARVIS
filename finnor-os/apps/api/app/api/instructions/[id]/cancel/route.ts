@@ -1,4 +1,4 @@
-import { actionLog, domainActions, instructionSessions, workflowRuns, workflowSteps, withTenant, transitionWork } from "@finnor/db";
+import { actionLog, businessOperations, domainActions, instructionSessions, workflowRuns, workflowSteps, workObjectiveLoops, works, withTenant, transitionWork } from "@finnor/db";
 import { cancelRun } from "@finnor/workflow-runtime";
 import { and, eq, inArray } from "drizzle-orm";
 import { emitInstructionEvent } from "@finnor/orchestration";
@@ -17,13 +17,33 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return Response.json({ error: `Your role (${ctx.role}) cannot cancel business instructions` }, { status: 403 });
     }
 
-    const snapshot = await withTenant(ctx.tenantId, async (db) => {
+    const instruction = await withTenant(ctx.tenantId, async (db) => {
       const [instruction] = await db
         .select({ id: instructionSessions.id, workId: instructionSessions.workId })
         .from(instructionSessions)
         .where(and(eq(instructionSessions.id, id), eq(instructionSessions.tenantId, ctx.tenantId)))
         .limit(1);
       if (!instruction) return null;
+      const [work] = instruction.workId ? await db
+        .select({ status: works.status })
+        .from(works)
+        .where(and(eq(works.tenantId, ctx.tenantId), eq(works.id, instruction.workId)))
+        .limit(1) : [];
+      return { ...instruction, workStatus: work?.status ?? null };
+    });
+    if (!instruction) return Response.json({ error: "Instruction not found" }, { status: 404 });
+    if (instruction.workStatus === "completed") {
+      return Response.json({ error: "Completed Work cannot be cancelled", status: "completed" }, { status: 409 });
+    }
+    if (instruction.workStatus === "cancelled") {
+      return Response.json({ status: "cancelled", duplicate: true, rejectedActions: 0, cancelledRuns: 0, inFlightActions: 0 });
+    }
+
+    // Publish the cancellation fence before taking a second snapshot. A planner
+    // that finishes after this point sees the marker and must reject its drafts.
+    await emitInstructionEvent(ctx.tenantId, id, "cancelled", { requestedBy: ctx.userId, source: "product", fence: true, canonical: false });
+
+    const snapshot = await withTenant(ctx.tenantId, async (db) => {
       const actions = await db
         .select({ id: domainActions.id, status: domainActions.status })
         .from(domainActions)
@@ -31,19 +51,42 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           eq(domainActions.tenantId, ctx.tenantId),
           instruction.workId ? eq(domainActions.workId, instruction.workId) : eq(domainActions.instructionId, id),
         ));
-      return { instruction, actions };
+      const activeOperations = instruction.workId ? await db
+        .select({ id: businessOperations.id, status: businessOperations.status })
+        .from(businessOperations)
+        .where(and(
+          eq(businessOperations.tenantId, ctx.tenantId),
+          eq(businessOperations.workId, instruction.workId),
+          inArray(businessOperations.status, ["awaiting_approval", "queued", "running"]),
+        )) : [];
+      if (activeOperations.length > 0) {
+        const reconciliationRequired = activeOperations.some((operation) => operation.status === "running");
+        await db.update(businessOperations).set({
+          status: "cancelled",
+          completedAt: new Date(),
+          finalOutcome: {
+            kind: "cancelled",
+            instructionId: id,
+            requestedBy: ctx.userId,
+            reconciliationRequired,
+          },
+          updatedAt: new Date(),
+        }).where(and(
+          eq(businessOperations.tenantId, ctx.tenantId),
+          inArray(businessOperations.id, activeOperations.map((operation) => operation.id)),
+          inArray(businessOperations.status, ["awaiting_approval", "queued", "running"]),
+        ));
+      }
+      return { instruction, actions, activeOperations };
     });
-    if (!snapshot) return Response.json({ error: "Instruction not found" }, { status: 404 });
 
-    await emitInstructionEvent(ctx.tenantId, id, "cancelled", { requestedBy: ctx.userId, source: "product" });
-
-    const draftIds = snapshot.actions.filter((action) => action.status === "draft").map((action) => action.id);
-    if (draftIds.length > 0) {
+    const rejectableIds = snapshot.actions.filter((action) => action.status === "draft" || action.status === "approved").map((action) => action.id);
+    if (rejectableIds.length > 0) {
       await withTenant(ctx.tenantId, async (db) => {
         const rejected = await db
           .update(domainActions)
           .set({ status: "rejected" })
-          .where(and(eq(domainActions.tenantId, ctx.tenantId), inArray(domainActions.id, draftIds), eq(domainActions.status, "draft")))
+          .where(and(eq(domainActions.tenantId, ctx.tenantId), inArray(domainActions.id, rejectableIds), inArray(domainActions.status, ["draft", "approved"])))
           .returning({ id: domainActions.id });
         if (rejected.length > 0) {
           await db.insert(actionLog).values(rejected.map((action) => ({
@@ -82,22 +125,68 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const runResults = await Promise.all(activeRuns.map((run) => cancelRun(ctx.tenantId, run.id, run.version, ctx.userId)));
     const inFlightActions = snapshot.actions.filter((action) => action.status === "approved" || action.status === "executing").length;
     if (snapshot.instruction.workId) {
-      await transitionWork(ctx.tenantId, snapshot.instruction.workId, "failed", "cancelled", {
+      const cancelledRuns = runResults.filter((result) => result.ok).length;
+      const unresolvedActions = await withTenant(ctx.tenantId, (db) => db
+        .select({ id: domainActions.id, status: domainActions.status })
+        .from(domainActions)
+        .where(and(
+          eq(domainActions.tenantId, ctx.tenantId),
+          eq(domainActions.workId, snapshot.instruction.workId!),
+          inArray(domainActions.status, ["executing", "needs_human_review"]),
+        )));
+      const unresolvedOperationIds = snapshot.activeOperations
+        .filter((operation) => operation.status === "running")
+        .map((operation) => operation.id);
+      const reconciliationRequired = unresolvedActions.length > 0 || unresolvedOperationIds.length > 0 || runResults.some((result) => !result.ok);
+      await transitionWork(ctx.tenantId, snapshot.instruction.workId, "cancelled", "cancelled", {
         instructionId: id,
         requestedBy: ctx.userId,
-        rejectedActions: draftIds.length + pendingIds.length,
-        cancelledRuns: runResults.filter((result) => result.ok).length,
+        rejectedActions: rejectableIds.length + pendingIds.length,
+        cancelledRuns,
         inFlightActions,
+        reconciliationRequired,
+        unresolvedActionIds: unresolvedActions.map((action) => action.id),
+        unresolvedOperationIds,
       }, {
-        finalOutcome: { kind: "cancelled", requestedBy: ctx.userId },
-        failure: { kind: "cancelled", message: "Cancelled by user", recoverable: false },
+        finalOutcome: {
+          kind: "cancelled",
+          requestedBy: ctx.userId,
+          reconciliationRequired,
+          unresolvedActionIds: unresolvedActions.map((action) => action.id),
+          unresolvedOperationIds,
+        },
+      });
+
+      // Re-read only after the terminal Work transition. startWorkObjective holds
+      // the same Work row lock, so an objective either existed before cancellation
+      // and is found here, or observes the cancelled Work and cannot start.
+      const [objective] = await withTenant(ctx.tenantId, (db) => db
+        .select({ id: workObjectiveLoops.id, state: workObjectiveLoops.state })
+        .from(workObjectiveLoops)
+        .where(and(eq(workObjectiveLoops.tenantId, ctx.tenantId), eq(workObjectiveLoops.workId, snapshot.instruction.workId!)))
+        .limit(1));
+      if (objective && objective.state !== "cancelled") {
+        await getOrchestrator().controlObjective({
+          tenantId: ctx.tenantId,
+          workId: snapshot.instruction.workId,
+          command: "cancel",
+          actorId: ctx.userId,
+          correlationId: ctx.correlationId,
+        });
+      }
+      await emitInstructionEvent(ctx.tenantId, id, "cancelled", {
+        requestedBy: ctx.userId,
+        source: "product",
+        canonical: true,
+        workId: snapshot.instruction.workId,
       });
     }
 
     return Response.json({
       status: "cancelled",
-      rejectedActions: draftIds.length + pendingIds.length,
+      rejectedActions: rejectableIds.length + pendingIds.length,
       cancelledRuns: runResults.filter((result) => result.ok).length,
+      cancelledOperations: snapshot.activeOperations.length,
       inFlightActions,
     });
   } catch (error) {

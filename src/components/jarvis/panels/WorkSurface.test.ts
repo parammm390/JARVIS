@@ -34,6 +34,12 @@ describe("P2.T2 Work surface contract", () => {
     expect(filterMatches(workCase({ status: "Working" }), "Open")).toBe(true)
     expect(filterMatches(workCase({ status: "Completed" }), "Open")).toBe(false)
     expect(filterMatches(workCase({ status: "Completed" }), "Done")).toBe(true)
+    expect(filterMatches(workCase({ status: "Cancelled" }), "Open")).toBe(false)
+    expect(filterMatches(workCase({ status: "Cancelled" }), "Done")).toBe(false)
+    expect(filterMatches(workCase({ status: "Cancelled" }), "Cancelled")).toBe(true)
+    expect(filterMatches(workCase({ status: "Partial" }), "Open")).toBe(false)
+    expect(filterMatches(workCase({ status: "Partial" }), "Done")).toBe(false)
+    expect(filterMatches(workCase({ status: "Partial" }), "Partial")).toBe(true)
     expect(filterMatches(workCase({ status: "Failed" }), "Failed")).toBe(true)
   })
 
@@ -41,6 +47,8 @@ describe("P2.T2 Work surface contract", () => {
     expect(stageFor(workCase({ actions: [{ id: "a", actionType: "send_message", status: "pending", summary: "Ask", instructionId: "case-1", planId: null, dependsOn: [], payload: {}, createdAt: "2026-08-08T00:00:00.000Z", updatedAt: "2026-08-08T00:00:00.000Z" }] }))).toBe("Plan")
     expect(stageFor(workCase({ status: "Needs you", approvals: [{ actionId: "a", status: "pending", decidedBy: null, decidedAt: null, pendingConfirmationId: "c" }] }))).toBe("Approval")
     expect(stageFor(workCase({ status: "Completed", receipts: [{ id: "r", workflowRunId: null, workflowStepId: null, domainActionId: null, objective: "Done", evidence: [], approval: {}, expectedResult: null, actualResult: null, failure: null, correlationId: null, createdAt: "2026-08-08T00:00:00.000Z", finalizedAt: "2026-08-08T00:00:00.000Z" }] }))).toBe("Evidence & outcome")
+    expect(stageFor(workCase({ status: "Cancelled" }))).toBe("Evidence & outcome")
+    expect(stageFor(workCase({ status: "Partial" }))).toBe("Evidence & outcome")
   })
 
   it("round-trips only exact deep-link identifiers across operational surfaces", () => {

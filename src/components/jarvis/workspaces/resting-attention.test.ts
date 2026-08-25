@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { WorkCaseProjection, WorkCaseStatus } from "@/lib/jarvis-client"
-import { projectRestingAttention } from "./resting-attention"
+import { projectRestingAttention, restingAttentionPresentation } from "./resting-attention"
 
 function workCase(id: string, status: WorkCaseStatus, overrides: Partial<WorkCaseProjection> = {}): WorkCaseProjection {
   return {
@@ -27,6 +27,21 @@ function workCase(id: string, status: WorkCaseStatus, overrides: Partial<WorkCas
 }
 
 describe("projectRestingAttention", () => {
+  it("never claims a clear queue before canonical Work succeeds", () => {
+    expect(restingAttentionPresentation({ itemCount: 0, loading: true, error: null, stale: false })).toMatchObject({
+      heading: "Reading what needs attention…",
+      showClearState: false,
+    })
+    expect(restingAttentionPresentation({ itemCount: 0, loading: false, error: "unavailable", stale: false })).toMatchObject({
+      heading: "Operational attention is unavailable",
+      truthLabel: "Projection unavailable",
+      showClearState: false,
+    })
+    expect(restingAttentionPresentation({ itemCount: 0, loading: false, error: null, stale: false })).toMatchObject({
+      heading: "No urgent Work is waiting",
+      showClearState: true,
+    })
+  })
   it("shows only the three highest-priority canonical Work conditions", () => {
     const rows = [
       workCase("working", "Working"),
@@ -35,6 +50,7 @@ describe("projectRestingAttention", () => {
       workCase("schedule", "Needs you", { linkedEntities: [{ entityType: "work_order", entityId: "wo-1", via: "work" }] }),
       workCase("money", "Needs you", { linkedEntities: [{ entityType: "invoice", entityId: "inv-1", via: "action" }] }),
       workCase("complete", "Completed"),
+      workCase("cancelled", "Cancelled"),
     ]
 
     const projected = projectRestingAttention(rows, Date.parse("2026-08-15T10:00:00.000Z"))
@@ -66,5 +82,11 @@ describe("projectRestingAttention", () => {
 
     expect(projected.map((item) => item.workCase.id)).toEqual(["due"])
     expect(projected[0]?.reason).toBe("Customer reply window elapsed")
+  })
+
+  it("surfaces partial terminal outcomes for review", () => {
+    const projected = projectRestingAttention([workCase("partial", "Partial")])
+    expect(projected).toHaveLength(1)
+    expect(projected[0]).toMatchObject({ kind: "recovery" })
   })
 })

@@ -45,7 +45,7 @@ import {
   type TraceEvent,
 } from "./instruction"
 import { recordTraceEventReceived } from "./trace-metrics"
-import type { InstructionState, JarvisMode, Presence, Truth } from "./types"
+import type { CancelableInstructionState, InstructionState, JarvisMode, Presence, Truth } from "./types"
 import { looksLikeFollowUpReference, UNRESOLVED_REFERENCE_MESSAGE, UNRESOLVED_REFERENCE_CONTEXT } from "./followup-reference"
 import { isOperationalQueryExecution, type OperationalQueryExecution } from "../workspaces/contracts"
 import { operatingInteractionFromWorkAggregate, useOperatingInteractionActions, type OperatingInteractionContextValue } from "./operating-interaction"
@@ -726,6 +726,9 @@ export function applyTraceEvents(thread: Thread, events: TraceEvent[], approval:
       }
       case "completed":
       case "failed": {
+        // Once canonical cancellation is observed, a late planner/query trace is
+        // stale evidence from the losing generation and cannot resurrect Work.
+        if (next.machine.instructionState === "cancelled") break
         const actionId = typeof event.payload.actionId === "string" ? event.payload.actionId : undefined
         const answerResult = event.phase === "completed" ? parseAnswerResult(event.payload) : null
         if (answerResult) {
@@ -833,15 +836,29 @@ export function applyTraceEvents(thread: Thread, events: TraceEvent[], approval:
         }
         break
       }
-      // `dispatched` and `cancelled` remain
-      // real trace facts even when this aggregate machine has no distinct state
-      // for them. The row is still measured and retained in the transport cursor;
-      // no customer-visible state is invented for them here.
+      case "cancelled": {
+        // The first marker is a planner fence written before cleanup. Only the
+        // second marker follows the canonical Work transition and may terminate
+        // the visible thread. Older emitters omitted `canonical`; retain their
+        // established terminal meaning unless they explicitly say false.
+        if (event.payload.canonical === false) break
+        next = {
+          ...next,
+          machine: transition(next.machine, { type: "USER_CANCELLED" }),
+          answerResult: null,
+          approvalWatch: null,
+          runWatch: null,
+          terminalAtMs: Date.now(),
+        }
+        break
+      }
+      // `dispatched` remains a measured trace fact with no distinct aggregate
+      // machine state. The row is retained in the transport cursor.
       default:
         break
     }
   }
-  if (next.answerResult) {
+  if (next.answerResult && next.machine.instructionState !== "cancelled") {
     next = {
       ...next,
       machine: { instructionState: "completed" },
@@ -880,6 +897,7 @@ export interface KernelState {
    *  mutating the old thread further would be dishonest once it's "history"). */
   threadHistory: Thread[]
   recentThreads: DurableThreadSummary[]
+  recentThreadsStatus: "idle" | "loading" | "live" | "unavailable"
   openThread: (threadId: string) => Promise<void>
   presence: Presence
   transport: TransportHealth
@@ -941,17 +959,22 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
   const [restoredTraceEventCount, setRestoredTraceEventCount] = useState(0)
   const [threadHistory, setThreadHistory] = useState<Thread[]>([])
   const [recentThreads, setRecentThreads] = useState<DurableThreadSummary[]>([])
+  const [recentThreadsStatus, setRecentThreadsStatus] = useState<KernelState["recentThreadsStatus"]>("idle")
   const refreshRecentThreads = useCallback(async () => {
     if (!auth.session) {
       setRecentThreads([])
+      setRecentThreadsStatus("idle")
       return
     }
+    setRecentThreadsStatus("loading")
     try {
       const response = await jarvisGet<{ threads?: DurableThreadSummary[] }>("threads", { limit: "50" })
       setRecentThreads(Array.isArray(response.threads) ? response.threads : [])
+      setRecentThreadsStatus("live")
     } catch {
       // The active Work remains usable when the history list is temporarily
       // unavailable. Preserve the last verified list instead of fabricating one.
+      setRecentThreadsStatus("unavailable")
     }
   }, [auth.session])
 
@@ -1789,8 +1812,12 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
   const cancelThread = useCallback(async () => {
     const current = threadRef.current
     if (!current || cancelInFlightRef.current) return
+    const returnTo = current.machine.instructionState
+    if (!["captured", "understanding", "planning", "clarifying", "awaiting_approval", "executing", "verifying"].includes(returnTo)) return
     cancelInFlightRef.current = true
-    setThread((prev) => prev && prev.id === current.id ? { ...prev, cancelError: null } : prev)
+    setThread((prev) => prev && prev.id === current.id
+      ? { ...prev, machine: transition(prev.machine, { type: "USER_CANCEL_REQUESTED" }), cancelError: null }
+      : prev)
     try {
       if (current.instructionId) {
         await jarvisPost(`instructions/${current.instructionId}/cancel`, {})
@@ -1802,7 +1829,11 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
       setThread((prev) => (prev && prev.id === current.id ? { ...prev, machine: transition(prev.machine, { type: "USER_CANCELLED" }), cancelError: null, terminalAtMs: Date.now() } : prev))
     } catch (error) {
       setThread((prev) => prev && prev.id === current.id
-        ? { ...prev, cancelError: error instanceof Error ? `Cancellation did not reach the server: ${error.message}` : "Cancellation did not reach the server. Try again." }
+        ? prev.machine.instructionState === "stopping" ? {
+            ...prev,
+            machine: transition(prev.machine, { type: "CANCEL_FAILED", returnTo: returnTo as CancelableInstructionState }),
+            cancelError: error instanceof Error ? `Cancellation did not reach the server: ${error.message}` : "Cancellation did not reach the server. Try again.",
+          } : prev
         : prev)
     } finally {
       cancelInFlightRef.current = false
@@ -1817,6 +1848,7 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
       restoredTraceEventCount,
       threadHistory,
       recentThreads,
+      recentThreadsStatus,
       openThread,
       presence,
       transport,
@@ -1836,7 +1868,7 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
       retryThread,
       refetchSlowLaneNow: data.refetchSlowLaneNow,
     }),
-    [effectiveMode, thread, threadRestored, restoredTraceEventCount, threadHistory, recentThreads, openThread, presence, transport, selectorInput, lane, micOpen, voiceSpeaking, setVoiceIndicators, submit, continueWork, answerClarification, cancelThread, retryThread, data.refetchSlowLaneNow],
+    [effectiveMode, thread, threadRestored, restoredTraceEventCount, threadHistory, recentThreads, recentThreadsStatus, openThread, presence, transport, selectorInput, lane, micOpen, voiceSpeaking, setVoiceIndicators, submit, continueWork, answerClarification, cancelThread, retryThread, data.refetchSlowLaneNow],
   )
 
   return <KernelContext.Provider value={value}>{children}</KernelContext.Provider>

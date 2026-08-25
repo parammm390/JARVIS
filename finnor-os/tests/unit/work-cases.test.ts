@@ -9,11 +9,11 @@ import {
 
 describe("P2.T1 Work status projection", () => {
   it("keeps the v6 vocabulary exact and exhaustive for domain actions", () => {
-    expect(WORK_STATUSES).toEqual(["Needs you", "Working", "Waiting", "Completed", "Failed", "Blocked"]);
+    expect(WORK_STATUSES).toEqual(["Needs you", "Working", "Waiting", "Partial", "Cancelled", "Completed", "Failed", "Blocked"]);
     expect(projectDomainActionStatus("draft")).toBe("Waiting");
     expect(projectDomainActionStatus("pending")).toBe("Needs you");
     expect(projectDomainActionStatus("approved")).toBe("Waiting");
-    expect(projectDomainActionStatus("rejected")).toBe("Completed");
+    expect(projectDomainActionStatus("rejected")).toBe("Cancelled");
     expect(projectDomainActionStatus("executing")).toBe("Working");
     expect(projectDomainActionStatus("completed")).toBe("Completed");
     expect(projectDomainActionStatus("failed")).toBe("Failed");
@@ -28,7 +28,7 @@ describe("P2.T1 Work status projection", () => {
     expect(projectWorkflowRunStatus("compensated")).toBe("Completed");
     expect(projectWorkflowRunStatus("paused")).toBe("Needs you");
     expect(projectWorkflowRunStatus("escalated")).toBe("Needs you");
-    expect(projectWorkflowRunStatus("cancelled")).toBe("Completed");
+    expect(projectWorkflowRunStatus("cancelled")).toBe("Cancelled");
     expect(projectWorkflowStepStatus("pending")).toBe("Waiting");
     expect(projectWorkflowStepStatus("leased")).toBe("Working");
     expect(projectWorkflowStepStatus("failed")).toBe("Failed");
@@ -40,6 +40,7 @@ describe("P2.T1 Work status projection", () => {
     expect(deriveWorkStatus(["Completed", "Needs you", "Working"])).toBe("Needs you");
     expect(deriveWorkStatus(["Completed", "Failed", "Working"])).toBe("Failed");
     expect(deriveWorkStatus(["Completed", "Blocked"])).toBe("Blocked");
+    expect(deriveWorkStatus(["Cancelled", "Completed"])).toBe("Partial");
     expect(deriveWorkStatus([])).toBe("Waiting");
   });
 

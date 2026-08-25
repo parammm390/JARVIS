@@ -1,6 +1,6 @@
 import type { WorkCaseProjection, WorkEntityLink } from "@/lib/jarvis-client"
 
-export type WorkFilter = "Open" | "Needs you" | "Working" | "Waiting" | "Done" | "Failed"
+export type WorkFilter = "Open" | "Needs you" | "Working" | "Waiting" | "Done" | "Partial" | "Cancelled" | "Failed"
 export const WORK_CHAPTERS = ["WHY", "PLAN", "OWNER", "APPROVAL", "EXECUTION", "EVIDENCE & OUTCOME", "NEXT ACTION"] as const
 
 export function primaryEntity(workCase: WorkCaseProjection): WorkEntityLink | null {
@@ -80,7 +80,7 @@ export function destinationForEntity(entity: WorkEntityLink, workCase: WorkCaseP
 }
 
 export function stageFor(workCase: WorkCaseProjection): string {
-  if (workCase.status === "Failed" || workCase.status === "Blocked") return "Evidence & outcome"
+  if (workCase.status === "Failed" || workCase.status === "Blocked" || workCase.status === "Partial" || workCase.status === "Cancelled") return "Evidence & outcome"
   if (workCase.approvals.some((approval) => approval.status === "pending")) return "Approval"
   if (workCase.operations?.some((operation) => ["queued", "running"].includes(operation.status)) || workCase.workflows.some((workflow) => ["running", "compensating"].includes(workflow.status))) return "Execution"
   if (workCase.receipts.length > 0 || workCase.status === "Completed") return "Evidence & outcome"
@@ -89,7 +89,7 @@ export function stageFor(workCase: WorkCaseProjection): string {
 }
 
 export function filterMatches(workCase: WorkCaseProjection, filter: WorkFilter): boolean {
-  if (filter === "Open") return workCase.status !== "Completed"
+  if (filter === "Open") return workCase.status !== "Completed" && workCase.status !== "Partial" && workCase.status !== "Cancelled"
   if (filter === "Done") return workCase.status === "Completed"
   return workCase.status === filter
 }

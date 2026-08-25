@@ -58,13 +58,18 @@ export type RecoveryKind =
   | "needs_human"
 
 // ---------------------------------------------------------------------------
-// P2.T1 — InstructionState, 12 values (plan v3 §4.4). Do not rename anything here.
+// P2.T1 — canonical instruction lifecycle. `stopping` is the honest local state
+// between a user's cancellation request and canonical server confirmation.
 // ---------------------------------------------------------------------------
 
 export type InstructionState =
   | "idle" | "captured" | "understanding" | "planning" | "clarifying"
-  | "awaiting_approval" | "executing" | "verifying"
+  | "awaiting_approval" | "executing" | "verifying" | "stopping"
   | "completed" | "partial" | "failed" | "cancelled"
+
+export type CancelableInstructionState =
+  | "captured" | "understanding" | "planning" | "clarifying"
+  | "awaiting_approval" | "executing" | "verifying"
 
 /** §4.4 events — every named event a machine transition responds to. `RESET` is
  *  valid from any state. Unlisted (state, event) pairs are a no-op + dev warning,
@@ -80,7 +85,9 @@ export type InstructionEvent =
   | { type: "TRACE_failed" }
   | { type: "PLAN_EMPTY" }
   | { type: "ANSWERED" }
+  | { type: "USER_CANCEL_REQUESTED" }
   | { type: "USER_CANCELLED" }
+  | { type: "CANCEL_FAILED"; returnTo: CancelableInstructionState }
   | { type: "APPROVAL_DECIDED"; approvedCount: number; rejectedCount: number; totalDecided: number }
   | { type: "TRACE_verifying" }
   | { type: "TERMINAL"; ok: number; failed: number; total: number }
