@@ -99,5 +99,5 @@ export function invoiceMatchesView(invoice: InvoiceResource, view: InvoiceView):
 }
 
 export function collectionMatchesView(workCase: WorkCaseProjection, view: CollectionView): boolean {
-  return view === "active" ? workCase.status !== "Completed" : workCase.status === "Completed"
+  return view === "active" ? !["Completed", "Partial", "Cancelled"].includes(workCase.status) : workCase.status === "Completed"
 }

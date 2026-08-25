@@ -124,16 +124,17 @@ export default function AgentFleetSurface() {
   const activity = activityByDomain.get(selectedKey)!
   const activityGroups = useMemo(() => groupCapabilityWork(activity.workCases), [activity.workCases])
   const exceptionGroups = useMemo(() => groupCapabilityWork(activity.exceptions), [activity.exceptions])
-  const provider = providerStatusCopy(integrations?.vapi)
-  const assistantStatus = (key: AgentKey) => assistantStatusCopy(integrations?.voiceAssistants?.find((assistant) => assistant.agentKey === key))
+  const provider = providerStatusCopy(integrations?.vapi, providerLoadState)
+  const assistantStatus = (key: AgentKey) => assistantStatusCopy(integrations?.voiceAssistants?.find((assistant) => assistant.agentKey === key), providerLoadState)
   const selectedAssistants = selected.voiceAgentKeys.map((key) => ({ key, status: assistantStatus(key) }))
-  const activeWork = activity.workCases.filter((workCase) => workCase.status !== "Completed")
+  const activeWork = activity.workCases.filter((workCase) => !["Completed", "Partial", "Cancelled"].includes(workCase.status))
   const authNote = session ? null : "Sign in to inspect tenant-linked calls and Work."
-  const providerDetail = providerLoadState === "loading" ? "Reading the provider-level integration source…" : provider.detail
   const workSourceNote = workLoadState === "loading"
     ? "Reading canonical Work links…"
     : workLoadState === "unavailable"
       ? "The canonical Work source is unavailable; no activity is being inferred."
+      : workLoadState === "idle"
+        ? "Sign in to inspect canonical Work links."
       : null
 
   const inspectWork = (workCase: WorkCaseProjection) => {
@@ -168,7 +169,7 @@ export default function AgentFleetSurface() {
 
       <div className="jarvis-agent-fleet__provider-strip" data-provider-status={provider.tone} data-source="api:integrations-status">
         <span className="jarvis-agent-fleet__provider-mark" aria-hidden><Activity size={16} /></span>
-        <span className="jarvis-agent-fleet__provider-copy"><strong>{providerLoadState === "loading" ? "Vapi provider check in progress" : provider.label}</strong><small>{providerDetail}</small></span>
+        <span className="jarvis-agent-fleet__provider-copy"><strong>{provider.label}</strong><small>{provider.detail}</small></span>
         <span className="jarvis-agent-fleet__provider-scope">Provider fact · not agent readiness</span>
       </div>
 
@@ -178,7 +179,7 @@ export default function AgentFleetSurface() {
           {AGENT_FLEET.map((agent) => {
             const status = assistantStatus(agent.key)
             const observed = callingAgentActivity.get(agent.key)!
-            return <article key={agent.key} data-agent-status={status.tone}><span className="jarvis-agent-fleet__state-dot" aria-hidden /><div><strong>{agent.label}</strong><small>{agent.roleCopy}</small></div><span>{status.label}<small>{observed.calls.length} recorded call{observed.calls.length === 1 ? "" : "s"}</small></span></article>
+            return <article key={agent.key} data-agent-status={status.tone}><span className="jarvis-agent-fleet__state-dot" aria-hidden /><div><strong>{agent.label}</strong><small>{agent.roleCopy}</small></div><span>{status.label}<small>{workLoadState === "loading" ? "Reading call records…" : workLoadState === "unavailable" ? "Call source unavailable" : workLoadState === "idle" ? "Call records not read" : `${observed.calls.length} recorded call${observed.calls.length === 1 ? "" : "s"}`}</small></span></article>
           })}
         </div>
       </section>
@@ -191,8 +192,8 @@ export default function AgentFleetSurface() {
           <div className="jarvis-agent-fleet__rail-list">
             {CAPABILITY_DOMAINS.map((agent) => {
               const observed = activityByDomain.get(agent.key)!
-              const open = observed.workCases.filter((workCase) => workCase.status !== "Completed").length
-              const stateLabel = observed.exceptions.length > 0 ? `${observed.exceptions.length} exceptions` : open > 0 ? `${open} open Work cases` : observed.workCases.length > 0 ? `${observed.workCases.length} observed outcomes` : "No observed Work"
+              const open = observed.workCases.filter((workCase) => !["Completed", "Partial", "Cancelled"].includes(workCase.status)).length
+              const stateLabel = workLoadState === "loading" ? "Reading Work" : workLoadState === "unavailable" ? "Work source unavailable" : workLoadState === "idle" ? "Work not read" : observed.exceptions.length > 0 ? `${observed.exceptions.length} exceptions` : open > 0 ? `${open} open Work cases` : observed.workCases.length > 0 ? `${observed.workCases.length} observed outcomes` : "No observed Work"
               return (
                 <button
                   key={agent.key}
@@ -208,12 +209,12 @@ export default function AgentFleetSurface() {
                 >
                   <DomainGlyph kind={agent.glyph} />
                   <span className="jarvis-agent-fleet__rail-row-copy"><strong>{agent.label}</strong><small>{agent.actionTypes.length} actions · {stateLabel}</small></span>
-                  <span className="jarvis-agent-fleet__rail-row-state" aria-label={stateLabel}>{observed.exceptions.length > 0 ? "!" : open > 0 ? "●" : observed.workCases.length > 0 ? "✓" : "○"}</span>
+                  <span className="jarvis-agent-fleet__rail-row-state" aria-label={stateLabel}>{workLoadState === "loading" ? "…" : workLoadState === "unavailable" ? "!" : workLoadState === "idle" ? "—" : observed.exceptions.length > 0 ? "!" : open > 0 ? "●" : observed.workCases.length > 0 ? "✓" : "○"}</span>
                 </button>
               )
             })}
           </div>
-          <p className="jarvis-agent-fleet__rail-note">● open Work · ✓ observed outcome · ! exception · ○ no observed Work</p>
+          <p className="jarvis-agent-fleet__rail-note">● open Work · ✓ observed outcome · ! exception · — not read · ○ no observed Work</p>
         </aside>
 
         <section className="jarvis-agent-fleet__stage" data-agent-fleet-stage aria-labelledby="selected-agent-title">
@@ -222,9 +223,9 @@ export default function AgentFleetSurface() {
               <DomainGlyph kind={selected.glyph} />
               <div><span className="jarvis-agent-fleet__eyebrow">SELECTED CAPABILITY DOMAIN</span><h2 id="selected-agent-title">{selected.label}</h2></div>
             </div>
-            <div className="jarvis-agent-fleet__stage-state" data-agent-status={activity.exceptions.length > 0 ? "unavailable" : activeWork.length > 0 ? "verified" : "unconfigured"} data-source="api:work-cases">
+            <div className="jarvis-agent-fleet__stage-state" data-agent-status={workLoadState === "loading" ? "loading" : workLoadState === "unavailable" || workLoadState === "idle" ? "unavailable" : activity.exceptions.length > 0 ? "unavailable" : activeWork.length > 0 ? "verified" : "unconfigured"} data-source="api:work-cases">
               <span className="jarvis-agent-fleet__state-dot" aria-hidden />
-              <span>{activity.exceptions.length > 0 ? `${activity.exceptions.length} exception${activity.exceptions.length === 1 ? "" : "s"}` : activeWork.length > 0 ? `${activeWork.length} open Work case${activeWork.length === 1 ? "" : "s"}` : activity.workCases.length > 0 ? `${activity.workCases.length} recorded outcome${activity.workCases.length === 1 ? "" : "s"}` : "No observed Work"}</span>
+              <span>{workLoadState === "loading" ? "Reading Work…" : workLoadState === "unavailable" ? "Work source unavailable" : workLoadState === "idle" ? "Work not read" : activity.exceptions.length > 0 ? `${activity.exceptions.length} exception${activity.exceptions.length === 1 ? "" : "s"}` : activeWork.length > 0 ? `${activeWork.length} open Work case${activeWork.length === 1 ? "" : "s"}` : activity.workCases.length > 0 ? `${activity.workCases.length} recorded outcome${activity.workCases.length === 1 ? "" : "s"}` : "No observed Work"}</span>
             </div>
           </header>
 
@@ -248,7 +249,7 @@ export default function AgentFleetSurface() {
                 {selectedAssistants.length > 0 ? selectedAssistants.map(({ key, status }) => <div key={key} data-agent-status={status.tone}><strong>{key.replaceAll("-", " ")}</strong><span>{status.label}</span><small>{status.detail}</small></div>) : <div><strong>No dedicated calling agent</strong><span>Backend capability domain</span><small>This domain operates through registered actions and Work evidence, not a Vapi assistant.</small></div>}
               </div>
               {activity.calls.length > 0 ? <div className="jarvis-agent-fleet__activity-list jarvis-agent-fleet__activity-list--calls">{activity.calls.slice(0, 4).map(({ workCase, call }) => <CallActivityRow key={call.id} workCase={workCase} call={call} onInspect={() => inspectCall(workCase, call)} />)}</div> : null}
-              {exceptionGroups.length > 0 ? <div className="jarvis-agent-fleet__activity-list jarvis-agent-fleet__activity-list--exceptions">{exceptionGroups.slice(0, 4).map((group) => { const workCase = group.cases[0]!; return <WorkActivityRow key={group.key} workCase={workCase} count={group.cases.length} onInspect={() => inspectWork(workCase)} /> })}</div> : <p>No exact failures or blocked handoffs are recorded for this domain.</p>}
+              {workSourceNote ? <p>{workSourceNote}</p> : exceptionGroups.length > 0 ? <div className="jarvis-agent-fleet__activity-list jarvis-agent-fleet__activity-list--exceptions">{exceptionGroups.slice(0, 4).map((group) => { const workCase = group.cases[0]!; return <WorkActivityRow key={group.key} workCase={workCase} count={group.cases.length} onInspect={() => inspectWork(workCase)} /> })}</div> : <p>No exact failures or blocked handoffs are recorded for this domain.</p>}
             </FleetLane>
           </div>
 

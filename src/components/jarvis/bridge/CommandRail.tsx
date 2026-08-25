@@ -35,6 +35,8 @@ function railBusy(state: InstructionState | null): { disabled: boolean; placehol
       return { disabled: true, placeholder: "JARVIS is resolving context…", cancelable: true }
     case "planning":
       return { disabled: true, placeholder: "JARVIS is planning…", cancelable: true }
+    case "stopping":
+      return { disabled: true, placeholder: "JARVIS is stopping…", cancelable: false }
     case "clarifying":
       return { disabled: false, placeholder: "Answer above, or ask something else", cancelable: true }
     case "awaiting_approval":
@@ -589,8 +591,8 @@ export function CommandRail({
           aria-live="polite"
         >
           <span className="min-w-0 flex-1">
-            <span className="font-black text-[color:var(--j-text)]" data-voice-state-label>{committing ? "Instruction accepted" : busy.cancelable ? (busy.placeholder ?? "Work in progress") : showVoiceStatus ? voiceCopy.label : "Ready"}</span>
-            <span className="ml-2" data-voice-state-detail>{committing ? "Live Work state is updating." : busy.cancelable && voiceCopy.state === "stopped" ? "Cancel remains available here." : showVoiceStatus ? voiceCopy.detail : "No instruction is in flight."}</span>
+            <span className="font-black text-[color:var(--j-text)]" data-voice-state-label>{committing ? "Instruction accepted" : busy.placeholder ?? (busy.cancelable ? "Work in progress" : showVoiceStatus ? voiceCopy.label : "Ready")}</span>
+            <span className="ml-2" data-voice-state-detail>{committing ? "Live Work state is updating." : threadState === "stopping" ? "Waiting for canonical cancellation confirmation." : busy.cancelable && voiceCopy.state === "stopped" ? "Cancel remains available here." : showVoiceStatus ? voiceCopy.detail : "No instruction is in flight."}</span>
           </span>
           {busy.cancelable && <button type="button" className="min-h-9 shrink-0 rounded-lg border border-white/15 px-2.5 font-bold text-[color:var(--j-text)] hover:border-cyan-200/40 hover:text-cyan-100" onClick={cancelInstruction} disabled={committing}>Cancel</button>}
           {voiceCopy.retryable && (
@@ -626,7 +628,7 @@ export function CommandRail({
         />
       )}
       <OpsPanel open={opsOpen} onClose={() => setOpsOpen(false)} />
-      <RecentThreadsPanel open={recentThreadsOpen} onClose={() => setRecentThreadsOpen(false)} thread={kernel.thread} threadHistory={kernel.threadHistory} />
+      <RecentThreadsPanel open={recentThreadsOpen} onClose={() => setRecentThreadsOpen(false)} threads={kernel.recentThreads} status={kernel.recentThreadsStatus} activeThreadId={kernel.thread?.conversationThreadId ?? null} onSelect={kernel.openThread} />
     </div>
   )
 }

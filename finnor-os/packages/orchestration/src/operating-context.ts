@@ -4,6 +4,7 @@ import {
   OPERATING_INTERACTION_PRECEDENCE,
   OPERATING_TRUTH_PRECEDENCE,
   type CanonicalEntityRef,
+  type EmployeeConversationContext,
   type MemorySnapshot,
   type OperatingCompanyDirectory,
   type OperatingContext,
@@ -94,6 +95,7 @@ export interface AssembleOperatingContextOptions {
   sessionId?: string;
   householdId?: string;
   activeContext?: OperatingInteractionContext | Record<string, unknown>;
+  conversationContext?: EmployeeConversationContext;
   /** Semantic memory is deliberately omitted for deterministic live-state reads. */
   includeMemory?: boolean;
   includeSemanticMemory?: boolean;
@@ -324,9 +326,14 @@ export async function assembleOperatingContext(
     try {
       memory = await buildMemorySnapshot({
         tenantId: ctx.tenantId,
+        employeeId: ctx.employeeId,
+        canonicalThreadId: opts.conversationContext?.thread.id,
         sessionId: opts.sessionId,
         householdId: resolvedHouseholdId,
-        semanticQuery: opts.includeSemanticMemory === false ? undefined : opts.instruction,
+        // Phase-6 human turns use employee-owned exact history and Zep facts from
+        // conversationContext. The legacy tenant-wide semantic conversation index
+        // is not a safe source for private reference resolution.
+        semanticQuery: opts.includeSemanticMemory === false || opts.conversationContext ? undefined : opts.instruction,
         semanticLimit: 5,
       });
       if (memory.shortTerm) sources.push({ kind: "SESSION", source: "session_memory", ref: opts.sessionId, asOf: assembledAt, role: "context_only" });
@@ -368,6 +375,11 @@ export async function assembleOperatingContext(
     }
   }
   if (resolvedHouseholdId && UUID.test(resolvedHouseholdId)) refs.set(`household:${resolvedHouseholdId}`, { entityType: "household", entityId: resolvedHouseholdId });
+  for (const ref of opts.conversationContext?.resolution.resolvedReferences ?? []) {
+    if (ENTITY_TYPES.has(ref.entityType) && UUID.test(ref.entityId)) {
+      refs.set(`${ref.entityType}:${ref.entityId}`, { entityType: ref.entityType, entityId: ref.entityId });
+    }
+  }
   const trustedPartyRefs = new Map<string, PartyRef>();
   const excludedInteractionRefs = new Set((interactionContext?.excludedEntities ?? []).map((ref) => `${ref.entityType}:${ref.entityId}`));
   const directInteractionRefs = [
@@ -429,6 +441,8 @@ export async function assembleOperatingContext(
     truthPrecedence: OPERATING_TRUTH_PRECEDENCE,
     interactionPrecedence: OPERATING_INTERACTION_PRECEDENCE,
     interactionContext,
+    conversationContext: opts.conversationContext ?? null,
+    personalMemory: opts.conversationContext?.personalMemories ?? [],
     tenant: {
       id: ctx.tenantId,
       companyName: tenantRow?.name ?? null,

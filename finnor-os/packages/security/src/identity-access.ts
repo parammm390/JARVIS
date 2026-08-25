@@ -746,6 +746,8 @@ export async function listAvailableIdentityAccess(tenantId: string, actorId: str
   const actor = await loadActorScope(tenantId, actorId);
   const [communications, profiles] = await Promise.all([communicationRows(tenantId), authRows(tenantId)]);
   const communicationIdentitiesSafe: AvailableCommunicationIdentity[] = communications.flatMap((row) => {
+    if (row.bindingStatus !== "active" || row.identityStatus !== "active") return [];
+    if (row.authProfileId && (row.linkedProfileStatus !== "active" || row.linkedConnectionStatus !== "active")) return [];
     const principalRef: IdentityPrincipalRef = { type: row.principalType, id: row.principalId };
     if (relation(principalRef, tenantId, actor).crossPrincipal) return [];
     return [{

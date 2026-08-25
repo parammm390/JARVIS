@@ -18,6 +18,52 @@ export interface RestingAttentionItem {
   href: string
 }
 
+export interface RestingAttentionPresentation {
+  heading: string
+  detail: string
+  truthLabel: string
+  showClearState: boolean
+}
+
+/** A zero count is only an empty result after a successful canonical read. */
+export function restingAttentionPresentation(input: {
+  itemCount: number
+  loading: boolean
+  error: string | null
+  stale: boolean
+}): RestingAttentionPresentation {
+  if (input.loading && input.itemCount === 0) {
+    return {
+      heading: "Reading what needs attention…",
+      detail: "No queue conclusion is available until canonical Work responds.",
+      truthLabel: "Reading projection",
+      showClearState: false,
+    }
+  }
+  if (input.error && input.itemCount === 0) {
+    return {
+      heading: "Operational attention is unavailable",
+      detail: "Canonical Work could not be read, so JARVIS is not claiming the queue is clear.",
+      truthLabel: "Projection unavailable",
+      showClearState: false,
+    }
+  }
+  if (input.itemCount > 0) {
+    return {
+      heading: `${input.itemCount} ${input.itemCount === 1 ? "thing needs" : "things need"} attention now`,
+      detail: "Only the highest-priority conditions from canonical Work are shown here.",
+      truthLabel: input.stale ? "Last verified projection" : "Live projection",
+      showClearState: false,
+    }
+  }
+  return {
+    heading: "No urgent Work is waiting",
+    detail: "JARVIS found no blocked, failed, approval-bound, overdue-continuation, or employee-assigned Work requiring action.",
+    truthLabel: input.stale ? "Last verified projection" : "Live projection",
+    showClearState: true,
+  }
+}
+
 function firstRecordedText(value: unknown): string | null {
   if (typeof value === "string" && value.trim()) return value.trim()
   if (!value || typeof value !== "object" || Array.isArray(value)) return null
@@ -81,7 +127,7 @@ function authorityFor(workCase: WorkCaseProjection, pendingApprovalCount: number
 }
 
 function buildItem(workCase: WorkCaseProjection, nowMs: number): RestingAttentionItem | null {
-  if (workCase.status === "Completed") return null
+  if (workCase.status === "Completed" || workCase.status === "Cancelled") return null
 
   const failedReceipt = workCase.receipts.find((receipt) => receipt.failure !== null)
   const failedOperation = workCase.operations?.find((operation) => operation.status === "failed" || operation.counts.failed > 0 || operation.counts.retry > 0)
@@ -91,6 +137,7 @@ function buildItem(workCase: WorkCaseProjection, nowMs: number): RestingAttentio
   const pendingApprovalCount = workCase.approvals.filter((approval) => approval.status === "pending").length
   const failed = workCase.status === "Failed"
     || workCase.status === "Blocked"
+    || workCase.status === "Partial"
     || failedReceipt !== undefined
     || durableFailure !== null
     || objective?.state === "failed"

@@ -8,6 +8,7 @@ export * from "./operational-queries";
 export * from "./company-graph";
 export * from "./operating-context";
 export * from "./operating-interaction";
+export * from "./conversation-context";
 export * from "./identity-access";
 export * from "./universal-actions";
 export * from "./computer";

@@ -11,7 +11,7 @@ import type { WorkCaseProjection } from "@/lib/jarvis-client"
 import { useBusinessProjection } from "../lib/business-projections"
 import { businessProjections } from "../lib/projection-definitions"
 import { OperationalSurfaceNav, withOperationalContext, type HouseholdContext } from "../surfaces/OperationalSurfaceNav"
-import { dispatchStopMatchesFocus, exactWorkCaseForStop, shiftIsoDate, workEntityIds, type DispatchFocusQuery } from "./dispatch-field-model"
+import { dispatchSourceState, dispatchStopMatchesFocus, exactWorkCaseForStop, shiftIsoDate, workEntityIds, type DispatchFocusQuery } from "./dispatch-field-model"
 import "../jarvis-theme.css"
 import { useOperatingInteraction, useOperatingInteractionActions } from "../kernel/operating-interaction"
 import { TenantReadyExperience } from "../experience/TenantReadyExperience"
@@ -53,7 +53,7 @@ function linksForStop(stop: Stop, workCase: WorkCaseProjection | null): Array<{ 
   ]
 }
 
-function StopRow({ stop, workCase, focused = false, selected = false, onFocus, onToggle }: { stop: Stop; workCase: WorkCaseProjection | null; focused?: boolean; selected?: boolean; onFocus: () => void; onToggle: () => void }) {
+function StopRow({ stop, workCase, workSourceState, focused = false, selected = false, onFocus, onToggle }: { stop: Stop; workCase: WorkCaseProjection | null; workSourceState: "loading" | "live" | "unavailable"; focused?: boolean; selected?: boolean; onFocus: () => void; onToggle: () => void }) {
   const links = linksForStop(stop, workCase)
   return (
     <article className="jarvis-dispatch-stop-row" data-visit-id={stop.visitId} data-household-id={stop.householdId} data-focused={focused ? "true" : "false"}>
@@ -67,7 +67,7 @@ function StopRow({ stop, workCase, focused = false, selected = false, onFocus, o
       </button>
       <div className="jarvis-dispatch-stop-row__ids">
         <span><CircleDot size={11} aria-hidden /> {stop.sourceKind === "appointment" ? "Appointment" : "Visit"} {shortId(stop.visitId)}</span>
-        {workCase ? <span className="jarvis-dispatch-stop-row__linked"><Wrench size={11} aria-hidden /> Work {shortId(workCase.id)}</span> : <span className="jarvis-dispatch-stop-row__unlinked">No exact Work case linked</span>}
+        {workSourceState === "loading" ? <span className="jarvis-dispatch-stop-row__unlinked">Reading exact Work link…</span> : workSourceState === "unavailable" ? <span className="jarvis-dispatch-stop-row__unlinked">Work link source unavailable</span> : workCase ? <span className="jarvis-dispatch-stop-row__linked"><Wrench size={11} aria-hidden /> Work {shortId(workCase.id)}</span> : <span className="jarvis-dispatch-stop-row__unlinked">No exact Work case linked</span>}
       </div>
       <div className="jarvis-dispatch-stop-row__links">
         {links.map((link) => <Link key={link.href} href={link.href}>{link.label}<ArrowUpRight size={11} aria-hidden /></Link>)}
@@ -100,8 +100,10 @@ export default function DispatchFieldSurface() {
   const workProjection = useBusinessProjection(businessProjections.workCases(), { enabled: canReadDispatch })
   const data: MapData | null = mapProjection.data
   const workCases = useMemo<WorkCaseProjection[]>(() => workProjection.data ?? [], [workProjection.data])
+  const workSourceState = workProjection.data ? "live" : workProjection.status === "error" ? "unavailable" : "loading"
   const error = mapProjection.error ? dispatchErrorCopy(mapProjection.error) : null
   const loading = canReadDispatch && mapProjection.data === null && mapProjection.status !== "error"
+  const sourceState = dispatchSourceState({ data, loading, error })
   const [surfaceSearch, setSurfaceSearch] = useState("")
   const surfaceQuery = useMemo(() => new URLSearchParams(surfaceSearch), [surfaceSearch])
   const requestedWorkCaseId = surfaceQuery.get("workCaseId")
@@ -171,7 +173,7 @@ export default function DispatchFieldSurface() {
       <OperationalSurfaceNav active="schedule" context={context} workCaseId={requestedWorkCaseId} />
       <section className="jarvis-dispatch-hero">
         <div><span className="jarvis-dispatch-eyebrow">SCHEDULE · DISPATCH FIELD</span><h1>Geography, today, exceptions.</h1><p>Stored coordinates and exact operational records; no calendar grid rebuilt here.</p></div>
-        <div className="jarvis-dispatch-hero__controls"><span className="jarvis-dispatch-source" data-source-state={data ? "live" : "unavailable"}><span aria-hidden />{data ? "Source live" : "Source unavailable"}</span><label><CalendarDays size={14} aria-hidden /><span className="sr-only">Dispatch day</span><input aria-label="Dispatch day" type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label><button type="button" onClick={() => void load()} aria-label="Refresh Dispatch Field"><RefreshCw size={15} aria-hidden /></button></div>
+        <div className="jarvis-dispatch-hero__controls"><span className="jarvis-dispatch-source" data-source-state={sourceState}><span aria-hidden />{sourceState === "live" ? "Source live" : sourceState === "loading" ? "Reading source" : "Source unavailable"}</span><label><CalendarDays size={14} aria-hidden /><span className="sr-only">Dispatch day</span><input aria-label="Dispatch day" type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label><button type="button" onClick={() => void load()} aria-label="Refresh Dispatch Field"><RefreshCw size={15} aria-hidden /></button></div>
       </section>
       {role === "dispatcher" ? <TenantReadyExperience role="dispatcher" compact /> : null}
       {error && <div className="jarvis-dispatch-banner" role="status"><span>{error}</span><Link href="/jarvis/login">Sign in</Link></div>}
@@ -181,7 +183,7 @@ export default function DispatchFieldSurface() {
         <div><span>Stops today</span><strong>{data?.stops.length ?? "—"}</strong></div>
         <div><span>Placed</span><strong>{data ? placed.length : "—"}</strong></div>
         <div><span>Unplaced</span><strong className={unplaced.length > 0 ? "is-attention" : ""}>{data ? unplaced.length : "—"}</strong></div>
-        <div><span>Work-linked visits</span><strong>{data ? linkedStops : "—"}</strong></div>
+        <div><span>Work-linked visits</span><strong>{data && workSourceState === "live" ? linkedStops : "—"}</strong></div>
         <div><span>Route evidence</span><strong>{data?.route?.kmSaved != null ? `${data.route.kmSaved} km saved` : "Not recorded"}</strong></div>
       </section>
       <section className="jarvis-dispatch-layout" aria-label="Dispatcher map and day rail">
@@ -193,8 +195,8 @@ export default function DispatchFieldSurface() {
         </div>
         <aside className="jarvis-dispatch-day-rail" aria-label="Dispatch day rail">
           <div className="jarvis-dispatch-day-rail__heading"><div><span className="jarvis-dispatch-eyebrow">FIELD RAIL</span><h2>{date}</h2></div><span>{data ? data.stops.length : "—"}</span></div>
-          {unplaced.length > 0 && <section className="jarvis-dispatch-exceptions"><div><AlertTriangle size={14} aria-hidden /><strong>Needs intervention</strong></div><p>{unplaced.length} stop{unplaced.length === 1 ? "" : "s"} have no stored coordinate and remain unplaced.</p>{unplaced.map((stop) => { const workCase = exactWorkCaseForStop(stop, workCases); return <StopRow key={stop.visitId} stop={stop} workCase={workCase} focused={hasFocus && dispatchStopMatchesFocus(stop, workCase, focus)} selected={stopSelected(stop)} onFocus={() => focusStop(stop)} onToggle={() => toggleStop(stop)} /> })}</section>}
-          <section className="jarvis-dispatch-today"><div className="jarvis-dispatch-subheading"><span>Today&apos;s placed stops</span><span>{placed.length}</span></div>{placed.length > 0 ? placed.map((stop) => { const workCase = exactWorkCaseForStop(stop, workCases); return <StopRow key={stop.visitId} stop={stop} workCase={workCase} focused={hasFocus && dispatchStopMatchesFocus(stop, workCase, focus)} selected={stopSelected(stop)} onFocus={() => focusStop(stop)} onToggle={() => toggleStop(stop)} /> }) : <p className="jarvis-dispatch-empty-copy">No placed stops were returned for this day.</p>}</section>
+          {unplaced.length > 0 && <section className="jarvis-dispatch-exceptions"><div><AlertTriangle size={14} aria-hidden /><strong>Needs intervention</strong></div><p>{unplaced.length} stop{unplaced.length === 1 ? "" : "s"} have no stored coordinate and remain unplaced.</p>{unplaced.map((stop) => { const workCase = exactWorkCaseForStop(stop, workCases); return <StopRow key={stop.visitId} stop={stop} workCase={workCase} workSourceState={workSourceState} focused={hasFocus && dispatchStopMatchesFocus(stop, workCase, focus)} selected={stopSelected(stop)} onFocus={() => focusStop(stop)} onToggle={() => toggleStop(stop)} /> })}</section>}
+          <section className="jarvis-dispatch-today"><div className="jarvis-dispatch-subheading"><span>Today&apos;s placed stops</span><span>{data ? placed.length : "—"}</span></div>{placed.length > 0 ? placed.map((stop) => { const workCase = exactWorkCaseForStop(stop, workCases); return <StopRow key={stop.visitId} stop={stop} workCase={workCase} workSourceState={workSourceState} focused={hasFocus && dispatchStopMatchesFocus(stop, workCase, focus)} selected={stopSelected(stop)} onFocus={() => focusStop(stop)} onToggle={() => toggleStop(stop)} /> }) : <p className="jarvis-dispatch-empty-copy">{loading && !data ? "Reading placed stops…" : "No placed stops were returned for this day."}</p>}</section>
         </aside>
       </section>
     </main>

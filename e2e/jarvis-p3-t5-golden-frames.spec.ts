@@ -144,7 +144,7 @@ test.describe("P3.T5 — 12 Golden Frames", () => {
       if (frame.id === "12-agents-fleet") {
         expect(await page.getByRole("heading", { name: "Five real calling agents. Fifty-nine registered actions." }).count()).toBe(1)
         expect(await page.locator("[data-agent-fleet-rail] [data-agent-key]").count()).toBe(9)
-        expect(await page.getByText("Assistant status unavailable").count()).toBeGreaterThan(0)
+        expect(await page.getByText("Assistant status not read").count()).toBeGreaterThan(0)
       }
 
       await page.screenshot({ path: `${OUT_DIR}/${frame.id}-${frame.width}x${frame.height}.png`, fullPage: true })

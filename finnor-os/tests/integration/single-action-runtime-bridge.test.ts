@@ -18,13 +18,14 @@ import {
   integrationOperations,
   jobs,
   reconciliationCases,
+  receiveWork,
   tasks,
   users,
   withTenant,
   workflowRuns,
   workflowSteps,
 } from "@finnor/db";
-import { FinnorOrchestrator, authorizeActionExecutionTx, executeAuthorizedEffectStep } from "@finnor/orchestration";
+import { FinnorOrchestrator, authorizeActionExecutionTx, emitInstructionEvent, executeAuthorizedEffectStep } from "@finnor/orchestration";
 import { migrate } from "../../packages/db/migrate";
 import { seed, SEED_OWNER_EMAIL, SEED_TENANT_ID } from "../../packages/db/seed";
 import { runWorkflowStep } from "../../apps/worker/src/handlers/run-workflow-step";
@@ -184,6 +185,35 @@ describe.skipIf(!available)("single-action universal durable boundary", () => {
     ]));
     expect(action!.status).toBe("rejected");
     expect(effect!.status).toBe("cancelled");
+    expect(commandRows).toHaveLength(0);
+  });
+
+  it("refuses a late approval after the instruction cancellation fence commits", async () => {
+    const fixture = await draftUpdate("Cancelled Work must never authorize");
+    const received = await receiveWork({
+      tenantId: SEED_TENANT_ID,
+      userId: ownerId,
+      instruction: "Update the task after approval",
+      channel: "text",
+      instructionId: randomUUID(),
+    });
+    await withTenant(SEED_TENANT_ID, (db) => db.update(domainActions).set({
+      workId: received.workId,
+      instructionId: received.instructionId,
+    }).where(and(eq(domainActions.tenantId, SEED_TENANT_ID), eq(domainActions.id, fixture.action.id))));
+    await emitInstructionEvent(SEED_TENANT_ID, received.instructionId, "cancelled", {
+      fence: true,
+      canonical: false,
+      requestedBy: ownerId,
+    });
+
+    const approval = await fixture.orchestrator.decide(fixture.action.id, SEED_TENANT_ID, "approve", ownerId, { role: "owner" });
+    expect(approval).toMatchObject({ status: "failure", output: { cancelled: true } });
+    const [action, commandRows] = await withTenant(SEED_TENANT_ID, async (db) => Promise.all([
+      db.select().from(domainActions).where(eq(domainActions.id, fixture.action.id)).then((rows) => rows[0]),
+      db.select().from(commands).where(eq(commands.businessEffectId, fixture.effectId)),
+    ]));
+    expect(action!.status).toBe("pending");
     expect(commandRows).toHaveLength(0);
   });
 

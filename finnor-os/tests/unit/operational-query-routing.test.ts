@@ -31,6 +31,26 @@ describe("Upgrade 3 deterministic operational-query classification", () => {
   });
 
   it.each([
+    "Show the schedule tomorrow. Read only: do not create, update, cancel, approve, or execute any business action.",
+    "Show the schedule tomorrow and do not cancel appointments",
+    "Show the schedule tomorrow, but never update any appointment",
+  ])("keeps an explicit trailing non-effect guard on the deterministic read lane: %s", (question) => {
+    expect(interpretOperationalQuery(question)).toMatchObject({
+      route: "fast_read",
+      request: { intent: "schedule_range", localDateRange: { startDate: "tomorrow" } },
+    });
+  });
+
+  it.each([
+    "Can you cancel tomorrow's appointment?",
+    "Show the schedule tomorrow, then cancel the first appointment",
+    "Show the schedule tomorrow. Create a follow-up task, but do not send it",
+    "Do not cancel tomorrow's appointments",
+  ])("never strips a consequential primary request: %s", (question) => {
+    expect(interpretOperationalQuery(question).route).toBe("planner");
+  });
+
+  it.each([
     "Create an invoice for Alice Johnson",
     "Send a payment reminder to every overdue customer",
     "Schedule a service visit for tomorrow",

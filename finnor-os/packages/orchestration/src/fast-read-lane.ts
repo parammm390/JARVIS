@@ -172,7 +172,13 @@ export interface FastReadOnlyRouterDeps {
 }
 
 const QUESTION_PREFIX = /^(?:how|what|which|where|when|who|is|are|do|does|did|can|could|tell me|show|find|give me|list|list out|get|summarize|explain)\b/i;
-const MUTATION_OR_ADVICE = /\b(?:create|send|update|change|delete|remove|approve|reject|book|call|text|email|pay|charge|reorder|restock|flag|mark|start|launch|assign|execute|run|prepare|draft|write|edit|improve|recommend|recommendation|advice|should|make|reschedule|schedule\s+(?:an?|the)?\s*(?:appointment|visit|service|water\s*test|job))\b/i;
+const MUTATION_VERB = String.raw`(?:create|send|update|change|delete|remove|approve|reject|book|cancel|call|text|email|pay|charge|reorder|restock|flag|mark|start|launch|assign|execute|run|prepare|draft|write|edit|improve|make|reschedule)`;
+const MUTATION_OR_ADVICE = new RegExp(String.raw`\b(?:${MUTATION_VERB}|recommend|recommendation|advice|should|schedule\s+(?:an?|the)?\s*(?:appointment|visit|service|water\s*test|job))\b`, "i");
+const GUARDED_MUTATION_VERB = String.raw`(?:${MUTATION_VERB}|schedule)`;
+const TRAILING_READ_ONLY_GUARD = new RegExp(
+  String.raw`^(.+?)(?:(?:[.!?]\s+)|(?:,\s*|\s+)(?:and|but)\s+)(?:read[\s-]*only\s*:\s*)?(?:please\s+)?(?:do\s+not|don't|never)\s+${GUARDED_MUTATION_VERB}\b[\s\S]*$`,
+  "i",
+);
 const EXTERNAL_OR_AMBIGUOUS = /\b(?:quickbooks|stripe|google|meta|vapi|integration|connected account|external|online|web|research|look up|competitors?|comparable compan(?:y|ies)|peer compan(?:y|ies)|latest|current\s+(?:news|benchmark|market|source|industry)|why|forecast|predict|projection|trend|benchmark|cite|citation|source-backed)\b/i;
 const CASH_COLLECTIONS = /\b(?:cash\s+collections?|collections?|payments?\s+collected|collected\s+(?:cash|payments?)|cash\s+position|cash\b[\s\S]{0,40}\bcollected)\b/i;
 const ISO_DATE = /\b\d{4}-\d{2}-\d{2}\b/g;
@@ -187,6 +193,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function normalizedInstruction(instruction: string): string {
   return instruction.trim().replace(/\s+/g, " ");
+}
+
+/**
+ * Users often append a negative safety constraint to an otherwise deterministic
+ * read ("Show tomorrow's schedule. Read only: do not update anything"). That
+ * constraint must not turn the read into a mutation, but only when it is a
+ * syntactically separate, trailing clause. The primary request is still scanned
+ * normally, so "Create a follow-up, but do not send it" remains consequential.
+ */
+function withoutTrailingReadOnlyGuard(instruction: string): string {
+  const guarded = instruction.match(TRAILING_READ_ONLY_GUARD)?.[1]?.trim();
+  return guarded || instruction;
 }
 
 function validLocalDate(value: string): boolean {
@@ -319,10 +337,11 @@ function assertNever(value: never): never {
 /** Pure, fail-closed natural-language interpretation. */
 export function interpretOperationalQuery(instruction: string): OperationalQueryDecision {
   const normalized = normalizedInstruction(instruction);
-  if (!normalized || normalized.length > 500 || (!QUESTION_PREFIX.test(normalized) && !/\?\s*$/.test(normalized))) return { route: "planner", reason: "not_question" };
-  if (MUTATION_OR_ADVICE.test(normalized)) return { route: "planner", reason: "mutation_or_advice" };
-  if (EXTERNAL_OR_AMBIGUOUS.test(normalized)) return { route: "planner", reason: "external_or_ambiguous" };
-  const draft = parseOperationalQuery(normalized);
+  const readRequest = withoutTrailingReadOnlyGuard(normalized);
+  if (!normalized || normalized.length > 500 || (!QUESTION_PREFIX.test(readRequest) && !/\?\s*$/.test(readRequest))) return { route: "planner", reason: "not_question" };
+  if (MUTATION_OR_ADVICE.test(readRequest)) return { route: "planner", reason: "mutation_or_advice" };
+  if (EXTERNAL_OR_AMBIGUOUS.test(readRequest)) return { route: "planner", reason: "external_or_ambiguous" };
+  const draft = parseOperationalQuery(readRequest);
   return draft ? { route: "fast_read", confidence: "high", request: toCanonicalRequest(draft) } : { route: "planner", reason: "unsupported" };
 }
 

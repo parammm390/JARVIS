@@ -87,7 +87,7 @@ export function ThreadHeard({
   const heardRef = useRef<HTMLDivElement | null>(null)
   const state = thread.machine.instructionState
   const failed = thread.machine.instructionState === "failed" && thread.nodes.length === 0 && thread.submitError
-  const canCancel = !["completed", "failed", "partial", "cancelled"].includes(state)
+  const canCancel = !["completed", "failed", "partial", "cancelled", "stopping"].includes(state)
 
   useEffect(() => {
     if (!intentLaunch) return
@@ -112,6 +112,11 @@ export function ThreadHeard({
         {state === "captured" && !failed && (
           <ThreadSignal>
             {resuming ? "Your answer is captured. I’m continuing this thread from here." : "Captured. Waiting for JARVIS to acknowledge the instruction."}
+          </ThreadSignal>
+        )}
+        {state === "stopping" && (
+          <ThreadSignal>
+            Cancellation requested. Waiting for the canonical Work state to confirm the stop.
           </ThreadSignal>
         )}
         {failed && (

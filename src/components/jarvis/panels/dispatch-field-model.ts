@@ -1,6 +1,14 @@
 import type { WorkCaseProjection } from "@/lib/jarvis-client"
 import type { Stop } from "./DispatchMap"
 
+export type DispatchSourceState = "loading" | "live" | "unavailable"
+
+export function dispatchSourceState(input: { data: unknown; loading: boolean; error: string | null }): DispatchSourceState {
+  if (input.data !== null && input.data !== undefined) return "live"
+  if (input.loading) return "loading"
+  return "unavailable"
+}
+
 export function shiftIsoDate(value: string, days: number): string {
   const [year, month, day] = value.split("-").map(Number)
   if (!year || !month || !day) return value

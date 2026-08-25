@@ -37,6 +37,7 @@ describe("kernel/presence — derivation order, first match wins", () => {
     ["clarifying", "asking"],
     ["awaiting_approval", "proposing"],
     ["executing", "working"],
+    ["stopping", "working"],
     ["verifying", "verifying"],
   ])("rule 2: %s -> %s", (state, presence) => {
     expect(derivePresence(input({ activeInstructionState: state as PresenceInput["activeInstructionState"] }))).toBe(presence)

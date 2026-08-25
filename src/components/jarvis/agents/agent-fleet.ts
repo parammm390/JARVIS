@@ -287,7 +287,8 @@ export function projectAgentActivity(workCases: WorkCaseProjection[], key: Agent
   return { workCases: matchingWorkCases, calls, exceptions }
 }
 
-export type ProviderStatusTone = "verified" | "unconfigured" | "unavailable"
+export type ProviderStatusTone = "loading" | "verified" | "unconfigured" | "unavailable"
+export type ProjectionSourceState = "idle" | "loading" | "live" | "unavailable"
 
 export interface ProviderStatusCopy {
   label: string
@@ -295,7 +296,9 @@ export interface ProviderStatusCopy {
   tone: ProviderStatusTone
 }
 
-export function assistantStatusCopy(assistant: VoiceAssistantHealth | null | undefined): ProviderStatusCopy {
+export function assistantStatusCopy(assistant: VoiceAssistantHealth | null | undefined, sourceState: ProjectionSourceState = "live"): ProviderStatusCopy {
+  if (sourceState === "loading") return { label: "Assistant check in progress", detail: "Reading assistant-specific configuration from the provider source.", tone: "loading" }
+  if (sourceState === "idle") return { label: "Assistant status not read", detail: "Sign in to inspect tenant assistant configuration.", tone: "unavailable" }
   if (!assistant) return { label: "Assistant status unavailable", detail: "No assistant-specific configuration result was returned.", tone: "unavailable" }
   if (!assistant.configured) return { label: "Assistant not configured", detail: "No provider assistant is bound to this channel.", tone: "unconfigured" }
   if (assistant.healthy === true) return { label: "Assistant configuration verified", detail: "The configured provider assistant exists and is readable by the active Vapi account.", tone: "verified" }
@@ -307,7 +310,21 @@ export function assistantStatusCopy(assistant: VoiceAssistantHealth | null | und
  * Vapi's integration endpoint only proves provider-level configuration/health. It
  * must never be promoted into a per-agent Ready state.
  */
-export function providerStatusCopy(provider: ProviderHealth | null | undefined): ProviderStatusCopy {
+export function providerStatusCopy(provider: ProviderHealth | null | undefined, sourceState: ProjectionSourceState = "live"): ProviderStatusCopy {
+  if (sourceState === "loading") {
+    return {
+      label: "Vapi provider check in progress",
+      detail: "Reading the provider-level integration source.",
+      tone: "loading",
+    }
+  }
+  if (sourceState === "idle") {
+    return {
+      label: "Vapi provider status not read",
+      detail: "Sign in to inspect the tenant provider configuration.",
+      tone: "unavailable",
+    }
+  }
   if (!provider) {
     return {
       label: "Vapi provider status unavailable",

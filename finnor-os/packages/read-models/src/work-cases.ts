@@ -37,7 +37,7 @@ import {
 } from "@finnor/db";
 import { and, asc, desc, eq, or } from "drizzle-orm";
 
-export const WORK_STATUSES = ["Needs you", "Working", "Waiting", "Completed", "Failed", "Blocked"] as const;
+export const WORK_STATUSES = ["Needs you", "Working", "Waiting", "Partial", "Cancelled", "Completed", "Failed", "Blocked"] as const;
 export type WorkStatus = (typeof WORK_STATUSES)[number];
 type DurableWorkRow = typeof works.$inferSelect;
 
@@ -399,8 +399,9 @@ export function projectDomainActionStatus(status: DomainActionStatus): WorkStatu
     case "draft":
       return "Waiting";
     case "completed":
-    case "rejected":
       return "Completed";
+    case "rejected":
+      return "Cancelled";
   }
 }
 
@@ -417,8 +418,9 @@ export function projectWorkflowRunStatus(status: WorkflowRunStatus): WorkStatus 
       return "Working";
     case "completed":
     case "compensated":
-    case "cancelled":
       return "Completed";
+    case "cancelled":
+      return "Cancelled";
   }
 }
 
@@ -458,8 +460,9 @@ function projectInstructionPhase(phase: InstructionPhase | null): WorkStatus | n
       return "Working";
     case "verified":
     case "completed":
-    case "cancelled":
       return "Completed";
+    case "cancelled":
+      return "Cancelled";
     case null:
       return null;
   }
@@ -471,7 +474,9 @@ const STATUS_PRIORITY: Record<WorkStatus, number> = {
   "Needs you": 4,
   Working: 3,
   Waiting: 2,
-  Completed: 1,
+  Partial: 2,
+  Cancelled: 1,
+  Completed: 0,
 };
 
 export function deriveWorkStatus(statuses: WorkStatus[], instructionPhase: InstructionPhase | null = null): WorkStatus {
@@ -481,6 +486,8 @@ export function deriveWorkStatus(statuses: WorkStatus[], instructionPhase: Instr
   // permanently claiming "Needs you". Do not let that observational lag override
   // unanimous terminal execution state.
   if (statuses.length > 0 && statuses.every((status) => status === "Completed")) return "Completed";
+  if (statuses.length > 0 && statuses.every((status) => status === "Cancelled")) return "Cancelled";
+  if (statuses.length > 0 && statuses.every((status) => status === "Completed" || status === "Cancelled")) return "Partial";
   const candidates = [...statuses, ...(instructionPhase ? [projectInstructionPhase(instructionPhase)] : [])].filter(
     (status): status is WorkStatus => status !== null,
   );
@@ -1025,9 +1032,12 @@ export async function workCases(tenantId: string): Promise<WorkCaseProjection[]>
       const lastPhase = instruction?.lastPhase ?? null;
       const status = durableWork
         ? durableWork.status === "completed"
-          ? "Completed"
+          ? operations.some((operation) => operation.status === "completed_with_failures")
+            || (statusCandidates.includes("Completed") && statusCandidates.includes("Cancelled"))
+            ? "Partial"
+            : "Completed"
           : durableWork.status === "cancelled"
-            ? "Completed"
+            ? "Cancelled"
           : durableWork.status === "failed"
             ? "Failed"
             : durableWork.status === "blocked"

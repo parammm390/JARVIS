@@ -31,7 +31,8 @@ test.describe("P3.T3 — Agent causality and auth-boundary audit", () => {
       await page.goto("/jarvis/agents", { waitUntil: "domcontentloaded" })
       await expect(page.locator("[data-jarvis-agent-fleet]")).toBeVisible()
       await expect(page.locator("[data-agent-fleet-rail] [data-agent-key]")).toHaveCount(9)
-      await expect(page.locator(".jarvis-calling-agents")).toContainText("Assistant status unavailable")
+      await expect(page.locator(".jarvis-calling-agents")).toContainText("Assistant status not read")
+      await expect(page.locator(".jarvis-calling-agents")).toContainText("Call records not read")
       await expect(page.locator(".jarvis-agent-fleet__provider-scope")).toContainText("not agent readiness")
       await expect(page.locator("[data-agent-fleet-inspector]")).toHaveCount(0)
 
@@ -39,12 +40,12 @@ test.describe("P3.T3 — Agent causality and auth-boundary audit", () => {
         viewport: currentViewport,
         workFetches: performance.getEntriesByType("resource").filter((entry) => entry.name.includes("read-models/work-cases")).length,
         scrollWidth: document.documentElement.scrollWidth,
-        emptyWork: document.querySelector(".jarvis-agent-fleet__lane")?.textContent?.includes("No exact") ?? false,
+        workNotRead: document.querySelector(".jarvis-agent-fleet__lane")?.textContent?.includes("Sign in to inspect canonical Work links.") ?? false,
       }), viewport.width)
       snapshots.push(snapshot)
       expect(snapshot.workFetches).toBe(0)
       expect(snapshot.scrollWidth).toBe(viewport.width)
-      expect(snapshot.emptyWork).toBe(true)
+      expect(snapshot.workNotRead).toBe(true)
       await page.screenshot({ path: `${OUT_DIR}/fleet-causality-${viewport.width}x${viewport.height}.png`, fullPage: true })
     }
 

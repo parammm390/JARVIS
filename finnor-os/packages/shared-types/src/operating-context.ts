@@ -2,6 +2,7 @@ import type { CanonicalEntityRef, PartyRef } from "./company-graph";
 import type { OperationalPartySummary } from "./operational-queries";
 import type { OperatingIdentityAccess } from "./identity-access";
 import type { OperatingInteractionContext, OperatingInteractionPrecedence } from "./operating-interaction";
+import type { EmployeeConversationContext, EmployeePersonalMemory } from "./conversation-context";
 
 /**
  * Evidence classes are deliberately ordered.  Callers may enrich a higher class
@@ -111,6 +112,10 @@ export interface OperatingContext {
   interactionPrecedence?: readonly OperatingInteractionPrecedence[];
   /** Authenticated, tenant-re-resolved explicit canvas state. */
   interactionContext?: OperatingInteractionContext | null;
+  /** Private authenticated-human context. It is never populated for a service
+   * principal and remains distinct from Work and canonical company truth. */
+  conversationContext?: EmployeeConversationContext | null;
+  personalMemory?: EmployeePersonalMemory[];
   tenant: {
     id: string;
     companyName: string | null;
