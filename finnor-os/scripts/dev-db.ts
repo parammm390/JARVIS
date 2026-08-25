@@ -21,7 +21,18 @@ async function main() {
   const fresh = !(await import("node:fs")).existsSync(join(dataDir, "PG_VERSION"));
   if (fresh) await pg.initialise();
   await pg.start();
-  if (fresh) await pg.createDatabase("finnor");
+  const admin = pg.getPgClient("postgres");
+  await admin.connect();
+  const database = await admin.query("SELECT 1 FROM pg_database WHERE datname = 'finnor'");
+  await admin.end();
+  if (database.rowCount === 0) await pg.createDatabase("finnor");
+  // Some embedded Postgres bundles do not carry plpgsql into a newly-created
+  // database even though the application migrations use it for their functions.
+  // Install it as part of the local bootstrap, before any migration/test connects.
+  const client = pg.getPgClient("finnor");
+  await client.connect();
+  await client.query("CREATE EXTENSION IF NOT EXISTS plpgsql");
+  await client.end();
   console.log("[dev-db] Postgres running at postgres://finnor:finnor@localhost:5432/finnor");
   console.log("[dev-db] Ctrl-C to stop.");
   const stop = async () => {

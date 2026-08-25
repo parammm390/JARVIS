@@ -34,10 +34,27 @@ const mocks = vi.hoisted(() => {
       ? [{ id: "planner-action" }]
       : [],
     query: options.fastReadDecision && (options.fastReadDecision as { route?: string }).route === "fast_read"
-      ? { metadata: { queryId: "query-1", durationMs: 1 }, result: { intent: "customer_lookup" } }
+      ? {
+          metadata: { queryId: "query-1", durationMs: 1 },
+          request: { intent: "customer_lookup" },
+          result: { intent: "customer_lookup", asOf: new Date().toISOString() },
+        }
       : undefined,
   }));
   const getOrchestrator = vi.fn(() => ({ handleInstructionResult }));
+  const prepareEmployeeConversationTurn = vi.fn(async ({ ctx, threadId }: { ctx: unknown; threadId?: string }) => ({
+    employeeId: (ctx as { userId?: string }).userId,
+    threadId: threadId ?? "00000000-0000-4000-8000-0000000000a6",
+    userMessage: { id: "00000000-0000-4000-8000-0000000000a7" },
+    context: { resolution: { resolvedReferences: [] } },
+  }));
+  const linkEmployeeConversationTurnToWork = vi.fn(async () => undefined);
+  const persistEmployeeAssistantTurn = vi.fn(async () => ({ id: "00000000-0000-4000-8000-0000000000a8" }));
+  const employeeAuthoritySnapshot = vi.fn(async () => ({
+    employeeId: "00000000-0000-4000-8000-0000000000a2",
+    revision: 1,
+    roles: ["owner"],
+  }));
   const errorResponse = vi.fn((err: unknown) => Response.json({ error: String(err) }, { status: 500 }));
   return {
     requireContext,
@@ -47,6 +64,10 @@ const mocks = vi.hoisted(() => {
     recordWorkResponse,
     transitionWork,
     workAggregate,
+    prepareEmployeeConversationTurn,
+    linkEmployeeConversationTurnToWork,
+    persistEmployeeAssistantTurn,
+    employeeAuthoritySnapshot,
     interpretOperationalQuery,
     handleInstructionResult,
     getOrchestrator,
@@ -74,9 +95,13 @@ vi.mock("@finnor/orchestration", () => ({
     : { version: 1, route: "ATOMIC_EFFECT", reasonCodes: ["strict_single_effect_candidate"] }),
   isConversationalTurn: vi.fn(() => false),
   resolveOperatingInteractionContext: vi.fn(async ({ context }: { context?: unknown }) => context),
+  prepareEmployeeConversationTurn: mocks.prepareEmployeeConversationTurn,
+  linkEmployeeConversationTurnToWork: mocks.linkEmployeeConversationTurnToWork,
+  persistEmployeeAssistantTurn: mocks.persistEmployeeAssistantTurn,
   interactionAwareOperationalDecision: vi.fn((decision: unknown) => decision),
   OperatingInteractionContextError: class OperatingInteractionContextError extends Error {},
 }));
+vi.mock("@finnor/authority", () => ({ employeeAuthoritySnapshot: mocks.employeeAuthoritySnapshot }));
 
 import { POST as actionsPOST } from "../../apps/api/app/api/actions/route";
 
