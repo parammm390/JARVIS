@@ -13,6 +13,7 @@ import {
   listEmployeePersonalMemories,
   loadEmployeeConversationThread,
   rememberExplicitEmployeeMemory,
+  receiveWork,
   updateEmployeeConversationThreadContext,
   withTenant,
 } from "@finnor/db";
@@ -117,13 +118,19 @@ describe.skipIf(!available)("Phase 6 authenticated-employee conversation context
     expect(day1.context.resolution.resolvedReferences).toEqual(expect.arrayContaining([expect.objectContaining({ entityType: "external_contact", entityId: johnSmith })]));
     expect(day1.context.personalMemories).toEqual(expect.arrayContaining([expect.objectContaining({ subjectKey: "communication.sender.email:outbound_sales" })]));
 
-    const day2 = await prepareEmployeeConversationTurn({ ctx, threadId: goldenThreadId, instruction: "Email him the current proposal.", instructionId: randomUUID(), idempotencyKey: "golden-day-2", channel: "text" });
+    const day2 = await prepareEmployeeConversationTurn({ ctx, threadId: goldenThreadId, instruction: "Email him and tell him we're moving Peterson to Friday.", instructionId: randomUUID(), idempotencyKey: "golden-day-2", channel: "text" });
     expect(day2.context.resolution).toMatchObject({ status: "resolved", senderIdentityRef: { communicationIdentityId: salesIdentity, channel: "email", purpose: "sales" } });
-    expect(day2.context.resolution.resolvedReferences[0]).toMatchObject({ entityType: "external_contact", entityId: johnSmith });
+    expect(day2.context.resolution.resolvedReferences).toEqual(expect.arrayContaining([
+      expect.objectContaining({ entityType: "external_contact", entityId: johnSmith }),
+      expect.objectContaining({ entityType: "appointment", entityId: petersonAppointment }),
+    ]));
 
     const day3 = await prepareEmployeeConversationTurn({ ctx, threadId: goldenThreadId, instruction: "Move the Peterson appointment to Friday.", instructionId: randomUUID(), idempotencyKey: "golden-day-3", channel: "voice", transportSessionId: "vapi:transport-only" });
     expect(day3.context.resolution).toMatchObject({ status: "resolved" });
     expect(day3.context.resolution.resolvedReferences[0]).toMatchObject({ entityType: "appointment", entityId: petersonAppointment });
+    const day3Followup = await prepareEmployeeConversationTurn({ ctx, threadId: goldenThreadId, instruction: "Move it to Saturday.", instructionId: randomUUID(), idempotencyKey: "golden-day-3-followup", channel: "text" });
+    expect(day3Followup.context.resolution).toMatchObject({ status: "resolved" });
+    expect(day3Followup.context.resolution.resolvedReferences).toEqual(expect.arrayContaining([expect.objectContaining({ entityType: "appointment", entityId: petersonAppointment })]));
 
     await prepareEmployeeConversationTurn({ ctx, threadId: goldenThreadId, instruction: "Use ops@example.com from now on.", instructionId: randomUUID(), idempotencyKey: "golden-day-4", channel: "text" });
     const memories = await listEmployeePersonalMemories({ tenantId: tenantA, ownerEmployeeId: sarah, subjectKey: "communication.sender.email:outbound_sales", includeSuperseded: true });
@@ -175,6 +182,19 @@ describe.skipIf(!available)("Phase 6 authenticated-employee conversation context
       expect.objectContaining({ id: prepared.userMessage.id, workId: started.workId, workInputId: started.workInputId }),
       expect.objectContaining({ role: "assistant", originalText: "Objective accepted; canonical inspection is next.", workId: started.workId }),
     ]));
+  });
+
+  it("clarifies an ambiguous Work continuation when no active Work is selected", async () => {
+    const thread = await createEmployeeConversationThread({ tenantId: tenantA, ownerEmployeeId: sarah, title: "Ambiguous Work continuation" });
+    const firstWork = await receiveWork({ tenantId: tenantA, userId: sarah, instruction: "Review the Peterson schedule.", channel: "text", instructionId: randomUUID(), idempotencyKey: "ambiguous-continuation-a" });
+    const secondWork = await receiveWork({ tenantId: tenantA, userId: sarah, instruction: "Review the Pentair quote.", channel: "text", instructionId: randomUUID(), idempotencyKey: "ambiguous-continuation-b" });
+    await appendEmployeeConversationMessage({ tenantId: tenantA, ownerEmployeeId: sarah, threadId: thread.id, role: "user", channel: "text", originalText: "Started the Peterson schedule Work.", workId: firstWork.workId, workInputId: firstWork.workInputId, instructionId: firstWork.instructionId, idempotencyKey: "ambiguous-continuation-message-a" });
+    await appendEmployeeConversationMessage({ tenantId: tenantA, ownerEmployeeId: sarah, threadId: thread.id, role: "user", channel: "text", originalText: "Started the Pentair quote Work.", workId: secondWork.workId, workInputId: secondWork.workInputId, instructionId: secondWork.instructionId, idempotencyKey: "ambiguous-continuation-message-b" });
+    await updateEmployeeConversationThreadContext({ tenantId: tenantA, ownerEmployeeId: sarah, threadId: thread.id, activeWorkId: null });
+    const continued = await prepareEmployeeConversationTurn({ ctx, threadId: thread.id, instruction: "Continue what we started yesterday.", instructionId: randomUUID(), idempotencyKey: "ambiguous-continuation-followup", channel: "text" });
+    expect(continued.context.resolution).toMatchObject({ status: "clarification_required", consequential: true });
+    expect(continued.context.resolution.unresolvedExpressions).toContain("continuation");
+    expect(continued.context.resolution.candidates.filter((candidate) => candidate.entityType === "work")).toHaveLength(2);
   });
 
   it("fails closed after a sender is revoked and after current company truth supersedes an appointment", async () => {

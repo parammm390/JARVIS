@@ -11,6 +11,7 @@ import {
   leads,
   listEmployeePersonalMemories,
   loadEmployeeConversationThread,
+  proposals,
   quotes,
   rememberExplicitEmployeeMemory,
   searchEmployeeConversationMessages,
@@ -33,11 +34,12 @@ import type {
   EmployeePersonalMemory,
   TenantContext,
 } from "@finnor/shared-types";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, or } from "drizzle-orm";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const CONSEQUENTIAL = /\b(?:email|call|text|contact|message|send|move|reschedule|schedule|book|create|update|delete|remove|void|pay|charge|notify|continue|finish|repeat|do\s+that)\b/i;
 const PERSON_PRONOUN = /\b(?:him|her|them|that customer|that contact|that lead|that person)\b/i;
+const OBJECT_PRONOUN = /\bit\b/i;
 const CONTINUATION = /\b(?:continue(?:\s+that)?|do\s+that\s+again|finish\s+what\s+we\s+started|repeat\s+that)\b/i;
 const REFERENCE_NOUNS: Array<[RegExp, CanonicalEntityType]> = [
   [/\b(?:that|the|this)\s+invoice\b/i, "invoice"],
@@ -57,6 +59,21 @@ interface CatalogEntry {
   householdId?: string | null;
   organizationId?: string | null;
   organizationName?: string | null;
+  leadId?: string | null;
+}
+
+type NamedExpressionCue = "party" | "appointment" | "invoice" | "quote" | "proposal" | "history";
+interface NamedExpression {
+  name: string;
+  organization?: string;
+  cue: NamedExpressionCue;
+  index: number;
+}
+
+interface ReferenceGroup {
+  expression: string;
+  kind: string;
+  candidates: ConversationReference[];
 }
 
 function object(value: unknown): Record<string, unknown> {
@@ -96,21 +113,32 @@ export async function resolveCanonicalHumanPrincipal(ctx: TenantContext): Promis
   return valid;
 }
 
-function extractNamedExpressions(instruction: string): Array<{ name: string; organization?: string }> {
-  const found: Array<{ name: string; organization?: string }> = [];
-  const add = (name: string | undefined, organization?: string) => {
+function extractNamedExpressions(instruction: string): NamedExpression[] {
+  const found: NamedExpression[] = [];
+  const add = (name: string | undefined, organization: string | undefined, cue: NamedExpressionCue, index: number) => {
     const clean = name?.replace(/\s+/g, " ").trim().replace(/[.,!?]+$/, "");
     if (!clean || clean.length < 2) return;
     if (/^(?:the|this|that|my|our|him|her|them|it)$/i.test(clean)) return;
-    if (!found.some((item) => normalized(item.name) === normalized(clean) && normalized(item.organization ?? "") === normalized(organization ?? ""))) {
-      found.push({ name: clean, ...(organization ? { organization: organization.trim().replace(/[.,!?]+$/, "") } : {}) });
+    const cleanOrganization = organization?.trim().replace(/[.,!?]+$/, "");
+    const existing = found.find((item) => normalized(item.name) === normalized(clean) && normalized(item.organization ?? "") === normalized(cleanOrganization ?? ""));
+    if (existing) {
+      // A target-specific cue is more informative than the generic party cue,
+      // while the earliest mention remains the stable ordering key.
+      if (existing.cue === "party" && cue !== "party") existing.cue = cue;
+      existing.index = Math.min(existing.index, index);
+      return;
     }
+    found.push({ name: clean, cue, index, ...(cleanOrganization ? { organization: cleanOrganization } : {}) });
   };
-  for (const match of instruction.matchAll(/\b([A-Z][\p{L}'-]+(?:\s+[A-Z][\p{L}'-]+){0,2})\s+from\s+([A-Z][\p{L}\d&.' -]{1,80}?)(?=[,.!?]|\s+(?:and|use|then)\b|$)/gu)) add(match[1], match[2]);
-  for (const match of instruction.matchAll(/\b(?:[Ee]mail|[Cc]all|[Tt]ext|[Cc]ontact|[Mm]essage|[Nn]otify)\s+([A-Z][\p{L}'-]+(?:\s+[A-Z][\p{L}'-]+){0,2})\b/gu)) add(match[1]);
-  for (const match of instruction.matchAll(/\b(?:the\s+)?([A-Z][\p{L}'-]+(?:\s+[A-Z][\p{L}'-]+)?)\s+(?:appointment|invoice|quote|proposal|account)\b/gu)) add(match[1]);
-  for (const match of instruction.matchAll(/\b([A-Z][\p{L}'-]+(?:\s+[A-Z][\p{L}'-]+){0,2})\s+(?:we\s+discussed|we\s+talked\s+about)\b/gu)) add(match[1]);
-  return found.slice(0, 5);
+  for (const match of instruction.matchAll(/\b([A-Z][\p{L}'-]+(?:\s+[A-Z][\p{L}'-]+){0,2})\s+from\s+([A-Z][\p{L}\d&.' -]{1,80}?)(?=[,.!?]|\s+(?:and|use|then)\b|$)/gu)) add(match[1], match[2], "party", match.index ?? 0);
+  for (const match of instruction.matchAll(/\b(?:[Ee]mail|[Cc]all|[Tt]ext|[Cc]ontact|[Mm]essage|[Nn]otify)\s+([A-Z][\p{L}'-]+(?:\s+[A-Z][\p{L}'-]+){0,2})\b/gu)) add(match[1], undefined, "party", match.index ?? 0);
+  for (const match of instruction.matchAll(/\b(?:move|moving|reschedule|schedule|book)\s+(?:the\s+)?([A-Z][\p{L}'-]+(?:\s+[A-Z][\p{L}'-]+)?)\b/gu)) add(match[1], undefined, "appointment", match.index ?? 0);
+  for (const match of instruction.matchAll(/\b(?:the\s+)?([A-Z][\p{L}'-]+(?:\s+[A-Z][\p{L}'-]+)?)\s+(appointment|invoice|quote|proposal|account)\b/gu)) {
+    const noun = match[2]?.toLocaleLowerCase();
+    add(match[1], undefined, noun === "account" ? "party" : noun as NamedExpressionCue, match.index ?? 0);
+  }
+  for (const match of instruction.matchAll(/\b([A-Z][\p{L}'-]+(?:\s+[A-Z][\p{L}'-]+){0,2})\s+(?:we\s+discussed|we\s+talked\s+about)\b/gu)) add(match[1], undefined, "history", match.index ?? 0);
+  return found.sort((left, right) => left.index - right.index).slice(0, 5);
 }
 
 function labelMatches(entry: CatalogEntry, expression: { name: string; organization?: string }): boolean {
@@ -136,6 +164,7 @@ async function loadCanonicalCatalog(tenantId: string, ownerEmployeeId: string): 
     const appointmentRows = await db.select({ id: appointments.id, subjectType: appointments.subjectType, subjectId: appointments.subjectId, status: appointments.status, scheduledAt: appointments.scheduledAt }).from(appointments).where(and(eq(appointments.tenantId, tenantId), inArray(appointments.status, ["hold", "confirmed"]), isNull(appointments.archivedAt))).limit(2000);
     const invoiceRows = await db.select({ id: invoices.id, householdId: invoices.householdId, status: invoices.status, memo: invoices.memo }).from(invoices).where(eq(invoices.tenantId, tenantId)).limit(2000);
     const quoteRows = await db.select({ id: quotes.id, householdId: quotes.householdId, leadId: quotes.leadId, status: quotes.status }).from(quotes).where(and(eq(quotes.tenantId, tenantId), isNull(quotes.archivedAt))).limit(2000);
+    const proposalRows = await db.select({ id: proposals.id, householdId: proposals.householdId, content: proposals.content, status: proposals.status }).from(proposals).where(eq(proposals.tenantId, tenantId)).limit(2000);
     const catalog: CatalogEntry[] = [];
     const householdLabels = new Map<string, string>();
     for (const row of householdRows) {
@@ -163,7 +192,12 @@ async function loadCanonicalCatalog(tenantId: string, ownerEmployeeId: string): 
       catalog.push({ entityType: "appointment", entityId: row.id, label: `${subject?.label ?? row.subjectType} appointment`, aliases: [row.scheduledAt.toISOString()], status: row.status, householdId: row.subjectType === "household" ? row.subjectId : subject?.householdId });
     }
     for (const row of invoiceRows) catalog.push({ entityType: "invoice", entityId: row.id, label: `${householdLabels.get(row.householdId) ?? "Customer"} invoice`, aliases: [row.memo ?? ""], status: row.status, householdId: row.householdId });
-    for (const row of quoteRows) catalog.push({ entityType: "quote", entityId: row.id, label: `${row.householdId ? householdLabels.get(row.householdId) ?? "Customer" : "Lead"} quote`, aliases: [], status: row.status, householdId: row.householdId });
+    for (const row of quoteRows) catalog.push({ entityType: "quote", entityId: row.id, label: `${row.householdId ? householdLabels.get(row.householdId) ?? "Customer" : "Lead"} quote`, aliases: [], status: row.status, householdId: row.householdId, leadId: row.leadId });
+    for (const row of proposalRows) {
+      const content = object(row.content);
+      const title = typeof content.title === "string" && content.title.trim() ? content.title.trim() : "proposal";
+      catalog.push({ entityType: "proposal", entityId: row.id, label: `${householdLabels.get(row.householdId) ?? "Customer"} ${title}`, aliases: [title], status: row.status, householdId: row.householdId });
+    }
     return catalog;
   }, ownerEmployeeId);
 }
@@ -342,63 +376,113 @@ export async function prepareEmployeeConversationTurn(params: {
   });
   let olderRelevantMessages: EmployeeConversationMessage[] = [];
   if (named.length > 0 && /\b(?:discussed|earlier|before|talked about)\b/i.test(params.instruction)) {
-    olderRelevantMessages = await searchEmployeeConversationMessages({ tenantId: params.ctx.tenantId, ownerEmployeeId: employeeId, query: named[0]!.name, limit: 20 });
+    const seen = new Set<string>();
+    for (const expression of named) {
+      const matches = await searchEmployeeConversationMessages({ tenantId: params.ctx.tenantId, ownerEmployeeId: employeeId, query: expression.name, limit: 20 });
+      for (const message of matches) if (!seen.has(message.id)) {
+        seen.add(message.id);
+        olderRelevantMessages.push(message);
+      }
+    }
   }
   const historyRefs = dedupeCatalog(olderRelevantMessages.flatMap((message) => referencesFromMessage(message, catalogMap)).map((ref) => ({ ...ref, aliases: [] } as CatalogEntry))).map((entry) => conversationRef(entry, "history_search"));
 
-  let candidates: ConversationReference[] = [];
+  const groups: ReferenceGroup[] = [];
+  const addGroup = (expression: string, kind: string, refs: ConversationReference[]) => {
+    const candidates = [...new Map(refs.map((candidate) => [refKey(candidate), candidate])).values()];
+    groups.push({ expression, kind, candidates });
+    for (const candidate of candidates) {
+      const stage = candidate.source === "thread" ? "thread" : candidate.source === "history_search" ? "history" : candidate.source === "work" ? "work" : candidate.source === "explicit_context" ? "explicit" : "company_twin";
+      provenance.push(source(stage, candidate.source, "candidate", refKey(candidate)));
+    }
+  };
+  const partyMatchesFor = (expression: NamedExpression): ConversationReference[] => {
+    const historyMatches = (expression.cue === "history" || /\b(?:discussed|earlier|before|talked about)\b/i.test(params.instruction))
+      ? historyRefs.filter((ref) => {
+        const entry = catalogMap.get(refKey(ref));
+        return entry ? PARTY_TYPES.has(entry.entityType) && labelMatches(entry, expression) : false;
+      })
+      : [];
+    if (historyMatches.length > 0) return historyMatches;
+    return dedupeCatalog(catalog.filter((entry) => PARTY_TYPES.has(entry.entityType) && labelMatches(entry, expression))).map((entry) => conversationRef(entry, "company_twin"));
+  };
+  const householdIdsFor = (refs: ConversationReference[]): Set<string> => new Set(refs.flatMap((ref) => {
+    const entry = catalogMap.get(refKey(ref));
+    return entry?.entityType === "household" ? [entry.entityId] : entry?.householdId ? [entry.householdId] : [];
+  }));
+  const entityMatchesFor = (type: CanonicalEntityType, parties: ConversationReference[]): ConversationReference[] => {
+    const householdIds = householdIdsFor(parties);
+    const leadIds = new Set(parties.filter((party) => party.entityType === "lead").map((party) => party.entityId));
+    return catalog.filter((entry) => entry.entityType === type && (
+      (entry.householdId ? householdIds.has(entry.householdId) : false)
+      || (entry.leadId ? leadIds.has(entry.leadId) : false)
+    ) && (type !== "invoice" || entry.status !== "void")).map((entry) => conversationRef(entry, "company_twin"));
+  };
+
   let targetKind = "target";
-  if (explicitRefs.length > 0) candidates = explicitRefs;
-  else if (CONTINUATION.test(params.instruction)) {
-    targetKind = "work item";
-    const activeWork = loaded.thread.activeWorkId ? await withTenant(params.ctx.tenantId, async (db) => {
-      const [row] = await db.select({ id: works.id, instruction: works.initialInstruction, status: works.status }).from(works).where(and(eq(works.tenantId, params.ctx.tenantId), eq(works.id, loaded.thread.activeWorkId!))).limit(1);
-      return row;
-    }, employeeId) : undefined;
-    if (activeWork) candidates = [{ entityType: "work", entityId: activeWork.id, label: activeWork.instruction.slice(0, 120), source: "work", currentTruthAsOf: new Date().toISOString() }];
+  if (explicitRefs.length > 0) {
+    targetKind = "explicit target";
+    addGroup("operating interaction context", targetKind, explicitRefs);
   } else {
+    if (CONTINUATION.test(params.instruction)) {
+      targetKind = "work item";
+      const workIds = new Set(loaded.messages.flatMap((message) => message.workId ? [message.workId] : []));
+      if (loaded.thread.activeWorkId) workIds.add(loaded.thread.activeWorkId);
+      const workRows = workIds.size > 0 ? await withTenant(params.ctx.tenantId, async (db) => db
+        .select({ id: works.id, instruction: works.initialInstruction, status: works.status })
+        .from(works)
+        .where(and(
+          eq(works.tenantId, params.ctx.tenantId),
+          inArray(works.id, [...workIds]),
+          or(eq(works.createdBy, employeeId), eq(works.currentOwnerId, employeeId), eq(works.assignedTo, employeeId)),
+        )), employeeId) : [];
+      addGroup("continuation", targetKind, workRows.map((work) => ({ entityType: "work", entityId: work.id, label: work.instruction.slice(0, 120), source: "work", currentTruthAsOf: new Date().toISOString() })));
+    }
+
+    const namedPartyMatches = new Map<string, ConversationReference[]>();
+    for (const expression of named) {
+      const parties = partyMatchesFor(expression);
+      if (expression.cue === "party" || expression.cue === "history") namedPartyMatches.set(normalized(expression.name), parties);
+      const type = expression.cue === "appointment" || expression.cue === "invoice" || expression.cue === "quote" || expression.cue === "proposal" ? expression.cue : null;
+      targetKind = type ?? expression.name;
+      addGroup(expression.name, type ?? "person", type ? entityMatchesFor(type, parties) : parties);
+    }
+
     const nounType = REFERENCE_NOUNS.find(([pattern]) => pattern.test(params.instruction))?.[1];
-    if (named.length > 0) {
-      targetKind = named[0]!.name;
-      const historyFirst = /\b(?:discussed|earlier|before|talked about)\b/i.test(params.instruction)
-        ? historyRefs.filter((ref) => labelMatches(catalogMap.get(refKey(ref))!, named[0]!))
-        : [];
-      const partyMatches = historyFirst.length > 0 ? historyFirst : dedupeCatalog(catalog.filter((entry) => PARTY_TYPES.has(entry.entityType) && labelMatches(entry, named[0]!))).map((entry) => conversationRef(entry, "company_twin"));
-      if (nounType === "appointment" || /\bappointment\b/i.test(params.instruction)) {
-        targetKind = "appointment";
-        const householdIds = new Set(partyMatches.flatMap((party) => {
-          const entry = catalogMap.get(refKey(party));
-          return entry?.entityType === "household" ? [entry.entityId] : entry?.householdId ? [entry.householdId] : [];
-        }));
-        candidates = catalog.filter((entry) => entry.entityType === "appointment" && entry.householdId && householdIds.has(entry.householdId)).map((entry) => conversationRef(entry, "company_twin"));
-      } else if (nounType === "invoice") {
-        targetKind = "invoice";
-        const householdIds = new Set(partyMatches.flatMap((party) => {
-          const entry = catalogMap.get(refKey(party));
-          return entry?.entityType === "household" ? [entry.entityId] : entry?.householdId ? [entry.householdId] : [];
-        }));
-        candidates = catalog.filter((entry) => entry.entityType === "invoice" && entry.householdId && householdIds.has(entry.householdId) && entry.status !== "void").map((entry) => conversationRef(entry, "company_twin"));
-      } else candidates = partyMatches;
-    } else if (PERSON_PRONOUN.test(params.instruction)) {
+    if (PERSON_PRONOUN.test(params.instruction)) {
       targetKind = "person";
-      const maxSequence = Math.max(0, ...activeRefs.filter((ref) => PARTY_TYPES.has(ref.entityType)).map((ref) => ref.mentionedAtSequence ?? 0));
-      candidates = activeRefs.filter((ref) => PARTY_TYPES.has(ref.entityType) && (ref.mentionedAtSequence ?? 0) === maxSequence);
-    } else if (nounType && named.length === 0) {
+      const sameTurnParties = [...namedPartyMatches.values()].flat();
+      const partyRefs = sameTurnParties.length > 0
+        ? sameTurnParties
+        : (() => {
+          const partyActive = activeRefs.filter((ref) => PARTY_TYPES.has(ref.entityType));
+          const maxSequence = Math.max(0, ...partyActive.map((ref) => ref.mentionedAtSequence ?? 0));
+          return partyActive.filter((ref) => (ref.mentionedAtSequence ?? 0) === maxSequence);
+        })();
+      addGroup("person pronoun", targetKind, partyRefs);
+    }
+    if (OBJECT_PRONOUN.test(params.instruction)) {
+      targetKind = nounType?.replace("_", " ") ?? "object";
+      const objectRefs = activeRefs.filter((ref) => !PARTY_TYPES.has(ref.entityType) && (!nounType || ref.entityType === nounType));
+      const maxSequence = Math.max(0, ...objectRefs.map((ref) => ref.mentionedAtSequence ?? 0));
+      addGroup("object pronoun", targetKind, objectRefs.filter((ref) => (ref.mentionedAtSequence ?? 0) === maxSequence));
+    }
+    if (nounType && named.length === 0 && !OBJECT_PRONOUN.test(params.instruction)) {
       targetKind = nounType.replace("_", " ");
-      candidates = activeRefs.filter((ref) => ref.entityType === nounType);
+      addGroup(`active ${targetKind}`, targetKind, activeRefs.filter((ref) => ref.entityType === nounType));
     }
   }
-  candidates = [...new Map(candidates.map((candidate) => [refKey(candidate), candidate])).values()];
-  for (const candidate of candidates) provenance.push(source(candidate.source === "thread" ? "thread" : candidate.source === "history_search" ? "history" : candidate.source === "work" ? "work" : "company_twin", candidate.source, "candidate", refKey(candidate)));
 
-  const referenceRequired = PERSON_PRONOUN.test(params.instruction) || CONTINUATION.test(params.instruction) || REFERENCE_NOUNS.some(([pattern]) => pattern.test(params.instruction)) || named.length > 0;
+  const candidates = [...new Map(groups.flatMap((group) => group.candidates).map((candidate) => [refKey(candidate), candidate])).values()];
+  const referenceRequired = groups.length > 0;
   const consequential = CONSEQUENTIAL.test(params.instruction);
-  const selected = candidates.length === 1 ? candidates : [];
+  const selected = [...new Map(groups.filter((group) => group.candidates.length === 1).flatMap((group) => group.candidates).map((candidate) => [refKey(candidate), candidate])).values()];
   const sender = await resolveSenderPreference({ tenantId: params.ctx.tenantId, employeeId, instruction: params.instruction, personalMemories, provenance });
   const senderProblem = sender === "ambiguous" || sender === "unavailable";
-  const ambiguous = consequential && ((referenceRequired && candidates.length !== 1) || senderProblem);
+  const unresolvedGroups = groups.filter((group) => group.candidates.length !== 1);
+  const ambiguous = consequential && ((referenceRequired && unresolvedGroups.length > 0) || senderProblem);
   const unresolvedExpressions = ambiguous
-    ? [senderProblem ? "remembered sender identity" : named[0]?.name ?? targetKind]
+    ? [...unresolvedGroups.map((group) => group.expression), ...(senderProblem ? ["remembered sender identity"] : [])]
     : [];
   const resolution: ConversationReferenceResolution = {
     status: ambiguous ? "clarification_required" : selected.length ? "resolved" : "none",
@@ -411,7 +495,7 @@ export async function prepareEmployeeConversationTurn(params: {
         ? sender === "unavailable"
           ? "Your remembered email sender is no longer available. Which currently connected sender should I use?"
           : "More than one current email sender matches your preference. Which sender should I use?"
-        : clarification(targetKind, candidates)
+        : clarification(unresolvedGroups.flatMap((group) => group.candidates).length > 0 ? unresolvedGroups[0]!.kind : targetKind, unresolvedGroups.flatMap((group) => group.candidates))
       : null,
     consequential,
     senderIdentityRef: sender && sender !== "ambiguous" && sender !== "unavailable" ? sender : null,

@@ -65,4 +65,22 @@ describe("Phase 6 Zep human/thread mapping", () => {
     expect(zep.threadAddMessages).not.toHaveBeenCalled();
     expect(zep.graphSearch).not.toHaveBeenCalled();
   });
+
+  it("fails open to canonical Postgres when configured Zep is unavailable", async () => {
+    const { mirrorConversationMessageToZep, queryConsolidatedFacts, testZepProviderConnection } = await import("@finnor/memory");
+    zep.projectGet.mockRejectedValueOnce(new Error("provider unavailable"));
+    zep.userAdd.mockRejectedValueOnce(new Error("provider unavailable"));
+    zep.graphSearch.mockRejectedValueOnce(new Error("provider unavailable"));
+    await expect(testZepProviderConnection()).resolves.toEqual({ configured: true, healthy: false, reason: "Zep project authentication or availability check failed" });
+    await expect(mirrorConversationMessageToZep({
+      tenantId: "00000000-0000-4000-8000-000000000011",
+      employeeId: "00000000-0000-4000-8000-000000000012",
+      threadId: "00000000-0000-4000-8000-000000000013",
+      messageId: "outage-message",
+      role: "user",
+      content: "This remains in canonical Postgres.",
+      createdAt: new Date(0).toISOString(),
+    })).resolves.toBeUndefined();
+    await expect(queryConsolidatedFacts("tenant-outage", "employee-outage", "sender preference")).resolves.toEqual([]);
+  });
 });
