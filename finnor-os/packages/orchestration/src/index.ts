@@ -1460,7 +1460,10 @@ export class FinnorOrchestrator implements Orchestrator {
         if ((state?.revision ?? 1) !== approverAuthority.authorityRevision) return { claimed: null, current: null, staleAuthority: true as const };
       }
       const [before] = await db.select().from(domainActions).where(and(eq(domainActions.id, actionId), eq(domainActions.tenantId, tenantId)));
-      if (decision !== "reject" && before) {
+      // A completed action is a terminal, idempotent read of the approval result.
+      // Do not reinterpret its already-finished Work as a cancellation boundary:
+      // repeated approval deliveries must remain successful no-ops.
+      if (decision !== "reject" && before && before.status !== "completed") {
         try {
           await assertActionNotCancelledTx(db, {
             tenantId,
