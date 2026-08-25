@@ -16,7 +16,7 @@ import { VapiWebhookSchema } from "@finnor/policy-schema";
 import { adminDb, withTenant, domainActions, domainPolicies, actionLog, tenantPhoneNumbers, getPool, households, communicationsLog, works, receiveWork, users, workAggregate, ingestIntegrationEventTx, externalOperations, integrationOperations, enqueueJob, type Db } from "@finnor/db";
 import { createTask, persistCall, recordBusinessEvent } from "@finnor/data-platform";
 import { ensureSecretsLoaded, resolveTenantCredentialContext } from "@finnor/security";
-import { parseSpokenDecision, diagnoseFailure, resolveProviderForPurpose } from "@finnor/orchestration";
+import { linkEmployeeConversationTurnToWork, parseSpokenDecision, diagnoseFailure, persistEmployeeAssistantTurn, prepareEmployeeConversationTurn, resolveProviderForPurpose } from "@finnor/orchestration";
 import { VOICE_AGENT_KEYS, logWithTrace } from "@finnor/tools";
 import type { Role } from "@finnor/shared-types";
 import {
@@ -349,6 +349,27 @@ async function handleToolCalls(message: Record<string, unknown>, tenantId: strin
           continue;
         }
         const sessionId = `vapi:${callId}`;
+        const instructionId = randomUUID();
+        const humanCtx = { tenantId, userId: staffCtx.userId, employeeId: staffCtx.userId, authorityRevision: voiceAuthority?.revision, authorityRoles: voiceAuthority?.roles, role: staffCtx.role, correlationId };
+        const prepared = await prepareEmployeeConversationTurn({
+          ctx: humanCtx,
+          instruction,
+          instructionId,
+          idempotencyKey: `vapi:${callId}:tool:${tc.id}`,
+          channel: "voice",
+          transportSessionId: sessionId,
+          originTransportKey: sessionId,
+        });
+        const resolvedRefs = prepared.context.resolution.resolvedReferences;
+        const activeContext = resolvedRefs.length > 0 ? {
+          version: 1 as const,
+          capturedAt: new Date().toISOString(),
+          source: "voice" as const,
+          selectedEntities: resolvedRefs.map(({ entityType, entityId }) => ({ entityType, entityId })),
+          excludedEntities: [],
+          surface: { id: "home" as const, route: "/jarvis", spatialState: "canvas" as const },
+          filters: [],
+        } : undefined;
         const [activeWork] = await withTenant(tenantId, (db) => db
           .select({ id: works.id })
           .from(works)
@@ -360,6 +381,7 @@ async function handleToolCalls(message: Record<string, unknown>, tenantId: strin
           const orchestrator = getOrchestrator();
           const activeAggregate = activeWork ? await workAggregate(tenantId, activeWork.id) : null;
           const activeObjective = activeAggregate?.objectiveLoop;
+          let objectiveLink: { workId: string; workInputId?: string; objectiveLoopId?: string } | null = activeWork ? { workId: activeWork.id, ...(activeObjective ? { objectiveLoopId: activeObjective.id } : {}) } : null;
           let spoken: string;
           if (objectiveCommand.command === "start") {
             if (activeObjective && !["completed", "failed", "cancelled"].includes(activeObjective.state)) {
@@ -370,6 +392,7 @@ async function handleToolCalls(message: Record<string, unknown>, tenantId: strin
                 { tenantId, userId: staffCtx.userId, employeeId: staffCtx.userId, authorityRevision: voiceAuthority?.revision, authorityRoles: voiceAuthority?.roles, role: staffCtx.role, correlationId },
                 { sessionId, channel: "voice", workId: activeWork?.id, idempotencyKey: `vapi:${callId}:objective:${tc.id}` },
               );
+              objectiveLink = { workId: started.workId, workInputId: started.workInputId, objectiveLoopId: started.objectiveLoopId };
               spoken = `I own that objective now. It is durable Work ${started.workId.slice(0, 8)}, and I will inspect current business state before choosing one bounded next step.`;
             }
           } else if (!activeWork || !activeObjective) {
@@ -406,20 +429,26 @@ async function handleToolCalls(message: Record<string, unknown>, tenantId: strin
                 : `I resumed the same objective. I will re-inspect canonical business state before choosing the next bounded step.`;
           }
           await appendVoiceTurn({ tenantId, voiceSessionId: session.id, role: "caller", transcriptText: instruction, resolvedActionIds: [] });
+          if (objectiveLink) await linkEmployeeConversationTurnToWork({ tenantId, employeeId: staffCtx.userId, threadId: prepared.threadId, userMessageId: prepared.userMessage.id, ...objectiveLink });
+          await persistEmployeeAssistantTurn({ tenantId, employeeId: staffCtx.userId, threadId: prepared.threadId, instructionId, channel: "voice", text: spoken, ...(objectiveLink?.workId ? { workId: objectiveLink.workId } : {}), ...(objectiveLink?.workInputId ? { workInputId: objectiveLink.workInputId } : {}), outcomeRefs: objectiveLink ? [{ kind: "work", id: objectiveLink.workId }, ...(objectiveLink.objectiveLoopId ? [{ kind: "objective_loop", id: objectiveLink.objectiveLoopId, state: activeAggregate?.objectiveLoop?.state ?? "continue" }] : [])] : [] });
           results.push({ toolCallId: tc.id, result: spoken });
           continue;
         }
         const instructionResult = await getOrchestrator().handleInstructionResult(
           instruction,
-          { tenantId, userId: staffCtx.userId, employeeId: staffCtx.userId, authorityRevision: voiceAuthority?.revision, authorityRoles: voiceAuthority?.roles, role: staffCtx.role, correlationId },
+          humanCtx,
           {
             sessionId,
             channel: "voice",
             workId: activeWork?.id,
+            instructionId,
             idempotencyKey: `vapi:${callId}:tool:${tc.id}`,
+            activeContext,
+            conversationContext: prepared.context,
           },
         );
         const actions = instructionResult.actions;
+        await linkEmployeeConversationTurnToWork({ tenantId, employeeId: staffCtx.userId, threadId: prepared.threadId, userMessageId: prepared.userMessage.id, workId: instructionResult.workId!, workInputId: instructionResult.workInputId!, ...(instructionResult.objective ? { objectiveLoopId: instructionResult.objective.objectiveLoopId } : {}) });
         await appendVoiceTurn({
           tenantId,
           voiceSessionId: session.id,
@@ -428,18 +457,22 @@ async function handleToolCalls(message: Record<string, unknown>, tenantId: strin
           resolvedActionIds: actions.map((a) => a.id),
         });
         if (instructionResult.answer) {
+          await persistEmployeeAssistantTurn({ tenantId, employeeId: staffCtx.userId, threadId: prepared.threadId, instructionId, channel: "voice", text: instructionResult.answer.spokenSummary, workId: instructionResult.workId!, workInputId: instructionResult.workInputId!, outcomeRefs: [{ kind: "work", id: instructionResult.workId }] });
           results.push({ toolCallId: tc.id, result: instructionResult.answer.spokenSummary });
           continue;
         }
         if (instructionResult.objective) {
-          results.push({ toolCallId: tc.id, result: `I accepted that as durable objective Work ${instructionResult.workId?.slice(0, 8)}. I will re-inspect current business state, take one governed step at a time, and stop only when the outcome verifies or I am explicitly blocked.` });
+          const spoken = `I accepted that as durable objective Work ${instructionResult.workId?.slice(0, 8)}. I will re-inspect current business state, take one governed step at a time, and stop only when the outcome verifies or I am explicitly blocked.`;
+          await persistEmployeeAssistantTurn({ tenantId, employeeId: staffCtx.userId, threadId: prepared.threadId, instructionId, channel: "voice", text: spoken, workId: instructionResult.workId!, workInputId: instructionResult.workInputId!, outcomeRefs: [{ kind: "objective_loop", id: instructionResult.objective.objectiveLoopId, state: instructionResult.objective.state }] });
+          results.push({ toolCallId: tc.id, result: spoken });
           continue;
         }
         if (actions.length === 0) {
+          const spoken = "I don't have that exact thing, but I can pull the full business overview — leads, pending items, inventory, invoices, upcoming visits — want that instead?";
+          await persistEmployeeAssistantTurn({ tenantId, employeeId: staffCtx.userId, threadId: prepared.threadId, instructionId, channel: "voice", text: spoken, workId: instructionResult.workId!, workInputId: instructionResult.workInputId!, outcomeRefs: [{ kind: "work", id: instructionResult.workId }] });
           results.push({
             toolCallId: tc.id,
-            result:
-              "I don't have that exact thing, but I can pull the full business overview — leads, pending items, inventory, invoices, upcoming visits — want that instead?",
+            result: spoken,
           });
           continue;
         }
@@ -515,7 +548,9 @@ async function handleToolCalls(message: Record<string, unknown>, tenantId: strin
               : "I ran that but have nothing specific to report.",
           );
         }
-        results.push({ toolCallId: tc.id, result: parts.join(" ") });
+        const spoken = parts.join(" ");
+        await persistEmployeeAssistantTurn({ tenantId, employeeId: staffCtx.userId, threadId: prepared.threadId, instructionId, channel: "voice", text: spoken, workId: instructionResult.workId!, workInputId: instructionResult.workInputId!, outcomeRefs: actions.map((action) => ({ kind: "domain_action", id: action.id, status: action.status })) });
+        results.push({ toolCallId: tc.id, result: spoken });
       } else if (name === "finnor_confirm") {
         const decisionWord = String(args.decision ?? args.answer ?? "");
         const decision = parseSpokenDecision(decisionWord, await loadVoiceConfirmationPhrases(tenantId));
@@ -523,8 +558,20 @@ async function handleToolCalls(message: Record<string, unknown>, tenantId: strin
         // turn computeLearningDigest's unclearConfirmations later re-parses to surface
         // real phrasings that failed to match, so the dealer can add them as config.
         await appendVoiceTurn({ tenantId, voiceSessionId: session.id, role: "caller", transcriptText: decisionWord });
+        const confirmationInstructionId = randomUUID();
+        const confirmationPrepared = staffCtx ? await prepareEmployeeConversationTurn({
+          ctx: { tenantId, userId: staffCtx.userId, employeeId: staffCtx.userId, authorityRevision: voiceAuthority?.revision, authorityRoles: voiceAuthority?.roles, role: staffCtx.role, correlationId },
+          instruction: decisionWord,
+          instructionId: confirmationInstructionId,
+          idempotencyKey: `vapi:${callId}:confirm:${tc.id}`,
+          channel: "voice",
+          transportSessionId: `vapi:${callId}`,
+          originTransportKey: `vapi:${callId}`,
+        }) : null;
         if (decision === "unclear") {
-          results.push({ toolCallId: tc.id, result: "I didn't catch a clear yes or no — nothing was executed. Say yes or no." });
+          const spoken = "I didn't catch a clear yes or no — nothing was executed. Say yes or no.";
+          if (confirmationPrepared) await persistEmployeeAssistantTurn({ tenantId, employeeId: confirmationPrepared.employeeId, threadId: confirmationPrepared.threadId, instructionId: confirmationInstructionId, channel: "voice", text: spoken, outcomeRefs: [] });
+          results.push({ toolCallId: tc.id, result: spoken });
           continue;
         }
         if (!staffCtx) {
@@ -538,7 +585,9 @@ async function handleToolCalls(message: Record<string, unknown>, tenantId: strin
         const open = await resolveOpenConfirmations(tenantId, session.id);
         const ids = args.actionId ? [String(args.actionId)] : open.map((o) => o.domainActionId);
         if (ids.length === 0) {
-          results.push({ toolCallId: tc.id, result: "I don't have anything pending to confirm on this call." });
+          const spoken = "I don't have anything pending to confirm on this call.";
+          if (confirmationPrepared) await persistEmployeeAssistantTurn({ tenantId, employeeId: confirmationPrepared.employeeId, threadId: confirmationPrepared.threadId, instructionId: confirmationInstructionId, channel: "voice", text: spoken, outcomeRefs: [] });
+          results.push({ toolCallId: tc.id, result: spoken });
           continue;
         }
         // Independent decisions execute concurrently — the caller hears one answer.
@@ -565,6 +614,11 @@ async function handleToolCalls(message: Record<string, unknown>, tenantId: strin
             : problems.length === 0
               ? `Approved and done — ${executed} action${executed === 1 ? "" : "s"} executed. Everything is in the audit log.`
               : `Approved ${ids.length} action${ids.length === 1 ? "" : "s"}, but ${problems.length} couldn't finish. ${problems[0]}`;
+        if (confirmationPrepared) {
+          const [linked] = await withTenant(tenantId, (db) => db.select({ workId: domainActions.workId }).from(domainActions).where(and(eq(domainActions.tenantId, tenantId), inArray(domainActions.id, ids))).limit(1));
+          if (linked?.workId) await linkEmployeeConversationTurnToWork({ tenantId, employeeId: confirmationPrepared.employeeId, threadId: confirmationPrepared.threadId, userMessageId: confirmationPrepared.userMessage.id, workId: linked.workId });
+          await persistEmployeeAssistantTurn({ tenantId, employeeId: confirmationPrepared.employeeId, threadId: confirmationPrepared.threadId, instructionId: confirmationInstructionId, channel: "voice", text: spoken, ...(linked?.workId ? { workId: linked.workId } : {}), outcomeRefs: ids.map((id, index) => ({ kind: "domain_action", id, decision, status: outcomes[index]?.status ?? "unknown" })) });
+        }
         results.push({ toolCallId: tc.id, result: spoken });
       } else {
         results.push({ toolCallId: tc.id, result: `Unknown tool ${name}.` });

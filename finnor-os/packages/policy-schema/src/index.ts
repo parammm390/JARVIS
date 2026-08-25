@@ -122,6 +122,9 @@ export const SubmitInstructionSchema = z.object({
   // GET /api/instructions/:id/events poll can trace this exact call's real phases
   // while it's still in flight — additive, optional, response shape unchanged.
   instructionId: z.string().uuid().optional(),
+  // Phase 6: canonical Postgres conversation identity. The API resolves ownership;
+  // sessionId remains transport provenance and can never select a thread.
+  threadId: z.string().uuid().optional(),
   // Upgrade 2: an explicit continuation appends a new input to this active Work.
   // Omitting it creates a new Work (whose id equals instructionId when supplied).
   workId: z.string().uuid().optional(),
@@ -157,6 +160,7 @@ export const StartObjectiveSchema = z.object({
   channel: z.enum(["voice", "text", "console"]).default("text"),
   sessionId: z.string().max(500).optional(),
   instructionId: z.string().uuid().optional(),
+  threadId: z.string().uuid().optional(),
   workId: z.string().uuid().optional(),
   idempotencyKey: z.string().min(1).max(200).optional(),
   activeContext: OperatingInteractionContextSchema.optional(),

@@ -20,7 +20,7 @@ import {
   ownedCapabilitiesResolvingToEmulator,
   tenantSourceTruthReport,
 } from "@finnor/tools";
-import { zepProviderStatus, embeddingsProviderStatus } from "@finnor/memory";
+import { testZepProviderConnection, embeddingsProviderStatus } from "@finnor/memory";
 import { secretProviderStatus } from "@finnor/security";
 import { adminDb, getPool, tenantPhoneNumbers } from "@finnor/db";
 import { eq } from "drizzle-orm";
@@ -77,7 +77,7 @@ export async function GET(req: Request): Promise<Response> {
     // No active health-check for these two (same posture as ghl: configured-state only,
     // no extra network round trip inside this endpoint) — LangGraph has no external
     // service to check (it's in-process, using the same Postgres pool as everything else).
-    const zep = { ...zepProviderStatus(), healthy: null as boolean | null };
+    const zep = await testZepProviderConnection();
     // §5.1: embeddingsProviderStatus() itself already reports healthy:false when
     // unconfigured (a real, not-guessed signal — see semantic.ts) rather than the
     // null-means-"not checked" convention zep/ghl use above.

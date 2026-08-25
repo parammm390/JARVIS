@@ -111,6 +111,8 @@ export interface SubmitInstructionOpts {
   instructionId?: string
   /** Existing durable Work for a clarification/follow-up continuation. */
   workId?: string
+  /** Canonical Postgres thread. Session/call ids remain transport-only. */
+  threadId?: string
   /** Exact visible business context captured at the shared text/voice seam. */
   activeContext?: OperatingInteractionContextValue
 }
@@ -163,6 +165,8 @@ export interface SubmitInstructionResult {
   sessionId: string
   workId: string | null
   instructionId: string | null
+  threadId: string | null
+  assistantMessage?: { id: string; originalText: string; createdAt: string }
 }
 
 /** The one path an instruction (typed or spoken) enters the system by (§3.2:
@@ -170,12 +174,13 @@ export interface SubmitInstructionResult {
  *  sends it in the POST body — the single change that closes V8's frontend gap. */
 export async function submitInstruction(text: string, opts: SubmitInstructionOpts): Promise<SubmitInstructionResult> {
   const sessionId = opts.sessionId ?? getOrCreateSessionId(opts.source)
-  const body = await jarvisPost<{ planned?: PlannedActionResponse[]; answer?: AnswerResponse; query?: OperationalQueryExecution; workId?: string; instructionId?: string }>("actions", {
+  const body = await jarvisPost<{ planned?: PlannedActionResponse[]; answer?: AnswerResponse; query?: OperationalQueryExecution; workId?: string; instructionId?: string; threadId?: string; assistantMessage?: { id: string; originalText: string; createdAt: string } }>("actions", {
     instruction: text,
     channel: opts.source === "voice" ? "voice" : "text",
     sessionId,
     instructionId: opts.instructionId,
     workId: opts.workId,
+    threadId: opts.threadId,
     activeContext: opts.activeContext,
   })
   return {
@@ -185,6 +190,8 @@ export async function submitInstruction(text: string, opts: SubmitInstructionOpt
     sessionId,
     workId: body.workId ?? opts.workId ?? opts.instructionId ?? null,
     instructionId: body.instructionId ?? opts.instructionId ?? null,
+    threadId: body.threadId ?? opts.threadId ?? null,
+    ...(body.assistantMessage ? { assistantMessage: body.assistantMessage } : {}),
   }
 }
 

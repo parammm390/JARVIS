@@ -7,6 +7,18 @@ import { enforceBatchBackpressure } from "../../../lib/backpressure";
 import { receiveWork, recordWorkResponse, transitionWork, workAggregate } from "@finnor/db";
 import { classifyInstructionRoute, interactionAwareOperationalDecision, interpretOperationalQuery, isConversationalTurn, OperatingInteractionContextError, resolveOperatingInteractionContext } from "@finnor/orchestration";
 import { employeeAuthoritySnapshot } from "@finnor/authority";
+import { linkEmployeeConversationTurnToWork, persistEmployeeAssistantTurn, prepareEmployeeConversationTurn } from "@finnor/orchestration";
+import { randomUUID } from "node:crypto";
+
+function assistantText(result: Awaited<ReturnType<ReturnType<typeof getOrchestrator>["handleInstructionResult"]>>): string {
+  if (result.answer?.spokenSummary) return result.answer.spokenSummary;
+  const clarification = result.actions.find((action) => action.actionType === "clarification_request");
+  if (clarification && typeof clarification.payload.question === "string") return clarification.payload.question;
+  if (result.objective) return "I started durable Work for this objective. I’ll report progress from verified outcomes and ask before any required approval.";
+  if (result.query) return "I completed the current-data query. The structured result is linked to this thread.";
+  if (result.actions.length > 0) return `I prepared ${result.actions.length} action${result.actions.length === 1 ? "" : "s"} in Work. Nothing is represented as completed unless its execution receipt verifies it.`;
+  return "I recorded this turn, but no business action was created.";
+}
 
 export async function POST(req: Request): Promise<Response> {
   try {
@@ -36,6 +48,36 @@ export async function POST(req: Request): Promise<Response> {
       }
       throw error;
     }
+    const instructionId = body.data.instructionId ?? randomUUID();
+    let prepared;
+    try {
+      prepared = await prepareEmployeeConversationTurn({
+        ctx,
+        threadId: body.data.threadId,
+        instruction: body.data.instruction,
+        instructionId,
+        idempotencyKey: body.data.idempotencyKey,
+        channel: body.data.channel,
+        transportSessionId: body.data.sessionId,
+        activeContext,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "conversation_context_failed";
+      const status = message === "conversation_thread_not_found" ? 404 : message.startsWith("canonical_human_principal") ? 403 : 500;
+      return Response.json({ error: message }, { status });
+    }
+    const humanCtx = { ...ctx, userId: prepared.employeeId, employeeId: prepared.employeeId };
+    if (!activeContext && prepared.context.resolution.resolvedReferences.length > 0) {
+      activeContext = {
+        version: 1,
+        capturedAt: new Date().toISOString(),
+        source: body.data.channel,
+        selectedEntities: prepared.context.resolution.resolvedReferences.map(({ entityType, entityId }) => ({ entityType, entityId })),
+        excludedEntities: [],
+        surface: { id: "home", route: "/jarvis", spatialState: "canvas" },
+        filters: [],
+      };
+    }
     // Classify once before planner-only gates. Authentication and the generic
     // authenticated-route limiter already ran in requireContext; this tighter
     // intake bucket and batch backpressure are reserved for planner work.
@@ -51,12 +93,20 @@ export async function POST(req: Request): Promise<Response> {
       instruction: body.data.instruction,
       channel: body.data.channel,
       sessionId: body.data.sessionId,
-      instructionId: body.data.instructionId,
+      instructionId,
       workId: body.data.workId,
-      userId: ctx.userId,
+      userId: prepared.employeeId,
       idempotencyKey: body.data.idempotencyKey,
       activeContext,
-      authorityContext: ctx.employeeId ? await employeeAuthoritySnapshot(ctx) : { principal: ctx.userId, kind: "service" },
+      authorityContext: await employeeAuthoritySnapshot(humanCtx),
+    });
+    await linkEmployeeConversationTurnToWork({
+      tenantId: ctx.tenantId,
+      employeeId: prepared.employeeId,
+      threadId: prepared.threadId,
+      userMessageId: prepared.userMessage.id,
+      workId: received.workId,
+      workInputId: received.workInputId,
     });
     if (received.duplicate) {
       const aggregate = await workAggregate(ctx.tenantId, received.workId);
@@ -74,6 +124,7 @@ export async function POST(req: Request): Promise<Response> {
         }),
         work: aggregate?.work ?? { id: received.workId, status: received.status },
         duplicate: true,
+        threadId: prepared.threadId,
       };
       const replayQuery = (replayResponse as Record<string, unknown>).query as { metadata?: { durationMs?: number } } | undefined;
       return Response.json(replayResponse, {
@@ -84,7 +135,7 @@ export async function POST(req: Request): Promise<Response> {
 
     try {
       if (instructionRouteDecision.route === "ATOMIC_EFFECT" || instructionRouteDecision.route === "CONVERSATION") await enforceBatchBackpressure();
-      const result = await getOrchestrator().handleInstructionResult(body.data.instruction, ctx, {
+      const result = await getOrchestrator().handleInstructionResult(body.data.instruction, humanCtx, {
         sessionId: body.data.sessionId,
         instructionId: received.instructionId,
         workId: received.workId,
@@ -92,6 +143,7 @@ export async function POST(req: Request): Promise<Response> {
         idempotencyKey: body.data.idempotencyKey,
         channel: body.data.channel,
         activeContext,
+        conversationContext: prepared.context,
         fastReadDecision,
         instructionRouteDecision,
         skipFastReadClassification: true,
@@ -104,7 +156,37 @@ export async function POST(req: Request): Promise<Response> {
         workId: received.workId,
         workInputId: received.workInputId,
         instructionId: received.instructionId,
+        threadId: prepared.threadId,
       };
+      const responseText = assistantText(result);
+      const outcomeRefs: Array<Record<string, unknown>> = [
+        { kind: "work", id: received.workId },
+        { kind: "work_input", id: received.workInputId },
+        ...result.actions.map((action) => ({ kind: "domain_action", id: action.id, status: action.status })),
+        ...(result.objective ? [{ kind: "objective_loop", id: result.objective.objectiveLoopId, state: result.objective.state }] : []),
+        ...(result.query ? [{ kind: "work_query", intent: result.query.request.intent, asOf: result.query.result.asOf }] : []),
+      ];
+      const assistantMessage = await persistEmployeeAssistantTurn({
+        tenantId: ctx.tenantId,
+        employeeId: prepared.employeeId,
+        threadId: prepared.threadId,
+        instructionId: received.instructionId,
+        channel: body.data.channel,
+        text: responseText,
+        workId: received.workId,
+        workInputId: received.workInputId,
+        outcomeRefs,
+      });
+      await linkEmployeeConversationTurnToWork({
+        tenantId: ctx.tenantId,
+        employeeId: prepared.employeeId,
+        threadId: prepared.threadId,
+        userMessageId: prepared.userMessage.id,
+        workId: received.workId,
+        workInputId: received.workInputId,
+        ...(result.objective ? { objectiveLoopId: result.objective.objectiveLoopId } : {}),
+      });
+      Object.assign(response, { assistantMessage });
       await recordWorkResponse(ctx.tenantId, received.workId, response);
       return Response.json(response, {
         status: result.objective ? 202 : 201,

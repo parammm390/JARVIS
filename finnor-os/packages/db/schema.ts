@@ -898,6 +898,7 @@ export const works = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
+    unique("works_tenant_id_id_key").on(t.tenantId, t.id),
     unique("works_tenant_idempotency_idx").on(t.tenantId, t.idempotencyKey),
     index("works_tenant_status_idx").on(t.tenantId, t.status),
     index("works_tenant_session_idx").on(t.tenantId, t.sessionId),
@@ -922,6 +923,7 @@ export const workInputs = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
+    unique("work_inputs_tenant_id_id_key").on(t.tenantId, t.id),
     unique("work_inputs_tenant_instruction_idx").on(t.tenantId, t.instructionId),
     unique("work_inputs_work_idempotency_idx").on(t.workId, t.idempotencyKey),
     index("work_inputs_work_created_idx").on(t.workId, t.createdAt),
@@ -1067,10 +1069,162 @@ export const workObjectiveLoops = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
+    unique("work_objective_loops_tenant_id_id_key").on(t.tenantId, t.id),
     unique("work_objective_loops_work_idx").on(t.workId),
     index("work_objective_loops_tenant_state_next_idx").on(t.tenantId, t.state, t.nextRunAt),
   ],
 );
+
+// Phase 6 conversation kernel. These are authenticated-employee conversations,
+// deliberately separate from the provider/customer `conversations` and `messages`
+// tables below. A browser/call session may be recorded as transport provenance,
+// but it is never the durable conversation identity.
+export const employeeConversationThreads = pgTable(
+  "employee_conversation_threads",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    ownerEmployeeId: uuid("owner_employee_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    visibility: text("visibility", { enum: ["private"] }).notNull().default("private"),
+    title: text("title"),
+    summary: text("summary"),
+    summaryThroughSequence: integer("summary_through_sequence").notNull().default(0),
+    revision: integer("revision").notNull().default(1),
+    activeReferences: jsonb("active_references").notNull().default([]),
+    unresolvedReferences: jsonb("unresolved_references").notNull().default([]),
+    activeWorkId: uuid("active_work_id").references(() => works.id),
+    activeObjectiveLoopId: uuid("active_objective_loop_id").references(() => workObjectiveLoops.id),
+    outcomeRefs: jsonb("outcome_refs").notNull().default([]),
+    originTransportKey: text("origin_transport_key"),
+    lastActivityAt: timestamp("last_activity_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("employee_conversation_threads_tenant_id_owner_key").on(t.tenantId, t.id, t.ownerEmployeeId),
+    unique("employee_conversation_threads_transport_key").on(t.tenantId, t.ownerEmployeeId, t.originTransportKey),
+    index("employee_conversation_threads_owner_activity_idx").on(t.tenantId, t.ownerEmployeeId, t.lastActivityAt),
+    foreignKey({
+      columns: [t.tenantId, t.ownerEmployeeId],
+      foreignColumns: [users.tenantId, users.id],
+      name: "employee_conversation_threads_owner_tenant_fkey",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [t.tenantId, t.activeWorkId],
+      foreignColumns: [works.tenantId, works.id],
+      name: "employee_conversation_threads_work_tenant_fkey",
+    }),
+    foreignKey({
+      columns: [t.tenantId, t.activeObjectiveLoopId],
+      foreignColumns: [workObjectiveLoops.tenantId, workObjectiveLoops.id],
+      name: "employee_conversation_threads_objective_tenant_fkey",
+    }),
+  ],
+);
+
+export const employeeConversationMessages = pgTable(
+  "employee_conversation_messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    threadId: uuid("thread_id").notNull().references(() => employeeConversationThreads.id, { onDelete: "cascade" }),
+    ownerEmployeeId: uuid("owner_employee_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    sequence: integer("sequence").notNull(),
+    role: text("role", { enum: ["user", "assistant"] }).notNull(),
+    channel: text("channel", { enum: ["voice", "text", "console"] }).notNull(),
+    authorEmployeeId: uuid("author_employee_id").references(() => users.id),
+    originalText: text("original_text").notNull(),
+    instructionId: uuid("instruction_id"),
+    workId: uuid("work_id").references(() => works.id),
+    workInputId: uuid("work_input_id").references(() => workInputs.id),
+    idempotencyKey: text("idempotency_key").notNull(),
+    transportSessionId: text("transport_session_id"),
+    transportProvenance: jsonb("transport_provenance").notNull().default({}),
+    resolutionSnapshot: jsonb("resolution_snapshot"),
+    resolutionProvenance: jsonb("resolution_provenance").notNull().default([]),
+    companyTruthSnapshot: jsonb("company_truth_snapshot"),
+    outcomeRefs: jsonb("outcome_refs").notNull().default([]),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("employee_conversation_messages_tenant_id_owner_key").on(t.tenantId, t.id, t.ownerEmployeeId),
+    unique("employee_conversation_messages_thread_sequence_key").on(t.threadId, t.sequence),
+    unique("employee_conversation_messages_thread_idempotency_key").on(t.threadId, t.idempotencyKey),
+    index("employee_conversation_messages_owner_created_idx").on(t.tenantId, t.ownerEmployeeId, t.createdAt),
+    index("employee_conversation_messages_thread_created_idx").on(t.threadId, t.createdAt),
+    foreignKey({
+      columns: [t.tenantId, t.threadId, t.ownerEmployeeId],
+      foreignColumns: [employeeConversationThreads.tenantId, employeeConversationThreads.id, employeeConversationThreads.ownerEmployeeId],
+      name: "employee_conversation_messages_thread_owner_fkey",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [t.tenantId, t.authorEmployeeId],
+      foreignColumns: [users.tenantId, users.id],
+      name: "employee_conversation_messages_author_tenant_fkey",
+    }),
+    foreignKey({
+      columns: [t.tenantId, t.workId],
+      foreignColumns: [works.tenantId, works.id],
+      name: "employee_conversation_messages_work_tenant_fkey",
+    }),
+    foreignKey({
+      columns: [t.tenantId, t.workInputId],
+      foreignColumns: [workInputs.tenantId, workInputs.id],
+      name: "employee_conversation_messages_work_input_tenant_fkey",
+    }),
+  ],
+);
+
+// Only explicit human-authored facts are eligible for this table. Runtime code
+// supersedes an active subject row instead of silently overwriting history.
+export const employeePersonalMemories = pgTable(
+  "employee_personal_memories",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    ownerEmployeeId: uuid("owner_employee_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    sourceThreadId: uuid("source_thread_id").notNull().references(() => employeeConversationThreads.id, { onDelete: "cascade" }),
+    sourceMessageId: uuid("source_message_id").notNull().references(() => employeeConversationMessages.id, { onDelete: "cascade" }),
+    memoryType: text("memory_type", { enum: ["preference", "proposition"] }).notNull(),
+    subjectKey: text("subject_key").notNull(),
+    proposition: text("proposition").notNull(),
+    structuredValue: jsonb("structured_value").notNull().default({}),
+    provenance: jsonb("provenance").notNull().default({}),
+    validFrom: timestamp("valid_from", { withTimezone: true }).notNull().defaultNow(),
+    supersededAt: timestamp("superseded_at", { withTimezone: true }),
+    supersededById: uuid("superseded_by_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("employee_personal_memories_tenant_id_owner_key").on(t.tenantId, t.id, t.ownerEmployeeId),
+    index("employee_personal_memories_owner_subject_idx").on(t.tenantId, t.ownerEmployeeId, t.subjectKey, t.validFrom),
+    foreignKey({
+      columns: [t.tenantId, t.ownerEmployeeId],
+      foreignColumns: [users.tenantId, users.id],
+      name: "employee_personal_memories_owner_tenant_fkey",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [t.tenantId, t.sourceThreadId, t.ownerEmployeeId],
+      foreignColumns: [employeeConversationThreads.tenantId, employeeConversationThreads.id, employeeConversationThreads.ownerEmployeeId],
+      name: "employee_personal_memories_thread_owner_fkey",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [t.tenantId, t.sourceMessageId, t.ownerEmployeeId],
+      foreignColumns: [employeeConversationMessages.tenantId, employeeConversationMessages.id, employeeConversationMessages.ownerEmployeeId],
+      name: "employee_personal_memories_message_owner_fkey",
+    }).onDelete("cascade"),
+  ],
+);
+
+// Records the one-way quarantine boundary for pre-Phase-6 tenant-wide Zep users.
+// New runtime code never reads or copies these graph identities.
+export const legacyZepGraphQuarantine = pgTable("legacy_zep_graph_quarantine", {
+  tenantId: uuid("tenant_id").primaryKey().references(() => tenants.id, { onDelete: "cascade" }),
+  legacyUserId: text("legacy_user_id").notNull(),
+  policy: text("policy", { enum: ["quarantined_no_query_no_copy"] }).notNull().default("quarantined_no_query_no_copy"),
+  reason: text("reason").notNull(),
+  quarantinedAt: timestamp("quarantined_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 // Upgrade 7: the only stored graph edge. Existing foreign keys remain the truth
 // for every other relationship; Work needs this table because its business subject

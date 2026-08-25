@@ -97,6 +97,8 @@ function isAllowedGet(segments: string[]): boolean {
   if (segments.length === 3 && a === "instructions" && c === "events") return true
   if (segments.length === 1 && a === "works") return true
   if (segments.length === 2 && a === "works") return true
+  if (segments.length === 1 && a === "threads") return true
+  if (segments.length === 2 && a === "threads") return true
   if (segments.length === 3 && a === "works" && c === "execution") return true
   if (segments.length === 3 && a === "works" && c === "objective") return true
   if (segments.length === 2 && a === "operations") return true
@@ -107,6 +109,7 @@ function isAllowedGet(segments: string[]): boolean {
 function isAllowedPost(segments: string[]): boolean {
   const [a, b, c, d] = segments
   if (segments.length === 1 && a === "actions") return true
+  if (segments.length === 1 && a === "threads") return true
   if (segments.length === 1 && a === "objectives") return true
   if (segments.length === 1 && a === "queries") return true
   if (segments.length === 2 && a === "dispatch" && b === "map") return true

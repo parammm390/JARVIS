@@ -626,7 +626,7 @@ export function CommandRail({
         />
       )}
       <OpsPanel open={opsOpen} onClose={() => setOpsOpen(false)} />
-      <RecentThreadsPanel open={recentThreadsOpen} onClose={() => setRecentThreadsOpen(false)} thread={kernel.thread} threadHistory={kernel.threadHistory} />
+      <RecentThreadsPanel open={recentThreadsOpen} onClose={() => setRecentThreadsOpen(false)} threads={kernel.recentThreads} activeThreadId={kernel.thread?.conversationThreadId ?? null} onSelect={kernel.openThread} />
     </div>
   )
 }

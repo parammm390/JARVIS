@@ -6,9 +6,9 @@
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import * as schema from "./schema";
-import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { createHash, randomUUID } from "node:crypto";
-import { CANONICAL_ENTITY_TYPES, type AttachWorkEntityInput, type CanonicalEntityRef, type DecisionContextSnapshot } from "@finnor/shared-types";
+import { CANONICAL_ENTITY_TYPES, type AttachWorkEntityInput, type CanonicalEntityRef, type DecisionContextSnapshot, type EmployeeConversationChannel, type EmployeeConversationMessage, type EmployeeConversationThreadSummary, type EmployeePersonalMemory } from "@finnor/shared-types";
 
 export * from "./schema";
 export * from "./migration-head";
@@ -1004,15 +1004,15 @@ async function decisionContextSnapshot(
   };
   const userIds = refs.filter((ref) => ref.entityType === "user").map((ref) => ref.entityId);
   const householdIds = refs.filter((ref) => ref.entityType === "household").map((ref) => ref.entityId);
-  const [userRows, householdRows, authorityState] = await Promise.all([
-    userIds.length > 0
-      ? db.select({ id: schema.users.id, displayName: schema.users.displayName, email: schema.users.email, status: schema.users.status }).from(schema.users).where(inArray(schema.users.id, userIds))
-      : Promise.resolve([]),
-    householdIds.length > 0
-      ? db.select({ id: schema.households.id, address: schema.households.address, contactInfo: schema.households.contactInfo }).from(schema.households).where(inArray(schema.households.id, householdIds))
-      : Promise.resolve([]),
-    db.select({ revision: schema.authorityStates.revision }).from(schema.authorityStates).where(eq(schema.authorityStates.tenantId, work.tenantId)).limit(1),
-  ]);
+  // This function runs on one transaction-bound pg client. Query it in order;
+  // concurrent client.query calls are deprecated and can interleave state.
+  const userRows = userIds.length > 0
+    ? await db.select({ id: schema.users.id, displayName: schema.users.displayName, email: schema.users.email, status: schema.users.status }).from(schema.users).where(inArray(schema.users.id, userIds))
+    : [];
+  const householdRows = householdIds.length > 0
+    ? await db.select({ id: schema.households.id, address: schema.households.address, contactInfo: schema.households.contactInfo }).from(schema.households).where(inArray(schema.households.id, householdIds))
+    : [];
+  const authorityState = await db.select({ revision: schema.authorityStates.revision }).from(schema.authorityStates).where(eq(schema.authorityStates.tenantId, work.tenantId)).limit(1);
   const userById = new Map(userRows.map((row) => [row.id, row]));
   const householdById = new Map(householdRows.map((row) => [row.id, row]));
   const entities = refs.slice(0, 100).map((ref) => {
@@ -1362,6 +1362,404 @@ export async function finishWorkQueryExecution(params: FinishWorkQueryExecutionP
       eq(schema.workQueryExecutions.tenantId, params.tenantId),
     ));
   });
+}
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function requireEmployeeOwner(ownerEmployeeId: string): void {
+  if (!UUID_PATTERN.test(ownerEmployeeId)) throw new Error("canonical_human_principal_required");
+}
+
+function iso(value: Date | string): string {
+  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+}
+
+function conversationMessage(row: typeof schema.employeeConversationMessages.$inferSelect): EmployeeConversationMessage {
+  return {
+    id: row.id,
+    threadId: row.threadId,
+    sequence: row.sequence,
+    role: row.role,
+    channel: row.channel,
+    originalText: row.originalText,
+    instructionId: row.instructionId,
+    workId: row.workId,
+    workInputId: row.workInputId,
+    resolutionSnapshot: row.resolutionSnapshot && typeof row.resolutionSnapshot === "object" ? row.resolutionSnapshot as Record<string, unknown> : null,
+    resolutionProvenance: Array.isArray(row.resolutionProvenance) ? row.resolutionProvenance as Array<Record<string, unknown>> : [],
+    companyTruthSnapshot: row.companyTruthSnapshot && typeof row.companyTruthSnapshot === "object" ? row.companyTruthSnapshot as Record<string, unknown> : null,
+    outcomeRefs: Array.isArray(row.outcomeRefs) ? row.outcomeRefs as Array<Record<string, unknown>> : [],
+    createdAt: iso(row.createdAt),
+  };
+}
+
+function conversationThread(row: typeof schema.employeeConversationThreads.$inferSelect): EmployeeConversationThreadSummary {
+  return {
+    id: row.id,
+    title: row.title,
+    summary: row.summary,
+    revision: row.revision,
+    activeWorkId: row.activeWorkId,
+    activeObjectiveLoopId: row.activeObjectiveLoopId,
+    lastActivityAt: iso(row.lastActivityAt),
+    createdAt: iso(row.createdAt),
+  };
+}
+
+function personalMemory(row: typeof schema.employeePersonalMemories.$inferSelect): EmployeePersonalMemory {
+  return {
+    id: row.id,
+    memoryType: row.memoryType,
+    subjectKey: row.subjectKey,
+    proposition: row.proposition,
+    structuredValue: row.structuredValue as Record<string, unknown>,
+    sourceThreadId: row.sourceThreadId,
+    sourceMessageId: row.sourceMessageId,
+    provenance: row.provenance as Record<string, unknown>,
+    validFrom: iso(row.validFrom),
+    supersededAt: row.supersededAt ? iso(row.supersededAt) : null,
+    supersededById: row.supersededById,
+  };
+}
+
+export interface CreateEmployeeConversationThreadParams {
+  tenantId: string;
+  ownerEmployeeId: string;
+  title?: string;
+  originTransportKey?: string;
+}
+
+export async function createEmployeeConversationThread(params: CreateEmployeeConversationThreadParams): Promise<EmployeeConversationThreadSummary> {
+  requireEmployeeOwner(params.ownerEmployeeId);
+  return withTenant(params.tenantId, async (db) => {
+    const [principal] = await db.select({ id: schema.users.id }).from(schema.users).where(and(
+      eq(schema.users.tenantId, params.tenantId),
+      eq(schema.users.id, params.ownerEmployeeId),
+      eq(schema.users.status, "active"),
+    )).limit(1);
+    if (!principal) throw new Error("canonical_human_principal_not_active");
+
+    if (params.originTransportKey) {
+      const [existing] = await db.select().from(schema.employeeConversationThreads).where(and(
+        eq(schema.employeeConversationThreads.tenantId, params.tenantId),
+        eq(schema.employeeConversationThreads.ownerEmployeeId, params.ownerEmployeeId),
+        eq(schema.employeeConversationThreads.originTransportKey, params.originTransportKey),
+      )).limit(1);
+      if (existing) return conversationThread(existing);
+    }
+
+    const [created] = await db.insert(schema.employeeConversationThreads).values({
+      tenantId: params.tenantId,
+      ownerEmployeeId: params.ownerEmployeeId,
+      title: params.title?.trim().slice(0, 500) || null,
+      originTransportKey: params.originTransportKey?.slice(0, 500) || null,
+    }).onConflictDoNothing().returning();
+    if (created) return conversationThread(created);
+
+    const [raced] = await db.select().from(schema.employeeConversationThreads).where(and(
+      eq(schema.employeeConversationThreads.tenantId, params.tenantId),
+      eq(schema.employeeConversationThreads.ownerEmployeeId, params.ownerEmployeeId),
+      eq(schema.employeeConversationThreads.originTransportKey, params.originTransportKey!),
+    )).limit(1);
+    if (!raced) throw new Error("Unable to create conversation thread");
+    return conversationThread(raced);
+  }, params.ownerEmployeeId);
+}
+
+export async function listEmployeeConversationThreads(
+  tenantId: string,
+  ownerEmployeeId: string,
+  limit = 30,
+): Promise<EmployeeConversationThreadSummary[]> {
+  requireEmployeeOwner(ownerEmployeeId);
+  const boundedLimit = Math.max(1, Math.min(limit, 100));
+  return withTenant(tenantId, async (db) => {
+    const rows = await db.select().from(schema.employeeConversationThreads).where(and(
+      eq(schema.employeeConversationThreads.tenantId, tenantId),
+      eq(schema.employeeConversationThreads.ownerEmployeeId, ownerEmployeeId),
+    )).orderBy(desc(schema.employeeConversationThreads.lastActivityAt), desc(schema.employeeConversationThreads.id)).limit(boundedLimit);
+    return rows.map(conversationThread);
+  }, ownerEmployeeId);
+}
+
+export interface LoadedEmployeeConversationThread {
+  thread: EmployeeConversationThreadSummary & {
+    summaryThroughSequence: number;
+    activeReferences: Array<Record<string, unknown>>;
+    unresolvedReferences: Array<Record<string, unknown>>;
+    outcomeRefs: Array<Record<string, unknown>>;
+  };
+  messages: EmployeeConversationMessage[];
+}
+
+export async function loadEmployeeConversationThread(params: {
+  tenantId: string;
+  ownerEmployeeId: string;
+  threadId: string;
+  messageLimit?: number;
+  beforeSequence?: number;
+}): Promise<LoadedEmployeeConversationThread | null> {
+  requireEmployeeOwner(params.ownerEmployeeId);
+  const messageLimit = Math.max(1, Math.min(params.messageLimit ?? 50, 200));
+  return withTenant(params.tenantId, async (db) => {
+    const [thread] = await db.select().from(schema.employeeConversationThreads).where(and(
+      eq(schema.employeeConversationThreads.tenantId, params.tenantId),
+      eq(schema.employeeConversationThreads.ownerEmployeeId, params.ownerEmployeeId),
+      eq(schema.employeeConversationThreads.id, params.threadId),
+    )).limit(1);
+    if (!thread) return null;
+    const before = params.beforeSequence && params.beforeSequence > 0
+      ? sql`${schema.employeeConversationMessages.sequence} < ${Math.floor(params.beforeSequence)}`
+      : sql`true`;
+    const rows = await db.select().from(schema.employeeConversationMessages).where(and(
+      eq(schema.employeeConversationMessages.tenantId, params.tenantId),
+      eq(schema.employeeConversationMessages.ownerEmployeeId, params.ownerEmployeeId),
+      eq(schema.employeeConversationMessages.threadId, params.threadId),
+      before,
+    )).orderBy(desc(schema.employeeConversationMessages.sequence)).limit(messageLimit);
+    return {
+      thread: {
+        ...conversationThread(thread),
+        summaryThroughSequence: thread.summaryThroughSequence,
+        activeReferences: Array.isArray(thread.activeReferences) ? thread.activeReferences as Array<Record<string, unknown>> : [],
+        unresolvedReferences: Array.isArray(thread.unresolvedReferences) ? thread.unresolvedReferences as Array<Record<string, unknown>> : [],
+        outcomeRefs: Array.isArray(thread.outcomeRefs) ? thread.outcomeRefs as Array<Record<string, unknown>> : [],
+      },
+      messages: rows.reverse().map(conversationMessage),
+    };
+  }, params.ownerEmployeeId);
+}
+
+export interface AppendEmployeeConversationMessageParams {
+  tenantId: string;
+  ownerEmployeeId: string;
+  threadId: string;
+  role: "user" | "assistant";
+  channel: EmployeeConversationChannel;
+  originalText: string;
+  idempotencyKey: string;
+  instructionId?: string;
+  workId?: string;
+  workInputId?: string;
+  transportSessionId?: string;
+  transportProvenance?: Record<string, unknown>;
+  resolutionSnapshot?: Record<string, unknown>;
+  resolutionProvenance?: Array<Record<string, unknown>>;
+  companyTruthSnapshot?: Record<string, unknown>;
+  outcomeRefs?: Array<Record<string, unknown>>;
+}
+
+export async function appendEmployeeConversationMessage(
+  params: AppendEmployeeConversationMessageParams,
+): Promise<{ message: EmployeeConversationMessage; duplicate: boolean }> {
+  requireEmployeeOwner(params.ownerEmployeeId);
+  const text = params.originalText;
+  if (!text.trim() || Buffer.byteLength(text, "utf8") > 65_536) throw new Error("conversation_message_invalid");
+  return withTenant(params.tenantId, async (db) => {
+    await db.execute(sql`SELECT id FROM ${schema.employeeConversationThreads} WHERE ${schema.employeeConversationThreads.id}=${params.threadId} AND ${schema.employeeConversationThreads.tenantId}=${params.tenantId} AND ${schema.employeeConversationThreads.ownerEmployeeId}=${params.ownerEmployeeId} FOR UPDATE`);
+    const [thread] = await db.select({ id: schema.employeeConversationThreads.id }).from(schema.employeeConversationThreads).where(and(
+      eq(schema.employeeConversationThreads.id, params.threadId),
+      eq(schema.employeeConversationThreads.tenantId, params.tenantId),
+      eq(schema.employeeConversationThreads.ownerEmployeeId, params.ownerEmployeeId),
+    )).limit(1);
+    if (!thread) throw new Error("conversation_thread_not_found");
+    const [existing] = await db.select().from(schema.employeeConversationMessages).where(and(
+      eq(schema.employeeConversationMessages.threadId, params.threadId),
+      eq(schema.employeeConversationMessages.idempotencyKey, params.idempotencyKey),
+    )).limit(1);
+    if (existing) return { message: conversationMessage(existing), duplicate: true };
+    const [last] = await db.select({ sequence: schema.employeeConversationMessages.sequence }).from(schema.employeeConversationMessages).where(
+      eq(schema.employeeConversationMessages.threadId, params.threadId),
+    ).orderBy(desc(schema.employeeConversationMessages.sequence)).limit(1);
+    const sequence = (last?.sequence ?? 0) + 1;
+    const [created] = await db.insert(schema.employeeConversationMessages).values({
+      tenantId: params.tenantId,
+      ownerEmployeeId: params.ownerEmployeeId,
+      threadId: params.threadId,
+      sequence,
+      role: params.role,
+      channel: params.channel,
+      authorEmployeeId: params.role === "user" ? params.ownerEmployeeId : null,
+      originalText: text,
+      instructionId: params.instructionId ?? null,
+      workId: params.workId ?? null,
+      workInputId: params.workInputId ?? null,
+      idempotencyKey: params.idempotencyKey.slice(0, 500),
+      transportSessionId: params.transportSessionId?.slice(0, 500) ?? null,
+      transportProvenance: boundedJson(params.transportProvenance ?? {}, 16_000) as object,
+      resolutionSnapshot: params.resolutionSnapshot ? boundedJson(params.resolutionSnapshot, 32_000) as object : null,
+      resolutionProvenance: boundedJson(params.resolutionProvenance ?? [], 32_000) as object[],
+      companyTruthSnapshot: params.companyTruthSnapshot ? boundedJson(params.companyTruthSnapshot, 32_000) as object : null,
+      outcomeRefs: boundedJson(params.outcomeRefs ?? [], 32_000) as object[],
+    }).returning();
+    if (!created) throw new Error("Unable to append conversation message");
+    const now = new Date();
+    await db.update(schema.employeeConversationThreads).set({
+      ...(sequence === 1 && params.role === "user" ? { title: text.replace(/\s+/g, " ").trim().slice(0, 120) } : {}),
+      revision: sql`${schema.employeeConversationThreads.revision}+1`,
+      lastActivityAt: now,
+      updatedAt: now,
+    }).where(eq(schema.employeeConversationThreads.id, params.threadId));
+    return { message: conversationMessage(created), duplicate: false };
+  }, params.ownerEmployeeId);
+}
+
+export async function updateEmployeeConversationThreadContext(params: {
+  tenantId: string;
+  ownerEmployeeId: string;
+  threadId: string;
+  activeReferences?: Array<Record<string, unknown>>;
+  unresolvedReferences?: Array<Record<string, unknown>>;
+  activeWorkId?: string | null;
+  activeObjectiveLoopId?: string | null;
+  outcomeRefs?: Array<Record<string, unknown>>;
+  summary?: string | null;
+  summaryThroughSequence?: number;
+}): Promise<void> {
+  requireEmployeeOwner(params.ownerEmployeeId);
+  await withTenant(params.tenantId, async (db) => {
+    const now = new Date();
+    const rows = await db.update(schema.employeeConversationThreads).set({
+      ...(params.activeReferences ? { activeReferences: boundedJson(params.activeReferences, 64_000) as object[] } : {}),
+      ...(params.unresolvedReferences ? { unresolvedReferences: boundedJson(params.unresolvedReferences, 32_000) as object[] } : {}),
+      ...(params.activeWorkId !== undefined ? { activeWorkId: params.activeWorkId } : {}),
+      ...(params.activeObjectiveLoopId !== undefined ? { activeObjectiveLoopId: params.activeObjectiveLoopId } : {}),
+      ...(params.outcomeRefs ? { outcomeRefs: boundedJson(params.outcomeRefs, 64_000) as object[] } : {}),
+      ...(params.summary !== undefined ? { summary: params.summary?.slice(0, 65_536) ?? null } : {}),
+      ...(params.summaryThroughSequence !== undefined ? { summaryThroughSequence: Math.max(0, Math.floor(params.summaryThroughSequence)) } : {}),
+      revision: sql`${schema.employeeConversationThreads.revision}+1`,
+      lastActivityAt: now,
+      updatedAt: now,
+    }).where(and(
+      eq(schema.employeeConversationThreads.tenantId, params.tenantId),
+      eq(schema.employeeConversationThreads.ownerEmployeeId, params.ownerEmployeeId),
+      eq(schema.employeeConversationThreads.id, params.threadId),
+    )).returning({ id: schema.employeeConversationThreads.id });
+    if (!rows.length) throw new Error("conversation_thread_not_found");
+  }, params.ownerEmployeeId);
+}
+
+export async function updateEmployeeConversationMessageContext(params: {
+  tenantId: string;
+  ownerEmployeeId: string;
+  threadId: string;
+  messageId: string;
+  workId?: string | null;
+  workInputId?: string | null;
+  resolutionSnapshot?: Record<string, unknown> | null;
+  resolutionProvenance?: Array<Record<string, unknown>>;
+  companyTruthSnapshot?: Record<string, unknown> | null;
+  outcomeRefs?: Array<Record<string, unknown>>;
+}): Promise<void> {
+  requireEmployeeOwner(params.ownerEmployeeId);
+  await withTenant(params.tenantId, async (db) => {
+    const rows = await db.update(schema.employeeConversationMessages).set({
+      ...(params.workId !== undefined ? { workId: params.workId } : {}),
+      ...(params.workInputId !== undefined ? { workInputId: params.workInputId } : {}),
+      ...(params.resolutionSnapshot !== undefined ? { resolutionSnapshot: params.resolutionSnapshot ? boundedJson(params.resolutionSnapshot, 32_000) as object : null } : {}),
+      ...(params.resolutionProvenance ? { resolutionProvenance: boundedJson(params.resolutionProvenance, 32_000) as object[] } : {}),
+      ...(params.companyTruthSnapshot !== undefined ? { companyTruthSnapshot: params.companyTruthSnapshot ? boundedJson(params.companyTruthSnapshot, 32_000) as object : null } : {}),
+      ...(params.outcomeRefs ? { outcomeRefs: boundedJson(params.outcomeRefs, 32_000) as object[] } : {}),
+    }).where(and(
+      eq(schema.employeeConversationMessages.tenantId, params.tenantId),
+      eq(schema.employeeConversationMessages.ownerEmployeeId, params.ownerEmployeeId),
+      eq(schema.employeeConversationMessages.threadId, params.threadId),
+      eq(schema.employeeConversationMessages.id, params.messageId),
+    )).returning({ id: schema.employeeConversationMessages.id });
+    if (!rows.length) throw new Error("conversation_message_not_found");
+  }, params.ownerEmployeeId);
+}
+
+export async function searchEmployeeConversationMessages(params: {
+  tenantId: string;
+  ownerEmployeeId: string;
+  query: string;
+  threadId?: string;
+  limit?: number;
+}): Promise<EmployeeConversationMessage[]> {
+  requireEmployeeOwner(params.ownerEmployeeId);
+  const terms = params.query.replace(/[^\p{L}\p{N}@._ -]+/gu, " ").trim().slice(0, 500);
+  if (!terms) return [];
+  const limit = Math.max(1, Math.min(params.limit ?? 20, 50));
+  return withTenant(params.tenantId, async (db) => {
+    const rows = await db.select().from(schema.employeeConversationMessages).where(and(
+      eq(schema.employeeConversationMessages.tenantId, params.tenantId),
+      eq(schema.employeeConversationMessages.ownerEmployeeId, params.ownerEmployeeId),
+      params.threadId ? eq(schema.employeeConversationMessages.threadId, params.threadId) : sql`true`,
+      sql`to_tsvector('simple',${schema.employeeConversationMessages.originalText}) @@ plainto_tsquery('simple',${terms})`,
+    )).orderBy(desc(schema.employeeConversationMessages.createdAt)).limit(limit);
+    return rows.map(conversationMessage);
+  }, params.ownerEmployeeId);
+}
+
+export async function listEmployeePersonalMemories(params: {
+  tenantId: string;
+  ownerEmployeeId: string;
+  subjectKey?: string;
+  includeSuperseded?: boolean;
+  limit?: number;
+}): Promise<EmployeePersonalMemory[]> {
+  requireEmployeeOwner(params.ownerEmployeeId);
+  const limit = Math.max(1, Math.min(params.limit ?? 50, 200));
+  return withTenant(params.tenantId, async (db) => {
+    const rows = await db.select().from(schema.employeePersonalMemories).where(and(
+      eq(schema.employeePersonalMemories.tenantId, params.tenantId),
+      eq(schema.employeePersonalMemories.ownerEmployeeId, params.ownerEmployeeId),
+      params.subjectKey ? eq(schema.employeePersonalMemories.subjectKey, params.subjectKey) : sql`true`,
+      params.includeSuperseded ? sql`true` : isNull(schema.employeePersonalMemories.supersededAt),
+    )).orderBy(desc(schema.employeePersonalMemories.validFrom)).limit(limit);
+    return rows.map(personalMemory);
+  }, params.ownerEmployeeId);
+}
+
+export async function rememberExplicitEmployeeMemory(params: {
+  tenantId: string;
+  ownerEmployeeId: string;
+  sourceThreadId: string;
+  sourceMessageId: string;
+  role: "user" | "assistant";
+  memoryType: "preference" | "proposition";
+  subjectKey: string;
+  proposition: string;
+  structuredValue: Record<string, unknown>;
+  provenance: Record<string, unknown>;
+}): Promise<EmployeePersonalMemory | null> {
+  requireEmployeeOwner(params.ownerEmployeeId);
+  if (params.role !== "user") return null;
+  if (!params.subjectKey.trim() || !params.proposition.trim()) throw new Error("personal_memory_invalid");
+  return withTenant(params.tenantId, async (db) => {
+    await db.execute(sql`SELECT id FROM ${schema.employeeConversationThreads} WHERE ${schema.employeeConversationThreads.id}=${params.sourceThreadId} AND ${schema.employeeConversationThreads.ownerEmployeeId}=${params.ownerEmployeeId} FOR UPDATE`);
+    const [current] = await db.select().from(schema.employeePersonalMemories).where(and(
+      eq(schema.employeePersonalMemories.tenantId, params.tenantId),
+      eq(schema.employeePersonalMemories.ownerEmployeeId, params.ownerEmployeeId),
+      eq(schema.employeePersonalMemories.subjectKey, params.subjectKey),
+      isNull(schema.employeePersonalMemories.supersededAt),
+    )).limit(1);
+    const structuredValue = boundedJson(params.structuredValue, 16_000) as object;
+    if (current && current.proposition === params.proposition && JSON.stringify(current.structuredValue) === JSON.stringify(structuredValue)) {
+      return personalMemory(current);
+    }
+    const id = randomUUID();
+    const now = new Date();
+    if (current) {
+      await db.update(schema.employeePersonalMemories).set({ supersededAt: now, supersededById: id }).where(eq(schema.employeePersonalMemories.id, current.id));
+    }
+    const [created] = await db.insert(schema.employeePersonalMemories).values({
+      id,
+      tenantId: params.tenantId,
+      ownerEmployeeId: params.ownerEmployeeId,
+      sourceThreadId: params.sourceThreadId,
+      sourceMessageId: params.sourceMessageId,
+      memoryType: params.memoryType,
+      subjectKey: params.subjectKey.slice(0, 500),
+      proposition: params.proposition.slice(0, 10_000),
+      structuredValue,
+      provenance: boundedJson(params.provenance, 16_000) as object,
+      validFrom: now,
+    }).returning();
+    if (!created) throw new Error("Unable to persist personal memory");
+    return personalMemory(created);
+  }, params.ownerEmployeeId);
 }
 
 export * from "./operational-deltas";
