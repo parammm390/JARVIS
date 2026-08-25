@@ -69,3 +69,26 @@ export async function createStripePaymentLink(input: CreatePaymentLinkInput, con
   const session = (await res.json()) as { id: string; url: string };
   return { paymentLinkUrl: session.url, linkId: session.id };
 }
+
+export interface StripeCheckoutSession extends Record<string, unknown> {
+  id: string;
+  status?: string;
+  payment_status?: string;
+  amount_total?: number;
+  currency?: string;
+  metadata?: Record<string, string>;
+  payment_intent?: string | Record<string, unknown> | null;
+}
+
+export async function readStripeCheckoutSession(id: string, context: StripeCredentialContext): Promise<StripeCheckoutSession | null> {
+  const response = await fetch(`https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(id)}?expand[]=payment_intent`, {
+    headers: { Authorization: `Bearer ${context.credentials.secretKey}` },
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (response.status === 404) return null;
+  if (!response.ok) {
+    const authFailure = response.status === 401 || response.status === 403;
+    throw new IntegrationError("stripe", `Checkout Session read failed (${response.status})`, !authFailure && (response.status === 429 || response.status >= 500), authFailure ? "auth" : "retryable");
+  }
+  return response.json() as Promise<StripeCheckoutSession>;
+}

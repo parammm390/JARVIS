@@ -26,6 +26,7 @@ import {
 import type { JarvisRole } from "../lib/jarvis-auth"
 import type { Thread } from "../kernel/store"
 import type { LiveFrameProjection } from "../kernel/liveframe"
+import { useOperatingInteractionActions } from "../kernel/operating-interaction"
 import { ActionRenderer } from "../ui/renderers/ActionRenderer"
 import { ApprovalCockpit } from "../bridge/ApprovalCockpit"
 import { ThreadClarify, ThreadExecution, ThreadReceipt } from "../bridge/ThreadBlocks"
@@ -51,7 +52,11 @@ import { withOperationalContext } from "../surfaces/surface-routes"
 import { buildWorkspaceInspector, groupWorkspaceInspector, type WorkspaceInspectorItem } from "./workspace-inspector"
 import { deriveWorkspaceProgress, splitResearchNarrative } from "./presentation"
 import { WorkspaceSettingsButton, useWorkspaceConfig } from "../WorkspaceConfigProvider"
-import { inspectorFieldVisible, orderedWorkspaceItems } from "../lib/workspace-config"
+import { effectiveMotionPreference, inspectorFieldVisible, orderedWorkspaceItems, sceneSlot } from "../lib/workspace-config"
+import { deriveSceneDirector } from "../kernel/scene-director"
+import { TenantReadyExperience } from "../experience/TenantReadyExperience"
+import { ExperienceSlot } from "../experience/extension-registry"
+import { TenantBrandMark } from "../experience/TenantBrandMark"
 
 gsap.registerPlugin(useGSAP)
 
@@ -275,11 +280,13 @@ function SourceBar({ result }: { result: OperationalQueryResult }) {
 }
 
 function CustomerWorkspace({ projection, onInspect }: WorkspaceBodyProps) {
+  const { focusEntity } = useOperatingInteractionActions()
   const result = projection.query?.result.intent === "customer_lookup" ? projection.query.result as CustomerLookupResult : null
-  const [selectedId, setSelectedId] = useState<string | null>(result?.rows[0]?.householdId ?? null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
   const rows = result?.rows ?? []
   const inspect = (row: CustomerLookupResult["rows"][number]) => {
     setSelectedId(row.householdId)
+    focusEntity({ entityType: "household", entityId: row.householdId }, row.displayName ?? row.address)
     onInspect([
       { label: "Customer", value: row.displayName ?? "Unnamed household" },
       { label: "Address", value: row.address },
@@ -287,12 +294,6 @@ function CustomerWorkspace({ projection, onInspect }: WorkspaceBodyProps) {
       { label: "Record", value: row.householdId, href: `/jarvis/customers?householdId=${encodeURIComponent(row.householdId)}` },
     ])
   }
-  useEffect(() => {
-    if (rows[0]) inspect(rows[0])
-    // The first row is the canonical initial selection for a new query result.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projection.key])
-
   if (!result) return <ActionPlan projection={projection} onInspect={onInspect} />
   return (
     <div className="jarvis-customer-workspace">
@@ -337,10 +338,12 @@ function CompanyContextWorkspace({ projection, onInspect }: WorkspaceBodyProps) 
 }
 
 function CohortWorkspace({ projection, onInspect }: WorkspaceBodyProps) {
+  const { focusEntity, setCohort, setFilters } = useOperatingInteractionActions()
   const result = projection.query?.result as CustomerCohortResult
-  const [selectedId, setSelectedId] = useState<string | null>(result.rows[0]?.householdId ?? null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
   const inspect = (row: CustomerCohortResult["rows"][number]) => {
     setSelectedId(row.householdId)
+    focusEntity({ entityType: "household", entityId: row.householdId }, row.displayName ?? row.address)
     onInspect([
       { label: "Customer", value: row.displayName ?? "Unnamed household" },
       { label: "Address", value: row.address },
@@ -349,10 +352,11 @@ function CohortWorkspace({ projection, onInspect }: WorkspaceBodyProps) {
       { label: "Open record", value: row.householdId, href: `/jarvis/customers?householdId=${encodeURIComponent(row.householdId)}` },
     ])
   }
-  useEffect(() => {
-    if (result.rows[0]) inspect(result.rows[0])
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projection.key])
+  const cohortCount = result.page.totalCountExact && result.page.totalCount !== null ? result.page.totalCount : result.count
+  const useEntireCohort = () => {
+    setCohort({ kind: "work_query_execution", executionId: projection.query!.metadata.queryId, entityType: "household", queryIntent: "customer_cohort", count: cohortCount })
+    setFilters([{ field: "cohort", operator: "eq", value: "inactive" }, { field: "minDaysInactive", operator: "gte", value: result.minDaysInactive }])
+  }
   return (
     <div className="jarvis-cohort-workspace">
       <SourceBar result={result} />
@@ -361,6 +365,7 @@ function CohortWorkspace({ projection, onInspect }: WorkspaceBodyProps) {
         <div><strong>{result.minDaysInactive}+</strong><span>days inactive</span></div>
         <div><strong>{dateOnly(result.cutoff)}</strong><span>activity cutoff</span></div>
       </div>
+      <button type="button" className="mb-3 rounded-xl border border-violet-300/25 bg-violet-300/10 px-3 py-2 text-xs font-black text-violet-100" onClick={useEntireCohort} data-use-entire-cohort={projection.query?.metadata.queryId}>Use entire {cohortCount}-customer cohort</button>
       {result.rows.length === 0 ? <WorkspaceEmptyResult title="No customers in this cohort" copy="No customer met the requested inactivity threshold at the query cutoff." /> : (
         <div className="jarvis-cohort-table" role="table" aria-label="Inspectable customer cohort">
           <div role="row" className="jarvis-cohort-table__head"><span>Customer</span><span>Address</span><span>Last interaction</span><span>Why included</span></div>
@@ -379,8 +384,15 @@ function CohortWorkspace({ projection, onInspect }: WorkspaceBodyProps) {
 }
 
 function ScheduleWorkspace({ projection, onInspect }: WorkspaceBodyProps) {
+  const { focusEntity, setTimeContext } = useOperatingInteractionActions()
   const result = projection.query?.result.intent === "schedule_range" ? projection.query.result as ScheduleRangeResult : null
-  const [selectedId, setSelectedId] = useState<string | null>(result?.rows[0]?.id ?? null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const rangeStart = result?.range.start
+  const rangeEnd = result?.range.end
+  const rangeTimeZone = result?.timeZone
+  useEffect(() => {
+    if (rangeStart && rangeEnd && rangeTimeZone) setTimeContext({ start: rangeStart, end: rangeEnd, timezone: rangeTimeZone })
+  }, [rangeEnd, rangeStart, rangeTimeZone, setTimeContext])
   if (!result) return <ActionPlan projection={projection} onInspect={onInspect} />
   const days = result.rows.reduce<Record<string, typeof result.rows>>((groups, row) => {
     const key = dateOnly(row.scheduledAt, result.timeZone)
@@ -389,6 +401,7 @@ function ScheduleWorkspace({ projection, onInspect }: WorkspaceBodyProps) {
   }, {})
   const inspect = (row: ScheduleRangeResult["rows"][number]) => {
     setSelectedId(row.id)
+    if (row.kind === "appointment" || row.kind === "service_visit" || row.kind === "work_order") focusEntity({ entityType: row.kind, entityId: row.id }, row.household?.displayName ?? humanize(row.kind))
     const destination = row.household ? `/jarvis/schedule?${row.kind === "appointment" ? "appointmentId" : row.kind === "work_order" ? "workOrderId" : "serviceVisitId"}=${encodeURIComponent(row.id)}&householdId=${encodeURIComponent(row.household.id)}` : "/jarvis/schedule"
     onInspect([
       { label: "Time", value: dateTime(row.scheduledAt, result.timeZone) },
@@ -566,6 +579,7 @@ function WorkTimelineWorkspace({
 }
 
 function QueryOperationsWorkspace({ projection, onInspect }: WorkspaceBodyProps) {
+  const { focusEntity } = useOperatingInteractionActions()
   const result = projection.query!.result
   if (result.intent === "work_list") {
     const work = result as WorkListResult
@@ -588,7 +602,7 @@ function QueryOperationsWorkspace({ projection, onInspect }: WorkspaceBodyProps)
   if (result.intent === "inventory_status") {
     const inventory = result as InventoryStatusResult
     return (
-      <div className="jarvis-query-plan-workspace"><SourceBar result={result} /><div className="jarvis-inventory-grid">{inventory.items.map((item) => <button key={item.id} type="button" data-alert={item.lowStock} onClick={() => onInspect([{ label: "Item", value: item.name }, { label: "SKU", value: item.sku }, { label: "On hand", value: String(item.quantity) }, { label: "Reorder at", value: String(item.reorderThreshold) }])}><span>{item.sku}</span><strong>{item.name}</strong><em>{item.quantity} on hand</em></button>)}</div></div>
+      <div className="jarvis-query-plan-workspace"><SourceBar result={result} /><div className="jarvis-inventory-grid">{inventory.items.map((item) => <button key={item.id} type="button" data-alert={item.lowStock} onClick={() => { focusEntity({ entityType: "inventory_item", entityId: item.id }, item.name); onInspect([{ label: "Item", value: item.name }, { label: "SKU", value: item.sku }, { label: "On hand", value: String(item.quantity) }, { label: "Reorder at", value: String(item.reorderThreshold) }]) }}><span>{item.sku}</span><strong>{item.name}</strong><em>{item.quantity} on hand</em></button>)}</div></div>
     )
   }
   const business = result as BusinessStateResult
@@ -691,7 +705,10 @@ export function AdaptiveWorkspaceShell({
     }
   }, [liveQuery.data, liveQuery.updatedAt, projectedThread])
   const restingWork = useBusinessProjection(businessProjections.workCases(), { enabled: thread === null && !publicPreview })
-  const restingAttention = useMemo(() => projectRestingAttention(restingWork.data ?? []), [restingWork.data])
+  const restingAttention = useMemo(() => {
+    const allowed = new Set(workspaceConfig.roles[role].ready.attentionCategories)
+    return projectRestingAttention(restingWork.data ?? [], Date.now(), 12).filter((item) => allowed.has(item.kind)).slice(0, 3)
+  }, [restingWork.data, role, workspaceConfig.roles])
   const [inspector, setInspector] = useState<InspectorItem[]>([])
   const [inspectorOpen, setInspectorOpen] = useState(false)
   const [advancedInspectorOpen, setAdvancedInspectorOpen] = useState(false)
@@ -731,9 +748,19 @@ export function AdaptiveWorkspaceShell({
   const restingLoading = !publicPreview && thread === null && restingWork.data === null && (restingWork.status === "idle" || restingWork.status === "loading")
   const restingState = restingAttention[0]?.tone === "critical" ? "failed" : restingAttention[0]?.tone === "decision" ? "awaiting_approval" : "idle"
   const restingStateLabel = restingLoading ? "Reading Work" : restingAttention.length > 0 ? `${restingAttention.length} need attention` : "Current"
-  const navItems = orderedWorkspaceItems([...NAV], workspaceConfig)
+  const navItems = orderedWorkspaceItems([...NAV], workspaceConfig, role)
   const visibleInspector = inspector.filter((item) => inspectorFieldVisible(item.label, workspaceConfig))
   const inspectorGroups = useMemo(() => groupWorkspaceInspector(visibleInspector), [visibleInspector])
+  const scene = deriveSceneDirector(liveframe).scene
+  const configuredScene = workspaceConfig.scenes[scene]
+  const extensionSlot = sceneSlot(scene)
+  const extensionContext = {
+    role,
+    scene,
+    vocabulary: workspaceConfig.vocabulary,
+    primaryProjection: workspaceConfig.roles[role].ready.primaryProjection,
+    activeWork: thread ? { id: thread.workId ?? null, state: thread.machine.instructionState } : null,
+  }
 
   useGSAP(() => {
     if (reducedMotion || !projection) return
@@ -752,11 +779,15 @@ export function AdaptiveWorkspaceShell({
       data-jarvis-restored-event-count={threadRestored ? restoredTraceEventCount : undefined}
       data-jarvis-instruction-id={thread?.instructionId ?? undefined}
       data-source={fixtureLabel ? "fixture.adaptiveWorkspace" : undefined}
+      data-experience-scene={scene}
+      data-experience-detail={configuredScene.detail}
+      data-experience-emphasis={configuredScene.emphasis}
+      data-experience-motion={effectiveMotionPreference(workspaceConfig.brand.motion, reducedMotion)}
     >
       {fixtureLabel && <div className="fixed left-1/2 top-2 z-[100] -translate-x-1/2"><span className="j-chip border border-violet-300/40 bg-violet-400/15 text-violet-200">FIXTURE · {fixtureLabel}</span></div>}
       {publicPreview && <div className="fixed left-1/2 top-2 z-[100] -translate-x-1/2"><span className="j-chip border border-cyan-300/30 bg-cyan-300/10 text-cyan-100">PUBLIC PREVIEW</span></div>}
       <aside className="jarvis-adaptive-nav" aria-label="JARVIS navigation">
-        <Link href={withOperationalContext("/jarvis", undefined, projection?.workId)} className="jarvis-adaptive-nav__brand"><span>{workspaceConfig.brand.mark}</span><strong>JARVIS</strong></Link>
+        <Link href={withOperationalContext("/jarvis", undefined, projection?.workId)} className="jarvis-adaptive-nav__brand"><span><TenantBrandMark size={24} /></span><strong>JARVIS</strong></Link>
         <nav>{navItems.map(({ key, href, icon: Icon }) => <Link key={href} href={withOperationalContext(href, undefined, projection?.workId)} aria-current={href === "/jarvis" ? "page" : undefined} title={workspaceConfig.terminology[key]}><Icon size={17} /><span>{workspaceConfig.terminology[key]}</span></Link>)}</nav>
         <div className="jarvis-adaptive-nav__status" data-state={liveframe.mode}><i /><span>{stateLabel(projection?.state ?? "idle")}</span></div>
       </aside>
@@ -776,9 +807,9 @@ export function AdaptiveWorkspaceShell({
           </div>
         </header>
         <div className="jarvis-adaptive-stage" data-adaptive-workspace-body>
-          {thread && projection ? <WorkspaceBody projection={projection} thread={thread} role={role} reducedMotion={reducedMotion} liveframe={liveframe} onInspect={inspectActive} onAnswer={onAnswer} onCancel={onCancel} onRetry={onRetry} />
+          {thread && projection ? <>{extensionSlot ? <ExperienceSlot slot={extensionSlot} context={extensionContext} className="jarvis-experience-scene-slot" /> : null}<WorkspaceBody projection={projection} thread={thread} role={role} reducedMotion={reducedMotion} liveframe={liveframe} onInspect={inspectActive} onAnswer={onAnswer} onCancel={onCancel} onRetry={onRetry} /></>
             : publicPreview ? <EmptyWorkspace />
-              : <RestingWorkspace items={restingAttention} loading={restingLoading} error={restingError} stale={Boolean(restingWork.data) && (restingWork.stale || restingWork.status === "error")} onRetry={() => { void restingWork.refresh().catch(() => undefined) }} onInspect={setInspector} />}
+              : <><TenantReadyExperience role={role} /><RestingWorkspace items={restingAttention} loading={restingLoading} error={restingError} stale={Boolean(restingWork.data) && (restingWork.stale || restingWork.status === "error")} onRetry={() => { void restingWork.refresh().catch(() => undefined) }} onInspect={setInspector} /></>}
         </div>
         <section className="jarvis-conversation-layer" aria-label="Command history">
           {thread && <div className="jarvis-current-request" data-history-current>
@@ -813,6 +844,7 @@ export function AdaptiveWorkspaceShell({
             </details>
           )}
           {projection?.query && <div className="jarvis-adaptive-inspector__provenance"><CheckCircle2 size={14} /><span><strong>Verified source</strong>{projection.query.result.source.tables.join(" · ")}</span></div>}
+          <ExperienceSlot slot="inspector.extra" context={extensionContext} />
           {inspectorGroups.durableWork?.href ? <Link className="jarvis-adaptive-inspector__open" href={inspectorGroups.durableWork.href}>Open durable Work <ArrowUpRight size={14} /></Link> : projection?.workId ? <Link className="jarvis-adaptive-inspector__open" href={`/jarvis/work?workCaseId=${encodeURIComponent(projection.workId)}`}>Open durable Work <ArrowUpRight size={14} /></Link> : null}
         </div>
       </aside>

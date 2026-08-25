@@ -191,6 +191,7 @@ export function makeExecuteNode(plugins: PluginRegistry, tools: ToolRegistry) {
     const finalStatus =
       effectVerification?.state === "divergent" || effectVerification?.state === "reconciliation_required" || result.errorKind === "unknown_outcome"
         ? "needs_human_review"
+        : effectVerification?.state === "partially_verified" ? "executing"
         : result.status === "success" ? "completed" : result.status === "integration_unavailable" ? "blocked_integration_unavailable" : "failed";
     await setStatus(state.tenantId, state.actionId, finalStatus);
 

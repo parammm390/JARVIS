@@ -86,7 +86,7 @@ export interface CapabilityDomainDefinition {
 }
 
 /**
- * A deliberately curated control plane over the 44 registered backend actions.
+ * A deliberately curated control plane over the registered backend actions.
  * These are not synthetic assistants or provider resources: each operating
  * domain is a named authority boundary whose action catalog maps one-for-one to
  * the existing domain contracts.
@@ -98,7 +98,7 @@ export const CAPABILITY_DOMAINS = [
     shortLabel: "Command",
     mandate: "Turns an owner instruction into grounded business context, a bounded plan, and a clear decision boundary.",
     authorityCopy: "May read and prepare work; consequential action still follows the existing approval contract.",
-    actionTypes: ["clarification_request", "get_business_overview", "answer_business_question", "manual_step_suggestion"],
+    actionTypes: ["clarification_request", "get_business_overview", "answer_business_question", "manual_step_suggestion", "request_acknowledgement", "create_task", "assign_task", "update_task", "handoff_work", "delegate_objective", "escalate_work", "cancel_delegation", "computer_task"],
     voiceAgentKeys: ["jarvis"],
     glyph: "command",
   },
@@ -108,7 +108,7 @@ export const CAPABILITY_DOMAINS = [
     shortLabel: "Customers",
     mandate: "Owns lead intake, customer answers, conversations, assignments, and follow-up continuity.",
     authorityCopy: "Works only against exact household, lead, and interaction records with recorded communication policy.",
-    actionTypes: ["create_lead", "update_lead_status", "log_interaction", "assign_lead_to_technician", "answer_customer_question", "send_customer_message", "send_follow_up"],
+    actionTypes: ["create_lead", "update_lead_status", "log_interaction", "assign_lead_to_technician", "answer_customer_question", "send_customer_message", "send_follow_up", "send_message", "place_call", "notify_group"],
     voiceAgentKeys: ["follow-up", "service-reminder"],
     glyph: "customer",
   },
@@ -138,7 +138,7 @@ export const CAPABILITY_DOMAINS = [
     shortLabel: "Field",
     mandate: "Owns route suggestions, technician capacity, visit assignment, rescheduling, reminders, and field exceptions.",
     authorityCopy: "Scheduling changes stay bound to exact visit, technician, work-order, and appointment records.",
-    actionTypes: ["route_suggestion", "assign_technician_to_visit", "check_technician_availability", "reschedule_visit", "check_reminder_due", "log_visit_report", "flag_visit_issue"],
+    actionTypes: ["route_suggestion", "assign_technician_to_visit", "check_technician_availability", "reschedule_visit", "check_reminder_due", "log_visit_report", "flag_visit_issue", "schedule_internal_event", "reschedule_internal_event"],
     voiceAgentKeys: ["service-reminder"],
     glyph: "field",
   },
@@ -148,7 +148,7 @@ export const CAPABILITY_DOMAINS = [
     shortLabel: "Sales",
     mandate: "Carries a household from sizing and quote through proposal, signature, installation, and maintenance renewal.",
     authorityCopy: "Commercial terms, signatures, and installation starts use their existing explicit action boundaries.",
-    actionTypes: ["renew_maintenance_agreement", "request_proposal_signature", "start_installation_workflow", "generate_quote", "size_equipment_for_household", "send_proposal"],
+    actionTypes: ["renew_maintenance_agreement", "request_proposal_signature", "start_installation_workflow", "generate_quote", "size_equipment_for_household", "send_proposal", "share_document"],
     voiceAgentKeys: ["follow-up"],
     glyph: "sales",
   },

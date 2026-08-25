@@ -1,7 +1,7 @@
 // Orchestration core (§9): Planner → confirmation gate → Executor → Reflection.
 // This module is the single entry point the API, webhooks, and workers all use.
 
-import type { DomainAction, DomainPolicy, TenantContext, ExecutionResult, MemorySnapshot, OperatingContext, OperatingInteractionContext, Role } from "@finnor/shared-types";
+import type { DomainAction, DomainPolicy, TenantContext, ExecutionResult, MemorySnapshot, OperatingContext, OperatingInteractionContext, EmployeeConversationContext, Role } from "@finnor/shared-types";
 import {
   withTenant, domainActions, domainPolicies, domainPolicyRevisions, actionLog,
   decisionReceipts, planRepairs, enqueueJob, receiveWork, transitionWork,
@@ -12,7 +12,7 @@ import {
   workObjectiveSteps,
   businessEffects,
 } from "@finnor/db";
-import { buildMemorySnapshot, appendEpisode, appendShortTerm, mirrorTurnToZep } from "@finnor/memory";
+import { buildMemorySnapshot, appendEpisode, appendShortTerm } from "@finnor/memory";
 import { createDefaultRegistry, type ToolRegistry } from "@finnor/tools";
 import { and, desc, eq, inArray, lte } from "drizzle-orm";
 import { LLMPlanner, type Planner } from "./planner";
@@ -87,6 +87,10 @@ export * from "./runtime-bridge";
 export * from "./durable-execution";
 export * from "./instruction-routing";
 export * from "./objective-success";
+export * from "./external-observation";
+export * from "./conversation-kernel";
+export * from "./outcome-packs";
+export * from "./autonomy";
 
 const EXTERNAL_RESEARCH_ACTION_TYPES = new Set(["search_web", "scan_competitors", "check_business_reviews"]);
 
@@ -111,6 +115,7 @@ export interface InstructionOptions {
   executionKey?: string;
   plannerAttemptKey?: string;
   activeContext?: OperatingInteractionContext | Record<string, unknown>;
+  conversationContext?: EmployeeConversationContext;
   channel?: "voice" | "text" | "console";
   signal?: AbortSignal;
   deadlineAt?: number;
@@ -179,7 +184,7 @@ async function rememberAnswerTurn(
   ctx: TenantContext,
   opts: InstructionOptions,
 ): Promise<void> {
-  if (!opts.sessionId) return;
+  if (!opts.sessionId || !ctx.employeeId) return;
   const turn = {
     instruction,
     answer: {
@@ -191,9 +196,6 @@ async function rememberAnswerTurn(
     at: new Date().toISOString(),
   };
   await appendShortTerm(ctx.tenantId, opts.sessionId, turn).catch(() => undefined);
-  const zepInstruction = redactText(instruction).value;
-  const zepOutcome = JSON.stringify(redactStructured(turn.answer));
-  await mirrorTurnToZep(ctx.tenantId, opts.sessionId, `Instruction: ${zepInstruction}\nOutcome: ${zepOutcome}`).catch(() => undefined);
 }
 
 function workFailure(error: unknown, fallback: string): Record<string, unknown> & { message: string; timeout: boolean } {
@@ -571,6 +573,9 @@ export class FinnorOrchestrator implements Orchestrator {
         activeContext: opts.activeContext,
         conversational: isConversationalTurn(instruction),
       });
+      if (opts.conversationContext?.resolution.status === "clarification_required") {
+        instructionRoute = { version: 1, route: "ATOMIC_EFFECT", reasonCodes: ["phase6_reference_or_sender_ambiguous"] };
+      }
       await transitionWork(ctx.tenantId, workId, "understanding", "instruction_routed", {
         policyVersion: instructionRoute.version,
         route: instructionRoute.route,
@@ -583,6 +588,7 @@ export class FinnorOrchestrator implements Orchestrator {
           workId,
           sessionId: opts.sessionId,
           activeContext: opts.activeContext,
+          conversationContext: opts.conversationContext,
           includeMemory: false,
           includeCanonicalBusinessState: false,
         })).context;
@@ -663,7 +669,7 @@ export class FinnorOrchestrator implements Orchestrator {
     let resolvedHouseholdId: string | undefined;
     let memory: MemorySnapshot;
     try {
-      await ensureSecretsLoaded();
+      if (opts.conversationContext?.resolution.status !== "clarification_required") await ensureSecretsLoaded();
       await emitInstructionEvent(ctx.tenantId, instructionId, "step_progress", { stage: "resolving_context" });
       const assembled = await assembleOperatingContext(ctx, {
         instruction,
@@ -671,6 +677,7 @@ export class FinnorOrchestrator implements Orchestrator {
         sessionId: opts.sessionId,
         householdId: opts.householdId,
         activeContext: opts.activeContext,
+        conversationContext: opts.conversationContext,
         includeMemory: true,
         includeSemanticMemory: plannerMemoryEnabled(),
         includeCanonicalBusinessState: true,
@@ -743,7 +750,9 @@ export class FinnorOrchestrator implements Orchestrator {
       await emitInstructionEvent(ctx.tenantId, instructionId, "failed", { error: failure.message, workId, recoverable: true });
       throw err;
     }
-    const finalRoute = finalizeInstructionRoute(instructionRoute!, actions);
+    const finalRoute = opts.conversationContext?.resolution.status === "clarification_required"
+      ? instructionRoute!
+      : finalizeInstructionRoute(instructionRoute!, actions);
     if (finalRoute.route === "OBJECTIVE") {
       if (actions.length > 0) {
         await withTenant(ctx.tenantId, async (db) => {
@@ -912,21 +921,12 @@ export class FinnorOrchestrator implements Orchestrator {
     // the same call/session started completely blank, so "call them" or "do it for
     // the second one" had nothing to resolve against. TTL'd (30 min), scoped to this
     // session only, never cross-session or cross-tenant.
-    if (opts.sessionId) {
+    if (opts.sessionId && ctx.employeeId) {
       await appendShortTerm(ctx.tenantId, opts.sessionId, {
         instruction,
         actions: turnResults,
         at: new Date().toISOString(),
       }).catch(() => undefined);
-      // Consolidation layer (Zep, additive — see @finnor/memory/consolidated.ts):
-      // mirrors the same turn so its knowledge graph can extract durable facts across
-      // sessions, not just this 30-minute short-term window. No-ops instantly if
-      // ZEP_API_KEY isn't configured.
-      const zepInstruction = redactText(instruction).value;
-      const zepOutcome = JSON.stringify(redactStructured(turnResults));
-      await mirrorTurnToZep(ctx.tenantId, opts.sessionId, `Instruction: ${zepInstruction}\nOutcome: ${zepOutcome}`).catch(
-        () => undefined,
-      );
     }
     await reconcileWorkStatus(ctx.tenantId, workId);
     return { actions, workId, workInputId, instructionId };

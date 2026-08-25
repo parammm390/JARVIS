@@ -898,6 +898,7 @@ export const works = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
+    unique("works_tenant_id_id_key").on(t.tenantId, t.id),
     unique("works_tenant_idempotency_idx").on(t.tenantId, t.idempotencyKey),
     index("works_tenant_status_idx").on(t.tenantId, t.status),
     index("works_tenant_session_idx").on(t.tenantId, t.sessionId),
@@ -922,6 +923,7 @@ export const workInputs = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
+    unique("work_inputs_tenant_id_id_key").on(t.tenantId, t.id),
     unique("work_inputs_tenant_instruction_idx").on(t.tenantId, t.instructionId),
     unique("work_inputs_work_idempotency_idx").on(t.workId, t.idempotencyKey),
     index("work_inputs_work_created_idx").on(t.workId, t.createdAt),
@@ -1067,10 +1069,162 @@ export const workObjectiveLoops = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
+    unique("work_objective_loops_tenant_id_id_key").on(t.tenantId, t.id),
     unique("work_objective_loops_work_idx").on(t.workId),
     index("work_objective_loops_tenant_state_next_idx").on(t.tenantId, t.state, t.nextRunAt),
   ],
 );
+
+// Phase 6 conversation kernel. These are authenticated-employee conversations,
+// deliberately separate from the provider/customer `conversations` and `messages`
+// tables below. A browser/call session may be recorded as transport provenance,
+// but it is never the durable conversation identity.
+export const employeeConversationThreads = pgTable(
+  "employee_conversation_threads",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    ownerEmployeeId: uuid("owner_employee_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    visibility: text("visibility", { enum: ["private"] }).notNull().default("private"),
+    title: text("title"),
+    summary: text("summary"),
+    summaryThroughSequence: integer("summary_through_sequence").notNull().default(0),
+    revision: integer("revision").notNull().default(1),
+    activeReferences: jsonb("active_references").notNull().default([]),
+    unresolvedReferences: jsonb("unresolved_references").notNull().default([]),
+    activeWorkId: uuid("active_work_id").references(() => works.id),
+    activeObjectiveLoopId: uuid("active_objective_loop_id").references(() => workObjectiveLoops.id),
+    outcomeRefs: jsonb("outcome_refs").notNull().default([]),
+    originTransportKey: text("origin_transport_key"),
+    lastActivityAt: timestamp("last_activity_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("employee_conversation_threads_tenant_id_owner_key").on(t.tenantId, t.id, t.ownerEmployeeId),
+    unique("employee_conversation_threads_transport_key").on(t.tenantId, t.ownerEmployeeId, t.originTransportKey),
+    index("employee_conversation_threads_owner_activity_idx").on(t.tenantId, t.ownerEmployeeId, t.lastActivityAt),
+    foreignKey({
+      columns: [t.tenantId, t.ownerEmployeeId],
+      foreignColumns: [users.tenantId, users.id],
+      name: "employee_conversation_threads_owner_tenant_fkey",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [t.tenantId, t.activeWorkId],
+      foreignColumns: [works.tenantId, works.id],
+      name: "employee_conversation_threads_work_tenant_fkey",
+    }),
+    foreignKey({
+      columns: [t.tenantId, t.activeObjectiveLoopId],
+      foreignColumns: [workObjectiveLoops.tenantId, workObjectiveLoops.id],
+      name: "employee_conversation_threads_objective_tenant_fkey",
+    }),
+  ],
+);
+
+export const employeeConversationMessages = pgTable(
+  "employee_conversation_messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    threadId: uuid("thread_id").notNull().references(() => employeeConversationThreads.id, { onDelete: "cascade" }),
+    ownerEmployeeId: uuid("owner_employee_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    sequence: integer("sequence").notNull(),
+    role: text("role", { enum: ["user", "assistant"] }).notNull(),
+    channel: text("channel", { enum: ["voice", "text", "console"] }).notNull(),
+    authorEmployeeId: uuid("author_employee_id").references(() => users.id),
+    originalText: text("original_text").notNull(),
+    instructionId: uuid("instruction_id"),
+    workId: uuid("work_id").references(() => works.id),
+    workInputId: uuid("work_input_id").references(() => workInputs.id),
+    idempotencyKey: text("idempotency_key").notNull(),
+    transportSessionId: text("transport_session_id"),
+    transportProvenance: jsonb("transport_provenance").notNull().default({}),
+    resolutionSnapshot: jsonb("resolution_snapshot"),
+    resolutionProvenance: jsonb("resolution_provenance").notNull().default([]),
+    companyTruthSnapshot: jsonb("company_truth_snapshot"),
+    outcomeRefs: jsonb("outcome_refs").notNull().default([]),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("employee_conversation_messages_tenant_id_owner_key").on(t.tenantId, t.id, t.ownerEmployeeId),
+    unique("employee_conversation_messages_thread_sequence_key").on(t.threadId, t.sequence),
+    unique("employee_conversation_messages_thread_idempotency_key").on(t.threadId, t.idempotencyKey),
+    index("employee_conversation_messages_owner_created_idx").on(t.tenantId, t.ownerEmployeeId, t.createdAt),
+    index("employee_conversation_messages_thread_created_idx").on(t.threadId, t.createdAt),
+    foreignKey({
+      columns: [t.tenantId, t.threadId, t.ownerEmployeeId],
+      foreignColumns: [employeeConversationThreads.tenantId, employeeConversationThreads.id, employeeConversationThreads.ownerEmployeeId],
+      name: "employee_conversation_messages_thread_owner_fkey",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [t.tenantId, t.authorEmployeeId],
+      foreignColumns: [users.tenantId, users.id],
+      name: "employee_conversation_messages_author_tenant_fkey",
+    }),
+    foreignKey({
+      columns: [t.tenantId, t.workId],
+      foreignColumns: [works.tenantId, works.id],
+      name: "employee_conversation_messages_work_tenant_fkey",
+    }),
+    foreignKey({
+      columns: [t.tenantId, t.workInputId],
+      foreignColumns: [workInputs.tenantId, workInputs.id],
+      name: "employee_conversation_messages_work_input_tenant_fkey",
+    }),
+  ],
+);
+
+// Only explicit human-authored facts are eligible for this table. Runtime code
+// supersedes an active subject row instead of silently overwriting history.
+export const employeePersonalMemories = pgTable(
+  "employee_personal_memories",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    ownerEmployeeId: uuid("owner_employee_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    sourceThreadId: uuid("source_thread_id").notNull().references(() => employeeConversationThreads.id, { onDelete: "cascade" }),
+    sourceMessageId: uuid("source_message_id").notNull().references(() => employeeConversationMessages.id, { onDelete: "cascade" }),
+    memoryType: text("memory_type", { enum: ["preference", "proposition"] }).notNull(),
+    subjectKey: text("subject_key").notNull(),
+    proposition: text("proposition").notNull(),
+    structuredValue: jsonb("structured_value").notNull().default({}),
+    provenance: jsonb("provenance").notNull().default({}),
+    validFrom: timestamp("valid_from", { withTimezone: true }).notNull().defaultNow(),
+    supersededAt: timestamp("superseded_at", { withTimezone: true }),
+    supersededById: uuid("superseded_by_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("employee_personal_memories_tenant_id_owner_key").on(t.tenantId, t.id, t.ownerEmployeeId),
+    index("employee_personal_memories_owner_subject_idx").on(t.tenantId, t.ownerEmployeeId, t.subjectKey, t.validFrom),
+    foreignKey({
+      columns: [t.tenantId, t.ownerEmployeeId],
+      foreignColumns: [users.tenantId, users.id],
+      name: "employee_personal_memories_owner_tenant_fkey",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [t.tenantId, t.sourceThreadId, t.ownerEmployeeId],
+      foreignColumns: [employeeConversationThreads.tenantId, employeeConversationThreads.id, employeeConversationThreads.ownerEmployeeId],
+      name: "employee_personal_memories_thread_owner_fkey",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [t.tenantId, t.sourceMessageId, t.ownerEmployeeId],
+      foreignColumns: [employeeConversationMessages.tenantId, employeeConversationMessages.id, employeeConversationMessages.ownerEmployeeId],
+      name: "employee_personal_memories_message_owner_fkey",
+    }).onDelete("cascade"),
+  ],
+);
+
+// Records the one-way quarantine boundary for pre-Phase-6 tenant-wide Zep users.
+// New runtime code never reads or copies these graph identities.
+export const legacyZepGraphQuarantine = pgTable("legacy_zep_graph_quarantine", {
+  tenantId: uuid("tenant_id").primaryKey().references(() => tenants.id, { onDelete: "cascade" }),
+  legacyUserId: text("legacy_user_id").notNull(),
+  policy: text("policy", { enum: ["quarantined_no_query_no_copy"] }).notNull().default("quarantined_no_query_no_copy"),
+  reason: text("reason").notNull(),
+  quarantinedAt: timestamp("quarantined_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 // Upgrade 7: the only stored graph edge. Existing foreign keys remain the truth
 // for every other relationship; Work needs this table because its business subject
@@ -1360,6 +1514,160 @@ export const workObjectiveSteps = pgTable(
     unique("work_objective_steps_query_idx").on(t.queryExecutionId),
     index("work_objective_steps_tenant_loop_idx").on(t.tenantId, t.objectiveLoopId, t.stepNumber),
     index("work_objective_steps_tenant_outcome_idx").on(t.tenantId, t.iterationOutcome, t.completedAt),
+  ],
+);
+
+// Phase 5 Certified Outcome Packs. These rows bind the pack/autonomy contract to the
+// existing Work + Objective controller; they do not own execution or authorization.
+export const outcomePackRuns = pgTable(
+  "outcome_pack_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    workId: uuid("work_id").notNull().references(() => works.id),
+    objectiveLoopId: uuid("objective_loop_id").notNull().references(() => workObjectiveLoops.id),
+    packId: text("pack_id").notNull(),
+    packVersion: integer("pack_version").notNull(),
+    mode: text("mode", { enum: ["shadow", "approval", "autopilot"] }).notNull(),
+    status: text("status", { enum: ["active", "paused", "blocked", "shadow_recorded", "completed", "failed", "cancelled"] }).notNull().default("active"),
+    certificationFingerprint: text("certification_fingerprint").notNull(),
+    objective: text("objective").notNull(),
+    input: jsonb("input").notNull().default({}),
+    subjectRefs: jsonb("subject_refs").notNull().default([]),
+    successCondition: jsonb("success_condition").notNull(),
+    blockedReason: text("blocked_reason"),
+    finalVerification: jsonb("final_verification"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (t) => [
+    unique("outcome_pack_runs_work_idx").on(t.workId),
+    unique("outcome_pack_runs_objective_idx").on(t.objectiveLoopId),
+    index("outcome_pack_runs_tenant_pack_status_idx").on(t.tenantId, t.packId, t.status, t.createdAt),
+  ],
+);
+
+export const tenantOutcomePackSettings = pgTable(
+  "tenant_outcome_pack_settings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    packId: text("pack_id").notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    defaultMode: text("default_mode", { enum: ["shadow", "approval", "autopilot"] }).notNull().default("approval"),
+    reason: text("reason"),
+    revision: integer("revision").notNull().default(1),
+    updatedBy: uuid("updated_by").references(() => users.id),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique("tenant_outcome_pack_settings_tenant_pack_idx").on(t.tenantId, t.packId)],
+);
+
+export const outcomePackCertifications = pgTable(
+  "outcome_pack_certifications",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    packId: text("pack_id").notNull(),
+    packVersion: integer("pack_version").notNull(),
+    level: text("level", { enum: ["deterministic", "chaos", "sandbox", "live_provider", "production"] }).notNull(),
+    status: text("status", { enum: ["LOCAL_PASS", "SANDBOX_PASS", "LIVE_TEST_PASS", "BLOCKED_CONFIG", "NOT_CERTIFIED", "SUSPENDED"] }).notNull(),
+    fingerprint: text("fingerprint").notNull(),
+    dependencyVersions: jsonb("dependency_versions").notNull(),
+    evidence: jsonb("evidence").notNull().default({}),
+    sampleSize: integer("sample_size").notNull().default(0),
+    criticalViolations: integer("critical_violations").notNull().default(0),
+    certifiedAt: timestamp("certified_at", { withTimezone: true }).notNull().defaultNow(),
+    validUntil: timestamp("valid_until", { withTimezone: true }).notNull(),
+    suspendedAt: timestamp("suspended_at", { withTimezone: true }),
+    suspensionReason: text("suspension_reason"),
+  },
+  (t) => [
+    unique("outcome_pack_certification_identity_idx").on(t.tenantId, t.packId, t.packVersion, t.level, t.fingerprint),
+    index("outcome_pack_certification_current_idx").on(t.tenantId, t.packId, t.status, t.validUntil),
+  ],
+);
+
+export const autonomyGrants = pgTable(
+  "autonomy_grants",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    packId: text("pack_id").notNull(),
+    packVersion: integer("pack_version").notNull(),
+    status: text("status", { enum: ["active", "suspended", "revoked", "expired"] }).notNull().default("active"),
+    effectClasses: text("effect_classes").array().notNull(),
+    resourceScope: jsonb("resource_scope").notNull(),
+    principal: text("principal").notNull(),
+    providerScope: jsonb("provider_scope").notNull().default([]),
+    maxAmountUsd: numeric("max_amount_usd", { precision: 14, scale: 2 }),
+    maxRisk: text("max_risk", { enum: ["low", "medium", "high"] }).notNull().default("low"),
+    policyVersion: integer("policy_version"),
+    authorityRevision: integer("authority_revision").notNull(),
+    certificationFingerprint: text("certification_fingerprint").notNull(),
+    validFrom: timestamp("valid_from", { withTimezone: true }).notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    reviewAfter: timestamp("review_after", { withTimezone: true }).notNull(),
+    createdBy: uuid("created_by").notNull().references(() => users.id),
+    revokedBy: uuid("revoked_by").references(() => users.id),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    reason: text("reason"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("autonomy_grants_scope_idx").on(t.tenantId, t.packId, t.status, t.expiresAt)],
+);
+
+export const autonomyEvaluations = pgTable(
+  "autonomy_evaluations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    outcomePackRunId: uuid("outcome_pack_run_id").notNull().references(() => outcomePackRuns.id),
+    workId: uuid("work_id").notNull().references(() => works.id),
+    domainActionId: uuid("domain_action_id").references(() => domainActions.id),
+    businessEffectId: uuid("business_effect_id").references(() => businessEffects.id),
+    grantId: uuid("grant_id").references(() => autonomyGrants.id),
+    mode: text("mode", { enum: ["shadow", "approval", "autopilot"] }).notNull(),
+    outcome: text("outcome", { enum: ["shadow_only", "approval_required", "autopilot_allowed", "blocked"] }).notNull(),
+    eligible: boolean("eligible").notNull(),
+    reasonCodes: text("reason_codes").array().notNull(),
+    authorityRevision: integer("authority_revision"),
+    policyVersion: integer("policy_version"),
+    certificationFingerprint: text("certification_fingerprint").notNull(),
+    sourceHealthSnapshot: jsonb("source_health_snapshot").notNull().default([]),
+    scopeSnapshot: jsonb("scope_snapshot").notNull().default({}),
+    evaluatedAt: timestamp("evaluated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("autonomy_evaluations_pack_time_idx").on(t.tenantId, t.outcomePackRunId, t.evaluatedAt),
+    index("autonomy_evaluations_effect_idx").on(t.businessEffectId),
+  ],
+);
+
+export const outcomeShadowProposals = pgTable(
+  "outcome_shadow_proposals",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    outcomePackRunId: uuid("outcome_pack_run_id").notNull().references(() => outcomePackRuns.id),
+    workId: uuid("work_id").notNull().references(() => works.id),
+    domainActionId: uuid("domain_action_id").notNull().references(() => domainActions.id),
+    businessEffectId: uuid("business_effect_id").notNull().references(() => businessEffects.id),
+    semanticHash: text("semantic_hash").notNull(),
+    hypotheticalEffect: jsonb("hypothetical_effect").notNull(),
+    expectedOutcome: jsonb("expected_outcome"),
+    comparisonStatus: text("comparison_status", { enum: ["pending", "matched", "modified", "divergent", "unsafe", "inconclusive"] }).notNull().default("pending"),
+    observedOutcome: jsonb("observed_outcome"),
+    comparison: jsonb("comparison"),
+    proposedAt: timestamp("proposed_at", { withTimezone: true }).notNull().defaultNow(),
+    comparedAt: timestamp("compared_at", { withTimezone: true }),
+  },
+  (t) => [
+    unique("outcome_shadow_proposals_action_idx").on(t.domainActionId),
+    unique("outcome_shadow_proposals_effect_idx").on(t.businessEffectId),
+    index("outcome_shadow_proposals_pack_status_idx").on(t.tenantId, t.outcomePackRunId, t.comparisonStatus),
   ],
 );
 
@@ -1813,10 +2121,15 @@ export const externalOperations = pgTable("external_operations", {
   // The exact ToolRegistry integration selected for this attempt. Historical rows
   // remain null rather than being guessed from action type or current tenant config.
   provider: text("provider"),
+  integrationId: uuid("integration_id"),
   businessEffectId: uuid("business_effect_id"),
   requestHash: text("request_hash").notNull(),
   status: text("status", { enum: ["running", "succeeded", "failed", "unknown"] }).notNull(),
   response: jsonb("response"),
+  providerAcknowledgedAt: timestamp("provider_acknowledged_at", { withTimezone: true }),
+  externalObservedAt: timestamp("external_observed_at", { withTimezone: true }),
+  verificationStatus: text("verification_status", { enum: ["not_required", "awaiting_observation", "verified", "divergent", "unknown"] }).notNull().default("not_required"),
+  observation: jsonb("observation"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -2267,14 +2580,37 @@ export const externalRefs = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
     entity: text("entity").notNull(),
-    internalId: uuid("internal_id").notNull(),
+    internalId: uuid("internal_id"),
     provider: text("provider").notNull(),
     externalId: text("external_id").notNull(),
+    integrationId: uuid("integration_id"),
+    externalObjectType: text("external_object_type").notNull().default("record"),
+    mappingStatus: text("mapping_status", { enum: ["mapped", "unresolved", "ambiguous", "tombstoned"] }).notNull().default("mapped"),
+    identityKey: text("identity_key"),
+    candidateCanonicalIds: uuid("candidate_canonical_ids").array().notNull().default([]),
+    sourceVersion: text("source_version"),
+    sourceSequence: bigint("source_sequence", { mode: "bigint" }),
+    observedState: jsonb("observed_state").notNull().default({}),
+    observedHash: text("observed_hash"),
+    canonicalHash: text("canonical_hash"),
+    firstObservedAt: timestamp("first_observed_at", { withTimezone: true }),
+    lastObservedAt: timestamp("last_observed_at", { withTimezone: true }),
+    lastSuccessfulSyncAt: timestamp("last_successful_sync_at", { withTimezone: true }),
+    freshnessState: text("freshness_state", { enum: ["unknown", "fresh", "stale", "expired"] }).notNull().default("unknown"),
+    syncStatus: text("sync_status", { enum: ["acknowledged", "observed", "materialized", "reconciled", "conflict", "source_missing", "failed"] }).notNull().default("observed"),
+    conflictState: text("conflict_state", { enum: ["none", "canonical_newer", "external_newer", "divergent", "ambiguous", "manual_resolution_required"] }).notNull().default("none"),
+    ownershipPolicy: jsonb("ownership_policy").notNull().default({}),
+    provenance: jsonb("provenance").notNull().default({}),
+    providerDeleted: boolean("provider_deleted").notNull().default(false),
+    tombstonedAt: timestamp("tombstoned_at", { withTimezone: true }),
+    lastEffectId: uuid("last_effect_id"),
     syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    unique("external_refs_internal_provider_idx").on(t.tenantId, t.entity, t.internalId, t.provider),
+    unique("external_refs_tenant_id_id_key").on(t.tenantId, t.id),
     index("external_refs_external_id_idx").on(t.tenantId, t.provider, t.externalId),
+    index("external_refs_truth_status_idx").on(t.tenantId, t.integrationId, t.mappingStatus, t.freshnessState, t.conflictState, t.lastObservedAt),
   ],
 );
 
@@ -2712,7 +3048,7 @@ export const workflowSteps = pgTable(
     stepType: text("step_type").notNull(),
     sequence: integer("sequence").notNull(),
     status: text("status", {
-      enum: ["pending", "leased", "completed", "failed", "compensating", "compensated"],
+      enum: ["pending", "leased", "waiting_observation", "completed", "failed", "compensating", "compensated"],
     })
       .notNull()
       .default("pending"),
@@ -2772,10 +3108,15 @@ export const integrationOperations = pgTable(
     // Binding.name at the actual execution boundary (native/emulator/vendor).
     // This is presentation-safe provenance, never provider response material.
     provider: text("provider"),
+    integrationId: uuid("integration_id"),
     businessEffectId: uuid("business_effect_id"),
     requestHash: text("request_hash").notNull(),
     status: text("status", { enum: ["running", "succeeded", "failed", "unknown"] }).notNull(),
     response: jsonb("response"),
+    providerAcknowledgedAt: timestamp("provider_acknowledged_at", { withTimezone: true }),
+    externalObservedAt: timestamp("external_observed_at", { withTimezone: true }),
+    verificationStatus: text("verification_status", { enum: ["not_required", "awaiting_observation", "verified", "divergent", "unknown"] }).notNull().default("not_required"),
+    observation: jsonb("observation"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -2831,12 +3172,17 @@ export const inboxEvents = pgTable(
 export const reconciliationCases = pgTable("reconciliation_cases", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
-  caseType: text("case_type", { enum: ["unknown_delivery", "unmatched_inbox_event"] }).notNull(),
+  caseType: text("case_type", { enum: ["unknown_delivery", "unmatched_inbox_event", "external_drift", "mapping_ambiguous", "stale_source", "auth_failure"] }).notNull(),
   relatedOutboxEventId: uuid("related_outbox_event_id").references(() => outboxEvents.id),
   relatedInboxEventId: uuid("related_inbox_event_id").references(() => inboxEvents.id),
   relatedStepId: uuid("related_step_id").references(() => workflowSteps.id),
   businessEffectId: uuid("business_effect_id"),
+  integrationId: uuid("integration_id"),
+  sourceLinkId: uuid("source_link_id"),
+  classification: text("classification"),
+  authoritativeSide: text("authoritative_side", { enum: ["finnor", "external", "manual"] }),
   details: jsonb("details").notNull().default({}),
+  resolution: jsonb("resolution"),
   status: text("status", { enum: ["open", "resolved"] }).notNull().default("open"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   resolvedAt: timestamp("resolved_at", { withTimezone: true }),
@@ -3181,13 +3527,62 @@ export const tenantIntegrations = pgTable(
     credentialRef: text("credential_ref"),
     credentialVersion: text("credential_version"),
     credentialMetadata: jsonb("credential_metadata").notNull().default({}),
+    applicationAccountId: uuid("application_account_id"),
+    authProfileId: uuid("auth_profile_id"),
+    sourcePolicy: jsonb("source_policy").notNull().default({}),
+    freshnessPolicy: jsonb("freshness_policy").notNull().default({}),
+    syncScopes: text("sync_scopes").array().notNull().default([]),
+    outcomePacks: text("outcome_packs").array().notNull().default([]),
     health: text("health", { enum: ["ok", "degraded", "down", "unknown"] }).notNull().default("unknown"),
+    syncStatus: text("sync_status", { enum: ["uninitialized", "initializing", "syncing", "synced", "degraded", "blocked"] }).notNull().default("uninitialized"),
+    freshnessState: text("freshness_state", { enum: ["unknown", "fresh", "stale", "expired"] }).notNull().default("unknown"),
+    webhookStatus: text("webhook_status", { enum: ["unknown", "healthy", "degraded", "disabled"] }).notNull().default("unknown"),
+    reconciliationStatus: text("reconciliation_status", { enum: ["unknown", "healthy", "degraded", "blocked"] }).notNull().default("unknown"),
+    syncInitializedAt: timestamp("sync_initialized_at", { withTimezone: true }),
+    lastSyncStartedAt: timestamp("last_sync_started_at", { withTimezone: true }),
+    lastSuccessfulSyncAt: timestamp("last_successful_sync_at", { withTimezone: true }),
+    lastObservedAt: timestamp("last_observed_at", { withTimezone: true }),
+    sourceLagMs: bigint("source_lag_ms", { mode: "number" }),
+    unresolvedConflicts: integer("unresolved_conflicts").notNull().default(0),
     lastCheckAt: timestamp("last_check_at", { withTimezone: true }),
     lastError: text("last_error"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [unique("tenant_integrations_tenant_capability_idx").on(t.tenantId, t.capability)],
+  (t) => [
+    unique("tenant_integrations_tenant_capability_idx").on(t.tenantId, t.capability),
+    unique("tenant_integrations_tenant_id_id_key").on(t.tenantId, t.id),
+    foreignKey({ columns: [t.tenantId, t.applicationAccountId], foreignColumns: [applicationAccounts.tenantId, applicationAccounts.id], name: "tenant_integrations_application_account_tenant_fkey" }),
+    foreignKey({ columns: [t.tenantId, t.authProfileId], foreignColumns: [authProfiles.tenantId, authProfiles.id], name: "tenant_integrations_auth_profile_tenant_fkey" }),
+  ],
+);
+
+export const integrationSyncCheckpoints = pgTable(
+  "integration_sync_checkpoints",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    integrationId: uuid("integration_id").notNull(),
+    sourceScope: text("source_scope").notNull(),
+    cursor: jsonb("cursor").notNull().default({}),
+    cursorVersion: integer("cursor_version").notNull().default(1),
+    highWatermark: timestamp("high_watermark", { withTimezone: true }),
+    status: text("status", { enum: ["idle", "running", "degraded", "blocked"] }).notNull().default("idle"),
+    leaseOwner: text("lease_owner"),
+    leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
+    lastPageAt: timestamp("last_page_at", { withTimezone: true }),
+    lastSuccessAt: timestamp("last_success_at", { withTimezone: true }),
+    errorCode: text("error_code"),
+    recovery: jsonb("recovery").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("integration_sync_checkpoints_identity_unique").on(t.tenantId, t.integrationId, t.sourceScope),
+    unique("integration_sync_checkpoints_tenant_id_id_key").on(t.tenantId, t.id),
+    index("integration_sync_checkpoints_due_idx").on(t.tenantId, t.status, t.leaseExpiresAt, t.updatedAt),
+    foreignKey({ columns: [t.tenantId, t.integrationId], foreignColumns: [tenantIntegrations.tenantId, tenantIntegrations.id], name: "integration_sync_checkpoints_integration_tenant_fkey" }).onDelete("cascade"),
+  ],
 );
 
 // D6.T1: an authenticated person's cockpit preferences. This is intentionally a

@@ -1,5 +1,5 @@
-// D3.T1 — the renderer registry: all 44 generated action types -> flagship/standard tier +
-// fixture, per plan spec ("renderers/registry.ts: all 44 types -> renderer +
+// Renderer registry: every generated backend action type -> flagship/standard tier +
+// fixture,
 // fixture. Tiers: flagship / standard (schema-driven designed card, plugin-family
 // styling) / designed fallback"). Field lists for standard-tier types are
 // hand-authored from each plugin's real zod schema (packages/domain-plugins/*, read
@@ -7,8 +7,8 @@
 //
 // Zero raw-JSON default surfaces: getRendererEntry() always resolves to a tier;
 // FallbackRenderer.tsx (a designed, debug-gated backstop) is the only path that can
-// ever show raw JSON, and only for a genuinely unregistered type — none of the 44
-// real ones hit it.
+// ever show raw JSON, and only for a genuinely unregistered type — no certified
+// action hits it.
 
 import type { ComponentType } from "react"
 import { WaterTestScene } from "./flagships/WaterTestScene"
@@ -194,6 +194,36 @@ const STANDARD_FIELDS: Record<string, { plugin: string; label: string; fields: F
     label: "Manual Step Suggested",
     fields: [f("originalActionType", "original action", "text"), f("unavailableCapabilities", "unavailable capability", "text"), f("reason", "reason", "longtext")],
   },
+  // universal-actions
+  send_message: { plugin: "universal-actions", label: "Send Message", fields: [f("recipient", "recipient", "text"), f("channel", "channel", "enum"), f("subject", "subject", "text"), f("body", "message", "longtext")] },
+  place_call: { plugin: "universal-actions", label: "Place Call", fields: [f("recipient", "recipient", "text"), f("objective", "objective", "longtext"), f("script", "script", "longtext")] },
+  request_acknowledgement: { plugin: "universal-actions", label: "Request Acknowledgement", fields: [f("recipient", "recipient", "text"), f("request", "request", "longtext"), f("deadline", "deadline", "date")] },
+  notify_group: { plugin: "universal-actions", label: "Notify Group", fields: [f("teamRef", "team", "text"), f("channel", "channel", "enum"), f("body", "message", "longtext")] },
+  create_task: { plugin: "universal-actions", label: "Create Task", fields: [f("subjectRef", "subject", "text"), f("title", "title", "text"), f("dueAt", "due", "date"), f("priority", "priority", "enum")] },
+  assign_task: { plugin: "universal-actions", label: "Assign Task", fields: [f("taskRef", "task", "text"), f("assigneeRef", "assignee", "text")] },
+  update_task: { plugin: "universal-actions", label: "Update Task", fields: [f("taskRef", "task", "text"), f("status", "status", "enum"), f("dueAt", "due", "date"), f("priority", "priority", "enum")] },
+  handoff_work: { plugin: "universal-actions", label: "Handoff Work", fields: [f("workRef", "work", "text"), f("targetEmployeeRef", "new owner", "text"), f("note", "note", "longtext")] },
+  delegate_objective: { plugin: "universal-actions", label: "Delegate Objective", fields: [f("workRef", "work", "text"), f("targetRef", "delegate", "text"), f("objective", "objective", "longtext"), f("completionDeadline", "deadline", "date")] },
+  escalate_work: { plugin: "universal-actions", label: "Escalate Work", fields: [f("delegationRef", "delegation", "text"), f("targetRef", "escalation target", "text"), f("reason", "reason", "longtext")] },
+  cancel_delegation: { plugin: "universal-actions", label: "Cancel Delegation", fields: [f("delegationRef", "delegation", "text"), f("reason", "reason", "longtext")] },
+  schedule_internal_event: { plugin: "universal-actions", label: "Schedule Internal Event", fields: [f("title", "title", "text"), f("startsAt", "starts", "date"), f("endsAt", "ends", "date"), f("participants", "participants", "text")] },
+  reschedule_internal_event: { plugin: "universal-actions", label: "Reschedule Internal Event", fields: [f("internalEventRef", "event", "text"), f("startsAt", "starts", "date"), f("endsAt", "ends", "date"), f("reason", "reason", "longtext")] },
+  share_document: { plugin: "universal-actions", label: "Share Document", fields: [f("documentRef", "document", "text"), f("recipient", "recipient", "text"), f("accessLevel", "access", "enum")] },
+  // computer-task — governed application/auth references only; no credential or
+  // browser-session material is rendered by this contract surface.
+  computer_task: {
+    plugin: "computer-task",
+    label: "Computer Task",
+    fields: [
+      f("application", "application", "text"),
+      f("authProfileRef", "auth profile", "text"),
+      f("task", "task", "longtext"),
+      f("target", "target", "text"),
+      f("mode", "mode", "enum"),
+      f("successCriteria", "success criteria", "text"),
+      f("authorizedEffect", "authorized effect", "text"),
+    ],
+  },
 }
 
 // ---------------------------------------------------------------------------
@@ -281,6 +311,6 @@ export function getRendererEntry(actionType: string): RegistryEntry | undefined 
   return ACTION_RENDERERS[actionType]
 }
 
-/** The generated 44 action types used by the Stage catalog and tests/verification,
+/** The generated action types used by the Stage catalog and tests/verification,
  *  never re-derived from a different source. */
 export const REGISTERED_ACTION_TYPES: string[] = Object.keys(ACTION_RENDERERS)

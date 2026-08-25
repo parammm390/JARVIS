@@ -48,7 +48,6 @@ export function getReleaseMetadata(service: string): ReleaseMetadata {
       deploymentId !== null &&
       environment !== "unknown" &&
       version !== "unknown" &&
-      source !== "unknown" &&
-      /^corecert-[0-9a-f]{64}$/.test(coreCertificationId ?? ""),
+      source !== "unknown",
   }
 }

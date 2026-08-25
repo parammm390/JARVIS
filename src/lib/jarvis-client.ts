@@ -23,6 +23,7 @@
 
 import { jarvisGet, jarvisPost, jarvisPut, JarvisApiError } from "../components/jarvis/lib/api"
 import type { paths } from "./jarvis/openapi-types"
+import type { OperatingInteractionContextValue } from "../components/jarvis/kernel/operating-interaction"
 import type {
   StatsResponse,
   PendingAction,
@@ -65,6 +66,7 @@ const API_PATHS = {
   runControlCancel: "/api/workflows/runs/{id}/cancel",
   runControlRetry: "/api/workflows/runs/{id}/retry",
   runControlEscalate: "/api/workflows/runs/{id}/escalate",
+  compensateStep: "/api/workflows/steps/{id}/compensate",
   events: "/api/events",
   readModel: "/api/read-models/{view}",
   comms: "/api/comms",
@@ -86,6 +88,8 @@ const API_PATHS = {
   vitals: "/api/vitals",
   activity: "/api/activity",
   workCases: "/api/read-models/{view}",
+  workExecution: "/api/works/{id}/execution",
+  workReplay: "/api/works/{id}/replay",
   dealerZeroTimeCompression: "/api/dealer-zero/time-compression",
   instruction: "/api/instructions/{id}",
   instructionEvents: "/api/instructions/{id}/events",
@@ -407,7 +411,7 @@ export interface WorkCaseProjection {
   objectiveLoop?: {
     id: string
     objective: string
-    state: "continue" | "awaiting_approval" | "waiting" | "blocked" | "completed" | "failed"
+    state: "continue" | "awaiting_approval" | "waiting" | "blocked" | "completed" | "failed" | "cancelled"
     revision: number
     reason: string | null
     nextStep: string | null
@@ -428,6 +432,83 @@ export interface WorkCaseProjection {
       plannerAttempts: Array<{ id: string; attempt: number; status: string; provider: string | null; failure: unknown }>
     }>
   }
+  outcomePack?: {
+    id: string
+    packId: string
+    packVersion: number
+    mode: "shadow" | "approval" | "autopilot"
+    status: string
+    certificationFingerprint: string
+    objective: string
+    subjectRefs: unknown
+    blockedReason: string | null
+    finalVerification: unknown
+    latestAutonomyDecision: {
+      outcome: string
+      eligible: boolean
+      reasonCodes: string[]
+      grantId: string | null
+      evaluatedAt: string
+    } | null
+    shadowProposals: Array<{
+      id: string
+      businessEffectId: string
+      semanticHash: string
+      comparisonStatus: string
+      proposedAt: string
+      comparedAt: string | null
+    }>
+  }
+}
+
+// Phase 3 — presentation-safe detail projection for one selected durable Work.
+export type ExecutionNodeStatus = "waiting_dependency" | "runnable" | "awaiting_approval" | "approved" | "executing" | "verifying" | "succeeded" | "failed" | "blocked" | "denied" | "rejected"
+export type ExecutionVerificationState = "not_started" | "awaiting_observation" | "verified" | "failed" | "unknown" | "reconciling"
+export interface ExecutionControl { kind: "approve" | "reject" | "pause" | "resume" | "cancel" | "retry" | "escalate" | "compensate"; label: string; endpoint: string; method: "POST"; expectedVersion: number | null; reason: string }
+export interface ExecutionTarget { entityType: string; entityId: string; label: string | null; status: string | null; sourceRef: string }
+export interface ExecutionFailure { errorKind: string | null; message: string; recoveryPath: string | null; reconciliationRequired: boolean; retrySafe: boolean; humanRequired: boolean; sourceRef: string }
+export interface ExecutionEvidence { source: string; ref: string | null; timestamp: string; restricted: boolean }
+export interface ExecutionActor { employeeId: string; displayName: string | null; role: "owner" | "dispatcher" | "technician" | null; sourceRef: string }
+export interface ExecutionComputerRun {
+  id: string; status: string; effectStatus: string; mode: "READ_ONLY" | "WRITE"; application: string; provider: string; account: { id: string; label: string }; actor: ExecutionActor; task: string; target: { kind: string; identifier: string }; currentActivity: string | null
+  steps: Array<{ id: string; seq: number; phase: string; operation: string; status: string; summary: string; createdAt: string; completedAt: string | null }>; stepCount: number; stepsTruncated: boolean; result: Record<string, unknown> | null; failureCode: string | null; blockReason: string | null; cancellationRequested: boolean; createdAt: string; startedAt: string | null; finishedAt: string | null; sourceRef: string
+}
+export interface ExecutionActionNode {
+  id: string; planId: string | null; actionType: string; businessVerb: string; summary: string | null; sourceStatus: string; status: ExecutionNodeStatus; semanticPayload: Record<string, unknown>; businessEffect: { id: string; semanticHash: string; scopeHash: string; status: string; contract: Record<string, unknown>; verification: Record<string, unknown> | null; sourceRef: string } | null; targets: ExecutionTarget[]; dependencyIds: string[]; dependentIds: string[]; blockedBy: Array<{ actionId: string; status: string }>; actor: ExecutionActor | null
+  route: { application: string | null; provider: string | null; identity: { kind: string; id: string; label: string | null; channel: string | null } | null; route: string | null; source: string; sourceRef: string } | null
+  authority: { state: string; decisionId: string | null; revision: number | null; operation: string | null; outcome: string | null; risk: string | null; reasonCode: string | null; employeeId: string | null; sourceRef: string | null }
+  approval: { required: boolean; status: string; requestId: string | null; currentStep: number | null; totalSteps: number; decidedBy: ExecutionActor | null; decidedAt: string | null; consequence: string; sourceRef: string | null }
+  intent: { expectedResult: Record<string, unknown> | null; source: "receipt" | "prediction" | "none" }; observation: { actualResult: Record<string, unknown> | null; evidence: ExecutionEvidence[]; verification: ExecutionVerificationState; basis: string }; externalEffect: "none" | "pending" | "confirmed" | "possible" | "unknown"; failure: ExecutionFailure | null; workflowRunIds: string[]; receiptIds: string[]; computer: ExecutionComputerRun | null; controls: ExecutionControl[]; timestamps: { createdAt: string; executionStartedAt: string | null; lastChangedAt: string }; sourceRefs: string[]
+}
+export interface ExecutionWorkflow {
+  id: string; workflowType: string; status: string; version: number; actionIds: string[]
+  steps: Array<{ id: string; sequence: number; stepType: string; status: string; attempts: number; terminalReason: string | null; domainActionId: string | null; integration: { capability: string; provider: string | null; status: string; sourceRef: string } | null; reconciliation: { caseId: string; status: string; sourceRef: string } | null; compensation: { caseId: string; status: string; sourceRef: string } | null; controls: ExecutionControl[]; updatedAt: string; sourceRef: string }>
+  controls: ExecutionControl[]; createdAt: string; updatedAt: string; sourceRef: string
+}
+export interface ExecutionReceiptProjection { id: string; workId: string; domainActionId: string | null; workflowRunId: string | null; workflowStepId: string | null; businessEffectId: string | null; intendedEffectHash: string | null; authorizedEffectHash: string | null; executedEffectHash: string | null; effectVerification: Record<string, unknown> | null; recoveryEffectId: string | null; objective: string; policyApplied: { id: string; version: number } | null; riskTier: string; approval: { required: boolean; approvedBy: string | null; at: string | null }; expectedResult: Record<string, unknown> | null; actualResult: Record<string, unknown> | null; evidence: ExecutionEvidence[]; failure: ExecutionFailure | null; finalizedAt: string | null; createdAt: string; sourceRef: string }
+export interface ExecutionProjection {
+  version: 1; work: { id: string; status: string; objective: string; createdAt: string; updatedAt: string; finalOutcome: Record<string, unknown> | null; failure: ExecutionFailure | null }; targets: ExecutionTarget[]; nodes: ExecutionActionNode[]; edges: Array<{ fromActionId: string; toActionId: string; state: string; sourceRef: string }>; workflows: ExecutionWorkflow[]; receipts: ExecutionReceiptProjection[]; viewer: { role: "owner" | "dispatcher" | "technician"; evidenceVisibility: "full" | "restricted" }; limits: { actions: number; workflowSteps: number; computerStepsPerRun: number; evidencePerReceipt: number }; truncated: { actions: boolean; workflowSteps: boolean; computerSteps: boolean; evidence: boolean }; asOf: string
+}
+
+export type CausalReplayStage = "trigger" | "context" | "evidence" | "planning" | "policy" | "authority" | "approval" | "dependency" | "execution" | "provider" | "external_event" | "canonical_change" | "verification" | "receipt" | "failure" | "recovery" | "compensation" | "missing"
+export type CausalEvidenceAvailability = "available" | "restricted" | "expired" | "unavailable" | "legacy_incomplete"
+export interface CausalReplayEvidenceRef { source: string; ref: string | null; recordedAt: string; availability: CausalEvidenceAvailability; integrityHash: string | null }
+export interface CausalReplayNode { id: string; stage: CausalReplayStage; title: string; summary: string; status: string; occurredAt: string; sourceRefs: string[]; evidence: CausalReplayEvidenceRef[]; facts: Record<string, unknown>; entityRefs: Array<{ entityType: string; entityId: string }> }
+export interface CausalReplayEdge { id: string; from: string; to: string; relation: string; certainty: "proven" | "missing"; evidenceRefs: string[]; explanation: string }
+export interface CausalReplayProjection {
+  version: 1
+  mode: "read_only"
+  work: { id: string; status: string; objective: string; createdAt: string; updatedAt: string }
+  nodes: CausalReplayNode[]
+  edges: CausalReplayEdge[]
+  moments: Array<{ at: string; nodeIds: string[]; headline: string; stage: CausalReplayStage }>
+  explanation: { trigger: string; context: string; plan: string; governance: string; execution: string; verification: string; outcome: string; gaps: string[] }
+  completeness: { status: "complete" | "partial" | "legacy_incomplete"; provenEdges: number; missingEdges: number; missing: string[] }
+  viewer: { role: "owner" | "dispatcher" | "technician"; evidenceVisibility: "full" | "restricted" }
+  readOnlyGuarantee: { source: "durable_projection"; method: "GET"; mutationControlsIncluded: false; sideEffectsPossible: false }
+  limits: { nodes: number; edges: number; actionEvents: number; computerArtifacts: number }
+  truncated: { nodes: boolean; edges: boolean; actionEvents: boolean; computerArtifacts: boolean }
+  asOf: string
 }
 
 export interface ObjectiveStartResponse {
@@ -529,10 +610,10 @@ export const jarvisClient = {
   submitAction: (body: { instruction: string; channel?: "voice" | "text" | "console"; sessionId?: string }): Promise<{ planned: unknown[] }> =>
     jarvisPost<{ planned: unknown[] }>("actions", body),
 
-  startObjective: (body: { objective: string; channel?: "voice" | "text" | "console"; idempotencyKey?: string; activeContext?: Record<string, unknown> }): Promise<ObjectiveStartResponse> =>
+  startObjective: (body: { objective: string; channel?: "voice" | "text" | "console"; idempotencyKey?: string; activeContext?: OperatingInteractionContextValue }): Promise<ObjectiveStartResponse> =>
     jarvisPost<ObjectiveStartResponse>("objectives", body),
 
-  controlObjective: (workId: string, body: { command: "continue" | "interrupt" } | { command: "redirect"; objective: string; channel?: "voice" | "text" | "console"; idempotencyKey?: string }): Promise<{ objective: WorkCaseProjection["objectiveLoop"] }> =>
+  controlObjective: (workId: string, body: { command: "continue" | "interrupt" | "cancel" } | { command: "redirect"; objective: string; channel?: "voice" | "text" | "console"; idempotencyKey?: string }): Promise<{ objective: WorkCaseProjection["objectiveLoop"] }> =>
     jarvisPost<{ objective: WorkCaseProjection["objectiveLoop"] }>(`works/${workId}/objective`, body),
 
   handoffWork: (workId: string, body: { targetEmployeeId: string; note?: string }): Promise<{ handoff: { previousOwnerId: string | null; currentOwnerId: string; duplicate: boolean } }> =>
@@ -546,6 +627,9 @@ export const jarvisClient = {
 
   runControl: (id: string, verb: "pause" | "resume" | "cancel" | "retry" | "escalate", expectedVersion: number): Promise<RunControlResult> =>
     jarvisPost<RunControlResult>(`workflows/runs/${id}/${verb}`, { expectedVersion }),
+
+  compensateStep: (id: string, reason: string): Promise<{ caseId: string; succeeded: boolean; idempotent?: boolean }> =>
+    jarvisPost<{ caseId: string; succeeded: boolean; idempotent?: boolean }>(`workflows/steps/${id}/compensate`, { reason }),
 
   dlqReplay: (id: string): Promise<{ replayed: true }> => jarvisPost<{ replayed: true }>(`dlq/${id}/replay`, {}),
 
@@ -565,6 +649,15 @@ export const jarvisClient = {
 
   workCases: (): Promise<{ view: "work-cases"; data: WorkCaseProjection[] }> =>
     jarvisGet<{ view: "work-cases"; data: WorkCaseProjection[] }>("read-models/work-cases"),
+
+  workExecution: (workId: string): Promise<{ execution: ExecutionProjection }> =>
+    jarvisGet<{ execution: ExecutionProjection }>(`works/${workId}/execution`),
+
+  workReplay: (workId: string): Promise<{ replay: CausalReplayProjection }> =>
+    jarvisGet<{ replay: CausalReplayProjection }>(`works/${workId}/replay`),
+
+  cancelComputerRun: (runId: string): Promise<{ cancellationRequested: boolean }> =>
+    jarvisPost<{ cancellationRequested: boolean }>(`computer/runs/${runId}/cancel`, {}),
 
   cashCollections: (): Promise<{ view: "cash-collections"; data: CashCollections }> =>
     jarvisGet<{ view: "cash-collections"; data: CashCollections }>("read-models/cash-collections"),

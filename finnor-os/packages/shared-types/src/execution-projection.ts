@@ -235,7 +235,7 @@ export interface ExecutionWorkflowStep {
   id: string;
   sequence: number;
   stepType: string;
-  status: "pending" | "leased" | "completed" | "failed" | "compensating" | "compensated";
+  status: "pending" | "leased" | "waiting_observation" | "completed" | "failed" | "compensating" | "compensated";
   executionState: "authorized" | "claimed" | "commit_started" | "awaiting_observation" | "reconciling" | "verified" | "failed_before_effect" | "failed_after_possible_effect" | "cancelled_before_effect" | "cancellation_requested" | "blocked";
   effectCommitAt: string | null;
   cancellationRequestedAt: string | null;

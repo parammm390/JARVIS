@@ -2,37 +2,27 @@
 
 // jarvis-v3 P5.T8 — "⌘K → recent threads" (§8 P5.T8). Same posture as
 // P4.T7's OpsPanel: a single deliberate overlay, never a route, reached only
-// from the Command Palette's own nav item. Lists the real active thread plus
-// `kernel.threadHistory` (newest-first, already ordered by the kernel — see
-// store.tsx's own push-on-new-submission comment); selecting one scrolls the
-// real page to that thread's own row (`ThreadStack.tsx` gives every row a
-// stable `id`) rather than duplicating its content in a second place.
+// from the Command Palette. The rows come from authenticated Postgres threads,
+// not component-lifetime React history; selecting one loads its bounded exact
+// messages and linked Work through the kernel.
 
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
 import { useEffect, useRef } from "react"
 import { X } from "lucide-react"
-import type { Thread as ThreadData } from "../kernel/store"
-import { summarizeThreadOutcome, threadRowElementId } from "./thread-presentation"
-
-function scrollToThread(threadId: string, reducedMotion: boolean) {
-  const target = document.getElementById(threadRowElementId(threadId))
-  if (!target) return
-  target.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "start" })
-  window.requestAnimationFrame(() => {
-    if (target instanceof HTMLElement) target.focus({ preventScroll: true })
-  })
-}
+import type { DurableThreadSummary } from "../kernel/store"
 
 export function RecentThreadsPanel({
   open,
   onClose,
-  thread,
-  threadHistory,
+  threads,
+  activeThreadId,
+  onSelect,
 }: {
   open: boolean
   onClose: () => void
-  thread: ThreadData | null
-  threadHistory: ThreadData[]
+  threads: DurableThreadSummary[]
+  activeThreadId: string | null
+  onSelect: (threadId: string) => Promise<void>
 }) {
   const reduced = useReducedMotion()
   const dialogRef = useRef<HTMLDivElement>(null)
@@ -60,8 +50,6 @@ export function RecentThreadsPanel({
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
   }, [open, onClose])
-
-  const all = thread ? [{ ...thread, __active: true } as ThreadData & { __active?: boolean }, ...threadHistory] : threadHistory
 
   return (
     <AnimatePresence>
@@ -92,28 +80,27 @@ export function RecentThreadsPanel({
               </button>
             </div>
             <div className="max-h-[55vh] space-y-1 overflow-y-auto p-3">
-              {all.length === 0 ? (
-                <div className="px-2 py-3 j-fs-micro text-white/45">No threads yet this session.</div>
+              {threads.length === 0 ? (
+                <div className="px-2 py-3 j-fs-micro text-white/45">No durable threads yet.</div>
               ) : (
-                all.map((t) => (
+                threads.map((t) => (
                   <button
                     key={t.id}
                     type="button"
                     onClick={() => {
-                      scrollToThread(t.id, reduced ?? false)
-                      onClose()
+                      void onSelect(t.id).then(() => onClose())
                     }}
                     className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-cyan-300/10"
                   >
-                    <span className="truncate j-fs-sm text-white">{t.instructionText}</span>
+                    <span className="min-w-0"><span className="block truncate j-fs-sm text-white">{t.title ?? "Untitled conversation"}</span><span className="block j-fs-micro text-white/35">{new Date(t.lastActivityAt).toLocaleString()}</span></span>
                     <span className="shrink-0 j-fs-micro font-black uppercase tracking-wide text-white/40">
-                      {(t as ThreadData & { __active?: boolean }).__active ? "Active" : summarizeThreadOutcome(t.machine.instructionState)}
+                      {t.id === activeThreadId ? "Active" : t.activeObjectiveLoopId ? "Objective" : t.activeWorkId ? "Work" : "Thread"}
                     </span>
                   </button>
                 ))
               )}
             </div>
-            <div className="border-t border-white/10 px-4 py-2 j-fs-micro uppercase tracking-widest text-white/35">esc close · select to jump</div>
+            <div className="border-t border-white/10 px-4 py-2 j-fs-micro uppercase tracking-widest text-white/35">esc close · select to load</div>
           </motion.section>
         </motion.div>
       )}

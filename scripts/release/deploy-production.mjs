@@ -115,10 +115,10 @@ const env = {
 }
 
 if (!deployOnly) {
-  run("vercel", ["pull", "--yes", "--environment=production", "--scope", TEAM_ID, ...tokenArgs], appDir, env)
+  run("vercel", ["pull", "--yes", "--environment=production", ...tokenArgs], appDir, env)
   const localConfig = join(appDir, ".vercel", "finnor-release.vercel.json")
   writeFileSync(localConfig, `${JSON.stringify({ installCommand: app.installCommand }, null, 2)}\n`)
-  run("vercel", ["build", "--prod", "--yes", "--local-config", localConfig, "--scope", TEAM_ID, ...tokenArgs], appDir, env)
+  run("vercel", ["build", "--prod", "--yes", "--local-config", localConfig, ...tokenArgs], appDir, env)
 }
 if (prepareOnly) {
   console.log(JSON.stringify({ ok: true, app: appName, prepared: true, commitSha, buildId, version, environment, source }, null, 2))
@@ -126,7 +126,7 @@ if (prepareOnly) {
 }
 
 const deployArgs = [
-  "deploy", "--prebuilt", "--prod", "--yes", "--scope", TEAM_ID,
+  "deploy", "--prebuilt", "--prod", "--yes",
   "--meta", `finnorCommitSha=${commitSha}`,
   "--meta", `finnorBuildId=${buildId}`,
   "--meta", `finnorVersion=${version}`,

@@ -1,7 +1,7 @@
 // D3.T1 — shared types for the action-type renderer registry. Root `src/` never
 // imports finnor-os's zod schemas directly (no cross-workspace type dependency exists
 // anywhere in this codebase today, grepped, confirmed — jarvis-client's generated
-// OpenAPI types are the only backend-shape bridge) so each of the 44 action types'
+// OpenAPI types are the only backend-shape bridge) so each certified action type's
 // field lists are hand-encoded here from the real schemas (packages/domain-plugins/*),
 // read file-by-file, not guessed.
 

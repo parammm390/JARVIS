@@ -19,8 +19,9 @@ export const DEFAULT_ROLE_LANDING: Record<JarvisRole, RoleLanding> = {
  * replace the canonical Home command canvas, and no role outside /api/me's
  * three-value contract is accepted here.
  */
-export function roleLandingFor(role: JarvisRole, savedHomepage: SavedHomepage): RoleLanding {
+export function roleLandingFor(role: JarvisRole, savedHomepage: SavedHomepage, configuredStart?: "command" | "schedule" | "dispatch-map" | "my-day"): RoleLanding {
   if (role === "owner") return DEFAULT_ROLE_LANDING.owner
   if (role === "dispatcher" && savedHomepage === "map") return "dispatch-map"
+  if (role === "dispatcher" && (configuredStart === "schedule" || configuredStart === "dispatch-map")) return configuredStart
   return DEFAULT_ROLE_LANDING[role]
 }

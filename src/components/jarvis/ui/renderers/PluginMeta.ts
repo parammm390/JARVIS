@@ -1,6 +1,6 @@
 // D3.T1 — plugin family -> icon/accent, the generalized form of StepIcon.tsx's
 // ICON_MAP precedent (that file keys on workflow *step* types like generate_document;
-// this keys on the 21 domain *plugins* that own the 44 action types — a distinct,
+// this keys on the domain *plugins* that own certified action types — a distinct,
 // wider taxonomy, not a rename of the same map).
 
 import {
@@ -25,6 +25,8 @@ import {
   PenLine,
   HardHat,
   Landmark,
+  Workflow,
+  Monitor,
   type LucideIcon,
 } from "lucide-react"
 
@@ -56,6 +58,8 @@ export const PLUGIN_META: Record<string, PluginStyle> = {
   "proposal-signature": { label: "Proposal Signature", icon: PenLine, accent: "violet" },
   "proposal-to-installation": { label: "Installation", icon: HardHat, accent: "amber" },
   "invoice-to-cash": { label: "Invoice → Cash", icon: Landmark, accent: "cyan" },
+  "universal-actions": { label: "Universal Actions", icon: Workflow, accent: "violet" },
+  "computer-task": { label: "Computer Task", icon: Monitor, accent: "amber" },
 }
 
 export const ACCENT_CLASS: Record<string, { bg: string; text: string; border: string }> = {

@@ -4,6 +4,274 @@
  */
 
 export interface paths {
+    "/api/ready": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Dependency readiness for database, migration head, worker fleet, and managed secrets */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Ready with exact release provenance */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description A process-level dependency is not ready */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/connections/google/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start a governed Google OAuth connection using one-time state and PKCE */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        authProfileRef: string;
+                        /** Format: uri */
+                        redirectUri?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Safe provider authorization URL and expiry; verifier remains HttpOnly */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid or unsupported connection */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Bad auth */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Employee authority denied */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/connections/google/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Consume one Google OAuth callback and bind the verified provider account */
+        get: {
+            parameters: {
+                query: {
+                    state: string;
+                    code: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Redirect to the connection settings result */
+                303: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/connections/{ref}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read safe connection lifecycle status */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    ref: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Safe status/scopes/timestamps without credential reference or token */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Bad auth */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Profile not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        /** Revoke a governed connection locally and attempt provider revocation */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    ref: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Local revocation is authoritative */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Bad auth */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Employee authority denied */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/connections/{ref}/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run a bounded connection health verification */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    ref: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Connection usable */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Connection degraded, expired, or requires reauthentication */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/stats": {
         parameters: {
             query?: never;
@@ -76,9 +344,72 @@ export interface paths {
                         /** Format: uuid */
                         instructionId?: string;
                         /** Format: uuid */
+                        threadId?: string;
+                        /** Format: uuid */
                         workId?: string;
                         activeContext?: {
-                            [key: string]: unknown;
+                            /** @constant */
+                            version: 1;
+                            /** Format: date-time */
+                            capturedAt: string;
+                            /** @enum {string} */
+                            source: "voice" | "text" | "console";
+                            activeWork?: {
+                                /** Format: uuid */
+                                workId: string;
+                            };
+                            focusedEntity?: {
+                                /** @enum {string} */
+                                entityType: "household" | "contact" | "user" | "technician" | "equipment" | "service_visit" | "maintenance_agreement" | "lead" | "opportunity" | "quote" | "proposal" | "work_order" | "appointment" | "invoice" | "payment" | "conversation" | "call" | "message" | "communication" | "document" | "task" | "work" | "domain_action" | "workflow_run" | "workflow_step" | "business_operation" | "business_operation_target" | "decision_receipt" | "business_event" | "org_unit" | "tenant_location" | "external_organization" | "external_contact" | "delegation" | "acknowledgement_request" | "communication_delivery" | "internal_event" | "document_share" | "inventory_item" | "computer_run";
+                                /** Format: uuid */
+                                entityId: string;
+                            };
+                            /** @default [] */
+                            selectedEntities?: {
+                                /** @enum {string} */
+                                entityType: "household" | "contact" | "user" | "technician" | "equipment" | "service_visit" | "maintenance_agreement" | "lead" | "opportunity" | "quote" | "proposal" | "work_order" | "appointment" | "invoice" | "payment" | "conversation" | "call" | "message" | "communication" | "document" | "task" | "work" | "domain_action" | "workflow_run" | "workflow_step" | "business_operation" | "business_operation_target" | "decision_receipt" | "business_event" | "org_unit" | "tenant_location" | "external_organization" | "external_contact" | "delegation" | "acknowledgement_request" | "communication_delivery" | "internal_event" | "document_share" | "inventory_item" | "computer_run";
+                                /** Format: uuid */
+                                entityId: string;
+                            }[];
+                            /** @default [] */
+                            excludedEntities?: {
+                                /** @enum {string} */
+                                entityType: "household" | "contact" | "user" | "technician" | "equipment" | "service_visit" | "maintenance_agreement" | "lead" | "opportunity" | "quote" | "proposal" | "work_order" | "appointment" | "invoice" | "payment" | "conversation" | "call" | "message" | "communication" | "document" | "task" | "work" | "domain_action" | "workflow_run" | "workflow_step" | "business_operation" | "business_operation_target" | "decision_receipt" | "business_event" | "org_unit" | "tenant_location" | "external_organization" | "external_contact" | "delegation" | "acknowledgement_request" | "communication_delivery" | "internal_event" | "document_share" | "inventory_item" | "computer_run";
+                                /** Format: uuid */
+                                entityId: string;
+                            }[];
+                            surface: {
+                                /** @enum {string} */
+                                id: "home" | "customers" | "money" | "work" | "schedule" | "agents";
+                                route?: string;
+                                /** @enum {string} */
+                                spatialState?: "canvas" | "detail" | "list" | "map" | "timeline";
+                            };
+                            /** @default [] */
+                            filters?: {
+                                field: string;
+                                /** @enum {string} */
+                                operator: "eq" | "neq" | "in" | "not_in" | "gte" | "lte" | "contains";
+                                value: string | number | boolean | string[];
+                            }[];
+                            timeContext?: {
+                                /** Format: date-time */
+                                start?: string;
+                                /** Format: date-time */
+                                end?: string;
+                                timezone?: string;
+                            };
+                            cohort?: {
+                                /** @constant */
+                                kind: "work_query_execution";
+                                /** Format: uuid */
+                                executionId: string;
+                                /** @constant */
+                                entityType: "household";
+                                /** @constant */
+                                queryIntent: "customer_cohort";
+                                count: number;
+                            };
                         };
                     };
                 };
@@ -107,6 +438,153 @@ export interface paths {
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/threads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the authenticated employee's private durable conversation threads */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Bounded Postgres thread summaries owned by the current employee */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Bad auth */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Canonical human principal required */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        /** Create a private durable conversation thread for the authenticated employee */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Canonical Postgres thread summary */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid payload */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Bad auth */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Canonical human principal required */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/threads/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Load one employee-owned thread and a bounded page of exact original messages */
+        get: {
+            parameters: {
+                query?: {
+                    limit?: number;
+                    beforeSequence?: number;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Thread summary plus exact ordered messages */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Bad auth */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Canonical human principal required */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Thread absent or owned by another employee/tenant */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -143,10 +621,129 @@ export interface paths {
                         /** Format: uuid */
                         instructionId?: string;
                         /** Format: uuid */
+                        threadId?: string;
+                        /** Format: uuid */
                         workId?: string;
                         idempotencyKey?: string;
                         activeContext?: {
-                            [key: string]: unknown;
+                            /** @constant */
+                            version: 1;
+                            /** Format: date-time */
+                            capturedAt: string;
+                            /** @enum {string} */
+                            source: "voice" | "text" | "console";
+                            activeWork?: {
+                                /** Format: uuid */
+                                workId: string;
+                            };
+                            focusedEntity?: {
+                                /** @enum {string} */
+                                entityType: "household" | "contact" | "user" | "technician" | "equipment" | "service_visit" | "maintenance_agreement" | "lead" | "opportunity" | "quote" | "proposal" | "work_order" | "appointment" | "invoice" | "payment" | "conversation" | "call" | "message" | "communication" | "document" | "task" | "work" | "domain_action" | "workflow_run" | "workflow_step" | "business_operation" | "business_operation_target" | "decision_receipt" | "business_event" | "org_unit" | "tenant_location" | "external_organization" | "external_contact" | "delegation" | "acknowledgement_request" | "communication_delivery" | "internal_event" | "document_share" | "inventory_item" | "computer_run";
+                                /** Format: uuid */
+                                entityId: string;
+                            };
+                            /** @default [] */
+                            selectedEntities?: {
+                                /** @enum {string} */
+                                entityType: "household" | "contact" | "user" | "technician" | "equipment" | "service_visit" | "maintenance_agreement" | "lead" | "opportunity" | "quote" | "proposal" | "work_order" | "appointment" | "invoice" | "payment" | "conversation" | "call" | "message" | "communication" | "document" | "task" | "work" | "domain_action" | "workflow_run" | "workflow_step" | "business_operation" | "business_operation_target" | "decision_receipt" | "business_event" | "org_unit" | "tenant_location" | "external_organization" | "external_contact" | "delegation" | "acknowledgement_request" | "communication_delivery" | "internal_event" | "document_share" | "inventory_item" | "computer_run";
+                                /** Format: uuid */
+                                entityId: string;
+                            }[];
+                            /** @default [] */
+                            excludedEntities?: {
+                                /** @enum {string} */
+                                entityType: "household" | "contact" | "user" | "technician" | "equipment" | "service_visit" | "maintenance_agreement" | "lead" | "opportunity" | "quote" | "proposal" | "work_order" | "appointment" | "invoice" | "payment" | "conversation" | "call" | "message" | "communication" | "document" | "task" | "work" | "domain_action" | "workflow_run" | "workflow_step" | "business_operation" | "business_operation_target" | "decision_receipt" | "business_event" | "org_unit" | "tenant_location" | "external_organization" | "external_contact" | "delegation" | "acknowledgement_request" | "communication_delivery" | "internal_event" | "document_share" | "inventory_item" | "computer_run";
+                                /** Format: uuid */
+                                entityId: string;
+                            }[];
+                            surface: {
+                                /** @enum {string} */
+                                id: "home" | "customers" | "money" | "work" | "schedule" | "agents";
+                                route?: string;
+                                /** @enum {string} */
+                                spatialState?: "canvas" | "detail" | "list" | "map" | "timeline";
+                            };
+                            /** @default [] */
+                            filters?: {
+                                field: string;
+                                /** @enum {string} */
+                                operator: "eq" | "neq" | "in" | "not_in" | "gte" | "lte" | "contains";
+                                value: string | number | boolean | string[];
+                            }[];
+                            timeContext?: {
+                                /** Format: date-time */
+                                start?: string;
+                                /** Format: date-time */
+                                end?: string;
+                                timezone?: string;
+                            };
+                            cohort?: {
+                                /** @constant */
+                                kind: "work_query_execution";
+                                /** Format: uuid */
+                                executionId: string;
+                                /** @constant */
+                                entityType: "household";
+                                /** @constant */
+                                queryIntent: "customer_cohort";
+                                count: number;
+                            };
+                        };
+                        successCondition?: {
+                            /** @constant */
+                            version: 1;
+                            statement: string;
+                            /** @constant */
+                            mode: "all";
+                            /** @constant */
+                            source: "explicit";
+                            criteria: ({
+                                /** @constant */
+                                kind: "no_open_execution";
+                            } | {
+                                /** @constant */
+                                kind: "all_objective_effects_verified";
+                                minimumCount: number;
+                            } | {
+                                /** @constant */
+                                kind: "canonical_query";
+                                request: {
+                                    [key: string]: unknown;
+                                };
+                                assertion: {
+                                    path: (string | number)[];
+                                    /** @enum {string} */
+                                    operator: "exists" | "not_exists" | "eq" | "not_eq" | "gte" | "lte" | "contains" | "array_contains";
+                                    expected?: unknown;
+                                };
+                            } | {
+                                /** @constant */
+                                kind: "matched_wait";
+                                minimumCount: number;
+                                eventType?: string;
+                            } | {
+                                /** @constant */
+                                kind: "delegation_state";
+                                minimumCount: number;
+                                /** @enum {string} */
+                                requiredStatus: "acknowledged" | "accepted" | "completed";
+                            } | {
+                                /** @constant */
+                                kind: "computer_run_state";
+                                minimumCount: number;
+                                /** @constant */
+                                requiredStatus: "succeeded";
+                                evidenceRequired: boolean;
+                            } | {
+                                /** @constant */
+                                kind: "decision_evidence";
+                                minimumCount: number;
+                                accepted: ("canonical_query" | "business_effect" | "matched_event" | "delegation" | "computer_run")[];
+                            } | {
+                                /** @constant */
+                                kind: "manual_verification";
+                                reason: string;
+                            })[];
                         };
                         budgets?: {
                             maxSteps?: number;
@@ -184,6 +781,393 @@ export interface paths {
                 };
                 /** @description Bad auth */
                 401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outcome-packs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the five certified outcome contracts, tenant operating state, and evidence-derived autonomy readiness */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Definitions, settings, certifications, active grants, and explicit readiness gates */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Bad auth */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        /** Accept responsibility for one versioned Outcome Pack on the existing durable Objective controller */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        packId: "lead_to_verified_water_test_booking" | "stuck_installation_service_resolution" | "overdue_receivable_collection" | "service_due_lifecycle" | "general_operator_objective";
+                        input: {
+                            [key: string]: unknown;
+                        };
+                        /**
+                         * @default console
+                         * @enum {string}
+                         */
+                        channel?: "voice" | "text" | "console";
+                        sessionId?: string;
+                        /** Format: uuid */
+                        instructionId?: string;
+                        /** Format: uuid */
+                        workId?: string;
+                        idempotencyKey?: string;
+                        activeContext?: {
+                            /** @constant */
+                            version: 1;
+                            /** Format: date-time */
+                            capturedAt: string;
+                            /** @enum {string} */
+                            source: "voice" | "text" | "console";
+                            activeWork?: {
+                                /** Format: uuid */
+                                workId: string;
+                            };
+                            focusedEntity?: {
+                                /** @enum {string} */
+                                entityType: "household" | "contact" | "user" | "technician" | "equipment" | "service_visit" | "maintenance_agreement" | "lead" | "opportunity" | "quote" | "proposal" | "work_order" | "appointment" | "invoice" | "payment" | "conversation" | "call" | "message" | "communication" | "document" | "task" | "work" | "domain_action" | "workflow_run" | "workflow_step" | "business_operation" | "business_operation_target" | "decision_receipt" | "business_event" | "org_unit" | "tenant_location" | "external_organization" | "external_contact" | "delegation" | "acknowledgement_request" | "communication_delivery" | "internal_event" | "document_share" | "inventory_item" | "computer_run";
+                                /** Format: uuid */
+                                entityId: string;
+                            };
+                            /** @default [] */
+                            selectedEntities?: {
+                                /** @enum {string} */
+                                entityType: "household" | "contact" | "user" | "technician" | "equipment" | "service_visit" | "maintenance_agreement" | "lead" | "opportunity" | "quote" | "proposal" | "work_order" | "appointment" | "invoice" | "payment" | "conversation" | "call" | "message" | "communication" | "document" | "task" | "work" | "domain_action" | "workflow_run" | "workflow_step" | "business_operation" | "business_operation_target" | "decision_receipt" | "business_event" | "org_unit" | "tenant_location" | "external_organization" | "external_contact" | "delegation" | "acknowledgement_request" | "communication_delivery" | "internal_event" | "document_share" | "inventory_item" | "computer_run";
+                                /** Format: uuid */
+                                entityId: string;
+                            }[];
+                            /** @default [] */
+                            excludedEntities?: {
+                                /** @enum {string} */
+                                entityType: "household" | "contact" | "user" | "technician" | "equipment" | "service_visit" | "maintenance_agreement" | "lead" | "opportunity" | "quote" | "proposal" | "work_order" | "appointment" | "invoice" | "payment" | "conversation" | "call" | "message" | "communication" | "document" | "task" | "work" | "domain_action" | "workflow_run" | "workflow_step" | "business_operation" | "business_operation_target" | "decision_receipt" | "business_event" | "org_unit" | "tenant_location" | "external_organization" | "external_contact" | "delegation" | "acknowledgement_request" | "communication_delivery" | "internal_event" | "document_share" | "inventory_item" | "computer_run";
+                                /** Format: uuid */
+                                entityId: string;
+                            }[];
+                            surface: {
+                                /** @enum {string} */
+                                id: "home" | "customers" | "money" | "work" | "schedule" | "agents";
+                                route?: string;
+                                /** @enum {string} */
+                                spatialState?: "canvas" | "detail" | "list" | "map" | "timeline";
+                            };
+                            /** @default [] */
+                            filters?: {
+                                field: string;
+                                /** @enum {string} */
+                                operator: "eq" | "neq" | "in" | "not_in" | "gte" | "lte" | "contains";
+                                value: string | number | boolean | string[];
+                            }[];
+                            timeContext?: {
+                                /** Format: date-time */
+                                start?: string;
+                                /** Format: date-time */
+                                end?: string;
+                                timezone?: string;
+                            };
+                            cohort?: {
+                                /** @constant */
+                                kind: "work_query_execution";
+                                /** Format: uuid */
+                                executionId: string;
+                                /** @constant */
+                                entityType: "household";
+                                /** @constant */
+                                queryIntent: "customer_cohort";
+                                count: number;
+                            };
+                        };
+                        budgets?: {
+                            maxSteps?: number;
+                            maxActions?: number;
+                            maxQueries?: number;
+                            maxPlannerFailures?: number;
+                            maxConsecutiveNoProgress?: number;
+                            /** Format: date-time */
+                            deadlineAt?: string;
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description Pack, Work, and Objective persisted and first iteration queued */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid pack input or disabled pack */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Bad auth */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outcome-packs/grants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List tenant-scoped progressive-autonomy grants and their current status */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Current and historical exact-scope grants */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Bad auth */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Owner authority required */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        /** Create one narrow, expiring autonomy grant only after deterministic readiness passes */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        packId: "lead_to_verified_water_test_booking" | "stuck_installation_service_resolution" | "overdue_receivable_collection" | "service_due_lifecycle" | "general_operator_objective";
+                        packVersion: number;
+                        scope: {
+                            effectClasses: ("internal_draft" | "internal_write" | "operational_change" | "financial_write" | "external_side_effect" | "external_spend" | "batch_external" | "durable_workflow")[];
+                            resources: {
+                                type: string;
+                                ids?: string[];
+                            }[];
+                            principal: string;
+                            providers: {
+                                provider: string;
+                                /** Format: uuid */
+                                applicationAccountId?: string;
+                            }[];
+                            maxAmountUsd: number | null;
+                            /** @enum {string} */
+                            maxRisk: "low" | "medium" | "high";
+                            /** Format: date-time */
+                            validFrom: string;
+                            /** Format: date-time */
+                            expiresAt: string;
+                            policyVersion: number | null;
+                            authorityRevision: number;
+                            certificationFingerprint: string;
+                            /** Format: date-time */
+                            reviewAfter: string;
+                        };
+                        reason: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Grant persisted */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid scope or readiness not earned */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Owner authority required */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outcome-packs/grants/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke an autonomy grant and prevent all future uncommitted effects that depended on it */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        reason: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Grant revoked */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Owner authority required */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Grant not found in tenant */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outcome-packs/control": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Enable or disable an Outcome Pack; disabling pauses active runs and suspends grants */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        packId: "lead_to_verified_water_test_booking" | "stuck_installation_service_resolution" | "overdue_receivable_collection" | "service_due_lifecycle" | "general_operator_objective";
+                        enabled: boolean;
+                        reason: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Tenant pack operating state updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Owner authority required */
+                403: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -587,12 +1571,75 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Pending actions */
+                /** @description Pending actions with their exact frozen Business Effect */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": {
+                            actions: ({
+                                /** Format: uuid */
+                                id: string;
+                                actionType: string;
+                                summary: string | null;
+                                payload: {
+                                    [key: string]: unknown;
+                                };
+                                status: string;
+                                businessEffect: ({
+                                    /** Format: uuid */
+                                    id: string;
+                                    /** @constant */
+                                    schemaVersion: 1;
+                                    semanticHash: string;
+                                    scopeHash: string;
+                                    operation: {
+                                        name: string;
+                                        class: string;
+                                        external: boolean;
+                                    };
+                                    targets: {
+                                        kind: string;
+                                        type: string;
+                                        id: string;
+                                        sourcePath?: string;
+                                    }[];
+                                    bindings: {
+                                        [key: string]: unknown;
+                                    }[];
+                                    before: {
+                                        [key: string]: unknown;
+                                    }[];
+                                    delta: {
+                                        operation: string;
+                                        values: {
+                                            [key: string]: unknown;
+                                        };
+                                    };
+                                    expected: {
+                                        [key: string]: unknown;
+                                    };
+                                    authority: {
+                                        [key: string]: unknown;
+                                    };
+                                    approval: {
+                                        required: boolean;
+                                        typedConfirmation: boolean;
+                                        summary: string;
+                                    };
+                                    provenance: {
+                                        [key: string]: unknown;
+                                    };
+                                } & {
+                                    [key: string]: unknown;
+                                }) | null;
+                                businessEffectStatus: string | null;
+                            } & {
+                                [key: string]: unknown;
+                            })[];
+                        };
+                    };
                 };
                 /** @description Bad auth */
                 401: {
@@ -1335,6 +2382,81 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/workflows/steps/{id}/compensate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Compensate one completed workflow effect with its registered typed binding */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        reason: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Compensation succeeded or an existing successful case was returned */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid reason */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Not authorized */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Step not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Illegal or unsupported compensation */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Compensation attempted and failed; case and receipt were preserved */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/events": {
         parameters: {
             query?: never;
@@ -1358,6 +2480,100 @@ export interface paths {
             responses: {
                 /** @description {events: EventRow[]} */
                 200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/business-world": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Bounded canonical Business World projection for one operating scene */
+        get: {
+            parameters: {
+                query: {
+                    scene: "customer" | "schedule" | "money" | "work" | "inventory" | "computer";
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description {data: BusinessWorldProjection} */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid scene */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/operational-deltas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Establish or replay a bounded tenant-scoped operational delta cursor */
+        get: {
+            parameters: {
+                query?: {
+                    cursor?: string;
+                    limit?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OperationalDeltaPage */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid cursor */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Cursor tenant scope mismatch */
+                409: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -2452,6 +3668,106 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/works/{id}/execution": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read one bounded, tenant-scoped execution projection for a durable Work */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Presentation-safe action DAG, authority, workflow, computer, uncertainty, and receipt truth */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Bad auth */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Work not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/works/{id}/replay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Replay one Work's evidence-backed causal history without mutating operational state */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Bounded, privacy-safe trigger-to-outcome causal graph with explicit provenance gaps */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Bad auth */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Work not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/works/{id}/objective": {
         parameters: {
             query?: never;
@@ -2515,6 +3831,9 @@ export interface paths {
                         command: "interrupt";
                     } | {
                         /** @constant */
+                        command: "cancel";
+                    } | {
+                        /** @constant */
                         command: "redirect";
                         objective: string;
                         /**
@@ -2525,6 +3844,62 @@ export interface paths {
                         /** Format: uuid */
                         instructionId?: string;
                         idempotencyKey?: string;
+                        successCondition?: {
+                            /** @constant */
+                            version: 1;
+                            statement: string;
+                            /** @constant */
+                            mode: "all";
+                            /** @constant */
+                            source: "explicit";
+                            criteria: ({
+                                /** @constant */
+                                kind: "no_open_execution";
+                            } | {
+                                /** @constant */
+                                kind: "all_objective_effects_verified";
+                                minimumCount: number;
+                            } | {
+                                /** @constant */
+                                kind: "canonical_query";
+                                request: {
+                                    [key: string]: unknown;
+                                };
+                                assertion: {
+                                    path: (string | number)[];
+                                    /** @enum {string} */
+                                    operator: "exists" | "not_exists" | "eq" | "not_eq" | "gte" | "lte" | "contains" | "array_contains";
+                                    expected?: unknown;
+                                };
+                            } | {
+                                /** @constant */
+                                kind: "matched_wait";
+                                minimumCount: number;
+                                eventType?: string;
+                            } | {
+                                /** @constant */
+                                kind: "delegation_state";
+                                minimumCount: number;
+                                /** @enum {string} */
+                                requiredStatus: "acknowledged" | "accepted" | "completed";
+                            } | {
+                                /** @constant */
+                                kind: "computer_run_state";
+                                minimumCount: number;
+                                /** @constant */
+                                requiredStatus: "succeeded";
+                                evidenceRequired: boolean;
+                            } | {
+                                /** @constant */
+                                kind: "decision_evidence";
+                                minimumCount: number;
+                                accepted: ("canonical_query" | "business_effect" | "matched_event" | "delegation" | "computer_run")[];
+                            } | {
+                                /** @constant */
+                                kind: "manual_verification";
+                                reason: string;
+                            })[];
+                        };
                     };
                 };
             };

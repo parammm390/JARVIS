@@ -12,7 +12,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import dynamic from "next/dynamic"
 import { motion, useReducedMotion } from "framer-motion"
 import "../jarvis-theme.css"
-import { KernelProvider, KernelSurface, useKernel, type Thread as ThreadData } from "../kernel/store"
+import { KernelProvider, useKernel, type Thread as ThreadData } from "../kernel/store"
 import { useJarvisAuth } from "../lib/jarvis-auth"
 import { useVapiSession } from "../lib/useVapiSession"
 import { ThreadField } from "./ThreadField"
@@ -39,7 +39,7 @@ import { JarvisOrbSurface } from "./JarvisOrbSurface"
 import orbSurfaceStyles from "./JarvisOrbSurface.module.css"
 import { deriveOrbVisualState, type CorrelatedOrbAction } from "./orb-visual-state"
 import { INTENT_LAUNCH_DURATION_MS, intentLaunchVariants, questionFocusLayerVariants, signatureMomentRingVariants } from "../kernel/choreography"
-import { deriveLiveFrame, type LiveFrameIntentLaunch, type LiveFrameMode, type LiveFrameProjection } from "../kernel/liveframe"
+import { deriveLiveFrame, projectKernelLiveFrame, type LiveFrameIntentLaunch, type LiveFrameMode, type LiveFrameProjection } from "../kernel/liveframe"
 import { deriveSceneDirector } from "../kernel/scene-director"
 import { SIGNATURE_MOMENTS, signatureMomentForEdge } from "../kernel/signature-moments"
 import { getAnchorRect } from "../lib/pulse-bus"
@@ -459,36 +459,6 @@ function QuestionDepth({ surface, focused, reducedMotion, className = "", childr
       {children}
     </motion.div>
   )
-}
-
-function projectKernelLiveFrame(
-  kernel: ReturnType<typeof useKernel>,
-  localVolumeLevel?: number,
-  latestImpulse: LiveFrameIntentLaunch | null = null,
-): LiveFrameProjection {
-  const workflowRuns = kernel.selectorInput.terminalRuns
-    ? [...kernel.selectorInput.runs, ...kernel.selectorInput.terminalRuns]
-    : kernel.selectorInput.runs
-  const state = kernel.thread?.machine.instructionState ?? null
-  return deriveLiveFrame({
-    presence: kernel.presence,
-    transport: kernel.transport,
-    micOpen: kernel.micOpen,
-    voiceSpeaking: kernel.voiceSpeaking,
-    localVolumeLevel,
-    nowMs: kernel.selectorInput.now,
-    instruction: kernel.thread
-      ? {
-          state,
-          actionIds: kernel.thread.nodes.map((node) => node.id),
-          clarificationRequired: kernel.thread.clarification !== null || state === "clarifying",
-          approvalRequired: state === "awaiting_approval",
-          verificationActive: state === "verifying",
-        }
-      : null,
-    workflowRuns,
-    latestImpulse,
-  })
 }
 
 function projectKernelOrbActions(kernel: ReturnType<typeof useKernel>): CorrelatedOrbAction[] {
@@ -1318,9 +1288,7 @@ export function InstructionThreadBridge({ standalone = true }: { standalone?: bo
       <ThreadGate />
     </KernelProvider>
   ) : (
-    <KernelSurface>
-      <ThreadGate />
-    </KernelSurface>
+    <ThreadGate />
   )
 }
 

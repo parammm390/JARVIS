@@ -48,6 +48,7 @@ import { recordTraceEventReceived } from "./trace-metrics"
 import type { InstructionState, JarvisMode, Presence, Truth } from "./types"
 import { looksLikeFollowUpReference, UNRESOLVED_REFERENCE_MESSAGE, UNRESOLVED_REFERENCE_CONTEXT } from "./followup-reference"
 import { isOperationalQueryExecution, type OperationalQueryExecution } from "../workspaces/contracts"
+import { operatingInteractionFromWorkAggregate, useOperatingInteractionActions, type OperatingInteractionContextValue } from "./operating-interaction"
 
 // ---------------------------------------------------------------------------
 // Thread shape
@@ -282,6 +283,9 @@ interface RunWatch {
 export interface Thread {
   id: string
   sessionId: string
+  /** Canonical authenticated-employee conversation. Session/call ids are only
+   * transport provenance and never select durable history. */
+  conversationThreadId?: string | null
   /** jarvis-v3 P3.T6: this submission's own client-minted trace id — the SAME id
    *  sent in POST /api/actions's body and polled via GET /api/instructions/:id/events.
    *  Null only for a thread this file's own unit tests construct without it. */
@@ -289,6 +293,8 @@ export interface Thread {
   /** Upgrade 2: stable across clarification/follow-up turns while instructionId
    * rotates per trace submission. Optional for older fixtures. */
   workId?: string | null
+  /** Exact context snapshot submitted with the current Work input. */
+  interactionContext?: OperatingInteractionContextValue | null
   source: InstructionSource
   instructionText: string
   createdAtMs: number
@@ -346,6 +352,26 @@ export interface Thread {
    *  `ReceiptContent`'s `refreshKey`, so the SAME already-shown receipt
    *  re-fetches and "gets truer over time" (§6⑦) without a fresh page load. */
   receiptRefreshTick: number
+}
+
+export interface DurableThreadSummary {
+  id: string
+  title: string | null
+  summary: string | null
+  activeWorkId: string | null
+  activeObjectiveLoopId: string | null
+  lastActivityAt: string
+  createdAt: string
+}
+
+interface DurableThreadMessage {
+  id: string
+  sequence: number
+  role: "user" | "assistant"
+  originalText: string
+  instructionId: string | null
+  workId: string | null
+  createdAt: string
 }
 
 /** P3.T3 LF-07: a clarification answer is a new turn in the SAME causal
@@ -481,6 +507,7 @@ export interface ActiveThreadPointer {
   sessionId: string
   instructionId: string
   workId?: string
+  conversationThreadId?: string
   source: InstructionSource
   instructionText: string
   createdAtMs: number
@@ -852,6 +879,8 @@ export interface KernelState {
    *  a new top-level instruction superseded it (never a live reference —
    *  mutating the old thread further would be dishonest once it's "history"). */
   threadHistory: Thread[]
+  recentThreads: DurableThreadSummary[]
+  openThread: (threadId: string) => Promise<void>
   presence: Presence
   transport: TransportHealth
   selectorInput: SelectorInput
@@ -905,11 +934,30 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
   const effectiveMode: JarvisMode = mode ?? (auth.session ? "production" : "preview")
   const selectorInput = useSelectorInput()
   const lane = useLanePresentation()
+  const interaction = useOperatingInteractionActions()
 
   const [thread, setThread] = useState<Thread | null>(null)
   const [restoredThreadPresentation, setRestoredThreadPresentation] = useState<{ threadId: string; instructionState: InstructionState } | null>(null)
   const [restoredTraceEventCount, setRestoredTraceEventCount] = useState(0)
   const [threadHistory, setThreadHistory] = useState<Thread[]>([])
+  const [recentThreads, setRecentThreads] = useState<DurableThreadSummary[]>([])
+  const refreshRecentThreads = useCallback(async () => {
+    if (!auth.session) {
+      setRecentThreads([])
+      return
+    }
+    try {
+      const response = await jarvisGet<{ threads?: DurableThreadSummary[] }>("threads", { limit: "50" })
+      setRecentThreads(Array.isArray(response.threads) ? response.threads : [])
+    } catch {
+      // The active Work remains usable when the history list is temporarily
+      // unavailable. Preserve the last verified list instead of fabricating one.
+    }
+  }, [auth.session])
+
+  useEffect(() => {
+    if (!auth.loading) void refreshRecentThreads()
+  }, [auth.loading, refreshRecentThreads])
   // jarvis-v3 P5.T8 — `runSubmission`'s own `useCallback` deps are
   // deliberately minimal (`[data.approvalsThisSession, data.rejectionsThisSession]`,
   // NOT `thread` — see its own eslint-disable comment), so reading `thread`
@@ -1093,6 +1141,7 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
         const workRes = initialWorkRes ?? (durableWorkId !== pointer.workId
           ? await jarvisGet<unknown>(`works/${durableWorkId}`).catch(() => null)
           : null)
+        interaction.restore(operatingInteractionFromWorkAggregate(workRes), durableWorkId)
         if (durableWorkId !== pointer.workId) {
           persistActiveThreadPointer({ ...pointer, workId: durableWorkId })
         }
@@ -1102,6 +1151,7 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
         const base: Thread = {
           id: pointer.id,
           sessionId: pointer.sessionId,
+          conversationThreadId: pointer.conversationThreadId ?? null,
           instructionId: pointer.instructionId,
           workId: durableWorkId,
           source: pointer.source,
@@ -1336,6 +1386,7 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
       // not merely look continuous while submitting an unrelated Work.
       const fallbackSessionId = existing ? existing.sessionId : sessionIdOverride ?? getOrCreateSessionId(source)
       const identity = continuationIdentity(existing, fallbackSessionId)
+      const activeContext = interaction.capture(source, identity.workId)
       const sessionId = identity.sessionId
       const id = existing?.id ?? newId()
       // jarvis-v3 P3.T6: always freshly minted, never reused across turns — this
@@ -1367,8 +1418,10 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
       setThread({
         id,
         sessionId,
+        conversationThreadId: existing?.conversationThreadId ?? null,
         instructionId,
         workId: identity.workId ?? instructionId,
+        interactionContext: activeContext,
         source,
         instructionText: text,
         createdAtMs: nowMs,
@@ -1388,7 +1441,7 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
       })
       // Survive navigation and refresh. A later response rebinds the optimistic
       // instruction id below to the server-authored durable Work id.
-      persistActiveThreadPointer({ id, sessionId, instructionId, workId: identity.workId ?? instructionId, source, instructionText: text, createdAtMs: nowMs })
+      persistActiveThreadPointer({ id, sessionId, instructionId, workId: identity.workId ?? instructionId, ...(existing?.conversationThreadId ? { conversationThreadId: existing.conversationThreadId } : {}), source, instructionText: text, createdAtMs: nowMs })
 
       // jarvis-v3 P3.T6/T7: the trace poll starts THE SAME INSTANT as the POST
       // below — both race the real backend from the same starting line
@@ -1411,7 +1464,7 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
 
       let result: Awaited<ReturnType<typeof submitInstruction>>
       try {
-        result = await submitInstruction(text, { source, sessionId, instructionId, workId: identity.workId ?? undefined })
+        result = await submitInstruction(text, { source, sessionId, instructionId, workId: identity.workId ?? undefined, threadId: existing?.conversationThreadId ?? undefined, activeContext })
       } catch (err) {
         if (activeInstructionIdRef.current !== instructionId) return "stale"
         const errorEnvelope = err instanceof JarvisApiError && err.details && typeof err.details === "object" && !Array.isArray(err.details)
@@ -1419,7 +1472,7 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
           : null
         const errorWorkId = typeof errorEnvelope?.workId === "string" ? errorEnvelope.workId : null
         if (errorWorkId) {
-          persistActiveThreadPointer({ id, sessionId, instructionId, workId: errorWorkId, source, instructionText: text, createdAtMs: nowMs })
+          persistActiveThreadPointer({ id, sessionId, instructionId, workId: errorWorkId, ...(existing?.conversationThreadId ? { conversationThreadId: existing.conversationThreadId } : {}), source, instructionText: text, createdAtMs: nowMs })
           setThread((prev) => prev && prev.id === id && prev.instructionId === instructionId ? { ...prev, workId: errorWorkId } : prev)
         }
         // The backend records lifecycle facts before returning an error. Reconcile
@@ -1463,10 +1516,12 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
         sessionId,
         instructionId,
         workId: result.workId ?? existing?.workId ?? instructionId,
+        ...(result.threadId ? { conversationThreadId: result.threadId } : {}),
         source,
         instructionText: text,
         createdAtMs: nowMs,
       })
+      interaction.bindWork(result.workId ?? existing?.workId ?? instructionId)
 
       // ② UNDERSTOOD / ③ PLAN — the trace transport above may already have driven ACK,
       // TRACE_planning, TRACE_clarification and every action_created node by the
@@ -1525,6 +1580,7 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
           return {
             ...prev,
             workId: result.workId,
+            conversationThreadId: result.threadId,
             machine: { instructionState: "completed" },
             nodes: [],
             clarification: null,
@@ -1537,7 +1593,7 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
         }
         const enrichedNodes = enrichNodesFromPlanned(prev.nodes, planned, usePostFallback)
         const m = usePostFallback && prev.machine.instructionState === "captured" ? transition(prev.machine, { type: "ACK" }) : prev.machine
-        return { ...prev, workId: result.workId, machine: m, nodes: enrichedNodes }
+        return { ...prev, workId: result.workId, conversationThreadId: result.threadId, machine: m, nodes: enrichedNodes }
       })
 
       setThread((prev) => {
@@ -1621,10 +1677,11 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
           )
         }
       }
+      void refreshRecentThreads()
       return "accepted"
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [data.approvalsThisSession, data.rejectionsThisSession, drainTraceQueue, enqueueTraceEvents, resetTraceQueue],
+    [data.approvalsThisSession, data.rejectionsThisSession, drainTraceQueue, enqueueTraceEvents, resetTraceQueue, interaction, refreshRecentThreads],
   )
 
   const retryThread = useCallback(async () => {
@@ -1643,6 +1700,71 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
     if (!canContinueWork(current)) return Promise.resolve<SubmissionOutcome>("failed")
     return runSubmission(text, source, current, sessionIdOverride)
   }, [runSubmission])
+
+  const openThread = useCallback(async (threadId: string) => {
+    const loaded = await jarvisGet<{ thread: DurableThreadSummary; messages?: DurableThreadMessage[] }>(`threads/${threadId}`, { limit: "100" })
+    const messages = Array.isArray(loaded.messages) ? loaded.messages : []
+    const lastUser = [...messages].reverse().find((message) => message.role === "user")
+    const lastAssistant = [...messages].reverse().find((message) => message.role === "assistant")
+    const workId = lastUser?.workId ?? loaded.thread.activeWorkId
+    const workAggregate = workId ? await jarvisGet<unknown>(`works/${workId}`).catch(() => null) : null
+    if (workId) interaction.restore(operatingInteractionFromWorkAggregate(workAggregate), workId)
+    const workStatus = workAggregate && typeof workAggregate === "object" && "work" in workAggregate
+      ? String((workAggregate as { work?: { status?: unknown } }).work?.status ?? "")
+      : ""
+    let instructionState: InstructionState = "completed"
+    if (["received", "understanding", "planning"].includes(workStatus)) instructionState = "planning"
+    else if (["ready", "actionable", "awaiting_approval"].includes(workStatus)) instructionState = "awaiting_approval"
+    else if (["executing", "waiting", "blocked", "recovery"].includes(workStatus)) instructionState = "executing"
+    else if (workStatus === "failed") instructionState = "failed"
+    else if (workStatus === "cancelled") instructionState = "cancelled"
+    if (threadRef.current && threadRef.current.conversationThreadId !== threadId) {
+      setThreadHistory((previous) => [threadRef.current!, ...previous].slice(0, THREAD_HISTORY_CAP))
+    }
+    traceHandleRef.current?.stop()
+    activeInstructionIdRef.current = null
+    const createdAtMs = new Date(lastUser?.createdAt ?? loaded.thread.createdAt).getTime()
+    const restored: Thread = {
+      id: threadId,
+      conversationThreadId: threadId,
+      sessionId: getOrCreateSessionId("typed"),
+      instructionId: lastUser?.instructionId ?? null,
+      workId,
+      interactionContext: operatingInteractionFromWorkAggregate(workAggregate),
+      source: "typed",
+      instructionText: lastUser?.originalText ?? loaded.thread.title ?? "Conversation",
+      createdAtMs: Number.isFinite(createdAtMs) ? createdAtMs : Date.now(),
+      machine: { instructionState },
+      nodes: [],
+      contextChips: [],
+      progress: null,
+      answerResult: lastAssistant ? { kind: "answer", spokenSummary: lastAssistant.originalText } : null,
+      traceGating: { expectedCount: null, resolvedActionIds: [], gatedActionIds: [] },
+      clarification: null,
+      submitError: null,
+      cancelError: null,
+      approvalWatch: null,
+      runWatch: null,
+      terminalAtMs: isTerminal(instructionState) ? Date.now() : null,
+      everExecuted: ["executing", "completed", "partial"].includes(instructionState),
+      receiptRefreshTick: 0,
+    }
+    setRestoredThreadPresentation({ threadId, instructionState })
+    setRestoredTraceEventCount(0)
+    setThread(restored)
+    if (lastUser?.instructionId) {
+      persistActiveThreadPointer({
+        id: threadId,
+        sessionId: restored.sessionId,
+        instructionId: lastUser.instructionId,
+        ...(workId ? { workId } : {}),
+        conversationThreadId: threadId,
+        source: "typed",
+        instructionText: restored.instructionText,
+        createdAtMs: restored.createdAtMs,
+      })
+    }
+  }, [interaction])
 
   const threadRestored = Boolean(
     thread &&
@@ -1694,6 +1816,8 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
       threadRestored,
       restoredTraceEventCount,
       threadHistory,
+      recentThreads,
+      openThread,
       presence,
       transport,
       selectorInput,
@@ -1712,7 +1836,7 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
       retryThread,
       refetchSlowLaneNow: data.refetchSlowLaneNow,
     }),
-    [effectiveMode, thread, threadRestored, restoredTraceEventCount, threadHistory, presence, transport, selectorInput, lane, micOpen, voiceSpeaking, setVoiceIndicators, submit, continueWork, answerClarification, cancelThread, retryThread, data.refetchSlowLaneNow],
+    [effectiveMode, thread, threadRestored, restoredTraceEventCount, threadHistory, recentThreads, openThread, presence, transport, selectorInput, lane, micOpen, voiceSpeaking, setVoiceIndicators, submit, continueWork, answerClarification, cancelThread, retryThread, data.refetchSlowLaneNow],
   )
 
   return <KernelContext.Provider value={value}>{children}</KernelContext.Provider>

@@ -9,6 +9,10 @@ import {
   StartObjectiveSchema,
   ControlObjectiveSchema,
   HandoffWorkSchema,
+  StartOutcomePackSchema,
+  CreateAutonomyGrantSchema,
+  RevokeAutonomyGrantSchema,
+  SetOutcomePackEnabledSchema,
   ConfirmActionSchema,
   RejectActionSchema,
   EscalateActionSchema,
@@ -258,11 +262,69 @@ const doc = {
         responses: { "201": { description: "Planned domain actions" }, "400": { description: "Invalid payload" }, "401": { description: "Bad auth" } },
       },
     },
+    "/api/threads": {
+      get: {
+        summary: "List the authenticated employee's private durable conversation threads",
+        responses: { "200": { description: "Bounded Postgres thread summaries owned by the current employee" }, "401": { description: "Bad auth" }, "403": { description: "Canonical human principal required" } },
+      },
+      post: {
+        summary: "Create a private durable conversation thread for the authenticated employee",
+        responses: { "201": { description: "Canonical Postgres thread summary" }, "400": { description: "Invalid payload" }, "401": { description: "Bad auth" }, "403": { description: "Canonical human principal required" } },
+      },
+    },
+    "/api/threads/{id}": {
+      get: {
+        summary: "Load one employee-owned thread and a bounded page of exact original messages",
+        parameters: [
+          { name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+          { name: "limit", in: "query", schema: { type: "integer", minimum: 1, maximum: 200 } },
+          { name: "beforeSequence", in: "query", schema: { type: "integer", minimum: 1 } },
+        ],
+        responses: { "200": { description: "Thread summary plus exact ordered messages" }, "401": { description: "Bad auth" }, "403": { description: "Canonical human principal required" }, "404": { description: "Thread absent or owned by another employee/tenant" } },
+      },
+    },
     "/api/objectives": {
       post: {
         summary: "Accept responsibility for one persistent, governed Work objective and queue its first bounded iteration",
         requestBody: { content: { "application/json": { schema: s(StartObjectiveSchema) } } },
         responses: { "202": { description: "Objective persisted and queued" }, "200": { description: "Idempotent replay of an existing objective" }, "400": { description: "Invalid objective or budget" }, "401": { description: "Bad auth" } },
+      },
+    },
+    "/api/outcome-packs": {
+      get: {
+        summary: "List the five certified outcome contracts, tenant operating state, and evidence-derived autonomy readiness",
+        responses: { "200": { description: "Definitions, settings, certifications, active grants, and explicit readiness gates" }, "401": { description: "Bad auth" } },
+      },
+      post: {
+        summary: "Accept responsibility for one versioned Outcome Pack on the existing durable Objective controller",
+        requestBody: { content: { "application/json": { schema: s(StartOutcomePackSchema) } } },
+        responses: { "202": { description: "Pack, Work, and Objective persisted and first iteration queued" }, "400": { description: "Invalid pack input or disabled pack" }, "401": { description: "Bad auth" } },
+      },
+    },
+    "/api/outcome-packs/grants": {
+      get: {
+        summary: "List tenant-scoped progressive-autonomy grants and their current status",
+        responses: { "200": { description: "Current and historical exact-scope grants" }, "401": { description: "Bad auth" }, "403": { description: "Owner authority required" } },
+      },
+      post: {
+        summary: "Create one narrow, expiring autonomy grant only after deterministic readiness passes",
+        requestBody: { content: { "application/json": { schema: s(CreateAutonomyGrantSchema) } } },
+        responses: { "201": { description: "Grant persisted" }, "400": { description: "Invalid scope or readiness not earned" }, "403": { description: "Owner authority required" } },
+      },
+    },
+    "/api/outcome-packs/grants/{id}": {
+      delete: {
+        summary: "Revoke an autonomy grant and prevent all future uncommitted effects that depended on it",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        requestBody: { content: { "application/json": { schema: s(RevokeAutonomyGrantSchema) } } },
+        responses: { "200": { description: "Grant revoked" }, "403": { description: "Owner authority required" }, "404": { description: "Grant not found in tenant" } },
+      },
+    },
+    "/api/outcome-packs/control": {
+      post: {
+        summary: "Enable or disable an Outcome Pack; disabling pauses active runs and suspends grants",
+        requestBody: { content: { "application/json": { schema: s(SetOutcomePackEnabledSchema) } } },
+        responses: { "200": { description: "Tenant pack operating state updated" }, "403": { description: "Owner authority required" } },
       },
     },
     "/api/employees": {

@@ -9,7 +9,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
-import type { DomainAction, ExecutionResult, ObjectiveSuccessCondition, ObjectiveSuccessVerification, OperatingInteractionContext, OperationalQueryRequest, Role, TenantContext } from "@finnor/shared-types";
+import type { DomainAction, ExecutionResult, ObjectiveSuccessCondition, ObjectiveSuccessVerification, OperatingInteractionContext, OperationalQueryRequest, OutcomePackStartBinding, Role, TenantContext } from "@finnor/shared-types";
 import {
   domainActions,
   authorityApprovalRequests,
@@ -36,6 +36,8 @@ import {
   workInputs,
   works,
   pendingConfirmations,
+  outcomePackRuns,
+  tenantOutcomePackSettings,
 } from "@finnor/db";
 import { executeOperationalQuery } from "@finnor/read-models";
 import { employeeAuthoritySnapshot, evaluateAuthority } from "@finnor/authority";
@@ -169,6 +171,8 @@ export interface StartObjectiveOptions extends ObjectiveBudgets {
   idempotencyKey?: string;
   activeContext?: OperatingInteractionContext | Record<string, unknown>;
   successCondition?: ObjectiveSuccessCondition;
+  /** Phase 5 binding only. The existing Objective controller remains the runtime. */
+  outcomePack?: OutcomePackStartBinding;
 }
 
 export interface StartObjectiveResult {
@@ -386,7 +390,21 @@ export async function startWorkObjective(objective: string, ctx: TenantContext, 
     if (existing) {
       if (existing.objective !== objective && !input.duplicate) throw new Error("Work already owns a different objective; use redirect explicitly");
       if (canonicalJson(existing.successCondition) !== canonicalJson(successCondition) && !input.duplicate) throw new Error("Work already owns a different objective success condition; use redirect explicitly");
+      if (options.outcomePack) {
+        const [existingPack] = await db.select().from(outcomePackRuns).where(and(eq(outcomePackRuns.tenantId, ctx.tenantId), eq(outcomePackRuns.workId, input.workId))).limit(1);
+        if (!existingPack || existingPack.packId !== options.outcomePack.packId || existingPack.packVersion !== options.outcomePack.packVersion
+          || existingPack.mode !== options.outcomePack.mode || existingPack.certificationFingerprint !== options.outcomePack.certificationFingerprint) {
+          throw new Error("Work is already bound to a different Outcome Pack contract");
+        }
+      }
       return existing;
+    }
+    if (options.outcomePack) {
+      const [setting] = await db.select().from(tenantOutcomePackSettings).where(and(
+        eq(tenantOutcomePackSettings.tenantId, ctx.tenantId),
+        eq(tenantOutcomePackSettings.packId, options.outcomePack.packId),
+      )).limit(1);
+      if (setting && !setting.enabled) throw new Error(`Outcome Pack ${options.outcomePack.packId} is disabled: ${setting.reason ?? "operator control"}`);
     }
     const [created] = await db.insert(workObjectiveLoops).values({
       tenantId: ctx.tenantId,
@@ -406,6 +424,21 @@ export async function startWorkObjective(objective: string, ctx: TenantContext, 
       nextStep: "Inspect current canonical business state.",
     }).returning();
     if (!created) throw new Error("Unable to persist Work objective loop");
+    if (options.outcomePack) {
+      await db.insert(outcomePackRuns).values({
+        tenantId: ctx.tenantId,
+        workId: input.workId,
+        objectiveLoopId: created.id,
+        packId: options.outcomePack.packId,
+        packVersion: options.outcomePack.packVersion,
+        mode: options.outcomePack.mode,
+        certificationFingerprint: options.outcomePack.certificationFingerprint,
+        objective: options.outcomePack.objective,
+        input: options.outcomePack.input,
+        subjectRefs: options.outcomePack.subjectRefs,
+        successCondition: options.outcomePack.successCondition,
+      });
+    }
     return created;
   });
   await transitionWork(ctx.tenantId, input.workId, "executing", "objective_accepted", {
@@ -834,6 +867,20 @@ async function finishIteration(params: {
       finalLoop = reloaded;
       outcome = reloaded.state;
     }
+    const packStatus = outcome === "completed" ? "completed"
+      : outcome === "failed" ? "failed"
+        : outcome === "cancelled" ? "cancelled"
+          : outcome === "blocked" ? "blocked"
+            : null;
+    if (packStatus) {
+      await db.update(outcomePackRuns).set({
+        status: packStatus,
+        blockedReason: outcome === "blocked" ? reason : null,
+        finalVerification: params.successVerification ?? null,
+        completedAt: outcome === "completed" || outcome === "failed" || outcome === "cancelled" ? new Date() : null,
+        updatedAt: new Date(),
+      }).where(and(eq(outcomePackRuns.tenantId, params.tenantId), eq(outcomePackRuns.objectiveLoopId, current.id)));
+    }
     return { outcome, loop: finalLoop, superseded: false as const, wakeClaimedDuringWaitCreation };
   });
   if (result.superseded) return result;
@@ -1251,6 +1298,15 @@ export async function controlWorkObjective(params: {
     return updated!;
   });
   if (cancellationAlreadyRecorded) return loop;
+  await withTenant(params.tenantId, (db) => db.update(outcomePackRuns).set({
+    status: params.command === "cancel" ? "cancelled"
+      : params.command === "interrupt" ? "paused"
+        : params.command === "redirect" ? "blocked"
+          : "active",
+    blockedReason: params.command === "redirect" ? "Objective redirect invalidated the certified pack scope; review or start a new pack run." : null,
+    completedAt: params.command === "cancel" ? new Date() : null,
+    updatedAt: new Date(),
+  }).where(and(eq(outcomePackRuns.tenantId, params.tenantId), eq(outcomePackRuns.workId, params.workId))));
   const workStatus = loop.state === "continue" ? "executing" : loop.state;
   await transitionWork(params.tenantId, params.workId, workStatus, `objective_${params.command}`, { objectiveLoopId: loop.id, actorId: params.actorId, revision: loop.revision, objective: params.command === "redirect" ? loop.objective : undefined }, loop.state === "cancelled" ? { finalOutcome: { kind: "objective", objectiveLoopId: loop.id, state: "cancelled", actorId: params.actorId } } : {});
   if (loop.state === "continue") await scheduleIteration(loop, new Date(), params.correlationId);

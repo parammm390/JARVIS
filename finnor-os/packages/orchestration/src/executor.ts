@@ -21,6 +21,7 @@ import {
   ensureBusinessEffect,
   recordBusinessEffectOutcome,
 } from "./compiler";
+import { evaluateEffectAutonomy, recordShadowEffect } from "./autonomy";
 
 export interface Executor {
   execute(action: DomainAction, policy: DomainPolicy): Promise<ExecutionResult>;
@@ -87,11 +88,52 @@ export class GatedExecutor implements Executor {
       return { status: "failure", output: { authorityDecisionId: authority.decision.id }, error: `Authority denied: ${authority.decision.reasonCode}` };
     }
     const requiresAuthorityGate = authority.decision.outcome === "approval_required";
+    const autonomy = effect ? await evaluateEffectAutonomy({ action, effect, authority: authority.decision }) : null;
+    // Approval mode keeps the existing policy/authority floors exactly as-is. This
+    // extra gate applies only when an Autopilot attempt reaches a permanent or
+    // current-policy approval boundary; Autopilot may add restrictions, never lower
+    // or replace the established permission engine.
+    const requiresAutonomyGate = autonomy?.mode === "autopilot" && autonomy.outcome === "approval_required";
+    if (autonomy) {
+      await appendEpisode(action.tenantId, action.id, "autonomy_evaluated", {
+        mode: autonomy.mode,
+        packId: autonomy.packId,
+        grantId: autonomy.grantId,
+      }, {
+        outcome: autonomy.outcome,
+        eligible: autonomy.eligible,
+        reasonCodes: autonomy.reasonCodes,
+        certificationFingerprint: autonomy.certificationFingerprint,
+      });
+    }
+    if (effect && autonomy?.outcome === "shadow_only") {
+      await recordShadowEffect({ action, effect });
+      return {
+        status: "success",
+        output: {
+          shadow: true,
+          consequentialMutation: false,
+          hypotheticalBusinessEffectId: effect.id,
+          semanticHash: effect.semanticHash,
+          autonomy,
+        },
+        expected: { hypotheticalOnly: true },
+      };
+    }
+    if (effect && autonomy?.mode === "autopilot" && autonomy.outcome === "blocked") {
+      await this.setStatus(action, "needs_human_review");
+      return {
+        status: "failure",
+        output: { autonomy },
+        error: `Autopilot failed closed: ${autonomy.reasonCodes.join(", ")}`,
+        errorKind: "config",
+      };
+    }
 
     // ---------------- THE CONFIRMATION GATE ----------------
     // The fixed release floor is authoritative: a plugin draft cannot lower a
     // required floor or turn a no-side-effect action into an approval item.
-    if ((approval.requiresConfirmation || requiresAuthorityGate) && action.status !== "approved" && action.status !== "executing") {
+    if ((approval.requiresConfirmation || requiresAuthorityGate || requiresAutonomyGate) && action.status !== "approved" && action.status !== "executing") {
       await withTenant(action.tenantId, async (db) => {
         await db
           .update(domainActions)
@@ -118,7 +160,7 @@ export class GatedExecutor implements Executor {
       // Stop here. Execution resumes only via POST /actions/:id/confirm or a spoken yes.
       return {
         status: "success",
-        output: { gated: true, pendingConfirmation: true, summary: effect?.approval.summary ?? draft.summary, businessEffectId: effect?.id },
+        output: { gated: true, pendingConfirmation: true, summary: effect?.approval.summary ?? draft.summary, businessEffectId: effect?.id, ...(autonomy ? { autonomy } : {}) },
       };
     }
     // --------------------------------------------------------
@@ -128,7 +170,7 @@ export class GatedExecutor implements Executor {
     // runtime bridge can distinguish this legitimate path from a forged SQL status.
     // Confirmation-required actions instead carry the `confirmed` episode written
     // by decide(), which the bridge validates independently.
-    if (!approval.requiresConfirmation && !requiresAuthorityGate) {
+    if (!approval.requiresConfirmation && !requiresAuthorityGate && !requiresAutonomyGate) {
       // Consequential policy authorization is persisted by runtime-bridge in the
       // same transaction as its command/first job. Reads have no Business Effect and
       // retain the small synchronous authorization episode used below.
@@ -174,6 +216,7 @@ export class GatedExecutor implements Executor {
       plugin,
       tools: scopedTools,
     });
+    if (autonomy) result.output.autonomy = autonomy;
     if (result.output.durableWorkerExecution === true) {
       if (action.workId) await transitionWork(action.tenantId, action.workId, "executing", "action_execution_authorized", {
         actionId: action.id,
@@ -215,6 +258,8 @@ export class GatedExecutor implements Executor {
     const finalStatus =
       effectVerification?.state === "divergent" || effectVerification?.state === "reconciliation_required" || result.errorKind === "unknown_outcome"
         ? "needs_human_review"
+        : effectVerification?.state === "partially_verified"
+          ? "executing"
         : result.status === "success"
         ? "completed"
         : result.status === "integration_unavailable"

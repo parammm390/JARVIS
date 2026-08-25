@@ -54,6 +54,7 @@ function isAllowedGet(segments: string[]): boolean {
   if (segments.length === 2 && a === "actions" && b === "pending") return true
   if (segments.length === 2 && a === "workflows" && b === "runs") return true
   if (segments.length === 1 && a === "events") return true
+  if (segments.length === 1 && (a === "business-world" || a === "operational-deltas")) return true
   if (segments.length === 1 && a === "employees") return true
   if (segments.length === 2 && a === "read-models" && READ_MODEL_VIEWS.has(b!)) return true
   if (segments.length === 1 && a === "comms") return true
@@ -96,6 +97,9 @@ function isAllowedGet(segments: string[]): boolean {
   if (segments.length === 3 && a === "instructions" && c === "events") return true
   if (segments.length === 1 && a === "works") return true
   if (segments.length === 2 && a === "works") return true
+  if (segments.length === 1 && a === "threads") return true
+  if (segments.length === 2 && a === "threads") return true
+  if (segments.length === 3 && a === "works" && c === "execution") return true
   if (segments.length === 3 && a === "works" && c === "objective") return true
   if (segments.length === 2 && a === "operations") return true
   if (segments.length === 3 && a === "computer" && b === "runs") return true
@@ -105,6 +109,7 @@ function isAllowedGet(segments: string[]): boolean {
 function isAllowedPost(segments: string[]): boolean {
   const [a, b, c, d] = segments
   if (segments.length === 1 && a === "actions") return true
+  if (segments.length === 1 && a === "threads") return true
   if (segments.length === 1 && a === "objectives") return true
   if (segments.length === 1 && a === "queries") return true
   if (segments.length === 2 && a === "dispatch" && b === "map") return true
@@ -118,6 +123,7 @@ function isAllowedPost(segments: string[]): boolean {
   // Phase 7: run controls (owner-only server-side via canApprove) and DLQ replay/
   // discard (owner-only) both need the frontend to reach them at all first.
   if (segments.length === 4 && a === "workflows" && b === "runs" && RUN_CONTROL_VERBS.has(d!)) return true
+  if (segments.length === 4 && a === "workflows" && b === "steps" && d === "compensate") return true
   if (segments.length === 3 && a === "dlq" && (c === "replay" || c === "discard")) return true
   if (segments.length === 1 && a === "corrections") return true
   if (segments.length === 4 && a === "data-quality" && b === "findings" && d === "resolve") return true

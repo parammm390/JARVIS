@@ -112,6 +112,48 @@ export interface LiveFrameProjection {
   latestImpulse: LiveFrameImpulse | null
 }
 
+/** Structural kernel seam shared by the home canvas and route-persistent dock. */
+export interface KernelLiveFrameSource {
+  presence: Presence
+  transport: TransportHealth
+  micOpen: boolean
+  voiceSpeaking: boolean
+  selectorInput: { now: number; runs: LiveFrameRunSignal[]; terminalRuns?: LiveFrameRunSignal[] }
+  thread: {
+    machine: { instructionState: InstructionState }
+    nodes: Array<{ id: string }>
+    clarification: unknown | null
+  } | null
+}
+
+export function projectKernelLiveFrame(
+  kernel: KernelLiveFrameSource,
+  localVolumeLevel?: number,
+  latestImpulse: LiveFrameIntentLaunch | null = null,
+): LiveFrameProjection {
+  const workflowRuns = kernel.selectorInput.terminalRuns
+    ? [...kernel.selectorInput.runs, ...kernel.selectorInput.terminalRuns]
+    : kernel.selectorInput.runs
+  const state = kernel.thread?.machine.instructionState ?? null
+  return deriveLiveFrame({
+    presence: kernel.presence,
+    transport: kernel.transport,
+    micOpen: kernel.micOpen,
+    voiceSpeaking: kernel.voiceSpeaking,
+    localVolumeLevel,
+    nowMs: kernel.selectorInput.now,
+    instruction: kernel.thread ? {
+      state,
+      actionIds: kernel.thread.nodes.map((node) => node.id),
+      clarificationRequired: kernel.thread.clarification !== null || state === "clarifying",
+      approvalRequired: state === "awaiting_approval",
+      verificationActive: state === "verifying",
+    } : null,
+    workflowRuns,
+    latestImpulse,
+  })
+}
+
 export const LIVEFRAME_ENERGY_BASE: Readonly<Record<LiveFrameMode, number>> = {
   ready: 0.12,
   listening: 0.28,

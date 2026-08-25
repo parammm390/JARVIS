@@ -23,6 +23,7 @@ import {
 } from "@finnor/tools";
 import {
   advanceWorkflow,
+  awaitStepObservation,
   completeStep,
   failStep,
   openReconciliationCase,
@@ -40,6 +41,7 @@ import { appendEpisode } from "@finnor/memory";
 import { advanceWorkflowForAction } from "./workflow";
 import { emitInstructionEvent } from "./instruction-trace";
 import { resumeObjectiveForAction } from "./objective-loop";
+import { demoteAutonomyForWorkRegression, evaluateEffectAutonomy } from "./autonomy";
 import { redactStructured, redactText } from "@finnor/security";
 
 class DurableExecutionBlocked extends Error {
@@ -122,6 +124,39 @@ export async function revalidateAuthorizedEffectEligibility(
   const authority = await revalidateActionExecution(tenantId, domainActionId);
   if (authority.outcome !== "allowed") return { allowed: false, reason: `Authority invalidated: ${authority.reasonCode}` };
   try {
+    const { actionRow, humanApproval } = await withTenant(tenantId, async (db) => {
+      const [[row], [approval]] = await Promise.all([
+        db.select().from(domainActions).where(and(eq(domainActions.tenantId, tenantId), eq(domainActions.id, domainActionId))).limit(1),
+        db.select({ id: actionLog.id }).from(actionLog).where(and(eq(actionLog.tenantId, tenantId), eq(actionLog.domainActionId, domainActionId), eq(actionLog.step, "confirmed"))).limit(1),
+      ]);
+      return { actionRow: row, humanApproval: approval };
+    });
+    if (!actionRow) throw new DurableExecutionBlocked("The authorized action disappeared before effect execution");
+    const autonomy = await evaluateEffectAutonomy({
+      action: {
+        id: actionRow.id,
+        tenantId: actionRow.tenantId,
+        actionType: actionRow.actionType,
+        payload: actionRow.payload as Record<string, unknown>,
+        policyId: actionRow.policyId,
+        policyVersion: actionRow.policyVersion,
+        status: actionRow.status,
+        createdAt: actionRow.createdAt.toISOString(),
+        workId: actionRow.workId,
+        plannerAttemptId: actionRow.plannerAttemptId,
+        initiatedBy: actionRow.initiatedBy,
+        authorityDecisionId: actionRow.authorityDecisionId,
+        authorityRevision: actionRow.authorityRevision,
+        authorityContext: actionRow.authorityContext as Record<string, unknown>,
+        objectiveStepId: actionRow.objectiveStepId,
+        businessEffectId: actionRow.businessEffectId,
+      },
+      effect,
+      authority,
+    });
+    if (!humanApproval && autonomy.mode === "autopilot" && autonomy.outcome !== "autopilot_allowed") {
+      throw new DurableExecutionBlocked(`Autopilot grant invalidated before effect execution: ${autonomy.reasonCodes.join(", ")}`);
+    }
     await assertMaterialPolicyStillValid(tenantId, effect);
     await verifyBusinessEffectPreconditions(tenantId, effect);
     return { allowed: true };
@@ -267,6 +302,9 @@ async function recordSemanticOperation(
   await withTenant(loaded.action.tenantId, (db) => db.update(integrationOperations).set({
     status,
     response: { status: result.status, output: result.output, expected: result.expected ?? null, error: result.error ?? null, errorKind: result.errorKind ?? null },
+    providerAcknowledgedAt: status === "succeeded" && loaded.effect.operation.external ? new Date() : null,
+    verificationStatus: status === "succeeded" && loaded.effect.operation.external ? "awaiting_observation"
+      : status === "unknown" ? "unknown" : "not_required",
     updatedAt: new Date(),
   }).where(and(
     eq(integrationOperations.workflowStepId, loaded.step.id),
@@ -323,6 +361,8 @@ export async function executeAuthorizedEffectStep(
       // only when it still says allowed.
       await appendEpisode(tenantId, loaded.action.id, "authority_revision_revalidated", { authorizedRevision: loaded.command.authorityRevision }, { currentRevision: authority.authorityRevision, decisionId: authority.id, outcome: authority.outcome });
     }
+    const eligibility = await revalidateAuthorizedEffectEligibility(tenantId, loaded.action.id, loaded.effect.id);
+    if (!eligibility.allowed) throw new DurableExecutionBlocked(eligibility.reason);
     await assertMaterialPolicyStillValid(tenantId, loaded.effect);
     await verifyBusinessEffectPreconditions(tenantId, loaded.effect);
   } catch (error) {
@@ -437,20 +477,32 @@ export async function executeAuthorizedEffectStep(
   }
 
   const verification = await recordBusinessEffectOutcome(tenantId, loaded.effect, result);
+  const awaitingExternalObservation = loaded.effect.operation.external && verification.state === "partially_verified";
   const finalStatus = verification.state === "divergent" || verification.state === "reconciliation_required" || result.errorKind === "unknown_outcome"
     ? "needs_human_review"
-    : result.status === "success" ? "completed"
+    : awaitingExternalObservation ? "executing"
+      : result.status === "success" ? "completed"
       : result.status === "integration_unavailable" ? "blocked_integration_unavailable" : "failed";
   await withTenant(tenantId, async (db) => {
     await db.update(workflowSteps).set({
       executionState: verification.state === "reconciliation_required" ? "reconciling"
-        : result.status === "success" ? "verified"
+        : awaitingExternalObservation ? "awaiting_observation"
+          : result.status === "success" ? "verified"
           : result.errorKind === "unknown_outcome" ? "failed_after_possible_effect" : "failed_before_effect",
     }).where(and(eq(workflowSteps.tenantId, tenantId), eq(workflowSteps.id, stepId)));
     await db.update(domainActions).set({ status: finalStatus, executionStartedAt: null })
       .where(and(eq(domainActions.tenantId, tenantId), eq(domainActions.id, loaded.action.id), eq(domainActions.status, "executing")));
   });
   if (result.status === "success") {
+    if (awaitingExternalObservation) {
+      await awaitStepObservation(tenantId, stepId, {
+        providerAcknowledged: true,
+        output: result.output,
+        verification,
+      });
+      if (loaded.action.workId) await reconcileWorkStatus(tenantId, loaded.action.workId);
+      return;
+    }
     await completeStep(tenantId, stepId, { status: result.status, output: result.output, verification });
     const advanced = await advanceWorkflowForAction(tenantId, loaded.action.actionType, loaded.effect.delta.values).catch(() => []);
     if (advanced.length > 0) await appendEpisode(tenantId, loaded.action.id, "workflow", {}, { advanced });
@@ -465,6 +517,9 @@ export async function executeAuthorizedEffectStep(
   if (loaded.action.workId) {
     if (finalStatus === "completed") await transitionWork(tenantId, loaded.action.workId, "executing", "action_effect_verified", { actionId: loaded.action.id, businessEffectId: loaded.effect.id, verification: verification.state });
     await reconcileWorkStatus(tenantId, loaded.action.workId);
+  }
+  if (loaded.action.workId && (finalStatus === "needs_human_review" || finalStatus === "failed" || verification.state === "divergent" || verification.state === "reconciliation_required")) {
+    await demoteAutonomyForWorkRegression(tenantId, loaded.action.workId).catch(() => 0);
   }
   await resumeObjectiveForAction(tenantId, loaded.action.id).catch(() => false);
 }

@@ -48,7 +48,12 @@ export const SendMessageInputSchema = z.object({
   channel: z.enum(["sms", "email"]).optional(),
   idempotencyKey: z.string().min(1),
 });
-export const SendMessageOutputSchema = z.object({ sent: z.literal(true), channel: z.string() });
+export const SendMessageOutputSchema = z.object({
+  sent: z.literal(true),
+  channel: z.string(),
+  messageId: z.string().optional(),
+  contactId: z.string().optional(),
+});
 
 export const BookProviderAppointmentInputSchema = z.object({
   tenantId: z.string().uuid(),
@@ -171,8 +176,9 @@ export const sendMessageGhlBinding: CapabilityBinding<SendMessageInput, SendMess
       async () => {
         const conn = await connectGhl(await resolveGhlCommunication(input, "sms", "send_message"));
         try {
-          await callMcpTool(conn, "ghl", "conversations_send-a-new-message", { contactId: input.contactId, message: input.message });
-          return { sent: true, channel: input.channel ?? "sms" };
+          const sent = await callMcpTool(conn, "ghl", "conversations_send-a-new-message", { contactId: input.contactId, message: input.message });
+          const messageId = typeof sent.messageId === "string" ? sent.messageId : typeof sent.id === "string" ? sent.id : undefined;
+          return { sent: true, channel: input.channel ?? "sms", ...(messageId ? { messageId } : {}), contactId: input.contactId };
         } finally {
           await conn.close().catch(() => undefined);
         }

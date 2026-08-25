@@ -49,6 +49,95 @@ async function quickbooksAccessToken(context: QuickBooksCredentialContext): Prom
   return data.access_token;
 }
 
+async function quickbooksGet<T>(context: QuickBooksCredentialContext, path: string): Promise<T> {
+  const accessToken = await quickbooksAccessToken(context);
+  const response = await fetch(`${apiBase(context)}/v3/company/${context.credentials.realmId}${path}`, {
+    headers: { Authorization: `Bearer ${accessToken}`, accept: "application/json" },
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!response.ok) {
+    const authFailure = response.status === 401 || response.status === 403;
+    throw new IntegrationError(
+      "quickbooks",
+      `read failed (${response.status})`,
+      !authFailure && (response.status === 429 || response.status >= 500),
+      authFailure ? "auth" : response.status === 429 || response.status >= 500 ? "retryable" : "terminal",
+    );
+  }
+  return response.json() as Promise<T>;
+}
+
+export interface QuickBooksReadRecord extends Record<string, unknown> {
+  Id: string;
+  SyncToken?: string;
+  MetaData?: { CreateTime?: string; LastUpdatedTime?: string };
+}
+
+export async function readQuickBooksObject(
+  objectType: "customer" | "invoice" | "payment",
+  id: string,
+  context: QuickBooksCredentialContext,
+): Promise<QuickBooksReadRecord | null> {
+  const payload = await quickbooksGet<Record<string, unknown>>(context, `/${objectType}/${encodeURIComponent(id)}?minorversion=75`).catch((error) => {
+    if (error instanceof IntegrationError && /\(404\)/.test(error.message)) return null;
+    throw error;
+  });
+  if (!payload) return null;
+  const key = objectType[0]!.toUpperCase() + objectType.slice(1);
+  const row = payload[key];
+  return row && typeof row === "object" ? row as QuickBooksReadRecord : null;
+}
+
+export interface QuickBooksChangeSet {
+  changedAt: string;
+  customers: QuickBooksReadRecord[];
+  invoices: QuickBooksReadRecord[];
+  payments: QuickBooksReadRecord[];
+}
+
+export async function queryQuickBooksObjects(
+  objectType: "Customer" | "Invoice" | "Payment",
+  startPosition: number,
+  context: QuickBooksCredentialContext,
+  maxResults = 250,
+): Promise<QuickBooksReadRecord[]> {
+  const boundedStart = Math.max(1, Math.floor(startPosition));
+  const boundedMax = Math.min(1_000, Math.max(1, Math.floor(maxResults)));
+  const query = `SELECT * FROM ${objectType} STARTPOSITION ${boundedStart} MAXRESULTS ${boundedMax}`;
+  const payload = await quickbooksGet<{ QueryResponse?: Record<string, unknown> }>(
+    context,
+    `/query?query=${encodeURIComponent(query)}&minorversion=75`,
+  );
+  const rows = payload.QueryResponse?.[objectType];
+  return Array.isArray(rows)
+    ? rows.filter((row): row is QuickBooksReadRecord => Boolean(row) && typeof row === "object" && typeof (row as { Id?: unknown }).Id === "string")
+    : [];
+}
+
+/** QuickBooks CDC is the provider delta cursor. `changedSince` is retained only after
+ * the complete returned set commits, so a restart safely replays the same identities. */
+export async function readQuickBooksChanges(changedSince: string, context: QuickBooksCredentialContext): Promise<QuickBooksChangeSet> {
+  const params = new URLSearchParams({ entities: "Customer,Invoice,Payment", changedSince, minorversion: "75" });
+  const payload = await quickbooksGet<{ CDCResponse?: Array<{ QueryResponse?: Array<Record<string, unknown>>; time?: string }> }>(
+    context,
+    `/cdc?${params.toString()}`,
+  );
+  const output: QuickBooksChangeSet = { changedAt: changedSince, customers: [], invoices: [], payments: [] };
+  for (const response of payload.CDCResponse ?? []) {
+    if (response.time) output.changedAt = response.time;
+    for (const query of response.QueryResponse ?? []) {
+      for (const [key, value] of Object.entries(query)) {
+        if (!Array.isArray(value)) continue;
+        const rows = value.filter((row): row is QuickBooksReadRecord => Boolean(row) && typeof row === "object" && typeof (row as { Id?: unknown }).Id === "string");
+        if (key === "Customer") output.customers.push(...rows);
+        if (key === "Invoice") output.invoices.push(...rows);
+        if (key === "Payment") output.payments.push(...rows);
+      }
+    }
+  }
+  return output;
+}
+
 /** Real, cheap QBO call (CompanyInfo, the standard health-check endpoint) — proves
  *  the refresh token and realm id are both actually valid, not just present. */
 export async function testQuickBooksConnection(context: QuickBooksCredentialContext): Promise<ProviderHealth> {

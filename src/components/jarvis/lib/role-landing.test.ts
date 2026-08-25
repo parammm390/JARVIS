@@ -20,4 +20,11 @@ describe("P3.T4 role landing contract", () => {
     expect(roleLandingFor("technician", "map")).toBe("my-day")
     expect(roleLandingFor("technician", "bridge")).toBe("my-day")
   })
+
+  it("honors only the role-compatible configured start view", () => {
+    expect(roleLandingFor("dispatcher", null, "dispatch-map")).toBe("dispatch-map")
+    expect(roleLandingFor("dispatcher", null, "schedule")).toBe("schedule")
+    expect(roleLandingFor("owner", null, "dispatch-map")).toBe("home")
+    expect(roleLandingFor("technician", null, "schedule")).toBe("my-day")
+  })
 })

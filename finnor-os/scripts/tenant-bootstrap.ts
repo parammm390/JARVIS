@@ -17,6 +17,7 @@ export interface BootstrapTenantResult {
   clientKey: string;
   policies: Awaited<ReturnType<typeof seedTenantPolicies>>;
   integrations: number;
+  outcomePacks: number;
   locations: number;
   humanOnlyField: string | null;
 }
@@ -918,11 +919,12 @@ export async function convergeIdentityAccess(
           JSON.stringify(account.metadata), manifest.clientKey],
       );
     }
-    const persistedAccounts = (await client.query<{ id: string; account_key: string }>(
-      "SELECT id,account_key FROM application_accounts WHERE tenant_id=$1",
+    const persistedAccounts = (await client.query<{ id: string; account_key: string; provider: string }>(
+      "SELECT id,account_key,provider FROM application_accounts WHERE tenant_id=$1",
       [tenantId],
     )).rows;
     const accountIds = new Map(persistedAccounts.map((row) => [row.account_key, row.id]));
+    const accountProviders = new Map(persistedAccounts.map((row) => [row.account_key, row.provider]));
 
     const desiredBindingKeys = new Set<string>();
     const resolvedBindings = communicationBindings.map((binding) => {
@@ -1047,11 +1049,12 @@ export async function convergeIdentityAccess(
       );
     }
 
-    const persistedProfiles = (await client.query<{ id: string; auth_profile_ref: string }>(
-      "SELECT id,auth_profile_ref FROM auth_profiles WHERE tenant_id=$1",
+    const persistedProfiles = (await client.query<{ id: string; auth_profile_ref: string; application_account_id: string }>(
+      "SELECT id,auth_profile_ref,application_account_id FROM auth_profiles WHERE tenant_id=$1",
       [tenantId],
     )).rows;
     const profileIds = new Map(persistedProfiles.map((row) => [row.auth_profile_ref, row.id]));
+    const profileAccountIds = new Map(persistedProfiles.map((row) => [row.auth_profile_ref, row.application_account_id]));
     for (const identity of communicationIdentities) {
       const linkedProfileId = identity.authProfileRef ? profileIds.get(identity.authProfileRef) : null;
       if (identity.authProfileRef && !linkedProfileId) throw new Error(`Communication identity references unprovisioned auth profile ${identity.authProfileRef}`);
@@ -1060,6 +1063,43 @@ export async function convergeIdentityAccess(
           WHERE tenant_id=$1 AND identity_key=$2 AND managed_by=$3
             AND auth_profile_id IS DISTINCT FROM $4`,
         [tenantId, identity.key, manifest.clientKey, linkedProfileId],
+      );
+    }
+
+    // Bind each provider capability to one exact tenant account/profile. Legacy
+    // manifests converge to the same synthesized keys; native capabilities remain
+    // intentionally unbound. This runs only after identity convergence so a first
+    // provision never guesses or stores an unresolved cross-tenant identifier.
+    for (const integration of manifest.integrations) {
+      const legacyKey = compatibilityMode && integration.mode !== "emulator"
+        && !["native", "emulator", "dry_run"].includes(integration.binding)
+        ? legacyAccessKey(integration.capability, integration.binding)
+        : undefined;
+      const accountKey = integration.applicationAccountKey ?? legacyKey;
+      const profileRef = integration.authProfileRef ?? legacyKey;
+      const applicationAccountId = accountKey ? accountIds.get(accountKey) : undefined;
+      const authProfileId = profileRef ? profileIds.get(profileRef) : undefined;
+      if (integration.applicationAccountKey && !applicationAccountId) {
+        throw new Error(`Integration ${integration.capability} references unprovisioned application account ${integration.applicationAccountKey}`);
+      }
+      if (integration.authProfileRef && !authProfileId) {
+        throw new Error(`Integration ${integration.capability} references unprovisioned auth profile ${integration.authProfileRef}`);
+      }
+      const accountProvider = accountKey ? accountProviders.get(accountKey) : undefined;
+      const providerMatches = accountProvider === integration.binding
+        || (integration.binding === "ads" && ["meta_ads", "google_ads"].includes(accountProvider ?? ""));
+      if (accountKey && applicationAccountId && !providerMatches) {
+        throw new Error(`Integration ${integration.capability} provider does not match application account ${accountKey}`);
+      }
+      if (applicationAccountId && profileRef && authProfileId && profileAccountIds.get(profileRef) !== applicationAccountId) {
+        throw new Error(`Integration ${integration.capability} auth profile ${profileRef} belongs to a different application account`);
+      }
+      await client.query(
+        `UPDATE tenant_integrations
+         SET application_account_id=$3,auth_profile_id=$4,updated_at=now()
+         WHERE tenant_id=$1 AND capability=$2
+           AND (application_account_id,auth_profile_id) IS DISTINCT FROM ($3::uuid,$4::uuid)`,
+        [tenantId, integration.capability, applicationAccountId ?? null, authProfileId ?? null],
       );
     }
 
@@ -1114,24 +1154,34 @@ export async function convergeIntegrations(
     for (const integration of manifest.integrations) {
       await client.query(
         `INSERT INTO tenant_integrations
-           (tenant_id, capability, binding, mode, config, credential_provider, credential_ref, credential_version, credential_metadata)
-         VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9::jsonb)
+           (tenant_id, capability, binding, mode, config, credential_provider, credential_ref, credential_version, credential_metadata,
+            source_policy,freshness_policy,sync_scopes,outcome_packs)
+         VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9::jsonb,$10::jsonb,$11::jsonb,$12::text[],$13::text[])
          ON CONFLICT (tenant_id, capability) DO UPDATE
          SET binding = EXCLUDED.binding, mode = EXCLUDED.mode, config = EXCLUDED.config,
              credential_provider = EXCLUDED.credential_provider,
              credential_ref = EXCLUDED.credential_ref,
              credential_version = EXCLUDED.credential_version,
              credential_metadata = EXCLUDED.credential_metadata,
+             source_policy = EXCLUDED.source_policy,
+             freshness_policy = EXCLUDED.freshness_policy,
+             sync_scopes = EXCLUDED.sync_scopes,
+             outcome_packs = EXCLUDED.outcome_packs,
              updated_at = now()
          WHERE (tenant_integrations.binding, tenant_integrations.mode, tenant_integrations.config,
                 tenant_integrations.credential_provider, tenant_integrations.credential_ref,
-                tenant_integrations.credential_version, tenant_integrations.credential_metadata)
+                tenant_integrations.credential_version, tenant_integrations.credential_metadata,
+                tenant_integrations.source_policy,tenant_integrations.freshness_policy,
+                tenant_integrations.sync_scopes,tenant_integrations.outcome_packs)
                IS DISTINCT FROM
                (EXCLUDED.binding, EXCLUDED.mode, EXCLUDED.config, EXCLUDED.credential_provider,
-                EXCLUDED.credential_ref, EXCLUDED.credential_version, EXCLUDED.credential_metadata)`,
+                EXCLUDED.credential_ref, EXCLUDED.credential_version, EXCLUDED.credential_metadata,
+                EXCLUDED.source_policy,EXCLUDED.freshness_policy,EXCLUDED.sync_scopes,EXCLUDED.outcome_packs)`,
         [tenantId, integration.capability, integration.binding, integration.mode, JSON.stringify(integration.config),
           integration.credential?.provider ?? null, integration.credential?.ref.replaceAll("{tenantId}", tenantId) ?? null,
-          integration.credential?.version ?? null, JSON.stringify(integration.credential?.metadata ?? {})],
+          integration.credential?.version ?? null, JSON.stringify(integration.credential?.metadata ?? {}),
+          JSON.stringify(integration.sourcePolicy ?? {}),JSON.stringify(integration.freshnessPolicy ?? {}),
+          integration.syncScopes,integration.outcomePacks],
       );
     }
     await client.query(
@@ -1142,9 +1192,56 @@ export async function convergeIntegrations(
   return { integrations: manifest.integrations.length };
 }
 
+/** Converge the narrow pack enable/default-mode surface. Grants are deliberately
+ * excluded: evidence-earned Autopilot authority can only be created explicitly. */
+export async function convergeOutcomePacks(
+  manifest: ClientManifest,
+  tenantId: string,
+  pool: pg.Pool = getPool(),
+): Promise<{ outcomePacks: number }> {
+  if (manifest.outcomePacks === undefined) {
+    const count = await withClientMutation(manifest, pool, async (client) => {
+      const result = await client.query<{ count: string }>("SELECT count(*)::text AS count FROM tenant_outcome_pack_settings WHERE tenant_id=$1", [tenantId]);
+      return Number(result.rows[0]?.count ?? 0);
+    });
+    return { outcomePacks: count };
+  }
+  await withClientMutation(manifest, pool, async (client) => {
+    const tenant = await client.query("SELECT id FROM tenants WHERE id=$1 AND client_key=$2", [tenantId, manifest.clientKey]);
+    if (!tenant.rows[0]) throw new Error(`Tenant ${tenantId} does not match client ${manifest.clientKey}`);
+    await client.query("SELECT set_config('app.tenant_id',$1,true)", [tenantId]);
+    for (const pack of manifest.outcomePacks ?? []) {
+      await client.query(
+        `INSERT INTO tenant_outcome_pack_settings(tenant_id,pack_id,enabled,default_mode,reason)
+         VALUES($1,$2,$3,$4,$5)
+         ON CONFLICT(tenant_id,pack_id) DO UPDATE SET
+           enabled=EXCLUDED.enabled,default_mode=EXCLUDED.default_mode,reason=EXCLUDED.reason,
+           revision=tenant_outcome_pack_settings.revision+1,updated_at=now()
+         WHERE (tenant_outcome_pack_settings.enabled,tenant_outcome_pack_settings.default_mode,tenant_outcome_pack_settings.reason)
+           IS DISTINCT FROM (EXCLUDED.enabled,EXCLUDED.default_mode,EXCLUDED.reason)`,
+        [tenantId, pack.packId, pack.enabled, pack.defaultMode, pack.reason ?? "client_manifest"],
+      );
+    }
+    const declared = (manifest.outcomePacks ?? []).map((pack) => pack.packId);
+    await client.query(
+      `UPDATE tenant_outcome_pack_settings SET enabled=false,reason='removed_from_client_manifest',revision=revision+1,updated_at=now()
+       WHERE tenant_id=$1 AND NOT(pack_id=ANY($2::text[])) AND enabled=true`,
+      [tenantId, declared],
+    );
+    await client.query(
+      `UPDATE autonomy_grants g SET status='suspended',reason='pack_disabled_by_client_manifest',updated_at=now()
+       FROM tenant_outcome_pack_settings s
+       WHERE s.tenant_id=$1 AND s.tenant_id=g.tenant_id AND s.pack_id=g.pack_id AND s.enabled=false AND g.status='active'`,
+      [tenantId],
+    );
+  });
+  return { outcomePacks: manifest.outcomePacks.length };
+}
+
 export async function bootstrapTenant(manifest: ClientManifest, pool: pg.Pool = getPool()): Promise<BootstrapTenantResult> {
   const tenantId = await ensureTenantRecord(manifest, pool);
   const workspace = await convergeWorkspaceAndPolicies(manifest, tenantId, pool);
   const integrations = await convergeIntegrations(manifest, tenantId, pool);
-  return { tenantId, clientKey: manifest.clientKey, ...workspace, ...integrations };
+  const outcomePacks = await convergeOutcomePacks(manifest, tenantId, pool);
+  return { tenantId, clientKey: manifest.clientKey, ...workspace, ...integrations, ...outcomePacks };
 }

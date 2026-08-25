@@ -15,6 +15,7 @@ import {
   testTenantDocusignConnection,
   resolveCapabilityBindingsForTenant,
   tenantResendStatus,
+  tenantSourceTruthReport,
 } from "@finnor/tools";
 import { requireContext, errorResponse } from "../../../../lib/auth";
 
@@ -30,7 +31,7 @@ export async function GET(req: Request): Promise<Response> {
       testTenantDocusignConnection(ctx.tenantId),
       resolveCapabilityBindingsForTenant(ctx.tenantId),
     ]);
-    const [ghl, resend] = await Promise.all([testTenantGhlConnection(ctx.tenantId), tenantResendStatus(ctx.tenantId)]);
+    const [ghl, resend, truth] = await Promise.all([testTenantGhlConnection(ctx.tenantId), tenantResendStatus(ctx.tenantId), tenantSourceTruthReport(ctx.tenantId)]);
     // Same "configured-state only" posture as ghl above — no cheap authenticated no-op
     // exists on Resend's API to probe healthy/unhealthy for real.
     const all = { meta_ads: ads.meta, google_ads: ads.googleAds, quickbooks, vapi, ghl, stripe, docusign, resend };
@@ -43,7 +44,7 @@ export async function GET(req: Request): Promise<Response> {
     // env -> default, the same resolveCapabilityBindingsForTenant() the worker uses to
     // pick the real binding — this report can't drift from what actually executes).
     const bindings = { payments: bindingsReport.payments.mode, esign: bindingsReport.esign.mode };
-    return Response.json({ ...all, voiceAssistants, bindings, summary }, { headers: { "cache-control": "no-store" } });
+    return Response.json({ ...all, voiceAssistants, bindings, summary, truth }, { headers: { "cache-control": "no-store" } });
   } catch (err) {
     return errorResponse(err);
   }

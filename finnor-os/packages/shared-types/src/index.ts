@@ -8,6 +8,7 @@ export * from "./operational-queries";
 export * from "./company-graph";
 export * from "./operating-context";
 export * from "./operating-interaction";
+export * from "./conversation-context";
 export * from "./identity-access";
 export * from "./universal-actions";
 export * from "./computer";
@@ -17,6 +18,8 @@ export * from "./execution-projection";
 export * from "./causal-replay";
 export * from "./business-effects";
 export * from "./objectives";
+export * from "./source-truth";
+export * from "./outcome-packs";
 
 export type Role = "owner" | "dispatcher" | "technician";
 

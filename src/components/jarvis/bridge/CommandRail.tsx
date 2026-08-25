@@ -23,6 +23,7 @@ import { sessionIdForVoiceCall } from "../kernel/instruction"
 import type { InstructionState } from "../kernel/types"
 import type { LiveFrameIntentLaunch, LiveFrameProjection } from "../kernel/liveframe"
 import { useWorkspaceConfig } from "../WorkspaceConfigProvider"
+import { useOperatingInteractionActions } from "../kernel/operating-interaction"
 
 const HOLD_TO_TALK_MS = 360
 
@@ -236,6 +237,7 @@ export function CommandRail({
   embedded?: boolean
 }) {
   const kernel = useKernel()
+  const interaction = useOperatingInteractionActions()
   const { config: workspaceConfig } = useWorkspaceConfig()
   const voice = useVapiSession()
   const { startVoice, stopVoice, transcript } = voice
@@ -485,7 +487,7 @@ export function CommandRail({
             <div className="jarvis-command-work-context__copy"><span>Work mode</span><strong>{startNewWork ? "Start New Work" : "Continuing Work"}</strong><small>{startNewWork ? "Open a separate durable objective." : `${continuableWorkId.slice(0, 12)}… · text and voice stay on this Work.`}</small></div>
             <div className="jarvis-command-work-context__switch" role="group" aria-label="Choose Work mode">
               <button type="button" data-work-mode="continue" aria-pressed={!startNewWork} onClick={() => setStartNewWork(false)}>Continuing Work</button>
-              <button type="button" data-work-mode="new" aria-pressed={startNewWork} onClick={() => setStartNewWork(true)}>Start New Work</button>
+              <button type="button" data-work-mode="new" aria-pressed={startNewWork} onClick={() => { setStartNewWork(true); interaction.beginUnrelatedWork() }}>Start New Work</button>
             </div>
           </aside>
         )}
@@ -624,7 +626,7 @@ export function CommandRail({
         />
       )}
       <OpsPanel open={opsOpen} onClose={() => setOpsOpen(false)} />
-      <RecentThreadsPanel open={recentThreadsOpen} onClose={() => setRecentThreadsOpen(false)} thread={kernel.thread} threadHistory={kernel.threadHistory} />
+      <RecentThreadsPanel open={recentThreadsOpen} onClose={() => setRecentThreadsOpen(false)} threads={kernel.recentThreads} activeThreadId={kernel.thread?.conversationThreadId ?? null} onSelect={kernel.openThread} />
     </div>
   )
 }

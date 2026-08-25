@@ -117,7 +117,7 @@ describe.skipIf(!available)("POST /api/webhooks/payment (A3.T6)", () => {
   it("rejects a real stripe-signature header with the wrong secret, in any environment", async () => {
     process.env.STRIPE_WEBHOOK_SECRET = "global-secret-must-not-be-used";
     vi.stubEnv("NODE_ENV", "production");
-    const rawBody = JSON.stringify({ id: "evt_1", type: "checkout.session.completed", data: { object: { amount_total: 4200, metadata: { tenantId: TENANT, invoiceId } } } });
+    const rawBody = JSON.stringify({ id: "evt_1", type: "checkout.session.completed", data: { object: { id: "cs_bad_signature", amount_total: 4200, metadata: { tenantId: TENANT, invoiceId } } } });
     const t = Math.floor(Date.now() / 1000);
     const badSig = createHmac("sha256", "wrong-secret").update(`${t}.${rawBody}`).digest("hex");
     const res = await paymentWebhook(req(rawBody, { "stripe-signature": `t=${t},v1=${badSig}` }));
@@ -130,7 +130,7 @@ describe.skipIf(!available)("POST /api/webhooks/payment (A3.T6)", () => {
     const rawBody = JSON.stringify({
       id: `evt_${randomUUID()}`,
       type: "checkout.session.completed",
-      data: { object: { amount_total: 4200, metadata: { tenantId: TENANT, invoiceId } } },
+      data: { object: { id: `cs_${randomUUID()}`, amount_total: 4200, metadata: { tenantId: TENANT, invoiceId } } },
     });
     const t = Math.floor(Date.now() / 1000);
     const goodSig = createHmac("sha256", "real-secret").update(`${t}.${rawBody}`).digest("hex");

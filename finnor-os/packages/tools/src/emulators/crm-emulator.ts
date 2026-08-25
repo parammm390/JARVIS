@@ -25,6 +25,8 @@ export interface SendMessageInput {
 export interface SendMessageOutput {
   sent: true;
   channel: string;
+  messageId?: string;
+  contactId?: string;
 }
 
 export interface BookProviderAppointmentInput {
@@ -72,7 +74,7 @@ export async function emulatorUpsertContact(input: UpsertContactInput): Promise<
 export async function emulatorSendMessage(input: SendMessageInput): Promise<SendMessageOutput> {
   await (tenantFaultInjector("crm", input.tenantId) ?? injectFaults)();
   sentMessages.add(input.idempotencyKey);
-  return { sent: true, channel: input.channel ?? "sms" };
+  return { sent: true, channel: input.channel ?? "sms", messageId: input.idempotencyKey, contactId: input.contactId };
 }
 
 export async function emulatorBookProviderAppointment(input: BookProviderAppointmentInput): Promise<BookProviderAppointmentOutput> {

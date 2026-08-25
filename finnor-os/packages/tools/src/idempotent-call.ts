@@ -5,13 +5,17 @@
 // retried execution (reflection retry, a resumed LangGraph thread) never re-fires an
 // already-completed external side effect like sending an SMS or syncing an invoice.
 
-import { withTenant, externalOperations } from "@finnor/db";
+import { withTenant, externalOperations, tenantIntegrations, authProfiles } from "@finnor/db";
 import { and, eq, sql } from "drizzle-orm";
 import { redactStructured } from "@finnor/security";
 
 export type ExternalOperationRow = typeof externalOperations.$inferSelect;
 
 export type ClaimResult = { claimed: true } | { claimed: false; existing: ExternalOperationRow };
+
+export const ACCOUNT_BOUND_PROVIDERS = new Set([
+  "ghl", "quickbooks", "stripe", "vapi", "docusign", "gmail", "resend", "meta_ads", "google_ads",
+]);
 
 export async function claimExternalOperation(
   tenantId: string,
@@ -20,13 +24,71 @@ export async function claimExternalOperation(
   requestHash: string,
   provider?: string,
   businessEffectId?: string,
+  authProfileRef?: string,
 ): Promise<ClaimResult> {
   return withTenant(tenantId, async (db) => {
+    let integrationId: string | null = null;
+    if (provider && ACCOUNT_BOUND_PROVIDERS.has(provider)) {
+      const candidates = authProfileRef
+        ? await db.select({
+            id: tenantIntegrations.id,
+            health: tenantIntegrations.health,
+            syncStatus: tenantIntegrations.syncStatus,
+            reconciliationStatus: tenantIntegrations.reconciliationStatus,
+            syncInitializedAt: tenantIntegrations.syncInitializedAt,
+            lastSuccessfulSyncAt: tenantIntegrations.lastSuccessfulSyncAt,
+            sourcePolicy: tenantIntegrations.sourcePolicy,
+            freshnessPolicy: tenantIntegrations.freshnessPolicy,
+          }).from(tenantIntegrations).innerJoin(authProfiles, and(
+            eq(authProfiles.tenantId, tenantId),
+            eq(authProfiles.id, tenantIntegrations.authProfileId),
+            eq(authProfiles.authProfileRef, authProfileRef),
+          )).where(and(eq(tenantIntegrations.tenantId, tenantId), eq(tenantIntegrations.binding, provider))).limit(2)
+        : await db.select({
+            id: tenantIntegrations.id,
+            health: tenantIntegrations.health,
+            syncStatus: tenantIntegrations.syncStatus,
+            reconciliationStatus: tenantIntegrations.reconciliationStatus,
+            syncInitializedAt: tenantIntegrations.syncInitializedAt,
+            lastSuccessfulSyncAt: tenantIntegrations.lastSuccessfulSyncAt,
+            sourcePolicy: tenantIntegrations.sourcePolicy,
+            freshnessPolicy: tenantIntegrations.freshnessPolicy,
+          }).from(tenantIntegrations).where(and(
+            eq(tenantIntegrations.tenantId, tenantId),
+            eq(tenantIntegrations.binding, provider),
+          )).limit(2);
+      if (candidates.length !== 1) throw new Error(`External operation requires one exact tenant integration/account for ${provider}`);
+      const integration = candidates[0]!;
+      if (integration.health === "down" || integration.syncStatus === "blocked" || integration.reconciliationStatus === "blocked") {
+        throw new Error(`External operation refused because ${provider} source truth is blocked or unavailable`);
+      }
+      const source = integration.sourcePolicy && typeof integration.sourcePolicy === "object" && !Array.isArray(integration.sourcePolicy)
+        ? integration.sourcePolicy as Record<string, unknown> : {};
+      const freshness = integration.freshnessPolicy && typeof integration.freshnessPolicy === "object" && !Array.isArray(integration.freshnessPolicy)
+        ? integration.freshnessPolicy as Record<string, unknown> : {};
+      const requiresFresh = source.requireFreshBeforeEffect === true
+        || freshness.requireFreshBeforeEffect === true
+        || freshness.criticality === "consequential"
+        || freshness.staleBehavior === "refresh_then_block";
+      const maxAgeSeconds = typeof freshness.maxAgeSeconds === "number" && freshness.maxAgeSeconds > 0
+        ? freshness.maxAgeSeconds : null;
+      if (requiresFresh && (!integration.syncInitializedAt || !integration.lastSuccessfulSyncAt)) {
+        throw new Error(`External operation refused because ${provider} has not completed its required initial synchronization`);
+      }
+      if (requiresFresh && maxAgeSeconds !== null && integration.lastSuccessfulSyncAt
+          && Date.now() - integration.lastSuccessfulSyncAt.getTime() > maxAgeSeconds * 1000) {
+        await db.update(tenantIntegrations).set({ freshnessState: "stale", syncStatus: "degraded", updatedAt: new Date() }).where(and(
+          eq(tenantIntegrations.tenantId, tenantId), eq(tenantIntegrations.id, integration.id),
+        ));
+        throw new Error(`External operation refused because ${provider} source truth is stale`);
+      }
+      integrationId = integration.id;
+    }
     let existing: ExternalOperationRow | undefined;
     for (let attempt = 0; attempt < 2 && !existing; attempt += 1) {
       const [row] = await db
         .insert(externalOperations)
-        .values({ tenantId, domainActionId, businessEffectId: businessEffectId ?? null, operationKey, provider: provider ?? null, requestHash, status: "running" })
+        .values({ tenantId, domainActionId, businessEffectId: businessEffectId ?? null, integrationId, operationKey, provider: provider ?? null, requestHash, status: "running" })
         .onConflictDoNothing({ target: [externalOperations.domainActionId, externalOperations.operationKey] })
         .returning();
       if (row) return { claimed: true } as const;
@@ -99,7 +161,7 @@ export async function recordExternalOperationResult(
   operationKey: string,
   status: "succeeded" | "failed" | "unknown",
   response: Record<string, unknown>,
-): Promise<void> {
+): Promise<ExternalOperationRow | null> {
   const redacted = redactStructured(response) as Record<string, unknown>;
   // Provider/native record identifiers are required to resume a multi-step effect
   // after a crash (for example: replay a successful contact upsert, then send the
@@ -107,18 +169,35 @@ export async function recordExternalOperationResult(
   // phone/email PII. Preserve only this small allowlist after structural redaction;
   // without it the cached replay returned "[REDACTED]" as contactId and made a safe
   // retry fail before the send.
-  for (const key of ["id", "contactId", "householdId", "messageId", "campaignId", "visitId", "appointmentId", "callId", "communicationIdentityId"]) {
+  for (const key of ["id", "contactId", "householdId", "messageId", "campaignId", "visitId", "appointmentId", "callId", "communicationIdentityId", "externalInvoiceId", "externalCustomerId", "linkId", "envelopeId"]) {
     if (typeof response[key] === "string") redacted[key] = response[key];
   }
-  await withTenant(tenantId, (db) =>
-    db
+  return withTenant(tenantId, async (db) => {
+    const [operation] = await db.select({ integrationId: externalOperations.integrationId }).from(externalOperations).where(and(
+      eq(externalOperations.tenantId, tenantId),
+      eq(externalOperations.domainActionId, domainActionId),
+      eq(externalOperations.operationKey, operationKey),
+    )).limit(1);
+    const requiresObservation = Boolean(operation?.integrationId);
+    const [row] = await db
       .update(externalOperations)
       // Cached results are replayed internally, but they are still durable customer
       // data. Keep only the minimum structured result and redact direct identifiers
       // before persisting the ledger.
-      .set({ status, response: redacted, updatedAt: new Date() })
-      .where(and(eq(externalOperations.domainActionId, domainActionId), eq(externalOperations.operationKey, operationKey))),
-  );
+      .set({
+        status,
+        response: redacted,
+        providerAcknowledgedAt: status === "succeeded" && requiresObservation ? new Date() : null,
+        externalObservedAt: status === "succeeded" && !requiresObservation ? new Date() : null,
+        verificationStatus: status === "succeeded"
+          ? requiresObservation ? "awaiting_observation" : "verified"
+          : status === "unknown" ? "unknown" : "not_required",
+        updatedAt: new Date(),
+      })
+      .where(and(eq(externalOperations.domainActionId, domainActionId), eq(externalOperations.operationKey, operationKey)))
+      .returning();
+    return row ?? null;
+  });
 }
 
 /** Explicit provider reconciliation is the only way an unknown operation becomes a

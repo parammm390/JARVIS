@@ -31,6 +31,9 @@ import {
   workObjectiveLoops,
   workObjectiveSteps,
   workObjectivePlannerAttempts,
+  outcomePackRuns,
+  autonomyEvaluations,
+  outcomeShadowProposals,
 } from "@finnor/db";
 import { and, asc, desc, eq, or } from "drizzle-orm";
 
@@ -50,7 +53,7 @@ export type DomainActionStatus =
   | "blocked_integration_unavailable";
 
 export type WorkflowRunStatus = "running" | "completed" | "failed" | "compensating" | "compensated" | "paused" | "cancelled" | "escalated";
-export type WorkflowStepStatus = "pending" | "leased" | "completed" | "failed" | "compensating" | "compensated";
+export type WorkflowStepStatus = "pending" | "leased" | "waiting_observation" | "completed" | "failed" | "compensating" | "compensated";
 export type InstructionPhase =
   | "received"
   | "context_retrieved"
@@ -289,6 +292,33 @@ export interface WorkCaseProjection {
       plannerAttempts: Array<{ id: string; attempt: number; status: string; provider: string | null; failure: unknown }>;
     }>;
   };
+  outcomePack?: {
+    id: string;
+    packId: string;
+    packVersion: number;
+    mode: "shadow" | "approval" | "autopilot";
+    status: string;
+    certificationFingerprint: string;
+    objective: string;
+    subjectRefs: unknown;
+    blockedReason: string | null;
+    finalVerification: unknown;
+    latestAutonomyDecision: {
+      outcome: string;
+      eligible: boolean;
+      reasonCodes: string[];
+      grantId: string | null;
+      evaluatedAt: string;
+    } | null;
+    shadowProposals: Array<{
+      id: string;
+      businessEffectId: string;
+      semanticHash: string;
+      comparisonStatus: string;
+      proposedAt: string;
+      comparedAt: string | null;
+    }>;
+  };
 }
 
 const ENTITY_KEYS: Record<string, WorkEntityType> = {
@@ -401,6 +431,7 @@ export function projectWorkflowStepStatus(status: WorkflowStepStatus): WorkStatu
     case "compensating":
       return "Working";
     case "pending":
+    case "waiting_observation":
       return "Waiting";
     case "completed":
     case "compensated":
@@ -657,6 +688,9 @@ export async function workCases(tenantId: string): Promise<WorkCaseProjection[]>
     const objectiveLoopRows = await db.select().from(workObjectiveLoops).where(eq(workObjectiveLoops.tenantId, tenantId)).orderBy(desc(workObjectiveLoops.updatedAt));
     const objectiveStepRows = await db.select().from(workObjectiveSteps).where(eq(workObjectiveSteps.tenantId, tenantId)).orderBy(asc(workObjectiveSteps.stepNumber));
     const objectiveAttemptRows = await db.select().from(workObjectivePlannerAttempts).where(eq(workObjectivePlannerAttempts.tenantId, tenantId)).orderBy(asc(workObjectivePlannerAttempts.startedAt));
+    const outcomePackRunRows = await db.select().from(outcomePackRuns).where(eq(outcomePackRuns.tenantId, tenantId)).orderBy(desc(outcomePackRuns.updatedAt));
+    const autonomyEvaluationRows = await db.select().from(autonomyEvaluations).where(eq(autonomyEvaluations.tenantId, tenantId)).orderBy(desc(autonomyEvaluations.evaluatedAt));
+    const shadowProposalRows = await db.select().from(outcomeShadowProposals).where(eq(outcomeShadowProposals.tenantId, tenantId)).orderBy(desc(outcomeShadowProposals.proposedAt));
     const instructionRows = await db.select().from(instructionSessions).where(eq(instructionSessions.tenantId, tenantId)).orderBy(desc(instructionSessions.updatedAt));
     const instructionEventRows = await db.select().from(instructionEvents).where(eq(instructionEvents.tenantId, tenantId)).orderBy(asc(instructionEvents.seq));
     const actionRows = await db.select().from(domainActions).where(eq(domainActions.tenantId, tenantId)).orderBy(desc(domainActions.createdAt));
@@ -916,6 +950,7 @@ export async function workCases(tenantId: string): Promise<WorkCaseProjection[]>
     for (const target of cases.values()) {
       const durableWork = target.root.kind === "work" ? workById.get(target.root.id) : undefined;
       const objectiveLoop = durableWork ? objectiveLoopRows.find((loop) => loop.workId === durableWork.id) : undefined;
+      const outcomePack = durableWork ? outcomePackRunRows.find((run) => run.workId === durableWork.id) : undefined;
       const instructionRow = target.instructionId ? instructionById.get(target.instructionId) : undefined;
       const actions = [...target.actionIds].map((id) => actionById.get(id)).filter((action): action is typeof actionRows[number] => Boolean(action)).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()).map(toWorkAction);
       const workflows = [...target.runIds].map((id) => {
@@ -1119,6 +1154,38 @@ export async function workCases(tenantId: string): Promise<WorkCaseProjection[]>
                 scheduledFor: iso(step.scheduledFor),
                 completedAt: iso(step.completedAt),
                 plannerAttempts: objectiveAttemptRows.filter((attempt) => attempt.objectiveStepId === step.id).map((attempt) => ({ id: attempt.id, attempt: attempt.attempt, status: attempt.status, provider: attempt.provider, failure: attempt.failure })),
+              })),
+            },
+          } : {}),
+          ...(outcomePack ? {
+            outcomePack: {
+              id: outcomePack.id,
+              packId: outcomePack.packId,
+              packVersion: outcomePack.packVersion,
+              mode: outcomePack.mode,
+              status: outcomePack.status,
+              certificationFingerprint: outcomePack.certificationFingerprint,
+              objective: outcomePack.objective,
+              subjectRefs: outcomePack.subjectRefs,
+              blockedReason: outcomePack.blockedReason,
+              finalVerification: outcomePack.finalVerification,
+              latestAutonomyDecision: (() => {
+                const evaluation = autonomyEvaluationRows.find((row) => row.outcomePackRunId === outcomePack.id);
+                return evaluation ? {
+                  outcome: evaluation.outcome,
+                  eligible: evaluation.eligible,
+                  reasonCodes: evaluation.reasonCodes,
+                  grantId: evaluation.grantId,
+                  evaluatedAt: evaluation.evaluatedAt.toISOString(),
+                } : null;
+              })(),
+              shadowProposals: shadowProposalRows.filter((row) => row.outcomePackRunId === outcomePack.id).map((row) => ({
+                id: row.id,
+                businessEffectId: row.businessEffectId,
+                semanticHash: row.semanticHash,
+                comparisonStatus: row.comparisonStatus,
+                proposedAt: row.proposedAt.toISOString(),
+                comparedAt: iso(row.comparedAt),
               })),
             },
           } : {}),

@@ -1,5 +1,6 @@
 import type { Metadata } from "next"
 import Household360Surface from "@/components/jarvis/panels/Household360Surface"
+import { BusinessWorldScene } from "@/components/jarvis/BusinessWorldScene"
 
 export const metadata: Metadata = {
   title: "JARVIS — Customers",
@@ -7,5 +8,5 @@ export const metadata: Metadata = {
 }
 
 export default function CustomersPage() {
-  return <Household360Surface />
+  return <><BusinessWorldScene scene="customer" /><Household360Surface /></>
 }

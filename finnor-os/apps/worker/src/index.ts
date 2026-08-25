@@ -47,6 +47,8 @@ import { recoverComputerTasks, runComputerTask } from "./handlers/run-computer-t
 import { processWorkEventWaitDeadlineHandler } from "./handlers/process-work-event-wait-deadline";
 import { scanConnectionHealth } from "./handlers/scan-connection-health";
 import { releaseProbe } from "./handlers/release-probe";
+import { syncSource, syncSources } from "./handlers/sync-source";
+import { observeExternalEffectHandler } from "./handlers/observe-external-effect";
 
 export function createWorker(): JobQueue {
   const queue = new JobQueue();
@@ -93,6 +95,9 @@ export function createWorker(): JobQueue {
   queue.register("process_work_event_wait_deadline", processWorkEventWaitDeadlineHandler);
   queue.register("scan_connection_health", scanConnectionHealth);
   queue.register("release_probe", releaseProbe);
+  queue.register("sync_sources", syncSources);
+  queue.register("sync_source", syncSource);
+  queue.register("observe_external_effect", observeExternalEffectHandler);
   return queue;
 }
 
@@ -124,6 +129,9 @@ const PROACTIVE_SCANS: ScheduledScan[] = [
   // timing" header), same honest "close enough" posture as every other sub-daily scan.
   { type: "scan_integration_health", intervalHours: 1 / 6, payload: (tenantId) => ({ tenantId }) },
   { type: "scan_connection_health", intervalHours: 1 / 4, payload: (tenantId) => ({ tenantId }) },
+  // Phase 4 company-twin refresh. Each tick only fans out durable per-source-page
+  // jobs; provider calls never run inside the scheduler or a serverless request.
+  { type: "sync_sources", intervalHours: 1 / 4, payload: (tenantId) => ({ tenantId }) },
   // A4.T2: same honest sub-hourly posture as scan_integration_health just above — real
   // cadence is this scheduler's own 15-min tick, not this number. The exit gate's "<5min"
   // claim is about direct-invocation detection latency (see the integration test), not

@@ -83,6 +83,23 @@ export interface PendingAction {
    *  Optional/null when no real simulate() ran for this action type — never a
    *  fabricated prediction; the card renders nothing in that case (§0.2 rule 3). */
   predicted?: Record<string, unknown> | null
+  businessEffect?: BusinessEffectContract | null
+  businessEffectStatus?: string | null
+}
+export interface BusinessEffectContract {
+  id: string
+  schemaVersion: 1
+  semanticHash: string
+  scopeHash: string
+  operation: { name: string; class: string; external: boolean }
+  targets: Array<{ kind: string; type: string; id: string; sourcePath?: string }>
+  bindings: Array<Record<string, unknown>>
+  before: Array<Record<string, unknown>>
+  delta: { operation: string; values: Record<string, unknown> }
+  expected: Record<string, unknown>
+  authority: Record<string, unknown>
+  approval: { required: boolean; typedConfirmation: boolean; summary: string }
+  provenance: Record<string, unknown>
 }
 export interface WorkflowStep {
   id: string

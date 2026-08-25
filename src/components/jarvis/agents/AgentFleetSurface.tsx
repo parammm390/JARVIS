@@ -157,12 +157,12 @@ export default function AgentFleetSurface() {
       <section className="jarvis-agent-fleet__intro">
         <div>
           <span className="jarvis-agent-fleet__eyebrow">AGENTS · CALLING & CAPABILITY CONTROL</span>
-          <h1>Five real calling agents. Forty-four registered actions.</h1>
-          <p>The Vapi fleet stays distinct from the backend capability map. Nine code-backed domains organize the 44 registered actions; they are operating taxonomy, not extra agents.</p>
+          <h1>Five real calling agents. Fifty-nine registered actions.</h1>
+          <p>The Vapi fleet stays distinct from the backend capability map. Nine code-backed domains organize the 59 registered actions; they are operating taxonomy, not extra agents.</p>
         </div>
         <div className="jarvis-agent-fleet__intro-signal" data-source="registered-action-contracts">
           <Waves size={18} aria-hidden />
-          <span><strong>{REGISTERED_BACKEND_ACTION_COUNT} registered actions</strong><small>24 backend plugins · 9 capability domains · 5 calling agents</small></span>
+          <span><strong>{REGISTERED_BACKEND_ACTION_COUNT} registered actions</strong><small>26 backend plugins · 9 capability domains · 5 calling agents</small></span>
         </div>
       </section>
 
@@ -187,7 +187,7 @@ export default function AgentFleetSurface() {
 
       <div className="jarvis-agent-fleet__layout">
         <aside className="jarvis-agent-fleet__rail" aria-label="Capability domains" data-agent-fleet-rail>
-          <div className="jarvis-agent-fleet__rail-heading"><span>CAPABILITY DOMAINS</span><strong>44-action map</strong></div>
+          <div className="jarvis-agent-fleet__rail-heading"><span>CAPABILITY DOMAINS</span><strong>59-action map</strong></div>
           <div className="jarvis-agent-fleet__rail-list">
             {CAPABILITY_DOMAINS.map((agent) => {
               const observed = activityByDomain.get(agent.key)!

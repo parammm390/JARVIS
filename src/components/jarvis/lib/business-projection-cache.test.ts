@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
 import { BusinessProjectionCache, type ProjectionDefinition } from "./business-projection-cache"
-import { businessEventProjectionTags, mutationProjectionTags } from "./business-invalidation"
+import { BusinessInvalidationBatcher, businessEventProjectionTags, mutationProjectionTags } from "./business-invalidation"
 
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -68,6 +68,20 @@ describe("BusinessProjectionCache", () => {
   })
 })
 describe("projection invalidation mapping", () => {
+  it("coalesces a realtime burst into one selective invalidation", () => {
+    vi.useFakeTimers()
+    const emit = vi.fn()
+    const batcher = new BusinessInvalidationBatcher(emit)
+    for (let index = 0; index < 300; index += 1) {
+      batcher.push(index % 2 === 0 ? ["schedule", "work"] : ["money", "work"], "realtime")
+    }
+    expect(emit).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(16)
+    expect(emit).toHaveBeenCalledTimes(1)
+    expect(emit).toHaveBeenCalledWith({ tags: expect.arrayContaining(["schedule", "money", "work"]), source: "realtime" })
+    vi.useRealTimers()
+  })
+
   it("fans an approved action into all business projections that can change", () => {
     const tags = mutationProjectionTags("actions/action-1/confirm")
     expect(tags).toEqual(expect.arrayContaining(["work", "actions", "approvals", "receipts", "customers", "schedule", "money", "queries"]))
@@ -75,6 +89,10 @@ describe("projection invalidation mapping", () => {
 
   it("keeps operational-query POSTs read-only", () => {
     expect(mutationProjectionTags("queries")).toEqual([])
+  })
+
+  it("invalidates the tenant presentation projection after a workspace save", () => {
+    expect(mutationProjectionTags("workspace-config")).toEqual(["preferences"])
   })
 
   it("targets payment events at money, customer, Work, and query projections", () => {
