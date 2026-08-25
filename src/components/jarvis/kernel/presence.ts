@@ -55,6 +55,7 @@ function instructionPresence(state: InstructionState, terminalDecayActive: boole
     case "awaiting_approval":
       return "proposing"
     case "executing":
+    case "stopping":
       return "working"
     case "verifying":
       return "verifying"

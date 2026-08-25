@@ -64,12 +64,22 @@ describe("kernel/machine — §4.4 legal transitions", () => {
     expect(transition(at("clarifying"), { type: "ANSWERED" })).toEqual(at("captured"))
   })
 
-  it("clarifying + USER_CANCELLED -> cancelled", () => {
-    expect(transition(at("clarifying"), { type: "USER_CANCELLED" })).toEqual(at("cancelled"))
+  it.each([
+    "captured", "understanding", "planning", "clarifying", "awaiting_approval", "executing", "verifying",
+  ] as const)("%s + USER_CANCEL_REQUESTED -> stopping -> USER_CANCELLED -> cancelled", (state) => {
+    const stopping = transition(at(state), { type: "USER_CANCEL_REQUESTED" })
+    expect(stopping).toEqual(at("stopping"))
+    expect(transition(stopping, { type: "USER_CANCELLED" })).toEqual(at("cancelled"))
   })
 
-  it("awaiting_approval + USER_CANCELLED -> cancelled", () => {
-    expect(transition(at("awaiting_approval"), { type: "USER_CANCELLED" })).toEqual(at("cancelled"))
+  it("stopping + CANCEL_FAILED restores the prior in-flight state", () => {
+    expect(transition(at("stopping"), { type: "CANCEL_FAILED", returnTo: "planning" })).toEqual(at("planning"))
+  })
+
+  it("a canonical USER_CANCELLED trace terminates any in-flight state directly", () => {
+    for (const state of ["captured", "understanding", "planning", "clarifying", "awaiting_approval", "executing", "verifying"] as const) {
+      expect(transition(at(state), { type: "USER_CANCELLED" })).toEqual(at("cancelled"))
+    }
   })
 
   it("awaiting_approval + APPROVAL_DECIDED, >=1 approved -> executing", () => {
@@ -122,7 +132,7 @@ describe("kernel/machine — §4.4 legal transitions", () => {
 
   it.each<InstructionState>([
     "idle", "captured", "understanding", "planning", "clarifying",
-    "awaiting_approval", "executing", "verifying", "completed", "partial", "failed", "cancelled",
+    "awaiting_approval", "executing", "verifying", "stopping", "completed", "partial", "failed", "cancelled",
   ])("RESET from %s -> idle, from any state", (from) => {
     expect(transition(at(from), { type: "RESET" })).toEqual(at("idle"))
   })

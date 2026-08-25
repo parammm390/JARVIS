@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { dispatchStopMatchesFocus, exactWorkCaseForStop, shiftIsoDate, workEntityIds } from "./dispatch-field-model"
+import { dispatchSourceState, dispatchStopMatchesFocus, exactWorkCaseForStop, shiftIsoDate, workEntityIds } from "./dispatch-field-model"
 import type { Stop } from "./DispatchMap"
 import type { WorkCaseProjection } from "@/lib/jarvis-client"
 
@@ -41,6 +41,11 @@ function workCase(visitId: string, entities: WorkCaseProjection["linkedEntities"
 }
 
 describe("P2.T4 Dispatch Field continuity contract", () => {
+  it("keeps loading distinct from source unavailability", () => {
+    expect(dispatchSourceState({ data: null, loading: true, error: null })).toBe("loading")
+    expect(dispatchSourceState({ data: null, loading: false, error: "network" })).toBe("unavailable")
+    expect(dispatchSourceState({ data: { stops: [] }, loading: false, error: null })).toBe("live")
+  })
   it("matches a Work case only by the exact visit/service-visit ID", () => {
     const sameHouseholdDifferentVisit = { ...workCase("visit-2"), linkedEntities: [{ entityType: "household", entityId: stop.householdId, via: "action.payload.householdId" }] }
     expect(exactWorkCaseForStop(stop, [sameHouseholdDifferentVisit])).toBeNull()

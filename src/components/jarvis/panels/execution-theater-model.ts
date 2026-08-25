@@ -38,4 +38,3 @@ export function boundedOutcomeSummary(value: Record<string, unknown> | null): st
 export function shortId(id: string): string {
   return id.length > 12 ? `${id.slice(0, 8)}…${id.slice(-4)}` : id
 }
-

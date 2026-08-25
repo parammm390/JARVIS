@@ -33,8 +33,8 @@ type InspectorTarget =
   | { kind: "receipt"; receipt: WorkReceipt }
   | { kind: "entity"; entity: WorkEntityLink }
 
-const FILTERS: WorkFilter[] = ["Open", "Needs you", "Working", "Waiting", "Done", "Failed"]
-const STATUS_ORDER: WorkCaseStatus[] = ["Needs you", "Working", "Waiting", "Failed", "Blocked", "Completed"]
+const FILTERS: WorkFilter[] = ["Open", "Needs you", "Working", "Waiting", "Done", "Partial", "Cancelled", "Failed"]
+const STATUS_ORDER: WorkCaseStatus[] = ["Needs you", "Working", "Waiting", "Failed", "Blocked", "Partial", "Cancelled", "Completed"]
 
 function humanize(value: string): string {
   return value.replaceAll("_", " ").replace(/\b\w/g, (character) => character.toUpperCase())
@@ -56,6 +56,8 @@ function statusGlyph(status: WorkCaseStatus): string {
   if (status === "Needs you") return "!"
   if (status === "Working") return "›"
   if (status === "Waiting") return "·"
+  if (status === "Partial") return "±"
+  if (status === "Cancelled") return "–"
   if (status === "Failed" || status === "Blocked") return "×"
   return "✓"
 }
@@ -472,10 +474,10 @@ function WorkSpine({
           <OperationalTimeMachine workId={workCase.durableWork.id} />
         </Chapter> : null}
 
-        <Chapter number={workCase.durableWork ? "08" : "07"} title="NEXT ACTION" active={workCase.status !== "Completed"}>
-          {objective ? <div><p className="jarvis-work-next-line"><Clock3 className="h-4 w-4" aria-hidden /> {objective.nextStep ?? (objective.state === "completed" ? "The objective has a verified terminal outcome." : "Canonical re-inspection will determine the next bounded step.")}</p>{objective.reason && <p className="jarvis-work-muted">Why · {objective.reason}</p>}{latestIteration && <p className="jarvis-work-muted">Last observed · {observationLabel(latestIteration.observation)}</p>}{objective.nextRunAt && <p className="jarvis-work-muted">Scheduled continuation · {new Date(objective.nextRunAt).toLocaleString()}</p>}<div className="jarvis-work-link-row">{["blocked", "waiting"].includes(objective.state) && <button type="button" className="jarvis-work-secondary-button" disabled={objectiveBusy !== null} onClick={() => void controlObjective("continue")}>{objectiveBusy === "continue" ? "Continuing…" : "Continue objective"}</button>}{["continue", "waiting", "awaiting_approval"].includes(objective.state) && <button type="button" className="jarvis-work-secondary-button" disabled={objectiveBusy !== null} onClick={() => void controlObjective("interrupt")}>{objectiveBusy === "interrupt" ? "Interrupting…" : "Interrupt loop"}</button>}{!["completed", "failed", "cancelled"].includes(objective.state) && <button type="button" className="jarvis-work-secondary-button" disabled={objectiveBusy !== null} onClick={() => void controlObjective("cancel")}>{objectiveBusy === "cancel" ? "Cancelling…" : "Cancel future execution"}</button>}</div>{objective.state !== "completed" && objective.state !== "failed" && <form className="jarvis-work-redirect" onSubmit={(event) => { event.preventDefault(); if (redirectObjective.trim()) void controlObjective("redirect") }}><label htmlFor={`redirect-objective-${workCase.id}`}>Redirect this same Work</label><div><input id={`redirect-objective-${workCase.id}`} value={redirectObjective} onChange={(event) => setRedirectObjective(event.target.value)} placeholder="Give JARVIS a revised outcome" maxLength={10_000} /><button type="submit" className="jarvis-work-secondary-button" disabled={objectiveBusy !== null || !redirectObjective.trim()}>{objectiveBusy === "redirect" ? "Redirecting…" : "Redirect"}</button></div></form>}{objectiveError && <p className="jarvis-work-honest-warning">{objectiveError}</p>}</div>
+        <Chapter number={workCase.durableWork ? "08" : "07"} title="NEXT ACTION" active={workCase.status !== "Completed" && workCase.status !== "Cancelled"}>
+          {objective ? <div><p className="jarvis-work-next-line"><Clock3 className="h-4 w-4" aria-hidden /> {objective.nextStep ?? (objective.state === "completed" ? "The objective has a verified terminal outcome." : objective.state === "cancelled" ? "The objective was cancelled; no future iteration is scheduled." : "Canonical re-inspection will determine the next bounded step.")}</p>{objective.reason && <p className="jarvis-work-muted">Why · {objective.reason}</p>}{latestIteration && <p className="jarvis-work-muted">Last observed · {observationLabel(latestIteration.observation)}</p>}{objective.nextRunAt && <p className="jarvis-work-muted">Scheduled continuation · {new Date(objective.nextRunAt).toLocaleString()}</p>}<div className="jarvis-work-link-row">{["blocked", "waiting"].includes(objective.state) && <button type="button" className="jarvis-work-secondary-button" disabled={objectiveBusy !== null} onClick={() => void controlObjective("continue")}>{objectiveBusy === "continue" ? "Continuing…" : "Continue objective"}</button>}{["continue", "waiting", "awaiting_approval"].includes(objective.state) && <button type="button" className="jarvis-work-secondary-button" disabled={objectiveBusy !== null} onClick={() => void controlObjective("interrupt")}>{objectiveBusy === "interrupt" ? "Interrupting…" : "Interrupt loop"}</button>}{!["completed", "failed", "cancelled"].includes(objective.state) && <button type="button" className="jarvis-work-secondary-button" disabled={objectiveBusy !== null} onClick={() => void controlObjective("cancel")}>{objectiveBusy === "cancel" ? "Cancelling…" : "Cancel future execution"}</button>}</div>{!["completed", "failed", "cancelled"].includes(objective.state) && <form className="jarvis-work-redirect" onSubmit={(event) => { event.preventDefault(); if (redirectObjective.trim()) void controlObjective("redirect") }}><label htmlFor={`redirect-objective-${workCase.id}`}>Redirect this same Work</label><div><input id={`redirect-objective-${workCase.id}`} value={redirectObjective} onChange={(event) => setRedirectObjective(event.target.value)} placeholder="Give JARVIS a revised outcome" maxLength={10_000} /><button type="submit" className="jarvis-work-secondary-button" disabled={objectiveBusy !== null || !redirectObjective.trim()}>{objectiveBusy === "redirect" ? "Redirecting…" : "Redirect"}</button></div></form>}{objectiveError && <p className="jarvis-work-honest-warning">{objectiveError}</p>}</div>
             : pendingApprovals.length > 0 ? <p className="jarvis-work-next-line"><ShieldCheck className="h-4 w-4" aria-hidden /> Approval is the recorded next boundary.</p>
-            : workCase.status === "Failed" || workCase.status === "Blocked" ? <p className="jarvis-work-next-line"><UserRound className="h-4 w-4" aria-hidden /> Manual review — no frontend-generated recovery action.</p>
+            : workCase.status === "Failed" || workCase.status === "Blocked" || workCase.status === "Partial" ? <p className="jarvis-work-next-line"><UserRound className="h-4 w-4" aria-hidden /> Manual review — no frontend-generated recovery action.</p>
               : workCase.status === "Working" || workCase.status === "Waiting" ? <p className="jarvis-work-next-line"><Clock3 className="h-4 w-4" aria-hidden /> Waiting for the recorded workflow or external result.</p>
                 : <p className="jarvis-work-muted">No next action recorded.</p>}
         </Chapter>
@@ -549,6 +551,7 @@ export function WorkSurface() {
   const visibleGroups = useMemo(() => groupWorkCases(visibleCases), [visibleCases])
   const requestedCase = useMemo(() => cases.find((workCase) => workCaseMatchesQuery(workCase, surfaceQuery)) ?? null, [cases, surfaceQuery])
   const selectedCase = scopedCases.find((workCase) => workCase.id === selectedId) ?? requestedCase ?? null
+  const countsReady = !loading || cases.length > 0
 
   useEffect(() => {
     if (!requestedCase || !hasExactTarget) return
@@ -556,6 +559,8 @@ export function WorkSurface() {
     focusEntity({ entityType: "work", entityId: requestedCase.id }, requestedCase.title ?? `Work ${shortId(requestedCase.id)}`)
     setFilter((current) => {
       if (requestedCase.status === "Completed") return "Done"
+      if (requestedCase.status === "Partial") return "Partial"
+      if (requestedCase.status === "Cancelled") return "Cancelled"
       if (requestedCase.status === "Needs you" || requestedCase.status === "Working" || requestedCase.status === "Waiting" || requestedCase.status === "Failed") return requestedCase.status
       return current
     })
@@ -620,13 +625,13 @@ export function WorkSurface() {
 
       <div className="jarvis-work-intro"><div><p>Give JARVIS an outcome to own.</p><span>Durable Work · one governed step at a time · observed results</span></div><form className="jarvis-work-objective-intake" onSubmit={assignObjective}><label className="sr-only" htmlFor="jarvis-work-objective">Business objective</label><input id="jarvis-work-objective" value={objectiveDraft} onChange={(event) => setObjectiveDraft(event.target.value)} placeholder="e.g. Follow up with Avery and make sure the outcome is recorded" maxLength={10_000} /><button type="submit" disabled={objectiveStarting || !objectiveDraft.trim()}>{objectiveStarting ? "Assigning…" : "Assign objective"}</button>{objectiveStartError && <small role="alert">{objectiveStartError}</small>}</form></div>
 
-      <div className="jarvis-work-filterbar"><button ref={queueToggleRef} type="button" className="jarvis-work-queue-toggle" onClick={() => setQueueOpen((open) => !open)} aria-expanded={queueOpen} aria-controls="jarvis-work-queue"><Workflow className="h-4 w-4" /> Cases <span>{visibleCases.length}</span></button><div className="jarvis-work-filters" role="tablist" aria-label="Work cases filter">{FILTERS.map((item) => <button key={item} type="button" role="tab" aria-selected={filter === item} className="jarvis-work-filter" data-selected={filter === item ? "true" : undefined} onClick={() => { setFilter(item); setQueueOpen(false) }}>{item}<span>{scopedCases.filter((workCase) => filterMatches(workCase, item)).length}</span></button>)}</div><label className="jarvis-work-search"><Search className="h-4 w-4" aria-hidden /><span className="sr-only">Search Work cases</span><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search Work" /></label></div>
+      <div className="jarvis-work-filterbar"><button ref={queueToggleRef} type="button" className="jarvis-work-queue-toggle" onClick={() => setQueueOpen((open) => !open)} aria-expanded={queueOpen} aria-controls="jarvis-work-queue"><Workflow className="h-4 w-4" /> Cases <span>{countsReady ? visibleCases.length : "—"}</span></button><div className="jarvis-work-filters" role="tablist" aria-label="Work cases filter">{FILTERS.map((item) => <button key={item} type="button" role="tab" aria-selected={filter === item} className="jarvis-work-filter" data-selected={filter === item ? "true" : undefined} onClick={() => { setFilter(item); setQueueOpen(false) }}>{item}<span>{countsReady ? scopedCases.filter((workCase) => filterMatches(workCase, item)).length : "—"}</span></button>)}</div><label className="jarvis-work-search"><Search className="h-4 w-4" aria-hidden /><span className="sr-only">Search Work cases</span><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search Work" /></label></div>
 
       {error && <div className="jarvis-work-banner" role="status"><span>{error}</span>{denied ? <Link href="/jarvis/login" className="jarvis-work-banner__link">Sign in</Link> : <button type="button" className="jarvis-work-banner__link" onClick={() => void reload()}>Retry now</button>}</div>}
 
       <main className={`jarvis-work-layout${inspector ? " jarvis-work-layout--inspector" : ""}`}>
         <section id="jarvis-work-queue" className="jarvis-work-queue" aria-label="Work cases">
-          <div className="jarvis-work-queue__heading"><div><span className="jarvis-work-eyebrow">Queue</span><h2>{filter}</h2></div><span>{visibleGroups.length} pattern{visibleGroups.length === 1 ? "" : "s"} · {visibleCases.length} case{visibleCases.length === 1 ? "" : "s"}</span></div>
+          <div className="jarvis-work-queue__heading"><div><span className="jarvis-work-eyebrow">Queue</span><h2>{filter}</h2></div><span>{countsReady ? `${visibleGroups.length} pattern${visibleGroups.length === 1 ? "" : "s"} · ${visibleCases.length} case${visibleCases.length === 1 ? "" : "s"}` : "Reading exact Work roots…"}</span></div>
           <div className="jarvis-work-queue__rows">
             {loading && cases.length === 0 && <p className="jarvis-work-muted jarvis-work-queue__empty">Reading exact Work roots…</p>}
             {!loading && visibleCases.length === 0 && <p className="jarvis-work-muted jarvis-work-queue__empty">No cases in this lane. The projection did not invent a zero-state record.</p>}

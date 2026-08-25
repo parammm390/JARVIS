@@ -3,12 +3,22 @@
 // executable workflow job are committed in one database transaction. Pure reads keep
 // their synchronous path and therefore do not pay queue latency.
 
-import { withTenant, domainActions, actionLog, businessEffects, type Db } from "@finnor/db";
+import {
+  withTenant,
+  domainActions,
+  actionLog,
+  businessEffects,
+  instructionEvents,
+  instructionSessions,
+  works,
+  type Db,
+} from "@finnor/db";
 import { submitCommand } from "@finnor/workflow-runtime";
-import { and, eq, inArray, or } from "drizzle-orm";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
 import type { BusinessEffectSet, DraftAction, ExecutionResult, ErrorKind } from "@finnor/shared-types";
 import type { ToolRegistry } from "@finnor/tools";
 import type { DomainEnginePlugin } from "@finnor/plugins-shared";
+import { isInstructionCancellationPayload } from "./instruction-trace";
 
 export interface ExecutePluginViaRuntimeParams {
   tenantId: string;
@@ -34,6 +44,56 @@ export interface AuthorizeActionExecutionTxParams {
   authorityDecisionId?: string;
   authorityRevision?: number;
   authorizationSource: "human_approval" | "policy";
+}
+
+export class ActionCancellationConflictError extends Error {
+  constructor(message = "Execution refused: the instruction or Work item is cancelled") {
+    super(message);
+    this.name = "ActionCancellationConflictError";
+  }
+}
+
+/**
+ * Final execution fence shared by approval, direct execution, and durable command
+ * authorization. Locking the instruction session serializes this check with the
+ * append-only cancellation marker; locking Work serializes it with the terminal
+ * Work transition. A caller that passes this function inside its authorization
+ * transaction therefore cannot enqueue a new effect after cancellation commits.
+ */
+export async function assertActionNotCancelledTx(
+  db: Db,
+  params: {
+    tenantId: string;
+    instructionId?: string | null;
+    workId?: string | null;
+  },
+): Promise<void> {
+  if (params.instructionId) {
+    await db.execute(sql`SELECT id FROM ${instructionSessions} WHERE ${instructionSessions.id} = ${params.instructionId} AND ${instructionSessions.tenantId} = ${params.tenantId} FOR UPDATE`);
+    const cancellationRows = await db
+      .select({ payload: instructionEvents.payload })
+      .from(instructionEvents)
+      .where(and(
+        eq(instructionEvents.tenantId, params.tenantId),
+        eq(instructionEvents.instructionId, params.instructionId),
+        eq(instructionEvents.phase, "cancelled"),
+      ))
+      .limit(100);
+    if (cancellationRows.some((row) => isInstructionCancellationPayload(row.payload))) {
+      throw new ActionCancellationConflictError();
+    }
+  }
+  if (params.workId) {
+    await db.execute(sql`SELECT id FROM ${works} WHERE ${works.id} = ${params.workId} AND ${works.tenantId} = ${params.tenantId} FOR UPDATE`);
+    const [work] = await db
+      .select({ status: works.status })
+      .from(works)
+      .where(and(eq(works.tenantId, params.tenantId), eq(works.id, params.workId)))
+      .limit(1);
+    if (work?.status === "cancelled" || work?.status === "completed") {
+      throw new ActionCancellationConflictError(`Execution refused: Work is ${work.status}`);
+    }
+  }
 }
 
 export function classifyExecutionFailure(result: ExecutionResult): { reason: string; errorKind: ErrorKind } {
@@ -64,6 +124,12 @@ export async function authorizeActionExecutionTx(
     .where(and(eq(domainActions.tenantId, params.tenantId), eq(domainActions.id, params.actionId)))
     .limit(1);
   if (!loaded) throw new Error("Durable execution refused: the action has no tenant-scoped Business Effect");
+
+  await assertActionNotCancelledTx(db, {
+    tenantId: params.tenantId,
+    instructionId: loaded.action.instructionId,
+    workId: loaded.action.workId,
+  });
 
   const effect = loaded.effect.effect as BusinessEffectSet;
   if (effect.id !== loaded.effect.id || effect.semanticHash !== loaded.effect.semanticHash

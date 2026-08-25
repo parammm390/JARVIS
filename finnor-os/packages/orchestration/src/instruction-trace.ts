@@ -337,17 +337,28 @@ export async function emitInstructionEvent(
   }
 }
 
+export function isInstructionCancellationPayload(value: unknown): boolean {
+  const payload = value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+  // Historical action rejections used the instruction-level phase with only an
+  // actionId. They are not global cancellation fences and must not suppress
+  // sibling actions. Current instruction cancellation carries fence/canonical
+  // metadata and no action-scoped identity.
+  return typeof payload.actionId !== "string" || payload.fence === true || payload.canonical === true;
+}
+
 export async function isInstructionCancelled(tenantId: string, instructionId: string | undefined): Promise<boolean> {
   if (!instructionId) return false;
   try {
-    const [row] = await withTenant(tenantId, (db) =>
+    const rows = await withTenant(tenantId, (db) =>
       db
-        .select({ id: instructionEvents.id })
+        .select({ payload: instructionEvents.payload })
         .from(instructionEvents)
         .where(and(eq(instructionEvents.instructionId, instructionId), eq(instructionEvents.phase, "cancelled")))
-        .limit(1),
+        .limit(100),
     );
-    return Boolean(row);
+    return rows.some((row) => isInstructionCancellationPayload(row.payload));
   } catch (err) {
     // The trace ledger is observability state, not an authorization gate. A
     // temporarily unavailable or not-yet-migrated instruction_events table must

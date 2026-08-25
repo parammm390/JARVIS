@@ -56,6 +56,8 @@ describe("JARVIS proxy route contract", () => {
       "operations/operation-1",
       "works/work-1/objective",
       "employees",
+      "threads",
+      "threads/thread-1",
     ]
 
     for (const path of paths) {
@@ -78,6 +80,7 @@ describe("JARVIS proxy route contract", () => {
       "objectives",
       "works/work-1/objective",
       "works/work-1/handoff",
+      "threads",
     ]
 
     for (const path of [...paths.slice(0, 4), ...paths.slice(6)]) {

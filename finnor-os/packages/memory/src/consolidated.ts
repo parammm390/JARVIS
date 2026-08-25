@@ -1,19 +1,15 @@
-// Zep-backed memory consolidation — layered ON TOP of the existing 4 tiers, never
-// replacing them (short-term.ts, long-term.ts, semantic.ts, episodic.ts are all
-// untouched). Zep's temporal knowledge graph does automatic entity/fact extraction
-// over mirrored conversation turns and tracks how facts change over time (e.g.
-// "renewal price was $199, now $249") — the compounding, gets-smarter-over-time
-// behavior the deterministic-only learning digest (Pillar 3) doesn't provide.
+// Optional Zep mirror for the authenticated-human conversation kernel.
 //
-// Honest fallback, matching every other integration adapter in this codebase: absent
-// ZEP_API_KEY, every function here is a silent no-op (empty results / no mirroring) —
-// never a fabricated hit, never a hard failure for a tenant that hasn't configured it,
-// and never something that can break the gated pipeline it's layered onto.
+// Canonical identity and exact history stay in Postgres. Zep is a best-effort,
+// employee-private derived index: one authenticated human -> one Zep user and one
+// canonical Postgres thread -> one Zep thread. Pre-Phase-6 tenant-wide users are
+// quarantined and are never queried or copied by this module.
 
 import { ZepClient } from "@getzep/zep-cloud";
 import type { SemanticHit } from "./semantic";
 
 let client: ZepClient | null = null;
+const ensuredThreads = new Set<string>();
 
 function zepConfigured(): boolean {
   return Boolean(process.env.ZEP_API_KEY);
@@ -23,74 +19,122 @@ export function zepProviderStatus(): { configured: boolean } {
   return { configured: zepConfigured() };
 }
 
+export async function testZepProviderConnection(): Promise<{ configured: boolean; healthy: boolean | null; reason: string | null }> {
+  if (!zepConfigured()) return { configured: false, healthy: null, reason: "ZEP_API_KEY is not configured" };
+  try {
+    await getZepClient().project.get({ timeoutInSeconds: 5, maxRetries: 0 });
+    return { configured: true, healthy: true, reason: null };
+  } catch {
+    // Do not surface provider error bodies: auth failures can echo sensitive
+    // request metadata. The status remains explicit and fail-closed.
+    return { configured: true, healthy: false, reason: "Zep project authentication or availability check failed" };
+  }
+}
+
 function getZepClient(): ZepClient {
   client ??= new ZepClient({ apiKey: process.env.ZEP_API_KEY });
   return client;
 }
 
-function zepUserId(tenantId: string): string {
-  return `finnor-tenant-${tenantId}`;
+export function zepEmployeeUserId(tenantId: string, employeeId: string): string {
+  return `finnor-human-${tenantId}-${employeeId}`;
 }
 
-function zepThreadId(tenantId: string, sessionId: string): string {
-  return `finnor-${tenantId}-${sessionId}`;
+export function zepCanonicalThreadId(threadId: string): string {
+  return `finnor-thread-${threadId}`;
 }
 
-const ensuredThreads = new Set<string>();
+export const LEGACY_ZEP_GRAPH_POLICY = "quarantined_no_query_no_copy" as const;
 
-/** Creates the tenant's Zep user + this session's thread if they don't exist yet.
- *  Cached per-process so repeated mirror calls in the same session don't re-issue the
- *  create calls; "already exists" errors are swallowed either way. */
-async function ensureThread(tenantId: string, sessionId: string): Promise<void> {
-  const key = `${tenantId}:${sessionId}`;
+async function ensureHumanThread(tenantId: string, employeeId: string, threadId: string): Promise<void> {
+  const key = `${tenantId}:${employeeId}:${threadId}`;
   if (ensuredThreads.has(key)) return;
   const zc = getZepClient();
-  await zc.user.add({ userId: zepUserId(tenantId) }).catch(() => undefined);
-  await zc.thread.create({ threadId: zepThreadId(tenantId, sessionId), userId: zepUserId(tenantId) }).catch(() => undefined);
+  const userId = zepEmployeeUserId(tenantId, employeeId);
+  const canonicalThreadId = zepCanonicalThreadId(threadId);
+  const ignoreConflict = async (operation: Promise<unknown>): Promise<void> => {
+    try {
+      await operation;
+    } catch (error) {
+      const record = error && typeof error === "object" ? error as Record<string, unknown> : {};
+      const status = record.statusCode ?? record.status;
+      if (status !== 409) throw error;
+    }
+  };
+  await ignoreConflict(zc.user.add({ userId }, { timeoutInSeconds: 5, maxRetries: 1 }));
+  await ignoreConflict(zc.thread.create({ threadId: canonicalThreadId, userId }, { timeoutInSeconds: 5, maxRetries: 1 }));
   ensuredThreads.add(key);
 }
 
-/**
- * Mirrors one conversation turn (instruction + outcome) into Zep as a message, so
- * Zep's own extraction pipeline can build a temporal knowledge graph over it. Called
- * alongside appendShortTerm (packages/memory/src/short-term.ts) — same session scope,
- * same call site (FinnorOrchestrator.handleInstruction) — never inside appendEpisode
- * itself, which is scoped per-domain-action, not per-session, and has no natural Zep
- * thread identity. Best-effort: never throws — a Zep outage must never break or slow
- * the gated pipeline it's mirroring alongside.
- */
-export async function mirrorTurnToZep(tenantId: string, sessionId: string, content: string): Promise<void> {
+/** Best-effort mirror. Assistant messages are retained as context but explicitly
+ * excluded from graph extraction, preventing assistant output from becoming a
+ * durable personal fact. */
+export async function mirrorConversationMessageToZep(params: {
+  tenantId: string;
+  employeeId: string;
+  threadId: string;
+  messageId: string;
+  role: "user" | "assistant";
+  content: string;
+  createdAt: string;
+}): Promise<void> {
   if (!zepConfigured()) return;
   try {
-    await ensureThread(tenantId, sessionId);
-    await getZepClient().thread.addMessages(zepThreadId(tenantId, sessionId), {
-      messages: [{ content, role: "system" }],
-    });
+    await ensureHumanThread(params.tenantId, params.employeeId, params.threadId);
+    await getZepClient().thread.addMessages(zepCanonicalThreadId(params.threadId), {
+      ...(params.role === "assistant" ? { ignoreRoles: ["assistant" as const] } : {}),
+      messages: [{
+        uuid: params.messageId,
+        content: params.content,
+        role: params.role,
+        createdAt: params.createdAt,
+        metadata: {
+          tenantId: params.tenantId,
+          employeeId: params.employeeId,
+          canonicalThreadId: params.threadId,
+          canonicalMessageId: params.messageId,
+        },
+      }],
+    }, { timeoutInSeconds: 5, maxRetries: 1 });
   } catch {
-    // Best-effort — see module header.
+    // Zep is never on the authoritative or execution path.
   }
 }
 
-/**
- * Searches the tenant's Zep knowledge graph for facts relevant to the query. Returns
- * [] (not an error) when Zep isn't configured or the search itself fails.
- * buildMemorySnapshot merges these into the SAME `semantic: SemanticHit[]` array
- * pgvector results already populate — additive, not a separate field the Planner
- * would need to learn about.
- */
-export async function queryConsolidatedFacts(tenantId: string, query: string, limit = 5): Promise<SemanticHit[]> {
-  if (!zepConfigured()) return [];
+/** Searches only the authenticated employee's graph. A two-argument legacy call
+ * returns [] instead of falling back to the quarantined tenant-wide graph. */
+export async function queryConsolidatedFacts(
+  tenantId: string,
+  employeeId: string,
+  query?: string,
+  limit = 5,
+): Promise<SemanticHit[]> {
+  if (!query || !zepConfigured()) return [];
   try {
-    const results = await getZepClient().graph.search({ userId: zepUserId(tenantId), query, limit });
+    const results = await getZepClient().graph.search({
+      userId: zepEmployeeUserId(tenantId, employeeId),
+      query,
+      limit: Math.max(1, Math.min(limit, 10)),
+    }, { timeoutInSeconds: 5, maxRetries: 1 });
     return (results.edges ?? []).map((edge) => ({
       chunk: edge.fact,
       sourceDocId: edge.uuid ?? null,
       similarity: edge.score ?? edge.relevance ?? 0,
       relevanceScore: edge.score ?? edge.relevance ?? 0,
-      sourceKind: "zep_consolidated_fact",
-      provenance: { provider: "zep", graphEdgeId: edge.uuid ?? null },
+      sourceKind: "zep_employee_fact",
+      provenance: {
+        provider: "zep",
+        employeeId,
+        graphEdgeId: edge.uuid ?? null,
+        legacyGraphPolicy: LEGACY_ZEP_GRAPH_POLICY,
+      },
     }));
   } catch {
     return [];
   }
+}
+
+/** @deprecated Pre-Phase-6 tenant/session mirroring is permanently disabled. */
+export async function mirrorTurnToZep(_tenantId: string, _sessionId: string, _content: string): Promise<void> {
+  return undefined;
 }

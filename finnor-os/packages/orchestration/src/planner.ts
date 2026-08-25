@@ -76,7 +76,10 @@ function plannerOperatingContext(context: OperatingContext | undefined): Record<
     employee: context.employee,
     activeWork: context.activeWork,
     companyDirectory: context.companyDirectory,
+    identityAccess: context.identityAccess,
     universalActions: context.universalActions,
+    conversationContext: context.conversationContext,
+    personalMemory: context.personalMemory,
     referencedEntities: context.referencedEntities,
     canonicalSummaries: context.canonicalSummaries,
     integrationHealth: context.integrationHealth,
@@ -117,6 +120,7 @@ export class LLMPlanner implements Planner {
       "Translate the dealer instruction into zero or more domain actions.",
       "Truth precedence is strict: CANONICAL live operational records > durable WORK/actions/receipts > configured PROFILE > current SESSION > SEMANTIC MEMORY > external WEB. A lower source may enrich but never replace or contradict a higher one.",
       "Interaction target precedence is separately strict: explicit operatingContext.interactionContext > active Work > deterministic context > memory > NLP inference. Explicit focused/selected entities and exclusions are already tenant-validated. Never add, substitute, or recover a consequential target from memory or pronoun inference when explicit interaction context exists.",
+      "When operatingContext.conversationContext is present, use its resolvedReferences and senderIdentityRef as the deterministic resolution. Preserve originalInstruction verbatim as evidence. If its status is clarification_required, emit only clarification_request and no consequential action or guessed target.",
       "For a bounded direct selection, act on exactly selectedEntities after excludedEntities. For a referenced cohort, use only its durable cohort/query bounds and exclusions; never enumerate, invent, or widen its population. Selection does not grant authority or approval.",
       "Resolve me/my against operatingContext.employee and us/our/the company against operatingContext.tenant before choosing an action. Missing profile facts remain missing; never infer identity, age, industry, geography, revenue, ARR, or company performance from semantic memory.",
       `The ONLY valid action_type values are: ${actionTypes.join(", ")}.`,
@@ -183,10 +187,21 @@ export class LLMPlanner implements Planner {
     const channel = opts.channel ?? "text";
     let raw: string;
     const continuationAction = clarificationContinuationAction(instruction, planningInstruction, memory, actionTypes);
+    const phase6Resolution = opts.operatingContext?.conversationContext?.resolution;
     const contextualResearch = opts.operatingContext
       ? resolveCompetitorResearch(planningInstruction, opts.operatingContext)
       : { route: "not_research" as const };
-    if (continuationAction) {
+    if (phase6Resolution?.status === "clarification_required") {
+      raw = JSON.stringify({ actions: [{
+        action_type: "clarification_request",
+        payload: {
+          question: phase6Resolution.clarificationQuestion ?? "Which current target should I use?",
+          missingFields: phase6Resolution.unresolvedExpressions,
+          context: `No business effect was created because ${phase6Resolution.candidates.length} current candidate(s) matched.`,
+        },
+        reasoning: "Phase 6 deterministic reference/sender resolution failed closed before planning.",
+      }] });
+    } else if (continuationAction) {
       raw = JSON.stringify({ actions: [continuationAction] });
     } else if (contextualResearch.route === "clarification" || contextualResearch.route === "resolved") {
       raw = JSON.stringify({ actions: [contextualResearch.action] });

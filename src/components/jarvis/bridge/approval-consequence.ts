@@ -11,6 +11,7 @@ export interface ApprovalConsequenceAction {
   amountUsd?: number | null
   targetLabel?: string | null
   policyVersion?: number | null
+  businessEffect?: { approval?: { summary?: string } } | null
 }
 
 export interface ApprovalConsequenceSummary {
@@ -79,6 +80,8 @@ function dateOnly(value: unknown): string | null {
 
 /** One action's real, action-type-specific consequence. */
 export function describeApprovalConsequence(action: ApprovalConsequenceAction): string {
+  const compiledSummary = text(action.businessEffect?.approval?.summary)
+  if (compiledSummary) return compiledSummary
   const p = record(action.payload)
   const target = action.targetLabel ?? text(p.householdLabel) ?? text(p.customerName)
 

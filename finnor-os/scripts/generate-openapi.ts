@@ -262,6 +262,27 @@ const doc = {
         responses: { "201": { description: "Planned domain actions" }, "400": { description: "Invalid payload" }, "401": { description: "Bad auth" } },
       },
     },
+    "/api/threads": {
+      get: {
+        summary: "List the authenticated employee's private durable conversation threads",
+        responses: { "200": { description: "Bounded Postgres thread summaries owned by the current employee" }, "401": { description: "Bad auth" }, "403": { description: "Canonical human principal required" } },
+      },
+      post: {
+        summary: "Create a private durable conversation thread for the authenticated employee",
+        responses: { "201": { description: "Canonical Postgres thread summary" }, "400": { description: "Invalid payload" }, "401": { description: "Bad auth" }, "403": { description: "Canonical human principal required" } },
+      },
+    },
+    "/api/threads/{id}": {
+      get: {
+        summary: "Load one employee-owned thread and a bounded page of exact original messages",
+        parameters: [
+          { name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+          { name: "limit", in: "query", schema: { type: "integer", minimum: 1, maximum: 200 } },
+          { name: "beforeSequence", in: "query", schema: { type: "integer", minimum: 1 } },
+        ],
+        responses: { "200": { description: "Thread summary plus exact ordered messages" }, "401": { description: "Bad auth" }, "403": { description: "Canonical human principal required" }, "404": { description: "Thread absent or owned by another employee/tenant" } },
+      },
+    },
     "/api/objectives": {
       post: {
         summary: "Accept responsibility for one persistent, governed Work objective and queue its first bounded iteration",

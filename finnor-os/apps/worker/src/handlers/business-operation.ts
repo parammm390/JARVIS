@@ -17,6 +17,7 @@ import {
   households,
   jobs,
   reconcileWorkStatus,
+  works,
   withTenant,
   type Db,
 } from "@finnor/db";
@@ -121,6 +122,48 @@ async function operationAuthorityStillValid(operation: OperationRow): Promise<bo
   });
   if (operation.workId) await reconcileWorkStatus(operation.tenantId, operation.workId);
   return false;
+}
+
+async function operationWorkStillActive(operation: OperationRow): Promise<boolean> {
+  if (!operation.workId) return true;
+  const result = await withTenant(operation.tenantId, async (db) => {
+    await db.execute(sql`SELECT id FROM ${works} WHERE ${works.id} = ${operation.workId} AND ${works.tenantId} = ${operation.tenantId} FOR UPDATE`);
+    const [work] = await db.select({ status: works.status }).from(works).where(and(
+      eq(works.tenantId, operation.tenantId),
+      eq(works.id, operation.workId!),
+    )).limit(1);
+    if (!work || (work.status !== "cancelled" && work.status !== "completed")) return { active: true as const };
+    const [running] = await db.select({ count: sql<number>`count(*)::int` })
+      .from(businessOperationTargets)
+      .where(and(eq(businessOperationTargets.operationId, operation.id), eq(businessOperationTargets.status, "running")));
+    const reconciliationRequired = (running?.count ?? 0) > 0;
+    const [cancelled] = await db.update(businessOperations).set({
+      status: "cancelled",
+      completedAt: new Date(),
+      finalOutcome: {
+        kind: "cancelled",
+        workStatus: work.status,
+        reconciliationRequired,
+        runningTargets: running?.count ?? 0,
+      },
+      updatedAt: new Date(),
+    }).where(and(
+      eq(businessOperations.tenantId, operation.tenantId),
+      eq(businessOperations.id, operation.id),
+      inArray(businessOperations.status, ["queued", "running"]),
+    )).returning({ id: businessOperations.id });
+    if (cancelled) {
+      await appendEventTx(db, {
+        tenantId: operation.tenantId,
+        operationId: operation.id,
+        eventType: "operation_cancelled_by_work",
+        payload: { workStatus: work.status, reconciliationRequired, runningTargets: running?.count ?? 0 },
+      });
+    }
+    return { active: false as const };
+  });
+  if (!result.active) await reconcileWorkStatus(operation.tenantId, operation.workId);
+  return result.active;
 }
 
 async function safetyCheck(tenantId: string, target: TargetRow): Promise<
@@ -391,6 +434,7 @@ export async function dispatchBusinessOperation(payload: Record<string, unknown>
   const operationId = String(payload.operationId ?? "");
   const operation = await loadOperation(tenantId, operationId);
   if (!operation || !["queued", "running"].includes(operation.status)) return;
+  if (!(await operationWorkStillActive(operation))) return;
   if (!(await operationAuthorityStillValid(operation))) return;
 
   // A worker that died after claiming an SMS target leaves a short lease. Reclaim it
@@ -526,6 +570,7 @@ export async function executeBusinessOperationTarget(payload: Record<string, unk
   const targetId = String(payload.targetId ?? "");
   const operation = await loadOperation(tenantId, operationId);
   if (!operation || !["queued", "running"].includes(operation.status)) return;
+  if (!(await operationWorkStillActive(operation))) return;
   if (!(await operationAuthorityStillValid(operation))) return;
   const target = await claimTarget(tenantId, targetId);
   if (!target) return;
@@ -572,6 +617,7 @@ export async function executeBusinessOperationCallBatch(payload: Record<string, 
   const operationId = String(payload.operationId ?? "");
   const operation = await loadOperation(tenantId, operationId);
   if (!operation || !["queued", "running"].includes(operation.status)) return;
+  if (!(await operationWorkStillActive(operation))) return;
   if (!(await operationAuthorityStillValid(operation))) return;
   const requestedIds = Array.isArray(payload.targetIds) ? payload.targetIds.filter((id): id is string => typeof id === "string") : [];
   const rows = requestedIds.length === 0 ? [] : await withTenant(tenantId, (db) => db.select().from(businessOperationTargets)

@@ -33,6 +33,7 @@ import {
   workObjectivePlannerAttempts,
   workObjectiveSteps,
   workEventWaits,
+  workEvents,
   workInputs,
   works,
   pendingConfirmations,
@@ -386,6 +387,23 @@ export async function startWorkObjective(objective: string, ctx: TenantContext, 
     ? parseObjectiveSuccessCondition(options.successCondition)
     : defaultObjectiveSuccessCondition(objective);
   const loop = await withTenant(ctx.tenantId, async (db) => {
+    await db.execute(sql`SELECT id FROM ${works} WHERE ${works.id}=${input.workId} AND ${works.tenantId}=${ctx.tenantId} FOR UPDATE`);
+    const [currentWork] = await db.select({ status: works.status }).from(works).where(and(eq(works.tenantId, ctx.tenantId), eq(works.id, input.workId))).limit(1);
+    const [latestInput] = await db.select({ id: workInputs.id }).from(workInputs)
+      .where(and(eq(workInputs.tenantId, ctx.tenantId), eq(workInputs.workId, input.workId)))
+      .orderBy(desc(workInputs.createdAt), desc(workInputs.id))
+      .limit(1);
+    if (!currentWork || latestInput?.id !== input.workInputId) throw new Error("Objective input is no longer the active Work input");
+    if (currentWork.status === "cancelled") {
+      const [latestEvent] = await db.select({ eventType: workEvents.eventType, payload: workEvents.payload }).from(workEvents)
+        .where(and(eq(workEvents.tenantId, ctx.tenantId), eq(workEvents.workId, input.workId)))
+        .orderBy(desc(workEvents.seq))
+        .limit(1);
+      const payload = isRecord(latestEvent?.payload) ? latestEvent.payload : {};
+      const explicitlyContinued = (latestEvent?.eventType === "input_received" || latestEvent?.eventType === "recovery_input_received")
+        && payload.workInputId === input.workInputId;
+      if (!explicitlyContinued) throw new Error("Cancelled Work cannot start an objective without a newer explicit input");
+    }
     const [existing] = await db.select().from(workObjectiveLoops).where(and(eq(workObjectiveLoops.tenantId, ctx.tenantId), eq(workObjectiveLoops.workId, input.workId))).limit(1);
     if (existing) {
       if (existing.objective !== objective && !input.duplicate) throw new Error("Work already owns a different objective; use redirect explicitly");
@@ -446,7 +464,7 @@ export async function startWorkObjective(objective: string, ctx: TenantContext, 
     objective,
     successCondition: loop.successCondition,
     budgets: { maxSteps: loop.maxSteps, maxActions: loop.maxActions, maxQueries: loop.maxQueries },
-  }, { executionModel: "objective" });
+  }, { executionModel: "objective", expectedWorkInputId: input.workInputId });
   await scheduleIteration(loop, new Date(), ctx.correlationId);
   return { workId: input.workId, workInputId: input.workInputId, instructionId: input.instructionId, objectiveLoopId: loop.id, state: loop.state, duplicate: input.duplicate };
 }

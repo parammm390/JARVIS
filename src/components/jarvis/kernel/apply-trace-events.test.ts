@@ -259,6 +259,24 @@ describe("kernel/store — applyTraceEvents (P3.T7)", () => {
     expect(t.machine.instructionState).toBe("failed")
   })
 
+  it("keeps the UI stopping on the early cancellation fence and terminates only on canonical confirmation", () => {
+    const stopping = planningThread({ machine: transition(planningThread().machine, { type: "USER_CANCEL_REQUESTED" }) })
+    const fenced = applyTraceEvents(stopping, [ev(1, "cancelled", { fence: true, canonical: false })], NO_DECISIONS)
+    expect(fenced.machine.instructionState).toBe("stopping")
+    const cancelled = applyTraceEvents(fenced, [ev(2, "cancelled", { canonical: true })], NO_DECISIONS)
+    expect(cancelled.machine.instructionState).toBe("cancelled")
+  })
+
+  it("does not let a late answer resurrect canonically cancelled Work", () => {
+    const stopping = planningThread({ machine: transition(planningThread().machine, { type: "USER_CANCEL_REQUESTED" }) })
+    const t = applyTraceEvents(stopping, [
+      ev(1, "cancelled", { canonical: true }),
+      ev(2, "completed", { actionId: "late-answer", result: { kind: "answer", spokenSummary: "Stale answer" } }),
+    ], NO_DECISIONS)
+    expect(t.machine.instructionState).toBe("cancelled")
+    expect(t.answerResult).toBeNull()
+  })
+
   describe("real per-action gating -> the aggregate transition (P3.T7/T8)", () => {
     it("6 actions, all gated -> awaiting_approval once every one resolves, with approvalWatch registered", () => {
       let t = planningThread()

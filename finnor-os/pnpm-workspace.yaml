@@ -1,9 +1,4 @@
-packages:
-  - 'apps/*'
-  - 'packages/*'
-  - 'packages/domain-plugins/*'
-
 allowBuilds:
-  '@embedded-postgres/darwin-arm64': true
-  esbuild: true
-  sharp: true
+  '@embedded-postgres/darwin-arm64': set this to true or false
+  esbuild: set this to true or false
+  sharp: set this to true or false
