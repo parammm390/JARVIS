@@ -57,6 +57,7 @@ import {
   reconciliationCases,
   tenantIntegrations,
   externalOperations,
+  planningIrArtifacts,
   type Db,
 } from "@finnor/db";
 import { and, asc, desc, eq, sql, type AnyColumn, type SQL } from "drizzle-orm";
@@ -74,6 +75,7 @@ import type {
   ExecutionResult,
 } from "@finnor/shared-types";
 import { BUSINESS_EFFECT_SCHEMA_VERSION } from "@finnor/shared-types";
+import { canonicalSerialize, parsePlanningIrArtifact } from "@finnor/planning-ir";
 import { ACTION_HARDENING_SPEC_BY_ACTION, type ActionProfile } from "../../../scripts/release/action-hardening-spec";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -719,6 +721,15 @@ export function isConsequentialAction(actionType: string, payload: Record<string
   return Boolean(profile && profile !== "READ_ONLY" && profile !== "META_NO_SIDE_EFFECT");
 }
 
+/** Planning-time declaration of the existing approval floor. This is not an
+ * authorization decision; the authority boundary still revalidates at execution. */
+export function businessEffectApprovalRequired(actionType: string, policyRequiresConfirmation: boolean): boolean {
+  const floor = ACTION_HARDENING_SPEC_BY_ACTION.get(actionType)?.approvalFloor;
+  if (floor === "NONE") return false;
+  if (floor === "POLICY") return policyRequiresConfirmation;
+  return floor === "REQUIRED" || floor === "TYPED_REQUIRED";
+}
+
 export class BusinessEffectBoundaryError extends Error {
   constructor(readonly code: "material_effect_change" | "stale_precondition" | "effect_missing" | "effect_in_progress", message: string) {
     super(message);
@@ -823,14 +834,51 @@ async function compileBusinessEffectWithDb(params: {
   };
 }
 
-export async function ensureBusinessEffect(params: {
+/** Resolves the explicitly persisted EffectSpec↔DomainAction binding and proves
+ * the lowerer did not change its consequential semantics. The returned proposal
+ * is never treated as authority; compileBusinessEffectWithDb remains the only
+ * BusinessEffectSet compiler. */
+async function assertPlanningEffectBindingWithDb(params: {
+  db: Db;
+  action: DomainAction;
+  draft: DraftAction;
+  required: boolean;
+}): Promise<void> {
+  const [row] = await params.db.select().from(planningIrArtifacts).where(and(
+    eq(planningIrArtifacts.tenantId, params.action.tenantId),
+    eq(planningIrArtifacts.domainActionId, params.action.id),
+  )).limit(1);
+  if (!row) {
+    if (params.required) throw new BusinessEffectBoundaryError("effect_missing", "No accepted Planning IR EffectSpec is bound to this DomainAction");
+    return;
+  }
+  // Shadow artifacts deliberately leave the legacy action canonical and do not
+  // become an EffectSpec compilation source.
+  if (row.status === "shadow") {
+    if (params.required) throw new BusinessEffectBoundaryError("effect_missing", "Shadow Planning IR cannot compile a consequential BusinessEffectSet");
+    return;
+  }
+  if (row.status !== "lowered" || !row.effectId) throw new BusinessEffectBoundaryError("effect_missing", "Planning IR action binding is not lowered to one explicit EffectSpec");
+  const artifact = parsePlanningIrArtifact(row.artifact);
+  const effect = artifact.effects.find((candidate) => candidate.id === row.effectId);
+  if (!effect) throw new BusinessEffectBoundaryError("effect_missing", `Planning IR binding references missing EffectSpec ${row.effectId}`);
+  if (effect.actionType !== params.action.actionType) throw new BusinessEffectBoundaryError("material_effect_change", "Lowered DomainAction action type differs from its accepted EffectSpec");
+  if (canonicalSerialize(semanticValue(effect.payload)) !== canonicalSerialize(semanticValue(params.draft.payload)) || canonicalSerialize(semanticValue(effect.payload)) !== canonicalSerialize(semanticValue(params.action.payload))) {
+    throw new BusinessEffectBoundaryError("material_effect_change", "Lowered DomainAction payload differs from its accepted EffectSpec");
+  }
+}
+
+type BusinessEffectCompileInput = {
   action: DomainAction;
   draft: DraftAction;
   policy: DomainPolicy;
   approval: { requiresConfirmation: boolean; typedConfirmation: boolean };
-}): Promise<BusinessEffectSet | undefined> {
+};
+
+async function ensureBusinessEffectInternal(params: BusinessEffectCompileInput, requirePlanningIr: boolean): Promise<BusinessEffectSet | undefined> {
   if (!isConsequentialAction(params.action.actionType, params.draft.payload)) return undefined;
   return withTenant(params.action.tenantId, async (db) => {
+    await assertPlanningEffectBindingWithDb({ db, action: params.action, draft: params.draft, required: requirePlanningIr });
     const [existing] = await db.select().from(businessEffects).where(and(eq(businessEffects.tenantId, params.action.tenantId), eq(businessEffects.domainActionId, params.action.id))).limit(1);
     const candidate = await compileBusinessEffectWithDb({ ...params, db, id: existing?.id });
     if (existing) {
@@ -860,6 +908,19 @@ export async function ensureBusinessEffect(params: {
     params.action.businessEffectId = effect.id;
     return effect;
   });
+}
+
+/** Compatibility entry point. Legacy actions remain supported; when a lowered IR
+ * binding exists it is always verified before the existing compiler runs. */
+export function ensureBusinessEffect(params: BusinessEffectCompileInput): Promise<BusinessEffectSet | undefined> {
+  return ensureBusinessEffectInternal(params, false);
+}
+
+/** Explicit deterministic EffectSpec→existing BusinessEffectSet seam. It requires
+ * one persisted lowered EffectSpec binding, verifies exact DomainAction semantics,
+ * then delegates to the same canonical BusinessEffect compiler used everywhere. */
+export function compilePlanningEffectToBusinessEffect(params: BusinessEffectCompileInput): Promise<BusinessEffectSet | undefined> {
+  return ensureBusinessEffectInternal(params, true);
 }
 
 export async function verifyBusinessEffectPreconditions(tenantId: string, effect: BusinessEffectSet): Promise<void> {

@@ -9,6 +9,7 @@ import {
   leads,
   payments,
   properties,
+  propertyPartyRelationships,
   proposals,
   quoteLineItems,
   quotes,
@@ -127,13 +128,31 @@ async function resolveSoleProperty(
       .from(properties)
       .where(and(eq(properties.tenantId, input.tenantId), eq(properties.id, input.explicitPropertyId)))
       .limit(1);
-    if (!property || property.householdId !== input.householdId) {
+    const [compatibility] = property && property.householdId !== input.householdId
+      ? await db.select({ id: propertyPartyRelationships.id }).from(propertyPartyRelationships).where(and(
+          eq(propertyPartyRelationships.tenantId, input.tenantId),
+          eq(propertyPartyRelationships.propertyId, property.id),
+          eq(propertyPartyRelationships.partyType, "household"),
+          eq(propertyPartyRelationships.partyId, input.householdId),
+          eq(propertyPartyRelationships.relationship, "customer_account"),
+          sql`${propertyPartyRelationships.validTo} IS NULL`,
+        )).limit(1)
+      : [];
+    if (!property || (property.householdId !== input.householdId && !compatibility)) {
       throw new CanonicalImportError("invalid_relationship", "property does not belong to the imported equipment household", "propertyId");
     }
     return property.id;
   }
-  const rows = await db.select({ id: properties.id }).from(properties)
-    .where(and(eq(properties.tenantId, input.tenantId), eq(properties.householdId, input.householdId), sql`${properties.archivedAt} IS NULL`));
+  const rows = await db.execute<{ id: string }>(sql`
+    SELECT DISTINCT p.id::text AS id
+      FROM finnor_os.properties p
+      LEFT JOIN finnor_os.property_party_relationships r
+        ON r.tenant_id=p.tenant_id AND r.property_id=p.id
+       AND r.party_type='household' AND r.party_id=${input.householdId}::uuid
+       AND r.relationship='customer_account' AND r.valid_to IS NULL
+     WHERE p.tenant_id=${input.tenantId}::uuid AND p.archived_at IS NULL
+       AND (p.household_id=${input.householdId}::uuid OR r.id IS NOT NULL)
+  `).then((result) => result.rows);
   if (rows.length > 1) {
     if (input.failOnMultiple === false) return undefined;
     throw new CanonicalImportError("ambiguous_match", "multiple service properties exist; propertyId is required", "propertyId");

@@ -12,6 +12,7 @@ import {
   numeric,
   vector,
   index,
+  uniqueIndex,
   unique,
   real,
   date,
@@ -1270,7 +1271,9 @@ export const properties = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     tenantId: uuid("tenant_id").notNull().default(sql`finnor_os.request_tenant_id()`).references(() => tenants.id),
-    householdId: uuid("household_id").notNull().references(() => households.id, { onDelete: "cascade" }),
+    // Nullable compatibility/customer-account projection. Canonical ownership and
+    // service relationships live in property_party_relationships.
+    householdId: uuid("household_id"),
     label: text("label"),
     address: text("address").notNull(),
     kind: text("kind", { enum: ["residential", "commercial", "service_location", "unknown"] }).notNull().default("unknown"),
@@ -1288,6 +1291,35 @@ export const properties = pgTable(
     unique("properties_source_identity_key").on(t.tenantId, t.sourceSystem, t.externalId),
     index("properties_tenant_household_idx").on(t.tenantId, t.householdId),
     foreignKey({ columns: [t.tenantId, t.householdId], foreignColumns: [households.tenantId, households.id], name: "properties_tenant_household_fk" }).onDelete("cascade"),
+  ],
+);
+
+/** Canonical Party↔Property topology. `properties.household_id` remains the
+ * Phase-1 compatibility customer/account link, but ownership, occupancy,
+ * management, billing, and service authority are represented here and may point
+ * at any canonical Party type. */
+export const propertyPartyRelationships = pgTable(
+  "property_party_relationships",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().default(sql`finnor_os.request_tenant_id()`).references(() => tenants.id),
+    propertyId: uuid("property_id").notNull(),
+    partyType: text("party_type", { enum: ["employee", "team", "location", "household", "contact", "external_organization", "external_contact"] }).notNull(),
+    partyId: uuid("party_id").notNull(),
+    relationship: text("relationship", { enum: ["customer_account", "owner", "occupant", "property_manager", "billing_contact", "service_contact", "other"] }).notNull(),
+    isPrimary: boolean("is_primary").notNull().default(false),
+    validFrom: timestamp("valid_from", { withTimezone: true }).notNull().defaultNow(),
+    validTo: timestamp("valid_to", { withTimezone: true }),
+    provenance: jsonb("provenance").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("property_party_relationships_tenant_id_id_key").on(t.tenantId, t.id),
+    uniqueIndex("property_party_relationships_active_identity_idx").on(t.tenantId, t.propertyId, t.partyType, t.partyId, t.relationship).where(sql`${t.validTo} IS NULL`),
+    index("property_party_relationships_property_idx").on(t.tenantId, t.propertyId, t.relationship),
+    index("property_party_relationships_party_idx").on(t.tenantId, t.partyType, t.partyId, t.relationship),
+    check("property_party_relationships_interval_check", sql`${t.validTo} IS NULL OR ${t.validTo} >= ${t.validFrom}`),
+    foreignKey({ columns: [t.tenantId, t.propertyId], foreignColumns: [properties.tenantId, properties.id], name: "property_party_relationships_property_tenant_fk" }).onDelete("cascade"),
   ],
 );
 
@@ -1310,7 +1342,7 @@ export const equipment = pgTable(
     unique("equipment_tenant_id_id_key").on(t.tenantId, t.id),
     unique("equipment_tenant_household_property_id_key").on(t.tenantId, t.householdId, t.propertyId, t.id),
     index("equipment_tenant_property_idx").on(t.tenantId, t.propertyId),
-    foreignKey({ columns: [t.tenantId, t.householdId, t.propertyId], foreignColumns: [properties.tenantId, properties.householdId, properties.id], name: "equipment_tenant_household_property_fk" }),
+    foreignKey({ columns: [t.tenantId, t.propertyId], foreignColumns: [properties.tenantId, properties.id], name: "equipment_tenant_property_fk" }),
   ],
 );
 
@@ -1337,7 +1369,7 @@ export const serviceVisits = pgTable(
     notes: text("notes"),
   },
   (t) => [
-    foreignKey({ columns: [t.tenantId, t.householdId, t.propertyId], foreignColumns: [properties.tenantId, properties.householdId, properties.id], name: "service_visits_tenant_household_property_fk" }),
+    foreignKey({ columns: [t.tenantId, t.propertyId], foreignColumns: [properties.tenantId, properties.id], name: "service_visits_tenant_property_fk" }),
     foreignKey({ columns: [t.tenantId, t.equipmentId], foreignColumns: [equipment.tenantId, equipment.id], name: "service_visits_tenant_equipment_fk" }),
   ],
 );
@@ -1361,7 +1393,7 @@ export const assetMeasurements = pgTable(
   },
   (t) => [
     index("asset_measurements_tenant_asset_observed_idx").on(t.tenantId, t.equipmentId, t.observedAt),
-    foreignKey({ columns: [t.tenantId, t.householdId, t.propertyId], foreignColumns: [properties.tenantId, properties.householdId, properties.id], name: "asset_measurements_tenant_household_property_fk" }),
+    foreignKey({ columns: [t.tenantId, t.propertyId], foreignColumns: [properties.tenantId, properties.id], name: "asset_measurements_tenant_property_fk" }),
     foreignKey({ columns: [t.tenantId, t.equipmentId], foreignColumns: [equipment.tenantId, equipment.id], name: "asset_measurements_tenant_equipment_fk" }),
   ],
 );
@@ -1601,6 +1633,9 @@ export const planningIrArtifacts = pgTable(
     domainActionId: uuid("domain_action_id").references(() => domainActions.id),
     workId: uuid("work_id").references(() => works.id),
     objectiveStepId: uuid("objective_step_id").references(() => workObjectiveSteps.id),
+    /** Explicit semantic EffectSpec binding for this DomainAction. */
+    effectId: text("effect_id"),
+    constraintEvaluations: jsonb("constraint_evaluations").notNull().default([]),
     irSchemaVersion: text("ir_schema_version").notNull(),
     compilerVersion: text("compiler_version").notNull(),
     irSemanticHash: text("ir_semantic_hash").notNull(),

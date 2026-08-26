@@ -9,9 +9,9 @@ import { resolveProviderForPurpose } from "./llm";
 import type { PluginRegistry } from "./plugin-registry";
 import { z } from "zod";
 import { redactStructured, redactText, restoreTokens } from "@finnor/security";
-import { groundEntitiesWithDb, buildCommandGraph } from "./compiler";
+import { businessEffectApprovalRequired, groundEntitiesWithDb, buildCommandGraph, isConsequentialAction } from "./compiler";
 import { businessEffectObservationForAction } from "./compiler";
-import { buildCompatibilityPlanningIr, compareLegacyCandidateToIr, planningIrMode } from "./planning-ir";
+import { actionsFromNativePlanningIr, buildCompatibilityPlanningIr, buildNativePlanningIr, compareLegacyCandidateToIr, deriveRuntimeHardConstraintDeclarations, planningIrMode, type CompatibilityActionCandidate } from "./planning-ir";
 import { createDbIrAdmissibilityCompiler, persistPlanningIrArtifactTx } from "./ir-admissibility-db";
 import { IrAdmissibilityRejectedError } from "./ir-admissibility";
 import { lowerAdmittedPlanningIr } from "./ir-lowerer";
@@ -27,11 +27,11 @@ import { plannerContinuationInstruction, plannerMemoryContext, plannerShortTermC
 import { clarificationContinuationAction, enforceExternalResearchRoute, enforceSchedulingMutationRoute, safeReadFallbackForInstruction, schedulingClarificationFallbackForInstruction } from "./read-routing";
 import { resolveCompetitorResearch } from "./research-context";
 import { applyOperatingInteractionTargets } from "./interaction-targeting";
-import type { CanonicalEntityRef as PlanningCanonicalEntityRef } from "@finnor/planning-ir";
+import { PlanningIrCandidateSchema, type CanonicalEntityRef as PlanningCanonicalEntityRef, type PlanningIrCandidate } from "@finnor/planning-ir";
 
 export { clarificationContinuationAction, enforceExternalResearchRoute, enforceSchedulingMutationRoute, safeReadFallbackForInstruction, schedulingClarificationFallbackForInstruction } from "./read-routing";
 
-const PlanSchema = z.object({
+const LegacyPlanSchema = z.object({
   actions: z.array(
     z.object({
       action_type: z.string(),
@@ -42,6 +42,16 @@ const PlanSchema = z.object({
     }),
   ),
 });
+
+const NativePlanSchema = z.object({ planning_ir: PlanningIrCandidateSchema }).strict();
+
+export class NativePlanningIrRequiredError extends Error {
+  readonly code = "NATIVE_PLANNING_IR_REQUIRED";
+  constructor(message = "The native planner did not return valid Planning IR") {
+    super(message);
+    this.name = "NativePlanningIrRequiredError";
+  }
+}
 
 const SecondCandidateSchema = z.object({
   action_type: z.string(),
@@ -180,7 +190,8 @@ export class LLMPlanner implements Planner {
       "Only return an empty actions array when the instruction is not a business question or action at all (chit-chat, out of scope, or something no plugin could ever plausibly do) — never because the exact phrasing didn't match a narrower action_type.",
       "When an instruction could lead to a business action but lacks a required fact or has multiple equally plausible real targets, return exactly one clarification_request instead of guessing. Its payload must contain a plain-language question, the missingFields list, and optional context. Do not emit a guessed business action alongside it.",
       "The user context includes integrationHealth. Do not propose an action that needs a capability whose unavailable field is true; propose manual_step_suggestion with the supplied reason instead. The server enforces this again after planning.",
-      'Respond with JSON: {"actions":[{"action_type":"...","payload":{...},"reasoning":"...","depends_on":[0]}]}. depends_on is optional; when present it contains zero-based indexes of EARLIER actions that must finish before this action can be dispatched. Never use a database id, forward index, or duplicate index.',
+      'The canonical response is native Planning IR: {"planning_ir":{"intent":{"requestedOutcome":"...","executionModel":"ATOMIC_EFFECT|OBJECTIVE","groundedEntities":[],"scope":{"included":[],"excluded":[],"textExclusions":[]},"unresolvedAmbiguity":[]},"goal":{"statement":"desired business state","desiredState":[{"subject":{"kind":"business_state","key":"..."},"path":[],"operator":"completed"}],"completionMode":"all","objectiveCompatibility":"reuse_existing_objective_semantics"},"constraints":{"hard":[],"soft":[]},"plan":{"nodes":[{"id":"effect-node-1","kind":"effect","effectId":"effect-1","dependsOn":[],"causalPrerequisites":[],"requiredCapabilities":["action:..."]},{"id":"observe-node-1","kind":"observe","observationId":"observation-1","dependsOn":["effect-node-1"],"causalPrerequisites":["effect-node-1"],"requiredCapabilities":[]}],"completion":{"mode":"all","observationIds":["observation-1"]}},"effects":[{"id":"effect-1","actionType":"...","effectIntent":"...","payload":{},"targetRefs":[],"requiredCapability":"action:...","risk":"low|medium|high","exposure":null,"proposalOnly":true}],"observations":[{"id":"observation-1","effectId":"effect-1","kind":"canonical_state|provider_delivery|computer_state|workflow_completion|recorded_result|canonical_query","predicate":{},"requiredEvidence":["..."],"acknowledgementSufficient":false,"verificationFloor":"at_least_existing"}]}}. Constraints must be concrete predicates; unresolved HARD constraints stay unresolved and fail closed.',
+      "The legacy actions[] envelope is compatibility-only. Produce native planning_ir for new plans. EffectSpec proposes intent only; it never grants authority or claims execution.",
       "Payloads must contain only facts from the instruction or the provided memory — never invent phone numbers, addresses, or prices.",
       "Direct identifiers are replaced with bracketed tokens such as [PHONE_1] before you see them. Preserve those tokens exactly in payload values whenever the underlying field is needed; never invent a different identifier.",
       "memory.patterns.householdProposals (if present) summarizes this household's own past proposal/quote outcomes — use it only as soft context, never as a source of new facts to invent into a payload.",
@@ -198,6 +209,7 @@ export class LLMPlanner implements Planner {
     memory: MemorySnapshot,
     opts: PlannerOptions = {},
   ): Promise<DomainAction[]> {
+    const irMode = planningIrMode();
     const actionTypes = this.plugins.actionTypes();
     const system = this.systemPrompt();
     const planningInstruction = plannerContinuationInstruction(instruction, memory.shortTerm);
@@ -212,6 +224,7 @@ export class LLMPlanner implements Planner {
       : await buildPlanningHealthContext(tenantContext.tenantId);
     const user = JSON.stringify({
       instruction: redactedInstruction.value,
+      executionModel: opts.executionModel ?? "ATOMIC_EFFECT",
       operatingContext: plannerOperatingContext(opts.operatingContext),
       integrationHealth,
       memory: {
@@ -225,6 +238,7 @@ export class LLMPlanner implements Planner {
 
     const channel = opts.channel ?? "text";
     let raw: string;
+    let modelGenerated = false;
     const continuationAction = clarificationContinuationAction(instruction, planningInstruction, memory, actionTypes);
     const phase6Resolution = opts.operatingContext?.conversationContext?.resolution;
     const contextualResearch = opts.operatingContext
@@ -245,6 +259,7 @@ export class LLMPlanner implements Planner {
     } else if (contextualResearch.route === "clarification" || contextualResearch.route === "resolved") {
       raw = JSON.stringify({ actions: [contextualResearch.action] });
     } else try {
+      modelGenerated = true;
       const provider = this.provider ?? this.routedProviders.get(channel) ?? resolveProviderForPurpose("planning", channel);
       if (!this.provider) this.routedProviders.set(channel, provider);
       raw = await provider.complete({
@@ -260,6 +275,7 @@ export class LLMPlanner implements Planner {
         deadlineMs: opts.deadlineMs,
       });
     } catch (err) {
+      modelGenerated = false;
       // A planning-provider timeout must not take down an instruction whose
       // intent is provably read-only. The deterministic router can select only
       // the two registered read actions below; it can never manufacture a write,
@@ -283,14 +299,42 @@ export class LLMPlanner implements Planner {
       }
     }
 
-    let parsed: z.infer<typeof PlanSchema>;
+    let parsed: z.infer<typeof LegacyPlanSchema>;
+    let nativeCandidate: PlanningIrCandidate | null = null;
     try {
-      parsed = PlanSchema.parse(JSON.parse(raw));
-    } catch {
-      // Model returned malformed JSON — treat as "no plan", never guess.
+      const decoded = JSON.parse(raw) as unknown;
+      const native = NativePlanSchema.safeParse(decoded);
+      if (native.success) {
+        nativeCandidate = native.data.planning_ir;
+        parsed = {
+          actions: actionsFromNativePlanningIr(nativeCandidate).map((action) => ({
+            action_type: action.actionType,
+            payload: action.payload,
+            reasoning: action.reasoning,
+            depends_on: action.dependsOn,
+          })),
+        };
+      } else {
+        const legacy = LegacyPlanSchema.parse(decoded);
+        if (modelGenerated && irMode !== "legacy") {
+          throw new NativePlanningIrRequiredError("Native planner output used the legacy actions envelope");
+        }
+        parsed = legacy;
+      }
+    } catch (error) {
+      if (error instanceof NativePlanningIrRequiredError) throw error;
+      if (modelGenerated && irMode !== "legacy") {
+        throw new NativePlanningIrRequiredError(`Native planner output was invalid: ${(error as Error).message}`);
+      }
+      // Deterministic compatibility output may still fail as no plan. Model output
+      // in native modes never reaches this fallback.
       parsed = { actions: [] };
     }
 
+    if (nativeCandidate) {
+      const unsupported = parsed.actions.find((action) => !actionTypes.includes(action.action_type));
+      if (unsupported) throw new Error(`Native Planning IR proposed unregistered action type ${unsupported.action_type}`);
+    }
     let valid = parsed.actions.filter((a) => actionTypes.includes(a.action_type));
     valid = enforceExternalResearchRoute(redactedInstruction.value, valid, actionTypes);
 
@@ -569,42 +613,54 @@ export class LLMPlanner implements Planner {
         : { ...candidate, healthAdjustment: null };
     });
 
-    const irMode = planningIrMode();
     const irScope = planningScope(opts.operatingContext);
-    const irArtifact = irMode === "legacy" ? null : buildCompatibilityPlanningIr({
-      executionModel: opts.executionModel ?? "ATOMIC_EFFECT",
-      requestedOutcome: instruction,
-      actions: finalCandidates.map((candidate, index) => ({
+    const finalIrActions = finalCandidates.map((candidate, index) => ({
         actionType: candidate.actionType,
         payload: candidate.payload,
         reasoning: valid[index]?.reasoning,
         dependsOn: dependencyIndexes[index]!,
-      })),
+      }));
+    const irProvenance = {
+      source: "instruction_planner" as const,
+      instructionId: opts.instructionId,
+      workId: opts.workId,
+      plannerAttemptId: opts.plannerAttemptId,
+      traceId: tenantContext.correlationId,
+      createdAt: new Date().toISOString(),
+    };
+    const sharedIrInput = {
+      executionModel: opts.executionModel ?? "ATOMIC_EFFECT" as const,
+      requestedOutcome: instruction,
+      actions: finalIrActions,
       observationForAction: businessEffectObservationForAction,
-      compileEffect: (action, effectId) => this.plugins.compilePlanningEffect(action.actionType, action.payload, effectId),
-      defineObservation: (action, effect, observationId) => this.plugins.definePlanningObservation(action.actionType, action.payload, effect, observationId),
-      provenance: {
-        source: "instruction_planner",
-        instructionId: opts.instructionId,
-        workId: opts.workId,
-        plannerAttemptId: opts.plannerAttemptId,
-        traceId: tenantContext.correlationId,
-        createdAt: new Date().toISOString(),
-      },
+      compileEffect: (action: CompatibilityActionCandidate, effectId: string) => this.plugins.compilePlanningEffect(action.actionType, action.payload, effectId),
+      defineObservation: (action: CompatibilityActionCandidate, effect: import("@finnor/planning-ir").EffectSpec, observationId: string) => this.plugins.definePlanningObservation(action.actionType, action.payload, effect, observationId),
+      provenance: irProvenance,
       included: irScope.included,
       excluded: irScope.excluded,
       textExclusions: irScope.textExclusions,
-    });
+      deriveHardConstraints: (effects: import("@finnor/planning-ir").EffectSpec[], observations: import("@finnor/planning-ir").ObservationSpec[]) => deriveRuntimeHardConstraintDeclarations({
+        effects,
+        observations,
+        trustedExcluded: irScope.excluded,
+        approvalRequired: (actionType) => businessEffectApprovalRequired(actionType, policyByType.get(actionType)?.requiresConfirmation ?? true),
+        maxAmountForAction: (actionType) => {
+          const amount = (policyByType.get(actionType)?.policy as { riskThresholds?: { amountUsd?: unknown } } | undefined)?.riskThresholds?.amountUsd;
+          return typeof amount === "number" && Number.isFinite(amount) && amount >= 0 ? amount : undefined;
+        },
+      }),
+    };
+    if (irMode !== "legacy" && modelGenerated && !nativeCandidate && finalCandidates.some((candidate) => isConsequentialAction(candidate.actionType, candidate.payload))) {
+      throw new NativePlanningIrRequiredError("Consequential planner output cannot fall back to legacy action JSON");
+    }
+    const irArtifact = irMode === "legacy" ? null : nativeCandidate
+      ? buildNativePlanningIr({ candidate: nativeCandidate, ...sharedIrInput })
+      : buildCompatibilityPlanningIr(sharedIrInput);
     const irDiff = irArtifact ? compareLegacyCandidateToIr({
       artifact: irArtifact,
       executionModel: opts.executionModel ?? "ATOMIC_EFFECT",
       requestedOutcome: instruction,
-      actions: finalCandidates.map((candidate, index) => ({
-        actionType: candidate.actionType,
-        payload: candidate.payload,
-        reasoning: valid[index]?.reasoning,
-        dependsOn: dependencyIndexes[index]!,
-      })),
+      actions: finalIrActions,
       observationForAction: businessEffectObservationForAction,
       included: irScope.included,
       excluded: irScope.excluded,
@@ -618,7 +674,10 @@ export class LLMPlanner implements Planner {
       if (!result.admissible) throw new IrAdmissibilityRejectedError(result.issues);
       return result.admitted;
     }) : null;
-    const lowered = irMode === "cutover" && admittedIr ? lowerAdmittedPlanningIr(admittedIr) : null;
+    const lowered = irMode === "native-ir" && admittedIr ? lowerAdmittedPlanningIr(admittedIr) : null;
+    const irEffectIds = irArtifact?.plan.nodes
+      .filter((node): node is Extract<typeof node, { kind: "effect" }> => node.kind === "effect")
+      .map((node) => node.effectId) ?? [];
     const effectiveCandidates = finalCandidates.map((candidate, index) => lowered?.[index]
       ? { ...candidate, actionType: lowered[index]!.actionType, payload: lowered[index]!.payload }
       : candidate);
@@ -687,14 +746,16 @@ export class LLMPlanner implements Planner {
         .returning()
         .then(async (inserted) => {
           if (irArtifact && irDiff) {
-            await Promise.all(inserted.map((row) => persistPlanningIrArtifactTx({
+            await Promise.all(inserted.map((row, index) => persistPlanningIrArtifactTx({
               db,
               tenantId: tenantContext.tenantId,
               artifact: irArtifact,
-              status: irMode === "shadow" ? "shadow" : "lowered",
+              status: irMode === "shadow-native-ir" ? "shadow" : "lowered",
               diff: irDiff,
               domainActionId: row.id,
               workId: opts.workId,
+              effectId: irEffectIds[index],
+              constraintEvaluations: admittedIr?.constraintEvaluations ?? [],
             })));
           }
           return inserted;

@@ -58,7 +58,7 @@ export const GoalSpecSchema = z.object({
 export const ConstraintSpecSchema = z.object({
   id: z.string().trim().min(1).max(240),
   strength: z.enum(["HARD", "SOFT"]),
-  kind: z.enum(["entity_relationship", "temporal", "capability", "precondition", "user_restriction", "policy_authority", "cost_risk_exposure", "preference"]),
+  kind: z.enum(["entity_relationship", "temporal", "capability", "precondition", "user_restriction", "policy_authority", "cost_risk_exposure", "observation_verifiability", "preference"]),
   description: z.string().trim().min(1).max(4000),
   status: z.enum(["satisfied", "violated", "unresolved"]),
   subjectRefs: z.array(CanonicalEntityRefSchema).max(100),
@@ -126,6 +126,17 @@ export const PlanningIrArtifactSchema = z.object({
     irSemanticHash: z.string().regex(/^[0-9a-f]{64}$/),
   }).strict(),
   intent: IntentSpecSchema,
+  goal: GoalSpecSchema,
+  constraints: ConstraintSetSchema,
+  plan: PlanGraphSchema,
+  effects: z.array(EffectSpecSchema).max(500),
+  observations: z.array(ObservationSpecSchema).min(1).max(500),
+}).strict();
+
+/** Schema for the canonical planner's native semantic output. Runtime-owned
+ * provenance and the semantic hash are attached only after this parses. */
+export const PlanningIrCandidateSchema = z.object({
+  intent: IntentSpecSchema.omit({ provenance: true }),
   goal: GoalSpecSchema,
   constraints: ConstraintSetSchema,
   plan: PlanGraphSchema,

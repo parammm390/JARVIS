@@ -18,3 +18,4 @@ export * from "./conversations";
 export * from "./documents";
 export * from "./import-writes";
 export * from "./source-truth";
+export * from "./properties";

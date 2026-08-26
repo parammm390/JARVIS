@@ -248,7 +248,7 @@ async function persistObjectiveGoalIr(input: {
     plugins: createDefaultPluginRegistry(),
   }).admit(input.artifact);
   if (!admitted.admissible) throw new IrAdmissibilityRejectedError(admitted.issues);
-  if (input.mode === "cutover" && lowerAdmittedPlanningIr(admitted.admitted).length !== 0) {
+  if (input.mode === "native-ir" && lowerAdmittedPlanningIr(admitted.admitted).length !== 0) {
     throw new Error("Goal-only Objective Planning IR unexpectedly lowered a consequential action");
   }
   const [existing] = await input.db.select({ id: planningIrArtifacts.id }).from(planningIrArtifacts).where(and(
@@ -265,7 +265,8 @@ async function persistObjectiveGoalIr(input: {
     workId: input.workId,
     artifact: input.artifact,
     diff: input.diff,
-    status: input.mode === "shadow" ? "shadow" : "accepted",
+    status: input.mode === "shadow-native-ir" ? "shadow" : "accepted",
+    constraintEvaluations: admitted.admitted.constraintEvaluations,
   });
 }
 

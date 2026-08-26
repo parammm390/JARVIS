@@ -55,7 +55,7 @@ export interface GoalSpec {
   objectiveCompatibility: "reuse_existing_objective_semantics";
 }
 
-export type ConstraintKind = "entity_relationship" | "temporal" | "capability" | "precondition" | "user_restriction" | "policy_authority" | "cost_risk_exposure" | "preference";
+export type ConstraintKind = "entity_relationship" | "temporal" | "capability" | "precondition" | "user_restriction" | "policy_authority" | "cost_risk_exposure" | "observation_verifiability" | "preference";
 export type ConstraintStatus = "satisfied" | "violated" | "unresolved";
 
 export interface ConstraintSpec {
@@ -66,6 +66,18 @@ export interface ConstraintSpec {
   status: ConstraintStatus;
   subjectRefs: CanonicalEntityRef[];
   values: Record<string, unknown>;
+}
+
+/** Planner-supplied status is an assertion for explanation/diffing only. The
+ * admissibility boundary independently derives this truth before lowering. */
+export interface ConstraintTruthEvaluation {
+  constraintId: string;
+  truth: ConstraintStatus;
+  source: "clock" | "capability_registry" | "canonical_state" | "canonical_relationship" | "policy_authority" | "runtime_scope" | "unsupported";
+  evidence: string[];
+  reason: string;
+  evaluatedAt: string;
+  sourceVersions: Record<string, string>;
 }
 
 export interface ConstraintSet {
@@ -128,6 +140,17 @@ export interface PlanningIrMetadata {
 export interface PlanningIrArtifact {
   metadata: PlanningIrMetadata;
   intent: IntentSpec;
+  goal: GoalSpec;
+  constraints: ConstraintSet;
+  plan: PlanGraph;
+  effects: EffectSpec[];
+  observations: ObservationSpec[];
+}
+
+/** Native planner output before trusted runtime metadata is attached. Tenant
+ * identity is intentionally absent and can only come from runtime context. */
+export interface PlanningIrCandidate {
+  intent: Omit<IntentSpec, "provenance">;
   goal: GoalSpec;
   constraints: ConstraintSet;
   plan: PlanGraph;

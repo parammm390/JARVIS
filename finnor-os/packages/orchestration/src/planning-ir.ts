@@ -7,6 +7,7 @@ import {
   type ConstraintSpec,
   type ObservationKind,
   type PlanningExecutionModel,
+  type PlanningIrCandidate,
   type PlanningIrArtifact,
   type PlanningSemanticDiff,
   type PlanningSemanticSnapshot,
@@ -14,13 +15,17 @@ import {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export type PlanningIrMode = "legacy" | "shadow" | "cutover";
+export type PlanningIrMode = "legacy" | "shadow-native-ir" | "native-ir";
 
 export function planningIrMode(env = process.env): PlanningIrMode {
   const configured = env.FINNOR_PLANNING_IR_MODE?.trim().toLowerCase();
-  if (!configured) return "cutover";
-  if (configured === "legacy" || configured === "shadow" || configured === "cutover") return configured;
-  throw new Error(`FINNOR_PLANNING_IR_MODE must be legacy, shadow, or cutover; received ${configured}`);
+  if (!configured) return "native-ir";
+  if (configured === "legacy" || configured === "shadow-native-ir" || configured === "native-ir") return configured;
+  // Temporary deployment aliases preserve the bounded rollback seam while all
+  // persisted/reporting semantics use the canonical mode names above.
+  if (configured === "shadow") return "shadow-native-ir";
+  if (configured === "cutover") return "native-ir";
+  throw new Error(`FINNOR_PLANNING_IR_MODE must be legacy, shadow-native-ir, or native-ir; received ${configured}`);
 }
 
 export interface CompatibilityActionCandidate {
@@ -30,6 +35,97 @@ export interface CompatibilityActionCandidate {
   dependsOn: number[];
   requiredCapability?: string;
   risk?: "low" | "medium" | "high";
+}
+
+export interface NativePlanningActionCandidate extends CompatibilityActionCandidate {
+  effectId: string;
+  effectNodeId: string;
+}
+
+export interface RuntimeConstraintDeclarationInput {
+  effects: import("@finnor/planning-ir").EffectSpec[];
+  observations: import("@finnor/planning-ir").ObservationSpec[];
+  trustedExcluded: CanonicalEntityRef[];
+  approvalRequired(actionType: string): boolean;
+  maxAmountForAction?(actionType: string): number | undefined;
+  maxRiskForAction?(actionType: string): "low" | "medium" | "high" | undefined;
+}
+
+/** Runtime-owned declarations are deterministic predicates, not truth claims.
+ * Their `status` field remains compatibility metadata; admissibility independently
+ * evaluates every declaration and persists the result/evidence. */
+export function deriveRuntimeHardConstraintDeclarations(input: RuntimeConstraintDeclarationInput): ConstraintSpec[] {
+  const rows: ConstraintSpec[] = [];
+  for (const [effectIndex, effect] of input.effects.entries()) {
+    rows.push({
+      id: `runtime:capability:${effectIndex}`,
+      strength: "HARD",
+      kind: "capability",
+      description: `${effect.requiredCapability} must be available at planning time`,
+      status: "unresolved",
+      subjectRefs: effect.targetRefs,
+      values: { capability: effect.requiredCapability, effectId: effect.id },
+    });
+    if (effect.targetRefs.length > 0) rows.push({
+      id: `runtime:existence:${effectIndex}`,
+      strength: "HARD",
+      kind: "precondition",
+      description: "Every consequential target must exist in the trusted tenant",
+      status: "unresolved",
+      subjectRefs: effect.targetRefs,
+      values: { exists: true, tenantOwned: true, effectId: effect.id },
+    });
+    rows.push({
+      id: `runtime:authority:${effectIndex}`,
+      strength: "HARD",
+      kind: "policy_authority",
+      description: "The declared approval floor must match current fixed and tenant policy truth",
+      status: "unresolved",
+      subjectRefs: effect.targetRefs,
+      values: { actionType: effect.actionType, requiresApproval: input.approvalRequired(effect.actionType), effectId: effect.id },
+    });
+    const maxAmount = input.maxAmountForAction?.(effect.actionType);
+    const maxRisk = input.maxRiskForAction?.(effect.actionType);
+    if (maxAmount !== undefined || maxRisk !== undefined) rows.push({
+      id: `runtime:exposure:${effectIndex}`,
+      strength: "HARD",
+      kind: "cost_risk_exposure",
+      description: "Effect exposure and risk must remain within the current trusted policy bounds",
+      status: "unresolved",
+      subjectRefs: effect.targetRefs,
+      values: { ...(maxAmount === undefined ? {} : { maxAmount }), ...(maxRisk === undefined ? {} : { maxRisk }), effectId: effect.id },
+    });
+    rows.push({
+      id: `runtime:observation:${effectIndex}`,
+      strength: "HARD",
+      kind: "observation_verifiability",
+      description: "Completion evidence must preserve or strengthen existing BusinessEffect verification truth",
+      status: "unresolved",
+      subjectRefs: effect.targetRefs,
+      values: { effectId: effect.id },
+    });
+    const property = effect.targetRefs.find((ref) => ref.kind === "property" || ref.entityType === "property");
+    const asset = effect.targetRefs.find((ref) => ref.kind === "asset" || ref.entityType === "equipment");
+    if (property && asset) rows.push({
+      id: `runtime:relationship:${effectIndex}:installed_at`,
+      strength: "HARD",
+      kind: "entity_relationship",
+      description: "The target asset must be installed at the target property",
+      status: "unresolved",
+      subjectRefs: [property, asset],
+      values: { relationship: "installed_at", effectId: effect.id },
+    });
+  }
+  if (input.trustedExcluded.length > 0) rows.push({
+    id: "runtime:user-exclusions",
+    strength: "HARD",
+    kind: "user_restriction",
+    description: "No effect may target an entity explicitly excluded by trusted operating context",
+    status: "unresolved",
+    subjectRefs: input.trustedExcluded,
+    values: { source: "trusted_operating_context" },
+  });
+  return rows;
 }
 
 const kindForField = (field: string): CanonicalEntityRef["kind"] => field === "householdId" || field === "customerId" ? "party"
@@ -112,7 +208,136 @@ const evidenceFor = (kind: ObservationKind): string[] => kind === "canonical_sta
         : kind === "canonical_query" ? ["canonical_query_result"]
           : ["recorded_result"];
 
-export function buildCompatibilityPlanningIr(input: {
+/** Extracts executable action proposals from a native PlanGraph without erasing
+ * its dependency semantics. Non-effect prerequisites remain in the IR and will
+ * fail closed at the compatibility lowerer until that runtime supports them. */
+export function actionsFromNativePlanningIr(candidate: PlanningIrCandidate): NativePlanningActionCandidate[] {
+  const effects = new Map(candidate.effects.map((effect) => [effect.id, effect]));
+  if (effects.size !== candidate.effects.length) throw new Error("Native Planning IR contains duplicate EffectSpec ids");
+  const effectNodes = candidate.plan.nodes.filter((node): node is Extract<typeof node, { kind: "effect" }> => node.kind === "effect");
+  const indexByNode = new Map(effectNodes.map((node, index) => [node.id, index]));
+  return effectNodes.map((node) => {
+    const effect = effects.get(node.effectId);
+    if (!effect) throw new Error(`Native Planning IR effect node references missing effect ${node.effectId}`);
+    const dependsOn = node.dependsOn.map((dependency) => {
+      const index = indexByNode.get(dependency);
+      if (index === undefined) throw new Error(`Native Planning IR effect ${effect.id} has non-effect prerequisite ${dependency}`);
+      return index;
+    });
+    return {
+      effectId: effect.id,
+      effectNodeId: node.id,
+      actionType: effect.actionType,
+      payload: effect.payload,
+      reasoning: effect.effectIntent,
+      dependsOn,
+      requiredCapability: effect.requiredCapability,
+      risk: effect.risk,
+    };
+  });
+}
+
+/** Materializes native planner semantics with trusted runtime provenance and the
+ * final schema/health-adjusted action payloads. This is distinct from the legacy
+ * compatibility wrapper: GoalSpec, ConstraintSet, PlanGraph, and observations
+ * originate natively from the planner candidate. */
+export function buildNativePlanningIr(input: {
+  candidate: PlanningIrCandidate;
+  executionModel: PlanningExecutionModel;
+  requestedOutcome: string;
+  actions: CompatibilityActionCandidate[];
+  observationForAction(actionType: string): ObservationKind;
+  provenance: PlanningIrArtifact["metadata"]["provenance"];
+  included?: CanonicalEntityRef[];
+  excluded?: CanonicalEntityRef[];
+  textExclusions?: string[];
+  compileEffect?: (action: CompatibilityActionCandidate, effectId: string, index: number) => import("@finnor/planning-ir").EffectSpec | undefined;
+  defineObservation?: (action: CompatibilityActionCandidate, effect: import("@finnor/planning-ir").EffectSpec, observationId: string, index: number) => import("@finnor/planning-ir").ObservationSpec | undefined;
+  deriveHardConstraints?: (effects: import("@finnor/planning-ir").EffectSpec[], observations: import("@finnor/planning-ir").ObservationSpec[]) => ConstraintSpec[];
+}): PlanningIrArtifact {
+  const nativeActions = actionsFromNativePlanningIr(input.candidate);
+  if (nativeActions.length !== input.actions.length) throw new Error(`Native Planning IR has ${nativeActions.length} effects but runtime produced ${input.actions.length} candidates`);
+  const originalEffects = new Map(input.candidate.effects.map((effect) => [effect.id, effect]));
+  const effects = nativeActions.map((native, index) => {
+    const action = input.actions[index]!;
+    const compiled = input.compileEffect?.(action, native.effectId, index);
+    if (compiled) return compiled;
+    const original = originalEffects.get(native.effectId)!;
+    const targetRefs = [...new Map([...original.targetRefs, ...collectCanonicalRefs(action.payload)]
+      .map((ref) => [`${ref.kind}:${ref.entityType}:${ref.entityId}:${ref.field ?? ""}`, ref])).values()];
+    return {
+      ...original,
+      actionType: action.actionType,
+      effectIntent: action.reasoning?.trim() || original.effectIntent,
+      payload: action.payload,
+      targetRefs,
+      requiredCapability: action.requiredCapability ?? `action:${action.actionType}`,
+      risk: action.risk ?? original.risk,
+      exposure: exposure(action.payload),
+      proposalOnly: true as const,
+    };
+  });
+  const effectById = new Map(effects.map((effect) => [effect.id, effect]));
+  const observations = input.candidate.observations.map((observation) => {
+    if (!observation.effectId) return observation;
+    const effect = effectById.get(observation.effectId);
+    if (!effect) return observation;
+    const index = effects.findIndex((candidateEffect) => candidateEffect.id === effect.id);
+    const action = input.actions[index]!;
+    return input.defineObservation?.(action, effect, observation.id, index) ?? (effect.actionType === originalEffects.get(effect.id)?.actionType
+      ? observation
+      : {
+          ...observation,
+          kind: input.observationForAction(effect.actionType),
+          predicate: { intendedOutcome: input.requestedOutcome, actionType: effect.actionType },
+          requiredEvidence: evidenceFor(input.observationForAction(effect.actionType)),
+          acknowledgementSufficient: false as const,
+          verificationFloor: "at_least_existing" as const,
+        });
+  });
+  const effectRefs = effects.flatMap((effect) => effect.targetRefs);
+  const groundedEntities = [...new Map([...input.candidate.intent.groundedEntities, ...effectRefs, ...(input.included ?? [])]
+    .map((ref) => [`${ref.kind}:${ref.entityType}:${ref.entityId}:${ref.field ?? ""}`, ref])).values()];
+  const included = [...new Map([...input.candidate.intent.scope.included, ...effectRefs, ...(input.included ?? [])]
+    .map((ref) => [`${ref.kind}:${ref.entityType}:${ref.entityId}:${ref.field ?? ""}`, ref])).values()];
+  // Exclusion authority comes only from trusted runtime context. Planner-authored
+  // exclusions are not discarded semantically: they remain declarations only when
+  // the runtime also provides them, never self-authenticating restrictions.
+  const excluded = [...new Map([...(input.excluded ?? [])]
+    .map((ref) => [`${ref.kind}:${ref.entityType}:${ref.entityId}:${ref.field ?? ""}`, ref])).values()];
+  const derivedHard = input.deriveHardConstraints?.(effects, observations) ?? [];
+  const hardById = new Map(input.candidate.constraints.hard.map((constraint) => [constraint.id, constraint]));
+  for (const constraint of derivedHard) hardById.set(constraint.id, constraint);
+  const finalPlan = {
+    ...input.candidate.plan,
+    nodes: input.candidate.plan.nodes.map((node) => {
+      if (node.kind !== "effect") return node;
+      const effect = effectById.get(node.effectId);
+      return effect ? { ...node, requiredCapabilities: [effect.requiredCapability] } : node;
+    }),
+  };
+  return createPlanningIrArtifact({
+    intent: {
+      ...input.candidate.intent,
+      requestedOutcome: input.requestedOutcome,
+      executionModel: input.executionModel,
+      groundedEntities,
+      scope: {
+        included,
+        excluded,
+        textExclusions: [...new Set(input.textExclusions ?? [])],
+      },
+      provenance: input.provenance,
+    },
+    goal: input.candidate.goal,
+    constraints: { hard: [...hardById.values()], soft: input.candidate.constraints.soft },
+    plan: finalPlan,
+    effects,
+    observations,
+  }, { compilerVersion: PLANNING_IR_COMPILER_VERSION, provenance: input.provenance });
+}
+
+export interface ActionDecisionPlanningIrInput {
   executionModel: PlanningExecutionModel;
   requestedOutcome: string;
   actions: CompatibilityActionCandidate[];
@@ -126,7 +351,10 @@ export function buildCompatibilityPlanningIr(input: {
   softConstraints?: ConstraintSpec[];
   compileEffect?: (action: CompatibilityActionCandidate, effectId: string, index: number) => import("@finnor/planning-ir").EffectSpec | undefined;
   defineObservation?: (action: CompatibilityActionCandidate, effect: import("@finnor/planning-ir").EffectSpec, observationId: string, index: number) => import("@finnor/planning-ir").ObservationSpec | undefined;
-}): PlanningIrArtifact {
+  deriveHardConstraints?: (effects: import("@finnor/planning-ir").EffectSpec[], observations: import("@finnor/planning-ir").ObservationSpec[]) => ConstraintSpec[];
+}
+
+function buildTypedActionDecisionPlanningIr(input: ActionDecisionPlanningIrInput): PlanningIrArtifact {
   const effects = input.actions.map((action, index) => {
     const effectId = `effect:${index}:${randomUUID()}`;
     const compiled = input.compileEffect?.(action, effectId, index);
@@ -199,11 +427,26 @@ export function buildCompatibilityPlanningIr(input: {
       completionMode: "all",
       objectiveCompatibility: "reuse_existing_objective_semantics",
     },
-    constraints: { hard: input.hardConstraints ?? [], soft: input.softConstraints ?? [] },
+    constraints: { hard: [...(input.hardConstraints ?? []), ...(input.deriveHardConstraints?.(effects, observations) ?? [])], soft: input.softConstraints ?? [] },
     plan: { nodes: [...effectNodes, ...observeNodes], completion: { mode: "all", observationIds: observations.map(({ id }) => id) } },
     effects,
     observations,
   }, { compilerVersion: PLANNING_IR_COMPILER_VERSION, provenance: input.provenance });
+}
+
+/** Legacy action candidates enter Planning IR only through this bounded adapter. */
+export function buildCompatibilityPlanningIr(input: ActionDecisionPlanningIrInput): PlanningIrArtifact {
+  return buildTypedActionDecisionPlanningIr(input);
+}
+
+/** The durable Objective controller already owns a typed decision. This emits the
+ * canonical native Goal/Plan/Effect/Observation artifact directly, without an
+ * actions[] model envelope or compatibility fallback. */
+export function buildNativeControllerPlanningIr(input: ActionDecisionPlanningIrInput): PlanningIrArtifact {
+  if (input.provenance.source !== "objective_controller") {
+    throw new Error("Native controller Planning IR requires objective_controller provenance");
+  }
+  return buildTypedActionDecisionPlanningIr(input);
 }
 
 /** The Objective route has a meaningful typed goal before its controller selects

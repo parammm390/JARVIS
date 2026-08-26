@@ -7,6 +7,7 @@ import { MIGRATIONS } from "../../packages/db/migrations-bundle";
 import * as schema from "../../packages/db/schema";
 import type { Db } from "@finnor/db";
 import { CanonicalImportError, writeCanonicalImportRow } from "../../packages/data-platform/src/import-writes";
+import { linkPropertyParty, listPartiesForProperty, listPropertiesForParty } from "../../packages/data-platform/src/properties";
 
 const SOURCE_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
 async function dbUp(): Promise<boolean> {
@@ -66,7 +67,7 @@ describe.skipIf(!available).sequential("Phase-1 Property/Asset additive upgrade 
     const rows = await fresh.query(`
       SELECT c.relname,c.relrowsecurity,c.relforcerowsecurity
       FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
-      WHERE n.nspname='finnor_os' AND c.relname IN ('properties','asset_measurements','planning_ir_artifacts')
+      WHERE n.nspname='finnor_os' AND c.relname IN ('properties','property_party_relationships','asset_measurements','planning_ir_artifacts')
       ORDER BY c.relname
     `);
     await fresh.end();
@@ -74,6 +75,7 @@ describe.skipIf(!available).sequential("Phase-1 Property/Asset additive upgrade 
       { relname: "asset_measurements", relrowsecurity: true, relforcerowsecurity: true },
       { relname: "planning_ir_artifacts", relrowsecurity: true, relforcerowsecurity: true },
       { relname: "properties", relrowsecurity: true, relforcerowsecurity: true },
+      { relname: "property_party_relationships", relrowsecurity: true, relforcerowsecurity: true },
     ]);
   });
 
@@ -86,6 +88,48 @@ describe.skipIf(!available).sequential("Phase-1 Property/Asset additive upgrade 
     expect((await client.query("SELECT count(*)::int count FROM finnor_os.properties WHERE household_id=$1", [unresolvedHouseholdId])).rows[0].count).toBe(0);
     const appointment = await client.query("SELECT id,property_id FROM finnor_os.appointments WHERE id=$1", [legacyAppointmentId]);
     expect(appointment.rows[0]).toEqual({ id: legacyAppointmentId, property_id: resolved.rows[0].property_id });
+    const compatibility = await client.query("SELECT party_type,party_id,relationship,is_primary FROM finnor_os.property_party_relationships WHERE tenant_id=$1 AND property_id=$2", [tenantId, resolved.rows[0].property_id]);
+    expect(compatibility.rows).toContainEqual({ party_type: "household", party_id: householdId, relationship: "customer_account", is_primary: true });
+  });
+
+  it("supports non-household Party ownership without changing the compatibility household link", async () => {
+    const propertyId = (await client.query("SELECT id FROM finnor_os.properties WHERE tenant_id=$1 AND household_id=$2", [tenantId, householdId])).rows[0].id as string;
+    const contactId = randomUUID();
+    await client.query("INSERT INTO finnor_os.contacts(id,tenant_id,household_id,name) VALUES ($1,$2,$3,'Property Owner')", [contactId, tenantId, householdId]);
+    await client.query("INSERT INTO finnor_os.property_party_relationships(tenant_id,property_id,party_type,party_id,relationship,is_primary,provenance) VALUES ($1,$2,'contact',$3,'owner',true,'{\"source\":\"test\"}')", [tenantId, propertyId, contactId]);
+    const relationships = await client.query("SELECT party_type,party_id,relationship FROM finnor_os.property_party_relationships WHERE tenant_id=$1 AND property_id=$2 ORDER BY relationship", [tenantId, propertyId]);
+    expect(relationships.rows).toContainEqual({ party_type: "contact", party_id: contactId, relationship: "owner" });
+    expect(relationships.rows).toContainEqual({ party_type: "household", party_id: householdId, relationship: "customer_account" });
+  });
+
+  it("proves one Party→many Properties, many Parties→one Property, and one Property→many Assets", async () => {
+    const ownerId = randomUUID();
+    const managerId = randomUUID();
+    const topologyHouseholdId = randomUUID();
+    const propertyOne = randomUUID();
+    const propertyTwo = randomUUID();
+    await client.query("INSERT INTO finnor_os.households(id,tenant_id,address) VALUES ($1,$2,'Compatibility Account Only')", [topologyHouseholdId, tenantId]);
+    await client.query("INSERT INTO finnor_os.contacts(id,tenant_id,name) VALUES ($1,$3,'Generic Owner'),($2,$3,'Property Manager')", [ownerId, managerId, tenantId]);
+    await client.query("INSERT INTO finnor_os.properties(id,tenant_id,household_id,address,kind,link_status) VALUES ($1,$3,NULL,'31 Independent Way','residential','RESOLVED'),($2,$3,NULL,'32 Independent Way','commercial','RESOLVED')", [propertyOne, propertyTwo, tenantId]);
+    await linkPropertyParty(db, { tenantId, propertyId: propertyOne, party: { partyType: "contact", partyId: ownerId }, relationship: "owner", isPrimary: true, provenance: { source: "explicit_test_fact" } });
+    await linkPropertyParty(db, { tenantId, propertyId: propertyTwo, party: { partyType: "contact", partyId: ownerId }, relationship: "owner", isPrimary: true, provenance: { source: "explicit_test_fact" } });
+    await linkPropertyParty(db, { tenantId, propertyId: propertyOne, party: { partyType: "contact", partyId: managerId }, relationship: "property_manager", provenance: { source: "explicit_test_fact" } });
+    await linkPropertyParty(db, { tenantId, propertyId: propertyOne, party: { partyType: "household", partyId: topologyHouseholdId }, relationship: "customer_account", isPrimary: true, provenance: { source: "explicit_service_account" } });
+
+    const owned = await listPropertiesForParty(db, { tenantId, party: { partyType: "contact", partyId: ownerId } });
+    expect(new Set(owned.map(({ id }) => id))).toEqual(new Set([propertyOne, propertyTwo]));
+    const parties = await listPartiesForProperty(db, { tenantId, propertyId: propertyOne });
+    expect(parties).toEqual(expect.arrayContaining([
+      expect.objectContaining({ partyId: ownerId, relationship: "owner" }),
+      expect.objectContaining({ partyId: managerId, relationship: "property_manager" }),
+      expect.objectContaining({ partyId: topologyHouseholdId, relationship: "customer_account" }),
+    ]));
+
+    const assetOne = randomUUID();
+    const assetTwo = randomUUID();
+    await client.query("INSERT INTO finnor_os.equipment(id,tenant_id,household_id,property_id,property_link_status,asset_domain,type,model) VALUES ($1,$3,$4,$5,'RESOLVED','HVAC','air_handler','AH-1'),($2,$3,$4,$5,'RESOLVED','PLUMBING','water_heater','WH-1')", [assetOne, assetTwo, tenantId, topologyHouseholdId, propertyOne]);
+    const assets = await client.query("SELECT id FROM finnor_os.equipment WHERE tenant_id=$1 AND property_id=$2 ORDER BY id", [tenantId, propertyOne]);
+    expect(new Set(assets.rows.map(({ id }) => id))).toEqual(new Set([assetOne, assetTwo]));
   });
 
   it("converges import-before-migration, migration, and the same import to one canonical equipment id", async () => {
@@ -115,6 +159,7 @@ describe.skipIf(!available).sequential("Phase-1 Property/Asset additive upgrade 
     const otherProperty = randomUUID();
     await client.query("INSERT INTO finnor_os.households(id,tenant_id,address) VALUES ($1,$2,'Other Tenant Rd')", [otherHousehold, otherTenantId]);
     await client.query("INSERT INTO finnor_os.properties(id,tenant_id,household_id,address,kind,link_status) VALUES ($1,$2,$3,'Other Tenant Rd','residential','RESOLVED')", [otherProperty, otherTenantId, otherHousehold]);
+    await expect(client.query("INSERT INTO finnor_os.property_party_relationships(tenant_id,property_id,party_type,party_id,relationship) VALUES ($1,$2,'household',$3,'owner')", [otherTenantId, otherProperty, householdId])).rejects.toThrow(/absent or belongs to another tenant/);
     await expect(writeCanonicalImportRow(db, { tenantId, entity: "equipment", data: { type: "pump", model: "P-CROSS" }, relationships: { householdId, propertyId: otherProperty }, sourceOwned: false, updateMode: "fill_missing", provenance: { sourceSystem: "forged", sourceId: "cross-tenant" } })).rejects.toMatchObject({ code: "invalid_relationship", field: "propertyId" } satisfies Partial<CanonicalImportError>);
   });
 });

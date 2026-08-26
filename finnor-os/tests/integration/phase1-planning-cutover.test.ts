@@ -13,7 +13,7 @@ import {
 } from "@finnor/db";
 import {
   createDefaultPluginRegistry,
-  ensureBusinessEffect,
+  compilePlanningEffectToBusinessEffect,
   LLMPlanner,
   startWorkObjective,
   type LLMProvider,
@@ -33,7 +33,18 @@ const context = (): TenantContext => ({ tenantId, userId: "phase1-cutover-fixtur
 const provider: LLMProvider = {
   name: "phase1-frozen-planner",
   async complete() {
-    return JSON.stringify({ actions: [{ action_type: "create_invoice", payload: { householdId, amountUsd: 125, memo: "Phase 1 cutover proof" } }] });
+    const target = { kind: "party", entityType: "household", entityId: householdId, field: "householdId", relationship: "customer_account" };
+    return JSON.stringify({ planning_ir: {
+      intent: { requestedOutcome: "Create the approved $125 invoice.", executionModel: "ATOMIC_EFFECT", groundedEntities: [target], scope: { included: [target], excluded: [], textExclusions: [] }, unresolvedAmbiguity: [] },
+      goal: { statement: "Create the approved $125 invoice.", desiredState: [{ subject: { kind: "business_state", key: "invoice" }, path: ["status"], operator: "eq", expected: "created" }], completionMode: "all", objectiveCompatibility: "reuse_existing_objective_semantics" },
+      constraints: { hard: [{ id: "approval-floor", strength: "HARD", kind: "policy_authority", description: "Invoice creation requires approval", status: "violated", subjectRefs: [target], values: { requiresApproval: true } }], soft: [] },
+      plan: { nodes: [
+        { id: "effect-node", kind: "effect", effectId: "invoice-effect", dependsOn: [], causalPrerequisites: [], requiredCapabilities: ["action:create_invoice"] },
+        { id: "observe-node", kind: "observe", observationId: "invoice-observation", dependsOn: ["effect-node"], causalPrerequisites: ["effect-node"], requiredCapabilities: [] },
+      ], completion: { mode: "all", observationIds: ["invoice-observation"] } },
+      effects: [{ id: "invoice-effect", actionType: "create_invoice", effectIntent: "Create the governed customer invoice", payload: { householdId, amountUsd: 125, memo: "Phase 1 cutover proof" }, targetRefs: [target], requiredCapability: "action:create_invoice", risk: "high", exposure: { amount: 125, currency: "USD" }, proposalOnly: true }],
+      observations: [{ id: "invoice-observation", effectId: "invoice-effect", kind: "canonical_state", predicate: { entityType: "invoice", exists: true }, requiredEvidence: ["canonical_read_back"], acknowledgementSufficient: false, verificationFloor: "at_least_existing" }],
+    } });
   },
 };
 
@@ -53,20 +64,20 @@ describe.skipIf(!available).sequential("Phase-1 Planning IR shadow and cutover",
   });
 
   it("runs the candidate IR in shadow with zero BusinessEffects, then cuts the same semantics over through the lowerer", async () => {
-    process.env.FINNOR_PLANNING_IR_MODE = "shadow";
+    process.env.FINNOR_PLANNING_IR_MODE = "shadow-native-ir";
     const [shadowAction] = await new LLMPlanner(createDefaultPluginRegistry(), provider).plan(
       "Create the approved $125 invoice.", context(), memory(), { executionModel: "ATOMIC_EFFECT" },
     );
     const [shadowIr] = await withTenant(tenantId, (db) => db.select().from(planningIrArtifacts).where(eq(planningIrArtifacts.domainActionId, shadowAction!.id)));
-    expect(shadowIr).toMatchObject({ status: "shadow", comparisonClassification: "EQUIVALENT" });
+    expect(shadowIr).toMatchObject({ status: "shadow", comparisonClassification: "EXPECTED_IMPROVEMENT", effectId: "invoice-effect" });
     expect(await withTenant(tenantId, (db) => db.select().from(businessEffects).where(eq(businessEffects.domainActionId, shadowAction!.id)))).toHaveLength(0);
 
-    process.env.FINNOR_PLANNING_IR_MODE = "cutover";
+    process.env.FINNOR_PLANNING_IR_MODE = "native-ir";
     const [cutoverAction] = await new LLMPlanner(createDefaultPluginRegistry(), provider).plan(
       "Create the approved $125 invoice.", context(), memory(), { executionModel: "ATOMIC_EFFECT" },
     );
     const [cutoverIr] = await withTenant(tenantId, (db) => db.select().from(planningIrArtifacts).where(eq(planningIrArtifacts.domainActionId, cutoverAction!.id)));
-    expect(cutoverIr).toMatchObject({ status: "lowered", comparisonClassification: "EQUIVALENT" });
+    expect(cutoverIr).toMatchObject({ status: "lowered", comparisonClassification: "EXPECTED_IMPROVEMENT", effectId: "invoice-effect" });
     expect(cutoverAction).toMatchObject({ actionType: shadowAction!.actionType, payload: shadowAction!.payload });
     expect(cutoverIr!.irSemanticHash).toBe(shadowIr!.irSemanticHash);
 
@@ -74,7 +85,12 @@ describe.skipIf(!available).sequential("Phase-1 Planning IR shadow and cutover",
     const policy: DomainPolicy = { id: "", tenantId, actionType: action.actionType, policy: {}, requiresConfirmation: true, confirmationTemplate: null, version: 0 };
     const plugin = createDefaultPluginRegistry().resolve(action.actionType)!;
     const draft = await plugin.draft(action.actionType, action.payload, policy);
-    const effect = await ensureBusinessEffect({ action, draft, policy, approval: { requiresConfirmation: true, typedConfirmation: false } });
+    const nativeArtifact = cutoverIr!.artifact as { goal: { desiredState: unknown[] }; constraints: { hard: Array<{ id: string; status: string }> }; plan: { nodes: unknown[] } };
+    expect(nativeArtifact.goal.desiredState).toHaveLength(1);
+    // The planner claimed "violated"; independent policy truth admitted it.
+    expect(nativeArtifact.constraints.hard).toContainEqual(expect.objectContaining({ id: "approval-floor", status: "violated" }));
+    expect(nativeArtifact.plan.nodes).toHaveLength(2);
+    const effect = await compilePlanningEffectToBusinessEffect({ action, draft, policy, approval: { requiresConfirmation: true, typedConfirmation: false } });
     expect(effect).toBeDefined();
     expect(effect!.semanticHash).not.toBe(cutoverIr!.irSemanticHash);
     expect(JSON.stringify(effect)).not.toContain("irSemanticHash");
@@ -84,7 +100,7 @@ describe.skipIf(!available).sequential("Phase-1 Planning IR shadow and cutover",
   });
 
   it("persists the Objective goal IR before its controller proposes any effect", async () => {
-    process.env.FINNOR_PLANNING_IR_MODE = "cutover";
+    process.env.FINNOR_PLANNING_IR_MODE = "native-ir";
     const started = await startWorkObjective("Keep every open customer invoice followed up until its persisted success condition is true.", context(), {
       channel: "text",
       activeContext: { householdId },

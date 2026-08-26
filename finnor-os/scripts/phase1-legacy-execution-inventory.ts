@@ -6,7 +6,7 @@ import { ACTION_HARDENING_SPEC_BY_ACTION } from "./release/action-hardening-spec
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const output = resolve(root, "artifacts/phase1/legacy-domain-engine-execution.post.json");
-const migratedActions = new Set(["log_stock_used_on_visit", "send_customer_message", "computer_task"]);
+const migratedActions = new Set(["log_stock_used_on_visit", "send_customer_message", "computer_task", "start_invoice_to_cash_workflow"]);
 const withoutComments = (source: string): string => source
   .replace(/\/\*[\s\S]*?\*\//g, (comment) => comment.replace(/[^\n]/g, " "))
   .replace(/\/\/[^\n]*/g, "");

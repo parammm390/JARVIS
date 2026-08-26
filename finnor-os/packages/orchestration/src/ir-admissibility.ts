@@ -1,4 +1,11 @@
-import { parsePlanningIrArtifact, type CanonicalEntityRef, type ObservationKind, type PlanningIrArtifact } from "@finnor/planning-ir";
+import {
+  parsePlanningIrArtifact,
+  type CanonicalEntityRef,
+  type ConstraintSpec,
+  type ConstraintTruthEvaluation,
+  type ObservationKind,
+  type PlanningIrArtifact,
+} from "@finnor/planning-ir";
 
 export type IrAdmissibilityErrorCode =
   | "IR_SCHEMA_INVALID"
@@ -6,6 +13,7 @@ export type IrAdmissibilityErrorCode =
   | "UNRESOLVED_AMBIGUITY"
   | "TARGET_NOT_GROUNDED"
   | "HARD_CONSTRAINT_VIOLATED"
+  | "HARD_CONSTRAINT_UNRESOLVED"
   | "TEMPORAL_INCONSISTENT"
   | "CAPABILITY_UNAVAILABLE"
   | "DEPENDENCY_INVALID"
@@ -28,12 +36,16 @@ export interface IrAdmissibilityDependencies {
   hasCapability(capability: string): boolean;
   hasActionType(actionType: string): boolean;
   requiredObservation(actionType: string): ObservationKind;
+  /** Independently derives consequential constraint truth. Implementations must
+   * not return the planner-authored constraint.status as the result. */
+  evaluateConstraint(constraint: ConstraintSpec, artifact: PlanningIrArtifact): Promise<Omit<ConstraintTruthEvaluation, "constraintId" | "evaluatedAt">>;
   now(): Date;
 }
 
 export interface AdmittedPlanningIr {
   artifact: PlanningIrArtifact;
   admittedAt: string;
+  constraintEvaluations: ConstraintTruthEvaluation[];
   issues: [];
 }
 
@@ -98,8 +110,32 @@ export class IrAdmissibilityCompiler {
     if (artifact.intent.unresolvedAmbiguity.length > 0) {
       issues.push(issue("UNRESOLVED_AMBIGUITY", "intent.unresolvedAmbiguity", "Unresolved consequential ambiguity cannot be lowered"));
     }
+    const evaluate = async (constraint: ConstraintSpec): Promise<ConstraintTruthEvaluation> => {
+      try {
+        const derived = await this.dependencies.evaluateConstraint(constraint, artifact);
+        return { ...derived, constraintId: constraint.id, evaluatedAt: this.dependencies.now().toISOString() };
+      } catch (error) {
+        return {
+          constraintId: constraint.id,
+          truth: "unresolved",
+          source: "unsupported",
+          evidence: [],
+          reason: error instanceof Error ? error.message : "Constraint evaluator failed",
+          evaluatedAt: this.dependencies.now().toISOString(),
+          sourceVersions: {},
+        };
+      }
+    };
+    const hardTruth = await Promise.all(artifact.constraints.hard.map(evaluate));
+    // SOFT truth is also replay evidence, but never an admissibility authority.
+    const softTruth = await Promise.all(artifact.constraints.soft.map(evaluate));
     for (const [index, constraint] of artifact.constraints.hard.entries()) {
-      if (constraint.status === "violated") issues.push(issue("HARD_CONSTRAINT_VIOLATED", `constraints.hard.${index}`, constraint.description));
+      const evaluation = hardTruth[index]!;
+      if (evaluation.truth === "violated") {
+        issues.push(issue("HARD_CONSTRAINT_VIOLATED", `constraints.hard.${index}`, `${constraint.description}: ${evaluation.reason}`));
+      } else if (evaluation.truth === "unresolved") {
+        issues.push(issue("HARD_CONSTRAINT_UNRESOLVED", `constraints.hard.${index}`, `${constraint.description}: ${evaluation.reason}`));
+      }
       if (constraint.kind === "temporal") {
         const notBefore = typeof constraint.values.notBefore === "string" ? Date.parse(constraint.values.notBefore) : null;
         const notAfter = typeof constraint.values.notAfter === "string" ? Date.parse(constraint.values.notAfter) : null;
@@ -107,9 +143,10 @@ export class IrAdmissibilityCompiler {
           issues.push(issue("TEMPORAL_INCONSISTENT", `constraints.hard.${index}`, "Temporal hard constraint has an impossible interval"));
         }
       }
-      if (constraint.kind === "capability" && typeof constraint.values.capability === "string" && !this.dependencies.hasCapability(constraint.values.capability)) {
-        issues.push(issue("CAPABILITY_UNAVAILABLE", `constraints.hard.${index}`, `Required capability ${constraint.values.capability} is unavailable`));
-      }
+      // Capability truth is independently evaluated above. Keep the dedicated
+      // error code as an additional deterministic diagnostic for unavailable
+      // capabilities; never use the planner-authored status field.
+      if (constraint.kind === "capability" && typeof constraint.values.capability === "string" && !this.dependencies.hasCapability(constraint.values.capability)) issues.push(issue("CAPABILITY_UNAVAILABLE", `constraints.hard.${index}`, `Required capability ${constraint.values.capability} is unavailable`));
     }
     const referencedEntities: Array<{ ref: CanonicalEntityRef; path: string }> = [
       ...artifact.intent.groundedEntities.map((ref, index) => ({ ref, path: `intent.groundedEntities.${index}` })),
@@ -184,7 +221,7 @@ export class IrAdmissibilityCompiler {
       }
       if (!artifact.plan.completion.observationIds.includes(observation.id)) issues.push(issue("OBSERVATION_INVALID", "plan.completion.observationIds", `Effect observation ${observation.id} is not required for completion`));
     }
-    return issues.length ? { admissible: false, issues } : { admissible: true, admitted: { artifact, admittedAt: this.dependencies.now().toISOString(), issues: [] } };
+    return issues.length ? { admissible: false, issues } : { admissible: true, admitted: { artifact, admittedAt: this.dependencies.now().toISOString(), constraintEvaluations: [...hardTruth, ...softTruth], issues: [] } };
   }
 }
 

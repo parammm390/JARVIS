@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { ASSET_DOMAINS, PROPERTY_LINK_STATUSES } from "@finnor/shared-types";
-import { appointments, assetMeasurements, equipment, households, properties, serviceVisits } from "@finnor/db";
+import { ASSET_DOMAINS, PROPERTY_LINK_STATUSES, PROPERTY_PARTY_RELATIONSHIPS } from "@finnor/shared-types";
+import { appointments, assetMeasurements, equipment, households, properties, propertyPartyRelationships, serviceVisits } from "@finnor/db";
 import { parseImportDefinition } from "@finnor/import-engine";
 import { PHASE1_LOCKED_COUNTS } from "../phase1/locked-corpus";
 
@@ -14,6 +14,10 @@ describe("generic Property/Asset kernel", () => {
 
   it("adds one shared property/asset/history/measurement relationship", () => {
     expect(properties.householdId.name).toBe("household_id");
+    expect(properties.householdId.notNull).toBe(false);
+    expect(propertyPartyRelationships.propertyId.name).toBe("property_id");
+    expect(propertyPartyRelationships.partyType.name).toBe("party_type");
+    expect(propertyPartyRelationships.partyId.name).toBe("party_id");
     expect(equipment.propertyId.name).toBe("property_id");
     expect(serviceVisits.propertyId.name).toBe("property_id");
     expect(serviceVisits.equipmentId.name).toBe("equipment_id");
@@ -21,6 +25,7 @@ describe("generic Property/Asset kernel", () => {
     expect(assetMeasurements.propertyId.notNull).toBe(true);
     expect(assetMeasurements.equipmentId.notNull).toBe(true);
     expect(PROPERTY_LINK_STATUSES).toEqual(["RESOLVED", "UNRESOLVED"]);
+    expect(PROPERTY_PARTY_RELATIONSHIPS).toEqual(["customer_account", "owner", "occupant", "property_manager", "billing_contact", "service_contact", "other"]);
     expect(ASSET_DOMAINS).toEqual(["WATER", "HVAC", "PLUMBING", "GENERIC", "UNRESOLVED"]);
   });
 

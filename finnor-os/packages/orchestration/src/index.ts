@@ -42,9 +42,9 @@ import { assembleOperatingContext } from "./operating-context";
 import { interactionAwareOperationalDecision, resolveOperatingInteractionContext } from "./interaction-context";
 import { employeeAuthoritySnapshot, evaluateActionApproval, evaluateAuthority, finalizeApprovalAuthorityTx, isFinalApprovalStep, revalidateActionExecution } from "@finnor/authority";
 import { queryAuthorityRequest } from "./authority-runtime";
-import { isConsequentialAction } from "./compiler";
+import { businessEffectApprovalRequired, isConsequentialAction } from "./compiler";
 import { businessEffectObservationForAction } from "./compiler";
-import { buildCompatibilityPlanningIr, compareLegacyCandidateToIr, planningIrMode } from "./planning-ir";
+import { buildNativeControllerPlanningIr, compareLegacyCandidateToIr, deriveRuntimeHardConstraintDeclarations, planningIrMode } from "./planning-ir";
 import { createDbIrAdmissibilityCompiler, persistPlanningIrArtifactTx } from "./ir-admissibility-db";
 import { IrAdmissibilityRejectedError } from "./ir-admissibility";
 import { lowerAdmittedPlanningIr } from "./ir-lowerer";
@@ -982,7 +982,7 @@ export class FinnorOrchestrator implements Orchestrator {
       initiatedBy?: string | null;
       authorityContext?: Record<string, unknown>;
       objectiveStepId?: string;
-      planning?: { artifact: PlanningIrArtifact; diff: PlanningSemanticDiff; status: "shadow" | "lowered" };
+      planning?: { artifact: PlanningIrArtifact; diff: PlanningSemanticDiff; status: "shadow" | "lowered"; effectId?: string; constraintEvaluations: import("@finnor/planning-ir").ConstraintTruthEvaluation[] };
     } = {},
   ): Promise<{ action: DomainAction; result: ExecutionResult }> {
     await ensureSecretsLoaded();
@@ -1009,6 +1009,8 @@ export class FinnorOrchestrator implements Orchestrator {
           domainActionId: created.id,
           workId: opts.workId,
           objectiveStepId: opts.objectiveStepId,
+          effectId: opts.planning.effectId,
+          constraintEvaluations: opts.planning.constraintEvaluations,
         });
         return created;
       }
@@ -1104,7 +1106,12 @@ export class FinnorOrchestrator implements Orchestrator {
       authorityContext: params.authorityContext,
       objectiveStepId: params.objectiveStepId,
     });
-    const artifact = buildCompatibilityPlanningIr({
+    const [planningPolicy] = await withTenant(params.tenantId, (db) => db.select().from(domainPolicyRevisions).where(and(
+      eq(domainPolicyRevisions.tenantId, params.tenantId),
+      eq(domainPolicyRevisions.actionType, params.actionType),
+      lte(domainPolicyRevisions.effectiveFrom, new Date()),
+    )).orderBy(desc(domainPolicyRevisions.effectiveFrom)).limit(1));
+    const artifact = buildNativeControllerPlanningIr({
       executionModel: "OBJECTIVE",
       requestedOutcome: params.objective,
       actions: [{ actionType: params.actionType, payload: params.payload, reasoning: `Objective controller selected ${params.actionType}`, dependsOn: [] }],
@@ -1112,6 +1119,16 @@ export class FinnorOrchestrator implements Orchestrator {
       compileEffect: (action, effectId) => this.plugins.compilePlanningEffect(action.actionType, action.payload, effectId),
       defineObservation: (action, effect, observationId) => this.plugins.definePlanningObservation(action.actionType, action.payload, effect, observationId),
       provenance: { source: "objective_controller", workId: params.workId, objectiveStepId: params.objectiveStepId, createdAt: new Date().toISOString() },
+      deriveHardConstraints: (effects, observations) => deriveRuntimeHardConstraintDeclarations({
+        effects,
+        observations,
+        trustedExcluded: [],
+        approvalRequired: (actionType) => businessEffectApprovalRequired(actionType, planningPolicy?.requiresConfirmation ?? true),
+        maxAmountForAction: () => {
+          const amount = (planningPolicy?.policy as { riskThresholds?: { amountUsd?: unknown } } | undefined)?.riskThresholds?.amountUsd;
+          return typeof amount === "number" && Number.isFinite(amount) && amount >= 0 ? amount : undefined;
+        },
+      }),
     });
     const diff = compareLegacyCandidateToIr({
       artifact,
@@ -1126,7 +1143,7 @@ export class FinnorOrchestrator implements Orchestrator {
       if (!result.admissible) throw new IrAdmissibilityRejectedError(result.issues);
       return result.admitted;
     });
-    const lowered = mode === "cutover" ? lowerAdmittedPlanningIr(admitted)[0] : null;
+    const lowered = mode === "native-ir" ? lowerAdmittedPlanningIr(admitted)[0] : null;
     return this.draftKnownAction(lowered?.actionType ?? params.actionType, lowered?.payload ?? params.payload, params.tenantId, {
       source: "objective_loop",
       actionId: params.actionId,
@@ -1135,7 +1152,7 @@ export class FinnorOrchestrator implements Orchestrator {
       initiatedBy: params.initiatedBy,
       authorityContext: params.authorityContext,
       objectiveStepId: params.objectiveStepId,
-      planning: { artifact, diff, status: mode === "shadow" ? "shadow" : "lowered" },
+      planning: { artifact, diff, status: mode === "shadow-native-ir" ? "shadow" : "lowered", effectId: artifact.effects[0]?.id, constraintEvaluations: admitted.constraintEvaluations },
     });
   }
 

@@ -5,7 +5,7 @@
 // @finnor/workflow-runtime's inbox_events/reconciliation_cases machinery (Phase 2),
 // which existed but had no real payment-domain caller until now.
 
-import type { DomainEnginePlugin } from "../shared/plugin-interface";
+import type { DomainEnginePlugin, PureDomainEngine } from "../shared/plugin-interface";
 import type { DraftAction, ExecutionResult, ValidationResult, DomainPolicy } from "@finnor/shared-types";
 import type { ToolRegistry } from "@finnor/tools";
 import { withTenant, invoices, households, domainActions, decisionReceipts, ingestIntegrationEventTx, tenantIntegrations } from "@finnor/db";
@@ -26,9 +26,53 @@ const SCHEMAS: Record<string, z.ZodTypeAny> = {
   start_invoice_to_cash_workflow: StartInvoiceToCashSchema,
 };
 
+/** Pure decision boundary for the durable multi-step path. It describes the
+ * existing workflow effect and evidence floor; the legacy execute adapter remains
+ * behind BusinessEffect/authority/durable-workflow governance. */
+export const invoiceToCashDomainEngine: PureDomainEngine = {
+  name: "invoice-to-cash",
+  version: "1.0.0",
+  actionTypes: ["start_invoice_to_cash_workflow"],
+  query: () => ({ requiredFacts: ["invoice", "customer_contact", "payment_provider", "accounting_provider"] }),
+  decide: ({ payload }) => ({
+    eligible: typeof payload.invoiceId === "string",
+    effectIntent: "Start the governed invoice-to-cash workflow for the grounded invoice",
+    requiredCapability: "action:start_invoice_to_cash_workflow",
+    risk: "high",
+    reasonCodes: ["DURABLE_PAYMENT_COLLECTION_WORKFLOW"],
+  }),
+  simulate: ({ payload }) => ({ predicted: { invoiceId: payload.invoiceId, steps: ["create_payment_link", "send_message", "sync_invoice"], started: false }, warnings: [] }),
+  explain: (_input, decision) => ({ summary: decision.effectIntent, reasonCodes: decision.reasonCodes }),
+  compileEffect: ({ effectId, payload }, decision) => ({
+    id: effectId,
+    actionType: "start_invoice_to_cash_workflow",
+    effectIntent: decision.effectIntent,
+    payload,
+    targetRefs: typeof payload.invoiceId === "string" ? [{ kind: "entity", entityType: "invoice", entityId: payload.invoiceId, field: "invoiceId", provenance: "pure_domain_engine" }] : [],
+    requiredCapability: decision.requiredCapability,
+    risk: decision.risk,
+    exposure: null,
+    proposalOnly: true,
+  }),
+  defineObservation: ({ observationId, effect }) => ({
+    id: observationId,
+    effectId: effect.id,
+    kind: "workflow_completion",
+    predicate: { workflowType: "invoice_to_cash", invoiceId: effect.payload.invoiceId, terminalState: "completed" },
+    requiredEvidence: ["workflow_terminal_state", "payment_and_accounting_step_receipts"],
+    acknowledgementSufficient: false,
+    verificationFloor: "at_least_existing",
+  }),
+  reconcileDecision: ({ observation }) => observation.terminal === true && observation.evidencePresent === true
+    ? { status: "verified", reasonCodes: ["WORKFLOW_TERMINAL_EVIDENCE_PRESENT"] }
+    : observation.failed === true ? { status: "failed", reasonCodes: ["WORKFLOW_FAILED"] } : { status: "pending", reasonCodes: ["WORKFLOW_TERMINAL_EVIDENCE_REQUIRED"] },
+  compileCompensationEffect: () => null,
+};
+
 export const invoiceToCashPlugin: DomainEnginePlugin = {
   name: "invoice-to-cash",
   actionTypes: Object.keys(SCHEMAS),
+  intelligence: invoiceToCashDomainEngine,
   payloadSchemas: SCHEMAS,
   canHandle(t) {
     return t in SCHEMAS;

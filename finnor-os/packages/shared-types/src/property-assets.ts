@@ -9,13 +9,27 @@ export type PropertyLinkStatus = (typeof PROPERTY_LINK_STATUSES)[number];
 export const PROPERTY_KINDS = ["residential", "commercial", "service_location", "unknown"] as const;
 export type PropertyKind = (typeof PROPERTY_KINDS)[number];
 
+export const PROPERTY_PARTY_RELATIONSHIPS = ["customer_account", "owner", "occupant", "property_manager", "billing_contact", "service_contact", "other"] as const;
+export type PropertyPartyRelationshipKind = (typeof PROPERTY_PARTY_RELATIONSHIPS)[number];
+
+export interface PropertyPartyRelationship {
+  propertyId: string;
+  party: import("./company-graph").PartyRef;
+  relationship: PropertyPartyRelationshipKind;
+  isPrimary: boolean;
+  validFrom: string;
+  validTo?: string;
+}
+
 /** Domain is classification only. It carries no domain-specific decision logic. */
 export const ASSET_DOMAINS = ["WATER", "HVAC", "PLUMBING", "GENERIC", "UNRESOLVED"] as const;
 export type AssetDomain = (typeof ASSET_DOMAINS)[number];
 
 export interface PropertyRef {
   propertyId: string;
-  householdId: string;
+  /** Compatibility customer/account relationship; ownership is represented by
+   * PropertyPartyRelationship and is not inferred from this field. */
+  householdId?: string;
   linkStatus: PropertyLinkStatus;
 }
 
