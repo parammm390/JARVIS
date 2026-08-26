@@ -249,3 +249,4 @@ describe.skipIf(!available)("Loop closure (Phase 12)", () => {
     expect(digest.scanFindingLagHours.max).toBeCloseTo(30, 1);
   });
 });
+process.env.FINNOR_PLANNING_IR_MODE = "legacy"; // This suite intentionally certifies the bounded legacy planner envelope.

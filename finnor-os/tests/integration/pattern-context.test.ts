@@ -149,3 +149,4 @@ describe.skipIf(!available)("Pattern context (Phase 9)", () => {
     expect(parsed.memory.patterns.householdProposals.accepted).toBe(2);
   });
 });
+process.env.FINNOR_PLANNING_IR_MODE = "legacy"; // This suite intentionally certifies the bounded legacy planner envelope.

@@ -19,6 +19,7 @@
     "test:live:steel": "vitest run tests/live/steel-provider.live.test.ts",
     "test:planner-evals": "vitest run tests/planner-evals",
     "test:phase1": "vitest run tests/phase1 tests/unit/planning-ir.test.ts tests/unit/property-asset-kernel.test.ts",
+    "test:phase1:db": "vitest run tests/integration/phase1-property-asset-upgrade.test.ts tests/integration/phase1-planning-cutover.test.ts tests/integration/phase1-real-corpus-db.test.ts",
     "eval:planner:live": "tsx scripts/eval-planner.ts",
     "test:staging": "tsx scripts/guard-staging.ts",
     "dev:api": "npm run dev --workspace @finnor/api",
@@ -62,7 +63,7 @@
     "release:certify:outcome": "tsx scripts/release/run-outcome-pack-certification.ts",
     "phase1:boundaries": "node scripts/phase1-boundary-gate.mjs",
     "phase1:legacy-inventory": "tsx scripts/phase1-legacy-execution-inventory.ts",
-    "release:phase1": "npm run phase1:legacy-inventory && npm run phase1:boundaries && npm run test:phase1 && npm run typecheck"
+    "release:phase1": "npm run phase1:legacy-inventory && npm run phase1:boundaries && npm run test:phase1 && npm run test:phase1:db && npm run typecheck"
   },
   "dependencies": {
     "@aws-sdk/client-secrets-manager": "^3.1086.0",

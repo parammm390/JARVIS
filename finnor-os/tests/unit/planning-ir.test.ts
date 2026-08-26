@@ -2,20 +2,20 @@ import { describe, expect, it } from "vitest";
 import fc from "fast-check";
 import { createHash } from "node:crypto";
 import { canonicalSerialize, comparePlanningSemantics, computeIrSemanticHash, IR_HASH_NAMESPACE } from "@finnor/planning-ir";
-import { businessEffectObservationForAction, IrAdmissibilityCompiler, lowerAdmittedPlanningIr, semanticSnapshotFromArtifact } from "@finnor/orchestration";
+import { businessEffectObservationForAction, IrAdmissibilityCompiler, lowerAdmittedPlanningIr, planningIrMode, semanticSnapshotFromArtifact } from "@finnor/orchestration";
 import { inventoryPlugin, stockUsageDomainEngine } from "../../packages/domain-plugins/inventory";
 import { customerCommPlugin, customerMessageDomainEngine } from "../../packages/domain-plugins/customer-comm";
 import { computerTaskPlugin, computerTaskDomainEngine } from "../../packages/domain-plugins/computer-task";
 import { invoiceToCashPlugin, invoiceToCashDomainEngine } from "../../packages/domain-plugins/invoice-to-cash";
-import { PHASE1_CONSEQUENTIAL_ACTION_TYPES, PHASE1_CORPUS_SEED, PHASE1_FIXED_CLOCK, PHASE1_LOCKED_CORPUS } from "../phase1/locked-corpus";
+import { PHASE1_CORPUS_SEED, PHASE1_FIXED_CLOCK, PHASE1_LOCKED_CORPUS } from "../phase1/locked-corpus";
 
-const baseCase = PHASE1_LOCKED_CORPUS.find((entry): entry is Extract<typeof entry, { suite: "ir" }> => entry.suite === "ir" && entry.effectCount === 1)!;
+const baseCase = PHASE1_LOCKED_CORPUS.find((entry): entry is Extract<typeof entry, { suite: "ir" }> => entry.suite === "ir")!;
 const base = () => structuredClone(baseCase.artifact);
 const compiler = () => new IrAdmissibilityCompiler({
   groundPayload: async (payload) => Object.keys(payload).filter((key) => key.endsWith("Id")).map((field) => ({ field, status: "verified" as const })),
   groundRef: async () => "verified",
-  hasCapability: (capability) => capability.startsWith("action:") && PHASE1_CONSEQUENTIAL_ACTION_TYPES.includes(capability.slice("action:".length)),
-  hasActionType: (actionType) => PHASE1_CONSEQUENTIAL_ACTION_TYPES.includes(actionType),
+  hasCapability: (capability) => capability === "action:fixture_action",
+  hasActionType: (actionType) => actionType === "fixture_action",
   requiredObservation: businessEffectObservationForAction,
   evaluateConstraint: async (constraint) => ({
     truth: constraint.values.actualTruth === "violated" ? "violated" : constraint.values.actualTruth === "unresolved" ? "unresolved" : "satisfied",
@@ -28,6 +28,10 @@ const compiler = () => new IrAdmissibilityCompiler({
 });
 
 describe("Planning IR canonical semantics", () => {
+  it("defaults supported planner paths to native IR", () => {
+    expect(planningIrMode({} as NodeJS.ProcessEnv)).toBe("native-ir");
+  });
+
   it("hashes equivalent objects identically across key order and non-semantic runtime metadata", () => {
     const artifact = base();
     const reordered = structuredClone(artifact);

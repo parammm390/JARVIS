@@ -40,3 +40,4 @@ describe.skipIf(!available)("clarification request", () => {
     expect(row).toMatchObject({ actionType: "clarification_request", status: "completed", payload: { missingFields: ["householdId"] } });
   });
 });
+process.env.FINNOR_PLANNING_IR_MODE = "legacy"; // This suite intentionally certifies the bounded legacy planner envelope.

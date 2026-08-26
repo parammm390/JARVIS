@@ -128,3 +128,4 @@ describe.skipIf(!available)("planner plan DAG", () => {
     expect(receipts.filter((receipt) => receipt.domainActionId === first!.id || receipt.domainActionId === second!.id)).toHaveLength(2);
   });
 });
+process.env.FINNOR_PLANNING_IR_MODE = "legacy"; // This suite intentionally certifies the bounded legacy planner envelope.

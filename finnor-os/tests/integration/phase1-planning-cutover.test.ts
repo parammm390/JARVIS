@@ -5,19 +5,26 @@ import { and, eq, isNull } from "drizzle-orm";
 import {
   businessEffects,
   closePool,
+  commands,
   domainActions,
   households,
   planningIrArtifacts,
   tenants,
+  works,
   withTenant,
 } from "@finnor/db";
 import {
+  ActionCancellationConflictError,
+  authorizeActionExecutionTx,
   createDefaultPluginRegistry,
   compilePlanningEffectToBusinessEffect,
+  createDbIrAdmissibilityCompiler,
   LLMPlanner,
+  NativePlanningIrRequiredError,
   startWorkObjective,
   type LLMProvider,
 } from "@finnor/orchestration";
+import { computeIrSemanticHash, parsePlanningIrArtifact } from "@finnor/planning-ir";
 import type { DomainAction, DomainPolicy, MemorySnapshot, TenantContext } from "@finnor/shared-types";
 import { migrate } from "../../packages/db/migrate";
 
@@ -99,6 +106,17 @@ describe.skipIf(!available).sequential("Phase-1 Planning IR shadow and cutover",
     expect(storedEffect!.semanticHash).not.toBe(cutoverIr!.irSemanticHash);
   });
 
+  it("fails closed without persisting an action when a native-mode model returns the legacy envelope", async () => {
+    process.env.FINNOR_PLANNING_IR_MODE = "native-ir";
+    const legacyProvider: LLMProvider = { name: "forbidden-legacy-envelope", async complete() { return JSON.stringify({ actions: [{ action_type: "create_invoice", payload: { householdId, amountUsd: 100 }, reasoning: "legacy envelope" }] }); } };
+    const before = await withTenant(tenantId, (db) => db.select({ id: domainActions.id }).from(domainActions));
+    await expect(new LLMPlanner(createDefaultPluginRegistry(), legacyProvider).plan(
+      "Create the approved $100 invoice.", context(), memory(), { executionModel: "ATOMIC_EFFECT" },
+    )).rejects.toBeInstanceOf(NativePlanningIrRequiredError);
+    const after = await withTenant(tenantId, (db) => db.select({ id: domainActions.id }).from(domainActions));
+    expect(after).toHaveLength(before.length);
+  });
+
   it("persists the Objective goal IR before its controller proposes any effect", async () => {
     process.env.FINNOR_PLANNING_IR_MODE = "native-ir";
     const started = await startWorkObjective("Keep every open customer invoice followed up until its persisted success condition is true.", context(), {
@@ -117,5 +135,41 @@ describe.skipIf(!available).sequential("Phase-1 Planning IR shadow and cutover",
     expect((goalIr!.artifact as { effects: unknown[] }).effects).toEqual([]);
     expect((goalIr!.artifact as { intent: { executionModel: string } }).intent.executionModel).toBe("OBJECTIVE");
     expect(await withTenant(tenantId, (db) => db.select().from(domainActions).where(eq(domainActions.workId, started.workId)))).toHaveLength(0);
+  });
+
+  it("independently rejects terminal Work at admissibility and at the final execution fence", async () => {
+    process.env.FINNOR_PLANNING_IR_MODE = "native-ir";
+    const [planned] = await new LLMPlanner(createDefaultPluginRegistry(), provider).plan(
+      "Create the approved $125 invoice.", context(), memory(), { executionModel: "ATOMIC_EFFECT" },
+    );
+    const workId = randomUUID();
+    await withTenant(tenantId, async (db) => {
+      await db.insert(works).values({ id: workId, tenantId, status: "failed", initialChannel: "text", initialInstruction: "Create the approved $125 invoice." });
+      await db.update(domainActions).set({ workId }).where(and(eq(domainActions.tenantId, tenantId), eq(domainActions.id, planned!.id)));
+    });
+    const [storedIr] = await withTenant(tenantId, (db) => db.select().from(planningIrArtifacts).where(eq(planningIrArtifacts.domainActionId, planned!.id)).limit(1));
+    const candidate = parsePlanningIrArtifact(storedIr!.artifact);
+    candidate.constraints.hard.push({
+      id: "work-must-remain-executable",
+      strength: "HARD",
+      kind: "precondition",
+      description: "Terminal Work cannot authorize a new undispatched effect",
+      status: "satisfied",
+      subjectRefs: [{ kind: "work", entityType: "work", entityId: workId, field: "workId", provenance: "trusted_runtime_context" }],
+      values: { workNotTerminal: true },
+    });
+    candidate.metadata.irSemanticHash = computeIrSemanticHash(candidate);
+    const registry = createDefaultPluginRegistry();
+    const admissibility = await withTenant(tenantId, (db) => createDbIrAdmissibilityCompiler({ db, tenantId, plugins: registry }).admit(candidate));
+    expect(admissibility.admissible).toBe(false);
+    if (!admissibility.admissible) expect(admissibility.issues).toContainEqual(expect.objectContaining({ code: "HARD_CONSTRAINT_VIOLATED" }));
+
+    const action = { ...planned!, workId } as DomainAction;
+    const policy: DomainPolicy = { id: "", tenantId, actionType: action.actionType, policy: {}, requiresConfirmation: true, confirmationTemplate: null, version: 0 };
+    const plugin = registry.resolve(action.actionType)!;
+    const draft = await plugin.draft(action.actionType, action.payload, policy);
+    const effect = await compilePlanningEffectToBusinessEffect({ action, draft, policy, approval: { requiresConfirmation: true, typedConfirmation: false } });
+    await expect(withTenant(tenantId, (db) => authorizeActionExecutionTx(db, { tenantId, actionId: action.id, authorizationSource: "human_approval" }))).rejects.toBeInstanceOf(ActionCancellationConflictError);
+    expect(await withTenant(tenantId, (db) => db.select().from(commands).where(eq(commands.businessEffectId, effect!.id)))).toHaveLength(0);
   });
 });

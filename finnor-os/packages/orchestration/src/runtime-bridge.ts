@@ -90,7 +90,7 @@ export async function assertActionNotCancelledTx(
       .from(works)
       .where(and(eq(works.tenantId, params.tenantId), eq(works.id, params.workId)))
       .limit(1);
-    if (work?.status === "cancelled" || work?.status === "completed") {
+    if (work?.status === "cancelled" || work?.status === "completed" || work?.status === "failed") {
       throw new ActionCancellationConflictError(`Execution refused: Work is ${work.status}`);
     }
   }

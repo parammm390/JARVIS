@@ -86,3 +86,4 @@ describe.skipIf(!available)("health-aware planner", () => {
     }
   });
 });
+process.env.FINNOR_PLANNING_IR_MODE = "legacy"; // This suite intentionally certifies the bounded legacy planner envelope.

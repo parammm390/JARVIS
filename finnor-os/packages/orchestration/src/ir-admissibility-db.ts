@@ -1,4 +1,4 @@
-import { domainPolicyRevisions, equipment, planningIrArtifacts, propertyPartyRelationships, type Db } from "@finnor/db";
+import { domainPolicyRevisions, equipment, planningIrArtifacts, propertyPartyRelationships, works, type Db } from "@finnor/db";
 import type { ConstraintSpec, ConstraintTruthEvaluation, PlanningIrArtifact, PlanningSemanticDiff, SemanticDiffClassification } from "@finnor/planning-ir";
 import { and, desc, eq, isNull, lte } from "drizzle-orm";
 import { businessEffectApprovalRequired, businessEffectObservationForAction, groundCanonicalRefWithDb, groundEntitiesWithDb } from "./compiler";
@@ -127,6 +127,23 @@ export function createDbIrAdmissibilityCompiler(input: {
         return evaluation("unresolved", "runtime_scope", "restriction is not tied to a trusted executable predicate");
       }
       case "precondition": {
+        if (constraint.values.workNotTerminal === true) {
+          const workRef = constraint.subjectRefs.find((ref) => ref.kind === "work" || ref.entityType === "work");
+          if (!workRef) return evaluation("unresolved", "canonical_state", "workNotTerminal requires a canonical Work reference");
+          const [work] = await input.db.select({ id: works.id, status: works.status, updatedAt: works.updatedAt }).from(works).where(and(
+            eq(works.tenantId, input.tenantId),
+            eq(works.id, workRef.entityId),
+          )).limit(1);
+          if (!work) return evaluation("violated", "canonical_state", "required Work does not exist in this tenant");
+          const terminal = work.status === "cancelled" || work.status === "failed" || work.status === "completed";
+          return evaluation(
+            terminal ? "violated" : "satisfied",
+            "canonical_state",
+            terminal ? `Work is terminal (${work.status})` : `Work remains executable (${work.status})`,
+            [`work:${work.id}:status:${work.status}`],
+            { work: work.updatedAt.toISOString() },
+          );
+        }
         if (constraint.values.exists !== true || constraint.subjectRefs.length === 0) return evaluation("unresolved", "canonical_state", "precondition has no supported canonical existence predicate");
         const grounded = await Promise.all(constraint.subjectRefs.map(groundRef));
         return grounded.every((status) => status === "verified")

@@ -77,3 +77,4 @@ describe.skipIf(!available)("planner simulations", () => {
     expect((row!.predictedReceipt as { simulation: { summary: string } }).simulation.summary).toContain("Dry run");
   });
 });
+process.env.FINNOR_PLANNING_IR_MODE = "legacy"; // This suite intentionally certifies the bounded legacy planner envelope.

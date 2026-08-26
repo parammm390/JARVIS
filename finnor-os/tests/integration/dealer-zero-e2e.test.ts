@@ -32,6 +32,7 @@ import {
 } from "@finnor/db";
 import { eq, and, ne } from "drizzle-orm";
 import { createDefaultPluginRegistry, FinnorOrchestrator } from "@finnor/orchestration";
+import { setupLangGraphCheckpointer } from "../../packages/orchestration/src/graph/setup";
 import { createLead } from "@finnor/data-platform";
 import { seedDealerZero, DEALER_ZERO_TENANT_ID } from "../../scripts/seed-dealer-zero";
 import { seedTenantPolicies } from "../../scripts/seed-tenant-policies";
@@ -84,6 +85,7 @@ describe.skipIf(!available)("Phase 3.6 proof tests — policy conformance + Deal
     process.env.SCHEDULING_BINDING = "emulator";
     await migrate(DB_URL);
     await seed(DB_URL);
+    await setupLangGraphCheckpointer();
     await seedDealerZero();
     await seedTenantPolicies(DEALER_ZERO_TENANT_ID, { reviewLinkUrl: "https://g.page/r/dealer-zero-finnor-water-co/review" });
     await withTenant(DEALER_ZERO_TENANT_ID, (db) => db.delete(reconciliationCases).where(eq(reconciliationCases.tenantId, DEALER_ZERO_TENANT_ID)));

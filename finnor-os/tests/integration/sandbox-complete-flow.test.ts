@@ -22,6 +22,7 @@ import {
   businessOperationTargets,
 } from "@finnor/db";
 import { FinnorOrchestrator } from "@finnor/orchestration";
+import { setupLangGraphCheckpointer } from "../../packages/orchestration/src/graph/setup";
 import { createDefaultRegistry, commsMode } from "@finnor/tools";
 import { and, desc, eq, sql } from "drizzle-orm";
 import type { DomainAction } from "@finnor/shared-types";
@@ -72,6 +73,7 @@ describe.skipIf(!available)("sandbox mode: the complete workflow is REAL (§99%)
     process.env.COMMS_MODE = "auto";
     await migrate(DB_URL);
     await seed(DB_URL);
+    await setupLangGraphCheckpointer();
   });
 
   afterAll(async () => {

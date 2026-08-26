@@ -12,6 +12,7 @@ import { withTenant, closePool, domainActions, domainPolicies, actionLog } from 
 import { FinnorOrchestrator } from "@finnor/orchestration";
 import { ToolRegistry } from "@finnor/tools";
 import { appendEpisode } from "@finnor/memory";
+import { setupLangGraphCheckpointer } from "../../packages/orchestration/src/graph/setup";
 import { and, eq } from "drizzle-orm";
 import type { DomainAction, TenantContext } from "@finnor/shared-types";
 import { driveDurableAction } from "./helpers/durable-action";
@@ -106,6 +107,11 @@ describe.skipIf(!available)("full gated flow (§32.6, §32.11)", () => {
     process.env.DATABASE_URL = DB_URL;
     await migrate(DB_URL);
     await seed(DB_URL);
+    // The graph executor persists approval pauses/resumes in its own schema. A
+    // fresh test database has no admin deployment step to provision it, so use
+    // the same explicit setup seam as CI/admin migration before exercising the
+    // graph-routed schedule_water_test path.
+    await setupLangGraphCheckpointer();
   });
 
   afterAll(async () => {

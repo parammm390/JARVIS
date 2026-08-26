@@ -4,7 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { migrate } from "../../packages/db/migrate";
 import {
   appointments, closePool, contactMethods, contacts, equipment, households, importEntityRefs, importRows, importRuns,
-  inventoryItems, invoices, leads, payments, proposals, quoteLineItems, quotes, serviceVisits, technicians, tenants, withTenant, workOrders,
+  inventoryItems, invoices, leads, payments, properties, proposals, quoteLineItems, quotes, serviceVisits, technicians, tenants, withTenant, workOrders,
 } from "@finnor/db";
 import { parseImportDefinition, runDeclarativeImport } from "@finnor/import-engine";
 
@@ -75,6 +75,7 @@ describe.skipIf(!available).sequential("Phase 3 declarative client import", () =
         await db.delete(leads).where(eq(leads.tenantId, id));
         await db.delete(contactMethods).where(eq(contactMethods.tenantId, id));
         await db.delete(contacts).where(eq(contacts.tenantId, id));
+        await db.delete(properties).where(eq(properties.tenantId, id));
         await db.delete(households).where(eq(households.tenantId, id));
         await db.delete(inventoryItems).where(eq(inventoryItems.tenantId, id));
         await db.delete(technicians).where(eq(technicians.tenantId, id));

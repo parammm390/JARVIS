@@ -48,9 +48,9 @@ async function findTargets(
         equipmentType: equipment.type,
       })
       .from(serviceVisits)
-      .innerJoin(households, eq(serviceVisits.householdId, households.id))
-      .leftJoin(equipment, eq(equipment.householdId, households.id))
-      .where(and(eq(serviceVisits.type, "install"), gte(serviceVisits.completedAt, since)))
+      .innerJoin(households, and(eq(serviceVisits.householdId, households.id), eq(households.tenantId, tenantId)))
+      .leftJoin(equipment, and(eq(equipment.householdId, households.id), eq(equipment.tenantId, tenantId)))
+      .where(and(eq(serviceVisits.tenantId, tenantId), eq(serviceVisits.type, "install"), gte(serviceVisits.completedAt, since)))
       .orderBy(desc(serviceVisits.completedAt))
       .limit(limit);
     const seen = new Set<string>();

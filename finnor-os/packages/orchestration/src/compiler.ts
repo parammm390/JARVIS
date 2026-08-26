@@ -863,8 +863,29 @@ async function assertPlanningEffectBindingWithDb(params: {
   const effect = artifact.effects.find((candidate) => candidate.id === row.effectId);
   if (!effect) throw new BusinessEffectBoundaryError("effect_missing", `Planning IR binding references missing EffectSpec ${row.effectId}`);
   if (effect.actionType !== params.action.actionType) throw new BusinessEffectBoundaryError("material_effect_change", "Lowered DomainAction action type differs from its accepted EffectSpec");
-  if (canonicalSerialize(semanticValue(effect.payload)) !== canonicalSerialize(semanticValue(params.draft.payload)) || canonicalSerialize(semanticValue(effect.payload)) !== canonicalSerialize(semanticValue(params.action.payload))) {
+  const effectPayload = semanticValue(effect.payload) as Record<string, unknown>;
+  const actionPayload = semanticValue(params.action.payload) as Record<string, unknown>;
+  const draftPayload = semanticValue(params.draft.payload) as Record<string, unknown>;
+  if (canonicalSerialize(effectPayload) !== canonicalSerialize(actionPayload)) {
     throw new BusinessEffectBoundaryError("material_effect_change", "Lowered DomainAction payload differs from its accepted EffectSpec");
+  }
+  for (const [key, value] of Object.entries(effectPayload)) {
+    if (!(key in draftPayload) || canonicalSerialize(draftPayload[key]) !== canonicalSerialize(value)) {
+      throw new BusinessEffectBoundaryError("material_effect_change", `Prepared draft changed accepted EffectSpec field ${key}`);
+    }
+  }
+  // These fields are deterministic canonical-state enrichments produced by the
+  // existing governed plugin draft/preparation hooks. They become inputs to the
+  // one BusinessEffect compiler, but never retroactively change Planning-IR
+  // identity or authorize broader user-supplied intent.
+  const allowedPreparedFields: Record<string, ReadonlySet<string>> = {
+    bulk_notify_existing_customers: new Set(["excludedHouseholdIds", "approvedTargetCount", "preview", "operationId", "durableOperation", "frozenTargetCount"]),
+    send_proposal_to_recent_installs: new Set(["windowDays", "limit", "targets"]),
+  };
+  const extras = Object.keys(draftPayload).filter((key) => !(key in effectPayload) && draftPayload[key] !== undefined);
+  const allowed = allowedPreparedFields[params.action.actionType] ?? new Set<string>();
+  if (extras.some((key) => !allowed.has(key))) {
+    throw new BusinessEffectBoundaryError("material_effect_change", `Prepared draft adds unapproved EffectSpec fields: ${extras.filter((key) => !allowed.has(key)).join(", ")}`);
   }
 }
 

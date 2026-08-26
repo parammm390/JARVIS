@@ -246,3 +246,4 @@ describe.skipIf(!available)("LLMPlanner reasoning tier", () => {
     expect((tierEpisode!.output as Record<string, unknown>).tier).toBe("high");
   });
 });
+process.env.FINNOR_PLANNING_IR_MODE = "legacy"; // This suite intentionally certifies the bounded legacy planner envelope.

@@ -223,3 +223,4 @@ describe.skipIf(!available)("LLMPlanner repair pass", () => {
     ).rejects.toThrow("Planner LLM call failed: LLM call deadline exceeded");
   });
 });
+process.env.FINNOR_PLANNING_IR_MODE = "legacy"; // This suite intentionally certifies the bounded legacy planner envelope.

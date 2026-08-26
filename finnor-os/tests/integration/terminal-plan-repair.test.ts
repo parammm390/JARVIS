@@ -71,3 +71,4 @@ describe.skipIf(!available)("terminal plan repair", () => {
     expect(replacement[0]).toMatchObject({ actionType: "manual_step_suggestion", status: "completed", repairedFromPlanId: sourcePlanId });
   });
 });
+process.env.FINNOR_PLANNING_IR_MODE = "legacy"; // This suite intentionally certifies the bounded legacy planner envelope.
