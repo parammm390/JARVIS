@@ -26,6 +26,9 @@ if (contract.topology.worker.provider !== "azure-vm") fail("worker provider must
 for (const key of ["tenantId", "subscriptionId", "resourceGroup", "resourceName", "resourceId", "vmId", "systemdUnit"]) {
   if (!contract.topology.worker[key]) fail(`Azure worker contract is missing ${key}`)
 }
+if (contract.topology.worker.sseGatewayEnabled !== true) fail("Azure worker SSE gateway must be enabled")
+if (!Number.isInteger(contract.topology.worker.sseGatewayPort) || contract.topology.worker.sseGatewayPort < 1024) fail("Azure worker SSE gateway port is invalid")
+if (contract.topology.worker.sseGatewayUrl !== `https://${contract.topology.worker.sseGatewayHostname}`) fail("Azure worker SSE URL/hostname drifted")
 if (contract.topology.orchestrator.separateDeployment === false && contract.topology.orchestrator.mode !== "embedded-worker") {
   fail("non-separate orchestrator must be embedded in the worker")
 }
@@ -97,6 +100,7 @@ for (const invariant of [
   "node scripts/release/deploy-production.mjs frontend",
   "node scripts/release/deploy-production.mjs api",
   "node scripts/release/deploy-azure-worker.mjs",
+  "node scripts/release/configure-azure-sse-ingress.mjs",
   "node scripts/release/verify-production-parity.mjs",
 ]) {
   if (!workflow.includes(invariant)) fail(`production workflow omits guarded stage: ${invariant}`)

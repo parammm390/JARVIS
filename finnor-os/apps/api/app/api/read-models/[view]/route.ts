@@ -49,7 +49,11 @@ const VIEWS: Record<string, (tenantId: string, searchParams: URLSearchParams) =>
   },
   // P2.T1: derived only from exact instruction/action/workflow/receipt links;
   // there is intentionally no persisted Work table or customer/time grouping.
-  "work-cases": (tenantId) => workCases(tenantId),
+  "work-cases": async (tenantId, searchParams) => {
+    const rows = await workCases(tenantId);
+    const workId = searchParams.get("workId");
+    return workId ? rows.filter((row) => row.durableWork?.id === workId) : rows;
+  },
   // Phase 8 (§8.3): the 30-day certification trend the cockpit's scorecard panel reads.
   "readiness": (tenantId, searchParams) => {
     const days = Number(searchParams.get("days") ?? 30);

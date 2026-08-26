@@ -194,14 +194,20 @@ if (isMain) {
   // worker_heartbeat. No-ops loudly inside the handler itself until Param supplies
   // BACKUP_GITHUB_TOKEN/BACKUP_GITHUB_REPO.
   if (!certificationMode) startGlobalScheduler("backup_db", 6, 15 * 60_000, controller.signal);
-  // The SSE gateway shares the persistent worker process and binds only when the
-  // deployment supplies PORT. Local job-loop development does not require a port.
-  if (process.env.PORT) {
-    const ssePort = Number(process.env.PORT);
+  // Production explicitly enables the gateway; local job-loop development can
+  // still opt in with SSE_PORT/PORT without acquiring another service runtime.
+  const sseEnabled = process.env.FINNOR_SSE_GATEWAY_ENABLED === "1" || Boolean(process.env.SSE_PORT || process.env.PORT);
+  if (sseEnabled) {
+    const ssePort = Number(process.env.SSE_PORT ?? process.env.PORT ?? 8090);
+    if (!Number.isInteger(ssePort) || ssePort < 1 || ssePort > 65_535) {
+      log.fatal({ ssePort }, "[sse] invalid gateway port");
+      process.exit(1);
+    }
     startSseServer(ssePort, controller.signal)
       .then(() => log.info({ port: ssePort }, "[sse] gateway listening (same process as job loop)"))
       .catch((err) => {
-        log.error({ err: err instanceof Error ? err.message : String(err) }, "[sse] gateway failed to start — job loop continues regardless");
+        log.fatal({ err: err instanceof Error ? err.message : String(err) }, "[sse] gateway failed to start");
+        process.exit(1);
       });
   }
   createWorker()

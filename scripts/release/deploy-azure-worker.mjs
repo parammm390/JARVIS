@@ -37,6 +37,8 @@ const replacements = {
   __FINNOR_CURRENT_SYMLINK__: worker.currentSymlink,
   __FINNOR_SECRET_ENV__: worker.secretEnvironmentFile,
   __FINNOR_RELEASE_ENV__: worker.releaseEnvironmentFile,
+  __FINNOR_SSE_PORT__: String(worker.sseGatewayPort),
+  __FINNOR_SSE_HOSTNAME__: worker.sseGatewayHostname,
 }
 let script = readFileSync(resolve(repoRoot, "scripts/release/azure/deploy-worker.sh"), "utf8")
 for (const [placeholder, value] of Object.entries(replacements)) script = script.replaceAll(placeholder, value)

@@ -52,6 +52,13 @@ function publishRealtimeStatus(status: "connecting" | "live" | "polling" | "paus
   window.dispatchEvent(new CustomEvent("jarvis:realtime-status", { detail }))
 }
 
+function publishOperationalDeltaToBrowser(delta: OperationalDelta): void {
+  if (typeof window === "undefined") return
+  const detail = { ...delta, receivedAt: Date.now() }
+  ;(window as unknown as { __JARVIS_LAST_OPERATIONAL_DELTA__?: typeof detail }).__JARVIS_LAST_OPERATIONAL_DELTA__ = detail
+  window.dispatchEvent(new CustomEvent("jarvis:operational-delta", { detail }))
+}
+
 async function consumeSse(
   response: Response,
   signal: AbortSignal,
@@ -183,6 +190,7 @@ export function BusinessProjectionProvider({ children }: { children: React.React
       if (reduction.kind === "ignore") return true
       if (reduction.kind === "resync") return false
       persist(reduction.state)
+      publishOperationalDeltaToBrowser(delta)
       if (reduction.tags.length > 0) realtimeInvalidations.push(reduction.tags, "realtime")
       if (reduction.highPriority) window.dispatchEvent(new CustomEvent("jarvis:operational-attention", { detail: { cursor: delta.cursor, changeType: delta.changeType, entityRefs: delta.entityRefs, workId: delta.workId } }))
       return true

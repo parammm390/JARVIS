@@ -72,15 +72,16 @@ export function finalizeInstructionRoute(
 ): InstructionRouteDecision {
   if (preliminary.route !== "ATOMIC_EFFECT") return preliminary;
   const action = actions[0];
-  const dependencyCount = Array.isArray((action as DomainAction & { dependsOn?: unknown[] }).dependsOn)
+  const dependencyCount = action && Array.isArray((action as DomainAction & { dependsOn?: unknown[] }).dependsOn)
     ? ((action as DomainAction & { dependsOn?: unknown[] }).dependsOn?.length ?? 0)
     : 0;
-  const atomic = actions.length === 1
-    && Boolean(action)
-    && dependencyCount === 0
-    && action!.compiledGraph?.kind === "single_action"
-    && !CONTINUATION_ACTION.test(action!.actionType)
-    && isConsequentialAction(action!.actionType, action!.payload);
+  if (actions.length !== 1 || !action) {
+    return { version: 1, route: "OBJECTIVE", reasonCodes: ["atomic_candidate_rejected_by_typed_plan"] };
+  }
+  const atomic = dependencyCount === 0
+    && action.compiledGraph?.kind === "single_action"
+    && !CONTINUATION_ACTION.test(action.actionType)
+    && isConsequentialAction(action.actionType, action.payload);
   return atomic
     ? { ...preliminary, reasonCodes: [...preliminary.reasonCodes, "one_independent_effect_set"] }
     : { version: 1, route: "OBJECTIVE", reasonCodes: ["atomic_candidate_rejected_by_typed_plan"] };

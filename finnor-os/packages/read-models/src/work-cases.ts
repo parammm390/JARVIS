@@ -34,6 +34,10 @@ import {
   outcomePackRuns,
   autonomyEvaluations,
   outcomeShadowProposals,
+  businessEffects,
+  computerRuns,
+  workEventWaits,
+  workWakeClaims,
 } from "@finnor/db";
 import { and, asc, desc, eq, or } from "drizzle-orm";
 
@@ -227,6 +231,28 @@ export interface WorkCaseProjection {
   workflows: WorkWorkflow[];
   receipts: WorkReceipt[];
   operations?: WorkOperation[];
+  businessEffects?: Array<{
+    id: string;
+    domainActionId: string | null;
+    semanticHash: string;
+    status: string;
+    verification: unknown;
+    observedAt: string | null;
+  }>;
+  computerRuns?: Array<{
+    id: string;
+    domainActionId: string;
+    businessEffectId: string | null;
+    status: string;
+    effectStatus: string;
+    application: string;
+    provider: string;
+    mode: "READ_ONLY" | "WRITE";
+    blockReason: string | null;
+    failureCode: string | null;
+    startedAt: string | null;
+    finishedAt: string | null;
+  }>;
   linkedEntities: WorkEntityLink[];
   businessEvents: WorkBusinessEvent[];
   calls: WorkCall[];
@@ -290,6 +316,27 @@ export interface WorkCaseProjection {
       scheduledFor: string | null;
       completedAt: string | null;
       plannerAttempts: Array<{ id: string; attempt: number; status: string; provider: string | null; failure: unknown }>;
+    }>;
+    eventWaits: Array<{
+      id: string;
+      status: string;
+      expectedEventType: string;
+      conditionSummary: string;
+      matchedEventId: string | null;
+      earliestAt: string;
+      deadlineAt: string | null;
+      satisfiedAt: string | null;
+      timedOutAt: string | null;
+    }>;
+    wakeClaims: Array<{
+      id: string;
+      waitId: string;
+      integrationEventId: string;
+      cause: "event" | "deadline";
+      objectiveRevision: number;
+      jobId: string;
+      claimedAt: string;
+      consumedAt: string | null;
     }>;
   };
   outcomePack?: {
@@ -698,6 +745,10 @@ export async function workCases(tenantId: string): Promise<WorkCaseProjection[]>
     const outcomePackRunRows = await db.select().from(outcomePackRuns).where(eq(outcomePackRuns.tenantId, tenantId)).orderBy(desc(outcomePackRuns.updatedAt));
     const autonomyEvaluationRows = await db.select().from(autonomyEvaluations).where(eq(autonomyEvaluations.tenantId, tenantId)).orderBy(desc(autonomyEvaluations.evaluatedAt));
     const shadowProposalRows = await db.select().from(outcomeShadowProposals).where(eq(outcomeShadowProposals.tenantId, tenantId)).orderBy(desc(outcomeShadowProposals.proposedAt));
+    const businessEffectRows = await db.select().from(businessEffects).where(eq(businessEffects.tenantId, tenantId)).orderBy(asc(businessEffects.createdAt));
+    const computerRunRows = await db.select().from(computerRuns).where(eq(computerRuns.tenantId, tenantId)).orderBy(asc(computerRuns.createdAt));
+    const eventWaitRows = await db.select().from(workEventWaits).where(eq(workEventWaits.tenantId, tenantId)).orderBy(asc(workEventWaits.createdAt));
+    const wakeClaimRows = await db.select().from(workWakeClaims).where(eq(workWakeClaims.tenantId, tenantId)).orderBy(asc(workWakeClaims.claimedAt));
     const instructionRows = await db.select().from(instructionSessions).where(eq(instructionSessions.tenantId, tenantId)).orderBy(desc(instructionSessions.updatedAt));
     const instructionEventRows = await db.select().from(instructionEvents).where(eq(instructionEvents.tenantId, tenantId)).orderBy(asc(instructionEvents.seq));
     const actionRows = await db.select().from(domainActions).where(eq(domainActions.tenantId, tenantId)).orderBy(desc(domainActions.createdAt));
@@ -1009,6 +1060,32 @@ export async function workCases(tenantId: string): Promise<WorkCaseProjection[]>
           createdAt: operation.createdAt.toISOString(),
           updatedAt: operation.updatedAt.toISOString(),
         }));
+      const effectsForCase = businessEffectRows
+        .filter((effect) => effect.domainActionId ? target.actionIds.has(effect.domainActionId) : false)
+        .map((effect) => ({
+          id: effect.id,
+          domainActionId: effect.domainActionId,
+          semanticHash: effect.semanticHash,
+          status: effect.status,
+          verification: effect.verification,
+          observedAt: iso(effect.observedAt),
+        }));
+      const computersForCase = computerRunRows
+        .filter((run) => run.workId === durableWork?.id || target.actionIds.has(run.domainActionId))
+        .map((run) => ({
+          id: run.id,
+          domainActionId: run.domainActionId,
+          businessEffectId: run.businessEffectId,
+          status: run.status,
+          effectStatus: run.effectStatus,
+          application: run.application,
+          provider: run.provider,
+          mode: run.mode,
+          blockReason: run.blockReason,
+          failureCode: run.failureCode,
+          startedAt: iso(run.startedAt),
+          finishedAt: iso(run.finishedAt),
+        }));
       const linkedEntities = [...target.links.values()].sort((a, b) => a.entityType.localeCompare(b.entityType) || a.entityId.localeCompare(b.entityId));
       const businessEventList = linkedEntities.flatMap((link) => eventsByEntity.get(`${link.entityType}:${link.entityId}`) ?? []).map((event) => ({ id: event.id, entityType: event.entityType, entityId: event.entityId, eventType: event.eventType, occurredAt: event.occurredAt.toISOString(), source: event.source }));
       const callsForCase = callRows
@@ -1069,6 +1146,8 @@ export async function workCases(tenantId: string): Promise<WorkCaseProjection[]>
           ...[...target.runIds].map((id) => runById.get(id)?.updatedAt),
           ...receipts.map((receipt) => new Date(receipt.finalizedAt ?? receipt.createdAt)),
           ...operations.map((operation) => new Date(operation.updatedAt)),
+          ...effectsForCase.flatMap((effect) => effect.observedAt ? [new Date(effect.observedAt)] : []),
+          ...computersForCase.flatMap((run) => run.finishedAt ? [new Date(run.finishedAt)] : run.startedAt ? [new Date(run.startedAt)] : []),
           objectiveLoop?.updatedAt,
           ...objectiveStepRows.filter((step) => step.objectiveLoopId === objectiveLoop?.id).map((step) => step.completedAt ?? step.startedAt),
         ], fallbackDate),
@@ -1079,6 +1158,8 @@ export async function workCases(tenantId: string): Promise<WorkCaseProjection[]>
         workflows,
         receipts,
         operations,
+        businessEffects: effectsForCase,
+        computerRuns: computersForCase,
         linkedEntities,
         businessEvents: businessEventList.sort((a, b) => b.occurredAt.localeCompare(a.occurredAt)),
         calls: sourceCalls,
@@ -1164,6 +1245,27 @@ export async function workCases(tenantId: string): Promise<WorkCaseProjection[]>
                 scheduledFor: iso(step.scheduledFor),
                 completedAt: iso(step.completedAt),
                 plannerAttempts: objectiveAttemptRows.filter((attempt) => attempt.objectiveStepId === step.id).map((attempt) => ({ id: attempt.id, attempt: attempt.attempt, status: attempt.status, provider: attempt.provider, failure: attempt.failure })),
+              })),
+              eventWaits: eventWaitRows.filter((wait) => wait.objectiveLoopId === objectiveLoop.id).map((wait) => ({
+                id: wait.id,
+                status: wait.status,
+                expectedEventType: wait.expectedEventType,
+                conditionSummary: wait.conditionSummary,
+                matchedEventId: wait.matchedEventId,
+                earliestAt: wait.earliestAt.toISOString(),
+                deadlineAt: iso(wait.deadlineAt),
+                satisfiedAt: iso(wait.satisfiedAt),
+                timedOutAt: iso(wait.timedOutAt),
+              })),
+              wakeClaims: wakeClaimRows.filter((claim) => claim.objectiveLoopId === objectiveLoop.id).map((claim) => ({
+                id: claim.id,
+                waitId: claim.waitId,
+                integrationEventId: claim.integrationEventId,
+                cause: claim.cause,
+                objectiveRevision: claim.objectiveRevision,
+                jobId: claim.jobId,
+                claimedAt: claim.claimedAt.toISOString(),
+                consumedAt: iso(claim.consumedAt),
               })),
             },
           } : {}),

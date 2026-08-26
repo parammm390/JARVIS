@@ -430,7 +430,7 @@ async function handleToolCalls(message: Record<string, unknown>, tenantId: strin
           }
           await appendVoiceTurn({ tenantId, voiceSessionId: session.id, role: "caller", transcriptText: instruction, resolvedActionIds: [] });
           if (objectiveLink) await linkEmployeeConversationTurnToWork({ tenantId, employeeId: staffCtx.userId, threadId: prepared.threadId, userMessageId: prepared.userMessage.id, ...objectiveLink });
-          await persistEmployeeAssistantTurn({ tenantId, employeeId: staffCtx.userId, threadId: prepared.threadId, instructionId, channel: "voice", text: spoken, ...(objectiveLink?.workId ? { workId: objectiveLink.workId } : {}), ...(objectiveLink?.workInputId ? { workInputId: objectiveLink.workInputId } : {}), outcomeRefs: objectiveLink ? [{ kind: "work", id: objectiveLink.workId }, ...(objectiveLink.objectiveLoopId ? [{ kind: "objective_loop", id: objectiveLink.objectiveLoopId, state: activeAggregate?.objectiveLoop?.state ?? "continue" }] : [])] : [] });
+          await persistEmployeeAssistantTurn({ tenantId, employeeId: staffCtx.userId, threadId: prepared.threadId, instructionId, channel: "voice", text: spoken, ...(objectiveLink?.workId ? { workId: objectiveLink.workId } : {}), ...(objectiveLink?.workInputId ? { workInputId: objectiveLink.workInputId } : {}), outcomeRefs: [{ kind: "assistant_semantic", semanticKind: "ACKNOWLEDGEMENT" }, ...(objectiveLink ? [{ kind: "work", id: objectiveLink.workId }, ...(objectiveLink.objectiveLoopId ? [{ kind: "objective_loop", id: objectiveLink.objectiveLoopId, state: activeAggregate?.objectiveLoop?.state ?? "continue" }] : [])] : [])] });
           results.push({ toolCallId: tc.id, result: spoken });
           continue;
         }
@@ -448,7 +448,7 @@ async function handleToolCalls(message: Record<string, unknown>, tenantId: strin
           },
         );
         const actions = instructionResult.actions;
-        await linkEmployeeConversationTurnToWork({ tenantId, employeeId: staffCtx.userId, threadId: prepared.threadId, userMessageId: prepared.userMessage.id, workId: instructionResult.workId!, workInputId: instructionResult.workInputId!, ...(instructionResult.objective ? { objectiveLoopId: instructionResult.objective.objectiveLoopId } : {}) });
+        await linkEmployeeConversationTurnToWork({ tenantId, employeeId: staffCtx.userId, threadId: prepared.threadId, userMessageId: prepared.userMessage.id, workId: instructionResult.workId!, workInputId: instructionResult.workInputId!, ...(instructionResult.objectiveLoopId ? { objectiveLoopId: instructionResult.objectiveLoopId } : {}) });
         await appendVoiceTurn({
           tenantId,
           voiceSessionId: session.id,
@@ -457,19 +457,19 @@ async function handleToolCalls(message: Record<string, unknown>, tenantId: strin
           resolvedActionIds: actions.map((a) => a.id),
         });
         if (instructionResult.answer) {
-          await persistEmployeeAssistantTurn({ tenantId, employeeId: staffCtx.userId, threadId: prepared.threadId, instructionId, channel: "voice", text: instructionResult.answer.spokenSummary, workId: instructionResult.workId!, workInputId: instructionResult.workInputId!, outcomeRefs: [{ kind: "work", id: instructionResult.workId }] });
+          await persistEmployeeAssistantTurn({ tenantId, employeeId: staffCtx.userId, threadId: prepared.threadId, instructionId, channel: "voice", text: instructionResult.answer.spokenSummary, workId: instructionResult.workId!, workInputId: instructionResult.workInputId!, outcomeRefs: [{ kind: "assistant_semantic", semanticKind: "ANSWER" }, { kind: "work", id: instructionResult.workId }] });
           results.push({ toolCallId: tc.id, result: instructionResult.answer.spokenSummary });
           continue;
         }
-        if (instructionResult.objective) {
+        if (instructionResult.executionModel === "OBJECTIVE" && instructionResult.objectiveLoopId) {
           const spoken = `I accepted that as durable objective Work ${instructionResult.workId?.slice(0, 8)}. I will re-inspect current business state, take one governed step at a time, and stop only when the outcome verifies or I am explicitly blocked.`;
-          await persistEmployeeAssistantTurn({ tenantId, employeeId: staffCtx.userId, threadId: prepared.threadId, instructionId, channel: "voice", text: spoken, workId: instructionResult.workId!, workInputId: instructionResult.workInputId!, outcomeRefs: [{ kind: "objective_loop", id: instructionResult.objective.objectiveLoopId, state: instructionResult.objective.state }] });
+          await persistEmployeeAssistantTurn({ tenantId, employeeId: staffCtx.userId, threadId: prepared.threadId, instructionId, channel: "voice", text: spoken, workId: instructionResult.workId!, workInputId: instructionResult.workInputId!, outcomeRefs: [{ kind: "assistant_semantic", semanticKind: "ACKNOWLEDGEMENT" }, { kind: "objective_loop", id: instructionResult.objectiveLoopId, state: instructionResult.objectiveState }] });
           results.push({ toolCallId: tc.id, result: spoken });
           continue;
         }
         if (actions.length === 0) {
           const spoken = "I don't have that exact thing, but I can pull the full business overview — leads, pending items, inventory, invoices, upcoming visits — want that instead?";
-          await persistEmployeeAssistantTurn({ tenantId, employeeId: staffCtx.userId, threadId: prepared.threadId, instructionId, channel: "voice", text: spoken, workId: instructionResult.workId!, workInputId: instructionResult.workInputId!, outcomeRefs: [{ kind: "work", id: instructionResult.workId }] });
+          await persistEmployeeAssistantTurn({ tenantId, employeeId: staffCtx.userId, threadId: prepared.threadId, instructionId, channel: "voice", text: spoken, workId: instructionResult.workId!, workInputId: instructionResult.workInputId!, outcomeRefs: [{ kind: "assistant_semantic", semanticKind: "ACKNOWLEDGEMENT" }, { kind: "work", id: instructionResult.workId }] });
           results.push({
             toolCallId: tc.id,
             result: spoken,
@@ -549,7 +549,7 @@ async function handleToolCalls(message: Record<string, unknown>, tenantId: strin
           );
         }
         const spoken = parts.join(" ");
-        await persistEmployeeAssistantTurn({ tenantId, employeeId: staffCtx.userId, threadId: prepared.threadId, instructionId, channel: "voice", text: spoken, workId: instructionResult.workId!, workInputId: instructionResult.workInputId!, outcomeRefs: actions.map((action) => ({ kind: "domain_action", id: action.id, status: action.status })) });
+        await persistEmployeeAssistantTurn({ tenantId, employeeId: staffCtx.userId, threadId: prepared.threadId, instructionId, channel: "voice", text: spoken, workId: instructionResult.workId!, workInputId: instructionResult.workInputId!, outcomeRefs: [{ kind: "assistant_semantic", semanticKind: "ACKNOWLEDGEMENT" }, ...actions.map((action) => ({ kind: "domain_action", id: action.id, status: action.status }))] });
         results.push({ toolCallId: tc.id, result: spoken });
       } else if (name === "finnor_confirm") {
         const decisionWord = String(args.decision ?? args.answer ?? "");
@@ -570,7 +570,7 @@ async function handleToolCalls(message: Record<string, unknown>, tenantId: strin
         }) : null;
         if (decision === "unclear") {
           const spoken = "I didn't catch a clear yes or no — nothing was executed. Say yes or no.";
-          if (confirmationPrepared) await persistEmployeeAssistantTurn({ tenantId, employeeId: confirmationPrepared.employeeId, threadId: confirmationPrepared.threadId, instructionId: confirmationInstructionId, channel: "voice", text: spoken, outcomeRefs: [] });
+          if (confirmationPrepared) await persistEmployeeAssistantTurn({ tenantId, employeeId: confirmationPrepared.employeeId, threadId: confirmationPrepared.threadId, instructionId: confirmationInstructionId, channel: "voice", text: spoken, outcomeRefs: [{ kind: "assistant_semantic", semanticKind: "CLARIFICATION" }] });
           results.push({ toolCallId: tc.id, result: spoken });
           continue;
         }
@@ -586,7 +586,7 @@ async function handleToolCalls(message: Record<string, unknown>, tenantId: strin
         const ids = args.actionId ? [String(args.actionId)] : open.map((o) => o.domainActionId);
         if (ids.length === 0) {
           const spoken = "I don't have anything pending to confirm on this call.";
-          if (confirmationPrepared) await persistEmployeeAssistantTurn({ tenantId, employeeId: confirmationPrepared.employeeId, threadId: confirmationPrepared.threadId, instructionId: confirmationInstructionId, channel: "voice", text: spoken, outcomeRefs: [] });
+          if (confirmationPrepared) await persistEmployeeAssistantTurn({ tenantId, employeeId: confirmationPrepared.employeeId, threadId: confirmationPrepared.threadId, instructionId: confirmationInstructionId, channel: "voice", text: spoken, outcomeRefs: [{ kind: "assistant_semantic", semanticKind: "ACKNOWLEDGEMENT" }] });
           results.push({ toolCallId: tc.id, result: spoken });
           continue;
         }
@@ -617,7 +617,7 @@ async function handleToolCalls(message: Record<string, unknown>, tenantId: strin
         if (confirmationPrepared) {
           const [linked] = await withTenant(tenantId, (db) => db.select({ workId: domainActions.workId }).from(domainActions).where(and(eq(domainActions.tenantId, tenantId), inArray(domainActions.id, ids))).limit(1));
           if (linked?.workId) await linkEmployeeConversationTurnToWork({ tenantId, employeeId: confirmationPrepared.employeeId, threadId: confirmationPrepared.threadId, userMessageId: confirmationPrepared.userMessage.id, workId: linked.workId });
-          await persistEmployeeAssistantTurn({ tenantId, employeeId: confirmationPrepared.employeeId, threadId: confirmationPrepared.threadId, instructionId: confirmationInstructionId, channel: "voice", text: spoken, ...(linked?.workId ? { workId: linked.workId } : {}), outcomeRefs: ids.map((id, index) => ({ kind: "domain_action", id, decision, status: outcomes[index]?.status ?? "unknown" })) });
+          await persistEmployeeAssistantTurn({ tenantId, employeeId: confirmationPrepared.employeeId, threadId: confirmationPrepared.threadId, instructionId: confirmationInstructionId, channel: "voice", text: spoken, ...(linked?.workId ? { workId: linked.workId } : {}), outcomeRefs: [{ kind: "assistant_semantic", semanticKind: "ACKNOWLEDGEMENT" }, ...ids.map((id, index) => ({ kind: "domain_action", id, decision, status: outcomes[index]?.status ?? "unknown" }))] });
         }
         results.push({ toolCallId: tc.id, result: spoken });
       } else {

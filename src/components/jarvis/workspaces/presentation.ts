@@ -8,6 +8,8 @@ export type WorkspaceProgressStage =
   | "planning"
   | "authority"
   | "executing"
+  | "waiting"
+  | "blocked"
   | "verifying"
   | "recovery"
   | "completed"
@@ -45,6 +47,8 @@ const FLOW: Array<{ key: WorkspaceProgressStage; label: string }> = [
   { key: "planning", label: "Planning" },
   { key: "authority", label: "Awaiting authority" },
   { key: "executing", label: "Executing" },
+  { key: "waiting", label: "Waiting on an external condition" },
+  { key: "blocked", label: "Blocked" },
   { key: "verifying", label: "Verifying" },
   { key: "recovery", label: "Recovery" },
   { key: "completed", label: "Completed" },
@@ -58,6 +62,9 @@ function stageForState(state: InstructionState): WorkspaceProgressStage {
     case "planning": return "planning"
     case "awaiting_approval": return "authority"
     case "executing": return "executing"
+    case "waiting": return "waiting"
+    case "blocked": return "blocked"
+    case "recovering": return "recovery"
     case "verifying": return "verifying"
     case "failed":
     case "partial":
@@ -69,7 +76,7 @@ function stageForState(state: InstructionState): WorkspaceProgressStage {
 
 function stageForInput(input: WorkspaceProgressInput): WorkspaceProgressStage {
   const stateStage = stageForState(input.state)
-  if (["completed", "recovery", "verifying", "authority"].includes(stateStage)) return stateStage
+  if (["completed", "recovery", "blocked", "waiting", "verifying", "authority"].includes(stateStage)) return stateStage
   if (input.progress?.stage === "verified" || input.progress?.stage === "verifying") return "verifying"
   if (input.progress?.stage === "resolving_context" && ["accepted", "context"].includes(stateStage)) return "context"
   if (
@@ -121,6 +128,9 @@ function detailFor(input: WorkspaceProgressInput, activeStage: WorkspaceProgress
           : "The live plan is still forming; no action has been committed yet."
     case "awaiting_approval": return `${actionCount} ${actionLabel} are ready for a recorded human decision. Nothing consequential runs before approval.`
     case "executing": return `${actionCount} ${actionLabel} are executing through the linked durable Work.`
+    case "waiting": return "Durable Work is waiting on the recorded external condition; no execution is being implied while it waits."
+    case "blocked": return "Durable Work is explicitly blocked. Its recorded reason and next permitted step remain attached to this Work."
+    case "recovering": return "Durable Work is in a recorded recovery cycle; prior failures remain visible and no success is implied."
     case "verifying": return "Execution has ended; JARVIS is reconciling observed outcomes and receipts."
     case "completed": return input.hasCanonicalQuery || input.hasExternalEvidence ? "Observed records and attached evidence are ready to inspect." : "The durable Work reached a completed terminal state."
     case "partial": return "The Work is partially complete. Only observed outcomes are shown; recovery stays attached to this Work."

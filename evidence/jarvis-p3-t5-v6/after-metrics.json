@@ -403,8 +403,7 @@
       "rawJson": false,
       "sourceLabels": [],
       "truthMarkers": [
-        "Source unavailable",
-        "Sign in to inspect the tenant Household 360.Sign in"
+        "Reading households"
       ],
       "privateResourceRequests": [],
       "unexpectedErrors": []
@@ -543,8 +542,8 @@
           "tag": "div",
           "label": "Command Authority",
           "width": 1408,
-          "height": 934,
-          "area": 1314830
+          "height": 977,
+          "area": 1375374
         },
         {
           "tag": "section",
@@ -571,20 +570,20 @@
       "rawJson": false,
       "sourceLabels": [
         "59 registered actions26 backend plugins · 9 capability domains · 5 calling agents",
-        "Vapi provider status unavailableThe provider-level integration result is not available to this surface.Provider fact · not agent readiness",
-        "CALLING AGENTSFive Vapi personas preserved from the backend registryJARVISUnderstands your instruction, plans against the business, asks when uncertain, and routes consequential actions through approval.Assistant status unavailable0 recorded callsFollow-upChecks in after a new installation or major service visit, captures satisfaction, and can gently ask for a review.Assistant status unavailable0 recorded callsService ReminderContacts customers whose treatment equipment is due or coming due for filter, membrane, or service work.Assistant status unavailable0 recorded callsWin-backReconnects with past customers who have gone quiet and can present an approved win-back offer.Assistant status unavailable0 recorded callsPayment CollectorGives a friendly heads-up about overdue invoices using the collection context a human approved.Assistant status unavailable0 recorded calls",
-        "No observed Work"
+        "Vapi provider status not readSign in to inspect the tenant provider configuration.Provider fact · not agent readiness",
+        "CALLING AGENTSFive Vapi personas preserved from the backend registryJARVISUnderstands your instruction, plans against the business, asks when uncertain, and routes consequential actions through approval.Assistant status not readCall records not readFollow-upChecks in after a new installation or major service visit, captures satisfaction, and can gently ask for a review.Assistant status not readCall records not readService ReminderContacts customers whose treatment equipment is due or coming due for filter, membrane, or service work.Assistant status not readCall records not readWin-backReconnects with past customers who have gone quiet and can present an approved win-back offer.Assistant status not readCall records not readPayment CollectorGives a friendly heads-up about overdue invoices using the collection context a human approved.Assistant status not readCall records not read",
+        "Work not read"
       ],
       "truthMarkers": [
-        "Vapi provider status unavailableThe provider-level integration result is not available to this surface.Provider fact · not agent readiness",
-        "JARVISUnderstands your instruction, plans against the business, asks when uncertain, and routes consequential actions through approval.Assistant status unavailable0 recorded calls",
-        "Follow-upChecks in after a new installation or major service visit, captures satisfaction, and can gently ask for a review.Assistant status unavailable0 recorded calls",
-        "Service ReminderContacts customers whose treatment equipment is due or coming due for filter, membrane, or service work.Assistant status unavailable0 recorded calls",
-        "Win-backReconnects with past customers who have gone quiet and can present an approved win-back offer.Assistant status unavailable0 recorded calls",
-        "Payment CollectorGives a friendly heads-up about overdue invoices using the collection context a human approved.Assistant status unavailable0 recorded calls",
+        "Vapi provider status not readSign in to inspect the tenant provider configuration.Provider fact · not agent readiness",
+        "JARVISUnderstands your instruction, plans against the business, asks when uncertain, and routes consequential actions through approval.Assistant status not readCall records not read",
+        "Follow-upChecks in after a new installation or major service visit, captures satisfaction, and can gently ask for a review.Assistant status not readCall records not read",
+        "Service ReminderContacts customers whose treatment equipment is due or coming due for filter, membrane, or service work.Assistant status not readCall records not read",
+        "Win-backReconnects with past customers who have gone quiet and can present an approved win-back offer.Assistant status not readCall records not read",
+        "Payment CollectorGives a friendly heads-up about overdue invoices using the collection context a human approved.Assistant status not readCall records not read",
         "Sign in to inspect tenant-linked calls and Work.Sign in",
-        "No observed Work",
-        "jarvisAssistant status unavailableNo assistant-specific configuration result was returned."
+        "Work not read",
+        "jarvisAssistant status not readSign in to inspect tenant assistant configuration."
       ],
       "privateResourceRequests": [],
       "unexpectedErrors": []

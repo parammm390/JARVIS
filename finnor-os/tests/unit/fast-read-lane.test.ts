@@ -127,6 +127,7 @@ describe("fast read-only lane", () => {
     });
 
     expect(result).toEqual({
+      executionModel: "QUERY",
       actions: [],
       answer,
       workId: "00000000-0000-4000-8000-0000000000a1",

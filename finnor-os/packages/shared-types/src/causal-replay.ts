@@ -113,7 +113,7 @@ export interface CausalReplayProjection {
   work: {
     id: string;
     status: string;
-    executionModel: "query" | "atomic_effect" | "objective" | null;
+    executionModel: "query" | "conversation" | "atomic_effect" | "objective" | null;
     objective: string;
     objectiveState: string | null;
     successCondition: unknown;

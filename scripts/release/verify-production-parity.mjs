@@ -101,6 +101,18 @@ const azureResult = JSON.parse(azureRaw)
 const azureMessage = (azureResult.value ?? []).map((entry) => entry.message ?? "").join("\n")
 if (!azureMessage.includes("FINNOR_AZURE_PARITY_OK")) throw new Error(`Azure source/service parity verification failed:\n${azureMessage}`)
 
+const gatewayResponse = await fetch(`${worker.sseGatewayUrl}/healthz`, {
+  headers: { accept: "application/json", "cache-control": "no-cache" },
+  signal: AbortSignal.timeout(20_000),
+})
+const gateway = await gatewayResponse.json().catch(() => null)
+if (!gatewayResponse.ok || gateway?.ok !== true || gateway?.realtime !== true || gateway?.release?.commitSha !== expected.commitSha) {
+  throw new Error(`worker SSE gateway parity failed with HTTP ${gatewayResponse.status}`)
+}
+for (const capability of ["realtime", "sse"]) {
+  if (!gateway.capabilities?.includes(capability)) throw new Error(`worker SSE gateway is missing ${capability} capability`)
+}
+
 const observed = { frontend, api, worker: workerRelease, migrationHead }
 assertRuntimeParity(contract, expected, observed)
 console.log(JSON.stringify({
@@ -109,6 +121,7 @@ console.log(JSON.stringify({
   frontend: { service: frontend.service, commitSha: frontend.commitSha, deploymentId: frontend.deploymentId },
   api: { service: api.service, commitSha: api.commitSha, deploymentId: api.deploymentId },
   worker: { commitSha: workerRelease.commitSha, heartbeatAgeSeconds, capabilities: workerRelease.capabilities },
+  realtimeGateway: { url: worker.sseGatewayUrl, commitSha: gateway.release.commitSha, capabilities: gateway.capabilities },
   orchestrator: { mode: contract.topology.orchestrator.mode, releaseIdentity: contract.topology.orchestrator.releaseIdentity },
   migrationHead,
 }, null, 2))
