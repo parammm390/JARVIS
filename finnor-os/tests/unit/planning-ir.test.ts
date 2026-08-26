@@ -59,6 +59,14 @@ describe("Planning IR canonical semantics", () => {
     expect(computeIrSemanticHash(left)).not.toBe(computeIrSemanticHash(right));
   });
 
+  it("retains semantic payload identifiers that overlap runtime metadata names", () => {
+    const left = base();
+    left.effects[0]!.payload = { ...left.effects[0]!.payload, workId: "work-a", field: "status" };
+    const right = structuredClone(left);
+    right.effects[0]!.payload = { ...right.effects[0]!.payload, workId: "work-b" };
+    expect(computeIrSemanticHash(left)).not.toBe(computeIrSemanticHash(right));
+  });
+
   it("repeats canonical hashes deterministically under fixed-seed object-key fuzz", () => {
     fc.assert(fc.property(fc.dictionary(fc.string({ minLength: 1, maxLength: 12 }), fc.oneof(fc.integer(), fc.boolean(), fc.string())), (record) => {
       const reversed = Object.fromEntries(Object.entries(record).reverse());
