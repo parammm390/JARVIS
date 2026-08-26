@@ -11,7 +11,7 @@ export const CLIENT_CERTIFICATION_SCHEMA = "finnor.client-certification/v1" as c
 export const CLIENT_RELEASE_SCHEMA = "finnor.client-release/v1" as const;
 // Phase 6 deliberately rotates the suite identities. A PASS artifact produced by
 // an earlier phase must never be reusable for final production certification.
-export const CORE_CERTIFICATION_SUITE_VERSION = "phase6-core-v1" as const;
+export const CORE_CERTIFICATION_SUITE_VERSION = "phase1-generic-kernel-v1" as const;
 export const CLIENT_CERTIFICATION_SUITE_VERSION = "phase6-client-v1" as const;
 export const FINAL_CERTIFICATION_SCHEMA = "finnor.final-certification/v1" as const;
 export const FINAL_CERTIFICATION_SUITE_VERSION = "phase6-final-v1" as const;
@@ -268,6 +268,7 @@ export const CORE_GATE_KEYS = [
   "source_provenance",
   "typecheck_build",
   "unit_integration",
+  "phase1_foundation",
   "migrations",
   "tenant_rls_security",
   "action_contracts",

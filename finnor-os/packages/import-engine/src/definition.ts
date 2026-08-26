@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const ImportEntitySchema = z.enum([
-  "customer", "lead", "appointment", "service_visit", "equipment", "work_order",
+  "customer", "lead", "property", "appointment", "service_visit", "equipment", "work_order",
   "quote", "proposal", "invoice", "payment", "inventory_item", "technician",
 ]);
 
@@ -51,9 +51,10 @@ function validateDefinition(definition: z.infer<typeof DeclarativeImportBodyObje
   const allowedFields: Record<z.infer<typeof ImportEntitySchema>, readonly string[]> = {
     customer: ["name", "firstName", "lastName", "phone", "email", "address", "role", "marketingConsent"],
     lead: ["name", "phone", "email", "address", "notes", "source", "status"],
+    property: ["label", "address", "kind", "latitude", "longitude"],
     appointment: ["scheduledAt", "status", "durationMinutes", "notes"],
     service_visit: ["type", "scheduledAt", "completedAt", "notes"],
-    equipment: ["type", "model", "installDate", "source"],
+    equipment: ["type", "model", "installDate", "source", "assetDomain"],
     work_order: ["type", "status", "depositAmountUsd", "scheduledAt", "completedAt"],
     quote: ["status", "validUntil", "lineItems"],
     proposal: ["status", "content", "sentAt"],
@@ -63,8 +64,8 @@ function validateDefinition(definition: z.infer<typeof DeclarativeImportBodyObje
     technician: ["name", "contactInfo", "availability"],
   };
   const allowedRelationships: Record<z.infer<typeof ImportEntitySchema>, readonly string[]> = {
-    customer: [], lead: ["householdId"], appointment: ["householdId", "technicianId"],
-    service_visit: ["householdId", "technicianId"], equipment: ["householdId"],
+    customer: [], lead: ["householdId"], property: ["householdId"], appointment: ["householdId", "propertyId", "technicianId"],
+    service_visit: ["householdId", "propertyId", "technicianId"], equipment: ["householdId", "propertyId"],
     work_order: ["householdId", "quoteId", "technicianId"], quote: ["householdId"], proposal: ["householdId", "quoteId"],
     invoice: ["householdId"], payment: ["invoiceId"], inventory_item: [], technician: [],
   };
@@ -75,7 +76,7 @@ function validateDefinition(definition: z.infer<typeof DeclarativeImportBodyObje
     if (!allowedRelationships[definition.entity].includes(field)) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["relationships", field], message: `${field} is not a supported relationship for ${definition.entity}` });
   }
   const requiredRelationship: Partial<Record<z.infer<typeof ImportEntitySchema>, string>> = {
-    appointment: "householdId", service_visit: "householdId", equipment: "householdId", work_order: "householdId",
+    property: "householdId", appointment: "householdId", service_visit: "householdId", equipment: "householdId", work_order: "householdId",
     quote: "householdId", proposal: "householdId", invoice: "householdId", payment: "invoiceId",
   };
   const required = requiredRelationship[definition.entity];

@@ -5,7 +5,8 @@ const exists = (value: unknown) => value !== undefined && value !== null && valu
 const enums: Partial<Record<ImportEntity, Record<string, string[]>>> = {
   lead: { status: ["new", "contacted", "qualified", "disqualified", "converted"] },
   appointment: { status: ["hold", "confirmed", "completed", "canceled", "no_show"] },
-  equipment: { source: ["finnor", "competitor"] },
+  equipment: { source: ["finnor", "competitor"], assetDomain: ["WATER", "HVAC", "PLUMBING", "GENERIC", "UNRESOLVED"] },
+  property: { kind: ["residential", "commercial", "service_location", "unknown"] },
   work_order: { type: ["install", "repair", "warranty", "other"], status: ["draft", "scheduled", "in_progress", "completed", "canceled"] },
   quote: { status: ["draft", "sent", "accepted", "declined", "expired"] },
   invoice: { status: ["draft", "sent", "paid", "overdue", "void"] },
@@ -25,6 +26,7 @@ export function validateCanonicalRow(entity: ImportEntity, data: Record<string, 
   if (entity === "appointment") require("scheduledAt");
   if (entity === "service_visit") require("type");
   if (entity === "equipment") require("type");
+  if (entity === "property") require("address");
   if (entity === "work_order") require("type");
   if (entity === "quote") {
     require("lineItems");

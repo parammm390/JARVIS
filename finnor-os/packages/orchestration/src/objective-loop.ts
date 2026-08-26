@@ -8,7 +8,7 @@
 
 import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { DomainAction, ExecutionResult, ObjectiveSuccessCondition, ObjectiveSuccessVerification, OperatingInteractionContext, OperationalQueryRequest, OutcomePackStartBinding, Role, TenantContext } from "@finnor/shared-types";
 import {
   domainActions,
@@ -38,18 +38,25 @@ import {
   works,
   pendingConfirmations,
   outcomePackRuns,
+  planningIrArtifacts,
   tenantOutcomePackSettings,
+  type Db,
 } from "@finnor/db";
 import { executeOperationalQuery } from "@finnor/read-models";
 import { employeeAuthoritySnapshot, evaluateAuthority } from "@finnor/authority";
 import { listAvailableIdentityAccess } from "@finnor/security";
 import type { LLMChannel, LLMProvider } from "./llm";
 import { resolveProviderForPurpose } from "./llm";
-import type { PluginRegistry } from "./plugin-registry";
+import { createDefaultPluginRegistry, type PluginRegistry } from "./plugin-registry";
 import { queryAuthorityRequest } from "./authority-runtime";
 import { validateOperationalQueryRequest } from "./fast-read-lane";
 import { ingestIntegrationEvent, markObjectiveWakeConsumed, objectiveWakeContext, recoverDueWorkEventWaits } from "./event-waits";
 import { resolveOperatingInteractionContext } from "./interaction-context";
+import { buildObjectiveGoalPlanningIr, compareExistingObjectiveGoalToIr, planningIrMode } from "./planning-ir";
+import { createDbIrAdmissibilityCompiler, persistPlanningIrArtifactTx } from "./ir-admissibility-db";
+import { IrAdmissibilityRejectedError } from "./ir-admissibility";
+import { lowerAdmittedPlanningIr } from "./ir-lowerer";
+import type { CanonicalEntityRef as PlanningCanonicalEntityRef, PlanningIrArtifact, PlanningSemanticDiff } from "@finnor/planning-ir";
 import {
   defaultObjectiveSuccessCondition,
   evaluateObjectiveSuccessCondition,
@@ -151,6 +158,7 @@ export interface ObjectiveActionExecutor {
     authorityContext: Record<string, unknown>;
     objectiveStepId: string;
     actionId: string;
+    objective: string;
   }): Promise<{ action: DomainAction; result: ExecutionResult }>;
 }
 
@@ -199,6 +207,66 @@ function canonicalJson(value: unknown): string {
 
 function hash(value: unknown): string {
   return createHash("sha256").update(canonicalJson(value)).digest("hex");
+}
+
+function planningRefKind(entityType: string): PlanningCanonicalEntityRef["kind"] {
+  if (entityType === "household" || entityType === "customer") return "party";
+  if (entityType === "property") return "property";
+  if (entityType === "equipment" || entityType === "asset") return "asset";
+  if (entityType === "work") return "work";
+  return "entity";
+}
+
+function objectivePlanningScope(activeContext: unknown): { included: PlanningCanonicalEntityRef[]; excluded: PlanningCanonicalEntityRef[] } {
+  const context = isRecord(activeContext) ? activeContext : {};
+  const excludedBase = canonicalRefsFromContext({ selectedEntities: Array.isArray(context.excludedEntities) ? context.excludedEntities : [] });
+  const excludedKeys = new Set(excludedBase.map((ref) => `${ref.entityType}:${ref.entityId}`));
+  const mapRef = (ref: { entityType: string; entityId: string }): PlanningCanonicalEntityRef => ({
+    kind: planningRefKind(ref.entityType),
+    entityType: ref.entityType,
+    entityId: ref.entityId,
+    provenance: "trusted_operating_context",
+  });
+  return {
+    included: canonicalRefsFromContext(activeContext).filter((ref) => !excludedKeys.has(`${ref.entityType}:${ref.entityId}`)).map(mapRef),
+    excluded: excludedBase.map(mapRef),
+  };
+}
+
+async function persistObjectiveGoalIr(input: {
+  db: Db;
+  tenantId: string;
+  workId: string;
+  artifact: PlanningIrArtifact;
+  diff: PlanningSemanticDiff;
+  mode: ReturnType<typeof planningIrMode>;
+}): Promise<void> {
+  if (input.mode === "legacy") return;
+  const admitted = await createDbIrAdmissibilityCompiler({
+    db: input.db,
+    tenantId: input.tenantId,
+    plugins: createDefaultPluginRegistry(),
+  }).admit(input.artifact);
+  if (!admitted.admissible) throw new IrAdmissibilityRejectedError(admitted.issues);
+  if (input.mode === "cutover" && lowerAdmittedPlanningIr(admitted.admitted).length !== 0) {
+    throw new Error("Goal-only Objective Planning IR unexpectedly lowered a consequential action");
+  }
+  const [existing] = await input.db.select({ id: planningIrArtifacts.id }).from(planningIrArtifacts).where(and(
+    eq(planningIrArtifacts.tenantId, input.tenantId),
+    eq(planningIrArtifacts.workId, input.workId),
+    eq(planningIrArtifacts.irSemanticHash, input.artifact.metadata.irSemanticHash),
+    isNull(planningIrArtifacts.domainActionId),
+    isNull(planningIrArtifacts.objectiveStepId),
+  )).limit(1);
+  if (existing) return;
+  await persistPlanningIrArtifactTx({
+    db: input.db,
+    tenantId: input.tenantId,
+    workId: input.workId,
+    artifact: input.artifact,
+    diff: input.diff,
+    status: input.mode === "shadow" ? "shadow" : "accepted",
+  });
 }
 
 function bounded(value: unknown, maxBytes = 48_000): unknown {
@@ -386,6 +454,29 @@ export async function startWorkObjective(objective: string, ctx: TenantContext, 
   const successCondition = options.successCondition
     ? parseObjectiveSuccessCondition(options.successCondition)
     : defaultObjectiveSuccessCondition(objective);
+  const irMode = planningIrMode();
+  const planningScope = objectivePlanningScope(options.activeContext);
+  const objectiveIr = irMode === "legacy" ? null : buildObjectiveGoalPlanningIr({
+    requestedOutcome: objective,
+    successCondition: successCondition as unknown as Record<string, unknown>,
+    included: planningScope.included,
+    excluded: planningScope.excluded,
+    provenance: {
+      source: "objective_controller",
+      instructionId: input.instructionId,
+      workId: input.workId,
+      createdAt: new Date().toISOString(),
+    },
+  });
+  const objectiveIrDiff = objectiveIr ? compareExistingObjectiveGoalToIr({
+    artifact: objectiveIr,
+    requestedOutcome: objective,
+    included: planningScope.included,
+    excluded: planningScope.excluded,
+  }) : null;
+  if (objectiveIrDiff?.classification === "REGRESSION") {
+    throw new Error(`Objective goal Planning IR semantic regression: ${JSON.stringify(objectiveIrDiff.differences)}`);
+  }
   const loop = await withTenant(ctx.tenantId, async (db) => {
     await db.execute(sql`SELECT id FROM ${works} WHERE ${works.id}=${input.workId} AND ${works.tenantId}=${ctx.tenantId} FOR UPDATE`);
     const [currentWork] = await db.select({ status: works.status }).from(works).where(and(eq(works.tenantId, ctx.tenantId), eq(works.id, input.workId))).limit(1);
@@ -415,6 +506,14 @@ export async function startWorkObjective(objective: string, ctx: TenantContext, 
           throw new Error("Work is already bound to a different Outcome Pack contract");
         }
       }
+      if (objectiveIr && objectiveIrDiff) await persistObjectiveGoalIr({
+        db,
+        tenantId: ctx.tenantId,
+        workId: input.workId,
+        artifact: objectiveIr,
+        diff: objectiveIrDiff,
+        mode: irMode,
+      });
       return existing;
     }
     if (options.outcomePack) {
@@ -457,6 +556,14 @@ export async function startWorkObjective(objective: string, ctx: TenantContext, 
         successCondition: options.outcomePack.successCondition,
       });
     }
+    if (objectiveIr && objectiveIrDiff) await persistObjectiveGoalIr({
+      db,
+      tenantId: ctx.tenantId,
+      workId: input.workId,
+      artifact: objectiveIr,
+      diff: objectiveIrDiff,
+      mode: irMode,
+    });
     return created;
   });
   await transitionWork(ctx.tenantId, input.workId, "executing", "objective_accepted", {
@@ -1185,6 +1292,7 @@ export class ObjectiveLoopRuntime {
         authorityContext: isRecord(work.authorityContext) ? work.authorityContext : {},
         objectiveStepId: step.id,
         actionId,
+        objective: loop.objective,
       });
       const observation = await latestActionObservation(params.tenantId, params.workId, action.id);
       const awaitingApproval = Boolean(result.output?.gated || result.output?.pendingConfirmation) || (isRecord(observation.action) && ["pending", "needs_human_review"].includes(String(observation.action.status)));

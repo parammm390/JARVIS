@@ -1,4 +1,4 @@
-import type { DomainEnginePlugin } from "../shared/plugin-interface";
+import type { DomainEnginePlugin, PureDomainEngine } from "../shared/plugin-interface";
 import { queueComputerRun } from "@finnor/computer";
 import type { ComputerTaskInput, DraftAction, DomainPolicy, ExecutionResult, ValidationResult } from "@finnor/shared-types";
 import { z } from "zod";
@@ -35,9 +35,31 @@ export const ComputerTaskSchema = z.object({
   }
 });
 
+/** Migrated computer/durable-workflow intelligence. It can describe a run but has
+ * no browser/session/provider capability; execute remains in the governed adapter. */
+export const computerTaskDomainEngine: PureDomainEngine = {
+  name: "computer-task",
+  version: "1.0.0",
+  actionTypes: ["computer_task"],
+  query: () => ({ requiredFacts: ["application_account", "auth_profile", "computer_capability", "current_target_state"] }),
+  decide: ({ payload }) => ({ eligible: payload.mode === "READ_ONLY" || (payload.mode === "WRITE" && Boolean(payload.authorizedEffect)), effectIntent: payload.mode === "WRITE" ? `Perform exactly the bounded authorized external change in ${String(payload.application)}` : `Inspect the bounded target in ${String(payload.application)}`, requiredCapability: "action:computer_task", risk: payload.mode === "WRITE" ? "high" : "low", reasonCodes: [payload.mode === "WRITE" ? "GOVERNED_COMPUTER_WRITE" : "GOVERNED_COMPUTER_READ"] }),
+  simulate: ({ payload }) => ({ predicted: { application: payload.application, mode: payload.mode, target: payload.target, sessionCreated: false }, warnings: [] }),
+  explain: (_input, decision) => ({ summary: decision.effectIntent, reasonCodes: decision.reasonCodes }),
+  compileEffect: ({ effectId, payload }, decision) => {
+    const target = payload.target as Record<string, unknown> | undefined;
+    return { id: effectId, actionType: "computer_task", effectIntent: decision.effectIntent, payload, targetRefs: target ? [{ kind: "resource", entityType: String(target.kind), entityId: String(target.identifier), provenance: "pure_domain_engine" }] : [], requiredCapability: decision.requiredCapability, risk: decision.risk, exposure: null, proposalOnly: true };
+  },
+  defineObservation: ({ observationId, effect }) => ({ id: observationId, effectId: effect.id, kind: "computer_state", predicate: { terminalState: true, successCriteria: effect.payload.successCriteria }, requiredEvidence: ["computer_terminal_state", "computer_artifact_evidence", "external_state_read_back_where_required"], acknowledgementSufficient: false, verificationFloor: "at_least_existing" }),
+  reconcileDecision: ({ observation }) => observation.terminal === true && observation.successCriteriaSatisfied === true && observation.evidencePresent === true
+    ? { status: "verified", reasonCodes: ["TERMINAL_EVIDENCE_SATISFIES_CRITERIA"] }
+    : observation.failed === true ? { status: "failed", reasonCodes: ["COMPUTER_RUN_FAILED"] } : { status: "pending", reasonCodes: ["TERMINAL_EVIDENCE_REQUIRED"] },
+  compileCompensationEffect: () => null,
+};
+
 export const computerTaskPlugin: DomainEnginePlugin = {
   name: "computer-task",
   actionTypes: ["computer_task"],
+  intelligence: computerTaskDomainEngine,
   payloadSchemas: { computer_task: ComputerTaskSchema },
   canHandle: (actionType) => actionType === "computer_task",
   validate(actionType, payload): ValidationResult {

@@ -2,7 +2,7 @@
 // (the dealer's own embedded SOPs/docs) — still confirmation-gated per policy, because
 // the answer goes OUT to a customer. Message sends stay scaffolded.
 
-import type { DomainEnginePlugin } from "../shared/plugin-interface";
+import type { DomainEnginePlugin, PureDomainEngine } from "../shared/plugin-interface";
 import type { DraftAction, ExecutionResult, ValidationResult, DomainPolicy } from "@finnor/shared-types";
 import { hybridRetrieve, type StructuredFact } from "@finnor/memory";
 import { withTenant, communicationsLog } from "@finnor/db";
@@ -38,9 +38,36 @@ export const SendFollowUpSchema = z.object({
   context: opt(z.string().max(500)),
 });
 
+/** Migrated external/provider consequential intelligence. Provider ACK is never the
+ * terminal observation; delivery/read-back or reconciliation remains mandatory. */
+export const customerMessageDomainEngine: PureDomainEngine = {
+  name: "customer-message",
+  version: "1.0.0",
+  actionTypes: ["send_customer_message"],
+  query: () => ({ requiredFacts: ["customer_contact_endpoint", "communication_identity", "provider_health"] }),
+  decide: ({ payload }) => ({ eligible: typeof payload.message === "string" && payload.message.length > 0, effectIntent: `Deliver the approved ${String(payload.channel ?? "sms")} message to the grounded customer`, requiredCapability: "action:send_customer_message", risk: "high", reasonCodes: ["EXTERNAL_CUSTOMER_COMMUNICATION"] }),
+  simulate: ({ payload }) => ({ predicted: { channel: payload.channel ?? "sms", recipientGrounded: Boolean(payload.householdId || payload.phone || payload.email), contentLength: typeof payload.message === "string" ? payload.message.length : 0 }, warnings: [] }),
+  explain: (_input, decision) => ({ summary: decision.effectIntent, reasonCodes: decision.reasonCodes }),
+  compileEffect: ({ effectId, payload }, decision) => ({
+    id: effectId, actionType: "send_customer_message", effectIntent: decision.effectIntent, payload,
+    targetRefs: [
+      ...(typeof payload.householdId === "string" ? [{ kind: "party" as const, entityType: "household", entityId: payload.householdId, field: "householdId", provenance: "pure_domain_engine" }] : []),
+      ...(typeof payload.phone === "string" ? [{ kind: "resource" as const, entityType: "phone_endpoint", entityId: payload.phone, field: "phone", provenance: "pure_domain_engine" }] : []),
+      ...(typeof payload.email === "string" ? [{ kind: "resource" as const, entityType: "email_endpoint", entityId: payload.email, field: "email", provenance: "pure_domain_engine" }] : []),
+    ],
+    requiredCapability: decision.requiredCapability, risk: decision.risk, exposure: null, proposalOnly: true,
+  }),
+  defineObservation: ({ observationId, effect }) => ({ id: observationId, effectId: effect.id, kind: "provider_delivery", predicate: { actionType: effect.actionType, deliveryState: "delivered_or_reconciled" }, requiredEvidence: ["external_delivery_observation_or_reconciliation", "canonical_message_record"], acknowledgementSufficient: false, verificationFloor: "at_least_existing" }),
+  reconcileDecision: ({ observation }) => observation.deliveryObserved === true && observation.canonicalMessageRecorded === true
+    ? { status: "verified", reasonCodes: ["DELIVERY_AND_CANONICAL_RECORD_OBSERVED"] }
+    : observation.failed === true ? { status: "failed", reasonCodes: ["DELIVERY_FAILED"] } : { status: "pending", reasonCodes: ["PROVIDER_ACK_IS_NOT_DELIVERY"] },
+  compileCompensationEffect: () => null,
+};
+
 export const customerCommPlugin: DomainEnginePlugin = {
   name: "customer-comm",
   actionTypes: ["answer_customer_question", "send_customer_message", "send_follow_up"],
+  intelligence: customerMessageDomainEngine,
   payloadSchemas: {
     answer_customer_question: CustomerQuestionPayloadSchema,
     send_customer_message: SendMessageSchema,

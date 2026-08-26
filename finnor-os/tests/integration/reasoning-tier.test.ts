@@ -8,7 +8,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
 import pg from "pg";
 import { migrate } from "../../packages/db/migrate";
-import { getPool, closePool, withTenant, domainPolicies, domainPolicyRevisions } from "@finnor/db";
+import { getPool, closePool, withTenant, domainPolicies, domainPolicyRevisions, households, invoices } from "@finnor/db";
 import { and, eq } from "drizzle-orm";
 import { readEpisodes } from "@finnor/memory";
 import { LLMPlanner, createDefaultPluginRegistry } from "@finnor/orchestration";
@@ -17,6 +17,8 @@ import type { TenantContext, MemorySnapshot } from "@finnor/shared-types";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
 const TENANT_ID = "00000000-0000-4000-8000-0000000000fa"; // dedicated, isolated from other fixtures
+const HOUSEHOLD_ID = "22222222-2222-4222-8222-2222222222fa";
+const INVOICE_ID = "11111111-1111-4111-8111-111111111111";
 
 async function dbUp(): Promise<boolean> {
   const c = new pg.Client({ connectionString: DB_URL, connectionTimeoutMillis: 2000 });
@@ -128,6 +130,10 @@ describe.skipIf(!available)("LLMPlanner reasoning tier", () => {
     process.env.DATABASE_URL = DB_URL;
     await migrate(DB_URL);
     await getPool().query(`INSERT INTO tenants (id, name) VALUES ($1, 'Reasoning Tier Test Tenant') ON CONFLICT (id) DO NOTHING`, [TENANT_ID]);
+    await withTenant(TENANT_ID, async (db) => {
+      await db.insert(households).values({ id: HOUSEHOLD_ID, tenantId: TENANT_ID, address: "12 Grounded Fixture Rd" }).onConflictDoNothing();
+      await db.insert(invoices).values({ id: INVOICE_ID, tenantId: TENANT_ID, householdId: HOUSEHOLD_ID, amountUsd: "125.00", status: "sent" }).onConflictDoNothing();
+    });
   });
 
   afterAll(async () => {

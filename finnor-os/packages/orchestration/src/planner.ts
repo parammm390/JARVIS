@@ -10,6 +10,11 @@ import type { PluginRegistry } from "./plugin-registry";
 import { z } from "zod";
 import { redactStructured, redactText, restoreTokens } from "@finnor/security";
 import { groundEntitiesWithDb, buildCommandGraph } from "./compiler";
+import { businessEffectObservationForAction } from "./compiler";
+import { buildCompatibilityPlanningIr, compareLegacyCandidateToIr, planningIrMode } from "./planning-ir";
+import { createDbIrAdmissibilityCompiler, persistPlanningIrArtifactTx } from "./ir-admissibility-db";
+import { IrAdmissibilityRejectedError } from "./ir-admissibility";
+import { lowerAdmittedPlanningIr } from "./ir-lowerer";
 import { appendEpisode } from "@finnor/memory";
 import { repairAction } from "./repair";
 import type { RepairVerdict } from "./repair";
@@ -22,6 +27,7 @@ import { plannerContinuationInstruction, plannerMemoryContext, plannerShortTermC
 import { clarificationContinuationAction, enforceExternalResearchRoute, enforceSchedulingMutationRoute, safeReadFallbackForInstruction, schedulingClarificationFallbackForInstruction } from "./read-routing";
 import { resolveCompetitorResearch } from "./research-context";
 import { applyOperatingInteractionTargets } from "./interaction-targeting";
+import type { CanonicalEntityRef as PlanningCanonicalEntityRef } from "@finnor/planning-ir";
 
 export { clarificationContinuationAction, enforceExternalResearchRoute, enforceSchedulingMutationRoute, safeReadFallbackForInstruction, schedulingClarificationFallbackForInstruction } from "./read-routing";
 
@@ -62,6 +68,39 @@ export interface PlannerOptions {
   deadlineAt?: number;
   deadlineMs?: number;
   operatingContext?: OperatingContext;
+  /** Only mutating planner routes enter IR. QUERY and CONVERSATION never call plan(). */
+  executionModel?: "ATOMIC_EFFECT" | "OBJECTIVE";
+}
+
+function planningEntityRef(entityType: string, entityId: string, provenance: string): PlanningCanonicalEntityRef {
+  const kind: PlanningCanonicalEntityRef["kind"] = entityType === "household" || entityType === "customer" ? "party"
+    : entityType === "property" ? "property"
+      : entityType === "equipment" || entityType === "asset" ? "asset"
+        : entityType === "work" ? "work"
+          : "entity";
+  return { kind, entityType, entityId, provenance };
+}
+
+function planningScope(context: OperatingContext | undefined): {
+  included: PlanningCanonicalEntityRef[];
+  excluded: PlanningCanonicalEntityRef[];
+  textExclusions: string[];
+} {
+  const interaction = context?.interactionContext;
+  if (!interaction) return { included: [], excluded: [], textExclusions: [] };
+  const includedRefs = [
+    ...(interaction.focusedEntity ? [interaction.focusedEntity] : []),
+    ...interaction.selectedEntities,
+  ];
+  const excluded = interaction.excludedEntities.map((ref) => planningEntityRef(ref.entityType, ref.entityId, "trusted_interaction_exclusion"));
+  const excludedKeys = new Set(excluded.map((ref) => `${ref.entityType}:${ref.entityId}`));
+  const included = [...new Map(includedRefs
+    .filter((ref) => !excludedKeys.has(`${ref.entityType}:${ref.entityId}`))
+    .map((ref) => [`${ref.entityType}:${ref.entityId}`, planningEntityRef(ref.entityType, ref.entityId, "trusted_interaction_scope")])).values()];
+  const textExclusions = interaction.filters
+    .filter(({ operator }) => operator === "neq" || operator === "not_in")
+    .map(({ field, operator, value }) => `${field} ${operator} ${JSON.stringify(value)}`);
+  return { included, excluded, textExclusions };
 }
 
 function plannerOperatingContext(context: OperatingContext | undefined): Record<string, unknown> | null {
@@ -530,11 +569,65 @@ export class LLMPlanner implements Planner {
         : { ...candidate, healthAdjustment: null };
     });
 
+    const irMode = planningIrMode();
+    const irScope = planningScope(opts.operatingContext);
+    const irArtifact = irMode === "legacy" ? null : buildCompatibilityPlanningIr({
+      executionModel: opts.executionModel ?? "ATOMIC_EFFECT",
+      requestedOutcome: instruction,
+      actions: finalCandidates.map((candidate, index) => ({
+        actionType: candidate.actionType,
+        payload: candidate.payload,
+        reasoning: valid[index]?.reasoning,
+        dependsOn: dependencyIndexes[index]!,
+      })),
+      observationForAction: businessEffectObservationForAction,
+      compileEffect: (action, effectId) => this.plugins.compilePlanningEffect(action.actionType, action.payload, effectId),
+      defineObservation: (action, effect, observationId) => this.plugins.definePlanningObservation(action.actionType, action.payload, effect, observationId),
+      provenance: {
+        source: "instruction_planner",
+        instructionId: opts.instructionId,
+        workId: opts.workId,
+        plannerAttemptId: opts.plannerAttemptId,
+        traceId: tenantContext.correlationId,
+        createdAt: new Date().toISOString(),
+      },
+      included: irScope.included,
+      excluded: irScope.excluded,
+      textExclusions: irScope.textExclusions,
+    });
+    const irDiff = irArtifact ? compareLegacyCandidateToIr({
+      artifact: irArtifact,
+      executionModel: opts.executionModel ?? "ATOMIC_EFFECT",
+      requestedOutcome: instruction,
+      actions: finalCandidates.map((candidate, index) => ({
+        actionType: candidate.actionType,
+        payload: candidate.payload,
+        reasoning: valid[index]?.reasoning,
+        dependsOn: dependencyIndexes[index]!,
+      })),
+      observationForAction: businessEffectObservationForAction,
+      included: irScope.included,
+      excluded: irScope.excluded,
+      textExclusions: irScope.textExclusions,
+    }) : null;
+    if (irDiff?.classification === "REGRESSION") {
+      throw new Error(`Planning IR semantic regression: ${JSON.stringify(irDiff.differences)}`);
+    }
+    const admittedIr = irArtifact ? await withTenant(tenantContext.tenantId, async (db) => {
+      const result = await createDbIrAdmissibilityCompiler({ db, tenantId: tenantContext.tenantId, plugins: this.plugins }).admit(irArtifact);
+      if (!result.admissible) throw new IrAdmissibilityRejectedError(result.issues);
+      return result.admitted;
+    }) : null;
+    const lowered = irMode === "cutover" && admittedIr ? lowerAdmittedPlanningIr(admittedIr) : null;
+    const effectiveCandidates = finalCandidates.map((candidate, index) => lowered?.[index]
+      ? { ...candidate, actionType: lowered[index]!.actionType, payload: lowered[index]!.payload }
+      : candidate);
+
     // B2.T2: forecast before persisting or gating. `PluginRegistry.simulate()` is
     // guaranteed no-write: five flagship plugins provide data-backed dry-runs and
     // every other plugin falls back to an explicitly limited schema prediction.
     const predictedReceipts = await Promise.all(
-      finalCandidates.map(async (candidate) => {
+      effectiveCandidates.map(async (candidate) => {
         const policy =
           policyByType.get(candidate.actionType) ??
           ({
@@ -560,7 +653,7 @@ export class LLMPlanner implements Planner {
       // this same open transaction, not a second one (see compiler.ts's own note on
       // groundEntitiesWithDb vs. compileAction).
       const compiled = await Promise.all(
-        finalCandidates.map(async (c) => {
+        effectiveCandidates.map(async (c) => {
           const policy = policyByType.get(c.actionType);
           const requiresConfirmation = policy?.requiresConfirmation ?? true;
           return {
@@ -572,7 +665,7 @@ export class LLMPlanner implements Planner {
       return db
         .insert(domainActions)
         .values(
-          finalCandidates.map((c, i) => ({
+          effectiveCandidates.map((c, i) => ({
             id: planActionIds[i]!,
             tenantId: tenantContext.tenantId,
             actionType: c.actionType,
@@ -591,7 +684,21 @@ export class LLMPlanner implements Planner {
             initiatedBy: tenantContext.employeeId ?? (/^[0-9a-f-]{36}$/i.test(tenantContext.userId) ? tenantContext.userId : null),
           })),
         )
-        .returning();
+        .returning()
+        .then(async (inserted) => {
+          if (irArtifact && irDiff) {
+            await Promise.all(inserted.map((row) => persistPlanningIrArtifactTx({
+              db,
+              tenantId: tenantContext.tenantId,
+              artifact: irArtifact,
+              status: irMode === "shadow" ? "shadow" : "lowered",
+              diff: irDiff,
+              domainActionId: row.id,
+              workId: opts.workId,
+            })));
+          }
+          return inserted;
+        });
     });
 
     // appendEpisode does not require an open tenant transaction (critic-review.ts

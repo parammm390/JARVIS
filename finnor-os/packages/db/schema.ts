@@ -1248,31 +1248,71 @@ export const workEntityLinks = pgTable(
   ],
 );
 
-export const households = pgTable("households", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
-  address: text("address").notNull(),
-  contactInfo: jsonb("contact_info").notNull().default({}),
-  waterProfile: jsonb("water_profile").notNull().default({}),
-  // TCPA: bulk outreach filters on this — false means never contact promotionally.
-  marketingConsent: boolean("marketing_consent").notNull().default(false),
-  // D5.T1: explicitly stored coordinates for dispatch. Null is meaningful: the UI
-  // must state that a household cannot be placed, never geocode silently in a map
-  // render or invent a location.
-  latitude: real("latitude"),
-  longitude: real("longitude"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const households = pgTable(
+  "households",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    address: text("address").notNull(),
+    contactInfo: jsonb("contact_info").notNull().default({}),
+    waterProfile: jsonb("water_profile").notNull().default({}),
+    marketingConsent: boolean("marketing_consent").notNull().default(false),
+    latitude: real("latitude"),
+    longitude: real("longitude"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique("households_tenant_id_id_key").on(t.tenantId, t.id)],
+);
 
-export const equipment = pgTable("equipment", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  tenantId: uuid("tenant_id").notNull().default(sql`finnor_os.request_tenant_id()`).references(() => tenants.id),
-  householdId: uuid("household_id").notNull().references(() => households.id),
-  type: text("type").notNull(),
-  model: text("model"),
-  installDate: timestamp("install_date", { withTimezone: true }),
-  source: text("source", { enum: ["finnor", "competitor"] }).notNull().default("finnor"),
-});
+/** Canonical service-location identity. A household remains the customer/account. */
+export const properties = pgTable(
+  "properties",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().default(sql`finnor_os.request_tenant_id()`).references(() => tenants.id),
+    householdId: uuid("household_id").notNull().references(() => households.id, { onDelete: "cascade" }),
+    label: text("label"),
+    address: text("address").notNull(),
+    kind: text("kind", { enum: ["residential", "commercial", "service_location", "unknown"] }).notNull().default("unknown"),
+    linkStatus: text("link_status", { enum: ["RESOLVED", "UNRESOLVED"] }).notNull().default("RESOLVED"),
+    latitude: real("latitude"),
+    longitude: real("longitude"),
+    ...archivable(),
+    ...provenanceColumns(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("properties_tenant_id_id_key").on(t.tenantId, t.id),
+    unique("properties_tenant_household_id_key").on(t.tenantId, t.householdId, t.id),
+    unique("properties_source_identity_key").on(t.tenantId, t.sourceSystem, t.externalId),
+    index("properties_tenant_household_idx").on(t.tenantId, t.householdId),
+    foreignKey({ columns: [t.tenantId, t.householdId], foreignColumns: [households.tenantId, households.id], name: "properties_tenant_household_fk" }).onDelete("cascade"),
+  ],
+);
+
+export const equipment = pgTable(
+  "equipment",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().default(sql`finnor_os.request_tenant_id()`).references(() => tenants.id),
+    // Preserve the required legacy customer relationship while property is additive.
+    householdId: uuid("household_id").notNull().references(() => households.id),
+    propertyId: uuid("property_id"),
+    propertyLinkStatus: text("property_link_status", { enum: ["RESOLVED", "UNRESOLVED"] }).notNull().default("UNRESOLVED"),
+    assetDomain: text("asset_domain", { enum: ["WATER", "HVAC", "PLUMBING", "GENERIC", "UNRESOLVED"] }).notNull().default("UNRESOLVED"),
+    type: text("type").notNull(),
+    model: text("model"),
+    installDate: timestamp("install_date", { withTimezone: true }),
+    source: text("source", { enum: ["finnor", "competitor"] }).notNull().default("finnor"),
+  },
+  (t) => [
+    unique("equipment_tenant_id_id_key").on(t.tenantId, t.id),
+    unique("equipment_tenant_household_property_id_key").on(t.tenantId, t.householdId, t.propertyId, t.id),
+    index("equipment_tenant_property_idx").on(t.tenantId, t.propertyId),
+    foreignKey({ columns: [t.tenantId, t.householdId, t.propertyId], foreignColumns: [properties.tenantId, properties.householdId, properties.id], name: "equipment_tenant_household_property_fk" }),
+  ],
+);
 
 export const technicians = pgTable("technicians", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -1282,16 +1322,49 @@ export const technicians = pgTable("technicians", {
   availability: jsonb("availability").notNull().default({}),
 });
 
-export const serviceVisits = pgTable("service_visits", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  tenantId: uuid("tenant_id").notNull().default(sql`finnor_os.request_tenant_id()`).references(() => tenants.id),
-  householdId: uuid("household_id").notNull().references(() => households.id),
-  technicianId: uuid("technician_id").references(() => technicians.id),
-  type: text("type").notNull(),
-  scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
-  completedAt: timestamp("completed_at", { withTimezone: true }),
-  notes: text("notes"),
-});
+export const serviceVisits = pgTable(
+  "service_visits",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().default(sql`finnor_os.request_tenant_id()`).references(() => tenants.id),
+    householdId: uuid("household_id").notNull().references(() => households.id),
+    propertyId: uuid("property_id"),
+    equipmentId: uuid("equipment_id"),
+    technicianId: uuid("technician_id").references(() => technicians.id),
+    type: text("type").notNull(),
+    scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    notes: text("notes"),
+  },
+  (t) => [
+    foreignKey({ columns: [t.tenantId, t.householdId, t.propertyId], foreignColumns: [properties.tenantId, properties.householdId, properties.id], name: "service_visits_tenant_household_property_fk" }),
+    foreignKey({ columns: [t.tenantId, t.equipmentId], foreignColumns: [equipment.tenantId, equipment.id], name: "service_visits_tenant_equipment_fk" }),
+  ],
+);
+
+/** Generic time-series observation for any existing equipment asset. */
+export const assetMeasurements = pgTable(
+  "asset_measurements",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().default(sql`finnor_os.request_tenant_id()`).references(() => tenants.id),
+    householdId: uuid("household_id").notNull().references(() => households.id),
+    propertyId: uuid("property_id").notNull(),
+    equipmentId: uuid("equipment_id").notNull(),
+    measurementType: text("measurement_type").notNull(),
+    value: jsonb("value").notNull(),
+    unit: text("unit"),
+    observedAt: timestamp("observed_at", { withTimezone: true }).notNull(),
+    source: text("source").notNull(),
+    provenance: jsonb("provenance").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("asset_measurements_tenant_asset_observed_idx").on(t.tenantId, t.equipmentId, t.observedAt),
+    foreignKey({ columns: [t.tenantId, t.householdId, t.propertyId], foreignColumns: [properties.tenantId, properties.householdId, properties.id], name: "asset_measurements_tenant_household_property_fk" }),
+    foreignKey({ columns: [t.tenantId, t.equipmentId], foreignColumns: [equipment.tenantId, equipment.id], name: "asset_measurements_tenant_equipment_fk" }),
+  ],
+);
 
 export const maintenanceAgreements = pgTable("maintenance_agreements", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -1508,12 +1581,43 @@ export const workObjectiveSteps = pgTable(
     completedAt: timestamp("completed_at", { withTimezone: true }),
   },
   (t) => [
+    unique("work_objective_steps_tenant_id_id_key").on(t.tenantId, t.id),
     unique("work_objective_steps_loop_number_idx").on(t.objectiveLoopId, t.stepNumber),
     unique("work_objective_steps_loop_key_idx").on(t.objectiveLoopId, t.idempotencyKey),
     unique("work_objective_steps_action_idx").on(t.domainActionId),
     unique("work_objective_steps_query_idx").on(t.queryExecutionId),
     index("work_objective_steps_tenant_loop_idx").on(t.tenantId, t.objectiveLoopId, t.stepNumber),
     index("work_objective_steps_tenant_outcome_idx").on(t.tenantId, t.iterationOutcome, t.completedAt),
+  ],
+);
+
+/** Persisted Planning-IR identity/provenance. Its semantic hash is intentionally
+ * absent from every BusinessEffect and idempotency identity domain. */
+export const planningIrArtifacts = pgTable(
+  "planning_ir_artifacts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    domainActionId: uuid("domain_action_id").references(() => domainActions.id),
+    workId: uuid("work_id").references(() => works.id),
+    objectiveStepId: uuid("objective_step_id").references(() => workObjectiveSteps.id),
+    irSchemaVersion: text("ir_schema_version").notNull(),
+    compilerVersion: text("compiler_version").notNull(),
+    irSemanticHash: text("ir_semantic_hash").notNull(),
+    provenance: jsonb("provenance").notNull(),
+    artifact: jsonb("artifact").notNull(),
+    status: text("status", { enum: ["shadow", "accepted", "rejected", "lowered"] }).notNull(),
+    comparisonClassification: text("comparison_classification", { enum: ["EQUIVALENT", "EXPECTED_IMPROVEMENT", "REGRESSION", "LEGACY_UNSUPPORTED", "IR_UNSUPPORTED", "FIXTURE_INVALID"] }).notNull(),
+    semanticDiff: jsonb("semantic_diff").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("planning_ir_artifacts_action_idx").on(t.domainActionId),
+    index("planning_ir_artifacts_tenant_hash_idx").on(t.tenantId, t.irSemanticHash),
+    index("planning_ir_artifacts_work_idx").on(t.workId, t.createdAt),
+    foreignKey({ columns: [t.tenantId, t.domainActionId], foreignColumns: [domainActions.tenantId, domainActions.id], name: "planning_ir_artifacts_action_tenant_fk" }),
+    foreignKey({ columns: [t.tenantId, t.workId], foreignColumns: [works.tenantId, works.id], name: "planning_ir_artifacts_work_tenant_fk" }),
+    foreignKey({ columns: [t.tenantId, t.objectiveStepId], foreignColumns: [workObjectiveSteps.tenantId, workObjectiveSteps.id], name: "planning_ir_artifacts_step_tenant_fk" }),
   ],
 );
 
@@ -2329,25 +2433,32 @@ export const tasks = pgTable(
 );
 
 // Also polymorphic subject (a lead's water-test hold, a work order's install slot, ...).
-export const appointments = pgTable("appointments", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
-  subjectType: text("subject_type").notNull(),
-  subjectId: uuid("subject_id").notNull(),
-  technicianId: uuid("technician_id").references(() => technicians.id),
-  status: text("status", {
-    enum: ["hold", "confirmed", "completed", "canceled", "no_show"],
-  })
-    .notNull()
-    .default("hold"),
-  scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull(),
-  durationMinutes: integer("duration_minutes"),
-  holdExpiresAt: timestamp("hold_expires_at", { withTimezone: true }),
-  notes: text("notes"),
-  ...archivable(),
-  ...provenanceColumns(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const appointments = pgTable(
+  "appointments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    subjectType: text("subject_type").notNull(),
+    subjectId: uuid("subject_id").notNull(),
+    propertyId: uuid("property_id"),
+    technicianId: uuid("technician_id").references(() => technicians.id),
+    status: text("status", {
+      enum: ["hold", "confirmed", "completed", "canceled", "no_show"],
+    })
+      .notNull()
+      .default("hold"),
+    scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull(),
+    durationMinutes: integer("duration_minutes"),
+    holdExpiresAt: timestamp("hold_expires_at", { withTimezone: true }),
+    notes: text("notes"),
+    ...archivable(),
+    ...provenanceColumns(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    foreignKey({ columns: [t.tenantId, t.propertyId], foreignColumns: [properties.tenantId, properties.id], name: "appointments_tenant_property_fk" }),
+  ],
+);
 
 export const technicianCapacity = pgTable("technician_capacity", {
   id: uuid("id").primaryKey().defaultRandom(),

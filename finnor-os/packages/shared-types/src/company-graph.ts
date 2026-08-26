@@ -9,6 +9,8 @@ export const CANONICAL_ENTITY_TYPES = [
   "user",
   "technician",
   "equipment",
+  "property",
+  "asset_measurement",
   "service_visit",
   "maintenance_agreement",
   "lead",

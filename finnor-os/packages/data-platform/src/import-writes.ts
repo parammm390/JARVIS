@@ -8,6 +8,7 @@ import {
   invoices,
   leads,
   payments,
+  properties,
   proposals,
   quoteLineItems,
   quotes,
@@ -22,6 +23,7 @@ import { recordBusinessEvent } from "./events";
 export type CanonicalImportEntity =
   | "customer"
   | "lead"
+  | "property"
   | "appointment"
   | "service_visit"
   | "equipment"
@@ -81,10 +83,12 @@ function updateValue<T>(current: T | null | undefined, incoming: T | null | unde
   return undefined;
 }
 
-async function assertRelatedTenant(db: Db, table: "households" | "technicians" | "invoices" | "quotes", id: string, tenantId: string): Promise<void> {
+async function assertRelatedTenant(db: Db, table: "households" | "properties" | "technicians" | "invoices" | "quotes", id: string, tenantId: string): Promise<void> {
   const rows = table === "households"
     ? await db.select({ tenantId: households.tenantId }).from(households).where(and(eq(households.id, id), eq(households.tenantId, tenantId))).limit(1)
-    : table === "technicians"
+    : table === "properties"
+      ? await db.select({ tenantId: properties.tenantId }).from(properties).where(and(eq(properties.id, id), eq(properties.tenantId, tenantId))).limit(1)
+      : table === "technicians"
       ? await db.select({ tenantId: technicians.tenantId }).from(technicians).where(and(eq(technicians.id, id), eq(technicians.tenantId, tenantId))).limit(1)
       : table === "invoices"
         ? await db.select({ tenantId: invoices.tenantId }).from(invoices).where(and(eq(invoices.id, id), eq(invoices.tenantId, tenantId))).limit(1)
@@ -92,6 +96,62 @@ async function assertRelatedTenant(db: Db, table: "households" | "technicians" |
   if (rows[0]?.tenantId !== tenantId) {
     throw new CanonicalImportError("invalid_relationship", `${table} relationship does not belong to this tenant`, table);
   }
+}
+
+function usablePropertyAddress(address: string | undefined): address is string {
+  if (!address?.trim()) return false;
+  const normalized = address.trim().toLowerCase().replace(/\s+/g, " ");
+  return !new Set([
+    "(address pending)",
+    "address pending",
+    "pending",
+    "unknown",
+    "n/a",
+    "na",
+    "none",
+    "not provided",
+    "no address",
+    "tbd",
+    "-",
+  ]).has(normalized);
+}
+
+/** Create only the one property supported by strong evidence. Never select among
+ * multiple locations and never manufacture a location from a placeholder. */
+async function resolveSoleProperty(
+  db: Db,
+  input: { tenantId: string; householdId: string; explicitPropertyId?: string; address?: string; provenance: { sourceSystem: string; sourceId: string }; failOnMultiple?: boolean },
+): Promise<string | undefined> {
+  if (input.explicitPropertyId) {
+    const [property] = await db.select({ id: properties.id, householdId: properties.householdId })
+      .from(properties)
+      .where(and(eq(properties.tenantId, input.tenantId), eq(properties.id, input.explicitPropertyId)))
+      .limit(1);
+    if (!property || property.householdId !== input.householdId) {
+      throw new CanonicalImportError("invalid_relationship", "property does not belong to the imported equipment household", "propertyId");
+    }
+    return property.id;
+  }
+  const rows = await db.select({ id: properties.id }).from(properties)
+    .where(and(eq(properties.tenantId, input.tenantId), eq(properties.householdId, input.householdId), sql`${properties.archivedAt} IS NULL`));
+  if (rows.length > 1) {
+    if (input.failOnMultiple === false) return undefined;
+    throw new CanonicalImportError("ambiguous_match", "multiple service properties exist; propertyId is required", "propertyId");
+  }
+  if (rows[0]) return rows[0].id;
+  if (!usablePropertyAddress(input.address)) return undefined;
+  const [created] = await db.insert(properties).values({
+    tenantId: input.tenantId,
+    householdId: input.householdId,
+    label: "Primary service location",
+    address: input.address,
+    kind: "unknown",
+    linkStatus: "RESOLVED",
+    sourceSystem: input.provenance.sourceSystem,
+    externalId: `${input.provenance.sourceId}:property`,
+    createdBy: `import:${input.provenance.sourceSystem}`,
+  }).returning({ id: properties.id });
+  return created!.id;
 }
 
 async function writeCustomer(db: Db, params: CanonicalImportWriteParams): Promise<CanonicalImportWriteResult> {
@@ -147,8 +207,9 @@ async function writeCustomer(db: Db, params: CanonicalImportWriteParams): Promis
     }).returning();
     if (phone) await db.insert(contactMethods).values({ tenantId: params.tenantId, contactId: contact!.id, methodType: "phone", value: phone }).onConflictDoNothing();
     if (email) await db.insert(contactMethods).values({ tenantId: params.tenantId, contactId: contact!.id, methodType: "email", value: email }).onConflictDoNothing();
+    const propertyId = await resolveSoleProperty(db, { tenantId: params.tenantId, householdId: household!.id, address, provenance: params.provenance, failOnMultiple: false });
     await recordBusinessEvent(db, { tenantId: params.tenantId, entityType: "contact", entityId: contact!.id, eventType: "contact_imported", source: params.provenance.sourceSystem });
-    return { entityType: "household", entityId: household!.id, action: "created", related: { contactId: contact!.id } };
+    return { entityType: "household", entityId: household!.id, action: "created", related: { contactId: contact!.id, ...(propertyId ? { propertyId } : {}) } };
   }
 
   const [household] = await db.select().from(households).where(and(eq(households.tenantId, params.tenantId), eq(households.id, householdId)));
@@ -157,7 +218,8 @@ async function writeCustomer(db: Db, params: CanonicalImportWriteParams): Promis
     const [existingContact] = await db.select().from(contacts).where(and(eq(contacts.tenantId, params.tenantId), eq(contacts.householdId, householdId)));
     contactId = existingContact?.id;
   }
-  if (params.updateMode === "insert_only") return { entityType: "household", entityId: householdId, action: "skipped", ...(contactId ? { related: { contactId } } : {}) };
+  const existingPropertyId = await resolveSoleProperty(db, { tenantId: params.tenantId, householdId, address: address ?? household.address, provenance: params.provenance, failOnMultiple: false });
+  if (params.updateMode === "insert_only") return { entityType: "household", entityId: householdId, action: "skipped", related: { ...(contactId ? { contactId } : {}), ...(existingPropertyId ? { propertyId: existingPropertyId } : {}) } };
 
   const overwrite = params.updateMode === "source_owned" && sourceOwned;
   let changed = false;
@@ -202,7 +264,7 @@ async function writeCustomer(db: Db, params: CanonicalImportWriteParams): Promis
     changed ||= inserted.length > 0;
   }
   if (changed) await recordBusinessEvent(db, { tenantId: params.tenantId, entityType: "contact", entityId: contactId, eventType: "contact_import_updated", source: params.provenance.sourceSystem });
-  return { entityType: "household", entityId: householdId, action: changed ? "updated" : "skipped", related: { contactId } };
+  return { entityType: "household", entityId: householdId, action: changed ? "updated" : "skipped", related: { contactId, ...(existingPropertyId ? { propertyId: existingPropertyId } : {}) } };
 }
 
 async function findOneByQuery(db: Db, query: ReturnType<typeof sql>): Promise<string | undefined> {
@@ -219,6 +281,36 @@ async function findOneByQuery(db: Db, query: ReturnType<typeof sql>): Promise<st
 export async function writeCanonicalImportRow(db: Db, params: CanonicalImportWriteParams): Promise<CanonicalImportWriteResult> {
   if (params.entity === "customer") return writeCustomer(db, params);
   const overwrite = canOverwrite(params);
+
+  if (params.entity === "property") {
+    const householdId = params.relationships.householdId;
+    if (!householdId) throw new CanonicalImportError("invalid_relationship", "property requires householdId", "householdId");
+    await assertRelatedTenant(db, "households", householdId, params.tenantId);
+    const address = stringValue(params.data.address);
+    if (!address) throw new CanonicalImportError("unsafe_update", "property requires an address", "address");
+    let id = params.existingId ?? await findOneByQuery(db, sql`
+      SELECT id::text FROM finnor_os.properties
+      WHERE tenant_id=${params.tenantId}::uuid AND household_id=${householdId}::uuid AND archived_at IS NULL
+        AND lower(regexp_replace(address,'\\s+',' ','g'))=lower(regexp_replace(${address},'\\s+',' ','g'))
+    `);
+    if (!id) {
+      const [row] = await db.insert(properties).values({
+        tenantId: params.tenantId, householdId, address,
+        label: stringValue(params.data.label) ?? null,
+        kind: (stringValue(params.data.kind) as typeof properties.$inferInsert.kind) ?? "unknown",
+        linkStatus: "RESOLVED", latitude: numberValue(params.data.latitude), longitude: numberValue(params.data.longitude),
+        sourceSystem: params.provenance.sourceSystem, externalId: params.provenance.sourceId,
+        createdBy: `import:${params.provenance.sourceSystem}`,
+      }).returning();
+      await recordBusinessEvent(db, { tenantId: params.tenantId, entityType: "property", entityId: row!.id, eventType: "property_imported", source: params.provenance.sourceSystem });
+      return { entityType: "property", entityId: row!.id, action: "created", related: { householdId } };
+    }
+    const [row] = await db.select().from(properties).where(and(eq(properties.tenantId, params.tenantId), eq(properties.id, id)));
+    if (!row || row.householdId !== householdId) throw new CanonicalImportError("invalid_relationship", "property source identity conflicts with household", "householdId");
+    if (!overwrite || params.updateMode === "insert_only") return { entityType: "property", entityId: id, action: "skipped", related: { householdId } };
+    await db.update(properties).set({ address, label: stringValue(params.data.label) ?? row.label, kind: (stringValue(params.data.kind) as typeof properties.$inferInsert.kind) ?? row.kind, latitude: numberValue(params.data.latitude) ?? row.latitude, longitude: numberValue(params.data.longitude) ?? row.longitude, updatedAt: new Date() }).where(eq(properties.id, id));
+    return { entityType: "property", entityId: id, action: "updated", related: { householdId } };
+  }
 
   if (params.entity === "lead") {
     let id = params.existingId;
@@ -297,41 +389,77 @@ export async function writeCanonicalImportRow(db: Db, params: CanonicalImportWri
 
   if (params.entity === "appointment") {
     const scheduledAt = dateValue(params.data.scheduledAt)!;
-    let id = params.existingId ?? await findOneByQuery(db, sql`SELECT id::text FROM finnor_os.appointments WHERE tenant_id=${params.tenantId}::uuid AND subject_type='household' AND subject_id=${householdId!}::uuid AND scheduled_at=${scheduledAt}`);
+    const [household] = await db.select({ address: households.address }).from(households).where(and(eq(households.tenantId, params.tenantId), eq(households.id, householdId!))).limit(1);
+    const propertyId = await resolveSoleProperty(db, { tenantId: params.tenantId, householdId: householdId!, explicitPropertyId: params.relationships.propertyId, address: household?.address, provenance: params.provenance });
+    let id = params.existingId ?? await findOneByQuery(db, sql`SELECT id::text FROM finnor_os.appointments WHERE tenant_id=${params.tenantId}::uuid AND subject_type='household' AND subject_id=${householdId!}::uuid AND property_id IS NOT DISTINCT FROM ${propertyId ?? null}::uuid AND scheduled_at=${scheduledAt}`);
+    if (!id && propertyId) id = await findOneByQuery(db, sql`SELECT id::text FROM finnor_os.appointments WHERE tenant_id=${params.tenantId}::uuid AND subject_type='household' AND subject_id=${householdId!}::uuid AND property_id IS NULL AND scheduled_at=${scheduledAt}`);
     if (!id) {
-      const [row] = await db.insert(appointments).values({ tenantId: params.tenantId, subjectType: "household", subjectId: householdId!, technicianId: technicianId ?? null, scheduledAt, durationMinutes: numberValue(params.data.durationMinutes), notes: stringValue(params.data.notes) ?? null, status: (stringValue(params.data.status) as typeof appointments.$inferInsert.status) ?? "confirmed", sourceSystem: params.provenance.sourceSystem, externalId: params.provenance.sourceId }).returning();
+      const [row] = await db.insert(appointments).values({ tenantId: params.tenantId, subjectType: "household", subjectId: householdId!, propertyId: propertyId ?? null, technicianId: technicianId ?? null, scheduledAt, durationMinutes: numberValue(params.data.durationMinutes), notes: stringValue(params.data.notes) ?? null, status: (stringValue(params.data.status) as typeof appointments.$inferInsert.status) ?? "confirmed", sourceSystem: params.provenance.sourceSystem, externalId: params.provenance.sourceId }).returning();
       await recordBusinessEvent(db, { tenantId: params.tenantId, entityType: "appointment", entityId: row!.id, eventType: "appointment_imported", source: params.provenance.sourceSystem });
-      return { entityType: "appointment", entityId: row!.id, action: "created" };
+      return { entityType: "appointment", entityId: row!.id, action: "created", related: { householdId: householdId!, ...(propertyId ? { propertyId } : {}) } };
     }
-    if (!overwrite || params.updateMode === "insert_only") return { entityType: "appointment", entityId: id, action: "skipped" };
-    await db.update(appointments).set({ technicianId: technicianId ?? null, scheduledAt, durationMinutes: numberValue(params.data.durationMinutes), notes: stringValue(params.data.notes) ?? null, status: (stringValue(params.data.status) as typeof appointments.$inferInsert.status) ?? "confirmed" }).where(and(eq(appointments.tenantId, params.tenantId), eq(appointments.id, id)));
-    return { entityType: "appointment", entityId: id, action: "updated" };
+    const [existing] = await db.select({ propertyId: appointments.propertyId }).from(appointments).where(and(eq(appointments.tenantId, params.tenantId), eq(appointments.id, id))).limit(1);
+    if (!existing) throw new CanonicalImportError("canonical_missing", "referenced appointment no longer exists");
+    if (existing.propertyId && propertyId && existing.propertyId !== propertyId) throw new CanonicalImportError("invalid_relationship", "appointment source identity conflicts with property", "propertyId");
+    const migrationPatch = !existing.propertyId && propertyId ? { propertyId } : {};
+    if (!overwrite || params.updateMode === "insert_only") {
+      if (Object.keys(migrationPatch).length) await db.update(appointments).set(migrationPatch).where(eq(appointments.id, id));
+      return { entityType: "appointment", entityId: id, action: Object.keys(migrationPatch).length ? "updated" : "skipped", related: { householdId: householdId!, ...(propertyId ? { propertyId } : {}) } };
+    }
+    await db.update(appointments).set({ ...migrationPatch, technicianId: technicianId ?? null, scheduledAt, durationMinutes: numberValue(params.data.durationMinutes), notes: stringValue(params.data.notes) ?? null, status: (stringValue(params.data.status) as typeof appointments.$inferInsert.status) ?? "confirmed" }).where(and(eq(appointments.tenantId, params.tenantId), eq(appointments.id, id)));
+    return { entityType: "appointment", entityId: id, action: "updated", related: { householdId: householdId!, ...(propertyId ? { propertyId } : {}) } };
   }
 
   if (params.entity === "service_visit") {
     const scheduledAt = dateValue(params.data.scheduledAt);
+    const [household] = await db.select({ address: households.address }).from(households).where(and(eq(households.tenantId, params.tenantId), eq(households.id, householdId!))).limit(1);
+    const propertyId = await resolveSoleProperty(db, { tenantId: params.tenantId, householdId: householdId!, explicitPropertyId: params.relationships.propertyId, address: household?.address, provenance: params.provenance });
     let id = params.existingId;
-    if (!id && scheduledAt) id = await findOneByQuery(db, sql`SELECT id::text FROM finnor_os.service_visits WHERE tenant_id=${params.tenantId}::uuid AND household_id=${householdId!}::uuid AND type=${String(params.data.type)} AND scheduled_at=${scheduledAt}`);
+    if (!id && scheduledAt) id = await findOneByQuery(db, sql`SELECT id::text FROM finnor_os.service_visits WHERE tenant_id=${params.tenantId}::uuid AND household_id=${householdId!}::uuid AND property_id IS NOT DISTINCT FROM ${propertyId ?? null}::uuid AND type=${String(params.data.type)} AND scheduled_at=${scheduledAt}`);
     if (!id) {
-      const [row] = await db.insert(serviceVisits).values({ tenantId: params.tenantId, householdId: householdId!, technicianId: technicianId ?? null, type: String(params.data.type), scheduledAt: scheduledAt ?? null, completedAt: dateValue(params.data.completedAt) ?? null, notes: stringValue(params.data.notes) ?? null }).returning();
+      const [row] = await db.insert(serviceVisits).values({ tenantId: params.tenantId, householdId: householdId!, propertyId: propertyId ?? null, technicianId: technicianId ?? null, type: String(params.data.type), scheduledAt: scheduledAt ?? null, completedAt: dateValue(params.data.completedAt) ?? null, notes: stringValue(params.data.notes) ?? null }).returning();
       await recordBusinessEvent(db, { tenantId: params.tenantId, entityType: "service_visit", entityId: row!.id, eventType: "service_visit_imported", source: params.provenance.sourceSystem });
-      return { entityType: "service_visit", entityId: row!.id, action: "created" };
+      return { entityType: "service_visit", entityId: row!.id, action: "created", related: { householdId: householdId!, ...(propertyId ? { propertyId } : {}) } };
     }
-    if (!overwrite || params.updateMode === "insert_only") return { entityType: "service_visit", entityId: id, action: "skipped" };
-    await db.update(serviceVisits).set({ technicianId: technicianId ?? null, type: String(params.data.type), scheduledAt: scheduledAt ?? null, completedAt: dateValue(params.data.completedAt) ?? null, notes: stringValue(params.data.notes) ?? null }).where(and(eq(serviceVisits.tenantId, params.tenantId), eq(serviceVisits.id, id)));
+    const [existing] = await db.select({ propertyId: serviceVisits.propertyId }).from(serviceVisits).where(and(eq(serviceVisits.tenantId, params.tenantId), eq(serviceVisits.id, id))).limit(1);
+    if (!existing) throw new CanonicalImportError("canonical_missing", "referenced service visit no longer exists");
+    if (existing.propertyId && propertyId && existing.propertyId !== propertyId) throw new CanonicalImportError("invalid_relationship", "service visit source identity conflicts with property", "propertyId");
+    if (!overwrite || params.updateMode === "insert_only") {
+      if (!existing.propertyId && propertyId) await db.update(serviceVisits).set({ propertyId }).where(eq(serviceVisits.id, id));
+      return { entityType: "service_visit", entityId: id, action: existing.propertyId || !propertyId ? "skipped" : "updated", related: { householdId: householdId!, ...(propertyId ? { propertyId } : {}) } };
+    }
+    await db.update(serviceVisits).set({ propertyId: existing.propertyId ?? propertyId ?? null, technicianId: technicianId ?? null, type: String(params.data.type), scheduledAt: scheduledAt ?? null, completedAt: dateValue(params.data.completedAt) ?? null, notes: stringValue(params.data.notes) ?? null }).where(and(eq(serviceVisits.tenantId, params.tenantId), eq(serviceVisits.id, id)));
     return { entityType: "service_visit", entityId: id, action: "updated" };
   }
 
   if (params.entity === "equipment") {
-    let id = params.existingId ?? await findOneByQuery(db, sql`SELECT id::text FROM finnor_os.equipment WHERE tenant_id=${params.tenantId}::uuid AND household_id=${householdId!}::uuid AND type=${String(params.data.type)} AND coalesce(model,'')=coalesce(${stringValue(params.data.model) ?? null},'')`);
+    const [household] = await db.select({ address: households.address }).from(households).where(and(eq(households.tenantId, params.tenantId), eq(households.id, householdId!))).limit(1);
+    const propertyId = await resolveSoleProperty(db, { tenantId: params.tenantId, householdId: householdId!, explicitPropertyId: params.relationships.propertyId, address: household?.address, provenance: params.provenance });
+    if (!propertyId) throw new CanonicalImportError("invalid_relationship", "equipment property is UNRESOLVED; import must supply propertyId", "propertyId");
+    const equipmentType = String(params.data.type);
+    const model = stringValue(params.data.model);
+    let id = params.existingId;
+    if (!id) id = await findOneByQuery(db, sql`SELECT id::text FROM finnor_os.equipment WHERE tenant_id=${params.tenantId}::uuid AND property_id=${propertyId}::uuid AND type=${equipmentType} AND coalesce(model,'')=coalesce(${model ?? null},'')`);
+    // Convergence seam: attach the one pre-property legacy match instead of creating
+    // a second canonical equipment row. Never match a row already owned by another property.
+    if (!id) id = await findOneByQuery(db, sql`SELECT id::text FROM finnor_os.equipment WHERE tenant_id=${params.tenantId}::uuid AND household_id=${householdId!}::uuid AND property_id IS NULL AND type=${equipmentType} AND coalesce(model,'')=coalesce(${model ?? null},'')`);
     if (!id) {
-      const [row] = await db.insert(equipment).values({ tenantId: params.tenantId, householdId: householdId!, type: String(params.data.type), model: stringValue(params.data.model) ?? null, installDate: dateValue(params.data.installDate) ?? null, source: (stringValue(params.data.source) as "finnor" | "competitor") ?? "finnor" }).returning();
+      const [row] = await db.insert(equipment).values({ tenantId: params.tenantId, householdId: householdId!, propertyId, propertyLinkStatus: "RESOLVED", assetDomain: (stringValue(params.data.assetDomain) as typeof equipment.$inferInsert.assetDomain) ?? "GENERIC", type: equipmentType, model: model ?? null, installDate: dateValue(params.data.installDate) ?? null, source: (stringValue(params.data.source) as "finnor" | "competitor") ?? "finnor" }).returning();
       await recordBusinessEvent(db, { tenantId: params.tenantId, entityType: "equipment", entityId: row!.id, eventType: "equipment_imported", source: params.provenance.sourceSystem });
-      return { entityType: "equipment", entityId: row!.id, action: "created" };
+      return { entityType: "equipment", entityId: row!.id, action: "created", related: { householdId: householdId!, propertyId } };
     }
-    if (!overwrite || params.updateMode === "insert_only") return { entityType: "equipment", entityId: id, action: "skipped" };
-    await db.update(equipment).set({ type: String(params.data.type), model: stringValue(params.data.model) ?? null, installDate: dateValue(params.data.installDate) ?? null, source: (stringValue(params.data.source) as "finnor" | "competitor") ?? "finnor" }).where(and(eq(equipment.tenantId, params.tenantId), eq(equipment.id, id)));
-    return { entityType: "equipment", entityId: id, action: "updated" };
+    const [existing] = await db.select().from(equipment).where(and(eq(equipment.tenantId, params.tenantId), eq(equipment.id, id))).limit(1);
+    if (!existing) throw new CanonicalImportError("canonical_missing", "referenced equipment no longer exists");
+    if (existing.householdId !== householdId || (existing.propertyId && existing.propertyId !== propertyId)) {
+      throw new CanonicalImportError("invalid_relationship", "equipment source identity conflicts with household/property", "propertyId");
+    }
+    const migrationPatch = !existing.propertyId ? { propertyId, propertyLinkStatus: "RESOLVED" as const } : {};
+    if (!overwrite || params.updateMode === "insert_only") {
+      if (Object.keys(migrationPatch).length) await db.update(equipment).set(migrationPatch).where(eq(equipment.id, id));
+      return { entityType: "equipment", entityId: id, action: Object.keys(migrationPatch).length ? "updated" : "skipped", related: { householdId: householdId!, propertyId } };
+    }
+    await db.update(equipment).set({ ...migrationPatch, assetDomain: (stringValue(params.data.assetDomain) as typeof equipment.$inferInsert.assetDomain) ?? existing.assetDomain, type: equipmentType, model: model ?? null, installDate: dateValue(params.data.installDate) ?? null, source: (stringValue(params.data.source) as "finnor" | "competitor") ?? "finnor" }).where(and(eq(equipment.tenantId, params.tenantId), eq(equipment.id, id)));
+    return { entityType: "equipment", entityId: id, action: "updated", related: { householdId: householdId!, propertyId } };
   }
 
   if (params.entity === "work_order") {

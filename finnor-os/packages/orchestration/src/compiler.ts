@@ -21,9 +21,14 @@
 import {
   withTenant,
   households,
+  properties,
+  equipment,
+  assetMeasurements,
   invoices,
+  payments,
   quotes,
   leads,
+  opportunities,
   workOrders,
   maintenanceAgreements,
   technicians,
@@ -86,8 +91,25 @@ async function lookUpKnownId(db: Db, tenantId: string | undefined, field: string
       const [row] = await db.select({ id: households.id }).from(households).where(tenantFor(eq(households.id, value), households.tenantId)).limit(1);
       return row ? "verified" : "not_found";
     }
+    case "propertyId": {
+      const [row] = await db.select({ id: properties.id }).from(properties).where(tenantFor(eq(properties.id, value), properties.tenantId)).limit(1);
+      return row ? "verified" : "not_found";
+    }
+    case "equipmentId":
+    case "assetId": {
+      const [row] = await db.select({ id: equipment.id }).from(equipment).where(tenantFor(eq(equipment.id, value), equipment.tenantId)).limit(1);
+      return row ? "verified" : "not_found";
+    }
+    case "assetMeasurementId": {
+      const [row] = await db.select({ id: assetMeasurements.id }).from(assetMeasurements).where(tenantFor(eq(assetMeasurements.id, value), assetMeasurements.tenantId)).limit(1);
+      return row ? "verified" : "not_found";
+    }
     case "invoiceId": {
       const [row] = await db.select({ id: invoices.id }).from(invoices).where(tenantFor(eq(invoices.id, value), invoices.tenantId)).limit(1);
+      return row ? "verified" : "not_found";
+    }
+    case "paymentId": {
+      const [row] = await db.select({ id: payments.id }).from(payments).where(tenantFor(eq(payments.id, value), payments.tenantId)).limit(1);
       return row ? "verified" : "not_found";
     }
     case "quoteId": {
@@ -98,11 +120,16 @@ async function lookUpKnownId(db: Db, tenantId: string | undefined, field: string
       const [row] = await db.select({ id: leads.id }).from(leads).where(tenantFor(eq(leads.id, value), leads.tenantId)).limit(1);
       return row ? "verified" : "not_found";
     }
+    case "opportunityId": {
+      const [row] = await db.select({ id: opportunities.id }).from(opportunities).where(tenantFor(eq(opportunities.id, value), opportunities.tenantId)).limit(1);
+      return row ? "verified" : "not_found";
+    }
     case "workOrderId": {
       const [row] = await db.select({ id: workOrders.id }).from(workOrders).where(tenantFor(eq(workOrders.id, value), workOrders.tenantId)).limit(1);
       return row ? "verified" : "not_found";
     }
-    case "agreementId": {
+    case "agreementId":
+    case "maintenanceAgreementId": {
       const [row] = await db
         .select({ id: maintenanceAgreements.id })
         .from(maintenanceAgreements)
@@ -124,7 +151,8 @@ async function lookUpKnownId(db: Db, tenantId: string | undefined, field: string
         .limit(1);
       return row ? "verified" : "not_found";
     }
-    case "visitId": {
+    case "visitId":
+    case "serviceVisitId": {
       const [row] = await db.select({ id: serviceVisits.id }).from(serviceVisits).innerJoin(households, eq(serviceVisits.householdId, households.id)).where(tenant(eq(serviceVisits.id, value))).limit(1);
       return row ? "verified" : "not_found";
     }
@@ -168,9 +196,36 @@ async function lookUpKnownId(db: Db, tenantId: string | undefined, field: string
       const [row] = await db.select({ id: communicationIdentities.id }).from(communicationIdentities).where(tenantFor(eq(communicationIdentities.id, value), communicationIdentities.tenantId)).limit(1);
       return row ? "verified" : "not_found";
     }
+    case "applicationAccountId": {
+      const [row] = await db.select({ id: applicationAccounts.id }).from(applicationAccounts).where(tenantFor(eq(applicationAccounts.id, value), applicationAccounts.tenantId)).limit(1);
+      return row ? "verified" : "not_found";
+    }
+    case "authProfileId": {
+      const [row] = await db.select({ id: authProfiles.id }).from(authProfiles).where(tenantFor(eq(authProfiles.id, value), authProfiles.tenantId)).limit(1);
+      return row ? "verified" : "not_found";
+    }
     default:
       return "unverifiable";
   }
+}
+
+/** Public reuse seam for the DB-aware IR admissibility layer. It delegates typed
+ * entity ownership to the existing canonical resolver instead of adding a second
+ * tenant-grounding map. */
+export async function groundCanonicalRefWithDb(
+  db: Db,
+  tenantId: string,
+  ref: { kind: string; entityType: string; entityId: string; field?: string },
+): Promise<"verified" | "not_found" | "unverifiable"> {
+  if (ref.kind === "resource") return ref.entityId.trim() ? "verified" : "not_found";
+  if (!UUID_RE.test(ref.entityId)) return "not_found";
+  const field = ref.field?.split(".").at(-1)?.replace(/^.*\]/, "");
+  if (field) {
+    const known = await lookUpKnownId(db, tenantId, field, ref.entityId);
+    if (known !== "unverifiable") return known;
+  }
+  if (ref.kind === "party") return lookUpTypedRef(db, tenantId, "party", ref.entityType, ref.entityId).catch(() => "not_found");
+  return lookUpTypedRef(db, tenantId, "entity", ref.entityType, ref.entityId).catch(() => "not_found");
 }
 
 async function lookUpTypedRef(
@@ -308,6 +363,7 @@ export async function compileAction(
 
 const EFFECT_RESOURCE_KEYS: Record<string, string> = {
   householdId: "household", customerId: "household", targetId: "household",
+  propertyId: "property", equipmentId: "equipment", assetId: "equipment", assetMeasurementId: "asset_measurement",
   technicianId: "technician", visitId: "service_visit", serviceVisitId: "service_visit",
   workOrderId: "work_order", invoiceId: "invoice", paymentId: "payment", leadId: "lead",
   opportunityId: "opportunity", quoteId: "quote", proposalId: "proposal",
@@ -424,6 +480,18 @@ async function safeState(db: Db, tenantId: string, target: Pick<BusinessEffectTa
     case "household": {
       const [row] = await db.select({ id: households.id, createdAt: households.createdAt }).from(households).where(and(eq(households.tenantId, tenantId), eq(households.id, target.id))).limit(1);
       return row ? { id: row.id, createdAt: iso(row.createdAt) } : null;
+    }
+    case "property": {
+      const [row] = await db.select({ id: properties.id, householdId: properties.householdId, address: properties.address, kind: properties.kind, linkStatus: properties.linkStatus, archivedAt: properties.archivedAt, updatedAt: properties.updatedAt }).from(properties).where(and(eq(properties.tenantId, tenantId), eq(properties.id, target.id))).limit(1);
+      return row ? { ...row, archivedAt: iso(row.archivedAt), updatedAt: iso(row.updatedAt) } : null;
+    }
+    case "equipment": {
+      const [row] = await db.select({ id: equipment.id, householdId: equipment.householdId, propertyId: equipment.propertyId, propertyLinkStatus: equipment.propertyLinkStatus, assetDomain: equipment.assetDomain, type: equipment.type, model: equipment.model, installDate: equipment.installDate, source: equipment.source }).from(equipment).where(and(eq(equipment.tenantId, tenantId), eq(equipment.id, target.id))).limit(1);
+      return row ? { ...row, installDate: iso(row.installDate) } : null;
+    }
+    case "asset_measurement": {
+      const [row] = await db.select({ id: assetMeasurements.id, householdId: assetMeasurements.householdId, propertyId: assetMeasurements.propertyId, equipmentId: assetMeasurements.equipmentId, measurementType: assetMeasurements.measurementType, value: assetMeasurements.value, unit: assetMeasurements.unit, observedAt: assetMeasurements.observedAt, source: assetMeasurements.source }).from(assetMeasurements).where(and(eq(assetMeasurements.tenantId, tenantId), eq(assetMeasurements.id, target.id))).limit(1);
+      return row ? { ...row, observedAt: iso(row.observedAt) } : null;
     }
     case "service_visit": {
       const [row] = await db.select({ id: serviceVisits.id, householdId: serviceVisits.householdId, technicianId: serviceVisits.technicianId, type: serviceVisits.type, scheduledAt: serviceVisits.scheduledAt, completedAt: serviceVisits.completedAt }).from(serviceVisits).where(and(eq(serviceVisits.tenantId, tenantId), eq(serviceVisits.id, target.id))).limit(1);
@@ -630,6 +698,14 @@ function observationKind(operationClass: BusinessEffectOperationClass, actionTyp
   if (operationClass === "durable_workflow") return "workflow_completion";
   if (["external_side_effect", "external_spend", "batch_external"].includes(operationClass)) return "provider_delivery";
   return "canonical_state";
+}
+
+/** Existing BusinessEffect verification floor exposed to Planning IR. The IR may
+ * strengthen this value but cannot replace the effect compiler that derives it. */
+export function businessEffectObservationForAction(actionType: string): BusinessEffectSet["expected"]["observation"] | "recorded_result" {
+  const profile = ACTION_HARDENING_SPEC_BY_ACTION.get(actionType)?.profile;
+  const operationClass = profile ? PROFILE_CLASS[profile] : undefined;
+  return operationClass ? observationKind(operationClass, actionType) : "recorded_result";
 }
 
 function reversibility(operationClass: BusinessEffectOperationClass): BusinessEffectSet["reversibility"] {

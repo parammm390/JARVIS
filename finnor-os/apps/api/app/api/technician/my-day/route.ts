@@ -3,9 +3,9 @@
 
 import { households, serviceVisits, users, withTenant, workOrders } from "@finnor/db";
 import { recordBusinessEvent } from "@finnor/data-platform";
-import technicianReportsPlugin from "@finnor/plugin-technician-reports";
 import { and, asc, eq, gte, isNull, lt } from "drizzle-orm";
 import { AuthError, errorResponse, requireContext } from "../../../../lib/auth";
+import { getOrchestrator } from "../../../../lib/orchestrator";
 
 function dayBounds(value: string): [Date, Date] {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new AuthError("date must be YYYY-MM-DD", 400);
@@ -87,15 +87,23 @@ export async function POST(req: Request): Promise<Response> {
       }
       if (body.action === "report") {
         if (typeof body.report !== "string") throw new AuthError("report is required", 400);
-        const draft = await technicianReportsPlugin.draft("log_visit_report", { householdId: workOrder.householdId, report: body.report, markCompleted: false }, { id: "technician-mobile", tenantId: ctx.tenantId, actionType: "log_visit_report", policy: {}, requiresConfirmation: false, confirmationTemplate: null, version: 1 });
-        const result = await technicianReportsPlugin.execute(draft, undefined as never);
-        return Response.json({ result });
+        const { action, result } = await getOrchestrator().draftKnownAction(
+          "log_visit_report",
+          { householdId: workOrder.householdId, report: body.report, markCompleted: false },
+          ctx.tenantId,
+          { source: "technician_mobile", initiatedBy: ctx.userId, authorityContext: { role: ctx.role, technicianId, workOrderId: workOrder.id } },
+        );
+        return Response.json({ actionId: action.id, result });
       }
       if (body.action === "flag") {
         if (typeof body.issue !== "string") throw new AuthError("issue is required", 400);
-        const draft = await technicianReportsPlugin.draft("flag_visit_issue", { issue: body.issue }, { id: "technician-mobile", tenantId: ctx.tenantId, actionType: "flag_visit_issue", policy: {}, requiresConfirmation: false, confirmationTemplate: null, version: 1 });
-        const result = await technicianReportsPlugin.execute(draft, undefined as never);
-        return Response.json({ result });
+        const { action, result } = await getOrchestrator().draftKnownAction(
+          "flag_visit_issue",
+          { issue: body.issue },
+          ctx.tenantId,
+          { source: "technician_mobile", initiatedBy: ctx.userId, authorityContext: { role: ctx.role, technicianId, workOrderId: workOrder.id } },
+        );
+        return Response.json({ actionId: action.id, result });
       }
       if (body.action === "done") {
         if (workOrder.status !== "in_progress") throw new AuthError("Only an in-progress work order can be completed", 409);

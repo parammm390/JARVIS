@@ -1,6 +1,6 @@
 // Inventory domain plugin — REAL, native: inventory_items is the stock ledger.
 
-import type { DomainEnginePlugin } from "../shared/plugin-interface";
+import type { DomainEnginePlugin, PureDomainEngine } from "../shared/plugin-interface";
 import type { DraftAction, ExecutionResult, ValidationResult, DomainPolicy } from "@finnor/shared-types";
 import { withTenant, inventoryItems } from "@finnor/db";
 import { recordBusinessEvent } from "@finnor/data-platform";
@@ -31,9 +31,39 @@ const SCHEMAS: Record<string, z.ZodTypeAny> = {
   log_stock_used_on_visit: LogUsageSchema,
 };
 
+/** Migrated canonical/internal consequential intelligence. The legacy execute seam
+ * below remains only as the governed durable-runtime adapter. */
+export const stockUsageDomainEngine: PureDomainEngine = {
+  name: "inventory-stock-usage",
+  version: "1.0.0",
+  actionTypes: ["log_stock_used_on_visit"],
+  query: () => ({ requiredFacts: ["inventory_item.quantity", "inventory_item.reorder_threshold"] }),
+  decide: ({ payload }) => {
+    const quantity = Number(payload.quantity);
+    return { eligible: Number.isInteger(quantity) && quantity > 0, effectIntent: `Deduct ${quantity} unit(s) from the canonical inventory ledger`, requiredCapability: "action:log_stock_used_on_visit", risk: "medium", reasonCodes: Number.isInteger(quantity) && quantity > 0 ? ["CANONICAL_STOCK_DECREMENT"] : ["INVALID_QUANTITY"] };
+  },
+  simulate: ({ payload, canonicalState }) => {
+    const before = Number(canonicalState?.quantity);
+    const quantity = Number(payload.quantity);
+    return { predicted: { quantityBefore: Number.isFinite(before) ? before : null, quantityAfter: Number.isFinite(before) ? before - quantity : null }, warnings: Number.isFinite(before) && before < quantity ? ["INSUFFICIENT_STOCK"] : [] };
+  },
+  explain: (_input, decision) => ({ summary: decision.effectIntent, reasonCodes: decision.reasonCodes }),
+  compileEffect: ({ effectId, payload }, decision) => ({
+    id: effectId, actionType: "log_stock_used_on_visit", effectIntent: decision.effectIntent, payload,
+    targetRefs: typeof payload.visitId === "string" ? [{ kind: "entity", entityType: "service_visit", entityId: payload.visitId, field: "visitId", provenance: "pure_domain_engine" }] : [],
+    requiredCapability: decision.requiredCapability, risk: decision.risk, exposure: null, proposalOnly: true,
+  }),
+  defineObservation: ({ observationId, effect }) => ({ id: observationId, effectId: effect.id, kind: "canonical_state", predicate: { actionType: effect.actionType, quantityDecremented: effect.payload.quantity }, requiredEvidence: ["inventory_read_back", "stock_usage_business_event"], acknowledgementSufficient: false, verificationFloor: "at_least_existing" }),
+  reconcileDecision: ({ observation }) => observation.inventoryReadBack === true && observation.businessEventRecorded === true
+    ? { status: "verified", reasonCodes: ["CANONICAL_STATE_AND_EVENT_OBSERVED"] }
+    : observation.failed === true ? { status: "failed", reasonCodes: ["CANONICAL_WRITE_FAILED"] } : { status: "pending", reasonCodes: ["READ_BACK_REQUIRED"] },
+  compileCompensationEffect: () => null,
+};
+
 export const inventoryPlugin: DomainEnginePlugin = {
   name: "inventory",
   actionTypes: Object.keys(SCHEMAS),
+  intelligence: stockUsageDomainEngine,
   payloadSchemas: SCHEMAS,
   canHandle(t) {
     return t in SCHEMAS;

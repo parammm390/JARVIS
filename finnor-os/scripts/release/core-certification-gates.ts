@@ -24,6 +24,9 @@ export const CORE_COMMAND_MATRIX: Record<string, CommandSpec[]> = {
   unit_integration: [
     { command: "npm", args: ["test"], cwd: "finnor-os" },
   ],
+  phase1_foundation: [
+    { command: "npm", args: ["run", "release:phase1"], cwd: "finnor-os" },
+  ],
   migrations: [
     { command: "npm", args: ["run", "db:bundle"], cwd: "finnor-os" },
     { command: "git", args: ["diff", "--exit-code", "--", "finnor-os/packages/db/migrations-bundle.ts"], cwd: "repo" },

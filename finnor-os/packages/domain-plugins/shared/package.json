@@ -9,6 +9,7 @@
     "@finnor/data-platform": "*",
     "@finnor/db": "*",
     "@finnor/shared-types": "*",
+    "@finnor/planning-ir": "*",
     "@finnor/tools": "*",
     "drizzle-orm": "^0.45.2",
     "zod": "^3.23.8"

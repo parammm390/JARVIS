@@ -43,6 +43,12 @@ import { interactionAwareOperationalDecision, resolveOperatingInteractionContext
 import { employeeAuthoritySnapshot, evaluateActionApproval, evaluateAuthority, finalizeApprovalAuthorityTx, isFinalApprovalStep, revalidateActionExecution } from "@finnor/authority";
 import { queryAuthorityRequest } from "./authority-runtime";
 import { isConsequentialAction } from "./compiler";
+import { businessEffectObservationForAction } from "./compiler";
+import { buildCompatibilityPlanningIr, compareLegacyCandidateToIr, planningIrMode } from "./planning-ir";
+import { createDbIrAdmissibilityCompiler, persistPlanningIrArtifactTx } from "./ir-admissibility-db";
+import { IrAdmissibilityRejectedError } from "./ir-admissibility";
+import { lowerAdmittedPlanningIr } from "./ir-lowerer";
+import type { PlanningIrArtifact, PlanningSemanticDiff } from "@finnor/planning-ir";
 import {
   ActionCancellationConflictError,
   assertActionNotCancelledTx,
@@ -62,6 +68,10 @@ import { classifyInstructionRoute, finalizeInstructionRoute, type InstructionRou
 export * from "./llm";
 export * from "./planner";
 export * from "./compiler";
+export * from "./planning-ir";
+export * from "./ir-admissibility";
+export * from "./ir-lowerer";
+export * from "./ir-admissibility-db";
 export * from "./executor";
 export * from "./reflection";
 export * from "./plugin-registry";
@@ -626,6 +636,11 @@ export class FinnorOrchestrator implements Orchestrator {
       });
       return { actions: [], answer: fastAnswer, workId, workInputId, instructionId };
     }
+    if (instructionRoute?.route === "QUERY") {
+      const failure = { code: "QUERY_EXECUTION_MISSING", message: "Operational Query Plane classified QUERY but produced no typed query execution; planner fallback is prohibited", recoverable: true };
+      await transitionWork(ctx.tenantId, workId, "failed", "query_execution_missing", failure, { failure, expectedWorkInputId: workInputId });
+      throw new Error(failure.message);
+    }
 
     if (instructionRoute?.route === "OBJECTIVE") {
       await emitInstructionEvent(ctx.tenantId, instructionId, "planning", { route: "objective" });
@@ -755,6 +770,7 @@ export class FinnorOrchestrator implements Orchestrator {
         deadlineAt: opts.deadlineAt,
         deadlineMs: opts.deadlineMs,
         operatingContext,
+        executionModel: "ATOMIC_EFFECT",
       });
     } catch (err) {
       const failure = workFailure(err, "Planning failed");
@@ -966,6 +982,7 @@ export class FinnorOrchestrator implements Orchestrator {
       initiatedBy?: string | null;
       authorityContext?: Record<string, unknown>;
       objectiveStepId?: string;
+      planning?: { artifact: PlanningIrArtifact; diff: PlanningSemanticDiff; status: "shadow" | "lowered" };
     } = {},
   ): Promise<{ action: DomainAction; result: ExecutionResult }> {
     await ensureSecretsLoaded();
@@ -982,7 +999,19 @@ export class FinnorOrchestrator implements Orchestrator {
         authorityContext: opts.authorityContext ?? {},
         objectiveStepId: opts.objectiveStepId ?? null,
       }).onConflictDoNothing().returning();
-      if (created) return created;
+      if (created) {
+        if (opts.planning) await persistPlanningIrArtifactTx({
+          db,
+          tenantId,
+          artifact: opts.planning.artifact,
+          status: opts.planning.status,
+          diff: opts.planning.diff,
+          domainActionId: created.id,
+          workId: opts.workId,
+          objectiveStepId: opts.objectiveStepId,
+        });
+        return created;
+      }
       const [existing] = opts.objectiveStepId
         ? await db.select().from(domainActions).where(and(eq(domainActions.tenantId, tenantId), eq(domainActions.objectiveStepId, opts.objectiveStepId))).limit(1)
         : opts.actionId
@@ -1063,8 +1092,10 @@ export class FinnorOrchestrator implements Orchestrator {
     authorityContext: Record<string, unknown>;
     objectiveStepId: string;
     actionId: string;
+    objective: string;
   }): Promise<{ action: DomainAction; result: ExecutionResult }> {
-    return this.draftKnownAction(params.actionType, params.payload, params.tenantId, {
+    const mode = planningIrMode();
+    if (mode === "legacy") return this.draftKnownAction(params.actionType, params.payload, params.tenantId, {
       source: "objective_loop",
       actionId: params.actionId,
       workId: params.workId,
@@ -1072,6 +1103,39 @@ export class FinnorOrchestrator implements Orchestrator {
       initiatedBy: params.initiatedBy,
       authorityContext: params.authorityContext,
       objectiveStepId: params.objectiveStepId,
+    });
+    const artifact = buildCompatibilityPlanningIr({
+      executionModel: "OBJECTIVE",
+      requestedOutcome: params.objective,
+      actions: [{ actionType: params.actionType, payload: params.payload, reasoning: `Objective controller selected ${params.actionType}`, dependsOn: [] }],
+      observationForAction: businessEffectObservationForAction,
+      compileEffect: (action, effectId) => this.plugins.compilePlanningEffect(action.actionType, action.payload, effectId),
+      defineObservation: (action, effect, observationId) => this.plugins.definePlanningObservation(action.actionType, action.payload, effect, observationId),
+      provenance: { source: "objective_controller", workId: params.workId, objectiveStepId: params.objectiveStepId, createdAt: new Date().toISOString() },
+    });
+    const diff = compareLegacyCandidateToIr({
+      artifact,
+      executionModel: "OBJECTIVE",
+      requestedOutcome: params.objective,
+      actions: [{ actionType: params.actionType, payload: params.payload, reasoning: `Objective controller selected ${params.actionType}`, dependsOn: [] }],
+      observationForAction: businessEffectObservationForAction,
+    });
+    if (diff.classification === "REGRESSION") throw new Error(`Objective Planning IR semantic regression: ${JSON.stringify(diff.differences)}`);
+    const admitted = await withTenant(params.tenantId, async (db) => {
+      const result = await createDbIrAdmissibilityCompiler({ db, tenantId: params.tenantId, plugins: this.plugins }).admit(artifact);
+      if (!result.admissible) throw new IrAdmissibilityRejectedError(result.issues);
+      return result.admitted;
+    });
+    const lowered = mode === "cutover" ? lowerAdmittedPlanningIr(admitted)[0] : null;
+    return this.draftKnownAction(lowered?.actionType ?? params.actionType, lowered?.payload ?? params.payload, params.tenantId, {
+      source: "objective_loop",
+      actionId: params.actionId,
+      workId: params.workId,
+      instructionId: params.instructionId,
+      initiatedBy: params.initiatedBy,
+      authorityContext: params.authorityContext,
+      objectiveStepId: params.objectiveStepId,
+      planning: { artifact, diff, status: mode === "shadow" ? "shadow" : "lowered" },
     });
   }
 
@@ -1293,6 +1357,7 @@ export class FinnorOrchestrator implements Orchestrator {
         instructionId: sourceAction.instructionId ?? undefined,
         workId: sourceAction.workId ?? undefined,
         plannerAttemptId: repairPlannerAttemptId ?? undefined,
+        executionModel: "OBJECTIVE",
       });
       if (repairPlannerAttemptId) {
         await finishWorkPlannerAttempt({
@@ -1398,6 +1463,15 @@ export class FinnorOrchestrator implements Orchestrator {
     decidedBy: string,
     opts?: { role?: string; note?: string | null; reason?: string | null; typedConfirmation?: boolean },
   ): Promise<ExecutionResult> {
+    // A duplicate approval delivered after the exact action has already completed
+    // is an idempotent read of terminal truth. Resolve it before authority-chain
+    // evaluation can create a fresh approval request against a completed Work.
+    if (decision === "approve") {
+      const [terminal] = await withTenant(tenantId, (db) => db.select({ status: domainActions.status }).from(domainActions)
+        .where(and(eq(domainActions.tenantId, tenantId), eq(domainActions.id, actionId)))
+        .limit(1));
+      if (terminal?.status === "completed") return { status: "success", output: { idempotent: true, status: terminal.status } };
+    }
     const humanDecision = decision === "approve" || decision === "reject";
     const approverAuthority = humanDecision
       ? await evaluateActionApproval({ tenantId, userId: decidedBy, employeeId: /^[0-9a-f-]{36}$/i.test(decidedBy) ? decidedBy : undefined, role: (opts?.role as Role | undefined) ?? "owner" }, actionId)

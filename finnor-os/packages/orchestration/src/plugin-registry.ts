@@ -3,6 +3,7 @@
 
 import type { DomainEnginePlugin } from "@finnor/plugins-shared";
 import type { DomainPolicy, SimulationResult } from "@finnor/shared-types";
+import type { EffectSpec, ObservationSpec } from "@finnor/planning-ir";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import waterTestPlugin from "../../domain-plugins/water-test/index";
 import maintenanceAgreementPlugin from "../../domain-plugins/maintenance-agreement/index";
@@ -81,6 +82,23 @@ export class PluginRegistry {
 
   actionTypes(): string[] {
     return [...this.byActionType.keys()];
+  }
+
+  /** Canonical pure-intelligence seam for migrated actions. Unmigrated actions
+   * return undefined and use the deterministic compatibility representation. */
+  compilePlanningEffect(actionType: string, payload: Record<string, unknown>, effectId: string): EffectSpec | undefined {
+    const intelligence = this.resolve(actionType)?.intelligence;
+    if (!intelligence?.actionTypes.includes(actionType)) return undefined;
+    const input = { actionType, payload };
+    const decision = intelligence.decide(input);
+    if (!decision.eligible) throw new Error(`Pure DomainEngine ${intelligence.name} rejected ${actionType}: ${decision.reasonCodes.join(",")}`);
+    return intelligence.compileEffect({ ...input, effectId }, decision);
+  }
+
+  definePlanningObservation(actionType: string, payload: Record<string, unknown>, effect: EffectSpec, observationId: string): ObservationSpec | undefined {
+    const intelligence = this.resolve(actionType)?.intelligence;
+    if (!intelligence?.actionTypes.includes(actionType)) return undefined;
+    return intelligence.defineObservation({ actionType, payload, effect, observationId });
   }
 
   private specCache: string | null = null;

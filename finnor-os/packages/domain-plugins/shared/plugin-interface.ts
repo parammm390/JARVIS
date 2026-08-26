@@ -1,5 +1,5 @@
-// DomainEnginePlugin (§13): the one interface all nine domain engines implement.
-// validate/draft are pure; side effects are isolated to execute (§22).
+// Legacy DomainEnginePlugin (§13): the compatibility interface current plugins
+// implement. validate/draft are pure; execution stays behind the governed runtime.
 
 import type {
   ValidationResult,
@@ -9,11 +9,46 @@ import type {
   DomainAction,
 } from "@finnor/shared-types";
 import type { ToolRegistry } from "@finnor/tools";
+import type { EffectSpec, ObservationSpec } from "@finnor/planning-ir";
+
+export interface PureDomainEngineInput {
+  actionType: string;
+  payload: Record<string, unknown>;
+  /** Canonical facts are supplied by the caller. Pure intelligence never fetches. */
+  canonicalState?: Record<string, unknown>;
+  policySnapshot?: Record<string, unknown>;
+}
+
+export interface PureDomainDecision {
+  eligible: boolean;
+  effectIntent: string;
+  requiredCapability: string;
+  risk: "low" | "medium" | "high";
+  reasonCodes: string[];
+}
+
+/** Canonical intelligence boundary. Every method is deterministic and receives
+ * facts as data. There is intentionally no tools/provider/browser/execute method. */
+export interface PureDomainEngine {
+  readonly name: string;
+  readonly version: string;
+  readonly actionTypes: readonly string[];
+  query(input: PureDomainEngineInput): { requiredFacts: string[] };
+  decide(input: PureDomainEngineInput): PureDomainDecision;
+  simulate(input: PureDomainEngineInput): { predicted: Record<string, unknown>; warnings: string[] };
+  explain(input: PureDomainEngineInput, decision: PureDomainDecision): { summary: string; reasonCodes: string[] };
+  compileEffect(input: PureDomainEngineInput & { effectId: string }, decision: PureDomainDecision): EffectSpec;
+  defineObservation(input: PureDomainEngineInput & { observationId: string; effect: EffectSpec }): ObservationSpec;
+  reconcileDecision(input: PureDomainEngineInput & { observation: Record<string, unknown> }): { status: "verified" | "pending" | "divergent" | "failed"; reasonCodes: string[] };
+  compileCompensationEffect(input: PureDomainEngineInput & { effectId: string; originalEffect: EffectSpec }): EffectSpec | null;
+}
 
 export interface DomainEnginePlugin {
   /** Human-readable plugin name, for logs and the audit view. */
   name: string;
   actionTypes: string[];
+  /** New canonical no-execution intelligence for migrated action classes. */
+  intelligence?: PureDomainEngine;
   /** Optional zod payload schema per action type — fed to the Planner so the LLM
    *  emits payloads that pass validate() on the first try. */
   payloadSchemas?: Record<string, import("zod").ZodTypeAny>;
