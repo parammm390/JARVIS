@@ -63,11 +63,14 @@ function actionTypesFrom(expression: ts.Expression, constants: Map<string, ts.Ex
 }
 
 function actionTypesProperty(source: ts.SourceFile): ts.PropertyAssignment | null {
+  // A migrated plugin may expose a pure DomainEngine object before the legacy
+  // compatibility plugin object. Both have an `actionTypes` property, but the
+  // registry must discover the complete plugin contract (the last declaration),
+  // not the narrower pure-intelligence subset.
   let result: ts.PropertyAssignment | null = null;
   const visit = (node: ts.Node) => {
-    if (result) return;
     if (ts.isPropertyAssignment(node) && propertyName(node) === "actionTypes") result = node;
-    else ts.forEachChild(node, visit);
+    ts.forEachChild(node, visit);
   };
   visit(source);
   return result;
