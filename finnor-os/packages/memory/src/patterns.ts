@@ -24,13 +24,10 @@ async function householdProposalPattern(db: Db, tenantId: string, householdId: s
     .leftJoin(quotes, eq(quotes.id, proposals.quoteId))
     .where(and(eq(households.tenantId, tenantId), eq(proposals.householdId, householdId)));
 
-  // proposals.status is never mirrored to "declined"/"expired" (only ever set to
-  // "accepted" — confirmed in applySignatureOutcome()), so the real outcome must be
-  // read from quotes.status or the business_events rows the same function writes
-  // (entityType: "quote", eventType: "quote_accepted" | "quote_declined" |
-  // "quote_expired"). Using the business_events rows here, not quotes.status
-  // directly, since a quote can carry other statuses ("draft", "sent") that aren't a
-  // signature outcome at all.
+  // Signature outcomes are mirrored onto proposals and quotes, and the same
+  // transition emits an immutable business event. Use the event rows here because a
+  // quote can also carry non-outcome statuses ("draft", "sent") and the pattern is
+  // specifically historical signature evidence.
   const quoteIds = rows.map((r) => r.quoteId).filter((id): id is string => id !== null);
   const outcomes =
     quoteIds.length === 0

@@ -67,7 +67,7 @@ describe.skipIf(!available)("Pattern context (Phase 9)", () => {
 
       await db.insert(proposals).values({ householdId, quoteId: quoteAccepted1!.id, status: "accepted" });
       await db.insert(proposals).values({ householdId, quoteId: quoteAccepted2!.id, status: "accepted" });
-      await db.insert(proposals).values({ householdId, quoteId: quoteDeclined!.id, status: "draft" }); // proposals.status never mirrors "declined" — the real signal is business_events
+      await db.insert(proposals).values({ householdId, quoteId: quoteDeclined!.id, status: "declined" });
 
       await db.insert(businessEvents).values({ tenantId: TENANT_ID, entityType: "quote", entityId: quoteAccepted1!.id, eventType: "quote_accepted" });
       await db.insert(businessEvents).values({ tenantId: TENANT_ID, entityType: "quote", entityId: quoteAccepted2!.id, eventType: "quote_accepted" });

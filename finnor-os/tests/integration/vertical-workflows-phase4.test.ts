@@ -175,6 +175,38 @@ describe.skipIf(!available)("Phase 4 vertical workflows", () => {
     });
   });
 
+  it.each(["declined", "expired"] as const)("workflow 2 terminal %s outcome converges both the quote and proposal", async (outcome) => {
+    const [hh] = await withTenant(TENANT_ID, (db) =>
+      db.insert(households).values({ tenantId: TENANT_ID, address: `2 Phase4 ${outcome} Ln`, contactInfo: {} }).returning(),
+    );
+    const [quote] = await withTenant(TENANT_ID, (db) =>
+      db.insert(quotes).values({ tenantId: TENANT_ID, householdId: hh!.id, totalUsd: "500.00", status: "sent" }).returning(),
+    );
+    const [proposal] = await withTenant(TENANT_ID, (db) =>
+      db.insert(proposals).values({ householdId: hh!.id, content: {}, status: "sent", quoteId: quote!.id }).returning(),
+    );
+
+    const result = await applySignatureOutcome({
+      tenantId: TENANT_ID,
+      quoteId: quote!.id,
+      proposalId: proposal!.id,
+      signatureRequestId: `pc039-${outcome}-${proposal!.id}`,
+      outcome,
+    });
+    expect(result.applied).toBe(true);
+
+    const [quoteAfter] = await withTenant(TENANT_ID, (db) => db.select().from(quotes).where(eq(quotes.id, quote!.id)));
+    const [proposalAfter] = await withTenant(TENANT_ID, (db) => db.select().from(proposals).where(eq(proposals.id, proposal!.id)));
+    expect(quoteAfter!.status).toBe(outcome);
+    expect(proposalAfter!.status).toBe(outcome);
+
+    await withTenant(TENANT_ID, async (db) => {
+      await db.delete(proposals).where(eq(proposals.id, proposal!.id));
+      await db.delete(quotes).where(eq(quotes.id, quote!.id));
+      await db.delete(households).where(eq(households.id, hh!.id));
+    });
+  });
+
   it("workflow 3 (signed proposal to installation): insufficient stock triggers a real procurement-exception step, then reserve/deposit/dispatch all complete", async () => {
     resetInventoryEmulator();
     resetAccountingEmulator();

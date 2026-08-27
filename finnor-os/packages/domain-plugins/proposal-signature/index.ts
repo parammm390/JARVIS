@@ -126,6 +126,10 @@ export default proposalSignaturePlugin;
 
 export type SignatureOutcome = "signed" | "declined" | "expired";
 
+export function signatureOutcomeStatus(outcome: SignatureOutcome): "accepted" | "declined" | "expired" {
+  return outcome === "signed" ? "accepted" : outcome;
+}
+
 /**
  * Called when the signer responds (in a real e-signature integration, from that
  * provider's webhook). Dedups via receiveInboxEvent exactly like the real Vapi/GHL
@@ -139,7 +143,7 @@ export async function applySignatureOutcome(params: {
   outcome: SignatureOutcome;
   matchStepId?: string;
 }): Promise<{ applied: boolean; reason?: string }> {
-  const quoteStatus = params.outcome === "signed" ? "accepted" : params.outcome === "declined" ? "declined" : "expired";
+  const terminalStatus = signatureOutcomeStatus(params.outcome);
   const intake = await withTenant(params.tenantId, async (db) => {
     const received = await receiveInboxEventTx(db, {
       tenantId: params.tenantId,
@@ -149,15 +153,13 @@ export async function applySignatureOutcome(params: {
       matchStepId: params.matchStepId,
     });
     if (received.status === "duplicate") return { duplicate: true } as const;
-    await db.update(quotes).set({ status: quoteStatus }).where(eq(quotes.id, params.quoteId));
-    if (quoteStatus === "accepted") {
-      await db.update(proposals).set({ status: "accepted" }).where(eq(proposals.id, params.proposalId));
-    }
+    await db.update(quotes).set({ status: terminalStatus }).where(eq(quotes.id, params.quoteId));
+    await db.update(proposals).set({ status: terminalStatus }).where(eq(proposals.id, params.proposalId));
     await recordBusinessEvent(db, {
       tenantId: params.tenantId,
       entityType: "quote",
       entityId: params.quoteId,
-      eventType: `quote_${quoteStatus}`,
+      eventType: `quote_${terminalStatus}`,
       payload: { proposalId: params.proposalId, signatureRequestId: params.signatureRequestId },
     });
     await ingestIntegrationEventTx(db, {
