@@ -39,7 +39,7 @@ import {
   workEventWaits,
   workWakeClaims,
 } from "@finnor/db";
-import { and, asc, desc, eq, or } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
 
 export const WORK_STATUSES = ["Needs you", "Working", "Waiting", "Partial", "Cancelled", "Completed", "Failed", "Blocked"] as const;
 export type WorkStatus = (typeof WORK_STATUSES)[number];
@@ -729,43 +729,155 @@ function toWorkReceipt(row: typeof decisionReceipts.$inferSelect): WorkReceipt {
  * `root.kind/root.id` as the stable derived ID; no customer, invoice, time, or
  * text similarity is used as a grouping key.
  */
-export async function workCases(tenantId: string): Promise<WorkCaseProjection[]> {
+export async function workCases(tenantId: string, requestedWorkId?: string): Promise<WorkCaseProjection[]> {
   return withTenant(tenantId, async (db) => {
     // A tenant transaction is a single pg client. These queries were always
     // serialized by the driver; spelling that out avoids pg@9's overlapping-
     // query deprecation and keeps the projection deterministic.
-    const workRows = await db.select().from(works).where(eq(works.tenantId, tenantId)).orderBy(desc(works.updatedAt));
-    const workEventRows = await db.select().from(workEvents).where(eq(workEvents.tenantId, tenantId)).orderBy(asc(workEvents.seq));
-    const workInputRows = await db.select().from(workInputs).where(eq(workInputs.tenantId, tenantId)).orderBy(asc(workInputs.createdAt));
-    const plannerAttemptRows = await db.select().from(workPlannerAttempts).where(eq(workPlannerAttempts.tenantId, tenantId)).orderBy(asc(workPlannerAttempts.attempt));
-    const canonicalWorkLinks = await db.select().from(workEntityLinks).where(eq(workEntityLinks.tenantId, tenantId)).orderBy(asc(workEntityLinks.createdAt));
-    const objectiveLoopRows = await db.select().from(workObjectiveLoops).where(eq(workObjectiveLoops.tenantId, tenantId)).orderBy(desc(workObjectiveLoops.updatedAt));
-    const objectiveStepRows = await db.select().from(workObjectiveSteps).where(eq(workObjectiveSteps.tenantId, tenantId)).orderBy(asc(workObjectiveSteps.stepNumber));
-    const objectiveAttemptRows = await db.select().from(workObjectivePlannerAttempts).where(eq(workObjectivePlannerAttempts.tenantId, tenantId)).orderBy(asc(workObjectivePlannerAttempts.startedAt));
-    const outcomePackRunRows = await db.select().from(outcomePackRuns).where(eq(outcomePackRuns.tenantId, tenantId)).orderBy(desc(outcomePackRuns.updatedAt));
-    const autonomyEvaluationRows = await db.select().from(autonomyEvaluations).where(eq(autonomyEvaluations.tenantId, tenantId)).orderBy(desc(autonomyEvaluations.evaluatedAt));
-    const shadowProposalRows = await db.select().from(outcomeShadowProposals).where(eq(outcomeShadowProposals.tenantId, tenantId)).orderBy(desc(outcomeShadowProposals.proposedAt));
-    const businessEffectRows = await db.select().from(businessEffects).where(eq(businessEffects.tenantId, tenantId)).orderBy(asc(businessEffects.createdAt));
-    const computerRunRows = await db.select().from(computerRuns).where(eq(computerRuns.tenantId, tenantId)).orderBy(asc(computerRuns.createdAt));
-    const eventWaitRows = await db.select().from(workEventWaits).where(eq(workEventWaits.tenantId, tenantId)).orderBy(asc(workEventWaits.createdAt));
-    const wakeClaimRows = await db.select().from(workWakeClaims).where(eq(workWakeClaims.tenantId, tenantId)).orderBy(asc(workWakeClaims.claimedAt));
-    const instructionRows = await db.select().from(instructionSessions).where(eq(instructionSessions.tenantId, tenantId)).orderBy(desc(instructionSessions.updatedAt));
-    const instructionEventRows = await db.select().from(instructionEvents).where(eq(instructionEvents.tenantId, tenantId)).orderBy(asc(instructionEvents.seq));
-    const actionRows = await db.select().from(domainActions).where(eq(domainActions.tenantId, tenantId)).orderBy(desc(domainActions.createdAt));
-    const confirmationRows = await db.select().from(pendingConfirmations).where(eq(pendingConfirmations.tenantId, tenantId)).orderBy(desc(pendingConfirmations.createdAt));
-    const commandRows = await db.select().from(commands).where(eq(commands.tenantId, tenantId)).orderBy(desc(commands.updatedAt));
-    const runRows = await db.select().from(workflowRuns).where(eq(workflowRuns.tenantId, tenantId)).orderBy(desc(workflowRuns.updatedAt));
-    const stepRows = await db.select().from(workflowSteps).where(eq(workflowSteps.tenantId, tenantId)).orderBy(asc(workflowSteps.sequence));
-    const receiptRows = await db.select().from(decisionReceipts).where(eq(decisionReceipts.tenantId, tenantId)).orderBy(desc(decisionReceipts.createdAt));
-    const operationRows = await db.select().from(businessOperations).where(eq(businessOperations.tenantId, tenantId)).orderBy(desc(businessOperations.updatedAt));
-    const operationTargetRows = await db.select().from(businessOperationTargets).where(eq(businessOperationTargets.tenantId, tenantId)).orderBy(asc(businessOperationTargets.ordinal));
-    const logRows = await db.select().from(actionLog).where(eq(actionLog.tenantId, tenantId)).orderBy(desc(actionLog.timestamp));
-    const voiceSessionRows = await db.select().from(voiceSessions).where(eq(voiceSessions.tenantId, tenantId));
-    const voiceTurnRows = await db.select().from(voiceTurns).where(eq(voiceTurns.tenantId, tenantId)).orderBy(asc(voiceTurns.sequence));
+    const scoped = requestedWorkId !== undefined;
+    const workRows = await db.select().from(works).where(scoped
+      ? and(eq(works.tenantId, tenantId), eq(works.id, requestedWorkId!))
+      : eq(works.tenantId, tenantId)).orderBy(desc(works.updatedAt));
+    // A missing scoped Work is a real empty result, not a tenant-wide fallback.
+    if (scoped && workRows.length === 0) return [];
+    const workEventRows = await db.select().from(workEvents).where(scoped
+      ? and(eq(workEvents.tenantId, tenantId), eq(workEvents.workId, requestedWorkId!))
+      : eq(workEvents.tenantId, tenantId)).orderBy(asc(workEvents.seq));
+    const workInputRows = await db.select().from(workInputs).where(scoped
+      ? and(eq(workInputs.tenantId, tenantId), eq(workInputs.workId, requestedWorkId!))
+      : eq(workInputs.tenantId, tenantId)).orderBy(asc(workInputs.createdAt));
+    const plannerAttemptRows = await db.select().from(workPlannerAttempts).where(scoped
+      ? and(eq(workPlannerAttempts.tenantId, tenantId), eq(workPlannerAttempts.workId, requestedWorkId!))
+      : eq(workPlannerAttempts.tenantId, tenantId)).orderBy(asc(workPlannerAttempts.attempt));
+    const canonicalWorkLinks = await db.select().from(workEntityLinks).where(scoped
+      ? and(eq(workEntityLinks.tenantId, tenantId), eq(workEntityLinks.workId, requestedWorkId!))
+      : eq(workEntityLinks.tenantId, tenantId)).orderBy(asc(workEntityLinks.createdAt));
+    const objectiveLoopRows = await db.select().from(workObjectiveLoops).where(scoped
+      ? and(eq(workObjectiveLoops.tenantId, tenantId), eq(workObjectiveLoops.workId, requestedWorkId!))
+      : eq(workObjectiveLoops.tenantId, tenantId)).orderBy(desc(workObjectiveLoops.updatedAt));
+    const objectiveLoopIds = objectiveLoopRows.map((loop) => loop.id);
+    const objectiveStepRows = await db.select().from(workObjectiveSteps).where(scoped
+      ? and(eq(workObjectiveSteps.tenantId, tenantId), eq(workObjectiveSteps.workId, requestedWorkId!))
+      : eq(workObjectiveSteps.tenantId, tenantId)).orderBy(asc(workObjectiveSteps.stepNumber));
+    const objectiveAttemptRows = await db.select().from(workObjectivePlannerAttempts).where(scoped
+      ? objectiveLoopIds.length > 0
+        ? and(eq(workObjectivePlannerAttempts.tenantId, tenantId), inArray(workObjectivePlannerAttempts.objectiveLoopId, objectiveLoopIds))
+        : sql`false`
+      : eq(workObjectivePlannerAttempts.tenantId, tenantId)).orderBy(asc(workObjectivePlannerAttempts.startedAt));
+    const outcomePackRunRows = await db.select().from(outcomePackRuns).where(scoped
+      ? and(eq(outcomePackRuns.tenantId, tenantId), eq(outcomePackRuns.workId, requestedWorkId!))
+      : eq(outcomePackRuns.tenantId, tenantId)).orderBy(desc(outcomePackRuns.updatedAt));
+    const autonomyEvaluationRows = await db.select().from(autonomyEvaluations).where(scoped
+      ? and(eq(autonomyEvaluations.tenantId, tenantId), eq(autonomyEvaluations.workId, requestedWorkId!))
+      : eq(autonomyEvaluations.tenantId, tenantId)).orderBy(desc(autonomyEvaluations.evaluatedAt));
+    const shadowProposalRows = await db.select().from(outcomeShadowProposals).where(scoped
+      ? and(eq(outcomeShadowProposals.tenantId, tenantId), eq(outcomeShadowProposals.workId, requestedWorkId!))
+      : eq(outcomeShadowProposals.tenantId, tenantId)).orderBy(desc(outcomeShadowProposals.proposedAt));
+    const eventWaitRows = await db.select().from(workEventWaits).where(scoped
+      ? and(eq(workEventWaits.tenantId, tenantId), eq(workEventWaits.workId, requestedWorkId!))
+      : eq(workEventWaits.tenantId, tenantId)).orderBy(asc(workEventWaits.createdAt));
+    const wakeClaimRows = await db.select().from(workWakeClaims).where(scoped
+      ? and(eq(workWakeClaims.tenantId, tenantId), eq(workWakeClaims.workId, requestedWorkId!))
+      : eq(workWakeClaims.tenantId, tenantId)).orderBy(asc(workWakeClaims.claimedAt));
+    const instructionRows = await db.select().from(instructionSessions).where(scoped
+      ? and(eq(instructionSessions.tenantId, tenantId), eq(instructionSessions.workId, requestedWorkId!))
+      : eq(instructionSessions.tenantId, tenantId)).orderBy(desc(instructionSessions.updatedAt));
+    const instructionIds = instructionRows.map((instruction) => instruction.id);
+    const instructionEventRows = await db.select().from(instructionEvents).where(scoped
+      ? instructionIds.length > 0
+        ? and(eq(instructionEvents.tenantId, tenantId), inArray(instructionEvents.instructionId, instructionIds))
+        : sql`false`
+      : eq(instructionEvents.tenantId, tenantId)).orderBy(asc(instructionEvents.seq));
+    const actionRows = await db.select().from(domainActions).where(scoped
+      ? and(eq(domainActions.tenantId, tenantId), eq(domainActions.workId, requestedWorkId!))
+      : eq(domainActions.tenantId, tenantId)).orderBy(desc(domainActions.createdAt));
+    const actionIds = actionRows.map((action) => action.id);
+    const confirmationRows = await db.select().from(pendingConfirmations).where(scoped
+      ? actionIds.length > 0
+        ? and(eq(pendingConfirmations.tenantId, tenantId), inArray(pendingConfirmations.domainActionId, actionIds))
+        : sql`false`
+      : eq(pendingConfirmations.tenantId, tenantId)).orderBy(desc(pendingConfirmations.createdAt));
+    const runRows = await db.select().from(workflowRuns).where(scoped
+      ? and(eq(workflowRuns.tenantId, tenantId), eq(workflowRuns.workId, requestedWorkId!))
+      : eq(workflowRuns.tenantId, tenantId)).orderBy(desc(workflowRuns.updatedAt));
+    const runIds = runRows.map((run) => run.id);
+    const commandIds = runRows.map((run) => run.commandId);
+    const commandRows = await db.select().from(commands).where(scoped
+      ? commandIds.length > 0
+        ? and(eq(commands.tenantId, tenantId), inArray(commands.id, commandIds))
+        : sql`false`
+      : eq(commands.tenantId, tenantId)).orderBy(desc(commands.updatedAt));
+    const stepRows = await db.select().from(workflowSteps).where(scoped
+      ? runIds.length > 0
+        ? and(eq(workflowSteps.tenantId, tenantId), inArray(workflowSteps.workflowRunId, runIds))
+        : sql`false`
+      : eq(workflowSteps.tenantId, tenantId)).orderBy(asc(workflowSteps.sequence));
+    const stepIds = stepRows.map((step) => step.id);
+    const receiptPredicates = scoped
+      ? [
+          eq(decisionReceipts.workId, requestedWorkId!),
+          ...(actionIds.length > 0 ? [inArray(decisionReceipts.domainActionId, actionIds)] : []),
+          ...(runIds.length > 0 ? [inArray(decisionReceipts.workflowRunId, runIds)] : []),
+          ...(stepIds.length > 0 ? [inArray(decisionReceipts.workflowStepId, stepIds)] : []),
+        ]
+      : [];
+    const receiptRows = await db.select().from(decisionReceipts).where(scoped
+      ? and(eq(decisionReceipts.tenantId, tenantId), or(...receiptPredicates))
+      : eq(decisionReceipts.tenantId, tenantId)).orderBy(desc(decisionReceipts.createdAt));
+    const operationRows = await db.select().from(businessOperations).where(scoped
+      ? and(eq(businessOperations.tenantId, tenantId), or(eq(businessOperations.workId, requestedWorkId!), ...(actionIds.length > 0 ? [inArray(businessOperations.domainActionId, actionIds)] : [])))
+      : eq(businessOperations.tenantId, tenantId)).orderBy(desc(businessOperations.updatedAt));
+    const operationIds = operationRows.map((operation) => operation.id);
+    const operationTargetRows = await db.select().from(businessOperationTargets).where(scoped
+      ? operationIds.length > 0
+        ? and(eq(businessOperationTargets.tenantId, tenantId), inArray(businessOperationTargets.operationId, operationIds))
+        : sql`false`
+      : eq(businessOperationTargets.tenantId, tenantId)).orderBy(asc(businessOperationTargets.ordinal));
+    const businessEffectRows = await db.select().from(businessEffects).where(scoped
+      ? actionIds.length > 0
+        ? and(eq(businessEffects.tenantId, tenantId), inArray(businessEffects.domainActionId, actionIds))
+        : sql`false`
+      : eq(businessEffects.tenantId, tenantId)).orderBy(asc(businessEffects.createdAt));
+    const computerRunRows = await db.select().from(computerRuns).where(scoped
+      ? and(eq(computerRuns.tenantId, tenantId), or(eq(computerRuns.workId, requestedWorkId!), ...(actionIds.length > 0 ? [inArray(computerRuns.domainActionId, actionIds)] : [])))
+      : eq(computerRuns.tenantId, tenantId)).orderBy(asc(computerRuns.createdAt));
+    const logRows = await db.select().from(actionLog).where(scoped
+      ? actionIds.length > 0
+        ? and(eq(actionLog.tenantId, tenantId), inArray(actionLog.domainActionId, actionIds))
+        : sql`false`
+      : eq(actionLog.tenantId, tenantId)).orderBy(desc(actionLog.timestamp));
+    const voiceSessionIds = confirmationRows.map((confirmation) => confirmation.voiceSessionId);
+    const voiceSessionRows = await db.select().from(voiceSessions).where(scoped
+      ? voiceSessionIds.length > 0
+        ? and(eq(voiceSessions.tenantId, tenantId), inArray(voiceSessions.id, voiceSessionIds))
+        : sql`false`
+      : eq(voiceSessions.tenantId, tenantId));
+    const selectedVoiceSessionIds = voiceSessionRows.map((session) => session.id);
+    const voiceTurnRows = await db.select().from(voiceTurns).where(scoped
+      ? selectedVoiceSessionIds.length > 0
+        ? and(eq(voiceTurns.tenantId, tenantId), inArray(voiceTurns.voiceSessionId, selectedVoiceSessionIds))
+        : sql`false`
+      : eq(voiceTurns.tenantId, tenantId)).orderBy(asc(voiceTurns.sequence));
+    const callPredicates = scoped
+      ? [
+          ...actionIds.map((actionId) => sql`(${calls.raw}->>'domainActionId' = ${actionId})`),
+          ...voiceSessionRows.map((session) => eq(calls.externalId, session.callExternalId)),
+        ]
+      : [];
+    const callRows = await db.select().from(calls).where(scoped
+      ? callPredicates.length > 0
+        ? and(eq(calls.tenantId, tenantId), or(...callPredicates))
+        : sql`false`
+      : eq(calls.tenantId, tenantId)).orderBy(desc(calls.createdAt));
+    const conversationIds = callRows.map((call) => call.conversationId).filter((id): id is string => Boolean(id));
     const conversationRows = await db
       .select({ id: conversations.id, householdId: conversations.householdId })
       .from(conversations)
-      .where(eq(conversations.tenantId, tenantId));
+      .where(scoped
+        ? conversationIds.length > 0
+          ? and(eq(conversations.tenantId, tenantId), inArray(conversations.id, conversationIds))
+          : sql`false`
+        : eq(conversations.tenantId, tenantId));
 
     const instructionActionRoots = new Map<string, string>();
     const lastPhaseByInstruction = new Map<string, InstructionPhase>();
@@ -944,7 +1056,6 @@ export async function workCases(tenantId: string): Promise<WorkCaseProjection[]>
       actionCallRefs.set(confirmation.domainActionId, refs);
     }
 
-    const callRows = await db.select().from(calls).where(eq(calls.tenantId, tenantId)).orderBy(desc(calls.createdAt));
     const callByReference = new Map<string, typeof callRows[number]>();
     const conversationById = new Map(conversationRows.map((conversation) => [conversation.id, conversation]));
     for (const call of callRows) {
@@ -1306,6 +1417,16 @@ export async function workCases(tenantId: string): Promise<WorkCaseProjection[]>
     }
     return output.sort(caseSort);
   });
+}
+
+/**
+ * Scoped Work read used by an active Thread. This intentionally shares the
+ * canonical projector above, but constrains every child query to the requested
+ * Work (and its immutable children) instead of materializing the tenant-wide
+ * Work list and filtering it after the fact.
+ */
+export async function workCase(tenantId: string, workId: string): Promise<WorkCaseProjection | null> {
+  return (await workCases(tenantId, workId))[0] ?? null;
 }
 
 export const workCasesReadModel = workCases;

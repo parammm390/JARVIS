@@ -16,3 +16,12 @@ test("golden matrix validation rejects a missing or duplicate journey", () => {
   assert.throws(() => validateGoldenMatrix(duplicate), /duplicate|order\/coverage/i)
 })
 
+test("special journeys declare deterministic setup and a row-specific canonical assertion", () => {
+  const ids = ["external-wait", "external-wake", "blocked-objective", "provider-unavailable", "failed-action-recovery", "completed-verified-outcome"]
+  for (const id of ids) {
+    const row = GOLDEN_JOURNEYS.find((candidate) => candidate.id === id)
+    assert.equal(row?.fixture, id)
+    assert.equal(row?.canonicalAssertion, id)
+    assert.ok(!row.instruction.includes("fixture"), "the assertion must not be satisfied by prompt wording")
+  }
+})

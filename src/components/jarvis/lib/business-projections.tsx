@@ -103,6 +103,10 @@ export function BusinessProjectionProvider({ children }: { children: React.React
     void sessionBoundary
     return new BusinessProjectionCache(publishMetricsToBrowser)
   }, [sessionBoundary])
+  const reportRealtimeStatus = useCallback((status: "connecting" | "live" | "polling" | "paused", cursor: string | null, error?: string) => {
+    cache.setRealtimeStatus(status)
+    publishRealtimeStatus(status, cursor, error)
+  }, [cache])
   const [online, setOnline] = useState(() => typeof navigator === "undefined" || navigator.onLine)
   const [visible, setVisible] = useState(() => typeof document === "undefined" || document.visibilityState !== "hidden")
   useEffect(() => () => cache.reset(), [cache])
@@ -161,7 +165,7 @@ export function BusinessProjectionProvider({ children }: { children: React.React
 
   useEffect(() => {
     if (!session || !online || !visible) {
-      publishRealtimeStatus("paused", null)
+      reportRealtimeStatus("paused", null)
       return
     }
     let cancelled = false
@@ -237,7 +241,7 @@ export function BusinessProjectionProvider({ children }: { children: React.React
         await replay()
         while (!cancelled) {
           controller = new AbortController()
-          publishRealtimeStatus("connecting", state?.cursor ?? null)
+          reportRealtimeStatus("connecting", state?.cursor ?? null)
           try {
             const response = await fetch("/api/jarvis/operational-stream", {
               cache: "no-store",
@@ -249,7 +253,7 @@ export function BusinessProjectionProvider({ children }: { children: React.React
             })
             if (!response.ok) throw new Error(`Realtime gateway returned ${response.status}`)
             retry = 0
-            publishRealtimeStatus("live", state?.cursor ?? null)
+            reportRealtimeStatus("live", state?.cursor ?? null)
             await consumeSse(response, controller.signal, (event, data, id) => {
               if (event === "resync") {
                 const cursor = data && typeof data === "object" && "cursor" in data ? String((data as { cursor: unknown }).cursor) : id
@@ -263,7 +267,7 @@ export function BusinessProjectionProvider({ children }: { children: React.React
             if (!cancelled) throw new Error("Realtime gateway disconnected")
           } catch (error) {
             if (cancelled || controller.signal.aborted) break
-            publishRealtimeStatus("polling", state?.cursor ?? null, error instanceof Error ? error.message : String(error))
+            reportRealtimeStatus("polling", state?.cursor ?? null, error instanceof Error ? error.message : String(error))
             try { await replay() } catch { /* retry remains bounded below */ }
             retry += 1
             const delay = Math.min(15_000, 1_000 * 2 ** Math.min(retry, 4))
@@ -271,7 +275,7 @@ export function BusinessProjectionProvider({ children }: { children: React.React
           }
         }
       } catch (error) {
-        if (!cancelled) publishRealtimeStatus("polling", state?.cursor ?? null, error instanceof Error ? error.message : String(error))
+        if (!cancelled) reportRealtimeStatus("polling", state?.cursor ?? null, error instanceof Error ? error.message : String(error))
       }
     })()
     return () => {
@@ -279,7 +283,7 @@ export function BusinessProjectionProvider({ children }: { children: React.React
       controller?.abort()
       realtimeInvalidations.cancel()
     }
-  }, [online, session, visible])
+  }, [online, reportRealtimeStatus, session, visible])
 
   const client = useMemo<ProjectionClient>(() => ({
     fetch: async <T,>(definition: ProjectionDefinition<T>, force = false) => {

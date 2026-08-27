@@ -21,6 +21,7 @@ const commonHeaders = {
   authorization: `Bearer ${token}`,
   ...(bypass ? { "x-vercel-protection-bypass": bypass } : {}),
 }
+const fixtureKey = process.env.PRODUCT_TRUTH_CERTIFICATION_KEY?.trim()
 
 async function fetchJson(url, init = {}) {
   const response = await fetch(url, {
@@ -325,6 +326,99 @@ async function waitForWorkCase(workId, timeoutMs = 45_000) {
   throw new Error(`no canonical Work projection was readable for ${workId}: ${JSON.stringify(latest).slice(0, 300)}`)
 }
 
+async function applyGoldenFixture(workId, row, nonce) {
+  if (!row.fixture) return null
+  if (!fixtureKey) throw new Error(`${row.id} requires PRODUCT_TRUTH_CERTIFICATION_KEY for deterministic canonical setup`)
+  const { body } = await fetchJson(`${frontendUrl}/api/jarvis/certification/product-truth`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-product-truth-certification-key": fixtureKey,
+    },
+    body: JSON.stringify({ workId, scenario: row.fixture, nonce }),
+  })
+  if (!body?.ok || body.scenario !== row.fixture || body.workId !== workId || body.nonce !== nonce) {
+    throw new Error(`${row.id} deterministic fixture did not return its canonical Work identity: ${JSON.stringify(body).slice(0, 500)}`)
+  }
+  return body
+}
+
+function assertGoldenFixture(canonical, row, fixture) {
+  if (!row.fixture) return null
+  if (!fixture || fixture.scenario !== row.canonicalAssertion) throw new Error(`${row.id} did not report the declared deterministic fixture`)
+  const work = canonical?.durableWork
+  const loop = canonical?.objectiveLoop
+  const iterations = loop?.iterations ?? []
+  const waits = loop?.eventWaits ?? []
+  const actions = canonical?.actions ?? []
+  const receipts = canonical?.receipts ?? []
+  const effects = canonical?.businessEffects ?? []
+  const require = (condition, message) => { if (!condition) throw new Error(`${row.id} canonical assertion failed: ${message}`) }
+  const fixtureStep = iterations.find((iteration) => iteration.id === fixture.objectiveStepId)
+  switch (row.canonicalAssertion) {
+    case "external-wait": {
+      const wait = waits.find((candidate) => candidate.id === fixture.waitId)
+      require(work?.status === "waiting", `durable Work status=${work?.status ?? "<missing>"}`)
+      require(loop?.state === "waiting", `Objective state=${loop?.state ?? "<missing>"}`)
+      require(wait?.status === "waiting", "durable event wait is not waiting")
+      require(wait?.expectedEventType === fixture.expectedEventType, "event type/correlation fixture mismatch")
+      require(wait?.conditionSummary === fixture.conditionSummary, "wait condition summary is not the injected canonical condition")
+      return { waitId: wait.id, status: wait.status, expectedEventType: wait.expectedEventType }
+    }
+    case "external-wake": {
+      const wait = waits.find((candidate) => candidate.id === fixture.waitId)
+      const wake = (loop?.wakeClaims ?? []).find((candidate) => candidate.id === fixture.wakeClaimId)
+      require(wait?.status === "satisfied", "durable event wait was not satisfied")
+      require(wait?.matchedEventId === fixture.eventId, "wait was not matched by the injected integration event")
+      require(Boolean(wake), "semantic wake claim is missing")
+      require(wake.waitId === wait.id && wake.integrationEventId === fixture.eventId, "wake claim does not point to the matched event")
+      require(loop?.state !== "waiting", "Objective remained waiting after the canonical wake")
+      return { waitId: wait.id, status: wait.status, wakeClaimId: wake.id, eventId: wake.integrationEventId }
+    }
+    case "blocked-objective": {
+      require(work?.status === "blocked", `durable Work status=${work?.status ?? "<missing>"}`)
+      require(loop?.state === "blocked", `Objective state=${loop?.state ?? "<missing>"}`)
+      require(!effects.some((effect) => ["verified", "executed"].includes(effect.status)), "blocked Work contains a verified effect")
+      require(receipts.length === 0, "blocked fixture unexpectedly finalized a receipt")
+      return { status: work.status, objectiveState: loop.state, receiptCount: receipts.length }
+    }
+    case "provider-unavailable": {
+      const attempts = iterations.flatMap((iteration) => iteration.plannerAttempts ?? [])
+      const failedAttempt = attempts.find((attempt) => attempt.id && attempt.failure?.code === "provider_unavailable")
+      require(work?.status === "blocked", `durable Work status=${work?.status ?? "<missing>"}`)
+      require(loop?.state === "blocked", `Objective state=${loop?.state ?? "<missing>"}`)
+      require(Boolean(failedAttempt), "no canonical planner attempt recorded provider_unavailable")
+      require(work?.failure?.code === "provider_unavailable", "durable Work failure does not identify provider_unavailable")
+      require(!effects.some((effect) => ["verified", "executed"].includes(effect.status)), "provider outage fixture contains a verified effect")
+      return { status: work.status, objectiveState: loop.state, plannerFailure: failedAttempt.failure }
+    }
+    case "failed-action-recovery": {
+      const action = actions.find((candidate) => candidate.id === fixture.actionId)
+      require(action?.status === "failed", "failed provider action is not canonical")
+      require(work?.status === "recovery", `durable Work status=${work?.status ?? "<missing>"}`)
+      require(Boolean(iterations.find((iteration) => iteration.recoveryKind === "recover")), "Objective iteration has no recover transition")
+      require(work?.recovery?.failedActionId === fixture.actionId, "Work recovery does not point to failed action")
+      require(loop?.state !== "completed", "failed action was incorrectly marked completed")
+      return { actionId: action.id, actionStatus: action.status, recoveryKind: fixtureStep?.recoveryKind ?? "recover" }
+    }
+    case "completed-verified-outcome": {
+      const action = actions.find((candidate) => candidate.id === fixture.actionId)
+      const effect = effects.find((candidate) => candidate.id === fixture.effectId)
+      const receipt = receipts.find((candidate) => candidate.id === fixture.receiptId)
+      require(work?.status === "completed", `durable Work status=${work?.status ?? "<missing>"}`)
+      require(loop?.state === "completed", `Objective state=${loop?.state ?? "<missing>"}`)
+      require(Boolean(loop?.successVerifiedAt), "Objective has no successVerifiedAt")
+      require(loop?.successVerification?.state === "verified", "Objective success verification is not verified")
+      require(action?.status === "completed", "verified outcome action is not completed")
+      require(effect?.status === "verified" && effect?.verification?.state === "verified", "business effect is not verified")
+      require(Boolean(receipt?.finalizedAt) && receipt?.verification?.state === "verified", "decision receipt is not finalized and verified")
+      return { actionId: action.id, effectId: effect.id, receiptId: receipt.id, verifiedAt: loop.successVerifiedAt }
+    }
+    default:
+      throw new Error(`${row.id} has no canonical assertion implementation`)
+  }
+}
+
 function pixelSnapshot(node) {
   return {
     workId: node.getAttribute("data-jarvis-work-id"),
@@ -523,12 +617,15 @@ async function browserGoldenJourney(browser, row, index) {
   try {
     const expectedTransport = row.transport === "polling" ? "polling" : "live"
     await page.waitForFunction((expected) => window.__JARVIS_REALTIME_STATUS__?.status === expected, expectedTransport, { timeout: row.reconnect ? 45_000 : 30_000 })
-    const instruction = materializeGoldenInstruction(row, `${index + 1}-${randomUUID()}`)
+    const instructionNonce = `${index + 1}-${randomUUID()}`
+    const instruction = materializeGoldenInstruction(row, instructionNonce)
     const responseAt = Date.now()
     const submission = await submitFromBrowser(page, input, row, instruction)
     const responseBody = submission.response
+    const fixture = await applyGoldenFixture(responseBody.workId, row, instructionNonce)
     if (row.workerRestart) await restartWorkerGateway()
     const canonical = await waitForWorkCase(responseBody.workId)
+    const fixtureEvidence = assertGoldenFixture(canonical, row, fixture)
     const pixel = await assertBrowserProjection(page, responseBody.workId, responseBody, canonical, row)
     const diagnostics = await page.evaluate(() => window.__PRODUCT_TRUTH_CERT__)
     const delta = [...diagnostics.deltas].reverse().find((entry) => entry.workId === responseBody.workId) ?? null
@@ -585,6 +682,8 @@ async function browserGoldenJourney(browser, row, index) {
       crossTenantStatus: denied,
       reconnectAttempts: getDisconnected(),
       requestCount: actions.length,
+      fixture: fixture?.scenario ?? null,
+      fixtureEvidence,
     }
   } finally {
     await context.close()

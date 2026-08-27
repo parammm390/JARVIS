@@ -91,8 +91,12 @@ export const businessProjections = {
   activeWork: (workId: string, posture: "active" | "waiting" = "active"): ProjectionDefinition<WorkCaseProjection | null> => ({
     key: ["read-model", "active-work", workId],
     owner: "thread.work",
-    staleMs: posture === "waiting" ? 5_000 : 2_000,
-    pollMs: posture === "waiting" ? 5_000 : 2_000,
+    // Realtime deltas are the primary freshness path. Keep a slow sanity
+    // refresh while the stream is healthy, and only enter the fast interval
+    // when the shared provider has explicitly fallen back to polling.
+    staleMs: posture === "waiting" ? 60_000 : 60_000,
+    pollMs: 60_000,
+    fallbackPollMs: posture === "waiting" ? 5_000 : 2_000,
     tags: ["work", "actions", "approvals", "workflows", "receipts", "computer", "activity", "queries"],
     load: () => jarvisClient.workCase(workId),
   }),
