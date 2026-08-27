@@ -225,45 +225,43 @@ export function BusinessProjectionProvider({ children }: { children: React.React
 
     void (async () => {
       let retry = 0
-      try {
-        await replay()
-        while (!cancelled) {
+      while (!cancelled) {
+        try {
+          // Replay is part of the same bounded recovery loop as stream setup. An
+          // initial API outage must not terminate realtime until this effect remounts.
+          await replay()
+          if (cancelled) break
           controller = new AbortController()
           publishRealtimeStatus("connecting", state?.cursor ?? null)
-          try {
-            const response = await fetch("/api/jarvis/operational-stream", {
-              cache: "no-store",
-              headers: {
-                authorization: `Bearer ${session.access_token}`,
-                ...(state ? { "last-event-id": state.cursor } : {}),
-              },
-              signal: controller.signal,
-            })
-            if (!response.ok) throw new Error(`Realtime gateway returned ${response.status}`)
-            retry = 0
-            publishRealtimeStatus("live", state?.cursor ?? null)
-            await consumeSse(response, controller.signal, (event, data, id) => {
-              if (event === "resync") {
-                const cursor = data && typeof data === "object" && "cursor" in data ? String((data as { cursor: unknown }).cursor) : id
-                if (cursor) resync(cursor)
-                return
-              }
-              if (event !== "operational_delta" || !data || typeof data !== "object") return
-              const delta = data as OperationalDelta
-              if (id !== delta.cursor || !applyDelta(delta)) throw new Error("Operational delta ordering gap")
-            })
-            if (!cancelled) throw new Error("Realtime gateway disconnected")
-          } catch (error) {
-            if (cancelled || controller.signal.aborted) break
-            publishRealtimeStatus("polling", state?.cursor ?? null, error instanceof Error ? error.message : String(error))
-            try { await replay() } catch { /* retry remains bounded below */ }
-            retry += 1
-            const delay = Math.min(15_000, 1_000 * 2 ** Math.min(retry, 4))
-            await new Promise((resolve) => window.setTimeout(resolve, delay))
-          }
+          const response = await fetch("/api/jarvis/operational-stream", {
+            cache: "no-store",
+            headers: {
+              authorization: `Bearer ${session.access_token}`,
+              ...(state ? { "last-event-id": state.cursor } : {}),
+            },
+            signal: controller.signal,
+          })
+          if (!response.ok) throw new Error(`Realtime gateway returned ${response.status}`)
+          retry = 0
+          publishRealtimeStatus("live", state?.cursor ?? null)
+          await consumeSse(response, controller.signal, (event, data, id) => {
+            if (event === "resync") {
+              const cursor = data && typeof data === "object" && "cursor" in data ? String((data as { cursor: unknown }).cursor) : id
+              if (cursor) resync(cursor)
+              return
+            }
+            if (event !== "operational_delta" || !data || typeof data !== "object") return
+            const delta = data as OperationalDelta
+            if (id !== delta.cursor || !applyDelta(delta)) throw new Error("Operational delta ordering gap")
+          })
+          if (!cancelled) throw new Error("Realtime gateway disconnected")
+        } catch (error) {
+          if (cancelled || controller?.signal.aborted) break
+          publishRealtimeStatus("polling", state?.cursor ?? null, error instanceof Error ? error.message : String(error))
+          retry += 1
+          const delay = Math.min(15_000, 1_000 * 2 ** Math.min(retry, 4))
+          await new Promise((resolve) => window.setTimeout(resolve, delay))
         }
-      } catch (error) {
-        if (!cancelled) publishRealtimeStatus("polling", state?.cursor ?? null, error instanceof Error ? error.message : String(error))
       }
     })()
     return () => {
