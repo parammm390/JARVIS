@@ -127,6 +127,8 @@ async function operationAuthorityStillValid(operation: OperationRow): Promise<bo
 async function operationWorkStillActive(operation: OperationRow): Promise<boolean> {
   if (!operation.workId) return true;
   const result = await withTenant(operation.tenantId, async (db) => {
+    // Match the effect/cancellation lock order: operation first, then parent Work.
+    await db.execute(sql`SELECT id FROM ${businessOperations} WHERE ${businessOperations.id} = ${operation.id} AND ${businessOperations.tenantId} = ${operation.tenantId} FOR UPDATE`);
     await db.execute(sql`SELECT id FROM ${works} WHERE ${works.id} = ${operation.workId} AND ${works.tenantId} = ${operation.tenantId} FOR UPDATE`);
     const [work] = await db.select({ status: works.status }).from(works).where(and(
       eq(works.tenantId, operation.tenantId),
@@ -201,9 +203,9 @@ function failureFrom(result: ToolCallResult, attempts: number, maxAttempts: numb
   return { status: "failed", failureClass: "invalid_input", errorKind: kind };
 }
 
-async function claimTarget(tenantId: string, targetId: string): Promise<TargetRow | null> {
+async function claimTargetTx(db: Db, tenantId: string, operationId: string, targetId: string): Promise<TargetRow | null> {
   const now = new Date();
-  const [row] = await withTenant(tenantId, (db) => db.update(businessOperationTargets).set({
+  const [row] = await db.update(businessOperationTargets).set({
     status: "running",
     attempts: sql`${businessOperationTargets.attempts} + 1`,
     startedAt: now,
@@ -211,14 +213,48 @@ async function claimTarget(tenantId: string, targetId: string): Promise<TargetRo
     updatedAt: now,
   }).where(and(
     eq(businessOperationTargets.tenantId, tenantId),
+    eq(businessOperationTargets.operationId, operationId),
     eq(businessOperationTargets.id, targetId),
     lte(businessOperationTargets.nextAttemptAt, now),
     or(
       inArray(businessOperationTargets.status, ["pending", "retry"]),
       and(eq(businessOperationTargets.status, "running"), lte(businessOperationTargets.leaseExpiresAt, now)),
     ),
-  )).returning());
+  )).returning();
   return row ?? null;
+}
+
+/** Hold the parent operation row lock across the provider mutation. Cancellation
+ * updates the same row, so either cancellation commits first and this returns
+ * inactive without dispatching, or the already-started provider call finishes
+ * before cancellation can truthfully commit. */
+async function withActiveOperationEffectFence<T>(
+  tenantId: string,
+  operationId: string,
+  effect: (db: Db) => Promise<T>,
+): Promise<{ active: true; value: T } | { active: false }> {
+  return withTenant(tenantId, async (db) => {
+    await db.execute(sql`SELECT id FROM ${businessOperations} WHERE ${businessOperations.tenantId}=${tenantId} AND ${businessOperations.id}=${operationId} FOR UPDATE`);
+    const [operation] = await db.select({ status: businessOperations.status, workId: businessOperations.workId })
+      .from(businessOperations)
+      .where(and(eq(businessOperations.tenantId, tenantId), eq(businessOperations.id, operationId)))
+      .limit(1);
+    if (!operation || !["queued", "running"].includes(operation.status)) return { active: false as const };
+    if (operation.workId) {
+      await db.execute(sql`SELECT id FROM ${works} WHERE ${works.tenantId}=${tenantId} AND ${works.id}=${operation.workId} FOR UPDATE`);
+      const [work] = await db.select({ status: works.status }).from(works).where(and(
+        eq(works.tenantId, tenantId),
+        eq(works.id, operation.workId),
+      )).limit(1);
+      if (!work || work.status === "cancelled" || work.status === "completed") return { active: false as const };
+    }
+    return { active: true as const, value: await effect(db) };
+  });
+}
+
+async function claimTarget(tenantId: string, operationId: string, targetId: string): Promise<TargetRow | null> {
+  const fenced = await withActiveOperationEffectFence(tenantId, operationId, (db) => claimTargetTx(db, tenantId, operationId, targetId));
+  return fenced.active ? fenced.value : null;
 }
 
 async function finishTarget(params: {
@@ -422,7 +458,7 @@ async function screenTargets(operation: OperationRow, candidates: TargetRow[]): 
     const check = await safetyCheck(operation.tenantId, target);
     if (check.ok) eligible.push(target);
     else {
-      const claimed = await claimTarget(operation.tenantId, target.id);
+      const claimed = await claimTarget(operation.tenantId, operation.id, target.id);
       if (claimed) await finishTarget({ tenantId: operation.tenantId, operation, target: claimed, ...check, error: check.message });
     }
   }
@@ -572,25 +608,38 @@ export async function executeBusinessOperationTarget(payload: Record<string, unk
   if (!operation || !["queued", "running"].includes(operation.status)) return;
   if (!(await operationWorkStillActive(operation))) return;
   if (!(await operationAuthorityStillValid(operation))) return;
-  const target = await claimTarget(tenantId, targetId);
-  if (!target) return;
-  const check = await safetyCheck(tenantId, target);
+  const [candidate] = await withTenant(tenantId, (db) => db.select().from(businessOperationTargets).where(and(
+    eq(businessOperationTargets.tenantId, tenantId),
+    eq(businessOperationTargets.operationId, operationId),
+    eq(businessOperationTargets.id, targetId),
+  )).limit(1));
+  if (!candidate) return;
+  const check = await safetyCheck(tenantId, candidate);
   if (!check.ok) {
-    await finishTarget({ tenantId, operation, target, ...check, error: check.message });
+    const target = await claimTarget(tenantId, operationId, targetId);
+    if (target) await finishTarget({ tenantId, operation, target, ...check, error: check.message });
     return;
   }
-  const prepared = object(target.preparedPayload);
+  const prepared = object(candidate.preparedPayload);
   const message = String(prepared.message ?? "");
   if (!message) {
-    await finishTarget({ tenantId, operation, target, status: "failed", failureClass: "invalid_input", errorKind: "validation", error: "The approved SMS preview is empty." });
+    const target = await claimTarget(tenantId, operationId, targetId);
+    if (target) await finishTarget({ tenantId, operation, target, status: "failed", failureClass: "invalid_input", errorKind: "validation", error: "The approved SMS preview is empty." });
     return;
   }
   const access = await actionAccessContext(tenantId, operation.domainActionId);
-  const scoped = new ScopedToolRegistry(tools(), { tenantId, domainActionId: operation.domainActionId, ...access, operationKeyPrefix: `operation:${operationId}:target:${target.id}` });
-  const contact = await scoped.call("ghl_create_contact", { phone: check.phone, firstName: String(prepared.label ?? "Customer"), tenantId });
-  const result = contact.ok
-    ? await scoped.call("ghl_send_sms", { contactId: String(contact.output.contactId ?? ""), message, tenantId })
-    : contact;
+  const scoped = new ScopedToolRegistry(tools(), { tenantId, domainActionId: operation.domainActionId, ...access, operationKeyPrefix: `operation:${operationId}:target:${candidate.id}` });
+  const fenced = await withActiveOperationEffectFence(tenantId, operationId, async (db) => {
+    const target = await claimTargetTx(db, tenantId, operationId, targetId);
+    if (!target) return null;
+    const contact = await scoped.call("ghl_create_contact", { phone: check.phone, firstName: String(prepared.label ?? "Customer"), tenantId });
+    const result = contact.ok
+      ? await scoped.call("ghl_send_sms", { contactId: String(contact.output.contactId ?? ""), message, tenantId })
+      : contact;
+    return { target, result };
+  });
+  if (!fenced.active || !fenced.value) return;
+  const { target, result } = fenced.value;
   if (!result.ok) {
     const failure = failureFrom(result, target.attempts, target.maxAttempts);
     await finishTarget({ tenantId, operation, target, ...failure, error: result.error ?? "SMS provider did not accept the message.", result: result.output });
@@ -627,20 +676,22 @@ export async function executeBusinessOperationCallBatch(payload: Record<string, 
   for (const row of rows) {
     const check = await safetyCheck(tenantId, row);
     if (!check.ok) {
-      const invalid = await claimTarget(tenantId, row.id);
+      const invalid = await claimTarget(tenantId, operationId, row.id);
       if (invalid) {
         await finishTarget({ tenantId, operation, target: invalid, ...check, error: check.message });
         await releaseBudget(tenantId, "vapi", "call", 1, String(payload.reservationDate), String(payload.reservationKey)).catch(() => undefined);
       }
       continue;
     }
-    const target = await claimTarget(tenantId, row.id);
-    if (target) claimed.push(target);
+    claimed.push(row);
   }
   if (claimed.length === 0) return;
   const preparedCustomers = claimed.map((target) => object(target.preparedPayload).customer).filter((customer): customer is Record<string, unknown> => Boolean(customer && typeof customer === "object"));
   if (preparedCustomers.length !== claimed.length) {
-    for (const target of claimed) await finishTarget({ tenantId, operation, target, status: "failed", failureClass: "invalid_input", errorKind: "validation", error: "The approved call payload is incomplete." });
+    for (const row of claimed) {
+      const target = await claimTarget(tenantId, operationId, row.id);
+      if (target) await finishTarget({ tenantId, operation, target, status: "failed", failureClass: "invalid_input", errorKind: "validation", error: "The approved call payload is incomplete." });
+    }
     await releaseBudget(tenantId, "vapi", "call", Number(payload.reserved ?? claimed.length), String(payload.reservationDate), String(payload.reservationKey)).catch(() => undefined);
     return;
   }
@@ -662,16 +713,31 @@ export async function executeBusinessOperationCallBatch(payload: Record<string, 
   const sequence = Number(payload.sequence ?? 0);
   const name = `finnor-winback-${operationId}-${String(payload.reservationDate)}-${sequence}`;
   const scoped = new ScopedToolRegistry(tools(), { tenantId, domainActionId: operation.domainActionId, ...access, operationKeyPrefix: `operation:${operationId}:call-batch:${sequence}` });
-  const result = await scoped.call("vapi_create_campaign", {
-    tenantId,
-    name,
-    assistantId,
-    schedulePlan: { earliestAt: String(payload.earliestAt), latestAt: String(payload.latestAt) },
-    customers: preparedCustomers,
+  const fenced = await withActiveOperationEffectFence(tenantId, operationId, async (db) => {
+    const targets: TargetRow[] = [];
+    for (const row of claimed) {
+      const target = await claimTargetTx(db, tenantId, operationId, row.id);
+      if (target) targets.push(target);
+    }
+    if (targets.length === 0) return null;
+    const customers = targets.map((target) => object(target.preparedPayload).customer) as Record<string, unknown>[];
+    const result = await scoped.call("vapi_create_campaign", {
+      tenantId,
+      name,
+      assistantId,
+      schedulePlan: { earliestAt: String(payload.earliestAt), latestAt: String(payload.latestAt) },
+      customers,
+    });
+    return { targets, result };
   });
-  if (!result.ok) {
+  if (!fenced.active || !fenced.value) {
     await releaseBudget(tenantId, "vapi", "call", Number(payload.reserved ?? claimed.length), String(payload.reservationDate), String(payload.reservationKey)).catch(() => undefined);
-    for (const target of claimed) {
+    return;
+  }
+  const { targets, result } = fenced.value;
+  if (!result.ok) {
+    await releaseBudget(tenantId, "vapi", "call", Number(payload.reserved ?? targets.length), String(payload.reservationDate), String(payload.reservationKey)).catch(() => undefined);
+    for (const target of targets) {
       const failure = failureFrom(result, target.attempts, target.maxAttempts);
       await finishTarget({ tenantId, operation, target, ...failure, error: result.error ?? "Vapi did not accept the campaign batch.", result: result.output });
     }
@@ -679,7 +745,7 @@ export async function executeBusinessOperationCallBatch(payload: Record<string, 
   }
   const simulated = result.output.simulated === true;
   const providerRef = String(result.output.id ?? name);
-  for (const target of claimed) {
+  for (const target of targets) {
     await finishTarget({
       tenantId,
       operation,
