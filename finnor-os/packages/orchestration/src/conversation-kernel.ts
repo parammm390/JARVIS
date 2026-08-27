@@ -113,12 +113,13 @@ export async function resolveCanonicalHumanPrincipal(ctx: TenantContext): Promis
   return valid;
 }
 
-function extractNamedExpressions(instruction: string): NamedExpression[] {
+export function extractNamedExpressions(instruction: string): NamedExpression[] {
   const found: NamedExpression[] = [];
   const add = (name: string | undefined, organization: string | undefined, cue: NamedExpressionCue, index: number) => {
-    const clean = name?.replace(/\s+/g, " ").trim().replace(/[.,!?]+$/, "");
+    const clean = name?.replace(/\s+/g, " ").trim().replace(/[.,!?]+$/, "").replace(/^the\s+/i, "");
     if (!clean || clean.length < 2) return;
     if (/^(?:the|this|that|my|our|him|her|them|it)$/i.test(clean)) return;
+    if (/^(?:email|call|text|contact|message|notify|move|moving|reschedule|schedule|book|send)\b/i.test(clean)) return;
     const cleanOrganization = organization?.trim().replace(/[.,!?]+$/, "");
     const existing = found.find((item) => normalized(item.name) === normalized(clean) && normalized(item.organization ?? "") === normalized(cleanOrganization ?? ""));
     if (existing) {
@@ -130,14 +131,14 @@ function extractNamedExpressions(instruction: string): NamedExpression[] {
     }
     found.push({ name: clean, cue, index, ...(cleanOrganization ? { organization: cleanOrganization } : {}) });
   };
-  for (const match of instruction.matchAll(/\b([A-Z][\p{L}'-]+(?:\s+[A-Z][\p{L}'-]+){0,2})\s+from\s+([A-Z][\p{L}\d&.' -]{1,80}?)(?=[,.!?]|\s+(?:and|use|then)\b|$)/gu)) add(match[1], match[2], "party", match.index ?? 0);
-  for (const match of instruction.matchAll(/\b(?:[Ee]mail|[Cc]all|[Tt]ext|[Cc]ontact|[Mm]essage|[Nn]otify)\s+([A-Z][\p{L}'-]+(?:\s+[A-Z][\p{L}'-]+){0,2})\b/gu)) add(match[1], undefined, "party", match.index ?? 0);
-  for (const match of instruction.matchAll(/\b(?:move|moving|reschedule|schedule|book)\s+(?:the\s+)?([A-Z][\p{L}'-]+(?:\s+[A-Z][\p{L}'-]+)?)\b/gu)) add(match[1], undefined, "appointment", match.index ?? 0);
-  for (const match of instruction.matchAll(/\b(?:the\s+)?([A-Z][\p{L}'-]+(?:\s+[A-Z][\p{L}'-]+)?)\s+(appointment|invoice|quote|proposal|account)\b/gu)) {
+  for (const match of instruction.matchAll(/\b([\p{L}][\p{L}'-]+(?:\s+[\p{L}][\p{L}'-]+){0,2})\s+from\s+([\p{L}][\p{L}\d&.' -]{1,80}?)(?=[,.!?]|\s+(?:and|use|then)\b|$)/giu)) add(match[1], match[2], "party", match.index ?? 0);
+  for (const match of instruction.matchAll(/\b(?:email|call|text|contact|message|notify)\s+([\p{L}][\p{L}'-]+(?:\s+[\p{L}][\p{L}'-]+){0,2})\b/giu)) add(match[1], undefined, "party", match.index ?? 0);
+  for (const match of instruction.matchAll(/\b(?:move|moving|reschedule|schedule|book)\s+(?:the\s+)?([\p{L}][\p{L}'-]+(?:\s+[\p{L}][\p{L}'-]+){0,1}?)(?=\s+(?:appointment|booking)\b|[,.!?]|$)/giu)) add(match[1], undefined, "appointment", match.index ?? 0);
+  for (const match of instruction.matchAll(/\b(?:the\s+)?([\p{L}][\p{L}'-]+(?:\s+[\p{L}][\p{L}'-]+)?)\s+(appointment|invoice|quote|proposal|account)\b/giu)) {
     const noun = match[2]?.toLocaleLowerCase();
     add(match[1], undefined, noun === "account" ? "party" : noun as NamedExpressionCue, match.index ?? 0);
   }
-  for (const match of instruction.matchAll(/\b([A-Z][\p{L}'-]+(?:\s+[A-Z][\p{L}'-]+){0,2})\s+(?:we\s+discussed|we\s+talked\s+about)\b/gu)) add(match[1], undefined, "history", match.index ?? 0);
+  for (const match of instruction.matchAll(/\b([\p{L}][\p{L}'-]+(?:\s+[\p{L}][\p{L}'-]+){0,2})\s+(?:we\s+discussed|we\s+talked\s+about)\b/giu)) add(match[1], undefined, "history", match.index ?? 0);
   return found.sort((left, right) => left.index - right.index).slice(0, 5);
 }
 
