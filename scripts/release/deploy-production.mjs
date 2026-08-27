@@ -69,7 +69,11 @@ function git(args) {
 }
 
 function run(command, args, cwd, env) {
-  const safeArgs = args.map((arg, index) => args[index - 1] === "--token" ? "<redacted>" : arg === "--token" ? arg : arg)
+  const safeArgs = args.map((arg, index) => {
+    if (args[index - 1] === "--token") return "<redacted>"
+    if (typeof arg === "string" && arg.startsWith("PRODUCT_TRUTH_CERTIFICATION_KEY=")) return "PRODUCT_TRUTH_CERTIFICATION_KEY=<redacted>"
+    return arg
+  })
   console.log(`$ ${command} ${safeArgs.join(" ")}`)
   const result = spawnSync(command, args, {
     cwd,
@@ -91,12 +95,14 @@ const version = process.env.FINNOR_VERSION || `0.1.0+${commitSha.slice(0, 12)}`
 const environment = "production"
 const source = process.env.FINNOR_RELEASE_SOURCE || (process.env.GITHUB_ACTIONS === "true" ? "github-actions" : "codex-governed-release")
 const coreCertification = loadCoreCertification(process.env.FINNOR_CORE_CERTIFICATION_FILE, commitSha)
+const productTruthCertificationKey = process.env.PRODUCT_TRUTH_CERTIFICATION_KEY?.trim()
 
 if (!/^[0-9a-f]{40}$/.test(commitSha)) throw new Error(`HEAD is not a full commit SHA: ${commitSha}`)
 if (dirty) throw new Error(`Refusing to deploy a dirty worktree:\n${dirty}`)
 if (remoteMain !== commitSha) throw new Error(`Refusing to deploy ${commitSha}; origin/main is ${remoteMain || "missing"}`)
 if (buildId !== `finnor-${commitSha.slice(0, 12)}`) throw new Error(`FINNOR_BUILD_ID must be commit-derived: ${buildId}`)
 if (!version.endsWith(`+${commitSha.slice(0, 12)}`)) throw new Error(`FINNOR_VERSION must be commit-derived: ${version}`)
+if (appName === "api" && deployOnly && !productTruthCertificationKey) throw new Error("PRODUCT_TRUTH_CERTIFICATION_KEY is required for the commit-scoped API certification deployment")
 
 const appDir = resolve(repoRoot, app.directory)
 const tokenArgs = process.env.VERCEL_TOKEN ? ["--token", process.env.VERCEL_TOKEN] : []
@@ -125,6 +131,12 @@ if (prepareOnly) {
   process.exit(0)
 }
 
+const productTruthEnvArgs = appName === "api" && productTruthCertificationKey
+  ? [
+      "--env", "PRODUCT_TRUTH_CERTIFICATION_FIXTURES=1",
+      "--env", `PRODUCT_TRUTH_CERTIFICATION_KEY=${productTruthCertificationKey}`,
+    ]
+  : []
 const deployArgs = [
   "deploy", "--prebuilt", "--prod", "--yes",
   "--meta", `finnorCommitSha=${commitSha}`,
@@ -145,6 +157,7 @@ const deployArgs = [
   "--env", `FINNOR_ENVIRONMENT=${environment}`,
   "--env", `FINNOR_RELEASE_SOURCE=${source}`,
   "--env", `FINNOR_CORE_CERTIFICATION_ID=${coreCertification.certificationId}`,
+  ...productTruthEnvArgs,
   ...tokenArgs,
 ]
 const deployOutput = run("vercel", deployArgs, appDir, env)
@@ -162,6 +175,7 @@ const result = {
   environment,
   source,
   coreCertificationId: coreCertification.certificationId,
+  productTruthCertificationFixtures: appName === "api" && Boolean(productTruthCertificationKey),
   dirty: false,
   remoteMain,
   deploymentUrl,
