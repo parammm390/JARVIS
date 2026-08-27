@@ -900,6 +900,8 @@ export async function transitionWork(
     recovery?: unknown;
     activeContext?: Record<string, unknown>;
     executionModel?: "query" | "atomic_effect" | "objective";
+    /** Optional optimistic fence for failures that may only claim a received Work. */
+    expectedStatus?: WorkStatus;
     /** Optimistic generation fence for instruction-owned transitions. */
     expectedWorkInputId?: string;
   } = {},
@@ -908,6 +910,9 @@ export async function transitionWork(
     await db.execute(sql`SELECT id FROM ${schema.works} WHERE ${schema.works.id} = ${workId} AND ${schema.works.tenantId} = ${tenantId} FOR UPDATE`);
     const [work] = await db.select().from(schema.works).where(and(eq(schema.works.id, workId), eq(schema.works.tenantId, tenantId))).limit(1);
     if (!work) throw new Error("Work not found");
+    if (patch.expectedStatus && work.status !== patch.expectedStatus) {
+      throw new WorkTransitionConflictError(`Work ${workId} is ${work.status}; expected ${patch.expectedStatus}`);
+    }
     if (patch.expectedWorkInputId) {
       const [latestInput] = await db.select({ id: schema.workInputs.id })
         .from(schema.workInputs)

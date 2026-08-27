@@ -41,7 +41,7 @@ import {
   tenantOutcomePackSettings,
 } from "@finnor/db";
 import { executeOperationalQuery } from "@finnor/read-models";
-import { employeeAuthoritySnapshot, evaluateAuthority } from "@finnor/authority";
+import { evaluateAuthority } from "@finnor/authority";
 import { listAvailableIdentityAccess } from "@finnor/security";
 import type { LLMChannel, LLMProvider } from "./llm";
 import { resolveProviderForPurpose } from "./llm";
@@ -187,6 +187,16 @@ export interface StartObjectiveResult {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function intakeAuthorityContext(ctx: TenantContext): Record<string, unknown> {
+  if (!ctx.employeeId && ctx.userId.startsWith("system:")) return { principal: ctx.userId, kind: "service" };
+  return {
+    employeeId: ctx.employeeId ?? null,
+    revision: ctx.authorityRevision ?? null,
+    roles: ctx.authorityRoles ?? [ctx.role],
+    principal: ctx.userId,
+  };
 }
 
 function canonicalJson(value: unknown): string {
@@ -339,19 +349,6 @@ async function scheduleIteration(loop: { id: string; tenantId: string; workId: s
 }
 
 export async function startWorkObjective(objective: string, ctx: TenantContext, options: StartObjectiveOptions = {}): Promise<StartObjectiveResult> {
-  options = {
-    ...options,
-    activeContext: await resolveOperatingInteractionContext({
-      tenantId: ctx.tenantId,
-      context: options.activeContext,
-      channel: options.channel ?? "text",
-      workId: options.workId,
-    }),
-  };
-  const employeeId = ctx.employeeId ?? (/^[0-9a-f-]{36}$/i.test(ctx.userId) ? ctx.userId : undefined);
-  const authority = employeeId
-    ? await employeeAuthoritySnapshot({ ...ctx, employeeId }).catch(() => null)
-    : null;
   const preReceived = options.workId && options.workInputId && options.instructionId
     ? await withTenant(ctx.tenantId, async (db) => {
         const [row] = await db.select({ input: workInputs, work: works }).from(workInputs)
@@ -373,16 +370,22 @@ export async function startWorkObjective(objective: string, ctx: TenantContext, 
       sessionId: options.sessionId,
       instructionId: options.instructionId,
       workId: options.workId,
-      userId: ctx.userId,
+      userId: ctx.employeeId ?? ctx.userId,
       idempotencyKey: options.idempotencyKey,
-      activeContext: options.activeContext as Record<string, unknown> | undefined,
-      authorityContext: {
-        employeeId: employeeId ?? null,
-        revision: authority?.revision ?? ctx.authorityRevision ?? null,
-        roles: authority?.roles ?? ctx.authorityRoles ?? [],
-        principal: ctx.userId,
-      },
+      // The caller may still be holding an unverified interaction context.
+      // Resolve it after the durable Work/Input claim before persisting it.
+      activeContext: undefined,
+      authorityContext: intakeAuthorityContext(ctx),
     });
+  options = {
+    ...options,
+    activeContext: await resolveOperatingInteractionContext({
+      tenantId: ctx.tenantId,
+      context: options.activeContext,
+      channel: options.channel ?? "text",
+      workId: input.workId,
+    }),
+  };
   const successCondition = options.successCondition
     ? parseObjectiveSuccessCondition(options.successCondition)
     : defaultObjectiveSuccessCondition(objective);
@@ -464,7 +467,11 @@ export async function startWorkObjective(objective: string, ctx: TenantContext, 
     objective,
     successCondition: loop.successCondition,
     budgets: { maxSteps: loop.maxSteps, maxActions: loop.maxActions, maxQueries: loop.maxQueries },
-  }, { executionModel: "objective", expectedWorkInputId: input.workInputId });
+  }, {
+    executionModel: "objective",
+    ...(options.activeContext ? { activeContext: options.activeContext as Record<string, unknown> } : {}),
+    expectedWorkInputId: input.workInputId,
+  });
   await scheduleIteration(loop, new Date(), ctx.correlationId);
   return { workId: input.workId, workInputId: input.workInputId, instructionId: input.instructionId, objectiveLoopId: loop.id, state: loop.state, duplicate: input.duplicate };
 }

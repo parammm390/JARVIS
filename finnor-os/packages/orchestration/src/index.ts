@@ -238,6 +238,16 @@ async function authorityContextForWork(ctx: TenantContext): Promise<Record<strin
   return { employeeId: snapshot.employeeId, revision: snapshot.revision, roles: snapshot.roles };
 }
 
+function intakeAuthorityContext(ctx: TenantContext): Record<string, unknown> {
+  if (!ctx.employeeId && ctx.userId.startsWith("system:")) return { principal: ctx.userId, kind: "service" };
+  return {
+    employeeId: ctx.employeeId ?? null,
+    revision: ctx.authorityRevision ?? null,
+    roles: ctx.authorityRoles ?? [ctx.role],
+    principal: ctx.userId,
+  };
+}
+
 export class FinnorOrchestrator implements Orchestrator {
   readonly plugins: PluginRegistry;
   readonly tools: ToolRegistry;
@@ -516,15 +526,6 @@ export class FinnorOrchestrator implements Orchestrator {
     ctx: TenantContext,
     opts: InstructionOptions = {},
   ): Promise<InstructionResult> {
-    opts = {
-      ...opts,
-      activeContext: await resolveOperatingInteractionContext({
-        tenantId: ctx.tenantId,
-        context: opts.activeContext,
-        channel: opts.channel ?? "console",
-        workId: opts.workId,
-      }),
-    };
     const received = opts.workId && opts.workInputId && opts.instructionId
       ? {
           workId: opts.workId,
@@ -540,9 +541,20 @@ export class FinnorOrchestrator implements Orchestrator {
           workId: opts.workId,
           userId: ctx.userId,
           idempotencyKey: opts.idempotencyKey,
-          activeContext: opts.activeContext as Record<string, unknown> | undefined,
-          authorityContext: await authorityContextForWork(ctx),
+          // The caller may still be holding an unverified interaction context.
+          // Resolve it after the durable Work/Input claim before persisting it.
+          activeContext: undefined,
+          authorityContext: intakeAuthorityContext(ctx),
         });
+    opts = {
+      ...opts,
+      activeContext: await resolveOperatingInteractionContext({
+        tenantId: ctx.tenantId,
+        context: opts.activeContext,
+        channel: opts.channel ?? "console",
+        workId: received.workId,
+      }),
+    };
     const workId = received.workId;
     const workInputId = received.workInputId;
     const instructionId = received.instructionId;
@@ -554,7 +566,10 @@ export class FinnorOrchestrator implements Orchestrator {
         workId,
       });
     await emitInstructionEvent(ctx.tenantId, instructionId, "received", { workId });
-    await transitionWork(ctx.tenantId, workId, "understanding", "understanding_started", { instructionId, workInputId }, { expectedWorkInputId: workInputId });
+    await transitionWork(ctx.tenantId, workId, "understanding", "understanding_started", { instructionId, workInputId }, {
+      ...(opts.activeContext ? { activeContext: opts.activeContext as Record<string, unknown> } : {}),
+      expectedWorkInputId: workInputId,
+    });
 
     // This branch is intentionally before memory retrieval and planner invocation.
     // Classification is read-only and can only produce a typed query; it never

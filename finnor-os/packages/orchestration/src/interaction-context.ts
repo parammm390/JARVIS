@@ -47,8 +47,10 @@ function normalizeLegacyContext(value: unknown, channel: "voice" | "text" | "con
 
 /**
  * Resolve browser-provided operating context inside the authenticated tenant.
- * This must run before Work intake, so an invalid or cross-tenant reference can
- * never be persisted as Work.activeContext or reach a planner prompt.
+ * This runs after the initial Work/Input intake claim but before the resolved
+ * context is persisted on Work or reaches a planner prompt. An invalid or
+ * cross-tenant reference therefore leaves a recoverable Work without becoming
+ * canonical context.
  */
 export async function resolveOperatingInteractionContext(params: {
   tenantId: string;
