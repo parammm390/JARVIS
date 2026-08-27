@@ -1,4 +1,5 @@
 import assert from "node:assert/strict"
+import { readFileSync } from "node:fs"
 import test from "node:test"
 import { assertCanonicalRelease, assertDeploymentPlan, assertResolvedTarget, assertRuntimeParity, expectedRelease, loadContract } from "./release-policy.mjs"
 
@@ -6,6 +7,7 @@ const contract = loadContract()
 const sha = "a".repeat(40)
 const coreCertificationId = "corecert-test"
 const release = { ...expectedRelease(sha), coreCertificationId, traceable: true }
+const productionWorkflow = readFileSync(new URL("../../.github/workflows/production-release.yml", import.meta.url), "utf8")
 
 test("production release from a non-main SHA is rejected", () => {
   assert.throws(() => assertCanonicalRelease({ head: sha, remoteMain: "b".repeat(40), dirty: "" }), /not canonical remote main/)
@@ -53,4 +55,21 @@ test("complete canonical parity passes", () => {
     expectedCoreCertificationId: coreCertificationId,
   }
   assert.doesNotThrow(() => assertRuntimeParity(contract, expectedRelease(sha), observed))
+})
+
+test("production release installs both locked dependency trees with npm ci", () => {
+  assert.equal(productionWorkflow.includes("npm install --no-package-lock"), false)
+  assert.equal((productionWorkflow.match(/run: npm ci --no-audit --no-fund/g) ?? []).length, 2)
+})
+
+test("production preparation consumes the exact commit core-certification artifact", () => {
+  const produce = productionWorkflow.indexOf("Produce commit-locked FINNOR core certification")
+  const upload = productionWorkflow.indexOf("Export core certification to the release job")
+  const download = productionWorkflow.indexOf("Download commit-locked FINNOR core certification")
+  const bind = productionWorkflow.indexOf("FINNOR_CORE_CERTIFICATION_FILE=")
+  const prepare = productionWorkflow.indexOf("deploy-production.mjs frontend --prepare-only")
+  assert.ok(produce > -1 && upload > produce)
+  assert.ok(download > upload && bind > download && prepare > bind)
+  assert.match(productionWorkflow, /release:certify -- core --core-sha="\$RELEASE_COMMIT_SHA"/)
+  assert.match(productionWorkflow, /artifact\.canonicalCoreSha!==process\.env\.RELEASE_COMMIT_SHA/)
 })
