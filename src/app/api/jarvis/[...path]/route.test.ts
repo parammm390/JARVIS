@@ -102,32 +102,27 @@ describe("JARVIS proxy route contract", () => {
     expect(arbitrary.status).toBe(404)
   })
 
-  it("keeps anonymous health anonymous, uses service auth for anonymous aggregates, and preserves a real caller", async () => {
+  it("keeps only health anonymous and requires caller auth for tenant-bearing status reads", async () => {
     await GET(request("GET", "health"), params("health"))
     const healthInit = fetchMock.mock.calls[0]?.[1] as RequestInit
     expect((healthInit.headers as Record<string, string>).authorization).toBeUndefined()
     expect(getServiceTokenMock).not.toHaveBeenCalled()
 
-    await GET(request("GET", "stats"), params("stats"))
-    expect(getServiceTokenMock).toHaveBeenCalledTimes(1)
-    const statsInit = fetchMock.mock.calls[1]?.[1] as RequestInit
-    expect((statsInit.headers as Record<string, string>).authorization).toBe("Bearer service-token")
+    const tenantBearingPaths = ["stats", "setup/status", "integrations/status"]
+    for (const path of tenantBearingPaths) {
+      const response = await GET(request("GET", path), params(path))
+      expect(response.status, path).toBe(401)
+    }
+    expect(getServiceTokenMock).not.toHaveBeenCalled()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
 
-    await GET(request("GET", "stats", { headers: AUTH }), params("stats"))
-    expect(getServiceTokenMock).toHaveBeenCalledTimes(1)
-    const authenticatedStatsInit = fetchMock.mock.calls[2]?.[1] as RequestInit
-    expect((authenticatedStatsInit.headers as Record<string, string>).authorization).toBe("Bearer caller-token")
-  })
-
-  it("bounds a hanging service-token lookup before forwarding a public aggregate", async () => {
-    vi.useFakeTimers()
-    getServiceTokenMock.mockImplementation(() => new Promise(() => {}))
-    const pending = GET(request("GET", "stats"), params("stats"))
-    await vi.advanceTimersByTimeAsync(JARVIS_PROXY_READ_TIMEOUT_MS + 1)
-    const response = await pending
-    expect(response.status).toBe(504)
-    await expect(response.json()).resolves.toMatchObject({ error: expect.stringContaining("proxy auth timed out") })
-    expect(fetchMock).not.toHaveBeenCalled()
+    for (const path of tenantBearingPaths) {
+      const response = await GET(request("GET", path, { headers: AUTH }), params(path))
+      expect(response.status, path).toBe(200)
+      const init = fetchMock.mock.calls[fetchMock.mock.calls.length - 1]?.[1] as RequestInit
+      expect((init.headers as Record<string, string>).authorization, path).toBe("Bearer caller-token")
+    }
+    expect(getServiceTokenMock).not.toHaveBeenCalled()
   })
 
   it("fails closed before touching the backend for missing auth, invalid queries, and unknown paths", async () => {

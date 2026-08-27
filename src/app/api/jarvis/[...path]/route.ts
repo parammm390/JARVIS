@@ -3,9 +3,8 @@
 // based demo auth is intentionally disabled there). Phase 1.4: private paths now
 // forward the CALLER's own bearer token verbatim — the backend's own requireContext/
 // canApprove RBAC is the sole authorizer, this file makes no authorization decisions
-// beyond "is there a token at all" and "is this path on the allowlist". The public
-// allowlisted paths (see isPublicGet) use the shared service-account token, and
-// only they accept anonymous requests.
+// beyond "is there a token at all" and "is this path on the allowlist". Only the
+// non-tenant health/liveness path accepts anonymous requests.
 import { NextRequest } from "next/server"
 import { z } from "zod"
 import { getServiceToken } from "@/lib/jarvis/proxy-auth"
@@ -37,11 +36,8 @@ const READ_MODEL_VIEWS = new Set([
 const RESOURCE_KINDS = new Set(["households", "inventory", "invoices", "technicians", "visits", "compliance-policy", "workflows"])
 
 function isPublicGet(segments: string[]): boolean {
-  const [a, b] = segments
-  if (segments.length === 1 && a === "stats") return true
+  const [a] = segments
   if (segments.length === 1 && a === "health") return true
-  if (segments.length === 2 && a === "setup" && b === "status") return true
-  if (segments.length === 2 && a === "integrations" && b === "status") return true
   return false
 }
 
