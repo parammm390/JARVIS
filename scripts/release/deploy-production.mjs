@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process"
-import { createHash } from "node:crypto"
+import { createHash, randomBytes } from "node:crypto"
 import { readFileSync, writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 
@@ -95,14 +95,22 @@ const version = process.env.FINNOR_VERSION || `0.1.0+${commitSha.slice(0, 12)}`
 const environment = "production"
 const source = process.env.FINNOR_RELEASE_SOURCE || (process.env.GITHUB_ACTIONS === "true" ? "github-actions" : "codex-governed-release")
 const coreCertification = loadCoreCertification(process.env.FINNOR_CORE_CERTIFICATION_FILE, commitSha)
-const productTruthCertificationKey = process.env.PRODUCT_TRUTH_CERTIFICATION_KEY?.trim()
 
 if (!/^[0-9a-f]{40}$/.test(commitSha)) throw new Error(`HEAD is not a full commit SHA: ${commitSha}`)
 if (dirty) throw new Error(`Refusing to deploy a dirty worktree:\n${dirty}`)
 if (remoteMain !== commitSha) throw new Error(`Refusing to deploy ${commitSha}; origin/main is ${remoteMain || "missing"}`)
 if (buildId !== `finnor-${commitSha.slice(0, 12)}`) throw new Error(`FINNOR_BUILD_ID must be commit-derived: ${buildId}`)
 if (!version.endsWith(`+${commitSha.slice(0, 12)}`)) throw new Error(`FINNOR_VERSION must be commit-derived: ${version}`)
-if (appName === "api" && deployOnly && !productTruthCertificationKey) throw new Error("PRODUCT_TRUTH_CERTIFICATION_KEY is required for the commit-scoped API certification deployment")
+
+let productTruthCertificationKey = process.env.PRODUCT_TRUTH_CERTIFICATION_KEY?.trim()
+if (appName === "api" && deployOnly && !productTruthCertificationKey) {
+  const runnerTemp = process.env.RUNNER_TEMP?.trim()
+  if (!runnerTemp) throw new Error("PRODUCT_TRUTH_CERTIFICATION_KEY or RUNNER_TEMP is required for the commit-scoped API certification deployment")
+  productTruthCertificationKey = randomBytes(32).toString("hex")
+  const keyFile = join(runnerTemp, "product-truth-certification-key")
+  writeFileSync(keyFile, `${productTruthCertificationKey}\n`, { mode: 0o600 })
+  console.log(`Generated one-run Product Truth certification capability at ${keyFile}`)
+}
 
 const appDir = resolve(repoRoot, app.directory)
 const tokenArgs = process.env.VERCEL_TOKEN ? ["--token", process.env.VERCEL_TOKEN] : []
