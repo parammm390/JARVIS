@@ -34,7 +34,7 @@ import type {
   EmployeePersonalMemory,
   TenantContext,
 } from "@finnor/shared-types";
-import { and, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, eq, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const CONSEQUENTIAL = /\b(?:email|call|text|contact|message|send|move|reschedule|schedule|book|create|update|delete|remove|void|pay|charge|notify|continue|finish|repeat|do\s+that)\b/i;
@@ -153,19 +153,157 @@ function labelMatches(entry: CatalogEntry, expression: { name: string; organizat
     || normalized(entry.organizationName ?? "").includes(normalized(expression.organization));
 }
 
-async function loadCanonicalCatalog(tenantId: string, ownerEmployeeId: string): Promise<CatalogEntry[]> {
+interface CatalogLookupRef {
+  entityType: CanonicalEntityType;
+  entityId: string;
+}
+
+const CATALOG_ENTITY_TYPES = new Set<CanonicalEntityType>([
+  "household",
+  "contact",
+  "lead",
+  "user",
+  "external_organization",
+  "external_contact",
+  "appointment",
+  "invoice",
+  "quote",
+  "proposal",
+]);
+
+function catalogLookupRefs(values: unknown[]): CatalogLookupRef[] {
+  const refs = values.flatMap((candidate) => {
+    const value = object(candidate);
+    const entityType = typeof value.entityType === "string" ? value.entityType as CanonicalEntityType : null;
+    const entityId = typeof value.entityId === "string" ? value.entityId : null;
+    return entityType && entityId && UUID.test(entityId) && CATALOG_ENTITY_TYPES.has(entityType)
+      ? [{ entityType, entityId }]
+      : [];
+  });
+  return [...new Map(refs.map((ref) => [refKey(ref), ref])).values()];
+}
+
+function resolutionSnapshotRefs(messages: EmployeeConversationMessage[]): CatalogLookupRef[] {
+  return catalogLookupRefs(messages.flatMap((message) => {
+    const snapshot = object(message.resolutionSnapshot);
+    return Array.isArray(snapshot.resolvedReferences) ? snapshot.resolvedReferences : [];
+  }));
+}
+
+function normalizedText(column: SQL): SQL {
+  return sql`lower(regexp_replace(coalesce(${column}, ''), '[^[:alnum:]@._]+', ' ', 'g'))`;
+}
+
+function expressionPredicate(fields: SQL[], expressions: NamedExpression[]): SQL | undefined {
+  const predicates = expressions.flatMap((expression) => {
+    const needle = normalized(expression.name);
+    if (!needle) return [];
+    const oneToken = !needle.includes(" ");
+    return fields.map((field) => sql`(
+      ${field} = ${needle}
+      OR ${field} LIKE ${`% ${needle}`}
+      OR (${oneToken} AND (' ' || ${field} || ' ') LIKE ${`% ${needle} %`})
+    )`);
+  });
+  return predicates.length > 0 ? or(...predicates) : undefined;
+}
+
+function idsFor(refs: CatalogLookupRef[], entityType: CanonicalEntityType): string[] {
+  return refs.filter((ref) => ref.entityType === entityType).map((ref) => ref.entityId);
+}
+
+async function loadCanonicalCatalog(
+  tenantId: string,
+  ownerEmployeeId: string,
+  expressions: NamedExpression[],
+  exactRefs: CatalogLookupRef[],
+): Promise<CatalogEntry[]> {
   return withTenant(tenantId, async (db) => {
-    // Drizzle shares a single pg client inside withTenant. Keep these queries
-    // ordered so pg never receives concurrent operations on that client.
-    const householdRows = await db.select({ id: households.id, contactInfo: households.contactInfo, address: households.address }).from(households).where(eq(households.tenantId, tenantId)).limit(2000);
-    const contactRows = await db.select({ id: contacts.id, householdId: contacts.householdId, name: contacts.name, firstName: contacts.firstName, lastName: contacts.lastName }).from(contacts).where(and(eq(contacts.tenantId, tenantId), isNull(contacts.archivedAt))).limit(2000);
-    const leadRows = await db.select({ id: leads.id, householdId: leads.householdId, name: leads.name, email: leads.email }).from(leads).where(and(eq(leads.tenantId, tenantId), isNull(leads.archivedAt))).limit(2000);
-    const externalRows = await db.select({ id: externalContacts.id, name: externalContacts.name, organizationId: externalContacts.externalOrganizationId }).from(externalContacts).where(and(eq(externalContacts.tenantId, tenantId), eq(externalContacts.active, true))).limit(2000);
-    const organizationRows = await db.select({ id: externalOrganizations.id, name: externalOrganizations.name }).from(externalOrganizations).where(and(eq(externalOrganizations.tenantId, tenantId), eq(externalOrganizations.active, true))).limit(2000);
-    const appointmentRows = await db.select({ id: appointments.id, subjectType: appointments.subjectType, subjectId: appointments.subjectId, status: appointments.status, scheduledAt: appointments.scheduledAt }).from(appointments).where(and(eq(appointments.tenantId, tenantId), inArray(appointments.status, ["hold", "confirmed"]), isNull(appointments.archivedAt))).limit(2000);
-    const invoiceRows = await db.select({ id: invoices.id, householdId: invoices.householdId, status: invoices.status, memo: invoices.memo }).from(invoices).where(eq(invoices.tenantId, tenantId)).limit(2000);
-    const quoteRows = await db.select({ id: quotes.id, householdId: quotes.householdId, leadId: quotes.leadId, status: quotes.status }).from(quotes).where(and(eq(quotes.tenantId, tenantId), isNull(quotes.archivedAt))).limit(2000);
-    const proposalRows = await db.select({ id: proposals.id, householdId: proposals.householdId, content: proposals.content, status: proposals.status }).from(proposals).where(eq(proposals.tenantId, tenantId)).limit(2000);
+    // Drizzle shares a single pg client inside withTenant. Keep these request-scoped
+    // queries ordered so pg never receives concurrent operations on that client.
+    const householdIds = idsFor(exactRefs, "household");
+    const householdMatch = expressionPredicate([
+      normalizedText(sql`${households.contactInfo}->>'name'`),
+      normalizedText(sql`${households.address}`),
+    ], expressions);
+    const householdWhere = or(
+      householdIds.length > 0 ? inArray(households.id, householdIds) : undefined,
+      householdMatch,
+    );
+    const householdRows = householdWhere ? await db
+      .select({ id: households.id, contactInfo: households.contactInfo, address: households.address })
+      .from(households)
+      .where(and(eq(households.tenantId, tenantId), householdWhere)) : [];
+
+    const contactIds = idsFor(exactRefs, "contact");
+    const contactMatch = expressionPredicate([
+      normalizedText(sql`${contacts.name}`),
+      normalizedText(sql`${contacts.firstName}`),
+      normalizedText(sql`${contacts.lastName}`),
+    ], expressions);
+    const contactWhere = or(
+      contactIds.length > 0 ? inArray(contacts.id, contactIds) : undefined,
+      contactMatch,
+    );
+    const contactRows = contactWhere ? await db
+      .select({ id: contacts.id, householdId: contacts.householdId, name: contacts.name, firstName: contacts.firstName, lastName: contacts.lastName })
+      .from(contacts)
+      .where(and(eq(contacts.tenantId, tenantId), isNull(contacts.archivedAt), contactWhere)) : [];
+
+    const leadIds = idsFor(exactRefs, "lead");
+    const leadMatch = expressionPredicate([normalizedText(sql`${leads.name}`), normalizedText(sql`${leads.email}`)], expressions);
+    const leadWhere = or(leadIds.length > 0 ? inArray(leads.id, leadIds) : undefined, leadMatch);
+    const leadRows = leadWhere ? await db
+      .select({ id: leads.id, householdId: leads.householdId, name: leads.name, email: leads.email })
+      .from(leads)
+      .where(and(eq(leads.tenantId, tenantId), isNull(leads.archivedAt), leadWhere)) : [];
+
+    const userIds = idsFor(exactRefs, "user");
+    const userMatch = expressionPredicate([normalizedText(sql`${users.displayName}`), normalizedText(sql`${users.email}`)], expressions);
+    const userWhere = or(userIds.length > 0 ? inArray(users.id, userIds) : undefined, userMatch);
+    const userRows = userWhere ? await db
+      .select({ id: users.id, displayName: users.displayName, email: users.email })
+      .from(users)
+      .where(and(eq(users.tenantId, tenantId), eq(users.status, "active"), userWhere)) : [];
+
+    const externalContactIds = idsFor(exactRefs, "external_contact");
+    const externalMatch = expressionPredicate([normalizedText(sql`${externalContacts.name}`)], expressions);
+    const externalWhere = or(
+      externalContactIds.length > 0 ? inArray(externalContacts.id, externalContactIds) : undefined,
+      externalMatch,
+    );
+    const externalRows = externalWhere ? await db
+      .select({ id: externalContacts.id, name: externalContacts.name, organizationId: externalContacts.externalOrganizationId })
+      .from(externalContacts)
+      .where(and(eq(externalContacts.tenantId, tenantId), eq(externalContacts.active, true), externalWhere)) : [];
+
+    const organizationIds = [...new Set([
+      ...idsFor(exactRefs, "external_organization"),
+      ...externalRows.flatMap((row) => row.organizationId ? [row.organizationId] : []),
+    ])];
+    const organizationMatch = expressionPredicate([normalizedText(sql`${externalOrganizations.name}`)], expressions);
+    const organizationWhere = or(
+      organizationIds.length > 0 ? inArray(externalOrganizations.id, organizationIds) : undefined,
+      organizationMatch,
+    );
+    const organizationRows = organizationWhere ? await db
+      .select({ id: externalOrganizations.id, name: externalOrganizations.name })
+      .from(externalOrganizations)
+      .where(and(eq(externalOrganizations.tenantId, tenantId), eq(externalOrganizations.active, true), organizationWhere)) : [];
+
+    const relatedHouseholdIds = [...new Set([
+      ...contactRows.flatMap((row) => row.householdId ? [row.householdId] : []),
+      ...leadRows.flatMap((row) => row.householdId ? [row.householdId] : []),
+    ])];
+    const loadedHouseholdIds = new Set(householdRows.map((row) => row.id));
+    const missingHouseholdIds = relatedHouseholdIds.filter((id) => !loadedHouseholdIds.has(id));
+    if (missingHouseholdIds.length > 0) {
+      householdRows.push(...await db
+        .select({ id: households.id, contactInfo: households.contactInfo, address: households.address })
+        .from(households)
+        .where(and(eq(households.tenantId, tenantId), inArray(households.id, missingHouseholdIds))));
+    }
+
     const catalog: CatalogEntry[] = [];
     const householdLabels = new Map<string, string>();
     for (const row of householdRows) {
@@ -180,14 +318,87 @@ async function loadCanonicalCatalog(tenantId: string, ownerEmployeeId: string): 
       } else {
         catalog.push({ entityType: "contact", entityId: row.id, label: row.name, aliases: [row.firstName ?? "", row.lastName ?? ""] });
       }
+      if (contactIds.includes(row.id) && row.householdId) catalog.push({ entityType: "contact", entityId: row.id, label: row.name, aliases: [row.firstName ?? "", row.lastName ?? ""], householdId: row.householdId });
     }
     for (const row of leadRows) {
       if (row.householdId) catalog.push({ entityType: "household", entityId: row.householdId, label: row.name, aliases: [householdLabels.get(row.householdId) ?? "", row.email ?? ""], householdId: row.householdId });
       else catalog.push({ entityType: "lead", entityId: row.id, label: row.name, aliases: [row.email ?? ""], householdId: row.householdId });
+      if (leadIds.includes(row.id) && row.householdId) catalog.push({ entityType: "lead", entityId: row.id, label: row.name, aliases: [row.email ?? ""], householdId: row.householdId });
     }
+    for (const row of userRows) catalog.push({ entityType: "user", entityId: row.id, label: row.displayName?.trim() || row.email, aliases: [row.email] });
     const orgNames = new Map(organizationRows.map((row) => [row.id, row.name]));
     for (const row of organizationRows) catalog.push({ entityType: "external_organization", entityId: row.id, label: row.name, aliases: [] });
     for (const row of externalRows) catalog.push({ entityType: "external_contact", entityId: row.id, label: row.name, aliases: [], organizationId: row.organizationId, organizationName: row.organizationId ? orgNames.get(row.organizationId) ?? null : null });
+
+    const objectExpressions = new Set(expressions.filter((expression) => ["appointment", "invoice", "quote", "proposal"].includes(expression.cue)).map((expression) => expression.cue));
+    const matchedParties = catalog.filter((entry) => PARTY_TYPES.has(entry.entityType) && expressions.some((expression) => labelMatches(entry, expression)));
+    const matchedHouseholdIds = new Set(matchedParties.flatMap((entry) => entry.entityType === "household" ? [entry.entityId] : entry.householdId ? [entry.householdId] : []));
+    const matchedLeadIds = new Set(matchedParties.filter((entry) => entry.entityType === "lead").map((entry) => entry.entityId));
+    const matchedSubjectIds = new Set([
+      ...matchedParties.map((entry) => entry.entityId),
+      ...contactRows.filter((row) => expressions.some((expression) => labelMatches({ entityType: "contact", entityId: row.id, label: row.name, aliases: [row.firstName ?? "", row.lastName ?? ""] }, expression))).map((row) => row.id),
+      ...leadRows.filter((row) => expressions.some((expression) => labelMatches({ entityType: "lead", entityId: row.id, label: row.name, aliases: [row.email ?? ""] }, expression))).map((row) => row.id),
+    ]);
+
+    const appointmentIds = idsFor(exactRefs, "appointment");
+    const appointmentWhere = or(
+      appointmentIds.length > 0 ? inArray(appointments.id, appointmentIds) : undefined,
+      objectExpressions.has("appointment") && matchedSubjectIds.size > 0 ? inArray(appointments.subjectId, [...matchedSubjectIds]) : undefined,
+    );
+    const appointmentRows = appointmentWhere ? await db
+      .select({ id: appointments.id, subjectType: appointments.subjectType, subjectId: appointments.subjectId, status: appointments.status, scheduledAt: appointments.scheduledAt })
+      .from(appointments)
+      .where(and(eq(appointments.tenantId, tenantId), inArray(appointments.status, ["hold", "confirmed"]), isNull(appointments.archivedAt), appointmentWhere)) : [];
+
+    const invoiceIds = idsFor(exactRefs, "invoice");
+    const invoiceWhere = or(
+      invoiceIds.length > 0 ? inArray(invoices.id, invoiceIds) : undefined,
+      objectExpressions.has("invoice") && matchedHouseholdIds.size > 0 ? inArray(invoices.householdId, [...matchedHouseholdIds]) : undefined,
+    );
+    const invoiceRows = invoiceWhere ? await db
+      .select({ id: invoices.id, householdId: invoices.householdId, status: invoices.status, memo: invoices.memo })
+      .from(invoices)
+      .where(and(eq(invoices.tenantId, tenantId), invoiceWhere)) : [];
+
+    const quoteIds = idsFor(exactRefs, "quote");
+    const quoteWhere = or(
+      quoteIds.length > 0 ? inArray(quotes.id, quoteIds) : undefined,
+      objectExpressions.has("quote") && matchedHouseholdIds.size > 0 ? inArray(quotes.householdId, [...matchedHouseholdIds]) : undefined,
+      objectExpressions.has("quote") && matchedLeadIds.size > 0 ? inArray(quotes.leadId, [...matchedLeadIds]) : undefined,
+    );
+    const quoteRows = quoteWhere ? await db
+      .select({ id: quotes.id, householdId: quotes.householdId, leadId: quotes.leadId, status: quotes.status })
+      .from(quotes)
+      .where(and(eq(quotes.tenantId, tenantId), isNull(quotes.archivedAt), quoteWhere)) : [];
+
+    const proposalIds = idsFor(exactRefs, "proposal");
+    const proposalWhere = or(
+      proposalIds.length > 0 ? inArray(proposals.id, proposalIds) : undefined,
+      objectExpressions.has("proposal") && matchedHouseholdIds.size > 0 ? inArray(proposals.householdId, [...matchedHouseholdIds]) : undefined,
+    );
+    const proposalRows = proposalWhere ? await db
+      .select({ id: proposals.id, householdId: proposals.householdId, content: proposals.content, status: proposals.status })
+      .from(proposals)
+      .where(and(eq(proposals.tenantId, tenantId), proposalWhere)) : [];
+
+    const objectHouseholdIds = [...new Set([
+      ...invoiceRows.map((row) => row.householdId),
+      ...quoteRows.flatMap((row) => row.householdId ? [row.householdId] : []),
+      ...proposalRows.map((row) => row.householdId),
+      ...appointmentRows.flatMap((row) => row.subjectType === "household" ? [row.subjectId] : []),
+    ])].filter((id) => !householdLabels.has(id));
+    if (objectHouseholdIds.length > 0) {
+      const rows = await db
+        .select({ id: households.id, contactInfo: households.contactInfo, address: households.address })
+        .from(households)
+        .where(and(eq(households.tenantId, tenantId), inArray(households.id, objectHouseholdIds)));
+      for (const row of rows) {
+        const info = object(row.contactInfo);
+        const label = typeof info.name === "string" && info.name.trim() ? info.name.trim() : row.address;
+        householdLabels.set(row.id, label);
+        catalog.push({ entityType: "household", entityId: row.id, label, aliases: [row.address] });
+      }
+    }
     for (const row of appointmentRows) {
       const subject = catalog.find((item) => item.entityType === row.subjectType && item.entityId === row.subjectId);
       catalog.push({ entityType: "appointment", entityId: row.id, label: `${subject?.label ?? row.subjectType} appointment`, aliases: [row.scheduledAt.toISOString()], status: row.status, householdId: row.subjectType === "household" ? row.subjectId : subject?.householdId });
@@ -350,15 +561,34 @@ export async function prepareEmployeeConversationTurn(params: {
   // production intentionally uses a single short-lived session per function.
   const loaded = await loadEmployeeConversationThread({ tenantId: params.ctx.tenantId, ownerEmployeeId: employeeId, threadId: threadSummary.id, messageLimit: 40 });
   const personalMemories = await listEmployeePersonalMemories({ tenantId: params.ctx.tenantId, ownerEmployeeId: employeeId, limit: 50 });
-  const catalog = await loadCanonicalCatalog(params.ctx.tenantId, employeeId);
   if (!loaded) throw new Error("conversation_thread_not_found");
-  const catalogMap = new Map(dedupeCatalog(catalog).map((entry) => [refKey(entry), entry]));
-  const provenance: ConversationResolutionProvenance[] = [];
   const named = extractNamedExpressions(params.instruction);
   const exactContext = object(params.activeContext);
-  const explicitRefs = [
+  let olderRelevantMessages: EmployeeConversationMessage[] = [];
+  if (named.length > 0 && /\b(?:discussed|earlier|before|talked about)\b/i.test(params.instruction)) {
+    const seen = new Set<string>();
+    for (const expression of named) {
+      const matches = await searchEmployeeConversationMessages({ tenantId: params.ctx.tenantId, ownerEmployeeId: employeeId, query: expression.name, limit: 20 });
+      for (const message of matches) if (!seen.has(message.id)) {
+        seen.add(message.id);
+        olderRelevantMessages.push(message);
+      }
+    }
+  }
+  const rawExplicitRefs = [
     ...(Array.isArray(exactContext.selectedEntities) ? exactContext.selectedEntities : []),
     ...(exactContext.focusedEntity ? [exactContext.focusedEntity] : []),
+  ];
+  const exactRefs = catalogLookupRefs([
+    ...rawExplicitRefs,
+    ...loaded.thread.activeReferences,
+    ...resolutionSnapshotRefs(olderRelevantMessages),
+  ]);
+  const catalog = await loadCanonicalCatalog(params.ctx.tenantId, employeeId, named, exactRefs);
+  const catalogMap = new Map(dedupeCatalog(catalog).map((entry) => [refKey(entry), entry]));
+  const provenance: ConversationResolutionProvenance[] = [];
+  const explicitRefs = [
+    ...rawExplicitRefs,
   ].flatMap((candidate) => {
     const value = object(candidate);
     const current = catalogMap.get(`${String(value.entityType)}:${String(value.entityId)}`);
@@ -375,18 +605,11 @@ export async function prepareEmployeeConversationTurn(params: {
     }
     return [conversationRef(current, "thread", typeof value.sourceMessageId === "string" ? value.sourceMessageId : undefined, typeof value.mentionedAtSequence === "number" ? value.mentionedAtSequence : undefined)];
   });
-  let olderRelevantMessages: EmployeeConversationMessage[] = [];
-  if (named.length > 0 && /\b(?:discussed|earlier|before|talked about)\b/i.test(params.instruction)) {
-    const seen = new Set<string>();
-    for (const expression of named) {
-      const matches = await searchEmployeeConversationMessages({ tenantId: params.ctx.tenantId, ownerEmployeeId: employeeId, query: expression.name, limit: 20 });
-      for (const message of matches) if (!seen.has(message.id)) {
-        seen.add(message.id);
-        olderRelevantMessages.push(message);
-      }
-    }
-  }
-  const historyRefs = dedupeCatalog(olderRelevantMessages.flatMap((message) => referencesFromMessage(message, catalogMap)).map((ref) => ({ ...ref, aliases: [] } as CatalogEntry))).map((entry) => conversationRef(entry, "history_search"));
+  const historyRefs = [...new Map(
+    olderRelevantMessages
+      .flatMap((message) => referencesFromMessage(message, catalogMap))
+      .map((ref) => [refKey(ref), ref]),
+  ).values()];
 
   const groups: ReferenceGroup[] = [];
   const addGroup = (expression: string, kind: string, refs: ConversationReference[]) => {
@@ -446,7 +669,11 @@ export async function prepareEmployeeConversationTurn(params: {
       if (expression.cue === "party" || expression.cue === "history") namedPartyMatches.set(normalized(expression.name), parties);
       const type = expression.cue === "appointment" || expression.cue === "invoice" || expression.cue === "quote" || expression.cue === "proposal" ? expression.cue : null;
       targetKind = type ?? expression.name;
-      addGroup(expression.name, type ?? "person", type ? entityMatchesFor(type, parties) : parties);
+      const directHistoryMatches = type ? historyRefs.filter((ref) => {
+        const entry = catalogMap.get(refKey(ref));
+        return entry?.entityType === type && labelMatches(entry, expression);
+      }) : [];
+      addGroup(expression.name, type ?? "person", type ? directHistoryMatches.length > 0 ? directHistoryMatches : entityMatchesFor(type, parties) : parties);
     }
 
     const nounType = REFERENCE_NOUNS.find(([pattern]) => pattern.test(params.instruction))?.[1];
