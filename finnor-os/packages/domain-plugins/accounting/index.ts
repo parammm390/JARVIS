@@ -127,6 +127,7 @@ export const accountingPlugin: DomainEnginePlugin = {
       const rows = await withTenant(tenantId, (db) => db.select().from(invoices).where(inArray(invoices.id, ids)));
       let called = 0;
       const failures: string[] = [];
+      const deliveredUnrecorded: string[] = [];
       for (const inv of rows) {
         const hh = await findHousehold(tenantId, { householdId: inv.householdId });
         const contact = (hh?.contactInfo ?? {}) as Record<string, unknown>;
@@ -146,16 +147,33 @@ export const accountingPlugin: DomainEnginePlugin = {
           invoiceId: inv.id,
         });
         if (call.ok) {
-          called++;
-          await withTenant(tenantId, (db) =>
-            db.insert(communicationsLog).values({ householdId: inv.householdId, channel: "call", direction: "outbound", content: firstMessage }),
-          ).catch(() => undefined);
+          try {
+            await withTenant(tenantId, (db) =>
+              db.insert(communicationsLog).values({ householdId: inv.householdId, channel: "call", direction: "outbound", content: firstMessage }),
+            );
+            called++;
+          } catch {
+            deliveredUnrecorded.push(inv.id);
+            failures.push(`${inv.id}: call delivered but canonical communications history was not recorded`);
+          }
         } else {
           failures.push(`${inv.id}: ${call.error}`);
         }
       }
-      if (called === 0 && failures.length > 0) return { status: "integration_unavailable", output: { failures }, error: failures[0] };
-      return { status: "success", output: { called, failures }, expected: { called: rows.length } };
+      if (called === 0 && failures.length > 0 && deliveredUnrecorded.length === 0) {
+        return { status: "integration_unavailable", output: { failures }, error: failures[0] };
+      }
+      if (failures.length > 0) {
+        return {
+          status: "failure",
+          output: { called, deliveredUnrecorded, failures },
+          error: deliveredUnrecorded.length > 0
+            ? `${deliveredUnrecorded.length} reminder call${deliveredUnrecorded.length === 1 ? " was" : "s were"} delivered without canonical history. Do not call again automatically; reconcile the recorded deliveries.`
+            : `${failures.length} of ${rows.length} reminder calls failed after earlier calls were delivered. Review the per-invoice results before retrying.`,
+          errorKind: "needs_human",
+        };
+      }
+      return { status: "success", output: { called, deliveredUnrecorded, failures }, expected: { called: rows.length } };
     }
 
     // Remaining actions operate on an existing invoice.
@@ -207,9 +225,18 @@ export const accountingPlugin: DomainEnginePlugin = {
     } else {
       return { status: "failure", output: {}, error: "This customer has no email or phone on file for a reminder.", errorKind: "validation" };
     }
-    await withTenant(tenantId, (db) =>
-      db.insert(communicationsLog).values({ householdId: inv.householdId, channel, direction: "outbound", content: message }),
-    ).catch(() => undefined);
+    try {
+      await withTenant(tenantId, (db) =>
+        db.insert(communicationsLog).values({ householdId: inv.householdId, channel, direction: "outbound", content: message }),
+      );
+    } catch {
+      return {
+        status: "failure",
+        output: { sent: true, channel, invoiceId: inv.id, deliveredUnrecorded: true },
+        error: "The payment reminder was delivered, but its canonical communications history was not recorded. Do not resend automatically; reconcile the recorded delivery.",
+        errorKind: "needs_human",
+      };
+    }
     return { status: "success", output: { sent, channel, invoiceId: inv.id }, expected: { sent: true } };
   },
 };
