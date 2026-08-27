@@ -2,7 +2,7 @@
 // workflow_step, created at proposal time and finalized in place at completion — see
 // packages/db/schema.ts's decisionReceipts table and its unique(workflowStepId).
 
-import { withTenant, decisionReceipts, llmCalls } from "@finnor/db";
+import { withTenant, decisionReceipts, llmCalls, type Db } from "@finnor/db";
 import { eq, and, desc, sql } from "drizzle-orm";
 import type { BusinessEffectVerification, ReceiptEvidence, ReceiptApproval, ReceiptFailure } from "@finnor/shared-types";
 
@@ -25,41 +25,50 @@ export interface OpenReceiptParams {
   correlationId?: string;
 }
 
+export type FinalizeReceiptResult = ({ actualResult: Record<string, unknown>; evidence?: ReceiptEvidence[] } | { failure: ReceiptFailure; evidence?: ReceiptEvidence[] }) & {
+  executedEffectHash?: string;
+  effectVerification?: BusinessEffectVerification;
+  recoveryEffectId?: string;
+};
+
+/** Transaction-owned form used when the receipt is part of the same correctness
+ * boundary as a step or control transition. */
+export async function openReceiptTx(db: Db, params: OpenReceiptParams): Promise<{ receiptId: string }> {
+  const [cost] = params.domainActionId
+    ? await db.select({ total: sql<number | null>`sum(${llmCalls.costUsd})` }).from(llmCalls)
+        .where(and(eq(llmCalls.tenantId, params.tenantId), eq(llmCalls.domainActionId, params.domainActionId)))
+    : [{ total: null }];
+  const [row] = await db
+    .insert(decisionReceipts)
+    .values({
+      tenantId: params.tenantId,
+      workflowRunId: params.workflowRunId ?? null,
+      workflowStepId: params.workflowStepId ?? null,
+      domainActionId: params.domainActionId ?? null,
+      businessEffectId: params.businessEffectId ?? null,
+      intendedEffectHash: params.intendedEffectHash ?? null,
+      authorizedEffectHash: params.authorizedEffectHash ?? null,
+      workId: params.workId ?? null,
+      objective: params.objective,
+      evidence: params.evidence,
+      policyApplied: params.policyApplied,
+      riskTier: params.riskTier,
+      proposedAction: params.proposedAction,
+      approval: params.approval,
+      expectedResult: params.expectedResult ?? null,
+      correlationId: params.correlationId ?? null,
+      llmCostUsd: cost?.total === null || cost?.total === undefined ? null : Number(cost.total),
+    })
+    .returning({ id: decisionReceipts.id });
+  if (!row) throw new Error("DecisionReceipt insert did not return a durable row");
+  return { receiptId: row.id };
+}
+
 /** Called before the step's external effect runs — the receipt exists whether or not
  *  the effect ultimately succeeds, so "no receipt" can never mean "nothing happened,
  *  we just didn't record it." */
 export async function openReceipt(params: OpenReceiptParams): Promise<{ receiptId: string }> {
-  const [row] = await withTenant(params.tenantId, async (db) => {
-    // Cost is only a sum of provider-reported, configured-price rows. A null result
-    // remains unknown (not $0) when a provider supplied no usage/price.
-    const [cost] = params.domainActionId
-      ? await db.select({ total: sql<number | null>`sum(${llmCalls.costUsd})` }).from(llmCalls)
-          .where(and(eq(llmCalls.tenantId, params.tenantId), eq(llmCalls.domainActionId, params.domainActionId)))
-      : [{ total: null }];
-    return db
-      .insert(decisionReceipts)
-      .values({
-        tenantId: params.tenantId,
-        workflowRunId: params.workflowRunId ?? null,
-        workflowStepId: params.workflowStepId ?? null,
-        domainActionId: params.domainActionId ?? null,
-        businessEffectId: params.businessEffectId ?? null,
-        intendedEffectHash: params.intendedEffectHash ?? null,
-        authorizedEffectHash: params.authorizedEffectHash ?? null,
-        workId: params.workId ?? null,
-        objective: params.objective,
-        evidence: params.evidence,
-        policyApplied: params.policyApplied,
-        riskTier: params.riskTier,
-        proposedAction: params.proposedAction,
-        approval: params.approval,
-        expectedResult: params.expectedResult ?? null,
-        correlationId: params.correlationId ?? null,
-        llmCostUsd: cost?.total === null || cost?.total === undefined ? null : Number(cost.total),
-      })
-      .returning({ id: decisionReceipts.id });
-  });
-  return { receiptId: row!.id };
+  return withTenant(params.tenantId, (db) => openReceiptTx(db, params));
 }
 
 /** Finalizes a receipt with what actually happened. Idempotent to call twice with the
@@ -71,17 +80,8 @@ export async function openReceipt(params: OpenReceiptParams): Promise<{ receiptI
  *  work has happened) with the REAL citations the execution actually relied on — e.g.
  *  hybridRetrieve's structured-fact + semantic-hit sources for an answer action. Every
  *  AI answer's receipt carries real citations this way, not a placeholder pointer. */
-export async function finalizeReceipt(
-  tenantId: string,
-  receiptId: string,
-  result: ({ actualResult: Record<string, unknown>; evidence?: ReceiptEvidence[] } | { failure: ReceiptFailure; evidence?: ReceiptEvidence[] }) & {
-    executedEffectHash?: string;
-    effectVerification?: BusinessEffectVerification;
-    recoveryEffectId?: string;
-  },
-): Promise<void> {
-  await withTenant(tenantId, (db) =>
-    db
+export async function finalizeReceiptTx(db: Db, tenantId: string, receiptId: string, result: FinalizeReceiptResult): Promise<void> {
+  const [updated] = await db
       .update(decisionReceipts)
       .set({
         actualResult: "actualResult" in result ? result.actualResult : null,
@@ -95,8 +95,39 @@ export async function finalizeReceipt(
         ...("evidence" in result && result.evidence ? { evidence: result.evidence } : {}),
         finalizedAt: new Date(),
       })
-      .where(and(eq(decisionReceipts.tenantId, tenantId), eq(decisionReceipts.id, receiptId))),
-  );
+      .where(and(eq(decisionReceipts.tenantId, tenantId), eq(decisionReceipts.id, receiptId)))
+      .returning({ id: decisionReceipts.id });
+  if (!updated) throw new Error(`DecisionReceipt ${receiptId} was not found for finalization`);
+}
+
+export async function finalizeReceipt(tenantId: string, receiptId: string, result: FinalizeReceiptResult): Promise<void> {
+  await withTenant(tenantId, (db) => finalizeReceiptTx(db, tenantId, receiptId, result));
+}
+
+export async function findReceiptByStepTx(db: Db, workflowStepId: string): Promise<{
+  id: string;
+  objective: string;
+  domainActionId: string | null;
+  workflowRunId: string | null;
+  workId: string | null;
+  policyApplied: unknown;
+  riskTier: "low" | "medium" | "high";
+  actualResult: unknown;
+} | null> {
+  const [row] = await db
+    .select({
+      id: decisionReceipts.id,
+      objective: decisionReceipts.objective,
+      domainActionId: decisionReceipts.domainActionId,
+      workflowRunId: decisionReceipts.workflowRunId,
+      workId: decisionReceipts.workId,
+      policyApplied: decisionReceipts.policyApplied,
+      riskTier: decisionReceipts.riskTier,
+      actualResult: decisionReceipts.actualResult,
+    })
+    .from(decisionReceipts)
+    .where(eq(decisionReceipts.workflowStepId, workflowStepId));
+  return row ?? null;
 }
 
 /** Computer-backed actions first finalize their single-action receipt with the
@@ -141,20 +172,5 @@ export async function findReceiptByStep(
   riskTier: "low" | "medium" | "high";
   actualResult: unknown;
 } | null> {
-  const [row] = await withTenant(tenantId, (db) =>
-    db
-      .select({
-        id: decisionReceipts.id,
-        objective: decisionReceipts.objective,
-        domainActionId: decisionReceipts.domainActionId,
-        workflowRunId: decisionReceipts.workflowRunId,
-        workId: decisionReceipts.workId,
-        policyApplied: decisionReceipts.policyApplied,
-        riskTier: decisionReceipts.riskTier,
-        actualResult: decisionReceipts.actualResult,
-      })
-      .from(decisionReceipts)
-      .where(eq(decisionReceipts.workflowStepId, workflowStepId)),
-  );
-  return row ?? null;
+  return withTenant(tenantId, (db) => findReceiptByStepTx(db, workflowStepId));
 }

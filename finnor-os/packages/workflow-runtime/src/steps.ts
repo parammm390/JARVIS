@@ -9,7 +9,7 @@ import { withTenant, enqueueJob, workflowSteps, workflowRuns, commands, jobs, in
 import { and, eq, lt, sql, desc, inArray, or } from "drizzle-orm";
 import { maybeChaosKill } from "./chaos";
 import { openReconciliationCase } from "./reconciliation";
-import { openReceipt, finalizeReceipt, findReceiptByStep } from "./receipts";
+import { openReceiptTx, finalizeReceiptTx, findReceiptByStep, findReceiptByStepTx } from "./receipts";
 import { ingestReceipt } from "./memory-ingest";
 import type { ReceiptEvidence } from "@finnor/shared-types";
 import { workflowStepJobKey } from "./job-identity";
@@ -128,54 +128,41 @@ export async function redriveNextPendingStepTx(db: Db, tenantId: string, workflo
   return redriveStepTx(db, tenantId, next.id);
 }
 
-/** §2.4: opens the one DecisionReceipt for a step's whole lifecycle, at the moment of
- *  its first-ever claim (attempts having just gone 0→1 — a later reclaim after a stale
- *  lease recovery or a retry re-finalizes the SAME receipt, never opens a second one;
- *  decision_receipts.workflow_step_id is unique, and this guard avoids relying on that
- *  constraint alone to fail loudly instead of quietly). Best-effort: a receipt-write
- *  failure must never break the step claim itself, same convention as the voice-confirm
- *  enqueue in executor.ts ("queue trouble must never break the gate itself"). */
-async function openReceiptForFirstClaim(tenantId: string, step: WorkflowStepRow): Promise<void> {
-  if (step.attempts !== 1) return;
-  try {
-    const [run] = await withTenant(tenantId, (db) => db.select().from(workflowRuns).where(and(eq(workflowRuns.tenantId, tenantId), eq(workflowRuns.id, step.workflowRunId))));
-    const [command] = run ? await withTenant(tenantId, (db) => db.select().from(commands).where(and(eq(commands.tenantId, tenantId), eq(commands.id, run.commandId)))) : [undefined];
-    // §3.1: policyApplied cites the REAL policy row that gated this step's parent
-    // domain_action, when one exists — a system-drafted scan step or a chaos-test
-    // step with no domain_action_id honestly gets null, not a fabricated reference.
-    let policyApplied: { id: string; version: number } | null = null;
-    let effect: typeof businessEffects.$inferSelect | undefined;
-    if (step.domainActionId) {
-      const [action] = await withTenant(tenantId, (db) => db.select().from(domainActions).where(and(eq(domainActions.tenantId, tenantId), eq(domainActions.id, step.domainActionId!))));
-      if (action?.policyId) {
-        const [policy] = await withTenant(tenantId, (db) => db.select().from(domainPolicies).where(and(eq(domainPolicies.tenantId, tenantId), eq(domainPolicies.id, action.policyId!))));
-        if (policy) policyApplied = { id: policy.id, version: policy.version };
-      }
-      if (step.businessEffectId) {
-        [effect] = await withTenant(tenantId, (db) => db.select().from(businessEffects).where(and(eq(businessEffects.tenantId, tenantId), eq(businessEffects.id, step.businessEffectId!))).limit(1));
-      }
+/** The receipt claim is part of the same transaction as pending -> leased. A failure
+ * rolls the claim back, so no provider effect can begin without durable evidence. */
+async function openReceiptForClaimTx(db: Db, tenantId: string, step: WorkflowStepRow): Promise<void> {
+  if (await findReceiptByStepTx(db, step.id)) return;
+  const [run] = await db.select().from(workflowRuns).where(and(eq(workflowRuns.tenantId, tenantId), eq(workflowRuns.id, step.workflowRunId)));
+  const [command] = run ? await db.select().from(commands).where(and(eq(commands.tenantId, tenantId), eq(commands.id, run.commandId))) : [undefined];
+  let policyApplied: { id: string; version: number } | null = null;
+  if (step.domainActionId) {
+    const [action] = await db.select().from(domainActions).where(and(eq(domainActions.tenantId, tenantId), eq(domainActions.id, step.domainActionId)));
+    if (action?.policyId) {
+      const [policy] = await db.select().from(domainPolicies).where(and(eq(domainPolicies.tenantId, tenantId), eq(domainPolicies.id, action.policyId)));
+      if (policy) policyApplied = { id: policy.id, version: policy.version };
     }
-    await openReceipt({
-      tenantId,
-      workflowRunId: step.workflowRunId,
-      workflowStepId: step.id,
-      objective: `${run?.workflowType ?? "workflow"}: ${step.stepType}`,
-      evidence: [{ source: "workflow_step", ref: step.id, timestamp: new Date().toISOString() }],
-      policyApplied,
-      riskTier: "medium",
-      proposedAction: effect ? effect.effect as Record<string, unknown> : { stepType: step.stepType, payload: step.payload },
-      approval: { required: true, approvedBy: command?.requestedBy ?? undefined, at: command?.createdAt.toISOString() },
-      correlationId: step.correlationId ?? undefined,
-      domainActionId: step.domainActionId ?? undefined,
-      businessEffectId: effect?.id,
-      intendedEffectHash: effect?.semanticHash,
-      authorizedEffectHash: effect?.semanticHash,
-      expectedResult: effect ? ((effect.effect as { expected?: Record<string, unknown> }).expected ?? undefined) : undefined,
-      workId: run?.workId ?? undefined,
-    });
-  } catch (err) {
-    console.error(`[decision_receipts] failed to open receipt for step ${step.id}`, err);
   }
+  const [effect] = step.businessEffectId
+    ? await db.select().from(businessEffects).where(and(eq(businessEffects.tenantId, tenantId), eq(businessEffects.id, step.businessEffectId))).limit(1)
+    : [undefined];
+  await openReceiptTx(db, {
+    tenantId,
+    workflowRunId: step.workflowRunId,
+    workflowStepId: step.id,
+    objective: `${run?.workflowType ?? "workflow"}: ${step.stepType}`,
+    evidence: [{ source: "workflow_step", ref: step.id, timestamp: new Date().toISOString() }],
+    policyApplied,
+    riskTier: "medium",
+    proposedAction: effect ? effect.effect as Record<string, unknown> : { stepType: step.stepType, payload: step.payload },
+    approval: { required: true, approvedBy: command?.requestedBy ?? undefined, at: command?.createdAt.toISOString() },
+    correlationId: step.correlationId ?? undefined,
+    domainActionId: step.domainActionId ?? undefined,
+    businessEffectId: effect?.id,
+    intendedEffectHash: effect?.semanticHash,
+    authorizedEffectHash: effect?.semanticHash,
+    expectedResult: effect ? ((effect.effect as { expected?: Record<string, unknown> }).expected ?? undefined) : undefined,
+    workId: run?.workId ?? undefined,
+  });
 }
 
 /** Atomic claim — mirrors runAction()'s UPDATE...WHERE status=<expected> pattern.
@@ -206,16 +193,12 @@ export async function claimStep(tenantId: string, stepId: string, requestedGener
         ),
       )
       .returning();
+    if (claimed) await openReceiptForClaimTx(db, tenantId, claimed);
     return claimed ?? null;
   });
-  if (claimed) await openReceiptForFirstClaim(tenantId, claimed);
   return claimed;
 }
 
-/** §2.4: finalizes the step's receipt in place — idempotent to call on a resumed step
- *  (recoverStaleSteps re-finalizing after a crash), since it's a plain UPDATE, not an
- *  append. No receipt existing (e.g. the open above failed) is a logged gap, never a
- *  thrown error — the step's own completion must never depend on the receipt succeeding. */
 /** §5.3: a plugin execution may report the real sources it relied on — hybridRetrieve's
  *  structured facts + semantic hits, for an answer action — under `output.citations`.
  *  Pulled out here so any completed step's real evidence (not just answer actions)
@@ -226,23 +209,17 @@ function extractCitations(actualResult: Record<string, unknown>): ReceiptEvidenc
   return Array.isArray(citations) && citations.length > 0 ? (citations as ReceiptEvidence[]) : undefined;
 }
 
-async function finalizeReceiptForStep(tenantId: string, stepId: string, result: { actualResult: Record<string, unknown> } | { errorKind: import("@finnor/shared-types").ErrorKind; message: string; recoveryPath: string }): Promise<void> {
-  try {
-    const receipt = await findReceiptByStep(tenantId, stepId);
-    if (!receipt) {
-      console.error(`[decision_receipts] no receipt found to finalize for step ${stepId}`);
-      return;
-    }
-    await finalizeReceipt(
-      tenantId,
-      receipt.id,
-      "actualResult" in result
-        ? { actualResult: result.actualResult, evidence: extractCitations(result.actualResult) }
-        : { failure: { errorKind: result.errorKind, message: result.message, recoveryPath: result.recoveryPath } },
-    );
-  } catch (err) {
-    console.error(`[decision_receipts] failed to finalize receipt for step ${stepId}`, err);
-  }
+async function finalizeReceiptForStepTx(db: Db, tenantId: string, stepId: string, result: { actualResult: Record<string, unknown> } | { errorKind: import("@finnor/shared-types").ErrorKind; message: string; recoveryPath: string }): Promise<void> {
+  const receipt = await findReceiptByStepTx(db, stepId);
+  if (!receipt) throw new Error(`Workflow step ${stepId} has no DecisionReceipt`);
+  await finalizeReceiptTx(
+    db,
+    tenantId,
+    receipt.id,
+    "actualResult" in result
+      ? { actualResult: result.actualResult, evidence: extractCitations(result.actualResult) }
+      : { failure: { errorKind: result.errorKind, message: result.message, recoveryPath: result.recoveryPath } },
+  );
 }
 
 /** §5.2: auto-ingest into semantic memory — every completed step becomes real, cited
@@ -257,8 +234,8 @@ async function ingestStepReceipt(tenantId: string, stepId: string, evidence: Rec
 }
 
 export async function completeStep(tenantId: string, stepId: string, evidence: Record<string, unknown>): Promise<void> {
-  const [completed] = await withTenant(tenantId, (db) =>
-    db
+  const completed = await withTenant(tenantId, async (db) => {
+    const [row] = await db
       .update(workflowSteps)
       .set({ status: "completed", executionState: "verified", evidence, leaseExpiresAt: null, updatedAt: new Date() })
       .where(and(
@@ -266,10 +243,12 @@ export async function completeStep(tenantId: string, stepId: string, evidence: R
         eq(workflowSteps.id, stepId),
         inArray(workflowSteps.status, ["leased", "waiting_observation"]),
       ))
-      .returning({ id: workflowSteps.id }),
-  );
+      .returning({ id: workflowSteps.id });
+    if (!row) return null;
+    await finalizeReceiptForStepTx(db, tenantId, stepId, { actualResult: evidence });
+    return row;
+  });
   if (!completed) return;
-  await finalizeReceiptForStep(tenantId, stepId, { actualResult: evidence });
   await ingestStepReceipt(tenantId, stepId, evidence).catch((err) =>
     console.error(`[memory] auto-ingest failed for step ${stepId}`, err),
   );
@@ -304,8 +283,8 @@ export async function failStep(
   // plugin's "integration_unavailable" from a plain failure) may pass it explicitly.
   errorKind: import("@finnor/shared-types").ErrorKind = "terminal",
 ): Promise<void> {
-  const [failed] = await withTenant(tenantId, (db) =>
-    db
+  const failed = await withTenant(tenantId, async (db) => {
+    const [row] = await db
       .update(workflowSteps)
       .set({ status: "failed", terminalReason, leaseExpiresAt: null, updatedAt: new Date() })
       .where(and(
@@ -316,10 +295,12 @@ export async function failStep(
           and(eq(workflowSteps.status, "failed"), eq(workflowSteps.executionState, "blocked")),
         ),
       ))
-      .returning({ id: workflowSteps.id }),
-  );
+      .returning({ id: workflowSteps.id });
+    if (!row) return null;
+    await finalizeReceiptForStepTx(db, tenantId, stepId, { errorKind, message: terminalReason, recoveryPath: "review via GET /api/workflows/runs and retry or escalate the run" });
+    return row;
+  });
   if (!failed) return;
-  await finalizeReceiptForStep(tenantId, stepId, { errorKind, message: terminalReason, recoveryPath: "review via GET /api/workflows/runs and retry or escalate the run" });
   // B2.T6: semantic terminal failures can propose a revised plan. Provider outages
   // remain on the established recovery/retry path and do not consume a repair.
   if (errorKind === "terminal") {

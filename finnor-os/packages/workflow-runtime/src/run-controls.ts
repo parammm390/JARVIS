@@ -11,7 +11,7 @@ import { actionLog, businessEffects, commands, domainActions, reconciliationCase
 import type { Db } from "@finnor/db";
 import { and, eq, sql, inArray } from "drizzle-orm";
 import { redriveNextPendingStepTx } from "./steps";
-import { openReceipt, finalizeReceipt } from "./receipts";
+import { openReceiptTx, finalizeReceiptTx } from "./receipts";
 
 export type RunControlVerb = "pause" | "resume" | "cancel" | "retry" | "escalate";
 
@@ -36,6 +36,29 @@ const TRANSITIONS: Record<RunControlVerb, TransitionSpec> = {
   escalate: { verb: "escalate", fromStatuses: ["running", "failed"], toStatus: "escalated" },
 };
 
+async function recordRunControlReceiptTx(
+  db: Db,
+  tenantId: string,
+  run: typeof workflowRuns.$inferSelect,
+  requestedBy: string,
+  objective: string,
+  proposedAction: Record<string, unknown>,
+): Promise<void> {
+  const { receiptId } = await openReceiptTx(db, {
+    tenantId,
+    workId: run.workId ?? undefined,
+    workflowRunId: run.id,
+    objective,
+    evidence: [{ source: "workflow_runs", ref: run.id, timestamp: new Date().toISOString() }],
+    policyApplied: null,
+    riskTier: "medium",
+    proposedAction,
+    approval: { required: true, approvedBy: requestedBy, at: new Date().toISOString() },
+    expectedResult: { status: run.status },
+  });
+  await finalizeReceiptTx(db, tenantId, receiptId, { actualResult: { status: run.status, version: run.version } });
+}
+
 async function applyTransition(
   tenantId: string,
   runId: string,
@@ -58,6 +81,14 @@ async function applyTransition(
       )
       .returning();
     if (row && afterTransition) await afterTransition(db, row);
+    if (row) await recordRunControlReceiptTx(
+      db,
+      tenantId,
+      row,
+      requestedBy,
+      `${spec.verb} workflow run ${runId}`,
+      { verb: spec.verb, fromStatuses: spec.fromStatuses, toStatus: spec.toStatus },
+    );
     return row ?? null;
   });
 
@@ -70,19 +101,6 @@ async function applyTransition(
     if (current.version !== expectedVersion) return { ok: false, reason: "version_conflict" };
     return { ok: false, reason: "illegal_transition" };
   }
-
-  await openReceipt({
-    tenantId,
-    workId: updated.workId ?? undefined,
-    workflowRunId: runId,
-    objective: `${spec.verb} workflow run ${runId}`,
-    evidence: [{ source: "workflow_runs", ref: runId, timestamp: new Date().toISOString() }],
-    policyApplied: null,
-    riskTier: "medium",
-    proposedAction: { verb: spec.verb, fromStatuses: spec.fromStatuses, toStatus: spec.toStatus },
-    approval: { required: true, approvedBy: requestedBy, at: new Date().toISOString() },
-    expectedResult: { status: spec.toStatus },
-  }).then(({ receiptId }) => finalizeReceipt(tenantId, receiptId, { actualResult: { status: updated.status, version: updated.version } }));
 
   if (updated.workId) await reconcileWorkStatus(tenantId, updated.workId);
 
@@ -166,6 +184,14 @@ export async function cancelRun(tenantId: string, runId: string, expectedVersion
         output: { crossedEffectCommitPoint: crossedCommitPoint, reconciliationRequired: crossedCommitPoint },
       })));
     }
+    await recordRunControlReceiptTx(
+      db,
+      tenantId,
+      run,
+      requestedBy,
+      `cancel workflow run ${runId}`,
+      { verb: "cancel", effectSemantics: "stop before commit; reconcile after possible effect" },
+    );
     return run;
   });
 
@@ -175,18 +201,6 @@ export async function cancelRun(tenantId: string, runId: string, expectedVersion
     if (current.version !== expectedVersion) return { ok: false, reason: "version_conflict" };
     return { ok: false, reason: "illegal_transition" };
   }
-  await openReceipt({
-    tenantId,
-    workId: updated.workId ?? undefined,
-    workflowRunId: runId,
-    objective: `cancel workflow run ${runId}`,
-    evidence: [{ source: "workflow_runs", ref: runId, timestamp: new Date().toISOString() }],
-    policyApplied: null,
-    riskTier: "medium",
-    proposedAction: { verb: "cancel", effectSemantics: "stop before commit; reconcile after possible effect" },
-    approval: { required: true, approvedBy: requestedBy, at: new Date().toISOString() },
-    expectedResult: { status: "cancelled" },
-  }).then(({ receiptId }) => finalizeReceipt(tenantId, receiptId, { actualResult: { status: updated.status, version: updated.version } }));
   if (updated.workId) await reconcileWorkStatus(tenantId, updated.workId);
   return { ok: true, run: updated };
 }
@@ -261,6 +275,14 @@ export async function retryRun(tenantId: string, runId: string, expectedVersion:
       })));
     }
     await redriveNextPendingStepTx(db, tenantId, runId);
+    await recordRunControlReceiptTx(
+      db,
+      tenantId,
+      run,
+      requestedBy,
+      `retry workflow run ${runId}`,
+      { verb: "retry", fromStatuses: ["failed"], toStatus: "running", safeKnownFailure: true },
+    );
     return run;
   });
 
@@ -270,18 +292,6 @@ export async function retryRun(tenantId: string, runId: string, expectedVersion:
     if (current.version !== expectedVersion) return { ok: false, reason: "version_conflict" };
     return { ok: false, reason: "illegal_transition" };
   }
-  await openReceipt({
-    tenantId,
-    workId: updated.workId ?? undefined,
-    workflowRunId: runId,
-    objective: `retry workflow run ${runId}`,
-    evidence: [{ source: "workflow_runs", ref: runId, timestamp: new Date().toISOString() }],
-    policyApplied: null,
-    riskTier: "medium",
-    proposedAction: { verb: "retry", fromStatuses: ["failed"], toStatus: "running", safeKnownFailure: true },
-    approval: { required: true, approvedBy: requestedBy, at: new Date().toISOString() },
-    expectedResult: { status: "running" },
-  }).then(({ receiptId }) => finalizeReceipt(tenantId, receiptId, { actualResult: { status: updated.status, version: updated.version } }));
   if (updated.workId) await reconcileWorkStatus(tenantId, updated.workId);
   return { ok: true, run: updated };
 }
