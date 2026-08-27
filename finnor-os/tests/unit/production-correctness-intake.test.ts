@@ -70,6 +70,7 @@ const mocks = vi.hoisted(() => {
   const recordWorkResponse = vi.fn(async () => undefined);
   const transitionWork = vi.fn(async () => undefined);
   const workAggregate = vi.fn<() => Promise<MockWorkAggregate>>(async () => null);
+  const ensureObjectiveIterationDelivery = vi.fn(async () => false);
   const errorResponse = vi.fn((error: unknown) => Response.json({ error: String(error) }, { status: 500 }));
   return {
     receiveWork,
@@ -88,6 +89,7 @@ const mocks = vi.hoisted(() => {
     recordWorkResponse,
     transitionWork,
     workAggregate,
+    ensureObjectiveIterationDelivery,
     errorResponse,
   };
 });
@@ -116,6 +118,7 @@ vi.mock("@finnor/orchestration", () => ({
   linkEmployeeConversationTurnToWork: mocks.linkEmployeeConversationTurnToWork,
   persistEmployeeAssistantTurn: mocks.persistEmployeeAssistantTurn,
   parseObjectiveSuccessCondition: vi.fn((condition: unknown) => condition),
+  ensureObjectiveIterationDelivery: mocks.ensureObjectiveIterationDelivery,
 }));
 
 import { POST as actionsPOST } from "../../apps/api/app/api/actions/route";
@@ -371,5 +374,6 @@ describe("production-correctness intake boundary", () => {
     expect(mocks.persistEmployeeAssistantTurn).not.toHaveBeenCalled();
     expect(mocks.recordWorkResponse).not.toHaveBeenCalled();
     expect(mocks.workAggregate).not.toHaveBeenCalled();
+    expect(mocks.ensureObjectiveIterationDelivery).toHaveBeenCalledWith(ids.tenantId, ids.objectiveLoopId, "test-correlation");
   });
 });
