@@ -65,6 +65,40 @@ describe.skipIf(!available)("durable Work APIs", () => {
     });
   });
 
+  it("filters every terminal Work before applying the active result limit", async () => {
+    const sessionId = `active-work-${randomUUID()}`;
+    const active = await receiveWork({
+      tenantId: TENANT_ID,
+      instruction: "Keep this active Work discoverable",
+      sessionId,
+      channel: "text",
+    });
+    const terminalWorkIds: string[] = [];
+    for (const status of ["completed", "failed", "cancelled"] as const) {
+      const terminal = await receiveWork({
+        tenantId: TENANT_ID,
+        instruction: `Exclude ${status} Work from active discovery`,
+        sessionId,
+        channel: "text",
+      });
+      await transitionWork(
+        TENANT_ID,
+        terminal.workId,
+        status,
+        `test_${status}`,
+        {},
+        status === "failed" ? { failure: { kind: "test" } } : { finalOutcome: { kind: "test" } },
+      );
+      terminalWorkIds.push(terminal.workId);
+    }
+
+    const response = await listWorks(request(`/api/works?sessionId=${sessionId}&active=true`));
+    expect(response.status).toBe(200);
+    const body = await response.json() as { works: Array<{ id: string; status: string }> };
+    expect(body.works).toEqual(expect.arrayContaining([expect.objectContaining({ id: active.workId, status: "received" })]));
+    expect(body.works.some((work) => terminalWorkIds.includes(work.id))).toBe(false);
+  });
+
   it("does not expose Work across tenants", async () => {
     const received = await receiveWork({ tenantId: TENANT_ID, instruction: "Private Work", channel: "console" });
     const response = await getWork(request(`/api/works/${received.workId}`, OTHER_TENANT_ID), { params: Promise.resolve({ id: received.workId }) });

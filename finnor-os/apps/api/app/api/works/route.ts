@@ -1,5 +1,5 @@
 import { works, withTenant } from "@finnor/db";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, notInArray } from "drizzle-orm";
 import { errorResponse, requireContext } from "../../../lib/auth";
 
 /** Small discovery API for reconnecting a typed or voice surface to active Work. */
@@ -15,11 +15,11 @@ export async function GET(req: Request): Promise<Response> {
       .where(and(
         eq(works.tenantId, ctx.tenantId),
         ...(sessionId ? [eq(works.sessionId, sessionId)] : []),
+        ...(activeOnly ? [notInArray(works.status, ["completed", "failed", "cancelled"])] : []),
       ))
       .orderBy(desc(works.updatedAt))
       .limit(100));
-    const filtered = activeOnly ? rows.filter((work) => work.status !== "completed") : rows;
-    return Response.json({ works: filtered });
+    return Response.json({ works: rows });
   } catch (err) {
     return errorResponse(err);
   }
