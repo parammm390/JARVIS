@@ -29,7 +29,7 @@ import {
   openReconciliationCase,
 } from "@finnor/workflow-runtime";
 import { and, desc, eq, lte, sql } from "drizzle-orm";
-import type { BusinessEffectSet, DraftAction, ExecutionResult, ErrorKind } from "@finnor/shared-types";
+import type { BusinessEffectSet, DomainAction, DraftAction, ExecutionResult, ErrorKind } from "@finnor/shared-types";
 import { createDefaultPluginRegistry } from "./plugin-registry";
 import {
   BusinessEffectBoundaryError,
@@ -38,7 +38,7 @@ import {
 } from "./compiler";
 import { classifyExecutionFailure } from "./runtime-bridge";
 import { appendEpisode } from "@finnor/memory";
-import { advanceWorkflowForAction } from "./workflow";
+import { advanceWorkflowForActionRequired } from "./workflow";
 import { emitInstructionEvent } from "./instruction-trace";
 import { resumeObjectiveForAction } from "./objective-loop";
 import { demoteAutonomyForWorkRegression, evaluateEffectAutonomy } from "./autonomy";
@@ -476,7 +476,7 @@ export async function executeAuthorizedEffectStep(
 
   const verification = await recordBusinessEffectOutcome(tenantId, loaded.effect, result);
   const awaitingExternalObservation = loaded.effect.operation.external && verification.state === "partially_verified";
-  const finalStatus = verification.state === "divergent" || verification.state === "reconciliation_required" || result.errorKind === "unknown_outcome"
+  let finalStatus: DomainAction["status"] = verification.state === "divergent" || verification.state === "reconciliation_required" || result.errorKind === "unknown_outcome"
     ? "needs_human_review"
     : awaitingExternalObservation ? "executing"
       : result.status === "success" ? "completed"
@@ -502,8 +502,22 @@ export async function executeAuthorizedEffectStep(
       return;
     }
     await completeStep(tenantId, stepId, { status: result.status, output: result.output, verification });
-    const advanced = await advanceWorkflowForAction(tenantId, loaded.action.actionType, loaded.effect.delta.values).catch(() => []);
-    if (advanced.length > 0) await appendEpisode(tenantId, loaded.action.id, "workflow", {}, { advanced });
+    const workflow = await advanceWorkflowForActionRequired({ tenantId, actionId: loaded.action.id, actionType: loaded.action.actionType, payload: loaded.effect.delta.values });
+    if (!workflow.ok) {
+      finalStatus = "needs_human_review";
+      result = {
+        status: "failure",
+        output: { ...result.output, effectSucceeded: true, workflowAdvancementRecorded: false },
+        error: "The action succeeded, but its required workflow state could not be advanced. Do not repeat the effect; reconcile the workflow state.",
+        errorKind: "needs_human",
+      };
+      await withTenant(tenantId, (db) => db.update(workflowSteps).set({ executionState: "reconciling", updatedAt: new Date() }).where(and(
+        eq(workflowSteps.tenantId, tenantId),
+        eq(workflowSteps.id, stepId),
+      )));
+    } else if (workflow.advanced.length > 0) {
+      await appendEpisode(tenantId, loaded.action.id, "workflow", {}, { advanced: workflow.advanced });
+    }
   } else {
     const failure = classifyExecutionFailure(result);
     await failStep(tenantId, stepId, failure.reason, failure.errorKind);

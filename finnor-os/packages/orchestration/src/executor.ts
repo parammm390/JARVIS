@@ -10,7 +10,7 @@ import { eq, and } from "drizzle-orm";
 import { ScopedToolRegistry, tenantProviderConfigured, type ToolRegistry } from "@finnor/tools";
 import type { PluginRegistry } from "./plugin-registry";
 import { diagnoseFailure, buildConfirmationScript } from "./voice";
-import { advanceWorkflowForAction } from "./workflow";
+import { advanceWorkflowForActionRequired } from "./workflow";
 import { classifyExecutionFailure, executePluginViaRuntime } from "./runtime-bridge";
 import { finalizeReceipt, openReceipt } from "@finnor/workflow-runtime";
 import { redactStructured } from "@finnor/security";
@@ -268,13 +268,22 @@ export class GatedExecutor implements Executor {
     await this.setStatus(action, finalStatus);
     if (finalStatus === "completed") {
       // Advance the relevant workflow state machine (§14) — state lives in the DB.
-      const advanced = await advanceWorkflowForAction(
-        action.tenantId,
-        action.actionType,
-        (draft.payload ?? action.payload) as Record<string, unknown>,
-      ).catch(() => []);
-      if (advanced.length > 0) {
-        await appendEpisode(action.tenantId, action.id, "workflow", {}, { advanced });
+      const workflow = await advanceWorkflowForActionRequired({
+        tenantId: action.tenantId,
+        actionId: action.id,
+        actionType: action.actionType,
+        payload: (draft.payload ?? action.payload) as Record<string, unknown>,
+      });
+      if (!workflow.ok) {
+        return {
+          status: "failure",
+          output: { ...result.output, effectSucceeded: true, workflowAdvancementRecorded: false },
+          error: "The action succeeded, but its required workflow state could not be advanced. Do not repeat the effect; reconcile the workflow state.",
+          errorKind: "needs_human",
+        };
+      }
+      if (workflow.advanced.length > 0) {
+        await appendEpisode(action.tenantId, action.id, "workflow", {}, { advanced: workflow.advanced });
       }
     }
     if (finalStatus === "blocked_integration_unavailable" && await tenantProviderConfigured(action.tenantId, "vapi")) {

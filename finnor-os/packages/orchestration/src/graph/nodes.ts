@@ -11,7 +11,7 @@ import type { DomainAction } from "@finnor/shared-types";
 import { ScopedToolRegistry, tenantProviderConfigured, type ToolRegistry } from "@finnor/tools";
 import type { PluginRegistry } from "../plugin-registry";
 import { diagnoseFailure, buildConfirmationScript } from "../voice";
-import { advanceWorkflowForAction } from "../workflow";
+import { advanceWorkflowForActionRequired } from "../workflow";
 import { executePluginViaRuntime } from "../runtime-bridge";
 import type { GateState } from "./state";
 import { evaluateActionAuthorityBoundary } from "../authority-runtime";
@@ -196,9 +196,19 @@ export function makeExecuteNode(plugins: PluginRegistry, tools: ToolRegistry) {
     await setStatus(state.tenantId, state.actionId, finalStatus);
 
     if (finalStatus === "completed") {
-      const advanced = await advanceWorkflowForAction(state.tenantId, state.actionType, state.draft!.payload).catch(() => []);
-      if (advanced.length > 0) {
-        await appendEpisode(state.tenantId, state.actionId, "workflow", {}, { advanced });
+      const workflow = await advanceWorkflowForActionRequired({ tenantId: state.tenantId, actionId: state.actionId, actionType: state.actionType, payload: state.draft!.payload });
+      if (!workflow.ok) {
+        return {
+          result: {
+            status: "failure",
+            output: { ...result.output, effectSucceeded: true, workflowAdvancementRecorded: false },
+            error: "The action succeeded, but its required workflow state could not be advanced. Do not repeat the effect; reconcile the workflow state.",
+            errorKind: "needs_human",
+          },
+        };
+      }
+      if (workflow.advanced.length > 0) {
+        await appendEpisode(state.tenantId, state.actionId, "workflow", {}, { advanced: workflow.advanced });
       }
     }
     if (finalStatus === "blocked_integration_unavailable" && await tenantProviderConfigured(state.tenantId, "vapi")) {
