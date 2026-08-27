@@ -63,7 +63,7 @@ export async function POST(req: Request): Promise<Response> {
       await linkEmployeeConversationTurnToWork({ tenantId: ctx.tenantId, employeeId: prepared.employeeId, threadId: prepared.threadId, userMessageId: prepared.userMessage.id, workId: clarified.workId!, workInputId: clarified.workInputId! });
       const action = clarified.actions.find((candidate) => candidate.actionType === "clarification_request");
       const text = typeof action?.payload.question === "string" ? action.payload.question : prepared.context.resolution.clarificationQuestion ?? "Which current target should I use?";
-      const assistantMessage = await persistEmployeeAssistantTurn({ tenantId: ctx.tenantId, employeeId: prepared.employeeId, threadId: prepared.threadId, instructionId: clarified.instructionId!, channel: parsed.data.channel, text, workId: clarified.workId!, workInputId: clarified.workInputId!, outcomeRefs: clarified.actions.map((item) => ({ kind: "domain_action", id: item.id, status: item.status })) });
+      const assistantMessage = await persistEmployeeAssistantTurn({ tenantId: ctx.tenantId, employeeId: prepared.employeeId, threadId: prepared.threadId, instructionId: clarified.instructionId!, channel: parsed.data.channel, text, workId: clarified.workId!, workInputId: clarified.workInputId!, outcomeRefs: [{ kind: "assistant_semantic", semanticKind: "CLARIFICATION" }, ...clarified.actions.map((item) => ({ kind: "domain_action", id: item.id, status: item.status }))] });
       return Response.json({ planned: clarified.actions, clarification: prepared.context.resolution, threadId: prepared.threadId, workId: clarified.workId, instructionId: clarified.instructionId, assistantMessage }, { status: 200 });
     }
     const budgets = parsed.data.budgets;
@@ -83,7 +83,7 @@ export async function POST(req: Request): Promise<Response> {
       deadlineAt: budgets?.deadlineAt ? new Date(budgets.deadlineAt) : undefined,
     });
     await linkEmployeeConversationTurnToWork({ tenantId: ctx.tenantId, employeeId: prepared.employeeId, threadId: prepared.threadId, userMessageId: prepared.userMessage.id, workId: result.workId, workInputId: result.workInputId, objectiveLoopId: result.objectiveLoopId });
-    const assistantMessage = await persistEmployeeAssistantTurn({ tenantId: ctx.tenantId, employeeId: prepared.employeeId, threadId: prepared.threadId, instructionId: result.instructionId, channel: parsed.data.channel, text: "I started durable Work for this objective. I’ll report progress from verified outcomes and ask before any required approval.", workId: result.workId, workInputId: result.workInputId, outcomeRefs: [{ kind: "objective_loop", id: result.objectiveLoopId, state: result.state }, { kind: "work", id: result.workId }] });
+    const assistantMessage = await persistEmployeeAssistantTurn({ tenantId: ctx.tenantId, employeeId: prepared.employeeId, threadId: prepared.threadId, instructionId: result.instructionId, channel: parsed.data.channel, text: "I started durable Work for this objective. I’ll report progress from verified outcomes and ask before any required approval.", workId: result.workId, workInputId: result.workInputId, outcomeRefs: [{ kind: "assistant_semantic", semanticKind: "ACKNOWLEDGEMENT" }, { kind: "objective_loop", id: result.objectiveLoopId, state: result.state }, { kind: "work", id: result.workId }] });
     return Response.json({ objective: result, threadId: prepared.threadId, assistantMessage }, { status: result.duplicate ? 200 : 202 });
   } catch (error) {
     return errorResponse(error);

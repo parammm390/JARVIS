@@ -1,23 +1,52 @@
 // POST /api/actions — submit a new instruction (voice transcript or text) (§8).
 
-import { SubmitInstructionSchema } from "@finnor/policy-schema";
+import { InstructionSubmissionResponseSchema, SubmitInstructionSchema } from "@finnor/policy-schema";
 import { requireContext, errorResponse, enforceRouteRateLimit } from "../../../lib/auth";
 import { getOrchestrator } from "../../../lib/orchestrator";
 import { enforceBatchBackpressure } from "../../../lib/backpressure";
 import { receiveWork, recordWorkResponse, transitionWork, workAggregate } from "@finnor/db";
 import { classifyInstructionRoute, interactionAwareOperationalDecision, interpretOperationalQuery, isConversationalTurn, OperatingInteractionContextError, resolveOperatingInteractionContext } from "@finnor/orchestration";
 import { employeeAuthoritySnapshot } from "@finnor/authority";
-import { linkEmployeeConversationTurnToWork, persistEmployeeAssistantTurn, prepareEmployeeConversationTurn } from "@finnor/orchestration";
+import { InstructionCancelledError, linkEmployeeConversationTurnToWork, persistEmployeeAssistantTurn, prepareEmployeeConversationTurn } from "@finnor/orchestration";
 import { randomUUID } from "node:crypto";
+import type {
+  AssistantSemanticKind,
+  DomainAction,
+  InstructionAssistantMessage,
+  InstructionSubmissionResult,
+} from "@finnor/shared-types";
+import type { AnswerEnvelope, OperationalQueryExecution } from "@finnor/orchestration";
+
+type ActionsResponse = InstructionSubmissionResult<DomainAction, OperationalQueryExecution, AnswerEnvelope>;
+
+function assistantSemanticKind(result: Awaited<ReturnType<ReturnType<typeof getOrchestrator>["handleInstructionResult"]>>): AssistantSemanticKind {
+  if (result.answer) return "ANSWER";
+  if (result.actions.some((action) => action.actionType === "clarification_request")) return "CLARIFICATION";
+  return "ACKNOWLEDGEMENT";
+}
 
 function assistantText(result: Awaited<ReturnType<ReturnType<typeof getOrchestrator>["handleInstructionResult"]>>): string {
   if (result.answer?.spokenSummary) return result.answer.spokenSummary;
   const clarification = result.actions.find((action) => action.actionType === "clarification_request");
   if (clarification && typeof clarification.payload.question === "string") return clarification.payload.question;
-  if (result.objective) return "I started durable Work for this objective. I’ll report progress from verified outcomes and ask before any required approval.";
+  if (result.executionModel === "OBJECTIVE") return "I started durable Work for this objective. I’ll report progress from verified outcomes and ask before any required approval.";
   if (result.query) return "I completed the current-data query. The structured result is linked to this thread.";
   if (result.actions.length > 0) return `I prepared ${result.actions.length} action${result.actions.length === 1 ? "" : "s"} in Work. Nothing is represented as completed unless its execution receipt verifies it.`;
   return "I recorded this turn, but no business action was created.";
+}
+
+function isStoredActionsResponse(value: unknown): value is ActionsResponse {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const row = value as Record<string, unknown>;
+  if (!["QUERY", "CONVERSATION", "ATOMIC_EFFECT", "OBJECTIVE"].includes(String(row.executionModel))) return false;
+  if (!Array.isArray(row.actions)) return false;
+  if (![row.workId, row.workInputId, row.instructionId, row.threadId].every((entry) => typeof entry === "string" && entry.length > 0)) return false;
+  if (!row.assistantMessage || typeof row.assistantMessage !== "object" || Array.isArray(row.assistantMessage)) return false;
+  const assistant = row.assistantMessage as Record<string, unknown>;
+  return typeof assistant.id === "string"
+    && typeof assistant.originalText === "string"
+    && typeof assistant.createdAt === "string"
+    && ["ANSWER", "ACKNOWLEDGEMENT", "CLARIFICATION"].includes(String(assistant.semanticKind));
 }
 
 export async function POST(req: Request): Promise<Response> {
@@ -116,18 +145,17 @@ export async function POST(req: Request): Promise<Response> {
       const replay = finalOutcome && typeof finalOutcome === "object" && !Array.isArray(finalOutcome)
         ? (finalOutcome as { response?: Record<string, unknown> }).response
         : undefined;
-      const replayResponse = {
-        ...(replay ?? {
-          planned: aggregate ? aggregate.actions : [],
+      if (!isStoredActionsResponse(replay)) {
+        return Response.json({
+          error: "This Work predates the canonical instruction response contract and must be refreshed from its Work projection.",
+          code: "LEGACY_INSTRUCTION_RESPONSE",
           workId: received.workId,
           instructionId: received.instructionId,
-        }),
-        work: aggregate?.work ?? { id: received.workId, status: received.status },
-        duplicate: true,
-        threadId: prepared.threadId,
-      };
-      const replayQuery = (replayResponse as Record<string, unknown>).query as { metadata?: { durationMs?: number } } | undefined;
-      return Response.json(replayResponse, {
+          threadId: prepared.threadId,
+        }, { status: 409 });
+      }
+      const replayQuery = replay.executionModel === "QUERY" ? replay.query : undefined;
+      return Response.json(replay, {
         status: received.status === "completed" || received.status === "failed" || received.status === "cancelled" ? 200 : 202,
         headers: replayQuery?.metadata?.durationMs === undefined ? undefined : { "Server-Timing": `query;dur=${Number(replayQuery.metadata.durationMs).toFixed(1)}` },
       });
@@ -148,22 +176,14 @@ export async function POST(req: Request): Promise<Response> {
         instructionRouteDecision,
         skipFastReadClassification: true,
       });
-      const response = {
-        planned: result.actions,
-        ...(result.answer ? { answer: result.answer } : {}),
-        ...(result.query ? { query: result.query } : {}),
-        ...(result.objective ? { objective: result.objective } : {}),
-        workId: received.workId,
-        workInputId: received.workInputId,
-        instructionId: received.instructionId,
-        threadId: prepared.threadId,
-      };
       const responseText = assistantText(result);
+      const semanticKind = assistantSemanticKind(result);
       const outcomeRefs: Array<Record<string, unknown>> = [
         { kind: "work", id: received.workId },
         { kind: "work_input", id: received.workInputId },
+        { kind: "assistant_semantic", semanticKind },
         ...result.actions.map((action) => ({ kind: "domain_action", id: action.id, status: action.status })),
-        ...(result.objective ? [{ kind: "objective_loop", id: result.objective.objectiveLoopId, state: result.objective.state }] : []),
+        ...(result.objectiveLoopId ? [{ kind: "objective_loop", id: result.objectiveLoopId, state: result.objectiveState }] : []),
         ...(result.query ? [{ kind: "work_query", intent: result.query.request.intent, asOf: result.query.result.asOf }] : []),
       ];
       const assistantMessage = await persistEmployeeAssistantTurn({
@@ -184,15 +204,58 @@ export async function POST(req: Request): Promise<Response> {
         userMessageId: prepared.userMessage.id,
         workId: received.workId,
         workInputId: received.workInputId,
-        ...(result.objective ? { objectiveLoopId: result.objective.objectiveLoopId } : {}),
+        ...(result.objectiveLoopId ? { objectiveLoopId: result.objectiveLoopId } : {}),
       });
-      Object.assign(response, { assistantMessage });
-      await recordWorkResponse(ctx.tenantId, received.workId, response);
+      const responseAssistant: InstructionAssistantMessage = {
+        id: assistantMessage.id,
+        originalText: assistantMessage.originalText,
+        createdAt: assistantMessage.createdAt,
+        semanticKind,
+      };
+      const common = {
+        workId: received.workId,
+        workInputId: received.workInputId,
+        instructionId: received.instructionId,
+        threadId: prepared.threadId,
+        assistantMessage: responseAssistant,
+      };
+      let response: ActionsResponse;
+      switch (result.executionModel) {
+        case "QUERY":
+          if (!result.query) throw new Error("Instruction contract violation: QUERY has no query result");
+          response = { executionModel: "QUERY", actions: [], query: result.query, ...(result.answer ? { answer: result.answer } : {}), ...common };
+          break;
+        case "CONVERSATION":
+          if (!result.answer) throw new Error("Instruction contract violation: CONVERSATION has no answer");
+          response = { executionModel: "CONVERSATION", actions: [], answer: result.answer, ...common };
+          break;
+        case "OBJECTIVE":
+          if (!result.objectiveLoopId || !result.objectiveState) throw new Error("Instruction contract violation: OBJECTIVE has no durable loop identity");
+          response = { executionModel: "OBJECTIVE", actions: [], objectiveLoopId: result.objectiveLoopId, objectiveState: result.objectiveState, ...common };
+          break;
+        case "ATOMIC_EFFECT":
+          response = { executionModel: "ATOMIC_EFFECT", actions: result.actions, ...common };
+          break;
+      }
+      if (!InstructionSubmissionResponseSchema.safeParse(response).success) {
+        throw new Error("Instruction contract violation: response failed the canonical discriminated schema");
+      }
+      await recordWorkResponse(ctx.tenantId, received.workId, response as unknown as Record<string, unknown>);
       return Response.json(response, {
-        status: result.objective ? 202 : 201,
+        status: result.executionModel === "OBJECTIVE" ? 202 : 201,
         headers: result.query ? { "Server-Timing": `query;dur=${result.query.metadata.durationMs.toFixed(1)}` } : undefined,
       });
     } catch (err) {
+      if (err instanceof InstructionCancelledError) {
+        return Response.json({
+          error: "Instruction cancelled before execution began.",
+          code: err.code,
+          workId: err.workId,
+          workInputId: err.workInputId,
+          instructionId: err.instructionId,
+          threadId: prepared.threadId,
+        }, { status: 409 });
+      }
       const message = err instanceof Error ? err.message : "Instruction processing failed";
       const timeout = /\b(?:timeout|timed out|deadline|aborted?)\b/i.test(message) || (err instanceof Error && err.name === "AbortError");
       const failedWork = await workAggregate(ctx.tenantId, received.workId).catch(() => null);
@@ -211,6 +274,6 @@ export async function POST(req: Request): Promise<Response> {
       }, { status: timeout ? 504 : 500 });
     }
   } catch (err) {
-    return errorResponse(err);
+      return errorResponse(err);
   }
 }

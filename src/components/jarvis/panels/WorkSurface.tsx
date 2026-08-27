@@ -21,6 +21,7 @@ import { useWorkspaceConfig } from "../WorkspaceConfigProvider"
 import { inspectorFieldVisible } from "../lib/workspace-config"
 import "../jarvis-theme.css"
 import { useOperatingInteractionActions } from "../kernel/operating-interaction"
+import { submitInstruction } from "../kernel/instruction"
 
 const ApprovalCockpit = dynamic(() => import("../bridge/ApprovalCockpit").then((module) => module.ApprovalCockpit), { ssr: false })
 const ExecutionTheater = dynamic(() => import("./ExecutionTheater").then((module) => module.ExecutionTheater), { ssr: false })
@@ -588,16 +589,17 @@ export function WorkSurface() {
     setObjectiveStarting(true)
     setObjectiveStartError(null)
     try {
-      const result = await jarvisClient.startObjective({
-        objective,
-        channel: "text",
-        idempotencyKey: `workspace-objective:${crypto.randomUUID()}`,
+      const result = await submitInstruction(objective, {
+        source: "typed",
         activeContext: capture("typed", null),
       })
+      if (result.executionModel !== "OBJECTIVE") {
+        throw new Error("JARVIS did not route this Work request as an Objective")
+      }
       setObjectiveDraft("")
       setFilter("Open")
-      setSelectedId(result.objective.workId)
-      const objectiveQuery = `?workCaseId=${encodeURIComponent(result.objective.workId)}`
+      setSelectedId(result.workId)
+      const objectiveQuery = `?workCaseId=${encodeURIComponent(result.workId)}`
       setSurfaceQuery(readWorkSurfaceQuery(objectiveQuery))
       window.history.replaceState(null, "", `/jarvis/work${objectiveQuery}`)
       reload()

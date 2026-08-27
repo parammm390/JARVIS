@@ -14,7 +14,7 @@
     "test:e2e:ui": "playwright test --ui",
     "release:verify": "node scripts/release/verify-release.mjs",
     "release:truth": "node scripts/release/validate-deployment-truth.mjs",
-    "test:release": "node --test scripts/release/release-policy.test.mjs"
+    "test:release": "node --test scripts/release/release-policy.test.mjs scripts/release/product-truth-golden-matrix.test.mjs"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",

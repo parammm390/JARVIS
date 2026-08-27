@@ -45,6 +45,9 @@ function activeBlock(state: InstructionState, everExecuted: boolean, hasAnswer: 
     case "awaiting_approval":
       return everExecuted ? "execution" : "plan"
     case "executing":
+    case "waiting":
+    case "blocked":
+    case "recovering":
     case "verifying":
       return "execution"
     case "completed":
@@ -65,7 +68,7 @@ function reachedBlocks(thread: ThreadData): Set<BlockKey> {
   const state = thread.machine.instructionState
   const reached = new Set<BlockKey>(["heard"])
   if (state !== "idle" && state !== "captured") reached.add("understood")
-  if (state === "planning" || state === "clarifying" || state === "awaiting_approval" || state === "executing" || state === "verifying" || isTerminal(state)) {
+  if (state === "planning" || state === "clarifying" || state === "awaiting_approval" || state === "executing" || state === "waiting" || state === "blocked" || state === "recovering" || state === "verifying" || isTerminal(state)) {
     reached.add("plan")
   }
   if (thread.everExecuted) reached.add("execution")
@@ -94,6 +97,9 @@ function blockStatus(key: BlockKey, thread: ThreadData, resuming: boolean): stri
     case "execution":
       if (state === "awaiting_approval") return "Paused for review"
       if (state === "executing") return "In progress"
+      if (state === "waiting") return "Waiting"
+      if (state === "blocked") return "Blocked"
+      if (state === "recovering") return "Recovering"
       if (state === "verifying") return "Verifying"
       return "Execution recorded"
     case "receipt":
@@ -386,7 +392,7 @@ export function Thread({
           {key === "understood" && <ThreadUnderstood thread={thread} reducedMotion={reducedMotion} />}
           {key === "answer" && <ThreadAnswer thread={thread} />}
           {key === "plan" && (thread.clarification ? <ThreadClarify thread={thread} onAnswer={answerClarification} onSkip={onSkip} onCancel={onCancel} /> : <ThreadPlan thread={thread} reducedMotion={reducedMotion} restored={blockRestored} />)}
-          {key === "execution" && <ThreadExecution thread={thread} restored={blockRestored} executionWeavePlacement={executionWeavePlacement} energy={executionEnergy} />}
+          {key === "execution" && <ThreadExecution thread={thread} restored={blockRestored} executionWeavePlacement={executionWeavePlacement} energy={executionEnergy} onCancel={onCancel} />}
           {key === "receipt" && <ThreadReceipt thread={thread} reducedMotion={reducedMotion} onRetry={onRetry} restored={blockRestored} />}
         </BlockShell>
       </motion.div>
@@ -405,6 +411,13 @@ export function Thread({
         data-thread-restored={restored ? "true" : "false"}
         data-jarvis-restored-event-count={restored ? restoredTraceEventCount : undefined}
         data-jarvis-instruction-id={thread.instructionId ?? undefined}
+        data-jarvis-work-id={thread.workId ?? undefined}
+        data-jarvis-objective-loop-id={thread.objectiveLoopId ?? undefined}
+        data-jarvis-execution-model={thread.executionModel ?? undefined}
+        data-jarvis-assistant-semantic-kind={thread.assistantSemanticKind ?? undefined}
+        data-jarvis-objective-state={thread.objectiveProjection?.state ?? undefined}
+        data-jarvis-instruction-state={thread.machine.instructionState}
+        data-jarvis-work-posture={thread.workPosture?.status ?? undefined}
         data-jarvis-trace-metrics-count={traceMeasurements.length}
         data-jarvis-trace-metrics={traceMeasurements.length > 0 ? JSON.stringify(traceMeasurements) : undefined}
         aria-label="Instruction thread"

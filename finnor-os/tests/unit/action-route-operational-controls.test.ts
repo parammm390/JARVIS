@@ -43,6 +43,7 @@ const mocks = vi.hoisted(() => {
       }
     : { route: "planner" as const, reason: "mutation_or_advice" as const });
   const handleInstructionResult = vi.fn(async (_instruction: string, _ctx: unknown, options: Record<string, unknown>) => ({
+    executionModel: options.fastReadDecision && (options.fastReadDecision as { route?: string }).route === "fast_read" ? "QUERY" as const : "ATOMIC_EFFECT" as const,
     actions: options.fastReadDecision && (options.fastReadDecision as { route?: string }).route === "planner"
       ? [{ id: "planner-action" }]
       : [],
@@ -127,7 +128,7 @@ describe("POST /api/actions deterministic-vs-planner controls", () => {
         skipFastReadClassification: true,
       }),
     );
-    expect((await response.json()).query).toMatchObject({ result: { intent: "customer_lookup" } });
+    expect(await response.json()).toMatchObject({ executionModel: "QUERY", actions: [], query: { result: { intent: "customer_lookup" } } });
   });
 
   it("keeps mutation/advice instructions on the ordinary planner path with both planner gates", async () => {
@@ -143,6 +144,6 @@ describe("POST /api/actions deterministic-vs-planner controls", () => {
         skipFastReadClassification: true,
       }),
     );
-    expect((await response.json()).planned).toEqual([{ id: "planner-action" }]);
+    expect(await response.json()).toMatchObject({ executionModel: "ATOMIC_EFFECT", actions: [{ id: "planner-action" }] });
   });
 });

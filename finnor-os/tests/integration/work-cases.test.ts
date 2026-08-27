@@ -5,7 +5,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import pg from "pg";
 import { migrate } from "../../packages/db/migrate";
-import { workCases } from "../../packages/read-models";
+import { workCase, workCases } from "../../packages/read-models";
 import {
   actionLog,
   businessEvents,
@@ -23,6 +23,7 @@ import {
   withTenant,
   workflowRuns,
   workflowSteps,
+  works,
 } from "@finnor/db";
 import { GET } from "../../apps/api/app/api/read-models/[view]/route";
 import { and, eq, sql } from "drizzle-orm";
@@ -45,6 +46,8 @@ const STEP_A = "00000000-0000-4000-8000-0000000002f1";
 const RECEIPT_A = "00000000-0000-4000-8000-0000000002f2";
 const VOICE_SESSION = "00000000-0000-4000-8000-0000000002f3";
 const CALL_EXTERNAL_ID = "p2-t1-call-0001";
+const SCOPED_WORK = "00000000-0000-4000-8000-000000000301";
+const SCOPED_INSTRUCTION = "00000000-0000-4000-8000-000000000302";
 
 async function dbUp(): Promise<boolean> {
   const client = new pg.Client({ connectionString: DB_URL, connectionTimeoutMillis: 2000 });
@@ -73,6 +76,8 @@ describe.skipIf(!available)("P2.T1 Work correlation + derived projection", () =>
     await withTenant(TENANT_ID, async (db) => {
       await db.insert(tenants).values({ id: TENANT_ID, name: "P2 T1 Work Correlation" }).onConflictDoNothing();
       await db.insert(tenants).values({ id: OTHER_TENANT_ID, name: "P2 T1 Other Tenant" }).onConflictDoNothing();
+      await db.insert(works).values({ id: SCOPED_WORK, tenantId: TENANT_ID, initialChannel: "console", initialInstruction: "Scoped active Work read", executionModel: "objective", status: "executing" }).onConflictDoNothing();
+      await db.insert(instructionSessions).values({ id: SCOPED_INSTRUCTION, tenantId: TENANT_ID, workId: SCOPED_WORK, instructionText: "Scoped active Work read", source: "typed" }).onConflictDoNothing();
       await db.insert(instructionSessions).values([
         { id: INSTRUCTION_A, tenantId: TENANT_ID, instructionText: "Prepare Henderson service and payment follow-up", source: "typed" },
         { id: INSTRUCTION_B, tenantId: TENANT_ID, instructionText: "Follow up with the Henderson household", source: "typed" },
@@ -116,6 +121,11 @@ describe.skipIf(!available)("P2.T1 Work correlation + derived projection", () =>
       await db.delete(domainActions).where(eq(domainActions.tenantId, TENANT_ID));
       await db.delete(instructionEvents).where(eq(instructionEvents.tenantId, TENANT_ID));
       await db.delete(instructionSessions).where(eq(instructionSessions.tenantId, TENANT_ID));
+      // The operational delta ledger is append-only and references Work with
+      // ON DELETE SET NULL; use its retention owner function before removing
+      // this deterministic fixture Work.
+      await db.execute(sql`SELECT finnor_os.purge_operational_deltas(${TENANT_ID}, now() + interval '1 minute')`);
+      await db.delete(works).where(eq(works.id, SCOPED_WORK));
       await db.delete(voiceSessions).where(eq(voiceSessions.tenantId, TENANT_ID));
       await db.delete(businessEvents).where(and(eq(businessEvents.tenantId, TENANT_ID), eq(businessEvents.source, "p2-t1")));
     });
@@ -170,6 +180,12 @@ describe.skipIf(!available)("P2.T1 Work correlation + derived projection", () =>
     const response = await GET(request(), { params: Promise.resolve({ view: "work-cases" }) });
     expect(response.status).toBe(200);
     expect((await response.json() as { data: WorkCaseProjection[] }).data.some((item) => item.root.id === INSTRUCTION_A)).toBe(true);
+  });
+
+  it("reads one durable Work through the scoped projector without returning another tenant Work", async () => {
+    const scoped = await workCase(TENANT_ID, SCOPED_WORK);
+    expect(scoped).toMatchObject({ id: `work:${SCOPED_WORK}`, root: { kind: "work", id: SCOPED_WORK }, durableWork: { id: SCOPED_WORK } });
+    expect((await workCase(TENANT_ID, "00000000-0000-4000-8000-0000000003ff"))).toBeNull();
   });
 });
 

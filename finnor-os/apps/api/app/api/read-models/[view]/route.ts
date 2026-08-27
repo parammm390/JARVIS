@@ -18,6 +18,7 @@ import {
   readinessSloScorecard,
   failureInjectionLog,
   workCases,
+  workCase,
 } from "@finnor/read-models";
 import { getProjection } from "@finnor/projections";
 
@@ -49,7 +50,10 @@ const VIEWS: Record<string, (tenantId: string, searchParams: URLSearchParams) =>
   },
   // P2.T1: derived only from exact instruction/action/workflow/receipt links;
   // there is intentionally no persisted Work table or customer/time grouping.
-  "work-cases": (tenantId) => workCases(tenantId),
+  "work-cases": (tenantId, searchParams) => {
+    const workId = searchParams.get("workId");
+    return workId ? workCase(tenantId, workId).then((row) => row ? [row] : []) : workCases(tenantId);
+  },
   // Phase 8 (§8.3): the 30-day certification trend the cockpit's scorecard panel reads.
   "readiness": (tenantId, searchParams) => {
     const days = Number(searchParams.get("days") ?? 30);

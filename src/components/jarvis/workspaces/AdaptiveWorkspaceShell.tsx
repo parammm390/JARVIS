@@ -651,7 +651,7 @@ function WorkspaceBody({ projection, thread, role, reducedMotion, liveframe, onI
   if (projection.kind === "answer") return <AnswerWorkspace projection={projection} onInspect={onInspect} />
   if (projection.kind === "execution") {
     if (projection.query) return <QueryOperationsWorkspace projection={projection} onInspect={onInspect} />
-    return <div className="jarvis-execution-workspace"><WorkspaceProgress thread={thread} liveframe={liveframe} /><ThreadExecution thread={thread} restored={false} executionWeavePlacement="document" energy={0.7} /></div>
+    return <div className="jarvis-execution-workspace"><WorkspaceProgress thread={thread} liveframe={liveframe} /><ThreadExecution thread={thread} restored={false} executionWeavePlacement="document" energy={0.7} onCancel={onCancel} /></div>
   }
   if (projection.kind === "receipt") return <div className="jarvis-receipt-workspace"><ThreadReceipt thread={thread} reducedMotion={reducedMotion} onRetry={onRetry} restored={false} /></div>
   if (projection.kind === "recovery") return <div className="jarvis-recovery-workspace"><div className="jarvis-recovery-workspace__lead"><ShieldAlert size={22} /><div><strong>Work stopped safely</strong><p>{thread.submitError ?? "The durable Work record is available for retry and inspection. No unverified success is being shown."}</p></div></div><ThreadReceipt thread={thread} reducedMotion={reducedMotion} onRetry={onRetry} restored={false} /></div>
@@ -772,6 +772,7 @@ export function AdaptiveWorkspaceShell({
   return (
     <div
       ref={shellRef}
+      suppressHydrationWarning
       className="jarvis-adaptive-shell"
       data-inspector-state={inspectorOpen ? "open" : "closed"}
       data-active-workspace={projection?.kind ?? "ready"}
@@ -779,6 +780,14 @@ export function AdaptiveWorkspaceShell({
       data-thread-restored={threadRestored ? "true" : "false"}
       data-jarvis-restored-event-count={threadRestored ? restoredTraceEventCount : undefined}
       data-jarvis-instruction-id={thread?.instructionId ?? undefined}
+      data-jarvis-work-id={thread?.workId ?? undefined}
+      data-jarvis-objective-loop-id={thread?.objectiveLoopId ?? undefined}
+      data-jarvis-execution-model={thread?.executionModel ?? undefined}
+      data-jarvis-assistant-semantic-kind={thread?.assistantSemanticKind ?? undefined}
+      data-jarvis-objective-state={thread?.objectiveProjection?.state ?? undefined}
+      data-jarvis-instruction-state={thread?.machine.instructionState ?? undefined}
+      data-jarvis-work-posture={thread?.workPosture?.status ?? undefined}
+      data-jarvis-transport={liveframe.transportPosture}
       data-source={fixtureLabel ? "fixture.adaptiveWorkspace" : undefined}
       data-experience-scene={scene}
       data-experience-detail={configuredScene.detail}

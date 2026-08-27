@@ -1,7 +1,23 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import pg from "pg";
-import { randomUUID } from "node:crypto";
-import { adminDb, closePool, domainActions, getPool, readOperationalDeltas, tenants } from "@finnor/db";
+import { createHash, randomUUID } from "node:crypto";
+import {
+  adminDb,
+  businessEffects,
+  closePool,
+  domainActions,
+  getPool,
+  integrationEvents,
+  jobs,
+  readOperationalDeltas,
+  receiveWork,
+  tenants,
+  workEventWaits,
+  workObjectiveLoops,
+  workObjectivePlannerAttempts,
+  workObjectiveSteps,
+  workWakeClaims,
+} from "@finnor/db";
 import { migrate } from "../../packages/db/migrate";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
@@ -34,6 +50,116 @@ describe.skipIf(!available)("durable tenant operational deltas", () => {
     const replay = await readOperationalDeltas(tenantA, baseline.cursor);
     expect(replay.deltas.map((delta) => delta.cursor)).toEqual(page.deltas.map((delta) => delta.cursor));
     await expect(readOperationalDeltas(tenantB, page.cursor)).rejects.toMatchObject({ code: "scope_mismatch" });
+  });
+
+  it("invalidates every Objective fact used by the canonical Work projection", async () => {
+    const received = await receiveWork({
+      tenantId: tenantA,
+      instructionId: randomUUID(),
+      instruction: "Wait for a correlated event, then verify the outcome",
+      channel: "console",
+    });
+    const baseline = await readOperationalDeltas(tenantA);
+    const successCondition = {
+      version: 1,
+      statement: "The correlated event was observed",
+      mode: "all",
+      source: "explicit",
+      criteria: [{ kind: "no_open_execution" }],
+    };
+    const [loop] = await adminDb().insert(workObjectiveLoops).values({
+      tenantId: tenantA,
+      workId: received.workId,
+      objective: "Observe a correlated event",
+      successCondition,
+      initialChannel: "console",
+    }).returning();
+    const [step] = await adminDb().insert(workObjectiveSteps).values({
+      tenantId: tenantA,
+      objectiveLoopId: loop!.id,
+      workId: received.workId,
+      stepNumber: 1,
+      idempotencyKey: `delta-step:${received.workId}`,
+    }).returning();
+    await adminDb().insert(workObjectivePlannerAttempts).values({
+      tenantId: tenantA,
+      objectiveLoopId: loop!.id,
+      objectiveStepId: step!.id,
+      attempt: 1,
+      inspectionHash: "delta-inspection",
+    });
+    const [wait] = await adminDb().insert(workEventWaits).values({
+      tenantId: tenantA,
+      workId: received.workId,
+      objectiveLoopId: loop!.id,
+      objectiveStepId: step!.id,
+      expectedEventType: "delta.test.observed",
+      conditionSummary: "Waiting for the exact correlated event",
+    }).returning();
+    const [event] = await adminDb().insert(integrationEvents).values({
+      tenantId: tenantA,
+      source: "operational_delta_test",
+      sourceEventId: randomUUID(),
+      eventType: "delta.test.observed",
+      occurredAt: new Date(),
+      workId: received.workId,
+    }).returning();
+    const [job] = await adminDb().insert(jobs).values({
+      type: "run_objective_iteration",
+      payload: { tenantId: tenantA, workId: received.workId, objectiveLoopId: loop!.id },
+      idempotencyKey: `delta-wake:${wait!.id}`,
+    }).returning();
+    await adminDb().insert(workWakeClaims).values({
+      tenantId: tenantA,
+      waitId: wait!.id,
+      integrationEventId: event!.id,
+      objectiveLoopId: loop!.id,
+      workId: received.workId,
+      cause: "event",
+      objectiveRevision: 1,
+      jobId: job!.id,
+    });
+    const [action] = await adminDb().insert(domainActions).values({
+      tenantId: tenantA,
+      workId: received.workId,
+      actionType: "delta_effect_test",
+      payload: {},
+      status: "draft",
+    }).returning();
+    await adminDb().insert(businessEffects).values({
+      tenantId: tenantA,
+      domainActionId: action!.id,
+      semanticHash: createHash("sha256").update(`delta-semantic:${action!.id}`).digest("hex"),
+      scopeHash: createHash("sha256").update(`delta-scope:${action!.id}`).digest("hex"),
+      operationClass: "internal_write",
+      effect: {
+        schemaVersion: 1,
+        source: { domainActionId: action!.id, actionType: "delta_effect_test", workId: received.workId, objectiveStepId: step!.id },
+        operation: { name: "delta_effect_test", class: "internal_write", external: false },
+        targets: [],
+        bindings: [],
+      },
+    });
+
+    const page = await readOperationalDeltas(tenantA, baseline.cursor, 250);
+    const objectiveChanges = page.deltas.filter((delta) => [
+      "work_objective_loops.insert",
+      "work_objective_steps.insert",
+      "work_objective_planner_attempts.insert",
+      "work_event_waits.insert",
+      "work_wake_claims.insert",
+      "business_effects.insert",
+    ].includes(delta.changeType));
+    expect(objectiveChanges.map((delta) => delta.changeType)).toEqual(expect.arrayContaining([
+      "work_objective_loops.insert",
+      "work_objective_steps.insert",
+      "work_objective_planner_attempts.insert",
+      "work_event_waits.insert",
+      "work_wake_claims.insert",
+      "business_effects.insert",
+    ]));
+    expect(objectiveChanges.every((delta) => delta.workId === received.workId)).toBe(true);
+    expect(objectiveChanges.every((delta) => delta.projectionTags.includes("work"))).toBe(true);
   });
 
   it("returns resync_required when retention has removed a cursor gap", async () => {

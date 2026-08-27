@@ -57,4 +57,14 @@ describe("objective-first instruction-routing policy", () => {
     expect(finalizeInstructionRoute(preliminary, [action({ compiledGraph: { kind: "workflow", commandType: "send_follow_up", requiresConfirmation: true, autoApprove: false } })]).route).toBe("OBJECTIVE");
     expect(finalizeInstructionRoute(preliminary, [action(), action({ id: "00000000-0000-4000-8000-000000000014" })]).route).toBe("OBJECTIVE");
   });
+
+  it("routes an empty typed plan to durable Objective without throwing", () => {
+    const preliminary = classifyInstructionRoute({ instruction: "Send this exact message", fastReadDecision: planner });
+    expect(preliminary.route).toBe("ATOMIC_EFFECT");
+    expect(() => finalizeInstructionRoute(preliminary, [])).not.toThrow();
+    expect(finalizeInstructionRoute(preliminary, [])).toMatchObject({
+      route: "OBJECTIVE",
+      reasonCodes: ["atomic_candidate_rejected_by_typed_plan"],
+    });
+  });
 });

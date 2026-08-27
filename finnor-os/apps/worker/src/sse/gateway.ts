@@ -155,6 +155,10 @@ export function createSseGateway(): http.Server {
     }
     if (req.method === "GET" && url.pathname === "/healthz") {
       const release = getRuntimeReleaseMetadata("finnor-worker");
+      const capabilities = (process.env.FINNOR_WORKER_CAPABILITIES ?? "")
+        .split(",")
+        .map((capability) => capability.trim())
+        .filter(Boolean);
       res.writeHead(200, {
         "content-type": "application/json",
         "cache-control": "no-store, max-age=0",
@@ -163,7 +167,7 @@ export function createSseGateway(): http.Server {
         "x-finnor-environment": release.environment,
         "x-finnor-version": release.version,
       });
-      res.end(JSON.stringify({ ok: true, release }));
+      res.end(JSON.stringify({ ok: true, release, capabilities, realtime: capabilities.includes("realtime") && capabilities.includes("sse") }));
       return;
     }
     if (req.method === "GET" && url.pathname === "/events") {

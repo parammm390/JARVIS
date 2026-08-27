@@ -26,4 +26,25 @@ describe("Phase 2 durable operational delta contract", () => {
     }
     for (const forbidden of ["provider_session_ref", "credential_ref", "payload->", "NEW.payload", "NEW.config"]) expect(sql).not.toContain(forbidden);
   });
+
+  it("covers every durable Objective progression source with a Work-correlated delta", () => {
+    const sql = readFileSync(new URL("../../packages/db/migrations/0102_product_truth_objective_realtime.sql", import.meta.url), "utf8");
+    for (const source of [
+      "work_objective_loops",
+      "work_objective_steps",
+      "work_objective_planner_attempts",
+      "work_event_waits",
+      "work_wake_claims",
+      "business_effects",
+      "workflow_steps",
+      "authority_approval_requests",
+      "authority_approval_request_steps",
+    ]) {
+      expect(sql, source).toContain(`${source}_operational_delta`);
+    }
+    expect(sql).toContain("SELECT loop.work_id INTO work");
+    expect(sql).toContain("SELECT action.work_id INTO work");
+    expect(sql).toContain("'work,actions,approvals,workflows,receipts,activity,queries'");
+    for (const forbidden of ["NEW.payload", "provider_session_ref", "credential_ref"]) expect(sql).not.toContain(forbidden);
+  });
 });

@@ -26,7 +26,7 @@ describe("Work contextual inspector", () => {
       status: "Failed",
       approvals: [],
       receipts: [{ id: "receipt-1", workflowRunId: null, workflowStepId: null, domainActionId: "action-1", objective: "Send reminder", evidence: [], approval: {}, expectedResult: { status: "delivered" }, actualResult: null, failure: { message: "Provider unavailable" }, correlationId: null, createdAt: "2026-08-15T00:00:00Z", finalizedAt: "2026-08-15T01:00:00Z" }],
-      durableWork: { id: "work-1", status: "failed", sessionId: "session-1", channel: "text", activeContext: null, initiatedBy: "user-1", currentOwnerId: "user-1", assignedTo: "user-1", authorityContext: { role: "owner" }, finalOutcome: null, failure: { message: "Provider unavailable" }, recovery: { message: "Retry delivery" } },
+      durableWork: { id: "work-1", status: "failed", executionModel: "atomic_effect", sessionId: "session-1", channel: "text", activeContext: null, initiatedBy: "user-1", currentOwnerId: "user-1", assignedTo: "user-1", authorityContext: { role: "owner" }, finalOutcome: null, failure: { message: "Provider unavailable" }, recovery: { message: "Retry delivery" }, handoffs: [] },
     }))
     expect(facts.find((fact) => fact.label === "What happened")?.value).toContain("Provider unavailable")
     expect(facts.find((fact) => fact.label === "Next permitted action")?.value).toContain("Retry delivery")

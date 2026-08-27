@@ -70,6 +70,14 @@ function nextState(from: InstructionState, event: InstructionEvent): Instruction
       if (event.type === "TERMINAL") return terminalOutcome(event)
       return null
 
+    case "waiting":
+    case "blocked":
+    case "recovering":
+      if (event.type === "ACTION_needs_human_review" || event.type === "RUN_escalated") return "awaiting_approval"
+      if (event.type === "TRACE_verifying") return "verifying"
+      if (event.type === "TRACE_failed") return "failed"
+      return null
+
     case "stopping":
       if (event.type === "CANCEL_FAILED") return event.returnTo
       if (event.type === "TRACE_failed") return "failed"
@@ -94,6 +102,9 @@ function isCancelable(state: InstructionState): state is CancelableInstructionSt
     || state === "clarifying"
     || state === "awaiting_approval"
     || state === "executing"
+    || state === "waiting"
+    || state === "blocked"
+    || state === "recovering"
     || state === "verifying"
 }
 

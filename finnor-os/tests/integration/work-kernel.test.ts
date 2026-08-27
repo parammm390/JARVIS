@@ -226,14 +226,14 @@ describe.skipIf(!available)("Upgrade 2 durable Work kernel", () => {
       role: "owner",
     }, opts);
 
-    expect(first).toMatchObject({ workId: instructionId, instructionId, actions: [], objective: { route: "OBJECTIVE", state: "continue" } });
-    expect(retry).toMatchObject({ workId: instructionId, instructionId, objective: { objectiveLoopId: first.objective!.objectiveLoopId } });
+    expect(first).toMatchObject({ executionModel: "OBJECTIVE", workId: instructionId, instructionId, actions: [], objectiveState: "continue" });
+    expect(retry).toMatchObject({ executionModel: "OBJECTIVE", workId: instructionId, instructionId, objectiveLoopId: first.objectiveLoopId });
     expect(plannerCalls).toBe(0);
     const aggregate = await workAggregate(TENANT_ID, instructionId);
     expect((aggregate!.work as { status: string; executionModel: string }).status).toBe("executing");
     expect((aggregate!.work as { executionModel: string }).executionModel).toBe("objective");
     expect(aggregate!.plannerAttempts).toHaveLength(0);
-    expect(aggregate!.objectiveLoop).toMatchObject({ id: first.objective!.objectiveLoopId, state: "continue" });
+    expect(aggregate!.objectiveLoop).toMatchObject({ id: first.objectiveLoopId, state: "continue" });
   });
 
   it("aggregates planner, action, workflow, and receipt evidence through durable foreign keys", async () => {

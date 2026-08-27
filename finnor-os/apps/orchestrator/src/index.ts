@@ -41,11 +41,12 @@ const server = createServer(async (req, res) => {
         if (!body.success) return send(400, { error: body.error.issues.map((i) => i.message).join("; ") });
         const { instruction, sessionId, ...ctx } = body.data;
         const result = await orchestrator.handleInstructionResult(instruction, ctx, { sessionId });
-        return send(result.objective ? 202 : 200, {
-          planned: result.actions,
+        return send(result.executionModel === "OBJECTIVE" ? 202 : 200, {
+          executionModel: result.executionModel,
+          actions: result.actions,
           ...(result.answer ? { answer: result.answer } : {}),
           ...(result.query ? { query: result.query } : {}),
-          ...(result.objective ? { objective: result.objective } : {}),
+          ...(result.objectiveLoopId ? { objectiveLoopId: result.objectiveLoopId, objectiveState: result.objectiveState } : {}),
           workId: result.workId,
           instructionId: result.instructionId,
         });

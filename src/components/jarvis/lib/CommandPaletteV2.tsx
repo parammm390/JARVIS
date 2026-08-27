@@ -11,6 +11,7 @@ import { ActionRenderer } from "../ui/renderers/ActionRenderer"
 import { ErrorState, EmptyState } from "../ui/primitives"
 import { Press } from "../ui/motion/primitives"
 import { useJarvis } from "./data-core"
+import { submitInstruction } from "../kernel/instruction"
 
 type Planned = { id: string; actionType: string; payload: Record<string, unknown>; status: string; createdAt: string }
 type Mode = "navigate" | "search" | "instruct"
@@ -82,8 +83,8 @@ export function CommandPaletteV2({
         onClose()
         return
       }
-      const result = await jarvisClient.submitAction({ instruction, channel: "console" }) as { planned: Planned[] }
-      const actions = result.planned ?? []
+      const result = await submitInstruction(instruction, { source: "typed" })
+      const actions = result.executionModel === "ATOMIC_EFFECT" ? result.actions as Planned[] : []
       setPlanned(actions)
       data.injectOptimisticPending(actions.map((action) => ({ ...action, summary: null, groundedPayload: undefined })))
     } catch (e) {

@@ -11,6 +11,8 @@ release_root="__FINNOR_RELEASE_ROOT__"
 current_link="__FINNOR_CURRENT_SYMLINK__"
 secret_env="__FINNOR_SECRET_ENV__"
 release_env="__FINNOR_RELEASE_ENV__"
+sse_port="__FINNOR_SSE_PORT__"
+sse_hostname="__FINNOR_SSE_HOSTNAME__"
 
 [[ "$release_sha" =~ ^[0-9a-f]{40}$ ]]
 remote_main=$(git ls-remote "https://github.com/${repository}.git" refs/heads/main | awk '{print $1}')
@@ -59,7 +61,10 @@ FINNOR_BUILD_ID=$build_id
 FINNOR_VERSION=$version
 FINNOR_ENVIRONMENT=production
 FINNOR_RELEASE_SOURCE=$release_source
-FINNOR_WORKER_CAPABILITIES=jobs,orchestration,computer,event-wake,connection-health
+FINNOR_WORKER_CAPABILITIES=jobs,orchestration,computer,event-wake,connection-health,realtime,sse
+FINNOR_SSE_GATEWAY_ENABLED=1
+SSE_PORT=$sse_port
+JARVIS_SSE_ALLOWED_ORIGINS=https://finnorai.com
 EOF
 install -o root -g finnor -m 0644 "$release_env_tmp" "$release_env"
 
@@ -119,6 +124,48 @@ if journalctl -u "$unit_name" --since "5 minutes ago" --no-pager -o cat | grep -
   echo "worker emitted a fatal startup error" >&2
   exit 1
 fi
+
+health_file=$(mktemp)
+for _ in $(seq 1 30); do
+  if curl --fail --silent --max-time 2 "http://127.0.0.1:${sse_port}/healthz" >"$health_file"; then break; fi
+  sleep 2
+done
+node -e 'const fs=require("fs");const h=JSON.parse(fs.readFileSync(process.argv[2],"utf8"));if(!h.ok||!h.realtime||h.release.commitSha!==process.argv[1])process.exit(1)' "$release_sha" "$health_file"
+rm -f "$health_file"
+
+# Public SSE ingress is HTTPS-only. Azure DNS/NSG are configured by the guarded
+# release workflow before this runs; this host terminates TLS and proxies the
+# authenticated stream to the worker's loopback port.
+if ! command -v nginx >/dev/null 2>&1 || ! command -v certbot >/dev/null 2>&1; then
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -qq
+  apt-get install -y -qq nginx certbot python3-certbot-nginx
+fi
+cat > /etc/nginx/sites-available/finnor-sse <<EOF
+server {
+  listen 80;
+  listen [::]:80;
+  server_name $sse_hostname;
+  location / {
+    proxy_pass http://127.0.0.1:$sse_port;
+    proxy_http_version 1.1;
+    proxy_set_header Host \$host;
+    proxy_set_header Authorization \$http_authorization;
+    proxy_set_header Last-Event-ID \$http_last_event_id;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+    proxy_buffering off;
+    proxy_cache off;
+    proxy_read_timeout 3600s;
+  }
+}
+EOF
+ln -sfn /etc/nginx/sites-available/finnor-sse /etc/nginx/sites-enabled/finnor-sse
+rm -f /etc/nginx/sites-enabled/default
+nginx -t
+systemctl enable --now nginx >/dev/null
+systemctl reload nginx
+certbot --nginx --non-interactive --agree-tos --register-unsafely-without-email --redirect -d "$sse_hostname"
+curl --fail --silent --max-time 15 "https://${sse_hostname}/healthz" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const h=JSON.parse(s);if(!h.ok||!h.realtime||h.release.commitSha!==process.argv[1])process.exit(1)})' "$release_sha"
 
 switched=0
 echo "FINNOR_AZURE_DEPLOY_OK $release_sha"

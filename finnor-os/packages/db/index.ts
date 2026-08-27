@@ -899,7 +899,7 @@ export async function transitionWork(
     failure?: unknown;
     recovery?: unknown;
     activeContext?: Record<string, unknown>;
-    executionModel?: "query" | "atomic_effect" | "objective";
+    executionModel?: "query" | "conversation" | "atomic_effect" | "objective";
     /** Optimistic generation fence for instruction-owned transitions. */
     expectedWorkInputId?: string;
   } = {},

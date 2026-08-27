@@ -16,11 +16,15 @@ describe("Phase 6 canonical thread submission", () => {
 
   it("continues the Postgres thread while keeping sessionId transport-only", async () => {
     jarvisPostMock.mockResolvedValue({
-      planned: [],
+      executionModel: "OBJECTIVE",
+      actions: [],
       workId: "work-1",
+      workInputId: "work-input-1",
       instructionId: "instruction-2",
       threadId: "canonical-thread-1",
-      assistantMessage: { id: "message-2", originalText: "Actual response", createdAt: "2026-08-25T00:00:00.000Z" },
+      objectiveLoopId: "objective-1",
+      objectiveState: "continue",
+      assistantMessage: { id: "message-2", originalText: "Actual response", createdAt: "2026-08-25T00:00:00.000Z", semanticKind: "ACKNOWLEDGEMENT" },
     })
 
     const result = await submitInstruction("Continue that.", {
@@ -38,7 +42,6 @@ describe("Phase 6 canonical thread submission", () => {
       workId: "work-1",
     }))
     expect(result).toMatchObject({
-      sessionId: "typed:transport-session",
       threadId: "canonical-thread-1",
       workId: "work-1",
       assistantMessage: { originalText: "Actual response" },

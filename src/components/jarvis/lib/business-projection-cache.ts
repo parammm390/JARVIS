@@ -24,9 +24,17 @@ export interface ProjectionDefinition<T> {
   owner: string
   staleMs: number
   pollMs?: number
+  /**
+   * Optional faster interval used only while the realtime transport is in its
+   * bounded polling fallback. The normal `pollMs` remains a slow sanity
+   * refresh so healthy SSE is the primary invalidation/fetch path.
+   */
+  fallbackPollMs?: number
   tags: readonly ProjectionTag[]
   load: () => Promise<T>
 }
+
+export type RealtimeProjectionStatus = "connecting" | "live" | "polling" | "paused"
 
 export type ProjectionStatus = "idle" | "loading" | "ready" | "error"
 
@@ -101,6 +109,7 @@ export class BusinessProjectionCache {
   private generation = 0
   private visible = true
   private online = true
+  private realtimeStatus: RealtimeProjectionStatus = "paused"
   private metrics: ProjectionMetrics = { ...EMPTY_METRICS }
   private metricsListeners = new Set<() => void>()
   private onMetrics?: (metrics: ProjectionMetrics) => void
@@ -296,6 +305,20 @@ export class BusinessProjectionCache {
     }
   }
 
+  /**
+   * Realtime owns freshness while it is healthy. A projection may opt into a
+   * bounded fast fallback interval, but only while the shared stream has
+   * explicitly declared `polling`; changing the status reschedules existing
+   * subscriptions immediately so a 2s timer cannot survive a recovered SSE.
+   */
+  setRealtimeStatus(status: RealtimeProjectionStatus): void {
+    if (this.realtimeStatus === status) return
+    this.realtimeStatus = status
+    for (const entry of this.entries.values()) {
+      if (entry.listeners.size > 0) this.schedule(entry)
+    }
+  }
+
   reset(): void {
     this.generation += 1
     for (const entry of this.entries.values()) this.clearTimer(entry)
@@ -307,8 +330,11 @@ export class BusinessProjectionCache {
   private schedule(entry: Entry): void {
     this.clearTimer(entry)
     if (!this.visible || !this.online || entry.listeners.size === 0 || !entry.definition.pollMs) return
-    const elapsed = entry.snapshot.updatedAt === null ? entry.definition.pollMs : Date.now() - entry.snapshot.updatedAt
-    const delay = Math.max(0, entry.definition.pollMs - elapsed)
+    const pollMs = this.realtimeStatus === "polling"
+      ? entry.definition.fallbackPollMs ?? entry.definition.pollMs
+      : entry.definition.pollMs
+    const elapsed = entry.snapshot.updatedAt === null ? pollMs : Date.now() - entry.snapshot.updatedAt
+    const delay = Math.max(0, pollMs - elapsed)
     entry.timer = setTimeout(() => {
       entry.timer = null
       void this.ensure(entry.id, true).catch(() => undefined)
