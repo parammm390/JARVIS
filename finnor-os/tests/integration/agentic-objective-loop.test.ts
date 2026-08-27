@@ -482,6 +482,14 @@ describe.skipIf(!available)("Upgrade 9 governed agentic objective loop", () => {
     const first = await startObjectiveRoute(routeRequest("/api/objectives", { objective: "Own this route-created business outcome.", channel: "text", idempotencyKey }));
     expect(first.status).toBe(202);
     const firstBody = await first.json() as { objective: { workId: string; objectiveLoopId: string } };
+    const canonicalJobKey = `objective:${firstBody.objective.objectiveLoopId}:revision:1:step:1`;
+    const [initialJob] = await withTenant(tenantId, (db) => db.select().from(jobs).where(eq(jobs.idempotencyKey, canonicalJobKey)));
+    expect(initialJob).toMatchObject({ status: "queued", lane: "interactive", priority: 100 });
+    expect((await workAggregate(tenantId, firstBody.objective.workId))!.work).toMatchObject({ status: "executing", executionModel: "objective" });
+
+    // Simulate the historical split-commit orphan: an idempotent replay must repair
+    // delivery instead of treating loop existence alone as healthy.
+    await withTenant(tenantId, (db) => db.delete(jobs).where(eq(jobs.id, initialJob!.id)));
     const replay = await startObjectiveRoute(routeRequest("/api/objectives", { objective: "Own this route-created business outcome.", channel: "text", idempotencyKey }));
     expect(replay.status).toBe(200);
     expect((await replay.json() as typeof firstBody & { objective: { duplicate: boolean } }).objective).toMatchObject({
@@ -489,6 +497,17 @@ describe.skipIf(!available)("Upgrade 9 governed agentic objective loop", () => {
       objectiveLoopId: firstBody.objective.objectiveLoopId,
       duplicate: true,
     });
+    const [repairedJob] = await withTenant(tenantId, (db) => db.select().from(jobs).where(eq(jobs.idempotencyKey, canonicalJobKey)));
+    expect(repairedJob).toMatchObject({ status: "queued" });
+
+    // A consumed delivery is immutable. Periodic recovery creates a new delivery
+    // identity rather than colliding with the terminal key forever.
+    await withTenant(tenantId, (db) => db.update(jobs).set({ status: "completed", completedAt: new Date() }).where(eq(jobs.id, repairedJob!.id)));
+    await recoverRunnableObjectives(tenantId);
+    const objectiveJobs = await withTenant(tenantId, (db) => db.select().from(jobs).where(eq(jobs.type, "run_objective_iteration")));
+    expect(objectiveJobs).toEqual(expect.arrayContaining([
+      expect.objectContaining({ idempotencyKey: `${canonicalJobKey}:recovery-after:${repairedJob!.id}`, status: "queued" }),
+    ]));
 
     const inspected = await getObjectiveRoute(routeRequest(`/api/works/${firstBody.objective.workId}/objective`), { params: Promise.resolve({ id: firstBody.objective.workId }) });
     expect(inspected.status).toBe(200);

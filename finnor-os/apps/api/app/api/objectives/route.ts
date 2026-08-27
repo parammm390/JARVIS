@@ -2,7 +2,7 @@ import { StartObjectiveSchema } from "@finnor/policy-schema";
 import { errorResponse, requireContext } from "../../../lib/auth";
 import { getOrchestrator } from "../../../lib/orchestrator";
 import { receiveWork, recordWorkResponse, transitionWork, workAggregate } from "@finnor/db";
-import { linkEmployeeConversationTurnToWork, OperatingInteractionContextError, parseObjectiveSuccessCondition, persistEmployeeAssistantTurn, prepareEmployeeConversationTurn, resolveOperatingInteractionContext } from "@finnor/orchestration";
+import { ensureObjectiveIterationDelivery, linkEmployeeConversationTurnToWork, OperatingInteractionContextError, parseObjectiveSuccessCondition, persistEmployeeAssistantTurn, prepareEmployeeConversationTurn, resolveOperatingInteractionContext } from "@finnor/orchestration";
 import { randomUUID } from "node:crypto";
 
 function intakeAuthorityContext(ctx: {
@@ -132,6 +132,10 @@ export async function POST(req: Request): Promise<Response> {
         replay = storedResponse(aggregate?.work && typeof aggregate.work === "object" ? (aggregate.work as { finalOutcome?: unknown }).finalOutcome : undefined);
       }
       if (replay && replay.objective && typeof replay.objective === "object" && !Array.isArray(replay.objective)) {
+        const objectiveLoopId = (replay.objective as { objectiveLoopId?: unknown }).objectiveLoopId;
+        if (typeof objectiveLoopId === "string") {
+          await ensureObjectiveIterationDelivery(ctx.tenantId, objectiveLoopId, ctx.correlationId);
+        }
         replay = {
           ...replay,
           objective: { ...(replay.objective as Record<string, unknown>), duplicate: true },
@@ -140,6 +144,7 @@ export async function POST(req: Request): Promise<Response> {
       }
       const objectiveLoop = aggregate?.objectiveLoop;
       if (objectiveLoop) {
+        await ensureObjectiveIterationDelivery(ctx.tenantId, objectiveLoop.id, ctx.correlationId);
         return Response.json({
           objective: {
             workId: received.workId,

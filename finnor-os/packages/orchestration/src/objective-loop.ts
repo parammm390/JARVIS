@@ -22,7 +22,7 @@ import {
   createWorkEventWaitTx,
   delegations,
   acknowledgementRequests,
-  enqueueJobAt,
+  jobs,
   receiveWork,
   tenantSettings,
   transitionWork,
@@ -39,6 +39,7 @@ import {
   pendingConfirmations,
   outcomePackRuns,
   tenantOutcomePackSettings,
+  type Db,
 } from "@finnor/db";
 import { executeOperationalQuery } from "@finnor/read-models";
 import { evaluateAuthority } from "@finnor/authority";
@@ -335,17 +336,81 @@ export class LLMObjectiveDecisionPlanner implements ObjectiveDecisionPlanner {
   }
 }
 
-async function scheduleIteration(loop: { id: string; tenantId: string; workId: string; stepCount: number; revision: number }, runAt: Date, correlationId?: string): Promise<void> {
-  const nextStep = loop.stepCount + 1;
-  await enqueueJobAt(
-    "run_objective_iteration",
-    { tenantId: loop.tenantId, workId: loop.workId, objectiveLoopId: loop.id, expectedRevision: loop.revision, expectedStepNumber: nextStep },
-    runAt,
-    `objective:${loop.id}:revision:${loop.revision}:step:${nextStep}`,
-    correlationId,
-    "interactive",
-    100,
+type SchedulableObjectiveLoop = { id: string; tenantId: string; workId: string; stepCount: number; revision: number };
+
+export function objectiveIterationJobKey(loopId: string, revision: number, stepNumber: number, recoveryAfterJobId?: string): string {
+  const canonical = `objective:${loopId}:revision:${revision}:step:${stepNumber}`;
+  return recoveryAfterJobId ? `${canonical}:recovery-after:${recoveryAfterJobId}` : canonical;
+}
+
+async function scheduleIterationTx(
+  db: Db,
+  loop: SchedulableObjectiveLoop,
+  runAt: Date,
+  correlationId?: string,
+): Promise<boolean> {
+  const [unfinished] = await db.select({ stepNumber: workObjectiveSteps.stepNumber }).from(workObjectiveSteps).where(and(
+    eq(workObjectiveSteps.tenantId, loop.tenantId),
+    eq(workObjectiveSteps.objectiveLoopId, loop.id),
+    sql`${workObjectiveSteps.completedAt} IS NULL`,
+  )).orderBy(desc(workObjectiveSteps.stepNumber)).limit(1);
+  const nextStep = unfinished?.stepNumber ?? loop.stepCount + 1;
+  const scope = and(
+    eq(jobs.type, "run_objective_iteration"),
+    sql`${jobs.payload}->>'objectiveLoopId'=${loop.id}`,
+    sql`${jobs.payload}->>'expectedRevision'=${String(loop.revision)}`,
+    sql`${jobs.payload}->>'expectedStepNumber'=${String(nextStep)}`,
   );
+  const [actionable] = await db.select({ id: jobs.id }).from(jobs).where(and(
+    scope,
+    inArray(jobs.status, ["queued", "running"]),
+  )).limit(1);
+  if (actionable) return false;
+
+  const [latestTerminal] = await db.select({ id: jobs.id }).from(jobs).where(scope)
+    .orderBy(sql`${jobs.completedAt} DESC NULLS LAST`, sql`${jobs.startedAt} DESC NULLS LAST`, desc(jobs.id))
+    .limit(1);
+  const payload = {
+    tenantId: loop.tenantId,
+    workId: loop.workId,
+    objectiveLoopId: loop.id,
+    expectedRevision: loop.revision,
+    expectedStepNumber: nextStep,
+    ...(correlationId ? { _correlationId: correlationId } : {}),
+  };
+  const [inserted] = await db.insert(jobs).values({
+    type: "run_objective_iteration",
+    payload,
+    runAt,
+    idempotencyKey: objectiveIterationJobKey(loop.id, loop.revision, nextStep, latestTerminal?.id),
+    lane: "interactive",
+    priority: 100,
+  }).onConflictDoNothing({ target: jobs.idempotencyKey }).returning({ id: jobs.id });
+  return Boolean(inserted);
+}
+
+async function scheduleIteration(loop: SchedulableObjectiveLoop, runAt: Date, correlationId?: string): Promise<void> {
+  await withTenant(loop.tenantId, async (db) => {
+    await db.execute(sql`SELECT id FROM ${workObjectiveLoops} WHERE ${workObjectiveLoops.tenantId}=${loop.tenantId} AND ${workObjectiveLoops.id}=${loop.id} FOR UPDATE`);
+    const [current] = await db.select().from(workObjectiveLoops).where(and(
+      eq(workObjectiveLoops.tenantId, loop.tenantId),
+      eq(workObjectiveLoops.id, loop.id),
+    )).limit(1);
+    if (!current || ["blocked", "completed", "failed", "cancelled"].includes(current.state)) return;
+    await scheduleIterationTx(db, current, runAt, correlationId);
+  });
+}
+
+export async function ensureObjectiveIterationDelivery(tenantId: string, objectiveLoopId: string, correlationId?: string): Promise<boolean> {
+  return withTenant(tenantId, async (db) => {
+    await db.execute(sql`SELECT id FROM ${workObjectiveLoops} WHERE ${workObjectiveLoops.tenantId}=${tenantId} AND ${workObjectiveLoops.id}=${objectiveLoopId} FOR UPDATE`);
+    const [loop] = await db.select().from(workObjectiveLoops).where(and(
+      eq(workObjectiveLoops.tenantId, tenantId),
+      eq(workObjectiveLoops.id, objectiveLoopId),
+    )).limit(1);
+    if (!loop || loop.state !== "continue") return false;
+    return scheduleIterationTx(db, loop, new Date(), correlationId);
+  });
 }
 
 export async function startWorkObjective(objective: string, ctx: TenantContext, options: StartObjectiveOptions = {}): Promise<StartObjectiveResult> {
@@ -389,15 +454,15 @@ export async function startWorkObjective(objective: string, ctx: TenantContext, 
   const successCondition = options.successCondition
     ? parseObjectiveSuccessCondition(options.successCondition)
     : defaultObjectiveSuccessCondition(objective);
-  const loop = await withTenant(ctx.tenantId, async (db) => {
+  const loopClaim = await withTenant(ctx.tenantId, async (db) => {
     await db.execute(sql`SELECT id FROM ${works} WHERE ${works.id}=${input.workId} AND ${works.tenantId}=${ctx.tenantId} FOR UPDATE`);
-    const [currentWork] = await db.select({ status: works.status }).from(works).where(and(eq(works.tenantId, ctx.tenantId), eq(works.id, input.workId))).limit(1);
+    const [currentWork] = await db.select().from(works).where(and(eq(works.tenantId, ctx.tenantId), eq(works.id, input.workId))).limit(1);
     const [latestInput] = await db.select({ id: workInputs.id }).from(workInputs)
       .where(and(eq(workInputs.tenantId, ctx.tenantId), eq(workInputs.workId, input.workId)))
       .orderBy(desc(workInputs.createdAt), desc(workInputs.id))
       .limit(1);
     if (!currentWork || latestInput?.id !== input.workInputId) throw new Error("Objective input is no longer the active Work input");
-    if (currentWork.status === "cancelled") {
+    if (currentWork.status === "cancelled" || currentWork.status === "completed") {
       const [latestEvent] = await db.select({ eventType: workEvents.eventType, payload: workEvents.payload }).from(workEvents)
         .where(and(eq(workEvents.tenantId, ctx.tenantId), eq(workEvents.workId, input.workId)))
         .orderBy(desc(workEvents.seq))
@@ -405,8 +470,9 @@ export async function startWorkObjective(objective: string, ctx: TenantContext, 
       const payload = isRecord(latestEvent?.payload) ? latestEvent.payload : {};
       const explicitlyContinued = (latestEvent?.eventType === "input_received" || latestEvent?.eventType === "recovery_input_received")
         && payload.workInputId === input.workInputId;
-      if (!explicitlyContinued) throw new Error("Cancelled Work cannot start an objective without a newer explicit input");
+      if (!explicitlyContinued) throw new Error(`Terminal Work cannot start an objective from ${currentWork.status} without a newer explicit input`);
     }
+    if (currentWork.status === "failed") throw new Error("Failed Work must enter explicit recovery before starting an objective");
     const [existing] = await db.select().from(workObjectiveLoops).where(and(eq(workObjectiveLoops.tenantId, ctx.tenantId), eq(workObjectiveLoops.workId, input.workId))).limit(1);
     if (existing) {
       if (existing.objective !== objective && !input.duplicate) throw new Error("Work already owns a different objective; use redirect explicitly");
@@ -418,7 +484,8 @@ export async function startWorkObjective(objective: string, ctx: TenantContext, 
           throw new Error("Work is already bound to a different Outcome Pack contract");
         }
       }
-      return existing;
+      if (existing.state === "continue") await scheduleIterationTx(db, existing, new Date(), ctx.correlationId);
+      return { loop: existing, created: false } as const;
     }
     if (options.outcomePack) {
       const [setting] = await db.select().from(tenantOutcomePackSettings).where(and(
@@ -460,19 +527,34 @@ export async function startWorkObjective(objective: string, ctx: TenantContext, 
         successCondition: options.outcomePack.successCondition,
       });
     }
-    return created;
+    const [latest] = await db.select({ maxSeq: sql<number>`coalesce(max(${workEvents.seq}), 0)::int` })
+      .from(workEvents).where(eq(workEvents.workId, input.workId));
+    await db.update(works).set({
+      status: "executing",
+      updatedAt: new Date(),
+      activeContext: options.activeContext
+        ? { ...(isRecord(currentWork.activeContext) ? currentWork.activeContext : {}), ...(options.activeContext as Record<string, unknown>) }
+        : currentWork.activeContext,
+      executionModel: "objective",
+    }).where(and(eq(works.tenantId, ctx.tenantId), eq(works.id, input.workId)));
+    await db.insert(workEvents).values({
+      tenantId: ctx.tenantId,
+      workId: input.workId,
+      seq: (latest?.maxSeq ?? 0) + 1,
+      eventType: "objective_accepted",
+      fromStatus: currentWork.status,
+      toStatus: "executing",
+      payload: {
+        objectiveLoopId: created.id,
+        objective,
+        successCondition: created.successCondition,
+        budgets: { maxSteps: created.maxSteps, maxActions: created.maxActions, maxQueries: created.maxQueries },
+      },
+    });
+    await scheduleIterationTx(db, created, new Date(), ctx.correlationId);
+    return { loop: created, created: true } as const;
   });
-  await transitionWork(ctx.tenantId, input.workId, "executing", "objective_accepted", {
-    objectiveLoopId: loop.id,
-    objective,
-    successCondition: loop.successCondition,
-    budgets: { maxSteps: loop.maxSteps, maxActions: loop.maxActions, maxQueries: loop.maxQueries },
-  }, {
-    executionModel: "objective",
-    ...(options.activeContext ? { activeContext: options.activeContext as Record<string, unknown> } : {}),
-    expectedWorkInputId: input.workInputId,
-  });
-  await scheduleIteration(loop, new Date(), ctx.correlationId);
+  const loop = loopClaim.loop;
   return { workId: input.workId, workInputId: input.workInputId, instructionId: input.instructionId, objectiveLoopId: loop.id, state: loop.state, duplicate: input.duplicate };
 }
 
