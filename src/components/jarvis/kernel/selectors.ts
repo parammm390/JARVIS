@@ -23,12 +23,6 @@ import type {
 import type { DeniedReason } from "../lib/data-core"
 import type { Truth, TruthSource } from "./types"
 
-/** Verified against `finnor-os/apps/api/app/api/actions/pending/route.ts:49` —
- *  `.limit(100)`. This is defect C-03: `/api/stats` counts every pending action,
- *  the list endpoint returns at most 100 of them, and the two were rendered as if
- *  they agreed. */
-export const PENDING_LIST_CAP = 100
-
 /** Everything a selector may read. Assembled by the caller from `useJarvis()` and
  *  `useJarvisAuth()`; the selectors themselves never touch either hook. */
 export interface SelectorInput {
@@ -166,21 +160,14 @@ function isClarification(action: { actionType: string }): boolean {
 /**
  * Pending approvals — and the resolution of defect C-03.
  *
- * Two endpoints answer this question and they can legitimately disagree:
- * `/api/stats` counts every pending row; `/api/actions/pending` returns at most
- * `PENDING_LIST_CAP`. Per §4.7:
- *   - list at the cap        -> `partial`, `capped` = what we hold, `value` = the
- *                               real total, rendered "100 of 137 shown"
- *   - counts agree           -> `known`
- *   - disagree below the cap -> `known` from `/api/stats` (the authority), plus a
- *                               dev warning naming both numbers
+ * `/api/stats` and the fully paginated `/api/actions/pending` projection answer
+ * this question independently. Counts agree as `known`; any disagreement keeps
+ * `/api/stats` authoritative and emits a development warning.
  *
  * `/api/stats`'s own `pending` count makes no clarification/business-action
  * distinction (it counts every `pending`-status row) — this selector subtracts
  * the clarifications actually visible in `pendingActions` from that total, so
- * the rendered number matches what §6④ requires. Below the row cap this is
- * exact; AT the cap, clarifications beyond the cap cannot be counted (the rows
- * aren't in hand) — a documented, narrow imprecision, not a silent one.
+ * the rendered number matches what §6④ requires.
  */
 export function selectPendingApprovals(input: SelectorInput): Truth<number> {
   const degraded = input.statsDegraded || input.pendingDegraded
@@ -192,21 +179,11 @@ export function selectPendingApprovals(input: SelectorInput): Truth<number> {
   const clarificationsHeld = input.pendingActions.filter(isClarification).length
   const held = rawHeld - clarificationsHeld
 
-  if (rawHeld >= PENDING_LIST_CAP) {
-    return {
-      status: "partial",
-      value: authoritative,
-      source: "api:stats",
-      atMs: input.now,
-      capped: held,
-    }
-  }
-
   const adjustedAuthoritative = Math.max(0, authoritative - clarificationsHeld)
 
   if (held !== adjustedAuthoritative && process.env.NODE_ENV !== "production") {
     console.warn(
-      `[jarvis/selectors] selectPendingApprovals disagreement below the cap: ` +
+      `[jarvis/selectors] selectPendingApprovals disagreement: ` +
         `/api/stats reports pending=${authoritative} (adjusted ${adjustedAuthoritative} for ${clarificationsHeld} clarification(s)), ` +
         `/api/actions/pending returned ${held} non-clarification rows. ` +
         `Rendering ${adjustedAuthoritative} (/api/stats is the authority per plan v3 §4.7).`,

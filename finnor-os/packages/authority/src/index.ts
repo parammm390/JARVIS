@@ -58,6 +58,13 @@ type Grant = {
   approvalChainId: string | null;
 };
 
+type LoadedAuthority = {
+  revision: number;
+  employee: { id: string; status: "active" | "suspended"; role: Role } | null;
+  assignments: Assignment[];
+  grants: Grant[];
+};
+
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
@@ -143,31 +150,24 @@ async function everyResourceAllows(
   return true;
 }
 
-async function loadAuthority(db: Db, tenantId: string, employeeId: string): Promise<{
-  revision: number;
-  employee: { id: string; status: "active" | "suspended"; role: Role } | null;
-  assignments: Assignment[];
-  grants: Grant[];
-}> {
+async function loadAuthorities(db: Db, tenantId: string, employeeIds: string[]): Promise<Map<string, LoadedAuthority>> {
+  const uniqueEmployeeIds = [...new Set(employeeIds)];
   const [state] = await db.select({ revision: authorityStates.revision }).from(authorityStates).where(eq(authorityStates.tenantId, tenantId)).limit(1);
-  const [employee] = await db.select({ id: users.id, status: users.status, role: users.role }).from(users).where(and(eq(users.tenantId, tenantId), eq(users.id, employeeId))).limit(1);
-  const assignmentRows = await db.select({ roleId: employeeRoleAssignments.roleId, roleKey: employeeRoles.key, resourceScope: employeeRoleAssignments.resourceScope })
+  if (uniqueEmployeeIds.length === 0) return new Map();
+  const employees = await db.select({ id: users.id, status: users.status, role: users.role }).from(users).where(and(eq(users.tenantId, tenantId), inArray(users.id, uniqueEmployeeIds)));
+  const assignmentsWithEmployee = await db.select({ employeeId: employeeRoleAssignments.employeeId, roleId: employeeRoleAssignments.roleId, roleKey: employeeRoles.key, resourceScope: employeeRoleAssignments.resourceScope })
     .from(employeeRoleAssignments)
     .innerJoin(employeeRoles, and(eq(employeeRoles.id, employeeRoleAssignments.roleId), eq(employeeRoles.tenantId, tenantId), eq(employeeRoles.active, true)))
     .where(and(
       eq(employeeRoleAssignments.tenantId, tenantId),
-      eq(employeeRoleAssignments.employeeId, employeeId),
+      inArray(employeeRoleAssignments.employeeId, uniqueEmployeeIds),
       eq(employeeRoleAssignments.active, true),
       lte(employeeRoleAssignments.effectiveFrom, new Date()),
       or(isNull(employeeRoleAssignments.expiresAt), sql`${employeeRoleAssignments.expiresAt} > now()`),
     ));
-  const roleIds = assignmentRows.map((row) => row.roleId);
+  const roleIds = [...new Set(assignmentsWithEmployee.map((row) => row.roleId))];
   const grantRows = roleIds.length === 0 ? [] : await db.select().from(roleAuthorityGrants).where(and(eq(roleAuthorityGrants.tenantId, tenantId), inArray(roleAuthorityGrants.roleId, roleIds)));
-  return {
-    revision: state?.revision ?? 1,
-    employee: employee ? { id: employee.id, status: employee.status, role: employee.role } : null,
-    assignments: assignmentRows.map((row) => ({ roleId: row.roleId, roleKey: row.roleKey, scope: scope(row.resourceScope) })),
-    grants: grantRows.map((row) => ({
+  const grants: Grant[] = grantRows.map((row) => ({
       id: row.id,
       roleId: row.roleId,
       capability: row.capability,
@@ -177,8 +177,26 @@ async function loadAuthority(db: Db, tenantId: string, employeeId: string): Prom
       maxRisk: row.maxRisk,
       approvalRequired: row.approvalRequired,
       approvalChainId: row.approvalChainId,
-    })),
-  };
+    }));
+  const employeeById = new Map(employees.map((employee) => [employee.id, employee] as const));
+  return new Map(uniqueEmployeeIds.map((employeeId) => {
+    const employee = employeeById.get(employeeId);
+    const assignments = assignmentsWithEmployee
+      .filter((row) => row.employeeId === employeeId)
+      .map((row) => ({ roleId: row.roleId, roleKey: row.roleKey, scope: scope(row.resourceScope) }));
+    const employeeRoleIds = new Set(assignments.map((assignment) => assignment.roleId));
+    return [employeeId, {
+      revision: state?.revision ?? 1,
+      employee: employee ? { id: employee.id, status: employee.status, role: employee.role } : null,
+      assignments,
+      grants: grants.filter((grant) => employeeRoleIds.has(grant.roleId)),
+    }] as const;
+  }));
+}
+
+async function loadAuthority(db: Db, tenantId: string, employeeId: string): Promise<LoadedAuthority> {
+  const authorities = await loadAuthorities(db, tenantId, [employeeId]);
+  return authorities.get(employeeId) ?? { revision: 1, employee: null, assignments: [], grants: [] };
 }
 
 async function eligibleApproversTx(
@@ -192,9 +210,11 @@ async function eligibleApproversTx(
   if (!step) return [];
   const capability = step.approverCapability.replaceAll("$action", actionType);
   const candidates = await db.select({ id: users.id }).from(users).where(and(eq(users.tenantId, tenantId), eq(users.status, "active")));
+  const authorities = await loadAuthorities(db, tenantId, candidates.map((candidate) => candidate.id));
   const eligible: string[] = [];
   for (const candidate of candidates) {
-    const auth = await loadAuthority(db, tenantId, candidate.id);
+    const auth = authorities.get(candidate.id);
+    if (!auth?.employee || auth.employee.status !== "active") continue;
     const matching = auth.grants.filter((grant) => capabilityMatches(grant.capability, capability) && grant.effect === "allow");
     let allowed = false;
     for (const grant of matching) {
@@ -569,15 +589,66 @@ export async function canExerciseAuthority(ctx: TenantContext, request: Authorit
   });
 }
 
-export async function eligibleApproversForAction(tenantId: string, actionId: string): Promise<string[]> {
+export async function eligibleApproversForActions(tenantId: string, actionIds: string[]): Promise<Record<string, string[]>> {
+  const uniqueActionIds = [...new Set(actionIds)];
+  if (uniqueActionIds.length === 0) return {};
   return withTenant(tenantId, async (db) => {
-    const [action] = await db.select({ actionType: domainActions.actionType, authorityContext: domainActions.authorityContext }).from(domainActions).where(and(eq(domainActions.tenantId, tenantId), eq(domainActions.id, actionId))).limit(1);
-    const [request] = await db.select().from(authorityApprovalRequests).where(and(eq(authorityApprovalRequests.tenantId, tenantId), eq(authorityApprovalRequests.domainActionId, actionId), eq(authorityApprovalRequests.status, "pending"))).limit(1);
-    if (!action || !request) return [];
-    const context = record(action.authorityContext);
-    const resources = Array.isArray(context.resources) ? context.resources as AuthorityResource[] : [{ type: "*" }];
-    return eligibleApproversTx(db, tenantId, request.approvalChainId, action.actionType, resources);
+    const actions = await db.select({ id: domainActions.id, actionType: domainActions.actionType, authorityContext: domainActions.authorityContext })
+      .from(domainActions)
+      .where(and(eq(domainActions.tenantId, tenantId), inArray(domainActions.id, uniqueActionIds)));
+    const requests = await db.select({ id: authorityApprovalRequests.id, domainActionId: authorityApprovalRequests.domainActionId, currentStep: authorityApprovalRequests.currentStep })
+      .from(authorityApprovalRequests)
+      .where(and(
+        eq(authorityApprovalRequests.tenantId, tenantId),
+        eq(authorityApprovalRequests.status, "pending"),
+        inArray(authorityApprovalRequests.domainActionId, uniqueActionIds),
+      ));
+    const requestIds = requests.map((request) => request.id);
+    const steps = requestIds.length === 0 ? [] : await db.select({ approvalRequestId: authorityApprovalRequestSteps.approvalRequestId, sequence: authorityApprovalRequestSteps.sequence, approverCapability: authorityApprovalRequestSteps.approverCapability })
+      .from(authorityApprovalRequestSteps)
+      .where(and(eq(authorityApprovalRequestSteps.tenantId, tenantId), inArray(authorityApprovalRequestSteps.approvalRequestId, requestIds)));
+    const candidates = await db.select({ id: users.id }).from(users).where(and(eq(users.tenantId, tenantId), eq(users.status, "active")));
+    const authorities = await loadAuthorities(db, tenantId, candidates.map((candidate) => candidate.id));
+    const requestByActionId = new Map(requests.map((request) => [request.domainActionId, request] as const));
+    const stepByRequestId = new Map(steps.map((step) => [`${step.approvalRequestId}:${step.sequence}`, step] as const));
+    const scopeCache = new Map<string, boolean>();
+    const result: Record<string, string[]> = Object.fromEntries(uniqueActionIds.map((actionId) => [actionId, []]));
+
+    for (const action of actions) {
+      const request = requestByActionId.get(action.id);
+      const step = request ? stepByRequestId.get(`${request.id}:${request.currentStep}`) : undefined;
+      if (!step) continue;
+      const capability = step.approverCapability.replaceAll("$action", action.actionType);
+      const context = record(action.authorityContext);
+      const resources = Array.isArray(context.resources) ? context.resources as AuthorityResource[] : [{ type: "*" }];
+      for (const candidate of candidates) {
+        const auth = authorities.get(candidate.id);
+        if (!auth?.employee || auth.employee.status !== "active") continue;
+        const matching = auth.grants.filter((grant) => capabilityMatches(grant.capability, capability) && grant.effect === "allow");
+        let allowed = false;
+        for (const grant of matching) {
+          const assignment = auth.assignments.find((row) => row.roleId === grant.roleId);
+          if (!assignment) continue;
+          const everyResource = await everyResourceAllows(resources, async (resource) => {
+            if (!resourceTypeMatches(grant.resourceType, resource.type)) return false;
+            const cacheKey = `${candidate.id}:${assignment.roleId}:${resource.type}:${resource.id ?? "*"}`;
+            if (scopeCache.has(cacheKey)) return scopeCache.get(cacheKey)!;
+            const scopeAllowed = await scopeAllows(db, tenantId, candidate.id, assignment, resource);
+            scopeCache.set(cacheKey, scopeAllowed);
+            return scopeAllowed;
+          });
+          if (everyResource) { allowed = true; break; }
+        }
+        if (allowed) result[action.id]!.push(candidate.id);
+      }
+    }
+    return result;
   });
+}
+
+export async function eligibleApproversForAction(tenantId: string, actionId: string): Promise<string[]> {
+  const eligible = await eligibleApproversForActions(tenantId, [actionId]);
+  return eligible[actionId] ?? [];
 }
 
 /** Used by durable workers immediately before effects. It rejects stale/revoked

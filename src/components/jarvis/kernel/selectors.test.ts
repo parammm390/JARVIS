@@ -1,15 +1,13 @@
-// Plan v3 P1.T6 evidence: "selector unit tests incl. the `partial` cap and
-// disagreement cases".
+// Plan v3 P1.T6 evidence: selector disagreement and truth-state cases.
 //
 // These tests are the regression net under defect C-01 (a 401 rendering as a
 // confident $0) and C-03 (an unbounded /api/stats count rendered as if it agreed
-// with a .limit(100) list). They assert on statuses, not just numbers — the status
+// with an incomplete list). They assert on statuses, not just numbers — the status
 // IS the product requirement.
 
 import { describe, expect, it, vi } from "vitest"
 import {
   mapTruth,
-  PENDING_LIST_CAP,
   selectCollectedUsd,
   selectEventsToday,
   selectFirstName,
@@ -214,24 +212,14 @@ describe("selectPendingApprovals (defect C-03)", () => {
     expect(t).toMatchObject({ value: 3, source: "api:stats" })
   })
 
-  it("list at the cap -> partial, rendered as '100 of 137'", () => {
+  it("a large fully paginated list remains known", () => {
     const t = selectPendingApprovals(
-      input({ stats: { pending: 137, blocked: 0, recentActions: [] }, pendingActions: rows(PENDING_LIST_CAP) }),
+      input({ stats: { pending: 137, blocked: 0, recentActions: [] }, pendingActions: rows(137) }),
     )
-    expect(t).toEqual({
-      status: "partial",
-      value: 137,
-      source: "api:stats",
-      atMs: NOW,
-      capped: 100,
-    })
+    expect(t).toMatchObject({ status: "known", value: 137, source: "api:stats" })
   })
 
-  it("the cap is 100, matching actions/pending/route.ts:49", () => {
-    expect(PENDING_LIST_CAP).toBe(100)
-  })
-
-  it("disagreement BELOW the cap -> known from /api/stats, with a dev warning naming both", () => {
+  it("disagreement -> known from /api/stats, with a dev warning naming both", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
     const t = selectPendingApprovals(
       input({ stats: { pending: 137, blocked: 0, recentActions: [] }, pendingActions: rows(12) }),
@@ -449,16 +437,15 @@ describe("mapTruth", () => {
     }
   })
 
-  it("preserves the partial cap through a projection", () => {
+  it("preserves known truth through a projection", () => {
     const t = selectPendingApprovals(
-      input({ stats: { pending: 137, blocked: 0, recentActions: [] }, pendingActions: rows(PENDING_LIST_CAP) }),
+      input({ stats: { pending: 137, blocked: 0, recentActions: [] }, pendingActions: rows(137) }),
     )
     expect(mapTruth(t, (n) => n * 2)).toEqual({
-      status: "partial",
+      status: "known",
       value: 274,
       source: "api:stats",
       atMs: NOW,
-      capped: 100,
     })
   })
 })

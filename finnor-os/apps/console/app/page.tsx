@@ -8,7 +8,7 @@
 // placeholder on its own failure — never blanks the whole page.
 
 import { useCallback, useRef, useState } from "react";
-import { api } from "../lib/api";
+import { allPendingActions, api } from "../lib/api";
 import { usePoll } from "../lib/use-poll";
 import { useCountUp } from "../lib/use-count-up";
 import Timeline, { relativeTime, type BusinessEvent } from "../components/Timeline";
@@ -120,8 +120,8 @@ export default function Home() {
   const loadStats = useCallback(async () => {
     try {
       const [pending, blocked, comms, audit, sla] = await Promise.all([
-        api<{ actions: unknown[] }>("/api/actions/pending"),
-        api<{ actions: unknown[] }>("/api/actions/pending?filter=blocked"),
+        allPendingActions("pending"),
+        allPendingActions("blocked"),
         api<{ outbox: unknown[] }>("/api/comms"),
         api<{ entries: Array<{ step: string; actionType: string; timestamp: string }> }>("/api/audit?limit=6"),
         api<{ view: string; data: { stuckWorkflowRuns: number; openReconciliationCases: number } }>("/api/read-models/sla-breaches").catch(() => null),

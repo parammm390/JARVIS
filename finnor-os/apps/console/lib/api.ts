@@ -22,3 +22,25 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (!res.ok) throw new Error(body.error ?? `Request failed (${res.status})`);
   return body;
 }
+
+export async function allPendingActions<T>(filter: "pending" | "blocked" = "pending"): Promise<{ actions: T[]; complete: true }> {
+  const actions: T[] = [];
+  let cursor: string | undefined;
+  for (let pageNumber = 0; pageNumber < 10_000; pageNumber += 1) {
+    const params = new URLSearchParams({ filter, limit: "100" });
+    if (cursor) params.set("cursor", cursor);
+    const response = await api<{
+      actions: T[];
+      page?: { hasMore: boolean; nextCursor: string | null };
+    }>(`/api/actions/pending?${params.toString()}`);
+    actions.push(...response.actions);
+    if (!response.page) {
+      if (response.actions.length >= 100) throw new Error("Pending approval response did not prove completeness");
+      return { actions, complete: true };
+    }
+    if (!response.page.hasMore) return { actions, complete: true };
+    if (!response.page.nextCursor || response.page.nextCursor === cursor) throw new Error("Pending approval pagination did not advance");
+    cursor = response.page.nextCursor;
+  }
+  throw new Error("Pending approval pagination exceeded its safety bound");
+}

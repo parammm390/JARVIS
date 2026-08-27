@@ -4,7 +4,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api } from "../../lib/api";
+import { allPendingActions, api } from "../../lib/api";
 
 interface PendingAction {
   id: string;
@@ -26,7 +26,7 @@ export default function ConfirmPage() {
 
   const load = useCallback(async () => {
     try {
-      const res = await api<{ actions: PendingAction[] }>(`/api/actions/pending?filter=${filter}`);
+      const res = await allPendingActions<PendingAction>(filter);
       // Quiet merge: never re-render cards the user is mid-decision on.
       setActions(res.actions.filter((a) => !inflight.current.has(a.id)));
       setError(null);

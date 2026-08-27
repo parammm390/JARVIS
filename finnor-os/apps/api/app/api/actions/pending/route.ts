@@ -15,11 +15,11 @@
 // is scoped to price-book comparison rather than a generic all-fields diff.
 
 import { withTenant, domainActions, businessEffects, decisionReceipts, actionLog, priceBookItems } from "@finnor/db";
-import { inArray, desc, eq, and } from "drizzle-orm";
+import { inArray, desc, eq, and, lt, or } from "drizzle-orm";
 import { requireContext, errorResponse } from "../../../../lib/auth";
 import { extractPriceCandidates, buildPriceBookProvenance } from "../../../../lib/price-book-provenance";
 import { extractPredicted } from "../../../../lib/predicted-outcome";
-import { eligibleApproversForAction } from "@finnor/authority";
+import { eligibleApproversForActions } from "@finnor/authority";
 
 type ReceiptSummary = {
   id: string;
@@ -33,11 +33,39 @@ type ReceiptSummary = {
 
 type CriticSummary = { flagged: boolean; reason: string };
 
+type PendingCursor = { createdAt: string; id: string; filter: "pending" | "blocked" };
+
+function parseLimit(value: string | null): number | null {
+  if (value === null) return 100;
+  const limit = Number(value);
+  return Number.isInteger(limit) && limit >= 1 && limit <= 100 ? limit : null;
+}
+
+function decodeCursor(value: string | null, filter: PendingCursor["filter"]): PendingCursor | null | undefined {
+  if (value === null) return null;
+  try {
+    const parsed = JSON.parse(Buffer.from(value, "base64url").toString("utf8")) as Partial<PendingCursor>;
+    if (parsed.filter !== filter || typeof parsed.id !== "string" || typeof parsed.createdAt !== "string") return undefined;
+    if (Number.isNaN(new Date(parsed.createdAt).getTime())) return undefined;
+    return parsed as PendingCursor;
+  } catch {
+    return undefined;
+  }
+}
+
+function encodeCursor(row: { createdAt: Date; id: string }, filter: PendingCursor["filter"]): string {
+  return Buffer.from(JSON.stringify({ createdAt: row.createdAt.toISOString(), id: row.id, filter } satisfies PendingCursor)).toString("base64url");
+}
+
 export async function GET(req: Request): Promise<Response> {
   try {
     const ctx = await requireContext(req);
     const url = new URL(req.url);
-    const filter = url.searchParams.get("filter");
+    const filter = url.searchParams.get("filter") === "blocked" ? "blocked" : "pending";
+    const limit = parseLimit(url.searchParams.get("limit"));
+    const cursor = decodeCursor(url.searchParams.get("cursor"), filter);
+    if (limit === null) return Response.json({ error: "limit must be an integer from 1 to 100" }, { status: 400 });
+    if (cursor === undefined) return Response.json({ error: "cursor is invalid for this approval filter" }, { status: 400 });
     const statuses =
       filter === "blocked"
         ? (["blocked_integration_unavailable", "needs_human_review"] as const)
@@ -46,12 +74,21 @@ export async function GET(req: Request): Promise<Response> {
       db
         .select()
         .from(domainActions)
-        .where(inArray(domainActions.status, [...statuses]))
-        .orderBy(desc(domainActions.createdAt))
-        .limit(100),
+        .where(and(
+          eq(domainActions.tenantId, ctx.tenantId),
+          inArray(domainActions.status, [...statuses]),
+          cursor ? or(
+            lt(domainActions.createdAt, new Date(cursor.createdAt)),
+            and(eq(domainActions.createdAt, new Date(cursor.createdAt)), lt(domainActions.id, cursor.id)),
+          ) : undefined,
+        ))
+        .orderBy(desc(domainActions.createdAt), desc(domainActions.id))
+        .limit(limit + 1),
     );
+    const hasMore = rows.length > limit;
+    const pageRows = hasMore ? rows.slice(0, limit) : rows;
 
-    const actionIds = rows.map((r) => r.id);
+    const actionIds = pageRows.map((r) => r.id);
     const effectRows = actionIds.length > 0 ? await withTenant(ctx.tenantId, (db) => db.select().from(businessEffects).where(and(eq(businessEffects.tenantId, ctx.tenantId), inArray(businessEffects.domainActionId, actionIds)))) : [];
     const effectByActionId = new Map(effectRows.flatMap((row) => row.domainActionId ? [[row.domainActionId, row] as const] : []));
     // A domain action can have more than one receipt (each reflection-retry step opens
@@ -82,7 +119,7 @@ export async function GET(req: Request): Promise<Response> {
     const criticByActionId = new Map<string, CriticSummary>();
     const allSkus = new Set<string>();
     const candidatesByActionId = new Map<string, ReturnType<typeof extractPriceCandidates>>();
-    for (const r of rows) {
+    for (const r of pageRows) {
       const candidates = extractPriceCandidates(r.payload);
       if (candidates.length > 0) {
         candidatesByActionId.set(r.id, candidates);
@@ -119,8 +156,8 @@ export async function GET(req: Request): Promise<Response> {
           )
         : [];
 
-    const approversByAction = new Map(await Promise.all(rows.map(async (row) => [row.id, await eligibleApproversForAction(ctx.tenantId, row.id)] as const)));
-    const actions = rows.map((r) => ({
+    const approversByAction = new Map(Object.entries(await eligibleApproversForActions(ctx.tenantId, actionIds)));
+    const actions = pageRows.map((r) => ({
       ...r,
       receipt: receiptByActionId.get(r.id) ?? null,
       businessEffect: effectByActionId.get(r.id)?.effect ?? null,
@@ -136,7 +173,16 @@ export async function GET(req: Request): Promise<Response> {
       // ran for this action type — never a fabricated prediction.
       predicted: extractPredicted(r.predictedReceipt),
     }));
-    return Response.json({ actions });
+    const last = pageRows.at(-1);
+    return Response.json({
+      actions,
+      page: {
+        limit,
+        hasMore,
+        complete: !hasMore,
+        nextCursor: hasMore && last ? encodeCursor(last, filter) : null,
+      },
+    });
   } catch (err) {
     return errorResponse(err);
   }
