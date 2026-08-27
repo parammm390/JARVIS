@@ -63,7 +63,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         .where(and(
           eq(businessOperations.tenantId, ctx.tenantId),
           eq(businessOperations.workId, instruction.workId),
-          inArray(businessOperations.status, ["awaiting_approval", "queued", "running"]),
+          inArray(businessOperations.status, ["awaiting_approval", "queued", "running", "needs_human_review"]),
         )) : [];
       if (activeOperations.length > 0) {
         const reconciliationRequired = activeOperations.some((operation) => operation.status === "running");
@@ -80,7 +80,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         }).where(and(
           eq(businessOperations.tenantId, ctx.tenantId),
           inArray(businessOperations.id, activeOperations.map((operation) => operation.id)),
-          inArray(businessOperations.status, ["awaiting_approval", "queued", "running"]),
+          inArray(businessOperations.status, ["awaiting_approval", "queued", "running", "needs_human_review"]),
         ));
       }
       return { instruction, actions, activeOperations };

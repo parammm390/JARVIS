@@ -155,6 +155,11 @@ async function operationWorkStillActive(operation: OperationRow): Promise<boolea
       inArray(businessOperations.status, ["queued", "running"]),
     )).returning({ id: businessOperations.id });
     if (cancelled) {
+      await db.update(domainActions).set({ status: "rejected", executionStartedAt: null }).where(and(
+        eq(domainActions.tenantId, operation.tenantId),
+        eq(domainActions.id, operation.domainActionId),
+        inArray(domainActions.status, ["pending", "approved", "executing", "needs_human_review"]),
+      ));
       await appendEventTx(db, {
         tenantId: operation.tenantId,
         operationId: operation.id,

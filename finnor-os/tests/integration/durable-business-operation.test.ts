@@ -151,7 +151,7 @@ describe.skipIf(!available)("Upgrade 6 durable customer win-back operation", () 
     expect(second).toMatchObject({ retried: 0, duplicate: true });
     const after = await withTenant(tenantId, (db) => db.select().from(businessOperationTargets).where(and(eq(businessOperationTargets.operationId, operationId), inArray(businessOperationTargets.targetId, [validHouseholdId, invalidHouseholdId]))));
     expect(after.find((target) => target.targetId === validHouseholdId)?.status).toBe("succeeded");
-    expect(after.find((target) => target.targetId === invalidHouseholdId)).toMatchObject({ status: "retry", attempts: 0 });
+    expect(after.find((target) => target.targetId === invalidHouseholdId)).toMatchObject({ status: "retry", attempts: 1, maxAttempts: 4 });
   });
 
   it("reserves only available calling capacity and durably schedules the remainder", async () => {

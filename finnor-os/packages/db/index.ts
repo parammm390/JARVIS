@@ -460,11 +460,23 @@ export async function retryBusinessOperation(params: {
 }): Promise<{ retried: number; duplicate: boolean; workId: string | null; actionType: string }> {
   if (!params.recoveryKey.trim() || params.recoveryKey.length > 200) throw new Error("recoveryKey must be non-empty and at most 200 characters");
   return withTenant(params.tenantId, async (db) => {
+    await db.execute(sql`SELECT id FROM ${schema.businessOperations} WHERE ${schema.businessOperations.tenantId}=${params.tenantId} AND ${schema.businessOperations.id}=${params.operationId} FOR UPDATE`);
     const [operation] = await db.select().from(schema.businessOperations).where(and(
       eq(schema.businessOperations.tenantId, params.tenantId),
       eq(schema.businessOperations.id, params.operationId),
     )).limit(1);
     if (!operation) throw new Error("Business operation not found");
+    if (operation.workId) {
+      await db.execute(sql`SELECT id FROM ${schema.works} WHERE ${schema.works.tenantId}=${params.tenantId} AND ${schema.works.id}=${operation.workId} FOR UPDATE`);
+      const [work] = await db.select({ status: schema.works.status }).from(schema.works).where(and(
+        eq(schema.works.tenantId, params.tenantId),
+        eq(schema.works.id, operation.workId),
+      )).limit(1);
+      if (!work) throw new Error("Business operation Work not found");
+      if (work.status === "cancelled" || work.status === "completed") {
+        throw new Error(`Business operation belongs to terminal ${work.status} Work; it is not recoverable`);
+      }
+    }
     const [action] = await db.select({ actionType: schema.domainActions.actionType }).from(schema.domainActions).where(and(
       eq(schema.domainActions.tenantId, params.tenantId),
       eq(schema.domainActions.id, operation.domainActionId),
@@ -478,7 +490,10 @@ export async function retryBusinessOperation(params: {
     }
     const targets = await db.update(schema.businessOperationTargets).set({
       status: "retry",
-      attempts: 0,
+      // Attempts are a permanent delivery generation. Keeping them monotonic means
+      // the dispatcher cannot collide with a completed target job from an earlier
+      // human-authorized recovery. Grant a fresh three-attempt budget above history.
+      maxAttempts: sql`${schema.businessOperationTargets.attempts} + 3`,
       jobKey: null,
       nextAttemptAt: new Date(),
       leaseExpiresAt: null,
