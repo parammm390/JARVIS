@@ -79,6 +79,6 @@ describe.skipIf(!available)("durable Work APIs", () => {
       body: JSON.stringify({ idempotencyKey: "completed-work-retry" }),
     }), { params: Promise.resolve({ id: received.workId }) });
     expect(response.status).toBe(409);
-    expect((await response.json()).error).toMatch(/only failed or recovering Work/i);
+    expect((await response.json()).error).toMatch(/only failed Work/i);
   });
 });

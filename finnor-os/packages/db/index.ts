@@ -1023,6 +1023,84 @@ export async function recordWorkResponse(tenantId: string, workId: string, respo
   });
 }
 
+const WORK_RECOVERY_CLAIM_TTL_MS = 15 * 60_000;
+
+/** Atomically leases failed Work for one recovery request and returns the exact input
+ * that lease owns. Distinct HTTP idempotency keys therefore cannot both reach the
+ * planner. A process that dies before orchestration advances the Work can be taken
+ * over only after the bounded lease expires. */
+export async function claimWorkRecovery(params: {
+  tenantId: string;
+  workId: string;
+  attemptKey: string;
+  requestedBy: string;
+}): Promise<{
+  claimed: boolean;
+  activeAttemptKey: string;
+  status: "claimed" | "planning" | "succeeded" | "failed" | "timed_out";
+  input: typeof schema.workInputs.$inferSelect | null;
+}> {
+  return withTenant(params.tenantId, async (db) => {
+    await db.execute(sql`SELECT id FROM ${schema.works} WHERE ${schema.works.id}=${params.workId} AND ${schema.works.tenantId}=${params.tenantId} FOR UPDATE`);
+    const [work] = await db.select().from(schema.works).where(and(
+      eq(schema.works.id, params.workId),
+      eq(schema.works.tenantId, params.tenantId),
+    )).limit(1);
+    if (!work) throw new Error("Work not found");
+
+    const [existingAttempt] = await db.select({ attemptKey: schema.workPlannerAttempts.attemptKey, status: schema.workPlannerAttempts.status })
+      .from(schema.workPlannerAttempts)
+      .where(and(
+        eq(schema.workPlannerAttempts.workId, params.workId),
+        eq(schema.workPlannerAttempts.attemptKey, params.attemptKey),
+      ))
+      .limit(1);
+    if (existingAttempt) return { claimed: false, activeAttemptKey: existingAttempt.attemptKey, status: existingAttempt.status, input: null };
+
+    const previousRecovery = jsonObject(work.recovery);
+    const activeAttemptKey = typeof previousRecovery.attemptKey === "string" ? previousRecovery.attemptKey : "";
+    const claimedAtMs = typeof previousRecovery.claimedAt === "string" ? Date.parse(previousRecovery.claimedAt) : Number.NaN;
+    const stale = !Number.isFinite(claimedAtMs) || Date.now() - claimedAtMs >= WORK_RECOVERY_CLAIM_TTL_MS;
+    if (work.status === "recovery" && !stale) {
+      return { claimed: false, activeAttemptKey: activeAttemptKey || params.attemptKey, status: "planning", input: null };
+    }
+    if (work.status !== "failed" && work.status !== "recovery") {
+      throw new WorkTransitionConflictError(`Work ${params.workId} is ${work.status}; only failed Work can be retried`);
+    }
+
+    const [input] = await db.select().from(schema.workInputs).where(and(
+      eq(schema.workInputs.tenantId, params.tenantId),
+      eq(schema.workInputs.workId, params.workId),
+    )).orderBy(desc(schema.workInputs.createdAt), desc(schema.workInputs.id)).limit(1);
+    if (!input) throw new WorkTransitionConflictError("Work has no durable input to retry");
+
+    const now = new Date();
+    const [latest] = await db.select({ maxSeq: sql<number>`coalesce(max(${schema.workEvents.seq}), 0)::int` })
+      .from(schema.workEvents).where(eq(schema.workEvents.workId, params.workId));
+    await db.update(schema.works).set({
+      status: "recovery",
+      recovery: {
+        status: "claimed",
+        requestedBy: params.requestedBy,
+        attemptKey: params.attemptKey,
+        claimedAt: now.toISOString(),
+        ...(work.status === "recovery" ? { reclaimedFrom: activeAttemptKey || null } : {}),
+      },
+      updatedAt: now,
+    }).where(and(eq(schema.works.id, params.workId), eq(schema.works.tenantId, params.tenantId)));
+    await db.insert(schema.workEvents).values({
+      tenantId: params.tenantId,
+      workId: params.workId,
+      seq: (latest?.maxSeq ?? 0) + 1,
+      eventType: work.status === "recovery" ? "retry_claim_recovered" : "retry_requested",
+      fromStatus: work.status,
+      toStatus: "recovery",
+      payload: { requestedBy: params.requestedBy, attemptKey: params.attemptKey, workInputId: input.id },
+    });
+    return { claimed: true, activeAttemptKey: params.attemptKey, status: "claimed", input };
+  });
+}
+
 export async function beginWorkPlannerAttempt(params: {
   tenantId: string;
   workId: string;

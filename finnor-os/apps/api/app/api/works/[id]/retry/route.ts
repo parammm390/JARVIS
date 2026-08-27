@@ -1,4 +1,4 @@
-import { latestWorkInput, transitionWork, workAggregate } from "@finnor/db";
+import { claimWorkRecovery, WorkTransitionConflictError, workAggregate } from "@finnor/db";
 import { z } from "zod";
 import { errorResponse, requireContext } from "../../../../../lib/auth";
 import { getOrchestrator } from "../../../../../lib/orchestrator";
@@ -17,21 +17,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     requestContext = ctx;
     const body = RetryWorkSchema.safeParse(await req.json().catch(() => ({})));
     if (!body.success) return Response.json({ error: body.error.issues.map((issue) => issue.message).join("; ") }, { status: 400 });
-    const aggregate = await workAggregate(ctx.tenantId, id);
-    if (!aggregate) return Response.json({ error: "Work not found" }, { status: 404 });
-    const work = aggregate.work as { status?: string };
-    if (work.status !== "failed" && work.status !== "recovery") {
-      return Response.json({ error: `Work is ${work.status ?? "unknown"}; only failed or recovering Work can be retried` }, { status: 409 });
-    }
     const attemptKey = `retry:${body.data.idempotencyKey}`;
-    const prior = (aggregate.plannerAttempts as Array<{ attemptKey: string; status: string }>).find((attempt) => attempt.attemptKey === attemptKey);
-    if (prior) return Response.json({ work: aggregate, duplicate: true }, { status: prior.status === "planning" ? 202 : 200 });
-
-    const input = await latestWorkInput(ctx.tenantId, id);
-    if (!input) return Response.json({ error: "Work has no durable input to retry" }, { status: 409 });
-    await transitionWork(ctx.tenantId, id, "recovery", "retry_requested", { requestedBy: ctx.userId, attemptKey }, {
-      recovery: { status: "requested", requestedBy: ctx.userId, attemptKey, at: new Date().toISOString() },
+    const claim = await claimWorkRecovery({
+      tenantId: ctx.tenantId,
+      workId: id,
+      requestedBy: ctx.userId,
+      attemptKey,
     });
+    if (!claim.claimed) return Response.json({
+      work: await workAggregate(ctx.tenantId, id),
+      duplicate: true,
+      activeAttemptKey: claim.activeAttemptKey,
+    }, { status: claim.status === "planning" ? 202 : 200 });
+    const input = claim.input!;
     const result = await getOrchestrator().handleInstructionResult(input.instructionText, ctx, {
       workId: id,
       workInputId: input.id,
@@ -51,6 +49,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (err instanceof Error && err.name === "PlannerAttemptAlreadyClaimedError" && requestContext && workId) {
       return Response.json({ work: await workAggregate(requestContext.tenantId, workId), duplicate: true }, { status: 202 });
     }
+    if (err instanceof WorkTransitionConflictError) return Response.json({ error: err.message }, { status: 409 });
+    if (err instanceof Error && err.message === "Work not found") return Response.json({ error: err.message }, { status: 404 });
     return errorResponse(err);
   }
 }

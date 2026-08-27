@@ -4,6 +4,7 @@ import pg from "pg";
 import { migrate } from "../../packages/db/migrate";
 import {
   beginWorkPlannerAttempt,
+  claimWorkRecovery,
   closePool,
   domainActions,
   finishWorkPlannerAttempt,
@@ -144,6 +145,25 @@ describe.skipIf(!available)("Upgrade 2 durable Work kernel", () => {
     await transitionWork(TENANT_ID, received.workId, "recovery", "retry_requested", { requestedBy: "test" });
     await transitionWork(TENANT_ID, received.workId, "ready", "recovery_ready");
     expect((await workAggregate(TENANT_ID, received.workId))!.work).toMatchObject({ status: "ready" });
+  });
+
+  it("allows only one concurrent recovery lease across distinct request keys", async () => {
+    const received = await receiveWork({
+      tenantId: TENANT_ID,
+      instruction: "Exercise concurrent recovery claims",
+      instructionId: randomUUID(),
+      channel: "text",
+    });
+    await transitionWork(TENANT_ID, received.workId, "failed", "planning_failed", { message: "test failure" });
+
+    const claims = await Promise.all([
+      claimWorkRecovery({ tenantId: TENANT_ID, workId: received.workId, attemptKey: "retry:one", requestedBy: "test" }),
+      claimWorkRecovery({ tenantId: TENANT_ID, workId: received.workId, attemptKey: "retry:two", requestedBy: "test" }),
+    ]);
+    expect(claims.filter((claim) => claim.claimed)).toHaveLength(1);
+    expect(claims.filter((claim) => !claim.claimed)).toHaveLength(1);
+    expect(new Set(claims.map((claim) => claim.activeAttemptKey)).size).toBe(1);
+    expect((await workAggregate(TENANT_ID, received.workId))!.work).toMatchObject({ status: "recovery" });
   });
 
   it("allows only a newer explicit input to continue cancelled Work", async () => {
