@@ -8,7 +8,7 @@ import {
   users,
   withTenant,
 } from "@finnor/db";
-import { evaluateAuthority } from "@finnor/authority";
+import { canExerciseAuthority, evaluateAuthority } from "@finnor/authority";
 import type {
   AvailableApplicationAccount,
   AvailableAuthProfile,
@@ -29,6 +29,9 @@ import {
 } from "./tenant-credentials";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const CREDENTIAL_PROVIDERS = new Set<TenantCredentialProvider>([
+  "quickbooks", "vapi", "stripe", "docusign", "ghl", "gmail", "resend", "meta_ads", "google_ads",
+]);
 
 export type IdentityAccessErrorCode =
   | "invalid_actor"
@@ -85,6 +88,10 @@ function object(value: unknown): Record<string, unknown> {
 
 function strings(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function tenantCredentialProvider(value: string): value is TenantCredentialProvider {
+  return CREDENTIAL_PROVIDERS.has(value as TenantCredentialProvider);
 }
 
 async function loadActorScope(tenantId: string, actorId: string): Promise<ActorScope> {
@@ -162,6 +169,26 @@ async function authorize(params: {
     risk: "medium",
   });
   return decision.outcome === "allowed" ? decision.id : null;
+}
+
+async function canUse(params: {
+  tenantId: string;
+  actor: ActorScope;
+  crossPrincipal: boolean;
+  kind: "identity" | "account";
+  resourceId: string;
+}): Promise<boolean> {
+  return canExerciseAuthority({
+    tenantId: params.tenantId,
+    userId: params.actor.actorId,
+    ...(params.actor.employeeId ? { employeeId: params.actor.employeeId } : {}),
+    role: params.actor.role,
+  }, {
+    operation: "execution",
+    capability: `${params.kind}:${params.crossPrincipal ? "act_as" : "use"}`,
+    resource: { type: params.kind === "identity" ? "communication_identity" : "application_account", id: params.resourceId },
+    risk: "medium",
+  });
 }
 
 function withAccess<P extends TenantCredentialProvider>(
@@ -242,6 +269,23 @@ function communicationMetadata(provider: TenantCredentialProvider, row: Communic
   if (provider === "vapi") return providerRef ? { phoneNumberId: providerRef } : {};
   if (provider === "ghl") return providerRef ? { locationId: providerRef } : {};
   return {};
+}
+
+async function communicationCredentialAvailable(tenantId: string, row: CommunicationCandidate): Promise<boolean> {
+  if (!tenantCredentialProvider(row.provider)) return false;
+  if (row.authProfileId && row.linkedCredentialProvider === "os-keychain") return false;
+  try {
+    await resolveCredentialReferenceContext(tenantId, row.provider, {
+      credentialProvider: row.authProfileId ? row.linkedCredentialProvider as "aws-secrets-manager" | "legacy-env" | null : row.credentialProvider,
+      credentialRef: row.authProfileId ? row.linkedCredentialRef : row.credentialRef,
+      credentialVersion: row.authProfileId ? row.linkedCredentialVersion : row.credentialVersion,
+      publicMetadata: communicationMetadata(row.provider, row),
+      integration: { id: row.identityId, capability: "communications", binding: row.provider },
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function resolveCommunication<P extends TenantCredentialProvider>(params: {
@@ -431,6 +475,33 @@ function accountMetadata(provider: TenantCredentialProvider, row: AuthCandidate)
           : provider === "ghl" ? "locationId"
             : "providerAccountRef";
   return { ...metadata, [key]: row.providerAccountRef };
+}
+
+async function authProfileCredentialAvailable(tenantId: string, row: AuthCandidate): Promise<boolean> {
+  try {
+    if (row.authMethod === "browser_profile" || row.credentialProvider === "os-keychain") {
+      const bundle = await resolveTenantBoundSecretBundle(tenantId, {
+        credentialProvider: row.credentialProvider,
+        credentialRef: row.credentialRef,
+        credentialVersion: row.credentialVersion,
+      });
+      return Boolean(
+        (typeof (bundle.steelProfileId ?? bundle.profileId) === "string" && String(bundle.steelProfileId ?? bundle.profileId).trim())
+        || (typeof (bundle.steelNamespace ?? bundle.namespace) === "string" && String(bundle.steelNamespace ?? bundle.namespace).trim()),
+      );
+    }
+    if (!tenantCredentialProvider(row.provider)) return false;
+    await resolveCredentialReferenceContext(tenantId, row.provider, {
+      credentialProvider: row.credentialProvider as "aws-secrets-manager" | "legacy-env" | null,
+      credentialRef: row.credentialRef,
+      credentialVersion: row.credentialVersion,
+      publicMetadata: accountMetadata(row.provider, row),
+      integration: { id: row.profileId, capability: row.application, binding: row.provider },
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 interface SelectedAuthProfile {
@@ -745,12 +816,16 @@ export async function resolveComputerAuthProfile(
 export async function listAvailableIdentityAccess(tenantId: string, actorId: string): Promise<OperatingIdentityAccess> {
   const actor = await loadActorScope(tenantId, actorId);
   const [communications, profiles] = await Promise.all([communicationRows(tenantId), authRows(tenantId)]);
-  const communicationIdentitiesSafe: AvailableCommunicationIdentity[] = communications.flatMap((row) => {
-    if (row.bindingStatus !== "active" || row.identityStatus !== "active") return [];
-    if (row.authProfileId && (row.linkedProfileStatus !== "active" || row.linkedConnectionStatus !== "active")) return [];
+  const communicationIdentitiesSafe: AvailableCommunicationIdentity[] = [];
+  for (const row of communications) {
+    if (row.bindingStatus !== "active" || row.identityStatus !== "active") continue;
+    if (row.authProfileId && (row.linkedProfileStatus !== "active" || !["active", "degraded"].includes(row.linkedConnectionStatus ?? ""))) continue;
     const principalRef: IdentityPrincipalRef = { type: row.principalType, id: row.principalId };
-    if (relation(principalRef, tenantId, actor).crossPrincipal) return [];
-    return [{
+    const related = relation(principalRef, tenantId, actor);
+    if (related.crossPrincipal) continue;
+    if (!await communicationCredentialAvailable(tenantId, row)) continue;
+    if (!await canUse({ tenantId, actor, crossPrincipal: false, kind: "identity", resourceId: row.identityId })) continue;
+    communicationIdentitiesSafe.push({
       id: row.identityId,
       key: row.identityKey,
       provider: row.provider,
@@ -762,12 +837,18 @@ export async function listAvailableIdentityAccess(tenantId: string, actorId: str
       principalRef,
       purpose: row.purpose,
       priority: row.priority,
-    }];
-  });
-  const availableProfiles = profiles.filter((row) => !relation({ type: row.principalType, id: row.principalId }, tenantId, actor).crossPrincipal);
+    });
+  }
   const accountMap = new Map<string, AvailableApplicationAccount>();
   const authProfilesSafe: AvailableAuthProfile[] = [];
-  for (const row of availableProfiles) {
+  for (const row of profiles) {
+    const principalRef: IdentityPrincipalRef = { type: row.principalType, id: row.principalId };
+    const related = relation(principalRef, tenantId, actor);
+    if (related.crossPrincipal) continue;
+    if (row.accountStatus !== "active" || row.profileStatus !== "active" || !["active", "degraded"].includes(row.connectionStatus)) continue;
+    if (!restrictionsAllow(row, actor.actorId, row.purpose)) continue;
+    if (!await authProfileCredentialAvailable(tenantId, row)) continue;
+    if (!await canUse({ tenantId, actor, crossPrincipal: false, kind: "account", resourceId: row.accountId })) continue;
     accountMap.set(row.accountId, {
       id: row.accountId,
       key: row.accountKey,
@@ -781,7 +862,7 @@ export async function listAvailableIdentityAccess(tenantId: string, actorId: str
     authProfilesSafe.push({
       authProfileRef: row.authProfileRef,
       applicationAccountId: row.accountId,
-      principalRef: { type: row.principalType, id: row.principalId },
+      principalRef,
       purpose: row.purpose,
       priority: row.priority,
       status: row.profileStatus,
