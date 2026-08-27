@@ -183,6 +183,10 @@ export async function settleExternalEffectObservation(
     await advanceWorkflow(observation.tenantId, step.runId);
   }
 
+  // Canonical provider evidence and any exact objective wake are required
+  // convergence, not telemetry. If this fails after settlement, propagate so the
+  // authenticated event/job retries; every state update above is idempotent and the
+  // integration-event claim itself deduplicates by tenant/source/sourceEventId.
   await ingestIntegrationEvent({
     tenantId: observation.tenantId,
     source: String(observation.provider),
@@ -196,7 +200,7 @@ export async function settleExternalEffectObservation(
     payload: { businessEffectId: observation.businessEffectId, classification: terminal, externalObjectType: observation.externalObjectType },
     evidenceRefs: observation.externalId ? [{ kind: "provider_object", ref: observation.externalId }] : [],
     trustClass: "trusted_runtime",
-  }).catch(() => undefined);
+  });
   if (loaded.actionWorkId) await reconcileWorkStatus(observation.tenantId, loaded.actionWorkId);
-  await resumeObjectiveForAction(observation.tenantId, loaded.effectActionId).catch(() => false);
+  await resumeObjectiveForAction(observation.tenantId, loaded.effectActionId);
 }

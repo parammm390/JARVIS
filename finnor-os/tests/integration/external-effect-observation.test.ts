@@ -8,6 +8,7 @@ import {
   commands,
   domainActions,
   integrationOperations,
+  integrationEvents,
   reconciliationCases,
   tenantIntegrations,
   workflowRuns,
@@ -113,6 +114,13 @@ describe.skipIf(!available)("external EffectSet observation settlement", () => {
     expect(run?.status).toBe("completed");
     expect(command?.status).toBe("completed");
     expect(operation).toMatchObject({ verificationStatus: "verified", observation: expect.objectContaining({ classification: "present" }) });
+    const events = await withTenant(tenantId, (db) => db.select().from(integrationEvents).where(and(
+      eq(integrationEvents.tenantId, tenantId),
+      eq(integrationEvents.domainActionId, scenario.actionId),
+      eq(integrationEvents.eventType, "effect.present"),
+    )));
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ status: "unmatched", trustClass: "trusted_runtime" });
 
     // A delayed out-of-order provider event cannot regress already verified truth.
     await settle(scenario, "divergent", { amountUsd: 99 });
