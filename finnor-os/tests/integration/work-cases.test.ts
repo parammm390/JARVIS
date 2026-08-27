@@ -21,6 +21,7 @@ import {
   voiceSessions,
   voiceTurns,
   withTenant,
+  works,
   workflowRuns,
   workflowSteps,
 } from "@finnor/db";
@@ -170,6 +171,49 @@ describe.skipIf(!available)("P2.T1 Work correlation + derived projection", () =>
     const response = await GET(request(), { params: Promise.resolve({ view: "work-cases" }) });
     expect(response.status).toBe(200);
     expect((await response.json() as { data: WorkCaseProjection[] }).data.some((item) => item.root.id === INSTRUCTION_A)).toBe(true);
+  });
+
+  it("paginates bounded legacy roots and reports its completeness contract", async () => {
+    const first = await GET(request("?limit=2"), { params: Promise.resolve({ view: "work-cases" }) });
+    expect(first.status).toBe(200);
+    const firstBody = await first.json() as {
+      data: WorkCaseProjection[];
+      page: { limit: number; hasMore: boolean; nextCursor: string | null; rootScope: string; childRowsTruncated: boolean };
+    };
+    expect(firstBody.data).toHaveLength(2);
+    expect(firstBody.page).toMatchObject({ limit: 2, hasMore: true, rootScope: "legacy_instruction", childRowsTruncated: false });
+    expect(firstBody.page.nextCursor).toEqual(expect.any(String));
+
+    const second = await GET(request(`?limit=2&cursor=${encodeURIComponent(firstBody.page.nextCursor!)}`), { params: Promise.resolve({ view: "work-cases" }) });
+    const secondBody = await second.json() as { data: WorkCaseProjection[]; page: { hasMore: boolean; nextCursor: string | null } };
+    expect(secondBody.data).toHaveLength(1);
+    expect(secondBody.page).toMatchObject({ hasMore: false, nextCursor: null });
+    expect(new Set([...firstBody.data, ...secondBody.data].map((item) => item.id)).size).toBe(3);
+  });
+
+  it("continues from canonical Work into legacy history without hiding either scope", async () => {
+    const [work] = await withTenant(TENANT_ID, (db) => db.insert(works).values({
+      tenantId: TENANT_ID,
+      initialChannel: "text",
+      initialInstruction: "Canonical root before legacy history",
+      status: "executing",
+    }).returning());
+    try {
+      const canonical = await GET(request("?limit=1"), { params: Promise.resolve({ view: "work-cases" }) });
+      const canonicalBody = await canonical.json() as {
+        data: WorkCaseProjection[];
+        page: { rootScope: string; hasMore: boolean; nextCursor: string | null };
+      };
+      expect(canonicalBody.data.map((item) => item.root.id)).toEqual([work!.id]);
+      expect(canonicalBody.page).toMatchObject({ rootScope: "canonical_work", hasMore: true });
+
+      const legacy = await GET(request(`?limit=1&cursor=${encodeURIComponent(canonicalBody.page.nextCursor!)}`), { params: Promise.resolve({ view: "work-cases" }) });
+      const legacyBody = await legacy.json() as { data: WorkCaseProjection[]; page: { rootScope: string } };
+      expect(legacyBody.page.rootScope).toBe("legacy_instruction");
+      expect(legacyBody.data[0]?.root.kind).toBe("instruction");
+    } finally {
+      await withTenant(TENANT_ID, (db) => db.delete(works).where(eq(works.id, work!.id)));
+    }
   });
 });
 

@@ -35,7 +35,64 @@ import {
   autonomyEvaluations,
   outcomeShadowProposals,
 } from "@finnor/db";
-import { and, asc, desc, eq, or } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNull, lt, or, sql } from "drizzle-orm";
+
+const DEFAULT_WORK_CASE_LIMIT = 50;
+const MAX_WORK_CASE_LIMIT = 100;
+const MAX_CHILD_ROWS_PER_TABLE = 1_000;
+
+export interface WorkCasesPageOptions {
+  limit?: number;
+  cursor?: string;
+}
+
+export interface WorkCasesPage {
+  items: WorkCaseProjection[];
+  page: {
+    limit: number;
+    hasMore: boolean;
+    nextCursor: string | null;
+    rootScope: "canonical_work" | "legacy_instruction";
+    childRowsTruncated: boolean;
+    childRowLimitPerTable: number;
+  };
+}
+
+type WorkCasesCursor = {
+  scope: WorkCasesPage["page"]["rootScope"];
+  activityBucket?: 0 | 1;
+  updatedAt?: string;
+  id?: string;
+};
+
+function pageLimit(value: number | undefined): number {
+  if (value === undefined) return DEFAULT_WORK_CASE_LIMIT;
+  if (!Number.isInteger(value) || value < 1) throw Object.assign(new Error("work-cases limit must be a positive integer"), { status: 400 });
+  return Math.min(value, MAX_WORK_CASE_LIMIT);
+}
+
+function encodeWorkCasesCursor(cursor: WorkCasesCursor): string {
+  return Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url");
+}
+
+function decodeWorkCasesCursor(value: string | undefined): WorkCasesCursor | null {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(Buffer.from(value, "base64url").toString("utf8")) as Partial<WorkCasesCursor>;
+    if (parsed.scope !== "canonical_work" && parsed.scope !== "legacy_instruction") throw new Error();
+    const positioned = parsed.updatedAt !== undefined || parsed.id !== undefined || parsed.activityBucket !== undefined;
+    if (positioned && (
+      typeof parsed.id !== "string"
+      || typeof parsed.updatedAt !== "string"
+      || Number.isNaN(new Date(parsed.updatedAt).getTime())
+      || (parsed.activityBucket !== 0 && parsed.activityBucket !== 1)
+    )) throw new Error();
+    if (!positioned && parsed.scope !== "legacy_instruction") throw new Error();
+    return parsed as WorkCasesCursor;
+  } catch {
+    throw Object.assign(new Error("Invalid work-cases cursor"), { status: 400 });
+  }
+}
 
 export const WORK_STATUSES = ["Needs you", "Working", "Waiting", "Partial", "Cancelled", "Completed", "Failed", "Blocked"] as const;
 export type WorkStatus = (typeof WORK_STATUSES)[number];
@@ -622,11 +679,18 @@ function findActionRoot(
   action: { id: string; workId: string | null; instructionId: string | null; planId: string | null },
   instructionIds: Set<string>,
   instructionActionRoots: Map<string, string>,
+  instructionWorkRoots: Map<string, string>,
 ): WorkRoot {
   if (action.workId) return { kind: "work", id: action.workId };
-  if (action.instructionId && instructionIds.has(action.instructionId)) return { kind: "instruction", id: action.instructionId };
+  if (action.instructionId && instructionIds.has(action.instructionId)) {
+    const workId = instructionWorkRoots.get(action.instructionId);
+    return workId ? { kind: "work", id: workId } : { kind: "instruction", id: action.instructionId };
+  }
   const eventInstructionId = instructionActionRoots.get(action.id);
-  if (eventInstructionId) return { kind: "instruction", id: eventInstructionId };
+  if (eventInstructionId) {
+    const workId = instructionWorkRoots.get(eventInstructionId);
+    return workId ? { kind: "work", id: workId } : { kind: "instruction", id: eventInstructionId };
+  }
   if (action.planId) return { kind: "plan", id: action.planId };
   return { kind: "action", id: action.id };
 }
@@ -678,43 +742,136 @@ function toWorkReceipt(row: typeof decisionReceipts.$inferSelect): WorkReceipt {
 }
 
 /**
- * Returns all tenant Work Cases from existing durable rows. The caller may use
- * `root.kind/root.id` as the stable derived ID; no customer, invoice, time, or
- * text similarity is used as a grouping key.
+ * Returns one bounded page of tenant Work Cases. Canonical Work is the root; a
+ * bounded instruction-root fallback remains only for tenants that have no Work rows
+ * from before the durable Work migration. Every child query is restricted to the
+ * selected roots and capped independently.
  */
-export async function workCases(tenantId: string): Promise<WorkCaseProjection[]> {
+export async function workCasesPage(tenantId: string, options: WorkCasesPageOptions = {}): Promise<WorkCasesPage> {
   return withTenant(tenantId, async (db) => {
-    // A tenant transaction is a single pg client. These queries were always
-    // serialized by the driver; spelling that out avoids pg@9's overlapping-
-    // query deprecation and keeps the projection deterministic.
-    const workRows = await db.select().from(works).where(eq(works.tenantId, tenantId)).orderBy(desc(works.updatedAt));
-    const workEventRows = await db.select().from(workEvents).where(eq(workEvents.tenantId, tenantId)).orderBy(asc(workEvents.seq));
-    const workInputRows = await db.select().from(workInputs).where(eq(workInputs.tenantId, tenantId)).orderBy(asc(workInputs.createdAt));
-    const plannerAttemptRows = await db.select().from(workPlannerAttempts).where(eq(workPlannerAttempts.tenantId, tenantId)).orderBy(asc(workPlannerAttempts.attempt));
-    const canonicalWorkLinks = await db.select().from(workEntityLinks).where(eq(workEntityLinks.tenantId, tenantId)).orderBy(asc(workEntityLinks.createdAt));
-    const objectiveLoopRows = await db.select().from(workObjectiveLoops).where(eq(workObjectiveLoops.tenantId, tenantId)).orderBy(desc(workObjectiveLoops.updatedAt));
-    const objectiveStepRows = await db.select().from(workObjectiveSteps).where(eq(workObjectiveSteps.tenantId, tenantId)).orderBy(asc(workObjectiveSteps.stepNumber));
-    const objectiveAttemptRows = await db.select().from(workObjectivePlannerAttempts).where(eq(workObjectivePlannerAttempts.tenantId, tenantId)).orderBy(asc(workObjectivePlannerAttempts.startedAt));
-    const outcomePackRunRows = await db.select().from(outcomePackRuns).where(eq(outcomePackRuns.tenantId, tenantId)).orderBy(desc(outcomePackRuns.updatedAt));
-    const autonomyEvaluationRows = await db.select().from(autonomyEvaluations).where(eq(autonomyEvaluations.tenantId, tenantId)).orderBy(desc(autonomyEvaluations.evaluatedAt));
-    const shadowProposalRows = await db.select().from(outcomeShadowProposals).where(eq(outcomeShadowProposals.tenantId, tenantId)).orderBy(desc(outcomeShadowProposals.proposedAt));
-    const instructionRows = await db.select().from(instructionSessions).where(eq(instructionSessions.tenantId, tenantId)).orderBy(desc(instructionSessions.updatedAt));
-    const instructionEventRows = await db.select().from(instructionEvents).where(eq(instructionEvents.tenantId, tenantId)).orderBy(asc(instructionEvents.seq));
-    const actionRows = await db.select().from(domainActions).where(eq(domainActions.tenantId, tenantId)).orderBy(desc(domainActions.createdAt));
-    const confirmationRows = await db.select().from(pendingConfirmations).where(eq(pendingConfirmations.tenantId, tenantId)).orderBy(desc(pendingConfirmations.createdAt));
-    const commandRows = await db.select().from(commands).where(eq(commands.tenantId, tenantId)).orderBy(desc(commands.updatedAt));
-    const runRows = await db.select().from(workflowRuns).where(eq(workflowRuns.tenantId, tenantId)).orderBy(desc(workflowRuns.updatedAt));
-    const stepRows = await db.select().from(workflowSteps).where(eq(workflowSteps.tenantId, tenantId)).orderBy(asc(workflowSteps.sequence));
-    const receiptRows = await db.select().from(decisionReceipts).where(eq(decisionReceipts.tenantId, tenantId)).orderBy(desc(decisionReceipts.createdAt));
-    const operationRows = await db.select().from(businessOperations).where(eq(businessOperations.tenantId, tenantId)).orderBy(desc(businessOperations.updatedAt));
-    const operationTargetRows = await db.select().from(businessOperationTargets).where(eq(businessOperationTargets.tenantId, tenantId)).orderBy(asc(businessOperationTargets.ordinal));
-    const logRows = await db.select().from(actionLog).where(eq(actionLog.tenantId, tenantId)).orderBy(desc(actionLog.timestamp));
-    const voiceSessionRows = await db.select().from(voiceSessions).where(eq(voiceSessions.tenantId, tenantId));
-    const voiceTurnRows = await db.select().from(voiceTurns).where(eq(voiceTurns.tenantId, tenantId)).orderBy(asc(voiceTurns.sequence));
-    const conversationRows = await db
-      .select({ id: conversations.id, householdId: conversations.householdId })
-      .from(conversations)
-      .where(eq(conversations.tenantId, tenantId));
+    const limit = pageLimit(options.limit);
+    let childRowsTruncated = false;
+    const bounded = <T>(rows: T[]): T[] => {
+      if (rows.length > MAX_CHILD_ROWS_PER_TABLE) childRowsTruncated = true;
+      return rows.slice(0, MAX_CHILD_ROWS_PER_TABLE);
+    };
+    const cursor = decodeWorkCasesCursor(options.cursor);
+    const [canonicalWork] = await db.select({ id: works.id }).from(works).where(eq(works.tenantId, tenantId)).limit(1);
+    const rootScope: WorkCasesPage["page"]["rootScope"] = cursor?.scope ?? (canonicalWork ? "canonical_work" : "legacy_instruction");
+    const cursorDate = cursor?.updatedAt ? new Date(cursor.updatedAt) : null;
+    const activityBucket = sql<number>`CASE WHEN ${works.status} IN ('completed','failed','cancelled') THEN 1 ELSE 0 END`;
+    const workCursor = cursorDate
+      ? or(
+          gt(activityBucket, cursor!.activityBucket!),
+          and(eq(activityBucket, cursor!.activityBucket!), or(
+            lt(works.updatedAt, cursorDate),
+            and(eq(works.updatedAt, cursorDate), lt(works.id, cursor!.id!)),
+          )),
+        )
+      : undefined;
+    const legacyCursor = cursorDate
+      ? or(lt(instructionSessions.updatedAt, cursorDate), and(eq(instructionSessions.updatedAt, cursorDate), lt(instructionSessions.id, cursor!.id!)))
+      : undefined;
+
+    const fetchedWorkRows = rootScope === "canonical_work"
+      ? await db.select().from(works).where(and(eq(works.tenantId, tenantId), workCursor)).orderBy(asc(activityBucket), desc(works.updatedAt), desc(works.id)).limit(limit + 1)
+      : [];
+    const fetchedLegacyInstructions = rootScope === "legacy_instruction"
+      ? await db.select().from(instructionSessions).where(and(eq(instructionSessions.tenantId, tenantId), isNull(instructionSessions.workId), legacyCursor)).orderBy(desc(instructionSessions.updatedAt), desc(instructionSessions.id)).limit(limit + 1)
+      : [];
+    const scopeHasMore = (rootScope === "canonical_work" ? fetchedWorkRows : fetchedLegacyInstructions).length > limit;
+    const workRows = fetchedWorkRows.slice(0, limit);
+    const legacyInstructionRoots = fetchedLegacyInstructions.slice(0, limit);
+    const lastRoot = rootScope === "canonical_work" ? workRows.at(-1) : legacyInstructionRoots.at(-1);
+    const [legacyRemaining] = rootScope === "canonical_work" && !scopeHasMore
+      ? await db.select({ id: instructionSessions.id }).from(instructionSessions).where(and(
+          eq(instructionSessions.tenantId, tenantId),
+          isNull(instructionSessions.workId),
+        )).limit(1)
+      : [];
+    const hasMore = scopeHasMore || Boolean(legacyRemaining);
+    const nextCursor = scopeHasMore && lastRoot
+      ? encodeWorkCasesCursor({
+          scope: rootScope,
+          activityBucket: rootScope === "canonical_work" && "status" in lastRoot && ["completed", "failed", "cancelled"].includes(lastRoot.status) ? 1 : 0,
+          updatedAt: lastRoot.updatedAt.toISOString(),
+          id: lastRoot.id,
+        })
+      : legacyRemaining
+        ? encodeWorkCasesCursor({ scope: "legacy_instruction" })
+      : null;
+    const workIds = workRows.map((row) => row.id);
+
+    const workEventRows = workIds.length ? bounded(await db.select().from(workEvents).where(and(eq(workEvents.tenantId, tenantId), inArray(workEvents.workId, workIds))).orderBy(asc(workEvents.seq)).limit(MAX_CHILD_ROWS_PER_TABLE + 1)) : [];
+    const workInputRows = workIds.length ? bounded(await db.select().from(workInputs).where(and(eq(workInputs.tenantId, tenantId), inArray(workInputs.workId, workIds))).orderBy(asc(workInputs.createdAt)).limit(MAX_CHILD_ROWS_PER_TABLE + 1)) : [];
+    const plannerAttemptRows = workIds.length ? bounded(await db.select().from(workPlannerAttempts).where(and(eq(workPlannerAttempts.tenantId, tenantId), inArray(workPlannerAttempts.workId, workIds))).orderBy(asc(workPlannerAttempts.attempt)).limit(MAX_CHILD_ROWS_PER_TABLE + 1)) : [];
+    const canonicalWorkLinks = workIds.length ? bounded(await db.select().from(workEntityLinks).where(and(eq(workEntityLinks.tenantId, tenantId), inArray(workEntityLinks.workId, workIds))).orderBy(asc(workEntityLinks.createdAt)).limit(MAX_CHILD_ROWS_PER_TABLE + 1)) : [];
+    const objectiveLoopRows = workIds.length ? bounded(await db.select().from(workObjectiveLoops).where(and(eq(workObjectiveLoops.tenantId, tenantId), inArray(workObjectiveLoops.workId, workIds))).orderBy(desc(workObjectiveLoops.updatedAt)).limit(MAX_CHILD_ROWS_PER_TABLE + 1)) : [];
+    const objectiveLoopIds = objectiveLoopRows.map((row) => row.id);
+    const objectiveStepRows = objectiveLoopIds.length ? bounded(await db.select().from(workObjectiveSteps).where(and(eq(workObjectiveSteps.tenantId, tenantId), inArray(workObjectiveSteps.objectiveLoopId, objectiveLoopIds))).orderBy(asc(workObjectiveSteps.stepNumber)).limit(MAX_CHILD_ROWS_PER_TABLE + 1)) : [];
+    const objectiveStepIds = objectiveStepRows.map((row) => row.id);
+    const objectiveAttemptRows = objectiveStepIds.length ? bounded(await db.select().from(workObjectivePlannerAttempts).where(and(eq(workObjectivePlannerAttempts.tenantId, tenantId), inArray(workObjectivePlannerAttempts.objectiveStepId, objectiveStepIds))).orderBy(asc(workObjectivePlannerAttempts.startedAt)).limit(MAX_CHILD_ROWS_PER_TABLE + 1)) : [];
+    const outcomePackRunRows = workIds.length ? bounded(await db.select().from(outcomePackRuns).where(and(eq(outcomePackRuns.tenantId, tenantId), inArray(outcomePackRuns.workId, workIds))).orderBy(desc(outcomePackRuns.updatedAt)).limit(MAX_CHILD_ROWS_PER_TABLE + 1)) : [];
+    const outcomePackIds = outcomePackRunRows.map((row) => row.id);
+    const autonomyEvaluationRows = outcomePackIds.length ? bounded(await db.select().from(autonomyEvaluations).where(and(eq(autonomyEvaluations.tenantId, tenantId), inArray(autonomyEvaluations.outcomePackRunId, outcomePackIds))).orderBy(desc(autonomyEvaluations.evaluatedAt)).limit(MAX_CHILD_ROWS_PER_TABLE + 1)) : [];
+    const shadowProposalRows = outcomePackIds.length ? bounded(await db.select().from(outcomeShadowProposals).where(and(eq(outcomeShadowProposals.tenantId, tenantId), inArray(outcomeShadowProposals.outcomePackRunId, outcomePackIds))).orderBy(desc(outcomeShadowProposals.proposedAt)).limit(MAX_CHILD_ROWS_PER_TABLE + 1)) : [];
+    const instructionRows = rootScope === "legacy_instruction"
+      ? legacyInstructionRoots
+      : workIds.length ? bounded(await db.select().from(instructionSessions).where(and(eq(instructionSessions.tenantId, tenantId), inArray(instructionSessions.workId, workIds))).orderBy(desc(instructionSessions.updatedAt)).limit(MAX_CHILD_ROWS_PER_TABLE + 1)) : [];
+    const instructionIds = instructionRows.map((row) => row.id);
+    const instructionEventRows = instructionIds.length ? bounded(await db.select().from(instructionEvents).where(and(eq(instructionEvents.tenantId, tenantId), inArray(instructionEvents.instructionId, instructionIds))).orderBy(asc(instructionEvents.seq)).limit(MAX_CHILD_ROWS_PER_TABLE + 1)) : [];
+    const actionPredicates = [
+      ...(workIds.length ? [inArray(domainActions.workId, workIds)] : []),
+      ...(instructionIds.length ? [inArray(domainActions.instructionId, instructionIds)] : []),
+    ];
+    const actionRows = actionPredicates.length ? bounded(await db.select().from(domainActions).where(and(eq(domainActions.tenantId, tenantId), or(...actionPredicates))).orderBy(desc(domainActions.createdAt)).limit(MAX_CHILD_ROWS_PER_TABLE + 1)) : [];
+    const actionIds = actionRows.map((row) => row.id);
+    const confirmationRows = actionIds.length ? bounded(await db.select().from(pendingConfirmations).where(and(eq(pendingConfirmations.tenantId, tenantId), inArray(pendingConfirmations.domainActionId, actionIds))).orderBy(desc(pendingConfirmations.createdAt)).limit(MAX_CHILD_ROWS_PER_TABLE + 1)) : [];
+    const operationPredicates = [
+      ...(workIds.length ? [inArray(businessOperations.workId, workIds)] : []),
+      ...(actionIds.length ? [inArray(businessOperations.domainActionId, actionIds)] : []),
+    ];
+    const operationRows = operationPredicates.length ? bounded(await db.select().from(businessOperations).where(and(eq(businessOperations.tenantId, tenantId), or(...operationPredicates))).orderBy(desc(businessOperations.updatedAt)).limit(MAX_CHILD_ROWS_PER_TABLE + 1)) : [];
+    const operationIds = operationRows.map((row) => row.id);
+    const operationTargetRows = operationIds.length ? bounded(await db.select().from(businessOperationTargets).where(and(eq(businessOperationTargets.tenantId, tenantId), inArray(businessOperationTargets.operationId, operationIds))).orderBy(asc(businessOperationTargets.ordinal)).limit(MAX_CHILD_ROWS_PER_TABLE + 1)) : [];
+    const logRows = actionIds.length ? bounded(await db.select().from(actionLog).where(and(eq(actionLog.tenantId, tenantId), inArray(actionLog.domainActionId, actionIds))).orderBy(desc(actionLog.timestamp)).limit(MAX_CHILD_ROWS_PER_TABLE + 1)) : [];
+
+    const directRunRows = workIds.length ? bounded(await db.select().from(workflowRuns).where(and(eq(workflowRuns.tenantId, tenantId), inArray(workflowRuns.workId, workIds))).orderBy(desc(workflowRuns.updatedAt)).limit(MAX_CHILD_ROWS_PER_TABLE + 1)) : [];
+    const actionStepRows = actionIds.length ? bounded(await db.select().from(workflowSteps).where(and(eq(workflowSteps.tenantId, tenantId), inArray(workflowSteps.domainActionId, actionIds))).orderBy(asc(workflowSteps.sequence)).limit(MAX_CHILD_ROWS_PER_TABLE + 1)) : [];
+    const runIds = [...new Set([...directRunRows.map((row) => row.id), ...actionStepRows.map((row) => row.workflowRunId)])];
+    const runRows = runIds.length ? bounded(await db.select().from(workflowRuns).where(and(eq(workflowRuns.tenantId, tenantId), inArray(workflowRuns.id, runIds))).orderBy(desc(workflowRuns.updatedAt)).limit(MAX_CHILD_ROWS_PER_TABLE + 1)) : [];
+    const stepRows = runIds.length ? bounded(await db.select().from(workflowSteps).where(and(eq(workflowSteps.tenantId, tenantId), inArray(workflowSteps.workflowRunId, runIds))).orderBy(asc(workflowSteps.sequence)).limit(MAX_CHILD_ROWS_PER_TABLE + 1)) : [];
+    const stepIds = stepRows.map((row) => row.id);
+    const commandIds = runRows.map((row) => row.commandId);
+    const commandRows = commandIds.length ? bounded(await db.select().from(commands).where(and(eq(commands.tenantId, tenantId), inArray(commands.id, commandIds))).orderBy(desc(commands.updatedAt)).limit(MAX_CHILD_ROWS_PER_TABLE + 1)) : [];
+    const receiptPredicates = [
+      ...(workIds.length ? [inArray(decisionReceipts.workId, workIds)] : []),
+      ...(actionIds.length ? [inArray(decisionReceipts.domainActionId, actionIds)] : []),
+      ...(runIds.length ? [inArray(decisionReceipts.workflowRunId, runIds)] : []),
+      ...(stepIds.length ? [inArray(decisionReceipts.workflowStepId, stepIds)] : []),
+      ...(operationIds.length ? [inArray(decisionReceipts.operationId, operationIds)] : []),
+    ];
+    const receiptRows = receiptPredicates.length ? bounded(await db.select().from(decisionReceipts).where(and(eq(decisionReceipts.tenantId, tenantId), or(...receiptPredicates))).orderBy(desc(decisionReceipts.createdAt)).limit(MAX_CHILD_ROWS_PER_TABLE + 1)) : [];
+
+    const voiceTurnActionPredicate = actionIds.length
+      ? sql`${voiceTurns.resolvedActionIds} ?| ARRAY[${sql.join(actionIds.map((id) => sql`${id}`), sql`, `)}]::text[]`
+      : undefined;
+    const voiceTurnRows = voiceTurnActionPredicate ? bounded(await db.select().from(voiceTurns).where(and(eq(voiceTurns.tenantId, tenantId), voiceTurnActionPredicate)).orderBy(asc(voiceTurns.sequence)).limit(MAX_CHILD_ROWS_PER_TABLE + 1)) : [];
+    const voiceSessionIds = [...new Set([...confirmationRows.map((row) => row.voiceSessionId), ...voiceTurnRows.map((row) => row.voiceSessionId)])];
+    const voiceSessionRows = voiceSessionIds.length ? bounded(await db.select().from(voiceSessions).where(and(eq(voiceSessions.tenantId, tenantId), inArray(voiceSessions.id, voiceSessionIds))).limit(MAX_CHILD_ROWS_PER_TABLE + 1)) : [];
+    const callIds = [...new Set([
+      ...canonicalWorkLinks.filter((link) => link.entityType === "call").map((link) => link.entityId),
+      ...actionRows.map((action) => stringValue(record(action.payload)?.callId)).filter((id): id is string => Boolean(id)),
+    ])];
+    const callExternalIds = voiceSessionRows.map((row) => row.callExternalId);
+    const callPredicates = [
+      ...(callIds.length ? [inArray(calls.id, callIds)] : []),
+      ...(callExternalIds.length ? [inArray(calls.externalId, callExternalIds)] : []),
+      ...(actionIds.length ? [inArray(sql<string>`${calls.raw}->>'domainActionId'`, actionIds)] : []),
+    ];
+    const callRows = callPredicates.length ? bounded(await db.select().from(calls).where(and(eq(calls.tenantId, tenantId), or(...callPredicates))).orderBy(desc(calls.createdAt)).limit(MAX_CHILD_ROWS_PER_TABLE + 1)) : [];
+    const conversationIds = callRows.map((row) => row.conversationId).filter((id): id is string => Boolean(id));
+    const conversationRows = conversationIds.length ? bounded(await db.select({ id: conversations.id, householdId: conversations.householdId }).from(conversations).where(and(eq(conversations.tenantId, tenantId), inArray(conversations.id, conversationIds))).limit(MAX_CHILD_ROWS_PER_TABLE + 1)) : [];
 
     const instructionActionRoots = new Map<string, string>();
     const lastPhaseByInstruction = new Map<string, InstructionPhase>();
@@ -795,6 +952,7 @@ export async function workCases(tenantId: string): Promise<WorkCaseProjection[]>
     const runById = new Map(runRows.map((run) => [run.id, run]));
     const actionById = new Map(actionRows.map((action) => [action.id, action]));
     const instructionById = new Map(instructionRows.map((instruction) => [instruction.id, instruction]));
+    const instructionWorkRoots = new Map(instructionRows.flatMap((instruction) => instruction.workId ? [[instruction.id, instruction.workId] as const] : []));
 
     const cases = new Map<string, WorkingCase>();
     for (const work of workRows) ensureCase(cases, { kind: "work", id: work.id });
@@ -809,7 +967,7 @@ export async function workCases(tenantId: string): Promise<WorkCaseProjection[]>
     }
     const rootByAction = new Map<string, WorkRoot>();
     for (const action of actionRows) {
-      const root = findActionRoot(action, new Set(instructionRows.map((instruction) => instruction.id)), instructionActionRoots);
+      const root = findActionRoot(action, new Set(instructionRows.map((instruction) => instruction.id)), instructionActionRoots, instructionWorkRoots);
       rootByAction.set(action.id, root);
       const target = ensureCase(cases, root);
       target.actionIds.add(action.id);
@@ -893,7 +1051,6 @@ export async function workCases(tenantId: string): Promise<WorkCaseProjection[]>
       actionCallRefs.set(confirmation.domainActionId, refs);
     }
 
-    const callRows = await db.select().from(calls).where(eq(calls.tenantId, tenantId)).orderBy(desc(calls.createdAt));
     const callByReference = new Map<string, typeof callRows[number]>();
     const conversationById = new Map(conversationRows.map((conversation) => [conversation.id, conversation]));
     for (const call of callRows) {
@@ -930,9 +1087,11 @@ export async function workCases(tenantId: string): Promise<WorkCaseProjection[]>
     }
 
     const allLinks = [...cases.values()].flatMap((target) => [...target.links.values()]);
-    const eventPredicates = [...new Map(allLinks.map((link) => [`${link.entityType}:${link.entityId}`, link])).values()].map((link) => and(eq(businessEvents.entityType, link.entityType), eq(businessEvents.entityId, link.entityId)));
+    const uniqueEventLinks = [...new Map(allLinks.map((link) => [`${link.entityType}:${link.entityId}`, link])).values()];
+    if (uniqueEventLinks.length > MAX_CHILD_ROWS_PER_TABLE) childRowsTruncated = true;
+    const eventPredicates = uniqueEventLinks.slice(0, MAX_CHILD_ROWS_PER_TABLE).map((link) => and(eq(businessEvents.entityType, link.entityType), eq(businessEvents.entityId, link.entityId)));
     const eventRows = eventPredicates.length > 0
-      ? await db.select().from(businessEvents).where(and(eq(businessEvents.tenantId, tenantId), or(...eventPredicates))).orderBy(desc(businessEvents.occurredAt))
+      ? bounded(await db.select().from(businessEvents).where(and(eq(businessEvents.tenantId, tenantId), or(...eventPredicates))).orderBy(desc(businessEvents.occurredAt)).limit(MAX_CHILD_ROWS_PER_TABLE + 1))
       : [];
     const eventsByEntity = new Map<string, typeof eventRows>();
     for (const event of eventRows) {
@@ -1202,8 +1361,22 @@ export async function workCases(tenantId: string): Promise<WorkCaseProjection[]>
         } : {}),
       });
     }
-    return output.sort(caseSort);
+    return {
+      items: output.sort(caseSort),
+      page: {
+        limit,
+        hasMore,
+        nextCursor,
+        rootScope,
+        childRowsTruncated,
+        childRowLimitPerTable: MAX_CHILD_ROWS_PER_TABLE,
+      },
+    };
   });
+}
+
+export async function workCases(tenantId: string): Promise<WorkCaseProjection[]> {
+  return (await workCasesPage(tenantId)).items;
 }
 
 export const workCasesReadModel = workCases;

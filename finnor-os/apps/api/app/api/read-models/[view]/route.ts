@@ -18,6 +18,7 @@ import {
   readinessSloScorecard,
   failureInjectionLog,
   workCases,
+  workCasesPage,
 } from "@finnor/read-models";
 import { getProjection } from "@finnor/projections";
 
@@ -47,8 +48,8 @@ const VIEWS: Record<string, (tenantId: string, searchParams: URLSearchParams) =>
     if (!householdId) throw new AuthError("householdId query param required", 400);
     return household360(tenantId, householdId);
   },
-  // P2.T1: derived only from exact instruction/action/workflow/receipt links;
-  // there is intentionally no persisted Work table or customer/time grouping.
+  // Backward-compatible registry entry; GET special-cases this view below to expose
+  // its truthful bounded-page metadata alongside the unchanged data array.
   "work-cases": (tenantId) => workCases(tenantId),
   // Phase 8 (§8.3): the 30-day certification trend the cockpit's scorecard panel reads.
   "readiness": (tenantId, searchParams) => {
@@ -68,7 +69,14 @@ export async function GET(req: Request, { params }: { params: Promise<{ view: st
     if (!fn) {
       return Response.json({ error: `Unknown read-model "${view}". Valid views: ${Object.keys(VIEWS).join(", ")}` }, { status: 404 });
     }
-    const data = await fn(ctx.tenantId, new URL(req.url).searchParams);
+    const searchParams = new URL(req.url).searchParams;
+    if (view === "work-cases") {
+      const rawLimit = searchParams.get("limit");
+      const limit = rawLimit === null ? undefined : Number(rawLimit);
+      const result = await workCasesPage(ctx.tenantId, { limit, cursor: searchParams.get("cursor") ?? undefined });
+      return Response.json({ view, data: result.items, page: result.page });
+    }
+    const data = await fn(ctx.tenantId, searchParams);
     if (data === null) {
       return Response.json({ error: "No such household" }, { status: 404 });
     }

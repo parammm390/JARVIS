@@ -667,8 +667,11 @@ export const jarvisClient = {
   activity: (params?: { since?: string; limit?: number }): Promise<ActivityPage> =>
     jarvisGet<ActivityPage>("activity", toStringParams(params)),
 
-  workCases: (): Promise<{ view: "work-cases"; data: WorkCaseProjection[] }> =>
-    jarvisGet<{ view: "work-cases"; data: WorkCaseProjection[] }>("read-models/work-cases"),
+  workCases: (): Promise<{
+    view: "work-cases"
+    data: WorkCaseProjection[]
+    page: { limit: number; hasMore: boolean; nextCursor: string | null; rootScope: "canonical_work" | "legacy_instruction"; childRowsTruncated: boolean; childRowLimitPerTable: number }
+  }> => jarvisGet("read-models/work-cases"),
 
   workExecution: (workId: string): Promise<{ execution: ExecutionProjection }> =>
     jarvisGet<{ execution: ExecutionProjection }>(`works/${workId}/execution`),
