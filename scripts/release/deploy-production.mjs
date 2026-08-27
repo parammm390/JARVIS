@@ -1,6 +1,6 @@
 import { execFileSync, spawnSync } from "node:child_process"
 import { createHash, randomBytes } from "node:crypto"
-import { readFileSync, writeFileSync } from "node:fs"
+import { appendFileSync, readFileSync, writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 
 const appName = process.argv[2]
@@ -109,6 +109,9 @@ if (appName === "api" && deployOnly && !productTruthCertificationKey) {
   productTruthCertificationKey = randomBytes(32).toString("hex")
   const keyFile = join(runnerTemp, "product-truth-certification-key")
   writeFileSync(keyFile, `${productTruthCertificationKey}\n`, { mode: 0o600 })
+  // GitHub interprets this workflow command and masks the value in all later logs.
+  if (process.env.GITHUB_ACTIONS === "true") console.log(`::add-mask::${productTruthCertificationKey}`)
+  if (process.env.GITHUB_ENV) appendFileSync(process.env.GITHUB_ENV, `PRODUCT_TRUTH_CERTIFICATION_KEY=${productTruthCertificationKey}\n`)
   console.log(`Generated one-run Product Truth certification capability at ${keyFile}`)
 }
 
