@@ -59,5 +59,6 @@ export const quickbooksSync: JobHandler = async (payload) => {
     customerPhone: contact.phone ? String(contact.phone) : undefined,
     amountUsd: Number(inv.amountUsd),
     memo: inv.memo ?? undefined,
+    idempotencyKey: invoiceId,
   }, credentialContext);
 };

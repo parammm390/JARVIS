@@ -65,9 +65,9 @@ export const syncInvoiceContract: CapabilityContract<SyncInvoiceInput, SyncInvoi
   retryPolicy: RETRY_POLICY,
   requiredPermission: "accounting:sync_invoice",
   piiAllowlist: ["customerName", "customerPhone", "amountUsd", "memo"],
-  // Sync is a best-effort mirror of Finnor's own invoice (the real system of record) —
-  // safe to retry on unknown delivery, since QuickBooks' own DisplayName lookup makes a
-  // re-sync converge rather than duplicate (findOrCreateCustomer in quickbooks.ts).
+  // Sync is a best-effort mirror of Finnor's own invoice (the real system of record).
+  // The same key is sent as deterministic QuickBooks request IDs for both provider
+  // creates, so an unknown-outcome replay converges instead of duplicating either row.
   retryOnUnknown: true,
 };
 
@@ -92,6 +92,7 @@ export const syncInvoiceQuickbooksBinding: CapabilityBinding<SyncInvoiceInput, S
           customerPhone: input.customerPhone,
           amountUsd: input.amountUsd,
           memo: input.memo,
+          idempotencyKey: input.idempotencyKey,
         }, credentialContext),
       { tenantId: input.tenantId },
     );

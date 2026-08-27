@@ -55,25 +55,36 @@ class CapabilityOutcomeUnknownError extends Error {
 
 /**
  * Applies the contract's retryPolicy around a binding call — timeout per attempt, then
- * exponential backoff retry, mirroring packages/tools/src/wrap.ts's wrappedCall exactly
- * (duplicated rather than imported, to avoid a circular package dependency — see file
- * header). An error is retryable unless it explicitly sets `retryable: false` (e.g. the
- * emulators' AuthFaultError) — same convention as wrap.ts's IntegrationError.
+ * exponential backoff only when the contract permits replay after an ambiguous outcome.
+ * Explicit non-retryable errors remain known failures; every other exhausted or forbidden
+ * replay is surfaced as unknown so the caller reconciles instead of claiming failure.
  */
-async function withRetryAndTimeout<T>(fn: () => Promise<T>, policy: RetryPolicy): Promise<T> {
+export async function withRetryAndTimeout<T>(fn: () => Promise<T>, policy: RetryPolicy, retryOnUnknown: boolean): Promise<T> {
   let lastErr: unknown;
   for (let attempt = 1; attempt <= policy.attempts; attempt++) {
     try {
-      return await Promise.race([
-        fn(),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new CapabilityOutcomeUnknownError(`capability call timed out after ${policy.timeoutMs}ms; provider outcome is unknown`)), policy.timeoutMs),
-        ),
-      ]);
+      let timeout: ReturnType<typeof setTimeout> | undefined;
+      try {
+        return await Promise.race([
+          fn(),
+          new Promise<never>((_, reject) => {
+            timeout = setTimeout(() => reject(new CapabilityOutcomeUnknownError(`capability call timed out after ${policy.timeoutMs}ms; provider outcome is unknown`)), policy.timeoutMs);
+          }),
+        ]);
+      } finally {
+        if (timeout) clearTimeout(timeout);
+      }
     } catch (err) {
       lastErr = err;
-      const retryable = (err as { retryable?: boolean }).retryable !== false;
-      if (!retryable || attempt === policy.attempts) break;
+      const explicitlyUnknown = (err as { kind?: unknown }).kind === "unknown_outcome";
+      const potentiallyDispatched = explicitlyUnknown || (err as { retryable?: boolean }).retryable !== false;
+      if (!potentiallyDispatched) throw err;
+      if (!retryOnUnknown || attempt === policy.attempts) {
+        if (explicitlyUnknown) throw err;
+        throw new CapabilityOutcomeUnknownError(
+          `${err instanceof Error ? err.message : String(err)}; provider outcome is unknown`,
+        );
+      }
       await new Promise((r) => setTimeout(r, policy.baseDelayMs * 2 ** (attempt - 1)));
     }
   }
@@ -150,7 +161,7 @@ export async function executeCapability<TIn, TOut>(
 
   let output: TOut;
   try {
-    output = await withRetryAndTimeout(() => binding.call(input), contract.retryPolicy);
+    output = await withRetryAndTimeout(() => binding.call(input), contract.retryPolicy, contract.retryOnUnknown);
   } catch (err) {
     const unknownOutcome = (err as { kind?: unknown }).kind === "unknown_outcome";
     await withTenant(tenantId, (db) =>

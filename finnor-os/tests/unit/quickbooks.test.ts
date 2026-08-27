@@ -7,6 +7,7 @@
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { createCredentialContextForTesting } from "@finnor/security";
+import { createHash } from "node:crypto";
 
 const TENANT_ID = "00000000-0000-4000-8000-0000000000e4";
 const qbContext = () => createCredentialContextForTesting(TENANT_ID, "quickbooks", {
@@ -23,6 +24,9 @@ function setConfigured() {
 }
 
 const tokenResponse = { ok: true, json: async () => ({ access_token: "fake-access-token" }) };
+const requestId = (key: string, operation: "customer" | "invoice") =>
+  createHash("sha256").update(`${operation}:${key}`).digest("hex").slice(0, 50);
+
 function stubFetchSequence(responses: Array<{ ok: boolean; status?: number; json?: () => Promise<unknown>; text?: () => Promise<string> }>) {
   const fetchSpy = vi.fn();
   for (const r of responses) fetchSpy.mockResolvedValueOnce(r);
@@ -70,9 +74,10 @@ describe("quickbooks adapter — configured, stub-fetch", () => {
       { ok: true, json: async () => ({ Invoice: { Id: "inv-99" } }) },
     ]);
     const { syncInvoiceToQuickBooks } = await import("@finnor/tools");
-    const result = await syncInvoiceToQuickBooks({ customerName: "Jane Doe", amountUsd: 249, memo: "AMC renewal" }, qbContext());
+    const result = await syncInvoiceToQuickBooks({ customerName: "Jane Doe", amountUsd: 249, memo: "AMC renewal", idempotencyKey: "sync-jane-249" }, qbContext());
     expect(result).toEqual({ quickbooksInvoiceId: "inv-99", quickbooksCustomerId: "cust-1" });
     expect(fetchSpy).toHaveBeenCalledTimes(3); // token, search, invoice create -- no customer-create call when one was found
+    expect(String(fetchSpy.mock.calls[2]![0])).toContain(`/invoice?requestid=${requestId("sync-jane-249", "invoice")}&minorversion=75`);
   });
 
   it("happy path, new customer: search finds nothing -> customer created -> invoice created", async () => {
@@ -83,15 +88,18 @@ describe("quickbooks adapter — configured, stub-fetch", () => {
       { ok: true, json: async () => ({ Invoice: { Id: "inv-100" } }) },
     ]);
     const { syncInvoiceToQuickBooks } = await import("@finnor/tools");
-    const result = await syncInvoiceToQuickBooks({ customerName: "New Customer", amountUsd: 100 }, qbContext());
+    const result = await syncInvoiceToQuickBooks({ customerName: "New Customer", amountUsd: 100, idempotencyKey: "sync-new-100" }, qbContext());
     expect(result).toEqual({ quickbooksInvoiceId: "inv-100", quickbooksCustomerId: "cust-new" });
     expect(fetchSpy).toHaveBeenCalledTimes(4);
+    expect(String(fetchSpy.mock.calls[2]![0])).toContain(`/customer?requestid=${requestId("sync-new-100", "customer")}&minorversion=75`);
+    expect(String(fetchSpy.mock.calls[3]![0])).toContain(`/invoice?requestid=${requestId("sync-new-100", "invoice")}&minorversion=75`);
+    expect(String(fetchSpy.mock.calls[2]![0])).not.toBe(String(fetchSpy.mock.calls[3]![0]));
   });
 
   it("OAuth token refresh failure surfaces as a clear IntegrationError, no invoice/customer calls attempted", async () => {
     const fetchSpy = stubFetchSequence([{ ok: false, status: 401, text: async () => "invalid_grant" }]);
     const { syncInvoiceToQuickBooks, IntegrationError } = await import("@finnor/tools");
-    await expect(syncInvoiceToQuickBooks({ customerName: "X", amountUsd: 10 }, qbContext())).rejects.toThrow(IntegrationError);
+    await expect(syncInvoiceToQuickBooks({ customerName: "X", amountUsd: 10, idempotencyKey: "sync-x-10" }, qbContext())).rejects.toThrow(IntegrationError);
     expect(fetchSpy).toHaveBeenCalledTimes(1); // failed at the token step -- never reached customer/invoice
   });
 
@@ -102,7 +110,18 @@ describe("quickbooks adapter — configured, stub-fetch", () => {
       { ok: false, status: 503, text: async () => "Service temporarily unavailable" },
     ]);
     const { syncInvoiceToQuickBooks } = await import("@finnor/tools");
-    await expect(syncInvoiceToQuickBooks({ customerName: "Jane", amountUsd: 10 }, qbContext())).rejects.toMatchObject({ retryable: true });
+    await expect(syncInvoiceToQuickBooks({ customerName: "Jane", amountUsd: 10, idempotencyKey: "sync-jane-10-503" }, qbContext())).rejects.toMatchObject({ retryable: true });
+  });
+
+  it("never creates a customer when the exact-name lookup failed", async () => {
+    const fetchSpy = stubFetchSequence([
+      tokenResponse,
+      { ok: false, status: 503, text: async () => "Lookup unavailable" },
+    ]);
+    const { syncInvoiceToQuickBooks } = await import("@finnor/tools");
+    await expect(syncInvoiceToQuickBooks({ customerName: "Jane", amountUsd: 10, idempotencyKey: "sync-lookup-failed" }, qbContext()))
+      .rejects.toMatchObject({ retryable: true });
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
   });
 
   it("a 400 invoice-create response is never retryable", async () => {
@@ -112,7 +131,7 @@ describe("quickbooks adapter — configured, stub-fetch", () => {
       { ok: false, status: 400, text: async () => "Malformed invoice" },
     ]);
     const { syncInvoiceToQuickBooks } = await import("@finnor/tools");
-    await expect(syncInvoiceToQuickBooks({ customerName: "Jane", amountUsd: 10 }, qbContext())).rejects.toMatchObject({ retryable: false });
+    await expect(syncInvoiceToQuickBooks({ customerName: "Jane", amountUsd: 10, idempotencyKey: "sync-jane-10-400" }, qbContext())).rejects.toMatchObject({ retryable: false });
   });
 
   it("testQuickBooksConnection reports healthy:true on a real 2xx CompanyInfo response", async () => {

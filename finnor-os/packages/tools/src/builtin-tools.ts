@@ -464,10 +464,10 @@ function registerAccountingSync(registry: ToolRegistry): void {
     name: "quickbooks_sync_invoice",
     description: "Sync a native Finnor invoice to QuickBooks Online, if connected.",
     integration: "quickbooks",
-    inputSchema: z.object({ tenantId: z.string().uuid(), customerName: z.string(), customerPhone: z.string().optional(), amountUsd: z.number(), memo: z.string().optional() }),
+    inputSchema: z.object({ tenantId: z.string().uuid(), customerName: z.string(), customerPhone: z.string().optional(), amountUsd: z.number(), memo: z.string().optional(), idempotencyKey: z.string().min(1) }),
     piiAllowlist: ["tenantId", "customerName", "customerPhone", "amountUsd", "memo"],
     async run(input, runtime) {
-      const i = input as { customerName: string; customerPhone?: string; amountUsd: number; memo?: string };
+      const i = input as { customerName: string; customerPhone?: string; amountUsd: number; memo?: string; idempotencyKey: string };
       // Throws IntegrationError (not-connected, or a real API failure) — wrappedCall
       // (registry.call()'s caller) already catches and types it uniformly; no
       // per-tool try/catch needed here.

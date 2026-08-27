@@ -15,6 +15,7 @@
 
 import { IntegrationError, type ProviderHealth } from "./errors";
 import type { TenantCredentialContext } from "@finnor/security";
+import { createHash } from "node:crypto";
 
 export type QuickBooksCredentialContext = TenantCredentialContext<"quickbooks">;
 
@@ -163,17 +164,30 @@ interface QboCustomerRef {
 
 /** Find a customer by exact DisplayName, or create one — QBO has no concept of "our"
  *  household id, DisplayName is the closest stable natural key we can round-trip. */
-async function findOrCreateCustomer(context: QuickBooksCredentialContext, accessToken: string, realmId: string, displayName: string, phone?: string): Promise<QboCustomerRef> {
+function qboRequestId(idempotencyKey: string, operation: "customer" | "invoice"): string {
+  return createHash("sha256").update(`${operation}:${idempotencyKey}`).digest("hex").slice(0, 50);
+}
+
+async function findOrCreateCustomer(
+  context: QuickBooksCredentialContext,
+  accessToken: string,
+  realmId: string,
+  displayName: string,
+  idempotencyKey: string,
+  phone?: string,
+): Promise<QboCustomerRef> {
   const query = `SELECT Id, DisplayName FROM Customer WHERE DisplayName = '${displayName.replace(/'/g, "\\'")}'`;
   const searchRes = await fetch(`${apiBase(context)}/v3/company/${realmId}/query?query=${encodeURIComponent(query)}`, {
     headers: { Authorization: `Bearer ${accessToken}`, accept: "application/json" },
   });
-  if (searchRes.ok) {
-    const data = (await searchRes.json()) as { QueryResponse?: { Customer?: Array<{ Id: string; DisplayName: string }> } };
-    const existing = data.QueryResponse?.Customer?.[0];
-    if (existing) return { id: existing.Id, displayName: existing.DisplayName };
+  if (!searchRes.ok) {
+    throw new IntegrationError("quickbooks", `customer lookup failed (${searchRes.status})`, searchRes.status >= 500);
   }
-  const createRes = await fetch(`${apiBase(context)}/v3/company/${realmId}/customer`, {
+  const data = (await searchRes.json()) as { QueryResponse?: { Customer?: Array<{ Id: string; DisplayName: string }> } };
+  const existing = data.QueryResponse?.Customer?.[0];
+  if (existing) return { id: existing.Id, displayName: existing.DisplayName };
+  const requestId = qboRequestId(idempotencyKey, "customer");
+  const createRes = await fetch(`${apiBase(context)}/v3/company/${realmId}/customer?requestid=${encodeURIComponent(requestId)}&minorversion=75`, {
     method: "POST",
     headers: { Authorization: `Bearer ${accessToken}`, "content-type": "application/json", accept: "application/json" },
     body: JSON.stringify({ DisplayName: displayName, ...(phone ? { PrimaryPhone: { FreeFormNumber: phone } } : {}) }),
@@ -191,6 +205,7 @@ export interface QuickBooksInvoiceSync {
   customerPhone?: string;
   amountUsd: number;
   memo?: string;
+  idempotencyKey: string;
 }
 
 export interface QuickBooksInvoiceSyncResult {
@@ -205,9 +220,10 @@ export interface QuickBooksInvoiceSyncResult {
 export async function syncInvoiceToQuickBooks(invoice: QuickBooksInvoiceSync, context: QuickBooksCredentialContext): Promise<QuickBooksInvoiceSyncResult> {
   const accessToken = await quickbooksAccessToken(context);
   const realmId = context.credentials.realmId;
-  const customer = await findOrCreateCustomer(context, accessToken, realmId, invoice.customerName, invoice.customerPhone);
+  const customer = await findOrCreateCustomer(context, accessToken, realmId, invoice.customerName, invoice.idempotencyKey, invoice.customerPhone);
 
-  const res = await fetch(`${apiBase(context)}/v3/company/${realmId}/invoice`, {
+  const requestId = qboRequestId(invoice.idempotencyKey, "invoice");
+  const res = await fetch(`${apiBase(context)}/v3/company/${realmId}/invoice?requestid=${encodeURIComponent(requestId)}&minorversion=75`, {
     method: "POST",
     headers: { Authorization: `Bearer ${accessToken}`, "content-type": "application/json", accept: "application/json" },
     body: JSON.stringify({
