@@ -528,6 +528,10 @@ export const WORK_STATUSES = [
 ] as const;
 export type WorkStatus = (typeof WORK_STATUSES)[number];
 
+export function isImmutableWorkStatus(status: WorkStatus): boolean {
+  return status === "completed" || status === "failed" || status === "cancelled";
+}
+
 export class WorkTransitionConflictError extends Error {
   constructor(message: string) {
     super(message);
@@ -1120,9 +1124,10 @@ export async function reconcileWorkStatus(tenantId: string, workId: string): Pro
     return { actions, runs, repairs, operations, objectiveLoop, work };
   });
   if (!snapshot.work) throw new Error("Work not found");
-  // Cancellation is a user-owned terminal fact. Late action/run reconciliation
-  // may refine child evidence, but it must never resurrect the parent Work.
-  if (snapshot.work.status === "cancelled") return "cancelled";
+  // Terminal parent truth is immutable until an explicit continuation/recovery
+  // input changes it. Late child evidence may be inspected, but reconciliation
+  // must never resurrect or relabel completed, failed, or cancelled Work.
+  if (isImmutableWorkStatus(snapshot.work.status)) return snapshot.work.status;
   if (snapshot.objectiveLoop) {
     const status: WorkStatus = snapshot.objectiveLoop.state === "continue"
       ? "executing"
