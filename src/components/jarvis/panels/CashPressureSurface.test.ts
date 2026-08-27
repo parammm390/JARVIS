@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { buildAgingSummary, collectionMatchesView, deriveAgingBand, filterCollectionWork, groupCollectionWork, invoiceMatchesView, safeBusinessLabel } from "./cash-pressure-model"
+import { buildAgingSummary, collectionMatchesView, collectionWorkBandLabel, deriveAgingBand, filterCollectionWork, groupCollectionWork, invoiceMatchesView, safeBusinessLabel } from "./cash-pressure-model"
 import type { InvoiceResource, WorkCaseProjection } from "@/lib/jarvis-client"
 
 const now = new Date("2026-08-08T00:00:00.000Z")
@@ -89,9 +89,22 @@ describe("P2.T5 Cash Pressure Field contract", () => {
 
     const active = workCase(["send_payment_reminder"])
     const completed = { ...active, status: "Completed" as const }
+    const partial = { ...active, status: "Partial" as const }
+    const cancelled = { ...active, status: "Cancelled" as const }
     expect(collectionMatchesView(active, "active")).toBe(true)
     expect(collectionMatchesView(completed, "active")).toBe(false)
     expect(collectionMatchesView(completed, "history")).toBe(true)
+    expect(collectionMatchesView(partial, "active")).toBe(false)
+    expect(collectionMatchesView(partial, "history")).toBe(true)
+    expect(collectionMatchesView(cancelled, "active")).toBe(false)
+    expect(collectionMatchesView(cancelled, "history")).toBe(true)
+  })
+
+  it("does not claim a collection-Work absence while its source is unavailable", () => {
+    expect(collectionWorkBandLabel("loading", 0)).toBe("Reading collection Work…")
+    expect(collectionWorkBandLabel("unavailable", 0)).toBe("Collection Work unavailable")
+    expect(collectionWorkBandLabel("live", 0)).toBe("No collection Work linked")
+    expect(collectionWorkBandLabel("live", 2)).toBe("2 collection Work")
   })
 
   it("groups repeated collection projections while preserving every exact record", () => {

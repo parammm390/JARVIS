@@ -10,7 +10,7 @@ import type { CashCollections } from "../lib/data-core"
 import { useBusinessProjection } from "../lib/business-projections"
 import { businessProjections } from "../lib/projection-definitions"
 import { OperationalSurfaceNav, withOperationalContext, type HouseholdContext } from "../surfaces/OperationalSurfaceNav"
-import { AGE_BANDS, buildAgingSummary, collectionMatchesView, filterCollectionWork, groupCollectionWork, invoiceAmount, invoiceMatchesView, safeBusinessLabel, type AgingBandSummary, type CollectionView, type InvoiceView } from "./cash-pressure-model"
+import { AGE_BANDS, buildAgingSummary, collectionMatchesView, collectionWorkBandLabel, filterCollectionWork, groupCollectionWork, invoiceAmount, invoiceMatchesView, safeBusinessLabel, type AgingBandSummary, type CollectionView, type InvoiceView } from "./cash-pressure-model"
 import "../jarvis-theme.css"
 import { useOperatingInteraction } from "../kernel/operating-interaction"
 
@@ -195,7 +195,7 @@ export default function CashPressureSurface() {
             {aging.eligible ? <div className="jarvis-money-aging-bands">{aging.bands.map((band) => {
               const maxTotal = Math.max(...aging.bands.map((candidate) => candidate.totalUsd), 1)
               const active = collectionsForBand(band, collectionWork)
-              return <div className="jarvis-money-aging-band" key={band.key} data-aging-band={band.key}><div className="jarvis-money-aging-band__label"><strong>{band.label}</strong><span>{band.count} invoice{band.count === 1 ? "" : "s"}</span></div><strong className="jarvis-money-aging-band__amount">{formatMoney(band.totalUsd)}</strong><div className="jarvis-money-aging-band__bar"><span style={{ width: `${Math.max(0, Math.min(100, (band.totalUsd / maxTotal) * 100))}%` }} /></div><span className="jarvis-money-aging-band__work">{workSource === "loading" ? "Reading collection Work…" : active.length > 0 ? `${active.length} collection Work` : "No collection Work linked"}</span></div>
+              return <div className="jarvis-money-aging-band" key={band.key} data-aging-band={band.key}><div className="jarvis-money-aging-band__label"><strong>{band.label}</strong><span>{band.count} invoice{band.count === 1 ? "" : "s"}</span></div><strong className="jarvis-money-aging-band__amount">{formatMoney(band.totalUsd)}</strong><div className="jarvis-money-aging-band__bar"><span style={{ width: `${Math.max(0, Math.min(100, (band.totalUsd / maxTotal) * 100))}%` }} /></div><span className="jarvis-money-aging-band__work">{collectionWorkBandLabel(workSource, active.length)}</span></div>
             })}</div> : <div className="jarvis-money-fallback"><CircleAlert size={17} aria-hidden /><p>{aging.reason ?? "Invoice due-date truth is not sufficient for aging."}</p><span>The ledger below keeps each invoice&apos;s exact amount, status, and due-date availability without synthesizing bands.</span></div>}
           </section>
 

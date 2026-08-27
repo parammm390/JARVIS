@@ -28,12 +28,12 @@ function recordedValue(value: unknown, fallback: string): string {
 }
 
 function nextAction(workCase: WorkCaseProjection): string {
-  if (workCase.objectiveLoop?.nextStep) return compact(workCase.objectiveLoop.nextStep)
-  if (workCase.approvals.some((approval) => approval.status === "pending")) return "Review the pending approval; execution remains paused until a permitted decision is recorded."
-  if (workCase.status === "Failed" || workCase.status === "Blocked" || workCase.status === "Partial") return recordedValue(workCase.durableWork?.recovery, "Inspect the incomplete outcome and use only the recorded recovery path.")
-  if (workCase.status === "Working" || workCase.status === "Waiting") return "Wait for the recorded operation or external result, then re-inspect this same Work."
   if (workCase.status === "Completed") return "Continue this same Work for a follow-up, or inspect its receipt and linked business evidence."
   if (workCase.status === "Cancelled") return "No future execution is scheduled. Start a new explicit input if this responsibility should continue."
+  if (workCase.status === "Failed" || workCase.status === "Blocked" || workCase.status === "Partial") return recordedValue(workCase.durableWork?.recovery, "Inspect the incomplete outcome and use only the recorded recovery path.")
+  if (workCase.approvals.some((approval) => approval.status === "pending")) return "Review the pending approval; execution remains paused until a permitted decision is recorded."
+  if (workCase.objectiveLoop?.nextStep) return compact(workCase.objectiveLoop.nextStep)
+  if (workCase.status === "Working" || workCase.status === "Waiting") return "Wait for the recorded operation or external result, then re-inspect this same Work."
   return "No permitted next action is recorded."
 }
 

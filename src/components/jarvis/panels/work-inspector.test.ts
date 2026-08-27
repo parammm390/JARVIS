@@ -13,6 +13,13 @@ function workCase(overrides: Partial<WorkCaseProjection> = {}): WorkCaseProjecti
   }
 }
 
+function objectiveLoop(state: NonNullable<WorkCaseProjection["objectiveLoop"]>["state"], nextStep: string): NonNullable<WorkCaseProjection["objectiveLoop"]> {
+  return {
+    id: "loop-1", objective: "Collect", state, revision: 1, reason: null, nextStep, nextRunAt: null, lastObservation: null,
+    budget: { steps: 1, maxSteps: 3, actions: 1, maxActions: 3, queries: 1, maxQueries: 3 }, iterations: [],
+  }
+}
+
 describe("Work contextual inspector", () => {
   it("covers source, permission, consequence, authority, outcome, evidence, and next action", () => {
     const facts = buildWorkInspectorFacts(workCase())
@@ -33,12 +40,26 @@ describe("Work contextual inspector", () => {
   })
 
   it("does not present cancelled Work as completed or still in flight", () => {
-    const facts = buildWorkInspectorFacts(workCase({ status: "Cancelled", approvals: [] }))
+    const facts = buildWorkInspectorFacts(workCase({ status: "Cancelled", approvals: [], objectiveLoop: objectiveLoop("cancelled", "Send another reminder") }))
     expect(facts.find((fact) => fact.label === "Next permitted action")?.value).toContain("No future execution is scheduled")
+    expect(facts.find((fact) => fact.label === "Next permitted action")?.value).not.toContain("Send another reminder")
   })
 
   it("routes partial outcomes to incomplete-evidence review", () => {
-    const facts = buildWorkInspectorFacts(workCase({ status: "Partial", approvals: [] }))
+    const facts = buildWorkInspectorFacts(workCase({ status: "Partial", approvals: [], objectiveLoop: objectiveLoop("failed", "Keep executing") }))
     expect(facts.find((fact) => fact.label === "Next permitted action")?.value).toContain("Inspect the incomplete outcome")
+    expect(facts.find((fact) => fact.label === "Next permitted action")?.value).not.toContain("Keep executing")
+  })
+
+  it("does not expose stale loop guidance after Work completed", () => {
+    const facts = buildWorkInspectorFacts(workCase({ status: "Completed", approvals: [], objectiveLoop: objectiveLoop("completed", "Retry the charge") }))
+    expect(facts.find((fact) => fact.label === "Next permitted action")?.value).toContain("follow-up")
+    expect(facts.find((fact) => fact.label === "Next permitted action")?.value).not.toContain("Retry the charge")
+  })
+
+  it.each(["Failed", "Blocked"] as const)("does not expose stale loop guidance after Work is %s", (status) => {
+    const facts = buildWorkInspectorFacts(workCase({ status, approvals: [], objectiveLoop: objectiveLoop("failed", "Keep executing") }))
+    expect(facts.find((fact) => fact.label === "Next permitted action")?.value).toContain("Inspect the incomplete outcome")
+    expect(facts.find((fact) => fact.label === "Next permitted action")?.value).not.toContain("Keep executing")
   })
 })

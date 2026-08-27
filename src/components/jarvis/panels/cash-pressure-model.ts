@@ -12,6 +12,7 @@ export const AGE_BANDS = [
 export type AgeBandKey = (typeof AGE_BANDS)[number]["key"]
 export type InvoiceView = "open" | "overdue" | "paid" | "all"
 export type CollectionView = "active" | "history"
+export type CollectionWorkSource = "idle" | "live" | "loading" | "unavailable"
 
 export interface AgingBandSummary {
   key: AgeBandKey
@@ -99,5 +100,12 @@ export function invoiceMatchesView(invoice: InvoiceResource, view: InvoiceView):
 }
 
 export function collectionMatchesView(workCase: WorkCaseProjection, view: CollectionView): boolean {
-  return view === "active" ? !["Completed", "Partial", "Cancelled"].includes(workCase.status) : workCase.status === "Completed"
+  const recordedOutcome = ["Completed", "Partial", "Cancelled"].includes(workCase.status)
+  return view === "active" ? !recordedOutcome : recordedOutcome
+}
+
+export function collectionWorkBandLabel(source: CollectionWorkSource, count: number): string {
+  if (source === "loading") return "Reading collection Work…"
+  if (source === "unavailable") return "Collection Work unavailable"
+  return count > 0 ? `${count} collection Work` : "No collection Work linked"
 }
