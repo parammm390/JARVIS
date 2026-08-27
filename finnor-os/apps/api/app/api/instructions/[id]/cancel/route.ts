@@ -41,7 +41,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     // Publish the cancellation fence before taking a second snapshot. A planner
     // that finishes after this point sees the marker and must reject its drafts.
-    await emitInstructionEvent(ctx.tenantId, id, "cancelled", { requestedBy: ctx.userId, source: "product", fence: true, canonical: false });
+    await emitInstructionEvent(
+      ctx.tenantId,
+      id,
+      "cancelled",
+      { requestedBy: ctx.userId, source: "product", fence: true, canonical: false },
+      { required: true },
+    );
 
     const snapshot = await withTenant(ctx.tenantId, async (db) => {
       const actions = await db

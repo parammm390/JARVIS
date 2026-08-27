@@ -1,10 +1,9 @@
 // jarvis-v3 P3.T2 (plan v3 §7.1/§8 PHASE 3): the instruction lifecycle trace.
 // `instruction_sessions`/`instruction_events` (migration 0062, unapplied this session —
 // see JARVIS-FRONTEND-MAESTRO-STATE-v3.md BLOCKER for why) back the frontend's 400ms
-// trace poll. Both functions here are best-effort, fire-and-forget from the caller's
-// perspective — the SAME convention `index.ts`'s own appendShortTerm/mirrorTurnToZep
-// calls already use (`.catch(() => undefined)`): a trace-recording failure must never
-// break the real instruction it is only describing.
+// trace poll. Ordinary presentation trace writes are best-effort. Cancellation
+// markers are different: they are execution fences, so their write/read paths are
+// explicitly fail-closed.
 
 import { withTenant, instructionSessions, instructionEvents, receiveWork } from "@finnor/db";
 import { and, eq, sql } from "drizzle-orm";
@@ -293,9 +292,10 @@ export async function ensureInstructionSession(
  *  transaction. The real write pattern this system has (one instructionId, one
  *  synchronous `handleInstruction` call as its only writer) makes this safe in
  *  practice; the UNIQUE(instruction_id, seq) constraint (migration 0062) turns any
- *  genuine race into a caught, logged insert failure rather than silent corruption —
- *  never a crash, never a duplicate seq. No-ops (does not throw, does not write)
- *  when `instructionId` is absent — the phone (`webhooks/vapi/route.ts`) and async
+ *  genuine race into a caught, logged insert failure rather than silent corruption.
+ *  Callers may require the write when the event is an execution fence. No-ops (does
+ *  not throw, does not write) when `instructionId` is absent — the phone
+ *  (`webhooks/vapi/route.ts`) and async
  *  worker (`process-instruction.ts`) paths never send one and are untouched by this
  *  phase. */
 export async function emitInstructionEvent(
@@ -307,6 +307,7 @@ export async function emitInstructionEvent(
   // deliberately closed interface). Keep this boundary structural so the
   // compiler checks the caller's object shape without forcing an unsafe cast.
   payload: object = {},
+  options: { required?: boolean } = {},
 ): Promise<void> {
   if (!instructionId) return;
   try {
@@ -332,8 +333,11 @@ export async function emitInstructionEvent(
   } catch (err) {
     getLogger().warn(
       { err: err instanceof Error ? err.message : String(err), instructionId, phase },
-      "[instruction-trace] emitInstructionEvent failed (non-fatal — trace gap, real instruction unaffected)",
+      options.required
+        ? "[instruction-trace] required instruction event failed"
+        : "[instruction-trace] emitInstructionEvent failed (non-fatal — trace gap, real instruction unaffected)",
     );
+    if (options.required) throw err;
   }
 }
 
@@ -351,24 +355,31 @@ export function isInstructionCancellationPayload(value: unknown): boolean {
 export async function isInstructionCancelled(tenantId: string, instructionId: string | undefined): Promise<boolean> {
   if (!instructionId) return false;
   try {
-    const rows = await withTenant(tenantId, (db) =>
+    const [row] = await withTenant(tenantId, (db) =>
       db
-        .select({ payload: instructionEvents.payload })
+        .select({ id: instructionEvents.id })
         .from(instructionEvents)
-        .where(and(eq(instructionEvents.instructionId, instructionId), eq(instructionEvents.phase, "cancelled")))
-        .limit(100),
+        .where(and(
+          eq(instructionEvents.tenantId, tenantId),
+          eq(instructionEvents.instructionId, instructionId),
+          eq(instructionEvents.phase, "cancelled"),
+          sql`(
+            jsonb_typeof(${instructionEvents.payload}->'actionId') IS DISTINCT FROM 'string'
+            OR ${instructionEvents.payload}->>'fence' = 'true'
+            OR ${instructionEvents.payload}->>'canonical' = 'true'
+          )`,
+        ))
+        .limit(1),
     );
-    return rows.some((row) => isInstructionCancellationPayload(row.payload));
+    return Boolean(row);
   } catch (err) {
-    // The trace ledger is observability state, not an authorization gate. A
-    // temporarily unavailable or not-yet-migrated instruction_events table must
-    // not turn a valid planner result into a 500 or silently discard the action.
-    // Cancellation remains fail-closed at the explicit cancel endpoint; this
-    // best-effort read only answers whether a cancellation marker is present.
+    // This read is an execution fence, not ordinary trace observability. Unknown
+    // cancellation state must stop planning/effects until the durable ledger is
+    // readable again.
     getLogger().warn(
       { err: err instanceof Error ? err.message : String(err), instructionId },
-      "[instruction-trace] cancellation lookup failed; continuing as not cancelled",
+      "[instruction-trace] cancellation lookup failed; refusing to continue",
     );
-    return false;
+    throw err;
   }
 }
