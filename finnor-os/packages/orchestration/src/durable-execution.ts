@@ -125,10 +125,8 @@ export async function revalidateAuthorizedEffectEligibility(
   if (authority.outcome !== "allowed") return { allowed: false, reason: `Authority invalidated: ${authority.reasonCode}` };
   try {
     const { actionRow, humanApproval } = await withTenant(tenantId, async (db) => {
-      const [[row], [approval]] = await Promise.all([
-        db.select().from(domainActions).where(and(eq(domainActions.tenantId, tenantId), eq(domainActions.id, domainActionId))).limit(1),
-        db.select({ id: actionLog.id }).from(actionLog).where(and(eq(actionLog.tenantId, tenantId), eq(actionLog.domainActionId, domainActionId), eq(actionLog.step, "confirmed"))).limit(1),
-      ]);
+      const [row] = await db.select().from(domainActions).where(and(eq(domainActions.tenantId, tenantId), eq(domainActions.id, domainActionId))).limit(1);
+      const [approval] = await db.select({ id: actionLog.id }).from(actionLog).where(and(eq(actionLog.tenantId, tenantId), eq(actionLog.domainActionId, domainActionId), eq(actionLog.step, "confirmed"))).limit(1);
       return { actionRow: row, humanApproval: approval };
     });
     if (!actionRow) throw new DurableExecutionBlocked("The authorized action disappeared before effect execution");

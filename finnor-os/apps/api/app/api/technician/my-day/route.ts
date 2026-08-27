@@ -29,8 +29,8 @@ export async function GET(req: Request): Promise<Response> {
     const technicianId = await technicianForUser(ctx.tenantId, ctx.userId);
     const date = new URL(req.url).searchParams.get("date") ?? new Date().toISOString().slice(0, 10);
     const [start, end] = dayBounds(date);
-    const [visits, workOrdersForDay] = await withTenant(ctx.tenantId, (db) => Promise.all([
-      db.select({
+    const { visits, workOrdersForDay } = await withTenant(ctx.tenantId, async (db) => {
+      const visits = await db.select({
         id: serviceVisits.id,
         type: serviceVisits.type,
         scheduledAt: serviceVisits.scheduledAt,
@@ -44,8 +44,8 @@ export async function GET(req: Request): Promise<Response> {
         .from(serviceVisits)
         .innerJoin(households, eq(households.id, serviceVisits.householdId))
         .where(and(eq(serviceVisits.technicianId, technicianId), gte(serviceVisits.scheduledAt, start), lt(serviceVisits.scheduledAt, end)))
-        .orderBy(asc(serviceVisits.scheduledAt)),
-      db.select({
+        .orderBy(asc(serviceVisits.scheduledAt));
+      const workOrdersForDay = await db.select({
         id: workOrders.id,
         type: workOrders.type,
         status: workOrders.status,
@@ -57,8 +57,9 @@ export async function GET(req: Request): Promise<Response> {
         .from(workOrders)
         .innerJoin(households, eq(households.id, workOrders.householdId))
         .where(and(eq(workOrders.tenantId, ctx.tenantId), eq(workOrders.technicianId, technicianId), gte(workOrders.scheduledAt, start), lt(workOrders.scheduledAt, end)))
-        .orderBy(asc(workOrders.scheduledAt)),
-    ]));
+        .orderBy(asc(workOrders.scheduledAt));
+      return { visits, workOrdersForDay };
+    });
     return Response.json({ date, technicianId, visits, workOrders: workOrdersForDay });
   } catch (err) {
     return errorResponse(err);

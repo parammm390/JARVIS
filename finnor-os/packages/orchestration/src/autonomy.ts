@@ -145,18 +145,16 @@ export async function evaluateEffectAutonomy(params: {
     if (!run) return { run: null, setting: null, authorityRevision: null, integrations: [], grants: [], certifications: [], openReconciliation: [] };
     const definition = OUTCOME_PACK_DEFINITIONS[run.packId as OutcomePackId];
     const requiredCapabilities = definition?.requiredCapabilities.map((item) => item.capability) ?? [];
-    const [[setting], [authority], integrations, grants, certifications, openReconciliation] = await Promise.all([
-      db.select().from(tenantOutcomePackSettings).where(and(eq(tenantOutcomePackSettings.tenantId, params.action.tenantId), eq(tenantOutcomePackSettings.packId, run.packId))).limit(1),
-      db.select().from(authorityStates).where(eq(authorityStates.tenantId, params.action.tenantId)).limit(1),
-      requiredCapabilities.length === 0 ? Promise.resolve([]) : db.select().from(tenantIntegrations).where(and(eq(tenantIntegrations.tenantId, params.action.tenantId), inArray(tenantIntegrations.capability, requiredCapabilities as Array<typeof tenantIntegrations.$inferSelect.capability>))),
-      db.select().from(autonomyGrants).where(and(eq(autonomyGrants.tenantId, params.action.tenantId), eq(autonomyGrants.packId, run.packId), eq(autonomyGrants.packVersion, run.packVersion))).orderBy(desc(autonomyGrants.createdAt)),
-      db.select().from(outcomePackCertifications).where(and(eq(outcomePackCertifications.tenantId, params.action.tenantId), eq(outcomePackCertifications.packId, run.packId), eq(outcomePackCertifications.packVersion, run.packVersion), eq(outcomePackCertifications.fingerprint, run.certificationFingerprint))).orderBy(desc(outcomePackCertifications.certifiedAt)),
-      db.select().from(reconciliationCases).where(and(
-        eq(reconciliationCases.tenantId, params.action.tenantId),
-        eq(reconciliationCases.status, "open"),
-        inArray(reconciliationCases.caseType, ["external_drift", "mapping_ambiguous", "stale_source", "auth_failure"]),
-      )),
-    ]);
+    const [setting] = await db.select().from(tenantOutcomePackSettings).where(and(eq(tenantOutcomePackSettings.tenantId, params.action.tenantId), eq(tenantOutcomePackSettings.packId, run.packId))).limit(1);
+    const [authority] = await db.select().from(authorityStates).where(eq(authorityStates.tenantId, params.action.tenantId)).limit(1);
+    const integrations = requiredCapabilities.length === 0 ? [] : await db.select().from(tenantIntegrations).where(and(eq(tenantIntegrations.tenantId, params.action.tenantId), inArray(tenantIntegrations.capability, requiredCapabilities as Array<typeof tenantIntegrations.$inferSelect.capability>)));
+    const grants = await db.select().from(autonomyGrants).where(and(eq(autonomyGrants.tenantId, params.action.tenantId), eq(autonomyGrants.packId, run.packId), eq(autonomyGrants.packVersion, run.packVersion))).orderBy(desc(autonomyGrants.createdAt));
+    const certifications = await db.select().from(outcomePackCertifications).where(and(eq(outcomePackCertifications.tenantId, params.action.tenantId), eq(outcomePackCertifications.packId, run.packId), eq(outcomePackCertifications.packVersion, run.packVersion), eq(outcomePackCertifications.fingerprint, run.certificationFingerprint))).orderBy(desc(outcomePackCertifications.certifiedAt));
+    const openReconciliation = await db.select().from(reconciliationCases).where(and(
+      eq(reconciliationCases.tenantId, params.action.tenantId),
+      eq(reconciliationCases.status, "open"),
+      inArray(reconciliationCases.caseType, ["external_drift", "mapping_ambiguous", "stale_source", "auth_failure"]),
+    ));
     return { run, setting: setting ?? null, authorityRevision: authority?.revision ?? 1, integrations, grants, certifications, openReconciliation };
   });
   if (!state.run) return result({ eligible: false, outcome: "not_pack_work", reasons: ["NOT_OUTCOME_PACK_WORK"] });

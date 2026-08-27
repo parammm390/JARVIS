@@ -43,10 +43,8 @@ export async function objectiveWakeContext(tenantId: string, objectiveLoopId: st
       eq(workWakeClaims.objectiveLoopId, objectiveLoopId),
     )).orderBy(desc(workWakeClaims.claimedAt)).limit(1);
     if (!claim) return null;
-    const [[wait], [event]] = await Promise.all([
-      db.select().from(workEventWaits).where(and(eq(workEventWaits.tenantId, tenantId), eq(workEventWaits.id, claim.waitId))).limit(1),
-      db.select().from(integrationEvents).where(and(eq(integrationEvents.tenantId, tenantId), eq(integrationEvents.id, claim.integrationEventId))).limit(1),
-    ]);
+    const [wait] = await db.select().from(workEventWaits).where(and(eq(workEventWaits.tenantId, tenantId), eq(workEventWaits.id, claim.waitId))).limit(1);
+    const [event] = await db.select().from(integrationEvents).where(and(eq(integrationEvents.tenantId, tenantId), eq(integrationEvents.id, claim.integrationEventId))).limit(1);
     if (!wait || !event) return null;
     return {
       claim: { id: claim.id, cause: claim.cause, objectiveRevision: claim.objectiveRevision, claimedAt: claim.claimedAt.toISOString() },

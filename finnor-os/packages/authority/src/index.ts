@@ -131,26 +131,36 @@ async function scopeAllows(db: Db, tenantId: string, employeeId: string, assignm
   return isAssigned(db, tenantId, employeeId, resource);
 }
 
+async function everyResourceAllows(
+  resources: AuthorityResource[],
+  predicate: (resource: AuthorityResource) => Promise<boolean>,
+): Promise<boolean> {
+  // withTenant supplies one transaction-scoped pg client. Keep its reads serial:
+  // pg clients cannot execute overlapping queries on the same connection.
+  for (const resource of resources) {
+    if (!await predicate(resource)) return false;
+  }
+  return true;
+}
+
 async function loadAuthority(db: Db, tenantId: string, employeeId: string): Promise<{
   revision: number;
   employee: { id: string; status: "active" | "suspended"; role: Role } | null;
   assignments: Assignment[];
   grants: Grant[];
 }> {
-  const [[state], [employee], assignmentRows] = await Promise.all([
-    db.select({ revision: authorityStates.revision }).from(authorityStates).where(eq(authorityStates.tenantId, tenantId)).limit(1),
-    db.select({ id: users.id, status: users.status, role: users.role }).from(users).where(and(eq(users.tenantId, tenantId), eq(users.id, employeeId))).limit(1),
-    db.select({ roleId: employeeRoleAssignments.roleId, roleKey: employeeRoles.key, resourceScope: employeeRoleAssignments.resourceScope })
-      .from(employeeRoleAssignments)
-      .innerJoin(employeeRoles, and(eq(employeeRoles.id, employeeRoleAssignments.roleId), eq(employeeRoles.tenantId, tenantId), eq(employeeRoles.active, true)))
-      .where(and(
-        eq(employeeRoleAssignments.tenantId, tenantId),
-        eq(employeeRoleAssignments.employeeId, employeeId),
-        eq(employeeRoleAssignments.active, true),
-        lte(employeeRoleAssignments.effectiveFrom, new Date()),
-        or(isNull(employeeRoleAssignments.expiresAt), sql`${employeeRoleAssignments.expiresAt} > now()`),
-      )),
-  ]);
+  const [state] = await db.select({ revision: authorityStates.revision }).from(authorityStates).where(eq(authorityStates.tenantId, tenantId)).limit(1);
+  const [employee] = await db.select({ id: users.id, status: users.status, role: users.role }).from(users).where(and(eq(users.tenantId, tenantId), eq(users.id, employeeId))).limit(1);
+  const assignmentRows = await db.select({ roleId: employeeRoleAssignments.roleId, roleKey: employeeRoles.key, resourceScope: employeeRoleAssignments.resourceScope })
+    .from(employeeRoleAssignments)
+    .innerJoin(employeeRoles, and(eq(employeeRoles.id, employeeRoleAssignments.roleId), eq(employeeRoles.tenantId, tenantId), eq(employeeRoles.active, true)))
+    .where(and(
+      eq(employeeRoleAssignments.tenantId, tenantId),
+      eq(employeeRoleAssignments.employeeId, employeeId),
+      eq(employeeRoleAssignments.active, true),
+      lte(employeeRoleAssignments.effectiveFrom, new Date()),
+      or(isNull(employeeRoleAssignments.expiresAt), sql`${employeeRoleAssignments.expiresAt} > now()`),
+    ));
   const roleIds = assignmentRows.map((row) => row.roleId);
   const grantRows = roleIds.length === 0 ? [] : await db.select().from(roleAuthorityGrants).where(and(eq(roleAuthorityGrants.tenantId, tenantId), inArray(roleAuthorityGrants.roleId, roleIds)));
   return {
@@ -190,7 +200,10 @@ async function eligibleApproversTx(
     for (const grant of matching) {
       const assignment = auth.assignments.find((row) => row.roleId === grant.roleId);
       if (!assignment) continue;
-      const everyResource = (await Promise.all(resources.map((resource) => resourceTypeMatches(grant.resourceType, resource.type) && scopeAllows(db, tenantId, candidate.id, assignment, resource)))).every(Boolean);
+      const everyResource = await everyResourceAllows(resources, async (resource) => (
+        resourceTypeMatches(grant.resourceType, resource.type)
+        && await scopeAllows(db, tenantId, candidate.id, assignment, resource)
+      ));
       if (everyResource) { allowed = true; break; }
     }
     if (allowed) eligible.push(candidate.id);
@@ -313,7 +326,10 @@ export async function evaluateAuthority(ctx: TenantContext, request: AuthorityRe
       const assignment = auth.assignments.find((row) => row.roleId === grant.roleId);
       if (!assignment) continue;
       const typeAllowed = resources.every((resource) => resourceTypeMatches(grant.resourceType, resource.type));
-      const scopeAllowed = typeAllowed && (await Promise.all(resources.map((resource) => scopeAllows(db, ctx.tenantId, employeeId, assignment, resource)))).every(Boolean);
+      const scopeAllowed = typeAllowed && await everyResourceAllows(
+        resources,
+        (resource) => scopeAllows(db, ctx.tenantId, employeeId, assignment, resource),
+      );
       const amountAllowed = request.amountUsd === undefined || grant.maxAmountUsd === null || request.amountUsd <= Number(grant.maxAmountUsd);
       const riskAllowed = RISK_RANK[request.risk] <= RISK_RANK[grant.maxRisk];
       evaluated.push({ grant, assignment, scopeAllowed, typeAllowed, amountAllowed, riskAllowed });
@@ -535,7 +551,10 @@ export async function canExerciseAuthority(ctx: TenantContext, request: Authorit
       const assignment = auth.assignments.find((row) => row.roleId === grant.roleId);
       if (!assignment) continue;
       const typeAllowed = resources.every((resource) => resourceTypeMatches(grant.resourceType, resource.type));
-      const scopeAllowed = typeAllowed && (await Promise.all(resources.map((resource) => scopeAllows(db, ctx.tenantId, employeeId, assignment, resource)))).every(Boolean);
+      const scopeAllowed = typeAllowed && await everyResourceAllows(
+        resources,
+        (resource) => scopeAllows(db, ctx.tenantId, employeeId, assignment, resource),
+      );
       evaluated.push({
         grant,
         scopeAllowed,

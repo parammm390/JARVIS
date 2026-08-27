@@ -294,10 +294,8 @@ export async function getComputerRunBundle(tenantId: string, runId: string): Pro
   return withTenant(tenantId, async (db) => {
     const [run] = await db.select().from(computerRuns).where(and(eq(computerRuns.tenantId, tenantId), eq(computerRuns.id, runId))).limit(1);
     if (!run) return null;
-    const [steps, artifacts] = await Promise.all([
-      db.select().from(computerSteps).where(and(eq(computerSteps.tenantId, tenantId), eq(computerSteps.runId, runId))).orderBy(asc(computerSteps.seq)),
-      db.select().from(computerArtifacts).where(and(eq(computerArtifacts.tenantId, tenantId), eq(computerArtifacts.runId, runId))).orderBy(asc(computerArtifacts.createdAt)),
-    ]);
+    const steps = await db.select().from(computerSteps).where(and(eq(computerSteps.tenantId, tenantId), eq(computerSteps.runId, runId))).orderBy(asc(computerSteps.seq));
+    const artifacts = await db.select().from(computerArtifacts).where(and(eq(computerArtifacts.tenantId, tenantId), eq(computerArtifacts.runId, runId))).orderBy(asc(computerArtifacts.createdAt));
     return { run: runView(run), steps: steps.map(stepView), artifacts: artifacts.map(artifactView) };
   });
 }
