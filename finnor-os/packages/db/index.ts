@@ -668,6 +668,47 @@ export async function receiveWork(params: ReceiveWorkParams): Promise<ReceivedWo
   const contextSnapshotHash = contextSnapshot ? provenanceHash(contextSnapshot) : null;
   const contextCapturedAt = contextSnapshot ? provenanceCapturedAt(contextSnapshot) : null;
   return withTenant(params.tenantId, async (db) => {
+    // Work cannot be created before the input's two idempotency claims are known to
+    // be free. Serialize both claims so callers using different work/idempotency IDs
+    // for the same instruction cannot race each other into an orphan Work.
+    const claimKeys = [
+      `instruction:${params.tenantId}:${desiredInstructionId}`,
+      ...(params.idempotencyKey ? [`idempotency:${params.tenantId}:${params.idempotencyKey}`] : []),
+    ].sort();
+    for (const claimKey of claimKeys) {
+      await db.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${claimKey}, 0))`);
+    }
+
+    const duplicateForInput = async (input: typeof schema.workInputs.$inferSelect): Promise<ReceivedWork> => {
+      const [canonicalWork] = await db.select().from(schema.works).where(and(
+        eq(schema.works.tenantId, params.tenantId),
+        eq(schema.works.id, input.workId),
+      )).limit(1);
+      if (!canonicalWork) throw new Error("Durable Work input references a missing Work");
+      return {
+        workId: canonicalWork.id,
+        workInputId: input.id,
+        instructionId: input.instructionId,
+        created: false,
+        duplicate: true,
+        status: canonicalWork.status,
+        finalOutcome: canonicalWork.finalOutcome,
+      };
+    };
+
+    const matchingInputs = await db.select().from(schema.workInputs).where(and(
+      eq(schema.workInputs.tenantId, params.tenantId),
+      or(
+        eq(schema.workInputs.instructionId, desiredInstructionId),
+        params.idempotencyKey ? eq(schema.workInputs.idempotencyKey, params.idempotencyKey) : undefined,
+      ),
+    ));
+    const distinctInputs = [...new Map(matchingInputs.map((input) => [input.id, input])).values()];
+    if (distinctInputs.length > 1) {
+      throw new Error("Work input idempotency claims resolve to different canonical inputs");
+    }
+    if (distinctInputs[0]) return duplicateForInput(distinctInputs[0]);
+
     const [validUser] = isUuid(params.userId)
       ? await db.select({ id: schema.users.id }).from(schema.users).where(and(eq(schema.users.tenantId, params.tenantId), eq(schema.users.id, params.userId))).limit(1)
       : [];
@@ -738,24 +779,6 @@ export async function receiveWork(params: ReceiveWorkParams): Promise<ReceivedWo
       });
     }
 
-    const [existingInput] = await db.select().from(schema.workInputs).where(and(
-      eq(schema.workInputs.tenantId, params.tenantId),
-      params.idempotencyKey
-        ? eq(schema.workInputs.idempotencyKey, params.idempotencyKey)
-        : eq(schema.workInputs.instructionId, desiredInstructionId),
-    )).limit(1);
-    if (existingInput) {
-      return {
-        workId: work.id,
-        workInputId: existingInput.id,
-        instructionId: existingInput.instructionId,
-        created,
-        duplicate: true,
-        status: work.status,
-        finalOutcome: work.finalOutcome,
-      };
-    }
-
     const inputId = desiredInstructionId;
     const [input] = await db.insert(schema.workInputs).values({
       id: inputId,
@@ -772,9 +795,15 @@ export async function receiveWork(params: ReceiveWorkParams): Promise<ReceivedWo
       contextCapturedAt,
     }).onConflictDoNothing().returning();
     if (!input) {
-      const [raced] = await db.select().from(schema.workInputs).where(and(eq(schema.workInputs.tenantId, params.tenantId), eq(schema.workInputs.instructionId, desiredInstructionId))).limit(1);
+      const [raced] = await db.select().from(schema.workInputs).where(and(
+        eq(schema.workInputs.tenantId, params.tenantId),
+        or(
+          eq(schema.workInputs.instructionId, desiredInstructionId),
+          params.idempotencyKey ? eq(schema.workInputs.idempotencyKey, params.idempotencyKey) : undefined,
+        ),
+      )).limit(1);
       if (!raced) throw new Error("Unable to persist Work input");
-      return { workId: raced.workId, workInputId: raced.id, instructionId: raced.instructionId, created, duplicate: true, status: work.status, finalOutcome: work.finalOutcome };
+      return duplicateForInput(raced);
     }
 
     // instruction_sessions remains the backward-compatible trace projection. Every
