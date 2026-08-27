@@ -297,7 +297,7 @@ export class LLMPlanner implements Planner {
             lte(domainPolicyRevisions.effectiveFrom, new Date()),
           ),
         )
-        .orderBy(desc(domainPolicyRevisions.effectiveFrom));
+        .orderBy(desc(domainPolicyRevisions.effectiveFrom), desc(domainPolicyRevisions.version));
       // Ordering makes the first revision for each type the policy effective now.
       return new Map(rows.filter((p, i, all) => all.findIndex((x) => x.actionType === p.actionType) === i).map((p) => [p.actionType, ({ ...p, id: p.policyId } as DomainPolicy)]));
     });

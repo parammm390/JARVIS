@@ -12,7 +12,7 @@
 // voice_notify_failure job pattern scheduled-reminder.ts's AMC lapse notice and
 // executor.ts's integration-failure notice both already use.
 
-import { withTenant, domainActions, domainPolicies, enqueueJob } from "@finnor/db";
+import { withTenant, domainActions, domainPolicyRevisions, enqueueJob } from "@finnor/db";
 import { and, eq } from "drizzle-orm";
 import type { JobHandler } from "../queue";
 
@@ -29,10 +29,13 @@ export const scanApprovalExpiry: JobHandler = async (payload) => {
         actionType: domainActions.actionType,
         createdAt: domainActions.createdAt,
         summary: domainActions.summary,
-        confirmationTimeoutHours: domainPolicies.confirmationTimeoutHours,
+        confirmationTimeoutHours: domainPolicyRevisions.confirmationTimeoutHours,
       })
       .from(domainActions)
-      .leftJoin(domainPolicies, eq(domainActions.policyId, domainPolicies.id))
+      .leftJoin(domainPolicyRevisions, and(
+        eq(domainActions.policyId, domainPolicyRevisions.policyId),
+        eq(domainActions.policyVersion, domainPolicyRevisions.version),
+      ))
       .where(and(eq(domainActions.tenantId, tenantId), eq(domainActions.status, "pending"))),
   );
   if (pending.length === 0) return;

@@ -5,7 +5,7 @@
 // file's lease_expires_at is an additional, finer-grained atomic claim on top of the
 // job-level lease, not a second queue system.
 
-import { withTenant, enqueueJob, workflowSteps, workflowRuns, commands, jobs, integrationOperations, reconciliationCases, domainActions, domainPolicies, businessEffects, decisionReceipts, reconcileWorkStatus, transitionWork, type Db } from "@finnor/db";
+import { withTenant, enqueueJob, workflowSteps, workflowRuns, commands, jobs, integrationOperations, reconciliationCases, domainActions, domainPolicies, domainPolicyRevisions, businessEffects, decisionReceipts, reconcileWorkStatus, transitionWork, type Db } from "@finnor/db";
 import { and, eq, lt, sql, desc, inArray, or } from "drizzle-orm";
 import { maybeChaosKill } from "./chaos";
 import { openReconciliationCase } from "./reconciliation";
@@ -138,8 +138,18 @@ async function openReceiptForClaimTx(db: Db, tenantId: string, step: WorkflowSte
   if (step.domainActionId) {
     const [action] = await db.select().from(domainActions).where(and(eq(domainActions.tenantId, tenantId), eq(domainActions.id, step.domainActionId)));
     if (action?.policyId) {
-      const [policy] = await db.select().from(domainPolicies).where(and(eq(domainPolicies.tenantId, tenantId), eq(domainPolicies.id, action.policyId)));
-      if (policy) policyApplied = { id: policy.id, version: policy.version };
+      const [revision] = action.policyVersion
+        ? await db.select({ policyId: domainPolicyRevisions.policyId, version: domainPolicyRevisions.version }).from(domainPolicyRevisions).where(and(
+            eq(domainPolicyRevisions.tenantId, tenantId),
+            eq(domainPolicyRevisions.policyId, action.policyId),
+            eq(domainPolicyRevisions.version, action.policyVersion),
+          )).limit(1)
+        : [];
+      if (revision) policyApplied = { id: revision.policyId, version: revision.version };
+      else {
+        const [policy] = await db.select().from(domainPolicies).where(and(eq(domainPolicies.tenantId, tenantId), eq(domainPolicies.id, action.policyId)));
+        if (policy) policyApplied = { id: policy.id, version: policy.version };
+      }
     }
   }
   const [effect] = step.businessEffectId

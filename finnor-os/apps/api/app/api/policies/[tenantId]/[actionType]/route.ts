@@ -4,10 +4,27 @@
 
 import { withTenant, domainPolicies, domainPolicyRevisions } from "@finnor/db";
 import { UpsertPolicySchema } from "@finnor/policy-schema";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, lte, sql } from "drizzle-orm";
 import { requireContext, errorResponse } from "../../../../../lib/auth";
 
 type Params = { params: Promise<{ tenantId: string; actionType: string }> };
+
+type PolicyBase = typeof domainPolicies.$inferSelect;
+type PolicyRevision = typeof domainPolicyRevisions.$inferSelect;
+
+function projectRevision(base: PolicyBase, revision: PolicyRevision): PolicyBase {
+  return {
+    ...base,
+    actionType: revision.actionType,
+    policy: revision.policy,
+    requiresConfirmation: revision.requiresConfirmation,
+    confirmationTemplate: revision.confirmationTemplate,
+    modelProvider: revision.modelProvider,
+    confirmationTimeoutHours: revision.confirmationTimeoutHours,
+    version: revision.version,
+    effectiveFrom: revision.effectiveFrom,
+  };
+}
 
 export async function GET(req: Request, { params }: Params): Promise<Response> {
   try {
@@ -16,14 +33,29 @@ export async function GET(req: Request, { params }: Params): Promise<Response> {
     if (ctx.tenantId !== tenantId) {
       return Response.json({ error: "Forbidden" }, { status: 403 });
     }
-    const rows = await withTenant(ctx.tenantId, (db) =>
-      db
+    const policy = await withTenant(ctx.tenantId, async (db) => {
+      const [base] = await db
         .select()
         .from(domainPolicies)
-        .where(and(eq(domainPolicies.tenantId, ctx.tenantId), eq(domainPolicies.actionType, actionType))),
-    );
-    if (rows.length === 0) return Response.json({ error: "No policy configured" }, { status: 404 });
-    return Response.json({ policy: rows[0] });
+        .where(and(eq(domainPolicies.tenantId, ctx.tenantId), eq(domainPolicies.actionType, actionType)));
+      if (!base) return null;
+      const [current] = await db
+        .select()
+        .from(domainPolicyRevisions)
+        .where(and(
+          eq(domainPolicyRevisions.tenantId, ctx.tenantId),
+          eq(domainPolicyRevisions.policyId, base.id),
+          lte(domainPolicyRevisions.effectiveFrom, new Date()),
+        ))
+        .orderBy(desc(domainPolicyRevisions.effectiveFrom), desc(domainPolicyRevisions.version))
+        .limit(1);
+      if (current) return projectRevision(base, current);
+      // Compatibility fallback for pre-revision rows only. A first policy scheduled
+      // for the future is not current merely because its parent row already exists.
+      return base.effectiveFrom <= new Date() ? base : null;
+    });
+    if (!policy) return Response.json({ error: "No policy configured" }, { status: 404 });
+    return Response.json({ policy });
   } catch (err) {
     return errorResponse(err);
   }
@@ -51,23 +83,34 @@ export async function PUT(req: Request, { params }: Params): Promise<Response> {
       return Response.json({ error: "effectiveFrom must be now or in the future" }, { status: 400 });
     }
     const row = await withTenant(ctx.tenantId, async (db) => {
+      // Serialize both first creation and every later revision for this exact policy.
+      // Row locks alone cannot protect the no-row-yet case.
+      await db.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`${ctx.tenantId}:${actionType}`}, 906))`);
       const [existing] = await db
         .select()
         .from(domainPolicies)
         .where(and(eq(domainPolicies.tenantId, ctx.tenantId), eq(domainPolicies.actionType, actionType)));
       if (existing) {
-        // A scheduled change must not replace the live row early. The revision is
-        // selected by effective time at planning/execution; the mutable row remains
-        // the current fast path until an immediate edit supersedes it.
+        const [latestRevision] = await db
+          .select({ version: domainPolicyRevisions.version })
+          .from(domainPolicyRevisions)
+          .where(and(
+            eq(domainPolicyRevisions.tenantId, ctx.tenantId),
+            eq(domainPolicyRevisions.policyId, existing.id),
+          ))
+          .orderBy(desc(domainPolicyRevisions.version))
+          .limit(1);
+        const version = Math.max(existing.version, latestRevision?.version ?? 0) + 1;
+        // A scheduled change must not replace the compatibility/base row early.
+        // Effective reads use the immutable revision log and its activation time.
         if (effectiveFrom > new Date()) {
-          const version = existing.version + 1;
           const [scheduled] = await db.insert(domainPolicyRevisions).values({
             tenantId: ctx.tenantId, policyId: existing.id, actionType, version,
             policy: body.data.policy, requiresConfirmation: body.data.requiresConfirmation,
             confirmationTemplate: body.data.confirmationTemplate ?? null, modelProvider: body.data.modelProvider ?? null,
             confirmationTimeoutHours: body.data.confirmationTimeoutHours ?? null, effectiveFrom,
           }).returning();
-          return scheduled!;
+          return projectRevision(existing, scheduled!);
         }
         const [updated] = await db
           .update(domainPolicies)
@@ -80,7 +123,7 @@ export async function PUT(req: Request, { params }: Params): Promise<Response> {
             // §3.1: a real edit is a real new version — never caller-supplied (a
             // client can't be trusted to increment its own audit trail), always +1
             // from whatever's actually stored, regardless of what body.data.version says.
-            version: existing.version + 1,
+            version,
             effectiveFrom,
           })
           .where(eq(domainPolicies.id, existing.id))

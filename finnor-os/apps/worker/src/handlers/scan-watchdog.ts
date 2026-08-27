@@ -15,7 +15,7 @@
 //    signal fires EARLIER (half that timeout) and only nudges — never changes status —
 //    so it can't race or duplicate that scan's own transition.
 
-import { withTenant, workflowRuns, workflowSteps, decisionReceipts, domainActions, domainPolicies, enqueueJob, getPool } from "@finnor/db";
+import { withTenant, workflowRuns, workflowSteps, decisionReceipts, domainActions, domainPolicyRevisions, enqueueJob, getPool } from "@finnor/db";
 import { and, eq, lt, isNull, sql } from "drizzle-orm";
 import { enqueueStep, isRunPastWatchdogDeadline, stuckRunDeadlineHours, workflowStepJobKey } from "@finnor/workflow-runtime";
 import { appendEpisode, readEpisodes } from "@finnor/memory";
@@ -126,10 +126,13 @@ async function detectAndNudgeAgingApprovals(tenantId: string): Promise<WatchdogF
         actionType: domainActions.actionType,
         createdAt: domainActions.createdAt,
         summary: domainActions.summary,
-        confirmationTimeoutHours: domainPolicies.confirmationTimeoutHours,
+        confirmationTimeoutHours: domainPolicyRevisions.confirmationTimeoutHours,
       })
       .from(domainActions)
-      .leftJoin(domainPolicies, eq(domainActions.policyId, domainPolicies.id))
+      .leftJoin(domainPolicyRevisions, and(
+        eq(domainActions.policyId, domainPolicyRevisions.policyId),
+        eq(domainActions.policyVersion, domainPolicyRevisions.version),
+      ))
       .where(and(eq(domainActions.tenantId, tenantId), eq(domainActions.status, "pending"))),
   );
   if (pending.length === 0) return [];

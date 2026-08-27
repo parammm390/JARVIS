@@ -90,7 +90,7 @@ async function assertMaterialPolicyStillValid(tenantId: string, effect: Business
       eq(domainPolicyRevisions.tenantId, tenantId),
       eq(domainPolicyRevisions.policyId, effect.authority.policyId!),
       lte(domainPolicyRevisions.effectiveFrom, new Date()),
-    )).orderBy(desc(domainPolicyRevisions.effectiveFrom)).limit(1);
+    )).orderBy(desc(domainPolicyRevisions.effectiveFrom), desc(domainPolicyRevisions.version)).limit(1);
     return { authorized, current };
   });
   if (!rows.authorized || !rows.current) throw new DurableExecutionBlocked("The authorized policy revision is no longer available");

@@ -1371,8 +1371,8 @@ export class FinnorOrchestrator implements Orchestrator {
       // up another tenant's policy row for the same action_type). Same convention
       // scan-low-inventory.ts and friends already follow.
       const [revision] = action.policyId
-        ? await db.select().from(domainPolicyRevisions).where(and(eq(domainPolicyRevisions.policyId, action.policyId), eq(domainPolicyRevisions.tenantId, action.tenantId), action.policyVersion ? eq(domainPolicyRevisions.version, action.policyVersion) : lte(domainPolicyRevisions.effectiveFrom, new Date()))).orderBy(desc(domainPolicyRevisions.effectiveFrom)).limit(1)
-        : await db.select().from(domainPolicyRevisions).where(and(eq(domainPolicyRevisions.actionType, action.actionType), eq(domainPolicyRevisions.tenantId, action.tenantId), lte(domainPolicyRevisions.effectiveFrom, new Date()))).orderBy(desc(domainPolicyRevisions.effectiveFrom)).limit(1);
+        ? await db.select().from(domainPolicyRevisions).where(and(eq(domainPolicyRevisions.policyId, action.policyId), eq(domainPolicyRevisions.tenantId, action.tenantId), action.policyVersion ? eq(domainPolicyRevisions.version, action.policyVersion) : lte(domainPolicyRevisions.effectiveFrom, new Date()))).orderBy(desc(domainPolicyRevisions.effectiveFrom), desc(domainPolicyRevisions.version)).limit(1)
+        : await db.select().from(domainPolicyRevisions).where(and(eq(domainPolicyRevisions.actionType, action.actionType), eq(domainPolicyRevisions.tenantId, action.tenantId), lte(domainPolicyRevisions.effectiveFrom, new Date()))).orderBy(desc(domainPolicyRevisions.effectiveFrom), desc(domainPolicyRevisions.version)).limit(1);
       return revision;
     });
     const policy: DomainPolicy = !row
@@ -1511,7 +1511,7 @@ export class FinnorOrchestrator implements Orchestrator {
         return { claimed: null, current };
       }
       const [currentRevision] = decision === "approve" && claimed.policyId
-        ? await db.select().from(domainPolicyRevisions).where(and(eq(domainPolicyRevisions.policyId, claimed.policyId), eq(domainPolicyRevisions.tenantId, tenantId), lte(domainPolicyRevisions.effectiveFrom, new Date()))).orderBy(desc(domainPolicyRevisions.effectiveFrom)).limit(1)
+        ? await db.select().from(domainPolicyRevisions).where(and(eq(domainPolicyRevisions.policyId, claimed.policyId), eq(domainPolicyRevisions.tenantId, tenantId), lte(domainPolicyRevisions.effectiveFrom, new Date()))).orderBy(desc(domainPolicyRevisions.effectiveFrom), desc(domainPolicyRevisions.version)).limit(1)
         : [];
       const [draftRevision] = decision === "approve" && before?.policyId && before.policyVersion
         ? await db.select().from(domainPolicyRevisions).where(and(eq(domainPolicyRevisions.policyId, before.policyId), eq(domainPolicyRevisions.version, before.policyVersion))).limit(1)
