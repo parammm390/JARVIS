@@ -119,28 +119,45 @@ export const customerCommPlugin: DomainEnginePlugin = {
         return { status: "failure", output: {}, error: "No customer found and no email given — nowhere to send this.", errorKind: "validation" };
       }
       if (hh) {
-        // Kept alongside the canonical write below — packages/memory/src/long-term.ts
-        // still reads communications_log for household history.
-        await withTenant(tenantId, (db) =>
-          db.insert(communicationsLog).values({ householdId: hh.id, channel, direction: "outbound", content: message }),
-        ).catch(() => undefined);
-        await withTenant(tenantId, async (db) => {
-          const { conversationId } = await getOrCreateConversation(db, {
-            tenantId,
-            householdId: hh.id,
-            channel: channel === "email" ? "email" : "sms",
+        const persistenceFailures: string[] = [];
+        try {
+          await withTenant(tenantId, async (db) => {
+            const { conversationId } = await getOrCreateConversation(db, {
+              tenantId,
+              householdId: hh.id,
+              channel: channel === "email" ? "email" : "sms",
+            });
+            await persistMessage(db, {
+              tenantId,
+              conversationId,
+              direction: "outbound",
+              channel,
+              content: message,
+              ...(draft.businessEffect
+                ? { provenance: { sourceSystem: `domain_action:${draft.businessEffect.source.domainActionId}` } }
+                : {}),
+            });
           });
-          await persistMessage(db, {
-            tenantId,
-            conversationId,
-            direction: "outbound",
-            channel,
-            content: message,
-            ...(draft.businessEffect
-              ? { provenance: { sourceSystem: `domain_action:${draft.businessEffect.source.domainActionId}` } }
-              : {}),
-          });
-        }).catch(() => undefined);
+        } catch {
+          persistenceFailures.push("canonical_message");
+        }
+        try {
+          // Kept alongside the canonical write above — packages/memory/src/long-term.ts
+          // still reads communications_log for household history.
+          await withTenant(tenantId, (db) =>
+            db.insert(communicationsLog).values({ householdId: hh.id, channel, direction: "outbound", content: message }),
+          );
+        } catch {
+          persistenceFailures.push("communications_history");
+        }
+        if (persistenceFailures.length > 0) {
+          return {
+            status: "failure",
+            output: { sent: true, channel, householdId: hh.id, persistenceFailures },
+            error: "The customer message was sent, but its required canonical history is incomplete. Do not resend automatically; reconcile the recorded delivery.",
+            errorKind: "needs_human",
+          };
+        }
       }
       return { status: "success", output: { sent: true, channel }, expected: { sent: true } };
     }

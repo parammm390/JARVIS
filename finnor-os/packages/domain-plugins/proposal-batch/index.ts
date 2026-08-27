@@ -117,6 +117,7 @@ export const proposalBatchPlugin: DomainEnginePlugin = {
     if (targets.length === 0) return { status: "success", output: { sent: 0 }, expected: { sent: 0 } };
     const tenantId = String(draft.payload.tenantId ?? "");
     const sent: string[] = [];
+    const deliveredUnrecorded: string[] = [];
     const failed: Array<{ label: string; error: string }> = [];
 
     for (const t of targets) {
@@ -136,33 +137,42 @@ export const proposalBatchPlugin: DomainEnginePlugin = {
           })
         : contact;
       if (sms.ok) {
-        sent.push(t.label);
         if (tenantId) {
-          await withTenant(tenantId, async (db) => {
-            const [row] = await db
-              .insert(proposals)
-              .values({
-                householdId: t.householdId,
-                content: { message, kind: "post_install_follow_up" },
-                status: "sent",
-                sentAt: new Date(),
-              })
-              .returning();
-            await recordBusinessEvent(db, {
-              tenantId,
-              entityType: "proposal",
-              entityId: row!.id,
-              eventType: "post_install_followup_sent",
-              payload: { householdId: t.householdId },
+          try {
+            await withTenant(tenantId, async (db) => {
+              const [row] = await db
+                .insert(proposals)
+                .values({
+                  householdId: t.householdId,
+                  content: { message, kind: "post_install_follow_up" },
+                  status: "sent",
+                  sentAt: new Date(),
+                })
+                .returning();
+              if (!row) throw new Error("proposal_evidence_not_created");
+              await recordBusinessEvent(db, {
+                tenantId,
+                entityType: "proposal",
+                entityId: row.id,
+                eventType: "post_install_followup_sent",
+                payload: { householdId: t.householdId },
+              });
             });
-          }).catch(() => undefined);
+            sent.push(t.label);
+          } catch {
+            deliveredUnrecorded.push(t.label);
+            failed.push({ label: t.label, error: "message sent but canonical proposal evidence was not recorded" });
+          }
+        } else {
+          deliveredUnrecorded.push(t.label);
+          failed.push({ label: t.label, error: "message sent but tenant identity was unavailable for canonical proposal evidence" });
         }
       } else {
         failed.push({ label: t.label, error: sms.error ?? "send failed" });
       }
     }
 
-    if (sent.length === 0 && failed.length > 0) {
+    if (sent.length === 0 && failed.length > 0 && deliveredUnrecorded.length === 0) {
       return {
         status: failed.every((f) => f.error.includes("not set") || f.error.includes("unavailable"))
           ? "integration_unavailable"
@@ -171,9 +181,19 @@ export const proposalBatchPlugin: DomainEnginePlugin = {
         error: `None of the ${targets.length} proposals could be sent: ${failed[0]!.error}`,
       };
     }
+    if (failed.length > 0) {
+      return {
+        status: "failure",
+        output: { sent: sent.length, sentTo: sent, deliveredUnrecorded, failed },
+        error: deliveredUnrecorded.length > 0
+          ? `${deliveredUnrecorded.length} proposal message${deliveredUnrecorded.length === 1 ? " was" : "s were"} delivered without complete canonical evidence. Do not resend automatically; reconcile the recorded deliveries.`
+          : `${failed.length} of ${targets.length} proposal messages failed after earlier messages were sent. Review the exact per-recipient result before retrying.`,
+        errorKind: "needs_human",
+      };
+    }
     return {
       status: "success",
-      output: { sent: sent.length, sentTo: sent, failed },
+      output: { sent: sent.length, sentTo: sent, deliveredUnrecorded, failed },
       expected: { sent: targets.length },
     };
   },

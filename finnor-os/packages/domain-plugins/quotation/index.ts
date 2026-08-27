@@ -240,9 +240,22 @@ export const quotationPlugin: DomainEnginePlugin = {
         });
         if (!sms.ok) return { status: sms.integrationUnavailable ? "integration_unavailable" : "failure", output: { contact: contact.output }, error: `The proposal text could not be sent: ${sms.error}` };
       }
-      await withTenant(tenantId, (db) =>
-        db.update(proposals).set({ status: "sent", sentAt: new Date() }).where(eq(proposals.id, String(draft.payload.proposalId))),
-      ).catch(() => undefined);
+      try {
+        const updated = await withTenant(tenantId, (db) =>
+          db.update(proposals)
+            .set({ status: "sent", sentAt: new Date() })
+            .where(eq(proposals.id, String(draft.payload.proposalId)))
+            .returning({ id: proposals.id }),
+        );
+        if (updated.length !== 1) throw new Error("proposal_state_not_updated");
+      } catch {
+        return {
+          status: "failure",
+          output: { proposalId: draft.payload.proposalId, channel: draft.payload.channel, sent: true, stateRecorded: false },
+          error: "The proposal was sent, but its canonical sent state could not be recorded. Do not resend automatically; reconcile the recorded delivery.",
+          errorKind: "needs_human",
+        };
+      }
       return { status: "success", output: { proposalId: draft.payload.proposalId, channel: draft.payload.channel }, expected: { sent: true } };
     }
     return {
