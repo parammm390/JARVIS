@@ -6,7 +6,7 @@ import pg from "pg";
 import { randomUUID } from "node:crypto";
 import { migrate } from "../../packages/db/migrate";
 import { claimStep, failStep, submitCommand } from "@finnor/workflow-runtime";
-import { closePool, domainActions, planRepairs, tenants, withTenant } from "@finnor/db";
+import { closePool, domainActions, jobs, planRepairs, tenants, withTenant } from "@finnor/db";
 import { and, eq } from "drizzle-orm";
 import { createDefaultPluginRegistry, FinnorOrchestrator, GatedExecutor, LLMPlanner } from "@finnor/orchestration";
 import { createDefaultRegistry } from "@finnor/tools";
@@ -45,6 +45,10 @@ describe.skipIf(!available)("terminal plan repair", () => {
     );
     await claimStep(TENANT_ID, submitted.stepIds[0]!);
     await failStep(TENANT_ID, submitted.stepIds[0]!, "Appointment validation failed.", "terminal");
+    const [repairJob] = await withTenant(TENANT_ID, (db) =>
+      db.select({ status: jobs.status }).from(jobs).where(eq(jobs.idempotencyKey, `plan-repair:${failedAction!.id}`)),
+    );
+    expect(repairJob).toMatchObject({ status: "queued" });
 
     const provider: LLMProvider = {
       name: "terminal-repair-stub",

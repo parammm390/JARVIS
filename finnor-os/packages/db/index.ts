@@ -936,78 +936,92 @@ export async function handoffWork(params: HandoffWorkParams): Promise<HandoffWor
   });
 }
 
+export interface TransitionWorkPatch {
+  finalOutcome?: unknown;
+  failure?: unknown;
+  recovery?: unknown;
+  activeContext?: Record<string, unknown>;
+  executionModel?: "query" | "atomic_effect" | "objective";
+  /** Optional optimistic fence for failures that may only claim a received Work. */
+  expectedStatus?: WorkStatus;
+  /** Optimistic generation fence for instruction-owned transitions. */
+  expectedWorkInputId?: string;
+}
+
+/** Transaction-scoped Work transition for callers that must commit lifecycle truth
+ * together with another required durable write, such as the job that delivers it. */
+export async function transitionWorkTx(
+  db: Db,
+  tenantId: string,
+  workId: string,
+  toStatus: WorkStatus,
+  eventType: string,
+  payload: Record<string, unknown> = {},
+  patch: TransitionWorkPatch = {},
+): Promise<void> {
+  await db.execute(sql`SELECT id FROM ${schema.works} WHERE ${schema.works.id} = ${workId} AND ${schema.works.tenantId} = ${tenantId} FOR UPDATE`);
+  const [work] = await db.select().from(schema.works).where(and(eq(schema.works.id, workId), eq(schema.works.tenantId, tenantId))).limit(1);
+  if (!work) throw new Error("Work not found");
+  if (patch.expectedStatus && work.status !== patch.expectedStatus) {
+    throw new WorkTransitionConflictError(`Work ${workId} is ${work.status}; expected ${patch.expectedStatus}`);
+  }
+  if (patch.expectedWorkInputId) {
+    const [latestInput] = await db.select({ id: schema.workInputs.id })
+      .from(schema.workInputs)
+      .where(and(eq(schema.workInputs.tenantId, tenantId), eq(schema.workInputs.workId, workId)))
+      .orderBy(desc(schema.workInputs.createdAt), desc(schema.workInputs.id))
+      .limit(1);
+    if (latestInput?.id !== patch.expectedWorkInputId) {
+      throw new WorkTransitionConflictError(`Work input ${patch.expectedWorkInputId} is no longer active`);
+    }
+  }
+  if ((work.status === "completed" || work.status === "cancelled") && toStatus !== work.status) {
+    const [latestEvent] = await db.select({ eventType: schema.workEvents.eventType, payload: schema.workEvents.payload })
+      .from(schema.workEvents)
+      .where(and(eq(schema.workEvents.tenantId, tenantId), eq(schema.workEvents.workId, workId)))
+      .orderBy(desc(schema.workEvents.seq))
+      .limit(1);
+    const eventInputId = jsonObject(latestEvent?.payload).workInputId;
+    const explicitlyContinued = patch.expectedWorkInputId
+      && (latestEvent?.eventType === "input_received" || latestEvent?.eventType === "recovery_input_received")
+      && eventInputId === patch.expectedWorkInputId;
+    if (!explicitlyContinued) {
+      throw new WorkTransitionConflictError(`Terminal Work ${workId} cannot transition from ${work.status} to ${toStatus} without a newer active input`);
+    }
+  }
+  if (work.status === "failed" && !["failed", "recovery", "cancelled"].includes(toStatus)) {
+    throw new WorkTransitionConflictError(`Failed Work ${workId} must enter explicit recovery before transitioning to ${toStatus}`);
+  }
+  const [latest] = await db.select({ maxSeq: sql<number>`coalesce(max(${schema.workEvents.seq}), 0)::int` }).from(schema.workEvents).where(eq(schema.workEvents.workId, workId));
+  await db.update(schema.works).set({
+    status: toStatus,
+    updatedAt: new Date(),
+    ...(patch.finalOutcome !== undefined ? { finalOutcome: patch.finalOutcome as object } : {}),
+    ...(patch.failure !== undefined ? { failure: patch.failure as object } : {}),
+    ...(patch.recovery !== undefined ? { recovery: patch.recovery as object } : {}),
+    ...(patch.activeContext ? { activeContext: { ...jsonObject(work.activeContext), ...patch.activeContext } } : {}),
+    ...(patch.executionModel ? { executionModel: patch.executionModel } : {}),
+  }).where(eq(schema.works.id, workId));
+  await db.insert(schema.workEvents).values({
+    tenantId,
+    workId,
+    seq: (latest?.maxSeq ?? 0) + 1,
+    eventType,
+    fromStatus: work.status,
+    toStatus,
+    payload,
+  });
+}
+
 export async function transitionWork(
   tenantId: string,
   workId: string,
   toStatus: WorkStatus,
   eventType: string,
   payload: Record<string, unknown> = {},
-  patch: {
-    finalOutcome?: unknown;
-    failure?: unknown;
-    recovery?: unknown;
-    activeContext?: Record<string, unknown>;
-    executionModel?: "query" | "atomic_effect" | "objective";
-    /** Optional optimistic fence for failures that may only claim a received Work. */
-    expectedStatus?: WorkStatus;
-    /** Optimistic generation fence for instruction-owned transitions. */
-    expectedWorkInputId?: string;
-  } = {},
+  patch: TransitionWorkPatch = {},
 ): Promise<void> {
-  await withTenant(tenantId, async (db) => {
-    await db.execute(sql`SELECT id FROM ${schema.works} WHERE ${schema.works.id} = ${workId} AND ${schema.works.tenantId} = ${tenantId} FOR UPDATE`);
-    const [work] = await db.select().from(schema.works).where(and(eq(schema.works.id, workId), eq(schema.works.tenantId, tenantId))).limit(1);
-    if (!work) throw new Error("Work not found");
-    if (patch.expectedStatus && work.status !== patch.expectedStatus) {
-      throw new WorkTransitionConflictError(`Work ${workId} is ${work.status}; expected ${patch.expectedStatus}`);
-    }
-    if (patch.expectedWorkInputId) {
-      const [latestInput] = await db.select({ id: schema.workInputs.id })
-        .from(schema.workInputs)
-        .where(and(eq(schema.workInputs.tenantId, tenantId), eq(schema.workInputs.workId, workId)))
-        .orderBy(desc(schema.workInputs.createdAt), desc(schema.workInputs.id))
-        .limit(1);
-      if (latestInput?.id !== patch.expectedWorkInputId) {
-        throw new WorkTransitionConflictError(`Work input ${patch.expectedWorkInputId} is no longer active`);
-      }
-    }
-    if ((work.status === "completed" || work.status === "cancelled") && toStatus !== work.status) {
-      const [latestEvent] = await db.select({ eventType: schema.workEvents.eventType, payload: schema.workEvents.payload })
-        .from(schema.workEvents)
-        .where(and(eq(schema.workEvents.tenantId, tenantId), eq(schema.workEvents.workId, workId)))
-        .orderBy(desc(schema.workEvents.seq))
-        .limit(1);
-      const eventInputId = jsonObject(latestEvent?.payload).workInputId;
-      const explicitlyContinued = patch.expectedWorkInputId
-        && (latestEvent?.eventType === "input_received" || latestEvent?.eventType === "recovery_input_received")
-        && eventInputId === patch.expectedWorkInputId;
-      if (!explicitlyContinued) {
-        throw new WorkTransitionConflictError(`Terminal Work ${workId} cannot transition from ${work.status} to ${toStatus} without a newer active input`);
-      }
-    }
-    if (work.status === "failed" && !["failed", "recovery", "cancelled"].includes(toStatus)) {
-      throw new WorkTransitionConflictError(`Failed Work ${workId} must enter explicit recovery before transitioning to ${toStatus}`);
-    }
-    const [latest] = await db.select({ maxSeq: sql<number>`coalesce(max(${schema.workEvents.seq}), 0)::int` }).from(schema.workEvents).where(eq(schema.workEvents.workId, workId));
-    await db.update(schema.works).set({
-      status: toStatus,
-      updatedAt: new Date(),
-      ...(patch.finalOutcome !== undefined ? { finalOutcome: patch.finalOutcome as object } : {}),
-      ...(patch.failure !== undefined ? { failure: patch.failure as object } : {}),
-      ...(patch.recovery !== undefined ? { recovery: patch.recovery as object } : {}),
-      ...(patch.activeContext ? { activeContext: { ...jsonObject(work.activeContext), ...patch.activeContext } } : {}),
-      ...(patch.executionModel ? { executionModel: patch.executionModel } : {}),
-    }).where(eq(schema.works.id, workId));
-    await db.insert(schema.workEvents).values({
-      tenantId,
-      workId,
-      seq: (latest?.maxSeq ?? 0) + 1,
-      eventType,
-      fromStatus: work.status,
-      toStatus,
-      payload,
-    });
-  });
+  await withTenant(tenantId, (db) => transitionWorkTx(db, tenantId, workId, toStatus, eventType, payload, patch));
 }
 
 /** Persist the exact backward-compatible API response without manufacturing a

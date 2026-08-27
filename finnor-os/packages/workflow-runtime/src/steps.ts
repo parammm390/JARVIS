@@ -5,7 +5,7 @@
 // file's lease_expires_at is an additional, finer-grained atomic claim on top of the
 // job-level lease, not a second queue system.
 
-import { withTenant, enqueueJob, workflowSteps, workflowRuns, commands, jobs, integrationOperations, reconciliationCases, domainActions, domainPolicies, domainPolicyRevisions, businessEffects, decisionReceipts, reconcileWorkStatus, transitionWork, type Db } from "@finnor/db";
+import { withTenant, enqueueJob, workflowSteps, workflowRuns, commands, jobs, integrationOperations, reconciliationCases, domainActions, domainPolicies, domainPolicyRevisions, businessEffects, decisionReceipts, reconcileWorkStatus, transitionWorkTx, type Db } from "@finnor/db";
 import { and, eq, lt, sql, desc, inArray, or } from "drizzle-orm";
 import { maybeChaosKill } from "./chaos";
 import { openReconciliationCase } from "./reconciliation";
@@ -308,34 +308,33 @@ export async function failStep(
       .returning({ id: workflowSteps.id });
     if (!row) return null;
     await finalizeReceiptForStepTx(db, tenantId, stepId, { errorKind, message: terminalReason, recoveryPath: "review via GET /api/workflows/runs and retry or escalate the run" });
+    if (errorKind === "terminal") {
+      const [step] = await db
+        .select({ domainActionId: workflowSteps.domainActionId, workId: workflowRuns.workId })
+        .from(workflowSteps)
+        .innerJoin(workflowRuns, eq(workflowRuns.id, workflowSteps.workflowRunId))
+        .where(and(eq(workflowSteps.tenantId, tenantId), eq(workflowRuns.tenantId, tenantId), eq(workflowSteps.id, stepId)));
+      if (step?.workId) {
+        await transitionWorkTx(db, tenantId, step.workId, "recovery", "workflow_step_failed", {
+          workflowStepId: stepId,
+          domainActionId: step.domainActionId,
+          errorKind,
+          message: terminalReason,
+        }, { recovery: { status: "queued", workflowStepId: stepId, domainActionId: step.domainActionId } });
+      }
+      if (step?.domainActionId) {
+        await db.insert(jobs).values({
+          type: "repair_plan_after_terminal_failure",
+          payload: { tenantId, domainActionId: step.domainActionId, workflowStepId: stepId },
+          idempotencyKey: `plan-repair:${step.domainActionId}`,
+          lane: "batch",
+          priority: 0,
+        }).onConflictDoNothing({ target: jobs.idempotencyKey });
+      }
+    }
     return row;
   });
   if (!failed) return;
-  // B2.T6: semantic terminal failures can propose a revised plan. Provider outages
-  // remain on the established recovery/retry path and do not consume a repair.
-  if (errorKind === "terminal") {
-    const [step] = await withTenant(tenantId, (db) =>
-      db.select({ domainActionId: workflowSteps.domainActionId, workId: workflowRuns.workId })
-        .from(workflowSteps)
-        .innerJoin(workflowRuns, eq(workflowRuns.id, workflowSteps.workflowRunId))
-        .where(and(eq(workflowSteps.tenantId, tenantId), eq(workflowRuns.tenantId, tenantId), eq(workflowSteps.id, stepId))),
-    );
-    if (step?.workId) {
-      await transitionWork(tenantId, step.workId, "recovery", "workflow_step_failed", {
-        workflowStepId: stepId,
-        domainActionId: step.domainActionId,
-        errorKind,
-        message: terminalReason,
-      }, { recovery: { status: "queued", workflowStepId: stepId, domainActionId: step.domainActionId } });
-    }
-    if (step?.domainActionId) {
-      await enqueueJob(
-        "repair_plan_after_terminal_failure",
-        { tenantId, domainActionId: step.domainActionId, workflowStepId: stepId },
-        `plan-repair:${step.domainActionId}`,
-      ).catch(() => undefined);
-    }
-  }
 }
 
 /** Enqueues the next pending step in sequence, or marks the workflow_run (and its
