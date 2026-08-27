@@ -10,7 +10,7 @@ import type { DraftAction, ExecutionResult, ValidationResult, DomainPolicy } fro
 import type { ToolRegistry } from "@finnor/tools";
 import { withTenant, invoices, households, domainActions, decisionReceipts, ingestIntegrationEventTx, tenantIntegrations } from "@finnor/db";
 import { submitCommand, receiveInboxEventTx, finalizeReceipt } from "@finnor/workflow-runtime";
-import { materializeSourceRecord, recordPayment } from "@finnor/data-platform";
+import { invoicePaymentBalance, materializeSourceRecord, recordPayment, type InvoicePaymentBalance } from "@finnor/data-platform";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -261,7 +261,7 @@ async function findInvoiceWorkflowRow(tenantId: string, invoiceId: string): Prom
  * The "payment webhook" + "reconciliation" steps: called from
  * apps/api/app/api/webhooks/payment/route.ts when the payment provider notifies us.
  * Dedups via receiveInboxEvent exactly like the real Vapi/GHL webhook routes, then
- * records the payment and marks the invoice paid on success. No real Stripe-equivalent
+ * records the payment and marks the invoice paid only after cumulative net settlement. No real Stripe-equivalent
  * provider is configured (Phase 3 finding — create_payment_link is emulator-only this
  * phase), so this is invoked with synthetic provider event ids in tests/dev rather
  * than a live signed webhook — the dedup/reconciliation mechanism is identical either
@@ -275,7 +275,7 @@ async function findInvoiceWorkflowRow(tenantId: string, invoiceId: string): Prom
  *     already documents this as safe/idempotent), never a second receipt row.
  *  2. `domain_actions.predictionDiff` gains one more real field comparison —
  *     `amountPaidUsd`: predicted (from the plugin's own `simulate()`, computed
- *     at plan time) vs. actual (this real payment) — genuinely the "predicted
+ *     at plan time) vs. cumulative actual paid — genuinely the "predicted
  *     $890, actually paid $890" moat moment, not fabricated: both sides are
  *     real numbers this function already has in hand. Appended to the
  *     existing diff's fields (never replacing the execution-time invoiceId
@@ -302,7 +302,7 @@ export async function applyPaymentWebhookEvent(params: {
       payload: { invoiceId: params.invoiceId, amountUsd: params.amountUsd, status: params.status },
       matchStepId: params.matchStepId,
     });
-    if (received.status === "duplicate") return { duplicate: true } as const;
+    if (received.status === "duplicate") return { duplicate: true, settlement: null } as const;
     if (params.status === "succeeded") {
       const payment = await recordPayment(db, {
         tenantId: params.tenantId,
@@ -344,34 +344,47 @@ export async function applyPaymentWebhookEvent(params: {
         sourceEventId: params.providerEventId,
         eventType: "payment.succeeded",
         resource: { type: "invoice", id: params.invoiceId },
-        payload: { status: params.status, amountUsd: params.amountUsd },
+        payload: { status: params.status, amountUsd: params.amountUsd, amountPaidUsd: payment.amountPaidUsd, balanceUsd: payment.balanceUsd, settled: payment.settled },
         evidenceRefs: [{ type: "inbox_event", id: received.inboxEventId }],
         trustClass: "untrusted_external",
       });
-    } else {
-      await ingestIntegrationEventTx(db, {
-        tenantId: params.tenantId,
-        source: "payment_provider",
-        provider: "payment_provider",
-        sourceEventId: params.providerEventId,
-        eventType: "payment.failed",
-        resource: { type: "invoice", id: params.invoiceId },
-        payload: { status: params.status, amountUsd: params.amountUsd },
-        evidenceRefs: [{ type: "inbox_event", id: received.inboxEventId }],
-        trustClass: "untrusted_external",
-      });
+      return { duplicate: false, settlement: payment } as const;
     }
-    return { duplicate: false } as const;
+    await ingestIntegrationEventTx(db, {
+      tenantId: params.tenantId,
+      source: "payment_provider",
+      provider: "payment_provider",
+      sourceEventId: params.providerEventId,
+      eventType: "payment.failed",
+      resource: { type: "invoice", id: params.invoiceId },
+      payload: { status: params.status, amountUsd: params.amountUsd },
+      evidenceRefs: [{ type: "inbox_event", id: received.inboxEventId }],
+      trustClass: "untrusted_external",
+    });
+    return { duplicate: false, settlement: null } as const;
   });
-  if (intake.duplicate) return { applied: false, reason: "duplicate delivery" };
 
   if (params.status === "succeeded") {
+    // Inbox dedup protects the canonical payment insert, not downstream convergence.
+    // A retry after a post-commit failure must repair the receipt/prediction state.
+    const settlement: InvoicePaymentBalance = intake.settlement ?? await withTenant(params.tenantId, (db) =>
+      invoicePaymentBalance(db, { tenantId: params.tenantId, invoiceId: params.invoiceId }),
+    );
     const workflow = await findInvoiceWorkflowRow(params.tenantId, params.invoiceId);
     if (workflow?.receiptId) {
       const priorActual =
         workflow.receiptActualResult && typeof workflow.receiptActualResult === "object" ? (workflow.receiptActualResult as Record<string, unknown>) : {};
+      const observedAt = new Date().toISOString();
       await finalizeReceipt(params.tenantId, workflow.receiptId, {
-        actualResult: { ...priorActual, paymentReceived: true, amountPaidUsd: params.amountUsd, paidAt: new Date().toISOString() },
+        actualResult: {
+          ...priorActual,
+          paymentReceived: settlement.amountPaidUsd > 0,
+          invoiceSettled: settlement.settled,
+          amountPaidUsd: settlement.amountPaidUsd,
+          balanceUsd: settlement.balanceUsd,
+          lastPaymentAt: observedAt,
+          ...(settlement.settled ? { paidAt: typeof priorActual.paidAt === "string" ? priorActual.paidAt : observedAt } : {}),
+        },
       });
     }
     if (workflow && workflow.predictedAmountUsd !== null) {
@@ -380,10 +393,14 @@ export async function applyPaymentWebhookEvent(params: {
           ? (workflow.predictionDiff as { compared?: number; matched?: number; fields?: unknown[] })
           : { compared: 0, matched: 0, fields: [] };
       const priorFields = Array.isArray(priorDiff.fields) ? priorDiff.fields : [];
-      const paymentMatched = workflow.predictedAmountUsd === params.amountUsd;
-      const fields = [...priorFields, { path: "amountPaidUsd", predicted: workflow.predictedAmountUsd, actual: params.amountUsd, matched: paymentMatched }];
-      const matched = (priorDiff.matched ?? 0) + (paymentMatched ? 1 : 0);
-      const compared = (priorDiff.compared ?? 0) + 1;
+      const existingPaymentField = priorFields.find((field) => field && typeof field === "object" && (field as { path?: unknown }).path === "amountPaidUsd") as { matched?: unknown } | undefined;
+      const baseFields = priorFields.filter((field) => !field || typeof field !== "object" || (field as { path?: unknown }).path !== "amountPaidUsd");
+      const paymentMatched = workflow.predictedAmountUsd === settlement.amountPaidUsd;
+      const fields = [...baseFields, { path: "amountPaidUsd", predicted: workflow.predictedAmountUsd, actual: settlement.amountPaidUsd, matched: paymentMatched }];
+      const baseCompared = Math.max(0, (priorDiff.compared ?? priorFields.length) - (existingPaymentField ? 1 : 0));
+      const baseMatched = Math.max(0, (priorDiff.matched ?? 0) - (existingPaymentField?.matched === true ? 1 : 0));
+      const compared = baseCompared + 1;
+      const matched = baseMatched + (paymentMatched ? 1 : 0);
       await withTenant(params.tenantId, (db) =>
         db
           .update(domainActions)
@@ -393,5 +410,5 @@ export async function applyPaymentWebhookEvent(params: {
     }
   }
 
-  return { applied: true };
+  return intake.duplicate ? { applied: false, reason: "duplicate delivery" } : { applied: true };
 }

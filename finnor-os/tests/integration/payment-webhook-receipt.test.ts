@@ -113,6 +113,8 @@ describe.skipIf(!available)("applyPaymentWebhookEvent — receipt updates in pla
   it("records a real mismatch honestly when the amount paid differs from the prediction — never silently matched", async () => {
     const { invoiceId, actionId } = await seedInvoiceWorkflow(500);
     await applyPaymentWebhookEvent({ tenantId: TENANT, invoiceId, providerEventId: `evt_${randomUUID()}`, amountUsd: 450, status: "succeeded" });
+    const [invoice] = await withTenant(TENANT, (db) => db.select({ status: invoices.status }).from(invoices).where(eq(invoices.id, invoiceId)));
+    expect(invoice!.status).toBe("sent");
     const [actionRow] = await withTenant(TENANT, (db) => db.select({ predictionDiff: domainActions.predictionDiff }).from(domainActions).where(eq(domainActions.id, actionId)));
     const diff = actionRow!.predictionDiff as { fields: Array<{ path: string; matched: boolean; predicted: number; actual: number }> };
     const amountField = diff.fields.find((f) => f.path === "amountPaidUsd");
@@ -120,7 +122,7 @@ describe.skipIf(!available)("applyPaymentWebhookEvent — receipt updates in pla
   });
 
   it("a duplicate delivery of the same providerEventId is a no-op — dedup, not a second update", async () => {
-    const { invoiceId, receiptId } = await seedInvoiceWorkflow(200);
+    const { invoiceId, actionId, receiptId } = await seedInvoiceWorkflow(200);
     const providerEventId = `evt_${randomUUID()}`;
     const first = await applyPaymentWebhookEvent({ tenantId: TENANT, invoiceId, providerEventId, amountUsd: 200, status: "succeeded" });
     expect(first.applied).toBe(true);
@@ -128,6 +130,26 @@ describe.skipIf(!available)("applyPaymentWebhookEvent — receipt updates in pla
     expect(second).toEqual({ applied: false, reason: "duplicate delivery" });
     const [receiptRow] = await withTenant(TENANT, (db) => db.select().from(decisionReceipts).where(eq(decisionReceipts.id, receiptId)));
     expect((receiptRow!.actualResult as { amountPaidUsd: number }).amountPaidUsd).toBe(200);
+    const [actionRow] = await withTenant(TENANT, (db) => db.select({ predictionDiff: domainActions.predictionDiff }).from(domainActions).where(eq(domainActions.id, actionId)));
+    const fields = (actionRow!.predictionDiff as { fields: Array<{ path: string }> }).fields;
+    expect(fields.filter((field) => field.path === "amountPaidUsd")).toHaveLength(1);
+  });
+
+  it("a duplicate payment repairs missing post-commit receipt and prediction convergence", async () => {
+    const { invoiceId, actionId, receiptId } = await seedInvoiceWorkflow(300);
+    const providerEventId = `evt_${randomUUID()}`;
+    await applyPaymentWebhookEvent({ tenantId: TENANT, invoiceId, providerEventId, amountUsd: 300, status: "succeeded" });
+    await withTenant(TENANT, async (db) => {
+      await db.update(decisionReceipts).set({ actualResult: { invoiceId } }).where(eq(decisionReceipts.id, receiptId));
+      await db.update(domainActions).set({ predictionDiff: { compared: 1, matched: 1, accuracy: 1, fields: [{ path: "invoiceId", predicted: invoiceId, actual: invoiceId, matched: true }] } }).where(eq(domainActions.id, actionId));
+    });
+
+    expect(await applyPaymentWebhookEvent({ tenantId: TENANT, invoiceId, providerEventId, amountUsd: 300, status: "succeeded" }))
+      .toEqual({ applied: false, reason: "duplicate delivery" });
+    const [receipt] = await withTenant(TENANT, (db) => db.select({ actualResult: decisionReceipts.actualResult }).from(decisionReceipts).where(eq(decisionReceipts.id, receiptId)));
+    expect(receipt!.actualResult).toMatchObject({ paymentReceived: true, invoiceSettled: true, amountPaidUsd: 300, balanceUsd: 0 });
+    const [action] = await withTenant(TENANT, (db) => db.select({ predictionDiff: domainActions.predictionDiff }).from(domainActions).where(eq(domainActions.id, actionId)));
+    expect((action!.predictionDiff as { fields: Array<{ path: string }> }).fields.filter((field) => field.path === "amountPaidUsd")).toHaveLength(1);
   });
 
   it("a payment for an invoice this plugin never touched is a real, honest no-op — never guesses a receipt to update", async () => {

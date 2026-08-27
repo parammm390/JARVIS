@@ -191,6 +191,22 @@ describe.skipIf(!available)("@finnor/data-platform repository layer", () => {
     expect(updated!.status).toBe("paid");
   });
 
+  it("keeps a partially paid invoice open until cumulative succeeded payments settle it", async () => {
+    const [hh] = await withTenant(TENANT_ID, (db) =>
+      db.insert(households).values({ tenantId: TENANT_ID, address: "3 Partial Payment Ln", contactInfo: {} }).returning(),
+    );
+    const [inv] = await withTenant(TENANT_ID, (db) =>
+      db.insert(invoices).values({ tenantId: TENANT_ID, householdId: hh!.id, amountUsd: "1000.00", status: "sent" }).returning(),
+    );
+    const partial = await withTenant(TENANT_ID, (db) => recordPayment(db, { tenantId: TENANT_ID, invoiceId: inv!.id, amountUsd: 1 }));
+    expect(partial).toMatchObject({ amountPaidUsd: 1, balanceUsd: 999, settled: false });
+    expect((await withTenant(TENANT_ID, (db) => db.select({ status: invoices.status }).from(invoices).where(eq(invoices.id, inv!.id))))[0]!.status).toBe("sent");
+
+    const settled = await withTenant(TENANT_ID, (db) => recordPayment(db, { tenantId: TENANT_ID, invoiceId: inv!.id, amountUsd: 999 }));
+    expect(settled).toMatchObject({ amountPaidUsd: 1000, balanceUsd: 0, settled: true });
+    expect((await withTenant(TENANT_ID, (db) => db.select({ status: invoices.status }).from(invoices).where(eq(invoices.id, inv!.id))))[0]!.status).toBe("paid");
+  });
+
   it("persistCall is idempotent by (tenant, source, external id) and links to a conversation", async () => {
     const first = await withTenant(TENANT_ID, (db) =>
       persistCall(db, { tenantId: TENANT_ID, provenance: { sourceSystem: "test", externalId: "repo-call-1" }, direction: "inbound", transcript: "hello" }),
