@@ -21,6 +21,7 @@ import {
 } from "@finnor/db";
 import { eq } from "drizzle-orm";
 import { detectWatchdogFindings } from "../../apps/worker/src/handlers/scan-watchdog";
+import { workflowStepJobKey } from "@finnor/workflow-runtime";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
 
@@ -138,6 +139,39 @@ describe.skipIf(!available)("scan_watchdog detector (A4.T2)", () => {
 
     const findings = await detectWatchdogFindings(SEED_TENANT_ID);
     expect(findings.some((f) => f.kind === "orphaned_step" && f.refId === stepId)).toBe(false);
+  });
+
+  it.each(["completed", "dead_letter"])("re-drives a pending step whose current job is %s", async (terminalStatus) => {
+    const idempotencyKey = `watchdog-terminal-job-test:${terminalStatus}:${randomUUID()}`;
+    const stepId = await withTenant(SEED_TENANT_ID, async (db) => {
+      const [cmd] = await db.insert(commands).values({ tenantId: SEED_TENANT_ID, commandType: "single_action", payload: {} }).returning();
+      const [run] = await db.insert(workflowRuns).values({ tenantId: SEED_TENANT_ID, commandId: cmd!.id, workflowType: "single_action", status: "running" }).returning();
+      const [step] = await db.insert(workflowSteps).values({
+        tenantId: SEED_TENANT_ID,
+        workflowRunId: run!.id,
+        stepType: "noop",
+        sequence: 0,
+        status: "pending",
+        idempotencyKey,
+      }).returning();
+      await db.update(workflowSteps).set({ createdAt: new Date(Date.now() - 20 * 60_000) }).where(eq(workflowSteps.id, step!.id));
+      return step!.id;
+    });
+    await getPool().query("INSERT INTO jobs (type, payload, idempotency_key, status) VALUES ($1, $2, $3, $4)", [
+      "run_workflow_step",
+      JSON.stringify({ tenantId: SEED_TENANT_ID, workflowStepId: stepId, workflowStepGeneration: 0 }),
+      workflowStepJobKey(SEED_TENANT_ID, stepId, 0),
+      terminalStatus,
+    ]);
+
+    const findings = await detectWatchdogFindings(SEED_TENANT_ID);
+    expect(findings.some((finding) => finding.kind === "orphaned_step" && finding.refId === stepId)).toBe(true);
+    const [step] = await withTenant(SEED_TENANT_ID, (db) => db.select().from(workflowSteps).where(eq(workflowSteps.id, stepId)));
+    expect(step!.dispatchGeneration).toBe(1);
+    const replacement = await getPool().query("SELECT status FROM jobs WHERE idempotency_key=$1", [
+      workflowStepJobKey(SEED_TENANT_ID, stepId, 1),
+    ]);
+    expect(replacement.rows).toEqual([{ status: "queued" }]);
   });
 
   it("flags a decision receipt that's sat unfinalized past the threshold", async () => {

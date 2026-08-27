@@ -359,13 +359,22 @@ async function resumeBusinessControllers(tenantId: string, domainActionId: strin
 export const runWorkflowStep: JobHandler = async (payload) => {
   const tenantId = String(payload.tenantId ?? "");
   const stepId = String(payload.workflowStepId ?? "");
+  const rawGeneration = payload.workflowStepGeneration;
+  // Jobs written before the generation migration have no field and are generation 0.
+  // Any malformed value is fenced to that legacy generation rather than being able
+  // to claim a newer step delivery.
+  const requestedGeneration = typeof rawGeneration === "number"
+    && Number.isSafeInteger(rawGeneration)
+    && rawGeneration >= 0
+    ? rawGeneration
+    : 0;
   if (!tenantId || !stepId) throw new Error("run_workflow_step requires tenantId and workflowStepId");
 
   // Same lease-recovery discipline as recoverExpiredRunningJobs() at the top of
   // JobQueue.tick() — reclaim any step this tenant left stuck before claiming this one.
   await recoverStaleSteps(tenantId);
 
-  const claimed = await claimStep(tenantId, stepId);
+  const claimed = await claimStep(tenantId, stepId, requestedGeneration);
   if (!claimed) return; // already leased/completed elsewhere — duplicate delivery, safe no-op
 
   try {

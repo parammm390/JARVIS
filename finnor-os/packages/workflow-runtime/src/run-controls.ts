@@ -8,8 +8,9 @@
 // consequential action in this system is.
 
 import { actionLog, businessEffects, commands, domainActions, reconciliationCases, withTenant, workflowRuns, workflowSteps, reconcileWorkStatus } from "@finnor/db";
+import type { Db } from "@finnor/db";
 import { and, eq, sql, inArray } from "drizzle-orm";
-import { advanceWorkflow } from "./steps";
+import { redriveNextPendingStepTx } from "./steps";
 import { openReceipt, finalizeReceipt } from "./receipts";
 
 export type RunControlVerb = "pause" | "resume" | "cancel" | "retry" | "escalate";
@@ -41,6 +42,7 @@ async function applyTransition(
   expectedVersion: number,
   spec: TransitionSpec,
   requestedBy: string,
+  afterTransition?: (db: Db, run: typeof workflowRuns.$inferSelect) => Promise<void>,
 ): Promise<RunControlResult> {
   const updated = await withTenant(tenantId, async (db) => {
     const [row] = await db
@@ -55,6 +57,7 @@ async function applyTransition(
         ),
       )
       .returning();
+    if (row && afterTransition) await afterTransition(db, row);
     return row ?? null;
   });
 
@@ -91,12 +94,11 @@ export async function pauseRun(tenantId: string, runId: string, expectedVersion:
 }
 
 export async function resumeRun(tenantId: string, runId: string, expectedVersion: number, requestedBy: string): Promise<RunControlResult> {
-  const result = await applyTransition(tenantId, runId, expectedVersion, TRANSITIONS.resume, requestedBy);
-  // Resuming only lifts claimStep's block (see steps.ts) — it does not itself re-fire
-  // anything. A step that was already enqueued while paused needs re-driving now that
-  // the block is lifted, same call advanceWorkflow already makes after every step.
-  if (result.ok) await advanceWorkflow(tenantId, runId).catch(() => undefined);
-  return result;
+  return applyTransition(tenantId, runId, expectedVersion, TRANSITIONS.resume, requestedBy, async (db) => {
+    // The old delivery may already have completed as a no-op while the run was paused.
+    // Advance the generation and insert its replacement atomically with the resume.
+    await redriveNextPendingStepTx(db, tenantId, runId);
+  });
 }
 
 export async function cancelRun(tenantId: string, runId: string, expectedVersion: number, requestedBy: string): Promise<RunControlResult> {
@@ -258,6 +260,7 @@ export async function retryRun(tenantId: string, runId: string, expectedVersion:
         output: { safeKnownFailure: true, effectIds },
       })));
     }
+    await redriveNextPendingStepTx(db, tenantId, runId);
     return run;
   });
 
@@ -279,7 +282,6 @@ export async function retryRun(tenantId: string, runId: string, expectedVersion:
     approval: { required: true, approvedBy: requestedBy, at: new Date().toISOString() },
     expectedResult: { status: "running" },
   }).then(({ receiptId }) => finalizeReceipt(tenantId, receiptId, { actualResult: { status: updated.status, version: updated.version } }));
-  await advanceWorkflow(tenantId, runId);
   if (updated.workId) await reconcileWorkStatus(tenantId, updated.workId);
   return { ok: true, run: updated };
 }

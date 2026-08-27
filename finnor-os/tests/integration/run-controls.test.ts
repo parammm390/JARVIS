@@ -8,9 +8,9 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import pg from "pg";
 import { migrate } from "../../packages/db/migrate";
-import { withTenant, closePool, tenants, workflowRuns, workflowSteps, decisionReceipts } from "@finnor/db";
+import { withTenant, closePool, getPool, tenants, workflowRuns, workflowSteps, decisionReceipts } from "@finnor/db";
 import { eq } from "drizzle-orm";
-import { submitCommand, claimStep, completeStep, failStep, advanceWorkflow, pauseRun, resumeRun, cancelRun, retryRun, escalateRun } from "@finnor/workflow-runtime";
+import { submitCommand, claimStep, completeStep, failStep, advanceWorkflow, pauseRun, resumeRun, cancelRun, retryRun, escalateRun, workflowStepJobKey } from "@finnor/workflow-runtime";
 
 const SUPER_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
 const TENANT_ID = "00000000-0000-4000-8000-0000000000eb";
@@ -101,13 +101,25 @@ describe.skipIf(!available)("run controls (§2.7)", () => {
   it("resume: paused -> running, and re-drives a step that was blocked by the pause", async () => {
     const { runId, stepIds } = await newRun();
     await pauseRun(TENANT_ID, runId, 1, "owner-1");
+    // This is what the real worker records after claimStep correctly no-ops while
+    // paused: the immutable generation-0 queue row is terminal.
+    await getPool().query("UPDATE jobs SET status='completed', completed_at=now() WHERE idempotency_key=$1", [
+      workflowStepJobKey(TENANT_ID, stepIds[0]!, 0),
+    ]);
     const result = await resumeRun(TENANT_ID, runId, 2, "owner-1");
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.run.status).toBe("running");
 
-    // Now claimable again.
-    const claimed = await claimStep(TENANT_ID, stepIds[0]!);
+    const [step] = await withTenant(TENANT_ID, (db) => db.select().from(workflowSteps).where(eq(workflowSteps.id, stepIds[0]!)));
+    expect(step!.dispatchGeneration).toBe(1);
+    const replacement = await getPool().query("SELECT status FROM jobs WHERE idempotency_key=$1", [
+      workflowStepJobKey(TENANT_ID, stepIds[0]!, 1),
+    ]);
+    expect(replacement.rows).toEqual([{ status: "queued" }]);
+    // A late legacy delivery is fenced; only the replacement generation can claim.
+    expect(await claimStep(TENANT_ID, stepIds[0]!, 0)).toBeNull();
+    const claimed = await claimStep(TENANT_ID, stepIds[0]!, 1);
     expect(claimed).not.toBeNull();
   });
 
@@ -165,6 +177,11 @@ describe.skipIf(!available)("run controls (§2.7)", () => {
     // Reset to pending (not left 'failed') — genuinely retryable, not a cosmetic flip.
     expect(stepAfterRetry!.status).toBe("pending");
     expect(stepAfterRetry!.terminalReason).toBeNull();
+    expect(stepAfterRetry!.dispatchGeneration).toBe(1);
+    const replacement = await getPool().query("SELECT status FROM jobs WHERE idempotency_key=$1", [
+      workflowStepJobKey(TENANT_ID, stepIds[0]!, 1),
+    ]);
+    expect(replacement.rows).toEqual([{ status: "queued" }]);
   });
 
   it("retry is illegal from a status other than 'failed'", async () => {

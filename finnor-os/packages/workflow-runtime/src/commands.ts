@@ -4,6 +4,7 @@
 
 import { commands, workflowRuns, workflowSteps, domainActions, jobs, type Db } from "@finnor/db";
 import { and, eq } from "drizzle-orm";
+import { workflowStepJobKey } from "./job-identity";
 
 export interface StepDefinition {
   stepType: string;
@@ -49,21 +50,14 @@ export interface SubmitCommandResult {
   alreadyExisted: boolean;
 }
 
-function firstStepJobKey(tenantId: string, stepId: string): string {
-  // jobs is global rather than RLS-scoped, so tenant identity is part of the global
-  // uniqueness key. The UUID is still rechecked against the tenant-scoped step by
-  // claimStep before any handler is allowed to execute it.
-  return `workflow-step:${tenantId}:${stepId}`;
-}
-
-async function enqueueFirstStepTx(db: Db, tenantId: string, stepId: string, correlationId?: string): Promise<void> {
+async function enqueueFirstStepTx(db: Db, tenantId: string, stepId: string, dispatchGeneration: number, correlationId?: string): Promise<void> {
   const payload = correlationId
-    ? { tenantId, workflowStepId: stepId, _correlationId: correlationId }
-    : { tenantId, workflowStepId: stepId };
+    ? { tenantId, workflowStepId: stepId, workflowStepGeneration: dispatchGeneration, _correlationId: correlationId }
+    : { tenantId, workflowStepId: stepId, workflowStepGeneration: dispatchGeneration };
   await db.insert(jobs).values({
     type: "run_workflow_step",
     payload,
-    idempotencyKey: firstStepJobKey(tenantId, stepId),
+    idempotencyKey: workflowStepJobKey(tenantId, stepId, dispatchGeneration),
     lane: "interactive",
     priority: 100,
   }).onConflictDoNothing({ target: jobs.idempotencyKey });
@@ -90,7 +84,7 @@ export async function submitCommand(db: Db, params: SubmitCommandParams): Promis
       const steps = run ? await db.select().from(workflowSteps).where(eq(workflowSteps.workflowRunId, run.id)) : [];
       const first = steps.sort((a, b) => a.sequence - b.sequence)[0];
       if (first && first.status === "pending" && params.enqueueFirstStep !== false) {
-        await enqueueFirstStepTx(db, params.tenantId, first.id, params.correlationId);
+        await enqueueFirstStepTx(db, params.tenantId, first.id, first.dispatchGeneration, params.correlationId);
       }
       return {
         commandId: existingCommand.id,
@@ -157,7 +151,7 @@ export async function submitCommand(db: Db, params: SubmitCommandParams): Promis
     // This insert uses the caller's Db transaction. A committed command can never
     // exist without its executable first job, and a rolled-back approval leaves
     // neither command nor job behind.
-    await enqueueFirstStepTx(db, params.tenantId, stepRows[0].id, params.correlationId);
+    await enqueueFirstStepTx(db, params.tenantId, stepRows[0].id, stepRows[0].dispatchGeneration, params.correlationId);
   }
 
   return {

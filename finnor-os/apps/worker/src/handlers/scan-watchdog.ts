@@ -17,7 +17,7 @@
 
 import { withTenant, workflowRuns, workflowSteps, decisionReceipts, domainActions, domainPolicies, enqueueJob, getPool } from "@finnor/db";
 import { and, eq, lt, isNull, sql } from "drizzle-orm";
-import { enqueueStep, isRunPastWatchdogDeadline, stuckRunDeadlineHours } from "@finnor/workflow-runtime";
+import { enqueueStep, isRunPastWatchdogDeadline, stuckRunDeadlineHours, workflowStepJobKey } from "@finnor/workflow-runtime";
 import { appendEpisode, readEpisodes } from "@finnor/memory";
 import { Sentry } from "@finnor/tools";
 import type { JobHandler } from "../queue";
@@ -67,11 +67,9 @@ async function detectStuckRuns(tenantId: string): Promise<WatchdogFinding[]> {
   return findings;
 }
 
-/** A step is orphaned when it's sat "pending" past ORPHANED_STEP_MINUTES with NO job row
- *  at all for its idempotency key — i.e. the enqueueStep() call that should have followed
- *  its insert never happened (or its job row was lost), so nothing will ever claim it on
- *  its own. Re-enqueuing is always safe: enqueueJob's ON CONFLICT DO NOTHING makes this a
- *  no-op if a job actually does exist (e.g. a race with this very scan's own prior tick). */
+/** A pending step is healthy only while its current-generation job is actionable.
+ * Completed/failed/dead-letter rows are historical evidence, not future delivery;
+ * enqueueStep advances the generation and creates the replacement atomically. */
 async function detectAndHealOrphanedSteps(tenantId: string): Promise<WatchdogFinding[]> {
   const cutoff = new Date(Date.now() - ORPHANED_STEP_MINUTES * 60_000);
   const pending = await withTenant(tenantId, (db) =>
@@ -84,15 +82,16 @@ async function detectAndHealOrphanedSteps(tenantId: string): Promise<WatchdogFin
 
   const findings: WatchdogFinding[] = [];
   for (const step of pending) {
-    const canonicalJobKey = `workflow-step:${tenantId}:${step.id}`;
-    const { rows } = await getPool().query("SELECT 1 FROM jobs WHERE idempotency_key = $1 LIMIT 1", [canonicalJobKey]);
-    if (rows.length > 0) continue; // a job exists — not orphaned, just genuinely queued/slow
+    const canonicalJobKey = workflowStepJobKey(tenantId, step.id, step.dispatchGeneration);
+    const { rows } = await getPool().query<{ status: string }>("SELECT status FROM jobs WHERE idempotency_key = $1 LIMIT 1", [canonicalJobKey]);
+    const jobStatuses = rows.map((row) => row.status);
+    if (jobStatuses.some((status) => status === "queued" || status === "running")) continue;
     findings.push({
       kind: "orphaned_step",
       tenantId,
       refId: step.id,
       domainActionId: step.domainActionId ?? undefined,
-      detail: { stepType: step.stepType, ageMinutes: Math.round(hoursSince(step.createdAt) * 60) },
+      detail: { stepType: step.stepType, ageMinutes: Math.round(hoursSince(step.createdAt) * 60), jobStatuses },
     });
     await enqueueStep(tenantId, step.id, step.idempotencyKey);
   }

@@ -8,7 +8,7 @@
     "requireCleanWorktree": true
   },
   "release": {
-    "requiredMigrationHead": "0101_multi_employee_conversation_context_kernel.sql",
+    "requiredMigrationHead": "0102_workflow_step_redrive_generation.sql",
     "metadata": [
       "FINNOR_COMMIT_SHA",
       "FINNOR_BUILD_ID",

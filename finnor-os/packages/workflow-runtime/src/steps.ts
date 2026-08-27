@@ -5,13 +5,14 @@
 // file's lease_expires_at is an additional, finer-grained atomic claim on top of the
 // job-level lease, not a second queue system.
 
-import { withTenant, enqueueJob, workflowSteps, workflowRuns, commands, integrationOperations, reconciliationCases, domainActions, domainPolicies, businessEffects, decisionReceipts, reconcileWorkStatus, transitionWork } from "@finnor/db";
-import { and, eq, lt, sql, desc, inArray } from "drizzle-orm";
+import { withTenant, enqueueJob, workflowSteps, workflowRuns, commands, jobs, integrationOperations, reconciliationCases, domainActions, domainPolicies, businessEffects, decisionReceipts, reconcileWorkStatus, transitionWork, type Db } from "@finnor/db";
+import { and, eq, lt, sql, desc, inArray, or } from "drizzle-orm";
 import { maybeChaosKill } from "./chaos";
 import { openReconciliationCase } from "./reconciliation";
 import { openReceipt, finalizeReceipt, findReceiptByStep } from "./receipts";
 import { ingestReceipt } from "./memory-ingest";
 import type { ReceiptEvidence } from "@finnor/shared-types";
+import { workflowStepJobKey } from "./job-identity";
 
 // Overridable (FINNOR_STEP_LEASE_SECONDS) so the chaos-test script can prove real
 // lease-expiry recovery in seconds rather than waiting out the production default.
@@ -22,11 +23,109 @@ function leaseSeconds(): number {
 
 export type WorkflowStepRow = typeof workflowSteps.$inferSelect;
 
+const ACTIONABLE_JOB_STATUSES = ["queued", "running"] as const;
+
+async function enqueueWorkflowStepJobTx(
+  db: Db,
+  step: Pick<WorkflowStepRow, "id" | "tenantId" | "dispatchGeneration" | "correlationId">,
+): Promise<void> {
+  const payload = step.correlationId
+    ? { tenantId: step.tenantId, workflowStepId: step.id, workflowStepGeneration: step.dispatchGeneration, _correlationId: step.correlationId }
+    : { tenantId: step.tenantId, workflowStepId: step.id, workflowStepGeneration: step.dispatchGeneration };
+  await db.insert(jobs).values({
+    type: "run_workflow_step",
+    payload,
+    idempotencyKey: workflowStepJobKey(step.tenantId, step.id, step.dispatchGeneration),
+    lane: "interactive",
+    priority: 100,
+  }).onConflictDoNothing({ target: jobs.idempotencyKey });
+}
+
 export async function enqueueStep(tenantId: string, stepId: string, idempotencyKey: string): Promise<void> {
-  // jobs is not tenant-scoped (schema.ts comment) — the payload carries tenant_id so the
-  // handler can re-establish tenant context, same convention as every other job type.
-  void idempotencyKey; // retained for source compatibility; the canonical key is the tenant-scoped durable step id.
-  await enqueueJob("run_workflow_step", { tenantId, workflowStepId: stepId }, `workflow-step:${tenantId}:${stepId}`);
+  void idempotencyKey; // retained for source compatibility; delivery identity is step + generation.
+  await withTenant(tenantId, async (db) => {
+    await db.execute(sql`SELECT id FROM ${workflowSteps} WHERE ${workflowSteps.tenantId}=${tenantId} AND ${workflowSteps.id}=${stepId}::uuid FOR UPDATE`);
+    const [step] = await db.select().from(workflowSteps).where(and(
+      eq(workflowSteps.tenantId, tenantId),
+      eq(workflowSteps.id, stepId),
+      eq(workflowSteps.status, "pending"),
+    )).limit(1);
+    if (!step) return;
+    const [run] = await db.select({ status: workflowRuns.status }).from(workflowRuns).where(and(
+      eq(workflowRuns.tenantId, tenantId),
+      eq(workflowRuns.id, step.workflowRunId),
+    )).limit(1);
+    if (run?.status !== "running") return;
+
+    const currentKey = workflowStepJobKey(tenantId, step.id, step.dispatchGeneration);
+    const [currentJob] = await db.select({ status: jobs.status }).from(jobs).where(eq(jobs.idempotencyKey, currentKey)).limit(1);
+    if (currentJob && ACTIONABLE_JOB_STATUSES.includes(currentJob.status as typeof ACTIONABLE_JOB_STATUSES[number])) return;
+
+    const dispatchGeneration = currentJob ? step.dispatchGeneration + 1 : step.dispatchGeneration;
+    const [dispatchable] = dispatchGeneration === step.dispatchGeneration
+      ? [step]
+      : await db.update(workflowSteps).set({ dispatchGeneration, updatedAt: new Date() }).where(and(
+          eq(workflowSteps.tenantId, tenantId),
+          eq(workflowSteps.id, step.id),
+          eq(workflowSteps.status, "pending"),
+          eq(workflowSteps.dispatchGeneration, step.dispatchGeneration),
+        )).returning();
+    if (dispatchable) await enqueueWorkflowStepJobTx(db, dispatchable);
+  });
+}
+
+/** Explicit recovery consumes a new generation even if the old job is still queued
+ * or running. The step-row lock, generation update, and replacement job insert share
+ * one transaction, so a crash cannot expose a reset step without an executable job. */
+export async function redriveStepTx(db: Db, tenantId: string, stepId: string): Promise<WorkflowStepRow | null> {
+  await db.execute(sql`SELECT id FROM ${workflowSteps} WHERE ${workflowSteps.tenantId}=${tenantId} AND ${workflowSteps.id}=${stepId}::uuid FOR UPDATE`);
+  const [step] = await db.select().from(workflowSteps).where(and(
+    eq(workflowSteps.tenantId, tenantId),
+    eq(workflowSteps.id, stepId),
+  )).limit(1);
+  if (!step || !["pending", "leased", "failed"].includes(step.status)) return null;
+
+  const dispatchGeneration = step.dispatchGeneration + 1;
+  const [redriven] = await db.update(workflowSteps).set({
+    status: "pending",
+    dispatchGeneration,
+    leaseExpiresAt: null,
+    updatedAt: new Date(),
+  }).where(and(
+    eq(workflowSteps.tenantId, tenantId),
+    eq(workflowSteps.id, stepId),
+    eq(workflowSteps.dispatchGeneration, step.dispatchGeneration),
+  )).returning();
+  if (!redriven) return null;
+
+  const [run] = await db.select({ status: workflowRuns.status }).from(workflowRuns).where(and(
+    eq(workflowRuns.tenantId, tenantId),
+    eq(workflowRuns.id, redriven.workflowRunId),
+  )).limit(1);
+  if (run?.status === "running") await enqueueWorkflowStepJobTx(db, redriven);
+  return redriven;
+}
+
+export async function redriveNextPendingStepTx(db: Db, tenantId: string, workflowRunId: string): Promise<WorkflowStepRow | null> {
+  const steps = await db.select().from(workflowSteps).where(and(
+    eq(workflowSteps.tenantId, tenantId),
+    eq(workflowSteps.workflowRunId, workflowRunId),
+  )).orderBy(workflowSteps.sequence);
+  const next = steps.find((step) => step.status === "pending");
+  if (!next) return null;
+  const context: Record<string, unknown> = {};
+  for (const step of steps) {
+    if (step.status === "completed" && step.evidence) {
+      const evidence = step.evidence as Record<string, unknown>;
+      context[step.stepType] = "output" in evidence ? evidence.output : evidence;
+    }
+  }
+  await db.update(workflowSteps).set({ payload: { ...(next.payload as Record<string, unknown>), context } }).where(and(
+    eq(workflowSteps.tenantId, tenantId),
+    eq(workflowSteps.id, next.id),
+    eq(workflowSteps.status, "pending"),
+  ));
+  return redriveStepTx(db, tenantId, next.id);
 }
 
 /** §2.4: opens the one DecisionReceipt for a step's whole lifecycle, at the moment of
@@ -81,7 +180,7 @@ async function openReceiptForFirstClaim(tenantId: string, step: WorkflowStepRow)
 
 /** Atomic claim — mirrors runAction()'s UPDATE...WHERE status=<expected> pattern.
  *  Returns null if the step is already leased/completed (duplicate job delivery safe). */
-export async function claimStep(tenantId: string, stepId: string): Promise<WorkflowStepRow | null> {
+export async function claimStep(tenantId: string, stepId: string, requestedGeneration = 0): Promise<WorkflowStepRow | null> {
   maybeChaosKill("pre_commit");
   const claimed = await withTenant(tenantId, async (db) => {
     const [claimed] = await db
@@ -99,6 +198,7 @@ export async function claimStep(tenantId: string, stepId: string): Promise<Workf
           eq(workflowSteps.id, stepId),
           eq(workflowSteps.tenantId, tenantId),
           eq(workflowSteps.status, "pending"),
+          eq(workflowSteps.dispatchGeneration, requestedGeneration),
           // §2.7: a paused/cancelled/escalated run must genuinely stop making progress,
           // not just display a different status label — this is the actual enforcement
           // point, checked atomically in the same UPDATE as the claim itself.
@@ -157,12 +257,18 @@ async function ingestStepReceipt(tenantId: string, stepId: string, evidence: Rec
 }
 
 export async function completeStep(tenantId: string, stepId: string, evidence: Record<string, unknown>): Promise<void> {
-  await withTenant(tenantId, (db) =>
+  const [completed] = await withTenant(tenantId, (db) =>
     db
       .update(workflowSteps)
       .set({ status: "completed", executionState: "verified", evidence, leaseExpiresAt: null, updatedAt: new Date() })
-      .where(and(eq(workflowSteps.tenantId, tenantId), eq(workflowSteps.id, stepId))),
+      .where(and(
+        eq(workflowSteps.tenantId, tenantId),
+        eq(workflowSteps.id, stepId),
+        inArray(workflowSteps.status, ["leased", "waiting_observation"]),
+      ))
+      .returning({ id: workflowSteps.id }),
   );
+  if (!completed) return;
   await finalizeReceiptForStep(tenantId, stepId, { actualResult: evidence });
   await ingestStepReceipt(tenantId, stepId, evidence).catch((err) =>
     console.error(`[memory] auto-ingest failed for step ${stepId}`, err),
@@ -198,12 +304,21 @@ export async function failStep(
   // plugin's "integration_unavailable" from a plain failure) may pass it explicitly.
   errorKind: import("@finnor/shared-types").ErrorKind = "terminal",
 ): Promise<void> {
-  await withTenant(tenantId, (db) =>
+  const [failed] = await withTenant(tenantId, (db) =>
     db
       .update(workflowSteps)
       .set({ status: "failed", terminalReason, leaseExpiresAt: null, updatedAt: new Date() })
-      .where(and(eq(workflowSteps.tenantId, tenantId), eq(workflowSteps.id, stepId))),
+      .where(and(
+        eq(workflowSteps.tenantId, tenantId),
+        eq(workflowSteps.id, stepId),
+        or(
+          inArray(workflowSteps.status, ["leased", "waiting_observation"]),
+          and(eq(workflowSteps.status, "failed"), eq(workflowSteps.executionState, "blocked")),
+        ),
+      ))
+      .returning({ id: workflowSteps.id }),
   );
+  if (!failed) return;
   await finalizeReceiptForStep(tenantId, stepId, { errorKind, message: terminalReason, recoveryPath: "review via GET /api/workflows/runs and retry or escalate the run" });
   // B2.T6: semantic terminal failures can propose a revised plan. Provider outages
   // remain on the established recovery/retry path and do not consume a repair.
@@ -366,10 +481,7 @@ export async function recoverStaleSteps(tenantId: string): Promise<{ recovered: 
     );
 
     if (!claimRow) {
-      await withTenant(tenantId, (db) =>
-        db.update(workflowSteps).set({ status: "pending", leaseExpiresAt: null }).where(and(eq(workflowSteps.tenantId, tenantId), eq(workflowSteps.id, step.id))),
-      );
-      await enqueueStep(tenantId, step.id, step.idempotencyKey);
+      await withTenant(tenantId, (db) => redriveStepTx(db, tenantId, step.id));
       recovered++;
       continue;
     }
@@ -421,10 +533,7 @@ export async function recoverStaleSteps(tenantId: string): Promise<{ recovered: 
     }
 
     // A known failed attempt did not deliver an effect and is safe to retry.
-    await withTenant(tenantId, (db) =>
-      db.update(workflowSteps).set({ status: "pending", leaseExpiresAt: null }).where(and(eq(workflowSteps.tenantId, tenantId), eq(workflowSteps.id, step.id))),
-    );
-    await enqueueStep(tenantId, step.id, step.idempotencyKey);
+    await withTenant(tenantId, (db) => redriveStepTx(db, tenantId, step.id));
     recovered++;
   }
 

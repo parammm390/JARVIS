@@ -3055,6 +3055,10 @@ export const workflowSteps = pgTable(
     idempotencyKey: text("idempotency_key").notNull(),
     leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
     attempts: integer("attempts").notNull().default(0),
+    // A terminal queue row consumes its immutable idempotency key. Explicit recovery
+    // advances this value so the replacement delivery has a fresh key, while workers
+    // reject late deliveries from older generations.
+    dispatchGeneration: integer("dispatch_generation").notNull().default(0),
     evidence: jsonb("evidence").notNull().default({}),
     terminalReason: text("terminal_reason"),
     payload: jsonb("payload").notNull().default({}),
@@ -3091,7 +3095,10 @@ export const workflowSteps = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [unique("workflow_steps_run_sequence_idx").on(t.workflowRunId, t.sequence)],
+  (t) => [
+    unique("workflow_steps_run_sequence_idx").on(t.workflowRunId, t.sequence),
+    check("workflow_steps_dispatch_generation_check", sql`${t.dispatchGeneration} >= 0`),
+  ],
 );
 
 // Generalizes external_operations (packages/tools/src/idempotent-call.ts) from being

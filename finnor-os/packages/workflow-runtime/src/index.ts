@@ -6,6 +6,7 @@
 export * from "./chaos";
 export * from "./capability";
 export * from "./commands";
+export * from "./job-identity";
 export * from "./steps";
 export * from "./outbox";
 export * from "./inbox";
