@@ -12,7 +12,7 @@
 // voice_notify_failure job pattern scheduled-reminder.ts's AMC lapse notice and
 // executor.ts's integration-failure notice both already use.
 
-import { withTenant, domainActions, domainPolicyRevisions, enqueueJob } from "@finnor/db";
+import { withTenant, domainActions, domainPolicies, domainPolicyRevisions, enqueueJob } from "@finnor/db";
 import { and, eq } from "drizzle-orm";
 import type { JobHandler } from "../queue";
 
@@ -30,9 +30,15 @@ export const scanApprovalExpiry: JobHandler = async (payload) => {
         createdAt: domainActions.createdAt,
         summary: domainActions.summary,
         confirmationTimeoutHours: domainPolicyRevisions.confirmationTimeoutHours,
+        policyConfirmationTimeoutHours: domainPolicies.confirmationTimeoutHours,
       })
       .from(domainActions)
+      .leftJoin(domainPolicies, and(
+        eq(domainActions.tenantId, domainPolicies.tenantId),
+        eq(domainActions.policyId, domainPolicies.id),
+      ))
       .leftJoin(domainPolicyRevisions, and(
+        eq(domainActions.tenantId, domainPolicyRevisions.tenantId),
         eq(domainActions.policyId, domainPolicyRevisions.policyId),
         eq(domainActions.policyVersion, domainPolicyRevisions.version),
       ))
@@ -42,7 +48,7 @@ export const scanApprovalExpiry: JobHandler = async (payload) => {
 
   const now = Date.now();
   const expired = pending.filter((row) => {
-    const timeoutHours = row.confirmationTimeoutHours ?? DEFAULT_CONFIRMATION_TIMEOUT_HOURS;
+    const timeoutHours = row.confirmationTimeoutHours ?? row.policyConfirmationTimeoutHours ?? DEFAULT_CONFIRMATION_TIMEOUT_HOURS;
     return now - row.createdAt.getTime() >= timeoutHours * 3600 * 1000;
   });
 
@@ -59,7 +65,7 @@ export const scanApprovalExpiry: JobHandler = async (payload) => {
     );
     if (!updated) continue; // another concurrent tick already escalated it
 
-    const timeoutHours = row.confirmationTimeoutHours ?? DEFAULT_CONFIRMATION_TIMEOUT_HOURS;
+    const timeoutHours = row.confirmationTimeoutHours ?? row.policyConfirmationTimeoutHours ?? DEFAULT_CONFIRMATION_TIMEOUT_HOURS;
     await enqueueJob(
       "voice_notify_failure",
       {

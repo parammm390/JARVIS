@@ -16,6 +16,7 @@ import {
   withTenant,
 } from "@finnor/db";
 import { settleExternalEffectObservation } from "@finnor/orchestration";
+import { openReceiptTx } from "@finnor/workflow-runtime";
 import type { ExternalObservationClassification } from "@finnor/shared-types";
 import { migrate } from "../../packages/db/migrate";
 
@@ -54,6 +55,21 @@ async function waitingScenario(label: string) {
     await db.insert(workflowSteps).values({
       id: stepId, tenantId, workflowRunId: runId, stepType: "execute_authorized_effect", sequence: 1,
       status: "waiting_observation", executionState: "awaiting_observation", idempotencyKey: `observe:${label}`, domainActionId: actionId, businessEffectId: effectId,
+    });
+    await openReceiptTx(db, {
+      tenantId,
+      workflowRunId: runId,
+      workflowStepId: stepId,
+      domainActionId: actionId,
+      businessEffectId: effectId,
+      objective: `external_test: ${label}`,
+      evidence: [{ source: "workflow_step", ref: stepId, timestamp: new Date().toISOString() }],
+      policyApplied: null,
+      riskTier: "medium",
+      proposedAction: { external: true, label },
+      approval: { required: true },
+      intendedEffectHash: semanticHash,
+      authorizedEffectHash: semanticHash,
     });
     await db.insert(integrationOperations).values({
       id: operationId, tenantId, workflowStepId: stepId, operationKey: `provider:${label}`, capability: "accounting",

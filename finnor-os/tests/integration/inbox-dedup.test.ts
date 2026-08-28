@@ -7,7 +7,7 @@ import pg from "pg";
 import { migrate } from "../../packages/db/migrate";
 import { withTenant, closePool, tenants, workflowSteps, workflowRuns, commands, inboxEvents, reconciliationCases } from "@finnor/db";
 import { and, eq } from "drizzle-orm";
-import { submitCommand, completeStep, receiveInboxEvent } from "@finnor/workflow-runtime";
+import { submitCommand, claimStep, completeStep, receiveInboxEvent } from "@finnor/workflow-runtime";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
 const TENANT_ID = "00000000-0000-4000-8000-0000000000d3";
@@ -56,6 +56,10 @@ describe.skipIf(!available)("inbox event dedup + matching", () => {
 
   it("sending the same (provider, event_id) twice applies the business effect once and marks the replay duplicate", async () => {
     const { stepId } = await newStep();
+    // A provider callback can settle a step only after the worker has opened its
+    // leased/observation boundary. Model that production lifecycle explicitly;
+    // receiveInboxEvent itself remains an idempotent transport claim.
+    expect(await claimStep(TENANT_ID, stepId)).not.toBeNull();
     let appliedCount = 0;
 
     async function deliver() {

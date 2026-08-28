@@ -116,9 +116,20 @@ export async function resolveCanonicalHumanPrincipal(ctx: TenantContext): Promis
 export function extractNamedExpressions(instruction: string): NamedExpression[] {
   const found: NamedExpression[] = [];
   const add = (name: string | undefined, organization: string | undefined, cue: NamedExpressionCue, index: number) => {
-    const clean = name?.replace(/\s+/g, " ").trim().replace(/[.,!?]+$/, "").replace(/^the\s+/i, "");
+    // Natural-language cues often leave a conversational preposition in the
+    // capture ("with John Smith", "to the customer"). Strip only these
+    // leading glue words before matching the canonical catalog; otherwise a
+    // valid named party is silently treated as unresolved.
+    let clean = name?.replace(/\s+/g, " ").trim().replace(/[.,!?]+$/, "").replace(/^the\s+/i, "");
+    while (clean && /^(?:with|from|to|and|when|while|for|about|regarding|at|on|by)\s+/i.test(clean)) {
+      clean = clean.replace(/^(?:with|from|to|and|when|while|for|about|regarding|at|on|by)\s+/i, "");
+    }
     if (!clean || clean.length < 2) return;
     if (/^(?:the|this|that|my|our|him|her|them|it)$/i.test(clean)) return;
+    // A pronoun embedded in a cue such as "when contacting him" is not a
+    // named target. Reject the whole capture rather than adding a false party
+    // group that can make a consequential instruction ambiguous.
+    if (/\b(?:him|her|them|it)\b/i.test(clean)) return;
     if (/^(?:email|call|text|contact|message|notify|move|moving|reschedule|schedule|book|send)\b/i.test(clean)) return;
     const cleanOrganization = organization?.trim().replace(/[.,!?]+$/, "");
     const existing = found.find((item) => normalized(item.name) === normalized(clean) && normalized(item.organization ?? "") === normalized(cleanOrganization ?? ""));

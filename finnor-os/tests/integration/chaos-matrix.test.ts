@@ -143,7 +143,10 @@ const probeContract: CapabilityContract<ProbeInput, ProbeOutput> = {
   retryPolicy: { attempts: 3, baseDelayMs: 20, timeoutMs: 2_000 },
   requiredPermission: "communications:chaos_probe",
   piiAllowlist: [],
-  retryOnUnknown: false,
+  // This probe intentionally exercises bounded retry after an ambiguous
+  // provider failure. Production capabilities opt out when replay is unsafe;
+  // this test contract must opt in to the behavior it asserts.
+  retryOnUnknown: true,
 };
 function makeFlakyBinding(failTimes: number): { binding: CapabilityBinding<ProbeInput, ProbeOutput>; callCount: () => number } {
   let calls = 0;

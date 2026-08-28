@@ -313,7 +313,7 @@ describe.skipIf(!available)("Upgrade 9 governed agentic objective loop", () => {
     const failedRun = (await durableStepForAction(tenantId, action.id)).run;
     expect(await retryRun(tenantId, failedRun.id, failedRun.version, ownerId)).toMatchObject({ ok: true });
     const retried = await durableStepForAction(tenantId, action.id);
-    expect(await claimStep(tenantId, retried.step.id)).toBeTruthy();
+    expect(await claimStep(tenantId, retried.step.id, retried.step.dispatchGeneration)).toBeTruthy();
     await executeAuthorizedEffectStep(tenantId, retried.step.id, { tools });
     expect(await orchestrator.runObjectiveIteration({ tenantId, workId: started.workId, objectiveLoopId: started.objectiveLoopId })).toBe("completed");
     const recovered = await workAggregate(tenantId, started.workId);
