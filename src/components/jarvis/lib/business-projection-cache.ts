@@ -172,7 +172,11 @@ export class BusinessProjectionCache {
       this.notify(entry)
     }
     if (!force && entry.snapshot.data !== null && !entry.snapshot.stale && !staleByAge) return entry.snapshot.data
-    if (!this.visible || !this.online) return entry.snapshot.data
+    // navigator.onLine is only a connectivity hint. Browsers can report false
+    // while same-origin requests still work; suppressing the request here leaves
+    // every empty projection permanently stuck in its loading state. Always let
+    // the bounded API request determine whether the source is reachable.
+    if (!this.visible) return entry.snapshot.data
     if (entry.inFlight) {
       this.bumpMetric("requestsDeduped")
       return entry.inFlight
@@ -317,6 +321,11 @@ export class BusinessProjectionCache {
     for (const entry of this.entries.values()) {
       if (entry.listeners.size > 0) this.schedule(entry)
     }
+  }
+
+  /** Compatibility shorthand for the stream owner, which only needs live/polling. */
+  setRealtimeMode(mode: "live" | "polling"): void {
+    this.setRealtimeStatus(mode === "polling" ? "polling" : "live")
   }
 
   reset(): void {

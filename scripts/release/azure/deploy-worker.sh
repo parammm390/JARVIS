@@ -65,6 +65,8 @@ FINNOR_WORKER_CAPABILITIES=jobs,orchestration,computer,event-wake,connection-hea
 FINNOR_SSE_GATEWAY_ENABLED=1
 SSE_PORT=$sse_port
 JARVIS_SSE_ALLOWED_ORIGINS=https://finnorai.com
+# The embedded worker also owns the operational SSE gateway.
+PORT=$sse_port
 EOF
 install -o root -g finnor -m 0644 "$release_env_tmp" "$release_env"
 

@@ -4,6 +4,7 @@ import { InstructionSubmissionResponseSchema, SubmitInstructionSchema } from "@f
 import { requireContext, errorResponse, enforceRouteRateLimit } from "../../../lib/auth";
 import { getOrchestrator } from "../../../lib/orchestrator";
 import { enforceBatchBackpressure } from "../../../lib/backpressure";
+import { requireWorkerFleetReady } from "../../../lib/worker-readiness";
 import { receiveWork, recordWorkResponse, transitionWork, workAggregate } from "@finnor/db";
 import { classifyInstructionRoute, interactionAwareOperationalDecision, interpretOperationalQuery, isConversationalTurn, OperatingInteractionContextError, resolveOperatingInteractionContext } from "@finnor/orchestration";
 import { linkEmployeeConversationTurnToWork, persistEmployeeAssistantTurn, prepareEmployeeConversationTurn } from "@finnor/orchestration";
@@ -286,6 +287,13 @@ export async function POST(req: Request): Promise<Response> {
       }
     } catch (error) {
       return await recoverableWorkError(error, ctx.tenantId, received);
+    }
+    if (instructionRouteDecision.route === "OBJECTIVE" || instructionRouteDecision.route === "ATOMIC_EFFECT") {
+      try {
+        await requireWorkerFleetReady();
+      } catch (error) {
+        return await recoverableWorkError(error, ctx.tenantId, received, 503, { code: "worker_fleet_unavailable" });
+      }
     }
     try {
       await linkEmployeeConversationTurnToWork({

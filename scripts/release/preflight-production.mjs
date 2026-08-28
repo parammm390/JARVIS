@@ -65,6 +65,16 @@ const productionEnvNames = new Set(
 for (const name of ["MIGRATIONS_DATABASE_URL", "DATABASE_URL", "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "SECRETS_PROVIDER", "FINNOR_SECRET_IDS"]) {
   if (!productionEnvNames.has(name)) throw new Error(`Vercel API production environment is missing ${name}`)
 }
+const frontendTarget = contract.topology.frontend
+const frontendEnvResponse = await vercel(`/v10/projects/${frontendTarget.projectId}/env?teamId=${frontendTarget.organizationId}&decrypt=false`)
+const frontendProductionEnvNames = new Set(
+  (frontendEnvResponse.envs ?? [])
+    .filter((entry) => entry.target === "production" || entry.target?.includes?.("production"))
+    .map((entry) => entry.key),
+)
+if (!frontendProductionEnvNames.has("JARVIS_SSE_GATEWAY_URL")) {
+  throw new Error("Vercel frontend production environment is missing JARVIS_SSE_GATEWAY_URL")
+}
 
 const az = process.env.AZURE_CLI || "az"
 function azJson(args) {
