@@ -73,3 +73,8 @@ test("production preparation consumes the exact commit core-certification artifa
   assert.match(productionWorkflow, /release:certify -- core --core-sha="\$RELEASE_COMMIT_SHA"/)
   assert.match(productionWorkflow, /artifact\.canonicalCoreSha!==process\.env\.RELEASE_COMMIT_SHA/)
 })
+
+test("production certification uses the explicit deferred-load profile", () => {
+  assert.match(productionWorkflow, /FINNOR_RELEASE_PROFILE:\s*production/)
+  assert.match(productionWorkflow, /name: Materialize protected load identities[\s\S]*if: env\.FINNOR_RELEASE_PROFILE != 'production'/)
+})

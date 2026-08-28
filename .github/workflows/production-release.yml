@@ -80,6 +80,9 @@ jobs:
       FINNOR_CHAOS_TEST_CONTEXT: "1"
       FINNOR_RELEASE_SOURCE: github-actions
       FINNOR_ENVIRONMENT: production
+      # The production core profile records P3 load as explicitly deferred. The
+      # full load gate remains mandatory in its dedicated non-production run.
+      FINNOR_RELEASE_PROFILE: production
       STAGING_API_URL: ${{ secrets.STAGING_API_URL }}
       STAGING_FRONTEND_URL: ${{ secrets.STAGING_FRONTEND_URL }}
       STAGING_WORKER_URL: ${{ secrets.STAGING_WORKER_URL }}
@@ -132,6 +135,7 @@ jobs:
           echo "P3_LOAD_RECONCILIATION_FILE=$RUNNER_TEMP/p3-load-reconciliation.json" >> "$GITHUB_ENV"
 
       - name: Materialize protected load identities
+        if: env.FINNOR_RELEASE_PROFILE != 'production'
         run: |
           test -n "${P3_LOAD_JWTS_JSON:-}" || {
             echo "::error::P3_LOAD_JWTS_JSON is required for core load certification."
