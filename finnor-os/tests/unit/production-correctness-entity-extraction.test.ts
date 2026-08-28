@@ -35,6 +35,9 @@ describe("production-correctness entity expression extraction", () => {
     expect(extractNamedExpressions("Email John Smith from Pentair the update.")).toEqual(expect.arrayContaining([
       expect.objectContaining({ name: "John Smith", cue: "party" }),
     ]));
+    expect(extractNamedExpressions("Email him and tell him we're moving Peterson to Friday.")).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "Peterson", cue: "appointment" }),
+    ]));
   });
 
   it("loads only request-scoped entity candidates without arbitrary tenant catalog caps", () => {

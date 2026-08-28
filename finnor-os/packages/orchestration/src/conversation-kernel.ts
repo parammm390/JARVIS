@@ -150,7 +150,7 @@ export function extractNamedExpressions(instruction: string): NamedExpression[] 
   };
   for (const match of instruction.matchAll(/\b([\p{L}][\p{L}'-]+(?:\s+[\p{L}][\p{L}'-]+){0,2})\s+from\s+([\p{L}][\p{L}\d&.' -]{1,80}?)(?=[,.!?]|\s+(?:and|use|then)\b|$)/giu)) add(match[1], match[2], "party", match.index ?? 0);
   for (const match of instruction.matchAll(/\b(?:email|call|text|contact|message|notify)\s+([\p{L}][\p{L}'-]+(?:\s+[\p{L}][\p{L}'-]+){0,2})\b/giu)) add(match[1], undefined, "party", match.index ?? 0);
-  for (const match of instruction.matchAll(/\b(?:move|moving|reschedule|schedule|book)\s+(?:the\s+)?([\p{L}][\p{L}'-]+(?:\s+[\p{L}][\p{L}'-]+){0,1}?)(?=\s+(?:appointment|booking)\b|[,.!?]|$)/giu)) add(match[1], undefined, "appointment", match.index ?? 0);
+  for (const match of instruction.matchAll(/\b(?:move|moving|reschedule|schedule|book)\s+(?:the\s+)?([\p{L}][\p{L}'-]+(?:\s+[\p{L}][\p{L}'-]+){0,1}?)(?=\s+(?:appointment|booking|to|on|for|until|at|this|next)\b|[,.!?]|$)/giu)) add(match[1], undefined, "appointment", match.index ?? 0);
   for (const match of instruction.matchAll(/\b(?:the\s+)?([\p{L}][\p{L}'-]+(?:\s+[\p{L}][\p{L}'-]+)?)\s+(appointment|invoice|quote|proposal|account)\b/giu)) {
     const noun = match[2]?.toLocaleLowerCase();
     add(match[1], undefined, noun === "account" ? "party" : noun as NamedExpressionCue, match.index ?? 0);
