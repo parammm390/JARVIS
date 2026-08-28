@@ -653,6 +653,10 @@ export class FinnorOrchestrator implements Orchestrator {
         idempotencyKey: opts.idempotencyKey,
         activeContext: opts.activeContext,
       });
+      // A retry re-enters the common understanding trace before it finds the
+      // already-persisted Objective Loop. Reconcile the canonical Work so an
+      // idempotent replay cannot leave an active objective labelled "understanding".
+      await reconcileWorkStatus(ctx.tenantId, workId);
       await emitInstructionEvent(ctx.tenantId, instructionId, "plan_ready", { route: "objective", objectiveLoopId: started.objectiveLoopId, boundedIterations: true });
       return { executionModel: "OBJECTIVE", actions: [], workId, workInputId, instructionId, objective: { objectiveLoopId: started.objectiveLoopId, state: started.state, route: "OBJECTIVE" } };
     }
@@ -817,6 +821,7 @@ export class FinnorOrchestrator implements Orchestrator {
         idempotencyKey: opts.idempotencyKey,
         activeContext: opts.activeContext,
       });
+      await reconcileWorkStatus(ctx.tenantId, workId);
       await emitInstructionEvent(ctx.tenantId, instructionId, "plan_ready", { route: "objective", objectiveLoopId: started.objectiveLoopId, boundedIterations: true });
       return { executionModel: "OBJECTIVE", actions: [], workId, workInputId, instructionId, objective: { objectiveLoopId: started.objectiveLoopId, state: started.state, route: "OBJECTIVE" } };
     }
