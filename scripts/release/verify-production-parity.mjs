@@ -112,7 +112,6 @@ if (!gatewayResponse.ok || gateway?.ok !== true || gateway?.realtime !== true ||
 for (const capability of ["realtime", "sse"]) {
   if (!gateway.capabilities?.includes(capability)) throw new Error(`worker SSE gateway is missing ${capability} capability`)
 }
-
 const observed = { frontend, api, worker: workerRelease, migrationHead }
 assertRuntimeParity(contract, expected, observed)
 console.log(JSON.stringify({
