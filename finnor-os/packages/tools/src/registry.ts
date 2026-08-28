@@ -270,12 +270,11 @@ export class ScopedToolRegistry extends ToolRegistry {
       this.ctx.db,
     );
     if (result.ok && operation?.verificationStatus === "awaiting_observation" && this.ctx.businessEffectId) {
-      const { enqueueJob } = await import("@finnor/db");
-      await enqueueJob(
-        "observe_external_effect",
-        { tenantId: this.ctx.tenantId, externalOperationKey: operation.operationKey, domainActionId: this.ctx.domainActionId, attempt: 1 },
-        `observe-effect:${this.ctx.tenantId}:${this.ctx.domainActionId}:${operation.operationKey}:1`,
-      );
+      const { enqueueJob, enqueueJobTx } = await import("@finnor/db");
+      const payload = { tenantId: this.ctx.tenantId, externalOperationKey: operation.operationKey, domainActionId: this.ctx.domainActionId, attempt: 1 };
+      const idempotencyKey = `observe-effect:${this.ctx.tenantId}:${this.ctx.domainActionId}:${operation.operationKey}:1`;
+      if (this.ctx.db) await enqueueJobTx(this.ctx.db, "observe_external_effect", payload, idempotencyKey);
+      else await enqueueJob("observe_external_effect", payload, idempotencyKey);
     }
     return result;
   }

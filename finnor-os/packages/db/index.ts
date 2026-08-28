@@ -209,6 +209,27 @@ export async function enqueueJob(
   );
 }
 
+/** Transaction-scoped counterpart for execution fences that hold a parent Work
+ * row lock. The job becomes visible atomically with the ledger/effect commit. */
+export async function enqueueJobTx(
+  db: Db,
+  type: string,
+  payload: Record<string, unknown>,
+  idempotencyKey?: string,
+  correlationId?: string,
+  lane: "interactive" | "batch" = "batch",
+  priority = 0,
+): Promise<void> {
+  const fullPayload = correlationId ? { ...payload, _correlationId: correlationId } : payload;
+  await db.insert(schema.jobs).values({
+    type,
+    payload: fullPayload,
+    idempotencyKey: idempotencyKey ?? null,
+    lane,
+    priority,
+  }).onConflictDoNothing({ target: schema.jobs.idempotencyKey });
+}
+
 /** Scheduled variant of enqueueJob. The run time is part of the durable job row,
  * so a waiting objective survives every API/worker process restart. */
 export async function enqueueJobAt(
