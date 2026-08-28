@@ -121,6 +121,12 @@ export function extractNamedExpressions(instruction: string): NamedExpression[] 
     // leading glue words before matching the canonical catalog; otherwise a
     // valid named party is silently treated as unresolved.
     let clean = name?.replace(/\s+/g, " ").trim().replace(/[.,!?]+$/, "").replace(/^the\s+/i, "");
+    // A communication cue is followed by the target, not the rest of the
+    // instruction. Greedy bounded captures otherwise turn continuations into
+    // part of the name ("John the update", "John we", "John Smith from").
+    // Trim only known conversational continuation words; a canonical catalog
+    // match still decides whether the remaining name is real.
+    clean = clean?.replace(/\s+(?:the|and|from|to|when|while|for|about|regarding|at|on|by|we|then|use)\b.*$/i, "").trim();
     while (clean && /^(?:with|from|to|and|when|while|for|about|regarding|at|on|by)\s+/i.test(clean)) {
       clean = clean.replace(/^(?:with|from|to|and|when|while|for|about|regarding|at|on|by)\s+/i, "");
     }

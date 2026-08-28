@@ -25,6 +25,18 @@ describe("production-correctness entity expression extraction", () => {
     expect(expressions.some((expression) => /him|contacting/i.test(expression.name))).toBe(false);
   });
 
+  it("stops communication targets at the instruction continuation", () => {
+    expect(extractNamedExpressions("Email the John we discussed.")).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "John", cue: "party" }),
+    ]));
+    expect(extractNamedExpressions("Email John the update.")).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "John", cue: "party" }),
+    ]));
+    expect(extractNamedExpressions("Email John Smith from Pentair the update.")).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "John Smith", cue: "party" }),
+    ]));
+  });
+
   it("loads only request-scoped entity candidates without arbitrary tenant catalog caps", () => {
     const loader = kernelSource.slice(
       kernelSource.indexOf("async function loadCanonicalCatalog"),

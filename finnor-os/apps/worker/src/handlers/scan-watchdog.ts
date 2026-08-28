@@ -15,7 +15,7 @@
 //    signal fires EARLIER (half that timeout) and only nudges — never changes status —
 //    so it can't race or duplicate that scan's own transition.
 
-import { withTenant, workflowRuns, workflowSteps, decisionReceipts, domainActions, domainPolicyRevisions, enqueueJob, getPool } from "@finnor/db";
+import { withTenant, workflowRuns, workflowSteps, decisionReceipts, domainActions, domainPolicies, domainPolicyRevisions, enqueueJob, getPool } from "@finnor/db";
 import { and, eq, lt, isNull, sql } from "drizzle-orm";
 import { enqueueStep, isRunPastWatchdogDeadline, stuckRunDeadlineHours, workflowStepJobKey } from "@finnor/workflow-runtime";
 import { appendEpisode, readEpisodes } from "@finnor/memory";
@@ -126,10 +126,16 @@ async function detectAndNudgeAgingApprovals(tenantId: string): Promise<WatchdogF
         actionType: domainActions.actionType,
         createdAt: domainActions.createdAt,
         summary: domainActions.summary,
+        policyConfirmationTimeoutHours: domainPolicies.confirmationTimeoutHours,
         confirmationTimeoutHours: domainPolicyRevisions.confirmationTimeoutHours,
       })
       .from(domainActions)
+      .leftJoin(domainPolicies, and(
+        eq(domainActions.tenantId, domainPolicies.tenantId),
+        eq(domainActions.policyId, domainPolicies.id),
+      ))
       .leftJoin(domainPolicyRevisions, and(
+        eq(domainActions.tenantId, domainPolicyRevisions.tenantId),
         eq(domainActions.policyId, domainPolicyRevisions.policyId),
         eq(domainActions.policyVersion, domainPolicyRevisions.version),
       ))
@@ -139,7 +145,7 @@ async function detectAndNudgeAgingApprovals(tenantId: string): Promise<WatchdogF
 
   const findings: WatchdogFinding[] = [];
   for (const row of pending) {
-    const timeoutHours = row.confirmationTimeoutHours ?? 24;
+    const timeoutHours = row.confirmationTimeoutHours ?? row.policyConfirmationTimeoutHours ?? 24;
     const nudgeAtHours = timeoutHours * AGING_APPROVAL_NUDGE_FRACTION;
     if (hoursSince(row.createdAt) < nudgeAtHours) continue;
 
