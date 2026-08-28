@@ -1412,6 +1412,25 @@ export class FinnorOrchestrator implements Orchestrator {
     decidedBy: string,
     opts?: { role?: string; note?: string | null; reason?: string | null; typedConfirmation?: boolean },
   ): Promise<ExecutionResult> {
+    // A replay of a decision that has already crossed its state boundary must be
+    // idempotent even when the original approver's authority snapshot is no longer
+    // available (for example, after a handoff or employee rotation). Read the
+    // tenant-scoped action first so a completed approval does not get re-evaluated
+    // as a fresh approval and incorrectly fail closed. Pending/needs-review rows
+    // still take the full authority + conditional-transition path below.
+    const [existingAction] = await withTenant(tenantId, (db) => db
+      .select({ status: domainActions.status })
+      .from(domainActions)
+      .where(and(eq(domainActions.tenantId, tenantId), eq(domainActions.id, actionId)))
+      .limit(1));
+    if (!existingAction) return { status: "failure", output: {}, error: "Action not found" };
+    const idempotentStatus = decision === "approve"
+      ? existingAction.status === "approved" || existingAction.status === "executing" || existingAction.status === "completed"
+      : decision === "reject"
+        ? existingAction.status === "rejected"
+        : existingAction.status === "needs_human_review";
+    if (idempotentStatus) return { status: "success", output: { idempotent: true, status: existingAction.status } };
+
     const humanDecision = decision === "approve" || decision === "reject";
     const approverAuthority = humanDecision
       ? await evaluateActionApproval({ tenantId, userId: decidedBy, employeeId: /^[0-9a-f-]{36}$/i.test(decidedBy) ? decidedBy : undefined, role: (opts?.role as Role | undefined) ?? "owner" }, actionId)
