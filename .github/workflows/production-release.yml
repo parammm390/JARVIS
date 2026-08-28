@@ -91,6 +91,10 @@ jobs:
       STAGING_REDIS_URL: ${{ secrets.STAGING_REDIS_URL }}
       P3_STAGING_IDENTITY_CONFIRMED: "1"
       STAGING_AUTH_MODE: jwt
+      # The core certification database is an ephemeral CI instance. Allow only
+      # the explicitly guarded certification seed; production application code
+      # never runs with this flag.
+      CERTIFICATION_SEED_ALLOWED: "1"
       CERTIFICATION_TEST_EMAILS: ${{ secrets.CERTIFICATION_TEST_EMAILS }}
       CERTIFICATION_TEST_PHONES: ${{ secrets.CERTIFICATION_TEST_PHONES }}
       P3_NO_EGRESS: "1"
