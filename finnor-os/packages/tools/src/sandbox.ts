@@ -14,7 +14,8 @@
 // data without any of them needing their own change.
 
 import { z } from "zod";
-import type { Tool, ToolRegistry } from "./registry";
+import type { Tool, ToolRegistry, ToolRuntimeContext } from "./registry";
+import type { Db } from "@finnor/db";
 import { withTenant, households, serviceVisits, communicationsLog, sandboxOutbox, contacts, contactMethods } from "@finnor/db";
 import { and, eq, or, sql } from "drizzle-orm";
 import { createContact, addContactMethod, getOrCreateConversation, persistMessage } from "@finnor/data-platform";
@@ -40,14 +41,18 @@ export interface SmsDestination {
   phoneNumber: string;
 }
 
+function withExecutionDb<T>(tenantId: string, db: Db | undefined, fn: (db: Db) => Promise<T>): Promise<T> {
+  return db ? fn(db) : withTenant(tenantId, fn);
+}
+
 /** Resolve the caller-facing contact reference to a validated carrier destination. */
-export async function resolveSmsDestination(tenantId: string, contactId: string): Promise<SmsDestination> {
+export async function resolveSmsDestination(tenantId: string, contactId: string, executionDb?: Db): Promise<SmsDestination> {
   const identifier = contactId.trim();
   const directPhone = tryValidateDestinationPhone(identifier);
   if (directPhone) return { householdId: null, phoneNumber: directPhone };
   if (!UUID_PATTERN.test(identifier)) throw new Error("SMS contactId must resolve to a valid E.164 phone number");
 
-  return withTenant(tenantId, async (db) => {
+  return withExecutionDb(tenantId, executionDb, async (db) => {
     const [household] = await db
       .select({ id: households.id, contactInfo: households.contactInfo })
       .from(households)
@@ -105,8 +110,9 @@ export async function upsertHouseholdByPhone(
   phone: string,
   name?: string,
   address?: string,
+  executionDb?: Db,
 ): Promise<{ householdId: string; created: boolean }> {
-  return withTenant(tenantId, async (db) => {
+  return withExecutionDb(tenantId, executionDb, async (db) => {
     const [existing] = await db
       .select({ id: households.id })
       .from(households)
@@ -137,10 +143,11 @@ export async function bookServiceVisit(
   tenantId: string,
   householdId: string,
   startTime: string,
+  executionDb?: Db,
 ): Promise<{ booked: boolean; visitId: string; scheduledAt: string; simulated: true }> {
   const when = new Date(startTime);
   const scheduledAt = Number.isNaN(when.getTime()) ? null : when;
-  const visit = await withTenant(tenantId, async (db) => {
+  const visit = await withExecutionDb(tenantId, executionDb, async (db) => {
     const [row] = await db.insert(serviceVisits).values({ householdId, type: "water_test", scheduledAt }).returning();
     return row!;
   });
@@ -154,9 +161,10 @@ export async function recordOutbound(
   channel: "sms" | "call",
   toNumber: string,
   content: string,
+  executionDb?: Db,
 ): Promise<void> {
   const validatedPhone = validateDestinationPhone(toNumber);
-  await withTenant(tenantId, async (db) => {
+  await withExecutionDb(tenantId, executionDb, async (db) => {
     await db.insert(sandboxOutbox).values({ tenantId, channel, toNumber: validatedPhone, content });
     if (householdId) {
       await db.insert(communicationsLog).values({
@@ -187,12 +195,13 @@ export function registerSandboxComms(registry: ToolRegistry): void {
         .object({ phone: z.string().min(7), firstName: z.string().optional(), tenantId: TenantIdSchema })
         .passthrough(),
       piiAllowlist: ["phone", "firstName", "address", "tenantId"],
-      async run(input) {
+      async run(input, runtime?: Readonly<ToolRuntimeContext>) {
         const { householdId, created } = await upsertHouseholdByPhone(
           String(input.tenantId),
           String(input.phone),
           input.firstName ? String(input.firstName) : undefined,
           input.address ? String(input.address) : undefined,
+          runtime?.db,
         );
         // `contactId` preserves the pre-canonical GHL-shaped contract. Expose the
         // real native entity ID as well so receipts/read models can link the same
@@ -209,8 +218,8 @@ export function registerSandboxComms(registry: ToolRegistry): void {
         .object({ contactId: z.string().uuid(), startTime: z.string().min(1), tenantId: TenantIdSchema })
         .passthrough(),
       piiAllowlist: ["contactId", "startTime", "tenantId"],
-      async run(input) {
-        return bookServiceVisit(String(input.tenantId), String(input.contactId), String(input.startTime));
+      async run(input, runtime?: Readonly<ToolRuntimeContext>) {
+        return bookServiceVisit(String(input.tenantId), String(input.contactId), String(input.startTime), runtime?.db);
       },
     },
     {
@@ -223,10 +232,10 @@ export function registerSandboxComms(registry: ToolRegistry): void {
       // tenantId/contactId are structurally required here (route the DB write), not
       // optional metadata — unlike the live GHL/Vapi adapters, never omit them.
       piiAllowlist: ["contactId", "message", "tenantId"],
-      async run(input) {
+      async run(input, runtime?: Readonly<ToolRuntimeContext>) {
         const tenantId = String(input.tenantId);
-        const destination = await resolveSmsDestination(tenantId, String(input.contactId));
-        await recordOutbound(tenantId, destination.householdId, "sms", destination.phoneNumber, String(input.message));
+        const destination = await resolveSmsDestination(tenantId, String(input.contactId), runtime?.db);
+        await recordOutbound(tenantId, destination.householdId, "sms", destination.phoneNumber, String(input.message), runtime?.db);
         return { sent: true, to: destination.phoneNumber, simulated: true };
       },
     },
@@ -251,15 +260,15 @@ export function registerSandboxComms(registry: ToolRegistry): void {
         .object({ phoneNumber: z.string().min(7), instructions: z.string().optional(), tenantId: TenantIdSchema })
         .passthrough(),
       piiAllowlist: ["phoneNumber", "instructions", "tenantId"],
-      async run(input) {
+      async run(input, runtime?: Readonly<ToolRuntimeContext>) {
         const tenantId = String(input.tenantId);
-        const [hh] = await withTenant(tenantId, (db) =>
+        const [hh] = await withExecutionDb(tenantId, runtime?.db, (db) =>
           db
             .select({ id: households.id })
             .from(households)
             .where(sql`${households.contactInfo} ->> 'phone' = ${String(input.phoneNumber)}`),
         );
-        await recordOutbound(tenantId, hh?.id ?? null, "call", String(input.phoneNumber), String(input.instructions ?? "(assistant call)"));
+        await recordOutbound(tenantId, hh?.id ?? null, "call", String(input.phoneNumber), String(input.instructions ?? "(assistant call)"), runtime?.db);
         return { callQueued: true, simulated: true };
       },
     },
@@ -278,11 +287,11 @@ export function registerSandboxComms(registry: ToolRegistry): void {
         }).passthrough()).min(1),
       }).passthrough(),
       piiAllowlist: ["tenantId", "name", "schedulePlan", "customers"],
-      async run(input) {
+      async run(input, runtime?: Readonly<ToolRuntimeContext>) {
         const tenantId = String(input.tenantId);
         const customers = input.customers as Array<{ number: string; externalId: string; assistantOverrides: { firstMessage: string } }>;
         for (const customer of customers) {
-          await recordOutbound(tenantId, customer.externalId, "call", customer.number, customer.assistantOverrides.firstMessage);
+          await recordOutbound(tenantId, customer.externalId, "call", customer.number, customer.assistantOverrides.firstMessage, runtime?.db);
         }
         return {
           id: `sandbox:${String(input.name)}`,

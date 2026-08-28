@@ -121,7 +121,8 @@ describe.skipIf(!available)("P2.T1 Work correlation + derived projection", () =>
       await db.delete(instructionEvents).where(eq(instructionEvents.tenantId, TENANT_ID));
       await db.delete(instructionSessions).where(eq(instructionSessions.tenantId, TENANT_ID));
       await db.delete(voiceSessions).where(eq(voiceSessions.tenantId, TENANT_ID));
-      await db.delete(businessEvents).where(and(eq(businessEvents.tenantId, TENANT_ID), eq(businessEvents.source, "p2-t1")));
+      // business_events is an append-only audit ledger by design. The isolated
+      // fixture row remains historical evidence; cleanup must never delete it.
     });
     await withTenant(OTHER_TENANT_ID, async (db) => {
       await db.delete(domainActions).where(eq(domainActions.tenantId, OTHER_TENANT_ID));
@@ -215,7 +216,13 @@ describe.skipIf(!available)("P2.T1 Work correlation + derived projection", () =>
       expect(legacyBody.page.rootScope).toBe("legacy_instruction");
       expect(legacyBody.data[0]?.root.kind).toBe("instruction");
     } finally {
-      await withTenant(TENANT_ID, (db) => db.delete(works).where(eq(works.id, work!.id)));
+      await withTenant(TENANT_ID, async (db) => {
+        // operational_deltas is append-only and the Works FK uses SET NULL. Purge
+        // this isolated fixture's delta through the authorized retention function
+        // before deleting the Work, so Postgres never attempts an audit UPDATE.
+        await db.execute(sql`SELECT finnor_os.purge_operational_deltas(${TENANT_ID}::uuid, now() + interval '1 second')`);
+        await db.delete(works).where(eq(works.id, work!.id));
+      });
     }
   });
 });

@@ -100,7 +100,11 @@ export function registerBuiltinTools(registry: ToolRegistry): void {
         if (!tenantId) throw new IntegrationError("ghl", `${name} requires tenantId`, false);
         const mode = (await resolveCapabilityBindingsForTenant(tenantId)).crm.mode;
         if (mode === "ghl") return live.run(input, runtime);
-        const result = await native.call(name, input);
+        // Preserve the execution transaction for sandbox/native effects. A
+        // durable operation holds the operation/work and operational-cursor
+        // locks while its provider effect runs; opening a second connection
+        // here would block on that cursor and self-timeout.
+        const result = await native.callWithRuntimeContext(name, input, runtime ?? {});
         if (!result.ok) throw new IntegrationError("native", result.error ?? `${name} failed`, false);
         return result.output;
       },

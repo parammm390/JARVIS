@@ -24,6 +24,10 @@ export interface ToolRuntimeContext {
    * providers cannot replace it through their payload. */
   businessEffectId?: string;
   businessEffectHash?: string;
+  /** Existing transaction for sandbox/native effects that must commit with the
+   * durable operation fence. This is internal execution context and is never
+   * forwarded to an external provider. */
+  db?: Db;
 }
 
 export interface Tool {
@@ -193,6 +197,7 @@ export class ScopedToolRegistry extends ToolRegistry {
       ...(this.ctx.authProfileRef ? { authProfileRef: this.ctx.authProfileRef } : {}),
       ...(this.ctx.businessEffectId ? { businessEffectId: this.ctx.businessEffectId } : {}),
       ...(this.ctx.businessEffectHash ? { businessEffectHash: this.ctx.businessEffectHash } : {}),
+      ...(this.ctx.db ? { db: this.ctx.db } : {}),
     });
   }
 
@@ -260,6 +265,7 @@ export class ScopedToolRegistry extends ToolRegistry {
       ...(this.ctx.authProfileRef ? { authProfileRef: this.ctx.authProfileRef } : {}),
       ...(this.ctx.businessEffectId ? { businessEffectId: this.ctx.businessEffectId } : {}),
       ...(this.ctx.businessEffectHash ? { businessEffectHash: this.ctx.businessEffectHash } : {}),
+      ...(this.ctx.db ? { db: this.ctx.db } : {}),
     });
     const operation = await recordExternalOperationResult(
       this.ctx.tenantId,
